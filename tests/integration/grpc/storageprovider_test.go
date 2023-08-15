@@ -498,7 +498,7 @@ var _ = Describe("storage providers", func() {
 
 		Context("with an existing file /versioned_file", func() {
 			JustBeforeEach(func() {
-				fs, err := ocis.New(map[string]interface{}{
+				fs, err := ocis.New(ctx, map[string]interface{}{
 					"root":        revads["storage"].TmpRoot,
 					"enable_home": true,
 				})
@@ -556,7 +556,7 @@ var _ = Describe("storage providers", func() {
 
 		Context("with an existing file /versioned_file", func() {
 			JustBeforeEach(func() {
-				fs, err := ocis.New(map[string]interface{}{
+				fs, err := ocis.New(ctx, map[string]interface{}{
 					"root":        revads["storage"].TmpRoot,
 					"enable_home": true,
 				})
@@ -622,7 +622,7 @@ var _ = Describe("storage providers", func() {
 
 		Context("with an existing file /versioned_file", func() {
 			JustBeforeEach(func() {
-				fs, err := owncloud.New(map[string]interface{}{
+				fs, err := owncloud.New(ctx, map[string]interface{}{
 					"datadirectory":   revads["storage"].TmpRoot,
 					"userprovidersvc": revads["users"].GrpcAddress,
 					"enable_home":     true,

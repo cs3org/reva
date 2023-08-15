@@ -32,18 +32,24 @@ import (
 	"github.com/cs3org/reva/pkg/ocm/client"
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/repository/registry"
+	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
 func init() {
 	rgrpc.Register("ocminvitemanager", New)
+	plugin.RegisterNamespace("grpc.services.ocminvitemanager.drivers", func(name string, newFunc any) {
+		var f registry.NewFunc
+		utils.Cast(newFunc, &f)
+		registry.Register(name, f)
+	})
 }
 
 type config struct {
@@ -52,8 +58,8 @@ type config struct {
 	TokenExpiration   string                            `mapstructure:"token_expiration"`
 	OCMClientTimeout  int                               `mapstructure:"ocm_timeout"`
 	OCMClientInsecure bool                              `mapstructure:"ocm_insecure"`
-	GatewaySVC        string                            `mapstructure:"gateway_svc"`
-	ProviderDomain    string                            `mapstructure:"provider_domain" docs:"The same domain registered in the provider authorizer"`
+	GatewaySVC        string                            `mapstructure:"gatewaysvc"       validate:"required"`
+	ProviderDomain    string                            `mapstructure:"provider_domain"  validate:"required" docs:"The same domain registered in the provider authorizer"`
 
 	tokenExpiration time.Duration
 }
@@ -64,7 +70,7 @@ type service struct {
 	ocmClient *client.OCMClient
 }
 
-func (c *config) init() error {
+func (c *config) ApplyDefaults() {
 	if c.Driver == "" {
 		c.Driver = "json"
 	}
@@ -72,54 +78,40 @@ func (c *config) init() error {
 		c.TokenExpiration = "24h"
 	}
 
-	p, err := time.ParseDuration(c.TokenExpiration)
-	if err != nil {
-		return err
-	}
-	c.tokenExpiration = p
-
 	c.GatewaySVC = sharedconf.GetGatewaySVC(c.GatewaySVC)
-
-	return nil
 }
 
 func (s *service) Register(ss *grpc.Server) {
 	invitepb.RegisterInviteAPIServer(ss, s)
 }
 
-func getInviteRepository(c *config) (invite.Repository, error) {
+func getInviteRepository(ctx context.Context, c *config) (invite.Repository, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
+		return f(ctx, c.Drivers[c.Driver])
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
+// New creates a new OCM invite manager svc.
+func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	return c, nil
-}
 
-// New creates a new OCM invite manager svc.
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-	c, err := parseConfig(m)
+	p, err := time.ParseDuration(c.TokenExpiration)
 	if err != nil {
 		return nil, err
 	}
-	if err := c.init(); err != nil {
-		return nil, err
-	}
+	c.tokenExpiration = p
 
-	repo, err := getInviteRepository(c)
+	repo, err := getInviteRepository(ctx, &c)
 	if err != nil {
 		return nil, err
 	}
 
 	service := &service{
-		conf: c,
+		conf: &c,
 		repo: repo,
 		ocmClient: client.New(&client.Config{
 			Timeout:  time.Duration(c.OCMClientTimeout) * time.Second,

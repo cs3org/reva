@@ -25,8 +25,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/share/cache"
 	"github.com/cs3org/reva/pkg/share/cache/registry"
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
 func init() {
@@ -41,16 +40,18 @@ type manager struct {
 	cache gcache.Cache
 }
 
-// New returns an implementation of a resource info cache that stores the objects in memory.
-func New(m map[string]interface{}) (cache.ResourceInfoCache, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, errors.Wrap(err, "error decoding conf")
-	}
+func (c *config) ApplyDefaults() {
 	if c.CacheSize == 0 {
 		c.CacheSize = 1000000
 	}
+}
 
+// New returns an implementation of a resource info cache that stores the objects in memory.
+func New(m map[string]interface{}) (cache.ResourceInfoCache, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
+		return nil, err
+	}
 	return &manager{
 		cache: gcache.New(c.CacheSize).LFU().Build(),
 	}, nil

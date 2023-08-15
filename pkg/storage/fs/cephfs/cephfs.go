@@ -37,7 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
 
@@ -64,25 +64,23 @@ func init() {
 
 // New returns an implementation to of the storage.FS interface that talk to
 // a ceph filesystem.
-func New(m map[string]interface{}) (fs storage.FS, err error) {
-	c := &Options{}
-	if err = mapstructure.Decode(m, c); err != nil {
-		return nil, errors.Wrap(err, "error decoding conf")
+func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err error) {
+	var o Options
+	if err := cfg.Decode(m, &o); err != nil {
+		return nil, err
 	}
-
-	c.fillDefaults()
 
 	var cache *connections
 	if cache, err = newCache(); err != nil {
 		return nil, errors.New("cephfs: can't create caches")
 	}
 
-	adminConn := newAdminConn(c)
+	adminConn := newAdminConn(&o)
 	if adminConn == nil {
 		return nil, errors.Wrap(err, "cephfs: Couldn't create admin connections")
 	}
 
-	for _, dir := range []string{c.ShadowFolder, c.UploadFolder} {
+	for _, dir := range []string{o.ShadowFolder, o.UploadFolder} {
 		err = adminConn.adminMount.MakeDir(dir, dirPermFull)
 		if err != nil && err.Error() != errFileExists {
 			return nil, errors.New("cephfs: can't initialise system dir " + dir + ":" + err.Error())
@@ -90,7 +88,7 @@ func New(m map[string]interface{}) (fs storage.FS, err error) {
 	}
 
 	return &cephfs{
-		conf:      c,
+		conf:      &o,
 		conn:      cache,
 		adminConn: adminConn,
 	}, nil

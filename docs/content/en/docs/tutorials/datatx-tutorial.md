@@ -26,7 +26,7 @@ TPC allows for direct (ie. efficient) Reva to Reva transfers as opposed to strea
 ## 2. Reva daemons setup
 Follow the setup ([prerequisites](https://reva.link/docs/tutorials/share-tutorial/#prerequisites), [building](https://reva.link/docs/tutorials/share-tutorial/#2-build-reva), [running](https://reva.link/docs/tutorials/share-tutorial/#3-run-reva)) of the OCM share [tutorial](https://reva.link/docs/tutorials/share-tutorial/).
 
-Use the [data transfer example config](https://github.com/cs3org/reva/blob/master/examples/datatx/datatx.toml) for the relevant settings to enable rclone driven data transfer.
+Use the [data transfer example config](https://github.com/cs3org/reva/blob/master/examples/datatx/datatx.toml) for the relevant settings to enable rclone driven data transfer. Be careful when applying this to the ocmd tutorial configs, that in server-2 of that tutorial the port number of the grpc gateway is 17000 and not 19000.
 
 At this point you should have a two Reva daemon setup between which we will establish a data transfer driven by rclone.
 
@@ -36,9 +36,9 @@ At this point you should have a two Reva daemon setup between which we will esta
 
 Creating a transfer is similar to creating a regular OCM share through the `ocm-share-create` command with the addition of the `-datatx` flag. The `-datatx` flag signifies that this is a data transfer. 
 <br>The `ocm-share-create` command makes (see example below), via an OCM share, the contents of folder `/home/my-data` available for transferring to the grantee.
-<br>*Note that only a folder can be transferred!
+<br>*Note that only a folder can be transferred, and do make sure that this folder contains at least one file (subfolder is not enough)!
 ```
->> ocm-share-create -grantee f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c -idp cesnet.cz -transfer /home/my-data
+>> ocm-share-create -grantee f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c -idp cesnet.cz -datatx /home/my-data
 +--------------------------------------+-----------------+--------------------------------------+--------------------------------------------------------------------------------------------+-------------------+-------------+--------------------------------------+--------------------------------+--------------------------------+
 | #                                    | OWNER.IDP       | OWNER.OPAQUEID                       | RESOURCEID                                                                                 | TYPE              | GRANTEE.IDP | GRANTEE.OPAQUEID                     | CREATED                        | UPDATED                        |
 +--------------------------------------+-----------------+--------------------------------------+--------------------------------------------------------------------------------------------+-------------------+-------------+--------------------------------------+--------------------------------+--------------------------------+

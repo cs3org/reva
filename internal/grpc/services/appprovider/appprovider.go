@@ -21,7 +21,6 @@ package appprovider
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -33,20 +32,27 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/registry"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/mime"
+	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/juliangruber/go-intersect"
-	"github.com/mitchellh/mapstructure"
 	"google.golang.org/grpc"
 )
 
 func init() {
 	rgrpc.Register("appprovider", New)
+	plugin.RegisterNamespace("grpc.services.appprovider.drivers", func(name string, newFunc any) {
+		var f registry.NewFunc
+		utils.Cast(newFunc, &f)
+		registry.Register(name, f)
+	})
 }
 
 type service struct {
@@ -65,7 +71,7 @@ type config struct {
 	Language            string                            `mapstructure:"language"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.Driver == "" {
 		c.Driver = "demo"
 	}
@@ -73,39 +79,29 @@ func (c *config) init() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
-	}
-	c.init()
-	return c, nil
-}
-
 // New creates a new AppProviderService.
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
 	// read and register custom mime types if configured
-	err = registerMimeTypes(c.CustomMimeTypesJSON)
-	if err != nil {
+	if err := registerMimeTypes(c.CustomMimeTypesJSON); err != nil {
 		return nil, err
 	}
 
-	provider, err := getProvider(c)
+	provider, err := getProvider(ctx, &c)
 	if err != nil {
 		return nil, err
 	}
 
 	service := &service{
-		conf:     c,
+		conf:     &c,
 		provider: provider,
 	}
 
-	go service.registerProvider()
+	go service.registerProvider(ctx)
 	return service, nil
 }
 
@@ -130,13 +126,12 @@ func registerMimeTypes(mappingFile string) error {
 	return nil
 }
 
-func (s *service) registerProvider() {
+func (s *service) registerProvider(ctx context.Context) {
 	// Give the appregistry service time to come up
 	// TODO(lopresti) we should register the appproviders after all other microservices
 	time.Sleep(3 * time.Second)
 
-	ctx := context.Background()
-	log := logger.New().With().Int("pid", os.Getpid()).Logger()
+	log := appctx.GetLogger(ctx)
 	pInfo, err := s.provider.GetAppProviderInfo(ctx)
 	if err != nil {
 		log.Error().Err(err).Msgf("error registering app provider: could not get provider info")
@@ -196,7 +191,7 @@ func (s *service) Register(ss *grpc.Server) {
 	providerpb.RegisterProviderAPIServer(ss, s)
 }
 
-func getProvider(c *config) (app.Provider, error) {
+func getProvider(ctx context.Context, c *config) (app.Provider, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		driverConf := c.Drivers[c.Driver]
 		if c.MimeTypes != nil {
@@ -206,7 +201,7 @@ func getProvider(c *config) (app.Provider, error) {
 			}
 			driverConf["mime_types"] = c.MimeTypes
 		}
-		return f(driverConf)
+		return f(ctx, driverConf)
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
@@ -215,7 +210,7 @@ func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppReques
 	appURL, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken, req.Opaque.Map, s.conf.Language)
 	if err != nil {
 		res := &providerpb.OpenInAppResponse{
-			Status: status.NewInternal(ctx, errors.New("appprovider: error calling GetAppURL"), err.Error()),
+			Status: status.NewStatusFromErrType(ctx, "appprovider: error calling GetAppURL", err),
 		}
 		return res, nil
 	}

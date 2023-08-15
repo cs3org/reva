@@ -25,7 +25,7 @@ import (
 
 func TestImpersonator(t *testing.T) {
 	ctx := context.Background()
-	i, _ := New(nil)
+	i, _ := New(ctx, nil)
 	u, _, err := i.Authenticate(ctx, "admin", "pwd")
 	if err != nil {
 		t.Fatal(err)

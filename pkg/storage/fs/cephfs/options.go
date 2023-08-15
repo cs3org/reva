@@ -47,7 +47,7 @@ type Options struct {
 	HiddenDirs     map[string]bool
 }
 
-func (c *Options) fillDefaults() {
+func (c *Options) ApplyDefaults() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 
 	if c.IndexPool == "" {

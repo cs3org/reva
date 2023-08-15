@@ -23,17 +23,23 @@ import (
 
 	preferencespb "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/preferences"
 	"github.com/cs3org/reva/pkg/preferences/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
+	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"google.golang.org/grpc"
 )
 
 func init() {
 	rgrpc.Register("preferences", New)
+	plugin.RegisterNamespace("grpc.services.preferences.drivers", func(name string, newFunc any) {
+		var f registry.NewFunc
+		utils.Cast(newFunc, &f)
+		registry.Register(name, f)
+	})
 }
 
 type config struct {
@@ -41,7 +47,7 @@ type config struct {
 	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.Driver == "" {
 		c.Driver = "memory"
 	}
@@ -52,38 +58,27 @@ type service struct {
 	pm   preferences.Manager
 }
 
-func getPreferencesManager(c *config) (preferences.Manager, error) {
+func getPreferencesManager(ctx context.Context, c *config) (preferences.Manager, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
+		return f(ctx, c.Drivers[c.Driver])
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	return c, nil
-}
-
 // New returns a new PreferencesServiceServer.
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
-	c.init()
-
-	pm, err := getPreferencesManager(c)
+	pm, err := getPreferencesManager(ctx, &c)
 	if err != nil {
 		return nil, err
 	}
 
 	return &service{
-		conf: c,
+		conf: &c,
 		pm:   pm,
 	}, nil
 }

@@ -34,7 +34,7 @@ var _ = Describe("Static", func() {
 
 	totalProviders, rootProviders, eosProviders := 33, 31, 29
 
-	handler, err := static.New(map[string]interface{}{
+	handler, err := static.New(context.Background(), map[string]interface{}{
 		"home_provider": "/home",
 		"rules": map[string]interface{}{
 			"/home": map[string]interface{}{

@@ -32,9 +32,9 @@ import (
 	utils "github.com/cs3org/reva/pkg/cbox/utils"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/cs3org/reva/pkg/utils/list"
 	"github.com/gomodule/redigo/redis"
-	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog/log"
 )
 
@@ -74,7 +74,7 @@ type config struct {
 	UserFetchInterval int `mapstructure:"user_fetch_interval" docs:"3600"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.UserGroupsCacheExpiration == 0 {
 		c.UserGroupsCacheExpiration = 5
 	}
@@ -98,16 +98,8 @@ func (c *config) init() {
 	}
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
-	}
-	return c, nil
-}
-
 // New returns a user manager implementation that makes calls to the GRAPPA API.
-func New(m map[string]interface{}) (user.Manager, error) {
+func New(ctx context.Context, m map[string]interface{}) (user.Manager, error) {
 	mgr := &manager{}
 	err := mgr.Configure(m)
 	if err != nil {
@@ -117,17 +109,16 @@ func New(m map[string]interface{}) (user.Manager, error) {
 }
 
 func (m *manager) Configure(ml map[string]interface{}) error {
-	c, err := parseConfig(ml)
-	if err != nil {
+	var c config
+	if err := cfg.Decode(ml, &c); err != nil {
 		return err
 	}
-	c.init()
 	redisPool := initRedisPool(c.RedisAddress, c.RedisUsername, c.RedisPassword)
 	apiTokenManager, err := utils.InitAPITokenManager(ml)
 	if err != nil {
 		return err
 	}
-	m.conf = c
+	m.conf = &c
 	m.redisPool = redisPool
 	m.apiTokenManager = apiTokenManager
 

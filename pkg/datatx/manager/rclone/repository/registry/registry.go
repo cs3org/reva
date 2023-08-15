@@ -19,12 +19,14 @@
 package registry
 
 import (
+	"context"
+
 	"github.com/cs3org/reva/pkg/datatx/manager/rclone/repository"
 )
 
 // NewFunc is the function that rclone repository implementations
 // should register at init time.
-type NewFunc func(map[string]interface{}) (repository.Repository, error)
+type NewFunc func(context.Context, map[string]interface{}) (repository.Repository, error)
 
 // NewFuncs is a map containing all the registered datatx backends.
 var NewFuncs = map[string]NewFunc{}

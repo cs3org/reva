@@ -19,6 +19,8 @@
 package localhome
 
 import (
+	"context"
+
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/localfs"
@@ -36,6 +38,18 @@ type config struct {
 	UserLayout  string `mapstructure:"user_layout" docs:"{{.Username}};Template for user home directories"`
 }
 
+func (c *config) ApplyDefaults() {
+	if c.Root == "" {
+		c.Root = "/var/tmp/reva"
+	}
+	if c.ShareFolder == "" {
+		c.ShareFolder = "/MyShares"
+	}
+	if c.UserLayout == "" {
+		c.UserLayout = "{{.Username}}"
+	}
+}
+
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
@@ -47,7 +61,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New returns an implementation to of the storage.FS interface that talks to
 // a local filesystem with user homes.
-func New(m map[string]interface{}) (storage.FS, error) {
+func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

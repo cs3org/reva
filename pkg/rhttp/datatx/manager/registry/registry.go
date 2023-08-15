@@ -18,11 +18,15 @@
 
 package registry
 
-import "github.com/cs3org/reva/pkg/rhttp/datatx"
+import (
+	"context"
+
+	"github.com/cs3org/reva/pkg/rhttp/datatx"
+)
 
 // NewFunc is the function that data transfer implementations
 // should register at init time.
-type NewFunc func(map[string]interface{}) (datatx.DataTX, error)
+type NewFunc func(context.Context, map[string]interface{}) (datatx.DataTX, error)
 
 // NewFuncs is a map containing all the registered data transfers.
 var NewFuncs = map[string]NewFunc{}

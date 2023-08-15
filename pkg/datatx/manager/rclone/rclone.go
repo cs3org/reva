@@ -102,7 +102,7 @@ type endpoint struct {
 }
 
 // New returns a new rclone driver.
-func New(m map[string]interface{}) (txdriver.Manager, error) {
+func New(ctx context.Context, m map[string]interface{}) (txdriver.Manager, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -111,7 +111,7 @@ func New(m map[string]interface{}) (txdriver.Manager, error) {
 
 	client := rhttp.GetHTTPClient(rhttp.Insecure(c.Insecure))
 
-	storage, err := getStorageManager(c)
+	storage, err := getStorageManager(ctx, c)
 	if err != nil {
 		return nil, err
 	}
@@ -132,9 +132,9 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-func getStorageManager(c *config) (repository.Repository, error) {
+func getStorageManager(ctx context.Context, c *config) (repository.Repository, error) {
 	if f, ok := repoRegistry.NewFuncs[c.StorageDriver]; ok {
-		return f(c.StorageDrivers[c.StorageDriver])
+		return f(ctx, c.StorageDrivers[c.StorageDriver])
 	}
 	return nil, errtypes.NotFound("rclone service: storage driver not found: " + c.StorageDriver)
 }

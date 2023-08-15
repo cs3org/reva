@@ -29,15 +29,22 @@ import (
 	txregistry "github.com/cs3org/reva/pkg/datatx/manager/registry"
 	repoRegistry "github.com/cs3org/reva/pkg/datatx/repository/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
 func init() {
 	rgrpc.Register("datatx", New)
+	plugin.RegisterNamespace("grpc.services.datatx.drivers", func(name string, newFunc any) {
+		var f txregistry.NewFunc
+		utils.Cast(newFunc, &f)
+		txregistry.Register(name, f)
+	})
 }
 
 type config struct {
@@ -55,7 +62,7 @@ type service struct {
 	storageDriver txdriver.Repository
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.TxDriver == "" {
 		c.TxDriver = "rclone"
 	}
@@ -65,49 +72,39 @@ func (s *service) Register(ss *grpc.Server) {
 	datatx.RegisterTxAPIServer(ss, s)
 }
 
-func getDatatxManager(c *config) (txdriver.Manager, error) {
+func getDatatxManager(ctx context.Context, c *config) (txdriver.Manager, error) {
 	if f, ok := txregistry.NewFuncs[c.TxDriver]; ok {
-		return f(c.TxDrivers[c.TxDriver])
+		return f(ctx, c.TxDrivers[c.TxDriver])
 	}
 	return nil, errtypes.NotFound("datatx service: driver not found: " + c.TxDriver)
 }
 
-func getStorageManager(c *config) (txdriver.Repository, error) {
+func getStorageManager(ctx context.Context, c *config) (txdriver.Repository, error) {
 	if f, ok := repoRegistry.NewFuncs[c.StorageDriver]; ok {
-		return f(c.StorageDrivers[c.StorageDriver])
+		return f(ctx, c.StorageDrivers[c.StorageDriver])
 	}
 	return nil, errtypes.NotFound("datatx service: driver not found: " + c.StorageDriver)
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "datatx service: error decoding conf")
-		return nil, err
-	}
-	return c, nil
-}
-
 // New creates a new datatx svc.
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-	c, err := parseConfig(m)
-	if err != nil {
-		return nil, err
-	}
-	c.init()
-
-	txManager, err := getDatatxManager(c)
-	if err != nil {
+func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
-	storageDriver, err := getStorageManager(c)
+	txManager, err := getDatatxManager(ctx, &c)
+	if err != nil {
+		return nil, err
+	}
+
+	storageDriver, err := getStorageManager(ctx, &c)
 	if err != nil {
 		return nil, err
 	}
 
 	service := &service{
-		conf:          c,
+		conf:          &c,
 		txManager:     txManager,
 		storageDriver: storageDriver,
 	}

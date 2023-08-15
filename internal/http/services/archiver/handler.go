@@ -23,7 +23,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -38,17 +40,15 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
 	"github.com/cs3org/reva/pkg/storage/utils/walker"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/gdexlab/go-render/render"
 	ua "github.com/mileusna/useragent"
-	"github.com/mitchellh/mapstructure"
-	"github.com/rs/zerolog"
 )
 
 type svc struct {
 	config     *Config
 	gtwClient  gateway.GatewayAPIClient
-	log        *zerolog.Logger
 	walker     walker.Walker
 	downloader downloader.Downloader
 
@@ -58,12 +58,12 @@ type svc struct {
 // Config holds the config options that need to be passed down to all ocdav handlers.
 type Config struct {
 	Prefix         string   `mapstructure:"prefix"`
-	GatewaySvc     string   `mapstructure:"gatewaysvc"`
+	GatewaySvc     string   `mapstructure:"gatewaysvc"      validate:"required"`
 	Timeout        int64    `mapstructure:"timeout"`
 	Insecure       bool     `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 	Name           string   `mapstructure:"name"`
-	MaxNumFiles    int64    `mapstructure:"max_num_files"`
-	MaxSize        int64    `mapstructure:"max_size"`
+	MaxNumFiles    int64    `mapstructure:"max_num_files"   validate:"required,gt=0"`
+	MaxSize        int64    `mapstructure:"max_size"        validate:"required,gt=0"`
 	AllowedFolders []string `mapstructure:"allowed_folders"`
 }
 
@@ -72,14 +72,11 @@ func init() {
 }
 
 // New creates a new archiver service.
-func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-	c := &Config{}
-	err := mapstructure.Decode(conf, c)
-	if err != nil {
+func New(ctx context.Context, conf map[string]interface{}) (global.Service, error) {
+	var c Config
+	if err := cfg.Decode(conf, &c); err != nil {
 		return nil, err
 	}
-
-	c.init()
 
 	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
 	if err != nil {
@@ -97,18 +94,17 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 	}
 
 	return &svc{
-		config:         c,
+		config:         &c,
 		gtwClient:      gtw,
 		downloader:     downloader.NewDownloader(gtw, rhttp.Insecure(c.Insecure), rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second)))),
 		walker:         walker.NewWalker(gtw),
-		log:            log,
 		allowedFolders: allowedFolderRegex,
 	}, nil
 }
 
-func (c *Config) init() {
+func (c *Config) ApplyDefaults() {
 	if c.Prefix == "" {
-		c.Prefix = "download_archive"
+		c.Prefix = "archiver"
 	}
 
 	if c.Name == "" {
@@ -186,21 +182,22 @@ func (s *svc) allAllowed(paths []string) error {
 	return nil
 }
 
-func (s *svc) writeHTTPError(rw http.ResponseWriter, err error) {
-	s.log.Error().Msg(err.Error())
+func (s *svc) writeHTTPError(ctx context.Context, w http.ResponseWriter, err error) {
+	log := appctx.GetLogger(ctx)
+	log.Error().Msg(err.Error())
 
 	switch err.(type) {
 	case errtypes.NotFound:
-		rw.WriteHeader(http.StatusNotFound)
+		w.WriteHeader(http.StatusNotFound)
 	case manager.ErrMaxSize, manager.ErrMaxFileCount:
-		rw.WriteHeader(http.StatusRequestEntityTooLarge)
+		w.WriteHeader(http.StatusRequestEntityTooLarge)
 	case errtypes.BadRequest:
-		rw.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
 	default:
-		rw.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
 	}
 
-	_, _ = rw.Write([]byte(err.Error()))
+	_, _ = w.Write([]byte(err.Error()))
 }
 
 func (s *svc) Handler() http.Handler {
@@ -221,7 +218,7 @@ func (s *svc) Handler() http.Handler {
 
 		files, err := s.getFiles(ctx, paths, ids)
 		if err != nil {
-			s.writeHTTPError(rw, err)
+			s.writeHTTPError(ctx, rw, err)
 			return
 		}
 
@@ -230,17 +227,27 @@ func (s *svc) Handler() http.Handler {
 			MaxSize:     s.config.MaxSize,
 		})
 		if err != nil {
-			s.writeHTTPError(rw, err)
+			s.writeHTTPError(ctx, rw, err)
 			return
 		}
 
-		userAgent := ua.Parse(r.Header.Get("User-Agent"))
+		archType := v.Get("arch_type") // optional, either "tar" or "zip"
+		if archType == "" || archType != "tar" && archType != "zip" {
+			// in case of missing or bogus arch_type, detect it via user-agent
+			userAgent := ua.Parse(r.Header.Get("User-Agent"))
+			if userAgent.OS == ua.Windows {
+				archType = "zip"
+			} else {
+				archType = "tar"
+			}
+		}
 
-		archName := s.config.Name
-		if userAgent.OS == ua.Windows {
-			archName += ".zip"
+		var archName string
+		if len(files) == 1 {
+			archName = strings.TrimSuffix(filepath.Base(files[0]), filepath.Ext(files[0])) + "." + archType
 		} else {
-			archName += ".tar"
+			// TODO(lopresti) we may want to generate a meaningful name out of the list
+			archName = s.config.Name + "." + archType
 		}
 
 		log.Debug().Msg("Requested the following files/folders to archive: " + render.Render(files))
@@ -249,14 +256,14 @@ func (s *svc) Handler() http.Handler {
 		rw.Header().Set("Content-Transfer-Encoding", "binary")
 
 		// create the archive
-		if userAgent.OS == ua.Windows {
+		if archType == "zip" {
 			err = arch.CreateZip(ctx, rw)
 		} else {
 			err = arch.CreateTar(ctx, rw)
 		}
 
 		if err != nil {
-			s.writeHTTPError(rw, err)
+			s.writeHTTPError(ctx, rw, err)
 			return
 		}
 	})

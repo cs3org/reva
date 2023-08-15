@@ -19,6 +19,7 @@
 package dataprovider
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -28,8 +29,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/mitchellh/mapstructure"
-	"github.com/rs/zerolog"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
 func init() {
@@ -45,7 +45,7 @@ type config struct {
 	Insecure bool                              `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.Prefix == "" {
 		c.Prefix = "data"
 	}
@@ -62,27 +62,25 @@ type svc struct {
 }
 
 // New returns a new datasvc.
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
+func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
-	conf.init()
-
-	fs, err := getFS(conf)
+	fs, err := getFS(ctx, &c)
 	if err != nil {
 		return nil, err
 	}
 
-	dataTXs, err := getDataTXs(conf, fs)
+	dataTXs, err := getDataTXs(ctx, &c, fs)
 	if err != nil {
 		return nil, err
 	}
 
 	s := &svc{
 		storage: fs,
-		conf:    conf,
+		conf:    &c,
 		dataTXs: dataTXs,
 	}
 
@@ -90,14 +88,14 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	return s, err
 }
 
-func getFS(c *config) (storage.FS, error) {
+func getFS(ctx context.Context, c *config) (storage.FS, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
+		return f(ctx, c.Drivers[c.Driver])
 	}
 	return nil, fmt.Errorf("driver not found: %s", c.Driver)
 }
 
-func getDataTXs(c *config, fs storage.FS) (map[string]http.Handler, error) {
+func getDataTXs(ctx context.Context, c *config, fs storage.FS) (map[string]http.Handler, error) {
 	if c.DataTXs == nil {
 		c.DataTXs = make(map[string]map[string]interface{})
 	}
@@ -110,7 +108,7 @@ func getDataTXs(c *config, fs storage.FS) (map[string]http.Handler, error) {
 	txs := make(map[string]http.Handler)
 	for t := range c.DataTXs {
 		if f, ok := datatxregistry.NewFuncs[t]; ok {
-			if tx, err := f(c.DataTXs[t]); err == nil {
+			if tx, err := f(ctx, c.DataTXs[t]); err == nil {
 				if handler, err := tx.Handler(fs); err == nil {
 					txs[t] = handler
 				}

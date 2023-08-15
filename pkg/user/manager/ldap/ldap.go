@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -100,22 +101,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return &c, nil
 }
 
-// New returns a user manager implementation that connects to a LDAP server to provide user metadata.
-func New(m map[string]interface{}) (user.Manager, error) {
-	mgr := &manager{}
-	err := mgr.Configure(m)
-	if err != nil {
-		return nil, err
-	}
-	return mgr, nil
-}
-
-func (m *manager) Configure(ml map[string]interface{}) error {
-	c, err := parseConfig(ml)
-	if err != nil {
-		return err
-	}
-
+func (c *config) ApplyDefaults() {
 	// backwards compatibility
 	c.UserFilter = strings.ReplaceAll(c.UserFilter, "%s", "{{.OpaqueId}}")
 	if c.FindFilter == "" {
@@ -126,8 +112,27 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 	if c.Nobody == 0 {
 		c.Nobody = 99
 	}
+}
 
-	m.c = c
+// New returns a user manager implementation that connects to a LDAP server to provide user metadata.
+func New(ctx context.Context, m map[string]interface{}) (user.Manager, error) {
+	mgr := &manager{}
+	err := mgr.Configure(m)
+	if err != nil {
+		return nil, err
+	}
+	return mgr, nil
+}
+
+func (m *manager) Configure(ml map[string]interface{}) error {
+	var c config
+	c.Schema = ldapDefaults
+	if err := cfg.Decode(ml, &c); err != nil {
+		return err
+	}
+
+	m.c = &c
+	var err error
 	m.userfilter, err = template.New("uf").Funcs(sprig.TxtFuncMap()).Parse(c.UserFilter)
 	if err != nil {
 		err := errors.Wrap(err, fmt.Sprintf("error parsing userfilter tpl:%s", c.UserFilter))

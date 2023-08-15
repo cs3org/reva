@@ -19,14 +19,16 @@
 package mentix
 
 import (
+	"context"
 	"net/http"
 
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/mentix"
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/exchangers"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -95,16 +97,6 @@ func (s *svc) startBackgroundService() {
 	}()
 }
 
-func parseConfig(m map[string]interface{}) (*config.Configuration, error) {
-	cfg := &config.Configuration{}
-	if err := mapstructure.Decode(m, &cfg); err != nil {
-		return nil, errors.Wrap(err, "mentix: error decoding configuration")
-	}
-	applyInternalConfig(m, cfg)
-	applyDefaultConfig(cfg)
-	return cfg, nil
-}
-
 func applyInternalConfig(m map[string]interface{}, conf *config.Configuration) {
 	getSubsections := func(section string) []string {
 		subsections := make([]string, 0, 5)
@@ -166,24 +158,24 @@ func applyDefaultConfig(conf *config.Configuration) {
 }
 
 // New returns a new Mentix service.
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-	// Prepare the configuration
-	conf, err := parseConfig(m)
-	if err != nil {
+func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+	var c config.Configuration
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-
-	conf.Init()
+	applyInternalConfig(m, &c)
+	applyDefaultConfig(&c)
 
 	// Create the Mentix instance
-	mntx, err := mentix.New(conf, log)
+	log := appctx.GetLogger(ctx)
+	mntx, err := mentix.New(&c, log)
 	if err != nil {
 		return nil, errors.Wrap(err, "mentix: error creating Mentix")
 	}
 
 	// Create the service and start its background activity
 	s := &svc{
-		conf:       conf,
+		conf:       &c,
 		mntx:       mntx,
 		log:        log,
 		stopSignal: make(chan struct{}),

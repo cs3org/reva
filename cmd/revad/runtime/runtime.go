@@ -19,183 +19,326 @@
 package runtime
 
 import (
+	"context"
 	"fmt"
-	"io"
-	"log"
 	"net"
 	"os"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 
-	"github.com/cs3org/reva/cmd/revad/internal/grace"
-	"github.com/cs3org/reva/pkg/logger"
-	"github.com/cs3org/reva/pkg/registry/memory"
+	"github.com/BurntSushi/toml"
+	"github.com/pkg/errors"
+
+	"github.com/cs3org/reva/cmd/revad/pkg/config"
+	"github.com/cs3org/reva/cmd/revad/pkg/grace"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rhttp"
+
+	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rserverless"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	rtrace "github.com/cs3org/reva/pkg/trace"
-	"github.com/cs3org/reva/pkg/utils"
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
+	"github.com/cs3org/reva/pkg/utils/list"
+	"github.com/cs3org/reva/pkg/utils/maps"
+	netutil "github.com/cs3org/reva/pkg/utils/net"
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
 )
 
-// Run runs a reva server with the given config file and pid file.
-func Run(mainConf map[string]interface{}, pidFile, logLevel string) {
-	logConf := parseLogConfOrDie(mainConf["log"], logLevel)
-	logger := initLogger(logConf)
-	RunWithOptions(mainConf, pidFile, WithLogger(logger))
+// Reva represents a full instance of reva.
+type Reva struct {
+	ctx    context.Context
+	config *config.Config
+
+	servers    []*Server
+	serverless *rserverless.Serverless
+	watcher    *grace.Watcher
+	lns        map[string]net.Listener
+
+	pidfile string
+	log     *zerolog.Logger
 }
 
-// RunWithOptions runs a reva server with the given config file, pid file and options.
-func RunWithOptions(mainConf map[string]interface{}, pidFile string, opts ...Option) {
-	options := newOptions(opts...)
-	parseSharedConfOrDie(mainConf["shared"])
-	coreConf := parseCoreConfOrDie(mainConf["core"])
+// Server represents a reva server (grpc or http).
+type Server struct {
+	server   grace.Server
+	listener net.Listener
 
-	// TODO: one can pass the options from the config file to registry.New() and initialize a registry based upon config files.
-	if options.Registry != nil {
-		utils.GlobalRegistry = options.Registry
-	} else if _, ok := mainConf["registry"]; ok {
-		for _, services := range mainConf["registry"].(map[string]interface{}) {
-			for sName, nodes := range services.(map[string]interface{}) {
-				for _, instance := range nodes.([]interface{}) {
-					if err := utils.GlobalRegistry.Add(memory.NewService(sName, instance.(map[string]interface{})["nodes"].([]interface{}))); err != nil {
-						panic(err)
-					}
-				}
+	services map[string]any
+}
+
+// Start starts the server listening on the assigned listener.
+func (s *Server) Start() error {
+	return s.server.Start(s.listener)
+}
+
+// New creates a new reva instance.
+func New(config *config.Config, opt ...Option) (*Reva, error) {
+	opts := newOptions(opt...)
+	log := opts.Logger
+
+	ctx := appctx.WithLogger(opts.Ctx, log)
+
+	if err := initCPUCount(config.Core, log); err != nil {
+		return nil, err
+	}
+	initTracing(config.Core)
+
+	if opts.PidFile == "" {
+		return nil, errors.New("pid file not provided")
+	}
+
+	watcher, err := initWatcher(opts.PidFile, log)
+	if err != nil {
+		return nil, err
+	}
+
+	listeners, err := watcher.GetListeners(servicesAddresses(config))
+	if err != nil {
+		watcher.Clean()
+		return nil, err
+	}
+
+	setRandomAddresses(config, listeners, log)
+
+	if err := applyTemplates(config); err != nil {
+		watcher.Clean()
+		return nil, err
+	}
+	initSharedConf(config)
+
+	grpc := groupGRPCByAddress(config)
+	http := groupHTTPByAddress(config)
+	servers, err := newServers(ctx, grpc, http, listeners, log)
+	if err != nil {
+		watcher.Clean()
+		return nil, err
+	}
+
+	serverless, err := newServerless(ctx, config, log)
+	if err != nil {
+		watcher.Clean()
+		return nil, err
+	}
+
+	r := &Reva{
+		ctx:        ctx,
+		config:     config,
+		servers:    servers,
+		serverless: serverless,
+		watcher:    watcher,
+		lns:        listeners,
+		pidfile:    opts.PidFile,
+		log:        log,
+	}
+	r.initConfigDumper()
+	return r, nil
+}
+
+func (r *Reva) initConfigDumper() {
+	// dump the config when the process receives a SIGUSR1 signal
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGUSR1)
+
+	go func() {
+		for {
+			<-sigs
+			r.dumpConfig()
+		}
+	}()
+}
+
+func (r *Reva) dumpConfig() {
+	cfg := r.config.Dump()
+	out := r.config.Core.ConfigDumpFile
+	f, err := os.OpenFile(out, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0644)
+	if err != nil {
+		r.log.Error().Err(err).Msgf("error opening file %s for dumping the config", out)
+		return
+	}
+	defer f.Close()
+
+	enc := toml.NewEncoder(f)
+	if err := enc.Encode(cfg); err != nil {
+		r.log.Error().Err(err).Msg("error encoding config")
+		return
+	}
+	r.log.Debug().Msgf("config dumped successfully in %s", out)
+}
+
+func servicesAddresses(cfg *config.Config) map[string]grace.Addressable {
+	a := make(map[string]grace.Addressable)
+	cfg.GRPC.ForEachService(func(s *config.Service) {
+		a[s.Label] = &addr{address: s.Address.String(), network: s.Network}
+	})
+	cfg.HTTP.ForEachService(func(s *config.Service) {
+		a[s.Label] = &addr{address: s.Address.String(), network: s.Network}
+	})
+	return a
+}
+
+func newServerless(ctx context.Context, config *config.Config, log *zerolog.Logger) (*rserverless.Serverless, error) {
+	sl := make(map[string]rserverless.Service)
+	logger := log.With().Str("pkg", "serverless").Logger()
+	if err := config.Serverless.ForEach(func(name string, config map[string]any) error {
+		new, ok := rserverless.Services[name]
+		if !ok {
+			return fmt.Errorf("serverless service %s does not exist", name)
+		}
+		log := logger.With().Str("service", name).Logger()
+		ctx := appctx.WithLogger(ctx, &log)
+		svc, err := new(ctx, config)
+		if err != nil {
+			return errors.Wrapf(err, "serverless service %s could not be initialized", name)
+		}
+		sl[name] = svc
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	ss, err := rserverless.New(
+		rserverless.WithLogger(&logger),
+		rserverless.WithServices(sl),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return ss, nil
+}
+
+func setRandomAddresses(c *config.Config, lns map[string]net.Listener, log *zerolog.Logger) {
+	f := func(s *config.Service) {
+		if s.Address != "" {
+			return
+		}
+		ln, ok := lns[s.Label]
+		if !ok {
+			log.Fatal().Msg("port not assigned for service " + s.Label)
+		}
+		s.SetAddress(config.Address(ln.Addr().String()))
+		log.Debug().
+			Msgf("set random address %s:%s to service %s", ln.Addr().Network(), ln.Addr().String(), s.Label)
+	}
+	c.GRPC.ForEachService(f)
+	c.HTTP.ForEachService(f)
+}
+
+type addr struct {
+	address string
+	network string
+}
+
+func (a *addr) Address() string {
+	return a.address
+}
+
+func (a *addr) Network() string {
+	return a.network
+}
+
+func groupGRPCByAddress(cfg *config.Config) []*config.GRPC {
+	// TODO: same address cannot be used in different configurations
+	g := map[string]*config.GRPC{}
+	cfg.GRPC.ForEachService(func(s *config.Service) {
+		if _, ok := g[s.Address.String()]; !ok {
+			g[s.Address.String()] = &config.GRPC{
+				Address:          s.Address,
+				Network:          s.Network,
+				ShutdownDeadline: cfg.GRPC.ShutdownDeadline,
+				EnableReflection: cfg.GRPC.EnableReflection,
+				Services:         make(map[string]config.ServicesConfig),
+				Interceptors:     cfg.GRPC.Interceptors,
 			}
 		}
+		g[s.Address.String()].Services[s.Name] = config.ServicesConfig{
+			{Config: s.Config, Address: s.Address, Network: s.Network, Label: s.Label},
+		}
+	})
+	l := make([]*config.GRPC, 0, len(g))
+	for _, c := range g {
+		l = append(l, c)
 	}
-
-	run(mainConf, coreConf, options.Logger, pidFile)
+	return l
 }
 
-type coreConf struct {
-	MaxCPUs            string `mapstructure:"max_cpus"`
-	TracingEnabled     bool   `mapstructure:"tracing_enabled"`
-	TracingEndpoint    string `mapstructure:"tracing_endpoint"`
-	TracingCollector   string `mapstructure:"tracing_collector"`
-	TracingServiceName string `mapstructure:"tracing_service_name"`
-
-	// TracingService specifies the service. i.e OpenCensus, OpenTelemetry, OpenTracing...
-	TracingService string `mapstructure:"tracing_service"`
+func groupHTTPByAddress(cfg *config.Config) []*config.HTTP {
+	g := map[string]*config.HTTP{}
+	cfg.HTTP.ForEachService(func(s *config.Service) {
+		if _, ok := g[s.Address.String()]; !ok {
+			g[s.Address.String()] = &config.HTTP{
+				Address:     s.Address,
+				Network:     s.Network,
+				CertFile:    cfg.HTTP.CertFile,
+				KeyFile:     cfg.HTTP.KeyFile,
+				Services:    make(map[string]config.ServicesConfig),
+				Middlewares: cfg.HTTP.Middlewares,
+			}
+		}
+		g[s.Address.String()].Services[s.Name] = config.ServicesConfig{
+			{Config: s.Config, Address: s.Address, Network: s.Network, Label: s.Label},
+		}
+	})
+	l := make([]*config.HTTP, 0, len(g))
+	for _, c := range g {
+		l = append(l, c)
+	}
+	return l
 }
 
-func run(mainConf map[string]interface{}, coreConf *coreConf, logger *zerolog.Logger, filename string) {
-	host, _ := os.Hostname()
-	logger.Info().Msgf("host info: %s", host)
+// Start starts all the reva services and waits for a signal.
+func (r *Reva) Start() error {
+	defer r.watcher.Clean()
+	r.watcher.SetServers(list.Map(r.servers, func(s *Server) grace.Server { return s.server }))
+	r.watcher.SetServerless(r.serverless)
 
-	if coreConf.TracingEnabled {
-		initTracing(coreConf)
-	}
-	initCPUCount(coreConf, logger)
-
-	servers := initServers(mainConf, logger)
-	serverless := initServerless(mainConf, logger)
-
-	if len(servers) == 0 && serverless == nil {
-		logger.Info().Msg("nothing to do, no grpc/http/serverless enabled_services declared in config")
-		os.Exit(1)
+	var g errgroup.Group
+	for _, server := range r.servers {
+		server := server
+		g.Go(func() error {
+			return server.Start()
+		})
 	}
 
-	watcher, err := initWatcher(logger, filename)
-	if err != nil {
-		log.Panic(err)
-	}
-	listeners := initListeners(watcher, servers, logger)
-	if serverless != nil {
-		watcher.SL = serverless
-	}
+	g.Go(func() error {
+		return r.serverless.Start()
+	})
 
-	start(mainConf, servers, serverless, listeners, logger, watcher)
+	r.watcher.TrapSignals()
+	return g.Wait()
 }
 
-func initListeners(watcher *grace.Watcher, servers map[string]grace.Server, log *zerolog.Logger) map[string]net.Listener {
-	listeners, err := watcher.GetListeners(servers)
-	if err != nil {
-		log.Error().Err(err).Msg("error getting sockets")
-		watcher.Exit(1)
-	}
-	return listeners
+func initSharedConf(config *config.Config) {
+	sharedconf.Init(config.Shared)
 }
 
-func initWatcher(log *zerolog.Logger, filename string) (*grace.Watcher, error) {
-	watcher, err := handlePIDFlag(log, filename)
+func initWatcher(filename string, log *zerolog.Logger) (*grace.Watcher, error) {
+	return handlePIDFlag(log, filename)
 	// TODO(labkode): maybe pidfile can be created later on? like once a server is going to be created?
+}
+
+func applyTemplates(config *config.Config) error {
+	return config.ApplyTemplates(config)
+}
+
+func initCPUCount(conf *config.Core, log *zerolog.Logger) error {
+	ncpus, err := adjustCPU(conf.MaxCPUs)
 	if err != nil {
-		log.Error().Err(err).Msg("error creating grace watcher")
-		os.Exit(1)
+		return errors.Wrap(err, "error adjusting number of cpus")
 	}
-	return watcher, err
-}
-
-func initServers(mainConf map[string]interface{}, log *zerolog.Logger) map[string]grace.Server {
-	servers := map[string]grace.Server{}
-	if isEnabledHTTP(mainConf) {
-		s, err := getHTTPServer(mainConf["http"], log)
-		if err != nil {
-			log.Error().Err(err).Msg("error creating http server")
-			os.Exit(1)
-		}
-		servers["http"] = s
-	}
-
-	if isEnabledGRPC(mainConf) {
-		s, err := getGRPCServer(mainConf["grpc"], log)
-		if err != nil {
-			log.Error().Err(err).Msg("error creating grpc server")
-			os.Exit(1)
-		}
-		servers["grpc"] = s
-	}
-
-	return servers
-}
-
-func initServerless(mainConf map[string]interface{}, log *zerolog.Logger) *rserverless.Serverless {
-	if isEnabledServerless(mainConf) {
-		serverless, err := getServerless(mainConf["serverless"], log)
-		if err != nil {
-			log.Error().Err(err).Msg("error")
-			os.Exit(1)
-		}
-		return serverless
-	}
-
+	log.Info().Msgf("running on %d cpus", ncpus)
 	return nil
 }
 
-func initTracing(conf *coreConf) {
-	rtrace.SetTraceProvider(conf.TracingCollector, conf.TracingEndpoint, conf.TracingServiceName)
-}
-
-func initCPUCount(conf *coreConf, log *zerolog.Logger) {
-	ncpus, err := adjustCPU(conf.MaxCPUs)
-	if err != nil {
-		log.Error().Err(err).Msg("error adjusting number of cpus")
-		os.Exit(1)
-	}
-	// log.Info().Msgf("%s", getVersionString())
-	log.Info().Msgf("running on %d cpus", ncpus)
-}
-
-func initLogger(conf *logConf) *zerolog.Logger {
-	log, err := newLogger(conf)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error creating logger, exiting ...")
-		os.Exit(1)
-	}
-	return log
-}
-
 func handlePIDFlag(l *zerolog.Logger, pidFile string) (*grace.Watcher, error) {
-	var opts []grace.Option
-	opts = append(opts, grace.WithPIDFile(pidFile))
-	opts = append(opts, grace.WithLogger(l.With().Str("pkg", "grace").Logger()))
-	w := grace.NewWatcher(opts...)
+	w := grace.NewWatcher(
+		grace.WithPIDFile(pidFile),
+		grace.WithLogger(l.With().Str("pkg", "grace").Logger()),
+	)
 	err := w.WritePID()
 	if err != nil {
 		return nil, err
@@ -204,100 +347,13 @@ func handlePIDFlag(l *zerolog.Logger, pidFile string) (*grace.Watcher, error) {
 	return w, nil
 }
 
-func start(mainConf map[string]interface{}, servers map[string]grace.Server, serverless *rserverless.Serverless, listeners map[string]net.Listener, log *zerolog.Logger, watcher *grace.Watcher) {
-	if isEnabledHTTP(mainConf) {
-		go func() {
-			if err := servers["http"].(*rhttp.Server).Start(listeners["http"]); err != nil {
-				log.Error().Err(err).Msg("error starting the http server")
-				watcher.Exit(1)
-			}
-		}()
+func initTracing(conf *config.Core) {
+	if conf.TracingEnabled {
+		rtrace.SetTraceProvider(conf.TracingCollector, conf.TracingEndpoint, conf.TracingServiceName)
 	}
-	if isEnabledGRPC(mainConf) {
-		go func() {
-			if err := servers["grpc"].(*rgrpc.Server).Start(listeners["grpc"]); err != nil {
-				log.Error().Err(err).Msg("error starting the grpc server")
-				watcher.Exit(1)
-			}
-		}()
-	}
-	if isEnabledServerless(mainConf) {
-		if err := serverless.Start(); err != nil {
-			log.Error().Err(err).Msg("error starting serverless services")
-			watcher.Exit(1)
-		}
-	}
-
-	watcher.TrapSignals()
 }
 
-func newLogger(conf *logConf) (*zerolog.Logger, error) {
-	// TODO(labkode): use debug level rather than info as default until reaching a stable version.
-	// Helps having smaller development files.
-	if conf.Level == "" {
-		conf.Level = zerolog.DebugLevel.String()
-	}
-
-	var opts []logger.Option
-	opts = append(opts, logger.WithLevel(conf.Level))
-
-	w, err := getWriter(conf.Output)
-	if err != nil {
-		return nil, err
-	}
-
-	opts = append(opts, logger.WithWriter(w, logger.Mode(conf.Mode)))
-
-	l := logger.New(opts...)
-	sub := l.With().Int("pid", os.Getpid()).Logger()
-	return &sub, nil
-}
-
-func getWriter(out string) (io.Writer, error) {
-	if out == "stderr" || out == "" {
-		return os.Stderr, nil
-	}
-
-	if out == "stdout" {
-		return os.Stdout, nil
-	}
-
-	fd, err := os.OpenFile(out, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		err = errors.Wrap(err, "error creating log file: "+out)
-		return nil, err
-	}
-
-	return fd, nil
-}
-
-func getGRPCServer(conf interface{}, l *zerolog.Logger) (*rgrpc.Server, error) {
-	sub := l.With().Str("pkg", "rgrpc").Logger()
-	s, err := rgrpc.NewServer(conf, sub)
-	if err != nil {
-		err = errors.Wrap(err, "main: error creating grpc server")
-		return nil, err
-	}
-	return s, nil
-}
-
-func getHTTPServer(conf interface{}, l *zerolog.Logger) (*rhttp.Server, error) {
-	sub := l.With().Str("pkg", "rhttp").Logger()
-	s, err := rhttp.New(conf, sub)
-	if err != nil {
-		err = errors.Wrap(err, "main: error creating http server")
-		return nil, err
-	}
-	return s, nil
-}
-
-func getServerless(conf interface{}, l *zerolog.Logger) (*rserverless.Serverless, error) {
-	sub := l.With().Str("pkg", "rserverless").Logger()
-	return rserverless.New(conf, sub)
-}
-
-//	adjustCPU parses string cpu and sets GOMAXPROCS
-//
+// adjustCPU parses string cpu and sets GOMAXPROCS
 // according to its value. It accepts either
 // a number (e.g. 3) or a percent (e.g. 50%).
 // Default is to use all available cores.
@@ -337,81 +393,80 @@ func adjustCPU(cpu string) (int, error) {
 	return numCPU, nil
 }
 
-func parseCoreConfOrDie(v interface{}) *coreConf {
-	c := &coreConf{}
-	if err := mapstructure.Decode(v, c); err != nil {
-		fmt.Fprintf(os.Stderr, "error decoding core config: %s\n", err.Error())
-		os.Exit(1)
-	}
-
-	// tracing defaults to enabled if not explicitly configured
-	if v == nil {
-		c.TracingEnabled = true
-		c.TracingEndpoint = "localhost:6831"
-	} else if _, ok := v.(map[string]interface{})["tracing_enabled"]; !ok {
-		c.TracingEnabled = true
-		c.TracingEndpoint = "localhost:6831"
-	}
-
-	return c
-}
-
-func parseSharedConfOrDie(v interface{}) {
-	if err := sharedconf.Decode(v); err != nil {
-		fmt.Fprintf(os.Stderr, "error decoding shared config: %s\n", err.Error())
-		os.Exit(1)
-	}
-}
-
-func parseLogConfOrDie(v interface{}, logLevel string) *logConf {
-	c := &logConf{}
-	if err := mapstructure.Decode(v, c); err != nil {
-		fmt.Fprintf(os.Stderr, "error decoding log config: %s\n", err.Error())
-		os.Exit(1)
-	}
-
-	// if mode is not set, we use console mode, easier for devs
-	if c.Mode == "" {
-		c.Mode = "console"
-	}
-
-	// Give priority to the log level passed through the command line.
-	if logLevel != "" {
-		c.Level = logLevel
-	}
-
-	return c
-}
-
-type logConf struct {
-	Output string `mapstructure:"output"`
-	Mode   string `mapstructure:"mode"`
-	Level  string `mapstructure:"level"`
-}
-
-func isEnabledHTTP(conf map[string]interface{}) bool {
-	return isEnabled("http", conf)
-}
-
-func isEnabledGRPC(conf map[string]interface{}) bool {
-	return isEnabled("grpc", conf)
-}
-
-func isEnabledServerless(conf map[string]interface{}) bool {
-	return isEnabled("serverless", conf)
-}
-
-func isEnabled(key string, conf map[string]interface{}) bool {
-	if a, ok := conf[key]; ok {
-		if b, ok := a.(map[string]interface{}); ok {
-			if c, ok := b["services"]; ok {
-				if d, ok := c.(map[string]interface{}); ok {
-					if len(d) > 0 {
-						return true
-					}
-				}
-			}
+func listenerFromAddress(lns map[string]net.Listener, network string, address config.Address) net.Listener {
+	for _, ln := range lns {
+		if netutil.AddressEqual(ln.Addr(), network, address.String()) {
+			return ln
 		}
 	}
-	return false
+	panic(fmt.Sprintf("listener not found for address %s:%s", network, address))
+}
+
+func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, lns map[string]net.Listener, log *zerolog.Logger) ([]*Server, error) {
+	servers := make([]*Server, 0, len(grpc)+len(http))
+	for _, cfg := range grpc {
+		logger := log.With().Str("pkg", "grpc").Logger()
+		ctx := appctx.WithLogger(ctx, &logger)
+		services, err := rgrpc.InitServices(ctx, cfg.Services)
+		if err != nil {
+			return nil, err
+		}
+		unaryChain, streamChain, err := initGRPCInterceptors(cfg.Interceptors, grpcUnprotected(services), log)
+		if err != nil {
+			return nil, err
+		}
+		s, err := rgrpc.NewServer(
+			rgrpc.EnableReflection(cfg.EnableReflection),
+			rgrpc.WithShutdownDeadline(cfg.ShutdownDeadline),
+			rgrpc.WithLogger(logger),
+			rgrpc.WithServices(services),
+			rgrpc.WithUnaryServerInterceptors(unaryChain),
+			rgrpc.WithStreamServerInterceptors(streamChain),
+		)
+		if err != nil {
+			return nil, err
+		}
+		ln := listenerFromAddress(lns, cfg.Network, cfg.Address)
+		server := &Server{
+			server:   s,
+			listener: ln,
+			services: maps.MapValues(services, func(s rgrpc.Service) any { return s }),
+		}
+		log.Debug().
+			Interface("services", maps.Keys(cfg.Services)).
+			Msgf("spawned grpc server for services listening at %s:%s", ln.Addr().Network(), ln.Addr().String())
+		servers = append(servers, server)
+	}
+	for _, cfg := range http {
+		logger := log.With().Str("pkg", "http").Logger()
+		ctx := appctx.WithLogger(ctx, &logger)
+		services, err := rhttp.InitServices(ctx, cfg.Services)
+		if err != nil {
+			return nil, err
+		}
+		middlewares, err := initHTTPMiddlewares(cfg.Middlewares, httpUnprotected(services), &logger)
+		if err != nil {
+			return nil, err
+		}
+		s, err := rhttp.New(
+			rhttp.WithServices(services),
+			rhttp.WithLogger(logger),
+			rhttp.WithCertAndKeyFiles(cfg.CertFile, cfg.KeyFile),
+			rhttp.WithMiddlewares(middlewares),
+		)
+		if err != nil {
+			return nil, err
+		}
+		ln := listenerFromAddress(lns, cfg.Network, cfg.Address)
+		server := &Server{
+			server:   s,
+			listener: ln,
+			services: maps.MapValues(services, func(s global.Service) any { return s }),
+		}
+		log.Debug().
+			Interface("services", maps.Keys(cfg.Services)).
+			Msgf("spawned http server for services listening at %s:%s", ln.Addr().Network(), ln.Addr().String())
+		servers = append(servers, server)
+	}
+	return servers, nil
 }

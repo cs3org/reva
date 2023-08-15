@@ -19,28 +19,30 @@
 package appprovider
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"path"
 
+	apppb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	storagepb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/go-chi/chi/v5"
 	ua "github.com/mileusna/useragent"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
 )
 
 func init() {
@@ -50,11 +52,11 @@ func init() {
 // Config holds the config options for the HTTP appprovider service.
 type Config struct {
 	Prefix     string `mapstructure:"prefix"`
-	GatewaySvc string `mapstructure:"gatewaysvc"`
+	GatewaySvc string `mapstructure:"gatewaysvc" validate:"required"`
 	Insecure   bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 }
 
-func (c *Config) init() {
+func (c *Config) ApplyDefaults() {
 	if c.Prefix == "" {
 		c.Prefix = "app"
 	}
@@ -67,16 +69,15 @@ type svc struct {
 }
 
 // New returns a new ocmd object.
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-	conf := &Config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
+func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+	var c Config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	conf.init()
 
 	r := chi.NewRouter()
 	s := &svc{
-		conf:   conf,
+		conf:   &c,
 		router: r,
 	}
 
@@ -91,6 +92,7 @@ func (s *svc) routerInit() error {
 	s.router.Get("/list", s.handleList)
 	s.router.Post("/new", s.handleNew)
 	s.router.Post("/open", s.handleOpen)
+	s.router.Post("/notify", s.handleNotify)
 	return nil
 }
 
@@ -157,8 +159,8 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	statParentContainerReq := &provider.StatRequest{
-		Ref: &provider.Reference{
+	statParentContainerReq := &storagepb.StatRequest{
+		Ref: &storagepb.Reference{
 			ResourceId: parentContainerRef,
 		},
 	}
@@ -173,16 +175,16 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if parentContainer.Info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+	if parentContainer.Info.Type != storagepb.ResourceType_RESOURCE_TYPE_CONTAINER {
 		writeError(w, r, appErrorInvalidParameter, "the parent container id does not point to a container", nil)
 		return
 	}
 
-	fileRef := &provider.Reference{
+	fileRef := &storagepb.Reference{
 		Path: path.Join(parentContainer.Info.Path, utils.MakeRelativePath(filename)),
 	}
 
-	statFileReq := &provider.StatRequest{
+	statFileReq := &storagepb.StatRequest{
 		Ref: fileRef,
 	}
 	statFileRes, err := client.Stat(ctx, statFileReq)
@@ -201,7 +203,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create empty file via storageprovider
-	createReq := &provider.InitiateFileUploadRequest{
+	createReq := &storagepb.InitiateFileUploadRequest{
 		Ref: fileRef,
 		Opaque: &typespb.Opaque{
 			Map: map[string]*typespb.OpaqueEntry{
@@ -268,7 +270,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
+	if statRes.Info.Type != storagepb.ResourceType_RESOURCE_TYPE_FILE {
 		writeError(w, r, appErrorInvalidParameter, "the given file id does not point to a file", nil)
 		return
 	}
@@ -338,7 +340,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 
 	fileID := r.Form.Get("file_id")
 
-	var fileRef provider.Reference
+	var fileRef storagepb.Reference
 	if fileID == "" {
 		path := r.Form.Get("path")
 		if path == "" {
@@ -355,7 +357,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		fileRef.ResourceId = resourceID
 	}
 
-	statRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &fileRef})
+	statRes, err := client.Stat(ctx, &storagepb.StatRequest{Ref: &fileRef})
 	if err != nil {
 		writeError(w, r, appErrorServerError, "Internal error accessing the file, please try again later", err)
 		return
@@ -369,7 +371,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
+	if statRes.Info.Type != storagepb.ResourceType_RESOURCE_TYPE_FILE {
 		writeError(w, r, appErrorInvalidParameter, "the given file id does not point to a file", nil)
 		return
 	}
@@ -407,17 +409,33 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 			writeError(w, r, appErrorNotFound, openRes.Status.Message, nil)
 			return
 		}
+		if openRes.Status.Code == rpc.Code_CODE_ALREADY_EXISTS {
+			writeError(w, r, appErrorAlreadyExists, openRes.Status.Message, nil)
+			return
+		}
 		writeError(w, r, appErrorServerError, openRes.Status.Message,
 			status.NewErrorFromCode(openRes.Status.Code, "error calling OpenInApp"))
 		return
 	}
 
-	js, err := json.Marshal(openRes.AppUrl)
+	// recreate the structure to be able to marshal the AppUrl.Target as a string
+	js, err := json.Marshal(
+		map[string]interface{}{
+			"app_url":         openRes.AppUrl.AppUrl,
+			"method":          openRes.AppUrl.Method,
+			"form_parameters": openRes.AppUrl.FormParameters,
+			"headers":         openRes.AppUrl.Headers,
+			"target":          appTargetToString(openRes.AppUrl.Target),
+		},
+	)
 	if err != nil {
 		writeError(w, r, appErrorServerError, "Internal error with JSON payload",
 			errors.Wrap(err, "error marshalling JSON response"))
 		return
 	}
+
+	log := appctx.GetLogger(ctx)
+	log.Info().Interface("resource", fileRef).Str("url", openRes.AppUrl.AppUrl).Str("method", openRes.AppUrl.Method).Interface("target", openRes.AppUrl.Target).Msg("returning app URL for file")
 
 	w.Header().Set("Content-Type", "application/json")
 	if _, err = w.Write(js); err != nil {
@@ -425,6 +443,38 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 			errors.Wrap(err, "error writing JSON response"))
 		return
 	}
+}
+
+func (s *svc) handleNotify(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		writeError(w, r, appErrorInvalidParameter, "parameters could not be parsed", nil)
+	}
+
+	fileID := r.Form.Get("file_id")
+	var fileRef storagepb.Reference
+	if fileID == "" {
+		path := r.Form.Get("path")
+		if path == "" {
+			writeError(w, r, appErrorInvalidParameter, "missing file ID or path", nil)
+			return
+		}
+		fileRef.Path = path
+	} else {
+		resourceID := resourceid.OwnCloudResourceIDUnwrap(fileID)
+		if resourceID == nil {
+			writeError(w, r, appErrorInvalidParameter, "invalid file ID", nil)
+			return
+		}
+		fileRef.ResourceId = resourceID
+	}
+
+	// log the fileid for later correlation / monitoring
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+	log.Info().Interface("resource", fileRef).Msg("file successfully opened in app")
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func filterAppsByUserAgent(mimeTypes []*appregistry.MimeTypeInfo, userAgent string) []*appregistry.MimeTypeInfo {
@@ -448,7 +498,7 @@ func filterAppsByUserAgent(mimeTypes []*appregistry.MimeTypeInfo, userAgent stri
 	return res
 }
 
-func resolveViewMode(res *provider.ResourceInfo, vm string) gateway.OpenInAppRequest_ViewMode {
+func resolveViewMode(res *storagepb.ResourceInfo, vm string) gateway.OpenInAppRequest_ViewMode {
 	var viewMode gateway.OpenInAppRequest_ViewMode
 	if vm != "" {
 		viewMode = utils.GetViewMode(vm)
@@ -471,4 +521,15 @@ func resolveViewMode(res *provider.ResourceInfo, vm string) gateway.OpenInAppReq
 		viewMode = gateway.OpenInAppRequest_VIEW_MODE_INVALID
 	}
 	return viewMode
+}
+
+func appTargetToString(t apppb.Target) string {
+	switch t {
+	case apppb.Target_TARGET_IFRAME:
+		return "iframe"
+	case apppb.Target_TARGET_BLANK:
+		return "blank"
+	default:
+		return "invalid"
+	}
 }

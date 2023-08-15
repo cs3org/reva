@@ -54,7 +54,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 	"github.com/rs/zerolog/log"
@@ -120,16 +120,7 @@ type config struct {
 	DBName                   string `mapstructure:"dbname"`
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	return c, nil
-}
-
-func (c *config) init(m map[string]interface{}) {
+func (c *config) ApplyDefaults() {
 	if c.UserLayout == "" {
 		c.UserLayout = "{{.Username}}"
 	}
@@ -151,18 +142,17 @@ func (c *config) init(m map[string]interface{}) {
 
 // New returns an implementation to of the storage.FS interface that talk to
 // a local filesystem.
-func New(m map[string]interface{}) (storage.FS, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	c.init(m)
 
 	// c.DataDirectory should never end in / unless it is the root?
 	c.DataDirectory = filepath.Clean(c.DataDirectory)
 
 	// create datadir if it does not exist
-	err = os.MkdirAll(c.DataDirectory, 0700)
+	err := os.MkdirAll(c.DataDirectory, 0700)
 	if err != nil {
 		logger.New().Error().Err(err).
 			Str("path", c.DataDirectory).
@@ -183,7 +173,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	}
 
 	return &owncloudsqlfs{
-		c:            c,
+		c:            &c,
 		chunkHandler: chunking.NewChunkHandler(c.UploadInfoDir),
 		filecache:    filecache,
 	}, nil

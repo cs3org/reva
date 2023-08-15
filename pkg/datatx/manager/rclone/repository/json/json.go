@@ -19,6 +19,7 @@
 package json
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"os"
@@ -26,7 +27,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/datatx/manager/rclone/repository"
 	"github.com/cs3org/reva/pkg/datatx/manager/rclone/repository/registry"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
 
@@ -48,28 +49,18 @@ type rcloneJobsModel struct {
 	RcloneJobs map[string]*repository.Job `json:"rcloneJobs"`
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "rclone repository json driver: error decoding configuration")
-		return nil, err
-	}
-	return c, nil
-}
-
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.File == "" {
 		c.File = "/var/tmp/reva/transfer-jobs.json"
 	}
 }
 
 // New returns a json storage driver.
-func New(m map[string]interface{}) (repository.Repository, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+func New(ctx context.Context, m map[string]interface{}) (repository.Repository, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	c.init()
 
 	model, err := loadOrCreate(c.File)
 	if err != nil {
@@ -78,7 +69,7 @@ func New(m map[string]interface{}) (repository.Repository, error) {
 	}
 
 	mgr := &mgr{
-		config: c,
+		config: &c,
 		model:  model,
 	}
 

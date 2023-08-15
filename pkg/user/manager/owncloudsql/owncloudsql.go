@@ -29,10 +29,10 @@ import (
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/owncloudsql/accounts"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 
 	// Provides mysql drivers.
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
@@ -59,7 +59,7 @@ type config struct {
 }
 
 // NewMysql returns a new user manager connection to an owncloud mysql database.
-func NewMysql(m map[string]interface{}) (user.Manager, error) {
+func NewMysql(ctx context.Context, m map[string]interface{}) (user.Manager, error) {
 	mgr := &manager{}
 	err := mgr.Configure(m)
 	if err != nil {
@@ -80,26 +80,20 @@ func NewMysql(m map[string]interface{}) (user.Manager, error) {
 	return mgr, nil
 }
 
-func (m *manager) Configure(ml map[string]interface{}) error {
-	c, err := parseConfig(ml)
-	if err != nil {
-		return err
-	}
-
+func (c *config) ApplyDefaults() {
 	if c.Nobody == 0 {
 		c.Nobody = 99
 	}
-
-	m.c = c
-	return nil
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, &c); err != nil {
-		return nil, err
+func (m *manager) Configure(ml map[string]interface{}) error {
+	var c config
+	if err := cfg.Decode(ml, &c); err != nil {
+		return err
 	}
-	return c, nil
+
+	m.c = &c
+	return nil
 }
 
 func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {

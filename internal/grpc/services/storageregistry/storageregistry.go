@@ -24,16 +24,23 @@ import (
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"google.golang.org/grpc"
 )
 
 func init() {
 	rgrpc.Register("storageregistry", New)
+	plugin.RegisterNamespace("grpc.services.storageregistry.drivers", func(name string, newFunc any) {
+		var f registry.NewFunc
+		utils.Cast(newFunc, &f)
+		registry.Register(name, f)
+	})
 }
 
 type service struct {
@@ -57,22 +64,20 @@ type config struct {
 	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.Driver == "" {
 		c.Driver = "static"
 	}
 }
 
 // New creates a new StorageBrokerService.
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
-	c.init()
-
-	reg, err := getRegistry(c)
+	reg, err := getRegistry(ctx, &c)
 	if err != nil {
 		return nil, err
 	}
@@ -84,17 +89,9 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	return service, nil
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
-	}
-	return c, nil
-}
-
-func getRegistry(c *config) (storage.Registry, error) {
+func getRegistry(ctx context.Context, c *config) (storage.Registry, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
+		return f(ctx, c.Drivers[c.Driver])
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }

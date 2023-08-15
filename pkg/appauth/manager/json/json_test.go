@@ -123,7 +123,7 @@ func TestNewManager(t *testing.T) {
 
 	for _, test := range testCases {
 		t.Run(test.description, func(t *testing.T) {
-			manager, err := New(test.configMap)
+			manager, err := New(context.Background(), test.configMap)
 			if test.expected == nil {
 				if err == nil {
 					t.Fatalf("no error (but we expected one) while get manager")
@@ -239,7 +239,7 @@ func TestGenerateAppPassword(t *testing.T) {
 			tmpFile := createTempFile(t, tempDir, "test.json")
 			defer tmpFile.Close()
 			fill(t, tmpFile, test.prevStateJSON)
-			manager, err := New(map[string]interface{}{
+			manager, err := New(context.Background(), map[string]interface{}{
 				"file":               tmpFile.Name(),
 				"token_strength":     len(token),
 				"password_hash_cost": 11,
@@ -393,7 +393,7 @@ func TestListAppPasswords(t *testing.T) {
 			if test.stateJSON != "" {
 				fill(t, tmpFile, test.stateJSON)
 			}
-			manager, err := New(map[string]interface{}{
+			manager, err := New(context.Background(), map[string]interface{}{
 				"file":           tmpFile.Name(),
 				"token_strength": len(token),
 			})
@@ -514,7 +514,7 @@ func TestInvalidateAppPassword(t *testing.T) {
 			// initialize temp file with `state_json` content
 			tmpFile := createTempFile(t, tempDir, "test.json")
 			fill(t, tmpFile, test.stateJSON)
-			manager, err := New(map[string]interface{}{
+			manager, err := New(context.Background(), map[string]interface{}{
 				"file":           tmpFile.Name(),
 				"token_strength": 4,
 			})
@@ -669,7 +669,7 @@ func TestGetAppPassword(t *testing.T) {
 			// initialize temp file with `state_json` content
 			tmpFile := createTempFile(t, tempDir, "test.json")
 			fill(t, tmpFile, test.stateJSON)
-			manager, err := New(map[string]interface{}{
+			manager, err := New(context.Background(), map[string]interface{}{
 				"file":           tmpFile.Name(),
 				"token_strength": 4,
 			})

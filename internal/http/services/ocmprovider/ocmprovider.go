@@ -19,14 +19,14 @@
 package ocmprovider
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/mitchellh/mapstructure"
-	"github.com/rs/zerolog"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
 func init() {
@@ -62,7 +62,7 @@ type svc struct {
 	data *discoveryData
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.OCMPrefix == "" {
 		c.OCMPrefix = "ocm"
 	}
@@ -125,14 +125,12 @@ func (c *config) prepare() *discoveryData {
 // New returns a new ocmprovider object, that implements
 // the OCM discovery endpoint specified in
 // https://cs3org.github.io/OCM-API/docs.html?repo=OCM-API&user=cs3org#/paths/~1ocm-provider/get
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
+func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-
-	conf.init()
-	return &svc{data: conf.prepare()}, nil
+	return &svc{data: c.prepare()}, nil
 }
 
 // Close performs cleanup.
@@ -154,6 +152,12 @@ func (s *svc) Handler() http.Handler {
 		log := appctx.GetLogger(r.Context())
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		if r.UserAgent() == "Nextcloud Server Crawler" {
+			// TODO(lopresti) remove this hack once Nextcloud is able to talk OCM!
+			s.data.APIVersion = "1.0-proposal1"
+		} else {
+			s.data.APIVersion = "1.1.0"
+		}
 		indented, _ := json.MarshalIndent(s.data, "", "   ")
 		if _, err := w.Write(indented); err != nil {
 			log.Err(err).Msg("Error writing to ResponseWriter")

@@ -29,7 +29,7 @@ type Config struct {
 }
 
 // Init sets sane defaults.
-func (c *Config) Init() {
+func (c *Config) ApplyDefaults() {
 	if c.MetricsDataDriverType == "json" {
 		// default values
 		if c.MetricsDataLocation == "" {

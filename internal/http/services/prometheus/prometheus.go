@@ -19,13 +19,13 @@
 package prometheus
 
 import (
+	"context"
 	"net/http"
 
 	"contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
 	"go.opencensus.io/stats/view"
 )
 
@@ -34,13 +34,11 @@ func init() {
 }
 
 // New returns a new prometheus service.
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
+func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-
-	conf.init()
 
 	pe, err := prometheus.NewExporter(prometheus.Options{
 		Namespace: "revad",
@@ -50,14 +48,14 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	}
 
 	view.RegisterExporter(pe)
-	return &svc{prefix: conf.Prefix, h: pe}, nil
+	return &svc{prefix: c.Prefix, h: pe}, nil
 }
 
 type config struct {
 	Prefix string `mapstructure:"prefix"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.Prefix == "" {
 		c.Prefix = "metrics"
 	}

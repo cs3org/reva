@@ -19,6 +19,7 @@
 package gateway
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strings"
@@ -31,8 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/token/manager/registry"
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"google.golang.org/grpc"
 )
 
@@ -74,7 +74,7 @@ type config struct {
 }
 
 // sets defaults.
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.ShareFolder == "" {
 		c.ShareFolder = "MyShares"
 	}
@@ -124,13 +124,11 @@ type svc struct {
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
 // The gateway is responsible for high-level controls: rate-limiting, coordination between svcs
 // like sharing and storage acls, asynchronous transactions, ...
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-
-	c.init()
 
 	// ensure DataGatewayEndpoint is a valid URI
 	u, err := url.Parse(c.DataGatewayEndpoint)
@@ -152,7 +150,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	createHomeCache.SkipTTLExtensionOnHit(true)
 
 	s := &svc{
-		c:               c,
+		c:               &c,
 		dataGatewayURL:  *u,
 		tokenmgr:        tokenManager,
 		etagCache:       etagCache,
@@ -173,15 +171,6 @@ func (s *svc) Close() error {
 
 func (s *svc) UnprotectedEndpoints() []string {
 	return []string{"/cs3.gateway.v1beta1.GatewayAPI"}
-}
-
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "gateway: error decoding conf")
-		return nil, err
-	}
-	return c, nil
 }
 
 func getTokenManager(manager string, m map[string]map[string]interface{}) (token.Manager, error) {

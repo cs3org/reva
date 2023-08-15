@@ -19,6 +19,7 @@
 package ocis_test
 
 import (
+	"context"
 	"os"
 
 	"github.com/cs3org/reva/pkg/storage/fs/ocis"
@@ -52,7 +53,7 @@ var _ = Describe("Ocis", func() {
 
 	Describe("New", func() {
 		It("returns a new instance", func() {
-			_, err := ocis.New(options)
+			_, err := ocis.New(context.Background(), options)
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})

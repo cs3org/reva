@@ -32,8 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/eosfs"
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
 func init() {
@@ -54,11 +53,12 @@ type wrapper struct {
 	mountIDTemplate *template.Template
 }
 
-func parseConfig(m map[string]interface{}) (*eosfs.Config, string, error) {
-	c := &eosfs.Config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, "", err
+// New returns an implementation of the storage.FS interface that forms a wrapper
+// around separate connections to EOS.
+func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
+	var c eosfs.Config
+	if err := cfg.Decode(m, &c); err != nil {
+		return nil, err
 	}
 
 	// default to version invariance if not configured
@@ -77,18 +77,7 @@ func parseConfig(m map[string]interface{}) (*eosfs.Config, string, error) {
 		t = "eoshome-{{ trimAll \"/\" .Path | substr 0 1 }}"
 	}
 
-	return c, t, nil
-}
-
-// New returns an implementation of the storage.FS interface that forms a wrapper
-// around separate connections to EOS.
-func New(m map[string]interface{}) (storage.FS, error) {
-	c, t, err := parseConfig(m)
-	if err != nil {
-		return nil, err
-	}
-
-	eos, err := eosfs.NewEOSFS(c)
+	eos, err := eosfs.NewEOSFS(ctx, &c)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +87,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		return nil, err
 	}
 
-	return &wrapper{FS: eos, conf: c, mountIDTemplate: mountIDTemplate}, nil
+	return &wrapper{FS: eos, conf: &c, mountIDTemplate: mountIDTemplate}, nil
 }
 
 // We need to override the two methods, GetMD and ListFolder to fill the

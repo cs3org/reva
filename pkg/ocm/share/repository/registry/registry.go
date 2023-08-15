@@ -18,11 +18,15 @@
 
 package registry
 
-import "github.com/cs3org/reva/pkg/ocm/share"
+import (
+	"context"
+
+	"github.com/cs3org/reva/pkg/ocm/share"
+)
 
 // NewFunc is the function that share repositories
 // should register at init time.
-type NewFunc func(map[string]interface{}) (share.Repository, error)
+type NewFunc func(context.Context, map[string]interface{}) (share.Repository, error)
 
 // NewFuncs is a map containing all the registered share repositories.
 var NewFuncs = map[string]NewFunc{}

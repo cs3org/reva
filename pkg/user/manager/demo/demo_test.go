@@ -31,7 +31,7 @@ var ctx = context.Background()
 
 func TestUserManager(t *testing.T) {
 	// get manager
-	manager, _ := New(nil)
+	manager, _ := New(context.TODO(), nil)
 
 	// setup test data
 	uidEinstein := &userpb.UserId{Idp: "http://localhost:9998", OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51", Type: userpb.UserType_USER_TYPE_PRIMARY}

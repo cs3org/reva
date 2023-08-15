@@ -42,9 +42,8 @@ import (
 	"github.com/cs3org/reva/pkg/storage/favorite"
 	"github.com/cs3org/reva/pkg/storage/favorite/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
 )
 
 type ctxKey int
@@ -115,7 +114,7 @@ type Config struct {
 	Notifications          map[string]interface{}            `mapstructure:"notifications" docs:"Settingsg for the Notification Helper"`
 }
 
-func (c *Config) init() {
+func (c *Config) ApplyDefaults() {
 	// note: default c.Prefix is an empty string
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 
@@ -145,36 +144,35 @@ func getFavoritesManager(c *Config) (favorite.Manager, error) {
 }
 
 // New returns a new ocdav.
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-	conf := &Config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
+func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+	var c Config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
-	conf.init()
-
-	fm, err := getFavoritesManager(conf)
+	fm, err := getFavoritesManager(&c)
 	if err != nil {
 		return nil, err
 	}
 
+	log := appctx.GetLogger(ctx)
 	s := &svc{
-		c:             conf,
+		c:             &c,
 		webDavHandler: new(WebDavHandler),
 		davHandler:    new(DavHandler),
 		client: rhttp.GetHTTPClient(
-			rhttp.Timeout(time.Duration(conf.Timeout*int64(time.Second))),
-			rhttp.Insecure(conf.Insecure),
+			rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second))),
+			rhttp.Insecure(c.Insecure),
 		),
 		favoritesManager:   fm,
-		notificationHelper: notificationhelper.New("ocdav", conf.Notifications, log),
+		notificationHelper: notificationhelper.New("ocdav", c.Notifications, log),
 	}
 
-	// initialize handlers and set default configs
-	if err := s.webDavHandler.init(conf.WebdavNamespace, true); err != nil {
+	// initialize handlers and set default cigs
+	if err := s.webDavHandler.init(c.WebdavNamespace, true); err != nil {
 		return nil, err
 	}
-	if err := s.davHandler.init(conf); err != nil {
+	if err := s.davHandler.init(&c); err != nil {
 		return nil, err
 	}
 	return s, nil

@@ -19,11 +19,12 @@
 package local
 
 import (
+	"context"
+
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/localfs"
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
 func init() {
@@ -35,20 +36,20 @@ type config struct {
 	ShareFolder string `mapstructure:"share_folder" docs:"/MyShares;Path for storing share references."`
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
+func (c *config) ApplyDefaults() {
+	if c.Root == "" {
+		c.Root = "/var/tmp/reva"
 	}
-	return c, nil
+	if c.ShareFolder == "" {
+		c.ShareFolder = "/MyShares"
+	}
 }
 
 // New returns an implementation to of the storage.FS interface that talks to
 // a local filesystem with user homes disabled.
-func New(m map[string]interface{}) (storage.FS, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 

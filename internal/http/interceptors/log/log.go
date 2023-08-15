@@ -100,7 +100,7 @@ func writeLog(log *zerolog.Logger, req *http.Request, url url.URL, ts time.Time,
 	event.Str("host", host).Str("method", req.Method).Str("uri", uri).Int("status", status).
 		Msg("processed http request")
 
-	log.Debug().Str("host", host).Str("method", req.Method).
+	log.Trace().Str("host", host).Str("method", req.Method).
 		Str("uri", uri).Str("proto", req.Proto).Interface("req_headers", req.Header).
 		Int("status", status).Int("size", size).Interface("res_headers", resHeaders).
 		Str("start", ts.Format("02/Jan/2006:15:04:05 -0700")).

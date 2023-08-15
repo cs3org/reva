@@ -19,6 +19,7 @@
 package reverseproxy
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httputil"
@@ -27,9 +28,8 @@ import (
 
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/go-chi/chi/v5"
-	"github.com/mitchellh/mapstructure"
-	"github.com/rs/zerolog"
 )
 
 func init() {
@@ -45,7 +45,7 @@ type config struct {
 	ProxyRulesJSON string `mapstructure:"proxy_rules_json"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.ProxyRulesJSON == "" {
 		c.ProxyRulesJSON = "/etc/revad/proxy_rules.json"
 	}
@@ -56,14 +56,13 @@ type svc struct {
 }
 
 // New returns an instance of the reverse proxy service.
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
+func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	conf.init()
 
-	f, err := os.ReadFile(conf.ProxyRulesJSON)
+	f, err := os.ReadFile(c.ProxyRulesJSON)
 	if err != nil {
 		return nil, err
 	}

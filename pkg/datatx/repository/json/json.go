@@ -19,6 +19,7 @@
 package json
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"os"
@@ -28,7 +29,7 @@ import (
 	txv1beta "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 	"github.com/cs3org/reva/pkg/datatx"
 	"github.com/cs3org/reva/pkg/datatx/repository/registry"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
 
@@ -50,28 +51,18 @@ type transfersModel struct {
 	Transfers map[string]*datatx.Transfer `json:"transfers"`
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "datatx repository json driver: error decoding configuration")
-		return nil, err
-	}
-	return c, nil
-}
-
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.File == "" {
 		c.File = "/var/tmp/reva/datatx-transfers.json"
 	}
 }
 
 // New returns a json storage driver.
-func New(m map[string]interface{}) (datatx.Repository, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+func New(ctx context.Context, m map[string]interface{}) (datatx.Repository, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	c.init()
 
 	model, err := loadOrCreate(c.File)
 	if err != nil {
@@ -80,7 +71,7 @@ func New(m map[string]interface{}) (datatx.Repository, error) {
 	}
 
 	mgr := &mgr{
-		config: c,
+		config: &c,
 		model:  model,
 	}
 

@@ -35,8 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
 type cback struct {
@@ -50,16 +49,16 @@ func init() {
 
 // New returns an implementation to the storage.FS interface that talks to
 // cback.
-func New(m map[string]interface{}) (fs storage.FS, err error) {
-	c := &Options{}
-	if err = mapstructure.Decode(m, c); err != nil {
-		return nil, errors.Wrap(err, "Error Decoding Configuration")
+func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err error) {
+	var o Options
+	if err := cfg.Decode(m, &o); err != nil {
+		return nil, err
 	}
 
 	httpClient := rhttp.GetHTTPClient()
 
 	// Returns the storage.FS interface
-	return &cback{conf: c, client: httpClient}, nil
+	return &cback{conf: &o, client: httpClient}, nil
 }
 
 func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {

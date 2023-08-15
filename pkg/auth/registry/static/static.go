@@ -26,7 +26,7 @@ import (
 	"github.com/cs3org/reva/pkg/auth/registry/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
 func init() {
@@ -37,7 +37,7 @@ type config struct {
 	Rules map[string]string `mapstructure:"rules"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if len(c.Rules) == 0 {
 		c.Rules = map[string]string{
 			"basic": sharedconf.GetGatewaySVC(""),
@@ -70,20 +70,11 @@ func (r *reg) GetProvider(ctx context.Context, authType string) (*registrypb.Pro
 	return nil, errtypes.NotFound("static: auth type not found: " + authType)
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
-	}
-	return c, nil
-}
-
 // New returns an implementation of the auth.Registry interface.
-func New(m map[string]interface{}) (auth.Registry, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+func New(ctx context.Context, m map[string]interface{}) (auth.Registry, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	c.init()
 	return &reg{rules: c.Rules}, nil
 }

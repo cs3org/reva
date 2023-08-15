@@ -33,7 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
 
@@ -63,27 +63,14 @@ type Action struct {
 	argS     string
 }
 
-func (c *AuthManagerConfig) init() {
-}
-
-func parseConfig(m map[string]interface{}) (*AuthManagerConfig, error) {
-	c := &AuthManagerConfig{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	return c, nil
-}
-
 // New returns an auth manager implementation that verifies against a Nextcloud backend.
-func New(m map[string]interface{}) (auth.Manager, error) {
-	c, err := parseConfig(m)
-	if err != nil {
-		return nil, err
+func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
+	var c AuthManagerConfig
+	if err := cfg.Decode(m, &c); err != nil {
+		return nil, errors.Wrap(err, "nextcloud: error decoding config")
 	}
-	c.init()
 
-	return NewAuthManager(c)
+	return NewAuthManager(&c)
 }
 
 // NewAuthManager returns a new Nextcloud-based AuthManager.

@@ -73,7 +73,7 @@ type Configuration struct {
 }
 
 // Init sets sane defaults.
-func (c *Configuration) Init() {
+func (c *Configuration) ApplyDefaults() {
 	if c.Prefix == "" {
 		c.Prefix = "mentix"
 	}

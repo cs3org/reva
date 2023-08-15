@@ -32,7 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
 
@@ -53,7 +53,7 @@ type config struct {
 	HomeProvider string          `mapstructure:"home_provider"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.HomeProvider == "" {
 		c.HomeProvider = "/"
 	}
@@ -70,23 +70,14 @@ func (c *config) init() {
 	}
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
-	}
-	return c, nil
-}
-
 // New returns an implementation of the storage.Registry interface that
 // redirects requests to corresponding storage drivers.
-func New(m map[string]interface{}) (storage.Registry, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+func New(ctx context.Context, m map[string]interface{}) (storage.Registry, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	c.init()
-	return &reg{c: c}, nil
+	return &reg{c: &c}, nil
 }
 
 type reg struct {

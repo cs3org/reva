@@ -19,12 +19,14 @@
 package siteacc
 
 import (
+	"context"
 	"net/http"
 
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/siteacc"
 	"github.com/cs3org/reva/pkg/siteacc/config"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -64,21 +66,6 @@ func (s *svc) Handler() http.Handler {
 	return s.siteacc.RequestHandler()
 }
 
-func parseConfig(m map[string]interface{}) (*config.Configuration, error) {
-	conf := &config.Configuration{}
-	if err := mapstructure.Decode(m, &conf); err != nil {
-		return nil, errors.Wrap(err, "error decoding configuration")
-	}
-	applyDefaultConfig(conf)
-	conf.Cleanup()
-
-	if conf.Webserver.URL == "" {
-		return nil, errors.Errorf("no webserver URL specified")
-	}
-
-	return conf, nil
-}
-
 func applyDefaultConfig(conf *config.Configuration) {
 	if conf.Prefix == "" {
 		conf.Prefix = serviceName
@@ -103,22 +90,25 @@ func applyDefaultConfig(conf *config.Configuration) {
 }
 
 // New returns a new Site Accounts service.
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-	// Prepare the configuration
-	conf, err := parseConfig(m)
-	if err != nil {
+func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+	var c config.Configuration
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
+	applyDefaultConfig(&c)
+	c.Cleanup()
+
 	// Create the sites accounts instance
-	siteacc, err := siteacc.New(conf, log)
+	log := appctx.GetLogger(ctx)
+	siteacc, err := siteacc.New(&c, log)
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating the sites accounts service")
 	}
 
 	// Create the service
 	s := &svc{
-		conf:    conf,
+		conf:    &c,
 		log:     log,
 		siteacc: siteacc,
 	}

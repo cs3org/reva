@@ -1,0 +1,187 @@
+[shared]
+gatewaysvc = "{{ grpc.services.gateway.address }}"
+
+[vars]
+machine_api_key = "machine-api-key"
+provider_domain = "cernbox.cern.ch"
+
+[grpc.services.gateway]
+address = "0.0.0.0:19000"
+authregistrysvc = "{{ grpc.services.authregistry.address }}"
+appregistrysvc = "{{ grpc.services.appregistry.address }}"
+storageregistrysvc = "{{ grpc.services.storageregistry.address }}"
+userprovidersvc = "{{ grpc.services.userprovider.address }}"
+usershareprovidersvc = "{{ grpc.services.usershareprovider.address }}"
+ocmcoresvc = "{{ grpc.services.ocmcore.address }}"
+ocmshareprovidersvc = "{{ grpc.services.ocmshareprovider.address }}"
+ocminvitemanagersvc = "{{ grpc.services.ocminvitemanager.address }}"
+ocmproviderauthorizersvc = "{{ grpc.services.ocmproviderauthorizer.address }}"
+datagateway = "http://localhost:{{ http.services.datagateway.address.port }}/data"
+transfer_expires = 6                         # give it a moment
+commit_share_to_storage_grant = true
+commit_share_to_storage_ref = true
+
+[grpc.services.authregistry]
+driver = "static"
+
+[grpc.services.authregistry.drivers.static.rules]
+basic = "{{ grpc.services.authprovider[0].address }}"
+machine = "{{ grpc.services.authprovider[1].address }}"
+ocmshares = "{{ grpc.services.authprovider[2].address }}"
+
+[grpc.services.appregistry]
+driver = "static"
+
+[grpc.services.appprovider]
+driver = "demo"
+app_provider_url = "{{ grpc.services.appprovider.address }}"
+
+[grpc.services.storageregistry]
+driver = "static"
+
+[grpc.services.storageregistry.drivers.static]
+home_provider = "/home"
+
+[grpc.services.storageregistry.drivers.static.rules]
+"/home" = { address = "{{ grpc.services.storageprovider[0].address }}" }
+"123e4567-e89b-12d3-a456-426655440000" = { address = "{{ grpc.services.storageprovider[0].address }}" }
+"/ocm" = { address = "{{ grpc.services.storageprovider[1].address }}" }
+"ocm" = { address = "{{ grpc.services.storageprovider[1].address }}" }
+"/sciencemesh" = { address = "{{ grpc.services.storageprovider[2].address }}" }
+"sciencemesh" = { address = "{{ grpc.services.storageprovider[2].address }}" }
+
+[grpc.services.usershareprovider]
+driver = "memory"
+
+[grpc.services.ocmcore]
+driver = "json"
+
+# Note that ocmcore and ocmshareprovider should use the same file for storing the shares.
+[grpc.services.ocmcore.drivers.json]
+file = "/var/tmp/reva/shares_server_1.json"
+
+[grpc.services.ocminvitemanager]
+driver = "json"
+provider_domain = "{{ vars.provider_domain }}"
+
+[grpc.services.ocminvitemanager.drivers.json]
+file = "/var/tmp/reva/invites_server_1.json"
+
+[grpc.services.ocmshareprovider]
+driver = "json"
+webdav_endpoint = "http://localhost:{{ http.services.ocdav.address.port }}"
+provider_domain = "{{ vars.provider_domain }}"
+
+[grpc.services.ocmshareprovider.drivers.json]
+file = "/var/tmp/reva/shares_server_1.json"
+
+[grpc.services.ocmproviderauthorizer]
+driver = "json"
+
+[grpc.services.ocmproviderauthorizer.drivers.json]
+providers = "/home/gianmaria/Documenti/CERN/reva2/examples/ocmd/providers.demo.json"
+
+################################################################
+##########             STORAGE PROVIDERS              ##########
+################################################################
+[[grpc.services.storageprovider]]
+driver = "localhome"
+mount_path = "/home"
+mount_id = "123e4567-e89b-12d3-a456-426655440000"
+expose_data_server = true
+data_server_url = "http://localhost:{{ http.services.dataprovider[0].address.port }}/data"
+enable_home_creation = true
+
+[grpc.services.storageprovider.drivers.localhome]
+user_layout = "{{.Username}}"
+
+
+[[grpc.services.storageprovider]]
+driver = "ocmoutcoming"
+mount_path = "/ocm"
+mount_id = "ocm"
+expose_data_server = true
+data_server_url = "http://localhost:{{ http.services.dataprovider[1].address.port }}/data"
+
+[grpc.services.storageprovider.drivers.ocmoutcoming]
+machine_secret = "machine-api-key"
+
+
+[[grpc.services.storageprovider]]
+driver = "ocmreceived"
+mount_path = "/sciencemesh"
+mount_id = "sciencemesh"
+expose_data_server = true
+data_server_url = "http://localhost:{{ http.services.dataprovider[2].address.port }}/data"
+
+################################################################
+##########              AUTH PROVIDERS                ##########
+################################################################
+[[grpc.services.authprovider]]
+auth_manager = "json"
+
+[grpc.services.authprovider.auth_managers.json]
+users = "/home/gianmaria/Documenti/CERN/reva2/examples/ocmd/users.demo.json"
+
+
+[[grpc.services.authprovider]]
+auth_manager = "machine"
+
+[grpc.services.authprovider.auth_managers.machine]
+api_key = "{{ vars.machine_api_key }}"
+gateway_addr = "{{ grpc.services.gateway.address }}"
+
+
+[[grpc.services.authprovider]]
+auth_manager = "ocmshares"
+
+################################################################
+##########               USER PROVIDER                ##########
+################################################################
+[grpc.services.userprovider]
+driver = "json"
+
+[grpc.services.userprovider.drivers.json]
+users = "/home/gianmaria/Documenti/CERN/reva2/examples/ocmd/users.demo.json"
+
+################################################################
+##########              DATA PROVIDERS                ##########
+################################################################
+[[http.services.dataprovider]]
+driver = "localhome"
+
+[http.services.dataprovider.drivers.localhome]
+user_layout = "{{.Username}}"
+
+[[http.services.dataprovider]]
+driver = "ocmoutcoming"
+
+[http.services.dataprovider.drivers.ocmoutcoming]
+machine_secret = "{{ vars.machine_api_key }}"
+
+[[http.services.dataprovider]]
+driver = "ocmreceived"
+
+[http.services.ocmd]
+address = "0.0.0.0:8080"
+expose_recipient_display_name = true
+
+[http.services.ocmprovider]
+ocm_prefix = "ocm"
+provider = "reva@cern"
+endpoint = "http://localhost:{{ http.services.ocmd.address.port }}"
+enable_webapp = true
+enable_datatx = true
+
+[http.services.ocs]
+prefix = "ocs"
+
+[http.services.ocdav]
+address = "0.0.0.0:8080"
+
+[http.services.datagateway]
+address = "0.0.0.0:8080"
+
+[http.services.appprovider]
+
+[http.middlewares.cors]

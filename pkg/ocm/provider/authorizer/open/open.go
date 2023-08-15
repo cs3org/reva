@@ -28,8 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
 func init() {
@@ -37,13 +36,11 @@ func init() {
 }
 
 // New returns a new authorizer object.
-func New(m map[string]interface{}) (provider.Authorizer, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
+func New(ctx context.Context, m map[string]interface{}) (provider.Authorizer, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	c.init()
 
 	f, err := os.ReadFile(c.Providers)
 	if err != nil {
@@ -66,7 +63,7 @@ type config struct {
 	Providers string `mapstructure:"providers"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.Providers == "" {
 		c.Providers = "/etc/revad/ocm-providers.json"
 	}

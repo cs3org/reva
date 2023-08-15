@@ -156,7 +156,7 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
     TEST_WITH_LDAP='true' \
     REVA_LDAP_HOSTNAME='localhost' \
     TEST_REVA='true' \
-    BEHAT_FILTER_TAGS='~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis' \
+    BEHAT_FILTER_TAGS='~systemtags-app-required&&~@provisioning_api-app-required&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis' \
     EXPECTED_FAILURES_FILE=../reva/tests/acceptance/expected-failures-on-OCIS-storage.md \
     make test-acceptance-from-core-api
     ```

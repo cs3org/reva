@@ -35,7 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
 
@@ -58,24 +58,14 @@ type StorageDriver struct {
 	client       *http.Client
 }
 
-func parseConfig(m map[string]interface{}) (*StorageDriverConfig, error) {
-	c := &StorageDriverConfig{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	return c, nil
-}
-
 // New returns an implementation to of the storage.FS interface that talks to
 // a Nextcloud instance over http.
-func New(m map[string]interface{}) (storage.FS, error) {
-	conf, err := parseConfig(m)
-	if err != nil {
+func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
+	var c StorageDriverConfig
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-
-	return NewStorageDriver(conf)
+	return NewStorageDriver(&c)
 }
 
 // NewStorageDriver returns a new NextcloudStorageDriver.

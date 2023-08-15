@@ -24,85 +24,101 @@ import (
 	"net"
 	"net/http"
 	"path"
-	"sort"
 	"strings"
 	"time"
 
-	"github.com/cs3org/reva/internal/http/interceptors/appctx"
-	"github.com/cs3org/reva/internal/http/interceptors/auth"
-	"github.com/cs3org/reva/internal/http/interceptors/log"
-	"github.com/cs3org/reva/internal/http/interceptors/providerauthorizer"
+	"github.com/cs3org/reva/cmd/revad/pkg/config"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	rtrace "github.com/cs3org/reva/pkg/trace"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/propagation"
 )
 
-// New returns a new server.
-func New(m interface{}, l zerolog.Logger) (*Server, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
-		return nil, err
+type Config func(*Server)
+
+func WithServices(services map[string]global.Service) Config {
+	return func(s *Server) {
+		s.Services = services
 	}
+}
 
-	conf.init()
+func WithMiddlewares(middlewares []global.Middleware) Config {
+	return func(s *Server) {
+		s.middlewares = middlewares
+	}
+}
 
+func WithCertAndKeyFiles(cert, key string) Config {
+	return func(s *Server) {
+		s.CertFile = cert
+		s.KeyFile = key
+	}
+}
+
+func WithLogger(log zerolog.Logger) Config {
+	return func(s *Server) {
+		s.log = log
+	}
+}
+
+func InitServices(ctx context.Context, services map[string]config.ServicesConfig) (map[string]global.Service, error) {
+	s := make(map[string]global.Service)
+	for name, cfg := range services {
+		new, ok := global.Services[name]
+		if !ok {
+			return nil, fmt.Errorf("http service %s does not exist", name)
+		}
+		if cfg.DriversNumber() > 1 {
+			return nil, fmt.Errorf("service %s cannot have more than one driver in the same server", name)
+		}
+		log := appctx.GetLogger(ctx).With().Str("service", name).Logger()
+		ctx := appctx.WithLogger(ctx, &log)
+		svc, err := new(ctx, cfg[0].Config)
+		if err != nil {
+			return nil, errors.Wrapf(err, "http service %s could not be started", name)
+		}
+		s[name] = svc
+	}
+	return s, nil
+}
+
+// New returns a new server.
+func New(c ...Config) (*Server, error) {
 	httpServer := &http.Server{}
 	s := &Server{
+		log:         zerolog.Nop(),
 		httpServer:  httpServer,
-		conf:        conf,
 		svcs:        map[string]global.Service{},
 		unprotected: []string{},
 		handlers:    map[string]http.Handler{},
-		log:         l,
+		middlewares: []global.Middleware{},
 	}
+	for _, cc := range c {
+		cc(s)
+	}
+	s.registerServices()
 	return s, nil
 }
 
 // Server contains the server info.
 type Server struct {
+	Services map[string]global.Service // map key is service name
+	CertFile string
+	KeyFile  string
+
 	httpServer  *http.Server
-	conf        *config
 	listener    net.Listener
 	svcs        map[string]global.Service // map key is svc Prefix
 	unprotected []string
 	handlers    map[string]http.Handler
-	middlewares []*middlewareTriple
+	middlewares []global.Middleware
 	log         zerolog.Logger
-}
-
-type config struct {
-	Network     string                            `mapstructure:"network"`
-	Address     string                            `mapstructure:"address"`
-	Services    map[string]map[string]interface{} `mapstructure:"services"`
-	Middlewares map[string]map[string]interface{} `mapstructure:"middlewares"`
-	CertFile    string                            `mapstructure:"certfile"`
-	KeyFile     string                            `mapstructure:"keyfile"`
-}
-
-func (c *config) init() {
-	// apply defaults
-	if c.Network == "" {
-		c.Network = "tcp"
-	}
-
-	if c.Address == "" {
-		c.Address = "0.0.0.0:19001"
-	}
 }
 
 // Start starts the server.
 func (s *Server) Start(ln net.Listener) error {
-	if err := s.registerServices(); err != nil {
-		return err
-	}
-
-	if err := s.registerMiddlewares(); err != nil {
-		return err
-	}
-
 	handler, err := s.getHandler()
 	if err != nil {
 		return errors.Wrap(err, "rhttp: error creating http handler")
@@ -111,11 +127,11 @@ func (s *Server) Start(ln net.Listener) error {
 	s.httpServer.Handler = handler
 	s.listener = ln
 
-	if (s.conf.CertFile != "") && (s.conf.KeyFile != "") {
-		s.log.Info().Msgf("https server listening at https://%s '%s' '%s'", s.conf.Address, s.conf.CertFile, s.conf.KeyFile)
-		err = s.httpServer.ServeTLS(s.listener, s.conf.CertFile, s.conf.KeyFile)
+	if (s.CertFile != "") && (s.KeyFile != "") {
+		s.log.Info().Msgf("https server listening at https://%s using cert file '%s' and key file '%s'", s.listener.Addr(), s.CertFile, s.KeyFile)
+		err = s.httpServer.ServeTLS(s.listener, s.CertFile, s.KeyFile)
 	} else {
-		s.log.Info().Msgf("http server listening at http://%s '%s' '%s'", s.conf.Address, s.conf.CertFile, s.conf.KeyFile)
+		s.log.Info().Msgf("http server listening at http://%s", s.listener.Addr())
 		err = s.httpServer.Serve(s.listener)
 	}
 	if err == nil || err == http.ErrServerClosed {
@@ -148,12 +164,12 @@ func (s *Server) closeServices() {
 
 // Network return the network type.
 func (s *Server) Network() string {
-	return s.conf.Network
+	return s.listener.Addr().Network()
 }
 
 // Address returns the network address.
 func (s *Server) Address() string {
-	return s.conf.Address
+	return s.listener.Addr().String()
 }
 
 // GracefulStop gracefully stops the server.
@@ -162,68 +178,15 @@ func (s *Server) GracefulStop() error {
 	return s.httpServer.Shutdown(context.Background())
 }
 
-// middlewareTriple represents a middleware with the
-// priority to be chained.
-type middlewareTriple struct {
-	Name       string
-	Priority   int
-	Middleware global.Middleware
-}
-
-func (s *Server) registerMiddlewares() error {
-	middlewares := []*middlewareTriple{}
-	for name, newFunc := range global.NewMiddlewares {
-		if s.isMiddlewareEnabled(name) {
-			m, prio, err := newFunc(s.conf.Middlewares[name])
-			if err != nil {
-				err = errors.Wrapf(err, "error creating new middleware: %s,", name)
-				return err
-			}
-			middlewares = append(middlewares, &middlewareTriple{
-				Name:       name,
-				Priority:   prio,
-				Middleware: m,
-			})
-			s.log.Info().Msgf("http middleware enabled: %s", name)
-		}
+func (s *Server) registerServices() {
+	for name, svc := range s.Services {
+		// instrument services with opencensus tracing.
+		h := traceHandler(name, svc.Handler())
+		s.handlers[svc.Prefix()] = h
+		s.svcs[svc.Prefix()] = svc
+		s.unprotected = append(s.unprotected, getUnprotected(svc.Prefix(), svc.Unprotected())...)
+		s.log.Info().Msgf("http service enabled: %s@/%s", name, svc.Prefix())
 	}
-	s.middlewares = middlewares
-	return nil
-}
-
-func (s *Server) isMiddlewareEnabled(name string) bool {
-	_, ok := s.conf.Middlewares[name]
-	return ok
-}
-
-func (s *Server) registerServices() error {
-	for svcName := range s.conf.Services {
-		if s.isServiceEnabled(svcName) {
-			newFunc := global.Services[svcName]
-			svcLogger := s.log.With().Str("service", svcName).Logger()
-			svc, err := newFunc(s.conf.Services[svcName], &svcLogger)
-			if err != nil {
-				err = errors.Wrapf(err, "http service %s could not be started,", svcName)
-				return err
-			}
-
-			// instrument services with opencensus tracing.
-			h := traceHandler(svcName, svc.Handler())
-			s.handlers[svc.Prefix()] = h
-			s.svcs[svc.Prefix()] = svc
-			s.unprotected = append(s.unprotected, getUnprotected(svc.Prefix(), svc.Unprotected())...)
-			s.log.Info().Msgf("http service enabled: %s@/%s", svcName, svc.Prefix())
-		} else {
-			message := fmt.Sprintf("http service %s does not exist", svcName)
-			return errors.New(message)
-		}
-	}
-	return nil
-}
-
-func (s *Server) isServiceEnabled(svcName string) bool {
-	_, ok := global.Services[svcName]
-	return ok
 }
 
 // TODO(labkode): if the http server is exposed under a basename we need to prepend
@@ -312,44 +275,9 @@ func (s *Server) getHandler() (http.Handler, error) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 
-	// sort middlewares by priority.
-	sort.SliceStable(s.middlewares, func(i, j int) bool {
-		return s.middlewares[i].Priority > s.middlewares[j].Priority
-	})
-
 	handler := http.Handler(h)
-
-	for _, triple := range s.middlewares {
-		s.log.Info().Msgf("chaining http middleware %s with priority  %d", triple.Name, triple.Priority)
-		handler = triple.Middleware(traceHandler(triple.Name, handler))
-	}
-
-	for _, v := range s.unprotected {
-		s.log.Info().Msgf("unprotected URL: %s", v)
-	}
-	authMiddle, err := auth.New(s.conf.Middlewares["auth"], s.unprotected)
-	if err != nil {
-		return nil, errors.Wrap(err, "rhttp: error creating auth middleware")
-	}
-
-	// add always the logctx middleware as most priority, this middleware is internal
-	// and cannot be configured from the configuration.
-	coreMiddlewares := []*middlewareTriple{}
-
-	providerAuthMiddle, err := addProviderAuthMiddleware(s.conf, s.unprotected)
-	if err != nil {
-		return nil, errors.Wrap(err, "rhttp: error creating providerauthorizer middleware")
-	}
-	if providerAuthMiddle != nil {
-		coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: providerAuthMiddle, Name: "providerauthorizer"})
-	}
-
-	coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: authMiddle, Name: "auth"})
-	coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: log.New(), Name: "log"})
-	coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: appctx.New(s.log), Name: "appctx"})
-
-	for _, triple := range coreMiddlewares {
-		handler = triple.Middleware(traceHandler(triple.Name, handler))
+	for _, m := range s.middlewares {
+		handler = m(handler)
 	}
 
 	return handler, nil
@@ -365,14 +293,4 @@ func traceHandler(name string, h http.Handler) http.Handler {
 		rtrace.Propagator.Inject(ctx, propagation.HeaderCarrier(r.Header))
 		h.ServeHTTP(w, r.WithContext(ctx))
 	})
-}
-
-func addProviderAuthMiddleware(conf *config, unprotected []string) (global.Middleware, error) {
-	_, ocmdRegistered := global.Services["ocmd"]
-	_, ocmdEnabled := conf.Services["ocmd"]
-	ocmdPrefix, _ := conf.Services["ocmd"]["prefix"].(string)
-	if ocmdRegistered && ocmdEnabled {
-		return providerauthorizer.New(conf.Middlewares["providerauthorizer"], unprotected, ocmdPrefix)
-	}
-	return nil, nil
 }

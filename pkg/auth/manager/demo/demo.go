@@ -44,7 +44,7 @@ type Credentials struct {
 }
 
 // New returns a new auth Manager.
-func New(m map[string]interface{}) (auth.Manager, error) {
+func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 	// m not used
 	mgr := &manager{}
 	err := mgr.Configure(m)

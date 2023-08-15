@@ -19,12 +19,13 @@
 package sql
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
 	"github.com/cs3org/reva/pkg/notification"
 	"github.com/cs3org/reva/pkg/notification/manager/registry"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
 func init() {
@@ -37,7 +38,6 @@ type config struct {
 	DBHost     string `mapstructure:"db_host"`
 	DBPort     int    `mapstructure:"db_port"`
 	DBName     string `mapstructure:"db_name"`
-	GatewaySvc string `mapstructure:"gatewaysvc"`
 }
 
 type mgr struct {
@@ -46,9 +46,9 @@ type mgr struct {
 }
 
 // NewMysql returns an instance of the sql notifications manager.
-func NewMysql(m map[string]interface{}) (notification.Manager, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
+func NewMysql(ctx context.Context, m map[string]interface{}) (notification.Manager, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
@@ -80,7 +80,7 @@ func (m *mgr) UpsertNotification(n notification.Notification) error {
 	}
 
 	// Create/update notification
-	stmt, err := m.db.Prepare("REPLACE INTO cbox_notifications (ref, template_name) VALUES (?, ?)")
+	stmt, err := m.db.Prepare("REPLACE INTO notifications (ref, template_name) VALUES (?, ?)")
 	if err != nil {
 		return err
 	}
@@ -99,7 +99,7 @@ func (m *mgr) UpsertNotification(n notification.Notification) error {
 		return err
 	}
 
-	stmt, err = tx.Prepare("REPLACE INTO cbox_notification_recipients (notification_id, recipient) VALUES (?, ?)")
+	stmt, err = tx.Prepare("REPLACE INTO notification_recipients (notification_id, recipient) VALUES (?, ?)")
 	if err != nil {
 		_ = tx.Rollback()
 		return err
@@ -126,8 +126,8 @@ func (m *mgr) UpsertNotification(n notification.Notification) error {
 func (m *mgr) GetNotification(ref string) (*notification.Notification, error) {
 	query := `
 		SELECT n.id, n.ref, n.template_name, nr.recipient
-		FROM cbox_notifications AS n
-		JOIN cbox_notification_recipients AS nr ON n.id = nr.notification_id
+		FROM notifications AS n
+		JOIN notification_recipients AS nr ON n.id = nr.notification_id
 		WHERE n.ref = ?
 	`
 
@@ -171,7 +171,7 @@ func (m *mgr) DeleteNotification(ref string) error {
 	}
 
 	// Delete notification
-	stmt, err := m.db.Prepare("DELETE FROM cbox_notifications WHERE ref = ?")
+	stmt, err := m.db.Prepare("DELETE FROM notifications WHERE ref = ?")
 	if err != nil {
 		return err
 	}

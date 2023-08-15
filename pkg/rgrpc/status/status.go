@@ -181,6 +181,8 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 		return NewUnimplemented(ctx, err, "gateway: "+msg+":"+err.Error())
 	case errtypes.BadRequest:
 		return NewInvalidArg(ctx, "gateway: "+msg+":"+err.Error())
+	case errtypes.AlreadyExists:
+		return NewAlreadyExists(ctx, err, "gateway: "+msg+":"+err.Error())
 	}
 
 	// map GRPC status codes coming from the auth middleware

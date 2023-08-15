@@ -125,6 +125,10 @@ func (nh *NotificationHelper) connect() error {
 
 // Stop stops the notification helper.
 func (nh *NotificationHelper) Stop() {
+	if nh.nc == nil {
+		// service didn't connect yet to nat server
+		return
+	}
 	if err := nh.nc.Drain(); err != nil {
 		nh.Log.Error().Err(err)
 	}

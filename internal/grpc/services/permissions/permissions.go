@@ -26,14 +26,20 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/permission"
 	"github.com/cs3org/reva/pkg/permission/manager/registry"
+	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rgrpc"
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
+	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"google.golang.org/grpc"
 )
 
 func init() {
 	rgrpc.Register("permissions", New)
+	plugin.RegisterNamespace("grpc.services.permissions.drivers", func(name string, newFunc any) {
+		var f registry.NewFunc
+		utils.Cast(newFunc, &f)
+		registry.Register(name, f)
+	})
 }
 
 type config struct {
@@ -41,23 +47,14 @@ type config struct {
 	Drivers map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/permission/permission.go"`
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	return c, nil
-}
-
 type service struct {
 	manager permission.Manager
 }
 
 // New returns a new PermissionsServiceServer.
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
@@ -65,7 +62,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if !ok {
 		return nil, fmt.Errorf("could not get permission manager '%s'", c.Driver)
 	}
-	manager, err := f(c.Drivers[c.Driver])
+	manager, err := f(ctx, c.Drivers[c.Driver])
 	if err != nil {
 		return nil, err
 	}

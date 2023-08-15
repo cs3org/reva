@@ -26,15 +26,21 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
+	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
+	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"google.golang.org/grpc"
 )
 
 func init() {
 	rgrpc.Register("ocmproviderauthorizer", New)
+	plugin.RegisterNamespace("grpc.services.ocmproviderauthorizer.drivers", func(name string, newFunc any) {
+		var f registry.NewFunc
+		utils.Cast(newFunc, &f)
+		registry.Register(name, f)
+	})
 }
 
 type config struct {
@@ -47,7 +53,7 @@ type service struct {
 	pa   provider.Authorizer
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.Driver == "" {
 		c.Driver = "json"
 	}
@@ -57,37 +63,27 @@ func (s *service) Register(ss *grpc.Server) {
 	ocmprovider.RegisterProviderAPIServer(ss, s)
 }
 
-func getProviderAuthorizer(c *config) (provider.Authorizer, error) {
+func getProviderAuthorizer(ctx context.Context, c *config) (provider.Authorizer, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
+		return f(ctx, c.Drivers[c.Driver])
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	return c, nil
-}
-
 // New creates a new OCM provider authorizer svc.
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	c.init()
 
-	pa, err := getProviderAuthorizer(c)
+	pa, err := getProviderAuthorizer(ctx, &c)
 	if err != nil {
 		return nil, err
 	}
 
 	service := &service{
-		conf: c,
+		conf: &c,
 		pa:   pa,
 	}
 	return service, nil

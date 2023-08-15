@@ -19,12 +19,12 @@
 package helloworld
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/mitchellh/mapstructure"
-	"github.com/rs/zerolog"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
 func init() {
@@ -32,15 +32,13 @@ func init() {
 }
 
 // New returns a new helloworld service.
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
+func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
-	conf.init()
-
-	return &svc{conf: conf}, nil
+	return &svc{conf: &c}, nil
 }
 
 // Close performs cleanup.
@@ -53,7 +51,7 @@ type config struct {
 	HelloMessage string `mapstructure:"message"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.HelloMessage == "" {
 		c.HelloMessage = "Hello World!"
 	}

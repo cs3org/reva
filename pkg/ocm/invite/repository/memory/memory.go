@@ -37,7 +37,7 @@ func init() {
 }
 
 // New returns a new invite manager.
-func New(m map[string]interface{}) (invite.Repository, error) {
+func New(ctx context.Context, m map[string]interface{}) (invite.Repository, error) {
 	return &manager{
 		Invites:       sync.Map{},
 		AcceptedUsers: sync.Map{},

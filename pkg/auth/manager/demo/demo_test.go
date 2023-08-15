@@ -27,7 +27,7 @@ var ctx = context.Background()
 
 func TestUserManager(t *testing.T) {
 	// get manager
-	manager, _ := New(nil)
+	manager, _ := New(context.Background(), nil)
 
 	// Authenticate - positive test
 	_, _, err := manager.Authenticate(ctx, "einstein", "relativity")

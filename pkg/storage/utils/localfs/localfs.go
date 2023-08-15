@@ -62,7 +62,7 @@ type Config struct {
 	References          string `mapstructure:"references"`
 }
 
-func (c *Config) init() {
+func (c *Config) ApplyDefaults() {
 	if c.Root == "" {
 		c.Root = "/var/tmp/reva"
 	}
@@ -100,7 +100,7 @@ type localfs struct {
 // NewLocalFS returns a storage.FS interface implementation that controls then
 // local filesystem.
 func NewLocalFS(c *Config) (storage.FS, error) {
-	c.init()
+	c.ApplyDefaults()
 
 	// create namespaces if they do not exist
 	namespaces := []string{c.DataDirectory, c.Uploads, c.Shadow, c.References, c.RecycleBin, c.Versions}

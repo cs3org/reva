@@ -146,13 +146,14 @@ Call the `ocm-share-list-received` method.
 +--------------------------------------+-----------------+--------------------------------------+-------------------------------------------------------------------------------+-------------------+-------------+--------------------------------------+--------------------------------+--------------------------------+---------------------+-----------------+
 ```
 
-The share's recipien has received the share `ef05c999-8ae2-41af-ba0d-a886b061011f`. The user can get more informations about the share using the `ocm-share-get-received` command.
+The share's recipient has received the share `ef05c999-8ae2-41af-ba0d-a886b061011f`. The user can get more informations about the share using the `ocm-share-get-received` command.
 
 ```
 ocm-share-get-received ef05c999-8ae2-41af-ba0d-a886b061011f
 {"id":{"opaqueId":"ef05c999-8ae2-41af-ba0d-a886b061011f"}, "name":"my-folder", "resourceId":{"opaqueId":"123e4567-e89b-12d3-a456-426655440000:fileid-einstein%2Fmy-folder"}, "grantee":{"type":"GRANTEE_TYPE_USER", "userId":{"idp":"cesnet.cz", "opaqueId":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c", "type":"USER_TYPE_PRIMARY"}}, "owner":{"idp":"cernbox.cern.ch", "opaqueId":"4c510ada-c86b-4815-8820-42cdf82c3d51", "type":"USER_TYPE_FEDERATED"}, "creator":{"idp":"cernbox.cern.ch", "opaqueId":"4c510ada-c86b-4815-8820-42cdf82c3d51", "type":"USER_TYPE_FEDERATED"}, "ctime":{"seconds":"1681206728", "nanos":346009879}, "mtime":{"seconds":"1681206728", "nanos":346009879}, "shareType":"SHARE_TYPE_USER", "protocols":[{"webdavOptions":{"permissions":{"permissions":{"getPath":true, "initiateFileDownload":true, "initiateFileUpload":true, "listContainer":true, "stat":true}}, "uri":"http://localhost:19001/remote.php/dav/ocm/eSWNjTWjorFmZEGQNZVyrU3TyxdWEr1D"}}], "state":"SHARE_STATE_PENDING", "resourceType":"RESOURCE_TYPE_CONTAINER"}
 ```
 
+#### 5.2.3 Access content that was shared
 In this case, the share can be accessed using the WebDAV protocol (multiple access methods are available, like WebDAV, Webapp and Datatx) using the URL `http://localhost:19001/remote.php/dav/ocm/eSWNjTWjorFmZEGQNZVyrU3TyxdWEr1D`, and every WebDAV client can be used to access the received share resource.
 
 For example:

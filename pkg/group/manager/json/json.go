@@ -30,7 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/group"
 	"github.com/cs3org/reva/pkg/group/manager/registry"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
 
@@ -47,26 +47,16 @@ type config struct {
 	Groups string `mapstructure:"groups"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.Groups == "" {
 		c.Groups = "/etc/revad/groups.json"
 	}
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	c.init()
-	return c, nil
-}
-
 // New returns a group manager implementation that reads a json file to provide group metadata.
-func New(m map[string]interface{}) (group.Manager, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+func New(ctx context.Context, m map[string]interface{}) (group.Manager, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 

@@ -29,7 +29,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
 
@@ -46,24 +46,14 @@ type config struct {
 	Users string `mapstructure:"users"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.Users == "" {
 		c.Users = "/etc/revad/users.json"
 	}
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	c.init()
-	return c, nil
-}
-
 // New returns a user manager implementation that reads a json file to provide user metadata.
-func New(m map[string]interface{}) (user.Manager, error) {
+func New(_ context.Context, m map[string]interface{}) (user.Manager, error) {
 	mgr := &manager{}
 	err := mgr.Configure(m)
 	if err != nil {
@@ -73,8 +63,8 @@ func New(m map[string]interface{}) (user.Manager, error) {
 }
 
 func (m *manager) Configure(ml map[string]interface{}) error {
-	c, err := parseConfig(ml)
-	if err != nil {
+	var c config
+	if err := cfg.Decode(ml, &c); err != nil {
 		return err
 	}
 

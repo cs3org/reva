@@ -37,6 +37,8 @@ providers = "{{file_providers}}"
 
 [grpc.services.ocmshareprovider]
 driver = "json"
+webdav_endpoint = "http://{{cesnethttp_address}}"
+provider_domain = "cesnet.cz"
 
 [grpc.services.ocmshareprovider.drivers.json]
 file = "{{ocm_share_cesnet_file}}"

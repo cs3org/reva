@@ -34,8 +34,8 @@ import (
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/repository/registry"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/google/uuid"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
 )
@@ -45,13 +45,11 @@ func init() {
 }
 
 // New returns a new authorizer object.
-func New(m map[string]interface{}) (share.Repository, error) {
-	c, err := parseConfig(m)
-	if err != nil {
-		err = errors.Wrap(err, "error creating a new manager")
+func New(ctx context.Context, m map[string]interface{}) (share.Repository, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	c.init()
 
 	// load or create file
 	model, err := loadOrCreate(c.File)
@@ -61,7 +59,7 @@ func New(m map[string]interface{}) (share.Repository, error) {
 	}
 
 	mgr := &mgr{
-		c:     c,
+		c:     &c,
 		model: model,
 	}
 
@@ -170,7 +168,7 @@ type config struct {
 	File string `mapstructure:"file"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.File == "" {
 		c.File = "/var/tmp/reva/ocm-shares.json"
 	}
@@ -215,14 +213,6 @@ func (m *mgr) load() error {
 
 	m.model = &model
 	return nil
-}
-
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
-	}
-	return c, nil
 }
 
 func genID() string {

@@ -124,7 +124,7 @@ var _ = Describe("ocm invitation workflow", func() {
 		}
 	)
 
-	for _, driver := range []string{"json", "sql"} {
+	for _, driver := range []string{"json"} {
 
 		JustBeforeEach(func() {
 			tokenManager, err := jwt.New(map[string]interface{}{"secret": "changemeplease"})

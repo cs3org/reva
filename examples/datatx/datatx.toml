@@ -18,7 +18,7 @@ remove_transfer_on_cancel = true
 # rclone driver
 [grpc.services.datatx.txdrivers.rclone]
 # rclone endpoint
-endpoint = "http://..."
+endpoint = "http://your.rclone.server:5572"
 # Basic auth is used for authenticating with rclone
 auth_user = "{rclone user}"
 auth_pass = "{rclone user secret}"

@@ -32,10 +32,9 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/golang-jwt/jwt"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
 )
 
 const (
@@ -57,12 +56,12 @@ type transferClaims struct {
 }
 type config struct {
 	Prefix               string `mapstructure:"prefix"`
-	TransferSharedSecret string `mapstructure:"transfer_shared_secret"`
+	TransferSharedSecret string `mapstructure:"transfer_shared_secret" validate:"required"`
 	Timeout              int64  `mapstructure:"timeout"`
 	Insecure             bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.Prefix == "" {
 		c.Prefix = "datagateway"
 	}
@@ -77,19 +76,17 @@ type svc struct {
 }
 
 // New returns a new datagateway.
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
+func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
-	conf.init()
-
 	s := &svc{
-		conf: conf,
+		conf: &c,
 		client: rhttp.GetHTTPClient(
-			rhttp.Timeout(time.Duration(conf.Timeout*int64(time.Second))),
-			rhttp.Insecure(conf.Insecure),
+			rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second))),
+			rhttp.Insecure(c.Insecure),
 		),
 	}
 	s.setHandler()

@@ -27,7 +27,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/preferences"
 	"github.com/cs3org/reva/pkg/preferences/registry"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
 func init() {
@@ -48,9 +48,9 @@ type mgr struct {
 }
 
 // New returns an instance of the cbox sql preferences manager.
-func New(m map[string]interface{}) (preferences.Manager, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
+func New(ctx context.Context, m map[string]interface{}) (preferences.Manager, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
@@ -60,7 +60,7 @@ func New(m map[string]interface{}) (preferences.Manager, error) {
 	}
 
 	return &mgr{
-		c:  c,
+		c:  &c,
 		db: db,
 	}, nil
 }

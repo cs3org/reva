@@ -1,278 +1,238 @@
-Changelog for reva 1.24.0 (2023-05-11)
+Changelog for reva 1.25.0 (2023-08-14)
 =======================================
 
-The following sections list the changes in reva 1.24.0 relevant to
+The following sections list the changes in reva 1.25.0 relevant to
 reva users. The changes are ordered by importance.
 
 Summary
 -------
 
- * Fix #3805: Apps: fixed viewMode resolution
- * Fix #3771: Fix files sharing capabilities
- * Fix #3749: Fix persisting updates of received shares in json driver
- * Fix #3723: Fix revad docker images by enabling CGO
- * Fix #3765: Fix create version folder in EOS driver
- * Fix #3786: Fix listing directory for a read-only shares for EOS storage driver
- * Fix #3787: Fix application flag for EOS binary
- * Fix #3780: Fix Makefile error on Ubuntu
- * Fix #3873: Fix parsing of grappa response
- * Fix #3794: Fix unshare for EOS storage driver
- * Fix #3838: Fix upload in a single file share for lightweight accounts
- * Fix #3878: Fix creator/initiator in public and user shares
- * Fix #3813: Fix propfind URL for OCM shares
- * Fix #3770: Fixed default protocol on ocm-share-create
- * Fix #3852: Pass remote share id and shared secret in OCM call
- * Fix #3859: Fix inconsistency between data transfer protocol naming
- * Enh #3847: Update data transfers for current OCM shares implementation
- * Enh #3869: Datatx tutorial
- * Enh #3762: Denial and Resharing Default capabilities
- * Enh #3717: Disable sharing on low level paths
- * Enh #3766: Download file revisions
- * Enh #3733: Add support for static linking
- * Enh #3778: Add support to tag eos traffic
- * Enh #3868: Implement historical way of constructing OCM WebDAV URL
- * Enh #3719: Skip computing groups when fetching all groups from grappa
- * Enh #3783: Updated OCM tutorial
- * Enh #3750: New metadata flags
- * Enh #3839: Support multiple issuer in OIDC auth driver
- * Enh #3772: New OCM discovery endpoint
- * Enh #3619: Tests for invitation manager SQL driver
- * Enh #3757: Support OCM v1.0 schema
- * Enh #3695: Create OCM share from sciencemesh service
- * Enh #3722: List only valid OCM tokens
- * Enh #3821: Revamp user/group drivers and fix user type
- * Enh #3724: Send invitation link from mesh directory
- * Enh #3824: Serverless Services
+ * Fix #4032: Temporarily exclude ceph-iscsi when building revad-ceph image
+ * Fix #3883: Fix group request to Grappa
+ * Fix #3946: Filter OCM shares by path
+ * Fix #4016: Fix panic when closing notification service
+ * Fix #4061: Fixes on notifications
+ * Fix #3962: OCM-related compatibility fixes
+ * Fix #3972: Fix for #3971
+ * Fix #3882: Remove transfer on cancel should also remove transfer job
+ * Chg #4041: Clean up notifications error checking code, fix sql creation script
+ * Chg #3581: Remove meshdirectory http service
+ * Enh #4044: Added an /app/notify endpoint for logging/tracking apps
+ * Enh #3915: Storage drivers setup for datatx
+ * Enh #3891: Provide data transfer size with datatx share
+ * Enh #3905: Remove redundant config for invite_link_template
+ * Enh #4031: Dump reva config on SIGUSR1
+ * Enh #3954: Extend EOS metadata
+ * Enh #3958: Make `/sciencemesh/find-accepted-users` response
+ * Enh #3908: Removed support for forcelock
+ * Enh #4011: Improve logging of HTTP requests
+ * Enh #3407: Add init time logging to all services
+ * Enh #4030: Support multiple token strategies in auth middleware
+ * Enh #4015: New configuration
+ * Enh #3825: Notifications framework
+ * Enh #3969: Conditional notifications initialization
+ * Enh #4077: Handle target in OpenInApp response
+ * Enh #4073: Plugins
+ * Enh #3937: Manage OCM shares
+ * Enh #4035: Enforce/validate configuration of services
 
 Details
 -------
 
- * Bugfix #3805: Apps: fixed viewMode resolution
+ * Bugfix #4032: Temporarily exclude ceph-iscsi when building revad-ceph image
 
-   Currently, the viewMode passed on /app/open is taken without validating the actual user's
-   permissions. This PR fixes this.
+   Due to `Package ceph-iscsi-3.6-1.el8.noarch.rpm is not signed` error when building the
+   revad-ceph docker image, the package `ceph-iscsi` has been excluded from the dnf update. It
+   will be included again once the pkg will be signed again.
 
-   https://github.com/cs3org/reva/pull/3805
+   https://github.com/cs3org/reva/pull/4032
 
- * Bugfix #3771: Fix files sharing capabilities
+ * Bugfix #3883: Fix group request to Grappa
 
-   A bug was preventing setting some capabilities (ResharingDefault and DenyAccess) for files
-   sharing from the configuration file
+   The `url.JoinPath` call was returning an url-encoded string, turning `?` into `%3`. This
+   caused the request to return 404.
 
-   https://github.com/cs3org/reva/pull/3771
+   https://github.com/cs3org/reva/pull/3883
 
- * Bugfix #3749: Fix persisting updates of received shares in json driver
+ * Bugfix #3946: Filter OCM shares by path
 
-   https://github.com/cs3org/reva/pull/3749
+   Fixes the bug of duplicated OCM shares returned in the share with others response.
 
- * Bugfix #3723: Fix revad docker images by enabling CGO
+   https://github.com/cs3org/reva/pull/3946
 
-   https://github.com/cs3org/reva/pull/3723
+ * Bugfix #4016: Fix panic when closing notification service
 
- * Bugfix #3765: Fix create version folder in EOS driver
+   If the connection to the nats server was not yet estabished, the service on close was panicking.
+   This has been now fixed.
 
-   In a read only share, a stat could fail, beacause the EOS storage driver was not able to create the
-   version folder for a file in case this did not exist. This fixes this bug impersonating the owner
-   of the file when creating the version folder.
+   https://github.com/cs3org/reva/pull/4016
 
-   https://github.com/cs3org/reva/pull/3765
+ * Bugfix #4061: Fixes on notifications
 
- * Bugfix #3786: Fix listing directory for a read-only shares for EOS storage driver
+   This is to align the code to the latest schema for notifications
 
-   In a read-only share, while listing a folder, for resources not having a version folder, the
-   returned resource id was wrongly the one of the original file, instead of the version folder.
-   This behavior has been fixed, where the version folder is always created on behalf of the
-   resource owner.
+   https://github.com/cs3org/reva/pull/4061
 
-   https://github.com/cs3org/reva/pull/3786
+ * Bugfix #3962: OCM-related compatibility fixes
 
- * Bugfix #3787: Fix application flag for EOS binary
+   Following analysis of OC and NC code to access a remote share, we must expose paths and not full
+   URIs on the /ocm-provider endpoint. Also we fix a lookup issue with apps over OCM and update
+   examples.
 
-   https://github.com/cs3org/reva/pull/3787
+   https://github.com/cs3org/reva/pull/3962
 
- * Bugfix #3780: Fix Makefile error on Ubuntu
+ * Bugfix #3972: Fix for #3971
 
-   I've fixed Makefile using sh which is defaulted to dash in ubuntu, dash doesn't support `[[ ...
-   ]]` syntax and Makefile would throw `/bin/sh: 1: [[: not found` errors.
+   Fixed panic described in #3971
 
-   https://github.com/cs3org/reva/issues/3773
-   https://github.com/cs3org/reva/pull/3780
+   https://github.com/cs3org/reva/pull/3972
 
- * Bugfix #3873: Fix parsing of grappa response
+ * Bugfix #3882: Remove transfer on cancel should also remove transfer job
 
-   https://github.com/cs3org/reva/pull/3873
+   https://github.com/cs3org/reva/issues/3881
+   https://github.com/cs3org/reva/pull/3882
 
- * Bugfix #3794: Fix unshare for EOS storage driver
+ * Change #4041: Clean up notifications error checking code, fix sql creation script
 
-   In the EOS storage driver, the remove acl operation was a no-op. After removing a share, the
-   recipient of the share was still able to operate on the shared resource. Now this has been fixed,
-   removing correctly the ACL from the shared resource.
+   https://github.com/cs3org/reva/pull/4041
 
-   https://github.com/cs3org/reva/pull/3794
+ * Change #3581: Remove meshdirectory http service
 
- * Bugfix #3838: Fix upload in a single file share for lightweight accounts
+   As of meshdirectory-web version 2.0.0, it is now implemented and deployed as a completely
+   separate app, independent from Reva. We removed any deprecated meshdirectory-related code
+   from Reva.
 
-   https://github.com/cs3org/reva/pull/3838
+   https://github.com/cs3org/reva/pull/3581
 
- * Bugfix #3878: Fix creator/initiator in public and user shares
+ * Enhancement #4044: Added an /app/notify endpoint for logging/tracking apps
 
-   https://github.com/cs3org/reva/pull/3878
+   The new endpoint serves to probe the health state of apps such as Microsoft Office Online, and it
+   is expected to be called by the frontend upon successful loading of the document by the
+   underlying app
 
- * Bugfix #3813: Fix propfind URL for OCM shares
+   https://github.com/cs3org/reva/pull/4044
 
-   https://github.com/cs3org/reva/issues/3810
-   https://github.com/cs3org/reva/pull/3813
+ * Enhancement #3915: Storage drivers setup for datatx
 
- * Bugfix #3770: Fixed default protocol on ocm-share-create
+   https://github.com/cs3org/reva/issues/3914
+   https://github.com/cs3org/reva/pull/3915
 
-   https://github.com/cs3org/reva/pull/3770
+ * Enhancement #3891: Provide data transfer size with datatx share
 
- * Bugfix #3852: Pass remote share id and shared secret in OCM call
+   https://github.com/cs3org/reva/issues/2104
+   https://github.com/cs3org/reva/pull/3891
 
-   https://github.com/cs3org/reva/pull/3852
+ * Enhancement #3905: Remove redundant config for invite_link_template
 
- * Bugfix #3859: Fix inconsistency between data transfer protocol naming
+   This is to drop invite_link_template from the OCM-related config. Now the provider_domain
+   and mesh_directory_url config options are both mandatory in the sciencemesh http service,
+   and the link is directly built out of the context.
 
-   https://github.com/cs3org/reva/issues/3858
-   https://github.com/cs3org/reva/pull/3859
+   https://github.com/cs3org/reva/pull/3905
 
- * Enhancement #3847: Update data transfers for current OCM shares implementation
+ * Enhancement #4031: Dump reva config on SIGUSR1
 
-   https://github.com/cs3org/reva/issues/3846
-   https://github.com/cs3org/reva/pull/3847
+   Add an option to the runtime to dump the configuration on a file (default to
+   `/tmp/reva-dump.toml` and configurable) when the process receives a SIGUSR1 signal.
+   Eventual errors are logged in the log.
 
- * Enhancement #3869: Datatx tutorial
+   https://github.com/cs3org/reva/pull/4031
 
-   https://github.com/cs3org/reva/issues/3864
-   https://github.com/cs3org/reva/pull/3869
+ * Enhancement #3954: Extend EOS metadata
 
- * Enhancement #3762: Denial and Resharing Default capabilities
+   This PR extend the EOS metadata with atime and ctime fields. This change is backwards
+   compatible.
 
-   https://github.com/cs3org/reva/pull/3762
+   https://github.com/cs3org/reva/pull/3954
 
- * Enhancement #3717: Disable sharing on low level paths
+ * Enhancement #3958: Make `/sciencemesh/find-accepted-users` response
 
-   Sharing can be disable in the user share provider for some paths, but the storage provider was
-   still sending the sharing permissions for those paths. This adds a config option in the storage
-   provider, `minimum_allowed_path_level_for_share`, to disable sharing permissions for
-   resources up to a defined path level.
+   Consistent with delete user parameters
 
-   https://github.com/cs3org/reva/pull/3717
+   https://github.com/cs3org/reva/pull/3958
 
- * Enhancement #3766: Download file revisions
+ * Enhancement #3908: Removed support for forcelock
 
-   Currently it is only possible to restore a file version, replacing the actual file with the
-   selected version. This allows an user to download a version file, without touching/replacing
-   the last version of the file
+   This workaround is not needed any longer, see also the wopiserver.
 
-   https://github.com/cs3org/reva/pull/3766
+   https://github.com/cs3org/reva/pull/3908
 
- * Enhancement #3733: Add support for static linking
+ * Enhancement #4011: Improve logging of HTTP requests
 
-   We've added support for compiling reva with static linking enabled. It's possible to do so with
-   the `STATIC` flag: `make revad STATIC=true`
+   Added request and response headers and removed redundant URL from the "http" messages
 
-   https://github.com/cs3org/reva/pull/3733
+   https://github.com/cs3org/reva/pull/4011
 
- * Enhancement #3778: Add support to tag eos traffic
+ * Enhancement #3407: Add init time logging to all services
 
-   We've added support to tag eos traffic
+   https://github.com/cs3org/reva/pull/3407
 
-   https://github.com/cs3org/reva/pull/3778
+ * Enhancement #4030: Support multiple token strategies in auth middleware
 
- * Enhancement #3868: Implement historical way of constructing OCM WebDAV URL
+   Different HTTP services can in general support different token strategies for validating the
+   reva token. In this context, without updating every single client a mono process deployment
+   will never work. Now the HTTP auth middleware accepts in its configuration a token strategy
+   chain, allowing to provide the reva token in multiple places (bearer auth, header).
 
-   Expose the expected WebDAV endpoint for OCM by OC10 and Nextcloud as described in
-   https://github.com/cs3org/OCM-API/issues/70#issuecomment-1538551138 to allow reva
-   providers to participate to mesh.
+   https://github.com/cs3org/reva/pull/4030
 
-   https://github.com/cs3org/reva/issues/3855
-   https://github.com/cs3org/reva/pull/3868
+ * Enhancement #4015: New configuration
 
- * Enhancement #3719: Skip computing groups when fetching all groups from grappa
+   Allow multiple driverts of the same service to be in the same toml config. Add a `vars` section to
+   contain common parameters addressable using templates in the configuration of the different
+   drivers. Support templating to reference values of other parameters in the configuration.
+   Assign random ports to services where the address is not specified.
 
-   https://github.com/cs3org/reva/pull/3719
+   https://github.com/cs3org/reva/pull/4015
 
- * Enhancement #3783: Updated OCM tutorial
+ * Enhancement #3825: Notifications framework
 
-   The OCM tutorial in the doc was missing the example on how to access the received resources. Now
-   the tutorial contains all the steps to access a received resource using the WebDAV protocol.
+   Adds a notifications framework to Reva.
 
-   https://github.com/cs3org/reva/pull/3783
+   The new notifications service communicates with the rest of reva using NATS. It provides
+   helper functions to register new notifications and to send them.
 
- * Enhancement #3750: New metadata flags
+   Notification templates are provided in the configuration files for each service, and they are
+   registered into the notifications service on initialization.
 
-   Several new flags, like site infrastructure and service status, are now gathered and exposed
-   by Mentix.
+   https://github.com/cs3org/reva/pull/3825
 
-   https://github.com/cs3org/reva/pull/3750
+ * Enhancement #3969: Conditional notifications initialization
 
- * Enhancement #3839: Support multiple issuer in OIDC auth driver
+   Notification helpers in services will not try to initalize if there is no specific
+   configuration.
 
-   The OIDC auth driver supports now multiple issuers. Users of external providers are then
-   mapped to a local user by a mapping files. Only the main issuer (defined in the config with
-   `issuer`) and the ones defined in the mapping are allowed for the verification of the OIDC
-   token.
+   https://github.com/cs3org/reva/pull/3969
 
-   https://github.com/cs3org/reva/pull/3839
+ * Enhancement #4077: Handle target in OpenInApp response
 
- * Enhancement #3772: New OCM discovery endpoint
+   This PR adds the OpenInApp.target and AppProviderInfo.action properties to the respective
+   responses (/app/open and /app/list), to support different app integrations. In addition,
+   the archiver was extended to use the name of the file/folder as opposed to "download", and to
+   include a query parameter to override the archive type, as it will be used in an upcoming app.
 
-   This PR implements the new OCM v1.1 specifications for the /ocm-provider endpoint.
+   https://github.com/cs3org/reva/pull/4077
 
-   https://github.com/cs3org/reva/pull/3772
+ * Enhancement #4073: Plugins
 
- * Enhancement #3619: Tests for invitation manager SQL driver
+   Adds a plugin system for allowing the creation of external plugins for different plugable
+   components in reva, for example grpc drivers, http services and middlewares.
 
-   https://github.com/cs3org/reva/pull/3619
+   https://github.com/cs3org/reva/pull/4073
 
- * Enhancement #3757: Support OCM v1.0 schema
+ * Enhancement #3937: Manage OCM shares
 
-   Following cs3org/cs3apis#206, we add the fields to ensure backwards compatibility with OCM
-   v1.0. However, if the `protocol.options` undocumented object is not empty, we bail out for
-   now. Supporting interoperability with OCM v1.0 implementations (notably Nextcloud 25) may
-   come in the future if the undocumented options are fully reverse engineered. This is reflected
-   in the unit tests as well.
+   Implements the following item regarding OCM: - update of OCM shares in both grpc and ocs layer,
+   allowing an user to update permissions and expiration of the share - deletion of OCM shares in
+   both grpc and ocs layer - accept/reject of received OCM shares - remove accepted remote users
 
-   Also, added viewMode to webapp protocol options (cs3org/cs3apis#207) and adapted all SQL
-   code and unit tests.
+   https://github.com/cs3org/reva/pull/3937
 
-   https://github.com/cs3org/reva/pull/3757
+ * Enhancement #4035: Enforce/validate configuration of services
 
- * Enhancement #3695: Create OCM share from sciencemesh service
+   Every driver can now specify some validation rules on the configuration. If the validation
+   rules are not respected, reva will bail out on startup with a clear error.
 
-   https://github.com/pondersource/sciencemesh-php/issues/166
-   https://github.com/cs3org/reva/pull/3695
-
- * Enhancement #3722: List only valid OCM tokens
-
-   https://github.com/cs3org/reva/pull/3722
-
- * Enhancement #3821: Revamp user/group drivers and fix user type
-
-   For lightweight accounts
-
-   * Fix the user type for lightweight accounts, using the source field to differentiate between a
-   primary and lw account * Remove all the code with manual parsing of the json returned by the CERN
-   provider * Introduce pagination for `GetMembers` method in the group driver * Reduced network
-   transfer size by requesting only needed fields for `GetMembers` method
-
-   https://github.com/cs3org/reva/pull/3821
-
- * Enhancement #3724: Send invitation link from mesh directory
-
-   When generating and listing OCM tokens
-
-   To enhance user expirience, instead of only sending the token, we send directly the URL for
-   accepting the invitation workflow.
-
-   https://github.com/cs3org/reva/pull/3724
-
- * Enhancement #3824: Serverless Services
-
-   New type of service (along with http and grpc) which does not have a listening server. Useful for
-   the notifications service and others in the future.
-
-   https://github.com/cs3org/reva/pull/3824
+   https://github.com/cs3org/reva/pull/4035
 
 

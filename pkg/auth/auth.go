@@ -25,12 +25,10 @@ import (
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/pkg/plugin"
 )
 
 // Manager is the interface to implement to authenticate users.
 type Manager interface {
-	plugin.Plugin
 	Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error)
 }
 

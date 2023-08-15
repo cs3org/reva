@@ -16,11 +16,12 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package main
+package revadcmd
 
 import (
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -28,11 +29,16 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/cs3org/reva/cmd/revad/internal/config"
-	"github.com/cs3org/reva/cmd/revad/internal/grace"
+	"github.com/cs3org/reva"
+	"github.com/cs3org/reva/cmd/revad/pkg/config"
+	"github.com/cs3org/reva/cmd/revad/pkg/grace"
 	"github.com/cs3org/reva/cmd/revad/runtime"
+	"github.com/cs3org/reva/pkg/logger"
+	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/sysinfo"
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 )
 
 var (
@@ -41,15 +47,20 @@ var (
 	signalFlag  = flag.String("s", "", "send signal to a master process: stop, quit, reload")
 	configFlag  = flag.String("c", "/etc/revad/revad.toml", "set configuration file")
 	pidFlag     = flag.String("p", "", "pid file. If empty defaults to a random file in the OS temporary directory")
-	logFlag     = flag.String("log", "", "log messages with the given severity or above. One of: [trace, debug, info, warn, error, fatal, panic]")
 	dirFlag     = flag.String("dev-dir", "", "runs any toml file in the specified directory. Intended for development use only")
 
 	// Compile time variables initialized with gcc flags.
 	gitCommit, buildDate, version, goVersion string
 )
 
-func main() {
+var (
+	revaProcs []*runtime.Reva
+)
+
+func Main() {
 	flag.Parse()
+
+	initPlugins()
 
 	// initialize the global system information
 	if err := sysinfo.InitSystemInfo(&sysinfo.RevaVersion{Version: version, BuildDate: buildDate, GitCommit: gitCommit, GoVersion: goVersion}); err != nil {
@@ -82,6 +93,13 @@ func main() {
 	runConfigs(confs)
 }
 
+func initPlugins() {
+	plugins := reva.GetPlugins("")
+	for _, p := range plugins {
+		plugin.RegisterPlugin(p.ID.Namespace(), p.ID.Name(), p.New)
+	}
+}
+
 func handleVersionFlag() {
 	if *versionFlag {
 		fmt.Fprintf(os.Stderr, "%s\n", getVersionString())
@@ -108,6 +126,8 @@ func handleSignalFlag() {
 			signal = syscall.SIGQUIT
 		case "stop":
 			signal = syscall.SIGTERM
+		case "dump":
+			signal = syscall.SIGUSR1
 		default:
 			fmt.Fprintf(os.Stderr, "unknown signal %q\n", *signalFlag)
 			os.Exit(1)
@@ -126,7 +146,7 @@ func handleSignalFlag() {
 
 		// kill process with signal
 		if err := process.Signal(signal); err != nil {
-			fmt.Fprintf(os.Stderr, "error signaling process %d with signal %s\n", process.Pid, signal)
+			fmt.Fprintf(os.Stderr, "error signaling process %d with signal %s: %v\n", process.Pid, signal, err)
 			os.Exit(1)
 		}
 
@@ -134,7 +154,7 @@ func handleSignalFlag() {
 	}
 }
 
-func getConfigs() ([]map[string]interface{}, error) {
+func getConfigs() ([]*config.Config, error) {
 	var confs []string
 	// give priority to read from dev-dir
 	if *dirFlag != "" {
@@ -186,8 +206,8 @@ func getConfigsFromDir(dir string) (confs []string, err error) {
 	return
 }
 
-func readConfigs(files []string) ([]map[string]interface{}, error) {
-	confs := make([]map[string]interface{}, 0, len(files))
+func readConfigs(files []string) ([]*config.Config, error) {
+	confs := make([]*config.Config, 0, len(files))
 	for _, conf := range files {
 		fd, err := os.Open(conf)
 		if err != nil {
@@ -195,30 +215,61 @@ func readConfigs(files []string) ([]map[string]interface{}, error) {
 		}
 		defer fd.Close()
 
-		v, err := config.Read(fd)
+		c, err := config.Load(fd)
 		if err != nil {
 			return nil, err
 		}
-		confs = append(confs, v)
+		confs = append(confs, c)
 	}
 	return confs, nil
 }
 
-func runConfigs(confs []map[string]interface{}) {
+func runConfigs(confs []*config.Config) {
+	pidfile := getPidfile()
 	if len(confs) == 1 {
-		runSingle(confs[0])
+		runSingle(confs[0], pidfile)
 		return
 	}
 
 	runMultiple(confs)
 }
 
-func runSingle(conf map[string]interface{}) {
-	if *pidFlag == "" {
-		*pidFlag = getPidfile()
-	}
+func registerReva(r *runtime.Reva) {
+	revaProcs = append(revaProcs, r)
+}
 
-	runtime.Run(conf, *pidFlag, *logFlag)
+func runSingle(conf *config.Config, pidfile string) {
+	log := initLogger(conf.Log)
+	reva, err := runtime.New(conf,
+		runtime.WithPidFile(pidfile),
+		runtime.WithLogger(log),
+	)
+	if err != nil {
+		abort(log, "error creating reva runtime: %v", err)
+	}
+	registerReva(reva)
+	if err := reva.Start(); err != nil {
+		abort(log, "error starting reva: %v", err)
+	}
+}
+
+func abort(log *zerolog.Logger, format string, a ...any) {
+	log.Fatal().Msgf(format, a...)
+}
+
+func runMultiple(confs []*config.Config) {
+	var wg sync.WaitGroup
+
+	for _, conf := range confs {
+		wg.Add(1)
+		pidfile := getPidfile()
+		go func(wg *sync.WaitGroup, conf *config.Config) {
+			defer wg.Done()
+			runSingle(conf, pidfile)
+		}(&wg, conf)
+	}
+	wg.Wait()
+	os.Exit(0)
 }
 
 func getPidfile() string {
@@ -228,16 +279,50 @@ func getPidfile() string {
 	return path.Join(os.TempDir(), name)
 }
 
-func runMultiple(confs []map[string]interface{}) {
-	var wg sync.WaitGroup
-	for _, conf := range confs {
-		wg.Add(1)
-		pidfile := getPidfile()
-		go func(wg *sync.WaitGroup, conf map[string]interface{}) {
-			defer wg.Done()
-			runtime.Run(conf, pidfile, *logFlag)
-		}(&wg, conf)
+func initLogger(conf *config.Log) *zerolog.Logger {
+	log, err := newLogger(conf)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error creating logger: %v", err)
+		os.Exit(1)
 	}
-	wg.Wait()
-	os.Exit(0)
+	return log
+}
+
+func newLogger(conf *config.Log) (*zerolog.Logger, error) {
+	// TODO(labkode): use debug level rather than info as default until reaching a stable version.
+	// Helps having smaller development files.
+	if conf.Level == "" {
+		conf.Level = zerolog.DebugLevel.String()
+	}
+
+	var opts []logger.Option
+	opts = append(opts, logger.WithLevel(conf.Level))
+
+	w, err := getWriter(conf.Output)
+	if err != nil {
+		return nil, err
+	}
+
+	opts = append(opts, logger.WithWriter(w, logger.Mode(conf.Mode)))
+
+	l := logger.New(opts...)
+	sub := l.With().Int("pid", os.Getpid()).Logger()
+	return &sub, nil
+}
+
+func getWriter(out string) (io.Writer, error) {
+	if out == "stderr" || out == "" {
+		return os.Stderr, nil
+	}
+
+	if out == "stdout" {
+		return os.Stdout, nil
+	}
+
+	fd, err := os.OpenFile(out, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, errors.Wrap(err, "error creating log file: "+out)
+	}
+
+	return fd, nil
 }

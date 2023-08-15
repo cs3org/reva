@@ -33,7 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	// "github.com/cs3org/reva/pkg/errtypes".
 	// "github.com/gdexlab/go-render/render"
@@ -58,20 +58,10 @@ type UserManagerConfig struct {
 	MockHTTP     bool   `mapstructure:"mock_http"`
 }
 
-func (c *UserManagerConfig) init() {
+func (c *UserManagerConfig) ApplyDefaults() {
 	if c.EndPoint == "" {
 		c.EndPoint = "http://localhost/end/point?"
 	}
-}
-
-func parseConfig(m map[string]interface{}) (*UserManagerConfig, error) {
-	c := &UserManagerConfig{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	c.init()
-	return c, nil
 }
 
 // Action describes a REST request to forward to the Nextcloud backend.
@@ -81,14 +71,13 @@ type Action struct {
 }
 
 // New returns a user manager implementation that reads a json file to provide user metadata.
-func New(m map[string]interface{}) (user.Manager, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+func New(ctx context.Context, m map[string]interface{}) (user.Manager, error) {
+	var c UserManagerConfig
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	c.init()
 
-	return NewUserManager(c)
+	return NewUserManager(&c)
 }
 
 // NewUserManager returns a new Nextcloud-based UserManager.

@@ -21,6 +21,7 @@ package appprovider
 import (
 	"testing"
 
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/mitchellh/mapstructure"
 	"github.com/stretchr/testify/assert"
 )
@@ -80,9 +81,12 @@ func Test_parseConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseConfig(tt.m)
+			var got config
+			err := cfg.Decode(tt.m, &got)
 			assert.Equal(t, tt.wantErr, err)
-			assert.Equal(t, tt.want, got)
+			if tt.wantErr == nil {
+				assert.Equal(t, tt.want, &got)
+			}
 		})
 	}
 }

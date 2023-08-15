@@ -36,7 +36,7 @@ func init() {
 type mgr struct{}
 
 // New returns an auth manager implementation that allows to authenticate with any credentials.
-func New(c map[string]interface{}) (auth.Manager, error) {
+func New(ctx context.Context, c map[string]interface{}) (auth.Manager, error) {
 	return &mgr{}, nil
 }
 
