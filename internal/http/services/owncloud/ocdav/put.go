@@ -223,6 +223,20 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		Opaque: &typespb.Opaque{Map: opaqueMap},
 	}
 
+       dirPart, filePart := filepath.Split(ref.Path)
+       dirParts := strings.Split(dirPart, "/")
+       folder := dirParts[len(dirParts)-1]
+
+       trg := &trigger.Trigger{
+               Ref: "any",
+               TemplateData: map[string]interface{}{
+                       "path":     ref.Path,
+                       "folder":   folder,
+                       "fileName": filePart,
+               },
+       }
+       s.notificationHelper.TriggerNotification(trg)
+
 	// where to upload the file?
 	uRes, err := client.InitiateFileUpload(ctx, uReq)
 	if err != nil {
