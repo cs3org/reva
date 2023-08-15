@@ -80,8 +80,8 @@ type GranteeAltMap struct {
 
 // ShareAltMap is an alternative map to JSON-unmarshal a Share.
 type ShareAltMap struct {
-	ID            *ocm.ShareId          `json:"id"`
-	ResourceID    struct {
+	ID         *ocm.ShareId `json:"id"`
+	ResourceID struct {
 		OpaqueID string `json:"opaque_id"`
 	} `json:"resource_id"`
 	RemoteShareID string                `json:"remote_share_id"`
@@ -196,7 +196,7 @@ func (sm *Manager) GetShare(ctx context.Context, user *userpb.User, ref *ocm.Sha
 	return &ocm.Share{
 		Id: altResult.ID,
 		ResourceId: &provider.ResourceId{
-			OpaqueId: altResult.ResourceID.OpaqueID,
+			OpaqueId:  altResult.ResourceID.OpaqueID,
 			StorageId: sm.mountID,
 		},
 		Grantee: &provider.Grantee{
@@ -459,7 +459,7 @@ func (sm *Manager) do(ctx context.Context, a Action, username string) (int, []by
 	url := sm.endPoint + "~" + username + "/api/ocm/" + a.verb
 
 	log := appctx.GetLogger(ctx)
-	log.Info().Msgf("am.do %s %s %s", url, a.verb, a.argS)
+	log.Info().Msgf("am.do %s %s", url, a.argS)
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
 	if err != nil {
 		return 0, nil, err
