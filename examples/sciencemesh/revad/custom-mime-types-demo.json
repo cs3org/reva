@@ -1,4 +1,3 @@
 {
-  ".zmd": "application/compressed-markdown",
-  ".md": "application/compressed-markdown"
+  ".zmd": "application/compressed-markdown"
 }

@@ -92,6 +92,7 @@ shared_secret = "shared-secret-1"
 mock_http = false
 
 [grpc.services.ocminvitemanager]
+# TODO the driver should become "nextcloud"
 driver = "json"
 provider_domain = "your.revad.com"
 
@@ -174,6 +175,13 @@ insecure = true
 [http.services.sciencemesh]
 provider_domain = "your.revad.com"
 mesh_directory_url = "https://meshdir.docker/meshdir"
+ocm_mount_point = "/sciencemesh"
+
+[http.services.sciencemesh.smtp_credentials]
+disable_auth = true
+sender_mail = "sciencemesh@your.revad.com"
+smtp_server = "smtp.your.revad.com"
+smtp_port = 25
 
 [http.services.dataprovider]
 driver = "nextcloud"

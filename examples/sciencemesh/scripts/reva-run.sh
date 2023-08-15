@@ -24,4 +24,4 @@ cp /etc/revad/tls/*.crt /usr/local/share/ca-certificates/
 update-ca-certificates
 
 # run revad.
-revad --dev-dir "/revad/configs" -log "${LOG_LEVEL:-debug}" &
+revad --dev-dir "/revad/configs" &
