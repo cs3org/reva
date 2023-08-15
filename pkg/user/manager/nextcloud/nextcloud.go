@@ -28,8 +28,8 @@ import (
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
@@ -131,15 +131,13 @@ func (um *Manager) do(ctx context.Context, a Action, username string) (int, []by
 	log.Info().Msgf("um.do req %s %s", url, a.argS)
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
 	if err != nil {
-		panic(err)
+		return 0, nil, err
 	}
 	req.Header.Set("X-Reva-Secret", um.sharedSecret)
-
 	req.Header.Set("Content-Type", "application/json")
-	fmt.Println(url)
 	resp, err := um.client.Do(req)
 	if err != nil {
-		panic(err)
+		return 0, nil, err
 	}
 
 	defer resp.Body.Close()
