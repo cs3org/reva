@@ -33,7 +33,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
-	"github.com/r3labs/diff/v3"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -63,10 +62,9 @@ type Spaces struct {
 
 // Shares holds the share information of one space
 type Shares struct {
-	Shares   map[string]*collaboration.Share
-	Mtime    time.Time
-	etag     string
-	nextSync time.Time
+	Shares map[string]*collaboration.Share
+	Mtime  time.Time
+	etag   string
 }
 
 // UnmarshalJSON overrides the default unmarshaling
@@ -158,11 +156,11 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 		}
 	}
 
-	beforeMTime := c.Providers[storageID].Spaces[spaceID].Mtime
 	beforeShares := []string{}
 	for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
 		beforeShares = append(beforeShares, s.Id.OpaqueId)
 	}
+	beforeEtag := c.Providers[storageID].Spaces[spaceID].etag
 
 	persistFunc := func() error {
 		c.Providers[storageID].Spaces[spaceID].Shares[shareID] = share
@@ -193,12 +191,18 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 		log.Error().Err(err).Msg("persisting failed unexpectedly")
 	}
 
-	afterMTime := c.Providers[storageID].Spaces[spaceID].Mtime
 	afterShares := []string{}
 	for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
 		afterShares = append(afterShares, s.Id.OpaqueId)
 	}
-	log.Info().Interface("before", beforeShares).Interface("after", afterShares).Interface("beforeMTime", beforeMTime).Interface("afterMTime", afterMTime).Msg("providercache diff")
+	afterEtag := c.Providers[storageID].Spaces[spaceID].etag
+
+	log.Debug().
+		Interface("before", beforeShares).
+		Interface("after", afterShares).
+		Str("etag", beforeEtag).
+		Str("afterEtag", afterEtag).
+		Msg("provider cache add diff")
 
 	return err
 }
@@ -220,6 +224,12 @@ func (c *Cache) Remove(ctx context.Context, storageID, spaceID, shareID string) 
 		}
 	}
 
+	beforeShares := []string{}
+	for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
+		beforeShares = append(beforeShares, s.Id.OpaqueId)
+	}
+	beforeEtag := c.Providers[storageID].Spaces[spaceID].etag
+
 	persistFunc := func() error {
 		if c.Providers[storageID] == nil ||
 			c.Providers[storageID].Spaces[spaceID] == nil {
@@ -236,6 +246,25 @@ func (c *Cache) Remove(ctx context.Context, storageID, spaceID, shareID string) 
 		}
 		err = persistFunc()
 	}
+
+	afterShares := []string{}
+	for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
+		afterShares = append(afterShares, s.Id.OpaqueId)
+	}
+	afterEtag := c.Providers[storageID].Spaces[spaceID].etag
+
+	log := appctx.GetLogger(ctx).With().
+		Str("hostname", os.Getenv("HOSTNAME")).
+		Str("storageID", storageID).
+		Str("spaceID", spaceID).
+		Str("shareID", shareID).Logger()
+
+	log.Debug().
+		Interface("before", beforeShares).
+		Interface("after", afterShares).
+		Str("etag", beforeEtag).
+		Str("afterEtag", afterEtag).
+		Msg("provider cache remove diff")
 
 	return err
 }
@@ -370,6 +399,12 @@ func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) err
 		dlreq.IfNoneMatch = []string{c.Providers[storageID].Spaces[spaceID].etag}
 	}
 
+	beforeShares := []string{}
+	for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
+		beforeShares = append(beforeShares, s.Id.OpaqueId)
+	}
+	beforeEtag := c.Providers[storageID].Spaces[spaceID].etag
+
 	var dlres *metadata.DownloadResponse
 	var err error
 	downloadFunc := func() error {
@@ -418,22 +453,18 @@ func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) err
 	}
 	newShares.etag = dlres.Etag
 
-	if len(newShares.Shares) < len(c.Providers[storageID].Spaces[spaceID].Shares) {
-		serverShares := []string{}
-		localShares := []string{}
-		for _, s := range newShares.Shares {
-			serverShares = append(serverShares, s.Id.OpaqueId)
-		}
-		for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
-			localShares = append(localShares, s.Id.OpaqueId)
-		}
-		changelog, err := diff.Diff(localShares, serverShares)
-		if err != nil {
-			log.Error().Err(err).Msg("provider cache diff failed")
-		} else {
-			log.Debug().Interface("changelog", changelog).Msg("provider cache diff")
-		}
+	afterShares := []string{}
+	for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
+		afterShares = append(beforeShares, s.Id.OpaqueId)
 	}
+	afterEtag := c.Providers[storageID].Spaces[spaceID].etag
+
+	log.Debug().
+		Interface("before", beforeShares).
+		Interface("after", afterShares).
+		Str("etag", beforeEtag).
+		Str("afterEtag", afterEtag).
+		Msg("provider cache download diff")
 
 	c.Providers[storageID].Spaces[spaceID] = newShares
 	span.SetStatus(codes.Ok, "")
