@@ -42,10 +42,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-// This module implement the invite.Repository interface as an api(call with external API) driver.
+// This module implement the invite.Repository interface as a nextcloud (calling an external OC/NC instance) driver.
 
 func init() {
-	registry.Register("api", New)
+	registry.Register("nextcloud", New)
 }
 
 // Client is an API client.
