@@ -533,7 +533,7 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 	toUpdate.Mtime = utils.TSNow()
 
 	// Update provider cache
-	unlock := m.Cache.LockSpace(toUpdate.ResourceId.SpaceId)
+	unlock := m.Cache.LockProvider(toUpdate.ResourceId.StorageId)
 	defer unlock()
 	err := m.Cache.Persist(ctx, toUpdate.ResourceId.StorageId, toUpdate.ResourceId.SpaceId)
 	// when persisting fails

@@ -108,9 +108,9 @@ func (s *Shares) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// LockSpace locks the cache for a given space and returns an unlock function
-func (c *Cache) LockSpace(spaceID string) func() {
-	v, _ := c.lockMap.LoadOrStore(spaceID, &sync.Mutex{})
+// LockProvider locks the cache for a given space and returns an unlock function
+func (c *Cache) LockProvider(providerID string) func() {
+	v, _ := c.lockMap.LoadOrStore(providerID, &sync.Mutex{})
 	lock := v.(*sync.Mutex)
 
 	lock.Lock()
@@ -146,7 +146,7 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 		return fmt.Errorf("missing share id")
 	}
 
-	unlock := c.LockSpace(spaceID)
+	unlock := c.LockProvider(storageID)
 	defer unlock()
 	span.AddEvent("got lock")
 
@@ -214,7 +214,7 @@ func (c *Cache) Remove(ctx context.Context, storageID, spaceID, shareID string) 
 	defer span.End()
 	span.SetAttributes(attribute.String("cs3.storageid", storageID), attribute.String("cs3.spaceid", spaceID), attribute.String("cs3.shareid", shareID))
 
-	unlock := c.LockSpace(spaceID)
+	unlock := c.LockProvider(storageID)
 	defer unlock()
 	span.AddEvent("got lock")
 
@@ -276,7 +276,7 @@ func (c *Cache) Get(ctx context.Context, storageID, spaceID, shareID string, ski
 	defer span.End()
 	span.SetAttributes(attribute.String("cs3.storageid", storageID), attribute.String("cs3.spaceid", spaceID), attribute.String("cs3.shareid", shareID))
 
-	unlock := c.LockSpace(spaceID)
+	unlock := c.LockProvider(storageID)
 	defer unlock()
 	span.AddEvent("got lock")
 
@@ -301,7 +301,7 @@ func (c *Cache) ListSpace(ctx context.Context, storageID, spaceID string) (*Shar
 	defer span.End()
 	span.SetAttributes(attribute.String("cs3.storageid", storageID), attribute.String("cs3.spaceid", spaceID))
 
-	unlock := c.LockSpace(spaceID)
+	unlock := c.LockProvider(storageID)
 	defer unlock()
 	span.AddEvent("got lock")
 
