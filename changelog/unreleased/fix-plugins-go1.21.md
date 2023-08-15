@@ -1,4 +1,4 @@
-Bugfix: Fix plugin's registration when reva is build with version 1.21
+Bugfix: Fix plugin's registration when reva is built with version 1.21
 
 With go 1.21 the logic for package initialization has changed,
 and the plugins were failing in the registration.
