@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -134,41 +135,9 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	if err := r.ParseForm(); err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "parameters could not be parsed", nil)
-		return
-	}
-
-	resourceID := r.Form.Get("resource_id")
-
-	var resourceRef storagepb.Reference
-	if resourceID == "" {
-		path := r.Form.Get("path")
-		if path == "" {
-			reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "missing resource ID or path", nil)
-			return
-		}
-		resourceRef.Path = path
-	} else {
-		resourceID := resourceid.OwnCloudResourceIDUnwrap(resourceID)
-		if resourceID == nil {
-			reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "invalid resource ID", nil)
-			return
-		}
-		resourceRef.ResourceId = resourceID
-	}
-
-	statRes, err := s.gtwClient.Stat(ctx, &storagepb.StatRequest{Ref: &resourceRef})
+	statRes, err := s.validateQuery(w, r, ctx)
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "Internal error accessing the resource, please try again later", err)
-		return
-	}
-
-	if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-		reqres.WriteError(w, r, reqres.APIErrorNotFound, "resource does not exist", nil)
-		return
-	} else if statRes.Status.Code != rpc.Code_CODE_OK {
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "failed to stat the resource", nil)
+		// Validate query handles errors
 		return
 	}
 
@@ -279,4 +248,46 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+}
+
+func (s *svc) validateQuery(w http.ResponseWriter, r *http.Request, ctx context.Context) (*storagepb.StatResponse, error) {
+	if err := r.ParseForm(); err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "parameters could not be parsed", nil)
+		return nil, err
+	}
+
+	resourceID := r.Form.Get("resource_id")
+
+	var resourceRef storagepb.Reference
+	if resourceID == "" {
+		path := r.Form.Get("path")
+		if path == "" {
+			reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "missing resource ID or path", nil)
+			return nil, errors.New("missing resource ID or path")
+		}
+		resourceRef.Path = path
+	} else {
+		resourceID := resourceid.OwnCloudResourceIDUnwrap(resourceID)
+		if resourceID == nil {
+			reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "invalid resource ID", nil)
+			return nil, errors.New("invalid resource ID")
+		}
+		resourceRef.ResourceId = resourceID
+	}
+
+	statRes, err := s.gtwClient.Stat(ctx, &storagepb.StatRequest{Ref: &resourceRef})
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "Internal error accessing the resource, please try again later", err)
+		return nil, errors.New("Internal error accessing the resource, please try again later")
+	}
+
+	if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+		reqres.WriteError(w, r, reqres.APIErrorNotFound, "resource does not exist", nil)
+		return nil, errors.New("resource does not exist")
+	} else if statRes.Status.Code != rpc.Code_CODE_OK {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "failed to stat the resource", nil)
+		return nil, errors.New("failed to stat the resource")
+	}
+
+	return statRes, nil
 }
