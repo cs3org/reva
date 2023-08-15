@@ -25,9 +25,13 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"reflect"
 	"regexp"
+	"strings"
 	"sync"
 	"syscall"
+
+	gorun "runtime"
 
 	"github.com/cs3org/reva"
 	"github.com/cs3org/reva/cmd/revad/pkg/config"
@@ -48,6 +52,7 @@ var (
 	configFlag  = flag.String("c", "/etc/revad/revad.toml", "set configuration file")
 	pidFlag     = flag.String("p", "", "pid file. If empty defaults to a random file in the OS temporary directory")
 	dirFlag     = flag.String("dev-dir", "", "runs any toml file in the specified directory. Intended for development use only")
+	pluginsFlag = flag.Bool("plugins", false, "list all the plugins and exit")
 
 	// Compile time variables initialized with gcc flags.
 	gitCommit, buildDate, version, goVersion string
@@ -70,6 +75,7 @@ func Main() {
 
 	handleVersionFlag()
 	handleSignalFlag()
+	handlePluginsFlag()
 
 	confs, err := getConfigs()
 	if err != nil {
@@ -105,6 +111,49 @@ func handleVersionFlag() {
 		fmt.Fprintf(os.Stderr, "%s\n", getVersionString())
 		os.Exit(0)
 	}
+}
+
+func handlePluginsFlag() {
+	if !*pluginsFlag {
+		return
+	}
+
+	// TODO (gdelmont): maybe in future if needed we can filter
+	// by namespace (for example for getting all the http plugins).
+	// For now we just list all the plugins.
+	plugins := reva.GetPlugins("")
+	grouped := groupByNamespace(plugins)
+
+	count := 0
+	for ns, plugins := range grouped {
+		fmt.Printf("[%s]\n", ns)
+		for _, p := range plugins {
+			fmt.Printf("%s -> %s\n", p.ID.Name(), pkgOfFunction(p.New))
+		}
+		count++
+		if len(grouped) != count {
+			fmt.Println()
+		}
+	}
+	os.Exit(0)
+}
+
+func nameOfFunction(f any) string {
+	return gorun.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
+}
+
+func pkgOfFunction(f any) string {
+	name := nameOfFunction(f)
+	i := strings.LastIndex(name, ".")
+	return name[:i]
+}
+
+func groupByNamespace(plugins []reva.PluginInfo) map[string][]reva.PluginInfo {
+	m := make(map[string][]reva.PluginInfo)
+	for _, p := range plugins {
+		m[p.ID.Namespace()] = append(m[p.ID.Namespace()], p)
+	}
+	return m
 }
 
 func getVersionString() string {
