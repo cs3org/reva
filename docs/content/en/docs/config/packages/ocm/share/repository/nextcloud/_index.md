@@ -9,7 +9,7 @@ description: >
 # _struct: ShareManagerConfig_
 
 {{% dir name="endpoint" type="string" default="" %}}
-The Nextcloud backend endpoint for user check [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/ocm/share/repository/nextcloud/nextcloud.go#L60)
+The Nextcloud backend endpoint for user check [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/ocm/share/repository/nextcloud/nextcloud.go#L61)
 {{< highlight toml >}}
 [ocm.share.repository.nextcloud]
 endpoint = ""
