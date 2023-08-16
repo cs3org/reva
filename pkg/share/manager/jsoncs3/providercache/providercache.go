@@ -283,6 +283,7 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 	ctx, span := tracer.Start(ctx, "Persist")
 	defer span.End()
 	span.SetAttributes(attribute.String("cs3.storageid", storageID), attribute.String("cs3.spaceid", spaceID))
+	log := appctx.GetLogger(ctx).With().Str("storageID", storageID).Str("spaceID", spaceID).Str("BeforeEtag", c.Providers[storageID].Spaces[spaceID].etag).Logger()
 
 	if c.Providers[storageID] == nil || c.Providers[storageID].Spaces[spaceID] == nil {
 		span.AddEvent("nothing to persist")
@@ -314,16 +315,25 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 	// > If the field value is "*", the condition is false if the origin server has a current representation for the target resource.
 	if c.Providers[storageID].Spaces[spaceID].etag == "" {
 		ur.IfNoneMatch = []string{"*"}
+		log.Debug().Msg("setting IfNoneMatch to *")
+	} else {
+		log.Debug().Msg("setting IfMatchEtag")
 	}
 	res, err := c.storage.Upload(ctx, ur)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
+		log.Debug().Err(err).Msg("persisting provider cache failed")
 		return err
 	}
 	c.Providers[storageID].Spaces[spaceID].etag = res.Etag
 	// FIXME read etag from upload
 	span.SetStatus(codes.Ok, "")
+	shares := []string{}
+	for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
+		shares = append(shares, s.Id.OpaqueId)
+	}
+	log.Debug().Str("AfterEtag", c.Providers[storageID].Spaces[spaceID].etag).Interface("Shares", shares).Msg("persisted provider cache")
 	return nil
 }
 
