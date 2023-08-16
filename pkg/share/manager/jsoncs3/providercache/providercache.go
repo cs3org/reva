@@ -170,7 +170,7 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 		Str("spaceID", spaceID).
 		Str("shareID", share.Id.OpaqueId).Logger()
 
-	for retries := 10; retries > 0; retries-- {
+	for retries := 100; retries > 0; retries-- {
 		err = persistFunc()
 		if err != nil {
 			log.Debug().Msg("persisting failed. Retrying...")
