@@ -158,12 +158,6 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 		}
 	}
 
-	beforeShares := []string{}
-	for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
-		beforeShares = append(beforeShares, s.Id.OpaqueId)
-	}
-	beforeEtag := c.Providers[storageID].Spaces[spaceID].etag
-
 	persistFunc := func() error {
 		c.Providers[storageID].Spaces[spaceID].Shares[shareID] = share
 
@@ -179,7 +173,7 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 	for retries := 10; retries > 0; retries-- {
 		err = persistFunc()
 		if err != nil {
-			log.Info().Msg("persisting failed. Retrying...")
+			log.Debug().Msg("persisting failed. Retrying...")
 			if err := c.syncWithLock(ctx, storageID, spaceID); err != nil {
 				span.RecordError(err)
 				span.SetStatus(codes.Error, err.Error())
@@ -187,18 +181,6 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 				return err
 			}
 		} else {
-			afterShares := []string{}
-			for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
-				afterShares = append(afterShares, s.Id.OpaqueId)
-			}
-			afterEtag := c.Providers[storageID].Spaces[spaceID].etag
-
-			log.Debug().
-				Interface("before", beforeShares).
-				Interface("after", afterShares).
-				Str("etag", beforeEtag).
-				Str("afterEtag", afterEtag).
-				Msg("provider cache add diff")
 			break
 		}
 	}
@@ -226,12 +208,6 @@ func (c *Cache) Remove(ctx context.Context, storageID, spaceID, shareID string) 
 		}
 	}
 
-	beforeShares := []string{}
-	for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
-		beforeShares = append(beforeShares, s.Id.OpaqueId)
-	}
-	beforeEtag := c.Providers[storageID].Spaces[spaceID].etag
-
 	persistFunc := func() error {
 		if c.Providers[storageID] == nil ||
 			c.Providers[storageID].Spaces[spaceID] == nil {
@@ -248,25 +224,6 @@ func (c *Cache) Remove(ctx context.Context, storageID, spaceID, shareID string) 
 		}
 		err = persistFunc()
 	}
-
-	afterShares := []string{}
-	for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
-		afterShares = append(afterShares, s.Id.OpaqueId)
-	}
-	afterEtag := c.Providers[storageID].Spaces[spaceID].etag
-
-	log := appctx.GetLogger(ctx).With().
-		Str("hostname", os.Getenv("HOSTNAME")).
-		Str("storageID", storageID).
-		Str("spaceID", spaceID).
-		Str("shareID", shareID).Logger()
-
-	log.Debug().
-		Interface("before", beforeShares).
-		Interface("after", afterShares).
-		Str("etag", beforeEtag).
-		Str("afterEtag", afterEtag).
-		Msg("provider cache remove diff")
 
 	return err
 }
@@ -350,7 +307,6 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 	}
 
 	span.SetAttributes(attribute.String("etag", c.Providers[storageID].Spaces[spaceID].etag))
-	log := appctx.GetLogger(ctx).With().Str("storageID", storageID).Str("spaceID", spaceID).Str("BeforeEtag", c.Providers[storageID].Spaces[spaceID].etag).Logger()
 
 	ur := metadata.UploadRequest{
 		Path:        jsonPath,
@@ -361,25 +317,16 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 	// > If the field value is "*", the condition is false if the origin server has a current representation for the target resource.
 	if c.Providers[storageID].Spaces[spaceID].etag == "" {
 		ur.IfNoneMatch = []string{"*"}
-		log.Debug().Msg("setting IfNoneMatch to *")
-	} else {
-		log.Debug().Msg("setting IfMatchEtag")
 	}
 	res, err := c.storage.Upload(ctx, ur)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
-		log.Debug().Err(err).Msg("persisting provider cache failed")
 		return err
 	}
 	c.Providers[storageID].Spaces[spaceID].etag = res.Etag
 	// FIXME read etag from upload
 	span.SetStatus(codes.Ok, "")
-	shares := []string{}
-	for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
-		shares = append(shares, s.Id.OpaqueId)
-	}
-	log.Debug().Str("AfterEtag", c.Providers[storageID].Spaces[spaceID].etag).Interface("Shares", shares).Msg("persisted provider cache")
 	return nil
 }
 
@@ -400,12 +347,6 @@ func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) err
 		dlreq.IfNoneMatch = []string{c.Providers[storageID].Spaces[spaceID].etag}
 	}
 
-	beforeShares := []string{}
-	for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
-		beforeShares = append(beforeShares, s.Id.OpaqueId)
-	}
-	beforeEtag := c.Providers[storageID].Spaces[spaceID].etag
-
 	var dlres *metadata.DownloadResponse
 	var err error
 	downloadFunc := func() error {
@@ -415,22 +356,18 @@ func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) err
 			return nil
 		case errtypes.NotFound:
 			span.AddEvent("not found")
-			log.Debug().Msg("not found")
 			return nil
 		case errtypes.NotModified:
 			span.AddEvent("not modified")
-			log.Debug().Msg("not modified")
 			return nil
 		default:
 			span.RecordError(err)
 			span.SetStatus(codes.Error, "downloading provider cache failed")
-			log.Error().Err(err).Msg("downloading provider cache failed")
 			return err
 		}
 	}
 	err = downloadFunc()
 	if err != nil {
-		log.Debug().Msg("downloading failed. Retrying...")
 		err = downloadFunc()
 		if err != nil {
 			log.Error().Err(err).Msg("downloading provider cache failed")
@@ -443,7 +380,6 @@ func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) err
 		return nil
 	}
 	span.AddEvent("updating local cache")
-	log.Debug().Msg("updating local cache")
 	newShares := &Shares{}
 	err = json.Unmarshal(dlres.Content, newShares)
 	if err != nil {
@@ -453,19 +389,6 @@ func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) err
 		return err
 	}
 	newShares.etag = dlres.Etag
-
-	afterShares := []string{}
-	for _, s := range newShares.Shares {
-		afterShares = append(afterShares, s.Id.OpaqueId)
-	}
-	afterEtag := newShares.etag
-
-	log.Debug().
-		Interface("before", beforeShares).
-		Interface("after", afterShares).
-		Str("etag", beforeEtag).
-		Str("afterEtag", afterEtag).
-		Msg("provider cache download diff")
 
 	c.Providers[storageID].Spaces[spaceID] = newShares
 	span.SetStatus(codes.Ok, "")
