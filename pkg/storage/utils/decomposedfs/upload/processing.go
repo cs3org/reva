@@ -387,9 +387,17 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 		return nil, err
 	}
 
-	tmtime, err := old.GetTMTime(upload.Ctx)
+	targetPath := n.InternalPath()
+
+	// write lock existing node before reading treesize or tree time
+	f, err := lockedfile.OpenFile(upload.lu.MetadataBackend().LockfilePath(targetPath), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return nil, err
+	}
+
+	tmtime, err := old.GetTMTime(upload.Ctx)
+	if err != nil {
+		return f, err
 	}
 
 	// When the if-match header was set we need to check if the
@@ -398,9 +406,9 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 		targetEtag, err := node.CalculateEtag(n.ID, tmtime)
 		switch {
 		case err != nil:
-			return nil, errtypes.InternalError(err.Error())
+			return f, errtypes.InternalError(err.Error())
 		case ifMatch != targetEtag:
-			return nil, errtypes.Aborted("etag mismatch")
+			return f, errtypes.Aborted("etag mismatch")
 		}
 	}
 
@@ -409,14 +417,14 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 	if ifNoneMatch, ok := upload.Info.MetaData["if-none-match"]; ok {
 		targetEtag, err := node.CalculateEtag(n.ID, tmtime)
 		if err != nil {
-			return nil, errtypes.InternalError(err.Error())
+			return f, errtypes.InternalError(err.Error())
 		}
 		strings.Split(ifNoneMatch, ",")
 		switch {
 		case err != nil:
-			return nil, errtypes.InternalError(err.Error())
+			return f, errtypes.InternalError(err.Error())
 		case ifNoneMatch != targetEtag:
-			return nil, errtypes.Aborted("etag mismatch")
+			return f, errtypes.Aborted("etag mismatch")
 		}
 	}
 
@@ -425,15 +433,15 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 	if ifUnmodifiedSince, ok := upload.Info.MetaData["if-unmodified-since"]; ok {
 		nodeMTime, err := old.GetMTime(upload.Ctx)
 		if err != nil {
-			return nil, errtypes.InternalError(fmt.Sprintf("failed to read mtime of node: %w", err))
+			return f, errtypes.InternalError(fmt.Sprintf("failed to read mtime of node: %s", err))
 		}
 		ifUnmodifiedSince, err := time.Parse(time.RFC3339Nano, ifUnmodifiedSince)
 		if err != nil {
-			return nil, errtypes.InternalError(fmt.Sprintf("failed to parse if-unmodified-since time: %w", err))
+			return f, errtypes.InternalError(fmt.Sprintf("failed to parse if-unmodified-since time: %s", err))
 		}
 
 		if nodeMTime.After(ifUnmodifiedSince) {
-			return nil, errtypes.Aborted("if-unmodified-since mismatch")
+			return f, errtypes.Aborted("if-unmodified-since mismatch")
 		}
 	}
 
@@ -441,14 +449,6 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 	upload.SizeDiff = int64(fsize) - old.Blobsize
 	upload.Info.MetaData["versionsPath"] = upload.versionsPath
 	upload.Info.MetaData["sizeDiff"] = strconv.Itoa(int(upload.SizeDiff))
-
-	targetPath := n.InternalPath()
-
-	// write lock existing node before reading treesize or tree time
-	f, err := lockedfile.OpenFile(upload.lu.MetadataBackend().LockfilePath(targetPath), os.O_RDWR|os.O_CREATE, 0600)
-	if err != nil {
-		return nil, err
-	}
 
 	// create version node
 	if _, err := os.Create(upload.versionsPath); err != nil {
