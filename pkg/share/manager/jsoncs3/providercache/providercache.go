@@ -64,8 +64,8 @@ type Spaces struct {
 // Shares holds the share information of one space
 type Shares struct {
 	Shares map[string]*collaboration.Share
-	Mtime  time.Time
-	etag   string
+
+	etag string
 }
 
 // UnmarshalJSON overrides the default unmarshaling
@@ -75,7 +75,6 @@ type Shares struct {
 func (s *Shares) UnmarshalJSON(data []byte) error {
 	tmp := struct {
 		Shares map[string]json.RawMessage
-		Mtime  time.Time
 	}{}
 
 	err := json.Unmarshal(data, &tmp)
@@ -83,7 +82,6 @@ func (s *Shares) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	s.Mtime = tmp.Mtime
 	s.Shares = make(map[string]*collaboration.Share, len(tmp.Shares))
 	for id, genericShare := range tmp.Shares {
 		userShare := &collaboration.Share{
@@ -275,7 +273,6 @@ func (c *Cache) ListSpace(ctx context.Context, storageID, spaceID string) (*Shar
 
 	shares := &Shares{
 		Shares: maps.Clone(c.Providers[storageID].Spaces[spaceID].Shares),
-		Mtime:  c.Providers[storageID].Spaces[spaceID].Mtime,
 		etag:   c.Providers[storageID].Spaces[spaceID].etag,
 	}
 	return shares, nil

@@ -92,17 +92,17 @@ import (
   2. create /users/{userid}/created.json if it doesn't exist yet and add the space/share
   3. create /users/{userid}/received.json or /groups/{groupid}/received.json if it doesn exist yet and add the space/share
 
-  When updating shares /storages/{storageid}/{spaceid}.json is updated accordingly. The mtime is used to invalidate in-memory caches:
+  When updating shares /storages/{storageid}/{spaceid}.json is updated accordingly. The etag is used to invalidate in-memory caches:
   - TODO the upload is tried with an if-unmodified-since header
-  - TODO when if fails, the {spaceid}.json file is downloaded, the changes are reapplied and the upload is retried with the new mtime
+  - TODO when if fails, the {spaceid}.json file is downloaded, the changes are reapplied and the upload is retried with the new etag
 
   When updating received shares the mountpoint and state are updated in /users/{userid}/received.json (for both user and group shares).
 
   When reading the list of received shares the /users/{userid}/received.json file and the /groups/{groupid}/received.json files are statted.
-  - if the mtime changed we download the file to update the local cache
+  - if the etag changed we download the file to update the local cache
 
   When reading the list of created shares the /users/{userid}/created.json file is statted
-  - if the mtime changed we download the file to update the local cache
+  - if the etag changed we download the file to update the local cache
 */
 
 // name is the Tracer name used to identify this instrumentation library.
@@ -727,7 +727,6 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 			var ok bool
 			if rs, ok = ssids[ssid]; !ok {
 				rs = &receivedsharecache.Space{
-					Mtime:  spaceShareIDs.Mtime,
 					States: make(map[string]*receivedsharecache.State, len(spaceShareIDs.IDs)),
 				}
 				ssids[ssid] = rs

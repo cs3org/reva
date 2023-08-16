@@ -54,7 +54,6 @@ type Cache struct {
 
 // UserShareCache holds the space/share map for one user
 type UserShareCache struct {
-	Mtime      time.Time
 	UserShares map[string]*SpaceShareIDs
 
 	etag string
@@ -62,8 +61,7 @@ type UserShareCache struct {
 
 // SpaceShareIDs holds the unique list of share ids for a space
 type SpaceShareIDs struct {
-	Mtime time.Time
-	IDs   map[string]struct{}
+	IDs map[string]struct{}
 }
 
 func (c *Cache) lockUser(userID string) func() {
@@ -111,9 +109,7 @@ func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
 	persistFunc := func() error {
 		c.initializeIfNeeded(userid, ssid)
 
-		now := time.Now()
 		// add share id
-		c.UserShares[userid].UserShares[ssid].Mtime = now
 		c.UserShares[userid].UserShares[ssid].IDs[shareID] = struct{}{}
 		return c.Persist(ctx, userid)
 	}
@@ -164,7 +160,6 @@ func (c *Cache) Remove(ctx context.Context, userid, shareID string) error {
 
 		if c.UserShares[userid].UserShares[ssid] != nil {
 			// remove share id
-			c.UserShares[userid].UserShares[ssid].Mtime = time.Now()
 			delete(c.UserShares[userid].UserShares[ssid].IDs, shareID)
 		}
 
@@ -200,8 +195,7 @@ func (c *Cache) List(ctx context.Context, userid string) (map[string]SpaceShareI
 
 	for ssid, cached := range c.UserShares[userid].UserShares {
 		r[ssid] = SpaceShareIDs{
-			Mtime: cached.Mtime,
-			IDs:   cached.IDs,
+			IDs: cached.IDs,
 		}
 	}
 	return r, nil
@@ -245,8 +239,6 @@ func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 		log.Error().Err(err).Msg("Failed to unmarshal the share cache")
 		return err
 	}
-	//newShareCache.Mtime = utils.TSToTime(info.Mtime)
-	newShareCache.Mtime = dlres.Mtime
 	newShareCache.etag = dlres.Etag
 	c.UserShares[userID] = newShareCache
 	span.SetStatus(codes.Ok, "")
@@ -259,19 +251,14 @@ func (c *Cache) Persist(ctx context.Context, userid string) error {
 	defer span.End()
 	span.SetAttributes(attribute.String("cs3.userid", userid))
 
-	oldMtime := c.UserShares[userid].Mtime
-	c.UserShares[userid].Mtime = time.Now()
-
 	createdBytes, err := json.Marshal(c.UserShares[userid])
 	if err != nil {
-		c.UserShares[userid].Mtime = oldMtime
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 	jsonPath := c.userCreatedPath(userid)
 	if err := c.storage.MakeDirIfNotExist(ctx, path.Dir(jsonPath)); err != nil {
-		c.UserShares[userid].Mtime = oldMtime
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
@@ -289,7 +276,6 @@ func (c *Cache) Persist(ctx context.Context, userid string) error {
 	}
 	_, err = c.storage.Upload(ctx, ur)
 	if err != nil {
-		c.UserShares[userid].Mtime = oldMtime
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return err

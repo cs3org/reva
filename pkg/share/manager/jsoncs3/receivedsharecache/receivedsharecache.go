@@ -53,16 +53,13 @@ type Cache struct {
 
 // Spaces holds the received shares of one user per space
 type Spaces struct {
-	Mtime  time.Time
 	Spaces map[string]*Space
 
-	etag     string
-	nextSync time.Time
+	etag string
 }
 
 // Space holds the received shares of one user in one space
 type Space struct {
-	Mtime  time.Time
 	States map[string]*State
 }
 
@@ -113,7 +110,6 @@ func (c *Cache) Add(ctx context.Context, userID, spaceID string, rs *collaborati
 		c.initializeIfNeeded(userID, spaceID)
 
 		receivedSpace := c.ReceivedSpaces[userID].Spaces[spaceID]
-		receivedSpace.Mtime = time.Now()
 		if receivedSpace.States == nil {
 			receivedSpace.States = map[string]*State{}
 		}
@@ -203,8 +199,6 @@ func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 		log.Error().Err(err).Msg("Failed to unmarshal the received share")
 		return err
 	}
-	//newSpaces.Mtime = utils.TSToTime(info.Mtime)
-	newSpaces.Mtime = dlres.Mtime
 	newSpaces.etag = dlres.Etag
 
 	c.ReceivedSpaces[userID] = newSpaces
@@ -223,19 +217,14 @@ func (c *Cache) persist(ctx context.Context, userID string) error {
 		return nil
 	}
 
-	oldMtime := c.ReceivedSpaces[userID].Mtime
-	c.ReceivedSpaces[userID].Mtime = time.Now()
-
 	createdBytes, err := json.Marshal(c.ReceivedSpaces[userID])
 	if err != nil {
-		c.ReceivedSpaces[userID].Mtime = oldMtime
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 	jsonPath := userJSONPath(userID)
 	if err := c.storage.MakeDirIfNotExist(ctx, path.Dir(jsonPath)); err != nil {
-		c.ReceivedSpaces[userID].Mtime = oldMtime
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
@@ -254,7 +243,6 @@ func (c *Cache) persist(ctx context.Context, userID string) error {
 
 	_, err = c.storage.Upload(ctx, ur)
 	if err != nil {
-		c.ReceivedSpaces[userID].Mtime = oldMtime
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
