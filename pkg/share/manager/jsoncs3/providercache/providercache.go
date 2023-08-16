@@ -65,7 +65,7 @@ type Spaces struct {
 type Shares struct {
 	Shares map[string]*collaboration.Share
 
-	etag string
+	Etag string
 }
 
 // UnmarshalJSON overrides the default unmarshaling
@@ -96,11 +96,20 @@ func (s *Shares) UnmarshalJSON(data []byte) error {
 		groupShare := &collaboration.Share{
 			Grantee: &provider.Grantee{Id: &provider.Grantee_GroupId{}},
 		}
-		err = json.Unmarshal(genericShare, groupShare) // try to unmarshal to a group share if the user share unmarshalling failed
-		if err != nil {
-			return err
+		err = json.Unmarshal(genericShare, groupShare) // is this a group share?
+		if err == nil && groupShare.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+			s.Shares[id] = groupShare
+			continue
 		}
-		s.Shares[id] = groupShare
+
+		invalidShare := &collaboration.Share{}
+		err = json.Unmarshal(genericShare, invalidShare) // invalid
+		if err == nil {
+			s.Shares[id] = invalidShare
+			continue
+		}
+
+		return err
 	}
 
 	return nil
@@ -273,7 +282,7 @@ func (c *Cache) ListSpace(ctx context.Context, storageID, spaceID string) (*Shar
 
 	shares := &Shares{
 		Shares: maps.Clone(c.Providers[storageID].Spaces[spaceID].Shares),
-		etag:   c.Providers[storageID].Spaces[spaceID].etag,
+		Etag:   c.Providers[storageID].Spaces[spaceID].Etag,
 	}
 	return shares, nil
 }
@@ -283,13 +292,15 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 	ctx, span := tracer.Start(ctx, "Persist")
 	defer span.End()
 	span.SetAttributes(attribute.String("cs3.storageid", storageID), attribute.String("cs3.spaceid", spaceID))
-	log := appctx.GetLogger(ctx).With().Str("storageID", storageID).Str("spaceID", spaceID).Str("BeforeEtag", c.Providers[storageID].Spaces[spaceID].etag).Logger()
 
 	if c.Providers[storageID] == nil || c.Providers[storageID].Spaces[spaceID] == nil {
 		span.AddEvent("nothing to persist")
 		span.SetStatus(codes.Ok, "")
 		return nil
 	}
+	span.SetAttributes(attribute.String("BeforeEtag", c.Providers[storageID].Spaces[spaceID].Etag))
+	log := appctx.GetLogger(ctx).With().Str("storageID", storageID).Str("spaceID", spaceID).Logger()
+	log = log.With().Str("BeforeEtag", c.Providers[storageID].Spaces[spaceID].Etag).Logger()
 
 	createdBytes, err := json.Marshal(c.Providers[storageID].Spaces[spaceID])
 	if err != nil {
@@ -304,16 +315,16 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 		return err
 	}
 
-	span.SetAttributes(attribute.String("etag", c.Providers[storageID].Spaces[spaceID].etag))
+	span.SetAttributes(attribute.String("etag", c.Providers[storageID].Spaces[spaceID].Etag))
 
 	ur := metadata.UploadRequest{
 		Path:        jsonPath,
 		Content:     createdBytes,
-		IfMatchEtag: c.Providers[storageID].Spaces[spaceID].etag,
+		IfMatchEtag: c.Providers[storageID].Spaces[spaceID].Etag,
 	}
 	// when there is no etag in memory make sure the file has not been created on the server, see https://www.rfc-editor.org/rfc/rfc9110#field.if-match
 	// > If the field value is "*", the condition is false if the origin server has a current representation for the target resource.
-	if c.Providers[storageID].Spaces[spaceID].etag == "" {
+	if c.Providers[storageID].Spaces[spaceID].Etag == "" {
 		ur.IfNoneMatch = []string{"*"}
 		log.Debug().Msg("setting IfNoneMatch to *")
 	} else {
@@ -326,14 +337,14 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 		log.Debug().Err(err).Msg("persisting provider cache failed")
 		return err
 	}
-	c.Providers[storageID].Spaces[spaceID].etag = res.Etag
+	c.Providers[storageID].Spaces[spaceID].Etag = res.Etag
 	// FIXME read etag from upload
 	span.SetStatus(codes.Ok, "")
 	shares := []string{}
 	for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
 		shares = append(shares, s.Id.OpaqueId)
 	}
-	log.Debug().Str("AfterEtag", c.Providers[storageID].Spaces[spaceID].etag).Interface("Shares", shares).Msg("persisted provider cache")
+	log.Debug().Str("AfterEtag", c.Providers[storageID].Spaces[spaceID].Etag).Interface("Shares", shares).Msg("persisted provider cache")
 	return nil
 }
 
@@ -343,15 +354,15 @@ func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) err
 
 	c.initializeIfNeeded(storageID, spaceID)
 
-	span.SetAttributes(attribute.String("cs3.storageid", storageID), attribute.String("cs3.spaceid", spaceID), attribute.String("etag", c.Providers[storageID].Spaces[spaceID].etag))
-	log := appctx.GetLogger(ctx).With().Str("storageID", storageID).Str("spaceID", spaceID).Str("etag", c.Providers[storageID].Spaces[spaceID].etag).Str("hostname", os.Getenv("HOSTNAME")).Logger()
+	span.SetAttributes(attribute.String("cs3.storageid", storageID), attribute.String("cs3.spaceid", spaceID), attribute.String("etag", c.Providers[storageID].Spaces[spaceID].Etag))
+	log := appctx.GetLogger(ctx).With().Str("storageID", storageID).Str("spaceID", spaceID).Str("etag", c.Providers[storageID].Spaces[spaceID].Etag).Str("hostname", os.Getenv("HOSTNAME")).Logger()
 
 	dlreq := metadata.DownloadRequest{
 		Path: spaceJSONPath(storageID, spaceID),
 	}
 	// when we know an etag, only download if it changed remotely
-	if c.Providers[storageID].Spaces[spaceID].etag != "" {
-		dlreq.IfNoneMatch = []string{c.Providers[storageID].Spaces[spaceID].etag}
+	if c.Providers[storageID].Spaces[spaceID].Etag != "" {
+		dlreq.IfNoneMatch = []string{c.Providers[storageID].Spaces[spaceID].Etag}
 	}
 
 	var dlres *metadata.DownloadResponse
@@ -395,7 +406,7 @@ func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) err
 		log.Error().Err(err).Msg("unmarshaling provider cache failed")
 		return err
 	}
-	newShares.etag = dlres.Etag
+	newShares.Etag = dlres.Etag
 
 	c.Providers[storageID].Spaces[spaceID] = newShares
 	span.SetStatus(codes.Ok, "")

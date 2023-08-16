@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -135,20 +136,31 @@ func (disk *Disk) Upload(_ context.Context, req UploadRequest) (*UploadResponse,
 
 // Download reads a file from disk
 func (disk *Disk) Download(_ context.Context, req DownloadRequest) (*DownloadResponse, error) {
-	res := DownloadResponse{}
 	var err error
 
-	info, err := os.Stat(disk.targetPath(req.Path))
+	f, err := os.Open(disk.targetPath(req.Path))
+	if err != nil {
+		var pathError *fs.PathError
+		if errors.As(err, &pathError) {
+			return nil, errtypes.NotFound("path not found: " + disk.targetPath(req.Path))
+		}
+		return nil, err
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
 	if err != nil {
 		return nil, err
 	}
+
+	res := DownloadResponse{}
 	res.Mtime = info.ModTime()
 	res.Etag, err = calcEtag(info.ModTime(), info.Size())
 	if err != nil {
 		return nil, err
 	}
 
-	res.Content, err = os.ReadFile(disk.targetPath(req.Path))
+	res.Content, err = io.ReadAll(f)
 	if err != nil {
 		return nil, err
 	}
@@ -156,8 +168,9 @@ func (disk *Disk) Download(_ context.Context, req DownloadRequest) (*DownloadRes
 }
 
 // SimpleDownload reads a file from disk
-func (disk *Disk) SimpleDownload(_ context.Context, downloadpath string) ([]byte, error) {
-	return os.ReadFile(disk.targetPath(downloadpath))
+func (disk *Disk) SimpleDownload(ctx context.Context, downloadpath string) ([]byte, error) {
+	res, err := disk.Download(ctx, DownloadRequest{Path: downloadpath})
+	return res.Content, err
 }
 
 // Delete deletes a path

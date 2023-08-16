@@ -87,16 +87,16 @@ var _ = Describe("Cache", func() {
 			Expect(s).To(Equal(share1))
 		})
 
-		It("sets the mtime", func() {
+		It("sets the etag", func() {
 			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
-			Expect(c.Providers[storageID].Spaces[spaceID].Mtime).ToNot(Equal(time.Time{}))
+			Expect(c.Providers[storageID].Spaces[spaceID].Etag).ToNot(BeEmpty())
 		})
 
-		It("updates the mtime", func() {
+		It("updates the etag", func() {
 			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
-			old := c.Providers[storageID].Spaces[spaceID].Mtime
+			old := c.Providers[storageID].Spaces[spaceID].Etag
 			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
-			Expect(c.Providers[storageID].Spaces[spaceID].Mtime).ToNot(Equal(old))
+			Expect(c.Providers[storageID].Spaces[spaceID].Etag).ToNot(Equal(old))
 		})
 	})
 
@@ -127,11 +127,11 @@ var _ = Describe("Cache", func() {
 				Expect(s).To(BeNil())
 			})
 
-			It("updates the mtime", func() {
+			It("updates the etag", func() {
 				Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
-				old := c.Providers[storageID].Spaces[spaceID].Mtime
+				old := c.Providers[storageID].Spaces[spaceID].Etag
 				Expect(c.Remove(ctx, storageID, spaceID, shareID)).To(Succeed())
-				Expect(c.Providers[storageID].Spaces[spaceID].Mtime).ToNot(Equal(old))
+				Expect(c.Providers[storageID].Spaces[spaceID].Etag).ToNot(Equal(old))
 			})
 		})
 
@@ -147,21 +147,21 @@ var _ = Describe("Cache", func() {
 				Expect(c.Persist(ctx, storageID, spaceID)).To(Succeed())
 			})
 
-			It("updates the mtime", func() {
-				oldMtime := c.Providers[storageID].Spaces[spaceID].Mtime
+			It("updates the etag", func() {
+				oldEtag := c.Providers[storageID].Spaces[spaceID].Etag
 
 				Expect(c.Persist(ctx, storageID, spaceID)).To(Succeed())
-				Expect(c.Providers[storageID].Spaces[spaceID].Mtime).ToNot(Equal(oldMtime))
+				Expect(c.Providers[storageID].Spaces[spaceID].Etag).ToNot(Equal(oldEtag))
 			})
 
 		})
 
 		Describe("PersistWithTime", func() {
-			It("does not persist if the mtime on disk is more recent", func() {
+			It("does not persist if the etag changed", func() {
 				time.Sleep(1 * time.Nanosecond)
 				path := filepath.Join(tmpdir, "storages/storageid/spaceid.json")
 				now := time.Now()
-				_ = os.Chtimes(path, now, now)
+				_ = os.Chtimes(path, now, now) // this only works for the file backend
 				Expect(c.Persist(ctx, storageID, spaceID)).ToNot(Succeed())
 			})
 		})
