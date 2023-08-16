@@ -25,7 +25,7 @@ require (
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-chi/chi/v5 v5.0.8
 	github.com/go-ldap/ldap/v3 v3.4.5
-	github.com/go-micro/plugins/v4/events/natsjs v1.2.1
+	github.com/go-micro/plugins/v4/events/natsjs v1.2.2-0.20230807070816-bc05fb076ce7
 	github.com/go-micro/plugins/v4/server/http v1.2.1
 	github.com/go-micro/plugins/v4/store/nats-js v1.1.0
 	github.com/go-micro/plugins/v4/store/redis v1.2.1-0.20230510195111-07cd57e1bc9d
