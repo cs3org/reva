@@ -325,7 +325,7 @@ func CreateNodeForUpload(upload *Upload, initAttrs node.Attributes) (*node.Node,
 	}
 
 	// add etag to metadata
-	upload.Info.MetaData["etag"], _ = node.CalculateEtag(n.ID, mtime)
+	upload.Info.MetaData["etag"], _ = node.CalculateEtag(n, mtime)
 
 	// update nodeid for later
 	upload.Info.Storage["NodeId"] = n.ID
@@ -382,20 +382,24 @@ func initNewNode(upload *Upload, n *node.Node, fsize uint64) (*lockedfile.File, 
 }
 
 func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint64) (*lockedfile.File, error) {
-	old, _ := node.ReadNode(upload.Ctx, upload.lu, spaceID, n.ID, false, nil, false)
-	if _, err := node.CheckQuota(upload.Ctx, n.SpaceRoot, true, uint64(old.Blobsize), fsize); err != nil {
-		return nil, err
-	}
-
 	targetPath := n.InternalPath()
 
-	// write lock existing node before reading treesize or tree time
+	// write lock existing node before reading any metadata
 	f, err := lockedfile.OpenFile(upload.lu.MetadataBackend().LockfilePath(targetPath), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return nil, err
 	}
 
-	tmtime, err := old.GetTMTime(upload.Ctx)
+	old, _ := node.ReadNode(upload.Ctx, upload.lu, spaceID, n.ID, false, nil, false)
+	if _, err := node.CheckQuota(upload.Ctx, n.SpaceRoot, true, uint64(old.Blobsize), fsize); err != nil {
+		return nil, err
+	}
+
+	oldNodeMtime, err := old.GetMTime(upload.Ctx)
+	if err != nil {
+		return f, err
+	}
+	oldNodeEtag, err := node.CalculateEtag(old, oldNodeMtime)
 	if err != nil {
 		return f, err
 	}
@@ -403,11 +407,7 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 	// When the if-match header was set we need to check if the
 	// etag still matches before finishing the upload.
 	if ifMatch, ok := upload.Info.MetaData["if-match"]; ok {
-		targetEtag, err := node.CalculateEtag(n.ID, tmtime)
-		switch {
-		case err != nil:
-			return f, errtypes.InternalError(err.Error())
-		case ifMatch != targetEtag:
+		if ifMatch != oldNodeEtag {
 			return f, errtypes.Aborted("etag mismatch")
 		}
 	}
@@ -415,23 +415,19 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 	// When the if-none-match header was set we need to check if any of the
 	// etags matches before finishing the upload.
 	if ifNoneMatch, ok := upload.Info.MetaData["if-none-match"]; ok {
-		targetEtag, err := node.CalculateEtag(n.ID, tmtime)
-		if err != nil {
-			return f, errtypes.InternalError(err.Error())
+		if ifNoneMatch == "*" {
+			return f, errtypes.Aborted("etag mismatch, resource exists")
 		}
-		strings.Split(ifNoneMatch, ",")
-		switch {
-		case err != nil:
-			return f, errtypes.InternalError(err.Error())
-		case ifNoneMatch != targetEtag:
-			return f, errtypes.Aborted("etag mismatch")
+		for _, ifNoneMatchTag := range strings.Split(ifNoneMatch, ",") {
+			if ifNoneMatchTag == oldNodeEtag {
+				return f, errtypes.Aborted("etag mismatch")
+			}
 		}
 	}
 
 	// When the if-unmodified-since header was set we need to check if the
 	// etag still matches before finishing the upload.
 	if ifUnmodifiedSince, ok := upload.Info.MetaData["if-unmodified-since"]; ok {
-		nodeMTime, err := old.GetMTime(upload.Ctx)
 		if err != nil {
 			return f, errtypes.InternalError(fmt.Sprintf("failed to read mtime of node: %s", err))
 		}
@@ -440,12 +436,12 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 			return f, errtypes.InternalError(fmt.Sprintf("failed to parse if-unmodified-since time: %s", err))
 		}
 
-		if nodeMTime.After(ifUnmodifiedSince) {
+		if oldNodeMtime.After(ifUnmodifiedSince) {
 			return f, errtypes.Aborted("if-unmodified-since mismatch")
 		}
 	}
 
-	upload.versionsPath = upload.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+tmtime.UTC().Format(time.RFC3339Nano))
+	upload.versionsPath = upload.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+oldNodeMtime.UTC().Format(time.RFC3339Nano))
 	upload.SizeDiff = int64(fsize) - old.Blobsize
 	upload.Info.MetaData["versionsPath"] = upload.versionsPath
 	upload.Info.MetaData["sizeDiff"] = strconv.Itoa(int(upload.SizeDiff))
@@ -467,7 +463,7 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 	}
 
 	// keep mtime from previous version
-	if err := os.Chtimes(upload.versionsPath, tmtime, tmtime); err != nil {
+	if err := os.Chtimes(upload.versionsPath, oldNodeMtime, oldNodeMtime); err != nil {
 		return f, errtypes.InternalError(fmt.Sprintf("failed to change mtime of version node: %s", err))
 	}
 

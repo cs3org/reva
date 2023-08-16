@@ -511,16 +511,21 @@ func (n *Node) LockFilePath() string {
 }
 
 // CalculateEtag returns a hash of fileid + tmtime (or mtime)
-func CalculateEtag(nodeID string, tmTime time.Time) (string, error) {
-	return calculateEtag(nodeID, tmTime)
+func CalculateEtag(n *Node, tmTime time.Time) (string, error) {
+	return calculateEtag(n, tmTime)
 }
 
 // calculateEtag returns a hash of fileid + tmtime (or mtime)
-func calculateEtag(nodeID string, tmTime time.Time) (string, error) {
+func calculateEtag(n *Node, tmTime time.Time) (string, error) {
 	h := md5.New()
-	if _, err := io.WriteString(h, nodeID); err != nil {
+	if _, err := io.WriteString(h, n.ID); err != nil {
 		return "", err
 	}
+	/* TODO we could strengthen the etag by adding the blobid, but then all etags would change. we would need a legacy etag check as well
+	if _, err := io.WriteString(h, n.BlobID); err != nil {
+		return "", err
+	}
+	*/
 	if tb, err := tmTime.UTC().MarshalBinary(); err == nil {
 		if _, err := h.Write(tb); err != nil {
 			return "", err
@@ -556,7 +561,7 @@ func (n *Node) SetEtag(ctx context.Context, val string) (err error) {
 		return
 	}
 	var etag string
-	if etag, err = calculateEtag(n.ID, tmTime); err != nil {
+	if etag, err = calculateEtag(n, tmTime); err != nil {
 		return
 	}
 
@@ -667,7 +672,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	// use temporary etag if it is set
 	if b, err := n.XattrString(ctx, prefixes.TmpEtagAttr); err == nil && b != "" {
 		ri.Etag = fmt.Sprintf(`"%x"`, b)
-	} else if ri.Etag, err = calculateEtag(n.ID, tmTime); err != nil {
+	} else if ri.Etag, err = calculateEtag(n, tmTime); err != nil {
 		sublog.Debug().Err(err).Msg("could not calculate etag")
 	}
 
