@@ -300,7 +300,17 @@ func CreateNodeForUpload(upload *Upload, initAttrs node.Attributes) (*node.Node,
 		return nil, err
 	}
 
+	mtime := time.Now()
+	if upload.Info.MetaData["mtime"] != "" {
+		// overwrite mtime if requested
+		mtime, err = utils.MTimeToTime(upload.Info.MetaData["mtime"])
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// overwrite technical information
+	initAttrs.SetString(prefixes.MTimeAttr, mtime.UTC().Format(time.RFC3339Nano))
 	initAttrs.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_FILE))
 	initAttrs.SetString(prefixes.ParentidAttr, n.ParentID)
 	initAttrs.SetString(prefixes.NameAttr, n.Name)
@@ -314,19 +324,8 @@ func CreateNodeForUpload(upload *Upload, initAttrs node.Attributes) (*node.Node,
 		return nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
 	}
 
-	// overwrite mtime if requested
-	if upload.Info.MetaData["mtime"] != "" {
-		if err := n.SetMtimeString(upload.Info.MetaData["mtime"]); err != nil {
-			return nil, err
-		}
-	}
-
 	// add etag to metadata
-	tmtime, err := n.GetMTime()
-	if err != nil {
-		return nil, err
-	}
-	upload.Info.MetaData["etag"], _ = node.CalculateEtag(n.ID, tmtime)
+	upload.Info.MetaData["etag"], _ = node.CalculateEtag(n.ID, mtime)
 
 	// update nodeid for later
 	upload.Info.Storage["NodeId"] = n.ID
@@ -424,7 +423,7 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 	// When the if-unmodified-since header was set we need to check if the
 	// etag still matches before finishing the upload.
 	if ifUnmodifiedSince, ok := upload.Info.MetaData["if-unmodified-since"]; ok {
-		nodeMTime, err := old.GetMTime()
+		nodeMTime, err := old.GetMTime(upload.Ctx)
 		if err != nil {
 			return nil, errtypes.InternalError(fmt.Sprintf("failed to read mtime of node: %w", err))
 		}
@@ -457,11 +456,12 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 	}
 
 	// copy blob metadata to version node
-	if err := upload.lu.CopyMetadataWithSourceLock(upload.Ctx, targetPath, upload.versionsPath, func(attributeName string) bool {
-		return strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
+	if err := upload.lu.CopyMetadataWithSourceLock(upload.Ctx, targetPath, upload.versionsPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
+		return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
 			attributeName == prefixes.TypeAttr ||
 			attributeName == prefixes.BlobIDAttr ||
-			attributeName == prefixes.BlobsizeAttr
+			attributeName == prefixes.BlobsizeAttr ||
+			attributeName == prefixes.MTimeAttr
 	}, f); err != nil {
 		return f, err
 	}
@@ -469,12 +469,6 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 	// keep mtime from previous version
 	if err := os.Chtimes(upload.versionsPath, tmtime, tmtime); err != nil {
 		return f, errtypes.InternalError(fmt.Sprintf("failed to change mtime of version node: %s", err))
-	}
-
-	// update mtime of current version
-	mtime := time.Now()
-	if err := os.Chtimes(n.InternalPath(), mtime, mtime); err != nil {
-		return f, err
 	}
 
 	return f, nil

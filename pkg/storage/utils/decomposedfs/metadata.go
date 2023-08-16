@@ -74,7 +74,7 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 	if md.Metadata != nil {
 		if val, ok := md.Metadata["mtime"]; ok {
 			delete(md.Metadata, "mtime")
-			if err := n.SetMtimeString(val); err != nil {
+			if err := n.SetMtimeString(ctx, val); err != nil {
 				errs = append(errs, errors.Wrap(err, "could not set mtime"))
 			}
 		}

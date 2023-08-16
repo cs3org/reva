@@ -149,7 +149,7 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 		attributes[prefixes.StatusPrefix] = []byte(node.ProcessingStatus)
 	}
 	if mtime != "" {
-		if err := n.SetMtimeString(mtime); err != nil {
+		if err := n.SetMtimeString(ctx, mtime); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not set mtime")
 		}
 	}

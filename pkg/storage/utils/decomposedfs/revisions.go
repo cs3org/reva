@@ -230,11 +230,12 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		}()
 
 		// copy blob metadata from node to new revision node
-		err = fs.lu.CopyMetadata(ctx, nodePath, newRevisionPath, func(attributeName string) bool {
-			return strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) || // for checksums
+		err = fs.lu.CopyMetadata(ctx, nodePath, newRevisionPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
+			return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) || // for checksums
 				attributeName == prefixes.TypeAttr ||
 				attributeName == prefixes.BlobIDAttr ||
-				attributeName == prefixes.BlobsizeAttr
+				attributeName == prefixes.BlobsizeAttr ||
+				attributeName == prefixes.MTimeAttr
 		})
 		if err != nil {
 			return errtypes.InternalError("failed to copy blob xattrs to version node: " + err.Error())
@@ -249,8 +250,12 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 
 		// copy blob metadata from restored revision to node
 		restoredRevisionPath := fs.lu.InternalPath(spaceID, revisionKey)
-		err = fs.lu.CopyMetadata(ctx, restoredRevisionPath, nodePath, func(attributeName string) bool {
-			return strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
+		err = fs.lu.CopyMetadata(ctx, restoredRevisionPath, nodePath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
+			if attributeName == prefixes.MTimeAttr {
+				// update mtime
+				return []byte(time.Now().UTC().Format(time.RFC3339Nano)), true
+			}
+			return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
 				attributeName == prefixes.TypeAttr ||
 				attributeName == prefixes.BlobIDAttr ||
 				attributeName == prefixes.BlobsizeAttr
@@ -267,12 +272,6 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		// drop old revision
 		if err := os.Remove(restoredRevisionPath); err != nil {
 			log.Warn().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("could not delete old revision, continuing")
-		}
-
-		// explicitly update mtime of node as writing xattrs does not change mtime
-		now := time.Now()
-		if err := os.Chtimes(nodePath, now, now); err != nil {
-			return errtypes.InternalError("failed to change mtime of version node")
 		}
 
 		// revision 5, current 10 (restore a smaller blob) -> 5-10 = -5

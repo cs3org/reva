@@ -1015,7 +1015,7 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 		return nil, errtypes.NotFound(f)
 	}
 
-	mtime, err := n.GetMTime()
+	mtime, err := n.GetMTime(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error getting mtime for '"+n.ID+"'")
 	}

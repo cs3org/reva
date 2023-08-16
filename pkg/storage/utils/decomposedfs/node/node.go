@@ -532,19 +532,20 @@ func calculateEtag(nodeID string, tmTime time.Time) (string, error) {
 }
 
 // SetMtimeString sets the mtime and atime of a node to the unixtime parsed from the given string
-func (n *Node) SetMtimeString(mtime string) error {
-	mt, err := parseMTime(mtime)
+func (n *Node) SetMtimeString(ctx context.Context, mtime string) error {
+	mt, err := utils.MTimeToTime(mtime)
 	if err != nil {
 		return err
 	}
-	return n.SetMtime(mt)
+	return n.SetMtime(ctx, &mt)
 }
 
-// SetMtime sets the mtime and atime of a node
-func (n *Node) SetMtime(mtime time.Time) error {
-	nodePath := n.InternalPath()
-	// updating mtime also updates atime
-	return os.Chtimes(nodePath, mtime, mtime)
+// SetMTime writes the UTC mtime to the extended attributes or removes the attribute if nil is passed
+func (n *Node) SetMtime(ctx context.Context, t *time.Time) (err error) {
+	if t == nil {
+		return n.RemoveXattr(ctx, prefixes.MTimeAttr)
+	}
+	return n.SetXattrString(ctx, prefixes.MTimeAttr, t.UTC().Format(time.RFC3339Nano))
 }
 
 // SetEtag sets the temporary etag of a node if it differs from the current etag
@@ -883,16 +884,20 @@ func (n *Node) GetTMTime(ctx context.Context) (time.Time, error) {
 	}
 
 	// no tmtime, use mtime
-	return n.GetMTime()
+	return n.GetMTime(ctx)
 }
 
-// GetMTime reads the mtime from disk
-func (n *Node) GetMTime() (time.Time, error) {
-	fi, err := os.Lstat(n.InternalPath())
+// GetMTime reads the mtime from the extended attributes, falling back to disk
+func (n *Node) GetMTime(ctx context.Context) (time.Time, error) {
+	b, err := n.XattrString(ctx, prefixes.MTimeAttr)
 	if err != nil {
-		return time.Time{}, err
+		fi, err := os.Lstat(n.InternalPath())
+		if err != nil {
+			return time.Time{}, err
+		}
+		return fi.ModTime(), nil
 	}
-	return fi.ModTime(), nil
+	return time.Parse(time.RFC3339Nano, b)
 }
 
 // SetTMTime writes the UTC tmtime to the extended attributes or removes the attribute if nil is passed
@@ -1157,17 +1162,6 @@ func (n *Node) getGranteeTypes(ctx context.Context) []provider.GranteeType {
 		}
 	}
 	return types
-}
-
-func parseMTime(v string) (t time.Time, err error) {
-	p := strings.SplitN(v, ".", 2)
-	var sec, nsec int64
-	if sec, err = strconv.ParseInt(p[0], 10, 64); err == nil {
-		if len(p) > 1 {
-			nsec, err = strconv.ParseInt(p[1], 10, 64)
-		}
-	}
-	return time.Unix(sec, nsec), err
 }
 
 // FindStorageSpaceRoot calls n.Parent() and climbs the tree
