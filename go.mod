@@ -82,6 +82,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.16.0
 	go.opentelemetry.io/otel/trace v1.16.0
 	golang.org/x/crypto v0.11.0
+	golang.org/x/exp v0.0.0-20221026004748-78e5e7837ae6
 	golang.org/x/oauth2 v0.10.0
 	golang.org/x/sync v0.2.0
 	golang.org/x/sys v0.10.0
@@ -185,7 +186,6 @@ require (
 	github.com/prometheus/common v0.42.0 // indirect
 	github.com/prometheus/procfs v0.10.1 // indirect
 	github.com/prometheus/statsd_exporter v0.22.8 // indirect
-	github.com/r3labs/diff/v3 v3.0.1 // indirect
 	github.com/rivo/uniseg v0.4.2 // indirect
 	github.com/rs/xid v1.4.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
@@ -196,8 +196,6 @@ require (
 	github.com/stretchr/objx v0.5.0 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/urfave/cli/v2 v2.25.7 // indirect
-	github.com/vmihailenco/msgpack/v5 v5.3.5 // indirect
-	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/xanzy/ssh-agent v0.3.2 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.7 // indirect

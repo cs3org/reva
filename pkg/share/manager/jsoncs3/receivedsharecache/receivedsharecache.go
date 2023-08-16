@@ -32,7 +32,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
-	"github.com/r3labs/diff/v3"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 )
@@ -208,12 +207,6 @@ func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 	newSpaces.Mtime = dlres.Mtime
 	newSpaces.etag = dlres.Etag
 
-	_, err = diff.Diff(c.ReceivedSpaces[userID], newSpaces)
-	if err != nil {
-		log.Error().Err(err).Str("userid", userID).Msg("receivedsharecache diff failed")
-	} else {
-		// log.Debug().Str("userid", userID).Interface("changelog", changelog).Msg("receivedsharecache diff")
-	}
 	c.ReceivedSpaces[userID] = newSpaces
 	span.SetStatus(codes.Ok, "")
 	return nil

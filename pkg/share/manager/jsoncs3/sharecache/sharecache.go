@@ -31,7 +31,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/shareid"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
-	"github.com/r3labs/diff/v3"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 )
@@ -58,8 +57,7 @@ type UserShareCache struct {
 	Mtime      time.Time
 	UserShares map[string]*SpaceShareIDs
 
-	etag     string
-	nextSync time.Time
+	etag string
 }
 
 // SpaceShareIDs holds the unique list of share ids for a space
@@ -250,12 +248,6 @@ func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 	//newShareCache.Mtime = utils.TSToTime(info.Mtime)
 	newShareCache.Mtime = dlres.Mtime
 	newShareCache.etag = dlres.Etag
-	_, err = diff.Diff(c.UserShares[userID], newShareCache)
-	if err != nil {
-		log.Error().Str("userid", userID).Err(err).Msg("sharecache diff failed")
-	} else {
-		// log.Debug().Str("userid", userID).Interface("changelog", changelog).Msg("sharecache diff")
-	}
 	c.UserShares[userID] = newShareCache
 	span.SetStatus(codes.Ok, "")
 	return nil
