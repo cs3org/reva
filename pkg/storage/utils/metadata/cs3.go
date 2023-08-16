@@ -225,7 +225,7 @@ func (cs3 *CS3) Upload(ctx context.Context, req UploadRequest) (*UploadResponse,
 		return nil, err
 	}
 	etag := resp.Header.Get("Etag")
-	if ocEtag := resp.Header.Get("OC-Etag"); ocEtag != "" {
+	if ocEtag := resp.Header.Get("OC-ETag"); ocEtag != "" {
 		etag = ocEtag
 	}
 	return &UploadResponse{
