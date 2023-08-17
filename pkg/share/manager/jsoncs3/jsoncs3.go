@@ -655,46 +655,98 @@ func (m *Manager) listCreatedShares(ctx context.Context, user *userv1beta1.User,
 		return nil, err
 	}
 
-	var ss []*collaboration.Share
-	for ssid, spaceShareIDs := range list {
-		storageID, spaceID, _ := shareid.Decode(ssid)
-		// fetch all shares from space with one request
-		_, err := m.Cache.ListSpace(ctx, storageID, spaceID)
-		if err != nil {
-			log.Error().Err(err).
-				Str("storageid", storageID).
-				Str("spaceid", spaceID).
-				Msg("failed to list shares in space")
-			continue
-		}
-		for shareID := range spaceShareIDs.IDs {
-			s, err := m.Cache.Get(ctx, storageID, spaceID, shareID, true)
-			if err != nil || s == nil {
-				continue
-			}
-			if share.IsExpired(s) {
-				if err := m.removeShare(ctx, s); err != nil {
-					log.Error().Err(err).
-						Msg("failed to unshare expired share")
-				}
-				if err := events.Publish(ctx, m.eventStream, events.ShareExpired{
-					ShareOwner:     s.GetOwner(),
-					ItemID:         s.GetResourceId(),
-					ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
-					GranteeUserID:  s.GetGrantee().GetUserId(),
-					GranteeGroupID: s.GetGrantee().GetGroupId(),
-				}); err != nil {
-					log.Error().Err(err).
-						Msg("failed to publish share expired event")
-				}
-				continue
-			}
-			if utils.UserEqual(user.GetId(), s.GetCreator()) {
-				if share.MatchesFilters(s, filters) {
-					ss = append(ss, s)
-				}
+	numWorkers := m.MaxConcurrency
+	if numWorkers == 0 || len(list) < numWorkers {
+		numWorkers = len(list)
+	}
+
+	type w struct {
+		ssid string
+		ids  sharecache.SpaceShareIDs
+	}
+	work := make(chan w)
+	results := make(chan *collaboration.Share)
+
+	g, ctx := errgroup.WithContext(ctx)
+
+	// Distribute work
+	g.Go(func() error {
+		defer close(work)
+		for ssid, ids := range list {
+			select {
+			case work <- w{ssid, ids}:
+			case <-ctx.Done():
+				return ctx.Err()
 			}
 		}
+		return nil
+	})
+	// Spawn workers that'll concurrently work the queue
+	for i := 0; i < numWorkers; i++ {
+		g.Go(func() error {
+			for w := range work {
+				storageID, spaceID, _ := shareid.Decode(w.ssid)
+				// fetch all shares from space with one request
+				_, err := m.Cache.ListSpace(ctx, storageID, spaceID)
+				if err != nil {
+					log.Error().Err(err).
+						Str("storageid", storageID).
+						Str("spaceid", spaceID).
+						Msg("failed to list shares in space")
+					continue
+				}
+				for shareID := range w.ids.IDs {
+					s, err := m.Cache.Get(ctx, storageID, spaceID, shareID, true)
+					if err != nil || s == nil {
+						continue
+					}
+					if share.IsExpired(s) {
+						if err := m.removeShare(ctx, s); err != nil {
+							log.Error().Err(err).
+								Msg("failed to unshare expired share")
+						}
+						if err := events.Publish(ctx, m.eventStream, events.ShareExpired{
+							ShareOwner:     s.GetOwner(),
+							ItemID:         s.GetResourceId(),
+							ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
+							GranteeUserID:  s.GetGrantee().GetUserId(),
+							GranteeGroupID: s.GetGrantee().GetGroupId(),
+						}); err != nil {
+							log.Error().Err(err).
+								Msg("failed to publish share expired event")
+						}
+						continue
+					}
+					if utils.UserEqual(user.GetId(), s.GetCreator()) {
+						if share.MatchesFilters(s, filters) {
+							select {
+							case results <- s:
+							case <-ctx.Done():
+								return ctx.Err()
+							}
+						}
+					}
+				}
+			}
+			return nil
+		})
+	}
+
+	// Wait for things to settle down, then close results chan
+	go func() {
+		_ = g.Wait() // error is checked later
+		close(results)
+	}()
+
+	ss := []*collaboration.Share{}
+	for n := range results {
+		ss = append(ss, n)
+	}
+
+	if err := g.Wait(); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
 	}
 
 	span.SetStatus(codes.Ok, "")
