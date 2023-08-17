@@ -407,7 +407,7 @@ func (upload *Upload) cleanup(cleanNode, cleanBin, cleanInfo bool) {
 					attributeName == prefixes.BlobIDAttr ||
 					attributeName == prefixes.BlobsizeAttr ||
 					attributeName == prefixes.MTimeAttr
-			}); err != nil {
+			}, true); err != nil {
 				upload.log.Info().Str("versionpath", p).Str("nodepath", upload.Node.InternalPath()).Err(err).Msg("renaming version node failed")
 			}
 

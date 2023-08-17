@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/pkg/errors"
+	"github.com/rogpeppe/go-internal/lockedfile"
 )
 
 // Revision entries are stored inside the node folder and start with the same uuid as the current version.
@@ -207,6 +208,13 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		return err
 	}
 
+	// write lock node before copying metadata
+	f, err := lockedfile.OpenFile(fs.lu.MetadataBackend().LockfilePath(n.InternalPath()), os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
 	// move current version to new revision
 	nodePath := fs.lu.InternalPath(spaceID, kp[0])
 	var fi os.FileInfo
@@ -230,13 +238,13 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		}()
 
 		// copy blob metadata from node to new revision node
-		err = fs.lu.CopyMetadata(ctx, nodePath, newRevisionPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
+		err = fs.lu.CopyMetadataWithSourceLock(ctx, nodePath, newRevisionPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
 			return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) || // for checksums
 				attributeName == prefixes.TypeAttr ||
 				attributeName == prefixes.BlobIDAttr ||
 				attributeName == prefixes.BlobsizeAttr ||
 				attributeName == prefixes.MTimeAttr
-		})
+		}, f, true)
 		if err != nil {
 			return errtypes.InternalError("failed to copy blob xattrs to version node: " + err.Error())
 		}
@@ -259,7 +267,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 				attributeName == prefixes.TypeAttr ||
 				attributeName == prefixes.BlobIDAttr ||
 				attributeName == prefixes.BlobsizeAttr
-		})
+		}, false)
 		if err != nil {
 			return errtypes.InternalError("failed to copy blob xattrs to old revision to node: " + err.Error())
 		}

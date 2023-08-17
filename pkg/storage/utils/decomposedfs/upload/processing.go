@@ -458,7 +458,7 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 			attributeName == prefixes.BlobIDAttr ||
 			attributeName == prefixes.BlobsizeAttr ||
 			attributeName == prefixes.MTimeAttr
-	}, f); err != nil {
+	}, f, true); err != nil {
 		return f, err
 	}
 
