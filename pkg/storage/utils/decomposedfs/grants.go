@@ -83,9 +83,7 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 	defer unlockFunc()
 
 	if grant != nil {
-		// grant exists -> go to UpdateGrant
-		// TODO: should we hard error in this case?
-		return fs.UpdateGrant(ctx, ref, g)
+		return errtypes.AlreadyExists(filepath.Join(grantNode.ParentID, grantNode.Name))
 	}
 
 	owner := grantNode.Owner()

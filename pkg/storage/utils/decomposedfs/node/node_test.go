@@ -246,7 +246,7 @@ var _ = Describe("Node", func() {
 				UpdateGrant: true,
 				Stat:        true,
 			}, nil).Times(1)
-			err = env.Fs.AddGrant(env.Ctx, &provider.Reference{
+			err = env.Fs.UpdateGrant(env.Ctx, &provider.Reference{
 				ResourceId: &provider.ResourceId{
 					SpaceId:  pSpace.SpaceId,
 					OpaqueId: pSpace.OpaqueId,
@@ -273,7 +273,7 @@ var _ = Describe("Node", func() {
 				UpdateGrant: true,
 				Stat:        true,
 			}, nil).Times(1)
-			err = env.Fs.AddGrant(env.Ctx, &provider.Reference{
+			err = env.Fs.UpdateGrant(env.Ctx, &provider.Reference{
 				ResourceId: &provider.ResourceId{
 					SpaceId:  storageSpace.SpaceId,
 					OpaqueId: storageSpace.OpaqueId,
