@@ -68,7 +68,10 @@ func (m *manager) Authenticate(ctx context.Context, userID string, secret string
 	}
 	return &userpb.User{
 		// TODO: more details for service users?
-		Id: &userpb.UserId{OpaqueId: userID},
+		Id: &userpb.UserId{
+			OpaqueId: userID,
+			Type:     userpb.UserType_USER_TYPE_SERVICE,
+		},
 	}, scope, nil
 }
 
