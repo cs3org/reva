@@ -175,7 +175,7 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 		Str("hostname", os.Getenv("HOSTNAME")).
 		Str("storageID", storageID).
 		Str("spaceID", spaceID).
-		Str("shareID", share.Id.OpaqueId).Logger()
+		Str("shareID", shareID).Logger()
 
 	for retries := 100; retries > 0; retries-- {
 		err = persistFunc()
@@ -342,7 +342,7 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 	span.SetStatus(codes.Ok, "")
 	shares := []string{}
 	for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
-		shares = append(shares, s.Id.OpaqueId)
+		shares = append(shares, s.GetId().GetOpaqueId())
 	}
 	log.Debug().Str("AfterEtag", c.Providers[storageID].Spaces[spaceID].Etag).Interface("Shares", shares).Msg("persisted provider cache")
 	return nil
