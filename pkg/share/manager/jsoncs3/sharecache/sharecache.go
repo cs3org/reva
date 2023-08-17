@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path"
 	"path/filepath"
 	"sync"
@@ -114,17 +115,25 @@ func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
 		return c.Persist(ctx, userid)
 	}
 
-	err := persistFunc()
-	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
-		if err := c.syncWithLock(ctx, userid); err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
+	log := appctx.GetLogger(ctx).With().
+		Str("hostname", os.Getenv("HOSTNAME")).
+		Str("userID", userid).
+		Str("shareID", shareID).Logger()
 
-			return err
-		}
-
+	var err error
+	for retries := 100; retries > 0; retries-- {
 		err = persistFunc()
-		// TODO try more often?
+		if err != nil {
+			log.Debug().Msg("persisting failed. Retrying...")
+			if err := c.syncWithLock(ctx, userid); err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
+
+				return err
+			}
+		} else {
+			break
+		}
 	}
 	return err
 }
@@ -213,24 +222,44 @@ func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 	userCreatedPath := c.userCreatedPath(userID)
 	span.AddEvent("updating cache")
 	//  - update cached list of created shares for the user in memory if changed
-	dlres, err := c.storage.Download(ctx, metadata.DownloadRequest{
-		Path:        userCreatedPath,
-		IfNoneMatch: []string{c.UserShares[userID].Etag},
-	})
+	dlreq := metadata.DownloadRequest{
+		Path: userCreatedPath,
+	}
+	if c.UserShares[userID].Etag != "" {
+		dlreq.IfNoneMatch = []string{c.UserShares[userID].Etag}
+	}
 
-	switch err.(type) {
-	case nil:
-		// continue
-	case errtypes.NotFound:
+	var dlres *metadata.DownloadResponse
+	var err error
+	downloadFunc := func() error {
+		dlres, err = c.storage.Download(ctx, dlreq)
+		switch err.(type) {
+		case nil:
+			return nil
+		case errtypes.NotFound:
+			span.SetStatus(codes.Ok, "")
+			return nil
+		case errtypes.NotModified:
+			span.SetStatus(codes.Ok, "")
+			return nil
+		default:
+			span.SetStatus(codes.Error, fmt.Sprintf("Failed to download the share cache: %s", err.Error()))
+			log.Error().Err(err).Msg("Failed to download the share cache")
+			return err
+		}
+	}
+	err = downloadFunc()
+	if err != nil {
+		err = downloadFunc()
+		if err != nil {
+			log.Error().Err(err).Msg("downloading provider cache failed")
+			return err
+		}
+	}
+	if dlres == nil {
+		span.AddEvent("nothing to update")
 		span.SetStatus(codes.Ok, "")
 		return nil
-	case errtypes.NotModified:
-		span.SetStatus(codes.Ok, "")
-		return nil
-	default:
-		span.SetStatus(codes.Error, fmt.Sprintf("Failed to download the share cache: %s", err.Error()))
-		log.Error().Err(err).Msg("Failed to download the share cache")
-		return err
 	}
 	newShareCache := &UserShareCache{}
 	err = json.Unmarshal(dlres.Content, newShareCache)
