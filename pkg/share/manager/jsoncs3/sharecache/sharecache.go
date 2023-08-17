@@ -56,7 +56,7 @@ type Cache struct {
 type UserShareCache struct {
 	UserShares map[string]*SpaceShareIDs
 
-	etag string
+	Etag string
 }
 
 // SpaceShareIDs holds the unique list of share ids for a space
@@ -215,7 +215,7 @@ func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 	//  - update cached list of created shares for the user in memory if changed
 	dlres, err := c.storage.Download(ctx, metadata.DownloadRequest{
 		Path:        userCreatedPath,
-		IfNoneMatch: []string{c.UserShares[userID].etag},
+		IfNoneMatch: []string{c.UserShares[userID].Etag},
 	})
 
 	switch err.(type) {
@@ -239,7 +239,7 @@ func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 		log.Error().Err(err).Msg("Failed to unmarshal the share cache")
 		return err
 	}
-	newShareCache.etag = dlres.Etag
+	newShareCache.Etag = dlres.Etag
 	c.UserShares[userID] = newShareCache
 	span.SetStatus(codes.Ok, "")
 	return nil
@@ -267,19 +267,20 @@ func (c *Cache) Persist(ctx context.Context, userid string) error {
 	ur := metadata.UploadRequest{
 		Path:        jsonPath,
 		Content:     createdBytes,
-		IfMatchEtag: c.UserShares[userid].etag,
+		IfMatchEtag: c.UserShares[userid].Etag,
 	}
 	// when there is no etag in memory make sure the file has not been created on the server, see https://www.rfc-editor.org/rfc/rfc9110#field.if-match
 	// > If the field value is "*", the condition is false if the origin server has a current representation for the target resource.
-	if c.UserShares[userid].etag == "" {
+	if c.UserShares[userid].Etag == "" {
 		ur.IfNoneMatch = []string{"*"}
 	}
-	_, err = c.storage.Upload(ctx, ur)
+	res, err := c.storage.Upload(ctx, ur)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
+	c.UserShares[userid].Etag = res.Etag
 	span.SetStatus(codes.Ok, "")
 	return nil
 }
