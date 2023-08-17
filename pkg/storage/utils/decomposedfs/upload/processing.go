@@ -392,7 +392,7 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 
 	old, _ := node.ReadNode(upload.Ctx, upload.lu, spaceID, n.ID, false, nil, false)
 	if _, err := node.CheckQuota(upload.Ctx, n.SpaceRoot, true, uint64(old.Blobsize), fsize); err != nil {
-		return nil, err
+		return f, err
 	}
 
 	oldNodeMtime, err := old.GetMTime(upload.Ctx)
