@@ -217,7 +217,6 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 
 	// move current version to new revision
 	nodePath := fs.lu.InternalPath(spaceID, kp[0])
-	n.GetMTime(ctx)
 	mtime, err := n.GetMTime(ctx)
 	if err != nil {
 		log.Error().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("cannot read mtime")
@@ -248,7 +247,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 			attributeName == prefixes.TypeAttr ||
 			attributeName == prefixes.BlobIDAttr ||
 			attributeName == prefixes.BlobsizeAttr ||
-			attributeName == prefixes.MTimeAttr // FIXME somwhere I mix up the revision time and the mtime, causing the restore to overwrite the other existing revisien
+			attributeName == prefixes.MTimeAttr // FIXME somewhere I mix up the revision time and the mtime, causing the restore to overwrite the other existing revisien
 	}, f, true)
 	if err != nil {
 		return errtypes.InternalError("failed to copy blob xattrs to version node: " + err.Error())
