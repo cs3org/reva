@@ -548,7 +548,7 @@ func (n *Node) SetMtimeString(ctx context.Context, mtime string) error {
 // SetMTime writes the UTC mtime to the extended attributes or removes the attribute if nil is passed
 func (n *Node) SetMtime(ctx context.Context, t *time.Time) (err error) {
 	if t == nil {
-		return n.RemoveXattr(ctx, prefixes.MTimeAttr)
+		return n.RemoveXattr(ctx, prefixes.MTimeAttr, true)
 	}
 	return n.SetXattrString(ctx, prefixes.MTimeAttr, t.UTC().Format(time.RFC3339Nano))
 }
@@ -908,7 +908,7 @@ func (n *Node) GetMTime(ctx context.Context) (time.Time, error) {
 // SetTMTime writes the UTC tmtime to the extended attributes or removes the attribute if nil is passed
 func (n *Node) SetTMTime(ctx context.Context, t *time.Time) (err error) {
 	if t == nil {
-		return n.RemoveXattr(ctx, prefixes.TreeMTimeAttr)
+		return n.RemoveXattr(ctx, prefixes.TreeMTimeAttr, true)
 	}
 	return n.SetXattrString(ctx, prefixes.TreeMTimeAttr, t.UTC().Format(time.RFC3339Nano))
 }
@@ -925,7 +925,7 @@ func (n *Node) GetDTime(ctx context.Context) (tmTime time.Time, err error) {
 // SetDTime writes the UTC dtime to the extended attributes or removes the attribute if nil is passed
 func (n *Node) SetDTime(ctx context.Context, t *time.Time) (err error) {
 	if t == nil {
-		return n.RemoveXattr(ctx, prefixes.DTimeAttr)
+		return n.RemoveXattr(ctx, prefixes.DTimeAttr, true)
 	}
 	return n.SetXattrString(ctx, prefixes.DTimeAttr, t.UTC().Format(time.RFC3339Nano))
 }
@@ -972,7 +972,7 @@ func (n *Node) SetChecksum(ctx context.Context, csType string, h hash.Hash) (err
 
 // UnsetTempEtag removes the temporary etag attribute
 func (n *Node) UnsetTempEtag(ctx context.Context) (err error) {
-	return n.RemoveXattr(ctx, prefixes.TmpEtagAttr)
+	return n.RemoveXattr(ctx, prefixes.TmpEtagAttr, true)
 }
 
 // ReadUserPermissions will assemble the permissions for the current user on the given node without parent nodes
@@ -1121,6 +1121,23 @@ func (n *Node) ReadGrant(ctx context.Context, grantee string) (g *provider.Grant
 	return e.Grant(), nil
 }
 
+// ReadGrant reads a CS3 grant
+func (n *Node) DeleteGrant(ctx context.Context, g *provider.Grant, acquireLock bool) (err error) {
+
+	var attr string
+	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+		attr = prefixes.GrantGroupAcePrefix + g.Grantee.GetGroupId().OpaqueId
+	} else {
+		attr = prefixes.GrantUserAcePrefix + g.Grantee.GetUserId().OpaqueId
+	}
+
+	if err = n.RemoveXattr(ctx, attr, acquireLock); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // ListGrants lists all grants of the current node.
 func (n *Node) ListGrants(ctx context.Context) ([]*provider.Grant, error) {
 	grantees, err := n.ListGrantees(ctx)
@@ -1197,7 +1214,7 @@ func (n *Node) UnmarkProcessing(ctx context.Context, uploadID string) error {
 		// file started another postprocessing later - do not remove
 		return nil
 	}
-	return n.RemoveXattr(ctx, prefixes.StatusPrefix)
+	return n.RemoveXattr(ctx, prefixes.StatusPrefix, true)
 }
 
 // IsProcessing returns true if the node is currently being processed

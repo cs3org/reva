@@ -210,7 +210,7 @@ var _ = Describe("Backend", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(v).To(Equal([]byte("bar")))
 
-				err = backend.Remove(context.Background(), file, "foo")
+				err = backend.Remove(context.Background(), file, "foo", true)
 				Expect(err).ToNot(HaveOccurred())
 
 				_, err = backend.Get(context.Background(), file, "foo")

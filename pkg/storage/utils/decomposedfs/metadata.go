@@ -184,7 +184,7 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 				continue
 			}
 			fa := fmt.Sprintf("%s:%s:%s@%s", prefixes.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
-			if err := n.RemoveXattr(ctx, fa); err != nil {
+			if err := n.RemoveXattr(ctx, fa, true); err != nil {
 				if metadata.IsAttrUnset(err) {
 					continue // already gone, ignore
 				}
@@ -195,7 +195,7 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 				errs = append(errs, errors.Wrap(err, "could not unset favorite flag"))
 			}
 		default:
-			if err = n.RemoveXattr(ctx, prefixes.MetadataPrefix+k); err != nil {
+			if err = n.RemoveXattr(ctx, prefixes.MetadataPrefix+k, true); err != nil {
 				if metadata.IsAttrUnset(err) {
 					continue // already gone, ignore
 				}

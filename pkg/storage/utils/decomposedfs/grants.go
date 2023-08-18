@@ -202,14 +202,7 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 		return err
 	}
 
-	var attr string
-	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-		attr = prefixes.GrantGroupAcePrefix + g.Grantee.GetGroupId().OpaqueId
-	} else {
-		attr = prefixes.GrantUserAcePrefix + g.Grantee.GetUserId().OpaqueId
-	}
-
-	if err = grantNode.RemoveXattr(ctx, attr); err != nil {
+	if err := grantNode.DeleteGrant(ctx, g, false); err != nil {
 		return err
 	}
 
