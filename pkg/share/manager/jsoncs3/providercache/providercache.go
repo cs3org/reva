@@ -60,7 +60,8 @@ type Cache struct {
 
 // Spaces holds the share information for provider
 type Spaces struct {
-	Spaces map[string]*Shares
+	// Spaces map[string]*Shares
+	Spaces mtimesyncedcache.Map[string, *Shares]
 }
 
 // Shares holds the share information of one space
@@ -141,7 +142,7 @@ func (c *Cache) isSpaceCached(storageID, spaceID string) bool {
 	if !ok {
 		return false
 	}
-	_, ok = spaces.Spaces[spaceID]
+	_, ok = spaces.Spaces.Load(spaceID)
 	return ok
 }
 
@@ -172,19 +173,22 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 		}
 	}
 
-	persistFunc := func() error {
-
-		spaces, _ := c.Providers.Load(storageID)
-		spaces.Spaces[spaceID].Shares[shareID] = share
-
-		return c.Persist(ctx, storageID, spaceID)
-	}
-
 	log := appctx.GetLogger(ctx).With().
 		Str("hostname", os.Getenv("HOSTNAME")).
 		Str("storageID", storageID).
 		Str("spaceID", spaceID).
 		Str("shareID", shareID).Logger()
+
+	persistFunc := func() error {
+
+		spaces, _ := c.Providers.Load(storageID)
+		space, _ := spaces.Spaces.Load(spaceID)
+
+		log.Info().Interface("shares", maps.Keys(space.Shares)).Str("New share", shareID).Msg("Adding share to space")
+		space.Shares[shareID] = share
+
+		return c.Persist(ctx, storageID, spaceID)
+	}
 
 	for retries := 100; retries > 0; retries-- {
 		err = persistFunc()
@@ -226,10 +230,14 @@ func (c *Cache) Remove(ctx context.Context, storageID, spaceID, shareID string) 
 
 	persistFunc := func() error {
 		spaces, ok := c.Providers.Load(storageID)
-		if !ok || spaces.Spaces[spaceID] == nil {
+		if !ok {
 			return nil
 		}
-		delete(spaces.Spaces[spaceID].Shares, shareID)
+		space, _ := spaces.Spaces.Load(spaceID)
+		if !ok {
+			return nil
+		}
+		delete(space.Shares, shareID)
 
 		return c.Persist(ctx, storageID, spaceID)
 	}
@@ -263,10 +271,14 @@ func (c *Cache) Get(ctx context.Context, storageID, spaceID, shareID string, ski
 	}
 
 	spaces, ok := c.Providers.Load(storageID)
-	if !ok || spaces.Spaces[spaceID] == nil {
+	if !ok {
 		return nil, nil
 	}
-	return spaces.Spaces[spaceID].Shares[shareID], nil
+	space, ok := spaces.Spaces.Load(spaceID)
+	if !ok {
+		return nil, nil
+	}
+	return space.Shares[shareID], nil
 }
 
 // ListSpace returns the list of shares in a given space
@@ -286,13 +298,18 @@ func (c *Cache) ListSpace(ctx context.Context, storageID, spaceID string) (*Shar
 	}
 
 	spaces, ok := c.Providers.Load(storageID)
-	if !ok || spaces.Spaces[spaceID] == nil {
+	if !ok {
+		return &Shares{}, nil
+	}
+
+	space, ok := spaces.Spaces.Load(spaceID)
+	if !ok {
 		return &Shares{}, nil
 	}
 
 	shares := &Shares{
-		Shares: maps.Clone(spaces.Spaces[spaceID].Shares),
-		Etag:   spaces.Spaces[spaceID].Etag,
+		Shares: maps.Clone(space.Shares),
+		Etag:   space.Etag,
 	}
 	return shares, nil
 }
@@ -304,16 +321,22 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 	span.SetAttributes(attribute.String("cs3.storageid", storageID), attribute.String("cs3.spaceid", spaceID))
 
 	spaces, ok := c.Providers.Load(storageID)
-	if !ok || spaces.Spaces[spaceID] == nil {
+	if !ok {
 		span.AddEvent("nothing to persist")
 		span.SetStatus(codes.Ok, "")
 		return nil
 	}
-	span.SetAttributes(attribute.String("BeforeEtag", spaces.Spaces[spaceID].Etag))
+	space, ok := spaces.Spaces.Load(spaceID)
+	if !ok {
+		span.AddEvent("nothing to persist")
+		span.SetStatus(codes.Ok, "")
+		return nil
+	}
+	span.SetAttributes(attribute.String("BeforeEtag", space.Etag))
 	log := appctx.GetLogger(ctx).With().Str("storageID", storageID).Str("spaceID", spaceID).Logger()
-	log = log.With().Str("BeforeEtag", spaces.Spaces[spaceID].Etag).Logger()
+	log = log.With().Str("BeforeEtag", space.Etag).Logger()
 
-	createdBytes, err := json.Marshal(spaces.Spaces[spaceID])
+	createdBytes, err := json.Marshal(space)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -326,16 +349,16 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 		return err
 	}
 
-	span.SetAttributes(attribute.String("etag", spaces.Spaces[spaceID].Etag))
+	span.SetAttributes(attribute.String("etag", space.Etag))
 
 	ur := metadata.UploadRequest{
 		Path:        jsonPath,
 		Content:     createdBytes,
-		IfMatchEtag: spaces.Spaces[spaceID].Etag,
+		IfMatchEtag: space.Etag,
 	}
 	// when there is no etag in memory make sure the file has not been created on the server, see https://www.rfc-editor.org/rfc/rfc9110#field.if-match
 	// > If the field value is "*", the condition is false if the origin server has a current representation for the target resource.
-	if spaces.Spaces[spaceID].Etag == "" {
+	if space.Etag == "" {
 		ur.IfNoneMatch = []string{"*"}
 		log.Debug().Msg("setting IfNoneMatch to *")
 	} else {
@@ -348,14 +371,14 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 		log.Debug().Err(err).Msg("persisting provider cache failed")
 		return err
 	}
-	spaces.Spaces[spaceID].Etag = res.Etag
+	space.Etag = res.Etag
 	// FIXME read etag from upload
 	span.SetStatus(codes.Ok, "")
 	shares := []string{}
-	for _, s := range spaces.Spaces[spaceID].Shares {
+	for _, s := range space.Shares {
 		shares = append(shares, s.GetId().GetOpaqueId())
 	}
-	log.Debug().Str("AfterEtag", spaces.Spaces[spaceID].Etag).Interface("Shares", shares).Msg("persisted provider cache")
+	log.Debug().Str("AfterEtag", space.Etag).Interface("Shares", shares).Msg("persisted provider cache")
 	return nil
 }
 
@@ -366,15 +389,16 @@ func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) err
 	c.initializeIfNeeded(storageID, spaceID)
 
 	spaces, _ := c.Providers.Load(storageID)
-	span.SetAttributes(attribute.String("cs3.storageid", storageID), attribute.String("cs3.spaceid", spaceID), attribute.String("etag", spaces.Spaces[spaceID].Etag))
-	log := appctx.GetLogger(ctx).With().Str("storageID", storageID).Str("spaceID", spaceID).Str("etag", spaces.Spaces[spaceID].Etag).Str("hostname", os.Getenv("HOSTNAME")).Logger()
+	space, _ := spaces.Spaces.Load(spaceID)
+	span.SetAttributes(attribute.String("cs3.storageid", storageID), attribute.String("cs3.spaceid", spaceID), attribute.String("etag", space.Etag))
+	log := appctx.GetLogger(ctx).With().Str("storageID", storageID).Str("spaceID", spaceID).Str("etag", space.Etag).Str("hostname", os.Getenv("HOSTNAME")).Logger()
 
 	dlreq := metadata.DownloadRequest{
 		Path: spaceJSONPath(storageID, spaceID),
 	}
 	// when we know an etag, only download if it changed remotely
-	if spaces.Spaces[spaceID].Etag != "" {
-		dlreq.IfNoneMatch = []string{spaces.Spaces[spaceID].Etag}
+	if space.Etag != "" {
+		dlreq.IfNoneMatch = []string{space.Etag}
 	}
 
 	var dlres *metadata.DownloadResponse
@@ -420,20 +444,18 @@ func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) err
 	}
 	newShares.Etag = dlres.Etag
 
-	spaces.Spaces[spaceID] = newShares
+	spaces.Spaces.Store(spaceID, newShares)
 	span.SetStatus(codes.Ok, "")
 	return nil
 }
 
 func (c *Cache) initializeIfNeeded(storageID, spaceID string) {
 	spaces, _ := c.Providers.LoadOrStore(storageID, &Spaces{
-		Spaces: map[string]*Shares{},
+		Spaces: mtimesyncedcache.Map[string, *Shares]{},
 	})
-	if spaces.Spaces[spaceID] == nil {
-		spaces.Spaces[spaceID] = &Shares{
-			Shares: map[string]*collaboration.Share{},
-		}
-	}
+	_, _ = spaces.Spaces.LoadOrStore(spaceID, &Shares{
+		Shares: map[string]*collaboration.Share{},
+	})
 }
 
 func spaceJSONPath(storageID, spaceID string) string {
