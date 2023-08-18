@@ -975,6 +975,13 @@ func (n *Node) UnsetTempEtag(ctx context.Context) (err error) {
 	return n.RemoveXattr(ctx, prefixes.TmpEtagAttr, true)
 }
 
+func isGrantExpired(g *provider.Grant) bool {
+	if g.Expiration == nil {
+		return false
+	}
+	return time.Now().After(time.Unix(int64(g.Expiration.Seconds), int64(g.Expiration.Nanos)))
+}
+
 // ReadUserPermissions will assemble the permissions for the current user on the given node without parent nodes
 // we indicate if the access was denied by setting a grant with no permissions
 func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap provider.ResourcePermissions, accessDenied bool, err error) {
@@ -1024,6 +1031,10 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 			}
 		default:
 			// no need to check attribute
+			continue
+		}
+
+		if isGrantExpired(g) {
 			continue
 		}
 
