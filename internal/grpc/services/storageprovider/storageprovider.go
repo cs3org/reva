@@ -1090,6 +1090,19 @@ func (s *service) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequ
 		}
 	}
 
+	// TODO: update CS3 APIs
+	// FIXME these should be part of the AddGrantRequest object
+	// https://github.com/owncloud/ocis/issues/4312
+	if utils.ExistsInOpaque(req.Opaque, "spacegrant") {
+		ctx = context.WithValue(
+			ctx,
+			utils.SpaceGrant,
+			struct{ SpaceType string }{
+				SpaceType: utils.ReadPlainFromOpaque(req.Opaque, "spacetype"),
+			},
+		)
+	}
+
 	// check grantee type is valid
 	if req.Grant.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_INVALID {
 		return &provider.UpdateGrantResponse{

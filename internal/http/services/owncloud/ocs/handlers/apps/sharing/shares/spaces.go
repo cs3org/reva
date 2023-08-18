@@ -39,6 +39,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	sdk "github.com/cs3org/reva/v2/pkg/sdk/common"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -150,21 +151,27 @@ func (h *Handler) addSpaceMember(w http.ResponseWriter, r *http.Request, info *p
 		return
 	}
 
+	// we have to send the update request to the gateway to give it a chance to invalidate its cache
+	// TODO the gateway no longer should cache stuff because invalidation is to expensive. The decomposedfs already has a better cache.
 	if granteeExists(lgRes.Grants, grantee) {
-		updateShareRes, err := providerClient.UpdateGrant(ctx, &provider.UpdateGrantRequest{
+		updateShareReq := &collaborationv1beta1.UpdateShareRequest{
 			// TODO: change CS3 APIs
 			Opaque: &types.Opaque{
 				Map: map[string]*types.OpaqueEntry{
 					"spacegrant": {},
 				},
 			},
-			Ref: &ref,
-			Grant: &provider.Grant{
-				Permissions: permissions,
-				Grantee:     &grantee,
-				Expiration:  expirationTs,
+			Share: &collaborationv1beta1.Share{
+				ResourceId: ref.GetResourceId(),
+				Permissions: &collaborationv1beta1.SharePermissions{
+					Permissions: permissions,
+				},
+				Grantee:    &grantee,
+				Expiration: expirationTs,
 			},
-		})
+		}
+		updateShareReq.Opaque = utils.AppendPlainToOpaque(updateShareReq.Opaque, "spacetype", info.GetSpace().GetSpaceType())
+		updateShareRes, err := client.UpdateShare(ctx, updateShareReq)
 		if err != nil || updateShareRes.Status.Code != rpc.Code_CODE_OK {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "could not update space member grant", err)
 			return
