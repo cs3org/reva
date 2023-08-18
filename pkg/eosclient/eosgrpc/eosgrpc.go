@@ -16,6 +16,13 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
+
+
+// NOTE: compile the grpc proto with these commands
+// and do not ask any questions, I don't have the answer
+// protoc ./Rpc.proto --go-grpc_out=.
+// protoc ./eos_grpc.proto --go_out=plugins=grpc:.
+
 package eosgrpc
 
 import (
@@ -149,6 +156,7 @@ func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
 	if prep == nil {
 		log.Warn().Str("Could not ping to ", "'"+opt.GrpcURI+"' ").Str("nil response", "").Msg("")
 	}
+  log.Debug().Str("Ping to ", "'"+opt.GrpcURI+"' succeeded").Msg("")
 
 	return ecl, nil
 }
