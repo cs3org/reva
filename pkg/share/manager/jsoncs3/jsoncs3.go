@@ -105,6 +105,9 @@ import (
   - if the etag changed we download the file to update the local cache
 */
 
+// TODO implement a channel based aggregation of sharing requests: every in memory cache should read as many share updates to a space that are available and update them all in one go
+// whenever a persist operation fails we check if we can read more shares from the channel
+
 // name is the Tracer name used to identify this instrumentation library.
 const tracerName = "jsoncs3"
 
