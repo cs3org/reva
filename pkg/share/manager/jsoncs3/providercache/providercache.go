@@ -51,7 +51,6 @@ func init() {
 type Cache struct {
 	lockMap sync.Map
 
-	// Providers map[string]*Spaces
 	Providers mtimesyncedcache.Map[string, *Spaces]
 
 	storage metadata.Storage
@@ -60,7 +59,6 @@ type Cache struct {
 
 // Spaces holds the share information for provider
 type Spaces struct {
-	// Spaces map[string]*Shares
 	Spaces mtimesyncedcache.Map[string, *Shares]
 }
 
@@ -372,7 +370,6 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 		return err
 	}
 	space.Etag = res.Etag
-	// FIXME read etag from upload
 	span.SetStatus(codes.Ok, "")
 	shares := []string{}
 	for _, s := range space.Shares {
