@@ -150,26 +150,27 @@ func (m *manager) fetchCachedUserDetails(uid *userpb.UserId) (*userpb.User, erro
 }
 
 func (m *manager) cacheUserDetails(u *userpb.User) error {
+	expiration := (m.conf.UserFetchInterval + 1) * 3600
 	encodedUser, err := json.Marshal(&u)
 	if err != nil {
 		return err
 	}
-	if err = m.setVal(userPrefix+usernamePrefix+strings.ToLower(u.Id.OpaqueId), string(encodedUser), -1); err != nil {
+	if err = m.setVal(userPrefix+usernamePrefix+strings.ToLower(u.Id.OpaqueId), string(encodedUser), expiration); err != nil {
 		return err
 	}
 
 	if u.Mail != "" {
-		if err = m.setVal(userPrefix+mailPrefix+strings.ToLower(u.Mail), string(encodedUser), -1); err != nil {
+		if err = m.setVal(userPrefix+mailPrefix+strings.ToLower(u.Mail), string(encodedUser), expiration); err != nil {
 			return err
 		}
 	}
 	if u.DisplayName != "" {
-		if err = m.setVal(userPrefix+namePrefix+u.Id.OpaqueId+"_"+strings.ReplaceAll(strings.ToLower(u.DisplayName), " ", "_"), string(encodedUser), -1); err != nil {
+		if err = m.setVal(userPrefix+namePrefix+u.Id.OpaqueId+"_"+strings.ReplaceAll(strings.ToLower(u.DisplayName), " ", "_"), string(encodedUser), expiration); err != nil {
 			return err
 		}
 	}
 	if u.UidNumber != 0 {
-		if err = m.setVal(userPrefix+uidPrefix+strconv.FormatInt(u.UidNumber, 10), string(encodedUser), -1); err != nil {
+		if err = m.setVal(userPrefix+uidPrefix+strconv.FormatInt(u.UidNumber, 10), string(encodedUser), expiration); err != nil {
 			return err
 		}
 	}
