@@ -89,14 +89,22 @@ var _ = Describe("Cache", func() {
 
 		It("sets the etag", func() {
 			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
-			Expect(c.Providers[storageID].Spaces[spaceID].Etag).ToNot(BeEmpty())
+			spaces, ok := c.Providers.Load(storageID)
+			Expect(ok).To(BeTrue())
+			space, ok := spaces.Spaces.Load(spaceID)
+			Expect(ok).To(BeTrue())
+			Expect(space.Etag).ToNot(BeEmpty())
 		})
 
 		It("updates the etag", func() {
 			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
-			old := c.Providers[storageID].Spaces[spaceID].Etag
+			spaces, ok := c.Providers.Load(storageID)
+			Expect(ok).To(BeTrue())
+			space, ok := spaces.Spaces.Load(spaceID)
+			Expect(ok).To(BeTrue())
+			old := space.Etag
 			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
-			Expect(c.Providers[storageID].Spaces[spaceID].Etag).ToNot(Equal(old))
+			Expect(space.Etag).ToNot(Equal(old))
 		})
 	})
 
@@ -129,9 +137,13 @@ var _ = Describe("Cache", func() {
 
 			It("updates the etag", func() {
 				Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
-				old := c.Providers[storageID].Spaces[spaceID].Etag
+				spaces, ok := c.Providers.Load(storageID)
+				Expect(ok).To(BeTrue())
+				space, ok := spaces.Spaces.Load(spaceID)
+				Expect(ok).To(BeTrue())
+				old := space.Etag
 				Expect(c.Remove(ctx, storageID, spaceID, shareID)).To(Succeed())
-				Expect(c.Providers[storageID].Spaces[spaceID].Etag).ToNot(Equal(old))
+				Expect(space.Etag).ToNot(Equal(old))
 			})
 		})
 
@@ -148,10 +160,14 @@ var _ = Describe("Cache", func() {
 			})
 
 			It("updates the etag", func() {
-				oldEtag := c.Providers[storageID].Spaces[spaceID].Etag
+				spaces, ok := c.Providers.Load(storageID)
+				Expect(ok).To(BeTrue())
+				space, ok := spaces.Spaces.Load(spaceID)
+				Expect(ok).To(BeTrue())
+				oldEtag := space.Etag
 
 				Expect(c.Persist(ctx, storageID, spaceID)).To(Succeed())
-				Expect(c.Providers[storageID].Spaces[spaceID].Etag).ToNot(Equal(oldEtag))
+				Expect(space.Etag).ToNot(Equal(oldEtag))
 			})
 
 		})
