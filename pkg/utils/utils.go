@@ -415,8 +415,7 @@ func HasPermissions(target, toCheck *provider.ResourcePermissions) bool {
 // UserIsLightweight returns true if the user is a lightweight
 // or federated account.
 func UserIsLightweight(u *userpb.User) bool {
-	return u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED ||
-		u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT
+	return u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT
 }
 
 // Cast casts a value `v` to the value `to`.
