@@ -417,7 +417,10 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(s.Permissions.Permissions.InitiateFileUpload).To(BeFalse())
 
 				// Change providercache on disk
-				cache := m.Cache.Providers["storageid"].Spaces["spaceid"]
+				spaces, ok := m.Cache.Providers.Load("storageid")
+				Expect(ok).To(BeTrue())
+				cache, ok := spaces.Spaces.Load("spaceid")
+				Expect(ok).To(BeTrue())
 				cache.Shares[share.Id.OpaqueId].Permissions.Permissions.InitiateFileUpload = true
 				bytes, err := json.Marshal(cache)
 				Expect(err).ToNot(HaveOccurred())
@@ -428,7 +431,7 @@ var _ = Describe("Jsoncs3", func() {
 				cache.Shares[share.Id.OpaqueId].Permissions.Permissions.InitiateFileUpload = false
 
 				// Set local cache etag to something other then on disk
-				m.Cache.Providers["storageid"].Spaces["spaceid"].Etag = "reset1" // trigger reload
+				cache.Etag = "reset1" // trigger reload
 				s, err = m.GetShare(ctx, shareRef)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(s).ToNot(BeNil())
@@ -637,7 +640,10 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(shares[0].Permissions.Permissions.InitiateFileUpload).To(BeFalse())
 
 				// Change providercache on disk
-				cache := m.Cache.Providers["storageid"].Spaces["spaceid"]
+				spaces, ok := m.Cache.Providers.Load("storageid")
+				Expect(ok).To(BeTrue())
+				cache, ok := spaces.Spaces.Load("spaceid")
+				Expect(ok).To(BeTrue())
 				cache.Shares[share.Id.OpaqueId].Permissions.Permissions.InitiateFileUpload = true
 				bytes, err := json.Marshal(cache)
 				Expect(err).ToNot(HaveOccurred())
@@ -647,7 +653,7 @@ var _ = Describe("Jsoncs3", func() {
 				// Reset providercache in memory
 				cache.Shares[share.Id.OpaqueId].Permissions.Permissions.InitiateFileUpload = false
 
-				m.Cache.Providers["storageid"].Spaces["spaceid"].Etag = "reset1" // trigger reload
+				cache.Etag = "reset1" // trigger reload
 				shares, err = m.ListShares(ctx, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(shares)).To(Equal(1))
@@ -723,7 +729,10 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(received[0].Share.Permissions.Permissions.InitiateFileUpload).To(BeFalse())
 
 				// Change providercache on disk
-				cache := m.Cache.Providers["storageid"].Spaces["spaceid"]
+				spaces, ok := m.Cache.Providers.Load("storageid")
+				Expect(ok).To(BeTrue())
+				cache, ok := spaces.Spaces.Load("spaceid")
+				Expect(ok).To(BeTrue())
 				cache.Shares[share.Id.OpaqueId].Permissions.Permissions.InitiateFileUpload = true
 				bytes, err := json.Marshal(cache)
 				Expect(err).ToNot(HaveOccurred())
@@ -733,7 +742,7 @@ var _ = Describe("Jsoncs3", func() {
 				// Reset providercache in memory
 				cache.Shares[share.Id.OpaqueId].Permissions.Permissions.InitiateFileUpload = false
 
-				m.Cache.Providers["storageid"].Spaces["spaceid"].Etag = "reset1" // trigger reload
+				cache.Etag = "reset1" // trigger reload
 				received, err = m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(received)).To(Equal(1))
