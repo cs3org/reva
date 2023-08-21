@@ -34,7 +34,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
-	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
@@ -265,78 +264,11 @@ func (cs3 *CS3) Stat(ctx context.Context, path string) (*provider.ResourceInfo, 
 func (cs3 *CS3) SimpleDownload(ctx context.Context, downloadpath string) (content []byte, err error) {
 	ctx, span := tracer.Start(ctx, "SimpleDownload")
 	defer span.End()
-
-	client, err := cs3.providerClient()
+	dres, err := cs3.Download(ctx, DownloadRequest{Path: downloadpath})
 	if err != nil {
 		return nil, err
 	}
-	ctx, err = cs3.getAuthContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	dreq := provider.InitiateFileDownloadRequest{
-		Ref: &provider.Reference{
-			ResourceId: cs3.SpaceRoot,
-			Path:       utils.MakeRelativePath(downloadpath),
-		},
-	}
-
-	b := []byte{}
-	downloadFunc := func() error {
-		res, err := client.InitiateFileDownload(ctx, &dreq)
-		if err != nil {
-			return errtypes.NotFound(dreq.Ref.Path)
-		}
-
-		var endpoint string
-
-		for _, proto := range res.GetProtocols() {
-			if proto.Protocol == "spaces" {
-				endpoint = proto.GetDownloadEndpoint()
-				break
-			}
-		}
-		if endpoint == "" {
-			return errors.New("metadata storage doesn't support the spaces download protocol")
-		}
-
-		req, err := http.NewRequest(http.MethodGet, endpoint, nil)
-		if err != nil {
-			return err
-		}
-
-		md, _ := metadata.FromOutgoingContext(ctx)
-		req.Header.Add(ctxpkg.TokenHeader, md.Get(ctxpkg.TokenHeader)[0])
-		resp, err := cs3.dataGatewayClient.Do(req)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-
-		if err := errtypes.NewErrtypeFromHTTPStatusCode(resp.StatusCode, req.URL.Path); err != nil {
-			return err
-		}
-
-		b, err = io.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}
-	err = downloadFunc()
-	log := appctx.GetLogger(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("SimpleDownload failed. Retrying....")
-		err = downloadFunc()
-	}
-	if err != nil {
-		log.Error().Err(err).Msg("SimpleDownload failed. Giving up.")
-		return []byte{}, nil
-	}
-
-	return b, nil
+	return dres.Content, nil
 }
 
 // Download reads a file from the metadata storage
@@ -365,64 +297,55 @@ func (cs3 *CS3) Download(ctx context.Context, req DownloadRequest) (*DownloadRes
 	//   dreq.Opaque = utils.AppendPlainToOpaque(dreq.Opaque, "if-none-match", strings.Join(req.IfNoneMatch, ","))
 	// }
 
+	res, err := client.InitiateFileDownload(ctx, &dreq)
+	if err != nil {
+		return nil, errtypes.NotFound(dreq.Ref.Path)
+	}
+
+	var endpoint string
+
+	for _, proto := range res.GetProtocols() {
+		if proto.Protocol == "spaces" {
+			endpoint = proto.GetDownloadEndpoint()
+			break
+		}
+	}
+	if endpoint == "" {
+		return nil, errors.New("metadata storage doesn't support the spaces download protocol")
+	}
+
+	hreq, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, etag := range req.IfNoneMatch {
+		hreq.Header.Add(net.HeaderIfNoneMatch, etag)
+	}
+
+	md, _ := metadata.FromOutgoingContext(ctx)
+	hreq.Header.Add(ctxpkg.TokenHeader, md.Get(ctxpkg.TokenHeader)[0])
+	resp, err := cs3.dataGatewayClient.Do(hreq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
 	dres := DownloadResponse{}
 
-	downloadFunc := func() error {
-		res, err := client.InitiateFileDownload(ctx, &dreq)
-		if err != nil {
-			return errtypes.NotFound(dreq.Ref.Path)
-		}
+	dres.Etag = resp.Header.Get("etag")
+	dres.Etag = resp.Header.Get("oc-etag") // takes precedence
 
-		var endpoint string
-
-		for _, proto := range res.GetProtocols() {
-			if proto.Protocol == "spaces" {
-				endpoint = proto.GetDownloadEndpoint()
-				break
-			}
-		}
-		if endpoint == "" {
-			return errors.New("metadata storage doesn't support the spaces download protocol")
-		}
-
-		hreq, err := http.NewRequest(http.MethodGet, endpoint, nil)
-		if err != nil {
-			return err
-		}
-
-		for _, etag := range req.IfNoneMatch {
-			hreq.Header.Add(net.HeaderIfNoneMatch, etag)
-		}
-
-		md, _ := metadata.FromOutgoingContext(ctx)
-		hreq.Header.Add(ctxpkg.TokenHeader, md.Get(ctxpkg.TokenHeader)[0])
-		resp, err := cs3.dataGatewayClient.Do(hreq)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-
-		dres.Etag = resp.Header.Get("etag")
-		dres.Etag = resp.Header.Get("oc-etag") // takes precedence
-
-		if err := errtypes.NewErrtypeFromHTTPStatusCode(resp.StatusCode, hreq.URL.Path); err != nil {
-			return err
-		}
-
-		dres.Mtime, err = time.Parse(time.RFC1123Z, resp.Header.Get("last-modified"))
-		if err != nil {
-			return err
-		}
-
-		dres.Content, err = io.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-
-		return nil
+	if err := errtypes.NewErrtypeFromHTTPStatusCode(resp.StatusCode, hreq.URL.Path); err != nil {
+		return nil, err
 	}
-	err = downloadFunc()
-	// TODO add retries
+
+	dres.Mtime, err = time.Parse(time.RFC1123Z, resp.Header.Get("last-modified"))
+	if err != nil {
+		return nil, err
+	}
+
+	dres.Content, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
