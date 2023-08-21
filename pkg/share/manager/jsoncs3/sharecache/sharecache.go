@@ -265,38 +265,22 @@ func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 		dlreq.IfNoneMatch = []string{c.UserShares[userID].Etag}
 	}
 
-	var dlres *metadata.DownloadResponse
-	var err error
-	downloadFunc := func() error {
-		dlres, err = c.storage.Download(ctx, dlreq)
-		switch err.(type) {
-		case nil:
-			return nil
-		case errtypes.NotFound:
-			span.SetStatus(codes.Ok, "")
-			return nil
-		case errtypes.NotModified:
-			span.SetStatus(codes.Ok, "")
-			return nil
-		default:
-			span.SetStatus(codes.Error, fmt.Sprintf("Failed to download the share cache: %s", err.Error()))
-			log.Error().Err(err).Msg("Failed to download the share cache")
-			return err
-		}
-	}
-	err = downloadFunc()
-	if err != nil {
-		err = downloadFunc()
-		if err != nil {
-			log.Error().Err(err).Msg("downloading provider cache failed")
-			return err
-		}
-	}
-	if dlres == nil {
-		span.AddEvent("nothing to update")
+	dlres, err := c.storage.Download(ctx, dlreq)
+	switch err.(type) {
+	case nil:
+		span.AddEvent("updating local cache")
+	case errtypes.NotFound:
 		span.SetStatus(codes.Ok, "")
 		return nil
+	case errtypes.NotModified:
+		span.SetStatus(codes.Ok, "")
+		return nil
+	default:
+		span.SetStatus(codes.Error, fmt.Sprintf("Failed to download the share cache: %s", err.Error()))
+		log.Error().Err(err).Msg("Failed to download the share cache")
+		return err
 	}
+
 	newShareCache := &UserShareCache{}
 	err = json.Unmarshal(dlres.Content, newShareCache)
 	if err != nil {
@@ -305,6 +289,7 @@ func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 		return err
 	}
 	newShareCache.Etag = dlres.Etag
+
 	c.UserShares[userID] = newShareCache
 	span.SetStatus(codes.Ok, "")
 	return nil

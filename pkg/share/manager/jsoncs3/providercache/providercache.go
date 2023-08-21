@@ -433,38 +433,22 @@ func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) err
 		dlreq.IfNoneMatch = []string{space.Etag}
 	}
 
-	var dlres *metadata.DownloadResponse
-	var err error
-	downloadFunc := func() error {
-		dlres, err = c.storage.Download(ctx, dlreq)
-		switch err.(type) {
-		case nil:
-			return nil
-		case errtypes.NotFound:
-			span.AddEvent("not found")
-			return nil
-		case errtypes.NotModified:
-			span.AddEvent("not modified")
-			return nil
-		default:
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "downloading provider cache failed")
-			return err
-		}
-	}
-	err = downloadFunc()
-	if err != nil {
-		err = downloadFunc()
-		if err != nil {
-			log.Error().Err(err).Msg("downloading provider cache failed")
-			return err
-		}
-	}
-	if dlres == nil {
-		span.AddEvent("nothing to update")
+	dlres, err := c.storage.Download(ctx, dlreq)
+	switch err.(type) {
+	case nil:
+		span.AddEvent("updating local cache")
+	case errtypes.NotFound:
 		span.SetStatus(codes.Ok, "")
 		return nil
+	case errtypes.NotModified:
+		span.SetStatus(codes.Ok, "")
+		return nil
+	default:
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "downloading provider cache failed")
+		return err
 	}
+
 	span.AddEvent("updating local cache")
 	newShares := &Shares{}
 	err = json.Unmarshal(dlres.Content, newShares)

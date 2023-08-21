@@ -204,7 +204,7 @@ func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 	})
 	switch err.(type) {
 	case nil:
-		// continue
+		span.AddEvent("updating local cache")
 	case errtypes.NotFound:
 		span.SetStatus(codes.Ok, "")
 		return nil
@@ -216,6 +216,7 @@ func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 		log.Error().Err(err).Msg("Failed to download the received share")
 		return err
 	}
+
 	newSpaces := &Spaces{}
 	err = json.Unmarshal(dlres.Content, newSpaces)
 	if err != nil {
