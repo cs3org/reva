@@ -216,12 +216,8 @@ func (cs3 *CS3) Upload(ctx context.Context, req UploadRequest) (*UploadResponse,
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	if err := errtypes.NewErrtypeFromHTTPStatusCode(resp.StatusCode, httpReq.URL.Path); err != nil {
-		// resp.Body.Close()
-		return nil, err
-	}
-	err = resp.Body.Close() // TODO do we really need to close? if so then we need to also
-	if err != nil {
 		return nil, err
 	}
 	etag := resp.Header.Get("Etag")
@@ -316,6 +312,7 @@ func (cs3 *CS3) SimpleDownload(ctx context.Context, downloadpath string) (conten
 		if err != nil {
 			return err
 		}
+		defer resp.Body.Close()
 
 		if err := errtypes.NewErrtypeFromHTTPStatusCode(resp.StatusCode, req.URL.Path); err != nil {
 			return err
@@ -326,9 +323,6 @@ func (cs3 *CS3) SimpleDownload(ctx context.Context, downloadpath string) (conten
 			return err
 		}
 
-		if err = resp.Body.Close(); err != nil {
-			return err
-		}
 		return nil
 	}
 	err = downloadFunc()
@@ -406,6 +400,7 @@ func (cs3 *CS3) Download(ctx context.Context, req DownloadRequest) (*DownloadRes
 		if err != nil {
 			return err
 		}
+		defer resp.Body.Close()
 
 		dres.Etag = resp.Header.Get("etag")
 		dres.Etag = resp.Header.Get("oc-etag") // takes precedence
@@ -424,9 +419,6 @@ func (cs3 *CS3) Download(ctx context.Context, req DownloadRequest) (*DownloadRes
 			return err
 		}
 
-		if err = resp.Body.Close(); err != nil {
-			return err
-		}
 		return nil
 	}
 	err = downloadFunc()
