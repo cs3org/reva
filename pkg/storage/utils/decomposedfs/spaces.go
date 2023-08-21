@@ -870,7 +870,6 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 					}
 				}
 
-				fs.tp.Propagate(ctx, n, 0)
 				continue
 			}
 			grantExpiration[id] = g.Expiration
