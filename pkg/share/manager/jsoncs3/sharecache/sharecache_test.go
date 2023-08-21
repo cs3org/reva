@@ -70,12 +70,12 @@ var _ = Describe("Sharecache", func() {
 				Expect(c.Add(ctx, userid, shareID)).To(Succeed())
 			})
 
-			It("updates the mtime", func() {
-				oldMtime := c.UserShares[userid].Mtime
-				Expect(oldMtime).ToNot(Equal(time.Time{}))
+			It("updates the etag", func() {
+				oldEtag := c.UserShares[userid].Etag
+				Expect(oldEtag).ToNot(BeEmpty())
 
 				Expect(c.Persist(ctx, userid)).To(Succeed())
-				Expect(c.UserShares[userid]).ToNot(Equal(oldMtime))
+				Expect(c.UserShares[userid].Etag).ToNot(Equal(oldEtag))
 			})
 		})
 	})

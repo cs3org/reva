@@ -75,28 +75,36 @@ var _ = Describe("Cache", func() {
 
 	Describe("Add", func() {
 		It("adds a share", func() {
-			s, err := c.Get(ctx, storageID, spaceID, shareID)
+			s, err := c.Get(ctx, storageID, spaceID, shareID, false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(s).To(BeNil())
 
 			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
 
-			s, err = c.Get(ctx, storageID, spaceID, shareID)
+			s, err = c.Get(ctx, storageID, spaceID, shareID, false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(s).ToNot(BeNil())
 			Expect(s).To(Equal(share1))
 		})
 
-		It("sets the mtime", func() {
+		It("sets the etag", func() {
 			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
-			Expect(c.Providers[storageID].Spaces[spaceID].Mtime).ToNot(Equal(time.Time{}))
+			spaces, ok := c.Providers.Load(storageID)
+			Expect(ok).To(BeTrue())
+			space, ok := spaces.Spaces.Load(spaceID)
+			Expect(ok).To(BeTrue())
+			Expect(space.Etag).ToNot(BeEmpty())
 		})
 
-		It("updates the mtime", func() {
+		It("updates the etag", func() {
 			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
-			old := c.Providers[storageID].Spaces[spaceID].Mtime
+			spaces, ok := c.Providers.Load(storageID)
+			Expect(ok).To(BeTrue())
+			space, ok := spaces.Spaces.Load(spaceID)
+			Expect(ok).To(BeTrue())
+			old := space.Etag
 			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
-			Expect(c.Providers[storageID].Spaces[spaceID].Mtime).ToNot(Equal(old))
+			Expect(space.Etag).ToNot(Equal(old))
 		})
 	})
 
@@ -107,7 +115,7 @@ var _ = Describe("Cache", func() {
 
 		Describe("Get", func() {
 			It("returns the entry", func() {
-				s, err := c.Get(ctx, storageID, spaceID, shareID)
+				s, err := c.Get(ctx, storageID, spaceID, shareID, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(s).ToNot(BeNil())
 			})
@@ -115,23 +123,27 @@ var _ = Describe("Cache", func() {
 
 		Describe("Remove", func() {
 			It("removes the entry", func() {
-				s, err := c.Get(ctx, storageID, spaceID, shareID)
+				s, err := c.Get(ctx, storageID, spaceID, shareID, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(s).ToNot(BeNil())
 				Expect(s).To(Equal(share1))
 
 				Expect(c.Remove(ctx, storageID, spaceID, shareID)).To(Succeed())
 
-				s, err = c.Get(ctx, storageID, spaceID, shareID)
+				s, err = c.Get(ctx, storageID, spaceID, shareID, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(s).To(BeNil())
 			})
 
-			It("updates the mtime", func() {
+			It("updates the etag", func() {
 				Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
-				old := c.Providers[storageID].Spaces[spaceID].Mtime
+				spaces, ok := c.Providers.Load(storageID)
+				Expect(ok).To(BeTrue())
+				space, ok := spaces.Spaces.Load(spaceID)
+				Expect(ok).To(BeTrue())
+				old := space.Etag
 				Expect(c.Remove(ctx, storageID, spaceID, shareID)).To(Succeed())
-				Expect(c.Providers[storageID].Spaces[spaceID].Mtime).ToNot(Equal(old))
+				Expect(space.Etag).ToNot(Equal(old))
 			})
 		})
 
@@ -147,21 +159,25 @@ var _ = Describe("Cache", func() {
 				Expect(c.Persist(ctx, storageID, spaceID)).To(Succeed())
 			})
 
-			It("updates the mtime", func() {
-				oldMtime := c.Providers[storageID].Spaces[spaceID].Mtime
+			It("updates the etag", func() {
+				spaces, ok := c.Providers.Load(storageID)
+				Expect(ok).To(BeTrue())
+				space, ok := spaces.Spaces.Load(spaceID)
+				Expect(ok).To(BeTrue())
+				oldEtag := space.Etag
 
 				Expect(c.Persist(ctx, storageID, spaceID)).To(Succeed())
-				Expect(c.Providers[storageID].Spaces[spaceID].Mtime).ToNot(Equal(oldMtime))
+				Expect(space.Etag).ToNot(Equal(oldEtag))
 			})
 
 		})
 
 		Describe("PersistWithTime", func() {
-			It("does not persist if the mtime on disk is more recent", func() {
+			It("does not persist if the etag changed", func() {
 				time.Sleep(1 * time.Nanosecond)
 				path := filepath.Join(tmpdir, "storages/storageid/spaceid.json")
 				now := time.Now()
-				_ = os.Chtimes(path, now, now)
+				_ = os.Chtimes(path, now, now) // this only works for the file backend
 				Expect(c.Persist(ctx, storageID, spaceID)).ToNot(Succeed())
 			})
 		})
