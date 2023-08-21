@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/apex/log"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
@@ -191,7 +192,7 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 	for retries := 100; retries > 0; retries-- {
 		err = persistFunc()
 		if err != nil {
-			log.Debug().Msg("persisting failed. Retrying...")
+			log.Debug().Msg("persisting add failed. Retrying...")
 			if err := c.syncWithLock(ctx, storageID, spaceID); err != nil {
 				span.RecordError(err)
 				span.SetStatus(codes.Error, err.Error())
@@ -203,7 +204,7 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 		}
 	}
 	if err != nil {
-		log.Error().Err(err).Msg("persisting failed. giving up.")
+		log.Error().Err(err).Msg("persisting add failed. giving up.")
 	}
 
 	return err
@@ -239,12 +240,23 @@ func (c *Cache) Remove(ctx context.Context, storageID, spaceID, shareID string) 
 
 		return c.Persist(ctx, storageID, spaceID)
 	}
-	err := persistFunc()
-	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
-		if err := c.syncWithLock(ctx, storageID, spaceID); err != nil {
-			return err
-		}
+
+	var err error
+	for retries := 100; retries > 0; retries-- {
 		err = persistFunc()
+		if err != nil {
+			log.Debug().Msg("persisting remove failed. Retrying...")
+			if err := c.syncWithLock(ctx, storageID, spaceID); err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
+				return err
+			}
+		} else {
+			break
+		}
+	}
+	if err != nil {
+		log.Error().Err(err).Msg("persisting remove failed. giving up.")
 	}
 
 	return err
