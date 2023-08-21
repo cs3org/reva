@@ -9,7 +9,7 @@ description: >
 # _struct: config_
 
 {{% dir name="prefix" type="string" default="data" %}}
-The prefix to be used for this HTTP service [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L48)
+The prefix to be used for this HTTP service [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L42)
 {{< highlight toml >}}
 [http.services.dataprovider]
 prefix = "data"
@@ -17,7 +17,7 @@ prefix = "data"
 {{% /dir %}}
 
 {{% dir name="driver" type="string" default="localhome" %}}
-The storage driver to be used. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L49)
+The storage driver to be used. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L43)
 {{< highlight toml >}}
 [http.services.dataprovider]
 driver = "localhome"
@@ -25,7 +25,7 @@ driver = "localhome"
 {{% /dir %}}
 
 {{% dir name="drivers" type="map[string]map[string]interface{}" default="localhome" %}}
-The configuration for the storage driver [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L50)
+The configuration for the storage driver [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L44)
 {{< highlight toml >}}
 [http.services.dataprovider.drivers.localhome]
 root = "/var/tmp/reva/"
@@ -36,7 +36,7 @@ user_layout = "{{.Username}}"
 {{% /dir %}}
 
 {{% dir name="data_txs" type="map[string]map[string]interface{}" default="simple" %}}
-The configuration for the data tx protocols [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L51)
+The configuration for the data tx protocols [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L45)
 {{< highlight toml >}}
 [http.services.dataprovider.data_txs.simple]
 
