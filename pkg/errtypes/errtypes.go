@@ -176,7 +176,7 @@ func (e InsufficientStorage) StatusCode() int {
 // NotModified is the error to use when a resource was not modified, e.g. the requested etag did not change.
 type NotModified string
 
-func (e NotModified) Error() string { return "error: insufficient storage: " + string(e) }
+func (e NotModified) Error() string { return "error: not modified: " + string(e) }
 
 // NotModified implements the IsNotModified interface.
 func (e NotModified) IsNotModified() {}

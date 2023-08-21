@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path"
 	"path/filepath"
 	"sync"
@@ -120,15 +121,38 @@ func (c *Cache) Add(ctx context.Context, userID, spaceID string, rs *collaborati
 
 		return c.persist(ctx, userID)
 	}
-	err := persistFunc()
-	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
+
+	log := appctx.GetLogger(ctx).With().
+		Str("hostname", os.Getenv("HOSTNAME")).
+		Str("userID", userID).
+		Str("spaceID", spaceID).Logger()
+
+	var err error
+	for retries := 100; retries > 0; retries-- {
+		err = persistFunc()
+		switch err.(type) {
+		case nil:
+			span.SetStatus(codes.Ok, "")
+			return nil
+		case errtypes.Aborted:
+			log.Debug().Msg("aborted when persisting added received share: etag changed. retrying...")
+			// this is the expected status code from the server when the if-match etag check fails
+			// continue with sync below
+		case errtypes.PreconditionFailed:
+			log.Debug().Msg("precondition failed when persisting added received share: etag changed. retrying...")
+			// actually, this is the wrong status code and we treat it like errtypes.Aborted because of inconsistencies on the server side
+			// continue with sync below
+		default:
+			span.SetStatus(codes.Error, fmt.Sprintf("persisting added received share failed. giving up: %s", err.Error()))
+			log.Error().Err(err).Msg("persisting added received share failed")
+			return err
+		}
 		if err := c.syncWithLock(ctx, userID); err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, err.Error())
+			log.Error().Err(err).Msg("persisting added received share failed. giving up.")
 			return err
 		}
-
-		err = persistFunc()
 	}
 	return err
 }

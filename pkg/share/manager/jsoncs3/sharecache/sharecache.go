@@ -123,16 +123,28 @@ func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
 	var err error
 	for retries := 100; retries > 0; retries-- {
 		err = persistFunc()
-		if err != nil {
-			log.Debug().Msg("persisting failed. Retrying...")
-			if err := c.syncWithLock(ctx, userid); err != nil {
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
-
-				return err
-			}
-		} else {
-			break
+		switch err.(type) {
+		case nil:
+			span.SetStatus(codes.Ok, "")
+			return nil
+		case errtypes.Aborted:
+			log.Debug().Msg("aborted when persisting added share: etag changed. retrying...")
+			// this is the expected status code from the server when the if-match etag check fails
+			// continue with sync below
+		case errtypes.PreconditionFailed:
+			log.Debug().Msg("precondition failed when persisting added share: etag changed. retrying...")
+			// actually, this is the wrong status code and we treat it like errtypes.Aborted because of inconsistencies on the server side
+			// continue with sync below
+		default:
+			span.SetStatus(codes.Error, fmt.Sprintf("persisting added share failed. giving up: %s", err.Error()))
+			log.Error().Err(err).Msg("persisting added share failed")
+			return err
+		}
+		if err := c.syncWithLock(ctx, userid); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+			log.Error().Err(err).Msg("persisting added share failed. giving up.")
+			return err
 		}
 	}
 	return err
@@ -175,12 +187,36 @@ func (c *Cache) Remove(ctx context.Context, userid, shareID string) error {
 		return c.Persist(ctx, userid)
 	}
 
-	err := persistFunc()
-	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
-		if err := c.syncWithLock(ctx, userid); err != nil {
+	log := appctx.GetLogger(ctx).With().
+		Str("hostname", os.Getenv("HOSTNAME")).
+		Str("userID", userid).
+		Str("shareID", shareID).Logger()
+
+	var err error
+	for retries := 100; retries > 0; retries-- {
+		err = persistFunc()
+		switch err.(type) {
+		case nil:
+			span.SetStatus(codes.Ok, "")
+			return nil
+		case errtypes.Aborted:
+			log.Debug().Msg("aborted when persisting removed share: etag changed. retrying...")
+			// this is the expected status code from the server when the if-match etag check fails
+			// continue with sync below
+		case errtypes.PreconditionFailed:
+			log.Debug().Msg("precondition failed when persisting removed share: etag changed. retrying...")
+			// actually, this is the wrong status code and we treat it like errtypes.Aborted because of inconsistencies on the server side
+			// continue with sync below
+		default:
+			span.SetStatus(codes.Error, fmt.Sprintf("persisting removed share failed. giving up: %s", err.Error()))
+			log.Error().Err(err).Msg("persisting removed share failed")
 			return err
 		}
-		err = persistFunc()
+		if err := c.syncWithLock(ctx, userid); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+			return err
+		}
 	}
 
 	return err

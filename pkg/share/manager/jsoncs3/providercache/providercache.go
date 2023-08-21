@@ -28,7 +28,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/apex/log"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
@@ -191,20 +190,29 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 
 	for retries := 100; retries > 0; retries-- {
 		err = persistFunc()
-		if err != nil {
-			log.Debug().Msg("persisting add failed. Retrying...")
-			if err := c.syncWithLock(ctx, storageID, spaceID); err != nil {
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
-
-				return err
-			}
-		} else {
-			break
+		switch err.(type) {
+		case nil:
+			span.SetStatus(codes.Ok, "")
+			return nil
+		case errtypes.Aborted:
+			log.Debug().Msg("aborted when persisting added provider share: etag changed. retrying...")
+			// this is the expected status code from the server when the if-match etag check fails
+			// continue with sync below
+		case errtypes.PreconditionFailed:
+			log.Debug().Msg("precondition failed when persisting added provider share: etag changed. retrying...")
+			// actually, this is the wrong status code and we treat it like errtypes.Aborted because of inconsistencies on the server side
+			// continue with sync below
+		default:
+			span.SetStatus(codes.Error, fmt.Sprintf("persisting added provider share failed. giving up: %s", err.Error()))
+			log.Error().Err(err).Msg("persisting added provider share failed")
+			return err
 		}
-	}
-	if err != nil {
-		log.Error().Err(err).Msg("persisting add failed. giving up.")
+		if err := c.syncWithLock(ctx, storageID, spaceID); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+			log.Error().Err(err).Msg("persisting added provider share failed. giving up.")
+			return err
+		}
 	}
 
 	return err
@@ -241,24 +249,39 @@ func (c *Cache) Remove(ctx context.Context, storageID, spaceID, shareID string) 
 		return c.Persist(ctx, storageID, spaceID)
 	}
 
+	log := appctx.GetLogger(ctx).With().
+		Str("hostname", os.Getenv("HOSTNAME")).
+		Str("storageID", storageID).
+		Str("spaceID", spaceID).
+		Str("shareID", shareID).Logger()
+
 	var err error
 	for retries := 100; retries > 0; retries-- {
 		err = persistFunc()
-		if err != nil {
-			log.Debug().Msg("persisting remove failed. Retrying...")
-			if err := c.syncWithLock(ctx, storageID, spaceID); err != nil {
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
-				return err
-			}
-		} else {
-			break
+		switch err.(type) {
+		case nil:
+			span.SetStatus(codes.Ok, "")
+			return nil
+		case errtypes.Aborted:
+			log.Debug().Msg("aborted when persisting removed provider share: etag changed. retrying...")
+			// this is the expected status code from the server when the if-match etag check fails
+			// continue with sync below
+		case errtypes.PreconditionFailed:
+			log.Debug().Msg("precondition failed when persisting removed provider share: etag changed. retrying...")
+			// actually, this is the wrong status code and we treat it like errtypes.Aborted because of inconsistencies on the server side
+			// continue with sync below
+		default:
+			span.SetStatus(codes.Error, fmt.Sprintf("persisting removed provider share failed. giving up: %s", err.Error()))
+			log.Error().Err(err).Msg("persisting removed provider share failed")
+			return err
+		}
+		if err := c.syncWithLock(ctx, storageID, spaceID); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+			log.Error().Err(err).Msg("persisting removed provider share failed. giving up.")
+			return err
 		}
 	}
-	if err != nil {
-		log.Error().Err(err).Msg("persisting remove failed. giving up.")
-	}
-
 	return err
 }
 
