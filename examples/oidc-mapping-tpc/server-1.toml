@@ -35,7 +35,7 @@ mount_path = "/home"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 expose_data_server = true
 data_server_url = "http://localhost:19001/data"
-enable_home_creation = true
+enable_home_creation = false
 
 [grpc.services.usershareprovider]
 [grpc.services.groupprovider]

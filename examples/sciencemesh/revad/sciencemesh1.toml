@@ -125,7 +125,7 @@ driver = "memory"
 driver = "nextcloud"
 expose_data_server = true
 data_server_url = "https://your.revad.com/data"
-enable_home_creation = true
+enable_home_creation = false
 mount_id = "nextcloud"
 
 [grpc.services.storageprovider.drivers.nextcloud]
