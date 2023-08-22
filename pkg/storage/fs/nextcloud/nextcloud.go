@@ -164,6 +164,7 @@ func (nc *StorageDriver) doDownload(ctx context.Context, filePath string) (io.Re
 		panic(err)
 	}
 
+	req.Header.Set("X-Reva-Secret", nc.sharedSecret)
 	resp, err := nc.client.Do(req)
 	if err != nil {
 		panic(err)
