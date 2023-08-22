@@ -372,7 +372,7 @@ var _ = Describe("SQL manager", func() {
 			Expect(share.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 
 			share.State = collaboration.ShareState_SHARE_STATE_REJECTED
-			_, err = mgr.UpdateReceivedShare(ctx, share, &fieldmaskpb.FieldMask{Paths: []string{"foo"}})
+			_, err = mgr.UpdateReceivedShare(ctx, share, &fieldmaskpb.FieldMask{Paths: []string{"foo"}}, nil)
 			Expect(err).To(HaveOccurred())
 		})
 
@@ -386,12 +386,12 @@ var _ = Describe("SQL manager", func() {
 
 			share.State = collaboration.ShareState_SHARE_STATE_REJECTED
 
-			share, err = mgr.UpdateReceivedShare(ctx, share, &fieldmaskpb.FieldMask{Paths: []string{"mount_point"}})
+			share, err = mgr.UpdateReceivedShare(ctx, share, &fieldmaskpb.FieldMask{Paths: []string{"mount_point"}}, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(share.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 
 			share.State = collaboration.ShareState_SHARE_STATE_REJECTED
-			share, err = mgr.UpdateReceivedShare(ctx, share, &fieldmaskpb.FieldMask{Paths: []string{"state"}})
+			share, err = mgr.UpdateReceivedShare(ctx, share, &fieldmaskpb.FieldMask{Paths: []string{"state"}}, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(share.State).To(Equal(collaboration.ShareState_SHARE_STATE_REJECTED))
 
@@ -411,12 +411,12 @@ var _ = Describe("SQL manager", func() {
 
 			share.MountPoint = &provider.Reference{Path: "foo"}
 
-			share, err = mgr.UpdateReceivedShare(ctx, share, &fieldmaskpb.FieldMask{Paths: []string{"state"}})
+			share, err = mgr.UpdateReceivedShare(ctx, share, &fieldmaskpb.FieldMask{Paths: []string{"state"}}, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(share.MountPoint.Path).To(Equal("shared"))
 
 			share.MountPoint = &provider.Reference{Path: "foo"}
-			share, err = mgr.UpdateReceivedShare(ctx, share, &fieldmaskpb.FieldMask{Paths: []string{"mount_point"}})
+			share, err = mgr.UpdateReceivedShare(ctx, share, &fieldmaskpb.FieldMask{Paths: []string{"mount_point"}}, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(share.MountPoint.Path).To(Equal("foo"))
 
@@ -465,7 +465,7 @@ var _ = Describe("SQL manager", func() {
 				share.MountPoint = &provider.Reference{Path: "foo"}
 
 				By("overriding the child share information for the current user")
-				share, err = mgr.UpdateReceivedShare(ctx, share, &fieldmaskpb.FieldMask{Paths: []string{"mount_point"}})
+				share, err = mgr.UpdateReceivedShare(ctx, share, &fieldmaskpb.FieldMask{Paths: []string{"mount_point"}}, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(share.MountPoint.Path).To(Equal("foo"))
 
