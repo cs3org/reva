@@ -42,6 +42,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
 )
@@ -190,11 +191,18 @@ func (cls *cs3LS) Create(ctx context.Context, now time.Time, details LockDetails
 	// see: http://www.webdav.org/specs/rfc2518.html#n-lock-tokens
 	token := uuid.New()
 
+	u := ctxpkg.ContextMustGetUser(ctx)
+
+	// add metadata via opaque
+	o := utils.AppendPlainToOpaque(nil, "lockownername", u.GetDisplayName())
+	o = utils.AppendPlainToOpaque(o, "locktime", now.Format(time.RFC3339))
+
 	r := &provider.SetLockRequest{
 		Ref: details.Root,
 		Lock: &provider.Lock{
-			Type: provider.LockType_LOCK_TYPE_EXCL,
-			User: details.UserID, // no way to set an app lock? TODO maybe via the ownerxml
+			Opaque: o,
+			Type:   provider.LockType_LOCK_TYPE_EXCL,
+			User:   details.UserID, // no way to set an app lock? TODO maybe via the ownerxml
 			//AppName: , // TODO use a urn scheme?
 			LockId: lockTokenPrefix + token.String(), // can be a token or a Coded-URL
 		},
@@ -278,6 +286,10 @@ type LockDetails struct {
 	// ZeroDepth is whether the lock has zero depth. If it does not have zero
 	// depth, it has infinite depth.
 	ZeroDepth bool
+	// OwnerName is the name of the lock owner
+	OwnerName string
+	// Locktime is the time the lock was created
+	Locktime time.Time
 }
 
 func readLockInfo(r io.Reader) (li lockInfo, status int, err error) {
@@ -440,7 +452,8 @@ func (s *svc) lockReference(ctx context.Context, w http.ResponseWriter, r *http.
 	}
 
 	u := ctxpkg.ContextMustGetUser(ctx)
-	token, ld, now, created := "", LockDetails{UserID: u.Id, Root: ref, Duration: duration}, time.Now(), false
+	token, now, created := "", time.Now(), false
+	ld := LockDetails{UserID: u.Id, Root: ref, Duration: duration, OwnerName: u.GetDisplayName(), Locktime: now}
 	if li == (lockInfo{}) {
 		// An empty lockInfo means to refresh the lock.
 		ih, ok := parseIfHeader(r.Header.Get(net.HeaderIf))
@@ -566,6 +579,13 @@ func writeLockInfo(w io.Writer, token string, ld LockDetails) (int, error) {
 	if href != "" {
 		lockdiscovery.WriteString(fmt.Sprintf("  <d:lockroot><d:href>%s</d:href></d:lockroot>\n", prop.Escape(href)))
 	}
+	if ld.OwnerName != "" {
+		lockdiscovery.WriteString(fmt.Sprintf("  <d:ownername>%s</d:ownername>\n", prop.Escape(ld.OwnerName)))
+	}
+	if !ld.Locktime.IsZero() {
+		lockdiscovery.WriteString(fmt.Sprintf("  <d:locktime>%s</d:locktime>\n", prop.Escape(ld.Locktime.Format(time.RFC3339))))
+	}
+
 	lockdiscovery.WriteString("</d:activelock></d:lockdiscovery></d:prop>")
 
 	return fmt.Fprint(w, lockdiscovery.String())
