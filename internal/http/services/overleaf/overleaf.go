@@ -135,7 +135,26 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	statRes, err := s.validateQuery(w, r, ctx)
+	exportRequest, err := getExportRequest(w, r)
+
+	if err != nil {
+		return
+	}
+
+	statRes, err := s.gtwClient.Stat(ctx, &storagepb.StatRequest{Ref: &exportRequest.ResourceRef})
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "Internal error accessing the resource, please try again later", err)
+		return
+	}
+
+	if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+		reqres.WriteError(w, r, reqres.APIErrorNotFound, "resource does not exist", nil)
+		return
+	} else if statRes.Status.Code != rpc.Code_CODE_OK {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "failed to stat the resource", nil)
+		return
+	}
+
 	if err != nil {
 		// Validate query handles errors
 		return
@@ -160,7 +179,7 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Form.Get("override") == "" {
+	if !exportRequest.Override {
 		creationTime, alreadySet := resource.GetArbitraryMetadata().Metadata["reva.overleaf.exporttime"]
 		if alreadySet {
 			w.WriteHeader(http.StatusConflict)
@@ -269,7 +288,7 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *svc) validateQuery(w http.ResponseWriter, r *http.Request, ctx context.Context) (*storagepb.StatResponse, error) {
+func getExportRequest(w http.ResponseWriter, r *http.Request) (*exportRequest, error) {
 	if err := r.ParseForm(); err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "parameters could not be parsed", nil)
 		return nil, err
@@ -294,19 +313,15 @@ func (s *svc) validateQuery(w http.ResponseWriter, r *http.Request, ctx context.
 		resourceRef.ResourceId = resourceID
 	}
 
-	statRes, err := s.gtwClient.Stat(ctx, &storagepb.StatRequest{Ref: &resourceRef})
-	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "Internal error accessing the resource, please try again later", err)
-		return nil, errors.New("Internal error accessing the resource, please try again later")
-	}
+	// Override is true if field is set
+	override := r.Form.Get("override") != ""
+	return &exportRequest{
+		ResourceRef: resourceRef,
+		Override:    override,
+	}, nil
+}
 
-	if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-		reqres.WriteError(w, r, reqres.APIErrorNotFound, "resource does not exist", nil)
-		return nil, errors.New("resource does not exist")
-	} else if statRes.Status.Code != rpc.Code_CODE_OK {
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "failed to stat the resource", nil)
-		return nil, errors.New("failed to stat the resource")
-	}
-
-	return statRes, nil
+type exportRequest struct {
+	ResourceRef storagepb.Reference `json:"resourceId"`
+	Override    bool                `json:"override"`
 }
