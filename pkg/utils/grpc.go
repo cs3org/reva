@@ -24,8 +24,8 @@ func GetUser(userID *user.UserId, gwc gateway.GatewayAPIClient) (*user.User, err
 	return getUserResponse.GetUser(), nil
 }
 
-// ImpersonateServiceUser impersonates the given user
-func ImpersonateServiceUser(serviceUserID string, gwc gateway.GatewayAPIClient, serviceUserSecret string) (context.Context, error) {
+// GetServiceUserContext returns an authenticated context of the given service user
+func GetServiceUserContext(serviceUserID string, gwc gateway.GatewayAPIClient, serviceUserSecret string) (context.Context, error) {
 	ctx := context.Background()
 	authRes, err := gwc.Authenticate(ctx, &gateway.AuthenticateRequest{
 		Type:         "serviceaccounts",
@@ -36,7 +36,7 @@ func ImpersonateServiceUser(serviceUserID string, gwc gateway.GatewayAPIClient, 
 		return nil, err
 	}
 	if authRes.GetStatus().GetCode() != rpc.Code_CODE_OK {
-		return nil, fmt.Errorf("error impersonating user: %s", authRes.Status.Message)
+		return nil, fmt.Errorf("error authenticating service user: %s", authRes.Status.Message)
 	}
 
 	return metadata.AppendToOutgoingContext(ctx, revactx.TokenHeader, authRes.Token), nil

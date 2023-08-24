@@ -39,7 +39,6 @@ func (m *manager) Configure(config map[string]interface{}) error {
 	// only inmem authenticator for now
 	a := &inmemAuthenticator{make(map[string]string)}
 	for _, s := range c.ServiceUsers {
-		// TODO: hash secrets
 		a.m[s.ID] = s.Secret
 	}
 	m.authenticate = a.Authenticate
@@ -71,6 +70,7 @@ func (m *manager) Authenticate(ctx context.Context, userID string, secret string
 		Id: &userpb.UserId{
 			OpaqueId: userID,
 			Type:     userpb.UserType_USER_TYPE_SERVICE,
+			Idp:      "none",
 		},
 	}, scope, nil
 }
@@ -80,7 +80,9 @@ type inmemAuthenticator struct {
 }
 
 func (a *inmemAuthenticator) Authenticate(userID string, secret string) error {
-	// TODO: hash secrets
+	if secret == "" || a.m[userID] == "" {
+		return errors.New("unknown user")
+	}
 	if a.m[userID] == secret {
 		return nil
 	}
