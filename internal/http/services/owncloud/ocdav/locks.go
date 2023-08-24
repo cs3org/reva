@@ -194,6 +194,7 @@ func (cls *cs3LS) Create(ctx context.Context, now time.Time, details LockDetails
 	u := ctxpkg.ContextMustGetUser(ctx)
 
 	// add metadata via opaque
+	// TODO: upate cs3api: https://github.com/cs3org/cs3apis/issues/213
 	o := utils.AppendPlainToOpaque(nil, "lockownername", u.GetDisplayName())
 	o = utils.AppendPlainToOpaque(o, "locktime", now.Format(time.RFC3339))
 
@@ -560,7 +561,7 @@ func writeLockInfo(w io.Writer, token string, ld LockDetails) (int, error) {
 
 	lockdiscovery := strings.Builder{}
 	lockdiscovery.WriteString(xml.Header)
-	lockdiscovery.WriteString("<d:prop xmlns:d=\"DAV:\"><d:lockdiscovery><d:activelock>\n")
+	lockdiscovery.WriteString("<d:prop xmlns:d=\"DAV:\" xmlns:oc=\"http://owncloud.org/ns\"><d:lockdiscovery><d:activelock>\n")
 	lockdiscovery.WriteString("  <d:locktype><d:write/></d:locktype>\n")
 	lockdiscovery.WriteString("  <d:lockscope><d:exclusive/></d:lockscope>\n")
 	lockdiscovery.WriteString(fmt.Sprintf("  <d:depth>%s</d:depth>\n", depth))
@@ -580,10 +581,10 @@ func writeLockInfo(w io.Writer, token string, ld LockDetails) (int, error) {
 		lockdiscovery.WriteString(fmt.Sprintf("  <d:lockroot><d:href>%s</d:href></d:lockroot>\n", prop.Escape(href)))
 	}
 	if ld.OwnerName != "" {
-		lockdiscovery.WriteString(fmt.Sprintf("  <d:ownername>%s</d:ownername>\n", prop.Escape(ld.OwnerName)))
+		lockdiscovery.WriteString(fmt.Sprintf("  <oc:ownername>%s</oc:ownername>\n", prop.Escape(ld.OwnerName)))
 	}
 	if !ld.Locktime.IsZero() {
-		lockdiscovery.WriteString(fmt.Sprintf("  <d:locktime>%s</d:locktime>\n", prop.Escape(ld.Locktime.Format(time.RFC3339))))
+		lockdiscovery.WriteString(fmt.Sprintf("  <oc:locktime>%s</oc:locktime>\n", prop.Escape(ld.Locktime.Format(time.RFC3339))))
 	}
 
 	lockdiscovery.WriteString("</d:activelock></d:lockdiscovery></d:prop>")
