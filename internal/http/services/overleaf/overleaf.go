@@ -29,17 +29,20 @@ import (
 	"strings"
 	"time"
 
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storagepb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/go-chi/chi/v5"
@@ -60,6 +63,7 @@ type config struct {
 	ArchiverURL string `mapstructure:"archiver_url" docs:";Internet-facing URL of the archiver service, used to serve the files to Overleaf."  validate:"required"`
 	AppURL      string `mapstructure:"app_url" docs:";The App URL."   validate:"required"`
 	Insecure    bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
+	JWTSecret   string `mapstructure:"jwt_secret"`
 }
 
 func init() {
@@ -173,8 +177,27 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// TODO: generate and use a more restricted token
-	restrictedToken := token
+	tokenManager, err := jwt.New(map[string]interface{}{
+		"secret": sharedconf.GetJWTSecret(s.conf.JWTSecret),
+	})
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error fetching secret", err)
+		return
+	}
+
+	u := ctxpkg.ContextMustGetUser(ctx)
+
+	scope, err := scope.AddResourceInfoScope(resource, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error getting restricted token", err)
+		return
+	}
+
+	restrictedToken, err := tokenManager.MintToken(context.Background(), u, scope)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error getting restricted token", err)
+		return
+	}
 
 	// Setting up archiver request
 	archHTTPReq, err := rhttp.NewRequest(ctx, http.MethodGet, s.conf.ArchiverURL, nil)
