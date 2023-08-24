@@ -372,7 +372,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if statRes.Info.Type != storagepb.ResourceType_RESOURCE_TYPE_FILE && statRes.Info.Type != storagepb.ResourceType_RESOURCE_TYPE_CONTAINER {
-		writeError(w, r, appErrorInvalidParameter, "the given file id does not point to a file", nil)
+		writeError(w, r, appErrorInvalidParameter, "the given file id does not point to a file or a container", nil)
 		return
 	}
 
