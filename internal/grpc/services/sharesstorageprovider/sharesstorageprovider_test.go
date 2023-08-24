@@ -126,7 +126,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 				},
 			},
 			MountPoint: &sprovider.Reference{
-				Path: "",
+				Path: "share1-shareddir",
 			},
 		}
 
@@ -188,7 +188,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 		gatewayClient.On("Stat", mock.Anything, mock.AnythingOfType("*providerv1beta1.StatRequest")).Return(
 			func(_ context.Context, req *sprovider.StatRequest, _ ...grpc.CallOption) *sprovider.StatResponse {
 				switch req.Ref.GetPath() {
-				case "./share1-shareddir":
+				case "./share1-shareddir", "./share1-shareddir (1)":
 					return &sprovider.StatResponse{
 						Status: status.NewOK(context.Background()),
 						Info: &sprovider.ResourceInfo{
@@ -432,6 +432,21 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_CONTAINER))
 				Expect(res.Info.Path).To(Equal("share1-shareddir"))
 				// Expect(res.Info.Size).To(Equal(uint64(300))) TODO: Why 300?
+				Expect(res.Info.Size).To(Equal(uint64(100)))
+			})
+
+			It("stats the correct share in the share jail", func() {
+				BaseShare.MountPoint.Path = "share1-shareddir"
+				BaseShareTwo.MountPoint.Path = "share1-shareddir (1)"
+				statReq := ShareJailStatRequest
+				statReq.Ref.Path = "./share1-shareddir (1)"
+				res, err := s.Stat(ctx, statReq)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
+				Expect(res.Info).ToNot(BeNil())
+				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_CONTAINER))
+				Expect(res.Info.Path).To(Equal("share1-shareddir"))
 				Expect(res.Info.Size).To(Equal(uint64(100)))
 			})
 
