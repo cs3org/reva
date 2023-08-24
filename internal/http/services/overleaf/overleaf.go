@@ -55,10 +55,10 @@ type svc struct {
 
 type config struct {
 	Prefix      string `mapstructure:"prefix"`
-	GatewaySvc  string `mapstructure:"gatewaysvc"`
-	AppName     string `mapstructure:"app_name" docs:";The App user-friendly name."`
-	ArchiverURL string `mapstructure:"archiver_url" docs:";Internet-facing URL of the archiver service, used to serve the files to Overleaf."`
-	AppURL      string `mapstructure:"app_url" docs:";The App URL."`
+	GatewaySvc  string `mapstructure:"gatewaysvc"  validate:"required"`
+	AppName     string `mapstructure:"app_name" docs:";The App user-friendly name."  validate:"required"`
+	ArchiverURL string `mapstructure:"archiver_url" docs:";Internet-facing URL of the archiver service, used to serve the files to Overleaf."  validate:"required"`
+	AppURL      string `mapstructure:"app_url" docs:";The App URL."   validate:"required"`
 	Insecure    bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 }
 
@@ -71,8 +71,6 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 	if err := cfg.Decode(m, &conf); err != nil {
 		return nil, err
 	}
-
-	conf.init()
 
 	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(conf.GatewaySvc))
 	if err != nil {
@@ -100,7 +98,7 @@ func (s *svc) routerInit() error {
 	return nil
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.Prefix == "" {
 		c.Prefix = "overleaf"
 	}
