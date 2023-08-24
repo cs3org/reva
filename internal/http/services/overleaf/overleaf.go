@@ -120,7 +120,9 @@ func (s *svc) Unprotected() []string {
 }
 
 func (s *svc) Handler() http.Handler {
-	return s.router
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.router.ServeHTTP(w, r)
+	})
 }
 
 func (s *svc) handleImport(w http.ResponseWriter, r *http.Request) {
@@ -184,7 +186,7 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	archQuery := archHTTPReq.URL.Query()
-	archQuery.Add("id", resourceid.OwnCloudResourceIDWrap(resource.Id))
+	archQuery.Add("id", resource.Id.StorageId+"!"+resource.Id.OpaqueId)
 	archQuery.Add("access_token", restrictedToken)
 	archQuery.Add("arch_type", "zip")
 
