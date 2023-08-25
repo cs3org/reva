@@ -186,12 +186,14 @@ func (sm *Manager) GetShare(ctx context.Context, user *userpb.User, ref *ocm.Sha
 	log.Debug().Msgf("Found ShareAltMap %s", rejson)
 	return &ocm.Share{
 		Id: altResult.ID,
-		ResourceId: &provider.ResourceId{
-			OpaqueId:  altResult.ResourceID.OpaqueID,
-			StorageId: sm.mountID,
-		},
+		// ResourceId: &provider.ResourceId{
+		// 	OpaqueId:  altResult.ResourceID.OpaqueID,
+		// 	StorageId: sm.mountID,
+		// },
+		ResourceId: nil,
 		Grantee: &provider.Grantee{
-			Type: provider.GranteeType_GRANTEE_TYPE_USER,
+			// Type: provider.GranteeType_GRANTEE_TYPE_USER,
+			Type: 0,
 			Id: &provider.Grantee_UserId{
 				UserId: altResult.Grantee.ID.UserID,
 			},
@@ -199,10 +201,12 @@ func (sm *Manager) GetShare(ctx context.Context, user *userpb.User, ref *ocm.Sha
 		Owner: &userpb.UserId{
 			OpaqueId: altResult.Owner.OpaqueId,
 			Idp:      altResult.Owner.Idp,
+			Type:     1,
 		},
 		Creator: &userpb.UserId{
 			OpaqueId: altResult.Creator.OpaqueId,
 			Idp:      altResult.Creator.Idp,
+			Type:     1,
 		},
 		Ctime: altResult.Ctime,
 		Mtime: altResult.Mtime,
