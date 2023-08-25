@@ -155,11 +155,6 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err != nil {
-		// Validate query handles errors
-		return
-	}
-
 	resource := statRes.Info
 
 	// User needs to have download rights to export to Overleaf
