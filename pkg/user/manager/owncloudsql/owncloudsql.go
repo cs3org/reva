@@ -167,6 +167,10 @@ func (m *manager) convertToCS3User(ctx context.Context, a *accounts.Account, ski
 		GidNumber: m.c.Nobody,
 		UidNumber: m.c.Nobody,
 	}
+	// fall back to userid
+	if u.Id.OpaqueId == "" {
+		u.Id.OpaqueId = a.UserID
+	}
 	if u.Username == "" {
 		u.Username = u.Id.OpaqueId
 	}
