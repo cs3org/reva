@@ -32,7 +32,6 @@ import (
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storagepb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -46,13 +45,11 @@ import (
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/go-chi/chi/v5"
-	"github.com/rs/zerolog"
 )
 
 type svc struct {
 	conf      *config
 	gtwClient gateway.GatewayAPIClient
-	log       *zerolog.Logger
 	router    *chi.Mux
 }
 
@@ -61,7 +58,7 @@ type config struct {
 	GatewaySvc  string `mapstructure:"gatewaysvc"  validate:"required"`
 	AppName     string `mapstructure:"app_name" docs:";The App user-friendly name."  validate:"required"`
 	ArchiverURL string `mapstructure:"archiver_url" docs:";Internet-facing URL of the archiver service, used to serve the files to Overleaf."  validate:"required"`
-	AppURL      string `mapstructure:"app_url" docs:";The App URL."   validate:"required"`
+	appURL      string `mapstructure:"app_url" docs:";The App URL."   validate:"required"`
 	Insecure    bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 	JWTSecret   string `mapstructure:"jwt_secret"`
 }
@@ -229,8 +226,8 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 	log.Debug().Str("Archiver url", archHTTPReq.URL.String()).Msg("URL for downloading zipped resource from archiver")
 
 	// Setting up Overleaf request
-	appUrl := s.conf.AppURL + "/docs"
-	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, appUrl, nil)
+	appURL := s.conf.appURL + "/docs"
+	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, appURL, nil)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "overleaf: error setting up http request", nil)
 		return
@@ -248,11 +245,11 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 	httpReq.URL.RawQuery = q.Encode()
 	url := httpReq.URL.String()
 
-	req := &provider.SetArbitraryMetadataRequest{
-		Ref: &provider.Reference{
+	req := &storagepb.SetArbitraryMetadataRequest{
+		Ref: &storagepb.Reference{
 			ResourceId: resource.Id,
 		},
-		ArbitraryMetadata: &provider.ArbitraryMetadata{
+		ArbitraryMetadata: &storagepb.ArbitraryMetadata{
 			Metadata: map[string]string{
 				"reva.overleaf.exporttime": strconv.Itoa(int(time.Now().Unix())),
 				"reva.overleaf.name":       base64.StdEncoding.EncodeToString([]byte(name)),
