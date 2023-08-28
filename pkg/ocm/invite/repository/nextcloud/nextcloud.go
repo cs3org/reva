@@ -269,6 +269,7 @@ func (c *Client) doPostRemoteUser(initiator string, opaqueUserID string, idp str
 		return false, err
 	}
 
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return false, fmt.Errorf("Unexpected response code from EFSS API: " + strconv.Itoa(resp.StatusCode))
 	}
