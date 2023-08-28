@@ -29,7 +29,7 @@ import (
 	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
-const OCM_API_VERSION = "1.1.0"
+const OCMAPIVersion = "1.1.0"
 
 func init() {
 	global.Register("ocmprovider", New)
@@ -91,7 +91,7 @@ func (c *config) prepare() *discoveryData {
 	if c.Endpoint == "" {
 		d.Enabled = false
 		d.Endpoint = ""
-		d.APIVersion = OCM_API_VERSION
+		d.APIVersion = OCMAPIVersion
 		d.Provider = c.Provider
 		d.ResourceTypes = []resourceTypes{{
 			Name:       "file",
@@ -102,7 +102,7 @@ func (c *config) prepare() *discoveryData {
 		return d
 	}
 	d.Enabled = true
-	d.APIVersion = OCM_API_VERSION
+	d.APIVersion = OCMAPIVersion
 	d.Endpoint = fmt.Sprintf("%s/%s", c.Endpoint, c.OCMPrefix)
 	d.Provider = c.Provider
 	rtProtos := map[string]string{}
@@ -159,7 +159,7 @@ func (s *svc) Handler() http.Handler {
 			// https://github.com/nextcloud/server/pull/39574#issuecomment-1679191188
 			s.data.APIVersion = "1.1"
 		} else {
-			s.data.APIVersion = OCM_API_VERSION
+			s.data.APIVersion = OCMAPIVersion
 		}
 		indented, _ := json.MarshalIndent(s.data, "", "   ")
 		if _, err := w.Write(indented); err != nil {
