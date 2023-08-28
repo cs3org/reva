@@ -90,7 +90,6 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 	} else {
 		log.Trace().Msg("Token scope is not ok")
 	}
-	log.Info().Msg("Done extracting scope from token")
 
 	if checkLightweightScope(ctx, req, tokenScope, client) {
 		return nil
