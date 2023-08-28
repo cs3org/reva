@@ -179,8 +179,8 @@ func (c *Client) doPostToken(token string, initiator string, description string,
 }
 
 func (c *Client) doGetToken(token string) (*apiToken, error) {
-	requestUrl := c.Config.BaseURL + "/api/v1/get_token" + "?token=" + token
-	req, err := http.NewRequest(http.MethodGet, requestUrl, nil)
+	requestURL := c.Config.BaseURL + "/api/v1/get_token" + "?token=" + token
+	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -212,8 +212,8 @@ func (c *Client) doGetToken(token string) (*apiToken, error) {
 }
 
 func (c *Client) doGetAllTokens(initiator string) ([]*apiToken, error) {
-	requestUrl := c.Config.BaseURL + "/api/v1/tokens_list/" + initiator
-	req, err := http.NewRequest(http.MethodGet, requestUrl, nil)
+	requestURL := c.Config.BaseURL + "/api/v1/tokens_list/" + initiator
+	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -256,8 +256,8 @@ func (c *Client) doPostRemoteUser(initiator string, opaqueUserID string, idp str
 	if err != nil {
 		return false, err
 	}
-	requestUrl := c.Config.BaseURL + "/api/v1/add_remote_user/" + initiator
-	req, err := http.NewRequest(http.MethodPost, requestUrl, strings.NewReader(string(bodyStr)))
+	requestURL := c.Config.BaseURL + "/api/v1/add_remote_user/" + initiator
+	req, err := http.NewRequest(http.MethodPost, requestURL, strings.NewReader(string(bodyStr)))
 	if err != nil {
 		return false, err
 	}
@@ -276,8 +276,8 @@ func (c *Client) doPostRemoteUser(initiator string, opaqueUserID string, idp str
 }
 
 func (c *Client) doGetRemoteUser(initiator string, opaqueUserID string, idp string) (*apiOCMUser, error) {
-	requestUrl := c.Config.BaseURL + "/api/v1/get_remote_user/" + initiator + "?userId=" + opaqueUserID + "&idp=" + idp
-	req, err := http.NewRequest(http.MethodGet, requestUrl, nil)
+	requestURL := c.Config.BaseURL + "/api/v1/get_remote_user/" + initiator + "?userId=" + opaqueUserID + "&idp=" + idp
+	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -308,8 +308,8 @@ func (c *Client) doGetRemoteUser(initiator string, opaqueUserID string, idp stri
 }
 
 func (c *Client) doGetAllRemoteUsers(initiator string, search string) ([]*apiOCMUser, error) {
-	requestUrl := c.Config.BaseURL + "/api/v1/find_remote_user/" + initiator + "?search=" + search
-	req, err := http.NewRequest(http.MethodGet, requestUrl, nil)
+	requestURL := c.Config.BaseURL + "/api/v1/find_remote_user/" + initiator + "?search=" + search
+	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, err
 	}
