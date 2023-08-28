@@ -58,7 +58,7 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 	if err != nil {
 		return err
 	}
-	log.Info().Msg("Extracting scope from token")
+	log.Trace().Msg("Extracting scope from token")
 	if ref, ok := extractRef(req, tokenScope); ok {
 		// The request is for a storage reference. This can be the case for multiple scenarios:
 		// - If the path is not empty, the request might be coming from a share where the accessor is
