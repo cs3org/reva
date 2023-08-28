@@ -244,9 +244,9 @@ func (c *Client) doGetAllTokens(initiator string) ([]*apiToken, error) {
 	return result, nil
 }
 
-func (c *Client) doPostRemoteUser(initiator string, opaqueUserID string, idp string, email string, display_name string) (bool, error) {
+func (c *Client) doPostRemoteUser(initiator string, opaqueUserID string, idp string, email string, displayName string) (bool, error) {
 	bodyObj := &apiOCMUser{
-		DisplayName:  display_name,
+		DisplayName:  displayName,
 		Email:        email,
 		Idp:          idp,
 		OpaqueUserID: opaqueUserID,
@@ -343,7 +343,7 @@ func (c *Client) doGetAllRemoteUsers(initiator string, search string) ([]*apiOCM
 // AddToken stores the token in the external repository.
 func (c *Client) AddToken(ctx context.Context, token *invitepb.InviteToken) error {
 	result, err := c.doPostToken(token.Token, conversions.FormatUserID(token.UserId), token.Description, timestampToTime(ctx, token.Expiration))
-	if result != true {
+	if !result {
 		return err
 	}
 	return nil
