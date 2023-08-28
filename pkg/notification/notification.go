@@ -40,6 +40,8 @@ type Manager interface {
 	GetNotification(ref string) (*Notification, error)
 	// DeleteNotification deletes a notifcation.
 	DeleteNotification(ref string) error
+	// GetNotificationPreference queries the database whether a specific user has notifications disabled or enabled
+	GetNotificationPreference(opaqueId string) (bool, error)
 }
 
 // NotFoundError is the error returned when a notification does not exist.

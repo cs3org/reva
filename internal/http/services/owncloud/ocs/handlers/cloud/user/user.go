@@ -32,6 +32,8 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+
+	"strconv"
 )
 
 // The Handler renders the user endpoint.
@@ -50,8 +52,10 @@ func (h *Handler) Init(c *config.Config) {
 }
 
 const (
-	languageNamespace = "core"
-	languageKey       = "lang"
+	languageNamespace     = "core"
+	languageKey           = "lang"
+	notificationNamespace = "disableNotificationsCore"
+	notificationKey       = "disableNotifications"
 )
 
 // GetSelf handles GET requests on /cloud/user.
@@ -66,11 +70,12 @@ func (h *Handler) GetSelf(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.WriteOCSSuccess(w, r, &User{
-		ID:          u.Username,
-		DisplayName: u.DisplayName,
-		Email:       u.Mail,
-		UserType:    conversions.UserTypeString(u.Id.Type),
-		Language:    h.getLanguage(ctx),
+		ID:                   u.Username,
+		DisplayName:          u.DisplayName,
+		Email:                u.Mail,
+		UserType:             conversions.UserTypeString(u.Id.Type),
+		Language:             h.getLanguage(ctx),
+		DisableNotifications: h.getNotification(ctx),
 	})
 }
 
@@ -91,20 +96,43 @@ func (h *Handler) getLanguage(ctx context.Context) string {
 	return res.GetVal()
 }
 
+func (h *Handler) getNotification(ctx context.Context) bool {
+	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	if err != nil {
+		return false
+	}
+	res, err := gw.GetKey(ctx, &preferences.GetKeyRequest{
+		Key: &preferences.PreferenceKey{
+			Namespace: notificationNamespace,
+			Key:       notificationKey,
+		},
+	})
+
+	if err != nil || res.Status.Code != rpc.Code_CODE_OK {
+		return false
+	}
+
+	value, err := strconv.ParseBool(res.GetVal())
+	if err != nil {
+		return false
+	}
+
+	return value
+}
+
 type updateSelfRequest struct {
-	Language string `json:"language"`
+	Language               string `json:"language"`
+	NotificationPreference bool   `json:"disableNotifications,omitempty"`
 }
 
 // UpdateSelf handles PATCH requests on /cloud/user.
 func (h *Handler) UpdateSelf(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-
 	req, err := parseUpdateSelfRequest(r)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "body request not valid", err)
 		return
 	}
-
 	if req.Language != "" {
 		if !h.isLanguageAllowed(req.Language) {
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "language not allowed", fmt.Errorf("language not allowed"))
@@ -114,7 +142,33 @@ func (h *Handler) UpdateSelf(w http.ResponseWriter, r *http.Request) {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error setting language", err)
 			return
 		}
+	} else {
+		if err := h.updateNotificationSetting(ctx, req.NotificationPreference); err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error applying notification setting", err)
+			return
+		}
 	}
+}
+
+func (h *Handler) updateNotificationSetting(ctx context.Context, notificationPreference bool) error {
+	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	if err != nil {
+		return err
+	}
+	res, err := gw.SetKey(ctx, &preferences.SetKeyRequest{
+		Key: &preferences.PreferenceKey{
+			Namespace: notificationNamespace,
+			Key:       notificationKey,
+		},
+		Val: strconv.FormatBool(notificationPreference),
+	})
+	if err != nil {
+		return err
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return errors.New(res.Status.Message)
+	}
+	return nil
 }
 
 func (h *Handler) updateLanguage(ctx context.Context, lang string) error {
@@ -158,9 +212,10 @@ func parseUpdateSelfRequest(r *http.Request) (updateSelfRequest, error) {
 // User holds user data.
 type User struct {
 	// TODO needs better naming, clarify if we need a userid, a username or both
-	ID          string `json:"id" xml:"id"`
-	DisplayName string `json:"display-name" xml:"display-name"`
-	Email       string `json:"email" xml:"email"`
-	UserType    string `json:"user-type" xml:"user-type"`
-	Language    string `json:"language,omitempty" xml:"language,omitempty"`
+	ID                   string `json:"id" xml:"id"`
+	DisplayName          string `json:"display-name" xml:"display-name"`
+	Email                string `json:"email" xml:"email"`
+	UserType             string `json:"user-type" xml:"user-type"`
+	Language             string `json:"language,omitempty" xml:"language,omitempty"`
+	DisableNotifications bool   `json:"disableNotifications,omitempty" xml:"disableNotifications,omitempty"`
 }
