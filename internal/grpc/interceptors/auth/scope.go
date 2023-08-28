@@ -88,7 +88,7 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 			}
 		}
 	} else {
-		log.Info().Msg("Token scope is not ok")
+		log.Trace().Msg("Token scope is not ok")
 	}
 	log.Info().Msg("Done extracting scope from token")
 
