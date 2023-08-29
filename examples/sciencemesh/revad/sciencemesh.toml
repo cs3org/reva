@@ -58,20 +58,20 @@ ocmshares = "{{ grpc.services.authprovider[2].address }}"
 [[grpc.services.authprovider]]
 auth_manager = "nextcloud"
 
-[[grpc.services.authprovider]]
-auth_manager = "machine"
-
-[[grpc.services.authprovider]]
-auth_manager = "ocmshares"
-
 [grpc.services.authprovider.auth_managers.nextcloud]
 endpoint = "https://your.efss.com/index.php/apps/sciencemesh/"
 shared_secret = "shared-secret-1"
 mock_http = false
 
+[[grpc.services.authprovider]]
+auth_manager = "machine"
+
 [grpc.services.authprovider.auth_managers.machine]
 api_key = "{{ vars.machine_api_key }}"
 gateway_addr = "your.revad.com:19000"
+
+[[grpc.services.authprovider]]
+auth_manager = "ocmshares"
 
 
 ### STORAGE PROVIDERS ###
@@ -244,6 +244,7 @@ prefix = "ocs"
 
 [http.middlewares.cors]
 [http.middlewares.log]
+
 [http.middlewares.providerauthorizer]
 driver = "mentix"
 
