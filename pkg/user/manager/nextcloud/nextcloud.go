@@ -35,8 +35,6 @@ import (
 	"github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
-	// "github.com/cs3org/reva/pkg/errtypes".
-	// "github.com/gdexlab/go-render/render"
 )
 
 func init() {
