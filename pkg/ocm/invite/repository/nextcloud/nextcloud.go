@@ -36,7 +36,6 @@ import (
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/repository/registry"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -55,7 +54,7 @@ type Client struct {
 }
 
 type config struct {
-	BaseURL    string `mapstructure:"base_url"`
+	BaseURL    string `mapstructure:"base_url" default:"http://localhost"`
 	APIKey     string `mapstructure:"api_key"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
 }
@@ -93,16 +92,6 @@ func New(ctx context.Context, m map[string]interface{}) (invite.Repository, erro
 	}
 
 	return client, nil
-}
-
-func (c *config) init() {
-	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
-}
-
-func (c *Client) init() {
-	if c.Config.BaseURL == "" {
-		c.Config.BaseURL = "http://localhost/"
-	}
 }
 
 func parseConfig(c map[string]interface{}) (*config, error) {
