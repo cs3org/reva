@@ -1,3 +1,7 @@
+[vars]
+machine_api_key = "machine-api-key"
+provider_domain = "your.revad.com"
+
 [log]
 level = "trace"
 
@@ -21,8 +25,11 @@ ocmshareprovidersvc = "your.revad.com:19000"
 ocminvitemanagersvc = "your.revad.com:19000"
 ocmproviderauthorizersvc = "your.revad.com:19000"
 commit_share_to_storage_grant = false
-datagateway = "https://your.revad.com/data"
-transfer_expires = 6 # give it a moment
+datagateway = "http://your.revad.com:{{ http.services.datagateway.address.port }}/data"
+transfer_expires = 6     # give it a moment
+commit_share_to_storage_grant = true
+commit_share_to_storage_ref = true
+
 
 [grpc.services.appregistry]
 driver = "static"
@@ -37,35 +44,37 @@ mime_types = [
     {"mime_type" = "application/vnd.jupyter", "extension" = "ipynb", "name" = "Jupyter Notebook", "description" = "Jupyter Notebook"}
 ]
 
-[grpc.services.appprovider]
-driver = "wopi"
-custom_mime_types_json = "custom-mime-types-demo.json"
-mime_types = ["application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet", "application/vnd.oasis.opendocument.presentation", "text/rtf"]
-app_provider_url = "localhost:19000"
-language = "en-GB"
 
-[grpc.services.appprovider.drivers.wopi]
-iop_secret = "hello"
-wopi_url = "http://wopi.docker:8880/"
-app_name = "Collabora"
-app_url = "http://collabora.docker:9980"
-app_int_url = "http://collabora.docker:9980"
+### AUTH PROVIDERS ###
 
 [grpc.services.authregistry]
 driver = "static"
 
 [grpc.services.authregistry.drivers.static.rules]
-basic = "your.revad.com:19000"
-ocmshares = "your.revad.com:19001"
-machine = "your.revad.com:19030"
+basic = "{{ grpc.services.authprovider[0].address }}"
+machine = "{{ grpc.services.authprovider[1].address }}"
+ocmshares = "{{ grpc.services.authprovider[2].address }}"
 
-[grpc.services.authprovider]
+[[grpc.services.authprovider]]
 auth_manager = "nextcloud"
+
+[[grpc.services.authprovider]]
+auth_manager = "machine"
+
+[[grpc.services.authprovider]]
+auth_manager = "ocmshares"
 
 [grpc.services.authprovider.auth_managers.nextcloud]
 endpoint = "https://your.efss.com/index.php/apps/sciencemesh/"
 shared_secret = "shared-secret-1"
 mock_http = false
+
+[grpc.services.authprovider.auth_managers.machine]
+api_key = "{{ vars.machine_api_key }}"
+gateway_addr = "your.revad.com:19000"
+
+
+### STORAGE PROVIDERS ###
 
 [grpc.services.storageregistry]
 driver = "static"
@@ -78,6 +87,31 @@ home_provider = "/home"
 "nextcloud" = {"address" = "your.revad.com:19000"}
 "/ocm" = {"address" = "your.revad.com:19001"}
 "ocm" = {"address" = "your.revad.com:19001"}
+
+[[grpc.services.storageprovider]]
+driver = "nextcloud"
+mount_id = "nextcloud"
+expose_data_server = true
+enable_home_creation = false
+data_server_url = "http://your.revad.com:{{ http.services.dataprovider[0].address.port }}/data"
+
+[grpc.services.storageprovider.drivers.nextcloud]
+endpoint = "https://your.efss.com/index.php/apps/sciencemesh/"
+shared_secret = "shared-secret-1"
+mock_http = false
+
+[[grpc.services.storageprovider]]
+driver = "ocmoutcoming"
+mount_id = "ocm"
+mount_path = "/ocm"
+expose_data_server = true
+data_server_url = "http://your.revad.com:{{ http.services.dataprovider[1].address.port }}/data"
+
+[grpc.services.storageprovider.drivers.ocmoutcoming]
+machine_secret = "{{ vars.machine_api_key }}"
+
+
+### OTHER PROVIDERS ###
 
 [grpc.services.usershareprovider]
 driver = "memory"
@@ -121,18 +155,6 @@ verify_request_hostname = true
 [grpc.services.publicshareprovider]
 driver = "memory"
 
-[grpc.services.storageprovider]
-driver = "nextcloud"
-expose_data_server = true
-data_server_url = "https://your.revad.com/data"
-enable_home_creation = false
-mount_id = "nextcloud"
-
-[grpc.services.storageprovider.drivers.nextcloud]
-endpoint = "https://your.efss.com/index.php/apps/sciencemesh/"
-shared_secret = "shared-secret-1"
-mock_http = false
-
 [grpc.services.userprovider]
 driver = "nextcloud"
 
@@ -164,6 +186,9 @@ file = ""
 [grpc.services.datatx.txdrivers.rclone.storagedrivers.json]
 file = ""
 
+
+### HTTP ENDPOINTS ###
+
 [http]
 address = "0.0.0.0:443"
 certfile = "/etc/revad/tls/your.revad.ssl.crt"
@@ -171,6 +196,20 @@ keyfile = "/etc/revad/tls/your.revad.ssl.key"
 
 [http.services.appprovider]
 insecure = true
+
+[[http.services.dataprovider]]
+driver = "nextcloud"
+
+[http.services.dataprovider.drivers.nextcloud]
+endpoint = "https://your.efss.com/index.php/apps/sciencemesh/"
+shared_secret = "shared-secret-1"
+mock_http = false
+
+[[http.services.dataprovider]]
+driver = "ocmoutcoming"
+
+[http.services.dataprovider.drivers.ocmoutcoming]
+machine_secret = "{{ vars.machine_api_key }}"
 
 [http.services.sciencemesh]
 provider_domain = "your.revad.com"
@@ -183,20 +222,9 @@ sender_mail = "sciencemesh@your.revad.com"
 smtp_server = "smtp.your.revad.com"
 smtp_port = 25
 
-[http.services.dataprovider]
-driver = "nextcloud"
-
-[http.services.prometheus]
-[http.services.sysinfo]
-
-[http.services.dataprovider.drivers.nextcloud]
-endpoint = "https://your.efss.com/index.php/apps/sciencemesh/"
-shared_secret = "shared-secret-1"
-mock_http = false
-
 [http.services.ocmprovider]
 ocm_prefix = "ocm"
-provider = "Reva OCM"
+provider = "Reva for ownCloud/Nextcloud"
 endpoint = "https://your.revad.com"
 enable_webapp = true
 enable_datatx = true
@@ -211,6 +239,9 @@ host = "your.revad.com"
 prefix = "ocs"
 
 [http.services.ocdav]
+[http.services.prometheus]
+[http.services.sysinfo]
+
 [http.middlewares.cors]
 [http.middlewares.log]
 [http.middlewares.providerauthorizer]
@@ -222,4 +253,3 @@ verify_request_hostname = true
 insecure = false
 timeout = 10
 refresh = 900
-

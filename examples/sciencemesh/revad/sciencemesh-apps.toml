@@ -1,0 +1,22 @@
+[log]
+level = "debug"
+
+[shared]
+gatewaysvc = "your.revad.com:19000"
+
+[grpc]
+address = "0.0.0.0:19100"
+
+[grpc.services.appprovider]
+driver = "wopi"
+custom_mime_types_json = "custom-mime-types-demo.json"
+mime_types = ["application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet", "application/vnd.oasis.opendocument.presentation", "text/rtf"]
+app_provider_url = "your.revad.com:19000"
+language = "en-GB"
+
+[grpc.services.appprovider.drivers.wopi]
+iop_secret = "hello"
+wopi_url = "http://wopi.docker:8880/"
+app_name = "Collabora"
+app_url = "http://collabora.docker:9980"
+app_int_url = "http://collabora.docker:9980"
