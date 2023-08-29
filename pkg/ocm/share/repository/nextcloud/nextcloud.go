@@ -439,7 +439,7 @@ func getUsername(user *userpb.User) string {
 		return user.Id.OpaqueId
 	}
 
-	return "empty-username"
+	return "nobody"
 }
 
 func (sm *Manager) do(ctx context.Context, a Action, username string) (int, []byte, error) {
