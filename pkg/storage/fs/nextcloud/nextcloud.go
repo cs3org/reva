@@ -137,8 +137,7 @@ func (nc *StorageDriver) doUpload(ctx context.Context, filePath string, r io.Rea
 
 	req.Header.Set("X-Reva-Secret", nc.sharedSecret)
 	// set the request header Content-Type for the upload
-	// FIXME: get the actual content type from somewhere
-	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("Content-Type", "application/octet-stream")
 	// log.Error().Msg("client req")
 	resp, err := nc.client.Do(req)
 	if err != nil {
@@ -164,6 +163,7 @@ func (nc *StorageDriver) doDownload(ctx context.Context, filePath string) (io.Re
 		panic(err)
 	}
 
+	req.Header.Set("X-Reva-Secret", nc.sharedSecret)
 	resp, err := nc.client.Do(req)
 	if err != nil {
 		panic(err)

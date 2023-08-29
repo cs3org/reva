@@ -123,7 +123,6 @@ func (s *service) UnprotectedEndpoints() []string {
 func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransferRequest) (*datatx.CreateTransferResponse, error) {
 	txInfo, startTransferErr := s.txManager.CreateTransfer(ctx, req.SrcTargetUri, req.DestTargetUri)
 	log := appctx.GetLogger(ctx)
-	log.Debug().Msg("CreateTransfer in internal/grpc/services/datatx/datatx.go!")
 
 	// we always save the transfer regardless of start transfer outcome
 	// only then, if starting fails, can we try to restart it

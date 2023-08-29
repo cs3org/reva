@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -57,7 +56,7 @@ type Client struct {
 
 type config struct {
 	BaseURL    string `mapstructure:"base_url"`
-	ApiKey     string `mapstructure:"api_key"`
+	APIKey     string `mapstructure:"api_key"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
 }
 
@@ -114,22 +113,6 @@ func parseConfig(c map[string]interface{}) (*config, error) {
 	return &conf, nil
 }
 
-func normalizeDomain(d string) (string, error) {
-	var urlString string
-	if strings.Contains(d, "://") {
-		urlString = d
-	} else {
-		urlString = "https://" + d
-	}
-
-	u, err := url.Parse(urlString)
-	if err != nil {
-		return "", err
-	}
-
-	return u.Hostname(), nil
-}
-
 func timestampToTime(ctx context.Context, t *types.Timestamp) time.Time {
 	return time.Unix(int64(t.Seconds), int64(t.Nanos))
 }
@@ -174,19 +157,20 @@ func (c *Client) doPostToken(token string, initiator string, description string,
 		return false, err
 	}
 
-	requestUrl := c.Config.BaseURL + "/api/v1/add_token/" + initiator
+	requestURL := c.Config.BaseURL + "/api/v1/add_token/" + initiator
 
-	req, err := http.NewRequest(http.MethodPost, requestUrl, strings.NewReader(string(bodyStr)))
+	req, err := http.NewRequest(http.MethodPost, requestURL, strings.NewReader(string(bodyStr)))
 	if err != nil {
 		return false, err
 	}
-	req.Header.Set("apikey", c.Config.ApiKey)
+	req.Header.Set("apikey", c.Config.APIKey)
 
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return false, err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return false, fmt.Errorf("Unexpected response code from EFSS API: " + strconv.Itoa(resp.StatusCode))
@@ -195,12 +179,12 @@ func (c *Client) doPostToken(token string, initiator string, description string,
 }
 
 func (c *Client) doGetToken(token string) (*apiToken, error) {
-	requestUrl := c.Config.BaseURL + "/api/v1/get_token" + "?token=" + token
-	req, err := http.NewRequest(http.MethodGet, requestUrl, nil)
+	requestURL := c.Config.BaseURL + "/api/v1/get_token" + "?token=" + token
+	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("apikey", c.Config.ApiKey)
+	req.Header.Set("apikey", c.Config.APIKey)
 
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.HTTPClient.Do(req)
@@ -228,12 +212,12 @@ func (c *Client) doGetToken(token string) (*apiToken, error) {
 }
 
 func (c *Client) doGetAllTokens(initiator string) ([]*apiToken, error) {
-	requestUrl := c.Config.BaseURL + "/api/v1/tokens_list/" + initiator
-	req, err := http.NewRequest(http.MethodGet, requestUrl, nil)
+	requestURL := c.Config.BaseURL + "/api/v1/tokens_list/" + initiator
+	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("apikey", c.Config.ApiKey)
+	req.Header.Set("apikey", c.Config.APIKey)
 
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.HTTPClient.Do(req)
@@ -260,24 +244,24 @@ func (c *Client) doGetAllTokens(initiator string) ([]*apiToken, error) {
 	return result, nil
 }
 
-func (c *Client) doPostRemoteUser(initiator string, opaque_user_id string, idp string, email string, display_name string) (bool, error) {
+func (c *Client) doPostRemoteUser(initiator string, opaqueUserID string, idp string, email string, displayName string) (bool, error) {
 	bodyObj := &apiOCMUser{
-		DisplayName:  display_name,
+		DisplayName:  displayName,
 		Email:        email,
 		Idp:          idp,
-		OpaqueUserID: opaque_user_id,
+		OpaqueUserID: opaqueUserID,
 	}
 
 	bodyStr, err := json.Marshal(bodyObj)
 	if err != nil {
 		return false, err
 	}
-	requestUrl := c.Config.BaseURL + "/api/v1/add_remote_user/" + initiator
-	req, err := http.NewRequest(http.MethodPost, requestUrl, strings.NewReader(string(bodyStr)))
+	requestURL := c.Config.BaseURL + "/api/v1/add_remote_user/" + initiator
+	req, err := http.NewRequest(http.MethodPost, requestURL, strings.NewReader(string(bodyStr)))
 	if err != nil {
 		return false, err
 	}
-	req.Header.Set("apikey", c.Config.ApiKey)
+	req.Header.Set("apikey", c.Config.APIKey)
 
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.HTTPClient.Do(req)
@@ -285,20 +269,20 @@ func (c *Client) doPostRemoteUser(initiator string, opaque_user_id string, idp s
 		return false, err
 	}
 
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return false, fmt.Errorf("Unexpected response code from EFSS API: " + strconv.Itoa(resp.StatusCode))
 	}
 	return true, nil
 }
 
-func (c *Client) doGetRemoteUser(initiator string, opaque_user_id string, idp string) (*apiOCMUser, error) {
-	requestUrl := c.Config.BaseURL + "/api/v1/get_remote_user/" + initiator + "?userId=" + opaque_user_id + "&idp=" + idp
-	req, err := http.NewRequest(http.MethodGet, requestUrl, nil)
+func (c *Client) doGetRemoteUser(initiator string, opaqueUserID string, idp string) (*apiOCMUser, error) {
+	requestURL := c.Config.BaseURL + "/api/v1/get_remote_user/" + initiator + "?userId=" + opaqueUserID + "&idp=" + idp
+	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("apikey", c.Config.ApiKey)
-
+	req.Header.Set("apikey", c.Config.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -325,12 +309,12 @@ func (c *Client) doGetRemoteUser(initiator string, opaque_user_id string, idp st
 }
 
 func (c *Client) doGetAllRemoteUsers(initiator string, search string) ([]*apiOCMUser, error) {
-	requestUrl := c.Config.BaseURL + "/api/v1/find_remote_user/" + initiator + "?search=" + search
-	req, err := http.NewRequest(http.MethodGet, requestUrl, nil)
+	requestURL := c.Config.BaseURL + "/api/v1/find_remote_user/" + initiator + "?search=" + search
+	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("apikey", c.Config.ApiKey)
+	req.Header.Set("apikey", c.Config.APIKey)
 
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.HTTPClient.Do(req)
@@ -360,7 +344,7 @@ func (c *Client) doGetAllRemoteUsers(initiator string, search string) ([]*apiOCM
 // AddToken stores the token in the external repository.
 func (c *Client) AddToken(ctx context.Context, token *invitepb.InviteToken) error {
 	result, err := c.doPostToken(token.Token, conversions.FormatUserID(token.UserId), token.Description, timestampToTime(ctx, token.Expiration))
-	if result != true {
+	if !result {
 		return err
 	}
 	return nil

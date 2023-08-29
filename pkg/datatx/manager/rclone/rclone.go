@@ -143,7 +143,6 @@ func getStorageManager(ctx context.Context, c *config) (repository.Repository, e
 // Specified target URIs are of form scheme://userinfo@host:port?name={path}
 func (driver *rclone) CreateTransfer(ctx context.Context, srcTargetURI string, dstTargetURI string) (*datatx.TxInfo, error) {
 	log := appctx.GetLogger(ctx)
-	log.Debug().Msg("CreateTransfer in pkg/datatx/manager/rclone/rclone.go!")
 	srcEp, err := driver.extractEndpointInfo(ctx, srcTargetURI)
 	if err != nil {
 		return nil, err

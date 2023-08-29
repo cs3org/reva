@@ -166,7 +166,7 @@ func (sm *Manager) GetShare(ctx context.Context, user *userpb.User, ref *ocm.Sha
 	if err != nil {
 		return nil, err
 	}
-	_, body, err := sm.do(ctx, Action{"GetSentShareByToken", string(data)}, "nobody") // getUsername(user))
+	_, body, err := sm.do(ctx, Action{"GetSentShareByToken", string(data)}, getUsername(user))
 	if err != nil {
 		return nil, err
 	}
