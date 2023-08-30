@@ -38,8 +38,8 @@ cp --force ./scripts/init-owncloud-sciencemesh.sh  ./temp/owncloud.sh
 cp --force ./scripts/init-nextcloud-sciencemesh.sh ./temp/nextcloud.sh
 
 # TLS dirs for mounting
-cp --recursive --force ./tls ./temp/${EFSS1}-1-tls
-cp --recursive --force ./tls ./temp/${EFSS2}-2-tls
+cp --recursive --force ./tls "./temp/${EFSS1}-1-tls"
+cp --recursive --force ./tls "./temp/${EFSS2}-2-tls"
 
 # make sure scripts are executable.
 chmod +x "${ENV_ROOT}/scripts/reva-run.sh"

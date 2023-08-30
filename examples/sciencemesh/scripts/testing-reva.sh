@@ -27,7 +27,7 @@ docker run --detach --network=testnet                                         \
   -v "${ENV_ROOT}/scripts/reva-run.sh:/usr/bin/reva-run.sh"                   \
   -v "${ENV_ROOT}/scripts/reva-kill.sh:/usr/bin/reva-kill.sh"                 \
   -v "${ENV_ROOT}/scripts/reva-entrypoint.sh:/entrypoint.sh"                  \
-  pondersource/dev-stock-revad ${REVA_CMD}
+  pondersource/dev-stock-revad "${REVA_CMD}"
 
 
 # revad2
@@ -40,4 +40,4 @@ docker run --detach --network=testnet                                         \
   -v "${ENV_ROOT}/scripts/reva-run.sh:/usr/bin/reva-run.sh"                   \
   -v "${ENV_ROOT}/scripts/reva-kill.sh:/usr/bin/reva-kill.sh"                 \
   -v "${ENV_ROOT}/scripts/reva-entrypoint.sh:/entrypoint.sh"                  \
-  pondersource/dev-stock-revad ${REVA_CMD}
+  pondersource/dev-stock-revad "${REVA_CMD}"
