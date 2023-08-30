@@ -33,6 +33,7 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/repository/registry"
@@ -84,8 +85,8 @@ type ShareAltMap struct {
 	ResourceID struct {
 		OpaqueID string `json:"opaque_id"`
 	} `json:"resource_id"`
-	RemoteShareID string                `json:"remote_share_id"`
-	Permissions   *ocm.SharePermissions `json:"permissions"`
+	RemoteShareID string `json:"remote_share_id"`
+	Permissions   int    `json:"permissions"`
 	Grantee       struct {
 		ID *userpb.UserId `json:"id"`
 	} `json:"grantee"`
@@ -199,6 +200,11 @@ func (sm *Manager) GetShare(ctx context.Context, user *userpb.User, ref *ocm.Sha
 		Creator: &userpb.UserId{
 			OpaqueId: altResult.Creator.Id.OpaqueId,
 			Idp:      altResult.Creator.Id.Idp,
+		},
+		AccessMethods: []*ocm.AccessMethod{
+			share.NewWebDavAccessMethod(conversions.RoleFromOCSPermissions(conversions.Permissions(altResult.Permissions)).CS3ResourcePermissions()),
+			// TODO share.NewWebAppAccessMethod()
+			// TODO share.NewDataTxAccessMethod()
 		},
 		Ctime: altResult.Ctime,
 		Mtime: altResult.Mtime,
