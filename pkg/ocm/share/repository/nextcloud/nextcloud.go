@@ -190,7 +190,6 @@ func (sm *Manager) GetShare(ctx context.Context, user *userpb.User, ref *ocm.Sha
 			OpaqueId:  altResult.ResourceID.OpaqueID,
 			StorageId: sm.mountID,
 		},
-		// ResourceId: nil,
 		Grantee: &provider.Grantee{
 			// Type: provider.GranteeType_GRANTEE_TYPE_USER,
 			Type: 0,
