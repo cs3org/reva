@@ -46,7 +46,7 @@ chmod +x "${ENV_ROOT}/scripts/reva-run.sh"
 chmod +x "${ENV_ROOT}/scripts/reva-kill.sh"
 chmod +x "${ENV_ROOT}/scripts/reva-entrypoint.sh"
 
-docker run --detach --name=meshdir.docker   --network=testnet pondersource/dev-stock-ocmstub
+docker run --detach --name=meshdir.docker   --network=testnet -v "${ENV_ROOT}/scripts/stub.js:/ocm-stub/stub.js" pondersource/dev-stock-ocmstub
 docker run --detach --name=firefox          --network=testnet -p 5800:5800  --shm-size 2g jlesage/firefox:latest
 docker run --detach --name=firefox-legacy   --network=testnet -p 5900:5800  --shm-size 2g jlesage/firefox:v1.18.0
 docker run --detach --name=collabora.docker --network=testnet -p 9980:9980 -t -e "extra_params=--o:ssl.enable=false" collabora/code:latest 
