@@ -30,6 +30,8 @@ import (
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -56,6 +58,41 @@ type StorageDriver struct {
 	endPoint     string
 	sharedSecret string
 	client       *http.Client
+}
+
+type StatFromPhp struct {
+	Opaque struct {
+		Map any `json:"map"`
+	} `json:"opaque"`
+	Type int `json:"type"`
+	ID   struct {
+		OpaqueID string `json:"opaque_id"`
+	} `json:"id"`
+	Checksum struct {
+		Type int    `json:"type"`
+		Sum  string `json:"sum"`
+	} `json:"checksum"`
+	Etag     string `json:"etag"`
+	MimeType string `json:"mime_type"`
+	Mtime    struct {
+		Seconds int `json:"seconds"`
+	} `json:"mtime"`
+	Path              string `json:"path"`
+	Permissions       int    `json:"permissions"`
+	Size              int    `json:"size"`
+	CanonicalMetadata struct {
+		Target any `json:"target"`
+	} `json:"canonical_metadata"`
+	ArbitraryMetadata struct {
+		Metadata struct {
+			Placeholder string `json:".placeholder"`
+		} `json:"metadata"`
+	} `json:"arbitrary_metadata"`
+	Owner struct {
+		OpaqueID string `json:"opaque_id"`
+		Idp      string `json:"idp"`
+	} `json:"owner"`
+	Token string `json:"token"`
 }
 
 // New returns an implementation to of the storage.FS interface that talks to
@@ -325,12 +362,37 @@ func (nc *StorageDriver) GetMD(ctx context.Context, ref *provider.Reference, mdK
 	if status == 404 {
 		return nil, errtypes.NotFound("")
 	}
-	var respObj provider.ResourceInfo
+
+	var respObj StatFromPhp
 	err = json.Unmarshal(body, &respObj)
 	if err != nil {
 		return nil, err
 	}
-	return &respObj, nil
+	retValue := &provider.ResourceInfo{
+		Id: &provider.ResourceId{
+			OpaqueId: respObj.ID.OpaqueID,
+		},
+		Type: provider.ResourceType(respObj.Type),
+		Checksum: &provider.ResourceChecksum{
+			Type: provider.ResourceChecksumType(respObj.Checksum.Type),
+			Sum:  respObj.Checksum.Sum,
+		},
+		Etag:     respObj.Etag,
+		MimeType: respObj.MimeType,
+		Mtime: &typesv1beta1.Timestamp{
+			Seconds: uint64(respObj.Mtime.Seconds),
+		},
+		Path:          respObj.Path,
+		PermissionSet: conversions.RoleFromOCSPermissions(conversions.Permissions(respObj.Permissions)).CS3ResourcePermissions(),
+		Size:          uint64(respObj.Size),
+		Owner: &user.UserId{
+			Idp:      respObj.Owner.Idp,
+			OpaqueId: respObj.Owner.OpaqueID,
+			Type:     user.UserType_USER_TYPE_PRIMARY,
+		},
+	}
+	log.Error().Msgf("GetMD got %+v -> %+v", respObj, retValue)
+	return retValue, nil
 }
 
 // ListFolder as defined in the storage.FS interface.
