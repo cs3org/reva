@@ -258,7 +258,6 @@ var _ = Describe("Nextcloud", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*share).To(Equal(ocm.Share{
 				Id: &ocm.ShareId{},
-				ResourceId: &provider.ResourceId{},
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{
@@ -293,7 +292,7 @@ var _ = Describe("Nextcloud", func() {
 					XXX_sizecache:        0,
 				},
 			}))
-			checkCalled(called, `POST /apps/sciencemesh/~nobody/api/ocm/GetSentShareByToken {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`)
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/GetShare {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`)
 		})
 	})
 
