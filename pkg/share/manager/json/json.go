@@ -542,7 +542,7 @@ func (m *mgr) getReceived(ctx context.Context, ref *collaboration.ShareReference
 		return nil, err
 	}
 	user := ctxpkg.ContextMustGetUser(ctx)
-	if !share.IsGrantedToUser(s, user) {
+	if user.GetId().GetType() != userv1beta1.UserType_USER_TYPE_SERVICE && !share.IsGrantedToUser(s, user) {
 		return nil, errtypes.NotFound(ref.String())
 	}
 	return m.convert(user.Id, s), nil

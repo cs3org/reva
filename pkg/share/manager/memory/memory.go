@@ -335,7 +335,7 @@ func (m *manager) getReceived(ctx context.Context, ref *collaboration.ShareRefer
 	user := ctxpkg.ContextMustGetUser(ctx)
 	for _, s := range m.shares {
 		if sharesEqual(ref, s) {
-			if share.IsGrantedToUser(s, user) {
+			if user.GetId().GetType() == userv1beta1.UserType_USER_TYPE_SERVICE || share.IsGrantedToUser(s, user) {
 				rs := m.convert(ctx, s)
 				return rs, nil
 			}

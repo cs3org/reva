@@ -343,7 +343,7 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 
 	// check if we are the owner or the grantee
 	user := ctxpkg.ContextMustGetUser(ctx)
-	if share.IsCreatedByUser(s, user) || share.IsGrantedToUser(s, user) {
+	if user.GetId().GetType() == userpb.UserType_USER_TYPE_SERVICE || share.IsCreatedByUser(s, user) || share.IsGrantedToUser(s, user) {
 		return s, nil
 	}
 
