@@ -351,7 +351,7 @@ func (nc *StorageDriver) GetMD(ctx context.Context, ref *provider.Reference, mdK
 	}
 	bodyStr, _ := json.Marshal(bodyObj)
 	log := appctx.GetLogger(ctx)
-	log.Info().Msgf("GetMD %s", bodyStr)
+	log.Debug().Msgf("GetMD %s", bodyStr)
 
 	status, body, err := nc.do(ctx, Action{"GetMD", string(bodyStr)})
 	if err != nil {
@@ -389,7 +389,6 @@ func (nc *StorageDriver) GetMD(ctx context.Context, ref *provider.Reference, mdK
 			Type:     user.UserType_USER_TYPE_PRIMARY,
 		},
 	}
-	log.Error().Msgf("GetMD got %+v -> %+v", respObj, retValue)
 	return retValue, nil
 }
 
