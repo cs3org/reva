@@ -160,12 +160,12 @@ func (m *nilMap[T]) add(method string, v T) {
 
 type nodes []*node
 
-func (p *Params) add(key, val string, n func() *Params) {
-	if *p == nil {
-		new := n()
-		*p = *new
+func (p *Params) add(key, val string, ps func() *Params) *Params {
+	if p == nil {
+		p = ps()
 	}
 	*p = append(*p, Param{key, val})
+	return p
 }
 
 // search returns the node from the list of nodes having
@@ -210,7 +210,7 @@ func (n nodes) longestCommonPrefix(s string) (string, *node, bool) {
 	return prefix, match, has
 }
 
-func (n *node) lookup(path string, ps func() *Params) (*node, Params, bool) {
+func (n *node) lookup(path string, ps func() *Params) (*node, *Params, bool) {
 	// path can be something like
 	// path is already cleaned
 	// /search/aa/somenthing/bb
@@ -232,7 +232,7 @@ func (n *node) lookup(path string, ps func() *Params) (*node, Params, bool) {
 	// path has prefix of the node n
 	current := n
 	var found bool
-	var params Params
+	var params *Params
 
 	for {
 		// select next child having path as prefix
@@ -253,11 +253,11 @@ func (n *node) lookup(path string, ps func() *Params) (*node, Params, bool) {
 			if i == -1 {
 				i = len(path)
 			}
-			params.add(prefix, path[:i], ps)
+			params = params.add(prefix, path[:i], ps)
 			path = path[i:]
 		case catchall:
 			path = stripSlash(path)
-			params.add(prefix, path, ps)
+			params = params.add(prefix, path, ps)
 			path = ""
 		}
 
@@ -272,11 +272,11 @@ func (n *node) lookup(path string, ps func() *Params) (*node, Params, bool) {
 	}
 }
 
-func (n *node) nextContainingHandlers(params Params, ps func() *Params) (*node, Params) {
+func (n *node) nextContainingHandlers(params *Params, ps func() *Params) (*node, *Params) {
 	if n.handlers.isEmpty() {
 		for _, c := range n.children {
 			if c.ntype == catchall {
-				params.add(c.prefix, "", ps)
+				params = params.add(c.prefix, "", ps)
 				return c, params
 			}
 		}

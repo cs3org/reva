@@ -202,9 +202,13 @@ func (m *ServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		m.notFound(w, r)
 		return
 	}
-	handler.ServeHTTP(w, r, params)
+	if params == nil {
+		handler.ServeHTTP(w, r, nil)
+	} else {
+		handler.ServeHTTP(w, r, *params)
+	}
 	if params != nil {
-		m.tree.putParams(&params)
+		m.tree.putParams(params)
 	}
 }
 
