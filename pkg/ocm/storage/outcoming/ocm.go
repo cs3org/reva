@@ -34,6 +34,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -266,8 +267,10 @@ func (d *driver) unwrappedOpFromShareCreator(ctx context.Context, share *ocmv1be
 }
 
 func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string) (*provider.ResourceInfo, error) {
+	log := appctx.GetLogger(ctx)
 	share, rel, err := d.shareAndRelativePathFromRef(ctx, ref)
 	if err != nil {
+		log.Error().Err(err).Msg("Error from shareAndRelativePathFromRef")
 		return nil, err
 	}
 
@@ -275,13 +278,16 @@ func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string)
 	if err := d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
 		info, err = d.stat(ctx, newRef)
 		if err != nil {
+			log.Error().Err(err).Msg("Error from stat")
 			return err
 		}
 		return d.augmentResourceInfo(ctx, info, share)
 	}); err != nil {
+		log.Error().Err(err).Msg("Error from unwrappedOpFromShareCreator")
 		return nil, err
 	}
 
+	log.Debug().Interface("resinfo", info).Msg("GetMD returns")
 	return info, nil
 }
 
