@@ -153,43 +153,44 @@ func (nc *StorageDriver) SetHTTPClient(c *http.Client) {
 }
 
 func (nc *StorageDriver) doUpload(ctx context.Context, filePath string, r io.ReadCloser) error {
-	// log := appctx.GetLogger(ctx)
-	// log.Error().Msgf("in doUpload!  %s", filePath)
+	log := appctx.GetLogger(ctx)
 	user, err := getUser(ctx)
 	if err != nil {
-		// log.Error().Msg("error getting user!")
+		log.Error().Err(err).Msg("error getting user")
 		return err
 	}
-	// log.Error().Msgf("got user! %+v", user)
 
 	// See https://github.com/pondersource/nc-sciencemesh/issues/5
 	// url := nc.endPoint + "~" + user.Username + "/files/" + filePath
 	url := nc.endPoint + "~" + user.Id.OpaqueId + "/api/storage/Upload/home" + filePath
-	// log.Error().Msgf("sending PUT to NC/OC!  %s", url)
 	req, err := http.NewRequest(http.MethodPut, url, r)
 	if err != nil {
-		// log.Error().Msgf("error!  %s", err.Error())
-		panic(err)
+		log.Error().Err(err).Msg("error creating PUT request")
+		return err
 	}
 
 	req.Header.Set("X-Reva-Secret", nc.sharedSecret)
-	// set the request header Content-Type for the upload
 	req.Header.Set("Content-Type", "application/octet-stream")
-	// log.Error().Msg("client req")
+	log.Debug().Msgf("sending PUT to NC/OC at %s", url)
 	resp, err := nc.client.Do(req)
 	if err != nil {
-		// log.Error().Msgf("error!  %s", err.Error())
-		panic(err)
+		log.Error().Err(err).Msg("error sending PUT request")
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		log.Error().Interface("response", resp).Msg("NC/OC response is not ok")
+		return err
 	}
 
 	defer resp.Body.Close()
-	_, err = io.ReadAll(resp.Body)
-	return err
+	return nil
 }
 
 func (nc *StorageDriver) doDownload(ctx context.Context, filePath string) (io.ReadCloser, error) {
+	log := appctx.GetLogger(ctx)
 	user, err := getUser(ctx)
 	if err != nil {
+		log.Error().Err(err).Msg("error getting user")
 		return nil, err
 	}
 	// See https://github.com/pondersource/nc-sciencemesh/issues/5
@@ -197,42 +198,51 @@ func (nc *StorageDriver) doDownload(ctx context.Context, filePath string) (io.Re
 	url := nc.endPoint + "~" + user.Username + "/api/storage/Download/" + filePath
 	req, err := http.NewRequest(http.MethodGet, url, strings.NewReader(""))
 	if err != nil {
-		panic(err)
+		log.Error().Err(err).Msg("error creating GET request")
+		return nil, err
 	}
 
 	// See https://github.com/cs3org/reva/issues/4118
 	req.Header.Set("X-Reva-Secret", nc.sharedSecret)
-
+	log.Debug().Msgf("sending GET to NC/OC at %s", url)
 	resp, err := nc.client.Do(req)
 	if err != nil {
-		panic(err)
+		log.Error().Err(err).Msg("error sending GET request")
+		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		panic("No 200 response code in download request")
+		log.Error().Interface("response", resp).Msg("NC/OC response is not ok")
+		return nil, err
 	}
 
 	return resp.Body, err
 }
 
 func (nc *StorageDriver) doDownloadRevision(ctx context.Context, filePath string, key string) (io.ReadCloser, error) {
+	log := appctx.GetLogger(ctx)
 	user, err := getUser(ctx)
 	if err != nil {
+		log.Error().Err(err).Msg("error getting user")
 		return nil, err
 	}
 	// See https://github.com/pondersource/nc-sciencemesh/issues/5
 	url := nc.endPoint + "~" + user.Username + "/api/storage/DownloadRevision/" + url.QueryEscape(key) + "/" + filePath
 	req, err := http.NewRequest(http.MethodGet, url, strings.NewReader(""))
 	if err != nil {
-		panic(err)
+		log.Error().Err(err).Msg("error creating GET request")
+		return nil, err
 	}
-	req.Header.Set("X-Reva-Secret", nc.sharedSecret)
 
+	req.Header.Set("X-Reva-Secret", nc.sharedSecret)
+	log.Debug().Msgf("sending GET to NC/OC at %s", url)
 	resp, err := nc.client.Do(req)
 	if err != nil {
-		panic(err)
+		log.Error().Err(err).Msg("error sending GET request")
+		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		panic("No 200 response code in download request")
+		log.Error().Interface("response", resp).Msg("NC/OC response is not ok")
+		return nil, err
 	}
 
 	return resp.Body, err
