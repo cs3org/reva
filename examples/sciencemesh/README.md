@@ -12,7 +12,7 @@ cd examples/sciencemesh
 ./init-sciencemesh.sh # This will prepare the Nextcloud and ownCloud-10 images
 ./init-reva.sh # This will build reva and revad in the current repo and handle a few other prerequisites
 ./nrro.sh
-./einstein.sh nextcloud1
+./einstein.sh nextcloud1 # for owncloud1 / owncloud2, make sure to log in via the OC-10 GUI once before trying to access through reva-cli!
 ./maria2.sh
 ./clean.sh # Careful! This will kill and remove all your Docker containers on the current host system! Also unrelated ones if present.
 ./orro.sh
