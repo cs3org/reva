@@ -178,7 +178,7 @@ func (nc *StorageDriver) doUpload(ctx context.Context, filePath string, r io.Rea
 		return err
 	}
 	if resp.StatusCode != http.StatusOK {
-		log.Error().Interface("response", resp).Msg("NC/OC response is not ok")
+		log.Error().Int("status", resp.StatusCode).Msg("NC/OC response is not ok")
 		return err
 	}
 
@@ -211,11 +211,11 @@ func (nc *StorageDriver) doDownload(ctx context.Context, filePath string) (io.Re
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		log.Error().Interface("response", resp).Msg("NC/OC response is not ok")
+		log.Error().Int("status", resp.StatusCode).Msg("NC/OC response is not ok")
 		return nil, err
 	}
 
-	return resp.Body, err
+	return resp.Body, nil
 }
 
 func (nc *StorageDriver) doDownloadRevision(ctx context.Context, filePath string, key string) (io.ReadCloser, error) {
@@ -241,11 +241,11 @@ func (nc *StorageDriver) doDownloadRevision(ctx context.Context, filePath string
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		log.Error().Interface("response", resp).Msg("NC/OC response is not ok")
+		log.Error().Int("status", resp.StatusCode).Msg("NC/OC response is not ok")
 		return nil, err
 	}
 
-	return resp.Body, err
+	return resp.Body, nil
 }
 
 func (nc *StorageDriver) do(ctx context.Context, a Action) (int, []byte, error) {
