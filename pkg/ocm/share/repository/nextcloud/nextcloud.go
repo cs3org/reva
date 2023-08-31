@@ -186,11 +186,11 @@ func (sm *Manager) GetShare(ctx context.Context, user *userpb.User, ref *ocm.Sha
 	log.Debug().Msgf("Found ShareAltMap %s", rejson)
 	return &ocm.Share{
 		Id: altResult.ID,
-		// ResourceId: &provider.ResourceId{
-		// 	OpaqueId:  altResult.ResourceID.OpaqueID,
-		// 	StorageId: sm.mountID,
-		// },
-		ResourceId: nil,
+		ResourceId: &provider.ResourceId{
+			OpaqueId:  altResult.ResourceID.OpaqueID,
+			StorageId: sm.mountID,
+		},
+		// ResourceId: nil,
 		Grantee: &provider.Grantee{
 			// Type: provider.GranteeType_GRANTEE_TYPE_USER,
 			Type: 0,
@@ -423,8 +423,6 @@ func (sm *Manager) UpdateReceivedShare(ctx context.Context, user *userpb.User, s
 			State: altResult.State,
 		}, nil
 	}
-	fmt.Printf("received json: %s\n", respBody)
-	fmt.Printf("received altResultShare: %+v\n", altResultShare)
 
 	return &ocm.ReceivedShare{
 		Id:            altResultShare.ID,
