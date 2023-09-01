@@ -156,13 +156,13 @@ func New(m map[string]interface{}, unprotected []string) (mux.Middleware, error)
 		return nil, err
 	}
 
-	chain := func(next mux.Handler) mux.Handler {
+	chain := func(h mux.Handler) mux.Handler {
 		return mux.HandlerFunc(func(w http.ResponseWriter, r *http.Request, p mux.Params) {
 			// OPTION requests need to pass for preflight requests
 			// TODO(labkode): this will break options for auth protected routes.
 			// Maybe running the CORS middleware before auth kicks in is enough.
 			if r.Method == http.MethodOptions {
-				next.ServeHTTP(w, r, p)
+				h.ServeHTTP(w, r, p)
 				return
 			}
 
@@ -184,7 +184,7 @@ func New(m map[string]interface{}, unprotected []string) (mux.Middleware, error)
 			} else {
 				r = r.WithContext(ctx)
 			}
-			next.ServeHTTP(w, r, p)
+			h.ServeHTTP(w, r, p)
 		})
 	}
 	return chain, nil
