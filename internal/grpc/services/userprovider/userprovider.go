@@ -21,7 +21,6 @@ package userprovider
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"sort"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -31,6 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -38,6 +38,11 @@ import (
 
 func init() {
 	rgrpc.Register("userprovider", New)
+	plugin.RegisterNamespace("grpc.services.userprovider.drivers", func(name string, newFunc any) {
+		var f registry.NewFunc
+		utils.Cast(newFunc, &f)
+		registry.Register(name, f)
+	})
 }
 
 type config struct {
@@ -51,29 +56,12 @@ func (c *config) ApplyDefaults() {
 	}
 }
 
-func getDriver(ctx context.Context, c *config) (user.Manager, *plugin.RevaPlugin, error) {
-	p, err := plugin.Load("userprovider", c.Driver)
-	if err == nil {
-		manager, ok := p.Plugin.(user.Manager)
-		if !ok {
-			return nil, nil, fmt.Errorf("could not assert the loaded plugin")
-		}
-		pluginConfig := filepath.Base(c.Driver)
-		err = manager.Configure(c.Drivers[pluginConfig])
-		if err != nil {
-			return nil, nil, err
-		}
-		return manager, p, nil
-	} else if _, ok := err.(errtypes.NotFound); ok {
-		// plugin not found, fetch the driver from the in-memory registry
-		if f, ok := registry.NewFuncs[c.Driver]; ok {
-			mgr, err := f(ctx, c.Drivers[c.Driver])
-			return mgr, nil, err
-		}
-	} else {
-		return nil, nil, err
+func getDriver(ctx context.Context, c *config) (user.Manager, error) {
+	if f, ok := registry.NewFuncs[c.Driver]; ok {
+		mgr, err := f(ctx, c.Drivers[c.Driver])
+		return mgr, err
 	}
-	return nil, nil, errtypes.NotFound(fmt.Sprintf("driver %s not found for user manager", c.Driver))
+	return nil, errtypes.NotFound(fmt.Sprintf("driver %s not found for user manager", c.Driver))
 }
 
 // New returns a new UserProviderServiceServer.
@@ -82,13 +70,12 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	userManager, plug, err := getDriver(ctx, &c)
+	userManager, err := getDriver(ctx, &c)
 	if err != nil {
 		return nil, err
 	}
 	svc := &service{
 		usermgr: userManager,
-		plugin:  plug,
 	}
 
 	return svc, nil
@@ -96,13 +83,9 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 
 type service struct {
 	usermgr user.Manager
-	plugin  *plugin.RevaPlugin
 }
 
 func (s *service) Close() error {
-	if s.plugin != nil {
-		s.plugin.Kill()
-	}
 	return nil
 }
 

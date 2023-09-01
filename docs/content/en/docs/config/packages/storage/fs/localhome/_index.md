@@ -9,7 +9,7 @@ description: >
 # _struct: config_
 
 {{% dir name="root" type="string" default="/var/tmp/reva/" %}}
-Path of root directory for user storage. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/localhome/localhome.go#L34)
+Path of root directory for user storage. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/localhome/localhome.go#L36)
 {{< highlight toml >}}
 [storage.fs.localhome]
 root = "/var/tmp/reva/"
@@ -17,7 +17,7 @@ root = "/var/tmp/reva/"
 {{% /dir %}}
 
 {{% dir name="share_folder" type="string" default="/MyShares" %}}
-Path for storing share references. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/localhome/localhome.go#L35)
+Path for storing share references. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/localhome/localhome.go#L37)
 {{< highlight toml >}}
 [storage.fs.localhome]
 share_folder = "/MyShares"
@@ -25,7 +25,7 @@ share_folder = "/MyShares"
 {{% /dir %}}
 
 {{% dir name="user_layout" type="string" default="{{.Username}}" %}}
-Template for user home directories [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/localhome/localhome.go#L36)
+Template for user home directories [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/localhome/localhome.go#L38)
 {{< highlight toml >}}
 [storage.fs.localhome]
 user_layout = "{{.Username}}"

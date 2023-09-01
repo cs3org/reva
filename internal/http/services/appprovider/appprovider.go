@@ -24,10 +24,11 @@ import (
 	"net/http"
 	"path"
 
+	apppb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	storagepb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -137,8 +138,8 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 		return
 	}
 
-	statParentContainerReq := &provider.StatRequest{
-		Ref: &provider.Reference{
+	statParentContainerReq := &storagepb.StatRequest{
+		Ref: &storagepb.Reference{
 			ResourceId: parentContainerRef,
 		},
 	}
@@ -153,16 +154,16 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 		return
 	}
 
-	if parentContainer.Info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+	if parentContainer.Info.Type != storagepb.ResourceType_RESOURCE_TYPE_CONTAINER {
 		writeError(w, r, appErrorInvalidParameter, "the parent container id does not point to a container", nil)
 		return
 	}
 
-	fileRef := &provider.Reference{
+	fileRef := &storagepb.Reference{
 		Path: path.Join(parentContainer.Info.Path, utils.MakeRelativePath(filename)),
 	}
 
-	statFileReq := &provider.StatRequest{
+	statFileReq := &storagepb.StatRequest{
 		Ref: fileRef,
 	}
 	statFileRes, err := client.Stat(ctx, statFileReq)
@@ -181,7 +182,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	}
 
 	// Create empty file via storageprovider
-	createReq := &provider.InitiateFileUploadRequest{
+	createReq := &storagepb.InitiateFileUploadRequest{
 		Ref: fileRef,
 		Opaque: &typespb.Opaque{
 			Map: map[string]*typespb.OpaqueEntry{
@@ -248,7 +249,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 		return
 	}
 
-	if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
+	if statRes.Info.Type != storagepb.ResourceType_RESOURCE_TYPE_FILE {
 		writeError(w, r, appErrorInvalidParameter, "the given file id does not point to a file", nil)
 		return
 	}
@@ -318,7 +319,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 
 	fileID := r.Form.Get("file_id")
 
-	var fileRef provider.Reference
+	var fileRef storagepb.Reference
 	if fileID == "" {
 		path := r.Form.Get("path")
 		if path == "" {
@@ -335,7 +336,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 		fileRef.ResourceId = resourceID
 	}
 
-	statRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &fileRef})
+	statRes, err := client.Stat(ctx, &storagepb.StatRequest{Ref: &fileRef})
 	if err != nil {
 		writeError(w, r, appErrorServerError, "Internal error accessing the file, please try again later", err)
 		return
@@ -349,8 +350,8 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 		return
 	}
 
-	if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
-		writeError(w, r, appErrorInvalidParameter, "the given file id does not point to a file", nil)
+	if statRes.Info.Type != storagepb.ResourceType_RESOURCE_TYPE_FILE && statRes.Info.Type != storagepb.ResourceType_RESOURCE_TYPE_CONTAINER {
+		writeError(w, r, appErrorInvalidParameter, "the given file id does not point to a file or a container", nil)
 		return
 	}
 
@@ -387,12 +388,25 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 			writeError(w, r, appErrorNotFound, openRes.Status.Message, nil)
 			return
 		}
+		if openRes.Status.Code == rpc.Code_CODE_ALREADY_EXISTS {
+			writeError(w, r, appErrorAlreadyExists, openRes.Status.Message, nil)
+			return
+		}
 		writeError(w, r, appErrorServerError, openRes.Status.Message,
 			status.NewErrorFromCode(openRes.Status.Code, "error calling OpenInApp"))
 		return
 	}
 
-	js, err := json.Marshal(openRes.AppUrl)
+	// recreate the structure to be able to marshal the AppUrl.Target as a string
+	js, err := json.Marshal(
+		map[string]interface{}{
+			"app_url":         openRes.AppUrl.AppUrl,
+			"method":          openRes.AppUrl.Method,
+			"form_parameters": openRes.AppUrl.FormParameters,
+			"headers":         openRes.AppUrl.Headers,
+			"target":          appTargetToString(openRes.AppUrl.Target),
+		},
+	)
 	if err != nil {
 		writeError(w, r, appErrorServerError, "Internal error with JSON payload",
 			errors.Wrap(err, "error marshalling JSON response"))
@@ -400,7 +414,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	}
 
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("url", openRes.AppUrl.AppUrl).Interface("resource", fileRef).Msg("returning app URL for file")
+	log.Info().Interface("resource", fileRef).Str("url", openRes.AppUrl.AppUrl).Str("method", openRes.AppUrl.Method).Interface("target", openRes.AppUrl.Target).Msg("returning app URL for file")
 
 	w.Header().Set("Content-Type", "application/json")
 	if _, err = w.Write(js); err != nil {
@@ -417,7 +431,7 @@ func (s *svc) handleNotify(w http.ResponseWriter, r *http.Request, _ mux.Params)
 	}
 
 	fileID := r.Form.Get("file_id")
-	var fileRef provider.Reference
+	var fileRef storagepb.Reference
 	if fileID == "" {
 		path := r.Form.Get("path")
 		if path == "" {
@@ -463,7 +477,7 @@ func filterAppsByUserAgent(mimeTypes []*appregistry.MimeTypeInfo, userAgent stri
 	return res
 }
 
-func resolveViewMode(res *provider.ResourceInfo, vm string) gateway.OpenInAppRequest_ViewMode {
+func resolveViewMode(res *storagepb.ResourceInfo, vm string) gateway.OpenInAppRequest_ViewMode {
 	var viewMode gateway.OpenInAppRequest_ViewMode
 	if vm != "" {
 		viewMode = utils.GetViewMode(vm)
@@ -486,4 +500,15 @@ func resolveViewMode(res *provider.ResourceInfo, vm string) gateway.OpenInAppReq
 		viewMode = gateway.OpenInAppRequest_VIEW_MODE_INVALID
 	}
 	return viewMode
+}
+
+func appTargetToString(t apppb.Target) string {
+	switch t {
+	case apppb.Target_TARGET_IFRAME:
+		return "iframe"
+	case apppb.Target_TARGET_BLANK:
+		return "blank"
+	default:
+		return "invalid"
+	}
 }

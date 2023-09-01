@@ -418,3 +418,17 @@ func UserIsLightweight(u *userpb.User) bool {
 	return u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED ||
 		u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT
 }
+
+// Cast casts a value `v` to the value `to`.
+// `v` is expected to be the underlying type of `to`.
+// For example, if the type A is defined as func()
+// and v is func(), to is of type A.
+// to must be a pointer, otherwise the method panics.
+func Cast(v any, to any) {
+	toVal := reflect.ValueOf(to)
+	if toVal.Type().Kind() != reflect.Pointer {
+		panic("cast: destination must be a pointer")
+	}
+	toVal = toVal.Elem()
+	toVal.Set(reflect.ValueOf(v))
+}

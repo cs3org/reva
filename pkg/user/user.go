@@ -22,12 +22,10 @@ import (
 	"context"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/pkg/plugin"
 )
 
 // Manager is the interface to implement to manipulate users.
 type Manager interface {
-	plugin.Plugin
 	// GetUser returns the user metadata identified by a uid.
 	// The groups of the user are omitted if specified, as these might not be required for certain operations
 	// and might involve computational overhead.

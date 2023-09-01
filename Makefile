@@ -35,15 +35,15 @@ GIT_COMMIT	?= `git rev-parse --short HEAD`
 VERSION		?= `git describe --always`
 GO_VERSION	?= `go version | awk '{print $$3}'`
 BUILD_DATE	= `date +%FT%T%z`
-BUILD_FLAGS	= "`[[ -z "$(STATIC)" ]] && echo "" || echo "-extldflags=-static"` -X main.gitCommit=$(GIT_COMMIT) -X main.version=$(VERSION) -X main.goVersion=$(GO_VERSION) -X main.buildDate=$(BUILD_DATE)"
+BUILD_FLAGS	= "`[[ -z "$(STATIC)" ]] && echo "" || echo "-extldflags=-static"` -X github.com/cs3org/reva/cmd/revad.gitCommit=$(GIT_COMMIT) -X github.com/cs3org/reva/cmd/revad.version=$(VERSION) -X github.com/cs3org/reva/cmd/revad.goVersion=$(GO_VERSION) -X github.com/cs3org/reva/cmd/revad.buildDate=$(BUILD_DATE)"
 
 .PHONY: revad
 revad:
-	go build -ldflags $(BUILD_FLAGS) -o ./cmd/revad/revad ./cmd/revad
+	go build -ldflags $(BUILD_FLAGS) -o ./cmd/revad/revad ./cmd/revad/main
 
 .PHONY: revad-ceph
 revad-ceph:
-	go build -ldflags $(BUILD_FLAGS) -tags ceph -o ./cmd/revad/revad ./cmd/revad
+	go build -ldflags $(BUILD_FLAGS) -tags ceph -o ./cmd/revad/revad ./cmd/revad/main
 
 .PHONY: reva
 reva:

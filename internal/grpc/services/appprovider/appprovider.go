@@ -21,7 +21,6 @@ package appprovider
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -36,10 +35,12 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
+	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/juliangruber/go-intersect"
 	"google.golang.org/grpc"
@@ -47,6 +48,11 @@ import (
 
 func init() {
 	rgrpc.Register("appprovider", New)
+	plugin.RegisterNamespace("grpc.services.appprovider.drivers", func(name string, newFunc any) {
+		var f registry.NewFunc
+		utils.Cast(newFunc, &f)
+		registry.Register(name, f)
+	})
 }
 
 type service struct {
@@ -204,7 +210,7 @@ func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppReques
 	appURL, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken, req.Opaque.Map, s.conf.Language)
 	if err != nil {
 		res := &providerpb.OpenInAppResponse{
-			Status: status.NewInternal(ctx, errors.New("appprovider: error calling GetAppURL"), err.Error()),
+			Status: status.NewStatusFromErrType(ctx, "appprovider: error calling GetAppURL", err),
 		}
 		return res, nil
 	}

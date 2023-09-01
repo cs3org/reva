@@ -48,8 +48,8 @@ var _ = Describe("SQL manager for notifications", func() {
 		nn                              *notification.Notification
 		ref                             string
 		err                             error
-		selectNotificationsSQL          = "SELECT ref, template_name FROM cbox_notifications WHERE ref = ?"
-		selectNotificationRecipientsSQL = "SELECT COUNT(*) FROM cbox_notification_recipients WHERE notification_id = ?"
+		selectNotificationsSQL          = "SELECT ref, template_name FROM notifications WHERE ref = ?"
+		selectNotificationRecipientsSQL = "SELECT COUNT(*) FROM notification_recipients WHERE notification_id = ?"
 	)
 
 	AfterEach(func() {
@@ -103,7 +103,7 @@ var _ = Describe("SQL manager for notifications", func() {
 
 			It("should create notification recipients entries", func() {
 				var notificationID int
-				err = db.QueryRow("SELECT id FROM cbox_notifications WHERE ref = ?", n2.Ref).Scan(&notificationID)
+				err = db.QueryRow("SELECT id FROM notifications WHERE ref = ?", n2.Ref).Scan(&notificationID)
 				Expect(err).ToNot(HaveOccurred())
 				var newRecipientCount int
 				err = db.QueryRow(selectNotificationRecipientsSQL, notificationID).Scan(&newRecipientCount)
@@ -129,7 +129,7 @@ var _ = Describe("SQL manager for notifications", func() {
 
 			It("should not increase the number of entries in the notification table", func() {
 				var count int
-				err = db.QueryRow("SELECT COUNT(*) FROM cbox_notifications").Scan(&count)
+				err = db.QueryRow("SELECT COUNT(*) FROM notifications").Scan(&count)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(count).To(Equal(1))
 			})
@@ -143,14 +143,14 @@ var _ = Describe("SQL manager for notifications", func() {
 
 			It("should delete old entries in notification recipients", func() {
 				var count int
-				err = db.QueryRow("SELECT COUNT(*) FROM cbox_notification_recipients WHERE recipient = 'testuser'").Scan(&count)
+				err = db.QueryRow("SELECT COUNT(*) FROM notification_recipients WHERE recipient = 'testuser'").Scan(&count)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(count).To(BeZero())
 			})
 
 			It("should create new entries in notification recipients", func() {
 				var notificationID int
-				err = db.QueryRow("SELECT id FROM cbox_notifications WHERE ref = ?", m.Ref).Scan(&notificationID)
+				err = db.QueryRow("SELECT id FROM notifications WHERE ref = ?", m.Ref).Scan(&notificationID)
 				Expect(err).ToNot(HaveOccurred())
 				var newRecipientCount int
 				err = db.QueryRow(selectNotificationRecipientsSQL, notificationID).Scan(&newRecipientCount)
@@ -217,14 +217,14 @@ var _ = Describe("SQL manager for notifications", func() {
 
 			It("should delete the notification from the database", func() {
 				var count int
-				err = db.QueryRow("SELECT COUNT(*) FROM cbox_notifications WHERE ref = ?", ref).Scan(&count)
+				err = db.QueryRow("SELECT COUNT(*) FROM notifications WHERE ref = ?", ref).Scan(&count)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(count).To(BeZero())
 			})
 
 			It("should cascade the deletions to notification_recipients table", func() {
 				var count int
-				err = db.QueryRow("SELECT COUNT(*) FROM cbox_notification_recipients WHERE notification_id = ?", 1).Scan(&count)
+				err = db.QueryRow("SELECT COUNT(*) FROM notification_recipients WHERE notification_id = ?", 1).Scan(&count)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(count).To(BeZero())
 			})
@@ -241,7 +241,7 @@ var _ = Describe("SQL manager for notifications", func() {
 				isNotFoundError, _ := err.(*notification.NotFoundError)
 				Expect(isNotFoundError).ToNot(BeNil())
 				var count int
-				err = db.QueryRow("SELECT COUNT(*) FROM cbox_notifications").Scan(&count)
+				err = db.QueryRow("SELECT COUNT(*) FROM notifications").Scan(&count)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(count).To(Equal(1))
 			})

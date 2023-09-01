@@ -16,14 +16,18 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package plugin
+package plugins
 
-import "github.com/hashicorp/go-plugin"
+import (
+	"github.com/cs3org/reva/pkg/plugin"
+	"github.com/cs3org/reva/pkg/rserverless"
+	"github.com/cs3org/reva/pkg/utils"
+)
 
-// PluginMap is a map containing all the plugins.
-var PluginMap = map[string]plugin.Plugin{}
-
-// Register registers the plugin.
-func Register(name string, plugin plugin.Plugin) {
-	PluginMap[name] = plugin
+func init() {
+	plugin.RegisterNamespace("serverless.services", func(name string, newFunc any) {
+		var f rserverless.NewService
+		utils.Cast(newFunc, &f)
+		rserverless.Register(name, f)
+	})
 }

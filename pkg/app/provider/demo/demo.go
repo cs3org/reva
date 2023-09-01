@@ -45,12 +45,16 @@ func (p *demoProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	return &appprovider.OpenInAppURL{
 		AppUrl: url,
 		Method: http.MethodGet,
+		Target: appprovider.Target_TARGET_IFRAME, // alternatively, appprovider.Target_TARGET_BLANK
 	}, nil
 }
 
 func (p *demoProvider) GetAppProviderInfo(ctx context.Context) (*appregistry.ProviderInfo, error) {
 	return &appregistry.ProviderInfo{
-		Name: "demo-app",
+		Name:        "demo-app",
+		Description: "A dummy app provider",
+		MimeTypes:   []string{},
+		Action:      "Demo open",
 	}, nil
 }
 

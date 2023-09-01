@@ -22,7 +22,7 @@
 // and error is a reserved word :)
 package errtypes
 
-// NotFound is the error to use when a something is not found.
+// NotFound is the error to use when something is not found.
 type NotFound string
 
 func (e NotFound) Error() string { return "error: not found: " + string(e) }
@@ -46,7 +46,7 @@ func (e PermissionDenied) Error() string { return "error: permission denied: " +
 // IsPermissionDenied implements the IsPermissionDenied interface.
 func (e PermissionDenied) IsPermissionDenied() {}
 
-// AlreadyExists is the error to use when a resource something is not found.
+// AlreadyExists is the error to use when a resource already exists and can't be overwritten.
 type AlreadyExists string
 
 func (e AlreadyExists) Error() string { return "error: already exists: " + string(e) }
@@ -54,7 +54,7 @@ func (e AlreadyExists) Error() string { return "error: already exists: " + strin
 // IsAlreadyExists implements the IsAlreadyExists interface.
 func (e AlreadyExists) IsAlreadyExists() {}
 
-// UserRequired represents an error when a resource is not found.
+// UserRequired represents an error when a user could not be found from the context.
 type UserRequired string
 
 func (e UserRequired) Error() string { return "error: user required: " + string(e) }
