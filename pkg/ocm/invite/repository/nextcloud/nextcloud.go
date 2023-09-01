@@ -77,7 +77,7 @@ type apiOCMUser struct {
 func New(ctx context.Context, m map[string]interface{}) (invite.Repository, error) {
 	config, err := parseConfig(m)
 	if err != nil {
-		return nil, errors.Wrap(err, "error parsing config for api invite repository")
+		return nil, errors.Wrap(err, "error parsing config for nextcloud invite repository")
 	}
 
 	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(config.GatewaySvc))
