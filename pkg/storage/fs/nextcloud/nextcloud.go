@@ -177,7 +177,7 @@ func (nc *StorageDriver) doUpload(ctx context.Context, filePath string, r io.Rea
 		log.Error().Err(err).Msg("error sending PUT request")
 		return err
 	}
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusCreated {
 		log.Error().Int("status", resp.StatusCode).Msg("NC/OC response is not ok")
 		return err
 	}
