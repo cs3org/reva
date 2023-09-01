@@ -29,6 +29,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 )
 
 type providersHandler struct {
@@ -51,7 +52,7 @@ type provider struct {
 }
 
 // ListProviders lists all the providers filtering by the `search` query parameter.
-func (h *providersHandler) ListProviders(w http.ResponseWriter, r *http.Request) {
+func (h *providersHandler) ListProviders(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	ctx := r.Context()
 	term := strings.ToLower(r.URL.Query().Get("search"))
 

@@ -114,7 +114,7 @@ func (s *svc) Name() string {
 }
 
 func (s *svc) Register(r mux.Router) {
-	r.Get("/archiver", http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+	r.Get("/archiver", mux.HandlerFunc(func(rw http.ResponseWriter, r *http.Request, _ mux.Params) {
 		// get the paths and/or the resources id from the query
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)

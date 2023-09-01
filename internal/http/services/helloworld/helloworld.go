@@ -68,10 +68,10 @@ type svc struct {
 }
 
 func (s *svc) Register(r mux.Router) {
-	r.Get("/helloworld", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/helloworld", mux.HandlerFunc(func(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 		log := appctx.GetLogger(r.Context())
 		if _, err := w.Write([]byte(s.conf.HelloMessage)); err != nil {
 			log.Err(err).Msg("error writing response")
 		}
-	}), mux.Unprotected())
+	}))
 }

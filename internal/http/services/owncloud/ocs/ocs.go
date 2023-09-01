@@ -96,41 +96,46 @@ func (s *svc) Register(r mux.Router) {
 	s.shareesHandler.Init(s.c)
 
 	r.Route("/ocs/:version", func(r mux.Router) {
+		r.Use(response.VersionCtx, s.cacheWarmupMiddleware)
 		r.Route("/apps/files_sharing/api/v1", func(r mux.Router) {
 			r.Route("/shares", func(r mux.Router) {
-				r.Get("", http.HandlerFunc(s.sharesHandler.ListShares))
-				r.Options("", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				r.Get("", mux.HandlerFunc(s.sharesHandler.ListShares))
+				r.Options("", mux.HandlerFunc(func(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 					w.WriteHeader(http.StatusOK)
 				}))
-				r.Post("", http.HandlerFunc(s.sharesHandler.CreateShare))
+				r.Post("", mux.HandlerFunc(s.sharesHandler.CreateShare))
 				r.Route("/pending/:shareid", func(r mux.Router) {
-					r.Post("", http.HandlerFunc((s.sharesHandler.AcceptReceivedShare)))
-					r.Delete("", http.HandlerFunc(s.sharesHandler.RejectReceivedShare))
+					r.Post("", mux.HandlerFunc((s.sharesHandler.AcceptReceivedShare)))
+					r.Delete("", mux.HandlerFunc(s.sharesHandler.RejectReceivedShare))
 				})
 				r.Route("/remote_shares", func(r mux.Router) {
-					r.Get("", http.HandlerFunc(s.sharesHandler.ListFederatedShares))
-					r.Get("/:shareid", http.HandlerFunc(s.sharesHandler.GetFederatedShare))
+					r.Get("", mux.HandlerFunc(s.sharesHandler.ListFederatedShares))
+					r.Get("/:shareid", mux.HandlerFunc(s.sharesHandler.GetFederatedShare))
 				})
-				r.Get("/:shareid", http.HandlerFunc(s.sharesHandler.GetShare))
-				r.Put("/:shareid", http.HandlerFunc(s.sharesHandler.UpdateShare))
-				r.Get("/:shareid/notify", http.HandlerFunc(s.sharesHandler.NotifyShare))
-				r.Delete("/:shareid", http.HandlerFunc(s.sharesHandler.RemoveShare))
+				r.Get("/:shareid", mux.HandlerFunc(s.sharesHandler.GetShare))
+				r.Put("/:shareid", mux.HandlerFunc(s.sharesHandler.UpdateShare))
+				r.Get("/:shareid/notify", mux.HandlerFunc(s.sharesHandler.NotifyShare))
+				r.Delete("/:shareid", mux.HandlerFunc(s.sharesHandler.RemoveShare))
 			})
-			r.Get("/sharees", http.HandlerFunc(s.shareesHandler.FindSharees))
+			r.Get("/sharees", mux.HandlerFunc(s.shareesHandler.FindSharees))
 		})
 
-		r.Get("/config", http.HandlerFunc(s.configHandler.GetConfig))
+		r.Get("/config", mux.HandlerFunc(s.configHandler.GetConfig))
 
 		r.Route("/cloud", func(r mux.Router) {
-			r.Get("/capabilities", http.HandlerFunc(s.capabilitiesHandler.GetCapabilities), mux.Unprotected())
-			r.Get("/user", http.HandlerFunc(s.userHandler.GetSelf))
-			r.Patch("/user", http.HandlerFunc(s.userHandler.UpdateSelf))
+			r.Get("/capabilities", mux.HandlerFunc(s.capabilitiesHandler.GetCapabilities))
+			r.Get("/user", mux.HandlerFunc(s.userHandler.GetSelf))
+			r.Patch("/user", mux.HandlerFunc(s.userHandler.UpdateSelf))
 			r.Route("/users", func(r mux.Router) {
-				r.Get("/:userid", http.HandlerFunc(s.usersHandler.GetUsers))
-				r.Get("/:userid/groups", http.HandlerFunc(s.usersHandler.GetGroups))
+				r.Get("/:userid", mux.HandlerFunc(s.usersHandler.GetUsers))
+				r.Get("/:userid/groups", mux.HandlerFunc(s.usersHandler.GetGroups))
 			})
 		})
-	}, mux.WithMiddleware(response.VersionCtx), mux.WithMiddleware(s.cacheWarmupMiddleware))
+	})
+}
+
+func (s *svc) Unprotected() []string {
+	return []string{"/ocs/v1.php/cloud/capabilities", "/ocs/v2.php/cloud/capabilities"}
 }
 
 func (s *svc) Close() error {

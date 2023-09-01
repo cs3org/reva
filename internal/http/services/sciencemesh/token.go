@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/smtpclient"
 	"github.com/cs3org/reva/pkg/utils/list"
 )
@@ -82,7 +83,7 @@ type token struct {
 // Generate generates an invitation token and if a recipient is specified,
 // will send an email containing the link the user will use to accept the
 // invitation.
-func (h *tokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
+func (h *tokenHandler) Generate(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	ctx := r.Context()
 
 	query := r.URL.Query()
@@ -137,7 +138,7 @@ type acceptInviteRequest struct {
 }
 
 // AcceptInvite accepts an invitation from the user in the remote provider.
-func (h *tokenHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
+func (h *tokenHandler) AcceptInvite(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -222,7 +223,7 @@ type remoteUser struct {
 
 // FindAccepted returns the list of all the users that accepted the invitation
 // to the authenticated user.
-func (h *tokenHandler) FindAccepted(w http.ResponseWriter, r *http.Request) {
+func (h *tokenHandler) FindAccepted(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	ctx := r.Context()
 
 	res, err := h.gatewayClient.FindAcceptedUsers(ctx, &invitepb.FindAcceptedUsersRequest{})
@@ -250,7 +251,7 @@ func (h *tokenHandler) FindAccepted(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteAccepted deletes the given user from the list of the accepted users.
-func (h *tokenHandler) DeleteAccepted(w http.ResponseWriter, r *http.Request) {
+func (h *tokenHandler) DeleteAccepted(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	ctx := r.Context()
 
 	req, err := getDeleteAcceptedRequest(r)
@@ -295,7 +296,7 @@ func getDeleteAcceptedRequest(r *http.Request) (*deleteAcceptedRequest, error) {
 	return &req, nil
 }
 
-func (h *tokenHandler) ListInvite(w http.ResponseWriter, r *http.Request) {
+func (h *tokenHandler) ListInvite(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	ctx := r.Context()
 
 	res, err := h.gatewayClient.ListInviteTokens(ctx, &invitepb.ListInviteTokensRequest{})

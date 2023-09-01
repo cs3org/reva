@@ -58,8 +58,13 @@ type svc struct {
 
 func (s *svc) Register(r mux.Router) {
 	// TODO(labkode): all prometheus endpoints are public?
-	r.With("/metrics", mux.Unprotected())
-	r.Mount("/metrics", s.h)
+	r.Mount("/metrics", mux.HandlerFunc(func(w http.ResponseWriter, r *http.Request, _ mux.Params) {
+		s.h.ServeHTTP(w, r)
+	}))
+}
+
+func (s *svc) Unprotected() []string {
+	return []string{"/metrics"}
 }
 
 func (s *svc) Close() error {

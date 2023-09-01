@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/utils"
 )
 
@@ -59,7 +60,7 @@ type acceptInviteRequest struct {
 
 // AcceptInvite informs avout an accepted invitation so that the users
 // can initiate the OCM share creation.
-func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
+func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 

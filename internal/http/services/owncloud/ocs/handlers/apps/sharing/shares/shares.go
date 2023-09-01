@@ -163,7 +163,7 @@ func (h *Handler) extractReference(r *http.Request) (provider.Reference, error) 
 }
 
 // CreateShare handles POST requests on /apps/files_sharing/api/v1/shares.
-func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	ctx := r.Context()
 	shareType, err := strconv.Atoi(r.FormValue("shareType"))
 	if err != nil {
@@ -245,9 +245,9 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 }
 
 // NotifyShare handles GET requests on /apps/files_sharing/api/v1/shares/(shareid)/notify.
-func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request, p mux.Params) {
 	ctx := r.Context()
-	opaqueID, _ := mux.ParamsFromRequest(r).Get("shareid")
+	opaqueID, _ := p.Get("shareid")
 
 	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
@@ -426,10 +426,10 @@ func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri 
 type PublicShareContextName string
 
 // GetShare handles GET requests on /apps/files_sharing/api/v1/shares/(shareid).
-func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request, p mux.Params) {
 	var share *conversions.ShareData
 	var resourceID *provider.ResourceId
-	shareID, _ := mux.ParamsFromRequest(r).Get("shareid")
+	shareID, _ := p.Get("shareid")
 	ctx := r.Context()
 	log := appctx.GetLogger(r.Context())
 	log.Debug().Str("shareID", shareID).Msg("get share by id")
@@ -541,8 +541,8 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdateShare handles PUT requests on /apps/files_sharing/api/v1/shares/(shareid).
-func (h *Handler) UpdateShare(w http.ResponseWriter, r *http.Request) {
-	shareID, _ := mux.ParamsFromRequest(r).Get("shareid")
+func (h *Handler) UpdateShare(w http.ResponseWriter, r *http.Request, p mux.Params) {
+	shareID, _ := p.Get("shareid")
 
 	// FIXME: isPublicShare is already doing a GetShare and GetPublicShare,
 	// we should just reuse that object when doing updates
@@ -737,8 +737,8 @@ func (h *Handler) updateFederatedShare(w http.ResponseWriter, r *http.Request, s
 }
 
 // RemoveShare handles DELETE requests on /apps/files_sharing/api/v1/shares/(shareid).
-func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
-	shareID, _ := mux.ParamsFromRequest(r).Get("shareid")
+func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request, p mux.Params) {
+	shareID, _ := p.Get("shareid")
 	switch {
 	case h.isPublicShare(r, shareID):
 		h.removePublicShare(w, r, shareID)
@@ -753,7 +753,7 @@ func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListShares handles GET requests on /apps/files_sharing/api/v1/shares.
-func (h *Handler) ListShares(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListShares(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	if r.FormValue("shared_with_me") != "" {
 		var err error
 		listSharedWithMe, err := strconv.ParseBool(r.FormValue("shared_with_me"))

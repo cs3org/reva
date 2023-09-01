@@ -39,6 +39,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/go-playground/validator/v10"
 )
@@ -77,7 +78,7 @@ type createShareRequest struct {
 
 // CreateShare sends all the informations to the consumer needed to start
 // synchronization between the two services.
-func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
+func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	req, err := getCreateShareRequest(r)

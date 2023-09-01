@@ -35,8 +35,8 @@ import (
 )
 
 // AcceptReceivedShare handles Post Requests on /apps/files_sharing/api/v1/shares/{shareid}.
-func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
-	shareID, _ := mux.ParamsFromRequest(r).Get("shareid")
+func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request, p mux.Params) {
+	shareID, _ := p.Get("shareid")
 	if h.isFederatedReceivedShare(r, shareID) {
 		h.updateReceivedFederatedShare(w, r, shareID, false)
 	} else {
@@ -45,8 +45,8 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 }
 
 // RejectReceivedShare handles DELETE Requests on /apps/files_sharing/api/v1/shares/{shareid}.
-func (h *Handler) RejectReceivedShare(w http.ResponseWriter, r *http.Request) {
-	shareID, _ := mux.ParamsFromRequest(r).Get("shareid")
+func (h *Handler) RejectReceivedShare(w http.ResponseWriter, r *http.Request, p mux.Params) {
+	shareID, _ := p.Get("shareid")
 	if h.isFederatedReceivedShare(r, shareID) {
 		h.updateReceivedFederatedShare(w, r, shareID, true)
 	} else {

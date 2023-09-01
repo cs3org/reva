@@ -89,8 +89,8 @@ func (s *svc) Name() string {
 	return name
 }
 
-func (s *svc) handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func (s *svc) handler() mux.Handler {
+	return mux.HandlerFunc(func(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 		log := appctx.GetLogger(r.Context())
 		log.Debug().Msgf("dataprovider routing: path=%s", r.URL.Path)
 
@@ -114,8 +114,15 @@ func (s *svc) handler() http.Handler {
 }
 
 func (s *svc) Register(r mux.Router) {
-	r.Handle("/data/tus/*", s.handler(), mux.Unprotected(), mux.WithMiddleware(middlewares.TrimPrefix("/data")))
-	r.Handle("/data/*", s.handler(), mux.WithMiddleware(middlewares.TrimPrefix("/data")))
+	r.Route("/data", func(r mux.Router) {
+		r.Use(middlewares.TrimPrefix("/data"))
+		r.Handle("/tus/*", s.handler())
+		r.Handle("/*", s.handler())
+	})
+}
+
+func (s *svc) Unprotected() []string {
+	return []string{"/data"}
 }
 
 func getFS(ctx context.Context, c *config) (storage.FS, error) {

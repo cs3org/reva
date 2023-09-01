@@ -116,6 +116,11 @@ func (s *svc) Name() string {
 }
 
 func (s *svc) Register(r mux.Router) {
-	r.With("/siteacc", mux.Unprotected())
-	r.Mount("/siteacc", s.siteacc.RequestHandler())
+	r.Mount("/siteacc", mux.HandlerFunc(func(w http.ResponseWriter, r *http.Request, _ mux.Params) {
+		s.siteacc.RequestHandler().ServeHTTP(w, r)
+	}))
+}
+
+func (s *svc) Unprotected() []string {
+	return []string{"/siteacc"}
 }

@@ -27,34 +27,35 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/rs/zerolog"
 )
 
 // New returns a new HTTP middleware that logs HTTP requests and responses.
 // TODO(labkode): maybe log to another file?
-func New() func(http.Handler) http.Handler {
+func New() func(mux.Handler) mux.Handler {
 	return handler
 }
 
 // handler is a logging middleware.
-func handler(h http.Handler) http.Handler {
-	return newLoggingHandler(h)
+func handler(next mux.Handler) mux.Handler {
+	return newLoggingHandler(next)
 }
 
-func newLoggingHandler(h http.Handler) http.Handler {
-	return loggingHandler{handler: h}
+func newLoggingHandler(next mux.Handler) mux.Handler {
+	return loggingHandler{handler: next}
 }
 
 type loggingHandler struct {
-	handler http.Handler
+	handler mux.Handler
 }
 
-func (h loggingHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+func (h loggingHandler) ServeHTTP(w http.ResponseWriter, req *http.Request, p mux.Params) {
 	log := appctx.GetLogger(req.Context())
 	t := time.Now()
 	logger := makeLogger(w)
 	url := *req.URL
-	h.handler.ServeHTTP(logger, req)
+	h.handler.ServeHTTP(logger, req, p)
 	writeLog(log, req, url, t, logger.Status(), logger.Size(), logger.Header())
 }
 

@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/exchangers/exporters"
 	"github.com/cs3org/reva/pkg/mentix/exchangers/importers"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/rs/zerolog"
 )
 
@@ -292,7 +293,7 @@ func (mntx *Mentix) GetRequestExporters() []exchangers.RequestExchanger {
 
 // RequestHandler handles any incoming HTTP requests by asking each RequestExchanger whether it wants to
 // handle the request (usually based on the relative URL path).
-func (mntx *Mentix) RequestHandler(w http.ResponseWriter, r *http.Request) {
+func (mntx *Mentix) RequestHandler(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	defer r.Body.Close()
 
 	log := appctx.GetLogger(r.Context())

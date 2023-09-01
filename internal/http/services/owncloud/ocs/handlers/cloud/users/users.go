@@ -48,7 +48,7 @@ func (h *Handler) Init(c *config.Config) {
 
 // GetGroups handles GET requests on /cloud/users/groups
 // TODO: implement.
-func (h *Handler) GetGroups(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetGroups(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	response.WriteOCSSuccess(w, r, &Groups{})
 }
 
@@ -80,11 +80,11 @@ type Groups struct {
 // GetUsers handles GET requests on /cloud/users
 // Only allow self-read currently. TODO: List Users and Get on other users (both require
 // administrative privileges).
-func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request, p mux.Params) {
 	ctx := r.Context()
 	sublog := appctx.GetLogger(r.Context())
 
-	user, _ := mux.ParamsFromRequest(r).Get("userid")
+	user, _ := p.Get("userid")
 	// FIXME use ldap to fetch user info
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {

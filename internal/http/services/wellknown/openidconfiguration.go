@@ -23,9 +23,10 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 )
 
-func (s *svc) doOpenidConfiguration(w http.ResponseWriter, r *http.Request) {
+func (s *svc) doOpenidConfiguration(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	log := appctx.GetLogger(r.Context())
 	pm := &ProviderMetadata{
 		Issuer:                s.conf.Issuer,

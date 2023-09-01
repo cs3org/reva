@@ -94,7 +94,7 @@ func (s *svc) Register(r mux.Router) {
 			continue
 		}
 		proxy := httputil.NewSingleHostReverseProxy(remote)
-		r.Handle(rule.Endpoint, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Handle(rule.Endpoint, mux.HandlerFunc(func(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 			r.Host = remote.Host
 			if token, ok := ctxpkg.ContextGetToken(r.Context()); ok {
 				r.Header.Set(ctxpkg.TokenHeader, token)

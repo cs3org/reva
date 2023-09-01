@@ -20,7 +20,6 @@ package wellknown
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
@@ -67,9 +66,13 @@ func (s *svc) Name() string {
 
 func (s *svc) Register(r mux.Router) {
 	r.Route("/.well-known", func(r mux.Router) {
-		r.Get("/webfinger", http.HandlerFunc(s.doWebfinger))
-		r.Get("/openid-configuration", http.HandlerFunc(s.doOpenidConfiguration), mux.Unprotected())
+		r.Get("/webfinger", mux.HandlerFunc(s.doWebfinger))
+		r.Get("/openid-configuration", mux.HandlerFunc(s.doOpenidConfiguration))
 	})
+}
+
+func (s *svc) Unprotected() []string {
+	return []string{"/.well-known/openid-configuration"}
 }
 
 func (s *svc) Close() error {

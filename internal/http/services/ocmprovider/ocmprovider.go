@@ -146,7 +146,7 @@ func (s *svc) Name() string {
 }
 
 func (s *svc) Register(r mux.Router) {
-	r.Get("/ocm-provider", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/ocm-provider", mux.HandlerFunc(func(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 		log := appctx.GetLogger(r.Context())
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -160,5 +160,9 @@ func (s *svc) Register(r mux.Router) {
 		if _, err := w.Write(indented); err != nil {
 			log.Err(err).Msg("Error writing to ResponseWriter")
 		}
-	}), mux.Unprotected())
+	}))
+}
+
+func (s *svc) Unprotected() []string {
+	return []string{"/ocm-provider"}
 }

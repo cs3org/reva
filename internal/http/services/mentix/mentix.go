@@ -20,7 +20,6 @@ package mentix
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/mentix"
@@ -85,7 +84,7 @@ func (s *svc) Unprotected() []string {
 }
 
 func (s *svc) Register(r mux.Router) {
-	r.Mount("/mentix", http.HandlerFunc(s.mntx.RequestHandler))
+	r.Mount("/mentix", mux.HandlerFunc(s.mntx.RequestHandler))
 }
 
 func (s *svc) startBackgroundService() {

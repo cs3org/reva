@@ -37,15 +37,12 @@ import (
 var NewMiddlewares = map[string]NewMiddleware{}
 
 // NewMiddleware is the function that HTTP middlewares need to register at init time.
-type NewMiddleware func(conf map[string]interface{}) (Middleware, int, error)
+type NewMiddleware func(conf map[string]interface{}) (mux.Middleware, int, error)
 
 // RegisterMiddleware registers a new HTTP middleware and its new function.
 func RegisterMiddleware(name string, n NewMiddleware) {
 	NewMiddlewares[name] = n
 }
-
-// Middleware is a middleware http handler.
-type Middleware func(h http.Handler) http.Handler
 
 // Services is a map of service name and its new function.
 var Services = map[string]NewService{}
@@ -65,6 +62,12 @@ type Service interface {
 	io.Closer
 }
 
+// Unprotected is implemented by a service
+// that exposed unprotected endpoints.
+type Unprotected interface {
+	Unprotected() []string
+}
+
 type Config func(*Server)
 
 func WithServices(services map[string]Service) Config {
@@ -77,6 +80,12 @@ func WithCertAndKeyFiles(cert, key string) Config {
 	return func(s *Server) {
 		s.CertFile = cert
 		s.KeyFile = key
+	}
+}
+
+func WithMiddlewares(middlewares ...mux.Middleware) Config {
+	return func(s *Server) {
+		s.middlewares = middlewares
 	}
 }
 
@@ -126,10 +135,11 @@ type Server struct {
 	CertFile string
 	KeyFile  string
 
-	httpServer *http.Server
-	listener   net.Listener
-	svcs       map[string]Service // map key is svc Prefix
-	log        zerolog.Logger
+	middlewares []mux.Middleware
+	httpServer  *http.Server
+	listener    net.Listener
+	svcs        map[string]Service // map key is svc Prefix
+	log         zerolog.Logger
 }
 
 // Start starts the server.
@@ -145,6 +155,7 @@ func (s *Server) Start(ln net.Listener) error {
 		s.log.Debug().Msg(str)
 	})
 
+	router.Use(s.middlewares...)
 	s.httpServer.Handler = router
 	s.listener = ln
 

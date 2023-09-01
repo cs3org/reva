@@ -25,6 +25,7 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/trace"
@@ -32,15 +33,15 @@ import (
 
 // New returns a new HTTP middleware that stores the log
 // in the context with request ID information.
-func New(log zerolog.Logger) func(http.Handler) http.Handler {
-	chain := func(h http.Handler) http.Handler {
-		return handler(log, h)
+func New(log zerolog.Logger) func(mux.Handler) mux.Handler {
+	chain := func(next mux.Handler) mux.Handler {
+		return handler(log, next)
 	}
 	return chain
 }
 
-func handler(log zerolog.Logger, h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func handler(log zerolog.Logger, next mux.Handler) mux.Handler {
+	return mux.HandlerFunc(func(w http.ResponseWriter, r *http.Request, p mux.Params) {
 		ctx := r.Context()
 		span := trace.SpanFromContext(ctx)
 		defer span.End()
@@ -51,6 +52,6 @@ func handler(log zerolog.Logger, h http.Handler) http.Handler {
 		sub := log.With().Str("traceid", span.SpanContext().TraceID().String()).Logger()
 		ctx = appctx.WithLogger(ctx, &sub)
 		r = r.WithContext(ctx)
-		h.ServeHTTP(w, r)
+		next.ServeHTTP(w, r, p)
 	})
 }

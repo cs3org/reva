@@ -25,7 +25,6 @@ import (
 	"github.com/cs3org/reva/internal/http/interceptors/auth"
 	"github.com/cs3org/reva/internal/http/interceptors/log"
 	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/cs3org/reva/pkg/rhttp/middlewares"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -36,10 +35,10 @@ import (
 type middlewareTriple struct {
 	Name       string
 	Priority   int
-	Middleware rhttp.Middleware
+	Middleware mux.Middleware
 }
 
-func initHTTPMiddlewares(conf map[string]map[string]any, logger *zerolog.Logger, unprotected []string) (func(*mux.Options) []middlewares.Middleware, error) {
+func initHTTPMiddlewares(conf map[string]map[string]any, logger *zerolog.Logger, unprotected []string) ([]mux.Middleware, error) {
 	triples := []*middlewareTriple{}
 	for name, c := range conf {
 		new, ok := rhttp.NewMiddlewares[name]
@@ -69,15 +68,10 @@ func initHTTPMiddlewares(conf map[string]map[string]any, logger *zerolog.Logger,
 	logMiddle := log.New()
 	appctxMiddle := appctx.New(*logger)
 
-	return func(o *mux.Options) (m []middlewares.Middleware) {
-		m = append(m, o.Middlewares...)
-		for _, triple := range triples {
-			m = append(m, middlewares.Middleware(triple.Middleware))
-		}
-		if !o.Unprotected {
-			m = append(m, middlewares.Middleware(authMiddle))
-		}
-		m = append(m, logMiddle, appctxMiddle)
-		return
-	}, nil
+	middlewares := make([]mux.Middleware, 0, len(triples)+3)
+	for _, triple := range triples {
+		middlewares = append(middlewares, triple.Middleware)
+	}
+	middlewares = append(middlewares, authMiddle, logMiddle, appctxMiddle)
+	return middlewares, nil
 }

@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 )
 
 type appsHandler struct {
@@ -59,7 +60,7 @@ func (h *appsHandler) shareInfo(p string) (*ocmpb.ShareId, string) {
 	return &ocmpb.ShareId{OpaqueId: shareID}, rel
 }
 
-func (h *appsHandler) OpenInApp(w http.ResponseWriter, r *http.Request) {
+func (h *appsHandler) OpenInApp(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	ctx := r.Context()
 
 	if err := r.ParseForm(); err != nil {

@@ -56,12 +56,16 @@ func (s *svc) Name() string {
 }
 
 func (s *svc) Register(r mux.Router) {
-	r.Get("/sysinfo", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/sysinfo", mux.HandlerFunc(func(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 		log := appctx.GetLogger(r.Context())
 		if _, err := w.Write([]byte(s.getJSONData())); err != nil {
 			log.Err(err).Msg("error writing SysInfo response")
 		}
-	}), mux.Unprotected())
+	}))
+}
+
+func (s *svc) Unprotected() []string {
+	return []string{"/sysinfo"}
 }
 
 // Close is called when this service is being stopped.
@@ -72,11 +76,6 @@ func (s *svc) Close() error {
 // Prefix returns the main endpoint of this service.
 func (s *svc) Prefix() string {
 	return s.conf.Prefix
-}
-
-// Unprotected returns all endpoints that can be queried without prior authorization.
-func (s *svc) Unprotected() []string {
-	return []string{"/"}
 }
 
 func (s *svc) getJSONData() string {

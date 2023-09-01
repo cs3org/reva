@@ -72,8 +72,8 @@ func (s *svc) Name() string {
 
 func (s *svc) Register(r mux.Router) {
 	r.Route("/preferences", func(r mux.Router) {
-		r.Get("/", http.HandlerFunc(s.handleGet))
-		r.Post("/", http.HandlerFunc(s.handlePost))
+		r.Get("/", mux.HandlerFunc(s.handleGet))
+		r.Post("/", mux.HandlerFunc(s.handlePost))
 	})
 }
 
@@ -82,7 +82,7 @@ func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) handleGet(w http.ResponseWriter, r *http.Request) {
+func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -145,7 +145,7 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *svc) handlePost(w http.ResponseWriter, r *http.Request) {
+func (s *svc) handlePost(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 

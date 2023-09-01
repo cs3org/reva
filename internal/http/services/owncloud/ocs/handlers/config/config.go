@@ -24,6 +24,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 )
 
 // Handler renders the config endpoint.
@@ -53,6 +54,6 @@ func (h *Handler) Init(c *config.Config) {
 }
 
 // GetConfig renders the config.
-func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	response.WriteOCSSuccess(w, r, h.c)
 }

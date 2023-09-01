@@ -22,6 +22,7 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/cors"
 )
@@ -47,7 +48,7 @@ type config struct {
 }
 
 // New creates a new CORS middleware.
-func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
+func New(m map[string]interface{}) (mux.Middleware, int, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, 0, err
@@ -126,5 +127,10 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 		Debug:              conf.Debug,
 	})
 
-	return c.Handler, conf.Priority, nil
+	return func(next mux.Handler) mux.Handler {
+		return mux.HandlerFunc(func(w http.ResponseWriter, r *http.Request, p mux.Params) {
+			c.HandlerFunc(w, r)
+			next.ServeHTTP(w, r, p)
+		})
+	}, conf.Priority, nil
 }

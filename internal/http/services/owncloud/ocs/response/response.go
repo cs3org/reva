@@ -235,10 +235,9 @@ func OcsV2StatusCodes(meta Meta) int {
 }
 
 // WithAPIVersion puts the api version in the context.
-func VersionCtx(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		params := mux.ParamsFromRequest(r)
-		version, _ := params.Get("version")
+func VersionCtx(next mux.Handler) mux.Handler {
+	return mux.HandlerFunc(func(w http.ResponseWriter, r *http.Request, p mux.Params) {
+		version, _ := p.Get("version")
 		// version is of type v1.php or v2.php
 		version = strings.TrimPrefix(version, "v")
 		version = strings.TrimSuffix(version, ".php")
@@ -250,7 +249,7 @@ func VersionCtx(next http.Handler) http.Handler {
 
 		// store version in context so handlers can access it
 		ctx := context.WithValue(r.Context(), apiVersionKey, version)
-		next.ServeHTTP(w, r.WithContext(ctx))
+		next.ServeHTTP(w, r.WithContext(ctx), p)
 	})
 }
 

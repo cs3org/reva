@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 )
 
 // The Handler renders the user endpoint.
@@ -55,7 +56,7 @@ const (
 )
 
 // GetSelf handles GET requests on /cloud/user.
-func (h *Handler) GetSelf(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetSelf(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	ctx := r.Context()
 
 	// TODO move user to handler parameter?
@@ -96,7 +97,7 @@ type updateSelfRequest struct {
 }
 
 // UpdateSelf handles PATCH requests on /cloud/user.
-func (h *Handler) UpdateSelf(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UpdateSelf(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	ctx := r.Context()
 
 	req, err := parseUpdateSelfRequest(r)

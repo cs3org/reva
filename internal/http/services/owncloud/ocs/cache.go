@@ -25,13 +25,14 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"google.golang.org/grpc/metadata"
 )
 
-func (s *svc) cacheWarmupMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func (s *svc) cacheWarmupMiddleware(next mux.Handler) mux.Handler {
+	return mux.HandlerFunc(func(w http.ResponseWriter, r *http.Request, p mux.Params) {
 		go s.cacheWarmup(w, r)
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, r, p)
 	})
 }
 
@@ -66,7 +67,7 @@ func (s *svc) cacheWarmup(w http.ResponseWriter, r *http.Request) {
 
 			log.Info().Msgf("cache warmup getting created shares for user %s", id)
 			req.URL.Path = "/v1.php/apps/files_sharing/api/v1/shares"
-			s.sharesHandler.ListShares(p, req)
+			s.sharesHandler.ListShares(p, req, nil)
 
 			log.Info().Msgf("cache warmup getting received shares for user %s", id)
 			req.URL.Path = "/v1.php/apps/files_sharing/api/v1/shares"
@@ -74,7 +75,7 @@ func (s *svc) cacheWarmup(w http.ResponseWriter, r *http.Request) {
 			q.Set("shared_with_me", "true")
 			q.Set("state", "all")
 			req.URL.RawQuery = q.Encode()
-			s.sharesHandler.ListShares(p, req)
+			s.sharesHandler.ListShares(p, req, nil)
 		}
 	}
 }

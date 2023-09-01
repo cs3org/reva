@@ -30,8 +30,6 @@ import (
 // and endpoint should be used in all the HTTP methods.
 const MethodAll = "*"
 
-type paramsKey struct{}
-
 // ServeMux is a http.Handler which can be used to dispatch requests to different
 // handler functions via configurable routes, implementing the Router interface.
 type ServeMux struct {

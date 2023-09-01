@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 )
 
@@ -44,7 +45,7 @@ func (h *Handler) Init(c *config.Config) {
 }
 
 // FindSharees implements the /apps/files_sharing/api/v1/sharees endpoint.
-func (h *Handler) FindSharees(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) FindSharees(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	log := appctx.GetLogger(r.Context())
 	term := r.URL.Query().Get("search")
 

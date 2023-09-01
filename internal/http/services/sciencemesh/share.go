@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/go-playground/validator/v10"
 )
 
@@ -61,7 +62,7 @@ type createShareRequest struct {
 }
 
 // CreateShare creates an OCM share.
-func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
+func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	log := appctx.GetLogger(r.Context())
 
 	req, err := getCreateShareRequest(r)

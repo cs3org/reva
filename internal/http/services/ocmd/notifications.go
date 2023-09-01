@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 )
 
 // var validate = validator.New()
@@ -69,7 +70,7 @@ func (h *notifHandler) init(c *config) error {
 // Notifications dispatches any notifications received from remote OCM sites
 // according to the specifications at:
 // https://cs3org.github.io/OCM-API/docs.html?branch=v1.1.0&repo=OCM-API&user=cs3org#/paths/~1notifications/post
-func (h *notifHandler) Notifications(w http.ResponseWriter, r *http.Request) {
+func (h *notifHandler) Notifications(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	req, err := getNotification(r)

@@ -20,8 +20,10 @@ package wellknown
 
 import (
 	"net/http"
+
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 )
 
-func (s *svc) doWebfinger(w http.ResponseWriter, r *http.Request) {
+func (s *svc) doWebfinger(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	w.WriteHeader(http.StatusNotFound)
 }

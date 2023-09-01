@@ -146,11 +146,11 @@ func getViewModeFromRole(role *conversions.Role) providerv1beta1.ViewMode {
 }
 
 // GetFederatedShare handles GET requests on /apps/files_sharing/api/v1/shares/remote_shares/{shareid}.
-func (h *Handler) GetFederatedShare(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetFederatedShare(w http.ResponseWriter, r *http.Request, p mux.Params) {
 	// TODO: Implement response with HAL schemating
 	ctx := r.Context()
 
-	shareID, _ := mux.ParamsFromRequest(r).Get("shareid")
+	shareID, _ := p.Get("shareid")
 	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
@@ -181,7 +181,7 @@ func (h *Handler) GetFederatedShare(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListFederatedShares handles GET requests on /apps/files_sharing/api/v1/shares/remote_shares.
-func (h *Handler) ListFederatedShares(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListFederatedShares(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	// TODO Implement pagination.
 	// TODO Implement response with HAL schemating
 }

@@ -39,7 +39,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
@@ -78,7 +78,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns a new middleware with defined priority.
-func New(m map[string]interface{}, unprotected []string) (rhttp.Middleware, error) {
+func New(m map[string]interface{}, unprotected []string) (mux.Middleware, error) {
 	conf, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -156,13 +156,13 @@ func New(m map[string]interface{}, unprotected []string) (rhttp.Middleware, erro
 		return nil, err
 	}
 
-	chain := func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	chain := func(next mux.Handler) mux.Handler {
+		return mux.HandlerFunc(func(w http.ResponseWriter, r *http.Request, p mux.Params) {
 			// OPTION requests need to pass for preflight requests
 			// TODO(labkode): this will break options for auth protected routes.
 			// Maybe running the CORS middleware before auth kicks in is enough.
 			if r.Method == http.MethodOptions {
-				h.ServeHTTP(w, r)
+				next.ServeHTTP(w, r, p)
 				return
 			}
 
@@ -184,7 +184,7 @@ func New(m map[string]interface{}, unprotected []string) (rhttp.Middleware, erro
 			} else {
 				r = r.WithContext(ctx)
 			}
-			h.ServeHTTP(w, r)
+			next.ServeHTTP(w, r, p)
 		})
 	}
 	return chain, nil

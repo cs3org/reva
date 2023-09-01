@@ -81,10 +81,10 @@ func (s *svc) Name() string {
 
 func (s *svc) Register(r mux.Router) {
 	r.Route("/app", func(r mux.Router) {
-		r.Get("/list", http.HandlerFunc(s.handleList), mux.Unprotected())
-		r.Post("/new", http.HandlerFunc(s.handleNew))
-		r.Post("/open", http.HandlerFunc(s.handleOpen))
-		r.Post("/notify", http.HandlerFunc(s.handleNotify))
+		r.Get("/list", mux.HandlerFunc(s.handleList))
+		r.Post("/new", mux.HandlerFunc(s.handleNew))
+		r.Post("/open", mux.HandlerFunc(s.handleOpen))
+		r.Post("/notify", mux.HandlerFunc(s.handleNotify))
 	})
 }
 
@@ -93,7 +93,7 @@ func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
+func (s *svc) handleNew(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	ctx := r.Context()
 
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
@@ -270,7 +270,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *svc) handleList(w http.ResponseWriter, r *http.Request) {
+func (s *svc) handleList(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	ctx := r.Context()
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
 	if err != nil {
@@ -302,7 +302,7 @@ func (s *svc) handleList(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
+func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	ctx := r.Context()
 
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
@@ -410,7 +410,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *svc) handleNotify(w http.ResponseWriter, r *http.Request) {
+func (s *svc) handleNotify(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	err := r.ParseForm()
 	if err != nil {
 		writeError(w, r, appErrorInvalidParameter, "parameters could not be parsed", nil)

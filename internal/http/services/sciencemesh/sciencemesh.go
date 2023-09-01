@@ -20,7 +20,6 @@ package sciencemesh
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
@@ -109,13 +108,13 @@ type svc struct {
 
 func (s *svc) Register(r mux.Router) {
 	r.Route("/sciencemesh", func(r mux.Router) {
-		r.Get("/generate-invite", http.HandlerFunc(s.tokenHandler.Generate))
-		r.Get("/list-invite", http.HandlerFunc(s.tokenHandler.ListInvite))
-		r.Post("/accept-invite", http.HandlerFunc(s.tokenHandler.AcceptInvite))
-		r.Get("/find-accepted-users", http.HandlerFunc(s.tokenHandler.FindAccepted))
-		r.Delete("/delete-accepted-user", http.HandlerFunc(s.tokenHandler.DeleteAccepted))
-		r.Get("/list-providers", http.HandlerFunc(s.providersHandler.ListProviders))
-		r.Post("/create-share", http.HandlerFunc(s.sharesHandler.CreateShare))
-		r.Post("/open-in-app", http.HandlerFunc(s.appsHandler.OpenInApp))
+		r.Get("/generate-invite", mux.HandlerFunc(s.tokenHandler.Generate))
+		r.Get("/list-invite", mux.HandlerFunc(s.tokenHandler.ListInvite))
+		r.Post("/accept-invite", mux.HandlerFunc(s.tokenHandler.AcceptInvite))
+		r.Get("/find-accepted-users", mux.HandlerFunc(s.tokenHandler.FindAccepted))
+		r.Delete("/delete-accepted-user", mux.HandlerFunc(s.tokenHandler.DeleteAccepted))
+		r.Get("/list-providers", mux.HandlerFunc(s.providersHandler.ListProviders))
+		r.Post("/create-share", mux.HandlerFunc(s.sharesHandler.CreateShare))
+		r.Post("/open-in-app", mux.HandlerFunc(s.appsHandler.OpenInApp))
 	})
 }

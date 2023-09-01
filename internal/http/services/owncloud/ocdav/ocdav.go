@@ -200,8 +200,8 @@ func (s *svc) Register(r mux.Router) {
 	r.Handle("/index.php/*", s.Handler())
 }
 
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func (s *svc) Handler() mux.Handler {
+	return mux.HandlerFunc(func(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
 

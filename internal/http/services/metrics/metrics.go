@@ -52,10 +52,10 @@ func (s *svc) Name() string {
 }
 
 func (s *svc) Register(r mux.Router) {
-	// TODO (gdelmont): this should not be an http serbice, but a serverless
+	// TODO (gdelmont): this should not be an http service, but a serverless
 	// We use a dummy endpoint as the service is not expected to be exposed
 	// directly to the user, but just start a background process.
-	r.Handle("/register_metrics", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	r.Handle("/register_metrics", mux.HandlerFunc(func(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 		log := logger.New().With().Int("pid", os.Getpid()).Logger()
 		if _, err := w.Write([]byte("This is the metrics service.\n")); err != nil {
 			log.Error().Err(err).Msg("error writing metrics response")

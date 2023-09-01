@@ -20,7 +20,6 @@ package ocmd
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
@@ -90,10 +89,14 @@ func (s *svc) Name() string {
 
 func (s *svc) Register(r mux.Router) {
 	r.Route("/ocm", func(r mux.Router) {
-		r.Post("/shares", http.HandlerFunc(s.sharesHandler.CreateShare))
-		r.Post("/invite-accepted", http.HandlerFunc(s.invitesHandler.AcceptInvite))
-		r.Post("/notifications", http.HandlerFunc(s.notifHandler.Notifications))
-	}, mux.Unprotected())
+		r.Post("/shares", mux.HandlerFunc(s.sharesHandler.CreateShare))
+		r.Post("/invite-accepted", mux.HandlerFunc(s.invitesHandler.AcceptInvite))
+		r.Post("/notifications", mux.HandlerFunc(s.notifHandler.Notifications))
+	})
+}
+
+func (s *svc) Unprotected() []string {
+	return []string{"/ocm"}
 }
 
 // Close performs cleanup.

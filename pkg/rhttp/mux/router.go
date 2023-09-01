@@ -82,12 +82,3 @@ type WalkFunc func(method, path string, handler Handler)
 type Walker interface {
 	Walk(ctx context.Context, f WalkFunc)
 }
-
-func ParamsFromContext(ctx context.Context) Params {
-	p, _ := ctx.Value(paramsKey{}).(Params)
-	return p
-}
-
-func ParamsFromRequest(r *http.Request) Params {
-	return ParamsFromContext(r.Context())
-}

@@ -105,23 +105,27 @@ func (s *svc) Register(r mux.Router) {
 	// TODO (gdelmont): the token verification can be a custom middleware
 	// as the add cors header for HEAD
 	r.Route("/"+s.conf.Prefix, func(r mux.Router) {
-		r.Get("", http.HandlerFunc(s.doGet))
-		r.Head("", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Get("", mux.HandlerFunc(s.doGet))
+		r.Head("", mux.HandlerFunc(func(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 			addCorsHeader(w)
 			s.doHead(w, r)
 		}))
-		r.Put("", http.HandlerFunc(s.doPut))
-		r.Patch("", http.HandlerFunc(s.doPatch))
-	}, mux.Unprotected())
+		r.Put("", mux.HandlerFunc(s.doPut))
+		r.Patch("", mux.HandlerFunc(s.doPatch))
+	})
 	r.Route("/"+s.conf.Prefix, func(r mux.Router) {
-		r.Get("/*", http.HandlerFunc(s.doGet))
-		r.Head("/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Get("/*", mux.HandlerFunc(s.doGet))
+		r.Head("/*", mux.HandlerFunc(func(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 			addCorsHeader(w)
 			s.doHead(w, r)
 		}))
-		r.Put("/*", http.HandlerFunc(s.doPut))
-		r.Patch("/*", http.HandlerFunc(s.doPatch))
-	}, mux.Unprotected())
+		r.Put("/*", mux.HandlerFunc(s.doPut))
+		r.Patch("/*", mux.HandlerFunc(s.doPatch))
+	})
+}
+
+func (s *svc) Unprotected() []string {
+	return []string{"/" + s.conf.Prefix}
 }
 
 func addCorsHeader(res http.ResponseWriter) {
@@ -207,7 +211,7 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
+func (s *svc) doGet(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -272,7 +276,7 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
+func (s *svc) doPut(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -331,7 +335,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 }
 
 // TODO: put and post code is pretty much the same. Should be solved in a nicer way in the long run.
-func (s *svc) doPatch(w http.ResponseWriter, r *http.Request) {
+func (s *svc) doPatch(w http.ResponseWriter, r *http.Request, _ mux.Params) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
