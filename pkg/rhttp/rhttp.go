@@ -145,6 +145,7 @@ type Server struct {
 // Start starts the server.
 func (s *Server) Start(ln net.Listener) error {
 	router := mux.NewServeMux()
+	router.Use(s.middlewares...)
 
 	s.registerServices(router)
 
@@ -155,7 +156,6 @@ func (s *Server) Start(ln net.Listener) error {
 		s.log.Debug().Msg(str)
 	})
 
-	router.Use(s.middlewares...)
 	s.httpServer.Handler = router
 	s.listener = ln
 
