@@ -35,10 +35,7 @@ type node struct {
 	prefix   string
 	ntype    nodetype
 	handlers handlers
-	opts     nodeOptions
 	children nodes
-
-	middlewareFactory func(*Options) []Middleware
 }
 
 type trie struct {
@@ -61,47 +58,6 @@ func (t *trie) putParams(ps *Params) {
 	if ps != nil {
 		t.paramsPool.Put(ps)
 	}
-}
-
-type nodeOptions struct {
-	global *Options // these applies to all methods
-	opts   nilMap[*Options]
-}
-
-func (n *nodeOptions) set(method string, o *Options) {
-	if method == MethodAll {
-		n.global = o
-		return
-	}
-	n.opts.add(method, o)
-}
-
-func (n *nodeOptions) get(method string) *Options {
-	if method == MethodAll {
-		return n.global
-	}
-	global := n.global
-	perMethod := n.opts[method]
-	return global.merge(perMethod)
-}
-
-func (n *nodeOptions) merge(other *nodeOptions) *nodeOptions {
-	merged := nodeOptions{}
-	merged.global = n.global
-	merged.opts = nilMap[*Options]{}
-	if other.global != nil {
-		merged.global = merged.global.merge(other.global)
-	}
-	for method, opt := range n.opts {
-		merged.set(method, other.get(method).merge(opt))
-	}
-	for method, opt := range other.opts {
-		if _, ok := merged.opts[method]; ok {
-			continue
-		}
-		merged.opts.add(method, opt)
-	}
-	return &merged
 }
 
 type handlers struct {
@@ -143,10 +99,10 @@ func newTree() *trie {
 	}
 }
 
-func (t *trie) insert(method, path string, h Handler, opts *Options) {
+func (t *trie) insert(method, path string, h Handler) {
 	t.m.Lock()
 	defer t.m.Unlock()
-	t.root.insert(method, path, h, opts)
+	t.root.insert(method, path, h)
 }
 
 type nilMap[T any] map[string]T
@@ -174,7 +130,7 @@ func (n nodes) search(s string) (*node, bool) {
 	for _, node := range n {
 		if node.ntype == catchall || node.ntype == param ||
 			s == node.prefix && node.ntype == static && len(node.children) == 0 ||
-			node.ntype == static && strings.HasPrefix(s, node.prefix) && len(node.children) != 0 {
+			node.ntype == static && len(node.children) != 0 && strings.HasPrefix(s, node.prefix) {
 			return node, true
 		}
 	}
@@ -320,23 +276,16 @@ func nextWildcard(s string) (string, int, nodetype) {
 	return "", -1, 0
 }
 
-func (n *node) mergeOptions(method string, opts *Options) *Options {
-	nodeOpts := n.opts.get(method)
-	return opts.merge(nodeOpts)
-}
-
-func (n *node) insert(method, path string, handler Handler, opts *Options) {
+func (n *node) insert(method, path string, handler Handler) {
 	if n.prefix == "" {
 		// the tree is empty
-		n.insertChild(method, path, handler, nil, opts)
+		n.insertChild(method, path, handler)
 		return
 	}
 
-	var merged *Options
 	// traverse the tree until we cannot make further progresses
 	current := &node{
-		children:          nodes{n},
-		middlewareFactory: n.middlewareFactory,
+		children: nodes{n},
 	}
 walk:
 	for {
@@ -348,20 +297,18 @@ walk:
 			// with different type, and if same type different wildcard str
 			if i != -1 && node.ntype == wtype {
 				current = node
-				merged = node.mergeOptions(method, merged)
 				path = path[i+len(wildcard):]
 				continue walk
 			}
 			// the next node is the one having the same prefix of a static node
 			if node.ntype == static && strings.HasPrefix(path, node.prefix) {
 				current = node
-				merged = node.mergeOptions(method, merged)
 				path = path[len(node.prefix):]
 				continue walk
 			}
 		}
 
-		current.insertChild(method, path, handler, merged, opts)
+		current.insertChild(method, path, handler)
 		return
 	}
 }
@@ -375,21 +322,12 @@ func wildcardIndex(s string) int {
 	return -1
 }
 
-func (n *node) insertChild(method, path string, handler Handler, merged, opts *Options) {
+func (n *node) insertChild(method, path string, handler Handler) {
 	current := n
 	for {
 		if path == "" {
 			if handler != nil {
-				if n.middlewareFactory != nil {
-					merged = merged.merge(opts)
-					for _, mid := range n.middlewareFactory(merged) {
-						handler = mid(handler)
-					}
-				}
 				current.handlers.set(method, handler)
-			}
-			if opts != nil {
-				current.opts.set(method, opts)
 			}
 			return
 		}
@@ -397,9 +335,8 @@ func (n *node) insertChild(method, path string, handler Handler, merged, opts *O
 		wildcard, i, wtype := nextWildcard(path)
 		if i != -1 { // wildcard found
 			next := &node{
-				prefix:            wildcard,
-				ntype:             wtype,
-				middlewareFactory: n.middlewareFactory,
+				prefix: wildcard,
+				ntype:  wtype,
 			}
 			current.children = append(current.children, next)
 			path = path[len(wildcard)+1:]
@@ -428,9 +365,8 @@ func (n *node) insertChild(method, path string, handler Handler, merged, opts *O
 				current.ntype = static
 			} else {
 				other := &node{
-					prefix:            childPrefix,
-					ntype:             static,
-					middlewareFactory: n.middlewareFactory,
+					prefix: childPrefix,
+					ntype:  static,
 				}
 				current.children = append(current.children, other)
 				current = other
@@ -442,17 +378,14 @@ func (n *node) insertChild(method, path string, handler Handler, merged, opts *O
 
 func (n *node) split(prefix string) {
 	s := &node{
-		prefix:            n.prefix[len(prefix):],
-		ntype:             static,
-		handlers:          n.handlers,
-		children:          n.children,
-		opts:              n.opts,
-		middlewareFactory: n.middlewareFactory,
+		prefix:   n.prefix[len(prefix):],
+		ntype:    static,
+		handlers: n.handlers,
+		children: n.children,
 	}
 	n.children = nodes{s}
 	n.prefix = prefix
 	n.handlers = handlers{}
-	n.opts = nodeOptions{}
 }
 
 func stripSlash(path string) string {

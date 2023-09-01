@@ -55,29 +55,29 @@ type Router interface {
 	Walker
 
 	// Route mounts a sub-Router along a path string.
-	Route(path string, f func(Router), o ...Option)
+	Route(path string, f func(Router))
 	// Method routes for path that matches the HTTP method.
-	Method(method, path string, handler Handler, o ...Option)
+	Method(method, path string, handler Handler)
 
 	// Handle routes for path that matches all the HTTP methods.
-	Handle(path string, handler Handler, o ...Option)
+	Handle(path string, handler Handler)
 
 	Mount(path string, handler Handler)
 
-	With(path string, o ...Option)
+	Use(middlewares ...Middleware)
 
 	// HTTP-method routing along path.
-	Get(path string, handler Handler, o ...Option)
-	Head(path string, handler Handler, o ...Option)
-	Post(path string, handler Handler, o ...Option)
-	Put(path string, handler Handler, o ...Option)
-	Patch(path string, handler Handler, o ...Option)
-	Delete(path string, handler Handler, o ...Option)
-	Connect(path string, handler Handler, o ...Option)
-	Options(path string, handler Handler, o ...Option)
+	Get(path string, handler Handler)
+	Head(path string, handler Handler)
+	Post(path string, handler Handler)
+	Put(path string, handler Handler)
+	Patch(path string, handler Handler)
+	Delete(path string, handler Handler)
+	Connect(path string, handler Handler)
+	Options(path string, handler Handler)
 }
 
-type WalkFunc func(method, path string, handler Handler, opts *Options)
+type WalkFunc func(method, path string, handler Handler)
 
 type Walker interface {
 	Walk(ctx context.Context, f WalkFunc)

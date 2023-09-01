@@ -86,12 +86,6 @@ func WithLogger(log zerolog.Logger) Config {
 	}
 }
 
-func WithMiddlewareFactory(f func(o *mux.Options) []mux.Middleware) Config {
-	return func(s *Server) {
-		s.midFactory = f
-	}
-}
-
 func InitServices(ctx context.Context, services map[string]config.ServicesConfig) (map[string]Service, error) {
 	s := make(map[string]Service)
 	for name, cfg := range services {
@@ -136,23 +130,18 @@ type Server struct {
 	listener   net.Listener
 	svcs       map[string]Service // map key is svc Prefix
 	log        zerolog.Logger
-	midFactory func(*mux.Options) []mux.Middleware
 }
 
 // Start starts the server.
 func (s *Server) Start(ln net.Listener) error {
 	router := mux.NewServeMux()
-	router.SetMiddlewaresFactory(s.midFactory)
 
 	s.registerServices(router)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	router.Walk(ctx, func(method, path string, handler mux.Handler, opts *mux.Options) {
+	router.Walk(ctx, func(method, path string, handler mux.Handler) {
 		str := fmt.Sprintf("%s\t%s", method, path)
-		if o := opts.String(); o != "" {
-			str += fmt.Sprintf(" (%s)", o)
-		}
 		s.log.Debug().Msg(str)
 	})
 
