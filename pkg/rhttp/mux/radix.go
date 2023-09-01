@@ -36,6 +36,7 @@ type node struct {
 	ntype    nodetype
 	handlers handlers
 	children nodes
+	midds    []Middleware
 }
 
 type trie struct {
@@ -99,10 +100,10 @@ func newTree() *trie {
 	}
 }
 
-func (t *trie) insert(method, path string, h Handler) {
+func (t *trie) insert(method, path string, h Handler, middlewares ...Middleware) {
 	t.m.Lock()
 	defer t.m.Unlock()
-	t.root.insert(method, path, h)
+	t.root.insert(method, path, h, middlewares...)
 }
 
 type nilMap[T any] map[string]T
@@ -276,10 +277,10 @@ func nextWildcard(s string) (string, int, nodetype) {
 	return "", -1, 0
 }
 
-func (n *node) insert(method, path string, handler Handler) {
+func (n *node) insert(method, path string, handler Handler, middlewares ...Middleware) {
 	if n.prefix == "" {
 		// the tree is empty
-		n.insertChild(method, path, handler)
+		n.insertChild(method, path, handler, middlewares...)
 		return
 	}
 
@@ -298,17 +299,19 @@ walk:
 			if i != -1 && node.ntype == wtype {
 				current = node
 				path = path[i+len(wildcard):]
+				handler = wrapHandler(handler, node.midds...)
 				continue walk
 			}
 			// the next node is the one having the same prefix of a static node
 			if node.ntype == static && strings.HasPrefix(path, node.prefix) {
 				current = node
 				path = path[len(node.prefix):]
+				handler = wrapHandler(handler, node.midds...)
 				continue walk
 			}
 		}
 
-		current.insertChild(method, path, handler)
+		current.insertChild(method, path, handler, middlewares...)
 		return
 	}
 }
@@ -322,10 +325,20 @@ func wildcardIndex(s string) int {
 	return -1
 }
 
-func (n *node) insertChild(method, path string, handler Handler) {
+func wrapHandler(h Handler, midds ...Middleware) Handler {
+	for _, m := range midds {
+		h = m(h)
+	}
+	return h
+}
+
+func (n *node) insertChild(method, path string, handler Handler, middlewares ...Middleware) {
 	current := n
 	for {
 		if path == "" {
+			if len(middlewares) != 0 {
+				current.midds = append(current.midds, middlewares...)
+			}
 			if handler != nil {
 				current.handlers.set(method, handler)
 			}
@@ -341,6 +354,7 @@ func (n *node) insertChild(method, path string, handler Handler) {
 			current.children = append(current.children, next)
 			path = path[len(wildcard)+1:]
 			current = next
+			handler = wrapHandler(handler, current.midds...)
 			continue
 		}
 
@@ -372,6 +386,7 @@ func (n *node) insertChild(method, path string, handler Handler) {
 				current = other
 			}
 			path = path[len(childPrefix):]
+			handler = wrapHandler(handler, current.midds...)
 		}
 	}
 }

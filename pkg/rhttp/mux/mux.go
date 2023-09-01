@@ -203,12 +203,12 @@ func (m *ServeMux) Mount(path string, handler Handler) {
 		m.mountRouter(path, router, prefix)
 		return
 	}
-	m.Use(trimPrefix(prefix))
+	m.tree.root.insert(MethodAll, path+"/*", nil, trimPrefix(prefix))
 	m.Handle(path+"/*", handler)
 }
 
 func (m *ServeMux) Use(middlewares ...Middleware) {
-	// TODO
+	m.tree.insert(MethodAll, m.path, nil, middlewares...)
 }
 
 func (m *ServeMux) Handle(path string, handler Handler) {
