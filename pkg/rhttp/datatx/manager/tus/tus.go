@@ -78,10 +78,6 @@ func New(m map[string]interface{}, publisher events.Publisher) (datatx.DataTX, e
 }
 
 func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
-	composable, ok := fs.(composable)
-	if !ok {
-		return nil, errtypes.NotSupported("file system does not support the tus protocol")
-	}
 
 	// A storage backend for tusd may consist of multiple different parts which
 	// handle upload creation, locking, termination and so on. The composer is a
@@ -89,13 +85,38 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	// we only use the file store but you may plug in multiple.
 	composer := tusd.NewStoreComposer()
 
-	// let the composable storage tell tus which extensions it supports
-	composable.UseIn(composer)
-
 	config := tusd.Config{
-		StoreComposer:         composer,
+		StoreComposer: composer,
+		PreUploadCreateCallback: func(hook tusd.HookEvent) error {
+			return errors.New("uploads must be created with a cs3 InitiateUpload call")
+		},
 		NotifyCompleteUploads: true,
 		Logger:                log.New(appctx.GetLogger(context.Background()), "", 0),
+	}
+
+	var dataStore tusd.DataStore
+
+	cb, ok := fs.(hasTusDatastore)
+	if ok {
+		dataStore = cb.GetDataStore()
+		composable, ok := dataStore.(composable)
+		if !ok {
+			return nil, errtypes.NotSupported("tus datastore is not composable")
+		}
+		composable.UseIn(composer)
+		config.PreFinishResponseCallback = cb.PreFinishResponseCallback
+	} else {
+		composable, ok := fs.(composable)
+		if !ok {
+			return nil, errtypes.NotSupported("file system does not support the tus protocol")
+		}
+
+		// let the composable storage tell tus which extensions it supports
+		composable.UseIn(composer)
+		dataStore, ok = fs.(tusd.DataStore)
+		if !ok {
+			return nil, errtypes.NotSupported("file system does not support the tus datastore")
+		}
 	}
 
 	handler, err := tusd.NewUnroutedHandler(config)
@@ -108,23 +129,27 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 			ev := <-handler.CompleteUploads
 			info := ev.Upload
 			spaceOwner := &userv1beta1.UserId{
-				OpaqueId: info.Storage["SpaceOwnerOrManager"],
+				OpaqueId: info.MetaData[CS3Prefix+"SpaceOwnerOrManager"],
 			}
-			owner := &userv1beta1.UserId{
-				Idp:      info.Storage["Idp"],
-				OpaqueId: info.Storage["UserId"],
+			executant := &userv1beta1.UserId{
+				Type:     userv1beta1.UserType(userv1beta1.UserType_value[info.MetaData[CS3Prefix+"ExecutantType"]]),
+				Idp:      info.MetaData[CS3Prefix+"ExecutantIdp"],
+				OpaqueId: info.MetaData[CS3Prefix+"ExecutantId"],
 			}
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{
-					StorageId: info.MetaData["providerID"],
-					SpaceId:   info.Storage["SpaceRoot"],
-					OpaqueId:  info.Storage["SpaceRoot"],
+					StorageId: info.MetaData[CS3Prefix+"providerID"],
+					SpaceId:   info.MetaData[CS3Prefix+"SpaceRoot"],
+					OpaqueId:  info.MetaData[CS3Prefix+"SpaceRoot"],
 				},
-				Path: utils.MakeRelativePath(filepath.Join(info.MetaData["dir"], info.MetaData["filename"])),
+				// FIXME this seems wrong, path is not really relative to space root
+				// actually it is: InitiateUpload calls fs.lu.Path to get the path relative to the root...
+				// hm is that robust? what if the file is moved? shouldn't we store the parent id, then?
+				Path: utils.MakeRelativePath(filepath.Join(info.MetaData[CS3Prefix+"dir"], info.MetaData[CS3Prefix+"filename"])),
 			}
-			datatx.InvalidateCache(owner, ref, m.statCache)
+			datatx.InvalidateCache(executant, ref, m.statCache)
 			if m.publisher != nil {
-				if err := datatx.EmitFileUploadedEvent(spaceOwner, owner, ref, m.publisher); err != nil {
+				if err := datatx.EmitFileUploadedEvent(spaceOwner, executant, ref, m.publisher); err != nil {
 					appctx.GetLogger(context.Background()).Error().Err(err).Msg("failed to publish FileUploaded event")
 				}
 			}
@@ -132,6 +157,9 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	}()
 
 	h := handler.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// filter metadata headers
+		w = NewFilterResponseWriter(w)
+
 		method := r.Method
 		// https://github.com/tus/tus-resumable-upload-protocol/blob/master/protocol.md#x-http-method-override
 		if r.Header.Get("X-HTTP-Method-Override") != "" {
@@ -145,7 +173,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				metrics.UploadsActive.Sub(1)
 			}()
 			// set etag, mtime and file id
-			setHeaders(fs, w, r)
+			setHeaders(dataStore, w, r)
 			handler.PostFile(w, r)
 		case "HEAD":
 			handler.HeadFile(w, r)
@@ -155,7 +183,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				metrics.UploadsActive.Sub(1)
 			}()
 			// set etag, mtime and file id
-			setHeaders(fs, w, r)
+			setHeaders(dataStore, w, r)
 			handler.PatchFile(w, r)
 		case "DELETE":
 			handler.DelFile(w, r)
@@ -182,14 +210,14 @@ type composable interface {
 	UseIn(composer *tusd.StoreComposer)
 }
 
-func setHeaders(fs storage.FS, w http.ResponseWriter, r *http.Request) {
+type hasTusDatastore interface {
+	PreFinishResponseCallback(hook tusd.HookEvent) error
+	GetDataStore() tusd.DataStore
+}
+
+func setHeaders(datastore tusd.DataStore, w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := path.Base(r.URL.Path)
-	datastore, ok := fs.(tusd.DataStore)
-	if !ok {
-		appctx.GetLogger(ctx).Error().Interface("fs", fs).Msg("storage is not a tus datastore")
-		return
-	}
 	upload, err := datastore.GetUpload(ctx, id)
 	if err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Msg("could not get upload from storage")
@@ -200,14 +228,29 @@ func setHeaders(fs storage.FS, w http.ResponseWriter, r *http.Request) {
 		appctx.GetLogger(ctx).Error().Err(err).Msg("could not get upload info for upload")
 		return
 	}
-	expires := info.MetaData["expires"]
+	expires := info.MetaData[CS3Prefix+"expires"]
+	// fallback for outdated storageproviders that implement a tus datastore
+	if expires == "" {
+		expires = info.MetaData["expires"]
+	}
 	if expires != "" {
 		w.Header().Set(net.HeaderTusUploadExpires, expires)
 	}
 	resourceid := provider.ResourceId{
-		StorageId: info.MetaData["providerID"],
-		SpaceId:   info.Storage["SpaceRoot"],
-		OpaqueId:  info.Storage["NodeId"],
+		StorageId: info.MetaData[CS3Prefix+"providerID"],
+		SpaceId:   info.MetaData[CS3Prefix+"SpaceRoot"],
+		OpaqueId:  info.MetaData[CS3Prefix+"NodeId"],
 	}
+	// fallback for outdated storageproviders that implement a tus datastore
+	if resourceid.StorageId == "" {
+		resourceid.StorageId = info.MetaData["providerID"]
+	}
+	if resourceid.SpaceId == "" {
+		resourceid.SpaceId = info.MetaData["SpaceRoot"]
+	}
+	if resourceid.OpaqueId == "" {
+		resourceid.OpaqueId = info.MetaData["NodeId"]
+	}
+
 	w.Header().Set(net.HeaderOCFileID, storagespace.FormatResourceID(resourceid))
 }

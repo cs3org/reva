@@ -69,9 +69,11 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 
 	revisions = []*provider.FileVersion{}
 	np := n.InternalPath()
+	mtime, err := n.GetMTime(ctx)
+	currentRevisionPath := np + node.RevisionIDDelimiter + mtime.UTC().Format(time.RFC3339Nano)
 	if items, err := filepath.Glob(np + node.RevisionIDDelimiter + "*"); err == nil {
 		for i := range items {
-			if fs.lu.MetadataBackend().IsMetaFile(items[i]) || strings.HasSuffix(items[i], ".mlock") {
+			if fs.lu.MetadataBackend().IsMetaFile(items[i]) || strings.HasSuffix(items[i], ".mlock") || items[i] == currentRevisionPath {
 				continue
 			}
 
@@ -159,7 +161,7 @@ func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Refe
 
 	revisionNode := node.Node{SpaceID: spaceID, BlobID: blobid, Blobsize: blobsize} // blobsize is needed for the s3ng blobstore
 
-	reader, err := fs.tp.ReadBlob(&revisionNode)
+	reader, err := fs.blobstore.Download(&revisionNode)
 	if err != nil {
 		return nil, errors.Wrapf(err, "Decomposedfs: could not download blob of revision '%s' for node '%s'", n.ID, revisionKey)
 	}
@@ -315,7 +317,7 @@ func (fs *Decomposedfs) DeleteRevision(ctx context.Context, ref *provider.Refere
 		return err
 	}
 
-	return fs.tp.DeleteBlob(n)
+	return fs.blobstore.Delete(n)
 }
 
 func (fs *Decomposedfs) getRevisionNode(ctx context.Context, ref *provider.Reference, revisionKey string, hasPermission func(*provider.ResourcePermissions) bool) (*node.Node, error) {

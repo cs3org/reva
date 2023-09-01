@@ -23,6 +23,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"path/filepath"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
@@ -45,6 +46,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/store"
 	"github.com/cs3org/reva/v2/tests/helpers"
 	"github.com/stretchr/testify/mock"
+	"github.com/tus/tusd/pkg/filestore"
+	tusd "github.com/tus/tusd/pkg/handler"
 	"google.golang.org/grpc"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -59,6 +62,7 @@ var _ = Describe("File uploads", func() {
 		user    *userpb.User
 		ctx     context.Context
 
+		dataStore            tusd.DataStore
 		o                    *options.Options
 		lu                   *lookup.Lookup
 		permissions          *mocks.PermissionsChecker
@@ -97,6 +101,8 @@ var _ = Describe("File uploads", func() {
 		tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
 		Expect(err).ToNot(HaveOccurred())
 
+		dataStore = filestore.New(filepath.Join(tmpRoot, "uploads"))
+
 		o, err = options.New(map[string]interface{}{
 			"root": tmpRoot,
 		})
@@ -133,7 +139,7 @@ var _ = Describe("File uploads", func() {
 		}, nil).Times(1)
 		var err error
 		tree := tree.New(lu, bs, o, store.Create())
-		fs, err = decomposedfs.New(o, lu, decomposedfs.NewPermissions(permissions, permissionsSelector), tree, nil)
+		fs, err = decomposedfs.New(o, lu, decomposedfs.NewPermissions(permissions, permissionsSelector), tree, nil, dataStore, bs)
 		Expect(err).ToNot(HaveOccurred())
 
 		resp, err := fs.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{Owner: user, Type: "personal"})

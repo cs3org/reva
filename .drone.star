@@ -692,6 +692,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                             "DIVIDE_INTO_NUM_PARTS": parallelRuns,
                             "RUN_PART": runPart,
                             "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-S3NG-storage.md",
+                            "BEHAT_FEATURE": "tests/acceptance/features/coreApiTrashbin/trashbinDelete.feature:17",
                         },
                     },
                 ],

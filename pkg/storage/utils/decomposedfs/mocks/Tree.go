@@ -25,8 +25,6 @@ import (
 
 	fs "io/fs"
 
-	io "io"
-
 	mock "github.com/stretchr/testify/mock"
 
 	node "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
@@ -58,20 +56,6 @@ func (_m *Tree) Delete(ctx context.Context, _a1 *node.Node) error {
 	var r0 error
 	if rf, ok := ret.Get(0).(func(context.Context, *node.Node) error); ok {
 		r0 = rf(ctx, _a1)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// DeleteBlob provides a mock function with given fields: _a0
-func (_m *Tree) DeleteBlob(_a0 *node.Node) error {
-	ret := _m.Called(_a0)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(*node.Node) error); ok {
-		r0 = rf(_a0)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -194,32 +178,6 @@ func (_m *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid string, key st
 	return r0, r1, r2
 }
 
-// ReadBlob provides a mock function with given fields: _a0
-func (_m *Tree) ReadBlob(_a0 *node.Node) (io.ReadCloser, error) {
-	ret := _m.Called(_a0)
-
-	var r0 io.ReadCloser
-	var r1 error
-	if rf, ok := ret.Get(0).(func(*node.Node) (io.ReadCloser, error)); ok {
-		return rf(_a0)
-	}
-	if rf, ok := ret.Get(0).(func(*node.Node) io.ReadCloser); ok {
-		r0 = rf(_a0)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(io.ReadCloser)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(*node.Node) error); ok {
-		r1 = rf(_a0)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
 // RestoreRecycleItemFunc provides a mock function with given fields: ctx, spaceid, key, trashPath, target
 func (_m *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid string, key string, trashPath string, target *node.Node) (*node.Node, *node.Node, func() error, error) {
 	ret := _m.Called(ctx, spaceid, key, trashPath, target)
@@ -285,20 +243,6 @@ func (_m *Tree) TouchFile(ctx context.Context, _a1 *node.Node, markprocessing bo
 	var r0 error
 	if rf, ok := ret.Get(0).(func(context.Context, *node.Node, bool, string) error); ok {
 		r0 = rf(ctx, _a1, markprocessing, mtime)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// WriteBlob provides a mock function with given fields: _a0, source
-func (_m *Tree) WriteBlob(_a0 *node.Node, source string) error {
-	ret := _m.Called(_a0, source)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(*node.Node, string) error); ok {
-		r0 = rf(_a0, source)
 	} else {
 		r0 = ret.Error(0)
 	}

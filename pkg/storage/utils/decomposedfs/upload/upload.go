@@ -16,19 +16,58 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
+// Package upload handles the processing of uploads.
+// In general this is the lifecycle of an upload from the perspective of a storageprovider:
+// 1. To start an upload a client makes a call to InitializeUpload which will return protocols and urls that he can use to append bytes to the upload.
+// 2. When the client has sent all bytes the tusd handler will call a PreFinishResponseCallback which marks the end of the transfer and the start of postprocessing.
+// 3. When async uploads are enabled the storageprovider emits an BytesReceived event, otherwise a FileUploaded event and the upload lifcycle ends.
+// 4. During async postprocessing the uploaded bytes might be read at the upload URL to determine the outcome of the postprocessing steps
+// 5. To handle async postprocessing the storageporvider has to listen to multiple events:
+//   - PostprocessingFinished determines what should happen with the upload:
+//   - abort - the upload is cancelled but the bytes are kept in the upload folder, eg. when antivirus scanning encounters an error
+//     then what? can the admin retrigger the upload?
+//   - continue - the upload is moved to its final destination (eventually being marked with pp results)
+//   - delete - the file and the upload should be deleted
+//   - RestartPostprocessing
+//   - PostprocessingStepFinished is used to set scan data on an upload
+//
+// 6. The storageprovider emits an UploadReady event that can be used by eg. the search or thumbnails services to do update their metadata.
+//
+// There are two interesting scenarios:
+// 1. Two concurrent requests try to create the same file
+// 2. Two concurrent requests try to overwrite the same file
+// The first step to upload a file is making an InitiateUpload call to the storageprovider via CS3. It will return an upload id that can be used to append bytes to the upload.
+// With an upload id clients can append bytes to the upload.
+// When all bytes have been received tusd will call PreFinishResponseCallback on the storageprovider.
+// The storageprovider cannot use the tus upload metadata to persist a postprocessing status we have to store the processing status on a revision node.
+// On disk the layout for a node consists of the actual node metadata and revision nodes.
+// The revision nodes are used to capture the different revsions ...
+// * so every uploed always creates a revision node first?
+// * and in PreFinishResponseCallback we update or create? the actual node? or do we create the node in the InitiateUpload call?
+// * We need to skip unfinished revisions when listing versions?
+// The size diff is always calculated when updating the node
+//
+// ## Client considerations
+// When do we propagate the etag? Currently, already when an upload is in postprocessing ... why? because we update the node when all bytes are transferred?
+// Does the client expect an etag change when it uploads a file? it should not ... sync and uploads are independent last someone explained it to me
+// postprocessing könnte den content ändern und damit das etag
+//
+// When the client finishes transferring all bytes it gets the 'future' etag of the resource which it currently stores as the etag for the file in its local db.
+// When the next propfind happens before postprocessing finishes the client would see the old etag and download the old version. Then, when postprocessing causes
+// the next etag change, the client will download the file it previously uploaded.
+//
+// For the new file scenario, the desktop client would delete the uploaded file locally, when it is not listed in the next propfind.
+//
+// The graph api exposes pending uploads explicitly using the pendingOperations property, which carries a pendingContentUpdate resource with a
+// queuedDateTime property: Date and time the pending binary operation was queued in UTC time. Read-only.
+//
+// So, until clients learn to keep track of their uploads we need to return 425 when an upload is in progress ಠ_ಠ
 package upload
 
 import (
 	"context"
-	"crypto/md5"
-	"crypto/sha1"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"hash"
-	"hash/adler32"
-	"io"
-	"io/fs"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,15 +77,15 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/events"
+	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/tus"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/golang-jwt/jwt"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
+	"github.com/rogpeppe/go-internal/lockedfile"
 	tusd "github.com/tus/tusd/pkg/handler"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -58,417 +97,497 @@ func init() {
 	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/utils/decomposedfs/upload")
 }
 
-// Tree is used to manage a tree hierarchy
-type Tree interface {
-	Setup() error
-
-	GetMD(ctx context.Context, node *node.Node) (os.FileInfo, error)
-	ListFolder(ctx context.Context, node *node.Node) ([]*node.Node, error)
-	// CreateHome(owner *userpb.UserId) (n *node.Node, err error)
-	CreateDir(ctx context.Context, node *node.Node) (err error)
-	// CreateReference(ctx context.Context, node *node.Node, targetURI *url.URL) error
-	Move(ctx context.Context, oldNode *node.Node, newNode *node.Node) (err error)
-	Delete(ctx context.Context, node *node.Node) (err error)
-	RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPath string, target *node.Node) (*node.Node, *node.Node, func() error, error)
-	PurgeRecycleItemFunc(ctx context.Context, spaceid, key, purgePath string) (*node.Node, func() error, error)
-
-	WriteBlob(node *node.Node, binPath string) error
-	ReadBlob(node *node.Node) (io.ReadCloser, error)
-	DeleteBlob(node *node.Node) error
-
-	Propagate(ctx context.Context, node *node.Node, sizeDiff int64) (err error)
-}
-
-// Upload processes the upload
-// it implements tus tusd.Upload interface https://tus.io/protocols/resumable-upload.html#core-protocol
-// it also implements its termination extension as specified in https://tus.io/protocols/resumable-upload.html#termination
-// it also implements its creation-defer-length extension as specified in https://tus.io/protocols/resumable-upload.html#creation
-// it also implements its concatenation extension as specified in https://tus.io/protocols/resumable-upload.html#concatenation
-type Upload struct {
-	// we use a struct field on the upload as tus pkg will give us an empty context.Background
-	Ctx context.Context
-	// info stores the current information about the upload
-	Info tusd.FileInfo
-	// node for easy access
-	Node *node.Node
-	// SizeDiff size difference between new and old file version
-	SizeDiff int64
-	// infoPath is the path to the .info file
-	infoPath string
-	// binPath is the path to the binary file (which has no extension)
-	binPath string
-	// lu and tp needed for file operations
-	lu *lookup.Lookup
-	tp Tree
-	// versionsPath will be empty if there was no file before
-	versionsPath string
-	// and a logger as well
-	log zerolog.Logger
-	// publisher used to publish events
-	pub events.Publisher
-	// async determines if uploads shoud be done asynchronously
-	async bool
-	// tknopts hold token signing information
-	tknopts options.TokenOptions
-}
-
-func buildUpload(ctx context.Context, info tusd.FileInfo, binPath string, infoPath string, lu *lookup.Lookup, tp Tree, pub events.Publisher, async bool, tknopts options.TokenOptions) *Upload {
-	return &Upload{
-		Info:     info,
-		binPath:  binPath,
-		infoPath: infoPath,
-		lu:       lu,
-		tp:       tp,
-		Ctx:      ctx,
-		pub:      pub,
-		async:    async,
-		tknopts:  tknopts,
-		log: appctx.GetLogger(ctx).
-			With().
-			Interface("info", info).
-			Str("binPath", binPath).
-			Logger(),
-	}
-}
-
-// Cleanup cleans the upload
-func Cleanup(upload *Upload, failure bool, keepUpload bool) {
-	ctx, span := tracer.Start(upload.Ctx, "Cleanup")
+// CreateNewRevision will create a new revision node
+func CreateNewRevision(ctx context.Context, lu *lookup.Lookup, path string, fsize uint64) (*lockedfile.File, error) {
+	_, span := tracer.Start(ctx, "CreateNewRevision")
 	defer span.End()
-	upload.cleanup(failure, !keepUpload, !keepUpload)
 
-	// unset processing status
-	if upload.Node != nil { // node can be nil when there was an error before it was created (eg. checksum-mismatch)
-		if err := upload.Node.UnmarkProcessing(ctx, upload.Info.ID); err != nil {
-			upload.log.Info().Str("path", upload.Node.InternalPath()).Err(err).Msg("unmarking processing failed")
-		}
+	// create folder structure (if needed)
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return nil, err
 	}
-}
 
-// WriteChunk writes the stream from the reader to the given offset of the upload
-func (upload *Upload) WriteChunk(_ context.Context, offset int64, src io.Reader) (int64, error) {
-	ctx, span := tracer.Start(upload.Ctx, "WriteChunk")
-	defer span.End()
-	_, subspan := tracer.Start(ctx, "os.OpenFile")
-	file, err := os.OpenFile(upload.binPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
-	subspan.End()
+	// create and write lock new node metadata by parentid/name
+	f, err := lockedfile.OpenFile(lu.MetadataBackend().LockfilePath(path), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
-		return 0, err
-	}
-	defer file.Close()
-
-	// calculate cheksum here? needed for the TUS checksum extension. https://tus.io/protocols/resumable-upload.html#checksum
-	// TODO but how do we get the `Upload-Checksum`? WriteChunk() only has a context, offset and the reader ...
-	// It is sent with the PATCH request, well or in the POST when the creation-with-upload extension is used
-	// but the tus handler uses a context.Background() so we cannot really check the header and put it in the context ...
-	_, subspan = tracer.Start(ctx, "io.Copy")
-	n, err := io.Copy(file, src)
-	subspan.End()
-
-	// If the HTTP PATCH request gets interrupted in the middle (e.g. because
-	// the user wants to pause the upload), Go's net/http returns an io.ErrUnexpectedEOF.
-	// However, for the ocis driver it's not important whether the stream has ended
-	// on purpose or accidentally.
-	if err != nil && err != io.ErrUnexpectedEOF {
-		return n, err
+		return nil, err
 	}
 
-	upload.Info.Offset += n
-	return n, upload.writeInfo()
+	return f, nil
 }
 
-// GetInfo returns the FileInfo
-func (upload *Upload) GetInfo(_ context.Context) (tusd.FileInfo, error) {
-	return upload.Info, nil
-}
-
-// GetReader returns an io.Reader for the upload
-func (upload *Upload) GetReader(_ context.Context) (io.Reader, error) {
-	_, span := tracer.Start(upload.Ctx, "GetReader")
+// CreateNewNode will lock the given node and try to symlink it to the parent
+func CreateNewNode(ctx context.Context, lu *lookup.Lookup, n *node.Node, fsize uint64) (*lockedfile.File, error) {
+	ctx, span := tracer.Start(ctx, "CreateNewNode")
 	defer span.End()
-	return os.Open(upload.binPath)
-}
 
-// FinishUpload finishes an upload and moves the file to the internal destination
-func (upload *Upload) FinishUpload(_ context.Context) error {
-	ctx, span := tracer.Start(upload.Ctx, "FinishUpload")
-	defer span.End()
-	// set lockID to context
-	if upload.Info.MetaData["lockid"] != "" {
-		upload.Ctx = ctxpkg.ContextSetLockID(upload.Ctx, upload.Info.MetaData["lockid"])
+	// create folder structure (if needed)
+	if err := os.MkdirAll(filepath.Dir(n.InternalPath()), 0700); err != nil {
+		return nil, err
 	}
 
-	log := appctx.GetLogger(upload.Ctx)
-
-	// calculate the checksum of the written bytes
-	// they will all be written to the metadata later, so we cannot omit any of them
-	// TODO only calculate the checksum in sync that was requested to match, the rest could be async ... but the tests currently expect all to be present
-	// TODO the hashes all implement BinaryMarshaler so we could try to persist the state for resumable upload. we would neet do keep track of the copied bytes ...
-	sha1h := sha1.New()
-	md5h := md5.New()
-	adler32h := adler32.New()
-	{
-		_, subspan := tracer.Start(ctx, "os.Open")
-		f, err := os.Open(upload.binPath)
-		subspan.End()
-		if err != nil {
-			// we can continue if no oc checksum header is set
-			log.Info().Err(err).Str("binPath", upload.binPath).Msg("error opening binPath")
-		}
-		defer f.Close()
-
-		r1 := io.TeeReader(f, sha1h)
-		r2 := io.TeeReader(r1, md5h)
-
-		_, subspan = tracer.Start(ctx, "io.Copy")
-		_, err = io.Copy(adler32h, r2)
-		subspan.End()
-		if err != nil {
-			log.Info().Err(err).Msg("error copying checksums")
-		}
-	}
-
-	// compare if they match the sent checksum
-	// TODO the tus checksum extension would do this on every chunk, but I currently don't see an easy way to pass in the requested checksum. for now we do it in FinishUpload which is also called for chunked uploads
-	if upload.Info.MetaData["checksum"] != "" {
-		var err error
-		parts := strings.SplitN(upload.Info.MetaData["checksum"], " ", 2)
-		if len(parts) != 2 {
-			return errtypes.BadRequest("invalid checksum format. must be '[algorithm] [checksum]'")
-		}
-		switch parts[0] {
-		case "sha1":
-			err = upload.checkHash(parts[1], sha1h)
-		case "md5":
-			err = upload.checkHash(parts[1], md5h)
-		case "adler32":
-			err = upload.checkHash(parts[1], adler32h)
-		default:
-			err = errtypes.BadRequest("unsupported checksum algorithm: " + parts[0])
-		}
-		if err != nil {
-			Cleanup(upload, true, false)
-			return err
-		}
-	}
-
-	// update checksums
-	attrs := node.Attributes{
-		prefixes.ChecksumPrefix + "sha1":    sha1h.Sum(nil),
-		prefixes.ChecksumPrefix + "md5":     md5h.Sum(nil),
-		prefixes.ChecksumPrefix + "adler32": adler32h.Sum(nil),
-	}
-
-	n, err := CreateNodeForUpload(upload, attrs)
+	// create and write lock new node metadata by parentid/name
+	f, err := lockedfile.OpenFile(lu.MetadataBackend().LockfilePath(n.InternalPath()), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
-		Cleanup(upload, true, false)
+		return nil, err
+	}
+
+	// we also need to touch the actual node file here it stores the mtime of the resource
+	h, err := os.OpenFile(n.InternalPath(), os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return f, err
+	}
+	h.Close()
+
+	if _, err := node.CheckQuota(ctx, n.SpaceRoot, false, 0, fsize); err != nil {
+		return f, err
+	}
+
+	// link child name to parent if it is new
+	childNameLink := filepath.Join(n.ParentPath(), n.Name)
+	relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
+	log := appctx.GetLogger(ctx).With().Str("childNameLink", childNameLink).Str("relativeNodePath", relativeNodePath).Logger()
+	log.Info().Msg("createNewNode: creating symlink")
+
+	if err = os.Symlink(relativeNodePath, childNameLink); err != nil {
+		log.Info().Err(err).Msg("createNewNode: symlink failed")
+		if errors.Is(err, iofs.ErrExist) {
+			log.Info().Err(err).Msg("createNewNode: symlink already exists")
+
+			return f, errtypes.AlreadyExists(n.Name)
+		}
+		return f, errors.Wrap(err, "Decomposedfs: could not symlink child entry")
+	}
+	log.Info().Msg("createNewNode: symlink created")
+
+	return f, nil
+}
+
+// AddRevisionToNode will create the target node for the Upload
+// TODO this should be CreateRevision
+// - if the node does not exist it is created and assigned an id, no blob id?
+// - then always write out a revision node
+// - when postprocessing finishes copy metadata to node and replace latest revision node with previous blob info. if blobid is empty delete previous revision completely?
+func AddRevisionToNode(ctx context.Context, lu *lookup.Lookup, info tusd.FileInfo, attrs node.Attributes) (*node.Node, error) {
+	ctx, span := tracer.Start(ctx, "AddRevisionToNode")
+	defer span.End()
+	log := appctx.GetLogger(ctx).With().Str("uploadID", info.ID).Logger()
+
+	// check lock
+	if info.MetaData[tus.CS3Prefix+"lockid"] != "" {
+		ctx = ctxpkg.ContextSetLockID(ctx, info.MetaData[tus.CS3Prefix+"lockid"])
+	}
+
+	var err error
+
+	// FIXME should uploads fail if they try to overwrite an existing file?
+	// but if the webdav overwrite header is set ... two concurrent requests might each create a node with a different id ... -> same problem
+	// two concurrent requests that would create a new node would return different ids ...
+	// what if we generate an id based on the parent id and the filename?
+	// - no, then renaming the file and recreating a node with the provious name would generate the same id
+	// -> we have to create the node on initialize upload with processing true?
+
+	var n *node.Node
+	var revisionHandle, nodeHandle *lockedfile.File
+	if info.MetaData[tus.CS3Prefix+"NodeId"] == "" {
+		// we need to check if the node exists via parentid & child name
+		p, err := node.ReadNode(ctx, lu, info.MetaData[tus.CS3Prefix+"SpaceRoot"], info.MetaData[tus.CS3Prefix+"NodeParentId"], false, nil, true)
+		if err != nil {
+			log.Error().Err(err).Msg("could not read parent node")
+			return nil, err
+		}
+		if !p.Exists {
+			return nil, errtypes.PreconditionFailed("parent does not exist")
+		}
+		n, err = p.Child(ctx, info.MetaData[tus.CS3Prefix+"filename"])
+		if err != nil {
+			log.Error().Err(err).Msg("could not read parent node")
+			return nil, err
+		}
+		if !n.Exists {
+			n.ID = uuid.New().String()
+			nodeHandle, err = initNewNode(ctx, lu, info, n)
+			if err != nil {
+				log.Error().Err(err).Msg("could not init new node")
+				return nil, err
+			}
+			log.Info().Str("lockfile", nodeHandle.Name()).Msg("got lock file from initNewNode")
+		} else {
+			nodeHandle, err = openExistingNode(ctx, lu, n)
+			if err != nil {
+				log.Error().Err(err).Msg("could not open existing node")
+				return nil, err
+			}
+			log.Info().Str("lockfile", nodeHandle.Name()).Msg("got lock file from openExistingNode")
+		}
+	}
+
+	if nodeHandle == nil {
+		n, err = node.ReadNode(ctx, lu, info.MetaData[tus.CS3Prefix+"SpaceRoot"], info.MetaData[tus.CS3Prefix+"NodeId"], false, nil, true)
+		if err != nil {
+			log.Error().Err(err).Msg("could not read parent node")
+			return nil, err
+		}
+		nodeHandle, err = openExistingNode(ctx, lu, n)
+		if err != nil {
+			log.Error().Err(err).Msg("could not open existing node")
+			return nil, err
+		}
+		log.Info().Str("lockfile", nodeHandle.Name()).Msg("got lock file from openExistingNode")
+	}
+	defer func() {
+		if nodeHandle == nil {
+			return
+		}
+		if err := nodeHandle.Close(); err != nil {
+			log.Error().Err(err).Str("nodeid", n.ID).Str("parentid", n.ParentID).Msg("could not close lock")
+		}
+	}()
+
+	err = validateRequest(ctx, info, n)
+	if err != nil {
+		return nil, err
+	}
+
+	newBlobID := uuid.New().String()
+
+	// set processing status of node
+	nodeAttrs := node.Attributes{}
+	// store new Blobid and Blobsize in node
+	// nodeAttrs.SetString(prefixes.BlobIDAttr, newBlobID) // BlobID is checked when removing a revision to decide if we also need to delete the node
+	// hm ... check if any other revisions are still available?
+	nodeAttrs.SetInt64(prefixes.BlobsizeAttr, info.Size) // FIXME ... argh now the propagation needs to revert the size diff propagation again
+	nodeAttrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+info.ID)
+	err = n.SetXattrsWithContext(ctx, nodeAttrs, false)
+	if err != nil {
+		return nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
+	}
+
+	revisionNode, err := n.ReadRevision(ctx, info.MetaData[tus.CS3Prefix+"RevisionTime"])
+	if err != nil {
+		return nil, err
+	}
+
+	revisionHandle, err = createRevisionNode(ctx, lu, revisionNode)
+	defer func() {
+		if revisionHandle == nil {
+			return
+		}
+		if err := revisionHandle.Close(); err != nil {
+			log.Error().Err(err).Str("nodeid", revisionNode.ID).Str("parentid", revisionNode.ParentID).Msg("could not close lock")
+		}
+	}()
+	if err != nil {
+		return nil, err
+	}
+
+	// set upload related metadata
+	if info.MetaData[tus.TusPrefix+"mtime"] == "" {
+		attrs.SetString(prefixes.MTimeAttr, info.MetaData[tus.CS3Prefix+"RevisionTime"])
+	} else {
+		// overwrite mtime if requested
+		mtime, err := utils.MTimeToTime(info.MetaData[tus.TusPrefix+"mtime"])
+		if err != nil {
+			return nil, err
+		}
+		attrs.SetString(prefixes.MTimeAttr, mtime.UTC().Format(time.RFC3339Nano))
+	}
+	attrs.SetString(prefixes.BlobIDAttr, newBlobID)
+	attrs.SetInt64(prefixes.BlobsizeAttr, info.Size)
+	// TODO we should persist all versions as writes with ranges and the blobid in the node metadata
+	// attrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+info.ID)
+
+	err = revisionNode.SetXattrsWithContext(ctx, attrs, false)
+	if err != nil {
+		return nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
+	}
+
+	return n, nil
+}
+
+func validateRequest(ctx context.Context, info tusd.FileInfo, n *node.Node) error {
+	if err := n.CheckLock(ctx); err != nil {
 		return err
 	}
 
-	upload.Node = n
+	if _, err := node.CheckQuota(ctx, n.SpaceRoot, true, uint64(n.Blobsize), uint64(info.Size)); err != nil {
+		return err
+	}
 
-	if upload.pub != nil {
-		u, _ := ctxpkg.ContextGetUser(upload.Ctx)
-		s, err := upload.URL(upload.Ctx)
-		if err != nil {
-			return err
-		}
+	mtime, err := n.GetMTime(ctx)
+	if err != nil {
+		return err
+	}
+	currentEtag, err := node.CalculateEtag(n, mtime)
+	if err != nil {
+		return err
+	}
 
-		if err := events.Publish(ctx, upload.pub, events.BytesReceived{
-			UploadID:      upload.Info.ID,
-			URL:           s,
-			SpaceOwner:    n.SpaceOwnerOrManager(upload.Ctx),
-			ExecutingUser: u,
-			ResourceID:    &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID},
-			Filename:      upload.Info.Storage["NodeName"],
-			Filesize:      uint64(upload.Info.Size),
-		}); err != nil {
-			return err
+	// When the if-match header was set we need to check if the
+	// etag still matches before finishing the upload.
+	if ifMatch, ok := info.MetaData[tus.CS3Prefix+"if-match"]; ok {
+		if ifMatch != currentEtag {
+			return errtypes.Aborted("etag mismatch")
 		}
 	}
 
-	if !upload.async {
-		// handle postprocessing synchronously
-		err = upload.Finalize()
-		Cleanup(upload, err != nil, false)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to upload")
-			return err
+	// When the if-none-match header was set we need to check if any of the
+	// etags matches before finishing the upload.
+	if ifNoneMatch, ok := info.MetaData[tus.CS3Prefix+"if-none-match"]; ok {
+		if ifNoneMatch == "*" {
+			return errtypes.Aborted("etag mismatch, resource exists")
+		}
+		for _, ifNoneMatchTag := range strings.Split(ifNoneMatch, ",") {
+			if ifNoneMatchTag == currentEtag {
+				return errtypes.Aborted("etag mismatch")
+			}
 		}
 	}
 
-	return upload.tp.Propagate(upload.Ctx, n, upload.SizeDiff)
-}
+	// When the if-unmodified-since header was set we need to check if the
+	// etag still matches before finishing the upload.
+	if ifUnmodifiedSince, ok := info.MetaData[tus.CS3Prefix+"if-unmodified-since"]; ok {
+		if err != nil {
+			return errtypes.InternalError(fmt.Sprintf("failed to read mtime of node: %s", err))
+		}
+		ifUnmodifiedSince, err := time.Parse(time.RFC3339Nano, ifUnmodifiedSince)
+		if err != nil {
+			return errtypes.InternalError(fmt.Sprintf("failed to parse if-unmodified-since time: %s", err))
+		}
 
-// Terminate terminates the upload
-func (upload *Upload) Terminate(_ context.Context) error {
-	upload.cleanup(true, true, true)
+		if mtime.After(ifUnmodifiedSince) {
+			return errtypes.Aborted("if-unmodified-since mismatch")
+		}
+	}
 	return nil
 }
 
-// DeclareLength updates the upload length information
-func (upload *Upload) DeclareLength(_ context.Context, length int64) error {
-	upload.Info.Size = length
-	upload.Info.SizeIsDeferred = false
-	return upload.writeInfo()
+func openExistingNode(ctx context.Context, lu *lookup.Lookup, n *node.Node) (*lockedfile.File, error) {
+	// create and read lock existing node metadata
+	return lockedfile.OpenFile(lu.MetadataBackend().LockfilePath(n.InternalPath()), os.O_RDONLY, 0600)
+}
+func initNewNode(ctx context.Context, lu *lookup.Lookup, info tusd.FileInfo, n *node.Node) (*lockedfile.File, error) {
+	nodePath := n.InternalPath()
+	// create folder structure (if needed)
+	if err := os.MkdirAll(filepath.Dir(nodePath), 0700); err != nil {
+		return nil, err
+	}
+
+	// create and write lock new node metadata
+	f, err := lockedfile.OpenFile(lu.MetadataBackend().LockfilePath(nodePath), os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		return nil, err
+	}
+
+	// FIXME if this is removed links to files will be dangling, causing subsequest stats to files to fail
+	// we also need to touch the actual node file here it stores the mtime of the resource
+	h, err := os.OpenFile(nodePath, os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return f, err
+	}
+	h.Close()
+
+	// link child name to parent if it is new
+	childNameLink := filepath.Join(n.ParentPath(), n.Name)
+	relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
+	log := appctx.GetLogger(ctx).With().Str("childNameLink", childNameLink).Str("relativeNodePath", relativeNodePath).Logger()
+	log.Info().Msg("initNewNode: creating symlink")
+
+	if err = os.Symlink(relativeNodePath, childNameLink); err != nil {
+		log.Info().Err(err).Msg("initNewNode: symlink failed")
+		if errors.Is(err, iofs.ErrExist) {
+			log.Info().Err(err).Msg("initNewNode: symlink already exists")
+			return f, errtypes.AlreadyExists(n.Name)
+		}
+		return f, errors.Wrap(err, "Decomposedfs: could not symlink child entry")
+	}
+	log.Info().Msg("initNewNode: symlink created")
+
+	attrs := node.Attributes{}
+	attrs.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_FILE))
+	attrs.SetString(prefixes.ParentidAttr, n.ParentID)
+	attrs.SetString(prefixes.NameAttr, n.Name)
+	attrs.SetString(prefixes.MTimeAttr, info.MetaData[tus.CS3Prefix+"RevisionTime"])
+
+	// here we set the status the first time.
+	attrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+info.ID)
+
+	// update node metadata with basic metadata
+	err = n.SetXattrsWithContext(ctx, attrs, false)
+	if err != nil {
+		return nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
+	}
+	return f, nil
 }
 
-// ConcatUploads concatenates multiple uploads
-func (upload *Upload) ConcatUploads(_ context.Context, uploads []tusd.Upload) (err error) {
-	file, err := os.OpenFile(upload.binPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
+func createRevisionNode(ctx context.Context, lu *lookup.Lookup, revisionNode *node.Node) (*lockedfile.File, error) {
+	revisionPath := revisionNode.InternalPath()
+	// write lock existing node before reading any metadata
+	f, err := lockedfile.OpenFile(lu.MetadataBackend().LockfilePath(revisionPath), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer file.Close()
 
-	for _, partialUpload := range uploads {
-		fileUpload := partialUpload.(*Upload)
+	// FIXME if this is removed listing revisions breaks because it globs the dir but then filters all metadata files
+	// we also need to touch the a vorsions node here to list revisions
+	h, err := os.OpenFile(revisionPath, os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return f, err
+	}
+	h.Close()
+	return f, nil
+}
 
-		src, err := os.Open(fileUpload.binPath)
+func SetNodeToRevision(ctx context.Context, lu *lookup.Lookup, n *node.Node, revision string) (int64, error) {
+
+	nodePath := n.InternalPath()
+	// lock existing node metadata
+	f, err := lockedfile.OpenFile(lu.MetadataBackend().LockfilePath(nodePath), os.O_RDWR, 0600)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+	// read nodes
+
+	n, err = node.ReadNode(ctx, lu, n.SpaceID, n.ID, false, n.SpaceRoot, true)
+	if err != nil {
+		return 0, err
+	}
+
+	revisionNode, err := n.ReadRevision(ctx, revision)
+	if err != nil {
+		return 0, err
+	}
+
+	sizeDiff := revisionNode.Blobsize - n.Blobsize
+
+	n.BlobID = revisionNode.BlobID
+	n.Blobsize = revisionNode.Blobsize
+
+	revisionAttrs, err := revisionNode.Xattrs(ctx)
+	if err != nil {
+		return 0, err
+	}
+	attrs := node.Attributes{}
+	attrs.SetString(prefixes.BlobIDAttr, revisionNode.BlobID)
+	attrs.SetInt64(prefixes.BlobsizeAttr, revisionNode.Blobsize)
+	attrs[prefixes.MTimeAttr] = revisionAttrs[prefixes.MTimeAttr]
+
+	// copy checksums TODO we need to make sure ALL old checksums are wiped
+	for k, v := range revisionAttrs {
+		if strings.HasPrefix(k, prefixes.ChecksumPrefix) {
+			attrs[k] = v
+		}
+	}
+
+	err = n.SetXattrsWithContext(ctx, attrs, false)
+	if err != nil {
+		return 0, errors.Wrap(err, "Decomposedfs: could not write metadata")
+	}
+
+	return sizeDiff, nil
+}
+
+func ReadNode(ctx context.Context, lu *lookup.Lookup, info tusd.FileInfo) (*node.Node, error) {
+	var n *node.Node
+	var err error
+	if info.MetaData[tus.CS3Prefix+"NodeId"] == "" {
+		p, err := node.ReadNode(ctx, lu, info.MetaData[tus.CS3Prefix+"SpaceRoot"], info.MetaData[tus.CS3Prefix+"NodeParentId"], false, nil, true)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		defer src.Close()
-
-		if _, err := io.Copy(file, src); err != nil {
-			return err
+		n, err = p.Child(ctx, info.MetaData[tus.CS3Prefix+"filename"])
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		n, err = node.ReadNode(ctx, lu, info.MetaData[tus.CS3Prefix+"SpaceRoot"], info.MetaData[tus.CS3Prefix+"NodeId"], false, nil, true)
+		if err != nil {
+			return nil, err
 		}
 	}
-
-	return
+	return n, nil
 }
 
-// writeInfo updates the entire information. Everything will be overwritten.
-func (upload *Upload) writeInfo() error {
-	_, span := tracer.Start(upload.Ctx, "writeInfo")
+// Cleanup cleans the upload
+func Cleanup(ctx context.Context, lu *lookup.Lookup, n *node.Node, info tusd.FileInfo, failure bool) {
+	ctx, span := tracer.Start(ctx, "Cleanup")
 	defer span.End()
-	data, err := json.Marshal(upload.Info)
-	if err != nil {
-		return err
+
+	if n != nil { // node can be nil when there was an error before it was created (eg. checksum-mismatch)
+		if failure {
+			removeRevision(ctx, lu, n, info.MetaData[tus.CS3Prefix+"RevisionTime"])
+		}
+		// unset processing status
+		if err := n.UnmarkProcessing(ctx, info.ID); err != nil {
+			log := appctx.GetLogger(ctx)
+			log.Info().Str("path", n.InternalPath()).Err(err).Msg("unmarking processing failed")
+		}
 	}
-	return os.WriteFile(upload.infoPath, data, defaultFilePerm)
+}
+
+// removeRevision cleans up after the upload is finished
+func removeRevision(ctx context.Context, lu *lookup.Lookup, n *node.Node, revision string) {
+	log := appctx.GetLogger(ctx)
+	nodePath := n.InternalPath()
+	revisionPath := nodePath + node.RevisionIDDelimiter + revision
+	// remove revision
+	if err := utils.RemoveItem(revisionPath); err != nil {
+		log.Info().Str("path", revisionPath).Err(err).Msg("removing revision failed")
+	}
+	// purge revision metadata to clean up cache
+	if err := lu.MetadataBackend().Purge(revisionPath); err != nil {
+		log.Info().Str("path", revisionPath).Err(err).Msg("purging revision metadata failed")
+	}
+
+	if n.BlobID == "" { // FIXME ... this is brittle
+		// no old version was present - remove child entry symlink from directory
+		src := filepath.Join(n.ParentPath(), n.Name)
+		if err := os.Remove(src); err != nil {
+			log.Info().Str("path", n.ParentPath()).Err(err).Msg("removing node from parent failed")
+		}
+
+		// delete node
+		if err := utils.RemoveItem(nodePath); err != nil {
+			log.Info().Str("path", nodePath).Err(err).Msg("removing node failed")
+		}
+
+		// purge node metadata to clean up cache
+		if err := lu.MetadataBackend().Purge(nodePath); err != nil {
+			log.Info().Str("path", nodePath).Err(err).Msg("purging node metadata failed")
+		}
+	}
 }
 
 // Finalize finalizes the upload (eg moves the file to the internal destination)
-func (upload *Upload) Finalize() (err error) {
-	ctx, span := tracer.Start(upload.Ctx, "Finalize")
+func Finalize(ctx context.Context, blobstore tree.Blobstore, info tusd.FileInfo, n *node.Node) error {
+	_, span := tracer.Start(ctx, "Finalize")
 	defer span.End()
-	n := upload.Node
-	if n == nil {
-		var err error
-		n, err = node.ReadNode(ctx, upload.lu, upload.Info.Storage["SpaceRoot"], upload.Info.Storage["NodeId"], false, nil, false)
-		if err != nil {
+
+	rn, err := n.ReadRevision(ctx, info.MetaData[tus.CS3Prefix+"RevisionTime"])
+	if err != nil {
+		return errors.Wrap(err, "failed to read revision")
+	}
+	if mover, ok := blobstore.(tree.BlobstoreMover); ok {
+		err = mover.MoveBlob(rn, "", info.Storage["Bucket"], info.Storage["Key"])
+		switch err {
+		case nil:
+			return nil
+		case tree.ErrBlobstoreCannotMove:
+			// fallback below
+		default:
 			return err
 		}
-		upload.Node = n
 	}
 
 	// upload the data to the blobstore
 	_, subspan := tracer.Start(ctx, "WriteBlob")
-	err = upload.tp.WriteBlob(n, upload.binPath)
+	err = blobstore.Upload(rn, info.Storage["Path"]) // FIXME where do we read from
 	subspan.End()
 	if err != nil {
 		return errors.Wrap(err, "failed to upload file to blostore")
 	}
 
+	// FIXME use a reader
 	return nil
-}
-
-func (upload *Upload) checkHash(expected string, h hash.Hash) error {
-	if expected != hex.EncodeToString(h.Sum(nil)) {
-		return errtypes.ChecksumMismatch(fmt.Sprintf("invalid checksum: expected %s got %x", upload.Info.MetaData["checksum"], h.Sum(nil)))
-	}
-	return nil
-}
-
-// cleanup cleans up after the upload is finished
-func (upload *Upload) cleanup(cleanNode, cleanBin, cleanInfo bool) {
-	if cleanNode && upload.Node != nil {
-		switch p := upload.versionsPath; p {
-		case "":
-			// remove node
-			if err := utils.RemoveItem(upload.Node.InternalPath()); err != nil {
-				upload.log.Info().Str("path", upload.Node.InternalPath()).Err(err).Msg("removing node failed")
-			}
-
-			// no old version was present - remove child entry
-			src := filepath.Join(upload.Node.ParentPath(), upload.Node.Name)
-			if err := os.Remove(src); err != nil {
-				upload.log.Info().Str("path", upload.Node.ParentPath()).Err(err).Msg("removing node from parent failed")
-			}
-
-			// remove node from upload as it no longer exists
-			upload.Node = nil
-		default:
-
-			if err := upload.lu.CopyMetadata(upload.Ctx, p, upload.Node.InternalPath(), func(attributeName string, value []byte) (newValue []byte, copy bool) {
-				return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
-					attributeName == prefixes.TypeAttr ||
-					attributeName == prefixes.BlobIDAttr ||
-					attributeName == prefixes.BlobsizeAttr ||
-					attributeName == prefixes.MTimeAttr
-			}, true); err != nil {
-				upload.log.Info().Str("versionpath", p).Str("nodepath", upload.Node.InternalPath()).Err(err).Msg("renaming version node failed")
-			}
-
-			if err := os.RemoveAll(p); err != nil {
-				upload.log.Info().Str("versionpath", p).Str("nodepath", upload.Node.InternalPath()).Err(err).Msg("error removing version")
-			}
-
-		}
-	}
-
-	if cleanBin {
-		if err := os.Remove(upload.binPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			upload.log.Error().Str("path", upload.binPath).Err(err).Msg("removing upload failed")
-		}
-	}
-
-	if cleanInfo {
-		if err := os.Remove(upload.infoPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			upload.log.Error().Str("path", upload.infoPath).Err(err).Msg("removing upload info failed")
-		}
-	}
-}
-
-// URL returns a url to download an upload
-func (upload *Upload) URL(_ context.Context) (string, error) {
-	type transferClaims struct {
-		jwt.StandardClaims
-		Target string `json:"target"`
-	}
-
-	u := joinurl(upload.tknopts.DownloadEndpoint, "tus/", upload.Info.ID)
-	ttl := time.Duration(upload.tknopts.TransferExpires) * time.Second
-	claims := transferClaims{
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(ttl).Unix(),
-			Audience:  "reva",
-			IssuedAt:  time.Now().Unix(),
-		},
-		Target: u,
-	}
-
-	t := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), claims)
-
-	tkn, err := t.SignedString([]byte(upload.tknopts.TransferSharedSecret))
-	if err != nil {
-		return "", errors.Wrapf(err, "error signing token with claims %+v", claims)
-	}
-
-	return joinurl(upload.tknopts.DataGatewayEndpoint, tkn), nil
-}
-
-// replace with url.JoinPath after switching to go1.19
-func joinurl(paths ...string) string {
-	var s strings.Builder
-	l := len(paths)
-	for i, p := range paths {
-		s.WriteString(p)
-		if !strings.HasSuffix(p, "/") && i != l-1 {
-			s.WriteString("/")
-		}
-	}
-
-	return s.String()
 }

@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/store"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
+	"github.com/tus/tusd/pkg/filestore"
 	"google.golang.org/grpc"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -46,6 +47,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree/mocks"
 	"github.com/cs3org/reva/v2/tests/helpers"
+	tusHandler "github.com/tus/tusd/pkg/handler"
 )
 
 // TestEnv represents a test environment for unit tests
@@ -55,6 +57,7 @@ type TestEnv struct {
 	Tree                 *tree.Tree
 	Permissions          *mocks.PermissionsChecker
 	Blobstore            *treemocks.Blobstore
+	DataStore            tusHandler.DataStore
 	Owner                *userpb.User
 	DeleteAllSpacesUser  *userpb.User
 	DeleteHomeSpacesUser *userpb.User
@@ -89,6 +92,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	if err != nil {
 		return nil, err
 	}
+	dataStore := filestore.New(filepath.Join(tmpRoot, "uploads"))
 	defaultConfig := map[string]interface{}{
 		"root":                tmpRoot,
 		"treetime_accounting": true,
@@ -170,7 +174,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 
 	bs := &treemocks.Blobstore{}
 	tree := tree.New(lu, bs, o, store.Create())
-	fs, err := decomposedfs.New(o, lu, decomposedfs.NewPermissions(permissions, permissionsSelector), tree, nil)
+	fs, err := decomposedfs.New(o, lu, decomposedfs.NewPermissions(permissions, permissionsSelector), tree, nil, dataStore, bs)
 	if err != nil {
 		return nil, err
 	}
@@ -185,6 +189,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		Lookup:               lu,
 		Permissions:          permissions,
 		Blobstore:            bs,
+		DataStore:            dataStore,
 		Owner:                owner,
 		DeleteAllSpacesUser:  deleteAllSpacesUser,
 		DeleteHomeSpacesUser: deleteHomeSpacesUser,

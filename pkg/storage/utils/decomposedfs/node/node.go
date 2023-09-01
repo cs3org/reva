@@ -114,6 +114,7 @@ func New(spaceID, id, parentID, name string, blobsize int64, blobID string, t pr
 	if blobID == "" {
 		blobID = uuid.New().String()
 	}
+	// hm but dirs have no blob id
 	return &Node{
 		SpaceID:  spaceID,
 		ID:       id,
@@ -125,6 +126,35 @@ func New(spaceID, id, parentID, name string, blobsize int64, blobID string, t pr
 		BlobID:   blobID,
 		nodeType: &t,
 	}
+}
+
+func (n *Node) ReadRevision(ctx context.Context, revision string) (*Node, error) {
+
+	rn := &Node{
+		SpaceID:  n.SpaceID,
+		ID:       n.ID + RevisionIDDelimiter + revision,
+		ParentID: n.ParentID,
+		Name:     n.Name,
+		owner:    n.owner,
+		lu:       n.lu,
+		nodeType: n.nodeType,
+	}
+	attrs, err := rn.Xattrs(ctx)
+	switch {
+	case metadata.IsNotExist(err):
+		return rn, nil // swallow not found, the node defaults to exists = false
+	case err != nil:
+		return nil, err
+	}
+	rn.Exists = true
+
+	rn.BlobID = attrs.String(prefixes.BlobIDAttr)
+	rn.Blobsize, err = attrs.Int64(prefixes.BlobsizeAttr)
+	if err != nil {
+		return nil, err
+	}
+
+	return rn, nil
 }
 
 // Type returns the node's resource type
@@ -895,7 +925,7 @@ func (n *Node) GetTMTime(ctx context.Context) (time.Time, error) {
 // GetMTime reads the mtime from the extended attributes, falling back to disk
 func (n *Node) GetMTime(ctx context.Context) (time.Time, error) {
 	b, err := n.XattrString(ctx, prefixes.MTimeAttr)
-	if err != nil {
+	if err != nil || len(b) == 0 {
 		fi, err := os.Lstat(n.InternalPath())
 		if err != nil {
 			return time.Time{}, err

@@ -33,7 +33,7 @@ func TestInitNewNode(t *testing.T) {
 	}
 	n := node.New("e48c4e7a-beac-4b82-b991-a5cff7b8c39c", "930b7a2e-b745-41e1-8a9b-712582021842", "e48c4e7a-beac-4b82-b991-a5cff7b8c39c", "newchild", 10, "26493c53-2634-45f8-949f-dc07b88df9b0", providerv1beta1.ResourceType_RESOURCE_TYPE_FILE, &userv1beta1.UserId{}, lookup)
 	n.SpaceRoot = rootNode
-	f, err := initNewNode(&Upload{Ctx: context.Background(), lu: lookup, Info: handler.FileInfo{MetaData: handler.MetaData{}}}, n, 10)
+	f, err := initNewNode(context.Background(), lookup, handler.FileInfo{MetaData: handler.MetaData{}}, n)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -42,7 +42,7 @@ func TestInitNewNode(t *testing.T) {
 	// try initializing the same new node again in case a concurrent requests tries to create a file with the same name
 	n = node.New("e48c4e7a-beac-4b82-b991-a5cff7b8c39c", "a6ede986-cfcd-41c5-a820-6eee955a1c2b", "e48c4e7a-beac-4b82-b991-a5cff7b8c39c", "newchild", 10, "26493c53-2634-45f8-949f-dc07b88df9b0", providerv1beta1.ResourceType_RESOURCE_TYPE_FILE, &userv1beta1.UserId{}, lookup)
 	n.SpaceRoot = rootNode
-	f2, err := initNewNode(&Upload{Ctx: context.Background(), lu: lookup, Info: handler.FileInfo{MetaData: handler.MetaData{}}}, n, 10)
+	f2, err := initNewNode(context.Background(), lookup, handler.FileInfo{MetaData: handler.MetaData{}}, n)
 	if _, ok := err.(errtypes.IsAlreadyExists); !ok {
 		t.Fatalf(`initNewNode(with same 'newchild' name), %v, want %v`, err, errtypes.AlreadyExists("newchild"))
 	}

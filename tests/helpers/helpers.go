@@ -94,6 +94,11 @@ func TempJSONFile(c any) (string, error) {
 
 // Upload can be used to initiate an upload and do the upload to a storage.FS in one step
 func Upload(ctx context.Context, fs storage.FS, ref *provider.Reference, content []byte) error {
+	/*
+		FIXME always send size ... needs upated nextcloud tests
+		size := len(content)
+		uploadIds, err := fs.InitiateUpload(ctx, ref, int64(size), map[string]string{})
+	*/
 	uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
 	if err != nil {
 		return err

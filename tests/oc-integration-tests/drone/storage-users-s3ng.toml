@@ -28,6 +28,8 @@ permissionssvc = "localhost:10000"
 "s3.bucket" = "test"
 "s3.access_key" = "test"
 "s3.secret_key" = "test"
+"s3.disable_ssl" = true
+"s3.force_path_style" = true
 "metadata_backend" = "xattrs"
 
 # we have a locally running dataprovider
@@ -48,4 +50,6 @@ permissionssvc = "localhost:10000"
 "s3.bucket" = "test"
 "s3.access_key" = "test"
 "s3.secret_key" = "test"
+"s3.disable_ssl" = true
+"s3.force_path_style" = true
 "metadata_backend" = "xattrs"
