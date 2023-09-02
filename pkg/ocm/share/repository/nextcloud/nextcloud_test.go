@@ -588,19 +588,16 @@ var _ = Describe("Nextcloud", func() {
 						UserId: &userpb.UserId{
 							Idp:      "0.0.0.0:19000",
 							OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-							Type:     userpb.UserType_USER_TYPE_PRIMARY,
 						},
 					},
 				},
 				Owner: &userpb.UserId{
 					Idp:      "0.0.0.0:19000",
 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Creator: &userpb.UserId{
 					Idp:      "0.0.0.0:19000",
 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Ctime: &types.Timestamp{
 					Seconds:              1234567890,
