@@ -26,8 +26,10 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	masked_share "github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/repository/nextcloud"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
 	. "github.com/onsi/ginkgo"
@@ -257,25 +259,27 @@ var _ = Describe("Nextcloud", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*share).To(Equal(ocm.Share{
-				Id: &ocm.ShareId{},
+				Id:         &ocm.ShareId{},
+				ResourceId: &provider.ResourceId{},
 				Grantee: &provider.Grantee{
+					Type: provider.GranteeType_GRANTEE_TYPE_USER,
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{
 							Idp:      "0.0.0.0:19000",
 							OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-							Type:     userpb.UserType_USER_TYPE_PRIMARY,
 						},
 					},
 				},
 				Owner: &userpb.UserId{
 					Idp:      "0.0.0.0:19000",
 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Creator: &userpb.UserId{
 					Idp:      "0.0.0.0:19000",
 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-					Type:     userpb.UserType_USER_TYPE_PRIMARY,
+				},
+				AccessMethods: []*ocm.AccessMethod{
+					masked_share.NewWebDavAccessMethod(conversions.RoleFromOCSPermissions(conversions.Permissions(1)).CS3ResourcePermissions()),
 				},
 				Ctime: &types.Timestamp{
 					Seconds:              1234567890,
@@ -291,8 +295,9 @@ var _ = Describe("Nextcloud", func() {
 					XXX_unrecognized:     nil,
 					XXX_sizecache:        0,
 				},
+				Token: "some-token",
 			}))
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/GetShare {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`)
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/GetSentShareByToken {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`)
 		})
 	})
 
@@ -395,19 +400,16 @@ var _ = Describe("Nextcloud", func() {
 						UserId: &userpb.UserId{
 							Idp:      "0.0.0.0:19000",
 							OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-							Type:     userpb.UserType_USER_TYPE_PRIMARY,
 						},
 					},
 				},
 				Owner: &userpb.UserId{
 					Idp:      "0.0.0.0:19000",
 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Creator: &userpb.UserId{
 					Idp:      "0.0.0.0:19000",
 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Ctime: &types.Timestamp{
 					Seconds:              1234567890,
@@ -445,19 +447,16 @@ var _ = Describe("Nextcloud", func() {
 						UserId: &userpb.UserId{
 							Idp:      "0.0.0.0:19000",
 							OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-							Type:     userpb.UserType_USER_TYPE_PRIMARY,
 						},
 					},
 				},
 				Owner: &userpb.UserId{
 					Idp:      "0.0.0.0:19000",
 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Creator: &userpb.UserId{
 					Idp:      "0.0.0.0:19000",
 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Ctime: &types.Timestamp{
 					Seconds:              1234567890,
@@ -501,19 +500,16 @@ var _ = Describe("Nextcloud", func() {
 						UserId: &userpb.UserId{
 							Idp:      "0.0.0.0:19000",
 							OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-							Type:     userpb.UserType_USER_TYPE_PRIMARY,
 						},
 					},
 				},
 				Owner: &userpb.UserId{
 					Idp:      "0.0.0.0:19000",
 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Creator: &userpb.UserId{
 					Idp:      "0.0.0.0:19000",
 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Ctime: &types.Timestamp{
 					Seconds:              1234567890,
@@ -592,19 +588,16 @@ var _ = Describe("Nextcloud", func() {
 						UserId: &userpb.UserId{
 							Idp:      "0.0.0.0:19000",
 							OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-							Type:     userpb.UserType_USER_TYPE_PRIMARY,
 						},
 					},
 				},
 				Owner: &userpb.UserId{
 					Idp:      "0.0.0.0:19000",
 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Creator: &userpb.UserId{
 					Idp:      "0.0.0.0:19000",
 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Ctime: &types.Timestamp{
 					Seconds:              1234567890,
