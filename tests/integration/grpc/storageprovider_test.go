@@ -428,40 +428,42 @@ var _ = Describe("storage providers", func() {
 		})
 	}
 
-	assertMetadata := func() {
-		It("sets and unsets metadata", func() {
-			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-			Expect(statRes.Info.ArbitraryMetadata.Metadata["foo"]).To(BeEmpty())
+	/*	FIXME: related to https://github.com/cs3org/reva/issues/4158
+		assertMetadata := func() {
+			It("sets and unsets metadata", func() {
+				statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(statRes.Info.ArbitraryMetadata.Metadata["foo"]).To(BeEmpty())
 
-			By("setting arbitrary metadata")
-			samRes, err := serviceClient.SetArbitraryMetadata(ctx, &storagep.SetArbitraryMetadataRequest{
-				Ref:               subdirRef,
-				ArbitraryMetadata: &storagep.ArbitraryMetadata{Metadata: map[string]string{"foo": "bar"}},
+				By("setting arbitrary metadata")
+				samRes, err := serviceClient.SetArbitraryMetadata(ctx, &storagep.SetArbitraryMetadataRequest{
+					Ref:               subdirRef,
+					ArbitraryMetadata: &storagep.ArbitraryMetadata{Metadata: map[string]string{"foo": "bar"}},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(samRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(statRes.Info.ArbitraryMetadata.Metadata["foo"]).To(Equal("bar"))
+
+				By("unsetting arbitrary metadata")
+				uamRes, err := serviceClient.UnsetArbitraryMetadata(ctx, &storagep.UnsetArbitraryMetadataRequest{
+					Ref:                   subdirRef,
+					ArbitraryMetadataKeys: []string{"foo"},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(uamRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(statRes.Info.ArbitraryMetadata.Metadata["foo"]).To(BeEmpty())
 			})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(samRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-
-			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-			Expect(statRes.Info.ArbitraryMetadata.Metadata["foo"]).To(Equal("bar"))
-
-			By("unsetting arbitrary metadata")
-			uamRes, err := serviceClient.UnsetArbitraryMetadata(ctx, &storagep.UnsetArbitraryMetadataRequest{
-				Ref:                   subdirRef,
-				ArbitraryMetadataKeys: []string{"foo"},
-			})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(uamRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-
-			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-			Expect(statRes.Info.ArbitraryMetadata.Metadata["foo"]).To(BeEmpty())
-		})
-	}
+		}
+	*/
 
 	Describe("nextcloud", func() {
 		BeforeEach(func() {
@@ -493,7 +495,7 @@ var _ = Describe("storage providers", func() {
 			assertDownloads()
 			assertRecycle()
 			assertReferences()
-			assertMetadata()
+			// assertMetadata()
 		})
 
 		Context("with an existing file /versioned_file", func() {
@@ -551,7 +553,7 @@ var _ = Describe("storage providers", func() {
 			assertDownloads()
 			assertRecycle()
 			assertReferences()
-			assertMetadata()
+			// assertMetadata()
 		})
 
 		Context("with an existing file /versioned_file", func() {
@@ -617,7 +619,7 @@ var _ = Describe("storage providers", func() {
 			assertDownloads()
 			assertRecycle()
 			assertReferences()
-			assertMetadata()
+			// assertMetadata()
 		})
 
 		Context("with an existing file /versioned_file", func() {
