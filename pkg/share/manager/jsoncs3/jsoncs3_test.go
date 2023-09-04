@@ -840,7 +840,7 @@ var _ = Describe("Jsoncs3", func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					rs.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
-					_, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state"}})
+					_, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state"}}, nil)
 					Expect(err).ToNot(HaveOccurred())
 
 					received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
@@ -921,7 +921,7 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
 
 				rs.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
-				rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state"}})
+				rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state"}}, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 
@@ -946,7 +946,7 @@ var _ = Describe("Jsoncs3", func() {
 				rs.MountPoint = &providerv1beta1.Reference{
 					Path: "newMP",
 				}
-				rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"mount_point"}})
+				rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"mount_point"}}, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(rs.MountPoint.Path).To(Equal("newMP"))
 
@@ -967,7 +967,7 @@ var _ = Describe("Jsoncs3", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 
-				_, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"invalid"}})
+				_, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"invalid"}}, nil)
 				Expect(err).To(HaveOccurred())
 			})
 
@@ -992,7 +992,7 @@ var _ = Describe("Jsoncs3", func() {
 					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
 
 					rs.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
-					rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state"}})
+					rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state"}}, nil)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 
@@ -1015,7 +1015,7 @@ var _ = Describe("Jsoncs3", func() {
 					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
 
 					rs.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
-					rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state"}})
+					rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state"}}, nil)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 

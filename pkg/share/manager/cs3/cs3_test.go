@@ -609,7 +609,7 @@ var _ = Describe("Manager", func() {
 				rs.MountPoint.Path = "newPath/"
 
 				rrs, err := m.UpdateReceivedShare(granteeCtx,
-					rs, &fieldmaskpb.FieldMask{Paths: []string{"state", "mount_point"}})
+					rs, &fieldmaskpb.FieldMask{Paths: []string{"state", "mount_point"}}, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(rrs).ToNot(BeNil())
 				Expect(rrs.Share.ResourceId).ToNot(BeNil())
@@ -630,7 +630,7 @@ var _ = Describe("Manager", func() {
 				rs.MountPoint.Path = "newPath/"
 
 				rrs, err := m.UpdateReceivedShare(granteeCtx,
-					rs, &fieldmaskpb.FieldMask{Paths: []string{"mount_point"}})
+					rs, &fieldmaskpb.FieldMask{Paths: []string{"mount_point"}}, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(rrs).ToNot(BeNil())
 				Expect(rrs.Share.ResourceId).ToNot(BeNil())

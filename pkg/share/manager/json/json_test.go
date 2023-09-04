@@ -100,7 +100,7 @@ var _ = Describe("Json", func() {
 			rs.MountPoint = &providerv1beta1.Reference{Path: "newPath/"}
 
 			_, err = m.UpdateReceivedShare(granteeCtx,
-				rs, &fieldmaskpb.FieldMask{Paths: []string{"state", "mount_point"}})
+				rs, &fieldmaskpb.FieldMask{Paths: []string{"state", "mount_point"}}, nil)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
