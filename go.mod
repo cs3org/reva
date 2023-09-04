@@ -67,14 +67,14 @@ require (
 	go.opentelemetry.io/otel/trace v1.11.2
 	go.step.sm/crypto v0.23.2
 	golang.org/x/crypto v0.8.0
-	golang.org/x/oauth2 v0.3.0
+	golang.org/x/oauth2 v0.7.0
 	golang.org/x/sync v0.1.0
 	golang.org/x/sys v0.7.0
 	golang.org/x/term v0.7.0
 	golang.org/x/text v0.13.0
-	google.golang.org/genproto v0.0.0-20221227171554-f9683d7f8bef
-	google.golang.org/grpc v1.52.0
-	google.golang.org/protobuf v1.28.1
+	google.golang.org/genproto v0.0.0-20230526161137-0005af68ea54
+	google.golang.org/grpc v1.57.0
+	google.golang.org/protobuf v1.30.0
 	gotest.tools v2.2.0+incompatible
 )
 
@@ -104,7 +104,7 @@ require (
 	github.com/go-openapi/strfmt v0.21.3 // indirect
 	github.com/gocraft/dbr/v2 v2.7.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b // indirect
+	github.com/golang/glog v1.1.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/flatbuffers v2.0.6+incompatible // indirect
 	github.com/hashicorp/go-hclog v1.5.0 // indirect
@@ -166,6 +166,7 @@ require (
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.7.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230525234030-28d5490b6b19 // indirect
 	gopkg.in/ini.v1 v1.66.6 // indirect
 	gopkg.in/src-d/go-errors.v1 v1.0.0 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
