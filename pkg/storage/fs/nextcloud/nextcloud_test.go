@@ -26,7 +26,6 @@ import (
 	"os"
 	"strings"
 
-	user_masked "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -254,7 +253,7 @@ var _ = Describe("Nextcloud", func() {
 				Path:          "/some/path",
 				PermissionSet: conversions.RoleFromOCSPermissions(conversions.Permissions(0)).CS3ResourcePermissions(),
 				Size:          12345,
-				Owner: &user_masked.UserId{
+				Owner: &userpb.UserId{
 					Idp:      "",
 					OpaqueId: "",
 					Type:     1,
