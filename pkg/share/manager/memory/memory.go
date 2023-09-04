@@ -242,6 +242,8 @@ func (m *manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 							m.shares[i].Permissions = updated.Permissions
 						case "expiration":
 							m.shares[i].Expiration = updated.Expiration
+						case "hide":
+							m.shares[i].Hide = updated.Hide
 						default:
 							return nil, errtypes.NotSupported("updating " + path + " is not supported")
 						}
