@@ -213,6 +213,8 @@ machine_secret = "{{ vars.machine_api_key }}"
 address = "0.0.0.0:443"
 provider_domain = "your.revad.com"
 mesh_directory_url = "https://meshdir.docker/meshdir"
+# for a production deployment, use:
+# mesh_directory_url = 'https://sciencemesh.cesnet.cz/iop/meshdir'
 ocm_mount_point = "/sciencemesh"
 
 [http.services.sciencemesh.smtp_credentials]
