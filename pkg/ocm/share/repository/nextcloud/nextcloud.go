@@ -176,7 +176,7 @@ func (sm *Manager) GetShare(ctx context.Context, user *userpb.User, ref *ocm.Sha
 	if err := json.Unmarshal(body, &altResult); err != nil {
 		return nil, err
 	}
-	log.Debug().Interace("response", &altResult).Msg("got response from GetSentShareByToken endpoint")
+	log.Debug().Interface("response", &altResult).Msg("got response from GetSentShareByToken endpoint")
 	return &ocm.Share{
 		Id: altResult.ID,
 		ResourceId: &provider.ResourceId{
