@@ -287,12 +287,7 @@ var _ = Describe("Nextcloud", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(results)).To(Equal(1))
 			Expect(*results[0]).To(Equal(provider.ResourceInfo{
-				Opaque: &types.Opaque{
-					Map:                  nil,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
-				},
+				Opaque: nil,
 				Type: provider.ResourceType_RESOURCE_TYPE_FILE,
 				Id: &provider.ResourceId{
 					StorageId:            "",
@@ -318,22 +313,16 @@ var _ = Describe("Nextcloud", func() {
 					XXX_sizecache:        0,
 				},
 				Path:          "/some/path",
-				PermissionSet: nil,
+				PermissionSet: conversions.RoleFromOCSPermissions(conversions.Permissions(0)).CS3ResourcePermissions(),
 				Size:          12345,
-				Owner:         nil,
+				Owner: &userpb.UserId{
+					Idp:      "",
+					OpaqueId: "",
+					Type:     1,
+				},
 				Target:        "",
-				CanonicalMetadata: &provider.CanonicalMetadata{
-					Target:               nil,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
-				},
-				ArbitraryMetadata: &provider.ArbitraryMetadata{
-					Metadata:             map[string]string{"some": "arbi", "trary": "meta", "da": "ta"},
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
-				},
+				CanonicalMetadata: nil,
+				ArbitraryMetadata: nil,
 				XXX_NoUnkeyedLiteral: struct{}{},
 				XXX_unrecognized:     nil,
 				XXX_sizecache:        0,
