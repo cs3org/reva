@@ -288,7 +288,7 @@ var _ = Describe("Nextcloud", func() {
 			Expect(len(results)).To(Equal(1))
 			Expect(*results[0]).To(Equal(provider.ResourceInfo{
 				Opaque: nil,
-				Type: provider.ResourceType_RESOURCE_TYPE_FILE,
+				Type:   provider.ResourceType_RESOURCE_TYPE_FILE,
 				Id: &provider.ResourceId{
 					StorageId:            "",
 					OpaqueId:             "fileid-/some/path",
@@ -320,9 +320,9 @@ var _ = Describe("Nextcloud", func() {
 					OpaqueId: "",
 					Type:     1,
 				},
-				Target:        "",
-				CanonicalMetadata: nil,
-				ArbitraryMetadata: nil,
+				Target:               "",
+				CanonicalMetadata:    nil,
+				ArbitraryMetadata:    nil,
 				XXX_NoUnkeyedLiteral: struct{}{},
 				XXX_unrecognized:     nil,
 				XXX_sizecache:        0,
