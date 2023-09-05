@@ -134,14 +134,7 @@ func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransfer
 		ShareID:       req.GetShareId().OpaqueId,
 		UserID:        userID,
 	}
-
-	log.Debug().Msgf("CreateTransfer TxID '%s', SrcTargetURI '%s', DestTargetURI '%s', ShareID '%s', UserID '%s'@'%s'",
-		txInfo.GetId().OpaqueId,
-		req.SrcTargetUri,
-		req.DestTargetUri,
-		req.GetShareId().OpaqueId,
-		userID.OpaqueId,
-		userID.Idp)
+	log.Debug().Interface("transfer", transfer).Msg("CreateTransfer")
 
 	if err := s.storageDriver.StoreTransfer(transfer); err != nil {
 		err = errors.Wrap(err, "datatx service: error NEW saving transfer share: "+datatx.Status_STATUS_INVALID.String())
@@ -166,6 +159,7 @@ func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransfer
 }
 
 func (s *service) GetTransferStatus(ctx context.Context, req *datatx.GetTransferStatusRequest) (*datatx.GetTransferStatusResponse, error) {
+	log := appctx.GetLogger(ctx)
 	transfer, err := s.storageDriver.GetTransfer(req.TxId.OpaqueId)
 	if err != nil {
 		return nil, errtypes.InternalError("datatx service: transfer not found")
@@ -182,6 +176,7 @@ func (s *service) GetTransferStatus(ctx context.Context, req *datatx.GetTransfer
 
 	txInfo.ShareId = &ocm.ShareId{OpaqueId: transfer.ShareID}
 
+	log.Debug().Interface("txInfo", txInfo).Msg("GetTransferStatus")
 	return &datatx.GetTransferStatusResponse{
 		Status: status.NewOK(ctx),
 		TxInfo: txInfo,

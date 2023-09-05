@@ -448,7 +448,7 @@ func (sm *Manager) do(ctx context.Context, a Action, username string) (int, []by
 	url := sm.endPoint + "~" + username + "/api/ocm/" + a.verb
 
 	log := appctx.GetLogger(ctx)
-	log.Info().Msgf("am.do %s %s", url, a.argS)
+	log.Info().Msgf("sm.do %s %s", url, a.argS)
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
 	if err != nil {
 		return 0, nil, err
