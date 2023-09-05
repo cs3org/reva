@@ -1,3 +1,5 @@
+
+/* jshint ignore:start */
 const https = require('https');
 const fs = require('fs');
 const url = require('url');
@@ -308,3 +310,4 @@ const server = https.createServer(HTTPS_OPTIONS, async (req, res) => {
   });
 });
 server.listen(443);
+/* jshint ignore:end */
