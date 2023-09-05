@@ -4,6 +4,8 @@ import (
 	"testing"
 )
 
+var _defaultSpecialCharacters = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
+
 func TestPolicies_Validate(t *testing.T) {
 	type fields struct {
 		minCharacters          int
@@ -27,7 +29,7 @@ func TestPolicies_Validate(t *testing.T) {
 				minUpperCaseCharacters: 29,
 				minDigits:              10,
 				minSpecialCharacters:   32,
-				specialCharacters:      "",
+				specialCharacters:      _defaultSpecialCharacters,
 			},
 			args: "1234567890abcdefghijklmnopqrstuvwxyzäöüABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÜ!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~",
 		},
@@ -63,7 +65,6 @@ func TestPolicies_Validate(t *testing.T) {
 				minUpperCaseCharacters: 3,
 				minDigits:              0,
 				minSpecialCharacters:   0,
-				specialCharacters:      "",
 			},
 			args: "іІїЇЯяЙй",
 		},
@@ -124,6 +125,7 @@ func TestPasswordPolicies_Count(t *testing.T) {
 				wantUpperCaseCharacters: 29,
 				wantDigits:              10,
 				wantSpecialCharacters:   32,
+				specialCharacters:       _defaultSpecialCharacters,
 			},
 			args: "1234567890abcdefghijklmnopqrstuvwxyzäöüABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÜ!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~",
 		},

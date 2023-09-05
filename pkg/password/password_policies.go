@@ -8,8 +8,6 @@ import (
 	"unicode/utf8"
 )
 
-var _defaultSpecialCharacters = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
-
 // Validator describes the interface providing a password Validate method
 type Validator interface {
 	Validate(str string) error
@@ -30,26 +28,24 @@ type Policies struct {
 // NewPasswordPolicies returns a new NewPasswordPolicies instance
 func NewPasswordPolicies(minCharacters, minLowerCaseCharacters, minUpperCaseCharacters, minDigits, minSpecialCharacters int,
 	specialCharacters string) (Validator, error) {
+	p := &Policies{
+		minCharacters:          minCharacters,
+		minLowerCaseCharacters: minLowerCaseCharacters,
+		minUpperCaseCharacters: minUpperCaseCharacters,
+		minDigits:              minDigits,
+		minSpecialCharacters:   minSpecialCharacters,
+		specialCharacters:      specialCharacters,
+	}
 
-	digitsRegexp := regexp.MustCompile("[0-9]")
-	scStr := _defaultSpecialCharacters
+	p.digitsRegexp = regexp.MustCompile("[0-9]")
 	if len(specialCharacters) > 0 {
-		scStr = specialCharacters
+		var err error
+		p.specialCharactersRegexp, err = regexp.Compile(specialCharactersExp(specialCharacters))
+		if err != nil {
+			return nil, err
+		}
 	}
-	specialCharactersRegexp, err := regexp.Compile(specialCharactersExp(scStr))
-	if err != nil {
-		return nil, err
-	}
-	return &Policies{
-		minCharacters:           minCharacters,
-		minLowerCaseCharacters:  minLowerCaseCharacters,
-		minUpperCaseCharacters:  minUpperCaseCharacters,
-		minDigits:               minDigits,
-		minSpecialCharacters:    minSpecialCharacters,
-		specialCharacters:       specialCharacters,
-		digitsRegexp:            digitsRegexp,
-		specialCharactersRegexp: specialCharactersRegexp,
-	}, nil
+	return p, nil
 }
 
 // Validate implements a password validation regarding the policy
@@ -148,6 +144,9 @@ func (s Policies) countDigits(str string) int {
 }
 
 func (s Policies) countSpecialCharacters(str string) int {
+	if s.specialCharactersRegexp == nil {
+		return 0
+	}
 	res := s.specialCharactersRegexp.FindAllStringIndex(str, -1)
 	return len(res)
 }
