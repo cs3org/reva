@@ -268,18 +268,19 @@ func (d *driver) unwrappedOpFromShareCreator(ctx context.Context, share *ocmv1be
 func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string) (*provider.ResourceInfo, error) {
 	share, rel, err := d.shareAndRelativePathFromRef(ctx, ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "Error from shareAndRelativePathFromRef")
+		return nil, errors.Wrap(err, "Error from ocmoutcoming::shareAndRelativePathFromRef")
 	}
 
 	var info *provider.ResourceInfo
 	if err := d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
 		info, err = d.stat(ctx, newRef)
 		if err != nil {
-			return errors.Wrap(err, "Error from stat")
+			// we do not wrap this as we'd mask the original error code
+			return err
 		}
 		return d.augmentResourceInfo(ctx, info, share)
 	}); err != nil {
-		return nil, errors.Wrap(err, "Error from unwrappedOpFromShareCreator")
+		return nil, err
 	}
 
 	return info, nil
