@@ -84,10 +84,10 @@ func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID 
 }
 
 func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Request, parentRef, childRef *provider.Reference, log zerolog.Logger) {
-	if r.Body != http.NoBody {
-		w.WriteHeader(http.StatusUnsupportedMediaType)
-		return
-	}
+	// if r.Body != http.NoBody {
+	// 	w.WriteHeader(http.StatusUnsupportedMediaType)
+	// 	return
+	// }
 
 	client, err := s.getClient()
 	if err != nil {
