@@ -48,6 +48,7 @@ func NewUnary(_ map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 						info.PermissionSet.AddGrant = false
 						info.PermissionSet.RemoveGrant = false
 						info.PermissionSet.UpdateGrant = false
+						info.PermissionSet.DenyGrant = false
 					}
 				}
 			}
@@ -58,6 +59,7 @@ func NewUnary(_ map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 				statResp.Info.PermissionSet.AddGrant = false
 				statResp.Info.PermissionSet.RemoveGrant = false
 				statResp.Info.PermissionSet.UpdateGrant = false
+				statResp.Info.PermissionSet.DenyGrant = false
 			}
 			return resp, err
 		case *provider.AddGrantRequest:
