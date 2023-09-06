@@ -394,7 +394,8 @@ var _ = Describe("Nextcloud", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(1))
 			Expect(*shares[0]).To(Equal(ocm.Share{
-				Id: &ocm.ShareId{},
+				Id:   &ocm.ShareId{},
+				Name: "",
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{
@@ -425,6 +426,7 @@ var _ = Describe("Nextcloud", func() {
 					XXX_unrecognized:     nil,
 					XXX_sizecache:        0,
 				},
+				ShareType: ocm.ShareType_SHARE_TYPE_USER,
 			}))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/ListShares [{"type":4,"Term":{"Creator":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}}]`)
 		})
@@ -441,6 +443,7 @@ var _ = Describe("Nextcloud", func() {
 			Expect(len(receivedShares)).To(Equal(1))
 			Expect(*receivedShares[0]).To(Equal(ocm.ReceivedShare{
 				Id:            &ocm.ShareId{},
+				Name:          "",
 				RemoteShareId: "",
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
@@ -472,7 +475,8 @@ var _ = Describe("Nextcloud", func() {
 					XXX_unrecognized:     nil,
 					XXX_sizecache:        0,
 				},
-				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
+				ShareType: ocm.ShareType_SHARE_TYPE_USER,
+				State:     ocm.ShareState_SHARE_STATE_ACCEPTED,
 			}))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/ListReceivedShares `)
 		})
@@ -494,6 +498,7 @@ var _ = Describe("Nextcloud", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*receivedShare).To(Equal(ocm.ReceivedShare{
 				Id:            &ocm.ShareId{},
+				Name:          "",
 				RemoteShareId: "",
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
@@ -525,7 +530,8 @@ var _ = Describe("Nextcloud", func() {
 					XXX_unrecognized:     nil,
 					XXX_sizecache:        0,
 				},
-				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
+				ShareType: ocm.ShareType_SHARE_TYPE_USER,
+				State:     ocm.ShareState_SHARE_STATE_ACCEPTED,
 			}))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/GetReceivedShare {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`)
 		})
@@ -540,6 +546,7 @@ var _ = Describe("Nextcloud", func() {
 			receivedShare, err := am.UpdateReceivedShare(ctx, user,
 				&ocm.ReceivedShare{
 					Id:            &ocm.ShareId{},
+					Name:          "",
 					RemoteShareId: "",
 					Grantee: &provider.Grantee{
 						Id: &provider.Grantee_UserId{
@@ -574,7 +581,8 @@ var _ = Describe("Nextcloud", func() {
 						XXX_unrecognized:     nil,
 						XXX_sizecache:        0,
 					},
-					State: ocm.ShareState_SHARE_STATE_ACCEPTED,
+					ShareType: ocm.ShareType_SHARE_TYPE_USER,
+					State:     ocm.ShareState_SHARE_STATE_ACCEPTED,
 				},
 				&field_mask.FieldMask{
 					Paths: []string{"state"},
