@@ -41,7 +41,6 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rserverless"
 	"github.com/cs3org/reva/pkg/sharedconf"
-	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils/list"
 	"github.com/cs3org/reva/pkg/utils/maps"
 	netutil "github.com/cs3org/reva/pkg/utils/net"
@@ -349,7 +348,7 @@ func handlePIDFlag(l *zerolog.Logger, pidFile string) (*grace.Watcher, error) {
 
 func initTracing(conf *config.Core) {
 	if conf.TracingEnabled {
-		rtrace.SetTraceProvider(conf.TracingCollector, conf.TracingEndpoint, conf.TracingServiceName)
+		//TODO(labkode): init this
 	}
 }
 

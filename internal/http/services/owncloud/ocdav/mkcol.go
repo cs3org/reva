@@ -27,14 +27,11 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/rs/zerolog"
 )
 
 func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "mkcol")
-	defer span.End()
-
+	ctx := r.Context()
 	fn := path.Join(ns, r.URL.Path)
 	for _, r := range nameRules {
 		if !r.Test(fn) {
@@ -51,9 +48,7 @@ func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string)
 }
 
 func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "spaces_mkcol")
-	defer span.End()
-
+	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Str("handler", "mkcol").Logger()
 
 	parentRef, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, path.Dir(r.URL.Path))

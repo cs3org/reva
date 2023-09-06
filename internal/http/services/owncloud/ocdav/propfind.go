@@ -45,12 +45,9 @@ import (
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/share"
-	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 )
 
 const (
@@ -70,11 +67,7 @@ const (
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace.
 func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
-	defer span.End()
-
-	span.SetAttributes(attribute.String("component", "ocdav"))
-
+	ctx := r.Context()
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
@@ -97,8 +90,7 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 }
 
 func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_propfind")
-	defer span.End()
+	ctx := r.Context()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()
 
@@ -144,9 +136,6 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 }
 
 func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf propfindXML, parentInfo *provider.ResourceInfo, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(ctx, "propfind_response")
-	defer span.End()
-
 	linkFilters := make([]*link.ListPublicSharesRequest_Filter, 0, len(resourceInfos))
 	shareFilters := make([]*collaboration.Filter, 0, len(resourceInfos))
 	for i := range resourceInfos {
@@ -170,7 +159,6 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 		}
 	} else {
 		log.Error().Err(err).Msg("propfindResponse: couldn't list public shares")
-		span.SetStatus(codes.Error, err.Error())
 	}
 
 	var usershares map[string]struct{}
@@ -182,7 +170,6 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 		}
 	} else {
 		log.Error().Err(err).Msg("propfindResponse: couldn't list user shares")
-		span.SetStatus(codes.Error, err.Error())
 	}
 
 	propRes, err := s.multistatusResponse(ctx, &pf, resourceInfos, namespace, usershares, linkshares)

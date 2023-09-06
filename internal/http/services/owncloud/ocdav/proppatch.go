@@ -31,15 +31,12 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
 func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "proppatch")
-	defer span.End()
-
+	ctx := r.Context()
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
@@ -104,9 +101,7 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 }
 
 func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_proppatch")
-	defer span.End()
-
+	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()
 
 	pp, status, err := readProppatch(r.Body)

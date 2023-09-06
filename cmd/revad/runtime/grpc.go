@@ -28,10 +28,8 @@ import (
 	"github.com/cs3org/reva/internal/grpc/interceptors/token"
 	"github.com/cs3org/reva/internal/grpc/interceptors/useragent"
 	"github.com/cs3org/reva/pkg/rgrpc"
-	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 )
 
@@ -80,12 +78,6 @@ func initGRPCInterceptors(conf map[string]map[string]any, unprotected []string, 
 		unaryInterceptors = append(unaryInterceptors, t.Interceptor)
 		logger.Info().Msgf("rgrpc: chaining grpc unary interceptor %s with priority %d", t.Name, t.Priority)
 	}
-
-	unaryInterceptors = append(unaryInterceptors,
-		otelgrpc.UnaryServerInterceptor(
-			otelgrpc.WithTracerProvider(rtrace.Provider),
-			otelgrpc.WithPropagators(rtrace.Propagator)),
-	)
 
 	unaryInterceptors = append([]grpc.UnaryServerInterceptor{
 		appctx.NewUnary(*logger),

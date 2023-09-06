@@ -39,7 +39,6 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/utils/etag"
-	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
@@ -889,17 +888,12 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		}, nil
 	}
 
-	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "Delete")
-	defer span.End()
-
 	if !s.inSharedFolder(ctx, p) {
 		return s.delete(ctx, req)
 	}
 
 	if s.isSharedFolder(ctx, p) {
 		// TODO(labkode): deleting share names should be allowed, means unmounting.
-		err := errtypes.BadRequest("gateway: cannot delete share folder or share name: path=" + p)
-		span.RecordError(err)
 		return &provider.DeleteResponse{
 			Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
 		}, nil
