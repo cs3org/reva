@@ -713,15 +713,6 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 		}, nil
 	}
 
-	// check DeleteRequest for any known opaque properties.
-	if req.Opaque != nil {
-		_, ok := req.Opaque.Map["deleting_shared_resource"]
-		if ok {
-			// it is a binary key; its existence signals true. Although, do not assume.
-			ctx = context.WithValue(ctx, appctx.DeletingSharedResource, true)
-		}
-	}
-
 	if err := s.storage.Delete(ctx, newRef); err != nil {
 		var st *rpc.Status
 		switch err.(type) {

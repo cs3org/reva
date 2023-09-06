@@ -22,10 +22,8 @@ import (
 	"context"
 
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/trace"
 )
-
-// DeletingSharedResource flags to a storage a shared resource is being deleted not by the owner.
-var DeletingSharedResource struct{}
 
 // WithLogger returns a context with an associated logger.
 func WithLogger(ctx context.Context, l *zerolog.Logger) context.Context {
@@ -36,4 +34,9 @@ func WithLogger(ctx context.Context, l *zerolog.Logger) context.Context {
 // or a disabled logger in case no logger is stored inside the context.
 func GetLogger(ctx context.Context) *zerolog.Logger {
 	return zerolog.Ctx(ctx)
+}
+
+func GetTraceID(ctx context.Context) trace.TraceID {
+	traceID := trace.SpanContextFromContext(ctx).TraceID()
+	return traceID
 }
