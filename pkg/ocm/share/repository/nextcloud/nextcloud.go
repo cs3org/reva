@@ -35,6 +35,7 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/repository/registry"
 	"github.com/cs3org/reva/pkg/utils"
@@ -63,7 +64,7 @@ type ShareManagerConfig struct {
 	SharedSecret string `mapstructure:"shared_secret"`
 	WebDAVHost   string `mapstructure:"webdav_host"`
 	MockHTTP     bool   `mapstructure:"mock_http"`
-	MountID      string `mapstructure:"mount_id"`
+	MountID      string `mapstructure:"mount_id" docs:";The Reva mount id to identify the storage provider proxying the EFSS. Note that only one EFSS can be proxied by a given Reva process."`
 }
 
 // Action describes a REST request to forward to the Nextcloud backend.
@@ -160,6 +161,41 @@ func (sm *Manager) StoreShare(ctx context.Context, share *ocm.Share) (*ocm.Share
 	return share, nil
 }
 
+func (sm *Manager) efssShareToOcm(resp *ShareAltMap) *ocm.Share {
+	// Parse the JSON struct returned by the PHP SM app into an OCM share object
+	return &ocm.Share{
+		Id: resp.ID,
+		ResourceId: &provider.ResourceId{
+			OpaqueId:  resp.ResourceID.OpaqueID,
+			StorageId: sm.mountID,
+		},
+		Name:  "", // FIXME missing from SM app
+		Token: resp.Token,
+		Grantee: &provider.Grantee{
+			Type: provider.GranteeType_GRANTEE_TYPE_USER,
+			Id: &provider.Grantee_UserId{
+				UserId: resp.Grantee.ID,
+			},
+		},
+		Owner: &userpb.UserId{
+			OpaqueId: resp.Owner.Id.OpaqueId,
+			Idp:      resp.Owner.Id.Idp,
+		},
+		Creator: &userpb.UserId{
+			OpaqueId: resp.Creator.Id.OpaqueId,
+			Idp:      resp.Creator.Id.Idp,
+		},
+		Ctime:     resp.Ctime,
+		Mtime:     resp.Mtime,
+		ShareType: ocm.ShareType_SHARE_TYPE_USER,
+		AccessMethods: []*ocm.AccessMethod{
+			share.NewWebDavAccessMethod(conversions.RoleFromOCSPermissions(conversions.Permissions(resp.Permissions)).CS3ResourcePermissions()),
+			// FIXME share.NewWebAppAccessMethod()  missing from SM app
+			// FIXME share.NewDataTxAccessMethod()
+		},
+	}
+}
+
 // GetShare gets the information for a share by the given ref.
 func (sm *Manager) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*ocm.Share, error) {
 	data, err := json.Marshal(ref)
@@ -177,35 +213,7 @@ func (sm *Manager) GetShare(ctx context.Context, user *userpb.User, ref *ocm.Sha
 		return nil, err
 	}
 	log.Debug().Interface("response", &altResult).Msg("got response from GetSentShareByToken endpoint")
-	return &ocm.Share{
-		Id: altResult.ID,
-		ResourceId: &provider.ResourceId{
-			OpaqueId:  altResult.ResourceID.OpaqueID,
-			StorageId: sm.mountID,
-		},
-		Grantee: &provider.Grantee{
-			Type: provider.GranteeType_GRANTEE_TYPE_USER,
-			Id: &provider.Grantee_UserId{
-				UserId: altResult.Grantee.ID,
-			},
-		},
-		Owner: &userpb.UserId{
-			OpaqueId: altResult.Owner.Id.OpaqueId,
-			Idp:      altResult.Owner.Id.Idp,
-		},
-		Creator: &userpb.UserId{
-			OpaqueId: altResult.Creator.Id.OpaqueId,
-			Idp:      altResult.Creator.Id.Idp,
-		},
-		AccessMethods: []*ocm.AccessMethod{
-			share.NewWebDavAccessMethod(conversions.RoleFromOCSPermissions(conversions.Permissions(altResult.Permissions)).CS3ResourcePermissions()),
-			// TODO share.NewWebAppAccessMethod()
-			// TODO share.NewDataTxAccessMethod()
-		},
-		Ctime: altResult.Ctime,
-		Mtime: altResult.Mtime,
-		Token: altResult.Token,
-	}, nil
+	return sm.efssShareToOcm(&altResult), nil
 }
 
 // DeleteShare deletes the share pointed by ref.
@@ -238,22 +246,11 @@ func (sm *Manager) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.
 		return nil, err
 	}
 
-	altResult := &ShareAltMap{}
+	altResult := ShareAltMap{}
 	if err := json.Unmarshal(body, &altResult); err != nil {
 		return nil, err
 	}
-	return &ocm.Share{
-		Id: altResult.ID,
-		Grantee: &provider.Grantee{
-			Id: &provider.Grantee_UserId{
-				UserId: altResult.Grantee.ID,
-			},
-		},
-		Owner:   altResult.Owner.Id,
-		Creator: altResult.Creator.Id,
-		Ctime:   altResult.Ctime,
-		Mtime:   altResult.Mtime,
-	}, nil
+	return sm.efssShareToOcm(&altResult), nil
 }
 
 // ListShares returns the shares created by the user. If md is provided is not nil,
@@ -276,18 +273,7 @@ func (sm *Manager) ListShares(ctx context.Context, user *userpb.User, filters []
 
 	var lst = make([]*ocm.Share, 0, len(respArr))
 	for _, altResult := range respArr {
-		lst = append(lst, &ocm.Share{
-			Id: altResult.ID,
-			Grantee: &provider.Grantee{
-				Id: &provider.Grantee_UserId{
-					UserId: altResult.Grantee.ID,
-				},
-			},
-			Owner:   altResult.Owner.Id,
-			Creator: altResult.Creator.Id,
-			Ctime:   altResult.Ctime,
-			Mtime:   altResult.Mtime,
-		})
+		lst = append(lst, sm.efssShareToOcm(&altResult))
 	}
 	return lst, nil
 }
@@ -309,9 +295,30 @@ func (sm *Manager) StoreReceivedShare(ctx context.Context, share *ocm.ReceivedSh
 	return share, nil
 }
 
+func efssReceivedShareToOcm(altResultShare *ReceivedShareAltMap) *ocm.ReceivedShare {
+	// Parse the JSON struct returned by the PHP SM app into an OCM received share object
+	return &ocm.ReceivedShare{
+		Id:            altResultShare.Share.ID,
+		Name:          "",                                 // FIXME missing on SM app
+		RemoteShareId: altResultShare.Share.RemoteShareID, // sic, see https://github.com/cs3org/reva/pull/3852#discussion_r1189681465
+		Grantee: &provider.Grantee{
+			Id: &provider.Grantee_UserId{
+				UserId: altResultShare.Share.Grantee.ID,
+			},
+		},
+		Owner:     altResultShare.Share.Owner.Id,
+		Creator:   altResultShare.Share.Creator.Id,
+		Ctime:     altResultShare.Share.Ctime,
+		Mtime:     altResultShare.Share.Mtime,
+		ShareType: ocm.ShareType_SHARE_TYPE_USER,
+		// ResourceType: provider.ResourceType_RESOURCE_TYPE_FILE or CONTAINER, missing info on SM app
+		// Protocols: []*ocm.Protocol{}   FIXME SM app does not persist multi protocols yet
+		State: altResultShare.State,
+	}
+}
+
 // ListReceivedShares returns the list of shares the user has access.
 func (sm *Manager) ListReceivedShares(ctx context.Context, user *userpb.User) ([]*ocm.ReceivedShare, error) {
-	log := appctx.GetLogger(ctx)
 	_, respBody, err := sm.do(ctx, Action{"ListReceivedShares", ""}, getUsername(user))
 	if err != nil {
 		return nil, err
@@ -324,25 +331,9 @@ func (sm *Manager) ListReceivedShares(ctx context.Context, user *userpb.User) ([
 
 	res := make([]*ocm.ReceivedShare, 0, len(respArr))
 	for _, share := range respArr {
-		altResultShare := share.Share
-		log.Info().Msgf("Unpacking share object %+v\n", altResultShare)
-		if altResultShare == nil {
-			continue
+		if share.Share != nil {
+			res = append(res, efssReceivedShareToOcm(&share))
 		}
-		res = append(res, &ocm.ReceivedShare{
-			Id:            altResultShare.ID,
-			RemoteShareId: altResultShare.RemoteShareID, // sic, see https://github.com/cs3org/reva/pull/3852#discussion_r1189681465
-			Grantee: &provider.Grantee{
-				Id: &provider.Grantee_UserId{
-					UserId: altResultShare.Grantee.ID,
-				},
-			},
-			Owner:   altResultShare.Owner.Id,
-			Creator: altResultShare.Creator.Id,
-			Ctime:   altResultShare.Ctime,
-			Mtime:   altResultShare.Mtime,
-			State:   share.State,
-		})
 	}
 	return res, nil
 }
@@ -365,24 +356,9 @@ func (sm *Manager) GetReceivedShare(ctx context.Context, user *userpb.User, ref 
 	}
 	altResultShare := altResult.Share
 	if altResultShare == nil {
-		return &ocm.ReceivedShare{
-			State: altResult.State,
-		}, nil
+		return nil, errtypes.NotFound("Received share not found from EFSS API")
 	}
-	return &ocm.ReceivedShare{
-		Id:            altResultShare.ID,
-		RemoteShareId: altResultShare.RemoteShareID, // sic, see https://github.com/cs3org/reva/pull/3852#discussion_r1189681465
-		Grantee: &provider.Grantee{
-			Id: &provider.Grantee_UserId{
-				UserId: altResultShare.Grantee.ID,
-			},
-		},
-		Owner:   altResultShare.Owner.Id,
-		Creator: altResultShare.Creator.Id,
-		Ctime:   altResultShare.Ctime,
-		Mtime:   altResultShare.Mtime,
-		State:   altResult.State,
-	}, nil
+	return efssReceivedShareToOcm(&altResult), nil
 }
 
 // UpdateReceivedShare updates the received share with share state.
@@ -413,24 +389,9 @@ func (sm *Manager) UpdateReceivedShare(ctx context.Context, user *userpb.User, s
 	}
 	altResultShare := altResult.Share
 	if altResultShare == nil {
-		return &ocm.ReceivedShare{
-			State: altResult.State,
-		}, nil
+		return nil, errtypes.NotFound("Received share not found from EFSS API")
 	}
-	return &ocm.ReceivedShare{
-		Id:            altResultShare.ID,
-		RemoteShareId: altResultShare.RemoteShareID, // sic, see https://github.com/cs3org/reva/pull/3852#discussion_r1189681465
-		Grantee: &provider.Grantee{
-			Id: &provider.Grantee_UserId{
-				UserId: altResultShare.Grantee.ID,
-			},
-		},
-		Owner:   altResultShare.Owner.Id,
-		Creator: altResultShare.Creator.Id,
-		Ctime:   altResultShare.Ctime,
-		Mtime:   altResultShare.Mtime,
-		State:   altResult.State,
-	}, nil
+	return efssReceivedShareToOcm(&altResult), nil
 }
 
 func getUsername(user *userpb.User) string {
