@@ -174,16 +174,14 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 			if utils.Skip(r.URL.Path, unprotected) {
 				log.Info().Msg("skipping auth check for: " + r.URL.Path)
 				isUnprotectedEndpoint = true
-			}
-
-			ctx, err := authenticateUser(w, r, conf, tokenStrategyChain, tokenManager, tokenWriter, credChain, isUnprotectedEndpoint)
-			if err != nil {
-				if !isUnprotectedEndpoint {
+			} else {
+				ctx, err := authenticateUser(w, r, conf, tokenStrategyChain, tokenManager, tokenWriter, credChain, isUnprotectedEndpoint)
+				if err != nil {
 					return
 				}
-			} else {
 				r = r.WithContext(ctx)
 			}
+
 			h.ServeHTTP(w, r)
 		})
 	}
