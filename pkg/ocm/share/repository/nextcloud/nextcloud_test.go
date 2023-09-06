@@ -261,6 +261,7 @@ var _ = Describe("Nextcloud", func() {
 			Expect(*share).To(Equal(ocm.Share{
 				Id:         &ocm.ShareId{},
 				ResourceId: &provider.ResourceId{},
+				Name:       "",
 				Grantee: &provider.Grantee{
 					Type: provider.GranteeType_GRANTEE_TYPE_USER,
 					Id: &provider.Grantee_UserId{
@@ -295,7 +296,8 @@ var _ = Describe("Nextcloud", func() {
 					XXX_unrecognized:     nil,
 					XXX_sizecache:        0,
 				},
-				Token: "some-token",
+				ShareType: ocm.ShareType_SHARE_TYPE_USER,
+				Token:     "some-token",
 			}))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/GetSentShareByToken {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`)
 		})
@@ -394,9 +396,15 @@ var _ = Describe("Nextcloud", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(1))
 			Expect(*shares[0]).To(Equal(ocm.Share{
-				Id:   &ocm.ShareId{},
+				Id: &ocm.ShareId{},
+				ResourceId: &provider.ResourceId{
+					StorageId: "",
+					OpaqueId:  "",
+					SpaceId:   "",
+				},
 				Name: "",
 				Grantee: &provider.Grantee{
+					Type: provider.GranteeType_GRANTEE_TYPE_USER,
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{
 							Idp:      "0.0.0.0:19000",
@@ -427,6 +435,10 @@ var _ = Describe("Nextcloud", func() {
 					XXX_sizecache:        0,
 				},
 				ShareType: ocm.ShareType_SHARE_TYPE_USER,
+				AccessMethods: []*ocm.AccessMethod{
+					masked_share.NewWebDavAccessMethod(conversions.RoleFromOCSPermissions(conversions.Permissions(1)).CS3ResourcePermissions()),
+				},
+				Token: "some-token",
 			}))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/ListShares [{"type":4,"Term":{"Creator":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}}]`)
 		})
@@ -590,6 +602,7 @@ var _ = Describe("Nextcloud", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*receivedShare).To(Equal(ocm.ReceivedShare{
 				Id:            &ocm.ShareId{},
+				Name:          "",
 				RemoteShareId: "",
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
@@ -621,9 +634,10 @@ var _ = Describe("Nextcloud", func() {
 					XXX_unrecognized:     nil,
 					XXX_sizecache:        0,
 				},
-				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
+				ShareType: ocm.ShareType_SHARE_TYPE_USER,
+				State:     ocm.ShareState_SHARE_STATE_ACCEPTED,
 			}))
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/UpdateReceivedShare {"received_share":{"id":{},"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"owner":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"creator":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"ctime":{"seconds":1234567890},"mtime":{"seconds":1234567890},"state":2},"field_mask":{"paths":["state"]}}`)
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/UpdateReceivedShare {"received_share":{"id":{},"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"owner":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"creator":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"ctime":{"seconds":1234567890},"mtime":{"seconds":1234567890},"share_type":1,"state":2},"field_mask":{"paths":["state"]}}`)
 		})
 	})
 

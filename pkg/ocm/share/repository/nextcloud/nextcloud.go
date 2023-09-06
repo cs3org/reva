@@ -199,7 +199,6 @@ func (sm *Manager) efssShareToOcm(resp *ShareAltMap) *ocm.Share {
 // GetShare gets the information for a share by the given ref.
 func (sm *Manager) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*ocm.Share, error) {
 	data, err := json.Marshal(ref)
-	log := appctx.GetLogger(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +211,6 @@ func (sm *Manager) GetShare(ctx context.Context, user *userpb.User, ref *ocm.Sha
 	if err := json.Unmarshal(body, &altResult); err != nil {
 		return nil, err
 	}
-	log.Debug().Interface("response", &altResult).Msg("got response from GetSentShareByToken endpoint")
 	return sm.efssShareToOcm(&altResult), nil
 }
 
@@ -430,10 +428,10 @@ func (sm *Manager) do(ctx context.Context, a Action, username string) (int, []by
 
 	// curl -i -H 'application/json' -H 'X-Reva-Secret: shared-secret-1' -d '{"md":{"opaque_id":"fileid-/other/q/as"},"g":{"grantee":{"type":1,"Id":{"UserId":{"idp":"revanc2.docker","opaque_id":"marie"}}},"permissions":{"permissions":{"get_path":true,"initiate_file_download":true,"list_container":true,"list_file_versions":true,"stat":true}}},"provider_domain":"cern.ch","resource_type":"file","provider_id":2,"owner_opaque_id":"einstein","owner_display_name":"Albert Einstein","protocol":{"name":"webdav","options":{"sharedSecret":"secret","permissions":"webdav-property"}}}' https://nc1.docker/index.php/apps/sciencemesh/~/api/ocm/addSentShare
 
-	log.Info().Int("status", resp.StatusCode).Msgf("executed action against OC/NC, response: %s", body)
+	log.Info().Int("status", resp.StatusCode).Msgf("sent request to EFSS API, response: %s", body)
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return 0, nil, fmt.Errorf("Unexpected response code from EFSS API: " + strconv.Itoa(resp.StatusCode))
+		return 0, nil, fmt.Errorf("Unexpected response from EFSS API: " + strconv.Itoa(resp.StatusCode))
 	}
 	return resp.StatusCode, body, nil
 }
