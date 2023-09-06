@@ -26,8 +26,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
-	"strings"
+	"path/filepath"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -39,6 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/cs3org/reva/pkg/utils/list"
 	"github.com/pkg/errors"
 )
 
@@ -61,10 +61,8 @@ type StorageDriver struct {
 	client       *http.Client
 }
 
-type StatFromPhp struct {
-	Opaque struct {
-		Map any `json:"map"`
-	} `json:"opaque"`
+// MDFromEFSS is returned by the EFSS to represent a resource.
+type MDFromEFSS struct {
 	Type int `json:"type"`
 	ID   struct {
 		OpaqueID string `json:"opaque_id"`
@@ -93,7 +91,6 @@ type StatFromPhp struct {
 		OpaqueID string `json:"opaque_id"`
 		Idp      string `json:"idp"`
 	} `json:"owner"`
-	Token string `json:"token"`
 }
 
 // New returns an implementation to of the storage.FS interface that talks to
@@ -153,158 +150,88 @@ func (nc *StorageDriver) SetHTTPClient(c *http.Client) {
 	nc.client = c
 }
 
-func (nc *StorageDriver) doUpload(ctx context.Context, filePath string, r io.ReadCloser) error {
+func (nc *StorageDriver) doRaw(ctx context.Context, req *http.Request) (io.ReadCloser, error) {
 	log := appctx.GetLogger(ctx)
-	user, err := getUser(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("error getting user")
-		return err
-	}
 
-	// See https://github.com/pondersource/nc-sciencemesh/issues/5
-	// url := nc.endPoint + "~" + user.Username + "/files/" + filePath
-	url := nc.endPoint + "~" + user.Id.OpaqueId + "/api/storage/Upload/home" + filePath
-	req, err := http.NewRequest(http.MethodPut, url, r)
-	if err != nil {
-		log.Error().Err(err).Msg("error creating PUT request")
-		return err
-	}
-
-	req.Header.Set("X-Reva-Secret", nc.sharedSecret)
-	req.Header.Set("Content-Type", "application/octet-stream")
-	log.Debug().Msgf("sending PUT to NC/OC at %s", url)
+	log.Debug().Str("method", req.Method).Str("url", req.URL.String()).Msg("sending request to EFSS API")
 	resp, err := nc.client.Do(req)
 	if err != nil {
-		log.Error().Err(err).Msg("error sending PUT request")
-		return err
-	}
-	if resp.StatusCode != http.StatusCreated {
-		log.Error().Int("status", resp.StatusCode).Msg("NC/OC response is not ok")
-		return err
+		return nil, errors.Wrap(err, "error sending request")
 	}
 
-	defer resp.Body.Close()
-	return nil
-}
-
-func (nc *StorageDriver) doDownload(ctx context.Context, filePath string) (io.ReadCloser, error) {
-	log := appctx.GetLogger(ctx)
-	user, err := getUser(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("error getting user")
-		return nil, err
-	}
-	// See https://github.com/pondersource/nc-sciencemesh/issues/5
-	// url := nc.endPoint + "~" + user.Username + "/files/" + filePath
-	url := nc.endPoint + "~" + user.Username + "/api/storage/Download/" + filePath
-	req, err := http.NewRequest(http.MethodGet, url, strings.NewReader(""))
-	if err != nil {
-		log.Error().Err(err).Msg("error creating GET request")
-		return nil, err
-	}
-
-	// See https://github.com/cs3org/reva/issues/4118
-	req.Header.Set("X-Reva-Secret", nc.sharedSecret)
-	log.Debug().Msgf("sending GET to NC/OC at %s", url)
-	resp, err := nc.client.Do(req)
-	if err != nil {
-		log.Error().Err(err).Msg("error sending GET request")
-		return nil, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		log.Error().Int("status", resp.StatusCode).Msg("NC/OC response is not ok")
-		return nil, err
-	}
-
-	return resp.Body, nil
-}
-
-func (nc *StorageDriver) doDownloadRevision(ctx context.Context, filePath string, key string) (io.ReadCloser, error) {
-	log := appctx.GetLogger(ctx)
-	user, err := getUser(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("error getting user")
-		return nil, err
-	}
-	// See https://github.com/pondersource/nc-sciencemesh/issues/5
-	url := nc.endPoint + "~" + user.Username + "/api/storage/DownloadRevision/" + url.QueryEscape(key) + "/" + filePath
-	req, err := http.NewRequest(http.MethodGet, url, strings.NewReader(""))
-	if err != nil {
-		log.Error().Err(err).Msg("error creating GET request")
-		return nil, err
-	}
-
-	req.Header.Set("X-Reva-Secret", nc.sharedSecret)
-	log.Debug().Msgf("sending GET to NC/OC at %s", url)
-	resp, err := nc.client.Do(req)
-	if err != nil {
-		log.Error().Err(err).Msg("error sending GET request")
-		return nil, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		log.Error().Int("status", resp.StatusCode).Msg("NC/OC response is not ok")
-		return nil, err
-	}
-
-	return resp.Body, nil
-}
-
-func (nc *StorageDriver) do(ctx context.Context, a Action) (int, []byte, error) {
-	log := appctx.GetLogger(ctx)
-	user, err := getUser(ctx)
-	if err != nil {
-		return 0, nil, err
-	}
-	// See https://github.com/cs3org/reva/issues/2377
-	// for discussion of user.Username vs user.Id.OpaqueId
-	url := nc.endPoint + "~" + user.Id.OpaqueId + "/api/storage/" + a.verb
-	log.Info().Msgf("nc.do req %s %s", url, a.argS)
-	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
-	if err != nil {
-		return 0, nil, err
-	}
-	req.Header.Set("X-Reva-Secret", nc.sharedSecret)
-
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := nc.client.Do(req)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-
-	if err != nil {
-		return 0, nil, err
-	}
-	log.Info().Msgf("nc.do res %s %s", url, string(body))
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusNotFound {
-		return 0, nil, fmt.Errorf("Unexpected response code from EFSS API: " + strconv.Itoa(resp.StatusCode) + ":" + string(body))
+		return nil, fmt.Errorf("Unexpected response code %d from EFSS API", resp.StatusCode)
 	}
-	return resp.StatusCode, body, nil
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, errtypes.NotFound("")
+	}
+
+	return resp.Body, nil
+}
+
+func (nc *StorageDriver) prepareRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
+	user, err := getUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	url, _ := url.JoinPath(nc.endPoint, "~"+user.Id.OpaqueId, "/api/storage", path)
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
+	if err != nil {
+		return nil, errors.Wrap(err, "error creating request")
+	}
+	req.Header.Set("X-Reva-Secret", nc.sharedSecret)
+	return req, nil
+}
+
+// A convenient method that internally uses doRaw and automatically marshals and unmarshals
+// the body request and the body response as json if not nil
+func (nc *StorageDriver) do(ctx context.Context, method, path string, bodyObj, targetObj any) error {
+	var body []byte
+	var err error
+	if bodyObj != nil {
+		body, err = json.Marshal(bodyObj)
+		if err != nil {
+			return errors.Wrap(err, "error marshalling body to json")
+		}
+	}
+
+	req, err := nc.prepareRequest(ctx, method, path, bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := nc.doRaw(ctx, req)
+	if err != nil {
+		return err
+	}
+	defer res.Close()
+
+	if targetObj != nil {
+		if err := json.NewDecoder(res).Decode(targetObj); err != nil {
+			return errors.Wrapf(err, "response %s from EFSS API does not match target type %T", res, targetObj)
+		}
+	}
+	return nil
 }
 
 // GetHome as defined in the storage.FS interface.
 func (nc *StorageDriver) GetHome(ctx context.Context) (string, error) {
-	_, respBody, err := nc.do(ctx, Action{"GetHome", ""})
-	return string(respBody), err
+	var path string
+	err := nc.do(ctx, http.MethodPost, "GetHome", nil, &path)
+	return path, err
 }
 
 // CreateHome as defined in the storage.FS interface.
 func (nc *StorageDriver) CreateHome(ctx context.Context) error {
-	_, _, err := nc.do(ctx, Action{"CreateHome", ""})
-	return err
+	return nc.do(ctx, http.MethodPost, "CreateHome", nil, nil)
 }
 
 // CreateDir as defined in the storage.FS interface.
 func (nc *StorageDriver) CreateDir(ctx context.Context, ref *provider.Reference) error {
-	bodyStr, err := json.Marshal(ref)
-	if err != nil {
-		return err
-	}
-
-	_, _, err = nc.do(ctx, Action{"CreateDir", string(bodyStr)})
-	return err
+	return nc.do(ctx, http.MethodPost, "CreateDir", ref, nil)
 }
 
 // TouchFile as defined in the storage.FS interface.
@@ -314,386 +241,230 @@ func (nc *StorageDriver) TouchFile(ctx context.Context, ref *provider.Reference)
 
 // Delete as defined in the storage.FS interface.
 func (nc *StorageDriver) Delete(ctx context.Context, ref *provider.Reference) error {
-	bodyStr, err := json.Marshal(ref)
-	if err != nil {
-		return err
-	}
+	return nc.do(ctx, http.MethodPost, "Delete", ref, nil)
+}
 
-	_, _, err = nc.do(ctx, Action{"Delete", string(bodyStr)})
-	return err
+type MoveRequest struct {
+	OldRef *provider.Reference `json:"oldRef"`
+	NewRef *provider.Reference `json:"newRef"`
 }
 
 // Move as defined in the storage.FS interface.
 func (nc *StorageDriver) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
-	type paramsObj struct {
-		OldRef *provider.Reference `json:"oldRef"`
-		NewRef *provider.Reference `json:"newRef"`
-	}
-	bodyObj := &paramsObj{
-		OldRef: oldRef,
-		NewRef: newRef,
-	}
-	bodyStr, _ := json.Marshal(bodyObj)
-
-	_, _, err := nc.do(ctx, Action{"Move", string(bodyStr)})
-	return err
+	return nc.do(ctx, http.MethodPost, "Move", MoveRequest{OldRef: oldRef, NewRef: newRef}, nil)
 }
 
-func resInfosFromPhpNode(resp []byte) ([]*provider.ResourceInfo, error) {
-	// Parse the JSON struct returned by the PHP SM app into an array of ResourceInfo,
+func resInfoFromEFSS(respObj *MDFromEFSS) *provider.ResourceInfo {
+	// Parse the JSON struct returned by the PHP SM app into a ResourceInfo,
 	// translating the permissions from ownCloud DB value to CS3 and ignoring non relevant fields.
-	var respArray []StatFromPhp
-	err := json.Unmarshal(resp, &respArray)
-	if err != nil {
-		return nil, err
+	return &provider.ResourceInfo{
+		Id: &provider.ResourceId{
+			OpaqueId: respObj.ID.OpaqueID,
+		},
+		Type: provider.ResourceType(respObj.Type),
+		Checksum: &provider.ResourceChecksum{
+			Type: provider.ResourceChecksumType(respObj.Checksum.Type),
+			Sum:  respObj.Checksum.Sum,
+		},
+		Etag:     respObj.Etag,
+		MimeType: respObj.MimeType,
+		Mtime: &typesv1beta1.Timestamp{
+			Seconds: uint64(respObj.Mtime.Seconds),
+		},
+		Path: respObj.Path,
+		PermissionSet: conversions.RoleFromOCSPermissions(
+			conversions.Permissions(respObj.Permissions)).CS3ResourcePermissions(),
+		Size: uint64(respObj.Size),
+		Owner: &user.UserId{
+			Idp:      respObj.Owner.Idp,
+			OpaqueId: respObj.Owner.OpaqueID,
+			Type:     user.UserType_USER_TYPE_PRIMARY,
+		},
 	}
+}
 
-	var resInfo = make([]*provider.ResourceInfo, len(respArray))
-	for i := 0; i < len(respArray); i++ {
-		respObj := respArray[i]
-		resInfo[i] = &provider.ResourceInfo{
-			Id: &provider.ResourceId{
-				OpaqueId: respObj.ID.OpaqueID,
-			},
-			Type: provider.ResourceType(respObj.Type),
-			Checksum: &provider.ResourceChecksum{
-				Type: provider.ResourceChecksumType(respObj.Checksum.Type),
-				Sum:  respObj.Checksum.Sum,
-			},
-			Etag:     respObj.Etag,
-			MimeType: respObj.MimeType,
-			Mtime: &typesv1beta1.Timestamp{
-				Seconds: uint64(respObj.Mtime.Seconds),
-			},
-			Path:          respObj.Path,
-			PermissionSet: conversions.RoleFromOCSPermissions(conversions.Permissions(respObj.Permissions)).CS3ResourcePermissions(),
-			Size:          uint64(respObj.Size),
-			Owner: &user.UserId{
-				Idp:      respObj.Owner.Idp,
-				OpaqueId: respObj.Owner.OpaqueID,
-				Type:     user.UserType_USER_TYPE_PRIMARY,
-			},
-		}
-	}
-	return resInfo, nil
+type GetMDRequest struct {
+	Ref    *provider.Reference `json:"ref"`
+	MdKeys []string            `json:"mdKeys"`
 }
 
 // GetMD as defined in the storage.FS interface.
 func (nc *StorageDriver) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
-	type paramsObj struct {
-		Ref    *provider.Reference `json:"ref"`
-		MdKeys []string            `json:"mdKeys"`
-		// MetaData provider.ResourceInfo `json:"metaData"`
-	}
-	bodyObj := &paramsObj{
-		Ref:    ref,
-		MdKeys: mdKeys,
-	}
-	log := appctx.GetLogger(ctx)
-	bodyStr, _ := json.Marshal(bodyObj)
-
-	status, body, err := nc.do(ctx, Action{"GetMD", string(bodyStr)})
+	var target MDFromEFSS
+	err := nc.do(ctx, http.MethodPost, "GetMD", GetMDRequest{Ref: ref, MdKeys: mdKeys}, &target)
 	if err != nil {
 		return nil, err
 	}
-	if status == 404 {
-		return nil, errtypes.NotFound("")
-	}
-
-	// use the array parsing for the single metadata payload received here
-	retValue, err := resInfosFromPhpNode(bytes.Join([][]byte{[]byte("["), body, []byte("]")}, []byte{}))
-	if err != nil {
-		log.Error().Err(err).Str("output", string(body)).Msg("Failed to parse output")
-		return nil, err
-	}
-	return retValue[0], nil
+	return resInfoFromEFSS(&target), nil
 }
 
 // ListFolder as defined in the storage.FS interface.
 func (nc *StorageDriver) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
-	type paramsObj struct {
-		Ref    *provider.Reference `json:"ref"`
-		MdKeys []string            `json:"mdKeys"`
-	}
-	bodyObj := &paramsObj{
-		Ref:    ref,
-		MdKeys: mdKeys,
-	}
-	log := appctx.GetLogger(ctx)
-	bodyStr, err := json.Marshal(bodyObj)
+	var l []*MDFromEFSS
+	err := nc.do(ctx, http.MethodPost, "ListFolder", GetMDRequest{Ref: ref, MdKeys: mdKeys}, &l)
 	if err != nil {
 		return nil, err
-	}
-	status, body, err := nc.do(ctx, Action{"ListFolder", string(bodyStr)})
-	if err != nil {
-		return nil, err
-	}
-	if status == 404 {
-		return nil, errtypes.NotFound("")
 	}
 
-	retValue, err := resInfosFromPhpNode(body)
-	if err != nil {
-		log.Error().Err(err).Str("output", string(body)).Msg("Failed to parse output")
-		return nil, err
-	}
-	return retValue, nil
+	return list.Map(l, resInfoFromEFSS), nil
+}
+
+type InitiateUploadRequest struct {
+	Ref          *provider.Reference `json:"ref"`
+	UploadLength int64               `json:"uploadLength"`
+	Metadata     map[string]string   `json:"metadata"`
 }
 
 // InitiateUpload as defined in the storage.FS interface.
 func (nc *StorageDriver) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
-	type paramsObj struct {
-		Ref          *provider.Reference `json:"ref"`
-		UploadLength int64               `json:"uploadLength"`
-		Metadata     map[string]string   `json:"metadata"`
-	}
-	bodyObj := &paramsObj{
-		Ref:          ref,
-		UploadLength: uploadLength,
-		Metadata:     metadata,
-	}
-	bodyStr, _ := json.Marshal(bodyObj)
-	log := appctx.GetLogger(ctx)
-
-	_, respBody, err := nc.do(ctx, Action{"InitiateUpload", string(bodyStr)})
-	if err != nil {
-		return nil, err
-	}
-	respMap := make(map[string]string)
-	err = json.Unmarshal(respBody, &respMap)
-	if err != nil {
-		log.Error().Err(err).Str("output", string(respBody)).Msg("Failed to parse output")
-		return nil, err
-	}
-	return respMap, nil
+	var res map[string]string
+	err := nc.do(ctx, http.MethodPost, "InitiateUpload", InitiateUploadRequest{Ref: ref, UploadLength: uploadLength, Metadata: metadata}, &res)
+	return res, err
 }
 
 // Upload as defined in the storage.FS interface.
 func (nc *StorageDriver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
-	return nc.doUpload(ctx, ref.Path, r)
+	req, err := nc.prepareRequest(ctx, http.MethodPut, filepath.Join("/Upload/home", ref.Path), r)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/octet-stream")
+	b, err := nc.doRaw(ctx, req)
+	if err != nil {
+		return err
+	}
+	defer b.Close()
+	_, _ = io.ReadAll(b)
+	return nil
 }
 
 // Download as defined in the storage.FS interface.
 func (nc *StorageDriver) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
-	return nc.doDownload(ctx, ref.Path)
+	req, err := nc.prepareRequest(ctx, http.MethodGet, filepath.Join("/Download", ref.Path), nil)
+	if err != nil {
+		return nil, err
+	}
+	return nc.doRaw(ctx, req)
 }
 
 // ListRevisions as defined in the storage.FS interface.
 func (nc *StorageDriver) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
-	bodyStr, _ := json.Marshal(ref)
-	_, respBody, err := nc.do(ctx, Action{"ListRevisions", string(bodyStr)})
-
-	if err != nil {
-		return nil, err
-	}
-	var respMapArr []provider.FileVersion
-	err = json.Unmarshal(respBody, &respMapArr)
-	if err != nil {
-		return nil, err
-	}
-	revs := make([]*provider.FileVersion, len(respMapArr))
-	for i := 0; i < len(respMapArr); i++ {
-		revs[i] = &respMapArr[i]
-	}
-	return revs, err
+	var versions []*provider.FileVersion
+	err := nc.do(ctx, http.MethodPost, "ListRevisions", ref, &versions)
+	return versions, err
 }
 
 // DownloadRevision as defined in the storage.FS interface.
 func (nc *StorageDriver) DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error) {
-	return nc.doDownloadRevision(ctx, ref.Path, key)
+	req, err := nc.prepareRequest(ctx, http.MethodGet, filepath.Join("/DownloadRevision/", key, ref.Path), nil)
+	if err != nil {
+		return nil, err
+	}
+	return nc.doRaw(ctx, req)
+}
+
+type RestoreRevisionRequest struct {
+	Ref *provider.Reference `json:"ref"`
+	Key string              `json:"key"`
 }
 
 // RestoreRevision as defined in the storage.FS interface.
 func (nc *StorageDriver) RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error {
-	type paramsObj struct {
-		Ref *provider.Reference `json:"ref"`
-		Key string              `json:"key"`
-	}
-	bodyObj := &paramsObj{
-		Ref: ref,
-		Key: key,
-	}
-	bodyStr, _ := json.Marshal(bodyObj)
+	return nc.do(ctx, http.MethodPost, "RestoreRevision", RestoreRevisionRequest{Ref: ref, Key: key}, nil)
+}
 
-	_, _, err := nc.do(ctx, Action{"RestoreRevision", string(bodyStr)})
-	return err
+type ListRecycleRequest struct {
+	Key  string `json:"key"`
+	Path string `json:"path"`
 }
 
 // ListRecycle as defined in the storage.FS interface.
-func (nc *StorageDriver) ListRecycle(ctx context.Context, basePath, key string, relativePath string) ([]*provider.RecycleItem, error) {
-	type paramsObj struct {
-		Key  string `json:"key"`
-		Path string `json:"path"`
-	}
-	bodyObj := &paramsObj{
-		Key:  key,
-		Path: relativePath,
-	}
-	bodyStr, _ := json.Marshal(bodyObj)
+func (nc *StorageDriver) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
+	var items []*provider.RecycleItem
+	err := nc.do(ctx, http.MethodPost, "ListRecycle", ListRecycleRequest{Key: key, Path: relativePath}, &items)
+	return items, err
+}
 
-	_, respBody, err := nc.do(ctx, Action{"ListRecycle", string(bodyStr)})
-
-	if err != nil {
-		return nil, err
-	}
-	var respMapArr []provider.RecycleItem
-	err = json.Unmarshal(respBody, &respMapArr)
-	if err != nil {
-		return nil, err
-	}
-	items := make([]*provider.RecycleItem, len(respMapArr))
-	for i := 0; i < len(respMapArr); i++ {
-		items[i] = &respMapArr[i]
-	}
-	return items, nil
+type RestoreRecycleItemRequest struct {
+	Key        string              `json:"key"`
+	Path       string              `json:"path"`
+	RestoreRef *provider.Reference `json:"restoreRef"`
 }
 
 // RestoreRecycleItem as defined in the storage.FS interface.
 func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
-	type paramsObj struct {
-		Key        string              `json:"key"`
-		Path       string              `json:"path"`
-		RestoreRef *provider.Reference `json:"restoreRef"`
-	}
-	bodyObj := &paramsObj{
-		Key:        key,
-		Path:       relativePath,
-		RestoreRef: restoreRef,
-	}
+	return nc.do(ctx, http.MethodPost, "RestoreRecycleItem", RestoreRecycleItemRequest{Key: key, Path: relativePath, RestoreRef: restoreRef}, nil)
+}
 
-	bodyStr, _ := json.Marshal(bodyObj)
-	_, _, err := nc.do(ctx, Action{"RestoreRecycleItem", string(bodyStr)})
-
-	return err
+type PurgeRecycleItemRequest struct {
+	Key  string `json:"key"`
+	Path string `json:"path"`
 }
 
 // PurgeRecycleItem as defined in the storage.FS interface.
 func (nc *StorageDriver) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
-	type paramsObj struct {
-		Key  string `json:"key"`
-		Path string `json:"path"`
-	}
-	bodyObj := &paramsObj{
-		Key:  key,
-		Path: relativePath,
-	}
-	bodyStr, _ := json.Marshal(bodyObj)
-
-	_, _, err := nc.do(ctx, Action{"PurgeRecycleItem", string(bodyStr)})
-	return err
+	return nc.do(ctx, http.MethodPost, "PurgeRecycleItem", PurgeRecycleItemRequest{Key: key, Path: relativePath}, nil)
 }
 
 // EmptyRecycle as defined in the storage.FS interface.
 func (nc *StorageDriver) EmptyRecycle(ctx context.Context) error {
-	_, _, err := nc.do(ctx, Action{"EmptyRecycle", ""})
-	return err
+	return nc.do(ctx, http.MethodPost, "EmptyRecycle", nil, nil)
 }
 
 // GetPathByID as defined in the storage.FS interface.
 func (nc *StorageDriver) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
-	bodyStr, _ := json.Marshal(id)
-	_, respBody, err := nc.do(ctx, Action{"GetPathByID", string(bodyStr)})
-	return string(respBody), err
+	d, _ := json.Marshal(id)
+	req, err := nc.prepareRequest(ctx, http.MethodPost, "GetPathByID", bytes.NewBuffer(d))
+	if err != nil {
+		return "", err
+	}
+
+	body, err := nc.doRaw(ctx, req)
+	if err != nil {
+		return "", err
+	}
+	defer body.Close()
+
+	b, err := io.ReadAll(body)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+type GrantRequest struct {
+	Ref *provider.Reference `json:"ref"`
+	G   *provider.Grant     `json:"g"`
 }
 
 // AddGrant as defined in the storage.FS interface.
 func (nc *StorageDriver) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	type paramsObj struct {
-		Ref *provider.Reference `json:"ref"`
-		G   *provider.Grant     `json:"g"`
-	}
-	bodyObj := &paramsObj{
-		Ref: ref,
-		G:   g,
-	}
-
-	bodyStr, _ := json.Marshal(bodyObj)
-	_, _, err := nc.do(ctx, Action{"AddGrant", string(bodyStr)})
-	return err
+	return nc.do(ctx, http.MethodPost, "AddGrant", GrantRequest{Ref: ref, G: g}, nil)
 }
 
 // DenyGrant as defined in the storage.FS interface.
 func (nc *StorageDriver) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
-	type paramsObj struct {
-		Ref *provider.Reference `json:"ref"`
-		G   *provider.Grantee   `json:"g"`
-	}
-	bodyObj := &paramsObj{
-		Ref: ref,
-		G:   g,
-	}
-
-	bodyStr, _ := json.Marshal(bodyObj)
-	_, _, err := nc.do(ctx, Action{"DenyGrant", string(bodyStr)})
-	return err
+	return nc.do(ctx, http.MethodPost, "DenyGrant", GrantRequest{Ref: ref, G: &provider.Grant{Grantee: g}}, nil)
 }
 
 // RemoveGrant as defined in the storage.FS interface.
 func (nc *StorageDriver) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	type paramsObj struct {
-		Ref *provider.Reference `json:"ref"`
-		G   *provider.Grant     `json:"g"`
-	}
-	bodyObj := &paramsObj{
-		Ref: ref,
-		G:   g,
-	}
-
-	bodyStr, _ := json.Marshal(bodyObj)
-	_, _, err := nc.do(ctx, Action{"RemoveGrant", string(bodyStr)})
-	return err
+	return nc.do(ctx, http.MethodPost, "RemoveGrant", GrantRequest{Ref: ref, G: g}, nil)
 }
 
 // UpdateGrant as defined in the storage.FS interface.
 func (nc *StorageDriver) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	type paramsObj struct {
-		Ref *provider.Reference `json:"ref"`
-		G   *provider.Grant     `json:"g"`
-	}
-	bodyObj := &paramsObj{
-		Ref: ref,
-		G:   g,
-	}
-
-	bodyStr, _ := json.Marshal(bodyObj)
-	_, _, err := nc.do(ctx, Action{"UpdateGrant", string(bodyStr)})
-	return err
+	return nc.do(ctx, http.MethodPost, "UpdateGrant", GrantRequest{Ref: ref, G: g}, nil)
 }
 
 // ListGrants as defined in the storage.FS interface.
 func (nc *StorageDriver) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
-	bodyStr, _ := json.Marshal(ref)
-	log := appctx.GetLogger(ctx)
-
-	_, respBody, err := nc.do(ctx, Action{"ListGrants", string(bodyStr)})
+	var respMapArr []map[string]any
+	err := nc.do(ctx, http.MethodPost, "ListGrants", ref, &respMapArr)
 	if err != nil {
 		return nil, err
 	}
 
-	// To avoid this error:
-	// json: cannot unmarshal object into Go struct field Grantee.grantee.Id of type providerv1beta1.isGrantee_Id
-	// To test:
-	// bodyStr, _ := json.Marshal(provider.Grant{
-	// 	 Grantee: &provider.Grantee{
-	// 		 Type: provider.GranteeType_GRANTEE_TYPE_USER,
-	// 		 Id: &provider.Grantee_UserId{
-	// 			 UserId: &user.UserId{
-	// 				 Idp:      "some-idp",
-	// 				 OpaqueId: "some-opaque-id",
-	// 				 Type:     user.UserType_USER_TYPE_PRIMARY,
-	// 			 },
-	// 		 },
-	// 	 },
-	// 	 Permissions: &provider.ResourcePermissions{},
-	// })
-	// JSON example:
-	// [{"grantee":{"Id":{"UserId":{"idp":"some-idp","opaque_id":"some-opaque-id","type":1}}},"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true}}]
-	var respMapArr []map[string]interface{}
-	err = json.Unmarshal(respBody, &respMapArr)
-	if err != nil {
-		log.Error().Err(err).Str("output", string(respBody)).Msg("Failed to parse output")
-		return nil, err
-	}
 	grants := make([]*provider.Grant, len(respMapArr))
 	for i := 0; i < len(respMapArr); i++ {
 		granteeMap := respMapArr[i]["grantee"].(map[string]interface{})
@@ -739,72 +510,51 @@ func (nc *StorageDriver) ListGrants(ctx context.Context, ref *provider.Reference
 }
 
 // GetQuota as defined in the storage.FS interface.
-func (nc *StorageDriver) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, error) {
-	_, respBody, err := nc.do(ctx, Action{"GetQuota", ""})
+func (nc *StorageDriver) GetQuota(ctx context.Context, _ *provider.Reference) (uint64, uint64, error) {
+	var quotaRes struct {
+		TotalBytes uint64 `json:"totalBytes"`
+		UsedBytes  uint64 `json:"usedBytes"`
+	}
+	err := nc.do(ctx, http.MethodPost, "GetQuota", nil, &quotaRes)
 	if err != nil {
 		return 0, 0, err
 	}
+	return quotaRes.TotalBytes, quotaRes.UsedBytes, nil
+}
 
-	var respMap map[string]interface{}
-	err = json.Unmarshal(respBody, &respMap)
-	if err != nil {
-		return 0, 0, err
-	}
-	return uint64(respMap["totalBytes"].(float64)), uint64(respMap["usedBytes"].(float64)), nil
+type CreateReferenceRequest struct {
+	Path string `json:"path"`
+	URL  string `json:"url"`
 }
 
 // CreateReference as defined in the storage.FS interface.
 func (nc *StorageDriver) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
-	type paramsObj struct {
-		Path string `json:"path"`
-		URL  string `json:"url"`
-	}
-	bodyObj := &paramsObj{
-		Path: path,
-		URL:  targetURI.String(),
-	}
-	bodyStr, _ := json.Marshal(bodyObj)
-
-	_, _, err := nc.do(ctx, Action{"CreateReference", string(bodyStr)})
-	return err
+	return nc.do(ctx, http.MethodPost, "CreateReference", CreateReferenceRequest{Path: path, URL: targetURI.String()}, nil)
 }
 
-// Shutdown as defined in the storage.FS interface.
+// Shutdown as defined in the storage.FS interface. Obviously we don't shutdown the EFSS...
 func (nc *StorageDriver) Shutdown(ctx context.Context) error {
-	_, _, err := nc.do(ctx, Action{"Shutdown", ""})
-	return err
+	return nil
+}
+
+type SetArbitraryMetadataRequest struct {
+	Ref *provider.Reference         `json:"ref"`
+	Md  *provider.ArbitraryMetadata `json:"md"`
 }
 
 // SetArbitraryMetadata as defined in the storage.FS interface.
 func (nc *StorageDriver) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
-	type paramsObj struct {
-		Ref *provider.Reference         `json:"ref"`
-		Md  *provider.ArbitraryMetadata `json:"md"`
-	}
-	bodyObj := &paramsObj{
-		Ref: ref,
-		Md:  md,
-	}
+	return nc.do(ctx, http.MethodPost, "SetArbitraryMetadata", SetArbitraryMetadataRequest{Ref: ref, Md: md}, nil)
+}
 
-	bodyStr, _ := json.Marshal(bodyObj)
-	_, _, err := nc.do(ctx, Action{"SetArbitraryMetadata", string(bodyStr)})
-	return err
+type UnsetArbitraryMetadataRequest struct {
+	Ref  *provider.Reference `json:"ref"`
+	Keys []string            `json:"keys"`
 }
 
 // UnsetArbitraryMetadata as defined in the storage.FS interface.
 func (nc *StorageDriver) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
-	type paramsObj struct {
-		Ref  *provider.Reference `json:"ref"`
-		Keys []string            `json:"keys"`
-	}
-	bodyObj := &paramsObj{
-		Ref:  ref,
-		Keys: keys,
-	}
-
-	bodyStr, _ := json.Marshal(bodyObj)
-	_, _, err := nc.do(ctx, Action{"UnsetArbitraryMetadata", string(bodyStr)})
-	return err
+	return nc.do(ctx, http.MethodPost, "UnsetArbitraryMetadata", UnsetArbitraryMetadataRequest{Ref: ref, Keys: keys}, nil)
 }
 
 // GetLock returns an existing lock on the given reference.
@@ -829,53 +579,15 @@ func (nc *StorageDriver) Unlock(ctx context.Context, ref *provider.Reference, lo
 
 // ListStorageSpaces as defined in the storage.FS interface.
 func (nc *StorageDriver) ListStorageSpaces(ctx context.Context, f []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
-	log := appctx.GetLogger(ctx)
-	bodyStr, _ := json.Marshal(f)
-	_, respBody, err := nc.do(ctx, Action{"ListStorageSpaces", string(bodyStr)})
-	if err != nil {
-		return nil, err
-	}
-
-	// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L1341-L1366
-	var respMapArr []provider.StorageSpace
-	err = json.Unmarshal(respBody, &respMapArr)
-	if err != nil {
-		log.Error().Err(err).Str("output", string(respBody)).Msg("Failed to parse output")
-		return nil, err
-	}
-	var spaces = make([]*provider.StorageSpace, len(respMapArr))
-	for i := 0; i < len(respMapArr); i++ {
-		spaces[i] = &respMapArr[i]
-	}
-	return spaces, err
+	return nil, errtypes.NotSupported("unimplemented")
 }
 
 // CreateStorageSpace creates a storage space.
 func (nc *StorageDriver) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	bodyStr, _ := json.Marshal(req)
-	_, respBody, err := nc.do(ctx, Action{"CreateStorageSpace", string(bodyStr)})
-	if err != nil {
-		return nil, err
-	}
-	var respObj provider.CreateStorageSpaceResponse
-	err = json.Unmarshal(respBody, &respObj)
-	if err != nil {
-		return nil, err
-	}
-	return &respObj, nil
+	return nil, errtypes.NotSupported("unimplemented")
 }
 
 // UpdateStorageSpace updates a storage space.
 func (nc *StorageDriver) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
-	bodyStr, _ := json.Marshal(req)
-	_, respBody, err := nc.do(ctx, Action{"UpdateStorageSpace", string(bodyStr)})
-	if err != nil {
-		return nil, err
-	}
-	var respObj provider.UpdateStorageSpaceResponse
-	err = json.Unmarshal(respBody, &respObj)
-	if err != nil {
-		return nil, err
-	}
-	return &respObj, nil
+	return nil, errtypes.NotSupported("unimplemented")
 }
