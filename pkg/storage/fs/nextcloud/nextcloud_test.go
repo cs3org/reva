@@ -29,7 +29,6 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/storage/fs/nextcloud"
@@ -224,46 +223,45 @@ var _ = Describe("Nextcloud", func() {
 			mdKeys := []string{"val1", "val2", "val3"}
 			result, err := nc.GetMD(ctx, ref, mdKeys)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(*result).To(Equal(provider.ResourceInfo{
-				Opaque: nil,
-				Type:   provider.ResourceType_RESOURCE_TYPE_FILE,
-				Id: &provider.ResourceId{
-					StorageId:            "",
-					OpaqueId:             "fileid-/some/path",
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+			Expect(*result).To(Equal(nextcloud.MDFromEFSS{
+				Type: int(provider.ResourceType_RESOURCE_TYPE_FILE),
+				ID: struct {
+					OpaqueID string "json:\"opaque_id\""
+				}{
+					OpaqueID: "fileid-/some/path",
 				},
-				Checksum: &provider.ResourceChecksum{
-					Type:                 0,
-					Sum:                  "",
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+				Checksum: struct {
+					Type int    "json:\"type\""
+					Sum  string "json:\"sum\""
+				}{
+					Type: 0,
+					Sum:  "",
 				},
 				Etag:     "deadbeef",
 				MimeType: "text/plain",
-				Mtime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+				Mtime: struct {
+					Seconds int "json:\"seconds\""
+				}{
+					Seconds: 1234567890,
 				},
-				Path:          "/some/path",
-				PermissionSet: conversions.RoleFromOCSPermissions(conversions.Permissions(0)).CS3ResourcePermissions(),
-				Size:          12345,
-				Owner: &userpb.UserId{
+				Path:        "/some/path",
+				Permissions: 0,
+				Size:        12345,
+				Owner: struct {
+					OpaqueID string "json:\"opaque_id\""
+					Idp      string "json:\"idp\""
+				}{
 					Idp:      "",
-					OpaqueId: "",
-					Type:     1,
+					OpaqueID: "",
 				},
-				Target:               "",
-				CanonicalMetadata:    nil,
-				ArbitraryMetadata:    nil,
-				XXX_NoUnkeyedLiteral: struct{}{},
-				XXX_unrecognized:     nil,
-				XXX_sizecache:        0,
+				CanonicalMetadata: struct {
+					Target any "json:\"target\""
+				}{},
+				ArbitraryMetadata: struct {
+					Metadata struct {
+						Placeholder string "json:\".placeholder\""
+					} "json:\"metadata\""
+				}{},
 			}))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/GetMD {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"},"mdKeys":["val1","val2","val3"]}`)
 		})
@@ -286,46 +284,45 @@ var _ = Describe("Nextcloud", func() {
 			results, err := nc.ListFolder(ctx, ref, mdKeys)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(results)).To(Equal(1))
-			Expect(*results[0]).To(Equal(provider.ResourceInfo{
-				Opaque: nil,
-				Type:   provider.ResourceType_RESOURCE_TYPE_FILE,
-				Id: &provider.ResourceId{
-					StorageId:            "",
-					OpaqueId:             "fileid-/some/path",
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+			Expect(*results[0]).To(Equal(nextcloud.MDFromEFSS{
+				Type: int(provider.ResourceType_RESOURCE_TYPE_FILE),
+				ID: struct {
+					OpaqueID string "json:\"opaque_id\""
+				}{
+					OpaqueID: "fileid-/some/path",
 				},
-				Checksum: &provider.ResourceChecksum{
-					Type:                 0,
-					Sum:                  "",
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+				Checksum: struct {
+					Type int    "json:\"type\""
+					Sum  string "json:\"sum\""
+				}{
+					Type: 0,
+					Sum:  "",
 				},
 				Etag:     "deadbeef",
 				MimeType: "text/plain",
-				Mtime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+				Mtime: struct {
+					Seconds int "json:\"seconds\""
+				}{
+					Seconds: 1234567890,
 				},
-				Path:          "/some/path",
-				PermissionSet: conversions.RoleFromOCSPermissions(conversions.Permissions(0)).CS3ResourcePermissions(),
-				Size:          12345,
-				Owner: &userpb.UserId{
+				Path:        "/some/path",
+				Permissions: 0,
+				Size:        12345,
+				Owner: struct {
+					OpaqueID string "json:\"opaque_id\""
+					Idp      string "json:\"idp\""
+				}{
 					Idp:      "",
-					OpaqueId: "",
-					Type:     1,
+					OpaqueID: "",
 				},
-				Target:               "",
-				CanonicalMetadata:    nil,
-				ArbitraryMetadata:    nil,
-				XXX_NoUnkeyedLiteral: struct{}{},
-				XXX_unrecognized:     nil,
-				XXX_sizecache:        0,
+				CanonicalMetadata: struct {
+					Target any "json:\"target\""
+				}{},
+				ArbitraryMetadata: struct {
+					Metadata struct {
+						Placeholder string "json:\".placeholder\""
+					} "json:\"metadata\""
+				}{},
 			}))
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/ListFolder {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some"},"mdKeys":["val1","val2","val3"]}`)
