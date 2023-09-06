@@ -46,6 +46,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
+	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/response"
@@ -82,6 +83,7 @@ type Handler struct {
 	publicURL                             string
 	sharePrefix                           string
 	homeNamespace                         string
+	ocmMountPoint                         string
 	skipUpdatingExistingSharesMountpoints bool
 	additionalInfoTemplate                *template.Template
 	userIdentifierCache                   *ttlcache.Cache
@@ -132,6 +134,7 @@ func (h *Handler) Init(c *config.Config) error {
 	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
 	h.homeNamespace = c.HomeNamespace
+	h.ocmMountPoint = c.OCMMountPoint
 	h.skipUpdatingExistingSharesMountpoints = c.SkipUpdatingExistingSharesMountpoints
 
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
@@ -1520,6 +1523,19 @@ func mapState(state collaboration.ShareState) int {
 	return mapped
 }
 
+func mapOCMState(state ocmv1beta1.ShareState) int {
+	switch state {
+	case ocmv1beta1.ShareState_SHARE_STATE_PENDING:
+		return ocsStatePending
+	case ocmv1beta1.ShareState_SHARE_STATE_ACCEPTED:
+		return ocsStateAccepted
+	case ocmv1beta1.ShareState_SHARE_STATE_REJECTED:
+		return ocsStateRejected
+	default:
+		return ocsStateUnknown
+	}
+}
+
 func getStateFilter(s string) collaboration.ShareState {
 	var stateFilter collaboration.ShareState
 	switch s {
@@ -1535,6 +1551,21 @@ func getStateFilter(s string) collaboration.ShareState {
 		stateFilter = collaboration.ShareState_SHARE_STATE_ACCEPTED
 	}
 	return stateFilter
+}
+
+func getOCMStateFilter(s string) ocmv1beta1.ShareState {
+	switch s {
+	case "all":
+		return ocsStateUnknown // no filter
+	case "0": // accepted
+		return ocmv1beta1.ShareState_SHARE_STATE_ACCEPTED
+	case "1": // pending
+		return ocmv1beta1.ShareState_SHARE_STATE_PENDING
+	case "2": // rejected
+		return ocmv1beta1.ShareState_SHARE_STATE_REJECTED
+	default:
+		return ocmv1beta1.ShareState_SHARE_STATE_ACCEPTED
+	}
 }
 
 func (h *Handler) getPoolClient() (gateway.GatewayAPIClient, error) {

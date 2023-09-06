@@ -44,7 +44,7 @@ import (
 var tracer trace.Tracer
 
 func init() {
-	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree")
+	tracer = otel.Tracer("github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree")
 }
 
 const (
