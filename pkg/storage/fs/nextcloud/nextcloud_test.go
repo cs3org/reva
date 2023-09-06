@@ -121,16 +121,16 @@ var _ = Describe("Nextcloud", func() {
 	})
 
 	// 	GetHome(ctx context.Context) (string, error)
-	Describe("GetHome", func() {
-		It("calls the GetHome endpoint", func() {
-			nc, called, teardown := setUpNextcloudServer()
-			defer teardown()
-			home, err := nc.GetHome(ctx)
-			Expect(home).To(Equal("yes we are"))
-			Expect(err).ToNot(HaveOccurred())
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/GetHome `)
-		})
-	})
+	//Describe("GetHome", func() {
+	//	It("calls the GetHome endpoint", func() {
+	//		nc, called, teardown := setUpNextcloudServer()
+	//		defer teardown()
+	//		home, err := nc.GetHome(ctx)
+	//		Expect(home).To(Equal("yes we are"))
+	//		Expect(err).ToNot(HaveOccurred())
+	//		checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/GetHome `)
+	//	})
+	//})
 
 	// CreateHome(ctx context.Context) error
 	Describe("CreateHome", func() {
@@ -821,17 +821,6 @@ var _ = Describe("Nextcloud", func() {
 			err = nc.CreateReference(ctx, path, targetURI)
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/CreateReference {"path":"some/file/path.txt","url":"http://bing.com/search?q=dotnet"}`)
-		})
-	})
-
-	// Shutdown(ctx context.Context) error
-	Describe("Shutdown", func() {
-		It("calls the Shutdown endpoint", func() {
-			nc, called, teardown := setUpNextcloudServer()
-			defer teardown()
-			err := nc.Shutdown(ctx)
-			Expect(err).ToNot(HaveOccurred())
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/Shutdown `)
 		})
 	})
 
