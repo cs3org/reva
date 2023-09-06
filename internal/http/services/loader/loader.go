@@ -26,7 +26,6 @@ import (
 	_ "github.com/cs3org/reva/v2/internal/http/services/dataprovider"
 	_ "github.com/cs3org/reva/v2/internal/http/services/helloworld"
 	_ "github.com/cs3org/reva/v2/internal/http/services/mentix"
-	_ "github.com/cs3org/reva/v2/internal/http/services/meshdirectory"
 	_ "github.com/cs3org/reva/v2/internal/http/services/metrics"
 	_ "github.com/cs3org/reva/v2/internal/http/services/ocmd"
 	_ "github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav"
