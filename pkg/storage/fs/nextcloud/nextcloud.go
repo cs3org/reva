@@ -130,12 +130,6 @@ func NewStorageDriver(c *StorageDriverConfig) (*StorageDriver, error) {
 	}, nil
 }
 
-// Action describes a REST request to forward to the Nextcloud backend.
-type Action struct {
-	verb string
-	argS string
-}
-
 func getUser(ctx context.Context) (*user.User, error) {
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
@@ -160,7 +154,7 @@ func (nc *StorageDriver) doRaw(ctx context.Context, req *http.Request) (io.ReadC
 	}
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusNotFound {
-		return nil, fmt.Errorf("Unexpected response code %d from EFSS API", resp.StatusCode)
+		return nil, fmt.Errorf("unexpected response code %d from EFSS API", resp.StatusCode)
 	}
 
 	if resp.StatusCode == http.StatusNotFound {
@@ -186,7 +180,7 @@ func (nc *StorageDriver) prepareRequest(ctx context.Context, method, path string
 }
 
 // A convenient method that internally uses doRaw and automatically marshals and unmarshals
-// the body request and the body response as json if not nil
+// the body request and the body response as json if not nil.
 func (nc *StorageDriver) do(ctx context.Context, method, path string, bodyObj, targetObj any) error {
 	var body []byte
 	var err error
