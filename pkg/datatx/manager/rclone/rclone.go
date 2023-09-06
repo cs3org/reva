@@ -160,7 +160,7 @@ func (driver *rclone) CreateTransfer(ctx context.Context, srcTargetURI string, d
 	// we always set the userinfo part of the destination url for rclone tpc push support
 	dstRemote := fmt.Sprintf("%s://%s@%s", destEp.endpointScheme, dstToken, destEp.endpoint)
 
-	log.Debug().Str("srcRemote", srcRemote).Str("srcPath", srcPath).Str("srcToken", srcToken).Str("dstRemote", dstRemote).Str("dstPath", dstPath).Str("dstToken", dstToken).Msg("starting job")
+	log.Debug().Str("srcRemote", srcRemote).Str("srcPath", srcPath).Str("srcToken", srcToken).Str("dstRemote", dstRemote).Str("dstPath", dstPath).Str("dstToken", dstToken).Msg("starting rclone job")
 	return driver.startJob(ctx, "", srcRemote, srcPath, srcToken, dstRemote, dstPath, dstToken)
 }
 
