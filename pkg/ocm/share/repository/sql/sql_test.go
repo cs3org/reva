@@ -615,7 +615,7 @@ func TestGetShare(t *testing.T) {
 			_, port, cleanup := startDatabase(ctx, tables)
 			t.Cleanup(cleanup)
 
-			r, err := New(context.Background(), map[string]interface{}{
+			r, err := New(map[string]interface{}{
 				"db_username": "root",
 				"db_password": "",
 				"db_address":  fmt.Sprintf("%s:%d", address, port),
@@ -1054,7 +1054,7 @@ func TestListShares(t *testing.T) {
 			_, port, cleanup := startDatabase(ctx, tables)
 			t.Cleanup(cleanup)
 
-			r, err := New(context.Background(), map[string]interface{}{
+			r, err := New(map[string]interface{}{
 				"db_username": "root",
 				"db_password": "",
 				"db_address":  fmt.Sprintf("%s:%d", address, port),
@@ -1246,7 +1246,7 @@ func TestStoreShare(t *testing.T) {
 			engine, port, cleanup := startDatabase(ctx, tables)
 			t.Cleanup(cleanup)
 
-			r, err := New(context.Background(), map[string]interface{}{
+			r, err := New(map[string]interface{}{
 				"db_username": "root",
 				"db_password": "",
 				"db_address":  fmt.Sprintf("%s:%d", address, port),
@@ -1517,14 +1517,13 @@ func TestUpdateShare(t *testing.T) {
 			engine, port, cleanup := startDatabase(ctx, tables)
 			t.Cleanup(cleanup)
 
-			r, err := NewFromConfig(ctx,
-				&config{
-					DBUsername: "root",
-					DBPassword: "",
-					DBAddress:  fmt.Sprintf("%s:%d", address, port),
-					DBName:     dbName,
-					now:        func() time.Time { return fixedTime },
-				},
+			r, err := NewFromConfig(&config{
+				DBUsername: "root",
+				DBPassword: "",
+				DBAddress:  fmt.Sprintf("%s:%d", address, port),
+				DBName:     dbName,
+				now:        func() time.Time { return fixedTime },
+			},
 			)
 
 			if err != nil {
@@ -1687,7 +1686,7 @@ func TestGetReceivedShare(t *testing.T) {
 			_, port, cleanup := startDatabase(ctx, tables)
 			t.Cleanup(cleanup)
 
-			r, err := New(context.Background(), map[string]interface{}{
+			r, err := New(map[string]interface{}{
 				"db_username": "root",
 				"db_password": "",
 				"db_address":  fmt.Sprintf("%s:%d", address, port),
@@ -1799,7 +1798,7 @@ func TestUpdateReceivedShare(t *testing.T) {
 			engine, port, cleanup := startDatabase(ctx, tables)
 			t.Cleanup(cleanup)
 
-			r, err := NewFromConfig(ctx, &config{
+			r, err := NewFromConfig(&config{
 				DBUsername: "root",
 				DBPassword: "",
 				DBAddress:  fmt.Sprintf("%s:%d", address, port),
@@ -2041,7 +2040,7 @@ func TestListReceviedShares(t *testing.T) {
 			_, port, cleanup := startDatabase(ctx, tables)
 			t.Cleanup(cleanup)
 
-			r, err := New(context.Background(), map[string]interface{}{
+			r, err := New(map[string]interface{}{
 				"db_username": "root",
 				"db_password": "",
 				"db_address":  fmt.Sprintf("%s:%d", address, port),
@@ -2189,7 +2188,7 @@ func TestStoreReceivedShare(t *testing.T) {
 			engine, port, cleanup := startDatabase(ctx, tables)
 			t.Cleanup(cleanup)
 
-			r, err := New(context.Background(), map[string]interface{}{
+			r, err := New(map[string]interface{}{
 				"db_username": "root",
 				"db_password": "",
 				"db_address":  fmt.Sprintf("%s:%d", address, port),

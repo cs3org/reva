@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,24 +27,23 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/cs3org/reva/v2/internal/http/services/datagateway"
-	"github.com/pkg/errors"
-
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/eventials/go-tus"
-	"github.com/eventials/go-tus/memorystore"
-	"github.com/studio-b12/gowebdav"
 
 	// TODO(labkode): this should not come from this package.
 	"github.com/cs3org/reva/v2/internal/grpc/services/storageprovider"
+	"github.com/cs3org/reva/v2/internal/http/services/datagateway"
 	"github.com/cs3org/reva/v2/pkg/crypto"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/eventials/go-tus"
+	"github.com/eventials/go-tus/memorystore"
+	"github.com/pkg/errors"
+	"github.com/studio-b12/gowebdav"
 )
 
 func uploadCommand() *command {
@@ -148,7 +147,7 @@ func uploadCommand() *command {
 		dataServerURL := p.UploadEndpoint
 
 		if *protocolFlag == "simple" {
-			httpReq, err := rhttp.NewRequest(ctx, "PUT", dataServerURL, fd)
+			httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, dataServerURL, fd)
 			if err != nil {
 				return err
 			}
@@ -218,7 +217,7 @@ func uploadCommand() *command {
 
 		info := res2.Info
 
-		fmt.Printf("File uploaded: %s %d %s\n", info.Id, info.Size, info.Path)
+		fmt.Printf("File uploaded: %s:%s %d %s\n", info.Id.StorageId, info.Id.OpaqueId, info.Size, info.Path)
 
 		return nil
 	}
@@ -292,7 +291,6 @@ func computeXS(t provider.ResourceChecksumType, r io.Reader) (string, error) {
 		return "", nil
 	default:
 		return "", fmt.Errorf("invalid checksum: %s", t)
-
 	}
 }
 

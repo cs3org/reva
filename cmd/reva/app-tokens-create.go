@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -73,7 +73,6 @@ func appTokensCreateCommand() *command {
 	}
 
 	cmd.Action = func(w ...io.Writer) error {
-
 		createOpts := &appTokenCreateOpts{
 			Expiration: *expiration,
 			Label:      *label,
@@ -215,7 +214,7 @@ func getPathScope(ctx context.Context, client gateway.GatewayAPIClient, path, pe
 	return scope.AddResourceInfoScope(statResponse.GetInfo(), role, scopes)
 }
 
-// parse permission string in the form of "rw" to create a role
+// parse permission string in the form of "rw" to create a role.
 func parsePermission(perm string) (authpb.Role, error) {
 	switch perm {
 	case "r":
