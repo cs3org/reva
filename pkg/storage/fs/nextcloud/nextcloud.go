@@ -154,7 +154,9 @@ func (nc *StorageDriver) doRaw(ctx context.Context, req *http.Request) (io.ReadC
 	}
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusNotFound {
-		return nil, fmt.Errorf("unexpected response code %d from EFSS API", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		defer resp.Body.Close()
+		return nil, fmt.Errorf("unexpected response code %d from EFSS API, body was %s", resp.StatusCode, body)
 	}
 
 	if resp.StatusCode == http.StatusNotFound {
@@ -211,11 +213,10 @@ func (nc *StorageDriver) do(ctx context.Context, method, path string, bodyObj, t
 	return nil
 }
 
-// GetHome as defined in the storage.FS interface.
+// GetHome should return the home path of the given user.
+// As it is not implemented in the EFSS API, we return an empty string.
 func (nc *StorageDriver) GetHome(ctx context.Context) (string, error) {
-	var path string
-	err := nc.do(ctx, http.MethodPost, "GetHome", nil, &path)
-	return path, err
+	return "", nil
 }
 
 // CreateHome as defined in the storage.FS interface.

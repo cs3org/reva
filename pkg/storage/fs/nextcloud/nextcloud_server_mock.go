@@ -140,7 +140,6 @@ var responses = map[string]Response{
 
 	`POST /apps/sciencemesh/~f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c/api/storage/UpdateGrant {"ref":{"path":"/subdir"},"g":{"grantee":{"type":1,"Id":{"UserId":{"opaque_id":"4c510ada-c86b-4815-8820-42cdf82c3d51"}}},"permissions":{"delete":true,"move":true,"stat":true}}}`: {200, ``, serverStateGrantUpdated},
 
-	`POST /apps/sciencemesh/~tester/api/storage/GetHome `:    {200, `yes we are`, serverStateHome},
 	`POST /apps/sciencemesh/~tester/api/storage/CreateHome `: {201, ``, serverStateEmpty},
 	`POST /apps/sciencemesh/~tester/api/storage/CreateDir {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"}`:                                                                                                                        {201, ``, serverStateEmpty},
 	`POST /apps/sciencemesh/~tester/api/storage/Delete {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"}`:                                                                                                                           {200, ``, serverStateEmpty},
@@ -151,7 +150,7 @@ var responses = map[string]Response{
 	`PUT /apps/sciencemesh/~tester/api/storage/Upload/home/some/file/path.txt shiny!`:                                                                                                                                                                                     {200, ``, serverStateEmpty},
 	`GET /apps/sciencemesh/~tester/api/storage/Download/some/file/path.txt `:                                                                                                                                                                                              {200, `the contents of the file`, serverStateEmpty},
 	`POST /apps/sciencemesh/~tester/api/storage/ListRevisions {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"}`:                                                                                                                    {200, `[{"opaque":{"map":{"some":{"value":"ZGF0YQ=="}}},"key":"version-12","size":12345,"mtime":1234567890,"etag":"deadb00f"},{"opaque":{"map":{"different":{"value":"c3R1ZmY="}}},"key":"asdf","size":12345,"mtime":1234567890,"etag":"deadbeef"}]`, serverStateEmpty},
-	`GET /apps/sciencemesh/~tester/api/storage/DownloadRevision/some%2Frevision/some/file/path.txt `:                                                                                                                                                                      {200, `the contents of that revision`, serverStateEmpty},
+	`GET /apps/sciencemesh/~tester/api/storage/DownloadRevision/some/revision/some/file/path.txt `:                                                                                                                                                                        {200, `the contents of that revision`, serverStateEmpty},
 	`POST /apps/sciencemesh/~tester/api/storage/RestoreRevision {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"key":"asdf"}`:                                                                                     {200, ``, serverStateEmpty},
 	`POST /apps/sciencemesh/~tester/api/storage/ListRecycle {"key":"asdf","path":"/some/file.txt"}`:                                                                                                                                                                       {200, `[{"opaque":{},"key":"some-deleted-version","ref":{"resource_id":{},"path":"/some/file.txt"},"size":12345,"deletion_time":{"seconds":1234567890}}]`, serverStateEmpty},
 	`POST /apps/sciencemesh/~tester/api/storage/RestoreRecycleItem {"key":"asdf","path":"original/location/when/deleted.txt","restoreRef":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"}}`:                               {200, ``, serverStateEmpty},
@@ -189,15 +188,12 @@ func GetNextcloudServerMock(called *[]string) http.Handler {
 		}
 		if (response == Response{}) {
 			fmt.Printf("server mock cannot serve '%s %s %s %s'\n", r.Method, r.URL, buf.String(), serverState)
-			response = Response{500, fmt.Sprintf("response not defined! %s", key), serverStateEmpty}
+			response = Response{500, fmt.Sprintf("response not defined! %s", key), serverStateError}
 		}
-		serverState = responses[key].newServerState
-		if serverState == `` {
-			serverState = serverStateError
-		}
+		serverState = response.newServerState
 		w.WriteHeader(response.code)
 		// w.Header().Set("Etag", "mocker-etag")
-		_, err = w.Write([]byte(responses[key].body))
+		_, err = w.Write([]byte(response.body))
 		if err != nil {
 			panic(err)
 		}
