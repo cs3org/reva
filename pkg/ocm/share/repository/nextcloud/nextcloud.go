@@ -95,7 +95,7 @@ type ReceivedShareAltMap struct {
 }
 
 // New returns a share manager implementation that verifies against a Nextcloud backend.
-func New(ctx context.Context, m map[string]interface{}) (share.Repository, error) {
+func New(m map[string]interface{}) (share.Repository, error) {
 	var c ShareManagerConfig
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

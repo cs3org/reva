@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,24 +21,21 @@ package main
 import (
 	"io"
 	"os"
-	"strconv"
 	"time"
 
+	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
+	ocmshare "github.com/cs3org/reva/v2/pkg/ocm/share"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/pkg/errors"
 )
-
-// default for resharing
-var _resharing = false
 
 func ocmShareCreateCommand() *command {
 	cmd := newCommand("ocm-share-create")
@@ -48,10 +45,15 @@ func ocmShareCreateCommand() *command {
 	grantee := cmd.String("grantee", "", "the grantee")
 	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
 	userType := cmd.String("user-type", "primary", "the type of user account, defaults to primary")
-	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
+
+	webdav := cmd.Bool("webdav", false, "create a share with webdav access")
+	webapp := cmd.Bool("webapp", false, "create a share for app access")
+	datatx := cmd.Bool("datatx", false, "create a share for a data transfer")
+
+	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor) / applies to webdav and webapp")
 
 	cmd.ResetFlags = func() {
-		*grantType, *grantee, *idp, *rol, *userType = "user", "", "", "viewer", "primary"
+		*grantType, *grantee, *idp, *rol, *userType, *webdav, *webapp, *datatx = "user", "", "", "viewer", "primary", false, false, false
 	}
 
 	cmd.Action = func(w ...io.Writer) error {
@@ -66,6 +68,10 @@ func ocmShareCreateCommand() *command {
 
 		if *idp == "" {
 			return errors.New("IdP cannot be empty: use -idp flag\n" + cmd.Usage())
+		}
+
+		if !*webdav && !*webapp && !*datatx {
+			*webdav = true
 		}
 
 		fn := cmd.Args()[0]
@@ -104,40 +110,22 @@ func ocmShareCreateCommand() *command {
 			return formatError(res.Status)
 		}
 
-		perm, pint, err := getOCMSharePerm(*rol)
+		gt := getGrantType(*grantType)
+		am, err := getAccessMethods(*webdav, *webapp, *datatx, *rol)
 		if err != nil {
 			return err
 		}
 
-		gt := getGrantType(*grantType)
-		grant := &ocm.ShareGrant{
-			Permissions: perm,
+		shareRequest := &ocm.CreateOCMShareRequest{
+			ResourceId: res.Info.Id,
 			Grantee: &provider.Grantee{
 				Type: gt,
 				// For now, we only support user shares.
 				// TODO (ishank011): To be updated once this is decided.
-				Id: &provider.Grantee_UserId{UserId: u},
+				Id: &provider.Grantee_UserId{UserId: remoteUserRes.RemoteUser.Id},
 			},
-		}
-
-		opaqueObj := &types.Opaque{
-			Map: map[string]*types.OpaqueEntry{
-				"permissions": {
-					Decoder: "plain",
-					Value:   []byte(strconv.Itoa(pint)),
-				},
-				"name": {
-					Decoder: "plain",
-					Value:   []byte(res.Info.Path),
-				},
-			},
-		}
-
-		shareRequest := &ocm.CreateOCMShareRequest{
-			Opaque:                opaqueObj,
-			ResourceId:            res.Info.Id,
-			Grant:                 grant,
 			RecipientMeshProvider: providerInfo.ProviderInfo,
+			AccessMethods:         am,
 		}
 
 		shareRes, err := client.CreateOCMShare(ctx, shareRequest)
@@ -151,11 +139,12 @@ func ocmShareCreateCommand() *command {
 
 		t := table.NewWriter()
 		t.SetOutputMirror(os.Stdout)
-		t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Permissions", "Type", "Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated"})
+		t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Type", "Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated"})
+		// TODO (gdelmont): expose protocols info
 
 		s := shareRes.Share
 		t.AppendRows([]table.Row{
-			{s.Id.OpaqueId, s.Owner.Idp, s.Owner.OpaqueId, s.ResourceId.String(), s.Permissions.String(),
+			{s.Id.OpaqueId, s.Owner.Idp, s.Owner.OpaqueId, s.ResourceId.String(),
 				s.Grantee.Type.String(), s.Grantee.GetUserId().Idp, s.Grantee.GetUserId().OpaqueId,
 				time.Unix(int64(s.Ctime.Seconds), 0), time.Unix(int64(s.Mtime.Seconds), 0)},
 		})
@@ -166,15 +155,44 @@ func ocmShareCreateCommand() *command {
 	return cmd
 }
 
-func getOCMSharePerm(p string) (*ocm.SharePermissions, int, error) {
-	if p == viewerPermission {
-		return &ocm.SharePermissions{
-			Permissions: conversions.NewViewerRole(_resharing).CS3ResourcePermissions(),
-		}, 1, nil
-	} else if p == editorPermission {
-		return &ocm.SharePermissions{
-			Permissions: conversions.NewEditorRole(_resharing).CS3ResourcePermissions(),
-		}, 15, nil
+func getAccessMethods(webdav, webapp, datatx bool, rol string) ([]*ocm.AccessMethod, error) {
+	var m []*ocm.AccessMethod
+	if webdav {
+		perm, err := getOCMSharePerm(rol)
+		if err != nil {
+			return nil, err
+		}
+		m = append(m, ocmshare.NewWebDavAccessMethod(perm))
 	}
-	return nil, 0, errors.New("invalid rol: " + p)
+	if webapp {
+		v, err := getOCMViewMode(rol)
+		if err != nil {
+			return nil, err
+		}
+		m = append(m, ocmshare.NewWebappAccessMethod(v))
+	}
+	if datatx {
+		m = append(m, ocmshare.NewTransferAccessMethod())
+	}
+	return m, nil
+}
+
+func getOCMSharePerm(p string) (*provider.ResourcePermissions, error) {
+	switch p {
+	case viewerPermission:
+		return conversions.NewViewerRole(false).CS3ResourcePermissions(), nil
+	case editorPermission:
+		return conversions.NewEditorRole(false).CS3ResourcePermissions(), nil
+	}
+	return nil, errors.New("invalid rol: " + p)
+}
+
+func getOCMViewMode(p string) (appprovider.ViewMode, error) {
+	switch p {
+	case viewerPermission:
+		return appprovider.ViewMode_VIEW_MODE_READ_ONLY, nil
+	case editorPermission:
+		return appprovider.ViewMode_VIEW_MODE_READ_WRITE, nil
+	}
+	return 0, errors.New("invalid rol: " + p)
 }

@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -159,11 +159,11 @@ func getGrantType(t string) provider.GranteeType {
 func getSharePerm(p string) (*provider.ResourcePermissions, error) {
 	switch p {
 	case viewerPermission:
-		return conversions.NewViewerRole(_resharing).CS3ResourcePermissions(), nil
+		return conversions.NewViewerRole(false).CS3ResourcePermissions(), nil
 	case editorPermission:
-		return conversions.NewEditorRole(_resharing).CS3ResourcePermissions(), nil
+		return conversions.NewEditorRole(false).CS3ResourcePermissions(), nil
 	case collabPermission:
-		return conversions.NewManagerRole().CS3ResourcePermissions(), nil
+		return conversions.NewCoownerRole().CS3ResourcePermissions(), nil
 	case denyPermission:
 		return &provider.ResourcePermissions{}, nil
 	default:

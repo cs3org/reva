@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/cheggaaa/pb"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -50,7 +49,7 @@ func downloadCommand() *command {
 		remote := cmd.Args()[0]
 		local := cmd.Args()[1]
 
-		client, err := getClient()
+		gatewayClient, err := getClient()
 		if err != nil {
 			return err
 		}
@@ -58,7 +57,7 @@ func downloadCommand() *command {
 		ref := &provider.Reference{Path: remote}
 		req1 := &provider.StatRequest{Ref: ref}
 		ctx := getAuthContext()
-		res1, err := client.Stat(ctx, req1)
+		res1, err := gatewayClient.Stat(ctx, req1)
 		if err != nil {
 			return err
 		}
@@ -71,7 +70,7 @@ func downloadCommand() *command {
 		req2 := &provider.InitiateFileDownloadRequest{
 			Ref: &provider.Reference{Path: remote},
 		}
-		res, err := client.InitiateFileDownload(ctx, req2)
+		res, err := gatewayClient.InitiateFileDownload(ctx, req2)
 		if err != nil {
 			return err
 		}
@@ -96,21 +95,14 @@ func downloadCommand() *command {
 
 			dataServerURL := p.DownloadEndpoint
 			// TODO(labkode): do a protocol switch
-			httpReq, err := rhttp.NewRequest(ctx, "GET", dataServerURL, nil)
+			httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, dataServerURL, nil)
 			if err != nil {
 				return err
 			}
 
 			httpReq.Header.Set(datagateway.TokenTransportHeader, p.Token)
-			httpClient := rhttp.GetHTTPClient(
-				rhttp.Context(ctx),
-				// TODO make insecure configurable
-				rhttp.Insecure(true),
-				// TODO make timeout configurable
-				rhttp.Timeout(time.Duration(24*int64(time.Hour))),
-			)
 
-			httpRes, err := httpClient.Do(httpReq)
+			httpRes, err := client.Do(httpReq)
 			if err != nil {
 				return err
 			}
@@ -144,7 +136,10 @@ func downloadCommand() *command {
 	return cmd
 }
 
-func getDownloadProtocolInfo(protocolInfos []*gateway.FileDownloadProtocol, protocol string) (*gateway.FileDownloadProtocol, error) {
+func getDownloadProtocolInfo(
+	protocolInfos []*gateway.FileDownloadProtocol,
+	protocol string,
+) (*gateway.FileDownloadProtocol, error) {
 	for _, p := range protocolInfos {
 		if p.Protocol == protocol {
 			return p, nil
