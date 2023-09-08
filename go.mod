@@ -37,7 +37,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/juliangruber/go-intersect v1.1.0
-	github.com/mattn/go-sqlite3 v1.14.15
+	github.com/mattn/go-sqlite3 v1.14.17
 	github.com/maxymania/go-system v0.0.0-20170110133659-647cc364bf0b
 	github.com/mileusna/useragent v1.2.1
 	github.com/minio/minio-go/v7 v7.0.63
