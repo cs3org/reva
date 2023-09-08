@@ -22,7 +22,6 @@ import (
 	"context"
 	"os"
 
-	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -282,8 +281,8 @@ var _ = Describe("Nextcloud", func() {
 				},
 				AccessMethods: []*ocm.AccessMethod{
 					masked_share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
-					masked_share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
-					masked_share.NewTransferAccessMethod(),
+					// masked_share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
+					// masked_share.NewTransferAccessMethod(),
 				},
 				Ctime: &types.Timestamp{
 					Seconds:              1234567890,
@@ -440,8 +439,8 @@ var _ = Describe("Nextcloud", func() {
 				ShareType: ocm.ShareType_SHARE_TYPE_USER,
 				AccessMethods: []*ocm.AccessMethod{
 					masked_share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
-					masked_share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
-					masked_share.NewTransferAccessMethod(),
+					// masked_share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
+					// masked_share.NewTransferAccessMethod(),
 				},
 				Token: "some-token",
 			}))

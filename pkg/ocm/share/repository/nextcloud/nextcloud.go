@@ -30,7 +30,6 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 
-	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -194,10 +193,10 @@ func (sm *Manager) efssShareToOcm(resp *ShareAltMap) *ocm.Share {
 		AccessMethods: []*ocm.AccessMethod{
 			// FIXME for webdav we should use conversions.RoleFromOCSPermissions(conversions.Permissions(resp.Permissions))).CS3ResourcePermissions()
 			share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
-			// FIXME assume apps are supported and in r/w mode
-			share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
-			// FIXME assume datatx are supported
-			share.NewTransferAccessMethod(),
+			// FIXME add if apps are supported
+			// share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
+			// FIXME add if datatx are supported
+			// share.NewTransferAccessMethod(),
 		},
 	}
 }
