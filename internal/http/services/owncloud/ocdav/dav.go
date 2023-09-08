@@ -21,8 +21,8 @@ package ocdav
 import (
 	"context"
 	"net/http"
-	"net/url"
 	"path"
+	"path/filepath"
 	"strings"
 
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -195,7 +195,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			if ok {
 				// OCM 1.0
 				token = username
-				r.URL.Path, _ = url.JoinPath("/", token, r.URL.Path)
+				r.URL.Path = filepath.Join("/", token, r.URL.Path)
 				ctx = context.WithValue(ctx, ctxOCM10, true)
 			} else {
 				token, _ = router.ShiftPath(r.URL.Path)
