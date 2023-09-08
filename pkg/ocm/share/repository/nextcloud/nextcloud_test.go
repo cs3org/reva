@@ -280,7 +280,9 @@ var _ = Describe("Nextcloud", func() {
 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
 				},
 				AccessMethods: []*ocm.AccessMethod{
-					masked_share.NewWebDavAccessMethod(conversions.RoleFromOCSPermissions(conversions.Permissions(1)).CS3ResourcePermissions()),
+					masked_share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
+					// masked_share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
+					// masked_share.NewTransferAccessMethod(),
 				},
 				Ctime: &types.Timestamp{
 					Seconds:              1234567890,
@@ -436,7 +438,9 @@ var _ = Describe("Nextcloud", func() {
 				},
 				ShareType: ocm.ShareType_SHARE_TYPE_USER,
 				AccessMethods: []*ocm.AccessMethod{
-					masked_share.NewWebDavAccessMethod(conversions.RoleFromOCSPermissions(conversions.Permissions(1)).CS3ResourcePermissions()),
+					masked_share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
+					// masked_share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
+					// masked_share.NewTransferAccessMethod(),
 				},
 				Token: "some-token",
 			}))

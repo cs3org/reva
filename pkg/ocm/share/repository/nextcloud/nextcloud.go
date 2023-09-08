@@ -188,10 +188,15 @@ func (sm *Manager) efssShareToOcm(resp *ShareAltMap) *ocm.Share {
 		Ctime:     resp.Ctime,
 		Mtime:     resp.Mtime,
 		ShareType: ocm.ShareType_SHARE_TYPE_USER,
+		// FIXME the SM app does not provide methods and does not include permissions, see https://github.com/sciencemesh/nc-sciencemesh/issues/45
+		// the correct logic here is to include those access methods that come in the payload
 		AccessMethods: []*ocm.AccessMethod{
-			share.NewWebDavAccessMethod(conversions.RoleFromOCSPermissions(conversions.Permissions(resp.Permissions)).CS3ResourcePermissions()),
-			// FIXME share.NewWebAppAccessMethod()  missing from SM app
-			// FIXME share.NewDataTxAccessMethod()
+			// FIXME for webdav we should use conversions.RoleFromOCSPermissions(conversions.Permissions(resp.Permissions))).CS3ResourcePermissions()
+			share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
+			// FIXME add if apps are supported
+			// share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
+			// FIXME add if datatx are supported
+			// share.NewTransferAccessMethod(),
 		},
 	}
 }
