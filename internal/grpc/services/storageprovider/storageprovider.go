@@ -823,6 +823,8 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		Status: status.NewOK(ctx),
 		Info:   md,
 	}
+	log := appctx.GetLogger(ctx)
+	log.Trace().Interface("md", md).Msg("GetMD returns")
 	return res, nil
 }
 

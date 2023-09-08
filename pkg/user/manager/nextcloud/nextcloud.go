@@ -28,13 +28,13 @@ import (
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
-	// "github.com/cs3org/reva/pkg/errtypes".
 )
 
 func init() {
@@ -106,29 +106,30 @@ func (um *Manager) SetHTTPClient(c *http.Client) {
 func getUser(ctx context.Context) (*userpb.User, error) {
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
-		err := errors.Wrap(errtypes.UserRequired(""), "nextcloud storage driver: error getting user from ctx")
+		err := errors.Wrap(errtypes.UserRequired(""), "nextcloud user manager: error getting user from ctx")
 		return nil, err
 	}
 	return u, nil
 }
 
 func (um *Manager) do(ctx context.Context, a Action, username string) (int, []byte, error) {
+	log := appctx.GetLogger(ctx)
 	url := um.endPoint + "~" + username + "/api/user/" + a.verb
+	log.Info().Msgf("um.do req %s %s", url, a.argS)
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
 	if err != nil {
-		panic(err)
+		return 0, nil, err
 	}
 	req.Header.Set("X-Reva-Secret", um.sharedSecret)
-
 	req.Header.Set("Content-Type", "application/json")
-	fmt.Println(url)
 	resp, err := um.client.Do(req)
 	if err != nil {
-		panic(err)
+		return 0, nil, err
 	}
 
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
+	log.Info().Msgf("um.do res %s %s", url, string(body))
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return 0, nil, fmt.Errorf("Unexpected response code from EFSS API: " + strconv.Itoa(resp.StatusCode))
 	}
@@ -161,17 +162,16 @@ func (um *Manager) GetUserByClaim(ctx context.Context, claim, value string, skip
 		Claim string `json:"claim"`
 		Value string `json:"value"`
 	}
+	log := appctx.GetLogger(ctx)
+	log.Debug().Msgf("NC-based user manager GetUserByClaim - claim '%s', value '%s'", claim, value)
+
 	bodyObj := &paramsObj{
 		Claim: claim,
 		Value: value,
 	}
-	user, err := getUser(ctx)
-	if err != nil {
-		return nil, err
-	}
 
 	bodyStr, _ := json.Marshal(bodyObj)
-	_, respBody, err := um.do(ctx, Action{"GetUserByClaim", string(bodyStr)}, user.Username)
+	_, respBody, err := um.do(ctx, Action{"GetUserByClaim", string(bodyStr)}, value)
 	if err != nil {
 		return nil, err
 	}

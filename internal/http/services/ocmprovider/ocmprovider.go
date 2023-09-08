@@ -29,6 +29,8 @@ import (
 	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
+const OCMAPIVersion = "1.1.0"
+
 func init() {
 	global.Register("ocmprovider", New)
 }
@@ -89,7 +91,7 @@ func (c *config) prepare() *discoveryData {
 	if c.Endpoint == "" {
 		d.Enabled = false
 		d.Endpoint = ""
-		d.APIVersion = "1.1.0"
+		d.APIVersion = OCMAPIVersion
 		d.Provider = c.Provider
 		d.ResourceTypes = []resourceTypes{{
 			Name:       "file",
@@ -100,7 +102,7 @@ func (c *config) prepare() *discoveryData {
 		return d
 	}
 	d.Enabled = true
-	d.APIVersion = "1.1.0"
+	d.APIVersion = OCMAPIVersion
 	d.Endpoint = fmt.Sprintf("%s/%s", c.Endpoint, c.OCMPrefix)
 	d.Provider = c.Provider
 	rtProtos := map[string]string{}
@@ -153,10 +155,11 @@ func (s *svc) Handler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		if r.UserAgent() == "Nextcloud Server Crawler" {
-			// TODO(lopresti) remove this hack once Nextcloud is able to talk OCM!
-			s.data.APIVersion = "1.0-proposal1"
+			// Nextcloud decided to only support OCM 1.0 and 1.1, not any 1.x as per SemVer. See
+			// https://github.com/nextcloud/server/pull/39574#issuecomment-1679191188
+			s.data.APIVersion = "1.1"
 		} else {
-			s.data.APIVersion = "1.1.0"
+			s.data.APIVersion = OCMAPIVersion
 		}
 		indented, _ := json.MarshalIndent(s.data, "", "   ")
 		if _, err := w.Write(indented); err != nil {

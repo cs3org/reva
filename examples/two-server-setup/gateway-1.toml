@@ -36,16 +36,6 @@ mime_types = [
     {"mime_type" = "application/vnd.jupyter", "extension" = "ipynb", "name" = "Jupyter Notebook", "description" = "Jupyter Notebook"}
 ]
 
-[grpc.services.appprovider]
-driver = "wopi"
-app_provider_url = "localhost:19000"
-
-[grpc.services.appprovider.drivers.wopi]
-iop_secret = "shared-secret-with-wopiserver"
-wopi_url = "http://0.0.0.0:8880/"
-app_name = "Collabora"
-app_url = "https://your-collabora-server.org:9980"
-
 [grpc.services.storageregistry]
 [grpc.services.storageregistry.drivers.static]
 home_provider = "/home"
@@ -91,7 +81,6 @@ providers = "providers.demo.json"
 [http]
 address = "0.0.0.0:19001"
 
-[http.services.appprovider]
 [http.services.datagateway]
 [http.services.prometheus]
 [http.services.ocmd]
