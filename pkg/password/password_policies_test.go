@@ -4,8 +4,6 @@ import (
 	"testing"
 )
 
-var _defaultSpecialCharacters = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
-
 func TestPolicies_Validate(t *testing.T) {
 	type fields struct {
 		minCharacters          int
@@ -13,7 +11,6 @@ func TestPolicies_Validate(t *testing.T) {
 		minUpperCaseCharacters int
 		minDigits              int
 		minSpecialCharacters   int
-		specialCharacters      string
 	}
 	tests := []struct {
 		name    string
@@ -29,44 +26,19 @@ func TestPolicies_Validate(t *testing.T) {
 				minUpperCaseCharacters: 29,
 				minDigits:              10,
 				minSpecialCharacters:   32,
-				specialCharacters:      _defaultSpecialCharacters,
 			},
-			args: "1234567890abcdefghijklmnopqrstuvwxyzäöüABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÜ!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~",
+			args: "1234567890abcdefghijklmnopqrstuvwxyzäöüABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÜ !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~",
 		},
 		{
-			name: "exactly one",
+			name: "exactly",
 			fields: fields{
-				minCharacters:          1,
-				minLowerCaseCharacters: 1,
-				minUpperCaseCharacters: 1,
+				minCharacters:          19,
+				minLowerCaseCharacters: 7,
+				minUpperCaseCharacters: 7,
 				minDigits:              1,
 				minSpecialCharacters:   1,
-				specialCharacters:      "-",
 			},
-			args: "0äÖ-",
-		},
-		{
-			name: "exactly + special",
-			fields: fields{
-				minCharacters:          12,
-				minLowerCaseCharacters: 3,
-				minUpperCaseCharacters: 3,
-				minDigits:              1,
-				minSpecialCharacters:   9,
-				specialCharacters:      "-世界 ßAaBb",
-			},
-			args: "0äÖ-世界 ßAaBb",
-		},
-		{
-			name: "exactly cyrillic",
-			fields: fields{
-				minCharacters:          6,
-				minLowerCaseCharacters: 3,
-				minUpperCaseCharacters: 3,
-				minDigits:              0,
-				minSpecialCharacters:   0,
-			},
-			args: "іІїЇЯяЙй",
+			args: "0äÖ-世界іІїЇЯяЙйßAaBb",
 		},
 		{
 			name: "error",
@@ -76,7 +48,6 @@ func TestPolicies_Validate(t *testing.T) {
 				minUpperCaseCharacters: 2,
 				minDigits:              2,
 				minSpecialCharacters:   2,
-				specialCharacters:      "",
 			},
 			args:    "0äÖ-",
 			wantErr: true,
@@ -84,17 +55,13 @@ func TestPolicies_Validate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s, err := NewPasswordPolicies(
+			s := NewPasswordPolicies(
 				tt.fields.minCharacters,
 				tt.fields.minLowerCaseCharacters,
 				tt.fields.minUpperCaseCharacters,
 				tt.fields.minDigits,
 				tt.fields.minSpecialCharacters,
-				tt.fields.specialCharacters,
 			)
-			if err != nil {
-				t.Error(err)
-			}
 			if err := s.Validate(tt.args); (err != nil) != tt.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err.Error(), tt.wantErr)
 			}
@@ -109,7 +76,6 @@ func TestPasswordPolicies_Count(t *testing.T) {
 		wantUpperCaseCharacters int
 		wantDigits              int
 		wantSpecialCharacters   int
-		specialCharacters       string
 	}
 	tests := []struct {
 		name    string
@@ -120,76 +86,46 @@ func TestPasswordPolicies_Count(t *testing.T) {
 		{
 			name: "all in one",
 			fields: want{
-				wantCharacters:          100,
+				wantCharacters:          101,
 				wantLowerCaseCharacters: 29,
 				wantUpperCaseCharacters: 29,
 				wantDigits:              10,
-				wantSpecialCharacters:   32,
-				specialCharacters:       _defaultSpecialCharacters,
+				wantSpecialCharacters:   33,
 			},
-			args: "1234567890abcdefghijklmnopqrstuvwxyzäöüABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÜ!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~",
+			args: "1234567890abcdefghijklmnopqrstuvwxyzäöüABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÜ !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~",
 		},
 		{
 			name: "length only",
 			fields: want{
-				wantCharacters:          4,
+				wantCharacters:          3,
 				wantLowerCaseCharacters: 0,
 				wantUpperCaseCharacters: 0,
 				wantDigits:              0,
 				wantSpecialCharacters:   0,
 			},
-			args: "世界 ß",
+			args: "世界ß",
 		},
 		{
 			name: "length only",
 			fields: want{
-				wantCharacters:          8,
-				wantLowerCaseCharacters: 2,
-				wantUpperCaseCharacters: 2,
-				wantDigits:              0,
-				wantSpecialCharacters:   8,
-				specialCharacters:       "世界 ßAaBb",
+				wantCharacters:          21,
+				wantLowerCaseCharacters: 7,
+				wantUpperCaseCharacters: 7,
+				wantDigits:              1,
+				wantSpecialCharacters:   3,
 			},
-			args: "世界 ßAaBb",
-		},
-		{
-			name: "empty",
-			fields: want{
-				wantCharacters:          0,
-				wantLowerCaseCharacters: 0,
-				wantUpperCaseCharacters: 0,
-				wantDigits:              0,
-				wantSpecialCharacters:   0,
-			},
-			args: "",
-		},
-		{
-			name: "check '-' sing",
-			fields: want{
-				wantCharacters:          33,
-				wantLowerCaseCharacters: 0,
-				wantUpperCaseCharacters: 0,
-				wantDigits:              0,
-				wantSpecialCharacters:   5,
-				specialCharacters:       `_!-+`,
-			},
-			args: "!!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~",
+			args: "0äÖ-世界 іІїЇЯяЙй ßAaBb",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			i, err := NewPasswordPolicies(
+			i := NewPasswordPolicies(
 				tt.fields.wantCharacters,
 				tt.fields.wantLowerCaseCharacters,
 				tt.fields.wantUpperCaseCharacters,
 				tt.fields.wantDigits,
 				tt.fields.wantSpecialCharacters,
-				tt.fields.specialCharacters,
 			)
-			if err != nil {
-				t.Error(err)
-				return
-			}
 			s := i.(*Policies)
 			if got := s.count(tt.args); got != tt.fields.wantCharacters {
 				t.Errorf("count() = %v, want %v", got, tt.fields.wantCharacters)
