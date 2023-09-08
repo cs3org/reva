@@ -3,10 +3,10 @@
 set -e
 
 # repositories and branches.
-REPO_NEXTCLOUD_APP=https://github.com/MahdiBaghbani/nc-sciencemesh
+REPO_NEXTCLOUD_APP=https://github.com/sciencemesh/nc-sciencemesh
 BRANCH_NEXTCLOUD_APP=nextcloud
 
-REPO_OWNCLOUD_APP=https://github.com/MahdiBaghbani/nc-sciencemesh
+REPO_OWNCLOUD_APP=https://github.com/sciencemesh/nc-sciencemesh
 BRANCH_OWNCLOUD_APP=owncloud
 
 # Nextcloud Sciencemesh source code.
