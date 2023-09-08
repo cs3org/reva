@@ -104,9 +104,6 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 			return
 		}
 	}
-	if content == nil {
-		return
-	}
 	defer content.Close()
 
 	var ranges []HTTPRange
