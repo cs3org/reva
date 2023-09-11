@@ -48,7 +48,7 @@ var _ = PDescribe("gateway using a static registry and a shard setup", func() {
 	// TODO: Static registry relies on gateway being not dumb  at the moment. So these won't work anymore
 	// FIXME: Bring me back please!
 	var (
-		dependencies = map[string]string{}
+		dependencies = []RevadConfig{}
 		revads       = map[string]*Revad{}
 
 		einsteinCtx   context.Context
@@ -75,11 +75,11 @@ var _ = PDescribe("gateway using a static registry and a shard setup", func() {
 	)
 
 	BeforeEach(func() {
-		dependencies = map[string]string{
-			"gateway":  "gateway-static.toml",
-			"users":    "userprovider-json.toml",
-			"storage":  "storageprovider-local.toml",
-			"storage2": "storageprovider-local.toml",
+		dependencies = []RevadConfig{
+			{Name: "gateway", Config: "gateway-static.toml"},
+			{Name: "users", Config: "userprovider-json.toml"},
+			{Name: "storage", Config: "storageprovider-local.toml"},
+			{Name: "storage2", Config: "storageprovider-local.toml"},
 		}
 		redisAddress := os.Getenv("REDIS_ADDRESS")
 		if redisAddress == "" {

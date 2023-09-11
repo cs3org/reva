@@ -1,0 +1,15 @@
+[log]
+mode = "json"
+
+[shared]
+gatewaysvc = "{{cernboxgw_address}}"
+
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.authprovider]
+auth_manager = "machine"
+
+[grpc.services.authprovider.auth_managers.machine]
+api_key = "secret"
+gateway_addr = "{{cernboxgw_address}}"

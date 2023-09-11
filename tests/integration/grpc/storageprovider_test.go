@@ -79,7 +79,7 @@ func createFS(provider string, revads map[string]*Revad) (storage.FS, error) {
 // provider to be used in the assertion functions.
 var _ = Describe("storage providers", func() {
 	var (
-		dependencies = map[string]string{}
+		dependencies = []RevadConfig{}
 		variables    = map[string]string{}
 		revads       = map[string]*Revad{}
 
@@ -659,7 +659,7 @@ var _ = Describe("storage providers", func() {
 		})
 	}
 
-	suite := func(provider string, deps map[string]string) {
+	suite := func(provider string, deps []RevadConfig) {
 		Describe(provider, func() {
 			BeforeEach(func() {
 				dependencies = deps
@@ -733,13 +733,20 @@ var _ = Describe("storage providers", func() {
 
 	}
 
-	suite("nextcloud", map[string]string{
-		"storage": "storageprovider-nextcloud.toml",
+	suite("nextcloud", []RevadConfig{
+		{
+			Name:   "storage",
+			Config: "storageprovider-nextcloud.toml",
+		},
 	})
 
-	suite("ocis", map[string]string{
-		"storage":     "storageprovider-ocis.toml",
-		"permissions": "permissions-ocis-ci.toml",
+	suite("ocis", []RevadConfig{
+		{
+			Name: "storage", Config: "storageprovider-ocis.toml",
+		},
+		{
+			Name: "permissions", Config: "permissions-ocis-ci.toml",
+		},
 	})
 
 })

@@ -1,0 +1,76 @@
+[log]
+mode = "json"
+
+[shared]
+gatewaysvc = "{{grpc_address}}"
+
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.gateway]
+authregistrysvc = "{{grpc_address}}"
+userprovidersvc = "{{grpc_address}}"
+ocminvitemanagersvc = "{{grpc_address}}"
+ocmproviderauthorizersvc = "{{grpc_address}}"
+storageregistrysvc = "{{grpc_address}}"
+ocmshareprovidersvc = "{{grpc_address}}"
+datagateway = "http://{{cernboxhttp_address}}/datagateway"
+
+[grpc.services.storageregistry]
+[grpc.services.storageregistry.drivers.static]
+home_provider = "/home"
+[grpc.services.storageregistry.drivers.static.rules]
+"/home" = {"address" = "{{grpc_address}}"}
+"123e4567-e89b-12d3-a456-426655440000" = {"address" = "{{grpc_address}}"}
+"/ocm" = {"address" = "{{cernboxoutcomingocm_address}}"}
+"ocm" = {"address" = "{{cernboxoutcomingocm_address}}"}
+
+[grpc.services.storageprovider]
+driver = "localhome"
+mount_path = "/home"
+mount_id = "123e4567-e89b-12d3-a456-426655440000"
+data_server_url = "http://{{cernboxhttp_address}}/data"
+
+[grpc.services.storageprovider.drivers.localhome]
+root = "{{localhome_root}}"
+
+[grpc.services.authregistry]
+driver = "static"
+
+[grpc.services.authregistry.drivers.static.rules]
+basic = "{{grpc_address}}"
+ocmshares = "{{cernboxoutcomingocm_address}}"
+machine = "{{cernboxmachineauth_address}}"
+
+[grpc.services.ocminvitemanager]
+driver = "json"
+provider_domain = "cernbox.cern.ch"
+
+[grpc.services.ocminvitemanager.drivers.json]
+file = "{{invite_token_file}}"
+
+[grpc.services.ocmproviderauthorizer]
+driver = "json"
+
+[grpc.services.ocmproviderauthorizer.drivers.json]
+providers = "{{file_providers}}"
+
+[grpc.services.ocmshareprovider]
+driver = "json"
+webdav_endpoint = "http://{{cernboxwebdav_address}}"
+provider_domain = "cernbox.cern.ch"
+
+[grpc.services.ocmshareprovider.drivers.json]
+file = "{{ocm_share_cernbox_file}}"
+
+[grpc.services.authprovider]
+auth_manager = "json"
+
+[grpc.services.authprovider.auth_managers.json]
+users = "fixtures/ocm-share/ocm-users.demo.json"
+
+[grpc.services.userprovider]
+driver = "json"
+
+[grpc.services.userprovider.drivers.json]
+users = "fixtures/ocm-share/ocm-users.demo.json"
