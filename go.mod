@@ -3,7 +3,7 @@ module github.com/cs3org/reva
 require (
 	bou.ke/monkey v1.0.2
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
-	github.com/BurntSushi/toml v1.2.1
+	github.com/BurntSushi/toml v1.3.2
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/ReneKroon/ttlcache/v2 v2.11.0
 	github.com/asim/go-micro/plugins/events/nats/v4 v4.0.0-20220118152736-9e0be6c85d75
