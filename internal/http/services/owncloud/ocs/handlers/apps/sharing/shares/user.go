@@ -244,7 +244,7 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filte
 
 			h.addFileInfo(ctx, data, info)
 			h.mapUserIds(ctx, client, data)
-
+			//TODO: get filter list concorrent from a share manager service that deals with hidden shares
 			// Filter out a share if ShareWith is not found because the user or group already deleted
 			if data.ShareWith == "" {
 				continue

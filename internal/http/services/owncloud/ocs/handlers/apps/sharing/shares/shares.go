@@ -734,7 +734,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, share *col
 
 	share.Permissions = &collaboration.SharePermissions{Permissions: role.CS3ResourcePermissions()}
 
-	var fieldMaskPaths = []string{"permissions"}
+	var fieldMaskPaths = []string{"permissions", "hide"}
 
 	expireDate := r.PostFormValue("expireDate")
 	var expirationTs *types.Timestamp

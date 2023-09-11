@@ -48,6 +48,7 @@ const (
 
 // AcceptReceivedShare handles Post Requests on /apps/files_sharing/api/v1/shares/{shareid}
 func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
+	// TODO: this needs to evaluate the hide form field maybe and pass it on to updateReceivedShare
 	ctx := r.Context()
 	shareID := chi.URLParam(r, shareidkey)
 	client, err := h.getClient()
@@ -134,6 +135,7 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 
 // RejectReceivedShare handles DELETE Requests on /apps/files_sharing/api/v1/shares/{shareid}
 func (h *Handler) RejectReceivedShare(w http.ResponseWriter, r *http.Request) {
+	// TODO: this needs to evaluate the hide form field maybe and pass it on to updateReceivedShare
 	shareID := chi.URLParam(r, "shareid")
 	data := h.updateReceivedShare(w, r, shareID, true, "")
 	if data != nil {
@@ -151,15 +153,20 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 		return nil
 	}
 
+	hideFlag, _ := strconv.ParseBool(r.URL.Query().Get("hide"))
+
 	// we need to add a path to the share
 	shareRequest := &collaboration.UpdateReceivedShareRequest{
 		Share: &collaboration.ReceivedShare{
-			Share: &collaboration.Share{Id: &collaboration.ShareId{OpaqueId: shareID}},
+			Share: &collaboration.Share{
+				Id:   &collaboration.ShareId{OpaqueId: shareID},
+				Hide: hideFlag,
+			},
 			MountPoint: &provider.Reference{
 				Path: mountPoint,
 			},
 		},
-		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state", "hide"}},
 	}
 	if rejectShare {
 		shareRequest.Share.State = collaboration.ShareState_SHARE_STATE_REJECTED
