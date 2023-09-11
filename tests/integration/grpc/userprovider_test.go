@@ -36,7 +36,7 @@ import (
 
 var _ = Describe("user providers", func() {
 	var (
-		dependencies map[string]string
+		dependencies []RevadConfig
 		revads       map[string]*Revad
 
 		existingIdp string
@@ -244,8 +244,11 @@ var _ = Describe("user providers", func() {
 
 	Describe("the json userprovider", func() {
 		BeforeEach(func() {
-			dependencies = map[string]string{
-				"users": "userprovider-json.toml",
+			dependencies = []RevadConfig{
+				{
+					Name:   "users",
+					Config: "userprovider-json.toml",
+				},
 			}
 			existingIdp = "http://localhost:20080"
 		})
@@ -257,8 +260,11 @@ var _ = Describe("user providers", func() {
 
 	Describe("the demo userprovider", func() {
 		BeforeEach(func() {
-			dependencies = map[string]string{
-				"users": "userprovider-demo.toml",
+			dependencies = []RevadConfig{
+				{
+					Name:   "users",
+					Config: "userprovider-demo.toml",
+				},
 			}
 			existingIdp = "http://localhost:9998"
 		})
@@ -274,8 +280,11 @@ var _ = Describe("user providers", func() {
 			if runldap == "" {
 				Skip("Skipping LDAP tests")
 			}
-			dependencies = map[string]string{
-				"users": "userprovider-ldap.toml",
+			dependencies = []RevadConfig{
+				{
+					Name:   "users",
+					Config: "userprovider-ldap.toml",
+				},
 			}
 			existingIdp = "http://localhost:20080"
 		})
