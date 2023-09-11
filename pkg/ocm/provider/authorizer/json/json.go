@@ -47,14 +47,17 @@ func New(m map[string]interface{}) (provider.Authorizer, error) {
 		return nil, err
 	}
 
+	providers := []*ocmprovider.ProviderInfo{}
 	f, err := os.ReadFile(c.Providers)
 	if err != nil {
-		return nil, err
-	}
-	providers := []*ocmprovider.ProviderInfo{}
-	err = json.Unmarshal(f, &providers)
-	if err != nil {
-		return nil, err
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+	} else {
+		err = json.Unmarshal(f, &providers)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	a := &authorizer{
