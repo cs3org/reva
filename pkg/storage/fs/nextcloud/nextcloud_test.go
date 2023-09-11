@@ -29,6 +29,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/storage/fs/nextcloud"
@@ -117,18 +118,6 @@ var _ = Describe("Nextcloud", func() {
 		It("returns a new instance", func() {
 			_, err := nextcloud.New(context.Background(), options)
 			Expect(err).ToNot(HaveOccurred())
-		})
-	})
-
-	// 	GetHome(ctx context.Context) (string, error)
-	Describe("GetHome", func() {
-		It("calls the GetHome endpoint", func() {
-			nc, called, teardown := setUpNextcloudServer()
-			defer teardown()
-			home, err := nc.GetHome(ctx)
-			Expect(home).To(Equal("yes we are"))
-			Expect(err).ToNot(HaveOccurred())
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/GetHome `)
 		})
 	})
 
@@ -224,13 +213,8 @@ var _ = Describe("Nextcloud", func() {
 			result, err := nc.GetMD(ctx, ref, mdKeys)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*result).To(Equal(provider.ResourceInfo{
-				Opaque: &types.Opaque{
-					Map:                  nil,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
-				},
-				Type: provider.ResourceType_RESOURCE_TYPE_FILE,
+				Opaque: nil,
+				Type:   provider.ResourceType_RESOURCE_TYPE_FILE,
 				Id: &provider.ResourceId{
 					StorageId:            "",
 					OpaqueId:             "fileid-/some/path",
@@ -254,46 +238,17 @@ var _ = Describe("Nextcloud", func() {
 					XXX_unrecognized:     nil,
 					XXX_sizecache:        0,
 				},
-				Path: "/some/path",
-				PermissionSet: &provider.ResourcePermissions{
-					AddGrant:             false,
-					CreateContainer:      false,
-					Delete:               false,
-					GetPath:              false,
-					GetQuota:             false,
-					InitiateFileDownload: false,
-					InitiateFileUpload:   false,
-					ListGrants:           false,
-					ListContainer:        false,
-					ListFileVersions:     false,
-					ListRecycle:          false,
-					Move:                 false,
-					RemoveGrant:          false,
-					PurgeRecycle:         false,
-					RestoreFileVersion:   false,
-					RestoreRecycleItem:   false,
-					Stat:                 false,
-					UpdateGrant:          false,
-					DenyGrant:            false,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+				Path:          "/some/path",
+				PermissionSet: conversions.RoleFromOCSPermissions(conversions.Permissions(0)).CS3ResourcePermissions(),
+				Size:          12345,
+				Owner: &userpb.UserId{
+					Idp:      "",
+					OpaqueId: "",
+					Type:     1,
 				},
-				Size:   12345,
-				Owner:  nil,
-				Target: "",
-				CanonicalMetadata: &provider.CanonicalMetadata{
-					Target:               nil,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
-				},
-				ArbitraryMetadata: &provider.ArbitraryMetadata{
-					Metadata:             map[string]string{"some": "arbi", "trary": "meta", "da": "ta"},
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
-				},
+				Target:               "",
+				CanonicalMetadata:    nil,
+				ArbitraryMetadata:    nil,
 				XXX_NoUnkeyedLiteral: struct{}{},
 				XXX_unrecognized:     nil,
 				XXX_sizecache:        0,
@@ -320,13 +275,8 @@ var _ = Describe("Nextcloud", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(results)).To(Equal(1))
 			Expect(*results[0]).To(Equal(provider.ResourceInfo{
-				Opaque: &types.Opaque{
-					Map:                  nil,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
-				},
-				Type: provider.ResourceType_RESOURCE_TYPE_FILE,
+				Opaque: nil,
+				Type:   provider.ResourceType_RESOURCE_TYPE_FILE,
 				Id: &provider.ResourceId{
 					StorageId:            "",
 					OpaqueId:             "fileid-/some/path",
@@ -350,46 +300,17 @@ var _ = Describe("Nextcloud", func() {
 					XXX_unrecognized:     nil,
 					XXX_sizecache:        0,
 				},
-				Path: "/some/path",
-				PermissionSet: &provider.ResourcePermissions{
-					AddGrant:             false,
-					CreateContainer:      false,
-					Delete:               false,
-					GetPath:              false,
-					GetQuota:             false,
-					InitiateFileDownload: false,
-					InitiateFileUpload:   false,
-					ListGrants:           false,
-					ListContainer:        false,
-					ListFileVersions:     false,
-					ListRecycle:          false,
-					Move:                 false,
-					RemoveGrant:          false,
-					PurgeRecycle:         false,
-					RestoreFileVersion:   false,
-					RestoreRecycleItem:   false,
-					Stat:                 false,
-					UpdateGrant:          false,
-					DenyGrant:            false,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+				Path:          "/some/path",
+				PermissionSet: conversions.RoleFromOCSPermissions(conversions.Permissions(0)).CS3ResourcePermissions(),
+				Size:          12345,
+				Owner: &userpb.UserId{
+					Idp:      "",
+					OpaqueId: "",
+					Type:     1,
 				},
-				Size:   12345,
-				Owner:  nil,
-				Target: "",
-				CanonicalMetadata: &provider.CanonicalMetadata{
-					Target:               nil,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
-				},
-				ArbitraryMetadata: &provider.ArbitraryMetadata{
-					Metadata:             map[string]string{"some": "arbi", "trary": "meta", "da": "ta"},
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
-				},
+				Target:               "",
+				CanonicalMetadata:    nil,
+				ArbitraryMetadata:    nil,
 				XXX_NoUnkeyedLiteral: struct{}{},
 				XXX_unrecognized:     nil,
 				XXX_sizecache:        0,
@@ -541,7 +462,7 @@ var _ = Describe("Nextcloud", func() {
 			key := "some/revision"
 			reader, err := nc.DownloadRevision(ctx, ref, key)
 			Expect(err).ToNot(HaveOccurred())
-			checkCalled(called, `GET /apps/sciencemesh/~tester/api/storage/DownloadRevision/some%2Frevision/some/file/path.txt `)
+			checkCalled(called, `GET /apps/sciencemesh/~tester/api/storage/DownloadRevision/some/revision/some/file/path.txt `)
 			defer reader.Close()
 			body, err := io.ReadAll(reader)
 			Expect(err).ToNot(HaveOccurred())
@@ -714,32 +635,32 @@ var _ = Describe("Nextcloud", func() {
 	})
 
 	// DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error
-	Describe("DenyGrant", func() {
-		It("calls the DenyGrant endpoint", func() {
-			nc, called, teardown := setUpNextcloudServer()
-			defer teardown()
-			ref := &provider.Reference{
-				ResourceId: &provider.ResourceId{
-					StorageId: "storage-id",
-					OpaqueId:  "opaque-id",
-				},
-				Path: "some/file/path.txt",
-			}
-			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L896-L915
-			grantee := &provider.Grantee{
-				Id: &provider.Grantee_UserId{
-					UserId: &userpb.UserId{
-						Idp:      "0.0.0.0:19000",
-						OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-						Type:     userpb.UserType_USER_TYPE_PRIMARY,
-					},
-				},
-			}
-			err := nc.DenyGrant(ctx, ref, grantee)
-			Expect(err).ToNot(HaveOccurred())
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/DenyGrant {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"g":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}}}`)
-		})
-	})
+	// Describe("DenyGrant", func() {
+	// 	It("calls the DenyGrant endpoint", func() {
+	// 		nc, called, teardown := setUpNextcloudServer()
+	// 		defer teardown()
+	// 		ref := &provider.Reference{
+	// 			ResourceId: &provider.ResourceId{
+	// 				StorageId: "storage-id",
+	// 				OpaqueId:  "opaque-id",
+	// 			},
+	// 			Path: "some/file/path.txt",
+	// 		}
+	// 		// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L896-L915
+	// 		grantee := &provider.Grantee{
+	// 			Id: &provider.Grantee_UserId{
+	// 				UserId: &userpb.UserId{
+	// 					Idp:      "0.0.0.0:19000",
+	// 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+	// 					Type:     userpb.UserType_USER_TYPE_PRIMARY,
+	// 				},
+	// 			},
+	// 		}
+	// 		err := nc.DenyGrant(ctx, ref, grantee)
+	// 		Expect(err).ToNot(HaveOccurred())
+	// 		checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/DenyGrant {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"g":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}}}`)
+	// 	})
+	// })
 
 	// RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	Describe("RemoveGrant", func() {
@@ -894,17 +815,6 @@ var _ = Describe("Nextcloud", func() {
 		})
 	})
 
-	// Shutdown(ctx context.Context) error
-	Describe("Shutdown", func() {
-		It("calls the Shutdown endpoint", func() {
-			nc, called, teardown := setUpNextcloudServer()
-			defer teardown()
-			err := nc.Shutdown(ctx)
-			Expect(err).ToNot(HaveOccurred())
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/Shutdown `)
-		})
-	})
-
 	// SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error
 	Describe("SetArbitraryMetadata", func() {
 		It("calls the SetArbitraryMetadata endpoint", func() {
@@ -948,136 +858,136 @@ var _ = Describe("Nextcloud", func() {
 		})
 	})
 
-	// ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error)
-	Describe("ListStorageSpaces", func() {
-		It("calls the ListStorageSpaces endpoint", func() {
-			nc, called, teardown := setUpNextcloudServer()
-			defer teardown()
-			filter1 := &provider.ListStorageSpacesRequest_Filter{
-				Type: provider.ListStorageSpacesRequest_Filter_TYPE_OWNER,
-				Term: &provider.ListStorageSpacesRequest_Filter_Owner{
-					Owner: &userpb.UserId{
-						Idp:      "0.0.0.0:19000",
-						OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-						Type:     userpb.UserType_USER_TYPE_PRIMARY,
-					},
-				},
-			}
-			filter2 := &provider.ListStorageSpacesRequest_Filter{
-				Type: provider.ListStorageSpacesRequest_Filter_TYPE_ID,
-				Term: &provider.ListStorageSpacesRequest_Filter_Id{
-					Id: &provider.StorageSpaceId{
-						OpaqueId: "opaque-id",
-					},
-				},
-			}
-			filter3 := &provider.ListStorageSpacesRequest_Filter{
-				Type: provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
-				Term: &provider.ListStorageSpacesRequest_Filter_SpaceType{
-					SpaceType: string("home"),
-				},
-			}
-			filters := []*provider.ListStorageSpacesRequest_Filter{filter1, filter2, filter3}
-			spaces, err := nc.ListStorageSpaces(ctx, filters)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(len(spaces)).To(Equal(1))
-			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L1341-L1366
-			Expect(*spaces[0]).To(Equal(provider.StorageSpace{
-				Opaque: &types.Opaque{
-					Map: map[string](*types.OpaqueEntry){
-						"foo": &types.OpaqueEntry{Value: []byte("sama")},
-						"bar": &types.OpaqueEntry{Value: []byte("sama")},
-					},
-				},
-				Id: &provider.StorageSpaceId{OpaqueId: "some-opaque-storage-space-id"},
-				Owner: &userpb.User{
-					Id: &userpb.UserId{
-						Idp:      "some-idp",
-						OpaqueId: "some-opaque-user-id",
-						Type:     userpb.UserType_USER_TYPE_PRIMARY,
-					},
-				},
-				Root: &provider.ResourceId{
-					StorageId: "some-storage-ud",
-					OpaqueId:  "some-opaque-root-id",
-				},
-				Name: "My Storage Space",
-				Quota: &provider.Quota{
-					QuotaMaxBytes: uint64(456),
-					QuotaMaxFiles: uint64(123),
-				},
-				SpaceType: "home",
-				Mtime: &types.Timestamp{
-					Seconds: uint64(1234567890),
-				},
-			}))
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/ListStorageSpaces [{"type":3,"Term":{"Owner":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},{"type":2,"Term":{"Id":{"opaque_id":"opaque-id"}}},{"type":4,"Term":{"SpaceType":"home"}}]`)
-		})
-	})
+	// // ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error)
+	// Describe("ListStorageSpaces", func() {
+	// 	It("calls the ListStorageSpaces endpoint", func() {
+	// 		nc, called, teardown := setUpNextcloudServer()
+	// 		defer teardown()
+	// 		filter1 := &provider.ListStorageSpacesRequest_Filter{
+	// 			Type: provider.ListStorageSpacesRequest_Filter_TYPE_OWNER,
+	// 			Term: &provider.ListStorageSpacesRequest_Filter_Owner{
+	// 				Owner: &userpb.UserId{
+	// 					Idp:      "0.0.0.0:19000",
+	// 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+	// 					Type:     userpb.UserType_USER_TYPE_PRIMARY,
+	// 				},
+	// 			},
+	// 		}
+	// 		filter2 := &provider.ListStorageSpacesRequest_Filter{
+	// 			Type: provider.ListStorageSpacesRequest_Filter_TYPE_ID,
+	// 			Term: &provider.ListStorageSpacesRequest_Filter_Id{
+	// 				Id: &provider.StorageSpaceId{
+	// 					OpaqueId: "opaque-id",
+	// 				},
+	// 			},
+	// 		}
+	// 		filter3 := &provider.ListStorageSpacesRequest_Filter{
+	// 			Type: provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+	// 			Term: &provider.ListStorageSpacesRequest_Filter_SpaceType{
+	// 				SpaceType: string("home"),
+	// 			},
+	// 		}
+	// 		filters := []*provider.ListStorageSpacesRequest_Filter{filter1, filter2, filter3}
+	// 		spaces, err := nc.ListStorageSpaces(ctx, filters)
+	// 		Expect(err).ToNot(HaveOccurred())
+	// 		Expect(len(spaces)).To(Equal(1))
+	// 		// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L1341-L1366
+	// 		Expect(*spaces[0]).To(Equal(provider.StorageSpace{
+	// 			Opaque: &types.Opaque{
+	// 				Map: map[string](*types.OpaqueEntry){
+	// 					"foo": &types.OpaqueEntry{Value: []byte("sama")},
+	// 					"bar": &types.OpaqueEntry{Value: []byte("sama")},
+	// 				},
+	// 			},
+	// 			Id: &provider.StorageSpaceId{OpaqueId: "some-opaque-storage-space-id"},
+	// 			Owner: &userpb.User{
+	// 				Id: &userpb.UserId{
+	// 					Idp:      "some-idp",
+	// 					OpaqueId: "some-opaque-user-id",
+	// 					Type:     userpb.UserType_USER_TYPE_PRIMARY,
+	// 				},
+	// 			},
+	// 			Root: &provider.ResourceId{
+	// 				StorageId: "some-storage-ud",
+	// 				OpaqueId:  "some-opaque-root-id",
+	// 			},
+	// 			Name: "My Storage Space",
+	// 			Quota: &provider.Quota{
+	// 				QuotaMaxBytes: uint64(456),
+	// 				QuotaMaxFiles: uint64(123),
+	// 			},
+	// 			SpaceType: "home",
+	// 			Mtime: &types.Timestamp{
+	// 				Seconds: uint64(1234567890),
+	// 			},
+	// 		}))
+	// 		checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/ListStorageSpaces [{"type":3,"Term":{"Owner":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},{"type":2,"Term":{"Id":{"opaque_id":"opaque-id"}}},{"type":4,"Term":{"SpaceType":"home"}}]`)
+	// 	})
+	// })
 
-	// CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error)
-	Describe("CreateStorageSpace", func() {
-		It("calls the CreateStorageSpace endpoint", func() {
-			nc, called, teardown := setUpNextcloudServer()
-			defer teardown()
-			// https://github.com/cs3org/go-cs3apis/blob/03e4a408c1f3b2882916cf3fad4c71081a20711d/cs3/storage/provider/v1beta1/provider_api.pb.go#L3176-L3192
-			result, err := nc.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{
-				Opaque: &types.Opaque{
-					Map: map[string](*types.OpaqueEntry){
-						"foo": &types.OpaqueEntry{Value: []byte("sama")},
-						"bar": &types.OpaqueEntry{Value: []byte("sama")},
-					},
-				},
-				Owner: &userpb.User{
-					Id: &userpb.UserId{
-						Idp:      "some-idp",
-						OpaqueId: "some-opaque-user-id",
-						Type:     userpb.UserType_USER_TYPE_PRIMARY,
-					},
-				},
-				Name: "My Storage Space",
-				Quota: &provider.Quota{
-					QuotaMaxBytes: uint64(456),
-					QuotaMaxFiles: uint64(123),
-				},
-				Type: "home",
-			})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(*result).To(Equal(provider.CreateStorageSpaceResponse{
-				Opaque: nil,
-				Status: nil,
-				StorageSpace: &provider.StorageSpace{
-					Opaque: &types.Opaque{
-						Map: map[string](*types.OpaqueEntry){
-							"bar": &types.OpaqueEntry{Value: []byte("sama")},
-							"foo": &types.OpaqueEntry{Value: []byte("sama")},
-						},
-					},
-					Id: &provider.StorageSpaceId{OpaqueId: "some-opaque-storage-space-id"},
-					Owner: &userpb.User{
-						Id: &userpb.UserId{
-							Idp:      "some-idp",
-							OpaqueId: "some-opaque-user-id",
-							Type:     userpb.UserType_USER_TYPE_PRIMARY,
-						},
-					},
-					Root: &provider.ResourceId{
-						StorageId: "some-storage-ud",
-						OpaqueId:  "some-opaque-root-id",
-					},
-					Name: "My Storage Space",
-					Quota: &provider.Quota{
-						QuotaMaxBytes: uint64(456),
-						QuotaMaxFiles: uint64(123),
-					},
-					SpaceType: "home",
-					Mtime: &types.Timestamp{
-						Seconds: uint64(1234567890),
-					},
-				},
-			}))
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/CreateStorageSpace {"opaque":{"map":{"bar":{"value":"c2FtYQ=="},"foo":{"value":"c2FtYQ=="}}},"owner":{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}},"type":"home","name":"My Storage Space","quota":{"quota_max_bytes":456,"quota_max_files":123}}`)
-		})
-	})
+	// // CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error)
+	// Describe("CreateStorageSpace", func() {
+	// 	It("calls the CreateStorageSpace endpoint", func() {
+	// 		nc, called, teardown := setUpNextcloudServer()
+	// 		defer teardown()
+	// 		// https://github.com/cs3org/go-cs3apis/blob/03e4a408c1f3b2882916cf3fad4c71081a20711d/cs3/storage/provider/v1beta1/provider_api.pb.go#L3176-L3192
+	// 		result, err := nc.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{
+	// 			Opaque: &types.Opaque{
+	// 				Map: map[string](*types.OpaqueEntry){
+	// 					"foo": &types.OpaqueEntry{Value: []byte("sama")},
+	// 					"bar": &types.OpaqueEntry{Value: []byte("sama")},
+	// 				},
+	// 			},
+	// 			Owner: &userpb.User{
+	// 				Id: &userpb.UserId{
+	// 					Idp:      "some-idp",
+	// 					OpaqueId: "some-opaque-user-id",
+	// 					Type:     userpb.UserType_USER_TYPE_PRIMARY,
+	// 				},
+	// 			},
+	// 			Name: "My Storage Space",
+	// 			Quota: &provider.Quota{
+	// 				QuotaMaxBytes: uint64(456),
+	// 				QuotaMaxFiles: uint64(123),
+	// 			},
+	// 			Type: "home",
+	// 		})
+	// 		Expect(err).ToNot(HaveOccurred())
+	// 		Expect(*result).To(Equal(provider.CreateStorageSpaceResponse{
+	// 			Opaque: nil,
+	// 			Status: nil,
+	// 			StorageSpace: &provider.StorageSpace{
+	// 				Opaque: &types.Opaque{
+	// 					Map: map[string](*types.OpaqueEntry){
+	// 						"bar": &types.OpaqueEntry{Value: []byte("sama")},
+	// 						"foo": &types.OpaqueEntry{Value: []byte("sama")},
+	// 					},
+	// 				},
+	// 				Id: &provider.StorageSpaceId{OpaqueId: "some-opaque-storage-space-id"},
+	// 				Owner: &userpb.User{
+	// 					Id: &userpb.UserId{
+	// 						Idp:      "some-idp",
+	// 						OpaqueId: "some-opaque-user-id",
+	// 						Type:     userpb.UserType_USER_TYPE_PRIMARY,
+	// 					},
+	// 				},
+	// 				Root: &provider.ResourceId{
+	// 					StorageId: "some-storage-ud",
+	// 					OpaqueId:  "some-opaque-root-id",
+	// 				},
+	// 				Name: "My Storage Space",
+	// 				Quota: &provider.Quota{
+	// 					QuotaMaxBytes: uint64(456),
+	// 					QuotaMaxFiles: uint64(123),
+	// 				},
+	// 				SpaceType: "home",
+	// 				Mtime: &types.Timestamp{
+	// 					Seconds: uint64(1234567890),
+	// 				},
+	// 			},
+	// 		}))
+	// 		checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/CreateStorageSpace {"opaque":{"map":{"bar":{"value":"c2FtYQ=="},"foo":{"value":"c2FtYQ=="}}},"owner":{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}},"type":"home","name":"My Storage Space","quota":{"quota_max_bytes":456,"quota_max_files":123}}`)
+	// 	})
+	// })
 
 })

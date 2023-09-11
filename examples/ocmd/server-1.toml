@@ -90,7 +90,7 @@ mount_path = "/home"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 expose_data_server = true
 data_server_url = "http://localhost:{{ http.services.dataprovider[0].address.port }}/data"
-enable_home_creation = true
+enable_home_creation = false
 
 [grpc.services.storageprovider.drivers.localhome]
 user_layout = "{{.Username}}"

@@ -19,6 +19,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -248,7 +250,7 @@ nats_token = "secret-token-example"`
 		MaxCPUs:         "1",
 		TracingEnabled:  true,
 		TracingEndpoint: "localhost:6831",
-		ConfigDumpFile:  "/tmp/reva-dump.toml",
+		ConfigDumpFile:  filepath.Join(os.TempDir(), "reva-dump.toml"),
 	}, c2.Core)
 
 	assert.Equal(t, Vars{

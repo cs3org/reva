@@ -142,6 +142,7 @@ func getStorageManager(ctx context.Context, c *config) (repository.Repository, e
 // CreateTransfer creates a transfer job and returns a TxInfo object that includes a unique transfer id.
 // Specified target URIs are of form scheme://userinfo@host:port?name={path}
 func (driver *rclone) CreateTransfer(ctx context.Context, srcTargetURI string, dstTargetURI string) (*datatx.TxInfo, error) {
+	log := appctx.GetLogger(ctx)
 	srcEp, err := driver.extractEndpointInfo(ctx, srcTargetURI)
 	if err != nil {
 		return nil, err
@@ -159,6 +160,7 @@ func (driver *rclone) CreateTransfer(ctx context.Context, srcTargetURI string, d
 	// we always set the userinfo part of the destination url for rclone tpc push support
 	dstRemote := fmt.Sprintf("%s://%s@%s", destEp.endpointScheme, dstToken, destEp.endpoint)
 
+	log.Debug().Str("srcRemote", srcRemote).Str("srcPath", srcPath).Str("srcToken", srcToken).Str("dstRemote", dstRemote).Str("dstPath", dstPath).Str("dstToken", dstToken).Msg("starting rclone job")
 	return driver.startJob(ctx, "", srcRemote, srcPath, srcToken, dstRemote, dstPath, dstToken)
 }
 

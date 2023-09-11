@@ -26,6 +26,7 @@ import (
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/client"
@@ -203,7 +204,7 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 	// know each other
 
 	remoteUserID := &userpb.UserId{
-		Type:     userpb.UserType_USER_TYPE_PRIMARY,
+		Type:     userpb.UserType_USER_TYPE_FEDERATED,
 		Idp:      req.GetOriginSystemProvider().Domain,
 		OpaqueId: remoteUser.UserID,
 	}
@@ -306,7 +307,9 @@ func isTokenValid(token *invitepb.InviteToken) bool {
 }
 
 func (s *service) GetAcceptedUser(ctx context.Context, req *invitepb.GetAcceptedUserRequest) (*invitepb.GetAcceptedUserResponse, error) {
+	logger := appctx.GetLogger(ctx)
 	user, ok := getUserFilter(ctx, req)
+	logger.Info().Msgf("GetAcceptedUser %s at %s", user.Id.OpaqueId, user.Id.Idp)
 	if !ok {
 		return &invitepb.GetAcceptedUserResponse{
 			Status: status.NewInvalidArg(ctx, "user not found"),

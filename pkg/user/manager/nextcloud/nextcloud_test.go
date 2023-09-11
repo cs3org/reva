@@ -156,7 +156,7 @@ var _ = Describe("Nextcloud", func() {
 			um, called, teardown := setUpNextcloudServer()
 			defer teardown()
 
-			user, err := um.GetUserByClaim(ctx, "claim-string", "value-string", false)
+			user, err := um.GetUserByClaim(ctx, "username", "tester", false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(user).To(Equal(&userpb.User{
 				Id: &userpb.UserId{
@@ -173,7 +173,7 @@ var _ = Describe("Nextcloud", func() {
 				UidNumber:    0,
 				GidNumber:    0,
 			}))
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/user/GetUserByClaim {"claim":"claim-string","value":"value-string"}`)
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/user/GetUserByClaim {"claim":"username","value":"tester"}`)
 		})
 	})
 
