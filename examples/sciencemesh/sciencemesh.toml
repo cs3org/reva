@@ -3,6 +3,9 @@ provider_domain = "your.revad.org"
 efss_sciencemesh_endpoint = "https://your.efss.com/index.php/apps/sciencemesh/"
 machine_api_key = "machine-api-key"
 efss_shared_secret = "shared-secret-1"
+mesh_directory_url = "https://meshdir.docker/meshdir"
+# for a production deployment, use:
+# mesh_directory_url = 'https://sciencemesh.cesnet.cz/iop/meshdir'
 
 [log]
 level = "trace"
@@ -58,7 +61,7 @@ auth_manager = "nextcloud"
 
 [grpc.services.authprovider.auth_managers.nextcloud]
 endpoint = "{{ vars.efss_sciencemesh_endpoint }}"
-shared_secret = "{{ vars.shared_secret }}"
+shared_secret = "{{ vars.efss_shared_secret }}"
 mock_http = false
 
 [[grpc.services.authprovider]]
@@ -95,7 +98,7 @@ data_server_url = "https://{{ vars.provider_domain }}:{{ http.services.dataprovi
 
 [grpc.services.storageprovider.drivers.nextcloud]
 endpoint = "{{ vars.efss_sciencemesh_endpoint }}"
-shared_secret = "{{ vars.shared_secret }}"
+shared_secret = "{{ vars.efss_shared_secret }}"
 mock_http = false
 
 [[grpc.services.storageprovider]]
@@ -121,7 +124,7 @@ driver = "nextcloud"
 [grpc.services.ocmcore.drivers.nextcloud]
 host = "https://{{ vars.provider_domain }}/"
 endpoint = "{{ vars.efss_sciencemesh_endpoint }}"
-shared_secret = "{{ vars.shared_secret }}"
+shared_secret = "{{ vars.efss_shared_secret }}"
 mock_http = false
 
 [grpc.services.ocminvitemanager]
@@ -140,7 +143,7 @@ webapp_template = "https://{{ vars.provider_domain }}/external/sciencemesh/{{.To
 [grpc.services.ocmshareprovider.drivers.nextcloud]
 webdav_host = "https://{{ vars.provider_domain }}/"
 endpoint = "{{ vars.efss_sciencemesh_endpoint }}"
-shared_secret = "{{ vars.shared_secret }}"
+shared_secret = "{{ vars.efss_shared_secret }}"
 mock_http = false
 mount_id = "nextcloud"
 
@@ -213,9 +216,7 @@ machine_secret = "{{ vars.machine_api_key }}"
 [http.services.sciencemesh]
 address = "0.0.0.0:443"
 provider_domain = "{{ vars.provider_domain }}"
-mesh_directory_url = "https://meshdir.docker/meshdir"
-# for a production deployment, use:
-# mesh_directory_url = 'https://sciencemesh.cesnet.cz/iop/meshdir'
+mesh_directory_url = "{{ vars.mesh_directory_url }}"
 ocm_mount_point = "/sciencemesh"
 
 [http.services.sciencemesh.smtp_credentials]
