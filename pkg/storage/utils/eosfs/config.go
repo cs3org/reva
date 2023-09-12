@@ -104,9 +104,11 @@ type Config struct {
 	// GatewaySvc stores the endpoint at which the GRPC gateway is exposed.
 	GatewaySvc string `mapstructure:"gatewaysvc"`
 
-	// GRPCAuthkey is the key that authorizes this client to connect to the GRPC service
-	// It's unclear whether this will be the final solution
+	// GRPCAuthkey is the key that authorizes this client to connect to the EOS GRPC service
 	GRPCAuthkey string `mapstructure:"grpc_auth_key"`
+
+	// HTTPSAuthkey is the key that authorizes this client to connect to the EOS HTTPS service
+	HTTPSAuthkey string `mapstructure:"https_auth_key"`
 
 	// URI of the EOS MGM grpc server
 	// Default is empty

@@ -38,7 +38,9 @@ import (
 	"strings"
 	"syscall"
 
+  userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/eosclient"
 	erpc "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_grpc"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -101,13 +103,23 @@ type Options struct {
 	Keytab string
 
 	// Authkey is the key that authorizes this client to connect to the GRPC service
-	// It's unclear whether this will be the final solution
 	Authkey string
 
 	// SecProtocol is the comma separated list of security protocols used by xrootd.
 	// For example: "sss, unix"
 	SecProtocol string
 }
+
+
+func getUser(ctx context.Context) (*userpb.User, error) {
+	u, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		err := errors.Wrap(errtypes.UserRequired(""), "eosfs: error getting user from ctx")
+		return nil, err
+	}
+	return u, nil
+}
+
 
 func (opt *Options) init() {
 	if opt.XrdcopyBinary == "" {
@@ -1246,6 +1258,12 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 	var localfile io.WriteCloser
 	localfile = nil
 
+
+	u, err := getUser(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "eos: no user in ctx")
+	}
+
 	if c.opt.ReadUsesLocalTemp {
 		rand := "eosread-" + uuid.New().String()
 		localTarget := fmt.Sprintf("%s/%s", c.opt.CacheDirectory, rand)
@@ -1259,7 +1277,7 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 		}
 	}
 
-	bodystream, err := c.httpcl.GETFile(ctx, "", auth, path, localfile)
+	bodystream, err := c.httpcl.GETFile(ctx, u.Username, auth, path, localfile)
 	if err != nil {
 		log.Error().Str("func", "Read").Str("path", path).Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("err", err.Error()).Msg("")
 		return nil, errtypes.InternalError(fmt.Sprintf("can't GET local cache file '%s'", localTarget))
@@ -1276,6 +1294,11 @@ func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path s
 	log.Info().Str("func", "Write").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 	var length int64
 	length = -1
+
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eos: no user in ctx")
+	}
 
 	if c.opt.WriteUsesLocalTemp {
 		fd, err := os.CreateTemp(c.opt.CacheDirectory, "eoswrite-")
@@ -1299,10 +1322,10 @@ func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path s
 		defer wfd.Close()
 		defer os.RemoveAll(fd.Name())
 
-		return c.httpcl.PUTFile(ctx, "", auth, path, wfd, length)
+		return c.httpcl.PUTFile(ctx, u.Username, auth, path, wfd, length)
 	}
 
-	return c.httpcl.PUTFile(ctx, "", auth, path, stream, length)
+	return c.httpcl.PUTFile(ctx, u.Username, auth, path, stream, length)
 
 	// return c.httpcl.PUTFile(ctx, remoteuser, auth, urlpathng, stream)
 	// return c.WriteFile(ctx, uid, gid, path, fd.Name())

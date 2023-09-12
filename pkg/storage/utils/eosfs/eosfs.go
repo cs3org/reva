@@ -198,6 +198,7 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 			ClientKeyFile:       c.ClientKeyFile,
 			ClientCADirs:        c.ClientCADirs,
 			ClientCAFiles:       c.ClientCAFiles,
+			Authkey:             c.HTTPSAuthkey,
 		}
 		eosClient, err = eosgrpc.New(eosClientOpts, eosHTTPOpts)
 	} else {
