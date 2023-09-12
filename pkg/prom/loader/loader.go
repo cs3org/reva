@@ -16,31 +16,11 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package appctx
+package loader
 
 import (
-	"context"
-
-	"github.com/rs/zerolog"
-	"go.opentelemetry.io/otel/trace"
+	// Load collectors
+	_ "github.com/cs3org/reva/internal/http/interceptors/metrics"
+	_ "github.com/cs3org/reva/pkg/prom/base"
+	// Add your own here.
 )
-
-const traceIDKey = "traceid"
-
-// WithLogger returns a context with an associated logger.
-func WithLogger(ctx context.Context, l *zerolog.Logger) context.Context {
-	traceID := GetTraceID(ctx)
-	sublog := l.With().Str(traceIDKey, traceID.String()).Logger()
-	return sublog.WithContext(ctx)
-}
-
-// GetLogger returns the logger associated with the given context
-// or a disabled logger in case no logger is stored inside the context.
-func GetLogger(ctx context.Context) *zerolog.Logger {
-	return zerolog.Ctx(ctx)
-}
-
-func GetTraceID(ctx context.Context) trace.TraceID {
-	traceID := trace.SpanContextFromContext(ctx).TraceID()
-	return traceID
-}

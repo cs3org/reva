@@ -16,31 +16,23 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package appctx
+package base
 
 import (
 	"context"
-
-	"github.com/rs/zerolog"
-	"go.opentelemetry.io/otel/trace"
+	"github.com/cs3org/reva/pkg/prom/registry"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 )
 
-const traceIDKey = "traceid"
-
-// WithLogger returns a context with an associated logger.
-func WithLogger(ctx context.Context, l *zerolog.Logger) context.Context {
-	traceID := GetTraceID(ctx)
-	sublog := l.With().Str(traceIDKey, traceID.String()).Logger()
-	return sublog.WithContext(ctx)
+func init() {
+	registry.Register("base", New)
 }
 
-// GetLogger returns the logger associated with the given context
-// or a disabled logger in case no logger is stored inside the context.
-func GetLogger(ctx context.Context) *zerolog.Logger {
-	return zerolog.Ctx(ctx)
-}
-
-func GetTraceID(ctx context.Context) trace.TraceID {
-	traceID := trace.SpanContextFromContext(ctx).TraceID()
-	return traceID
+// New returns a prometheus collector
+func New(_ context.Context, m map[string]interface{}) ([]prometheus.Collector, error) {
+	return []prometheus.Collector{
+		collectors.NewBuildInfoCollector(),
+		collectors.NewGoCollector(),
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{})}, nil
 }

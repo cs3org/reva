@@ -279,3 +279,15 @@ func (s *Server) getHandler() (http.Handler, error) {
 
 	return handler, nil
 }
+
+// prometheusMiddleware implements mux.MiddlewareFunc.
+/*
+func prometheusHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		timer := prometheus.NewTimer(httpDuration.WithLabelValues(path))
+		next.ServeHTTP(w, r)
+		timer.ObserveDuration()
+	})
+}
+*/

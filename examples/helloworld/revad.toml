@@ -1,4 +1,5 @@
 [http.services.helloworld]
+[http.services.prometheus]
 
 [http]
 address = "localhost:8080"
