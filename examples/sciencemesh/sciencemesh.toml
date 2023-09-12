@@ -1,10 +1,20 @@
 ## Example configuration for the ScienceMesh app in ownCloud 10 / Nextcloud
 #
-## To contextualize this configuration for your deployment:
+## To contextualize this configuration for your deployment, please follow these steps:
 #
-# 1. Replace `your.revad.org` with your actual domain everywhere you find it
-# 2. Replace `your.efss.org` in the [vars] section with your actual endpoint
-# 3. Define appropriate secrets in the [vars] section
+# 1. In the [vars] section below and everywhere you find it, replace `your.revad.org` with your actual domain
+# 2. Replace `your.efss.org` with the actual endpoint of your EFSS system
+# 3. Define appropriate secrets in the [vars] section, and match with the EFSS ScienceMesh app configuration
+# 4. Provide appropriate SSL certificate and key files in the [http] section
+#
+# If you want to terminate the SSL connection to reva at your reverse proxy system
+# (e.g. at your Kubernetes ingress), then you can configure reva to use http instead.
+# For that, you need to follow these steps:
+#
+# 1. Remove the `certfile` and `keyfile` entries from the [http] section
+# 2. Replace `:443` with `:80` (or any other suitable value) everywhere you find it
+# 3. replace `https` with `http` in the `datagateway` and `data_server_url` entries
+
 
 [vars]
 provider_domain = "your.revad.org"
@@ -12,14 +22,18 @@ efss_sciencemesh_endpoint = "https://your.efss.org/index.php/apps/sciencemesh/"
 machine_api_key = "machine-api-key"
 efss_shared_secret = "shared-secret"
 
+[http]
+certfile = "/etc/revad/tls/your.revad.ssl.crt"
+keyfile = "/etc/revad/tls/your.revad.ssl.key"
+
 [log]
 level = "debug"
 
 [shared]
-gatewaysvc = "your.revad.org:19000"
+gatewaysvc = "{{ vars.provider_domain }}:19000"
 
 [grpc.services.gateway]
-address = "your.revad.org:19000"
+address = ":19000"
 authregistrysvc = "{{ grpc.services.authregistry.address }}"
 appregistrysvc = "{{ grpc.services.appregistry.address }}"
 storageregistrysvc = "{{ grpc.services.storageregistry.address }}"
@@ -193,16 +207,12 @@ file = ""
 
 ### HTTP ENDPOINTS ###
 
-[http]
-certfile = "/etc/revad/tls/your.revad.ssl.crt"
-keyfile = "/etc/revad/tls/your.revad.ssl.key"
-
 [http.services.appprovider]
-address = "0.0.0.0:443"
+address = ":443"
 insecure = true
 
 [http.services.datagateway]
-address = "0.0.0.0:443"
+address = ":443"
 
 [[http.services.dataprovider]]
 driver = "nextcloud"
@@ -219,7 +229,7 @@ driver = "ocmoutcoming"
 machine_secret = "{{ vars.machine_api_key }}"
 
 [http.services.sciencemesh]
-address = "0.0.0.0:443"
+address = ":443"
 provider_domain = "{{ vars.provider_domain }}"
 mesh_directory_url = "https://sciencemesh.cesnet.cz/iop/meshdir"
 ocm_mount_point = "/sciencemesh"
@@ -231,7 +241,7 @@ smtp_server = "smtp.{{ vars.provider_domain }}"
 smtp_port = 25
 
 [http.services.ocmprovider]
-address = "0.0.0.0:443"
+address = ":443"
 ocm_prefix = "ocm"
 provider = "Reva for ownCloud/Nextcloud"
 endpoint = "https://{{ vars.provider_domain }}"
@@ -239,18 +249,18 @@ enable_webapp = true
 enable_datatx = true
 
 [http.services.ocmd]
-address = "0.0.0.0:443"
+address = ":443"
 prefix = "ocm"
 
 [http.services.ocmd.config]
 host = "{{ vars.provider_domain }}"
 
 [http.services.ocs]
-address = "0.0.0.0:443"
+address = ":443"
 prefix = "ocs"
 
 [http.services.ocdav]
-address = "0.0.0.0:443"
+address = ":443"
 
 [http.services.prometheus]
 [http.services.sysinfo]
