@@ -48,11 +48,13 @@ func VerifyScope(ctx context.Context, scopeMap map[string]*authpb.Scope, resourc
 		for s, f := range supportedScopes {
 			if strings.HasPrefix(k, s) {
 				if valid, err := f(ctx, scope, resource, logger); err == nil && valid {
+					logger.Trace().Interface("scope", scope).Interface("resource", resource).Msg("scope is valid")
 					return true, nil
 				}
 			}
 		}
 	}
+	logger.Trace().Interface("scopemap", scopeMap).Interface("resource", resource).Msg("no valid scope found")
 	return false, nil
 }
 

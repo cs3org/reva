@@ -22,6 +22,7 @@ import (
 	// Load core share manager drivers.
 	_ "github.com/cs3org/reva/pkg/ocm/invite/repository/json"
 	_ "github.com/cs3org/reva/pkg/ocm/invite/repository/memory"
+	_ "github.com/cs3org/reva/pkg/ocm/invite/repository/nextcloud"
 	_ "github.com/cs3org/reva/pkg/ocm/invite/repository/sql"
 	// Add your own here.
 )

@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
@@ -141,18 +142,17 @@ func (am *Manager) Authenticate(ctx context.Context, clientID, clientSecret stri
 	type paramsObj struct {
 		ClientID     string `json:"clientID"`
 		ClientSecret string `json:"clientSecret"`
-		// Scope        authpb.Scope
 	}
+
+	if clientSecret == "" {
+		// This may happen when the remote OCM user attempts to do basic auth with (username = sharedSecret and pwd = empty),
+		// and the interceptors bring us here. But authentication is properly handled by the ocm share provider.
+		return nil, nil, errtypes.PermissionDenied("secret is empty, ignoring")
+	}
+
 	bodyObj := &paramsObj{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
-		// Scope: authpb.Scope{
-		// 	Resource: &types.OpaqueEntry{
-		// 		Decoder: "json",
-		// 		Value:   []byte(`{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"}`),
-		// 	},
-		// 	Role: authpb.Role_ROLE_OWNER,
-		// },
 	}
 	bodyStr, err := json.Marshal(bodyObj)
 	if err != nil {
@@ -168,7 +168,7 @@ func (am *Manager) Authenticate(ctx context.Context, clientID, clientSecret stri
 	}
 
 	if statusCode != 200 {
-		return nil, nil, errors.New("Username/password not recognized by Nextcloud backend")
+		return nil, nil, errtypes.PermissionDenied("Username/password not recognized by Nextcloud backend")
 	}
 
 	type resultsObj struct {

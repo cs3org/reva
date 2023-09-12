@@ -1,0 +1,49 @@
+#######  WORK IN PROGRESS  #######
+## Example configuration for the ScienceMesh app in ownCloud 10 / Nextcloud - Apps support
+#
+## This configuration file is to be used to enable Apps support in ScienceMesh.
+## To contextualize this configuration for your deployment, please follow these steps:
+#
+# 1. In the [vars] section below, replace `your.revad.org` with your actual domain
+# 2. Populate `wopi_endpoint` with your wopiserver endpoint
+# 3. Define a shared secret, and match it with the secret defined in the wopiserver
+
+
+[vars]
+provider_domain = "your.revad.org"
+wopi_endpoint = "http://wopi.docker:8880"
+wopi_shared_secret = "shared-secret"
+
+[log]
+level = "debug"
+
+[shared]
+gatewaysvc = "{{ vars.provider_domain }}:19000"
+
+[[grpc.services.appprovider]]
+driver = "wopi"
+custom_mime_types_json = "custom-mime-types-demo.json"
+mime_types = ["application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet", "application/vnd.oasis.opendocument.presentation", "text/rtf"]
+app_provider_url = "{{ grpc.services.appprovider[0].address }}"
+language = "en-GB"
+
+[grpc.services.appprovider.drivers.wopi]
+iop_secret = "{{ vars.wopi_shared_secret }}"
+wopi_url = "{{ vars.wopi_endpoint }}"
+app_name = "Collabora"
+app_url = "http://collabora.docker:9980"
+app_int_url = "http://collabora.docker:9980"
+
+
+# [[grpc.services.appprovider]]
+# driver = "wopi"
+# custom_mime_types_json = "custom-mime-types-demo.json"
+# mime_types = ["text/markdown", "application/compressed-markdown", "text/plain"]
+# app_provider_url = "{{ grpc.services.appprovider[1].address }}"
+#
+# [grpc.services.appprovider.drivers.wopi]
+# iop_secret = "{{ vars.wopi_shared_secret }}"
+# wopi_url = "{{ vars.wopi_endpoint }}"
+# app_name = "CodiMD"
+# app_url = "https://codimd.docker"
+# app_int_url = "https://codimd.docker"

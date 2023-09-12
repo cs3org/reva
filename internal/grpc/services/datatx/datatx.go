@@ -23,6 +23,7 @@ import (
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	txdriver "github.com/cs3org/reva/pkg/datatx"
 	txregistry "github.com/cs3org/reva/pkg/datatx/manager/registry"
@@ -121,6 +122,7 @@ func (s *service) UnprotectedEndpoints() []string {
 
 func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransferRequest) (*datatx.CreateTransferResponse, error) {
 	txInfo, startTransferErr := s.txManager.CreateTransfer(ctx, req.SrcTargetUri, req.DestTargetUri)
+	log := appctx.GetLogger(ctx)
 
 	// we always save the transfer regardless of start transfer outcome
 	// only then, if starting fails, can we try to restart it
@@ -132,6 +134,8 @@ func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransfer
 		ShareID:       req.GetShareId().OpaqueId,
 		UserID:        userID,
 	}
+	log.Debug().Interface("transfer", transfer).Msg("CreateTransfer")
+
 	if err := s.storageDriver.StoreTransfer(transfer); err != nil {
 		err = errors.Wrap(err, "datatx service: error NEW saving transfer share: "+datatx.Status_STATUS_INVALID.String())
 		return &datatx.CreateTransferResponse{
@@ -155,6 +159,7 @@ func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransfer
 }
 
 func (s *service) GetTransferStatus(ctx context.Context, req *datatx.GetTransferStatusRequest) (*datatx.GetTransferStatusResponse, error) {
+	log := appctx.GetLogger(ctx)
 	transfer, err := s.storageDriver.GetTransfer(req.TxId.OpaqueId)
 	if err != nil {
 		return nil, errtypes.InternalError("datatx service: transfer not found")
@@ -171,6 +176,7 @@ func (s *service) GetTransferStatus(ctx context.Context, req *datatx.GetTransfer
 
 	txInfo.ShareId = &ocm.ShareId{OpaqueId: transfer.ShareID}
 
+	log.Debug().Interface("txInfo", txInfo).Msg("GetTransferStatus")
 	return &datatx.GetTransferStatusResponse{
 		Status: status.NewOK(ctx),
 		TxInfo: txInfo,

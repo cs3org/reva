@@ -63,6 +63,7 @@ func checkLightweightPath(path string) bool {
 		"/dataprovider",
 		"/data",
 		"/app/open",
+		"/projects",
 	}
 	for _, p := range paths {
 		if strings.HasPrefix(path, p) {
