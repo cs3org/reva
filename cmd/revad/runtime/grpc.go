@@ -27,6 +27,7 @@ import (
 	"github.com/cs3org/reva/internal/grpc/interceptors/metrics"
 	"github.com/cs3org/reva/internal/grpc/interceptors/recovery"
 	"github.com/cs3org/reva/internal/grpc/interceptors/token"
+	"github.com/cs3org/reva/internal/grpc/interceptors/trace"
 	"github.com/cs3org/reva/internal/grpc/interceptors/useragent"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/pkg/errors"
@@ -81,6 +82,7 @@ func initGRPCInterceptors(conf map[string]map[string]any, unprotected []string, 
 	}
 
 	unaryInterceptors = append([]grpc.UnaryServerInterceptor{
+		trace.NewUnary(),
 		metrics.NewUnary(),
 		appctx.NewUnary(*logger),
 		token.NewUnary(),
@@ -125,6 +127,7 @@ func initGRPCInterceptors(conf map[string]map[string]any, unprotected []string, 
 	}
 
 	streamInterceptors = append([]grpc.StreamServerInterceptor{
+		trace.NewStream(),
 		metrics.NewStream(),
 		appctx.NewStream(*logger),
 		token.NewStream(),

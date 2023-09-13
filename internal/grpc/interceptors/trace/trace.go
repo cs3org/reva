@@ -16,23 +16,21 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package appctx
+package trace
 
 import (
-	"context"
-	"github.com/cs3org/reva/pkg/trace"
-	"github.com/rs/zerolog"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"google.golang.org/grpc"
 )
 
-// WithLogger returns a context with an associated logger.
-func WithLogger(ctx context.Context, l *zerolog.Logger) context.Context {
-	traceID := trace.GetTraceID(ctx)
-	sublog := l.With().Str(trace.TraceIDKey, traceID).Logger()
-	return sublog.WithContext(ctx)
+// NewUnary returns a new unary interceptor that adds
+// the useragent to the context.
+func NewUnary() grpc.UnaryServerInterceptor {
+	return otelgrpc.UnaryServerInterceptor()
 }
 
-// GetLogger returns the logger associated with the given context
-// or a disabled logger in case no logger is stored inside the context.
-func GetLogger(ctx context.Context) *zerolog.Logger {
-	return zerolog.Ctx(ctx)
+// NewStream returns a new server stream interceptor
+// that adds the user agent to the context.
+func NewStream() grpc.StreamServerInterceptor {
+	return otelgrpc.StreamServerInterceptor()
 }

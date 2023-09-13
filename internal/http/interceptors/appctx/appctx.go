@@ -25,6 +25,7 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/trace"
 	"github.com/rs/zerolog"
 )
 
@@ -40,6 +41,8 @@ func New(log zerolog.Logger) func(http.Handler) http.Handler {
 func handler(log zerolog.Logger, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
+		traceID := trace.GetTraceID(ctx)
+		log = log.With().Str("traceid", traceID).Logger()
 		ctx = appctx.WithLogger(ctx, &log)
 		r = r.WithContext(ctx)
 		h.ServeHTTP(w, r)
