@@ -137,6 +137,9 @@ var _ = Describe("ocm invitation workflow", func() {
 				{
 					Name:   "cernboxgw",
 					Config: "ocm-server-cernbox-grpc.toml",
+					Files: map[string]string{
+						"providers": "ocm-providers.demo.json",
+					},
 				},
 				{
 					Name:   "cernboxhttp",
