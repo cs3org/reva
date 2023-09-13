@@ -30,8 +30,8 @@ import (
 // NewUnary returns a new unary interceptor that creates the application context.
 func NewUnary(log zerolog.Logger) grpc.UnaryServerInterceptor {
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		traceID := trace.GetTraceID(ctx)
-		log = log.With().Str("traceid", traceID).Logger()
+		traceID := trace.Get(ctx)
+		log = log.With().Str(trace.Key, traceID).Logger()
 		ctx = appctx.WithLogger(ctx, &log)
 		res, err := handler(ctx, req)
 		return res, err
@@ -44,8 +44,8 @@ func NewUnary(log zerolog.Logger) grpc.UnaryServerInterceptor {
 func NewStream(log zerolog.Logger) grpc.StreamServerInterceptor {
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := ss.Context()
-		traceID := trace.GetTraceID(ctx)
-		log = log.With().Str("traceid", traceID).Logger()
+		traceID := trace.Get(ctx)
+		log = log.With().Str(trace.Key, traceID).Logger()
 		ctx = appctx.WithLogger(ctx, &log)
 
 		wrapped := newWrappedServerStream(ctx, ss)

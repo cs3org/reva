@@ -19,31 +19,42 @@
 // Package appctx creates a context with useful
 // components attached to the context like loggers and
 // token managers.
-package appctx
+package trace
 
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/trace"
-	"github.com/rs/zerolog"
+	"google.golang.org/grpc/metadata"
 )
 
 // New returns a new HTTP middleware that stores the log
 // in the context with request ID information.
-func New(log zerolog.Logger) func(http.Handler) http.Handler {
+func New() func(http.Handler) http.Handler {
 	chain := func(h http.Handler) http.Handler {
-		return handler(log, h)
+		return handler(h)
 	}
 	return chain
 }
 
-func handler(log zerolog.Logger, h http.Handler) http.Handler {
+func handler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
+		// try to get trace from context
 		traceID := trace.Get(ctx)
-		log = log.With().Str(trace.Key, traceID).Logger()
-		ctx = appctx.WithLogger(ctx, &log)
+		if traceID == "" {
+			// check if traceID is coming from header
+			traceID = r.Header.Get("X-Trace-ID")
+			if traceID == "" {
+				traceID = trace.Generate()
+			}
+			ctx = trace.Set(ctx, traceID)
+		}
+
+		// in case the http service will call a grpc service,
+		// we set the outgoing context so the trace information is
+		// passed through the two protocols.
+		ctx = metadata.AppendToOutgoingContext(ctx, trace.Key, traceID)
 		r = r.WithContext(ctx)
 		h.ServeHTTP(w, r)
 	})

@@ -20,14 +20,15 @@ package appctx
 
 import (
 	"context"
+
 	"github.com/cs3org/reva/pkg/trace"
 	"github.com/rs/zerolog"
 )
 
 // WithLogger returns a context with an associated logger.
 func WithLogger(ctx context.Context, l *zerolog.Logger) context.Context {
-	traceID := trace.GetTraceID(ctx)
-	sublog := l.With().Str(trace.TraceIDKey, traceID).Logger()
+	traceID := trace.Get(ctx)
+	sublog := l.With().Str(trace.Key, traceID).Logger()
 	return sublog.WithContext(ctx)
 }
 

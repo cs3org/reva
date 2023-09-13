@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//	http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,26 +15,32 @@
 // In applying this license, CERN does not waive the privileges and immunities
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
-package trace
 
-import (
-	"context"
+syntax = "proto3";
 
-	"github.com/gofrs/uuid"
-)
+package revad.pingpong;
 
-const Key string = "traceid"
+option go_package = "github.com/cs3org/reva/grpc/internal/services/pingpong/proto";
 
-func Get(ctx context.Context) (t string) {
-	t, _ = ctx.Value(Key).(string)
-	return
+service PingPongService {
+  rpc Ping(PingRequest) returns (PingResponse);
+  rpc Pong(PongRequest) returns (PongResponse);
 }
 
-func Generate() string {
-	return uuid.Must(uuid.NewV4()).String()
+message PingRequest {
+  string info = 1;
 }
 
-// ContextSetTrace stores the trace in the context.
-func Set(ctx context.Context, trace string) context.Context {
-	return context.WithValue(ctx, Key, trace)
+message PingResponse {
+  string info = 1;
 }
+message PongRequest {
+  string info = 1;
+}
+
+message PongResponse {
+  string info = 1;
+}
+
+// to compile this into grpc, cd in the directory where this file lives and execute:
+// protoc --go_out=. --go_opt=paths=source_relative  --go-grpc_out=. --go-grpc_opt=paths=source_relative pingpong.proto

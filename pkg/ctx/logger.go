@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//	http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,26 +15,25 @@
 // In applying this license, CERN does not waive the privileges and immunities
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
-package trace
+
+package ctx
 
 import (
 	"context"
 
-	"github.com/gofrs/uuid"
+	"github.com/cs3org/reva/pkg/trace"
+	"github.com/rs/zerolog"
 )
 
-const Key string = "traceid"
-
-func Get(ctx context.Context) (t string) {
-	t, _ = ctx.Value(Key).(string)
-	return
+// WithLogger returns a context with an associated logger.
+func WithLogger(ctx context.Context, l *zerolog.Logger) context.Context {
+	traceID := trace.Get(ctx)
+	sublog := l.With().Str(trace.Key, traceID).Logger()
+	return sublog.WithContext(ctx)
 }
 
-func Generate() string {
-	return uuid.Must(uuid.NewV4()).String()
-}
-
-// ContextSetTrace stores the trace in the context.
-func Set(ctx context.Context, trace string) context.Context {
-	return context.WithValue(ctx, Key, trace)
+// GetLogger returns the logger associated with the given context
+// or a disabled logger in case no logger is stored inside the context.
+func GetLogger(ctx context.Context) *zerolog.Logger {
+	return zerolog.Ctx(ctx)
 }

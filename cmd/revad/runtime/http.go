@@ -26,6 +26,7 @@ import (
 	"github.com/cs3org/reva/internal/http/interceptors/auth"
 	"github.com/cs3org/reva/internal/http/interceptors/log"
 	"github.com/cs3org/reva/internal/http/interceptors/metrics"
+	"github.com/cs3org/reva/internal/http/interceptors/trace"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -68,10 +69,11 @@ func initHTTPMiddlewares(conf map[string]map[string]any, unprotected []string, l
 	}
 
 	middlewares := []global.Middleware{
-		metrics.New(),
 		authMiddle,
 		log.New(),
 		appctx.New(*logger),
+		metrics.New(),
+		trace.New(),
 	}
 
 	for _, triple := range triples {

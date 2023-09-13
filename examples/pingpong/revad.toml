@@ -1,15 +1,12 @@
 [log]
-mode = "json"
 
 [http]
 address = "localhost:8080"
 
-[http.services.helloworld]
-[http.services.prometheus]
-
+[http.services.pingpong]
 
 [grpc]
 address = "localhost:8081"
 enable_reflection = true
 
-[grpc.services.helloworld]
+[grpc.services.pingpong]

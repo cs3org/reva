@@ -28,7 +28,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"go.opentelemetry.io/otel/trace"
+	"github.com/cs3org/reva/pkg/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -216,6 +216,5 @@ func NewErrorFromCode(code rpc.Code, pkgname string) error {
 
 // internal function to attach the trace to a context.
 func getTrace(ctx context.Context) string {
-	span := trace.SpanFromContext(ctx)
-	return span.SpanContext().TraceID().String()
+	return trace.Get(ctx)
 }

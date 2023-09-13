@@ -75,7 +75,7 @@ func initGRPCInterceptors(conf map[string]map[string]any, unprotected []string, 
 		return nil, nil, errors.Wrap(err, "error creating unary auth interceptor")
 	}
 
-	unaryInterceptors := []grpc.UnaryServerInterceptor{authUnary}
+	unaryInterceptors := []grpc.UnaryServerInterceptor{}
 	for _, t := range unaryTriples {
 		unaryInterceptors = append(unaryInterceptors, t.Interceptor)
 		logger.Info().Msgf("rgrpc: chaining grpc unary interceptor %s with priority %d", t.Name, t.Priority)
@@ -89,6 +89,7 @@ func initGRPCInterceptors(conf map[string]map[string]any, unprotected []string, 
 		useragent.NewUnary(),
 		log.NewUnary(),
 		recovery.NewUnary(),
+		authUnary,
 	}, unaryInterceptors...)
 
 	streamTriples := []*streamInterceptorTriple{}
