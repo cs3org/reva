@@ -1,5 +1,10 @@
 [http.services.helloworld]
+[grpc.services.helloworld]
 [http.services.prometheus]
 
 [http]
 address = "localhost:8080"
+
+[grpc]
+address = "localhost:8081"
+enable_reflection = true

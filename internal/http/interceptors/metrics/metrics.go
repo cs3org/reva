@@ -64,6 +64,17 @@ var responseSize = prometheus.NewHistogramVec(
 	[]string{},
 )
 
+// requestSize has no labels, making it a zero-dimensional
+// ObserverVec.
+var requestSize = prometheus.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "http_request_size_bytes",
+		Help:    "A histogram of request sizes for requests.",
+		Buckets: []float64{200, 500, 900, 1500},
+	},
+	[]string{},
+)
+
 func init() {
 	registry.Register("http_metrics", NewPromCollectors)
 }
@@ -80,7 +91,11 @@ func New() func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			h = promhttp.InstrumentHandlerDuration(duration.MustCurryWith(prometheus.Labels{"handler": r.URL.Path}),
 				promhttp.InstrumentHandlerCounter(counter,
-					promhttp.InstrumentHandlerResponseSize(responseSize, h),
+					promhttp.InstrumentHandlerResponseSize(responseSize,
+						promhttp.InstrumentHandlerRequestSize(requestSize,
+							promhttp.InstrumentHandlerInFlight(inFlightGauge, h),
+						),
+					),
 				),
 			)
 			h.ServeHTTP(w, r)

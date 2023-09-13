@@ -62,7 +62,7 @@ func (s *service) Close() error {
 }
 
 func (s *service) UnprotectedEndpoints() []string {
-	return []string{}
+	return []string{"/revad.helloworld.HelloWorldService/Hello"}
 }
 
 func (s *service) Register(ss *grpc.Server) {

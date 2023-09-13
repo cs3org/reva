@@ -20,6 +20,7 @@ package loader
 
 import (
 	// Load collectors
+	_ "github.com/cs3org/reva/internal/grpc/interceptors/metrics"
 	_ "github.com/cs3org/reva/internal/http/interceptors/metrics"
 	_ "github.com/cs3org/reva/pkg/prom/base"
 	// Add your own here.
