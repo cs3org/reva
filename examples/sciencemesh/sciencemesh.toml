@@ -278,6 +278,14 @@ prefix = "ocs"
 address = ":443"
 
 [http.services.prometheus]
+address = ":443"
+
+[http.services.metrics]
+address = ":443"
+metrics_data_driver_type = "json"
+metrics_data_location = "metrics.json"
+metrics_record_interval = 5000
+
 [http.services.sysinfo]
 
 [http.middlewares.cors]
