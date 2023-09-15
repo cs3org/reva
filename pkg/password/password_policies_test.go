@@ -55,7 +55,7 @@ func TestPolicies_Validate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := NewPasswordPolicies(
+			s := NewPasswordPolicy(
 				tt.fields.minCharacters,
 				tt.fields.minLowerCaseCharacters,
 				tt.fields.minUpperCaseCharacters,
@@ -119,7 +119,7 @@ func TestPasswordPolicies_Count(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			i := NewPasswordPolicies(
+			i := NewPasswordPolicy(
 				tt.fields.wantCharacters,
 				tt.fields.wantLowerCaseCharacters,
 				tt.fields.wantUpperCaseCharacters,
