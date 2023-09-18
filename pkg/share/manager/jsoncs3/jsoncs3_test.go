@@ -957,6 +957,36 @@ var _ = Describe("Jsoncs3", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(rs.MountPoint.Path).To(Equal("newMP"))
+				Expect(rs.Share.Hide).To(Equal(false))
+			})
+
+			It("hides the share", func() {
+				rs, err := m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+					Spec: &collaboration.ShareReference_Id{
+						Id: share.Id,
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(rs.MountPoint).To(BeNil())
+
+				rs.MountPoint = &providerv1beta1.Reference{
+					Path: "newMP",
+				}
+				rs.Share.Hide = true
+
+				rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"hide", "mount_point"}}, nil)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(rs.MountPoint.Path).To(Equal("newMP"))
+				Expect(rs.Share.Hide).To(Equal(true))
+
+				rs, err = m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+					Spec: &collaboration.ShareReference_Id{
+						Id: share.Id,
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(rs.MountPoint.Path).To(Equal("newMP"))
+				Expect(rs.Share.Hide).To(Equal(true))
 			})
 
 			It("handles invalid field masks", func() {

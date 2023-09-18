@@ -48,7 +48,6 @@ const (
 
 // AcceptReceivedShare handles Post Requests on /apps/files_sharing/api/v1/shares/{shareid}
 func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
-	// TODO: this needs to evaluate the hide form field maybe and pass it on to updateReceivedShare
 	ctx := r.Context()
 	shareID := chi.URLParam(r, shareidkey)
 	client, err := h.getClient()
@@ -135,7 +134,6 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 
 // RejectReceivedShare handles DELETE Requests on /apps/files_sharing/api/v1/shares/{shareid}
 func (h *Handler) RejectReceivedShare(w http.ResponseWriter, r *http.Request) {
-	// TODO: this needs to evaluate the hide form field maybe and pass it on to updateReceivedShare
 	shareID := chi.URLParam(r, "shareid")
 	data := h.updateReceivedShare(w, r, shareID, true, "")
 	if data != nil {
