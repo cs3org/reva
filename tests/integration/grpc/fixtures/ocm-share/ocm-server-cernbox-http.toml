@@ -25,9 +25,13 @@ providers = "fixtures/ocm-providers.demo.json"
 [http.services.datagateway]
 
 [http.services.dataprovider]
-driver = "localhome"
+driver = "ocis"
 
 [http.services.dataprovider.drivers.localhome]
-root = "{{localhome_root}}"
+root = "{{root}}/storage"
+treetime_accounting = true
+treesize_accounting = true
+enable_home = true
+permissionssvc = "{{permissions_address}}"
 
 [http.services.ocdav]
