@@ -16,8 +16,6 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-
-
 // NOTE: compile the grpc proto with these commands
 // and do not ask any questions, I don't have the answer
 // protoc ./Rpc.proto --go-grpc_out=.
@@ -38,7 +36,7 @@ import (
 	"strings"
 	"syscall"
 
-  userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/eosclient"
@@ -110,7 +108,6 @@ type Options struct {
 	SecProtocol string
 }
 
-
 func getUser(ctx context.Context) (*userpb.User, error) {
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
@@ -119,7 +116,6 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 	}
 	return u, nil
 }
-
 
 func (opt *Options) init() {
 	if opt.XrdcopyBinary == "" {
@@ -168,7 +164,7 @@ func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
 	if prep == nil {
 		log.Warn().Str("Could not ping to ", "'"+opt.GrpcURI+"' ").Str("nil response", "").Msg("")
 	}
-  log.Debug().Str("Ping to ", "'"+opt.GrpcURI+"' succeeded").Msg("")
+	log.Debug().Str("Ping to ", "'"+opt.GrpcURI+"' succeeded").Msg("")
 
 	return ecl, nil
 }
@@ -1257,7 +1253,6 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 	var err error
 	var localfile io.WriteCloser
 	localfile = nil
-
 
 	u, err := getUser(ctx)
 	if err != nil {

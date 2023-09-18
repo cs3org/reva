@@ -199,17 +199,15 @@ func rspdesc(rsp *http.Response) string {
 }
 
 func (c *EOSHTTPClient) doReq(req *http.Request, remoteuser string) (*http.Response, error) {
-  // Here we put the headers that are required by EOS >= 5
-  req.Header.Set("x-gateway-authorization", c.opt.Authkey)
+	// Here we put the headers that are required by EOS >= 5
+	req.Header.Set("x-gateway-authorization", c.opt.Authkey)
 	req.Header.Set("x-forwarded-for", "dummy")
 	req.Header.Set("remote-user", remoteuser)
 
-
-  resp, err := c.cl.Do(req)
+	resp, err := c.cl.Do(req)
 
 	return resp, err
 }
-
 
 // If the error is not nil, take that
 // If there is an error coming from EOS, erturn a descriptive error.
@@ -388,7 +386,6 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 
 		// Execute the request. I don't like that there is no explicit timeout or buffer control on the input stream
 		log.Debug().Str("func", "PUTFile").Msg("sending req")
-
 
 		resp, err := c.doReq(req, remoteuser)
 

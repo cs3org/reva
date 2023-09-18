@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,9 @@ import (
 
 var testCommand = func() *command {
 	cmd := newCommand("teststorageperf")
-	cmd.Description = func() string { return "Little performance test: upload/download/remove 1000 files into the directory /home/perftest. The source file is /tmp/1MFile" }
+	cmd.Description = func() string {
+		return "Little performance test: upload/download/remove 1000 files into the directory /home/perftest. The source file is /tmp/1MFile"
+	}
 	cmd.Action = func(w ...io.Writer) error {
 
 		start := time.Now()
