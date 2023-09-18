@@ -15,24 +15,30 @@ ocmproviderauthorizersvc = "{{grpc_address}}"
 storageregistrysvc = "{{grpc_address}}"
 ocmshareprovidersvc = "{{grpc_address}}"
 datagateway = "http://{{cernboxhttp_address}}/datagateway"
+permissionssvc = "{{permissions_address}}"
+
 
 [grpc.services.storageregistry]
-[grpc.services.storageregistry.drivers.static]
-home_provider = "/home"
-[grpc.services.storageregistry.drivers.static.rules]
-"/home" = {"address" = "{{grpc_address}}"}
-"123e4567-e89b-12d3-a456-426655440000" = {"address" = "{{grpc_address}}"}
-"/ocm" = {"address" = "{{cernboxoutcomingocm_address}}"}
-"ocm" = {"address" = "{{cernboxoutcomingocm_address}}"}
+driver = "spaces"
+
+[grpc.services.storageregistry.drivers.spaces]
+home_template = "/users/{{.Id.OpaqueId}}"
+
+[grpc.services.storageregistry.drivers.spaces.providers."{{grpc_address}}".spaces]
+"personal" = { "mount_point" = "/users", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}" }
 
 [grpc.services.storageprovider]
-driver = "localhome"
+driver = "ocis"
 mount_path = "/home"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 data_server_url = "http://{{cernboxhttp_address}}/data"
 
-[grpc.services.storageprovider.drivers.localhome]
-root = "{{localhome_root}}"
+[grpc.services.storageprovider.drivers.ocis]
+root = "{{root}}/storage"
+treetime_accounting = true
+treesize_accounting = true
+enable_home = true
+permissionssvc = "{{permissions_address}}"
 
 [grpc.services.authregistry]
 driver = "static"

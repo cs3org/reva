@@ -219,7 +219,7 @@ func startRevads(configs []RevadConfig, variables map[string]string) (map[string
 		}
 
 		// Run revad
-		cmd := exec.Command("../../../cmd/revad/revad", "-c", newCfgPath)
+		cmd := exec.Command("../../../cmd/revad/revad", "-log", "debug", "-c", newCfgPath)
 
 		outfile, err := os.Create(path.Join(tmpRoot, c.Name+"-out.log"))
 		if err != nil {

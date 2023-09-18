@@ -37,6 +37,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/ocm/share"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/ocis"
 	jwt "github.com/cs3org/reva/v2/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/v2/tests/helpers"
 	"github.com/owncloud/ocis/v2/services/webdav/pkg/net"
@@ -128,12 +129,21 @@ var _ = Describe("ocm share", func() {
 				Files: map[string]string{
 					"providers": "ocm-providers.demo.json",
 				},
+				Resources: map[string]Resource{
+					"ocm_share_cernbox_file": File{Content: "{}"},
+					"invite_token_file":      File{Content: "{}"},
+				},
 			},
+			{Name: "permissions", Config: "permissions-ocis-ci.toml"},
 			{Name: "cernboxwebdav", Config: "ocm-share/cernbox-webdav-server.toml"},
 			{Name: "cernboxhttp", Config: "ocm-share/ocm-server-cernbox-http.toml"},
 			{Name: "cesnetgw", Config: "ocm-share/ocm-server-cesnet-grpc.toml",
 				Files: map[string]string{
 					"providers": "ocm-providers.demo.json",
+				},
+				Resources: map[string]Resource{
+					"ocm_share_cesnet_file": File{Content: "{}"},
+					"invite_token_file":     File{Content: "{}"},
 				},
 			},
 			{Name: "cesnethttp", Config: "ocm-share/ocm-server-cesnet-http.toml"},
@@ -183,14 +193,22 @@ var _ = Describe("ocm share", func() {
 
 		Context("einstein shares a file with view permissions", func() {
 			It("marie is able to see the content of the file", func() {
-				fileToShare := &provider.Reference{
-					Path: "/home/new-file",
+				fs, err := ocis.New(map[string]interface{}{
+					"root":           revads["cernboxgw"].StorageRoot,
+					"permissionssvc": revads["permissions"].GrpcAddress,
+				}, nil)
+				Expect(err).ToNot(HaveOccurred())
+				ref := &provider.Reference{
+					ResourceId: &provider.ResourceId{
+						SpaceId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
+					},
+					Path: "new-file",
 				}
-				By("creating a file")
-				Expect(helpers.CreateFile(ctxEinstein, cernboxgw, fileToShare.Path, []byte("test"))).To(Succeed())
+				err = helpers.Upload(ctxEinstein, fs, ref, []byte("test"))
+				Expect(err).ToNot(HaveOccurred())
 
 				By("share the file with marie")
-				info, err := stat(ctxEinstein, cernboxgw, fileToShare)
+				info, err := stat(ctxEinstein, cernboxgw, ref)
 				Expect(err).ToNot(HaveOccurred())
 
 				cesnet, err := cernboxgw.GetInfoByDomain(ctxEinstein, &ocmproviderpb.GetInfoByDomainRequest{
@@ -237,7 +255,7 @@ var _ = Describe("ocm share", func() {
 				Expect(err).To(HaveOccurred())
 
 				By("marie access the share using the ocm mount")
-				ref := &provider.Reference{Path: ocmPath(share.Id, "")}
+				ref = &provider.Reference{Path: ocmPath(share.Id, "")}
 				statRes, err := cesnetgw.Stat(ctxMarie, &provider.StatRequest{Ref: ref})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
