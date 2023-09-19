@@ -212,7 +212,7 @@ func newConn(user *User) *cacheVal {
 		return destroyCephConn(mount, perm)
 	}
 
-	if user != nil {
+	if user != nil && !user.fs.conf.DisableHome {
 		if err = mount.ChangeDir(user.fs.conf.Root); err != nil {
 			return destroyCephConn(mount, perm)
 		}
