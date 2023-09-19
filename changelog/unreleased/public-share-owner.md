@@ -1,3 +1,3 @@
-Bugfix: access to public links pointing to project areas is performed on behalf of owner
+Bugfix: access public links to projects as owner
 
 https://github.com/cs3org/reva/pull/4196
