@@ -5,11 +5,12 @@ mkdir -p /revad/configs
 cp /etc/revad/sciencemesh*.toml /revad/configs/
 cp /etc/revad/providers.testnet.json /revad/configs/providers.testnet.json
 
-# substitute placeholders with correct values.
+# substitute placeholders and "external" values with valid ones for the testnet.
 sed -i "s/your.revad.ssl/${HOST}/g" /revad/configs/sciencemesh*.toml
 sed -i "s/your.revad.org/${HOST}.docker/g" /revad/configs/sciencemesh*.toml
 sed -i "s/your.efss.org/${HOST//reva/}.docker/g" /revad/configs/sciencemesh.toml
 sed -i "/^mesh_directory_url /s/=.*$/= 'https:\/\/meshdir\.docker\/meshdir'/" /revad/configs/sciencemesh.toml
+sed -i "/ocmproviderauthorizer\]/{n;s/.*/driver = \"json\"/;}" /revad/configs/sciencemesh.toml
 
 cp /etc/revad/tls/*.crt /usr/local/share/ca-certificates/
 update-ca-certificates
