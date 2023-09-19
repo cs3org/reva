@@ -123,7 +123,7 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 	}
 
 	getUserResponse, err := gwConn.GetUser(ctx, &user.GetUserRequest{
-		UserId: publicShareResponse.GetShare().GetCreator(),
+		UserId: publicShareResponse.GetShare().GetOwner(),
 	})
 	if err != nil {
 		return nil, nil, err
