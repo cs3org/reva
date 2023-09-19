@@ -113,14 +113,30 @@ func (p *Protocols) UnmarshalJSON(data []byte) error {
 	for name, d := range prot {
 		var res Protocol
 
-		// we do not support the OCM v1.0 properties for now, therefore just skip or bail out
 		if name == "name" {
 			continue
 		}
 		if name == "options" {
 			var opt map[string]any
-			if err := json.Unmarshal(d, &opt); err != nil || len(opt) > 0 {
-				return fmt.Errorf("protocol options not supported: %s", string(d))
+			if err := json.Unmarshal(d, &opt); err != nil {
+				return fmt.Errorf("malformed protocol options %s", d)
+			}
+			if len(opt) > 0 {
+				// This is an OCM 1.0 payload: parse the secret and assume max
+				// permissions, as in the OCM 1.0 model the remote server would check
+				// (and would not tell to the sharee!) which permissions are enabled
+				// on the share. Also, in this case the URL has to be resolved via
+				// discovery, see shares.go.
+				ss, ok := opt["sharedSecret"].(string)
+				if !ok {
+					return fmt.Errorf("missing sharedSecret from options %s", d)
+				}
+				res = &WebDAV{
+					SharedSecret: ss,
+					Permissions:  []string{"read", "write", "share"},
+					URL:          "",
+				}
+				*p = append(*p, res)
 			}
 			continue
 		}
@@ -145,15 +161,17 @@ func (p Protocols) MarshalJSON() ([]byte, error) {
 	}
 	d := make(map[string]any)
 	for _, prot := range p {
-		d[getProtocolName(prot)] = prot
+		d[GetProtocolName(prot)] = prot
 	}
-	// fill in the OCM v1.0 properties
+	// fill in the OCM v1.0 properties: for now we only create OCM 1.1 payloads,
+	// irrespective from the capabilities of the remote server.
 	d["name"] = "multi"
 	d["options"] = map[string]any{}
 	return json.Marshal(d)
 }
 
-func getProtocolName(p Protocol) string {
+// GetProtocolName returns the name of the protocol by reflection.
+func GetProtocolName(p Protocol) string {
 	n := reflect.TypeOf(p).String()
 	s := strings.Split(n, ".")
 	return strings.ToLower(s[len(s)-1])

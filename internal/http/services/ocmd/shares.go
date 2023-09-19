@@ -20,25 +20,31 @@ package ocmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
+	"path/filepath"
 	"strings"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/pkg/errors"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	ocmproviderhttp "github.com/cs3org/reva/internal/http/services/ocmprovider"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/go-playground/validator/v10"
 )
@@ -149,6 +155,12 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	protocols, err := getAndResolveProtocols(req.Protocols, r)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
+		return
+	}
+
 	createShareReq := &ocmcore.CreateOCMCoreShareRequest{
 		Description:  req.Description,
 		Name:         req.Name,
@@ -158,7 +170,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		ShareWith:    userRes.User.Id,
 		ResourceType: getResourceTypeFromOCMRequest(req.ResourceType),
 		ShareType:    getOCMShareType(req.ShareType),
-		Protocols:    getProtocols(req.Protocols),
+		Protocols:    protocols,
 	}
 
 	if req.Expiration != 0 {
@@ -246,10 +258,67 @@ func getOCMShareType(t string) ocm.ShareType {
 	return ocm.ShareType_SHARE_TYPE_GROUP
 }
 
-func getProtocols(p Protocols) []*ocm.Protocol {
-	prot := make([]*ocm.Protocol, 0, len(p))
+func getAndResolveProtocols(p Protocols, r *http.Request) ([]*ocm.Protocol, error) {
+	protos := make([]*ocm.Protocol, 0, len(p))
 	for _, data := range p {
-		prot = append(prot, data.ToOCMProtocol())
+		ocmProto := data.ToOCMProtocol()
+		if GetProtocolName(data) == "webdav" && ocmProto.GetWebdavOptions().Uri == "" {
+			// This is an OCM 1.0 payload with only webdav: we need to resolve the remote URL
+			remoteRoot, err := discoverOcmWebdavRoot(r)
+			if err != nil {
+				return nil, err
+			}
+			ocmProto.GetWebdavOptions().Uri = filepath.Join(remoteRoot, ocmProto.GetWebdavOptions().SharedSecret)
+		}
+		protos = append(protos, ocmProto)
 	}
-	return prot
+	return protos, nil
+}
+
+func discoverOcmWebdavRoot(r *http.Request) (string, error) {
+	// implements the OCM discovery logic to fetch the WebDAV root at the remote host that sent the share, see
+	// https://cs3org.github.io/OCM-API/docs.html?branch=v1.1.0&repo=OCM-API&user=cs3org#/paths/~1ocm-provider/get
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+	log.Debug().Str("sender", r.Host).Msg("received OCM 1.0 share, attempting to discover sender endpoint")
+
+	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, r.Host+"/ocm-provider", nil)
+	if err != nil {
+		return "", err
+	}
+	httpClient := rhttp.GetHTTPClient(
+		rhttp.Timeout(time.Duration(10 * int64(time.Second))),
+	)
+	httpRes, err := httpClient.Do(httpReq)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to contact OCM sender server")
+	}
+	defer httpRes.Body.Close()
+
+	if httpRes.StatusCode != http.StatusOK {
+		return "", errtypes.InternalError("Invalid HTTP response on OCM discovery")
+	}
+	body, err := io.ReadAll(httpRes.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var result ocmproviderhttp.DiscoveryData
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		log.Warn().Str("sender", r.Host).Str("response", string(body)).Msg("malformed response")
+		return "", errtypes.InternalError("Invalid payload on OCM discovery")
+	}
+
+	for _, t := range result.ResourceTypes {
+		webdavRoot, ok := t.Protocols["webdav"]
+		if ok {
+			// assume the first resourceType that exposes a webdav root is OK to use: as a matter of fact,
+			// no implementation exists yet that exposes multiple resource types with different roots.
+			return filepath.Join(result.Endpoint, webdavRoot), nil
+		}
+	}
+
+	log.Warn().Str("sender", r.Host).Str("response", string(body)).Msg("missing webdav root")
+	return "", errtypes.NotFound("WebDAV root not found on OCM discovery")
 }
