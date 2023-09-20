@@ -36,6 +36,7 @@ func main() {
 		ocdav.GatewaySvc("127.0.0.1:9142"),
 		ocdav.FilesNamespace("/users/{{.Id.OpaqueId}}"),
 		ocdav.WebdavNamespace("/users/{{.Id.OpaqueId}}"),
+		ocdav.OCMNamespace("/public"),
 		ocdav.SharesNamespace("/Shares"),
 	)
 	if err != nil {

@@ -106,7 +106,10 @@ func checkStorageRefForOCMShare(s *ocmv1beta1.Share, r *provider.Reference, ns s
 		return utils.ResourceIDEqual(s.ResourceId, r.GetResourceId()) || strings.HasPrefix(r.ResourceId.OpaqueId, s.Token)
 	}
 
-	// FIXME: the path here is hardcoded
+	// FIXME: the paths here are hardcoded
+	if strings.HasPrefix(r.GetPath(), "/public/"+s.Token) {
+		return true
+	}
 	return strings.HasPrefix(r.GetPath(), filepath.Join(ns, s.Token))
 }
 
