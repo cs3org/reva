@@ -49,6 +49,32 @@ func ocmShareScope(_ context.Context, scope *authpb.Scope, resource interface{},
 
 	switch v := resource.(type) {
 	// viewer role
+	case *registry.ListStorageProvidersRequest:
+		ref := &provider.Reference{}
+		if v.Opaque != nil && v.Opaque.Map != nil {
+			if e, ok := v.Opaque.Map["storage_id"]; ok {
+				if ref.ResourceId == nil {
+					ref.ResourceId = &provider.ResourceId{}
+				}
+				ref.ResourceId.StorageId = string(e.Value)
+			}
+			if e, ok := v.Opaque.Map["space_id"]; ok {
+				if ref.ResourceId == nil {
+					ref.ResourceId = &provider.ResourceId{}
+				}
+				ref.ResourceId.SpaceId = string(e.Value)
+			}
+			if e, ok := v.Opaque.Map["opaque_id"]; ok {
+				if ref.ResourceId == nil {
+					ref.ResourceId = &provider.ResourceId{}
+				}
+				ref.ResourceId.OpaqueId = string(e.Value)
+			}
+			if e, ok := v.Opaque.Map["path"]; ok {
+				ref.Path = string(e.Value)
+			}
+		}
+		return checkStorageRefForOCMShare(&share, ref, ocmNamespace), nil
 	case *registry.GetStorageProvidersRequest:
 		return checkStorageRefForOCMShare(&share, v.GetRef(), ocmNamespace), nil
 	case *provider.StatRequest:
@@ -89,12 +115,19 @@ func ocmShareScope(_ context.Context, scope *authpb.Scope, resource interface{},
 	// App provider requests
 	case *appregistry.GetDefaultAppProviderForMimeTypeRequest:
 		return true, nil
-
+	case *appregistry.GetAppProvidersRequest:
+		return true, nil
 	case *userv1beta1.GetUserByClaimRequest:
+		return true, nil
+	case *userv1beta1.GetUserRequest:
+		return true, nil
+	case *provider.ListStorageSpacesRequest:
 		return true, nil
 
 	case *ocmv1beta1.GetOCMShareRequest:
 		return checkOCMShareRef(&share, v.GetRef()), nil
+	case *ocmv1beta1.GetOCMShareByTokenRequest:
+		return share.Token == v.GetToken(), nil
 	case string:
 		return checkResourcePath(v), nil
 	}
