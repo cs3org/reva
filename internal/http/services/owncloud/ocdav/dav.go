@@ -98,7 +98,7 @@ func (h *DavHandler) init(c *config.Config) error {
 	}
 
 	h.OCMSharesHandler = new(WebDavHandler)
-	if err := h.OCMSharesHandler.init(c.OCMNamespace, false); err != nil {
+	if err := h.OCMSharesHandler.init(c.OCMNamespace, true); err != nil {
 		return err
 	}
 
