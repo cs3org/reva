@@ -1060,6 +1060,79 @@ var _ = Describe("Jsoncs3", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 				})
+
+				It("hides share and persists the change", func() {
+					rs, err := m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+						Spec: &collaboration.ShareReference_Id{
+							Id: gshare.Id,
+						},
+					})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
+
+					rs.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
+					rs.Share.Hide = true
+					rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state", "hide"}}, nil)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
+					Expect(rs.Share.Hide).To(Equal(true))
+
+					m, err := jsoncs3.New(storage, nil, 0, nil, 0) // Reset in-memory cache
+					Expect(err).ToNot(HaveOccurred())
+
+					rs, err = m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+						Spec: &collaboration.ShareReference_Id{
+							Id: gshare.Id,
+						},
+					})
+					Expect(rs.Share.Hide).To(Equal(true))
+					Expect(err).ToNot(HaveOccurred())
+					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
+				})
+
+				It("hides and unhides the share and persists the change", func() {
+					rs, err := m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+						Spec: &collaboration.ShareReference_Id{
+							Id: gshare.Id,
+						},
+					})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
+
+					rs.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
+					rs.Share.Hide = true
+					rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state", "hide"}}, nil)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
+					Expect(rs.Share.Hide).To(Equal(true))
+
+					m, err := jsoncs3.New(storage, nil, 0, nil, 0) // Reset in-memory cache
+					Expect(err).ToNot(HaveOccurred())
+
+					rs, err = m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+						Spec: &collaboration.ShareReference_Id{
+							Id: gshare.Id,
+						},
+					})
+					Expect(rs.Share.Hide).To(Equal(true))
+					Expect(err).ToNot(HaveOccurred())
+					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
+
+					rs.Share.Hide = false
+					rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state", "hide"}}, nil)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
+					Expect(rs.Share.Hide).To(Equal(false))
+
+					rs, err = m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+						Spec: &collaboration.ShareReference_Id{
+							Id: gshare.Id,
+						},
+					})
+					Expect(rs.Share.Hide).To(Equal(false))
+					Expect(err).ToNot(HaveOccurred())
+					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
+				})
 			})
 		})
 	})
