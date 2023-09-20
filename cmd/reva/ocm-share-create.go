@@ -45,6 +45,8 @@ func ocmShareCreateCommand() *command {
 	grantee := cmd.String("grantee", "", "the grantee")
 	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
 	userType := cmd.String("user-type", "primary", "the type of user account, defaults to primary")
+	spaceID := cmd.String("spaceid", "", "the space of the resource that's being shared")
+	opaqueID := cmd.String("id", "", "the id of the resource that's being shared")
 
 	webdav := cmd.Bool("webdav", false, "create a share with webdav access")
 	webapp := cmd.Bool("webapp", false, "create a share for app access")
@@ -57,24 +59,23 @@ func ocmShareCreateCommand() *command {
 	}
 
 	cmd.Action = func(w ...io.Writer) error {
-		if cmd.NArg() < 1 {
-			return errors.New("Invalid arguments: " + cmd.Usage())
-		}
-
 		// validate flags
 		if *grantee == "" {
 			return errors.New("Grantee cannot be empty: use -grantee flag\n" + cmd.Usage())
 		}
-
 		if *idp == "" {
 			return errors.New("IdP cannot be empty: use -idp flag\n" + cmd.Usage())
+		}
+		if *spaceID == "" {
+			return errors.New("SpaceID cannot be empty: use -spaceid flag\n" + cmd.Usage())
+		}
+		if *opaqueID == "" {
+			return errors.New("Path cannot be empty: use -path flag\n" + cmd.Usage())
 		}
 
 		if !*webdav && !*webapp && !*datatx {
 			*webdav = true
 		}
-
-		fn := cmd.Args()[0]
 
 		ctx := getAuthContext()
 		client, err := getClient()
@@ -100,7 +101,12 @@ func ocmShareCreateCommand() *command {
 			return formatError(remoteUserRes.Status)
 		}
 
-		ref := &provider.Reference{Path: fn}
+		ref := &provider.Reference{
+			ResourceId: &provider.ResourceId{
+				SpaceId:  *spaceID,
+				OpaqueId: *opaqueID,
+			},
+		}
 		req := &provider.StatRequest{Ref: ref}
 		res, err := client.Stat(ctx, req)
 		if err != nil {
