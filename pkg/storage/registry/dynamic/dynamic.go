@@ -89,13 +89,13 @@ func New(ctx context.Context, m map[string]interface{}) (storage.Registry, error
 	return d, nil
 }
 
-func initRoutingTree(dbusername, dbpassword, dbhost string, dbport int, dbname string) (*routingtree.RoutingTree, error) {
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", dbusername, dbpassword, dbhost, dbport, dbname))
+func initRoutingTree(dbUsername, dbPassword, dbHost string, dbPort int, dbName string) (*routingtree.RoutingTree, error) {
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", dbUsername, dbPassword, dbHost, dbPort, dbName))
 	if err != nil {
 		return nil, errors.Wrap(err, "error opening sql connection")
 	}
 
-	results, err := db.Query("SELECT path, mount_id, mount_type FROM routing")
+	results, err := db.Query("SELECT path, mount_id FROM routing")
 	if err != nil {
 		return nil, errors.Wrap(err, "error getting routing table from db")
 	}
@@ -104,7 +104,7 @@ func initRoutingTree(dbusername, dbpassword, dbhost string, dbport int, dbname s
 
 	for results.Next() {
 		var r routingtree.Route
-		err = results.Scan(&r.Path, &r.MountID, &r.MountType)
+		err = results.Scan(&r.Path, &r.MountID)
 		if err != nil {
 			return nil, errors.Wrap(err, "error scanning rows from db")
 		}

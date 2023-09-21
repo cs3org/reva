@@ -28,34 +28,28 @@ var _ = Describe("Routing Tree", func() {
 	var (
 		routes = []routingtree.Route{
 			{
-				Path:      "/eos/user/j",
-				MountID:   "eoshome-i01",
-				MountType: "home",
+				Path:    "/eos/user/j",
+				MountID: "eoshome-i01",
 			},
 			{
-				Path:      "/eos/user/g",
-				MountID:   "eoshome-i02",
-				MountType: "home",
+				Path:    "/eos/user/g",
+				MountID: "eoshome-i02",
 			},
 			{
-				Path:      "/eos/project/a/atlas",
-				MountID:   "eosproject-i00",
-				MountType: "project",
+				Path:    "/eos/project/a/atlas",
+				MountID: "eosproject-i00",
 			},
 			{
-				Path:      "/eos/project/c/cernbox",
-				MountID:   "eosproject-i01",
-				MountType: "project",
+				Path:    "/eos/project/c/cernbox",
+				MountID: "eosproject-i01",
 			},
 			{
-				Path:      "/eos/project/c/cernbox-2",
-				MountID:   "eosproject-i01",
-				MountType: "project",
+				Path:    "/eos/project/c/cernbox-2",
+				MountID: "eosproject-i01",
 			},
 			{
-				Path:      "/cephfs/project/c/cephbox",
-				MountID:   "cephfs",
-				MountType: "project",
+				Path:    "/cephfs/project/c/cephbox",
+				MountID: "cephfs",
 			},
 		}
 

@@ -21,8 +21,7 @@
 
 CREATE TABLE IF NOT EXISTS `routing` (
   `path`       VARCHAR(3072) NOT NULL,
-  `mount_id`   VARCHAR(255),
-  `mount_type` VARCHAR(100),
+  `mount_id`   VARCHAR(255) NOT NULL,
   PRIMARY KEY (path)
 )
 

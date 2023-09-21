@@ -27,9 +27,8 @@ import (
 
 // Route represents a route inside a storage provider.
 type Route struct {
-	Path      string
-	MountID   string
-	MountType string
+	Path    string
+	MountID string
 }
 
 // RoutingTree is a tree made of maps of routes.
@@ -96,7 +95,6 @@ func (t *RoutingTree) AddRoute(r Route) {
 		}
 		if path == r.Path {
 			newNode.MountID = r.MountID
-			newNode.MountType = r.MountType
 		}
 		current = current.addNode(newNode)
 	}
