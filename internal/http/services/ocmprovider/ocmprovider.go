@@ -45,7 +45,7 @@ type config struct {
 	EnableDatatx bool   `mapstructure:"enable_datatx" docs:"false;Whether data transfers are enabled in OCM shares."`
 }
 
-type discoveryData struct {
+type DiscoveryData struct {
 	Enabled       bool            `json:"enabled" xml:"enabled"`
 	APIVersion    string          `json:"apiVersion" xml:"apiVersion"`
 	Endpoint      string          `json:"endPoint" xml:"endPoint"`
@@ -61,7 +61,7 @@ type resourceTypes struct {
 }
 
 type svc struct {
-	data *discoveryData
+	data *DiscoveryData
 }
 
 func (c *config) ApplyDefaults() {
@@ -85,9 +85,9 @@ func (c *config) ApplyDefaults() {
 	}
 }
 
-func (c *config) prepare() *discoveryData {
+func (c *config) prepare() *DiscoveryData {
 	// generates the (static) data structure to be exposed by /ocm-provider
-	d := &discoveryData{}
+	d := &DiscoveryData{}
 	if c.Endpoint == "" {
 		d.Enabled = false
 		d.Endpoint = ""

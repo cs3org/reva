@@ -28,7 +28,6 @@ import (
 	"sync"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
@@ -113,7 +112,6 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 }
 
 func (a *authorizer) IsProviderAllowed(ctx context.Context, pi *ocmprovider.ProviderInfo) error {
-	log := appctx.GetLogger(ctx)
 	var err error
 	normalizedDomain, err := normalizeDomain(pi.Domain)
 	if err != nil {
@@ -142,7 +140,6 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, pi *ocmprovider.Prov
 
 	var ocmHost string
 	for _, p := range a.providers {
-		log.Debug().Msgf("Comparing '%s' to '%s'", p.Domain, normalizedDomain)
 		if p.Domain == normalizedDomain {
 			ocmHost, err = a.getOCMHost(p)
 			if err != nil {

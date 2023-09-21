@@ -25,12 +25,12 @@ import (
 )
 
 // NewWebDAVProtocol is an abstraction for creating a WebDAV protocol.
-func NewWebDAVProtocol(uri, shareSecred string, perms *ocm.SharePermissions) *ocm.Protocol {
+func NewWebDAVProtocol(uri, sharedSecret string, perms *ocm.SharePermissions) *ocm.Protocol {
 	return &ocm.Protocol{
 		Term: &ocm.Protocol_WebdavOptions{
 			WebdavOptions: &ocm.WebDAVProtocol{
 				Uri:          uri,
-				SharedSecret: shareSecred,
+				SharedSecret: sharedSecret,
 				Permissions:  perms,
 			},
 		},
