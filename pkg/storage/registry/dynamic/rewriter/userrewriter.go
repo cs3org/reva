@@ -28,7 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 )
 
-// UserRewriter rewrites a route with data from a user
+// UserRewriter rewrites a route with data from a user.
 type UserRewriter struct {
 	Tpls map[string]string
 }
@@ -43,7 +43,7 @@ func (ur UserRewriter) getTemplate(route string) (string, error) {
 	return "", errors.New("no rewrite rule found for route")
 }
 
-// GetAlias returns the alias for a given route
+// GetAlias returns the alias for a given route.
 func (ur UserRewriter) GetAlias(ctx context.Context, route string) string {
 	tpl, err := ur.getTemplate(route)
 	if err != nil {

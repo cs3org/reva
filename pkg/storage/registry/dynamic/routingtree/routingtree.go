@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package routingtree contains the routing tree implementation
+// Package routingtree contains the routing tree implementation.
 package routingtree
 
 import (
@@ -25,20 +25,20 @@ import (
 	"strings"
 )
 
-// Route represents a route inside a storage provider
+// Route represents a route inside a storage provider.
 type Route struct {
 	Path      string
 	MountID   string
 	MountType string
 }
 
-// RoutingTree is a tree made of maps of routes
+// RoutingTree is a tree made of maps of routes.
 type RoutingTree struct {
 	route Route
 	nodes map[string]*RoutingTree
 }
 
-// New returns a new RoutingTree
+// New returns a new RoutingTree.
 func New(rs []Route) *RoutingTree {
 	rt := &RoutingTree{
 		route: Route{
@@ -85,7 +85,7 @@ func getAncestors(p string) []string {
 	return ancestors
 }
 
-// AddRoute adds a new Route to the RoutingTree based on a path `p`
+// AddRoute adds a new Route to the RoutingTree based on a path `p`.
 func (t *RoutingTree) AddRoute(r Route) {
 	parts := getAncestors(r.Path)
 	current := t
@@ -153,7 +153,7 @@ func (t *RoutingTree) getLeaves() []*RoutingTree {
 	return leafNodes
 }
 
-// GetProviders returns a list of providers for a given path
+// GetProviders returns a list of providers for a given path.
 func (t *RoutingTree) GetProviders(p string) ([]string, error) {
 	subtree, err := t.findNodeForPath(path.Clean(p))
 	if err != nil || subtree == nil {

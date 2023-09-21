@@ -89,8 +89,8 @@ func New(ctx context.Context, m map[string]interface{}) (storage.Registry, error
 	return d, nil
 }
 
-func initRoutingTree(DBUsername, DBPassword, DBHost string, DBPort int, DBName string) (*routingtree.RoutingTree, error) {
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", DBUsername, DBPassword, DBHost, DBPort, DBName))
+func initRoutingTree(dbusername, dbpassword, dbhost string, dbport int, dbname string) (*routingtree.RoutingTree, error) {
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", dbusername, dbpassword, dbhost, dbport, dbname))
 	if err != nil {
 		return nil, errors.Wrap(err, "error opening sql connection")
 	}
@@ -114,7 +114,7 @@ func initRoutingTree(DBUsername, DBPassword, DBHost string, DBPort int, DBName s
 	return routingtree.New(rs), nil
 }
 
-// ListProviders lists all available storage providers
+// ListProviders lists all available storage providers.
 func (d *dynamic) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
 	providers := []*registrypb.ProviderInfo{}
 	for p, a := range d.r {
@@ -127,7 +127,7 @@ func (d *dynamic) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo
 	return providers, nil
 }
 
-// GetHome returns the storage provider for the home path
+// GetHome returns the storage provider for the home path.
 func (d *dynamic) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
 	p, err := d.rt.GetProviders(d.c.HomePath)
 	if err != nil {
@@ -144,6 +144,7 @@ func (d *dynamic) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error)
 	return nil, errors.New("home not found")
 }
 
+// FindProviders returns the storage providers for a given ref.
 func (d *dynamic) FindProviders(ctx context.Context, ref *provider.Reference) ([]*registrypb.ProviderInfo, error) {
 	l := d.log.With().Str("ref", ref.String()).Logger()
 
