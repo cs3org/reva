@@ -2,6 +2,8 @@ package password
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPolicies_Validate(t *testing.T) {
@@ -11,12 +13,14 @@ func TestPolicies_Validate(t *testing.T) {
 		minUpperCaseCharacters int
 		minDigits              int
 		minSpecialCharacters   int
+		bannedPasswordsList    map[string]struct{}
 	}
 	tests := []struct {
 		name    string
 		fields  fields
 		args    string
 		wantErr bool
+		errMsg  string
 	}{
 		{
 			name: "all in one",
@@ -51,6 +55,21 @@ func TestPolicies_Validate(t *testing.T) {
 			},
 			args:    "0äÖ-",
 			wantErr: true,
+			errMsg:  "at least 2 lowercase letters are required\nat least 2 uppercase letters are required\nat least 2 numbers are required\nat least 2 special characters are required  !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~",
+		},
+		{
+			name: "banned list",
+			fields: fields{
+				minCharacters:          10,
+				minLowerCaseCharacters: 3,
+				minUpperCaseCharacters: 3,
+				minDigits:              3,
+				minSpecialCharacters:   1,
+				bannedPasswordsList:    map[string]struct{}{"123abcABC!": struct{}{}},
+			},
+			args:    "123abcABC!",
+			wantErr: true,
+			errMsg:  "unfortunately, your password is commonly used. please pick a harder-to-guess password for your safety",
 		},
 	}
 	for _, tt := range tests {
@@ -61,9 +80,13 @@ func TestPolicies_Validate(t *testing.T) {
 				tt.fields.minUpperCaseCharacters,
 				tt.fields.minDigits,
 				tt.fields.minSpecialCharacters,
+				tt.fields.bannedPasswordsList,
 			)
-			if err := s.Validate(tt.args); (err != nil) != tt.wantErr {
-				t.Errorf("Validate() error = %v, wantErr %v", err.Error(), tt.wantErr)
+			err := s.Validate(tt.args)
+			if tt.wantErr {
+				assert.EqualError(t, err, tt.errMsg)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -125,6 +148,7 @@ func TestPasswordPolicies_Count(t *testing.T) {
 				tt.fields.wantUpperCaseCharacters,
 				tt.fields.wantDigits,
 				tt.fields.wantSpecialCharacters,
+				nil,
 			)
 			s := i.(*Policies)
 			if got := s.count(tt.args); got != tt.fields.wantCharacters {
