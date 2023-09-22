@@ -361,6 +361,8 @@ func (m *manager) UpdateReceivedShare(ctx context.Context, receivedShare *collab
 			rs.State = receivedShare.State
 		case "mount_point":
 			rs.MountPoint = receivedShare.MountPoint
+		case "hide":
+			continue
 		default:
 			return nil, errtypes.NotSupported("updating " + fieldMask.Paths[i] + " is not supported")
 		}
