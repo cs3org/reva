@@ -429,7 +429,7 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, content io
 
 		return nil
 	})
-	return provider.ResourceInfo{}, nil
+	return provider.ResourceInfo{}, err
 }
 
 func getDownloadProtocol(protocols []*gateway.FileDownloadProtocol, lst []string) (string, string, bool) {
