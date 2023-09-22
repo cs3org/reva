@@ -43,6 +43,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/password"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
@@ -84,6 +85,7 @@ type Handler struct {
 	sharePrefix                           string
 	homeNamespace                         string
 	ocmMountPoint                         string
+	listOCMShares                         bool
 	skipUpdatingExistingSharesMountpoints bool
 	additionalInfoTemplate                *template.Template
 	userIdentifierCache                   *ttlcache.Cache
@@ -135,6 +137,7 @@ func (h *Handler) Init(c *config.Config) error {
 	h.sharePrefix = c.SharePrefix
 	h.homeNamespace = c.HomeNamespace
 	h.ocmMountPoint = c.OCMMountPoint
+	h.listOCMShares = c.ListOCMShares
 	h.skipUpdatingExistingSharesMountpoints = c.SkipUpdatingExistingSharesMountpoints
 
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
@@ -864,7 +867,8 @@ const (
 
 func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	// which pending state to list
-	stateFilter := getStateFilter(r.FormValue("state"))
+	state := r.FormValue("state")
+	stateFilter := getStateFilter(state)
 
 	showHidden, _ := strconv.ParseBool(r.URL.Query().Get("show_hidden"))
 
@@ -1038,6 +1042,18 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 		shares = append(shares, data)
 		sublog.Debug().Msgf("share: %+v", *data)
+	}
+
+	if h.listOCMShares {
+		// include ocm shares in the response
+		stateFilter := getOCMStateFilter(state)
+		lst, err := h.listReceivedFederatedShares(ctx, client, stateFilter)
+		if err != nil {
+			log.Err(err).Msg("error listing received ocm shares")
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error listing received ocm shares", err)
+			return
+		}
+		shares = append(shares, lst...)
 	}
 
 	response.WriteOCSSuccess(w, r, shares)
