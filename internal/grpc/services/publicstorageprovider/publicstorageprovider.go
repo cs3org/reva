@@ -511,11 +511,11 @@ func (s *service) extractLinkFromScope(ctx context.Context) (*provider.ResourceI
 
 			// the share is minimally populated, we need more than the token
 			// look up complete share
-			info, err := s.resolveToken(ctx, share)
+			info, resolvedShare, err := s.resolveToken(ctx, share)
 			if err != nil {
 				return nil, nil, nil, "", err
 			}
-			return info, share, share.Owner, share.Token, nil
+			return info, resolvedShare, share.Owner, share.Token, nil
 		} else if strings.HasPrefix(k, "publicshare:") && v.Resource.Decoder == "json" {
 			share := &link.PublicShare{}
 			err := utils.UnmarshalJSONToProtoV1(v.Resource.Value, share)
@@ -525,11 +525,11 @@ func (s *service) extractLinkFromScope(ctx context.Context) (*provider.ResourceI
 
 			// the share is minimally populated, we need more than the token
 			// look up complete share
-			info, err := s.resolveToken(ctx, share)
+			info, resolvedShare, err := s.resolveToken(ctx, share)
 			if err != nil {
 				return nil, nil, nil, "", err
 			}
-			return info, share, share.Owner, share.Token, nil
+			return info, resolvedShare, share.Owner, share.Token, nil
 		}
 	}
 	return nil, nil, nil, "", errtypes.NotFound("No public storage info found in scopes")
@@ -924,14 +924,15 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 }
 
 // resolveToken returns the resource info for the publicly shared resource.
-func (s *service) resolveToken(ctx context.Context, share interface{}) (*provider.ResourceInfo, error) {
+func (s *service) resolveToken(ctx context.Context, share interface{}) (*provider.ResourceInfo, interface{}, error) {
 	gatewayClient, err := s.gatewaySelector.Next()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	resourceID := &provider.ResourceId{}
 	perms := &provider.ResourcePermissions{}
+	var resolvedShare interface{}
 	switch v := share.(type) {
 	case *link.PublicShare:
 		publicShareResponse, err := gatewayClient.GetPublicShare(
@@ -947,10 +948,11 @@ func (s *service) resolveToken(ctx context.Context, share interface{}) (*provide
 		)
 		switch {
 		case err != nil:
-			return nil, err
+			return nil, nil, err
 		case publicShareResponse.Status.Code != rpc.Code_CODE_OK:
-			return nil, errtypes.NewErrtypeFromStatus(publicShareResponse.Status)
+			return nil, nil, errtypes.NewErrtypeFromStatus(publicShareResponse.Status)
 		}
+		resolvedShare = publicShareResponse.GetShare()
 		resourceID = publicShareResponse.GetShare().GetResourceId()
 		perms = publicShareResponse.GetShare().GetPermissions().GetPermissions()
 	case *ocm.Share:
@@ -959,13 +961,13 @@ func (s *service) resolveToken(ctx context.Context, share interface{}) (*provide
 		})
 		switch {
 		case err != nil:
-			return nil, err
+			return nil, nil, err
 		case gsr.Status.Code != rpc.Code_CODE_OK:
-			return nil, errtypes.NewErrtypeFromStatus(gsr.Status)
+			return nil, nil, errtypes.NewErrtypeFromStatus(gsr.Status)
 		}
 		accessMethods := gsr.GetShare().GetAccessMethods()
 		if accessMethods == nil || len(accessMethods) > 0 {
-			return nil, errtypes.PermissionDenied("failed to get access to the requested resource")
+			return nil, nil, errtypes.PermissionDenied("failed to get access to the requested resource")
 		}
 		perms = accessMethods[0].GetWebdavOptions().Permissions
 	}
@@ -977,12 +979,12 @@ func (s *service) resolveToken(ctx context.Context, share interface{}) (*provide
 	})
 	switch {
 	case err != nil:
-		return nil, err
+		return nil, nil, err
 	case sRes.Status.Code != rpc.Code_CODE_OK:
-		return nil, errtypes.NewErrtypeFromStatus(sRes.Status)
+		return nil, nil, errtypes.NewErrtypeFromStatus(sRes.Status)
 	}
 
 	// Set permissions
 	sRes.Info.PermissionSet = perms
-	return sRes.Info, nil
+	return sRes.Info, resolvedShare, nil
 }
