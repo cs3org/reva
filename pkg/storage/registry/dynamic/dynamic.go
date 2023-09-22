@@ -50,8 +50,8 @@ type dynamic struct {
 }
 
 type config struct {
-	Rules      map[string]string `mapstructure:"rules"`
-	Rewrites   map[string]string `mapstructure:"rewrites"`
+	Rules      map[string]string `mapstructure:"rules" docs:"nil;A map from mountID to provider address"`
+	Rewrites   map[string]string `mapstructure:"rewrites" docs:"nil;A map from a path to an template alias to use when resolving"`
 	HomePath   string            `mapstructure:"home_path"`
 	DBUsername string            `mapstructure:"db_username"`
 	DBPassword string            `mapstructure:"db_password"`
@@ -69,7 +69,7 @@ func New(ctx context.Context, m map[string]interface{}) (storage.Registry, error
 	}
 
 	log := appctx.GetLogger(ctx)
-	annotatedLog := log.With().Str("storageprovider", "dynamic").Logger()
+	annotatedLog := log.With().Str("storageregistry", "dynamic").Logger()
 
 	rt, err := initRoutingTree(c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName)
 	if err != nil {
@@ -100,15 +100,15 @@ func initRoutingTree(dbUsername, dbPassword, dbHost string, dbPort int, dbName s
 		return nil, errors.Wrap(err, "error getting routing table from db")
 	}
 
-	var rs []routingtree.Route
+	rs := make(map[string]string)
 
 	for results.Next() {
-		var r routingtree.Route
-		err = results.Scan(&r.Path, &r.MountID)
+		var p, m string
+		err = results.Scan(&p, &m)
 		if err != nil {
 			return nil, errors.Wrap(err, "error scanning rows from db")
 		}
-		rs = append(rs, r)
+		rs[p] = m
 	}
 
 	return routingtree.New(rs), nil
@@ -116,7 +116,7 @@ func initRoutingTree(dbUsername, dbPassword, dbHost string, dbPort int, dbName s
 
 // ListProviders lists all available storage providers.
 func (d *dynamic) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
-	providers := []*registrypb.ProviderInfo{}
+	providers := make([]*registrypb.ProviderInfo, 0, len(d.r))
 	for p, a := range d.r {
 		providers = append(providers, &registrypb.ProviderInfo{
 			ProviderPath: p,
@@ -129,7 +129,7 @@ func (d *dynamic) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo
 
 // GetHome returns the storage provider for the home path.
 func (d *dynamic) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
-	p, err := d.rt.GetProviders(d.c.HomePath)
+	p, err := d.rt.Resolve(d.c.HomePath)
 	if err != nil {
 		return nil, errors.New("failed to get home provider")
 	}
@@ -146,10 +146,10 @@ func (d *dynamic) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error)
 
 // FindProviders returns the storage providers for a given ref.
 func (d *dynamic) FindProviders(ctx context.Context, ref *provider.Reference) ([]*registrypb.ProviderInfo, error) {
-	l := d.log.With().Str("ref", ref.String()).Logger()
+	l := d.log.With().Interface("ref", ref).Logger()
 
 	providerAlias := d.ur.GetAlias(ctx, ref.Path)
-	ps, err := d.rt.GetProviders(providerAlias)
+	ps, err := d.rt.Resolve(providerAlias)
 	if err != nil {
 		return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
 	}

@@ -25,98 +25,83 @@ import (
 	"strings"
 )
 
-// Route represents a route inside a storage provider.
+// Route represents a route inside a storage provider
 type Route struct {
-	Path    string
+	Name    string
 	MountID string
 }
 
-// RoutingTree is a tree made of maps of routes.
+// RoutingTree is a tree containing routes
 type RoutingTree struct {
 	route Route
 	nodes map[string]*RoutingTree
 }
 
-// New returns a new RoutingTree.
-func New(rs []Route) *RoutingTree {
-	rt := &RoutingTree{
-		route: Route{
-			Path: "/",
-		},
-		nodes: make(map[string]*RoutingTree),
+// New returns a new RoutingTree
+func New(routes map[string]string) *RoutingTree {
+	t := RoutingTree{
+		nodes: map[string]*RoutingTree{},
+		route: Route{},
 	}
 
-	for _, r := range rs {
-		rt.AddRoute(r)
+	for r, m := range routes {
+		t.addRoute(r, m)
 	}
 
-	return rt
+	return &t
 }
 
 func (t *RoutingTree) addNode(r Route) *RoutingTree {
-	if t.route.Path == r.Path {
+	if t.route.Name == r.Name {
 		return t
 	}
 
-	newNode, ok := t.nodes[r.Path]
+	newNode, ok := t.nodes[r.Name]
 	if !ok {
 		newNode = &RoutingTree{
 			route: r,
 			nodes: make(map[string]*RoutingTree),
 		}
-		t.nodes[r.Path] = newNode
+		t.nodes[r.Name] = newNode
 	}
 
 	return newNode
 }
 
-func getAncestors(p string) []string {
-	p = path.Clean(p)
-	ancestors := []string{}
-	previous := "/"
-	parts := strings.Split(p, "/")
-
-	for _, part := range parts {
-		previous = path.Join(previous, part)
-		ancestors = append(ancestors, previous)
-	}
-
-	return ancestors
-}
-
-// AddRoute adds a new Route to the RoutingTree based on a path `p`.
-func (t *RoutingTree) AddRoute(r Route) {
-	parts := getAncestors(r.Path)
+func (t *RoutingTree) addRoute(route, mountID string) {
+	parts := strings.Split(path.Clean(route), "/")
 	current := t
 
-	for _, path := range parts {
+	for i, name := range parts {
 		newNode := Route{
-			Path: path,
+			Name: name,
 		}
-		if path == r.Path {
-			newNode.MountID = r.MountID
+
+		if i == len(parts)-1 {
+			newNode.MountID = mountID
 		}
+
 		current = current.addNode(newNode)
 	}
 }
 
-func (t *RoutingTree) findNodeForPath(p string) (*RoutingTree, error) {
-	parts := getAncestors(p)
+func (t *RoutingTree) findRoute(p string) (*RoutingTree, error) {
+	parts := strings.Split(path.Clean(p), "/")
 	current := t
 
-	for _, part := range parts {
+	for _, name := range parts {
 		// If the current node matches the path part, continue
-		if current.route.Path == part {
+		if current.route.Name == name {
 			continue
 		}
 
 		// If not, check if there is a children with the path part
-		if childNode, ok := current.nodes[part]; ok {
+		if childNode, ok := current.nodes[name]; ok {
 			current = childNode
 		} else {
 			// If there is none but there are other children, this is an invalid path
 			if len(current.nodes) != 0 {
-				return nil, errors.New("invalid route")
+				return nil, errors.New("route not found")
 			}
 			// If there is none and the node is a leaf, then that means the rest of the
 			// path is not part of the route
@@ -127,48 +112,31 @@ func (t *RoutingTree) findNodeForPath(p string) (*RoutingTree, error) {
 	return current, nil
 }
 
-func (t *RoutingTree) getLeaves() []*RoutingTree {
-	if len(t.nodes) == 0 {
-		return []*RoutingTree{t}
-	}
-
-	leafNodes := []*RoutingTree{}
-	queue := []*RoutingTree{t}
-
-	for len(queue) > 0 {
-		node := queue[0]
-		queue = queue[1:]
-
-		if len(node.nodes) == 0 {
-			leafNodes = append(leafNodes, node)
-		}
-
-		for _, child := range node.nodes {
-			queue = append(queue, child)
-		}
-	}
-
-	return leafNodes
-}
-
-// GetProviders returns a list of providers for a given path.
-func (t *RoutingTree) GetProviders(p string) ([]string, error) {
-	subtree, err := t.findNodeForPath(path.Clean(p))
-	if err != nil || subtree == nil {
+// Resolve returns a list of providers for a given path.
+func (t *RoutingTree) Resolve(p string) ([]string, error) {
+	r, err := t.findRoute(p)
+	if err != nil {
 		return nil, err
 	}
 
-	leaves := subtree.getLeaves()
-	providers := []string{}
-	providerMap := make(map[string]bool)
+	providerMap := r.getMountID(p, map[string]bool{})
 
-	for _, l := range leaves {
-		providerMap[l.route.MountID] = true
-	}
-
+	providers := make([]string, 0, len(providerMap))
 	for p := range providerMap {
-		providers = append(providers, p)
+		providers = append(providers, path.Clean(p))
 	}
 
 	return providers, nil
+}
+
+func (t *RoutingTree) getMountID(p string, providerMap map[string]bool) map[string]bool {
+	if len(t.nodes) == 0 {
+		providerMap[t.route.MountID] = true
+	}
+
+	for _, r := range t.nodes {
+		r.getMountID(p, providerMap)
+	}
+
+	return providerMap
 }

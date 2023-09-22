@@ -26,35 +26,16 @@ import (
 
 var _ = Describe("Routing Tree", func() {
 	var (
-		routes = []routingtree.Route{
-			{
-				Path:    "/eos/user/j",
-				MountID: "eoshome-i01",
-			},
-			{
-				Path:    "/eos/user/g",
-				MountID: "eoshome-i02",
-			},
-			{
-				Path:    "/eos/project/a/atlas",
-				MountID: "eosproject-i00",
-			},
-			{
-				Path:    "/eos/project/c/cernbox",
-				MountID: "eosproject-i01",
-			},
-			{
-				Path:    "/eos/project/c/cernbox-2",
-				MountID: "eosproject-i01",
-			},
-			{
-				Path:    "/cephfs/project/c/cephbox",
-				MountID: "cephfs",
-			},
+		routes = map[string]string{
+			"/eos/user/j":               "eoshome-i01",
+			"/eos/user/g":               "eoshome-i02",
+			"/eos/project/a/atlas":      "eosproject-i00",
+			"/eos/project/c/cernbox":    "eosproject-i01",
+			"/eos/project/c/cernbox-2":  "eosproject-i01",
+			"/cephfs/project/c/cephbox": "cephfs",
 		}
 
 		nonLeaf = map[string][]string{
-			"":                  {"eoshome-i01", "eoshome-i02", "eosproject-i00", "eosproject-i01", "cephfs"},
 			"/":                 {"eoshome-i01", "eoshome-i02", "eosproject-i00", "eosproject-i01", "cephfs"},
 			"/eos":              {"eoshome-i01", "eoshome-i02", "eosproject-i00", "eosproject-i01"},
 			"/eos/":             {"eoshome-i01", "eoshome-i02", "eosproject-i00", "eosproject-i01"},
@@ -75,6 +56,7 @@ var _ = Describe("Routing Tree", func() {
 		}
 
 		badRoutes = []string{
+			"",
 			"badroute",
 			"/badroute",
 			"/eos/badroute",
@@ -95,23 +77,24 @@ var _ = Describe("Routing Tree", func() {
 	})
 
 	Context("resolving providers", func() {
-		for _, r := range routes {
+		for r, m := range routes {
 			r := r
-			When("passed an existing leaf route: "+r.Path, func() {
+			m := m
+			When("passed an existing leaf route: "+r, func() {
 				JustBeforeEach(func() {
-					p, err = t.GetProviders(r.Path)
+					p, err = t.Resolve(r)
 				})
 
 				It("should return the correct provider", func() {
 					Expect(err).ToNot(HaveOccurred())
-					Expect(p).To(ConsistOf(r.MountID))
+					Expect(p).To(ConsistOf(m))
 				})
 			})
 		}
 
 		When("passed a non-existing route", func() {
 			JustBeforeEach(func() {
-				p, err = t.GetProviders("/this/path/does/not/exist")
+				p, err = t.Resolve("/this/path/does/not/exist")
 			})
 
 			It("should return an error", func() {
@@ -124,7 +107,7 @@ var _ = Describe("Routing Tree", func() {
 			ps := ps
 			When("passed an existing non-leaf route: "+nl, func() {
 				JustBeforeEach(func() {
-					p, err = t.GetProviders(nl)
+					p, err = t.Resolve(nl)
 				})
 
 				It("should return the correct providers", func() {
@@ -139,7 +122,7 @@ var _ = Describe("Routing Tree", func() {
 			wp := wp
 			When("passed a deep route: "+r, func() {
 				JustBeforeEach(func() {
-					p, err = t.GetProviders(r)
+					p, err = t.Resolve(r)
 				})
 
 				It("should return the correct providers", func() {
@@ -153,7 +136,7 @@ var _ = Describe("Routing Tree", func() {
 			r := r
 			When("passed a bad route: "+r, func() {
 				JustBeforeEach(func() {
-					p, err = t.GetProviders(r)
+					p, err = t.Resolve(r)
 				})
 
 				It("should return an error", func() {

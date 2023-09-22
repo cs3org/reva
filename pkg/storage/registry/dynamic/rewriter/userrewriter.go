@@ -44,6 +44,7 @@ func (ur UserRewriter) getTemplate(route string) (string, error) {
 }
 
 // GetAlias returns the alias for a given route.
+// If an alias has not been configured for the route, it returns the route.
 func (ur UserRewriter) GetAlias(ctx context.Context, route string) string {
 	tpl, err := ur.getTemplate(route)
 	if err != nil {
