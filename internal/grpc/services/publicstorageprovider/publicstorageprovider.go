@@ -496,23 +496,6 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	return res, nil
 }
 
-func extractStorageInfoFromScope(ctx context.Context) (*provider.ResourceInfo, *userv1beta1.UserId, *provider.ResourcePermissions, error) {
-	scopes, ok := ctxpkg.ContextGetScopes(ctx)
-	if !ok {
-		return nil, nil, nil, errtypes.InternalError("No scope found in context")
-	}
-	for k, v := range scopes {
-		if strings.HasPrefix(k, "publicshare:") && v.Resource.Decoder == "json" {
-			share := &link.PublicShare{}
-			err := utils.UnmarshalJSONToProtoV1(v.Resource.Value, share)
-			if err != nil {
-				return nil, nil, nil, errtypes.InternalError("Failed to unmarshal public share")
-			}
-		}
-	}
-	return nil, nil, nil, errtypes.NotFound("No storage information found in context")
-}
-
 func (s *service) extractLinkFromScope(ctx context.Context) (*provider.ResourceInfo, interface{}, *userv1beta1.UserId, string, error) {
 	scopes, ok := ctxpkg.ContextGetScopes(ctx)
 	if !ok {
@@ -947,7 +930,7 @@ func (s *service) resolveToken(ctx context.Context, share interface{}) (*provide
 		return nil, err
 	}
 
-	resourceId := &provider.ResourceId{}
+	resourceID := &provider.ResourceId{}
 	switch v := share.(type) {
 	case *link.PublicShare:
 		publicShareResponse, err := gatewayClient.GetPublicShare(
@@ -967,7 +950,7 @@ func (s *service) resolveToken(ctx context.Context, share interface{}) (*provide
 		case publicShareResponse.Status.Code != rpc.Code_CODE_OK:
 			return nil, errtypes.NewErrtypeFromStatus(publicShareResponse.Status)
 		}
-		resourceId = publicShareResponse.GetShare().GetResourceId()
+		resourceID = publicShareResponse.GetShare().GetResourceId()
 	case *ocm.Share:
 		gsr, err := gatewayClient.GetOCMShareByToken(ctx, &ocm.GetOCMShareByTokenRequest{
 			Token: v.Token,
@@ -978,12 +961,12 @@ func (s *service) resolveToken(ctx context.Context, share interface{}) (*provide
 		case gsr.Status.Code != rpc.Code_CODE_OK:
 			return nil, errtypes.NewErrtypeFromStatus(gsr.Status)
 		}
-		resourceId = gsr.GetShare().GetResourceId()
+		resourceID = gsr.GetShare().GetResourceId()
 	}
 
 	sRes, err := gatewayClient.Stat(ctx, &provider.StatRequest{
 		Ref: &provider.Reference{
-			ResourceId: resourceId,
+			ResourceId: resourceID,
 		},
 	})
 	switch {
