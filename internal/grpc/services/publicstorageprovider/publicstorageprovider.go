@@ -931,6 +931,7 @@ func (s *service) resolveToken(ctx context.Context, share interface{}) (*provide
 	}
 
 	resourceID := &provider.ResourceId{}
+	perms := &provider.ResourcePermissions{}
 	switch v := share.(type) {
 	case *link.PublicShare:
 		publicShareResponse, err := gatewayClient.GetPublicShare(
@@ -951,6 +952,7 @@ func (s *service) resolveToken(ctx context.Context, share interface{}) (*provide
 			return nil, errtypes.NewErrtypeFromStatus(publicShareResponse.Status)
 		}
 		resourceID = publicShareResponse.GetShare().GetResourceId()
+		perms = publicShareResponse.GetShare().GetPermissions().GetPermissions()
 	case *ocm.Share:
 		gsr, err := gatewayClient.GetOCMShareByToken(ctx, &ocm.GetOCMShareByTokenRequest{
 			Token: v.Token,
@@ -961,7 +963,11 @@ func (s *service) resolveToken(ctx context.Context, share interface{}) (*provide
 		case gsr.Status.Code != rpc.Code_CODE_OK:
 			return nil, errtypes.NewErrtypeFromStatus(gsr.Status)
 		}
-		resourceID = gsr.GetShare().GetResourceId()
+		accessMethods := gsr.GetShare().GetAccessMethods()
+		if accessMethods == nil || len(accessMethods) > 0 {
+			return nil, errtypes.PermissionDenied("failed to get access to the requested resource")
+		}
+		perms = accessMethods[0].GetWebdavOptions().Permissions
 	}
 
 	sRes, err := gatewayClient.Stat(ctx, &provider.StatRequest{
@@ -975,5 +981,8 @@ func (s *service) resolveToken(ctx context.Context, share interface{}) (*provide
 	case sRes.Status.Code != rpc.Code_CODE_OK:
 		return nil, errtypes.NewErrtypeFromStatus(sRes.Status)
 	}
+
+	// Set permissions
+	sRes.Info.PermissionSet = perms
 	return sRes.Info, nil
 }
