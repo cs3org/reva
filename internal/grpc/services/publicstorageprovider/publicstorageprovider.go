@@ -667,7 +667,7 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 		}, nil
 	}
 	// FIXME: maybe there's a shortcut possible here using the source path
-	cs3RefDestination, info, tknDest, err := s.translatePublicRefToCS3Ref(ctx, req.Destination)
+	cs3RefDestination, _, tknDest, err := s.translatePublicRefToCS3Ref(ctx, req.Destination)
 	if err != nil {
 		return &provider.MoveResponse{
 			Status: status.NewStatusFromErrType(ctx, "failed to resolve destination reference", err),
