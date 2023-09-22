@@ -43,7 +43,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/password"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
@@ -1049,7 +1048,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		stateFilter := getOCMStateFilter(state)
 		lst, err := h.listReceivedFederatedShares(ctx, client, stateFilter)
 		if err != nil {
-			log.Err(err).Msg("error listing received ocm shares")
+			sublog.Err(err).Msg("error listing received ocm shares")
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error listing received ocm shares", err)
 			return
 		}
