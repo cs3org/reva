@@ -164,7 +164,7 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 	log := appctx.GetLogger(ctx)
 	c, err := pool.GetOCMShareProviderClient(s.c.OCMShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
+		appctx.GetLogger(ctx).Error().Err(err).Msg("error calling GetOCMShareProviderClient")
 		return &ocm.UpdateReceivedOCMShareResponse{
 			Status: status.NewInternal(ctx, "error getting share provider client"),
 		}, nil
@@ -365,7 +365,7 @@ func (s *svc) getTransferDestinationPath(ctx context.Context, req *ocm.UpdateRec
 func (s *svc) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMShareRequest) (*ocm.GetReceivedOCMShareResponse, error) {
 	c, err := pool.GetOCMShareProviderClient(s.c.OCMShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
+		appctx.GetLogger(ctx).Error().Err(err).Msg("error calling GetOCMShareProviderClient")
 		return &ocm.GetReceivedOCMShareResponse{
 			Status: status.NewInternal(ctx, "error getting share provider client"),
 		}, nil
