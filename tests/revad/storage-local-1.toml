@@ -30,5 +30,5 @@ address = "0.0.0.0:11101"
 driver = "local"
 temp_folder = "/var/tmp/reva/tmp"
 
-[http.services.dataprovider.drivers.ocis]
+[http.services.dataprovider.drivers.local]
 root = "/var/tmp/reva/data-local-1"
