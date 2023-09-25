@@ -1,3 +1,30 @@
+Changelog for reva 2.16.1 (2023-09-25)
+=======================================
+
+The following sections list the changes in reva 2.16.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #4194: Make appctx package compatible with go v1.21
+*   Fix #4214: Always pass adjusted default nats options
+
+Details
+-------
+
+*   Bugfix #4194: Make appctx package compatible with go v1.21
+
+   Backported fix from edge. See https://tip.golang.org/doc/go1.21#reflect
+
+   https://github.com/cs3org/reva/pull/4194
+
+*   Bugfix #4214: Always pass adjusted default nats options
+
+   The nats-js store will now automatically reconnect.
+
+   https://github.com/cs3org/reva/pull/4214
+
 Changelog for reva 2.16.0 (2023-08-21)
 =======================================
 
@@ -3193,6 +3220,27 @@ Details
 
    https://github.com/cs3org/reva/pull/2922
 
+Changelog for reva 2.4.1 (2022-05-24)
+=======================================
+
+The following sections list the changes in reva 2.4.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #2891: Add missing http status code
+
+Details
+-------
+
+*   Bugfix #2891: Add missing http status code
+
+   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
+   pass it through.
+
+   https://github.com/cs3org/reva/pull/2891
+
 Changelog for reva 2.4.0 (2022-05-24)
 =======================================
 
@@ -3335,27 +3383,6 @@ Details
    correct storageprovider
 
    https://github.com/cs3org/reva/pull/2792
-
-Changelog for reva 2.4.1 (2022-05-24)
-=======================================
-
-The following sections list the changes in reva 2.4.1 relevant to
-reva users. The changes are ordered by importance.
-
-Summary
--------
-
-*   Fix #2891: Add missing http status code
-
-Details
--------
-
-*   Bugfix #2891: Add missing http status code
-
-   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
-   pass it through.
-
-   https://github.com/cs3org/reva/pull/2891
 
 Changelog for reva 2.3.1 (2022-05-08)
 =======================================
