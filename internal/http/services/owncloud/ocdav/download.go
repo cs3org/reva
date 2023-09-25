@@ -41,7 +41,6 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// index.php/s/jIKrtrkXCIXwg1y/download?path=%2FHugo&files=Intrinsico
 func (s *svc) handleLegacyPublicLinkDownload(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimPrefix(r.URL.Path, "/")
 	files := getFilesFromRequest(r)
@@ -91,7 +90,7 @@ func (s *svc) authenticate(ctx context.Context, token string) (context.Context, 
 	return ctx, nil
 }
 
-func (s *svc) handleHttpError(w http.ResponseWriter, err error, log *zerolog.Logger) {
+func (s *svc) handleHTTPError(w http.ResponseWriter, err error, log *zerolog.Logger) {
 	log.Error().Err(err).Msg("ocdav: got error")
 	switch err.(type) {
 	case errtypes.NotFound:
@@ -109,12 +108,12 @@ func (s *svc) downloadFiles(ctx context.Context, w http.ResponseWriter, token st
 	log := appctx.GetLogger(ctx)
 	ctx, err := s.authenticate(ctx, token)
 	if err != nil {
-		s.handleHttpError(w, err, log)
+		s.handleHTTPError(w, err, log)
 		return
 	}
 	isSingleFileShare, res, err := s.isSingleFileShare(ctx, token, files)
 	if err != nil {
-		s.handleHttpError(w, err, log)
+		s.handleHTTPError(w, err, log)
 		return
 	}
 	if isSingleFileShare {
@@ -186,13 +185,13 @@ func (s *svc) downloadFile(ctx context.Context, w http.ResponseWriter, res *prov
 	log := appctx.GetLogger(ctx)
 	c, err := s.getClient()
 	if err != nil {
-		s.handleHttpError(w, err, log)
+		s.handleHTTPError(w, err, log)
 		return
 	}
 	d := downloader.NewDownloader(c)
 	r, err := d.Download(ctx, res.Path, "")
 	if err != nil {
-		s.handleHttpError(w, err, log)
+		s.handleHTTPError(w, err, log)
 		return
 	}
 	defer r.Close()
@@ -201,7 +200,7 @@ func (s *svc) downloadFile(ctx context.Context, w http.ResponseWriter, res *prov
 
 	_, err = io.Copy(w, r)
 	if err != nil {
-		s.handleHttpError(w, err, log)
+		s.handleHTTPError(w, err, log)
 		return
 	}
 }
@@ -223,7 +222,7 @@ func (s *svc) downloadArchive(ctx context.Context, w http.ResponseWriter, token 
 
 	gtw, err := s.getClient()
 	if err != nil {
-		s.handleHttpError(w, err, log)
+		s.handleHTTPError(w, err, log)
 		return
 	}
 
@@ -235,12 +234,12 @@ func (s *svc) downloadArchive(ctx context.Context, w http.ResponseWriter, token 
 		MaxSize:     s.c.PublicLinkDownload.MaxSize,
 	})
 	if err != nil {
-		s.handleHttpError(w, err, log)
+		s.handleHTTPError(w, err, log)
 		return
 	}
 
 	if err := archiver.CreateTar(ctx, w); err != nil {
-		s.handleHttpError(w, err, log)
+		s.handleHTTPError(w, err, log)
 		return
 	}
 }

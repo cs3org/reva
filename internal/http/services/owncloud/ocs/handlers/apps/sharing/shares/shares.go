@@ -952,7 +952,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 					// can we return the mountpoint when the gateway resolves the listing of shares?
 					// - no, the gateway only sees the same list any has the same options as the ocs service
-					// - we would need to have a list of mountpoints for the shares -> owncloudstorageprovider for hot migration migration
+					// - we would need to have a list of mountpoints for the shares -> owncloudstorageprovider for hot migration
 
 					// best we can do for now is stat the /Shares jail if it is set and return those paths
 

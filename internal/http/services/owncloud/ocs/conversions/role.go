@@ -37,7 +37,7 @@ type Role struct {
 const (
 	// RoleViewer grants non-editor role on a resource.
 	RoleViewer = "viewer"
-	// RoleReader grants non-editor role on a resource
+	// RoleReader grants non-editor role on a resource.
 	RoleReader = "reader"
 	// RoleEditor grants editor permission on a resource, including folders.
 	RoleEditor = "editor"
@@ -53,7 +53,7 @@ const (
 	RoleUnknown = "unknown"
 	// RoleLegacy provides backwards compatibility.
 	RoleLegacy = "legacy"
-	// RoleDenied grants no permission at all on a resource
+	// RoleDenied grants no permission at all on a resource.
 	RoleDenied = "denied"
 )
 
