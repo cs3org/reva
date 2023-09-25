@@ -288,11 +288,7 @@ func (m *manager) getByToken(ctx context.Context, token string, u *user.User) (*
 		}
 		return nil, "", err
 	}
-	share, err := conversions.ConvertToCS3PublicShare(ctx, m.client, s)
-	if err != nil {
-		return nil, "", err
-	}
-	return share, s.ShareWith, nil
+	return conversions.ConvertToCS3PublicShare(s), s.ShareWith, nil
 }
 
 func (m *manager) getByID(ctx context.Context, id *link.PublicShareId, u *user.User) (*link.PublicShare, string, error) {
@@ -305,11 +301,7 @@ func (m *manager) getByID(ctx context.Context, id *link.PublicShareId, u *user.U
 		}
 		return nil, "", err
 	}
-	share, err := conversions.ConvertToCS3PublicShare(ctx, m.client, s)
-	if err != nil {
-		return nil, "", err
-	}
-	return share, s.ShareWith, nil
+	return conversions.ConvertToCS3PublicShare(s), s.ShareWith, nil
 }
 
 func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference, sign bool) (*link.PublicShare, error) {
@@ -406,10 +398,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.Token, &s.Expiration, &s.ShareName, &s.ID, &s.STime, &s.Permissions, &s.Quicklink, &s.Description, &s.NotifyUploads, &s.NotifyUploadsExtraRecipients); err != nil {
 			continue
 		}
-		cs3Share, err := conversions.ConvertToCS3PublicShare(ctx, m.client, s)
-		if err != nil {
-			return nil, err
-		}
+		cs3Share := conversions.ConvertToCS3PublicShare(s)
 		if expired(cs3Share) {
 			_ = m.cleanupExpiredShares()
 		} else {
@@ -472,10 +461,7 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 		}
 		return nil, err
 	}
-	cs3Share, err := conversions.ConvertToCS3PublicShare(ctx, m.client, s)
-	if err != nil {
-		return nil, err
-	}
+	cs3Share := conversions.ConvertToCS3PublicShare(s)
 	if expired(cs3Share) {
 		if err := m.cleanupExpiredShares(); err != nil {
 			return nil, err
