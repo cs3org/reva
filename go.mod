@@ -223,4 +223,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/cs3org/go-cs3apis => github.com/2403905/go-cs3apis v0.0.0-20230517122726-727045414fd1
+// the replacement build is based on https://github.com/dragonchaser/cs3apis/tree/master
+replace github.com/cs3org/go-cs3apis => github.com/dragonchaser/go-cs3apis v0.0.0-20230918130959-ae732d4b8147
