@@ -63,10 +63,11 @@ func newCache() (c *connections, err error) {
 		MaxCost:     usrLimit,
 		BufferItems: 64,
 		OnEvict: func(item *ristretto.Item) {
-			v := item.Value.(*cacheVal)
-			v.perm.Destroy()
-			_ = v.mount.Unmount()
-			_ = v.mount.Release()
+			if v, ok := item.Value.(*cacheVal); ok {
+				v.perm.Destroy()
+				_ = v.mount.Unmount()
+				_ = v.mount.Release()
+			}
 		},
 	})
 	if err != nil {
