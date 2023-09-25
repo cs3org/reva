@@ -42,7 +42,7 @@ import (
 	"go.step.sm/crypto/randutil"
 
 	// gocritic is disabled because google.golang.org/protobuf/proto does not provide a method to convert MessageV1 to MessageV2.
-	"github.com/golang/protobuf/proto" //nolint:staticcheck
+	"github.com/golang/protobuf/proto"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 

@@ -245,7 +245,6 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 	}
 
 	return ocsDataPayload, nil, nil
-
 }
 
 func (h *Handler) isPublicShare(r *http.Request, oid string) bool {

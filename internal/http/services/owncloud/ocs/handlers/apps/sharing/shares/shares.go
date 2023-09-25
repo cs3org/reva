@@ -919,7 +919,6 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 						h.logProblems(status, err, "could not stat, skipping", log)
 						return
 					}
-
 				}
 
 				data, err := conversions.CS3Share2ShareData(r.Context(), rs.Share)
