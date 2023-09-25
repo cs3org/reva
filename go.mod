@@ -42,6 +42,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/hashicorp/go-hclog v1.3.1
 	github.com/hashicorp/go-plugin v1.4.5
+	github.com/huandu/xstrings v1.3.2
 	github.com/iancoleman/strcase v0.2.0
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/jellydator/ttlcache/v2 v2.11.1
@@ -147,7 +148,6 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/hashicorp/serf v0.10.0 // indirect
 	github.com/hashicorp/yamux v0.0.0-20211028200310-0bc27b27de87 // indirect
-	github.com/huandu/xstrings v1.3.2 // indirect
 	github.com/imdario/mergo v0.3.15 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
