@@ -19,9 +19,12 @@
 package shares
 
 import (
+	"context"
 	"net/http"
 	"strconv"
+	"sync"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -276,63 +279,88 @@ func (h *Handler) removeFederatedShare(w http.ResponseWriter, r *http.Request, s
 	response.WriteOCSSuccess(w, r, data)
 }
 
-func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filter) ([]*conversions.ShareData, *rpc.Status, error) {
+func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filter, ctxPath string) ([]*conversions.ShareData, *rpc.Status, error) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
 	lsUserSharesRequest := collaboration.ListSharesRequest{
 		Filters: filters,
+		Opaque: &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				ctxpkg.ResoucePathCtx: {Decoder: "plain", Value: []byte(ctxPath)},
+			},
+		},
 	}
 
 	ocsDataPayload := make([]*conversions.ShareData, 0)
-	if h.gatewayAddr != "" {
-		// get a connection to the users share provider
-		client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	if err != nil {
+		return ocsDataPayload, nil, err
+	}
+
+	// do list shares request. filtered
+	lsUserSharesResponse, err := client.ListShares(ctx, &lsUserSharesRequest)
+	if err != nil {
+		return ocsDataPayload, nil, err
+	}
+	if lsUserSharesResponse.Status.Code != rpc.Code_CODE_OK {
+		return ocsDataPayload, lsUserSharesResponse.Status, nil
+	}
+
+	var wg sync.WaitGroup
+	workers := 50
+	input := make(chan *collaboration.Share, len(lsUserSharesResponse.Shares))
+	output := make(chan *conversions.ShareData, len(lsUserSharesResponse.Shares))
+
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(ctx context.Context, client gateway.GatewayAPIClient, input chan *collaboration.Share, output chan *conversions.ShareData, wg *sync.WaitGroup) {
+			defer wg.Done()
+
+			// build OCS response payload
+			for s := range input {
+				data, err := conversions.CS3Share2ShareData(ctx, s)
+				if err != nil {
+					log.Debug().Interface("share", s.Id).Err(err).Msg("CS3Share2ShareData returned error, skipping")
+					return
+				}
+
+				info, status, err := h.getResourceInfoByID(ctx, client, s.ResourceId)
+				if err != nil || status.Code != rpc.Code_CODE_OK {
+					log.Debug().Interface("share", s.Id).Interface("status", status).Err(err).Msg("could not stat share, skipping")
+					return
+				}
+
+				if err := h.addFileInfo(ctx, data, info); err != nil {
+					log.Debug().Interface("share", s.Id).Err(err).Msg("could not add file info, skipping")
+					return
+				}
+				h.mapUserIds(ctx, client, data)
+
+				log.Debug().Interface("share", s.Id).Msg("mapped")
+				output <- data
+			}
+		}(ctx, client, input, output, &wg)
+	}
+
+	for _, share := range lsUserSharesResponse.Shares {
+		input <- share
+	}
+	close(input)
+	wg.Wait()
+	close(output)
+
+	for s := range output {
+		ocsDataPayload = append(ocsDataPayload, s)
+	}
+
+	if h.listOCMShares {
+		// include the ocm shares
+		ocmShares, err := h.listOutcomingFederatedShares(ctx, client, convertToOCMFilters(filters))
 		if err != nil {
-			return ocsDataPayload, nil, err
+			return nil, nil, err
 		}
-
-		// do list shares request. filtered
-		lsUserSharesResponse, err := client.ListShares(ctx, &lsUserSharesRequest)
-		if err != nil {
-			return ocsDataPayload, nil, err
-		}
-		if lsUserSharesResponse.Status.Code != rpc.Code_CODE_OK {
-			return ocsDataPayload, lsUserSharesResponse.Status, nil
-		}
-
-		// build OCS response payload
-		for _, s := range lsUserSharesResponse.Shares {
-			data, err := conversions.CS3Share2ShareData(ctx, s)
-			if err != nil {
-				log.Debug().Interface("share", s).Interface("shareData", data).Err(err).Msg("could not CS3Share2ShareData, skipping")
-				continue
-			}
-
-			info, status, err := h.getResourceInfoByID(ctx, client, s.ResourceId)
-			if err != nil || status.Code != rpc.Code_CODE_OK {
-				log.Debug().Interface("share", s).Interface("status", status).Interface("shareData", data).Err(err).Msg("could not stat share, skipping")
-				continue
-			}
-
-			if err := h.addFileInfo(ctx, data, info); err != nil {
-				log.Debug().Interface("share", s).Interface("info", info).Interface("shareData", data).Err(err).Msg("could not add file info, skipping")
-				continue
-			}
-			h.mapUserIds(ctx, client, data)
-
-			log.Debug().Interface("share", s).Interface("info", info).Interface("shareData", data).Msg("mapped")
-			ocsDataPayload = append(ocsDataPayload, data)
-		}
-
-		if h.listOCMShares {
-			// include the ocm shares
-			ocmShares, err := h.listOutcomingFederatedShares(ctx, client, convertToOCMFilters(filters))
-			if err != nil {
-				return nil, nil, err
-			}
-			ocsDataPayload = append(ocsDataPayload, ocmShares...)
-		}
+		ocsDataPayload = append(ocsDataPayload, ocmShares...)
 	}
 
 	return ocsDataPayload, nil, nil

@@ -29,6 +29,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 
@@ -210,23 +211,23 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 
 	switch shareType {
 	case int(conversions.ShareTypeUser):
-		// user collaborations default to coowner
-		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewCoownerRole()); err == nil {
+		// user collaborations default to collab
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewCollaboratorRole()); err == nil {
 			h.createUserShare(w, r, statRes.Info, role, val)
 		}
 	case int(conversions.ShareTypeGroup):
-		// group collaborations default to coowner
-		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewCoownerRole()); err == nil {
+		// group collaborations default to collab
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewCollaboratorRole()); err == nil {
 			h.createGroupShare(w, r, statRes.Info, role, val)
 		}
 	case int(conversions.ShareTypePublicLink):
 		// public links default to read only
-		if _, _, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
+		if _, _, err := h.extractPermissions(w, r, statRes.Info, conversions.NewReaderRole()); err == nil {
 			h.createPublicLinkShare(w, r, statRes.Info)
 		}
 	case int(conversions.ShareTypeFederatedCloudShare):
 		// federated shares default to read only
-		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewReaderRole()); err == nil {
 			h.createFederatedCloudShare(w, r, statRes.Info, role, val)
 		}
 	case int(conversions.ShareTypeSpaceMembership):
@@ -405,10 +406,17 @@ func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri 
 		}
 	}
 
-	existingPermissions := conversions.RoleFromResourcePermissions(ri.PermissionSet).OCSPermissions()
-	if permissions == conversions.PermissionInvalid || !existingPermissions.Contain(permissions) {
-		response.WriteOCSError(w, r, http.StatusNotFound, "Cannot set the requested share permissions", nil)
-		return nil, nil, errors.New("cannot set the requested share permissions")
+	// add a deny permission only if the user has the grant to deny (ResourcePermissions.DenyGrant == true)
+	if permissions == conversions.PermissionNone {
+		if !ri.PermissionSet.DenyGrant {
+			response.WriteOCSError(w, r, http.StatusNotFound, "Cannot set the requested share permissions: no deny grant on resource", nil)
+		}
+	} else {
+		existingPermissions := conversions.RoleFromResourcePermissions(ri.PermissionSet).OCSPermissions()
+		if permissions == conversions.PermissionInvalid || !existingPermissions.Contain(permissions) {
+			response.WriteOCSError(w, r, http.StatusNotFound, "Cannot set the requested share permissions", nil)
+			return nil, nil, errors.New("cannot set the requested share permissions")
+		}
 	}
 
 	role = conversions.RoleFromOCSPermissions(permissions)
@@ -881,84 +889,107 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 	shares := make([]*conversions.ShareData, 0, len(lrsRes.GetShares()))
 
-	// TODO(refs) filter out "invalid" shares
-	for _, rs := range lrsRes.GetShares() {
-		if stateFilter != ocsStateUnknown && rs.GetState() != stateFilter {
-			continue
-		}
-		var info *provider.ResourceInfo
-		if pinfo != nil {
-			// check if the shared resource matches the path resource
-			if !utils.ResourceIDEqual(rs.Share.ResourceId, pinfo.Id) {
-				// try next share
-				continue
-			}
-			// we can reuse the stat info
-			info = pinfo
-		} else {
-			var status *rpc.Status
-			info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
-			if err != nil || status.Code != rpc.Code_CODE_OK {
-				h.logProblems(status, err, "could not stat, skipping", log)
-				continue
-			}
-		}
+	var wg sync.WaitGroup
+	workers := 50
+	input := make(chan *collaboration.ReceivedShare, len(lrsRes.GetShares()))
+	output := make(chan *conversions.ShareData, len(lrsRes.GetShares()))
 
-		data, err := conversions.CS3Share2ShareData(r.Context(), rs.Share)
-		if err != nil {
-			log.Debug().Interface("share", rs.Share).Interface("shareData", data).Err(err).Msg("could not CS3Share2ShareData, skipping")
-			continue
-		}
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(ctx context.Context, client gateway.GatewayAPIClient, input chan *collaboration.ReceivedShare, output chan *conversions.ShareData, wg *sync.WaitGroup) {
+			defer wg.Done()
 
-		data.State = mapState(rs.GetState())
-
-		if err := h.addFileInfo(ctx, data, info); err != nil {
-			log.Debug().Interface("received_share", rs).Interface("info", info).Interface("shareData", data).Err(err).Msg("could not add file info, skipping")
-			continue
-		}
-		h.mapUserIds(r.Context(), client, data)
-
-		if data.State == ocsStateAccepted {
-			// only accepted shares can be accessed when jailing users into their home.
-			// in this case we cannot stat shared resources that are outside the users home (/home),
-			// the path (/users/u-u-i-d/foo) will not be accessible
-
-			// in a global namespace we can access the share using the full path
-			// in a jailed namespace we have to point to the mount point in the users /Shares jail
-			// - needed for oc10 hot migration
-			// or use the /dav/spaces/<space id> endpoint?
-
-			// list /Shares and match fileids with list of received shares
-			// - only works for a /Shares folder jail
-			// - does not work for freely mountable shares as in oc10 because we would need to iterate over the whole tree, there is no listing of mountpoints, yet
-
-			// can we return the mountpoint when the gateway resolves the listing of shares?
-			// - no, the gateway only sees the same list any has the same options as the ocs service
-			// - we would need to have a list of mountpoints for the shares -> owncloudstorageprovider for hot migration
-
-			// best we can do for now is stat the /Shares jail if it is set and return those paths
-
-			// if we are in a jail and the current share has been accepted use the stat from the share jail
-			// Needed because received shares can be jailed in a folder in the users home
-
-			if h.sharePrefix != "/" {
-				// if we have share jail infos use them to build the path
-				if sji := findMatch(shareJailInfos, rs.Share.ResourceId); sji != nil {
-					// override path with info from share jail
-					data.FileTarget = path.Join(h.sharePrefix, path.Base(sji.Path))
-					data.Path = path.Join(h.sharePrefix, path.Base(sji.Path))
-				} else {
-					data.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
-					data.Path = path.Join(h.sharePrefix, path.Base(info.Path))
+			for rs := range input {
+				if stateFilter != ocsStateUnknown && rs.GetState() != stateFilter {
+					return
 				}
-			} else {
-				data.FileTarget = info.Path
-				data.Path = info.Path
-			}
-		}
+				var info *provider.ResourceInfo
+				if pinfo != nil {
+					// check if the shared resource matches the path resource
+					if !utils.ResourceIDEqual(rs.Share.ResourceId, pinfo.Id) {
+						// try next share
+						return
+					}
+					// we can reuse the stat info
+					info = pinfo
+				} else {
+					var status *rpc.Status
+					info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
+					if err != nil || status.Code != rpc.Code_CODE_OK {
+						h.logProblems(status, err, "could not stat, skipping", log)
+						return
+					}
 
-		shares = append(shares, data)
-		log.Debug().Msgf("share: %+v", *data)
+				}
+
+				data, err := conversions.CS3Share2ShareData(r.Context(), rs.Share)
+				if err != nil {
+					log.Debug().Interface("share", rs.Share.Id).Err(err).Msg("CS3Share2ShareData call failes, skipping")
+					return
+				}
+
+				data.State = mapState(rs.GetState())
+
+				if err := h.addFileInfo(ctx, data, info); err != nil {
+					log.Debug().Interface("received_share", rs.Share.Id).Err(err).Msg("could not add file info, skipping")
+					return
+				}
+				h.mapUserIds(r.Context(), client, data)
+
+				if data.State == ocsStateAccepted {
+					// only accepted shares can be accessed when jailing users into their home.
+					// in this case we cannot stat shared resources that are outside the users home (/home),
+					// the path (/users/u-u-i-d/foo) will not be accessible
+
+					// in a global namespace we can access the share using the full path
+					// in a jailed namespace we have to point to the mount point in the users /Shares jail
+					// - needed for oc10 hot migration
+					// or use the /dav/spaces/<space id> endpoint?
+
+					// list /Shares and match fileids with list of received shares
+					// - only works for a /Shares folder jail
+					// - does not work for freely mountable shares as in oc10 because we would need to iterate over the whole tree, there is no listing of mountpoints, yet
+
+					// can we return the mountpoint when the gateway resolves the listing of shares?
+					// - no, the gateway only sees the same list any has the same options as the ocs service
+					// - we would need to have a list of mountpoints for the shares -> owncloudstorageprovider for hot migration migration
+
+					// best we can do for now is stat the /Shares jail if it is set and return those paths
+
+					// if we are in a jail and the current share has been accepted use the stat from the share jail
+					// Needed because received shares can be jailed in a folder in the users home
+
+					if h.sharePrefix != "/" {
+						// if we have share jail infos use them to build the path
+						if sji := findMatch(shareJailInfos, rs.Share.ResourceId); sji != nil {
+							// override path with info from share jail
+							data.FileTarget = path.Join(h.sharePrefix, path.Base(sji.Path))
+							data.Path = path.Join(h.sharePrefix, path.Base(sji.Path))
+						} else {
+							data.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
+							data.Path = path.Join(h.sharePrefix, path.Base(info.Path))
+						}
+					} else {
+						data.FileTarget = info.Path
+						data.Path = info.Path
+					}
+				}
+
+				log.Debug().Msgf("share: %+v", data)
+				output <- data
+			}
+		}(ctx, client, input, output, &wg)
+	}
+
+	for _, share := range lrsRes.GetShares() {
+		input <- share
+	}
+	close(input)
+	wg.Wait()
+	close(output)
+
+	for s := range output {
+		shares = append(shares, s)
 	}
 
 	if h.listOCMShares {
@@ -1041,7 +1072,7 @@ func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 		shares = append(shares, publicShares...)
 	}
 	if listUserShares {
-		userShares, status, err := h.listUserShares(r, filters)
+		userShares, status, err := h.listUserShares(r, filters, p)
 		h.logProblems(status, err, "could not listUserShares", log)
 		shares = append(shares, userShares...)
 	}

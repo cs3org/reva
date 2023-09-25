@@ -19,14 +19,12 @@
 package utils
 
 import (
-	"context"
-	"errors"
+	"database/sql"
+	"strings"
 	"time"
 
-	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -54,7 +52,7 @@ type DBShare struct {
 	Quicklink                    bool
 	Description                  string
 	NotifyUploads                bool
-	NotifyUploadsExtraRecipients string
+	NotifyUploadsExtraRecipients sql.NullString
 }
 
 // FormatGrantee formats a CS3API grantee to a string.
@@ -75,27 +73,19 @@ func FormatGrantee(g *provider.Grantee) (int, string) {
 }
 
 // ExtractGrantee retrieves the CS3API grantee from a formatted string.
-func ExtractGrantee(ctx context.Context, gateway gatewayv1beta1.GatewayAPIClient, t int, g string) (*provider.Grantee, error) {
+func ExtractGrantee(t int, g string) *provider.Grantee {
 	var grantee provider.Grantee
 	switch t {
 	case 0:
 		grantee.Type = provider.GranteeType_GRANTEE_TYPE_USER
-		user, err := ExtractUserID(ctx, gateway, g)
-		if err != nil {
-			return nil, err
-		}
-		grantee.Id = &provider.Grantee_UserId{UserId: user}
+		grantee.Id = &provider.Grantee_UserId{UserId: ExtractUserID(g)}
 	case 1:
 		grantee.Type = provider.GranteeType_GRANTEE_TYPE_GROUP
-		group, err := ExtractGroupID(ctx, gateway, g)
-		if err != nil {
-			return nil, err
-		}
-		grantee.Id = &provider.Grantee_GroupId{GroupId: group}
+		grantee.Id = &provider.Grantee_GroupId{GroupId: ExtractGroupID(g)}
 	default:
 		grantee.Type = provider.GranteeType_GRANTEE_TYPE_INVALID
 	}
-	return &grantee, nil
+	return &grantee
 }
 
 // ResourceTypeToItem maps a resource type to a string.
@@ -179,18 +169,14 @@ func FormatUserID(u *userpb.UserId) string {
 }
 
 // ExtractUserID retrieves a CS3API user ID from a string.
-func ExtractUserID(ctx context.Context, gateway gatewayv1beta1.GatewayAPIClient, u string) (*userpb.UserId, error) {
-	userRes, err := gateway.GetUser(ctx, &userpb.GetUserRequest{
-		UserId: &userpb.UserId{OpaqueId: u},
-	})
-	if err != nil {
-		return nil, err
+func ExtractUserID(u string) *userpb.UserId {
+	t := userpb.UserType_USER_TYPE_PRIMARY
+	if strings.HasPrefix(u, "guest:") {
+		t = userpb.UserType_USER_TYPE_LIGHTWEIGHT
+	} else if strings.Contains(u, "@") {
+		t = userpb.UserType_USER_TYPE_FEDERATED
 	}
-	if userRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-		return nil, errors.New(userRes.Status.Message)
-	}
-
-	return userRes.User.Id, nil
+	return &userpb.UserId{OpaqueId: u, Type: t}
 }
 
 // FormatGroupID formats a CS3API group ID to a string.
@@ -199,37 +185,15 @@ func FormatGroupID(u *grouppb.GroupId) string {
 }
 
 // ExtractGroupID retrieves a CS3API group ID from a string.
-func ExtractGroupID(ctx context.Context, gateway gatewayv1beta1.GatewayAPIClient, u string) (*grouppb.GroupId, error) {
-	groupRes, err := gateway.GetGroup(ctx, &grouppb.GetGroupRequest{
-		GroupId: &grouppb.GroupId{OpaqueId: u},
-	})
-	if err != nil {
-		return nil, err
-	}
-	if groupRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-		return nil, errors.New(groupRes.Status.Message)
-	}
-	return groupRes.Group.Id, nil
+func ExtractGroupID(u string) *grouppb.GroupId {
+	return &grouppb.GroupId{OpaqueId: u}
 }
 
 // ConvertToCS3Share converts a DBShare to a CS3API collaboration share.
-func ConvertToCS3Share(ctx context.Context, gateway gatewayv1beta1.GatewayAPIClient, s DBShare) (*collaboration.Share, error) {
+func ConvertToCS3Share(s DBShare) *collaboration.Share {
 	ts := &typespb.Timestamp{
 		Seconds: uint64(s.STime),
 	}
-	owner, err := ExtractUserID(ctx, gateway, s.UIDOwner)
-	if err != nil {
-		return nil, err
-	}
-	creator, err := ExtractUserID(ctx, gateway, s.UIDInitiator)
-	if err != nil {
-		return nil, err
-	}
-	grantee, err := ExtractGrantee(ctx, gateway, s.ShareType, s.ShareWith)
-	if err != nil {
-		return nil, err
-	}
-
 	return &collaboration.Share{
 		Id: &collaboration.ShareId{
 			OpaqueId: s.ID,
@@ -240,28 +204,24 @@ func ConvertToCS3Share(ctx context.Context, gateway gatewayv1beta1.GatewayAPICli
 			OpaqueId:  s.ItemSource,
 		},
 		Permissions: &collaboration.SharePermissions{Permissions: IntTosharePerm(s.Permissions, s.ItemType)},
-		Grantee:     grantee,
-		Owner:       owner,
-		Creator:     creator,
+		Grantee:     ExtractGrantee(s.ShareType, s.ShareWith),
+		Owner:       ExtractUserID(s.UIDOwner),
+		Creator:     ExtractUserID(s.UIDInitiator),
 		Ctime:       ts,
 		Mtime:       ts,
-	}, nil
+	}
 }
 
 // ConvertToCS3ReceivedShare converts a DBShare to a CS3API collaboration received share.
-func ConvertToCS3ReceivedShare(ctx context.Context, gateway gatewayv1beta1.GatewayAPIClient, s DBShare) (*collaboration.ReceivedShare, error) {
-	share, err := ConvertToCS3Share(ctx, gateway, s)
-	if err != nil {
-		return nil, err
-	}
+func ConvertToCS3ReceivedShare(s DBShare) *collaboration.ReceivedShare {
 	return &collaboration.ReceivedShare{
-		Share: share,
+		Share: ConvertToCS3Share(s),
 		State: IntToShareState(s.State),
-	}, nil
+	}
 }
 
 // ConvertToCS3PublicShare converts a DBShare to a CS3API public share.
-func ConvertToCS3PublicShare(ctx context.Context, gateway gatewayv1beta1.GatewayAPIClient, s DBShare) (*link.PublicShare, error) {
+func ConvertToCS3PublicShare(s DBShare) *link.PublicShare {
 	ts := &typespb.Timestamp{
 		Seconds: uint64(s.STime),
 	}
@@ -278,14 +238,6 @@ func ConvertToCS3PublicShare(ctx context.Context, gateway gatewayv1beta1.Gateway
 			}
 		}
 	}
-	owner, err := ExtractUserID(ctx, gateway, s.UIDOwner)
-	if err != nil {
-		return nil, err
-	}
-	creator, err := ExtractUserID(ctx, gateway, s.UIDInitiator)
-	if err != nil {
-		return nil, err
-	}
 	return &link.PublicShare{
 		Id: &link.PublicShareId{
 			OpaqueId: s.ID,
@@ -295,8 +247,8 @@ func ConvertToCS3PublicShare(ctx context.Context, gateway gatewayv1beta1.Gateway
 			OpaqueId:  s.ItemSource,
 		},
 		Permissions:                  &link.PublicSharePermissions{Permissions: IntTosharePerm(s.Permissions, s.ItemType)},
-		Owner:                        owner,
-		Creator:                      creator,
+		Owner:                        ExtractUserID(s.UIDOwner),
+		Creator:                      ExtractUserID(s.UIDInitiator),
 		Token:                        s.Token,
 		DisplayName:                  s.ShareName,
 		PasswordProtected:            pwd,
@@ -306,6 +258,6 @@ func ConvertToCS3PublicShare(ctx context.Context, gateway gatewayv1beta1.Gateway
 		Quicklink:                    s.Quicklink,
 		Description:                  s.Description,
 		NotifyUploads:                s.NotifyUploads,
-		NotifyUploadsExtraRecipients: s.NotifyUploadsExtraRecipients,
-	}, nil
+		NotifyUploadsExtraRecipients: s.NotifyUploadsExtraRecipients.String,
+	}
 }

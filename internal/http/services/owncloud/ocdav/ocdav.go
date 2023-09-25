@@ -84,6 +84,12 @@ func init() {
 	global.Register("ocdav", New)
 }
 
+type ConfigPublicLinkDownload struct {
+	MaxNumFiles  int64  `mapstructure:"max_num_files"`
+	MaxSize      int64  `mapstructure:"max_size"`
+	PublicFolder string `mapstructure:"public_folder"`
+}
+
 // Config holds the config options that need to be passed down to all ocdav handlers.
 type Config struct {
 	Prefix string `mapstructure:"prefix"`
@@ -111,6 +117,7 @@ type Config struct {
 	PublicURL              string                            `mapstructure:"public_url"`
 	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
 	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
+	PublicLinkDownload     *ConfigPublicLinkDownload         `mapstructure:"publiclink_download"`
 	Notifications          map[string]interface{}            `mapstructure:"notifications" docs:"Settingsg for the Notification Helper"`
 }
 
@@ -188,7 +195,7 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/", "/remote.php/dav/ocm/"}
+	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/", "/s/", "/remote.php/dav/ocm/"}
 }
 
 func (s *svc) Handler() http.Handler {
@@ -213,6 +220,14 @@ func (s *svc) Handler() http.Handler {
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
 		switch head {
+		case "s":
+			if strings.HasSuffix(r.URL.Path, "/download") {
+				r.URL.Path = strings.TrimSuffix(r.URL.Path, "/download")
+				s.handleLegacyPublicLinkDownload(w, r)
+				return
+			}
+			http.Error(w, "Not Yet Implemented", http.StatusNotImplemented)
+			return
 		case "status.php":
 			s.doStatus(w, r)
 			return
@@ -233,7 +248,7 @@ func (s *svc) Handler() http.Handler {
 			if head == "s" {
 				token := r.URL.Path
 				rURL := s.c.PublicURL + path.Join(head, token)
-
+				r.URL.Path = "/" // reset old path for redirection
 				http.Redirect(w, r, rURL, http.StatusMovedPermanently)
 				return
 			}
