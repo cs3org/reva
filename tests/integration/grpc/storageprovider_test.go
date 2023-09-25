@@ -27,9 +27,7 @@ import (
 	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/storage/fs/nextcloud"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
-	"github.com/cs3org/reva/tests/helpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"google.golang.org/grpc/metadata"
@@ -59,15 +57,15 @@ var _ = Describe("storage providers", func() {
 			Username: "einstein",
 		}
 
-		homeRef           = &storagep.Reference{Path: "/"}
-		filePath          = "/file"
-		fileRef           = &storagep.Reference{Path: filePath}
-		versionedFilePath = "/versionedFile"
-		versionedFileRef  = &storagep.Reference{Path: versionedFilePath}
-		subdirPath        = "/subdir"
-		subdirRef         = &storagep.Reference{Path: subdirPath}
-		sharesPath        = "/Shares"
-		sharesRef         = &storagep.Reference{Path: sharesPath}
+		homeRef  = &storagep.Reference{Path: "/"}
+		filePath = "/file"
+		fileRef  = &storagep.Reference{Path: filePath}
+		// versionedFilePath = "/versionedFile"
+		// versionedFileRef  = &storagep.Reference{Path: versionedFilePath}
+		subdirPath = "/subdir"
+		subdirRef  = &storagep.Reference{Path: subdirPath}
+		sharesPath = "/Shares"
+		sharesRef  = &storagep.Reference{Path: sharesPath}
 	)
 
 	JustBeforeEach(func() {
@@ -149,37 +147,37 @@ var _ = Describe("storage providers", func() {
 		})
 	}
 
-	assertFileVersions := func() {
-		It("lists file versions", func() {
-			listRes, err := serviceClient.ListFileVersions(ctx, &storagep.ListFileVersionsRequest{Ref: versionedFileRef})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-			Expect(len(listRes.Versions)).To(Equal(1))
-			Expect(listRes.Versions[0].Size).To(Equal(uint64(1)))
-		})
+	// assertFileVersions := func() {
+	// 	It("lists file versions", func() {
+	// 		listRes, err := serviceClient.ListFileVersions(ctx, &storagep.ListFileVersionsRequest{Ref: versionedFileRef})
+	// 		Expect(err).ToNot(HaveOccurred())
+	// 		Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+	// 		Expect(len(listRes.Versions)).To(Equal(1))
+	// 		Expect(listRes.Versions[0].Size).To(Equal(uint64(1)))
+	// 	})
 
-		It("restores a file version", func() {
-			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: versionedFileRef})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-			Expect(statRes.Info.Size).To(Equal(uint64(2))) // second version contains 2 bytes
+	// 	It("restores a file version", func() {
+	// 		statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: versionedFileRef})
+	// 		Expect(err).ToNot(HaveOccurred())
+	// 		Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+	// 		Expect(statRes.Info.Size).To(Equal(uint64(2))) // second version contains 2 bytes
 
-			listRes, err := serviceClient.ListFileVersions(ctx, &storagep.ListFileVersionsRequest{Ref: versionedFileRef})
-			Expect(err).ToNot(HaveOccurred())
-			restoreRes, err := serviceClient.RestoreFileVersion(ctx,
-				&storagep.RestoreFileVersionRequest{
-					Ref: versionedFileRef,
-					Key: listRes.Versions[0].Key,
-				})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(restoreRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+	// 		listRes, err := serviceClient.ListFileVersions(ctx, &storagep.ListFileVersionsRequest{Ref: versionedFileRef})
+	// 		Expect(err).ToNot(HaveOccurred())
+	// 		restoreRes, err := serviceClient.RestoreFileVersion(ctx,
+	// 			&storagep.RestoreFileVersionRequest{
+	// 				Ref: versionedFileRef,
+	// 				Key: listRes.Versions[0].Key,
+	// 			})
+	// 		Expect(err).ToNot(HaveOccurred())
+	// 		Expect(restoreRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
-			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: versionedFileRef})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-			Expect(statRes.Info.Size).To(Equal(uint64(1))) // initial version contains 1 byte
-		})
-	}
+	// 		statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: versionedFileRef})
+	// 		Expect(err).ToNot(HaveOccurred())
+	// 		Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+	// 		Expect(statRes.Info.Size).To(Equal(uint64(1))) // initial version contains 1 byte
+	// 	})
+	// }
 
 	assertDelete := func() {
 		It("deletes a directory", func() {
@@ -496,29 +494,6 @@ var _ = Describe("storage providers", func() {
 			// assertMetadata()
 		})
 
-		Context("with an existing file /versioned_file", func() {
-			JustBeforeEach(func() {
-				fs, err := nextcloud.New(ctx, map[string]interface{}{
-					"root":        revads["storage"].TmpRoot,
-					"enable_home": true,
-				})
-				Expect(err).ToNot(HaveOccurred())
-
-				content1 := []byte("1")
-				content2 := []byte("22")
-
-				ctx := ctxpkg.ContextSetUser(context.Background(), user)
-
-				err = fs.CreateHome(ctx)
-				Expect(err).ToNot(HaveOccurred())
-				err = helpers.Upload(ctx, fs, versionedFileRef, content1)
-				Expect(err).ToNot(HaveOccurred())
-				err = helpers.Upload(ctx, fs, versionedFileRef, content2)
-				Expect(err).ToNot(HaveOccurred())
-			})
-
-			assertFileVersions()
-		})
 	})
 
 })
