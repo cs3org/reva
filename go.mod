@@ -8,7 +8,7 @@ require (
 	github.com/ReneKroon/ttlcache/v2 v2.11.0
 	github.com/asim/go-micro/plugins/events/nats/v4 v4.7.0
 	github.com/aws/aws-sdk-go v1.45.1
-	github.com/beevik/etree v1.1.0
+	github.com/beevik/etree v1.2.0
 	github.com/bluele/gcache v0.0.2
 	github.com/c-bata/go-prompt v0.2.5
 	github.com/cenkalti/backoff v2.2.1+incompatible
