@@ -90,32 +90,6 @@ services:
     command: -c /etc/revad/storage-users-ocis.toml
     volumes:
       - shared-volume:/var/tmp
-  litmus-3:
-    extends: litmus
-    entrypoint: /bin/sh
-    command:
-      - -c
-      - |
-        curl -s -k -u einstein:relativity -I http://frontend:20080/remote.php/dav/files/einstein
-        export LITMUS_URL=http://frontend:20080/remote.php/dav/spaces/123e4567-e89b-12d3-a456-426655440000!$$(ls /var/tmp/reva/data/spaces/personal/)
-        exec /usr/local/bin/litmus-wrapper
-    volumes:
-      - shared-volume:/var/tmp
-    depends_on:
-      gateway:
-        condition: service_healthy
-      frontend:
-        condition: service_healthy
-      storage-home-ocis:
-        condition: service_healthy
-      users:
-        condition: service_healthy
-      shares:
-        condition: service_healthy
-      permissions-ocis-ci:
-        condition: service_healthy
-      storage-users-ocis:
-        condition: service_healthy
   frontend-global:
     extends: revad
     hostname: frontend

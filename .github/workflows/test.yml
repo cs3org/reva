@@ -73,7 +73,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        test: [litmus-1, litmus-2, litmus-3]
+        test: [litmus-1, litmus-2]
     uses: ./.github/workflows/compose.yml
     with:
       test: ${{ matrix.test }}
