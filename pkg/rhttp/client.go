@@ -24,7 +24,7 @@ import (
 	"io"
 	"net/http"
 
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	ctxpkg "github.com/cs3org/reva/pkg/appctx"
 	"github.com/pkg/errors"
 	"go.opencensus.io/plugin/ochttp"
 )

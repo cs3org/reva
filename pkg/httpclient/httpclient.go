@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/trace"
 	//"net/url"
 )
@@ -43,7 +44,7 @@ func (t injectTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 
 	tkn, ok := appctx.ContextGetToken(ctx)
 	if ok {
-		httpReq.Header.Set(appctx.TokenHeader, tkn)
+		r.Header.Set(appctx.TokenHeader, tkn)
 	}
 
 	return t.rt.RoundTrip(r)

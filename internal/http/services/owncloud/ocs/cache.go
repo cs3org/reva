@@ -24,7 +24,7 @@ import (
 	"net/http/httptest"
 
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	ctxpkg "github.com/cs3org/reva/pkg/appctx"
 	"google.golang.org/grpc/metadata"
 )
 

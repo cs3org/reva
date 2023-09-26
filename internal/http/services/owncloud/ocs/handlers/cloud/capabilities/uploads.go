@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	ctxpkg "github.com/cs3org/reva/pkg/appctx"
 	"github.com/juliangruber/go-intersect"
 )
 

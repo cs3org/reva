@@ -26,7 +26,7 @@ import (
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	ctxpkg "github.com/cs3org/reva/pkg/appctx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	ins "google.golang.org/grpc/credentials/insecure"
