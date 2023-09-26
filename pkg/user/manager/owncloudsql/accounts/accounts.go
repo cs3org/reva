@@ -204,7 +204,7 @@ func (as *Accounts) FindAccounts(ctx context.Context, query string) ([]Account, 
 	return accounts, nil
 }
 
-// GetAccountGroups lasts the groups for an account
+// GetAccountGroups lists the groups for an account
 func (as *Accounts) GetAccountGroups(ctx context.Context, uid string) ([]string, error) {
 	rows, err := as.db.QueryContext(ctx, "SELECT gid FROM oc_group_user WHERE uid=?", uid)
 	if err != nil {
