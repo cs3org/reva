@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
@@ -51,7 +52,15 @@ func init() {
 type config struct {
 	MountPath   string `mapstructure:"mount_path"`
 	MountID     string `mapstructure:"mount_id"`
-	GatewayAddr string `mapstructure:"gateway_addr"`
+	GatewayAddr string `mapstructure:"gatewaysvc"`
+}
+
+func (c *config) ApplyDefaults() {
+	c.GatewayAddr = sharedconf.GetGatewaySVC(c.GatewayAddr)
+
+	if c.MountPath == "" {
+		c.MountPath = "/public"
+	}
 }
 
 type service struct {
