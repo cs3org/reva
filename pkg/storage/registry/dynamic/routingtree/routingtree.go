@@ -25,19 +25,19 @@ import (
 	"strings"
 )
 
-// Route represents a route inside a storage provider
+// Route represents a route inside a storage provider.
 type Route struct {
 	Name    string
 	MountID string
 }
 
-// RoutingTree is a tree containing routes
+// RoutingTree is a tree containing routes.
 type RoutingTree struct {
 	route Route
 	nodes map[string]*RoutingTree
 }
 
-// New returns a new RoutingTree
+// New returns a new RoutingTree.
 func New(routes map[string]string) *RoutingTree {
 	t := RoutingTree{
 		nodes: map[string]*RoutingTree{},
