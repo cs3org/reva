@@ -129,7 +129,8 @@ func (d *dynamic) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo
 
 // GetHome returns the storage provider for the home path.
 func (d *dynamic) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
-	p, err := d.rt.Resolve(d.c.HomePath)
+	providerAlias := d.ur.GetAlias(ctx, d.c.HomePath)
+	p, err := d.rt.Resolve(providerAlias)
 	if err != nil {
 		return nil, errors.New("failed to get home provider")
 	}
@@ -147,6 +148,17 @@ func (d *dynamic) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error)
 // FindProviders returns the storage providers for a given ref.
 func (d *dynamic) FindProviders(ctx context.Context, ref *provider.Reference) ([]*registrypb.ProviderInfo, error) {
 	l := d.log.With().Interface("ref", ref).Logger()
+
+	if ref.ResourceId != nil {
+		if ref.ResourceId.StorageId != "" {
+			if address, ok := d.r[ref.ResourceId.StorageId]; ok {
+				return []*registrypb.ProviderInfo{{
+					ProviderId: ref.ResourceId.StorageId,
+					Address:    address,
+				}}, nil
+			}
+		}
+	}
 
 	providerAlias := d.ur.GetAlias(ctx, ref.Path)
 	ps, err := d.rt.Resolve(providerAlias)
@@ -168,7 +180,7 @@ func (d *dynamic) FindProviders(ctx context.Context, ref *provider.Reference) ([
 		}
 	}
 
-	l.Trace().Msgf("resolved storage providers %+v", providers)
+	l.Debug().Msgf("resolved storage providers %+v", providers)
 
 	return providers, nil
 }
