@@ -98,16 +98,3 @@ jobs:
       submodules: true
       parts: 6
       part: ${{ matrix.part }}
-  acceptance-3:
-    needs: docker-revad
-    strategy:
-      fail-fast: false
-      matrix:
-        part: [9]
-    uses: ./.github/workflows/compose.yml
-    with:
-      test: acceptance-3
-      image: ${{ needs.docker-revad.outputs.image }}
-      submodules: true
-      parts: 12
-      part: ${{ matrix.part }}

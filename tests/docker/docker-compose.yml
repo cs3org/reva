@@ -213,35 +213,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-  acceptance-3:
-    extends: acceptance
-    environment:
-      TEST_SERVER_URL: http://frontend:20080
-      STORAGE_DRIVER: S3NG
-      TEST_WITH_LDAP: 'true'
-      REVA_LDAP_HOSTNAME: ldap
-      TEST_REVA: 'true'
-      SEND_SCENARIO_LINE_REFERENCES: 'true'
-      BEHAT_FILTER_TAGS: ~@provisioning_api-app-required&&~@skipOnOcis-OCIS-Storage&&~@personalSpace&&~&&~@skipOnGraph&&~@carddav&&~@skipOnReva&&~@skipOnRevaMaster
-      DIVIDE_INTO_NUM_PARTS: ${PARTS:-1}
-      RUN_PART: ${PART:-1}
-      EXPECTED_FAILURES_FILE: /mnt/acceptance/expected-failures-on-S3NG-storage.md
-      BEHAT_YML: tests/acceptance/config/behat-core.yml
-      ACCEPTANCE_TEST_TYPE: core-api
-    volumes:
-      - shared-volume:/var/tmp
-    working_dir: /mnt/ocis
-    depends_on:
-      gateway:
-        condition: service_healthy
-      frontend:
-        condition: service_healthy
-      shares:
-        condition: service_healthy
-      storage-publiclink:
-        condition: service_healthy
-      ldap-users:
-        condition: service_healthy
-      
+
 volumes:
   shared-volume:

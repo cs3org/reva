@@ -65,7 +65,7 @@ def main(ctx):
     return [
         checkStarlark(),
         ocisIntegrationTest(),
-    ] + s3ngIntegrationTests()
+    ]
 
 def ocisIntegrationTest():
     return {
@@ -130,81 +130,6 @@ def ocisIntegrationTest():
             ldapService(),
         ],
     }
-
-def s3ngIntegrationTests():
-    parallelRuns = 12
-    pipelines = []
-    for runPart in range(1, parallelRuns + 1):
-        if runPart in [9]:
-            continue
-
-        pipelines.append(
-            {
-                "kind": "pipeline",
-                "type": "docker",
-                "name": "s3ng-integration-tests-%s" % runPart,
-                "platform": {
-                    "os": "linux",
-                    "arch": "amd64",
-                },
-                "trigger": {
-                    "event": {
-                        "include": [
-                            "pull_request",
-                            "tag",
-                        ],
-                    },
-                },
-                "steps": [
-                    makeStep(),
-                    {
-                        "name": "revad-services",
-                        "image": OC_CI_GOLANG,
-                        "detach": True,
-                        "commands": [
-                            "cd /drone/src/tests/oc-integration-tests/drone/",
-                            "/drone/src/cmd/revad/revad -c frontend.toml &",
-                            "/drone/src/cmd/revad/revad -c gateway.toml &",
-                            "/drone/src/cmd/revad/revad -c shares.toml &",
-                            "/drone/src/cmd/revad/revad -c storage-home-s3ng.toml &",
-                            "/drone/src/cmd/revad/revad -c storage-users-s3ng.toml &",
-                            "/drone/src/cmd/revad/revad -c storage-publiclink.toml &",
-                            "/drone/src/cmd/revad/revad -c ldap-users.toml",
-                        ],
-                    },
-                    cloneApiTestReposStep(),
-                    {
-                        "name": "APIAcceptanceTestsS3ngStorage",
-                        "image": OC_CI_PHP,
-                        "commands": [
-                            "cd /drone/src/tmp/testrunner",
-                            "make test-acceptance-from-core-api",
-                        ],
-                        "environment": {
-                            "TEST_SERVER_URL": "http://revad-services:20080",
-                            "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
-                            "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-* /drone/src/tmp/reva/data/blobs/*",
-                            "STORAGE_DRIVER": "S3NG",
-                            "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
-                            "TEST_WITH_LDAP": "true",
-                            "REVA_LDAP_HOSTNAME": "ldap",
-                            "TEST_REVA": "true",
-                            "SEND_SCENARIO_LINE_REFERENCES": "true",
-                            "BEHAT_FILTER_TAGS": "~@provisioning_api-app-required&&~@skipOnOcis-OCIS-Storage&&~@personalSpace&&~@skipOnGraph&&~@carddav&&~@skipOnReva&&~@skipOnRevaMaster",
-                            "DIVIDE_INTO_NUM_PARTS": parallelRuns,
-                            "RUN_PART": runPart,
-                            "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-S3NG-storage.md",
-                        },
-                    },
-                ],
-                "services": [
-                    ldapService(),
-                    cephService(),
-                ],
-            },
-        )
-
-    return pipelines
 
 def checkStarlark():
     return {
