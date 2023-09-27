@@ -37,7 +37,6 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/tests/helpers"
 	. "github.com/onsi/ginkgo"
@@ -700,7 +699,7 @@ func download(ctx context.Context, gw gatewaypb.GatewayAPIClient, ref *provider.
 			token, endpoint = p.Token, p.DownloadEndpoint
 		}
 	}
-	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, endpoint, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
