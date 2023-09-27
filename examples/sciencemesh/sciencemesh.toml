@@ -1,16 +1,44 @@
+## Example configuration for the ScienceMesh app in ownCloud 10 / Nextcloud
+#
+## To contextualize this configuration for your deployment, please follow these steps:
+#
+# 1. In the [vars] section below, replace `your.revad.org` with your actual domain
+# 2. If you have a Kubernetes deployment with an ingress and a route:
+# 2.1. Set the `external_reva_endpoint` var to your actual externally-visible route to reva
+# 2.2. In the [http.services.ocmprovider] section, set a `webdav_root` to include your route, e.g. `/iop/remote.php/dav/ocm/`
+# 3. Replace `your.efss.org` with the actual endpoint of your EFSS system
+# 4. Define appropriate secrets in the [vars] section: the `efss_shared_secret` must match the `oc_appconfig.configvalue` in your EFSS DB for `oc_appconfig.app_id` = `sciencemesh`
+# 5. Provide appropriate SSL full chain certificate and key files in the [http] section
+#
+# If you want to terminate the SSL connection to reva at your reverse proxy system
+# (e.g. at your Kubernetes ingress), then you can configure reva to use http instead.
+# For that, you need to follow these steps:
+#
+# 1. Remove the `certfile` and `keyfile` entries from the [http] section
+# 2. Replace the https port `443` with a port number of your choice everywhere you find it
+# 3. Make sure all `https`-served endpoints (including `datagateway`) are adapted accordingly
+
+
 [vars]
+internal_gateway = "your.revad.org"
+provider_domain = "your.revad.org"
+external_reva_endpoint = "https://your.revad.org"   # append here any route if applicable
+efss_sciencemesh_endpoint = "https://your.efss.org/index.php/apps/sciencemesh/"
 machine_api_key = "machine-api-key"
-provider_domain = "your.revad.com"
-shared_secret = "shared-secret-1"
+efss_shared_secret = "shared-secret-1"
+
+[http]
+certfile = "/etc/revad/tls/your.revad.ssl.crt"
+keyfile = "/etc/revad/tls/your.revad.ssl.key"
 
 [log]
-level = "trace"
+level = "debug"
 
 [shared]
-gatewaysvc = "your.revad.com:19000"
+gatewaysvc = "{{ vars.internal_gateway }}:19000"
 
 [grpc.services.gateway]
-address = "your.revad.com:19000"
+address = ":19000"
 authregistrysvc = "{{ grpc.services.authregistry.address }}"
 appregistrysvc = "{{ grpc.services.appregistry.address }}"
 storageregistrysvc = "{{ grpc.services.storageregistry.address }}"
@@ -56,8 +84,8 @@ ocmshares = "{{ grpc.services.authprovider[2].address }}"
 auth_manager = "nextcloud"
 
 [grpc.services.authprovider.auth_managers.nextcloud]
-endpoint = "https://your.efss.com/index.php/apps/sciencemesh/"
-shared_secret = "{{ vars.shared_secret }}"
+endpoint = "{{ vars.efss_sciencemesh_endpoint }}"
+shared_secret = "{{ vars.efss_shared_secret }}"
 mock_http = false
 
 [[grpc.services.authprovider]]
@@ -65,7 +93,7 @@ auth_manager = "machine"
 
 [grpc.services.authprovider.auth_managers.machine]
 api_key = "{{ vars.machine_api_key }}"
-gateway_addr = "your.revad.com:19000"
+gateway_addr = "{{ vars.internal_gateway }}:19000"
 
 [[grpc.services.authprovider]]
 auth_manager = "ocmshares"
@@ -90,11 +118,11 @@ driver = "nextcloud"
 mount_id = "nextcloud"
 expose_data_server = true
 enable_home_creation = false
-data_server_url = "https://your.revad.com:{{ http.services.dataprovider[0].address.port }}/data"
+data_server_url = "https://localhost:{{ http.services.dataprovider[0].address.port }}/data"
 
 [grpc.services.storageprovider.drivers.nextcloud]
-endpoint = "https://your.efss.com/index.php/apps/sciencemesh/"
-shared_secret = "{{ vars.shared_secret }}"
+endpoint = "{{ vars.efss_sciencemesh_endpoint }}"
+shared_secret = "{{ vars.efss_shared_secret }}"
 mock_http = false
 
 [[grpc.services.storageprovider]]
@@ -103,7 +131,7 @@ mount_id = "ocm"
 mount_path = "/ocm"
 expose_data_server = true
 enable_home_creation = false
-data_server_url = "https://your.revad.com:{{ http.services.dataprovider[1].address.port }}/data"
+data_server_url = "{{ vars.external_reva_endpoint }}/data"
 
 [grpc.services.storageprovider.drivers.ocmoutcoming]
 machine_secret = "{{ vars.machine_api_key }}"
@@ -118,35 +146,43 @@ driver = "memory"
 driver = "nextcloud"
 
 [grpc.services.ocmcore.drivers.nextcloud]
-host = "https://your.revad.com/"
-endpoint = "https://your.efss.com/index.php/apps/sciencemesh/"
-shared_secret = "{{ vars.shared_secret }}"
+host = "{{ vars.external_reva_endpoint }}"
+endpoint = "{{ vars.efss_sciencemesh_endpoint }}"
+shared_secret = "{{ vars.efss_shared_secret }}"
 mock_http = false
 
 [grpc.services.ocminvitemanager]
-# TODO the driver should become "nextcloud"
+# TODO the driver should be "nextcloud" once it is implemented
 driver = "json"
-provider_domain = "your.revad.com"
+provider_domain = "{{ vars.provider_domain }}"
 
 [grpc.services.ocmshareprovider]
 driver = "nextcloud"
-provider_domain = "your.revad.com"
-endpoint = "https://your.revad.com/"
-webdav_endpoint = "https://your.revad.com/"
-webdav_prefix = "https://your.revad.com/remote.php/dav/files"
-webapp_template = "https://your.revad.com/external/sciencemesh/{{.Token}}/{relative-path-to-shared-resource}"
+provider_domain = "{{ vars.provider_domain }}"
+webdav_endpoint = "{{ vars.external_reva_endpoint }}"
+webdav_prefix = "{{ vars.external_reva_endpoint }}/remote.php/dav/files"
+# TODO the following should become {{ vars.external_reva_endpoint }}/external/{{.Token}}/...
+webapp_template = "https://your.revad.org/external/sciencemesh/{{.Token}}/{relative-path-to-shared-resource}"
 
 [grpc.services.ocmshareprovider.drivers.nextcloud]
-webdav_host = "https://your.revad.com/"
-endpoint = "https://your.efss.com/index.php/apps/sciencemesh/"
-shared_secret = "{{ vars.shared_secret }}"
+webdav_host = "{{ vars.external_reva_endpoint }}"
+endpoint = "{{ vars.efss_sciencemesh_endpoint }}"
+shared_secret = "{{ vars.efss_shared_secret }}"
 mock_http = false
 mount_id = "nextcloud"
 
 [grpc.services.ocmproviderauthorizer]
-driver = "json"
+driver = "mentix"
+
+[grpc.services.ocmproviderauthorizer.drivers.mentix]
+url = "https://iop.sciencemesh.uni-muenster.de/iop/mentix/cs3"
+verify_request_hostname = true
+insecure = false
+timeout = 10
+refresh = 900
 
 [grpc.services.ocmproviderauthorizer.drivers.json]
+# this is used by the docker-based test deployment, not in production
 providers = "providers.testnet.json"
 verify_request_hostname = true
 
@@ -154,8 +190,8 @@ verify_request_hostname = true
 driver = "nextcloud"
 
 [grpc.services.userprovider.drivers.nextcloud]
-endpoint = "https://your.efss.com/index.php/apps/sciencemesh/"
-shared_secret = "shared-secret-1"
+endpoint = "{{ vars.efss_sciencemesh_endpoint }}"
+shared_secret = "{{ vars.efss_shared_secret }}"
 mock_http = false
 
 [grpc.services.datatx]
@@ -184,68 +220,71 @@ file = ""
 
 ### HTTP ENDPOINTS ###
 
-[http]
-certfile = "/etc/revad/tls/your.revad.ssl.crt"
-keyfile = "/etc/revad/tls/your.revad.ssl.key"
-
 [http.services.appprovider]
-address = "0.0.0.0:443"
+address = ":443"
 insecure = true
 
 [http.services.datagateway]
-address = "0.0.0.0:443"
+address = ":443"
 
 [[http.services.dataprovider]]
 driver = "nextcloud"
 
 [http.services.dataprovider.drivers.nextcloud]
-endpoint = "https://your.efss.com/index.php/apps/sciencemesh/"
-shared_secret = "shared-secret-1"
+endpoint = "{{ vars.efss_sciencemesh_endpoint }}"
+shared_secret = "{{ vars.efss_shared_secret }}"
 mock_http = false
 
 [[http.services.dataprovider]]
+address = ":443"
 driver = "ocmoutcoming"
 
 [http.services.dataprovider.drivers.ocmoutcoming]
 machine_secret = "{{ vars.machine_api_key }}"
 
 [http.services.sciencemesh]
-address = "0.0.0.0:443"
-provider_domain = "your.revad.com"
-mesh_directory_url = "https://meshdir.docker/meshdir"
-# for a production deployment, use:
-# mesh_directory_url = 'https://sciencemesh.cesnet.cz/iop/meshdir'
+address = ":443"
+provider_domain = "{{ vars.provider_domain }}"
+mesh_directory_url = "https://sciencemesh.cesnet.cz/iop/meshdir"
 ocm_mount_point = "/sciencemesh"
 
 [http.services.sciencemesh.smtp_credentials]
 disable_auth = true
-sender_mail = "sciencemesh@your.revad.com"
-smtp_server = "smtp.your.revad.com"
+sender_mail = "sciencemesh@{{ vars.provider_domain }}"
+smtp_server = "smtp.{{ vars.provider_domain }}"
 smtp_port = 25
 
 [http.services.ocmprovider]
-address = "0.0.0.0:443"
+address = ":443"
 ocm_prefix = "ocm"
 provider = "Reva for ownCloud/Nextcloud"
-endpoint = "https://your.revad.com"
+endpoint = "{{ vars.external_reva_endpoint }}"
 enable_webapp = true
 enable_datatx = true
 
 [http.services.ocmd]
-address = "0.0.0.0:443"
+address = ":443"
 prefix = "ocm"
 
 [http.services.ocmd.config]
-host = "your.revad.com"
+host = "{{ vars.provider_domain }}"
 
 [http.services.ocs]
-address = "0.0.0.0:443"
+address = ":443"
 prefix = "ocs"
 
 [http.services.ocdav]
-address = "0.0.0.0:443"
+address = ":443"
 
 [http.services.prometheus]
+address = ":443"
+
+[http.services.metrics]
+address = ":443"
+metrics_data_driver_type = "json"
+metrics_data_location = "metrics.json"
+metrics_record_interval = 5000
+
 [http.services.sysinfo]
 
 [http.middlewares.cors]
