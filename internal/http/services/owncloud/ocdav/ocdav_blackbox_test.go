@@ -620,7 +620,7 @@ var _ = Describe("ocdav", func() {
 			When("the gateway returns OK when moving file", func() {
 				It("the source exists, the destination doesn't exists", func() {
 
-					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Source.ResourceId})
 					client.On("Stat", mock.Anything, mock.Anything).Return(&cs3storageprovider.StatResponse{
 						Status: status.NewNotFound(ctx, ""),
 						Info:   &cs3storageprovider.ResourceInfo{},
@@ -680,7 +680,7 @@ var _ = Describe("ocdav", func() {
 
 				It("the destination Stat error", func() {
 
-					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Source.ResourceId})
 
 					client.On("Stat", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.StatRequest) bool {
 						return utils.ResourceEqual(req.Ref, mReq.Destination)
@@ -703,8 +703,8 @@ var _ = Describe("ocdav", func() {
 
 				It("error when deleting an existing tree", func() {
 
-					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Path: "./file"})
-					mockPathStat(mReq.Destination.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Path: "./newfile"})
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Source.ResourceId, Path: "./file"})
+					mockPathStat(mReq.Destination.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Destination.ResourceId, Path: "./newfile"})
 
 					client.On("Delete", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.DeleteRequest) bool {
 						return utils.ResourceEqual(req.Ref, mReq.Destination)
@@ -716,7 +716,7 @@ var _ = Describe("ocdav", func() {
 
 				It("error when destination Stat returns unexpected code", func() {
 
-					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Source.ResourceId})
 					mockPathStat(mReq.Destination.Path, status.NewInternal(ctx, ""), nil)
 
 					handler.Handler().ServeHTTP(rr, req)
@@ -725,8 +725,8 @@ var _ = Describe("ocdav", func() {
 
 				It("error when Delete returns unexpected code", func() {
 
-					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Path: "./file"})
-					mockPathStat(mReq.Destination.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Path: "./newfile"})
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Source.ResourceId, Path: "./file"})
+					mockPathStat(mReq.Destination.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Destination.ResourceId, Path: "./newfile"})
 
 					client.On("Delete", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.DeleteRequest) bool {
 						return utils.ResourceEqual(req.Ref, mReq.Destination)
@@ -739,7 +739,7 @@ var _ = Describe("ocdav", func() {
 
 				It("the destination Stat error", func() {
 
-					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Source.ResourceId})
 					mockPathStat(mReq.Destination.Path, status.NewNotFound(ctx, ""), nil)
 					client.On("Stat", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.StatRequest) bool {
 						return utils.ResourceEqual(req.Ref, &cs3storageprovider.Reference{
@@ -754,7 +754,7 @@ var _ = Describe("ocdav", func() {
 
 				It("error when destination Stat is not found", func() {
 
-					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Source.ResourceId})
 					mockPathStat(mReq.Destination.Path, status.NewNotFound(ctx, ""), nil)
 					mockPathStat(".", status.NewNotFound(ctx, ""), nil)
 
@@ -764,7 +764,7 @@ var _ = Describe("ocdav", func() {
 
 				It("an unexpected error when destination Stat", func() {
 
-					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Source.ResourceId})
 					mockPathStat(mReq.Destination.Path, status.NewNotFound(ctx, ""), nil)
 					mockPathStat(".", status.NewInvalid(ctx, ""), nil)
 
@@ -774,7 +774,7 @@ var _ = Describe("ocdav", func() {
 
 				It("error when removing", func() {
 
-					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Source.ResourceId})
 					mockPathStat(mReq.Destination.Path, status.NewNotFound(ctx, ""), nil)
 					mockPathStat(".", status.NewOK(ctx), nil)
 					client.On("Move", mock.Anything, mReq).Return(nil, fmt.Errorf("unexpected io error"))
@@ -799,7 +799,7 @@ var _ = Describe("ocdav", func() {
 
 				It("status 'Unimplemented' when removing", func() {
 
-					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Source.ResourceId})
 					mockPathStat(mReq.Destination.Path, status.NewNotFound(ctx, ""), nil)
 					mockPathStat(".", status.NewOK(ctx), nil)
 
@@ -813,7 +813,7 @@ var _ = Describe("ocdav", func() {
 
 				It("the destination Stat error after moving", func() {
 
-					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Source.ResourceId})
 					client.On("Stat", mock.Anything, mock.Anything).Return(&cs3storageprovider.StatResponse{
 						Status: status.NewNotFound(ctx, ""),
 						Info:   &cs3storageprovider.ResourceInfo{},
@@ -837,7 +837,7 @@ var _ = Describe("ocdav", func() {
 
 				It("the destination Stat returned not OK status after moving", func() {
 
-					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: mReq.Source.ResourceId})
 					mockPathStat(mReq.Destination.Path, status.NewNotFound(ctx, ""), nil)
 					mockPathStat(".", status.NewOK(ctx), nil)
 
@@ -853,39 +853,39 @@ var _ = Describe("ocdav", func() {
 			})
 		})
 
-		Describe("MOVE /dav/spaces failed", func() {
+		Describe("MOVE validation failed", func() {
 
 			BeforeEach(func() {
 				// setup the request
-				basePath = "/dav/spaces"
 				rr = httptest.NewRecorder()
 				req, err = http.NewRequest("MOVE", basePath+"/file", strings.NewReader(""))
 				Expect(err).ToNot(HaveOccurred())
 				req = req.WithContext(ctx)
-				req.Header.Set("Destination", basePath+"/provider-1$userspace!userspace")
+				req.Header.Set("Destination", basePath+"/newfile")
 				req.Header.Set("Overwrite", "T")
 
 				mReq = &cs3storageprovider.MoveRequest{
 					Source: &cs3storageprovider.Reference{
-						ResourceId: &cs3storageprovider.ResourceId{
-							SpaceId: "userspace",
-						},
-						Path: "./file",
+						ResourceId: userspace.Root,
+						Path:       "./file",
 					},
 					Destination: &cs3storageprovider.Reference{
-						ResourceId: &cs3storageprovider.ResourceId{
-							StorageId: "provider-1",
-							OpaqueId:  "userspace",
-							SpaceId:   "userspace",
-						},
-						Path: ".",
+						ResourceId: userspace.Root,
+						Path:       "./newfile",
 					},
 				}
 			})
 
-			When("the gateway returns OK when moving file", func() {
+			When("the gateway returns error when moving file", func() {
+				It("error when the source is a file and the destination is a folder", func() {
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{
+						Id: mReq.Source.ResourceId, Path: mReq.Source.Path,
+						Type: cs3storageprovider.ResourceType_RESOURCE_TYPE_FILE})
+					mockPathStat(mReq.Destination.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{
+						Id: mReq.Destination.ResourceId, Path: mReq.Destination.Path,
+						Type: cs3storageprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
+					})
 
-				It("the source and the destination exist", func() {
 					handler.Handler().ServeHTTP(rr, req)
 					Expect(rr).To(HaveHTTPStatus(http.StatusPreconditionFailed))
 				})
