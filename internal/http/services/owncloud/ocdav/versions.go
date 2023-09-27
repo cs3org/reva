@@ -30,6 +30,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
@@ -246,7 +247,7 @@ func (h *VersionsHandler) doDownload(w http.ResponseWriter, r *http.Request, s *
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fname))
 	w.Header().Set("Content-Transfer-Encoding", "binary")
 
-	down := downloader.NewDownloader(client)
+	down := downloader.NewDownloader(client, httpclient.New())
 	d, err := down.Download(ctx, resStat.Info.Path, key)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

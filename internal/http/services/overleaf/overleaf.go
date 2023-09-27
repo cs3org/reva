@@ -35,10 +35,9 @@ import (
 	storagepb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token/manager/jwt"
@@ -211,7 +210,7 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Setting up archiver request
-	archHTTPReq, err := rhttp.NewRequest(ctx, http.MethodGet, s.conf.ArchiverURL, nil)
+	archHTTPReq, err := http.NewRequestWithContext(ctx, http.MethodGet, s.conf.ArchiverURL, nil)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "overleaf: error setting up http request", nil)
 		return
@@ -227,7 +226,7 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 
 	// Setting up Overleaf request
 	appURL := s.conf.appURL + "/docs"
-	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, appURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, appURL, nil)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "overleaf: error setting up http request", nil)
 		return

@@ -22,8 +22,10 @@ package oidc
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -37,9 +39,9 @@ import (
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/golang-jwt/jwt"
@@ -294,14 +296,16 @@ func (am *mgr) Authenticate(ctx context.Context, _, clientSecret string) (*user.
 }
 
 func (am *mgr) getOAuthCtx(ctx context.Context) context.Context {
+	tr := &http.Transport{
+		DisableKeepAlives: true,
+		TLSClientConfig:   &tls.Config{InsecureSkipVerify: am.c.Insecure},
+	}
+
 	// Sometimes for testing we need to skip the TLS check, that's why we need a
 	// custom HTTP client.
-	customHTTPClient := rhttp.GetHTTPClient(
-		rhttp.Context(ctx),
-		rhttp.Timeout(time.Second*10),
-		rhttp.Insecure(am.c.Insecure),
-		// Fixes connection fd leak which might be caused by provider-caching
-		rhttp.DisableKeepAlive(true),
+	customHTTPClient := httpclient.New(
+		httpclient.Timeout(time.Second*10),
+		httpclient.RoundTripper(tr),
 	)
 	ctx = context.WithValue(ctx, oauth2.HTTPClient, customHTTPClient)
 	return ctx

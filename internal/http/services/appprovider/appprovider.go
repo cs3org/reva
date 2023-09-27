@@ -20,6 +20,7 @@ package appprovider
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"net/http"
 	"path"
@@ -32,9 +33,9 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
@@ -234,17 +235,16 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 			ep, token = p.UploadEndpoint, p.Token
 		}
 	}
-	httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, ep, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, ep, nil)
 	if err != nil {
 		writeError(w, r, appErrorServerError, "failed to create the file", err)
 		return
 	}
 
 	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
-	httpRes, err := rhttp.GetHTTPClient(
-		rhttp.Context(ctx),
-		rhttp.Insecure(s.conf.Insecure),
-	).Do(httpReq)
+
+	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: s.conf.Insecure}}
+	httpRes, err := httpclient.New(httpclient.RoundTripper(tr)).Do(httpReq)
 	if err != nil {
 		writeError(w, r, appErrorServerError, "failed to create the file", err)
 		return

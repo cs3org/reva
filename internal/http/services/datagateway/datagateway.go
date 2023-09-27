@@ -20,6 +20,7 @@ package datagateway
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"net/http"
 	"net/url"
@@ -29,7 +30,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils/cfg"
@@ -72,7 +73,7 @@ func (c *config) ApplyDefaults() {
 type svc struct {
 	conf    *config
 	handler http.Handler
-	client  *http.Client
+	client  *httpclient.Client
 }
 
 // New returns a new datagateway.
@@ -82,11 +83,15 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 		return nil, err
 	}
 
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: c.Insecure},
+	}
+
 	s := &svc{
 		conf: &c,
-		client: rhttp.GetHTTPClient(
-			rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second))),
-			rhttp.Insecure(c.Insecure),
+		client: httpclient.New(
+			httpclient.Timeout(time.Duration(c.Timeout*int64(time.Second))),
+			httpclient.RoundTripper(tr),
 		),
 	}
 	s.setHandler()
@@ -181,7 +186,7 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 	log.Debug().Str("target", claims.Target).Msg("sending request to internal data server")
 
 	httpClient := s.client
-	httpReq, err := rhttp.NewRequest(ctx, http.MethodHead, claims.Target, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodHead, claims.Target, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("wrong request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -233,7 +238,7 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	log.Debug().Str("target", claims.Target).Msg("sending request to internal data server")
 
 	httpClient := s.client
-	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, claims.Target, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, claims.Target, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("wrong request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -310,7 +315,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	log.Debug().Str("target", claims.Target).Msg("sending request to internal data server")
 
 	httpClient := s.client
-	httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, target, r.Body)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, target, r.Body)
 	if err != nil {
 		log.Err(err).Msg("wrong request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -369,7 +374,7 @@ func (s *svc) doPatch(w http.ResponseWriter, r *http.Request) {
 	log.Debug().Str("target", claims.Target).Msg("sending request to internal data server")
 
 	httpClient := s.client
-	httpReq, err := rhttp.NewRequest(ctx, http.MethodPatch, target, r.Body)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPatch, target, r.Body)
 	if err != nil {
 		log.Err(err).Msg("wrong request")
 		w.WriteHeader(http.StatusInternalServerError)

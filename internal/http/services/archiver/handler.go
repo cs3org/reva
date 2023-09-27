@@ -20,6 +20,7 @@ package archiver
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net/http"
@@ -34,8 +35,8 @@ import (
 	"github.com/cs3org/reva/internal/http/services/archiver/manager"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
@@ -93,10 +94,13 @@ func New(ctx context.Context, conf map[string]interface{}) (global.Service, erro
 		allowedFolderRegex = append(allowedFolderRegex, regex)
 	}
 
+	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: c.Insecure}}
+	hc := httpclient.New(httpclient.RoundTripper(tr), httpclient.Timeout(time.Duration(c.Timeout*int64(time.Second))))
+
 	return &svc{
 		config:         &c,
 		gtwClient:      gtw,
-		downloader:     downloader.NewDownloader(gtw, rhttp.Insecure(c.Insecure), rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second)))),
+		downloader:     downloader.NewDownloader(gtw, hc),
 		walker:         walker.NewWalker(gtw),
 		allowedFolders: allowedFolderRegex,
 	}, nil

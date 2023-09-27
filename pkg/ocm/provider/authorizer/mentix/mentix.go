@@ -20,6 +20,7 @@ package mentix
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -31,9 +32,9 @@ import (
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
@@ -45,7 +46,7 @@ func init() {
 // Client is a Mentix API client.
 type Client struct {
 	BaseURL    string
-	HTTPClient *http.Client
+	HTTPClient *httpclient.Client
 }
 
 // New returns a new authorizer object.
@@ -55,12 +56,13 @@ func New(ctx context.Context, m map[string]interface{}) (provider.Authorizer, er
 		return nil, err
 	}
 
+	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: c.Insecure}}
+
 	client := &Client{
 		BaseURL: c.URL,
-		HTTPClient: rhttp.GetHTTPClient(
-			rhttp.Context(context.Background()),
-			rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second))),
-			rhttp.Insecure(c.Insecure),
+		HTTPClient: httpclient.New(
+			httpclient.Timeout(time.Duration(c.Timeout*int64(time.Second))),
+			httpclient.RoundTripper(tr),
 		),
 	}
 

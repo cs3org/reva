@@ -21,6 +21,7 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -30,7 +31,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/ocmd"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/pkg/errors"
 )
 
@@ -56,7 +57,7 @@ var ErrInvalidParameters = errors.New("invalid parameters")
 
 // OCMClient is the client for an OCM provider.
 type OCMClient struct {
-	client *http.Client
+	client *httpclient.Client
 }
 
 // Config is the configuration to be used for the OCMClient.
@@ -67,10 +68,13 @@ type Config struct {
 
 // New returns a new OCMClient.
 func New(c *Config) *OCMClient {
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: c.Insecure},
+	}
 	return &OCMClient{
-		client: rhttp.GetHTTPClient(
-			rhttp.Timeout(c.Timeout),
-			rhttp.Insecure(c.Insecure),
+		client: httpclient.New(
+			httpclient.Timeout(c.Timeout),
+			httpclient.RoundTripper(tr),
 		),
 	}
 }

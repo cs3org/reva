@@ -37,7 +37,6 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
@@ -410,7 +409,7 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, content io
 			return errtypes.InternalError("simple upload not supported")
 		}
 
-		httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, endpoint, content)
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, content)
 		if err != nil {
 			return errors.Wrap(err, "error creating new request")
 		}
@@ -465,7 +464,7 @@ func (d *driver) Download(ctx context.Context, ref *provider.Reference) (io.Read
 			return errtypes.InternalError("simple download not supported")
 		}
 
-		httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, endpoint, nil)
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 		if err != nil {
 			return err
 		}

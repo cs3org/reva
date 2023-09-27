@@ -2,32 +2,104 @@ package httpclient
 
 import (
 	//"io"
-	"context"
-	"io"
+
+	"errors"
 	"net/http"
+	"time"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/trace"
 	//"net/url"
 )
 
-// New creates an http.Client with a custom round tripper that adds tracing headers
-// This client must be used in the reva codebase and usage of standard http.Client
-func New() *http.Client {
-	t := &injectTransport{rt: http.DefaultTransport}
-	client := http.Client{
-		Transport: t,
+// TODO(labkode): harden it.
+// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
+func New(opts ...Option) *Client {
+	options := newOptions(opts...)
+
+	var tr http.RoundTripper
+	if options.RoundTripper == nil {
+		tr = &injectTransport{rt: http.DefaultTransport}
+	} else {
+		tr = &injectTransport{rt: options.RoundTripper}
 	}
-	return &client
+
+	httpClient := &http.Client{
+		Timeout:   options.Timeout,
+		Transport: tr,
+	}
+
+	return &Client{c: httpClient}
 }
 
-// NewWithRoundTripper works as New but wraps the rt argument with the custom round tripper
-func NewWithRoundTripper(rt http.RoundTripper) *http.Client {
-	t := &injectTransport{rt: rt}
-	client := http.Client{
-		Transport: t,
+// Option defines a single option function.
+type Option func(o *Options)
+
+// Options defines the available options for this package.
+type Options struct {
+	Jar           http.CookieJar
+	CheckRedirect func(req *http.Request, via []*http.Request) error
+	Timeout       time.Duration
+	RoundTripper  http.RoundTripper
+}
+
+// newOptions initializes the available default options.
+func newOptions(opts ...Option) Options {
+	opt := Options{}
+
+	for _, o := range opts {
+		o(&opt)
 	}
-	return &client
+
+	return opt
+}
+
+// Timeout provides a function to set the timeout option.
+func Timeout(t time.Duration) Option {
+	return func(o *Options) {
+		o.Timeout = t
+	}
+}
+
+// RoundTripper provides a function to set a custom RoundTripper.
+func RoundTripper(rt http.RoundTripper) Option {
+	return func(o *Options) {
+		o.RoundTripper = rt
+	}
+}
+
+// CheckRedirect provides a function to set a custom CheckRedirect.
+func CheckRedirect(cr func(req *http.Request, via []*http.Request) error) Option {
+	return func(o *Options) {
+		o.CheckRedirect = cr
+	}
+
+}
+
+// Jar provides a function to set a custom CookieJar.
+func Jar(j http.CookieJar) Option {
+	return func(o *Options) {
+		o.Jar = j
+	}
+
+}
+
+// Client wraps a http.Client but only exposes the Do method
+// to force consumers to always create a request with http.NewRequestWithContext()
+type Client struct {
+	c *http.Client
+}
+
+func (c *Client) Do(r *http.Request) (*http.Response, error) {
+	// bail out early if context is not set
+	if r.Context() == nil {
+		return nil, errors.New("error: request must have a context")
+	}
+	return c.c.Do(r)
+}
+
+func (c *Client) GetNativeHTTP() *http.Client {
+	return c.c
 }
 
 type injectTransport struct {
@@ -40,7 +112,7 @@ func (t injectTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 
 	traceID := trace.Get(ctx)
 
-	r.Header.Add("X-Trace-ID", traceID)
+	r.Header.Set("X-Trace-ID", traceID)
 
 	tkn, ok := appctx.ContextGetToken(ctx)
 	if ok {
@@ -48,14 +120,4 @@ func (t injectTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	}
 
 	return t.rt.RoundTrip(r)
-}
-
-// NewRequest creates an HTTP request that sets tracing headers
-func NewRequestWithContext(ctx context.Context, method, url string, body io.Reader) (*http.Request, error) {
-	httpReq, err := http.NewRequestWithContext(ctx, method, url, body)
-	if err != nil {
-		return nil, err
-	}
-
-	return httpReq, nil
 }

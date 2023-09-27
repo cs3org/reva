@@ -21,6 +21,7 @@ package wopi
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -43,12 +44,12 @@ import (
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/registry"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
@@ -102,7 +103,7 @@ func (c *config) ApplyDefaults() {
 
 type wopiProvider struct {
 	conf       *config
-	wopiClient *http.Client
+	wopiClient *httpclient.Client
 	appURLs    map[string]map[string]string // map[viewMode]map[extension]appURL
 }
 
@@ -119,13 +120,17 @@ func New(ctx context.Context, m map[string]interface{}) (app.Provider, error) {
 		return nil, err
 	}
 
-	wopiClient := rhttp.GetHTTPClient(
-		rhttp.Timeout(time.Duration(10*int64(time.Second))),
-		rhttp.Insecure(c.InsecureConnections),
-	)
-	wopiClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: c.InsecureConnections}}
+
+	cr := func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
+
+	wopiClient := httpclient.New(
+		httpclient.Timeout(time.Duration(10*int64(time.Second))),
+		httpclient.RoundTripper(tr),
+		httpclient.CheckRedirect(cr),
+	)
 
 	return &wopiProvider{
 		conf:       &c,
@@ -144,7 +149,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	}
 	wopiurl.Path = path.Join(wopiurl.Path, "/wopi/iop/openinapp")
 
-	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, wopiurl.String(), nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, wopiurl.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -365,9 +370,11 @@ func (p *wopiProvider) GetAppProviderInfo(ctx context.Context) (*appregistry.Pro
 
 func getAppURLs(c *config) (map[string]map[string]string, error) {
 	// Initialize WOPI URLs by discovery
-	httpcl := rhttp.GetHTTPClient(
-		rhttp.Timeout(time.Duration(5*int64(time.Second))),
-		rhttp.Insecure(c.InsecureConnections),
+	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: c.InsecureConnections}}
+
+	httpcl := httpclient.New(
+		httpclient.Timeout(time.Duration(5*int64(time.Second))),
+		httpclient.RoundTripper(tr),
 	)
 
 	appurl, err := url.Parse(c.AppIntURL)

@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -33,9 +34,9 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/notification/notificationhelper"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
@@ -132,7 +133,7 @@ type svc struct {
 	webDavHandler      *WebDavHandler
 	davHandler         *DavHandler
 	favoritesManager   favorite.Manager
-	client             *http.Client
+	client             *httpclient.Client
 	notificationHelper *notificationhelper.NotificationHelper
 }
 
@@ -156,13 +157,14 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 	}
 
 	log := appctx.GetLogger(ctx)
+	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: c.Insecure}}
 	s := &svc{
 		c:             &c,
 		webDavHandler: new(WebDavHandler),
 		davHandler:    new(DavHandler),
-		client: rhttp.GetHTTPClient(
-			rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second))),
-			rhttp.Insecure(c.Insecure),
+		client: httpclient.New(
+			httpclient.Timeout(time.Duration(c.Timeout*int64(time.Second))),
+			httpclient.RoundTripper(tr),
 		),
 		favoritesManager:   fm,
 		notificationHelper: notificationhelper.New("ocdav", c.Notifications, log),

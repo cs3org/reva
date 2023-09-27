@@ -31,8 +31,8 @@ import (
 	v1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/mime"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/utils/cfg"
@@ -40,7 +40,7 @@ import (
 
 type cback struct {
 	conf   *Options
-	client *http.Client
+	client *httpclient.Client
 }
 
 func init() {
@@ -55,8 +55,7 @@ func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err erro
 		return nil, err
 	}
 
-	httpClient := rhttp.GetHTTPClient()
-
+	httpClient := httpclient.New()
 	// Returns the storage.FS interface
 	return &cback{conf: &o, client: httpClient}, nil
 }

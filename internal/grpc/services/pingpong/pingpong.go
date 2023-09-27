@@ -81,8 +81,8 @@ func (s *service) Ping(ctx context.Context, _ *proto.PingRequest) (*proto.PingRe
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 
-	client := httpclient.NewWithRoundTripper(tr)
-	req, err := httpclient.NewRequestWithContext(ctx, "GET", s.conf.Endpoint+"/pong", nil)
+	client := httpclient.New(httpclient.RoundTripper(tr))
+	req, err := http.NewRequestWithContext(ctx, "GET", s.conf.Endpoint+"/pong", nil)
 	if err != nil {
 		log.Error().Err(err).Msg("error creating http request")
 		return nil, err

@@ -32,7 +32,6 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
@@ -233,7 +232,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 
 		// 3. do download
 
-		httpDownloadReq, err := rhttp.NewRequest(ctx, http.MethodGet, downloadEP, nil)
+		httpDownloadReq, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadEP, nil)
 		if err != nil {
 			return err
 		}
@@ -250,7 +249,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 
 		// 4. do upload
 
-		httpUploadReq, err := rhttp.NewRequest(ctx, http.MethodPut, uploadEP, httpDownloadRes.Body)
+		httpUploadReq, err := http.NewRequestWithContext(ctx, http.MethodPut, uploadEP, httpDownloadRes.Body)
 		if err != nil {
 			return err
 		}
@@ -447,7 +446,7 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 		}
 
 		// 3. do download
-		httpDownloadReq, err := rhttp.NewRequest(ctx, http.MethodGet, downloadEP, nil)
+		httpDownloadReq, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadEP, nil)
 		if err != nil {
 			return err
 		}
@@ -466,7 +465,7 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 
 		// 4. do upload
 
-		httpUploadReq, err := rhttp.NewRequest(ctx, http.MethodPut, uploadEP, httpDownloadRes.Body)
+		httpUploadReq, err := http.NewRequestWithContext(ctx, http.MethodPut, uploadEP, httpDownloadRes.Body)
 		if err != nil {
 			return err
 		}

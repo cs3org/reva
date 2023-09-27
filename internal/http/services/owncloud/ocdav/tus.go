@@ -33,7 +33,6 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
@@ -221,7 +220,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 
 		var httpRes *http.Response
 
-		httpReq, err := rhttp.NewRequest(ctx, http.MethodPatch, ep, r.Body)
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPatch, ep, r.Body)
 		if err != nil {
 			log.Debug().Err(err).Msg("wrong request")
 			w.WriteHeader(http.StatusInternalServerError)

@@ -76,7 +76,7 @@ func Test_ListAppProviders(t *testing.T) {
 			want: &registrypb.ListAppProvidersResponse{
 				Status: &rpcv1beta1.Status{
 					Code:    1,
-					Trace:   "00000000000000000000000000000000",
+					Trace:   "",
 					Message: "",
 				},
 				Providers: []*registrypb.ProviderInfo{
@@ -98,7 +98,7 @@ func Test_ListAppProviders(t *testing.T) {
 			want: &registrypb.ListAppProvidersResponse{
 				Status: &rpcv1beta1.Status{
 					Code:  1,
-					Trace: "00000000000000000000000000000000",
+					Trace: "",
 				},
 				Providers: []*registrypb.ProviderInfo{},
 			},
@@ -112,7 +112,7 @@ func Test_ListAppProviders(t *testing.T) {
 			want: &registrypb.ListAppProvidersResponse{
 				Status: &rpcv1beta1.Status{
 					Code:    1,
-					Trace:   "00000000000000000000000000000000",
+					Trace:   "",
 					Message: "",
 				},
 				Providers: []*registrypb.ProviderInfo{},
@@ -218,7 +218,7 @@ func Test_GetAppProviders(t *testing.T) {
 			want: &registrypb.GetAppProvidersResponse{
 				Status: &rpcv1beta1.Status{
 					Code:    1,
-					Trace:   "00000000000000000000000000000000",
+					Trace:   "",
 					Message: "",
 				},
 				Providers: []*registrypb.ProviderInfo{
@@ -235,7 +235,7 @@ func Test_GetAppProviders(t *testing.T) {
 			want: &registrypb.GetAppProvidersResponse{
 				Status: &rpcv1beta1.Status{
 					Code:    1,
-					Trace:   "00000000000000000000000000000000",
+					Trace:   "",
 					Message: "",
 				},
 				Providers: []*registrypb.ProviderInfo{
@@ -252,7 +252,7 @@ func Test_GetAppProviders(t *testing.T) {
 			want: &registrypb.GetAppProvidersResponse{
 				Status: &rpcv1beta1.Status{
 					Code:    15,
-					Trace:   "00000000000000000000000000000000",
+					Trace:   "",
 					Message: "error looking for the app provider",
 				},
 				Providers: nil,
@@ -264,7 +264,7 @@ func Test_GetAppProviders(t *testing.T) {
 			want: &registrypb.GetAppProvidersResponse{
 				Status: &rpcv1beta1.Status{
 					Code:    15,
-					Trace:   "00000000000000000000000000000000",
+					Trace:   "",
 					Message: "error looking for the app provider",
 				},
 				Providers: nil,
@@ -276,7 +276,7 @@ func Test_GetAppProviders(t *testing.T) {
 			want: &registrypb.GetAppProvidersResponse{
 				Status: &rpcv1beta1.Status{
 					Code:    15,
-					Trace:   "00000000000000000000000000000000",
+					Trace:   "",
 					Message: "error looking for the app provider",
 				},
 				Providers: nil,
@@ -288,7 +288,7 @@ func Test_GetAppProviders(t *testing.T) {
 			want: &registrypb.GetAppProvidersResponse{
 				Status: &rpcv1beta1.Status{
 					Code:    15,
-					Trace:   "00000000000000000000000000000000",
+					Trace:   "",
 					Message: "error looking for the app provider",
 				},
 				Providers: nil,

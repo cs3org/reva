@@ -31,7 +31,6 @@ import (
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	ctxpkg "github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/studio-b12/gowebdav"
@@ -95,7 +94,7 @@ func downloadCommand() *command {
 
 			dataServerURL := p.DownloadEndpoint
 			// TODO(labkode): do a protocol switch
-			httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, dataServerURL, nil)
+			httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, dataServerURL, nil)
 			if err != nil {
 				return err
 			}
