@@ -11,3 +11,4 @@ address = "{{grpc_address}}"
 token_strategy = "bearer"
 
 [http.services.ocdav]
+ocm_namespace = "/public"

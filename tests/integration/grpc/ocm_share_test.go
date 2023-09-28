@@ -135,6 +135,7 @@ var _ = Describe("ocm share", func() {
 				},
 			},
 			{Name: "permissions", Config: "permissions-ocis-ci.toml"},
+			{Name: "cernboxpublicstorage", Config: "ocm-share/cernbox-storageprovider-public.toml"},
 			{Name: "cernboxwebdav", Config: "ocm-share/cernbox-webdav-server.toml"},
 			{Name: "cernboxhttp", Config: "ocm-share/ocm-server-cernbox-http.toml"},
 			{Name: "cesnetgw", Config: "ocm-share/ocm-server-cesnet-grpc.toml",
@@ -220,8 +221,13 @@ var _ = Describe("ocm share", func() {
 				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: info.Id,
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
-							UserId: marie.Id,
+							UserId: &userpb.UserId{
+								Idp:      marie.Id.Idp,
+								OpaqueId: marie.Id.OpaqueId,
+								Type:     userpb.UserType_USER_TYPE_FEDERATED,
+							},
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
@@ -257,6 +263,13 @@ var _ = Describe("ocm share", func() {
 				By("marie access the share using the ocm mount")
 				ref = &provider.Reference{Path: ocmPath(share.Id, "")}
 				statRes, err := cesnetgw.Stat(ctxMarie, &provider.StatRequest{Ref: ref})
+				statRes, err = cesnetgw.Stat(ctxMarie, &provider.StatRequest{Ref: ref})
+				statRes, err = cesnetgw.Stat(ctxMarie, &provider.StatRequest{Ref: ref})
+				statRes, err = cesnetgw.Stat(ctxMarie, &provider.StatRequest{Ref: ref})
+				statRes, err = cesnetgw.Stat(ctxMarie, &provider.StatRequest{Ref: ref})
+				statRes, err = cesnetgw.Stat(ctxMarie, &provider.StatRequest{Ref: ref})
+				statRes, err = cesnetgw.Stat(ctxMarie, &provider.StatRequest{Ref: ref})
+				statRes, err = cesnetgw.Stat(ctxMarie, &provider.StatRequest{Ref: ref})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 				checkResourceInfo(statRes.Info, &provider.ResourceInfo{

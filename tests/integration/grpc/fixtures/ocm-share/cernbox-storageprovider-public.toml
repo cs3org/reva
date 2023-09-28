@@ -1,0 +1,13 @@
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.publicstorageprovider]
+mount_id = "{{id}}"
+gateway_addr = "{{cernboxgw_address}}"
+machine_auth_api_key = "secret"
+
+[grpc.services.authprovider]
+auth_manager = "ocmshares"
+
+[grpc.services.authprovider.auth_managers.ocmshares]
+gatewaysvc = "{{cernboxgw_address}}"

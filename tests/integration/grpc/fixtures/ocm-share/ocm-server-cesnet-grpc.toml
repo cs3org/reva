@@ -62,10 +62,11 @@ driver = "json"
 users = "fixtures/ocm-users.demo.json"
 
 [grpc.services.storageregistry]
-[grpc.services.storageregistry.drivers.static]
-[grpc.services.storageregistry.drivers.static.rules]
-"/ocm" = {"address" = "{{grpc_address}}"}
-"984e7351-2729-4417-99b4-ab5e6d41fa97" = {"address" = "{{grpc_address}}"}
+driver = "spaces"
+
+[grpc.services.storageregistry.drivers.spaces.providers."{{grpc_address}}".spaces]
+"mountpoint" = { "mount_point" = "/ocm", "path_template" = "/ocm/{{.Space.Root.OpaqueId}}" }
+"grant" = { "mount_point" = "." }
 
 [grpc.services.storageprovider]
 driver = "ocmreceived"
