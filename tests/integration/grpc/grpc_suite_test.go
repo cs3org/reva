@@ -112,9 +112,18 @@ func startRevads(configs []RevadConfig, variables map[string]string) (map[string
 	revads := map[string]*Revad{}
 	addresses := map[string]string{}
 	ids := map[string]string{}
+	roots := map[string]string{}
+
+	tmpBase, err := os.MkdirTemp("", "reva-grpc-integration-tests")
+	if err != nil {
+		return nil, errors.Wrapf(err, "Could not create tmpdir")
+	}
 
 	for _, c := range configs {
 		ids[c.Name] = uuid.New().String()
+		// Create a temporary root for this revad
+		tmpRoot := path.Join(tmpBase, c.Name)
+		roots[c.Name] = tmpRoot
 		addresses[c.Name] = fmt.Sprintf("localhost:%d", port)
 		port++
 		addresses[c.Name+"+1"] = fmt.Sprintf("localhost:%d", port)
@@ -123,21 +132,17 @@ func startRevads(configs []RevadConfig, variables map[string]string) (map[string
 		port++
 	}
 
-	tmpBase, err := os.MkdirTemp("", "reva-grpc-integration-tests")
-	if err != nil {
-		return nil, errors.Wrapf(err, "Could not create tmpdir")
-	}
 	for _, c := range configs {
 		ownAddress := addresses[c.Name]
 		ownID := ids[c.Name]
 		filesPath := map[string]string{}
 
-		// Create a temporary root for this revad
-		tmpRoot := path.Join(tmpBase, c.Name)
+		tmpRoot := roots[c.Name]
 		err := os.Mkdir(tmpRoot, 0755)
 		if err != nil {
 			return nil, errors.Wrapf(err, "Could not create tmpdir")
 		}
+
 		newCfgPath := path.Join(tmpRoot, "config.toml")
 		rawCfg, err := os.ReadFile(path.Join("fixtures", c.Config))
 		if err != nil {
@@ -212,6 +217,9 @@ func startRevads(configs []RevadConfig, variables map[string]string) (map[string
 		}
 		for name, id := range ids {
 			cfg = strings.ReplaceAll(cfg, "{{"+name+"_id}}", id)
+		}
+		for name, root := range roots {
+			cfg = strings.ReplaceAll(cfg, "{{"+name+"_root}}", root)
 		}
 		err = os.WriteFile(newCfgPath, []byte(cfg), 0600)
 		if err != nil {

@@ -27,8 +27,8 @@ providers = "fixtures/ocm-providers.demo.json"
 [http.services.dataprovider]
 driver = "ocis"
 
-[http.services.dataprovider.drivers.localhome]
-root = "{{root}}/storage"
+[http.services.dataprovider.drivers.ocis]
+root = "{{cernboxgw_root}}/storage"
 treetime_accounting = true
 treesize_accounting = true
 enable_home = true

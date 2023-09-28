@@ -27,6 +27,10 @@ home_template = "/users/{{.Id.OpaqueId}}"
 [grpc.services.storageregistry.drivers.spaces.providers."{{grpc_address}}".spaces]
 "personal" = { "mount_point" = "/users", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}" }
 
+[grpc.services.storageregistry.drivers.spaces.providers."{{cernboxpublicstorage_address}}".spaces]
+"mountpoint" = { "mount_point" = "/public", "path_template" = "/public/{{.Space.Root.OpaqueId}}" }
+"grant" = { "mount_point" = "." }
+
 [grpc.services.storageprovider]
 driver = "ocis"
 mount_path = "/home"
