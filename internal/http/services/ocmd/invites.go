@@ -111,7 +111,7 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		Id: &userpb.UserId{
 			OpaqueId: req.UserID,
 			Idp:      req.RecipientProvider,
-			Type:     userpb.UserType_USER_TYPE_PRIMARY,
+			Type:     userpb.UserType_USER_TYPE_FEDERATED,
 		},
 		Mail:        req.Email,
 		DisplayName: req.Name,
