@@ -205,7 +205,7 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 	// know each other
 
 	remoteUserID := &userpb.UserId{
-		Type:     userpb.UserType_USER_TYPE_PRIMARY,
+		Type:     userpb.UserType_USER_TYPE_FEDERATED,
 		Idp:      req.GetOriginSystemProvider().Domain,
 		OpaqueId: remoteUser.UserID,
 	}
