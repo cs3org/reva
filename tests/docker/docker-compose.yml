@@ -96,6 +96,8 @@ services:
     environment:
       LITMUS_URL: http://frontend:20080/remote.php/dav/files/4c510ada-c86b-4815-8820-42cdf82c3d51
     depends_on:
+      eos-storage:
+        condition: service_healthy
       gateway:
         condition: service_healthy
       frontend:
