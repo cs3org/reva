@@ -5,7 +5,7 @@ eos daemon run mq &
 eos daemon run qdb &
 eos daemon run mgm &
 eos daemon run fst &
-sleep 30
+sleep 5
 
 for name in 01; do
   mkdir -p /data/fst/$$name;

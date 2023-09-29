@@ -26,7 +26,10 @@ services:
       - net.ipv6.conf.all.disable_ipv6=0
     hostname: eosuser.example.org
     healthcheck:
-      test: sleep 15 # eos file info /eos/user
+      test: eos file info /eos/user
+      interval: 10s
+      timeout: 5s
+      retries: 5
   litmus:
     image: registry.cern.ch/docker.io/owncloud/litmus:latest
     environment:
@@ -88,21 +91,21 @@ services:
         condition: service_healthy
       shares:
         condition: service_healthy
-  # litmus-2:
-  #   extends: litmus
-  #   environment:
-  #     LITMUS_URL: http://frontend:20080/remote.php/dav/files/4c510ada-c86b-4815-8820-42cdf82c3d51
-  #   depends_on:
-  #     gateway:
-  #       condition: service_healthy
-  #     frontend:
-  #       condition: service_healthy
-  #     storage-home-ocis:
-  #       condition: service_healthy
-  #     users:
-  #       condition: service_healthy
-  #     shares:
-  #       condition: service_healthy
+  litmus-2:
+    extends: litmus
+    environment:
+      LITMUS_URL: http://frontend:20080/remote.php/dav/files/4c510ada-c86b-4815-8820-42cdf82c3d51
+    depends_on:
+      gateway:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+      storage-home-ocis:
+        condition: service_healthy
+      users:
+        condition: service_healthy
+      shares:
+        condition: service_healthy
   # permissions-ocis-ci:
   #   extends: revad
   #   command: -c /etc/revad/permissions-ocis-ci.toml
