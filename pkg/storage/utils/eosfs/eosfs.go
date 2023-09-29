@@ -568,6 +568,9 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 
 		err := fs.c.UnsetAttr(ctx, auth, attr, false, fn)
 		if err != nil {
+			if errors.Is(err, eosclient.AttrNotExistsError) {
+				continue
+			}
 			return errors.Wrap(err, "eosfs: error unsetting xattr in eos driver")
 		}
 	}

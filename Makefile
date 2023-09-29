@@ -75,7 +75,7 @@ export PARTS		?= 1
 export PART			?= 1
 
 .PHONY: $(TEST)
-$(TEST): docker-revad
+$(TEST):
 	docker compose -f ./tests/docker/docker-compose.yml up --force-recreate --always-recreate-deps --build --abort-on-container-exit -V --remove-orphans --exit-code-from $@ $@
 
 .PHONY: test-go

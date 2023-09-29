@@ -17,25 +17,37 @@ address = "0.0.0.0:12000"
 # This is a storage provider that grants direct access to the wrapped storage
 # the context path wrapper reads tho username from the context and prefixes the relative storage path with it
 [grpc.services.storageprovider]
-driver = "localhome"
+driver = "eoshome"
 mount_path = "/home"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 expose_data_server = true
 data_server_url = "http://storage-home:12001/data"
 enable_home_creation = true
 
-[grpc.services.storageprovider.drivers.localhome]
-root = "/var/tmp/reva/data"
-enable_home = true
+[grpc.services.storageprovider.drivers.eoshome]
+namespace = "/eos/user/"
+quota_node = "/eos/user/"
+master_url = "root://eosuser.example.org"
+slave_url = "root://eosuser.example.org"
+user_layout = "{{substr 0 1 .Username}}/{{.Username}}"
+share_folder = "/Shares"
+xrdcopy_binary = "/opt/eos/xrootd/bin/xrdcopy"
+cache_directory = "/var/tmp/reva"
 
 # we have a locally running dataprovider
 [http]
 address = "0.0.0.0:12001"
 
 [http.services.dataprovider]
-driver = "localhome"
+driver = "eoshome"
 temp_folder = "/var/tmp/reva/tmp"
 
-[http.services.dataprovider.drivers.localhome]
-root = "/var/tmp/reva/data"
-enable_home = true
+[http.services.dataprovider.drivers.eoshome]
+namespace = "/eos/user/"
+quota_node = "/eos/user/"
+master_url = "root://eosuser.example.org"
+slave_url = "root://eosuser.example.org"
+user_layout = "{{substr 0 1 .Username}}/{{.Username}}"
+share_folder = "/Shares"
+xrdcopy_binary = "/opt/eos/xrootd/bin/xrdcopy"
+cache_directory = "/var/tmp/reva"
