@@ -36,18 +36,18 @@ services:
       LITMUS_USERNAME: einstein
       LITMUS_PASSWORD: relativity
       TESTS: basic http copymove props
-  # acceptance:
-  #   image: cs3org/behat:latest
-  #   entrypoint: /mnt/ocis/tests/acceptance/run.sh
-  #   environment:
-  #     OCIS_REVA_DATA_ROOT: /var/tmp/reva/data/
-  #     DELETE_USER_DATA_CMD: rm -rf /var/tmp/reva/data/nodes/root/* /var/tmp/reva/data/nodes/*-*-*-* /var/tmp/reva/data/blobs/*
-  #     SKELETON_DIR: /mnt/testing/data/apiSkeleton
-  #     PLAIN_OUTPUT: 'true'
-  #   volumes:
-  #     - ../testing:/mnt/testing
-  #     - ../ocis:/mnt/ocis
-  #     - ../acceptance:/mnt/acceptance
+  acceptance:
+    image: cs3org/behat:latest
+    entrypoint: /mnt/ocis/tests/acceptance/run.sh
+    environment:
+      OCIS_REVA_DATA_ROOT: /var/tmp/reva/data/
+      DELETE_USER_DATA_CMD: rm -rf /var/tmp/reva/data/nodes/root/* /var/tmp/reva/data/nodes/*-*-*-* /var/tmp/reva/data/blobs/*
+      SKELETON_DIR: /mnt/testing/data/apiSkeleton
+      PLAIN_OUTPUT: 'true'
+    volumes:
+      - ../testing:/mnt/testing
+      - ../ocis:/mnt/ocis
+      - ../acceptance:/mnt/acceptance
   gateway:
     extends: revad
     command: -c /etc/revad/gateway.toml
@@ -117,51 +117,52 @@ services:
   #   command: -c /etc/revad/storage-users-ocis.toml
   #   volumes:
   #     - shared-volume:/var/tmp
-  # frontend-global:
-  #   extends: revad
-  #   hostname: frontend
-  #   command: -c /etc/revad/frontend-global.toml
-  #   volumes:
-  #     - shared-volume:/var/tmp
-  # storage-local-1:
-  #   extends: revad
-  #   command: -c /etc/revad/storage-local-1.toml
-  #   volumes:
-  #     - shared-volume:/var/tmp
-  # storage-local-2:
-  #   extends: revad
-  #   command: -c /etc/revad/storage-local-2.toml
-  #   volumes:
-  #     - shared-volume:/var/tmp
-  # acceptance-1:
-  #   extends: acceptance
-  #   environment:
-  #     PATH_TO_APITESTS: /mnt/ocis
-  #     TEST_SERVER_URL: http://frontend:20180
-  #     STORAGE_DRIVER: OCIS
-  #     TEST_REVA: 'true'
-  #     REGULAR_USER_PASSWORD: relativity
-  #     SEND_SCENARIO_LINE_REFERENCES: 'true'
-  #     BEHAT_SUITE: apiVirtualViews
-  #     ACCEPTANCE_TEST_TYPE: api
-  #   volumes:
-  #     - shared-volume:/var/tmp
-  #   working_dir: /mnt/acceptance
-  #   depends_on:
-  #     gateway:
-  #       condition: service_healthy
-  #     frontend-global:
-  #       condition: service_healthy
-  #     storage-home-ocis:
-  #       condition: service_healthy
-  #     users:
-  #       condition: service_healthy
-  #     shares:
-  #       condition: service_healthy
-  #     storage-local-1:
-  #       condition: service_healthy
-  #     storage-local-2:
-  #       condition: service_healthy
+  frontend-global:
+    extends: revad
+    hostname: frontend
+    command: -c /etc/revad/frontend-global.toml
+    volumes:
+      - shared-volume:/var/tmp
+  storage-local-1:
+    extends: revad
+    command: -c /etc/revad/storage-local-1.toml
+    volumes:
+      - shared-volume:/var/tmp
+  storage-local-2:
+    extends: revad
+    command: -c /etc/revad/storage-local-2.toml
+    volumes:
+      - shared-volume:/var/tmp
+  acceptance-1:
+    extends: acceptance
+    environment:
+      PATH_TO_APITESTS: /mnt/ocis
+      TEST_SERVER_URL: http://frontend:20180
+      # STORAGE_DRIVER: OCIS
+      TEST_REVA: 'true'
+      EXPECTED_FAILURES_FILE: /mnt/acceptance/expected-failures-on-EOS-storage.md
+      REGULAR_USER_PASSWORD: relativity
+      SEND_SCENARIO_LINE_REFERENCES: 'true'
+      BEHAT_SUITE: apiVirtualViews
+      ACCEPTANCE_TEST_TYPE: api
+    volumes:
+      - shared-volume:/var/tmp
+    working_dir: /mnt/acceptance
+    depends_on:
+      gateway:
+        condition: service_healthy
+      frontend-global:
+        condition: service_healthy
+      storage-home-ocis:
+        condition: service_healthy
+      users:
+        condition: service_healthy
+      shares:
+        condition: service_healthy
+      storage-local-1:
+        condition: service_healthy
+      storage-local-2:
+        condition: service_healthy
   ldap:
     image: osixia/openldap:1.3.0
     environment:
@@ -170,11 +171,11 @@ services:
       LDAP_ADMIN_PASSWORD: admin
       LDAP_TLS_VERIFY_CLIENT: never
       HOSTNAME: ldap
-  #   healthcheck:
-  #     test: ldapsearch -x -h localhost -b dc=owncloud,dc=com -D "cn=admin,dc=owncloud,dc=com" -w admin
-  #     interval: 5s
-  #     timeout: 5s
-  #     retries: 5
+    healthcheck:
+      test: ldapsearch -x -h localhost -b dc=owncloud,dc=com -D "cn=admin,dc=owncloud,dc=com" -w admin
+      interval: 5s
+      timeout: 5s
+      retries: 5
   # storage-publiclink:
   #   extends: revad
   #   command: -c /etc/revad/storage-publiclink.toml

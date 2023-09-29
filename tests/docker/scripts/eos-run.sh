@@ -25,6 +25,8 @@ eos chmod 777 /eos/dev/ec-42/
 mkdir -p /eos/
 eosxd -ofsname=`hostname -f`:/eos/ /eos/
 
+eos mkdir -p /eos/user
+
 for letter in {a..z}; do
   eos mkdir -p /eos/user/$letter
 done
