@@ -34,5 +34,8 @@ done
 eos vid set membership 0 +sudo
 eos vid set membership 99 +sudo
 eos vid set map -tident "*@storage-home-ocis" vuid:0 vgid:0
+eos vid set map -tident "*@storage-users-ocis" vuid:0 vgid:0
+eos vid set map -tident "*@storage-local-1" vuid:0 vgid:0
+eos vid set map -tident "*@storage-local-2" vuid:0 vgid:0
 
 tail -f /dev/null

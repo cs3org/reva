@@ -14,22 +14,36 @@ address = "0.0.0.0:11000"
 # This is a storage provider that grants direct access to the wrapped storage
 # we have a locally running dataprovider
 [grpc.services.storageprovider]
-driver = "local"
+driver = "eos"
 mount_path = "/users"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 expose_data_server = true
 data_server_url = "http://storage-users:11001/data"
 
 [grpc.services.storageprovider.drivers.local]
-root = "/var/tmp/reva/data"
+namespace = "/eos/user/"
+quota_node = "/eos/user/"
+master_url = "root://eosuser.example.org"
+slave_url = "root://eosuser.example.org"
+user_layout = "{{substr 0 1 .Username}}/{{.Username}}"
+share_folder = "/Shares"
+xrdcopy_binary = "/opt/eos/xrootd/bin/xrdcopy"
+cache_directory = "/var/tmp/reva"
 
 # we have a locally running dataprovider
 [http]
 address = "0.0.0.0:11001"
 
 [http.services.dataprovider]
-driver = "local"
+driver = "eos"
 temp_folder = "/var/tmp/reva/tmp"
 
 [http.services.dataprovider.drivers.local]
-root = "/var/tmp/reva/data"
+namespace = "/eos/user/"
+quota_node = "/eos/user/"
+master_url = "root://eosuser.example.org"
+slave_url = "root://eosuser.example.org"
+user_layout = "{{substr 0 1 .Username}}/{{.Username}}"
+share_folder = "/Shares"
+xrdcopy_binary = "/opt/eos/xrootd/bin/xrdcopy"
+cache_directory = "/var/tmp/reva"
