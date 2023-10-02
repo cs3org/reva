@@ -23,12 +23,15 @@ import (
 	"errors"
 	"path"
 	"strings"
+
+	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 )
 
 // Route represents a route inside a storage provider.
 type Route struct {
-	Name    string
-	MountID string
+	Name      string
+	MountID   string
+	MountPath string
 }
 
 // RoutingTree is a tree containing routes.
@@ -79,6 +82,7 @@ func (t *RoutingTree) addRoute(route, mountID string) {
 
 		if i == len(parts)-1 {
 			newNode.MountID = mountID
+			newNode.MountPath = route
 		}
 
 		current = current.addNode(newNode)
@@ -113,25 +117,30 @@ func (t *RoutingTree) findRoute(p string) (*RoutingTree, error) {
 }
 
 // Resolve returns a list of providers for a given path.
-func (t *RoutingTree) Resolve(p string) ([]string, error) {
+func (t *RoutingTree) Resolve(p string) ([]*registrypb.ProviderInfo, error) {
 	r, err := t.findRoute(p)
 	if err != nil {
 		return nil, err
 	}
 
-	providerMap := r.getMountID(p, map[string]bool{})
+	providerMap := r.getMountID(p, map[string]*registrypb.ProviderInfo{})
 
-	providers := make([]string, 0, len(providerMap))
-	for p := range providerMap {
-		providers = append(providers, path.Clean(p))
+	providers := make([]*registrypb.ProviderInfo, 0, len(providerMap))
+	for _, p := range providerMap {
+		providers = append(providers, p)
 	}
 
 	return providers, nil
 }
 
-func (t *RoutingTree) getMountID(p string, providerMap map[string]bool) map[string]bool {
+func (t *RoutingTree) getMountID(p string, providerMap map[string]*registrypb.ProviderInfo) map[string]*registrypb.ProviderInfo {
 	if len(t.nodes) == 0 {
-		providerMap[t.route.MountID] = true
+		if _, ok := providerMap[t.route.MountID]; !ok {
+			providerMap[t.route.MountID] = &registrypb.ProviderInfo{
+				ProviderId:   t.route.MountID,
+				ProviderPath: t.route.MountPath,
+			}
+		}
 	}
 
 	for _, r := range t.nodes {

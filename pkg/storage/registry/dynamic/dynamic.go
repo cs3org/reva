@@ -135,14 +135,14 @@ func (d *dynamic) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error)
 		return nil, errors.New("failed to get home provider")
 	}
 
-	if a, ok := d.r[p[0]]; ok {
+	if a, ok := d.r[p[0].ProviderId]; ok {
 		return &registrypb.ProviderInfo{
 			ProviderPath: d.c.HomePath,
 			Address:      a,
 		}, nil
 	}
 
-	return nil, errors.New("home not found")
+	return nil, errtypes.InternalError("storage provider address not configured for mountID " + p[0].ProviderId)
 }
 
 // FindProviders returns the storage providers for a given ref.
@@ -157,6 +157,8 @@ func (d *dynamic) FindProviders(ctx context.Context, ref *provider.Reference) ([
 					Address:    address,
 				}}, nil
 			}
+
+			return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
 		}
 	}
 
@@ -168,15 +170,15 @@ func (d *dynamic) FindProviders(ctx context.Context, ref *provider.Reference) ([
 
 	var providers []*registrypb.ProviderInfo
 	for _, p := range ps {
-		if address, ok := d.r[p]; ok {
+		if address, ok := d.r[p.ProviderId]; ok {
 			providers = append(providers, &registrypb.ProviderInfo{
-				ProviderPath: ref.Path,
+				ProviderPath: p.ProviderPath,
 				Address:      address,
 			})
 		} else {
-			err := errors.New("storage provider address not configured for mountID " + p)
+			err := errtypes.InternalError("storage provider address not configured for mountID " + p.ProviderId)
 			l.Error().Err(err).Msgf("error finding providers")
-			return nil, errtypes.InternalError(err.Error())
+			return nil, err
 		}
 	}
 
