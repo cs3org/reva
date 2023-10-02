@@ -158,9 +158,7 @@ func Download(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ref *prov
 
 	var token, endpoint string
 	for _, p := range res.Protocols {
-		if p.Protocol == "simple" {
-			token, endpoint = p.Token, p.DownloadEndpoint
-		}
+		token, endpoint = p.Token, p.DownloadEndpoint
 	}
 	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
