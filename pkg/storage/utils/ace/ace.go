@@ -216,7 +216,7 @@ func FromGrant(g *provider.Grant) *ACE {
 
 func UserAce(id *userpb.UserId) string {
 	if id.GetType() == userpb.UserType_USER_TYPE_FEDERATED {
-		return "u:" + id.Idp + "/" + id.OpaqueId
+		return "u:" + id.OpaqueId + "@" + id.Idp
 	}
 
 	return "u:" + id.OpaqueId
