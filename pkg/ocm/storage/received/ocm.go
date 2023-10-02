@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -40,6 +41,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/sharedconf"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/pkg/utils/cfg"
 	"github.com/owncloud/ocis/v2/services/webdav/pkg/net"
 	"github.com/studio-b12/gowebdav"
@@ -401,8 +404,61 @@ func (d *driver) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 	return errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, _ bool) ([]*provider.StorageSpace, error) {
-	return nil, errtypes.NotSupported("operation not supported")
+func (d *driver) ListStorageSpaces(ctx context.Context, filters []*provider.ListStorageSpacesRequest_Filter, _ bool) ([]*provider.StorageSpace, error) {
+	spaceTypes := map[string]struct{}{}
+	var exists = struct{}{}
+	appendTypes := []string{}
+	for _, f := range filters {
+		switch f.Type {
+		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
+			spaceType := f.GetSpaceType()
+			if spaceType == "+mountpoint" {
+				appendTypes = append(appendTypes, strings.TrimPrefix(spaceType, "+"))
+				continue
+			}
+			spaceTypes[spaceType] = exists
+		}
+	}
+
+	lrsRes, err := d.gateway.ListReceivedOCMShares(ctx, &ocmpb.ListReceivedOCMSharesRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(spaceTypes) == 0 {
+		spaceTypes["mountpoint"] = exists
+	}
+	for _, s := range appendTypes {
+		spaceTypes[s] = exists
+	}
+
+	spaces := []*provider.StorageSpace{}
+	for k := range spaceTypes {
+		switch k {
+		case "mountpoint":
+			for _, share := range lrsRes.Shares {
+				root := &provider.ResourceId{
+					StorageId: utils.PublicStorageProviderID,
+					SpaceId:   share.Id.OpaqueId,
+					OpaqueId:  share.Id.OpaqueId,
+				}
+				space := &provider.StorageSpace{
+					Id: &provider.StorageSpaceId{
+						OpaqueId: storagespace.FormatResourceID(*root),
+					},
+					SpaceType: "mountpoint",
+					Owner: &userv1beta1.User{
+						Id: share.Grantee.GetUserId(),
+					},
+					Root: root,
+				}
+
+				spaces = append(spaces, space)
+			}
+		}
+	}
+
+	return spaces, nil
 }
 
 func (d *driver) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
