@@ -117,6 +117,9 @@ services:
     command: -c /etc/revad/storage-users-ocis.toml
     volumes:
       - shared-volume:/var/tmp
+    depends_on:
+      eos-storage:
+        condition: service_healthy
   frontend-global:
     extends: revad
     hostname: frontend
@@ -128,11 +131,17 @@ services:
     command: -c /etc/revad/storage-local-1.toml
     volumes:
       - shared-volume:/var/tmp
+    depends_on:
+      eos-storage:
+        condition: service_healthy
   storage-local-2:
     extends: revad
     command: -c /etc/revad/storage-local-2.toml
     volumes:
       - shared-volume:/var/tmp
+    depends_on:
+      eos-storage:
+        condition: service_healthy
   acceptance-1:
     extends: acceptance
     environment:
@@ -181,6 +190,9 @@ services:
     command: -c /etc/revad/storage-publiclink.toml
     volumes:
       - shared-volume:/var/tmp
+    depends_on:
+      eos-storage:
+        condition: service_healthy
   ldap-users:
     extends: revad
     hostname: users
