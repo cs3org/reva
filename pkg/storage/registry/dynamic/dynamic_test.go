@@ -21,6 +21,7 @@ package dynamic
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -46,6 +47,12 @@ func must(err error) {
 
 var _ = Describe("Dynamic storage provider", func() {
 	var (
+		d   storage.Registry
+		h   *registryv1beta1.ProviderInfo
+		err error
+		s   *server.Server
+		m   sync.Mutex
+
 		ctxAlice = ctxpkg.ContextSetUser(context.Background(), &userpb.User{
 			Id: &userpb.UserId{
 				OpaqueId: "alice",
@@ -62,6 +69,9 @@ var _ = Describe("Dynamic storage provider", func() {
 			},
 		})
 
+		dbHost = "localhost"
+		dbPort = 3305
+		dbName = "reva_tests"
 		routes = map[string]string{
 			"/home-a":                   "eoshome-i01",
 			"/home-b":                   "eoshome-i02",
@@ -73,7 +83,6 @@ var _ = Describe("Dynamic storage provider", func() {
 			"/cephfs/project/c/cephbox": "cephfs",
 			"/cephfs/project/s/sebtest": "vaultssda01",
 		}
-
 		rules = map[string]string{
 			"eoshome-i01":    "eoshome-i01:1234",
 			"eoshome-i02":    "eoshome-i02:1234",
@@ -89,10 +98,6 @@ var _ = Describe("Dynamic storage provider", func() {
 			"/Shares": "/{{substr 0 1 .Id.OpaqueId}}",
 		}
 		homePath = "/home"
-
-		d   storage.Registry
-		h   *registryv1beta1.ProviderInfo
-		err error
 
 		providers = map[string]*registryv1beta1.ProviderInfo{
 			"/home-a": {
@@ -148,11 +153,12 @@ var _ = Describe("Dynamic storage provider", func() {
 	)
 
 	BeforeSuite(func() {
-		dbHost := "localhost"
-		dbPort := 3306
-		dbName := "reva_tests"
+		m.Lock()
+		defer m.Unlock()
+
 		sqlCtx := sql.NewEmptyContext()
 		db := memory.NewDatabase(dbName)
+		dbPort++
 
 		db.EnablePrimaryKeyIndexes()
 
@@ -175,7 +181,7 @@ var _ = Describe("Dynamic storage provider", func() {
 		}
 
 		engine := sqle.NewDefault(memory.NewMemoryDBProvider(db))
-		s, err := server.NewDefaultServer(config, engine)
+		s, err = server.NewDefaultServer(config, engine)
 		if err != nil {
 			panic(err)
 		}
@@ -185,35 +191,81 @@ var _ = Describe("Dynamic storage provider", func() {
 				panic(err)
 			}
 		}()
+	})
 
-		d, err = New(context.Background(), map[string]interface{}{
-			"rules":       rules,
-			"rewrites":    rewrites,
-			"home_path":   homePath,
-			"db_username": "test",
-			"db_password": "test",
-			"db_host":     dbHost,
-			"db_port":     dbPort,
-			"db_name":     dbName,
-		})
-		if err != nil {
-			panic(err)
-		}
-
+	AfterSuite(func() {
 		if err := s.Close(); err != nil {
 			panic(err)
 		}
 	})
 
 	Context("initializing the provider", func() {
-		When("passed correct config", func() {
-			It("should return a correct dynamic provider", func() {
-				Expect(d).ToNot(BeNil())
+		When("passed incorrect config", func() {
+			It("should return an error", func() {
+				d, err = New(context.Background(), map[string]interface{}{"rules": "hi"})
+				Expect(d).To(BeNil())
+				Expect(err).To(HaveOccurred())
 			})
 		})
+
+		When("passed correct config", func() {
+			It("should return a correct dynamic provider", func() {
+				d, err = New(context.Background(), map[string]interface{}{
+					"rules":       rules,
+					"rewrites":    rewrites,
+					"home_path":   homePath,
+					"db_username": "test",
+					"db_password": "test",
+					"db_host":     dbHost,
+					"db_port":     dbPort,
+					"db_name":     dbName,
+				})
+
+				prv, _ := d.FindProviders(context.Background(), &provider.Reference{Path: "/eos/"})
+				fmt.Printf("\n\n\n%+v\n\n\n", prv)
+
+				Expect(d).ToNot(BeNil())
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+
+		When("passed a bad db host in the config", func() {
+			It("should return a en error", func() {
+				d, err = New(context.Background(), map[string]interface{}{
+					"rules":       rules,
+					"rewrites":    rewrites,
+					"home_path":   homePath,
+					"db_username": "test",
+					"db_password": "test",
+					"db_host":     "bad_db_host",
+					"db_port":     dbPort,
+					"db_name":     dbName,
+				})
+
+				fmt.Printf("\n\n\n%+v\n\n\n", err)
+
+				Expect(d).To(BeNil())
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
 	})
 
 	Context("listing providers", func() {
+		JustBeforeEach(func() {
+			d, err = New(context.Background(), map[string]interface{}{
+				"rules":       rules,
+				"rewrites":    rewrites,
+				"home_path":   homePath,
+				"db_username": "test",
+				"db_password": "test",
+				"db_host":     dbHost,
+				"db_port":     dbPort,
+				"db_name":     dbName,
+			})
+			Expect(err).ToNot(HaveOccurred())
+		})
+
 		It("should return a correct list of providers", func() {
 			p, err := d.ListProviders(context.Background())
 			Expect(p).To(HaveLen(len(providers)))
@@ -222,6 +274,20 @@ var _ = Describe("Dynamic storage provider", func() {
 	})
 
 	Context("getting home for user", func() {
+		JustBeforeEach(func() {
+			d, err = New(context.Background(), map[string]interface{}{
+				"rules":       rules,
+				"rewrites":    rewrites,
+				"home_path":   homePath,
+				"db_username": "test",
+				"db_password": "test",
+				"db_host":     dbHost,
+				"db_port":     dbPort,
+				"db_name":     dbName,
+			})
+			Expect(err).ToNot(HaveOccurred())
+		})
+
 		When("passed context for user alice", func() {
 			It("should return the correct provider", func() {
 				h, err = d.GetHome(ctxAlice)
@@ -255,6 +321,20 @@ var _ = Describe("Dynamic storage provider", func() {
 	})
 
 	Context("finding providers for a reference", func() {
+		JustBeforeEach(func() {
+			d, err = New(context.Background(), map[string]interface{}{
+				"rules":       rules,
+				"rewrites":    rewrites,
+				"home_path":   homePath,
+				"db_username": "test",
+				"db_password": "test",
+				"db_host":     dbHost,
+				"db_port":     dbPort,
+				"db_name":     dbName,
+			})
+			Expect(err).ToNot(HaveOccurred())
+		})
+
 		When("passed an storage id", func() {
 			It("should return the correct provider", func() {
 				ref := &provider.Reference{
