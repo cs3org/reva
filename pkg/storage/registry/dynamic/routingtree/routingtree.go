@@ -55,10 +55,6 @@ func New(routes map[string]string) *RoutingTree {
 }
 
 func (t *RoutingTree) addNode(r Route) *RoutingTree {
-	if t.route.Name == r.Name {
-		return t
-	}
-
 	newNode, ok := t.nodes[r.Name]
 	if !ok {
 		newNode = &RoutingTree{
@@ -76,6 +72,10 @@ func (t *RoutingTree) addRoute(route, mountID string) {
 	current := t
 
 	for i, name := range parts {
+		if name == "" {
+			continue
+		}
+
 		newNode := Route{
 			Name: name,
 		}
@@ -124,7 +124,6 @@ func (t *RoutingTree) Resolve(p string) ([]*registrypb.ProviderInfo, error) {
 	}
 
 	providerMap := r.getMountID(p, map[string]*registrypb.ProviderInfo{})
-
 	providers := make([]*registrypb.ProviderInfo, 0, len(providerMap))
 	for _, p := range providerMap {
 		providers = append(providers, p)
