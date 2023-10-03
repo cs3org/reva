@@ -263,7 +263,7 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 	log.Info().Str("func", "AddACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Init a new NSRequest
-	rq, err := c.initNSRequest(ctx, rootAuth)
+	rq, err := c.initNSRequest(context.Background(), rootAuth)
 	if err != nil {
 		return err
 	}
@@ -314,7 +314,7 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 	sysACL := acls.Serialize()
 
 	// Init a new NSRequest
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(context.Background(), auth)
 	if err != nil {
 		return err
 	}
@@ -391,7 +391,7 @@ func (c *Client) getACLForPath(ctx context.Context, auth eosclient.Authorization
 	log.Info().Str("func", "GetACLForPath").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(context.Background(), auth)
 	if err != nil {
 		return nil, err
 	}
@@ -515,7 +515,7 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 	log.Info().Str("func", "SetAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(context.Background(), auth)
 	if err != nil {
 		return err
 	}
@@ -536,7 +536,7 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 	rq.Command = &erpc.NSRequest_Xattr{Xattr: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctx, rq)
+	resp, err := c.cl.Exec(context.Background(), rq)
 	e := c.getRespError(resp, err)
 
 	if resp != nil && resp.Error != nil && resp.Error.Code == 17 {
@@ -565,7 +565,7 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 	log.Info().Str("func", "UnsetAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(context.Background(), auth)
 	if err != nil {
 		return err
 	}
@@ -582,7 +582,7 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 	rq.Command = &erpc.NSRequest_Xattr{Xattr: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctx, rq)
+	resp, err := c.cl.Exec(context.Background(), rq)
 
 	if resp != nil && resp.Error != nil && resp.Error.Code == 61 {
 		return eosclient.AttrNotExistsError
