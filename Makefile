@@ -65,6 +65,10 @@ docker-revad-ceph:
 docker-revad-eos:
 	docker build -f docker/Dockerfile.revad-eos -t revad-eos --build-arg VERSION=$(VERSION) --build-arg GIT_COMMIT=$(GIT_COMMIT) .
 
+.PHONY: docker-eos-full-tests
+docker-eos-full-tests:
+	docker build -f tests/docker/eos-storage/Dockerfile -t eos-full:latest tests/docker/eos-storage
+
 ################################################################################
 # Test
 ################################################################################
@@ -75,7 +79,7 @@ export PARTS		?= 1
 export PART			?= 1
 
 .PHONY: $(TEST)
-$(TEST):
+$(TEST): docker-revad-eos docker-eos-full-tests
 	docker compose -f ./tests/docker/docker-compose.yml up --force-recreate --always-recreate-deps --build --abort-on-container-exit -V --remove-orphans --exit-code-from $@ $@
 
 .PHONY: test-go

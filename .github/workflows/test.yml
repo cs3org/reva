@@ -68,8 +68,17 @@ jobs:
     with:
       file: docker/Dockerfile.revad
       load: true
+  eos-image-full:
+    name: docker (eos storage full - test only)
+    uses: ./.github/workflows/docker.yml
+    with:
+      file: tests/docker/eos-storage/Dockerfile
+      load: false
+      tags: eos-full:latest
   litmus:
-    needs: docker-revad
+    needs:
+      - docker-revad
+      - eos-image-full
     strategy:
       fail-fast: false
       matrix:
@@ -79,14 +88,18 @@ jobs:
       test: ${{ matrix.test }}
       image: ${{ needs.docker-revad.outputs.image }}
   acceptance-1:
-    needs: docker-revad
+    needs:
+      - docker-revad
+      - eos-image-full
     uses: ./.github/workflows/compose.yml
     with:
       test: acceptance-1
       image: ${{ needs.docker-revad.outputs.image }}
       submodules: true
   acceptance-2:
-    needs: docker-revad
+    needs:
+      - docker-revad
+      - eos-image-full
     strategy:
       fail-fast: false
       matrix:
