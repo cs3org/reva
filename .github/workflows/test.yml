@@ -75,6 +75,7 @@ jobs:
       file: tests/docker/eos-storage/Dockerfile
       load: false
       tags: eos-full:latest
+      context: tests/docker/eos-storage
   litmus:
     needs:
       - docker-revad
