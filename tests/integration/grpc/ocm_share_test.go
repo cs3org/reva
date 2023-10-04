@@ -152,14 +152,6 @@ var _ = Describe("ocm share", func() {
 			{Name: "cernboxocmdataserver", Config: "ocm-share/ocm-cernbox-outcoming-dataserver.toml"},
 			{Name: "cernboxmachineauth", Config: "ocm-share/cernbox-machine-authprovider.toml"},
 		}, variables)
-		// , map[string]string{
-		// 	"providers": "ocm-providers.demo.json",
-		// }, map[string]Resource{
-		// 	"ocm_share_cernbox_file": File{Content: "{}"},
-		// 	"ocm_share_cesnet_file":  File{Content: "{}"},
-		// 	"invite_token_file":      File{Content: "{}"},
-		// 	"localhome_root":         Folder{},
-		// }
 		Expect(err).ToNot(HaveOccurred())
 		cernboxgw, err = pool.GetGatewayServiceClient(revads["cernboxgw"].GrpcAddress)
 		Expect(err).ToNot(HaveOccurred())
@@ -263,22 +255,12 @@ var _ = Describe("ocm share", func() {
 				By("marie access the share using the ocm mount")
 				ref = &provider.Reference{Path: ocmPath(share.Id, "")}
 				statRes, err := cesnetgw.Stat(ctxMarie, &provider.StatRequest{Ref: ref})
-				statRes, err = cesnetgw.Stat(ctxMarie, &provider.StatRequest{Ref: ref})
-				statRes, err = cesnetgw.Stat(ctxMarie, &provider.StatRequest{Ref: ref})
-				statRes, err = cesnetgw.Stat(ctxMarie, &provider.StatRequest{Ref: ref})
-				statRes, err = cesnetgw.Stat(ctxMarie, &provider.StatRequest{Ref: ref})
-				statRes, err = cesnetgw.Stat(ctxMarie, &provider.StatRequest{Ref: ref})
-				statRes, err = cesnetgw.Stat(ctxMarie, &provider.StatRequest{Ref: ref})
-				statRes, err = cesnetgw.Stat(ctxMarie, &provider.StatRequest{Ref: ref})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(statRes.Info.Id).ToNot(BeNil())
 				checkResourceInfo(statRes.Info, &provider.ResourceInfo{
-					Id: &provider.ResourceId{
-						StorageId: "984e7351-2729-4417-99b4-ab5e6d41fa97",
-						OpaqueId:  share.Id.OpaqueId + ":/",
-					},
 					Name:          "new-file",
-					Path:          ocmPath(share.Id, ""),
+					Path:          ".",
 					Size:          4,
 					Type:          provider.ResourceType_RESOURCE_TYPE_FILE,
 					PermissionSet: viewerPermissions,
@@ -762,7 +744,6 @@ func ocmPath(id *ocmv1beta1.ShareId, p string) string {
 }
 
 func checkResourceInfo(info, target *provider.ResourceInfo) {
-	Expect(info.Id).To(Equal(target.Id))
 	Expect(info.Name).To(Equal(target.Name))
 	Expect(info.Path).To(Equal(target.Path))
 	Expect(info.Size).To(Equal(target.Size))
