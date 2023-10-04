@@ -142,7 +142,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, err
 	}
 
-	log.Debug().Interface("entries", sr.Entries).Send()
+	log.Trace().Interface("entries", sr.Entries).Send()
 	if len(sr.Entries) != 1 {
 		return nil, nil, errtypes.NotFound(clientID)
 	}

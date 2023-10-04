@@ -11,10 +11,14 @@ services:
     healthcheck:
       test: sleep 5
   eos-storage:
-    image: gitlab-registry.cern.ch/dss/eos/eos-ci:5.1.25
-    volumes:
-      - ./scripts:/mnt/scripts
-    entrypoint: /mnt/scripts/eos-run.sh
+    build:
+      # context: ../../
+      context: eos-storage
+      dockerfile: Dockerfile
+    # volumes:
+    #   - ./eos-storage/scripts:/mnt/scripts
+    #   - ./eos-storage/sssd/sssd.conf:/etc/sssd/sssd.conf
+    # entrypoint: /mnt/scripts/eos-run.sh
     security_opt:
       - seccomp:unconfined
     ulimits:
@@ -214,7 +218,7 @@ services:
       BEHAT_FILTER_TAGS: ~@provisioning_api-app-required&&~@skipOnOcis-OCIS-Storage&&~@personalSpace&&~@skipOnGraph&&~@carddav&&~@skipOnReva&&~@skipOnRevaMaster
       DIVIDE_INTO_NUM_PARTS: ${PARTS:-1}
       RUN_PART: ${PART:-1}
-      EXPECTED_FAILURES_FILE: /mnt/acceptance/expected-failures-on-OCIS-storage.md
+      # EXPECTED_FAILURES_FILE: /mnt/acceptance/expected-failures-on-OCIS-storage.md
       BEHAT_YML: tests/acceptance/config/behat-core.yml
       ACCEPTANCE_TEST_TYPE: core-api
     volumes:

@@ -5,6 +5,7 @@ eos daemon run mq &
 eos daemon run qdb &
 eos daemon run mgm &
 eos daemon run fst &
+sssd
 sleep 5
 
 for name in 01; do
@@ -28,7 +29,7 @@ eosxd -ofsname=`hostname -f`:/eos/ /eos/
 eos mkdir -p /eos/user
 
 for letter in {a..z}; do
-  eos mkdir -p /eos/user/$letter
+  eos mkdir -p "/eos/user/$letter"
 done
 
 eos vid set membership 0 +sudo
