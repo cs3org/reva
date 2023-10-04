@@ -28,7 +28,7 @@ jobs:
         with:
           image: ${{ inputs.image }}
       - name: Test
-        run: make ${{ inputs.test }} -o docker-revad
+        run: make ${{ inputs.test }}
         env:
           REVAD_IMAGE: ${{ inputs.image }}
           PARTS: ${{ inputs.parts }}
