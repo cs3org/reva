@@ -24,7 +24,7 @@ eos attr set default=raid6 /eos/dev/ec-42/
 eos chmod 777 /eos/dev/rep-2/
 eos chmod 777 /eos/dev/ec-42/
 mkdir -p /eos/
-eosxd -ofsname=`hostname -f`:/eos/ /eos/
+eosxd -ofsname=$(hostname -f):/eos/ /eos/
 
 eos mkdir -p /eos/user
 
