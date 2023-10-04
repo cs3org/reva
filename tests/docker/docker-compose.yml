@@ -218,7 +218,7 @@ services:
       BEHAT_FILTER_TAGS: ~@provisioning_api-app-required&&~@skipOnOcis-OCIS-Storage&&~@personalSpace&&~@skipOnGraph&&~@carddav&&~@skipOnReva&&~@skipOnRevaMaster
       DIVIDE_INTO_NUM_PARTS: ${PARTS:-1}
       RUN_PART: ${PART:-1}
-      EXPECTED_FAILURES_FILE: /mnt/acceptance/expected-failures-on-OCIS-storage.md
+      EXPECTED_FAILURES_FILE: /mnt/acceptance/expected-failures-on-EOS-storage.md
       BEHAT_YML: tests/acceptance/config/behat-core.yml
       ACCEPTANCE_TEST_TYPE: core-api
     volumes:
