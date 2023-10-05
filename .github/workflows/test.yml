@@ -13,7 +13,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Setup Go environment
-        uses: actions/setup-go@v3.3.0
+        uses: actions/setup-go@v4
         with:
           go-version-file: go.mod
       - name: Test integration
@@ -40,7 +40,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Setup Go environment
-        uses: actions/setup-go@v3.3.0
+        uses: actions/setup-go@v4
         with:
           go-version-file: go.mod
       - name: Test

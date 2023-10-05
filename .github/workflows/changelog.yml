@@ -20,7 +20,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3.1.0
       - name: Setup Go environment
-        uses: actions/setup-go@v3.3.0
+        uses: actions/setup-go@v4
         with:
           go-version-file: go.mod
       - name: Check changelog
