@@ -1385,6 +1385,7 @@ The problem has been fixed in reva edge branch but not in reva master
 - [coreApiWebdavEtagPropagation2/copyFileFolder.feature:227](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavEtagPropagation2/copyFileFolder.feature#L227)
 - [coreApiWebdavEtagPropagation2/copyFileFolder.feature:228](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavEtagPropagation2/copyFileFolder.feature#L228)
 - [coreApiWebdavEtagPropagation2/copyFileFolder.feature:28](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavEtagPropagation2/copyFileFolder.feature#L28)
+- [coreApiWebdavEtagPropagation2/copyFileFolder.feature:27](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavEtagPropagation2/copyFileFolder.feature#L27)
 - [coreApiWebdavEtagPropagation2/copyFileFolder.feature:55](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavEtagPropagation2/copyFileFolder.feature#L55)
 - [coreApiWebdavEtagPropagation2/copyFileFolder.feature:82](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavEtagPropagation2/copyFileFolder.feature#L82)
 - [coreApiWebdavEtagPropagation2/copyFileFolder.feature:83](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavEtagPropagation2/copyFileFolder.feature#L83)
