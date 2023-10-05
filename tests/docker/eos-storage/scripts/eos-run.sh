@@ -9,8 +9,8 @@ sssd
 sleep 5
 
 for name in 01; do
-  mkdir -p /data/fst/$$name;
-  chown daemon:daemon /data/fst/$$name
+  mkdir -p /data/fst/$name;
+  chown daemon:daemon /data/fst/$name
 done
 eos space define default
 
