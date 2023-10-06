@@ -75,7 +75,7 @@ jobs:
     uses: ./.github/workflows/docker.yml
     with:
       file: docker/Dockerfile.revad-eos
-      load: true
+      load: false
   litmus:
     needs:
       - docker-revad-eos
