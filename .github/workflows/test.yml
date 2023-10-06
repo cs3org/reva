@@ -70,9 +70,15 @@ jobs:
     with:
       file: docker/Dockerfile.revad
       load: true
+  docker-revad-eos:
+    name: docker (docker/Dockerfile.revad-eos)
+    uses: ./.github/workflows/docker.yml
+    with:
+      file: docker/Dockerfile.revad-eos
+      load: true
   litmus:
     needs:
-      - docker-revad
+      - docker-revad-eos
     strategy:
       fail-fast: false
       matrix:
@@ -83,7 +89,7 @@ jobs:
       image: ${{ needs.docker-revad.outputs.image }}
   acceptance-1:
     needs:
-      - docker-revad
+      - docker-revad-eos
     uses: ./.github/workflows/compose.yml
     with:
       test: acceptance-1
@@ -91,7 +97,7 @@ jobs:
       submodules: true
   acceptance-2:
     needs:
-      - docker-revad
+      - docker-revad-eos
     strategy:
       fail-fast: false
       matrix:
