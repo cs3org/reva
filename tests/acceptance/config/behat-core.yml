@@ -1,0 +1,401 @@
+default:
+  autoload:
+    "": "%paths.base%/../features/bootstrap"
+  suites:
+    coreApiMain:
+      paths:
+        - "%paths.base%/../features/coreApiMain"
+      context: &common_ldap_suite_context
+        parameters:
+          ldapAdminPassword: admin
+          ldapUsersOU: TestUsers
+          ldapGroupsOU: TestGroups
+          ldapInitialUserFilePath: /../../config/ldap-users.ldif
+      contexts:
+        - FeatureContext: &common_feature_context_params
+            baseUrl: http://localhost:8080
+            adminUsername: admin
+            adminPassword: admin
+            regularUserPassword: 123456
+            ocPath: apps/testing/api/v1/occ
+        - AppConfigurationContext:
+        - ChecksumContext:
+        - FilesVersionsContext:
+        - TrashbinContext:
+
+    coreApiAuth:
+      paths:
+        - "%paths.base%/../features/coreApiAuth"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - AuthContext:
+
+    coreApiAuthOcs:
+      paths:
+        - "%paths.base%/../features/coreApiAuthOcs"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - AuthContext:
+
+    coreApiAuthWebDav:
+      paths:
+        - "%paths.base%/../features/coreApiAuthWebDav"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - SearchContext:
+        - PublicWebDavContext:
+        - WebDavPropertiesContext:
+        - AuthContext:
+
+    coreApiCapabilities:
+      paths:
+        - "%paths.base%/../features/coreApiCapabilities"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - CapabilitiesContext:
+        - AppConfigurationContext:
+
+    coreApiFavorites:
+      paths:
+        - "%paths.base%/../features/coreApiFavorites"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - FavoritesContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiShareCreateSpecialToShares1:
+      paths:
+        - "%paths.base%/../features/coreApiShareCreateSpecialToShares1"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiShareCreateSpecialToShares2:
+      paths:
+        - "%paths.base%/../features/coreApiShareCreateSpecialToShares2"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiSharees:
+      paths:
+        - "%paths.base%/../features/coreApiSharees"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - ShareesContext:
+        - AppConfigurationContext:
+
+    coreApiShareManagementToShares:
+      paths:
+        - "%paths.base%/../features/coreApiShareManagementToShares"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+        - FilesVersionsContext:
+
+    coreApiShareManagementBasicToShares:
+      paths:
+        - "%paths.base%/../features/coreApiShareManagementBasicToShares"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+        - AuthContext:
+
+    coreApiShareOperationsToShares1:
+      paths:
+        - "%paths.base%/../features/coreApiShareOperationsToShares1"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+
+    coreApiShareOperationsToShares2:
+      paths:
+        - "%paths.base%/../features/coreApiShareOperationsToShares2"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+
+    coreApiSharePublicLink1:
+      paths:
+        - "%paths.base%/../features/coreApiSharePublicLink1"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiSharePublicLink2:
+      paths:
+        - "%paths.base%/../features/coreApiSharePublicLink2"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiSharePublicLink3:
+      paths:
+        - "%paths.base%/../features/coreApiSharePublicLink3"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiShareReshareToShares1:
+      paths:
+        - "%paths.base%/../features/coreApiShareReshareToShares1"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+
+    coreApiShareReshareToShares2:
+      paths:
+        - "%paths.base%/../features/coreApiShareReshareToShares2"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiShareReshareToShares3:
+      paths:
+        - "%paths.base%/../features/coreApiShareReshareToShares3"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiShareUpdateToShares:
+      paths:
+        - "%paths.base%/../features/coreApiShareUpdateToShares"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiTrashbin:
+      paths:
+        - "%paths.base%/../features/coreApiTrashbin"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - TrashbinContext:
+        - AppConfigurationContext:
+        - WebDavPropertiesContext:
+
+    coreApiTrashbinRestore:
+      paths:
+        - "%paths.base%/../features/coreApiTrashbinRestore"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - TrashbinContext:
+        - AppConfigurationContext:
+        - WebDavPropertiesContext:
+
+    coreApiVersions:
+      paths:
+        - "%paths.base%/../features/coreApiVersions"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - ChecksumContext:
+        - FilesVersionsContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+        - TrashbinContext:
+
+    coreApiWebdavDelete:
+      paths:
+        - "%paths.base%/../features/coreApiWebdavDelete"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - SearchContext:
+        - PublicWebDavContext:
+        - WebDavPropertiesContext:
+        - TrashbinContext:
+
+    coreApiWebdavLocks:
+      paths:
+        - "%paths.base%/../features/coreApiWebdavLocks"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - WebDavLockingContext:
+        - WebDavPropertiesContext:
+
+    coreApiWebdavLocks2:
+      paths:
+        - "%paths.base%/../features/coreApiWebdavLocks2"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - WebDavLockingContext:
+        - WebDavPropertiesContext:
+
+    coreApiWebdavLocksUnlock:
+      paths:
+        - "%paths.base%/../features/coreApiWebdavLocksUnlock"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - WebDavLockingContext:
+        - WebDavPropertiesContext:
+
+    coreApiWebdavMove1:
+      paths:
+        - "%paths.base%/../features/coreApiWebdavMove1"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - WebDavPropertiesContext:
+
+    coreApiWebdavMove2:
+      paths:
+        - "%paths.base%/../features/coreApiWebdavMove2"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - WebDavPropertiesContext:
+
+    coreApiWebdavOperations:
+      paths:
+        - "%paths.base%/../features/coreApiWebdavOperations"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - SearchContext:
+        - PublicWebDavContext:
+        - WebDavPropertiesContext:
+        - TrashbinContext:
+
+    coreApiWebdavPreviews:
+      paths:
+        - "%paths.base%/../features/coreApiWebdavPreviews"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - WebDavPropertiesContext:
+
+    coreApiWebdavProperties1:
+      paths:
+        - "%paths.base%/../features/coreApiWebdavProperties1"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiWebdavProperties2:
+      paths:
+        - "%paths.base%/../features/coreApiWebdavProperties2"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiWebdavUpload1:
+      paths:
+        - "%paths.base%/../features/coreApiWebdavUpload1"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - WebDavPropertiesContext:
+
+    coreApiWebdavUpload2:
+      paths:
+        - "%paths.base%/../features/coreApiWebdavUpload2"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+
+    coreApiWebdavUploadTUS:
+      paths:
+        - "%paths.base%/../features/coreApiWebdavUploadTUS"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TUSContext:
+        - FilesVersionsContext:
+        - ChecksumContext:
+    
+    # coreApiWebdavEtagPropagation1:
+    #   paths:
+    #     - "%paths.base%/../features/coreApiWebdavEtagPropagation1"
+    #   context: *common_ldap_suite_context
+    #   contexts:
+    #     - FeatureContext: *common_feature_context_params
+    #     - TrashbinContext:
+    #     - PublicWebDavContext:
+    #     - FilesVersionsContext:
+    #     - WebDavPropertiesContext:
+    #     - AppConfigurationContext:
+
+    # coreApiWebdavEtagPropagation2:
+    #   paths:
+    #     - "%paths.base%/../features/coreApiWebdavEtagPropagation2"
+    #   context: *common_ldap_suite_context
+    #   contexts:
+    #     - FeatureContext: *common_feature_context_params
+    #     - TrashbinContext:
+    #     - PublicWebDavContext:
+    #     - FilesVersionsContext:
+    #     - WebDavPropertiesContext:
+    #     - AppConfigurationContext:
+
+  extensions:
+    rdx\behatvars\BehatVariablesExtension: ~
+
+    Cjm\Behat\StepThroughExtension: ~

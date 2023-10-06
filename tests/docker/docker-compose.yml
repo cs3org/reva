@@ -145,7 +145,6 @@ services:
     environment:
       PATH_TO_APITESTS: /mnt/ocis
       TEST_SERVER_URL: http://frontend:20180
-      # STORAGE_DRIVER: OCIS
       TEST_REVA: 'true'
       EXPECTED_FAILURES_FILE: /mnt/acceptance/expected-failures-on-EOS-storage.md
       REGULAR_USER_PASSWORD: relativity
@@ -212,7 +211,7 @@ services:
       DIVIDE_INTO_NUM_PARTS: ${PARTS:-1}
       RUN_PART: ${PART:-1}
       EXPECTED_FAILURES_FILE: /mnt/acceptance/expected-failures-on-EOS-storage.md
-      BEHAT_YML: tests/acceptance/config/behat-core.yml
+      BEHAT_YML: /mnt/acceptance/config/behat-core.yml
       ACCEPTANCE_TEST_TYPE: core-api
     volumes:
       - shared-volume:/var/tmp
