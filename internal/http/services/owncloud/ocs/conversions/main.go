@@ -116,9 +116,9 @@ type ShareData struct {
 	// The type of the object being shared. This can be one of 'file' or 'folder'.
 	ItemType string `json:"item_type" xml:"item_type"`
 	// The RFC2045-compliant mimetype of the file.
-	MimeType  string `json:"mimetype" xml:"mimetype"`
+	MimeType  string `json:"mimetype"   xml:"mimetype"`
 	StorageID string `json:"storage_id" xml:"storage_id"`
-	Storage   uint64 `json:"storage" xml:"storage"`
+	Storage   uint64 `json:"storage"    xml:"storage"`
 	// The unique node id of the item being shared.
 	ItemSource string `json:"item_source" xml:"item_source"`
 	// The unique node id of the item being shared. For legacy reasons item_source and file_source attributes have the same value.
@@ -157,16 +157,16 @@ type ShareData struct {
 
 // ShareeData holds share recipient search results.
 type ShareeData struct {
-	Exact   *ExactMatchesData `json:"exact" xml:"exact"`
-	Users   []*MatchData      `json:"users" xml:"users>element"`
-	Groups  []*MatchData      `json:"groups" xml:"groups>element"`
+	Exact   *ExactMatchesData `json:"exact"   xml:"exact"`
+	Users   []*MatchData      `json:"users"   xml:"users>element"`
+	Groups  []*MatchData      `json:"groups"  xml:"groups>element"`
 	Remotes []*MatchData      `json:"remotes" xml:"remotes>element"`
 }
 
 // ExactMatchesData hold exact matches.
 type ExactMatchesData struct {
-	Users   []*MatchData `json:"users" xml:"users>element"`
-	Groups  []*MatchData `json:"groups" xml:"groups>element"`
+	Users   []*MatchData `json:"users"   xml:"users>element"`
+	Groups  []*MatchData `json:"groups"  xml:"groups>element"`
 	Remotes []*MatchData `json:"remotes" xml:"remotes>element"`
 }
 
@@ -178,9 +178,9 @@ type MatchData struct {
 
 // MatchValueData holds the type and actual value.
 type MatchValueData struct {
-	ShareType               int    `json:"shareType" xml:"shareType"`
-	ShareWith               string `json:"shareWith" xml:"shareWith"`
-	ShareWithProvider       string `json:"shareWithProvider" xml:"shareWithProvider"`
+	ShareType               int    `json:"shareType"               xml:"shareType"`
+	ShareWith               string `json:"shareWith"               xml:"shareWith"`
+	ShareWithProvider       string `json:"shareWithProvider"       xml:"shareWithProvider"`
 	ShareWithAdditionalInfo string `json:"shareWithAdditionalInfo" xml:"shareWithAdditionalInfo"`
 }
 

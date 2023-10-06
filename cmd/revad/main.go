@@ -247,7 +247,7 @@ func getConfigsFromDir(dir string) (confs []string, err error) {
 	for _, value := range files {
 		if !value.IsDir() {
 			expr := regexp.MustCompile(`[\w].toml`)
-			if expr.Match([]byte(value.Name())) {
+			if expr.MatchString(value.Name()) {
 				confs = append(confs, path.Join(dir, value.Name()))
 			}
 		}

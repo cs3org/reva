@@ -656,7 +656,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				} else {
 					checksums.WriteString(" MD5:")
 				}
-				checksums.WriteString(string(e.Value))
+				checksums.Write(e.Value)
 			}
 			if e, ok := md.Opaque.Map["adler32"]; ok {
 				if checksums.Len() == 0 {
@@ -664,7 +664,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				} else {
 					checksums.WriteString(" ADLER32:")
 				}
-				checksums.WriteString(string(e.Value))
+				checksums.Write(e.Value)
 			}
 		}
 		if checksums.Len() > 0 {
@@ -823,7 +823,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 							} else {
 								checksums.WriteString(" MD5:")
 							}
-							checksums.WriteString(string(e.Value))
+							checksums.Write(e.Value)
 						}
 						if e, ok := md.Opaque.Map["adler32"]; ok {
 							if checksums.Len() == 0 {
@@ -831,7 +831,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 							} else {
 								checksums.WriteString(" ADLER32:")
 							}
-							checksums.WriteString(string(e.Value))
+							checksums.Write(e.Value)
 						}
 					}
 					if checksums.Len() > 13 {

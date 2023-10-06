@@ -18,7 +18,7 @@ toolchain: $(GOLANGCI_LINT) $(CALENS)
 
 $(GOLANGCI_LINT):
 	@mkdir -p $(@D)
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | BINDIR=$(@D) sh -s v1.50.1
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | BINDIR=$(@D) sh -s v1.54.2
 
 CALENS_DIR := $(shell mktemp -d)
 $(CALENS):
@@ -139,3 +139,4 @@ docker-clean:
 .PHONY: clean
 clean: toolchain-clean docker-clean
 	rm -rf dist
+	rm -rf tmp

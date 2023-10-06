@@ -34,13 +34,13 @@ import (
 
 // SMTPCredentials stores the credentials required to connect to an SMTP server.
 type SMTPCredentials struct {
-	SenderLogin    string `mapstructure:"sender_login" docs:";The login to be used by sender."`
-	SenderMail     string `mapstructure:"sender_mail" docs:";The email to be used to send mails."`
-	SenderPassword string `mapstructure:"sender_password" docs:";The sender's password."`
-	SMTPServer     string `mapstructure:"smtp_server" docs:";The hostname of the SMTP server."`
-	SMTPPort       int    `mapstructure:"smtp_port" docs:"587;The port on which the SMTP daemon is running."`
-	DisableAuth    bool   `mapstructure:"disable_auth" docs:"false;Whether to disable SMTP auth."`
-	LocalName      string `mapstructure:"local_name" docs:";The host name to be used for unauthenticated SMTP."`
+	SenderLogin    string `docs:";The login to be used by sender."                    mapstructure:"sender_login"`
+	SenderMail     string `docs:";The email to be used to send mails."                mapstructure:"sender_mail"`
+	SenderPassword string `docs:";The sender's password."                             mapstructure:"sender_password"`
+	SMTPServer     string `docs:";The hostname of the SMTP server."                   mapstructure:"smtp_server"`
+	SMTPPort       int    `docs:"587;The port on which the SMTP daemon is running."   mapstructure:"smtp_port"`
+	DisableAuth    bool   `docs:"false;Whether to disable SMTP auth."                 mapstructure:"disable_auth"`
+	LocalName      string `docs:";The host name to be used for unauthenticated SMTP." mapstructure:"local_name"`
 }
 
 // NewSMTPCredentials creates a new SMTPCredentials object with the details of the passed object with sane defaults.

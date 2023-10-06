@@ -37,22 +37,22 @@ func init() {
 }
 
 type config struct {
-	OCMPrefix    string `mapstructure:"ocm_prefix" docs:"ocm;The prefix URL where the OCM API is served."`
-	Endpoint     string `mapstructure:"endpoint" docs:"This host's full URL. If it's not configured, it is assumed OCM is not available."`
-	Provider     string `mapstructure:"provider" docs:"reva;A friendly name that defines this service."`
-	WebdavRoot   string `mapstructure:"webdav_root" docs:"/remote.php/dav/ocm;The root URL of the WebDAV endpoint to serve OCM shares."`
-	WebappRoot   string `mapstructure:"webapp_root" docs:"/external/sciencemesh;The root URL to serve Web apps via OCM."`
-	EnableWebapp bool   `mapstructure:"enable_webapp" docs:"false;Whether web apps are enabled in OCM shares."`
-	EnableDatatx bool   `mapstructure:"enable_datatx" docs:"false;Whether data transfers are enabled in OCM shares."`
+	OCMPrefix    string `docs:"ocm;The prefix URL where the OCM API is served."                                   mapstructure:"ocm_prefix"`
+	Endpoint     string `docs:"This host's full URL. If it's not configured, it is assumed OCM is not available." mapstructure:"endpoint"`
+	Provider     string `docs:"reva;A friendly name that defines this service."                                   mapstructure:"provider"`
+	WebdavRoot   string `docs:"/remote.php/dav/ocm;The root URL of the WebDAV endpoint to serve OCM shares."      mapstructure:"webdav_root"`
+	WebappRoot   string `docs:"/external/sciencemesh;The root URL to serve Web apps via OCM."                     mapstructure:"webapp_root"`
+	EnableWebapp bool   `docs:"false;Whether web apps are enabled in OCM shares."                                 mapstructure:"enable_webapp"`
+	EnableDatatx bool   `docs:"false;Whether data transfers are enabled in OCM shares."                           mapstructure:"enable_datatx"`
 }
 
 type DiscoveryData struct {
-	Enabled       bool            `json:"enabled" xml:"enabled"`
-	APIVersion    string          `json:"apiVersion" xml:"apiVersion"`
-	Endpoint      string          `json:"endPoint" xml:"endPoint"`
-	Provider      string          `json:"provider" xml:"provider"`
+	Enabled       bool            `json:"enabled"       xml:"enabled"`
+	APIVersion    string          `json:"apiVersion"    xml:"apiVersion"`
+	Endpoint      string          `json:"endPoint"      xml:"endPoint"`
+	Provider      string          `json:"provider"      xml:"provider"`
 	ResourceTypes []resourceTypes `json:"resourceTypes" xml:"resourceTypes"`
-	Capabilities  []string        `json:"capabilities" xml:"capabilities"`
+	Capabilities  []string        `json:"capabilities"  xml:"capabilities"`
 }
 
 type resourceTypes struct {

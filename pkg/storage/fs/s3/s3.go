@@ -323,7 +323,7 @@ func (fs *s3FS) CreateDir(ctx context.Context, ref *provider.Reference) error {
 
 	result, err := fs.client.PutObject(input)
 	if err != nil {
-		log.Error().Err(err)
+		log.Error().Err(err).Send()
 		if aerr, ok := err.(awserr.Error); ok {
 			if aerr.Code() == s3.ErrCodeNoSuchBucket {
 				return errtypes.NotFound(ref.Path)
@@ -333,7 +333,7 @@ func (fs *s3FS) CreateDir(ctx context.Context, ref *provider.Reference) error {
 		return errors.Wrap(err, "s3fs: error creating dir "+ref.Path)
 	}
 
-	log.Debug().Interface("result", result) // todo cache etag?
+	log.Debug().Interface("result", result).Send() // todo cache etag?
 	return nil
 }
 
@@ -357,7 +357,7 @@ func (fs *s3FS) Delete(ctx context.Context, ref *provider.Reference) error {
 		Key:    aws.String(fn),
 	})
 	if err != nil {
-		log.Error().Err(err)
+		log.Error().Err(err).Send()
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
 			case s3.ErrCodeNoSuchBucket:
@@ -384,7 +384,7 @@ func (fs *s3FS) Delete(ctx context.Context, ref *provider.Reference) error {
 		Key:    aws.String(fn),
 	})
 	if err != nil {
-		log.Error().Err(err)
+		log.Error().Err(err).Send()
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
 			case s3.ErrCodeNoSuchBucket:
@@ -395,7 +395,7 @@ func (fs *s3FS) Delete(ctx context.Context, ref *provider.Reference) error {
 		return errors.Wrap(err, "s3fs: error deleting "+fn)
 	}
 
-	log.Debug().Interface("result", result)
+	log.Debug().Interface("result", result).Send()
 	return nil
 }
 
@@ -457,7 +457,7 @@ func (fs *s3FS) Move(ctx context.Context, oldRef, newRef *provider.Reference) er
 		Key:    aws.String(fn),
 	})
 	if err != nil {
-		log.Error().Err(err)
+		log.Error().Err(err).Send()
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
 			case s3.ErrCodeNoSuchBucket:
@@ -525,7 +525,7 @@ func (fs *s3FS) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []str
 	}
 	output, err := fs.client.HeadObject(input)
 	if err != nil {
-		log.Error().Err(err)
+		log.Error().Err(err).Send()
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
 			case s3.ErrCodeNoSuchBucket:
@@ -622,7 +622,7 @@ func (fs *s3FS) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 	result, err := uploader.Upload(upParams)
 
 	if err != nil {
-		log.Error().Err(err)
+		log.Error().Err(err).Send()
 		if aerr, ok := err.(awserr.Error); ok {
 			if aerr.Code() == s3.ErrCodeNoSuchBucket {
 				return errtypes.NotFound(fn)
@@ -631,7 +631,7 @@ func (fs *s3FS) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 		return errors.Wrap(err, "s3fs: error creating object "+fn)
 	}
 
-	log.Debug().Interface("result", result) // todo cache etag?
+	log.Debug().Interface("result", result).Send() // todo cache etag?
 	return nil
 }
 
@@ -651,7 +651,7 @@ func (fs *s3FS) Download(ctx context.Context, ref *provider.Reference) (io.ReadC
 		Key:    aws.String(fn),
 	})
 	if err != nil {
-		log.Error().Err(err)
+		log.Error().Err(err).Send()
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
 			case s3.ErrCodeNoSuchBucket:

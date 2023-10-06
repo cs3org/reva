@@ -106,7 +106,7 @@ type Config struct {
 	OCMNamespace    string `mapstructure:"ocm_namespace"`
 	GatewaySvc      string `mapstructure:"gatewaysvc"`
 	Timeout         int64  `mapstructure:"timeout"`
-	Insecure        bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
+	Insecure        bool   `docs:"false;Whether to skip certificate checks when sending requests." mapstructure:"insecure"`
 	// If true, HTTP COPY will expect the HTTP-TPC (third-party copy) headers
 	EnableHTTPTpc bool `mapstructure:"enable_http_tpc"`
 	// The authentication scheme to use for the tpc push call when userinfo part is specified in the Destination header uri. Default value is 'bearer'.
@@ -118,7 +118,7 @@ type Config struct {
 	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
 	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
 	PublicLinkDownload     *ConfigPublicLinkDownload         `mapstructure:"publiclink_download"`
-	Notifications          map[string]interface{}            `mapstructure:"notifications" docs:"Settingsg for the Notification Helper"`
+	Notifications          map[string]interface{}            `docs:"Settingsg for the Notification Helper" mapstructure:"notifications"`
 }
 
 func (c *Config) ApplyDefaults() {
@@ -349,7 +349,7 @@ func extractDestination(r *http.Request) (string, error) {
 func replaceAllStringSubmatchFunc(re *regexp.Regexp, str string, repl func([]string) string) string {
 	result := ""
 	lastIndex := 0
-	for _, v := range re.FindAllSubmatchIndex([]byte(str), -1) {
+	for _, v := range re.FindAllStringSubmatchIndex(str, -1) {
 		groups := []string{}
 		for i := 0; i < len(v); i += 2 {
 			groups = append(groups, str[v[i]:v[i+1]])

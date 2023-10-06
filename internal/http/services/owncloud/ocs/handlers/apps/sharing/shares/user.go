@@ -103,7 +103,7 @@ func (h *Handler) isUserShare(r *http.Request, oid string) bool {
 	logger := appctx.GetLogger(r.Context())
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
-		logger.Err(err)
+		logger.Err(err).Send()
 	}
 
 	getShareRes, err := client.GetShare(r.Context(), &collaboration.GetShareRequest{
@@ -116,7 +116,7 @@ func (h *Handler) isUserShare(r *http.Request, oid string) bool {
 		},
 	})
 	if err != nil {
-		logger.Err(err)
+		logger.Err(err).Send()
 		return false
 	}
 

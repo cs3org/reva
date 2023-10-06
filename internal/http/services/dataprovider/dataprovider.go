@@ -37,12 +37,12 @@ func init() {
 }
 
 type config struct {
-	Prefix   string                            `mapstructure:"prefix" docs:"data;The prefix to be used for this HTTP service"`
-	Driver   string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
-	Drivers  map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go;The configuration for the storage driver"`
-	DataTXs  map[string]map[string]interface{} `mapstructure:"data_txs" docs:"url:pkg/rhttp/datatx/manager/simple/simple.go;The configuration for the data tx protocols"`
+	Prefix   string                            `docs:"data;The prefix to be used for this HTTP service"                                          mapstructure:"prefix"`
+	Driver   string                            `docs:"localhome;The storage driver to be used."                                                  mapstructure:"driver"`
+	Drivers  map[string]map[string]interface{} `docs:"url:pkg/storage/fs/localhome/localhome.go;The configuration for the storage driver"        mapstructure:"drivers"`
+	DataTXs  map[string]map[string]interface{} `docs:"url:pkg/rhttp/datatx/manager/simple/simple.go;The configuration for the data tx protocols" mapstructure:"data_txs"`
 	Timeout  int64                             `mapstructure:"timeout"`
-	Insecure bool                              `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
+	Insecure bool                              `docs:"false;Whether to skip certificate checks when sending requests."                           mapstructure:"insecure"`
 }
 
 func (c *config) ApplyDefaults() {

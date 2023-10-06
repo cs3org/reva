@@ -47,8 +47,8 @@ type Response struct {
 
 // Payload combines response metadata and data.
 type Payload struct {
-	XMLName struct{}    `json:"-" xml:"ocs"`
-	Meta    Meta        `json:"meta" xml:"meta"`
+	XMLName struct{}    `json:"-"              xml:"ocs"`
+	Meta    Meta        `json:"meta"           xml:"meta"`
 	Data    interface{} `json:"data,omitempty" xml:"data,omitempty"`
 }
 
@@ -102,10 +102,10 @@ func (p Payload) MarshalXML(e *xml.Encoder, start xml.StartElement) (err error) 
 
 // Meta holds response metadata.
 type Meta struct {
-	Status       string `json:"status" xml:"status"`
-	StatusCode   int    `json:"statuscode" xml:"statuscode"`
-	Message      string `json:"message" xml:"message"`
-	TotalItems   string `json:"totalitems,omitempty" xml:"totalitems,omitempty"`
+	Status       string `json:"status"                 xml:"status"`
+	StatusCode   int    `json:"statuscode"             xml:"statuscode"`
+	Message      string `json:"message"                xml:"message"`
+	TotalItems   string `json:"totalitems,omitempty"   xml:"totalitems,omitempty"`
 	ItemsPerPage string `json:"itemsperpage,omitempty" xml:"itemsperpage,omitempty"`
 }
 
@@ -189,7 +189,7 @@ func encodeXML(res Response) ([]byte, error) {
 		return nil, err
 	}
 	b := new(bytes.Buffer)
-	b.Write([]byte(xml.Header))
+	b.WriteString(xml.Header)
 	b.Write(marshalled)
 	return b.Bytes(), nil
 }

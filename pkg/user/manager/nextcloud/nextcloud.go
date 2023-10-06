@@ -51,7 +51,7 @@ type Manager struct {
 
 // UserManagerConfig contains config for a Nextcloud-based UserManager.
 type UserManagerConfig struct {
-	EndPoint     string `mapstructure:"endpoint" docs:";The Nextcloud backend endpoint for user management"`
+	EndPoint     string `docs:";The Nextcloud backend endpoint for user management" mapstructure:"endpoint"`
 	SharedSecret string `mapstructure:"shared_secret"`
 	MockHTTP     bool   `mapstructure:"mock_http"`
 }

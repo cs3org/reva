@@ -91,10 +91,13 @@ func writeLog(log *zerolog.Logger, req *http.Request, url url.URL, ts time.Time,
 	var event *zerolog.Event
 	switch {
 	case status < 400:
+		//nolint:zerologlint
 		event = log.Info()
 	case status < 500:
+		//nolint:zerologlint
 		event = log.Warn()
 	default:
+		//nolint:zerologlint
 		event = log.Error()
 	}
 	event.Str("host", host).Str("method", req.Method).Str("uri", uri).Int("status", status).

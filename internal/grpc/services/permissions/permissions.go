@@ -43,8 +43,8 @@ func init() {
 }
 
 type config struct {
-	Driver  string                            `mapstructure:"driver" docs:"localhome;The permission driver to be used."`
-	Drivers map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/permission/permission.go"`
+	Driver  string                            `docs:"localhome;The permission driver to be used." mapstructure:"driver"`
+	Drivers map[string]map[string]interface{} `docs:"url:pkg/permission/permission.go"            mapstructure:"drivers"`
 }
 
 type service struct {

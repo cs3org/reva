@@ -54,7 +54,7 @@ type Client struct {
 }
 
 type config struct {
-	BaseURL    string `mapstructure:"base_url" default:"http://localhost"`
+	BaseURL    string `default:"http://localhost" mapstructure:"base_url"`
 	APIKey     string `mapstructure:"api_key"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
 }

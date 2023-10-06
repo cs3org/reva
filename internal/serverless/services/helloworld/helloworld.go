@@ -62,7 +62,7 @@ func New(ctx context.Context, m map[string]interface{}) (rserverless.Service, er
 
 	file, err := os.OpenFile(conf.Outfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		log.Err(err)
+		log.Err(err).Send()
 		return nil, err
 	}
 
@@ -94,7 +94,7 @@ func (s *svc) sayHello(filename string) {
 
 		_, err := s.file.Write([]byte(h))
 		if err != nil {
-			s.log.Err(err)
+			s.log.Err(err).Send()
 		}
 		time.Sleep(5 * time.Second)
 	}

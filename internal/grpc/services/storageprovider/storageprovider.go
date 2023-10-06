@@ -60,15 +60,15 @@ func init() {
 }
 
 type config struct {
-	MountPath                       string                            `mapstructure:"mount_path" docs:"/;The path where the file system would be mounted."`
-	MountID                         string                            `mapstructure:"mount_id" docs:"-;The ID of the mounted file system."`
-	Driver                          string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
-	Drivers                         map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go"`
-	TmpFolder                       string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
-	DataServerURL                   string                            `mapstructure:"data_server_url" docs:"http://localhost/data;The URL for the data server."`
-	ExposeDataServer                bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
-	AvailableXS                     map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
-	CustomMimeTypesJSON             string                            `mapstructure:"custom_mime_types_json" docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types."`
+	MountPath                       string                            `docs:"/;The path where the file system would be mounted."                                                           mapstructure:"mount_path"`
+	MountID                         string                            `docs:"-;The ID of the mounted file system."                                                                         mapstructure:"mount_id"`
+	Driver                          string                            `docs:"localhome;The storage driver to be used."                                                                     mapstructure:"driver"`
+	Drivers                         map[string]map[string]interface{} `docs:"url:pkg/storage/fs/localhome/localhome.go"                                                                    mapstructure:"drivers"`
+	TmpFolder                       string                            `docs:"/var/tmp;Path to temporary folder."                                                                           mapstructure:"tmp_folder"`
+	DataServerURL                   string                            `docs:"http://localhost/data;The URL for the data server."                                                           mapstructure:"data_server_url"`
+	ExposeDataServer                bool                              `docs:"false;Whether to expose data server."                                                                         mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
+	AvailableXS                     map[string]uint32                 `docs:"nil;List of available checksums."                                                                             mapstructure:"available_checksums"`
+	CustomMimeTypesJSON             string                            `docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types." mapstructure:"custom_mime_types_json"`
 	MinimunAllowedPathLevelForShare int                               `mapstructure:"minimum_allowed_path_level_for_share"`
 }
 
