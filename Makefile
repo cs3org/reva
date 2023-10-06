@@ -75,11 +75,11 @@ docker-eos-full-tests:
 # Test
 ################################################################################
 
-TEST				= litmus-1 litmus-2 litmus-3 acceptance-1 acceptance-2 acceptance-3
-export REVAD_IMAGE	?= revad-eos
+TEST				  = litmus-1 litmus-2 acceptance-1 acceptance-2
+export REVAD_IMAGE	  ?= revad-eos
 export EOS_FULL_IMAGE ?= eos-full
-export PARTS		?= 1
-export PART			?= 1
+export PARTS		  ?= 1
+export PART			  ?= 1
 
 .PHONY: $(TEST)
 $(TEST): docker-eos-full-tests docker-revad-eos

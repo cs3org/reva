@@ -4,6 +4,8 @@ services:
     # image: ${REVAD_IMAGE}
     # we build the reva image with eos because it's faster
     # instead of uploading and share through the github runners
+    # TODO (gdelmont): in future this should be parameterized
+    # to support other reva images as before
     build: 
       context: ../../
       dockerfile: docker/Dockerfile.revad-eos
@@ -107,9 +109,6 @@ services:
         condition: service_healthy
       shares:
         condition: service_healthy
-  # permissions-ocis-ci:
-  #   extends: revad
-  #   command: -c /etc/revad/permissions-ocis-ci.toml
   storage-users-ocis:
     extends: revad
     hostname: storage-users
@@ -205,7 +204,6 @@ services:
     extends: acceptance
     environment:
       TEST_SERVER_URL: http://frontend:20080
-      # STORAGE_DRIVER: OCIS
       TEST_WITH_LDAP: 'true'
       REVA_LDAP_HOSTNAME: ldap
       TEST_REVA: 'true'
