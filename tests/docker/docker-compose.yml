@@ -59,10 +59,10 @@ services:
     command: -c /etc/revad/frontend.toml
     volumes:
       - shared-volume:/var/tmp
-  storage-home-ocis:
+  storage-home:
     extends: revad
     hostname: storage-home
-    command: -c /etc/revad/storage-home-ocis.toml
+    command: -c /etc/revad/storage-home.toml
     volumes:
       - shared-volume:/var/tmp
   users:
@@ -86,7 +86,7 @@ services:
         condition: service_healthy
       frontend:
         condition: service_healthy
-      storage-home-ocis:
+      storage-home:
         condition: service_healthy
       users:
         condition: service_healthy
@@ -103,16 +103,16 @@ services:
         condition: service_healthy
       frontend:
         condition: service_healthy
-      storage-home-ocis:
+      storage-home:
         condition: service_healthy
       users:
         condition: service_healthy
       shares:
         condition: service_healthy
-  storage-users-ocis:
+  storage-users:
     extends: revad
     hostname: storage-users
-    command: -c /etc/revad/storage-users-ocis.toml
+    command: -c /etc/revad/storage-users.toml
     volumes:
       - shared-volume:/var/tmp
     depends_on:
@@ -159,7 +159,7 @@ services:
         condition: service_healthy
       frontend-global:
         condition: service_healthy
-      storage-home-ocis:
+      storage-home:
         condition: service_healthy
       users:
         condition: service_healthy
@@ -223,11 +223,11 @@ services:
         condition: service_healthy
       frontend:
         condition: service_healthy
-      storage-home-ocis:
+      storage-home:
         condition: service_healthy
       shares:
         condition: service_healthy
-      storage-users-ocis:
+      storage-users:
         condition: service_healthy
       storage-publiclink:
         condition: service_healthy

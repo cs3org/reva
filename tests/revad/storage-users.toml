@@ -1,5 +1,5 @@
 # This config file will start a reva service that:
-# - uses the ocis driver to serve users (/users)
+# - uses the eos driver to serve users (/users)
 # - serves the storage provider on grpc port 11000
 # - serves http dataprovider for this storage on port 11001
 #   - /data - dataprovider: file up and download
