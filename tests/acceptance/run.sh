@@ -459,6 +459,8 @@ function get_behat_suites() {
 		fi
 	done
 
+	ALL_SUITES=`echo "${ALL_SUITES}" | tr " " "\n"`
+
 	COUNT_ALL_SUITES=`echo "${ALL_SUITES}" | wc -l`
 	#divide the suites letting it round down (could be zero)
 	MIN_SUITES_PER_RUN=$((${COUNT_ALL_SUITES} / ${DIVIDE_INTO_NUM_PARTS}))
@@ -483,7 +485,7 @@ function get_behat_suites() {
 	fi
 
 	COUNT_FINISH_AND_TODO_SUITES=$((${SUITES_IN_PREVIOUS_RUNS} + ${SUITES_THIS_RUN}))
-	BEHAT_SUITES+=(`echo "${ALL_SUITES}" | tr " " "\n" | head -n ${COUNT_FINISH_AND_TODO_SUITES} | tail -n ${SUITES_THIS_RUN}`)
+	BEHAT_SUITES+=(`echo "${ALL_SUITES}" | head -n ${COUNT_FINISH_AND_TODO_SUITES} | tail -n ${SUITES_THIS_RUN}`)
 }
 
 if [[ -n "${BEHAT_SUITE}" ]]
