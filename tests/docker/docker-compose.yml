@@ -1,10 +1,10 @@
 version: "3.4"
 services:
   revad:
-    # image: ${REVAD_IMAGE}
-    build: 
-      context: ../../
-      dockerfile: docker/Dockerfile.revad-eos
+    image: ${REVAD_IMAGE}
+    # build: 
+    #   context: ../../
+    #   dockerfile: docker/Dockerfile.revad-eos
     volumes:
       - ../revad:/etc/revad
     working_dir: /etc/revad/
@@ -12,14 +12,6 @@ services:
       test: sleep 5
   eos-storage:
     image: ${EOS_FULL_IMAGE}
-    # build:
-    #   # context: ../../
-    #   context: eos-storage
-    #   dockerfile: Dockerfile
-    # volumes:
-    #   - ./eos-storage/scripts:/mnt/scripts
-    #   - ./eos-storage/sssd/sssd.conf:/etc/sssd/sssd.conf
-    # entrypoint: /mnt/scripts/eos-run.sh
     security_opt:
       - seccomp:unconfined
     ulimits:
