@@ -1,10 +1,10 @@
 default:
   autoload:
-    "": "%paths.base%/../features/bootstrap"
+    "": "%paths.base%/../../ocis/tests/acceptance/features/bootstrap"
   suites:
     coreApiMain:
       paths:
-        - "%paths.base%/../features/coreApiMain"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiMain"
       context: &common_ldap_suite_context
         parameters:
           ldapAdminPassword: admin
@@ -25,7 +25,7 @@ default:
 
     coreApiAuth:
       paths:
-        - "%paths.base%/../features/coreApiAuth"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiAuth"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -33,7 +33,7 @@ default:
 
     coreApiAuthOcs:
       paths:
-        - "%paths.base%/../features/coreApiAuthOcs"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiAuthOcs"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -41,7 +41,7 @@ default:
 
     coreApiAuthWebDav:
       paths:
-        - "%paths.base%/../features/coreApiAuthWebDav"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiAuthWebDav"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -52,7 +52,7 @@ default:
 
     coreApiCapabilities:
       paths:
-        - "%paths.base%/../features/coreApiCapabilities"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiCapabilities"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -61,7 +61,7 @@ default:
 
     coreApiFavorites:
       paths:
-        - "%paths.base%/../features/coreApiFavorites"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiFavorites"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -71,7 +71,7 @@ default:
 
     coreApiShareCreateSpecialToShares1:
       paths:
-        - "%paths.base%/../features/coreApiShareCreateSpecialToShares1"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiShareCreateSpecialToShares1"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -81,7 +81,7 @@ default:
 
     coreApiShareCreateSpecialToShares2:
       paths:
-        - "%paths.base%/../features/coreApiShareCreateSpecialToShares2"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiShareCreateSpecialToShares2"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -91,7 +91,7 @@ default:
 
     coreApiSharees:
       paths:
-        - "%paths.base%/../features/coreApiSharees"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiSharees"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -100,7 +100,7 @@ default:
 
     coreApiShareManagementToShares:
       paths:
-        - "%paths.base%/../features/coreApiShareManagementToShares"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiShareManagementToShares"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -112,7 +112,7 @@ default:
 
     coreApiShareManagementBasicToShares:
       paths:
-        - "%paths.base%/../features/coreApiShareManagementBasicToShares"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiShareManagementBasicToShares"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -123,7 +123,7 @@ default:
 
     coreApiShareOperationsToShares1:
       paths:
-        - "%paths.base%/../features/coreApiShareOperationsToShares1"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiShareOperationsToShares1"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -133,7 +133,7 @@ default:
 
     coreApiShareOperationsToShares2:
       paths:
-        - "%paths.base%/../features/coreApiShareOperationsToShares2"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiShareOperationsToShares2"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -143,7 +143,7 @@ default:
 
     coreApiSharePublicLink1:
       paths:
-        - "%paths.base%/../features/coreApiSharePublicLink1"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiSharePublicLink1"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -154,7 +154,7 @@ default:
 
     coreApiSharePublicLink2:
       paths:
-        - "%paths.base%/../features/coreApiSharePublicLink2"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiSharePublicLink2"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -165,7 +165,7 @@ default:
 
     coreApiSharePublicLink3:
       paths:
-        - "%paths.base%/../features/coreApiSharePublicLink3"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiSharePublicLink3"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -176,7 +176,7 @@ default:
 
     coreApiShareReshareToShares1:
       paths:
-        - "%paths.base%/../features/coreApiShareReshareToShares1"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiShareReshareToShares1"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -186,7 +186,7 @@ default:
 
     coreApiShareReshareToShares2:
       paths:
-        - "%paths.base%/../features/coreApiShareReshareToShares2"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiShareReshareToShares2"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -197,7 +197,7 @@ default:
 
     coreApiShareReshareToShares3:
       paths:
-        - "%paths.base%/../features/coreApiShareReshareToShares3"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiShareReshareToShares3"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -208,7 +208,7 @@ default:
 
     coreApiShareUpdateToShares:
       paths:
-        - "%paths.base%/../features/coreApiShareUpdateToShares"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiShareUpdateToShares"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -219,7 +219,7 @@ default:
 
     coreApiTrashbin:
       paths:
-        - "%paths.base%/../features/coreApiTrashbin"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiTrashbin"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -229,7 +229,7 @@ default:
 
     coreApiTrashbinRestore:
       paths:
-        - "%paths.base%/../features/coreApiTrashbinRestore"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiTrashbinRestore"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -239,7 +239,7 @@ default:
 
     coreApiVersions:
       paths:
-        - "%paths.base%/../features/coreApiVersions"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiVersions"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -251,7 +251,7 @@ default:
 
     coreApiWebdavDelete:
       paths:
-        - "%paths.base%/../features/coreApiWebdavDelete"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavDelete"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -262,7 +262,7 @@ default:
 
     coreApiWebdavLocks:
       paths:
-        - "%paths.base%/../features/coreApiWebdavLocks"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavLocks"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -272,7 +272,7 @@ default:
 
     coreApiWebdavLocks2:
       paths:
-        - "%paths.base%/../features/coreApiWebdavLocks2"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavLocks2"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -282,7 +282,7 @@ default:
 
     coreApiWebdavLocksUnlock:
       paths:
-        - "%paths.base%/../features/coreApiWebdavLocksUnlock"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavLocksUnlock"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -292,7 +292,7 @@ default:
 
     coreApiWebdavMove1:
       paths:
-        - "%paths.base%/../features/coreApiWebdavMove1"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavMove1"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -300,7 +300,7 @@ default:
 
     coreApiWebdavMove2:
       paths:
-        - "%paths.base%/../features/coreApiWebdavMove2"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavMove2"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -308,7 +308,7 @@ default:
 
     coreApiWebdavOperations:
       paths:
-        - "%paths.base%/../features/coreApiWebdavOperations"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavOperations"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -319,7 +319,7 @@ default:
 
     coreApiWebdavPreviews:
       paths:
-        - "%paths.base%/../features/coreApiWebdavPreviews"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavPreviews"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -327,7 +327,7 @@ default:
 
     coreApiWebdavProperties1:
       paths:
-        - "%paths.base%/../features/coreApiWebdavProperties1"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavProperties1"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -336,7 +336,7 @@ default:
 
     coreApiWebdavProperties2:
       paths:
-        - "%paths.base%/../features/coreApiWebdavProperties2"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavProperties2"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -345,7 +345,7 @@ default:
 
     coreApiWebdavUpload1:
       paths:
-        - "%paths.base%/../features/coreApiWebdavUpload1"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavUpload1"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -354,7 +354,7 @@ default:
 
     coreApiWebdavUpload2:
       paths:
-        - "%paths.base%/../features/coreApiWebdavUpload2"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavUpload2"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -362,7 +362,7 @@ default:
 
     coreApiWebdavUploadTUS:
       paths:
-        - "%paths.base%/../features/coreApiWebdavUploadTUS"
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavUploadTUS"
       context: *common_ldap_suite_context
       contexts:
         - FeatureContext: *common_feature_context_params
@@ -373,7 +373,7 @@ default:
     
     # coreApiWebdavEtagPropagation1:
     #   paths:
-    #     - "%paths.base%/../features/coreApiWebdavEtagPropagation1"
+    #     - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavEtagPropagation1"
     #   context: *common_ldap_suite_context
     #   contexts:
     #     - FeatureContext: *common_feature_context_params
@@ -385,7 +385,7 @@ default:
 
     # coreApiWebdavEtagPropagation2:
     #   paths:
-    #     - "%paths.base%/../features/coreApiWebdavEtagPropagation2"
+    #     - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavEtagPropagation2"
     #   context: *common_ldap_suite_context
     #   contexts:
     #     - FeatureContext: *common_feature_context_params

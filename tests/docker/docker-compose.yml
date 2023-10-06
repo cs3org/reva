@@ -39,7 +39,7 @@ services:
       TESTS: basic http copymove props
   acceptance:
     image: cs3org/behat:latest
-    entrypoint: /mnt/ocis/tests/acceptance/run.sh
+    entrypoint: /mnt/acceptance/run.sh
     environment:
       OCIS_REVA_DATA_ROOT: /var/tmp/reva/data/
       DELETE_USER_DATA_CMD: rm -rf /var/tmp/reva/data/nodes/root/* /var/tmp/reva/data/nodes/*-*-*-* /var/tmp/reva/data/blobs/*
@@ -211,6 +211,7 @@ services:
       DIVIDE_INTO_NUM_PARTS: ${PARTS:-1}
       RUN_PART: ${PART:-1}
       EXPECTED_FAILURES_FILE: /mnt/acceptance/expected-failures-on-EOS-storage.md
+      BEHAT_FEATURES_DIR: /mnt/ocis/tests/acceptance/features
       BEHAT_YML: /mnt/acceptance/config/behat-core.yml
       ACCEPTANCE_TEST_TYPE: core-api
     volumes:
