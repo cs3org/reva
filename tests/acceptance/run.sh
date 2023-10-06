@@ -462,6 +462,8 @@ function get_behat_suites() {
 	ALL_SUITES=`echo "${ALL_SUITES}" | tr " " "\n"`
 
 	COUNT_ALL_SUITES=`echo "${ALL_SUITES}" | wc -l`
+	echo "Total suits to run: $COUNT_ALL_SUITES"
+
 	#divide the suites letting it round down (could be zero)
 	MIN_SUITES_PER_RUN=$((${COUNT_ALL_SUITES} / ${DIVIDE_INTO_NUM_PARTS}))
 	#some jobs might need an extra suite
@@ -486,6 +488,7 @@ function get_behat_suites() {
 
 	COUNT_FINISH_AND_TODO_SUITES=$((${SUITES_IN_PREVIOUS_RUNS} + ${SUITES_THIS_RUN}))
 	BEHAT_SUITES+=(`echo "${ALL_SUITES}" | head -n ${COUNT_FINISH_AND_TODO_SUITES} | tail -n ${SUITES_THIS_RUN}`)
+	echo "Suites to run in this run: $BEHAT_SUITES"
 }
 
 if [[ -n "${BEHAT_SUITE}" ]]
