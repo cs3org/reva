@@ -432,6 +432,12 @@ fi
 
 declare -a BEHAT_SUITES
 
+BEHAT_FILTER_SUITE=""
+if [[ -f "${BEHAT_FILTER_SUITE_FILE}" ]]
+then
+	BEHAT_FILTER_SUITE=`cat "${BEHAT_FILTER_SUITE_FILE}"`
+fi
+
 function get_behat_suites() {
 	# $1 type of suites to get "api" or "core-api"
 	# defaults to "api"
@@ -440,7 +446,19 @@ function get_behat_suites() {
 	then
 		TYPE="api"
 	fi
-	ALL_SUITES=`find ${BEHAT_FEATURES_DIR}/ -type d -iname ${TYPE}* | sort | rev | cut -d"/" -f1 | rev`
+	
+	ALL_SUITES=""
+	for suite in `find ${BEHAT_FEATURES_DIR}/ -type d -iname ${TYPE}* | sort | rev | cut -d"/" -f1 | rev`
+	do
+		if [[ -f "${BEHAT_FILTER_SUITE_FILE}" ]]
+		then
+			if [[ ! `grep $suite "${BEHAT_FILTER_SUITE_FILE}"` ]]
+			then
+				ALL_SUITES+="$suite"$'\n'
+			fi
+		fi
+	done
+
 	COUNT_ALL_SUITES=`echo "${ALL_SUITES}" | wc -l`
 	#divide the suites letting it round down (could be zero)
 	MIN_SUITES_PER_RUN=$((${COUNT_ALL_SUITES} / ${DIVIDE_INTO_NUM_PARTS}))
@@ -465,7 +483,7 @@ function get_behat_suites() {
 	fi
 
 	COUNT_FINISH_AND_TODO_SUITES=$((${SUITES_IN_PREVIOUS_RUNS} + ${SUITES_THIS_RUN}))
-	BEHAT_SUITES+=(`echo "${ALL_SUITES}" | head -n ${COUNT_FINISH_AND_TODO_SUITES} | tail -n ${SUITES_THIS_RUN}`)
+	BEHAT_SUITES+=(`echo "${ALL_SUITES}" | tr " " "\n" | head -n ${COUNT_FINISH_AND_TODO_SUITES} | tail -n ${SUITES_THIS_RUN}`)
 }
 
 if [[ -n "${BEHAT_SUITE}" ]]
