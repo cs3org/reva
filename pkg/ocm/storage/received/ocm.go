@@ -95,15 +95,7 @@ func shareInfoFromReference(ref *provider.Reference) (*ocmpb.ShareId, string) {
 		return shareInfoFromPath(ref.Path)
 	}
 
-	s := strings.SplitN(ref.ResourceId.OpaqueId, ":", 2)
-	shareID := &ocmpb.ShareId{OpaqueId: s[0]}
-	var path string
-	if len(s) == 2 {
-		path = s[1]
-	}
-	path = filepath.Join(path, ref.Path)
-
-	return shareID, path
+	return &ocmpb.ShareId{OpaqueId: ref.ResourceId.OpaqueId}, ref.Path
 }
 
 func (d *driver) getWebDAVFromShare(ctx context.Context, shareID *ocmpb.ShareId) (*ocmpb.ReceivedShare, string, string, error) {
@@ -198,12 +190,6 @@ func (d *driver) Move(ctx context.Context, oldRef, newRef *provider.Reference) e
 	return client.Rename(relOld, relNew, false)
 }
 
-func getResourceInfo(shareID *ocmpb.ShareId, relPath string) *provider.ResourceId {
-	return &provider.ResourceId{
-		OpaqueId: fmt.Sprintf("%s:%s", shareID.OpaqueId, relPath),
-	}
-}
-
 func getPathFromShareIDAndRelPath(shareID *ocmpb.ShareId, relPath string) string {
 	return filepath.Join("/", shareID.OpaqueId, relPath)
 }
@@ -271,7 +257,7 @@ func (d *driver) ListFolder(ctx context.Context, ref *provider.Reference, _ []st
 
 	res := make([]*provider.ResourceInfo, 0, len(list))
 	for _, r := range list {
-		res = append(res, convertStatToResourceInfo(ref, r, share, filepath.Join(rel, r.Name())))
+		res = append(res, convertStatToResourceInfo(ref, r, share, utils.MakeRelativePath(filepath.Join(rel, r.Name()))))
 	}
 	return res, nil
 }
