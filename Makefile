@@ -69,7 +69,7 @@ docker-revad-eos:
 
 .PHONY: docker-eos-full-tests
 docker-eos-full-tests:
-	docker build -f tests/docker/eos-storage/Dockerfile -t eos-full:latest tests/docker/eos-storage
+	docker build -f tests/docker/eos-storage/Dockerfile -t eos-full tests/docker/eos-storage
 
 ################################################################################
 # Test
@@ -77,11 +77,12 @@ docker-eos-full-tests:
 
 TEST				= litmus-1 litmus-2 litmus-3 acceptance-1 acceptance-2 acceptance-3
 export REVAD_IMAGE	?= revad-eos
+export EOS_FULL_IMAGE ?= eos-full
 export PARTS		?= 1
 export PART			?= 1
 
 .PHONY: $(TEST)
-$(TEST):
+$(TEST): docker-eos-full-tests docker-revad-eos
 	docker compose -f ./tests/docker/docker-compose.yml up --force-recreate --always-recreate-deps --build --abort-on-container-exit -V --remove-orphans --exit-code-from $@ $@
 
 .PHONY: test-go

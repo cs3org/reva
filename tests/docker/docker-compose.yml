@@ -11,10 +11,11 @@ services:
     healthcheck:
       test: sleep 5
   eos-storage:
-    build:
-      # context: ../../
-      context: eos-storage
-      dockerfile: Dockerfile
+    image: ${EOS_FULL_IMAGE}
+    # build:
+    #   # context: ../../
+    #   context: eos-storage
+    #   dockerfile: Dockerfile
     # volumes:
     #   - ./eos-storage/scripts:/mnt/scripts
     #   - ./eos-storage/sssd/sssd.conf:/etc/sssd/sssd.conf
