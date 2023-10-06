@@ -1,10 +1,12 @@
 version: "3.4"
 services:
   revad:
-    image: ${REVAD_IMAGE}
-    # build: 
-    #   context: ../../
-    #   dockerfile: docker/Dockerfile.revad-eos
+    # image: ${REVAD_IMAGE}
+    # we build the reva image with eos because it's faster
+    # instead of uploading and share through the github runners
+    build: 
+      context: ../../
+      dockerfile: docker/Dockerfile.revad-eos
     volumes:
       - ../revad:/etc/revad
     working_dir: /etc/revad/
