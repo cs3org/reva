@@ -214,7 +214,7 @@ services:
       BEHAT_FEATURES_DIR: /mnt/ocis/tests/acceptance/features
       BEHAT_YML: /mnt/acceptance/config/behat-core.yml
       ACCEPTANCE_TEST_TYPE: core-api
-      BEHAT_FILTER_SUITE: /mnt/acceptance/filtered-suites-acceptance-2-EOS
+      BEHAT_FILTER_SUITE_FILE: /mnt/acceptance/filtered-suites-acceptance-2-EOS
     volumes:
       - shared-volume:/var/tmp
     working_dir: /mnt/ocis
