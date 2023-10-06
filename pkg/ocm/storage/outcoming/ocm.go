@@ -390,8 +390,8 @@ func getUploadProtocol(protocols []*gateway.FileUploadProtocol, protocol string)
 	return "", "", false
 }
 
-func (d *driver) Upload(ctx context.Context, ref *provider.Reference, content io.ReadCloser, _ storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
-	share, rel, err := d.shareAndRelativePathFromRef(ctx, ref)
+func (d *driver) Upload(ctx context.Context, req storage.UploadRequest, _ storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
+	share, rel, err := d.shareAndRelativePathFromRef(ctx, req.Ref)
 	if err != nil {
 		return provider.ResourceInfo{}, err
 	}
@@ -410,12 +410,13 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, content io
 			return errtypes.InternalError("simple upload not supported")
 		}
 
-		httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, endpoint, content)
+		httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, endpoint, req.Body)
 		if err != nil {
 			return errors.Wrap(err, "error creating new request")
 		}
 
 		httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+		httpReq.ContentLength = req.Length
 
 		httpRes, err := http.DefaultClient.Do(httpReq)
 		if err != nil {

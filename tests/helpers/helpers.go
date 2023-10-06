@@ -102,7 +102,11 @@ func Upload(ctx context.Context, fs storage.FS, ref *provider.Reference, content
 		return errors.New("simple upload method not available")
 	}
 	uploadRef := &provider.Reference{Path: "/" + uploadID}
-	_, err = fs.Upload(ctx, uploadRef, io.NopCloser(bytes.NewReader(content)), nil)
+	_, err = fs.Upload(ctx, storage.UploadRequest{
+		Ref:    uploadRef,
+		Body:   io.NopCloser(bytes.NewReader(content)),
+		Length: int64(len(content)),
+	}, nil)
 	return err
 }
 
@@ -130,6 +134,7 @@ func UploadGateway(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ref 
 	}
 
 	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+	httpReq.ContentLength = int64(len(content))
 
 	httpRes, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
