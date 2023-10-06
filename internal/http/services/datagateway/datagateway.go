@@ -324,6 +324,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpReq.Header = r.Header
+	httpReq.ContentLength = r.ContentLength
 
 	httpRes, err := httpClient.Do(httpReq)
 	if err != nil {

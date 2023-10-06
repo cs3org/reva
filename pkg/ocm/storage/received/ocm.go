@@ -20,9 +20,9 @@ package ocm
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -44,7 +44,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/pkg/utils/cfg"
-	"github.com/owncloud/ocis/v2/services/webdav/pkg/net"
 	"github.com/studio-b12/gowebdav"
 )
 
@@ -286,14 +285,22 @@ func (d *driver) InitiateUpload(ctx context.Context, ref *provider.Reference, _ 
 	}, nil
 }
 
-func (d *driver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, _ storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
-	client, _, rel, err := d.webdavClient(ctx, ref)
+func (d *driver) Upload(ctx context.Context, req storage.UploadRequest, _ storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
+	client, _, rel, err := d.webdavClient(ctx, req.Ref)
 	if err != nil {
 		return provider.ResourceInfo{}, err
 	}
+	client.SetInterceptor(func(method string, rq *http.Request) {
+		// Set the content length on the request struct directly instead of the header.
+		// The content-length header gets reset by the golang http library before
+		// sendind out the request, resulting in chunked encoding to be used which
+		// breaks the quota checks in ocdav.
+		if method == "PUT" {
+			rq.ContentLength = req.Length
+		}
+	})
 
-	client.SetHeader(net.HeaderUploadLength, "-1")
-	return provider.ResourceInfo{}, client.WriteStream(rel, r, 0)
+	return provider.ResourceInfo{}, client.WriteStream(rel, req.Body, 0)
 }
 
 func (d *driver) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {

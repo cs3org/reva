@@ -34,6 +34,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/nextcloud"
 	jwt "github.com/cs3org/reva/v2/pkg/token/manager/jwt"
 
@@ -447,7 +448,7 @@ var _ = Describe("Nextcloud", func() {
 			}
 			stringReader := strings.NewReader("shiny!")
 			stringReadCloser := io.NopCloser(stringReader)
-			_, err := nc.Upload(ctx, ref, stringReadCloser, nil)
+			_, err := nc.Upload(ctx, storage.UploadRequest{Ref: ref, Body: stringReadCloser, Length: stringReader.Size()}, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(*called)).To(Equal(2))
 			Expect((*called)[0]).To(Equal(`PUT /apps/sciencemesh/~tester/api/storage/Upload/some/file/path.txt shiny!`))
