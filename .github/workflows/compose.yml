@@ -7,6 +7,8 @@ on:
         type: string
       image:
         type: string
+      download:
+        type: boolean
       submodules:
         type: boolean
       parts:
@@ -24,7 +26,7 @@ jobs:
           submodules: ${{ inputs.submodules }}
       - name: Download image
         uses: ishworkh/docker-image-artifact-download@v1
-        if: ${{ inputs.image != "" }}
+        if: inputs.download
         with:
           image: ${{ inputs.image }}
       - name: Test
