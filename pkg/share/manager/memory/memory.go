@@ -29,7 +29,8 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/share/manager/registry"
@@ -68,7 +69,7 @@ func (m *manager) add(ctx context.Context, s *collaboration.Share) {
 
 func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
 	id := atomic.AddUint64(&counter, 1)
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	now := time.Now().UnixNano()
 	ts := &typespb.Timestamp{
 		Seconds: uint64(now / 1000000000),
@@ -147,7 +148,7 @@ func (m *manager) get(ctx context.Context, ref *collaboration.ShareReference) (s
 	}
 
 	// check if we are the owner
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	if share.IsCreatedByUser(s, user) {
 		return s, nil
 	}
@@ -168,7 +169,7 @@ func (m *manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 func (m *manager) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	for i, s := range m.shares {
 		if sharesEqual(ref, s) {
 			if share.IsCreatedByUser(s, user) {
@@ -198,7 +199,7 @@ func sharesEqual(ref *collaboration.ShareReference, s *collaboration.Share) bool
 func (m *manager) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	for i, s := range m.shares {
 		if sharesEqual(ref, s) {
 			if share.IsCreatedByUser(s, user) {
@@ -219,7 +220,7 @@ func (m *manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 	var ss []*collaboration.Share
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	for _, s := range m.shares {
 		if share.IsCreatedByUser(s, user) {
 			// no filter we return earlier
@@ -241,7 +242,7 @@ func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 	var rss []*collaboration.ReceivedShare
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	for _, s := range m.shares {
 		if share.IsCreatedByUser(s, user) || !share.IsGrantedToUser(s, user) {
 			// omit shares created by the user or shares the user can't access
@@ -268,7 +269,7 @@ func (m *manager) convert(ctx context.Context, s *collaboration.Share) *collabor
 		Share: s,
 		State: collaboration.ShareState_SHARE_STATE_PENDING,
 	}
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	if v, ok := m.shareState[user.Id.String()]; ok {
 		if state, ok := v[s.Id]; ok {
 			rs.State = state
@@ -284,7 +285,7 @@ func (m *manager) GetReceivedShare(ctx context.Context, ref *collaboration.Share
 func (m *manager) getReceived(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	for _, s := range m.shares {
 		if sharesEqual(ref, s) {
 			if share.IsGrantedToUser(s, user) {
@@ -302,7 +303,7 @@ func (m *manager) UpdateReceivedShare(ctx context.Context, receivedShare *collab
 		return nil, err
 	}
 
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	m.lock.Lock()
 	defer m.lock.Unlock()
 

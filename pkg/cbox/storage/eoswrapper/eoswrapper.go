@@ -27,7 +27,8 @@ import (
 
 	"github.com/Masterminds/sprig"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
@@ -184,7 +185,7 @@ func (w *wrapper) setProjectSharingPermissions(ctx context.Context, r *provider.
 			return nil
 		}
 		adminGroup := projectSpaceGroupsPrefix + parts[2] + projectSpaceAdminGroupsSuffix
-		user := ctxpkg.ContextMustGetUser(ctx)
+		user := appctx.ContextMustGetUser(ctx)
 
 		for _, g := range user.Groups {
 			if g == adminGroup {
@@ -220,7 +221,7 @@ func (w *wrapper) userIsProjectAdmin(ctx context.Context, ref *provider.Referenc
 		return nil
 	}
 	adminGroup := projectSpaceGroupsPrefix + parts[2] + projectSpaceAdminGroupsSuffix
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 
 	for _, g := range user.Groups {
 		if g == adminGroup {

@@ -21,7 +21,7 @@ package token
 import (
 	"context"
 
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/appctx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
@@ -32,11 +32,11 @@ func NewUnary() grpc.UnaryServerInterceptor {
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		md, ok := metadata.FromIncomingContext(ctx)
 		if ok && md != nil {
-			if val, ok := md[ctxpkg.TokenHeader]; ok {
+			if val, ok := md[appctx.TokenHeader]; ok {
 				if len(val) > 0 && val[0] != "" {
 					tkn := val[0]
-					ctx = ctxpkg.ContextSetToken(ctx, tkn)
-					ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, tkn)
+					ctx = appctx.ContextSetToken(ctx, tkn)
+					ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, tkn)
 				}
 			}
 		}
@@ -54,11 +54,11 @@ func NewStream() grpc.StreamServerInterceptor {
 
 		md, ok := metadata.FromIncomingContext(ss.Context())
 		if ok && md != nil {
-			if val, ok := md[ctxpkg.TokenHeader]; ok {
+			if val, ok := md[appctx.TokenHeader]; ok {
 				if len(val) > 0 && val[0] != "" {
 					tkn := val[0]
-					ctx = ctxpkg.ContextSetToken(ctx, tkn)
-					ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, tkn)
+					ctx = appctx.ContextSetToken(ctx, tkn)
+					ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, tkn)
 				}
 			}
 		}

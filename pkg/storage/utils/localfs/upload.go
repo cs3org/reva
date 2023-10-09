@@ -28,7 +28,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/utils"
@@ -159,7 +159,7 @@ func (fs *localfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tu
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error resolving upload path")
 	}
-	usr := ctxpkg.ContextMustGetUser(ctx)
+	usr := appctx.ContextMustGetUser(ctx)
 	info.Storage = map[string]string{
 		"Type":                "LocalStore",
 		"BinPath":             binPath,
@@ -236,7 +236,7 @@ func (fs *localfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error
 		Username: info.Storage["UserName"],
 	}
 
-	ctx = ctxpkg.ContextSetUser(ctx, u)
+	ctx = appctx.ContextSetUser(ctx, u)
 
 	return &fileUpload{
 		info:     info,

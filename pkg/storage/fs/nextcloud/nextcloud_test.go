@@ -30,7 +30,8 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/storage/fs/nextcloud"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
@@ -103,9 +104,9 @@ var _ = Describe("Nextcloud", func() {
 		Expect(err).ToNot(HaveOccurred())
 		t, err := tokenManager.MintToken(ctx, user, scope)
 		Expect(err).ToNot(HaveOccurred())
-		ctx = ctxpkg.ContextSetToken(ctx, t)
-		ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, t)
-		ctx = ctxpkg.ContextSetUser(ctx, user)
+		ctx = appctx.ContextSetToken(ctx, t)
+		ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, t)
+		ctx = appctx.ContextSetUser(ctx, user)
 	})
 
 	AfterEach(func() {

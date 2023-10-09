@@ -26,7 +26,7 @@ import (
 	"net/url"
 	"os"
 
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/go-chi/chi/v5"
@@ -85,8 +85,8 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 		proxy := httputil.NewSingleHostReverseProxy(remote)
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			r.Host = remote.Host
-			if token, ok := ctxpkg.ContextGetToken(r.Context()); ok {
-				r.Header.Set(ctxpkg.TokenHeader, token)
+			if token, ok := appctx.ContextGetToken(r.Context()); ok {
+				r.Header.Set(appctx.TokenHeader, token)
 			}
 			proxy.ServeHTTP(w, r)
 		})

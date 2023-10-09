@@ -29,7 +29,8 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	v1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/mime"
@@ -63,7 +64,7 @@ func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err erro
 func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
 	var ssID, searchPath string
 
-	user, inContext := ctxpkg.ContextGetUser(ctx)
+	user, inContext := appctx.ContextGetUser(ctx)
 
 	if !inContext {
 		return nil, errtypes.UserRequired("user not found in context")
@@ -151,7 +152,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 	var path = ref.GetPath()
 	var ssID, searchPath string
 
-	user, inContext := ctxpkg.ContextGetUser(ctx)
+	user, inContext := appctx.ContextGetUser(ctx)
 
 	if !inContext {
 		return nil, errtypes.UserRequired("no user found in context")
@@ -304,7 +305,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
 	var path = ref.GetPath()
 	var ssID, searchPath string
-	user, _ := ctxpkg.ContextGetUser(ctx)
+	user, _ := appctx.ContextGetUser(ctx)
 
 	resp, err := fs.matchBackups(user.Username, path)
 

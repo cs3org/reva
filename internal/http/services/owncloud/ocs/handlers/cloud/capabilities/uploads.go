@@ -23,7 +23,8 @@ import (
 	"strings"
 
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/appctx"
+
 	"github.com/juliangruber/go-intersect"
 )
 
@@ -58,7 +59,7 @@ func (h *Handler) getCapabilitiesForUserAgent(ctx context.Context, userAgent str
 }
 
 func ctxUserBelongsToGroups(ctx context.Context, groups []string) bool {
-	if user, ok := ctxpkg.ContextGetUser(ctx); ok {
+	if user, ok := appctx.ContextGetUser(ctx); ok {
 		return len(intersect.Simple(groups, user.Groups)) > 0
 	}
 	return false

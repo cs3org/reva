@@ -42,7 +42,7 @@ import (
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/share"
@@ -155,7 +155,7 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 	listResp, err := client.ListPublicShares(ctx, &link.ListPublicSharesRequest{
 		Opaque: &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
-				ctxpkg.ResoucePathCtx: {Decoder: "plain", Value: []byte(parentInfo.Path)},
+				appctx.ResoucePathCtx: {Decoder: "plain", Value: []byte(parentInfo.Path)},
 			},
 		},
 		Filters: linkFilters,
@@ -174,7 +174,7 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 		Filters: shareFilters,
 		Opaque: &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
-				ctxpkg.ResoucePathCtx: {Decoder: "plain", Value: []byte(parentInfo.Path)},
+				appctx.ResoucePathCtx: {Decoder: "plain", Value: []byte(parentInfo.Path)},
 			},
 		},
 	})
@@ -734,10 +734,10 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "public-link-share-owner":
 					if ls != nil && ls.Owner != nil {
 						if isCurrentUserOwner(ctx, ls.Owner) {
-							u := ctxpkg.ContextMustGetUser(ctx)
+							u := appctx.ContextMustGetUser(ctx)
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:public-link-share-owner", u.Username))
 						} else {
-							u, _ := ctxpkg.ContextGetUser(ctx)
+							u, _ := appctx.ContextGetUser(ctx)
 							sublog.Error().Interface("share", ls).Interface("user", u).Msg("the current user in the context should be the owner of a public link share")
 							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-share-owner", ""))
 						}
@@ -766,7 +766,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "owner-id": // phoenix only
 					if md.Owner != nil {
 						if isCurrentUserOwner(ctx, md.Owner) {
-							u := ctxpkg.ContextMustGetUser(ctx)
+							u := appctx.ContextMustGetUser(ctx)
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", u.Username))
 						} else {
 							sublog.Debug().Msg("TODO fetch user username")
@@ -855,7 +855,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "owner-display-name": // phoenix only
 					if md.Owner != nil {
 						if isCurrentUserOwner(ctx, md.Owner) {
-							u := ctxpkg.ContextMustGetUser(ctx)
+							u := appctx.ContextMustGetUser(ctx)
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-display-name", u.DisplayName))
 						} else {
 							sublog.Debug().Msg("TODO fetch user displayname")
@@ -1036,7 +1036,7 @@ func quoteEtag(etag string) string {
 
 // a file is only yours if you are the owner.
 func isCurrentUserOwner(ctx context.Context, owner *userv1beta1.UserId) bool {
-	contextUser, ok := ctxpkg.ContextGetUser(ctx)
+	contextUser, ok := appctx.ContextGetUser(ctx)
 	if ok && contextUser.Id != nil && owner != nil &&
 		contextUser.Id.Idp == owner.Idp &&
 		contextUser.Id.OpaqueId == owner.OpaqueId {

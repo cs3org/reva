@@ -30,7 +30,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -234,7 +234,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 						w.WriteHeader(http.StatusInternalServerError)
 						return nil, nil, false
 					}
-					currentUser := ctxpkg.ContextMustGetUser(ctx)
+					currentUser := appctx.ContextMustGetUser(ctx)
 					err = s.favoritesManager.UnsetFavorite(ctx, currentUser.Id, statRes.Info)
 					if err != nil {
 						w.WriteHeader(http.StatusInternalServerError)
@@ -275,7 +275,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 						w.WriteHeader(http.StatusInternalServerError)
 						return nil, nil, false
 					}
-					currentUser := ctxpkg.ContextMustGetUser(ctx)
+					currentUser := appctx.ContextMustGetUser(ctx)
 					err = s.favoritesManager.SetFavorite(ctx, currentUser.Id, statRes.Info)
 					if err != nil {
 						w.WriteHeader(http.StatusInternalServerError)

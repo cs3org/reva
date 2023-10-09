@@ -128,11 +128,13 @@ func (s *svc) doPing(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Info().Msg("pinging from http to grpc")
-
-	w.Write([]byte(pingRes.Info))
+	_, err = w.Write([]byte(pingRes.Info))
+	log.Error().Err(err).Msg("error writing res")
 }
 
 // doPong will be (http) called from grpc Pong.
 func (s *svc) doPong(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("pong"))
+	log := appctx.GetLogger(r.Context())
+	_, err := w.Write([]byte("pong"))
+	log.Error().Err(err).Msg("error writing res")
 }

@@ -33,7 +33,7 @@ import (
 	tokenregistry "github.com/cs3org/reva/internal/http/interceptors/auth/token/registry"
 	tokenwriterregistry "github.com/cs3org/reva/internal/http/interceptors/auth/tokenwriter/registry"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -191,7 +191,7 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 	log := appctx.GetLogger(ctx)
 
 	// Add the request user-agent to the ctx
-	ctx = metadata.NewIncomingContext(ctx, metadata.New(map[string]string{ctxpkg.UserAgentHeader: r.UserAgent()}))
+	ctx = metadata.NewIncomingContext(ctx, metadata.New(map[string]string{appctx.UserAgentHeader: r.UserAgent()}))
 
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(conf.GatewaySvc))
 	if err != nil {
@@ -297,10 +297,10 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 }
 
 func ctxWithUserInfo(ctx context.Context, r *http.Request, user *userpb.User, token string) context.Context {
-	ctx = ctxpkg.ContextSetUser(ctx, user)
-	ctx = ctxpkg.ContextSetToken(ctx, token)
-	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, token)
-	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.UserAgentHeader, r.UserAgent())
+	ctx = appctx.ContextSetUser(ctx, user)
+	ctx = appctx.ContextSetToken(ctx, token)
+	ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, token)
+	ctx = metadata.AppendToOutgoingContext(ctx, appctx.UserAgentHeader, r.UserAgent())
 
 	return ctx
 }

@@ -34,7 +34,7 @@ import (
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -1775,7 +1775,7 @@ func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResp
 }
 
 func (s *svc) filterProvidersByUserAgent(ctx context.Context, providers []*registry.ProviderInfo) []*registry.ProviderInfo {
-	cat, ok := ctxpkg.ContextGetUserAgentCategory(ctx)
+	cat, ok := appctx.ContextGetUserAgentCategory(ctx)
 	if !ok {
 		return providers
 	}

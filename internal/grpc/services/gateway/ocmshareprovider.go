@@ -30,7 +30,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -318,7 +318,7 @@ func (s *svc) handleTransfer(ctx context.Context, share *ocm.ReceivedShare, tran
 	// http://...token...@reva.eu/prefix/?name=remote.php/webdav/home/...
 	destEndpointPath := strings.TrimPrefix(destWebdavEndpointURL.Path, dstWebdavHostURL.Path)
 	destEndpointScheme := destWebdavEndpointURL.Scheme
-	destToken := ctxpkg.ContextMustGetToken(ctx)
+	destToken := appctx.ContextMustGetToken(ctx)
 	destPath := path.Join(destEndpointPath, transferDestinationPath, path.Base(share.Name))
 	destTargetURI := fmt.Sprintf("%s://%s@%s?name=%s", destEndpointScheme, destToken, destServiceHost, destPath)
 	// var destUri string

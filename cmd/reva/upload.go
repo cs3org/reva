@@ -35,7 +35,8 @@ import (
 	// TODO(labkode): this should not come from this package.
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/crypto"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/utils"
@@ -267,7 +268,7 @@ func checkUploadWebdavRef(protocols []*gateway.FileUploadProtocol, md os.FileInf
 	}
 
 	c := gowebdav.NewClient(p.UploadEndpoint, "", "")
-	c.SetHeader(ctxpkg.TokenHeader, token)
+	c.SetHeader(appctx.TokenHeader, token)
 	c.SetHeader("Upload-Length", strconv.FormatInt(md.Size(), 10))
 
 	if err = c.WriteStream(filePath, fd, 0700); err != nil {

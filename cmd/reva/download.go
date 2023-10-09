@@ -29,7 +29,8 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
@@ -182,7 +183,7 @@ func checkDownloadWebdavRef(protocols []*gateway.FileDownloadProtocol) (io.Reade
 	}
 
 	c := gowebdav.NewClient(p.DownloadEndpoint, "", "")
-	c.SetHeader(ctxpkg.TokenHeader, token)
+	c.SetHeader(appctx.TokenHeader, token)
 
 	reader, err := c.ReadStream(filePath)
 	if err != nil {

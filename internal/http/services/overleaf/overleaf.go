@@ -35,7 +35,7 @@ import (
 	storagepb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+
 	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
@@ -164,7 +164,7 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, ok := ctxpkg.ContextGetToken(ctx)
+	token, ok := appctx.ContextGetToken(ctx)
 	if !ok || token == "" {
 		reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, "Access token is invalid or empty", err)
 		return
@@ -195,7 +195,7 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u := ctxpkg.ContextMustGetUser(ctx)
+	u := appctx.ContextMustGetUser(ctx)
 
 	scope, err := scope.AddResourceInfoScope(resource, authpb.Role_ROLE_VIEWER, nil)
 	if err != nil {

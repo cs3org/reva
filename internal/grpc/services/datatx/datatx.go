@@ -24,7 +24,7 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+
 	txdriver "github.com/cs3org/reva/pkg/datatx"
 	txregistry "github.com/cs3org/reva/pkg/datatx/manager/registry"
 	repoRegistry "github.com/cs3org/reva/pkg/datatx/repository/registry"
@@ -126,7 +126,7 @@ func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransfer
 
 	// we always save the transfer regardless of start transfer outcome
 	// only then, if starting fails, can we try to restart it
-	userID := ctxpkg.ContextMustGetUser(ctx).GetId()
+	userID := appctx.ContextMustGetUser(ctx).GetId()
 	transfer := &txdriver.Transfer{
 		TxID:          txInfo.GetId().OpaqueId,
 		SrcTargetURI:  req.SrcTargetUri,
@@ -219,7 +219,7 @@ func (s *service) CancelTransfer(ctx context.Context, req *datatx.CancelTransfer
 }
 
 func (s *service) ListTransfers(ctx context.Context, req *datatx.ListTransfersRequest) (*datatx.ListTransfersResponse, error) {
-	userID := ctxpkg.ContextMustGetUser(ctx).GetId()
+	userID := appctx.ContextMustGetUser(ctx).GetId()
 	transfers, err := s.storageDriver.ListTransfers(req.Filters, userID)
 	if err != nil {
 		err = errors.Wrap(err, "datatx service: error listing transfers")

@@ -34,7 +34,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
@@ -91,7 +91,7 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 	if shareID, ok := h.createCs3Share(ctx, w, r, c, createShareReq, statInfo); ok {
 		notify, _ := strconv.ParseBool(r.FormValue("notify"))
 		if notify {
-			granter, ok := ctxpkg.ContextGetUser(ctx)
+			granter, ok := appctx.ContextGetUser(ctx)
 			if ok {
 				h.SendShareNotification(shareID.OpaqueId, granter, userRes.User, statInfo)
 			}
@@ -287,7 +287,7 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filte
 		Filters: filters,
 		Opaque: &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
-				ctxpkg.ResoucePathCtx: {Decoder: "plain", Value: []byte(ctxPath)},
+				appctx.ResoucePathCtx: {Decoder: "plain", Value: []byte(ctxPath)},
 			},
 		},
 	}

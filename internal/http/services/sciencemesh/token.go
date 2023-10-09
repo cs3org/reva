@@ -32,7 +32,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/smtpclient"
 	"github.com/cs3org/reva/pkg/utils/list"
@@ -94,7 +94,7 @@ func (h *tokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	recipient := query.Get("recipient")
 	if recipient != "" && h.smtpCredentials != nil {
 		templObj := &emailParams{

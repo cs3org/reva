@@ -34,7 +34,8 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -248,9 +249,9 @@ func (d *driver) opFromUser(ctx context.Context, userID *userv1beta1.UserId, f f
 	}
 
 	ownerCtx := context.TODO()
-	ownerCtx = ctxpkg.ContextSetToken(ownerCtx, authRes.Token)
-	ownerCtx = ctxpkg.ContextSetUser(ownerCtx, authRes.User)
-	ownerCtx = metadata.AppendToOutgoingContext(ownerCtx, ctxpkg.TokenHeader, authRes.Token)
+	ownerCtx = appctx.ContextSetToken(ownerCtx, authRes.Token)
+	ownerCtx = appctx.ContextSetUser(ownerCtx, authRes.User)
+	ownerCtx = metadata.AppendToOutgoingContext(ownerCtx, appctx.TokenHeader, authRes.Token)
 
 	return f(ownerCtx)
 }

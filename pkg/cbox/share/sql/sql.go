@@ -32,7 +32,8 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+
+	"github.com/cs3org/reva/pkg/appctx"
 	conversions "github.com/cs3org/reva/pkg/cbox/utils"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -105,7 +106,7 @@ func New(ctx context.Context, m map[string]interface{}) (share.Manager, error) {
 }
 
 func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 
 	// do not allow share to myself or the owner if share is for a user
 	// TODO(labkode): should not this be caught already at the gw level?
@@ -176,7 +177,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 }
 
 func (m *mgr) getByID(ctx context.Context, id *collaboration.ShareId) (*collaboration.Share, error) {
-	uid := conversions.FormatUserID(ctxpkg.ContextMustGetUser(ctx).Id)
+	uid := conversions.FormatUserID(appctx.ContextMustGetUser(ctx).Id)
 	s := conversions.DBShare{ID: id.OpaqueId}
 	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, stime, permissions, share_type FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND id=? AND (uid_owner=? or uid_initiator=?)"
 	if err := m.db.QueryRow(query, id.OpaqueId, uid, uid).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.STime, &s.Permissions, &s.ShareType); err != nil {
@@ -191,7 +192,7 @@ func (m *mgr) getByID(ctx context.Context, id *collaboration.ShareId) (*collabor
 
 func (m *mgr) getByKey(ctx context.Context, key *collaboration.ShareKey) (*collaboration.Share, error) {
 	owner := conversions.FormatUserID(key.Owner)
-	uid := conversions.FormatUserID(ctxpkg.ContextMustGetUser(ctx).Id)
+	uid := conversions.FormatUserID(appctx.ContextMustGetUser(ctx).Id)
 
 	s := conversions.DBShare{}
 	shareType, shareWith := conversions.FormatGrantee(key.Grantee)
@@ -226,7 +227,7 @@ func (m *mgr) GetShare(ctx context.Context, ref *collaboration.ShareReference) (
 }
 
 func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
-	uid := conversions.FormatUserID(ctxpkg.ContextMustGetUser(ctx).Id)
+	uid := conversions.FormatUserID(appctx.ContextMustGetUser(ctx).Id)
 	var query string
 	params := []interface{}{}
 	switch {
@@ -264,7 +265,7 @@ func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) er
 
 func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
 	permissions := conversions.SharePermToInt(p.Permissions)
-	uid := conversions.FormatUserID(ctxpkg.ContextMustGetUser(ctx).Id)
+	uid := conversions.FormatUserID(appctx.ContextMustGetUser(ctx).Id)
 
 	var query string
 	params := []interface{}{}
@@ -345,7 +346,7 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) (
 
 // we list the shares that are targeted to the user in context or to the user groups.
 func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error) {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	uid := conversions.FormatUserID(user.Id)
 
 	params := []interface{}{uid, uid, uid, uid}
@@ -398,7 +399,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 }
 
 func (m *mgr) getReceivedByID(ctx context.Context, id *collaboration.ShareId) (*collaboration.ReceivedShare, error) {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	uid := conversions.FormatUserID(user.Id)
 
 	params := []interface{}{uid, id.OpaqueId, uid}
@@ -428,7 +429,7 @@ func (m *mgr) getReceivedByID(ctx context.Context, id *collaboration.ShareId) (*
 }
 
 func (m *mgr) getReceivedByKey(ctx context.Context, key *collaboration.ShareKey) (*collaboration.ReceivedShare, error) {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	uid := conversions.FormatUserID(user.Id)
 
 	shareType, shareWith := conversions.FormatGrantee(key.Grantee)
@@ -480,7 +481,7 @@ func (m *mgr) GetReceivedShare(ctx context.Context, ref *collaboration.ShareRefe
 }
 
 func (m *mgr) UpdateReceivedShare(ctx context.Context, share *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 
 	rs, err := m.GetReceivedShare(ctx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: share.Share.Id}})
 	if err != nil {
@@ -520,7 +521,7 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, share *collaboration.Rece
 }
 
 func (m *mgr) uidOwnerFilters(ctx context.Context, filters map[collaboration.Filter_Type][]*collaboration.Filter) (string, []interface{}, error) {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	uid := conversions.FormatUserID(user.Id)
 
 	query := "uid_owner=? or uid_initiator=?"

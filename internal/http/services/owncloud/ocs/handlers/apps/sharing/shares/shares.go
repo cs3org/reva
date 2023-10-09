@@ -48,7 +48,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+
 	"github.com/cs3org/reva/pkg/notification"
 	"github.com/cs3org/reva/pkg/notification/notificationhelper"
 	"github.com/cs3org/reva/pkg/notification/trigger"
@@ -271,7 +271,7 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	granter, ok := ctxpkg.ContextGetUser(ctx)
+	granter, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		h.Log.Error().Err(err).Msgf("error getting granter data")
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting granter data", err)

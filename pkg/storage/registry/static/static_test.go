@@ -24,7 +24,8 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/storage/registry/static"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -81,12 +82,12 @@ var _ = Describe("Static", func() {
 	})
 	Expect(err).ToNot(HaveOccurred())
 
-	ctxAlice := ctxpkg.ContextSetUser(context.Background(), &userpb.User{
+	ctxAlice := appctx.ContextSetUser(context.Background(), &userpb.User{
 		Id: &userpb.UserId{
 			OpaqueId: "alice",
 		},
 	})
-	ctxRobert := ctxpkg.ContextSetUser(context.Background(), &userpb.User{
+	ctxRobert := appctx.ContextSetUser(context.Background(), &userpb.User{
 		Id: &userpb.UserId{
 			OpaqueId: "robert",
 		},
