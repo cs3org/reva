@@ -300,7 +300,7 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 		// Let's support redirections... and if we retry we have to retry at the same FST, avoid going back to the MGM
 		if resp != nil && (resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusTemporaryRedirect) {
 			// io.Copy(ioutil.Discard, resp.Body)
-			// resp.Body.Close()
+			resp.Body.Close()
 
 			loc, err := resp.Location()
 			if err != nil {
@@ -326,6 +326,8 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 		// And get an error code (if error) that is worth propagating
 		e := c.getRespError(resp, err)
 		if e != nil {
+			resp.Body.Close()
+			
 			if os.IsTimeout(e) {
 				ntries++
 				log.Warn().Str("func", "GETFile").Str("url", finalurl).Str("err", e.Error()).Int("try", ntries).Msg("recoverable network timeout")
@@ -388,11 +390,11 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 		log.Debug().Str("func", "PUTFile").Msg("sending req")
 
 		resp, err := c.doReq(req, remoteuser)
+		resp.Body.Close()
 
 		// Let's support redirections... and if we retry we retry at the same FST
 		if resp != nil && resp.StatusCode == 307 {
 			// io.Copy(ioutil.Discard, resp.Body)
-			// resp.Body.Close()
 
 			loc, err := resp.Location()
 			if err != nil {
