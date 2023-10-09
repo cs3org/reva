@@ -26,10 +26,10 @@ import (
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	ruser "github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/share"
 	sqlmanager "github.com/cs3org/reva/pkg/share/manager/sql"
-	mocks "github.com/cs3org/reva/pkg/share/mocks"
+	mocks "github.com/cs3org/reva/pkg/share/manager/sql/mocks"
 	_ "github.com/mattn/go-sqlite3"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -44,7 +44,7 @@ var _ = Describe("SQL manager", func() {
 		testDBFile *os.File
 
 		loginAs = func(user *user.User) {
-			ctx = ruser.ContextSetUser(context.Background(), user)
+			ctx = appctx.ContextSetUser(context.Background(), user)
 		}
 		admin = &user.User{
 			Id: &user.UserId{
