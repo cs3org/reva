@@ -118,7 +118,7 @@ var _ = Describe("ocm share", func() {
 			Mail:        "marie@cesnet.cz",
 			DisplayName: "Marie Curie",
 		}
-		federatedMarieId = &userpb.UserId{
+		federatedMarieID = &userpb.UserId{
 			OpaqueId: marie.Id.OpaqueId,
 			Idp:      marie.Id.Idp,
 			Type:     userpb.UserType_USER_TYPE_FEDERATED,
@@ -220,7 +220,7 @@ var _ = Describe("ocm share", func() {
 					Grantee: &provider.Grantee{
 						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
-							UserId: federatedMarieId,
+							UserId: federatedMarieID,
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
@@ -302,7 +302,7 @@ var _ = Describe("ocm share", func() {
 					Grantee: &provider.Grantee{
 						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
-							UserId: federatedMarieId,
+							UserId: federatedMarieID,
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
@@ -400,7 +400,7 @@ var _ = Describe("ocm share", func() {
 					Grantee: &provider.Grantee{
 						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
-							UserId: federatedMarieId,
+							UserId: federatedMarieID,
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
@@ -512,7 +512,7 @@ var _ = Describe("ocm share", func() {
 					Grantee: &provider.Grantee{
 						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
-							UserId: federatedMarieId,
+							UserId: federatedMarieID,
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
@@ -669,7 +669,7 @@ var _ = Describe("ocm share", func() {
 					Grantee: &provider.Grantee{
 						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
-							UserId: federatedMarieId,
+							UserId: federatedMarieID,
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
@@ -687,7 +687,7 @@ var _ = Describe("ocm share", func() {
 					Grantee: &provider.Grantee{
 						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
-							UserId: federatedMarieId,
+							UserId: federatedMarieID,
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
@@ -713,7 +713,7 @@ var _ = Describe("ocm share", func() {
 					Grantee: &provider.Grantee{
 						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
-							UserId: federatedMarieId,
+							UserId: federatedMarieID,
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
