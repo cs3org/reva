@@ -267,7 +267,11 @@ var _ = Describe("File uploads", func() {
 						Expect(data).To(Equal([]byte("0123456789")))
 					})
 
-				_, err = fs.Upload(ctx, uploadRef, io.NopCloser(bytes.NewReader(fileContent)), nil)
+				_, err = fs.Upload(ctx, storage.UploadRequest{
+					Ref:    uploadRef,
+					Body:   io.NopCloser(bytes.NewReader(fileContent)),
+					Length: int64(len(fileContent)),
+				}, nil)
 
 				Expect(err).ToNot(HaveOccurred())
 				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything, mock.Anything)
@@ -304,7 +308,11 @@ var _ = Describe("File uploads", func() {
 						Expect(data).To(Equal([]byte("")))
 					})
 
-				_, err = fs.Upload(ctx, uploadRef, io.NopCloser(bytes.NewReader(fileContent)), nil)
+				_, err = fs.Upload(ctx, storage.UploadRequest{
+					Ref:    uploadRef,
+					Body:   io.NopCloser(bytes.NewReader(fileContent)),
+					Length: int64(len(fileContent)),
+				}, nil)
 
 				Expect(err).ToNot(HaveOccurred())
 				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything, mock.Anything)
@@ -324,7 +332,11 @@ var _ = Describe("File uploads", func() {
 				)
 
 				uploadRef := &provider.Reference{Path: "/some-non-existent-upload-reference"}
-				_, err := fs.Upload(ctx, uploadRef, io.NopCloser(bytes.NewReader(fileContent)), nil)
+				_, err := fs.Upload(ctx, storage.UploadRequest{
+					Ref:    uploadRef,
+					Body:   io.NopCloser(bytes.NewReader(fileContent)),
+					Length: int64(len(fileContent)),
+				}, nil)
 
 				Expect(err).To(HaveOccurred())
 
