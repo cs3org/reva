@@ -32,6 +32,7 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	storagep "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/datagateway"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v2/pkg/ocm/share"
@@ -117,6 +118,11 @@ var _ = Describe("ocm share", func() {
 			Mail:        "marie@cesnet.cz",
 			DisplayName: "Marie Curie",
 		}
+		federatedMarieId = &userpb.UserId{
+			OpaqueId: marie.Id.OpaqueId,
+			Idp:      marie.Id.Idp,
+			Type:     userpb.UserType_USER_TYPE_FEDERATED,
+		}
 	)
 
 	JustBeforeEach(func() {
@@ -148,8 +154,7 @@ var _ = Describe("ocm share", func() {
 				},
 			},
 			{Name: "cesnethttp", Config: "ocm-share/ocm-server-cesnet-http.toml"},
-			{Name: "cernboxoutcomingocm", Config: "ocm-share/ocm-cernbox-outcoming-shares.toml"},
-			{Name: "cernboxocmdataserver", Config: "ocm-share/ocm-cernbox-outcoming-dataserver.toml"},
+			{Name: "cernboxocmsharesauth", Config: "ocm-share/ocm-cernbox-outcoming-shares.toml"},
 			{Name: "cernboxmachineauth", Config: "ocm-share/cernbox-machine-authprovider.toml"},
 		}, variables)
 		Expect(err).ToNot(HaveOccurred())
@@ -195,7 +200,7 @@ var _ = Describe("ocm share", func() {
 					ResourceId: &provider.ResourceId{
 						SpaceId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
 					},
-					Path: "new-file",
+					Path: "./new-file",
 				}
 				err = helpers.Upload(ctxEinstein, fs, ref, []byte("test"))
 				Expect(err).ToNot(HaveOccurred())
@@ -215,11 +220,7 @@ var _ = Describe("ocm share", func() {
 					Grantee: &provider.Grantee{
 						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
-							UserId: &userpb.UserId{
-								Idp:      marie.Id.Idp,
-								OpaqueId: marie.Id.OpaqueId,
-								Type:     userpb.UserType_USER_TYPE_FEDERATED,
-							},
+							UserId: federatedMarieId,
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
@@ -277,10 +278,14 @@ var _ = Describe("ocm share", func() {
 		Context("einstein shares a file with editor permissions", func() {
 			It("marie is able to modify the content of the file", func() {
 				fileToShare := &provider.Reference{
-					Path: "/home/new-file",
+					ResourceId: &storagep.ResourceId{
+						SpaceId:  einstein.Id.OpaqueId,
+						OpaqueId: einstein.Id.OpaqueId,
+					},
+					Path: "./new-file",
 				}
 				By("creating a file")
-				Expect(helpers.CreateFile(ctxEinstein, cernboxgw, fileToShare.Path, []byte("test"))).To(Succeed())
+				Expect(helpers.CreateFile(ctxEinstein, cernboxgw, fileToShare, []byte("test"))).To(Succeed())
 
 				By("share the file with marie")
 				info, err := stat(ctxEinstein, cernboxgw, fileToShare)
@@ -295,8 +300,9 @@ var _ = Describe("ocm share", func() {
 				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: info.Id,
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
-							UserId: marie.Id,
+							UserId: federatedMarieId,
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
@@ -323,7 +329,7 @@ var _ = Describe("ocm share", func() {
 
 				webdavClient := gowebdav.NewClient(webdav.WebdavOptions.Uri, "", "")
 				data := []byte("new-content")
-				webdavClient.SetHeader(net.HeaderUploadLength, strconv.Itoa(len(data)))
+				webdavClient.SetHeader(net.HeaderContentLength, strconv.Itoa(len(data)))
 				err = webdavClient.Write(".", data, 0)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -338,12 +344,8 @@ var _ = Describe("ocm share", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 				checkResourceInfo(statRes.Info, &provider.ResourceInfo{
-					Id: &provider.ResourceId{
-						StorageId: "984e7351-2729-4417-99b4-ab5e6d41fa97",
-						OpaqueId:  share.Id.OpaqueId + ":/",
-					},
 					Name:          "new-file",
-					Path:          ocmPath(share.Id, ""),
+					Path:          ".",
 					Size:          uint64(len(data)),
 					Type:          provider.ResourceType_RESOURCE_TYPE_FILE,
 					PermissionSet: editorPermissions,
@@ -373,8 +375,14 @@ var _ = Describe("ocm share", func() {
 						"bar": helpers.Folder{},
 					},
 				}
-				fileToShare := &provider.Reference{Path: "/home/ocm-share-folder"}
-				Expect(helpers.CreateStructure(ctxEinstein, cernboxgw, fileToShare.Path, structure)).To(Succeed())
+				fileToShare := &provider.Reference{
+					ResourceId: &storagep.ResourceId{
+						SpaceId:  einstein.Id.OpaqueId,
+						OpaqueId: einstein.Id.OpaqueId,
+					},
+					Path: "./ocm-share-folder",
+				}
+				Expect(helpers.CreateStructure(ctxEinstein, cernboxgw, fileToShare, structure)).To(Succeed())
 
 				By("share the file with marie")
 
@@ -390,8 +398,9 @@ var _ = Describe("ocm share", func() {
 				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: info.Id,
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
-							UserId: marie.Id,
+							UserId: federatedMarieId,
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
@@ -418,7 +427,7 @@ var _ = Describe("ocm share", func() {
 
 				webdavClient := gowebdav.NewClient(webdav.WebdavOptions.Uri, "", "")
 
-				ok, err = helpers.SameContentWebDAV(webdavClient, fileToShare.Path, structure)
+				ok, err = helpers.SameContentWebDAV(webdavClient, "/", structure)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ok).To(BeTrue())
 
@@ -436,10 +445,11 @@ var _ = Describe("ocm share", func() {
 					{
 						Id: &provider.ResourceId{
 							StorageId: "984e7351-2729-4417-99b4-ab5e6d41fa97",
-							OpaqueId:  share.Id.OpaqueId + ":/dir/foo",
+							SpaceId:   share.Id.OpaqueId,
+							OpaqueId:  share.Id.OpaqueId,
 						},
 						Name:          "foo",
-						Path:          ocmPath(share.Id, "dir/foo"),
+						Path:          "./dir/foo",
 						Size:          7,
 						Type:          provider.ResourceType_RESOURCE_TYPE_FILE,
 						PermissionSet: viewerPermissions,
@@ -447,10 +457,11 @@ var _ = Describe("ocm share", func() {
 					{
 						Id: &provider.ResourceId{
 							StorageId: "984e7351-2729-4417-99b4-ab5e6d41fa97",
-							OpaqueId:  share.Id.OpaqueId + ":/dir/bar",
+							SpaceId:   share.Id.OpaqueId,
+							OpaqueId:  share.Id.OpaqueId,
 						},
 						Name:          "bar",
-						Path:          ocmPath(share.Id, "dir/bar"),
+						Path:          "./dir/bar",
 						Size:          0,
 						Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 						PermissionSet: viewerPermissions,
@@ -475,9 +486,15 @@ var _ = Describe("ocm share", func() {
 						"bar": helpers.Folder{},
 					},
 				}
-				fileToShare := &provider.Reference{Path: "/home/ocm-share-folder"}
+				fileToShare := &provider.Reference{
+					ResourceId: &storagep.ResourceId{
+						SpaceId:  einstein.Id.OpaqueId,
+						OpaqueId: einstein.Id.OpaqueId,
+					},
+					Path: "./ocm-share-folder",
+				}
 
-				Expect(helpers.CreateStructure(ctxEinstein, cernboxgw, fileToShare.Path, structure)).To(Succeed())
+				Expect(helpers.CreateStructure(ctxEinstein, cernboxgw, fileToShare, structure)).To(Succeed())
 
 				By("share the file with marie")
 
@@ -493,8 +510,9 @@ var _ = Describe("ocm share", func() {
 				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: info.Id,
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
-							UserId: marie.Id,
+							UserId: federatedMarieId,
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
@@ -552,10 +570,11 @@ var _ = Describe("ocm share", func() {
 					{
 						Id: &provider.ResourceId{
 							StorageId: "984e7351-2729-4417-99b4-ab5e6d41fa97",
-							OpaqueId:  share.Id.OpaqueId + ":/dir/foo",
+							OpaqueId:  share.Id.OpaqueId,
+							SpaceId:   share.Id.OpaqueId,
 						},
 						Name:          "foo",
-						Path:          ocmPath(share.Id, "dir/foo"),
+						Path:          "./dir/foo",
 						Size:          7,
 						Type:          provider.ResourceType_RESOURCE_TYPE_FILE,
 						PermissionSet: editorPermissions,
@@ -563,10 +582,11 @@ var _ = Describe("ocm share", func() {
 					{
 						Id: &provider.ResourceId{
 							StorageId: "984e7351-2729-4417-99b4-ab5e6d41fa97",
-							OpaqueId:  share.Id.OpaqueId + ":/dir/bar",
+							OpaqueId:  share.Id.OpaqueId,
+							SpaceId:   share.Id.OpaqueId,
 						},
 						Name:          "bar",
-						Path:          ocmPath(share.Id, "dir/bar"),
+						Path:          "./dir/bar",
 						Size:          0,
 						Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 						PermissionSet: editorPermissions,
@@ -624,8 +644,14 @@ var _ = Describe("ocm share", func() {
 
 		Context("einstein creates twice the share to marie", func() {
 			It("fail with already existing error", func() {
-				fileToShare := &provider.Reference{Path: "/home/double-share"}
-				Expect(helpers.CreateFolder(ctxEinstein, cernboxgw, fileToShare.Path)).To(Succeed())
+				fileToShare := &provider.Reference{
+					ResourceId: &storagep.ResourceId{
+						SpaceId:  einstein.Id.OpaqueId,
+						OpaqueId: einstein.Id.OpaqueId,
+					},
+					Path: "./double-share",
+				}
+				Expect(helpers.CreateFolder(ctxEinstein, cernboxgw, fileToShare)).To(Succeed())
 
 				By("share the file with marie")
 
@@ -641,8 +667,9 @@ var _ = Describe("ocm share", func() {
 				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: info.Id,
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
-							UserId: marie.Id,
+							UserId: federatedMarieId,
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
@@ -658,8 +685,9 @@ var _ = Describe("ocm share", func() {
 				createShareRes2, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: info.Id,
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
-							UserId: marie.Id,
+							UserId: federatedMarieId,
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
@@ -683,8 +711,9 @@ var _ = Describe("ocm share", func() {
 				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
 					ResourceId: &provider.ResourceId{StorageId: "123e4567-e89b-12d3-a456-426655440000", OpaqueId: "NON_EXISTING_FILE"},
 					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
 						Id: &provider.Grantee_UserId{
-							UserId: marie.Id,
+							UserId: federatedMarieId,
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
@@ -719,9 +748,9 @@ func download(ctx context.Context, gw gatewaypb.GatewayAPIClient, ref *provider.
 
 	var token, endpoint string
 	for _, p := range initRes.Protocols {
-		if p.Protocol == "simple" {
-			token, endpoint = p.Token, p.DownloadEndpoint
-		}
+		// if p.Protocol == "simple" {
+		token, endpoint = p.Token, p.DownloadEndpoint
+		// }
 	}
 	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {

@@ -49,7 +49,7 @@ driver = "static"
 
 [grpc.services.authregistry.drivers.static.rules]
 basic = "{{grpc_address}}"
-ocmshares = "{{cernboxoutcomingocm_address}}"
+ocmshares = "{{cernboxocmsharesauth_address}}"
 machine = "{{cernboxmachineauth_address}}"
 
 [grpc.services.ocminvitemanager]
