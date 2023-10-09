@@ -44,7 +44,6 @@ import (
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/registry"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/httpclient"
@@ -161,7 +160,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	q.Add("appname", p.conf.AppName)
 
 	var ut = invalid
-	u, ok := ctxpkg.ContextGetUser(ctx)
+	u, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		// we must have been authenticated
 		return nil, errors.New("wopi: ContextGetUser failed")
@@ -173,7 +172,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		q.Add("userid", u.Id.OpaqueId+"@"+u.Id.Idp)
 	}
 
-	scopes, ok := ctxpkg.ContextGetScopes(ctx)
+	scopes, ok := appctx.ContextGetScopes(ctx)
 	if !ok {
 		// we must find at least one scope (as owner or sharee)
 		return nil, errors.New("wopi: ContextGetScopes failed")
@@ -442,7 +441,7 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 }
 
 func (p *wopiProvider) getAccessTokenTTL(ctx context.Context) (string, error) {
-	tkn := ctxpkg.ContextMustGetToken(ctx)
+	tkn := appctx.ContextMustGetToken(ctx)
 	token, err := jwt.ParseWithClaims(tkn, &jwt.StandardClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(p.conf.JWTSecret), nil
 	})

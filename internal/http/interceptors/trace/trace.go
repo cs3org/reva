@@ -31,10 +31,7 @@ import (
 // New returns a new HTTP middleware that stores the log
 // in the context with request ID information.
 func New() func(http.Handler) http.Handler {
-	chain := func(h http.Handler) http.Handler {
-		return handler(h)
-	}
-	return chain
+	return handler
 }
 
 func handler(h http.Handler) http.Handler {

@@ -31,7 +31,6 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/go-chi/chi/v5"
 )
@@ -86,7 +85,7 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 
 	user := chi.URLParam(r, "userid")
 	// FIXME use ldap to fetch user info
-	u, ok := ctxpkg.ContextGetUser(ctx)
+	u, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
 		return

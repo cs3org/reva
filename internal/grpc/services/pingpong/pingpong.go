@@ -13,7 +13,6 @@
 // limitations under the License.
 //
 // In applying this license, CERN does not waive the privileges and immunities
-
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
@@ -22,7 +21,7 @@ package pingpong
 import (
 	"context"
 	"crypto/tls"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/cs3org/reva/internal/grpc/services/pingpong/proto"
@@ -95,7 +94,7 @@ func (s *service) Ping(ctx context.Context, _ *proto.PingRequest) (*proto.PingRe
 	}
 
 	defer res.Body.Close()
-	data, err := ioutil.ReadAll(res.Body)
+	data, err := io.ReadAll(res.Body)
 	if err != nil {
 		log.Error().Err(err).Msg("error reading response body")
 		return nil, err
@@ -126,7 +125,7 @@ func (s *service) Pong(ctx context.Context, _ *proto.PongRequest) (*proto.PongRe
 	}
 
 	defer res.Body.Close()
-	data, err := ioutil.ReadAll(res.Body)
+	data, err := io.ReadAll(res.Body)
 	if err != nil {
 		log.Error().Err(err).Msg("error reading response body")
 		return nil, err

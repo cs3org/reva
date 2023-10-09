@@ -33,7 +33,6 @@ import (
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -158,8 +157,8 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, req *ga
 	}
 
 	gatewayClient := gateway.NewGatewayAPIClient(conn)
-	remoteCtx := ctxpkg.ContextSetToken(context.Background(), ep.token)
-	remoteCtx = metadata.AppendToOutgoingContext(remoteCtx, ctxpkg.TokenHeader, ep.token)
+	remoteCtx := appctx.ContextSetToken(context.Background(), ep.token)
+	remoteCtx = metadata.AppendToOutgoingContext(remoteCtx, appctx.TokenHeader, ep.token)
 
 	res, err := gatewayClient.OpenInApp(remoteCtx, appProviderReq)
 	if err != nil {
@@ -170,7 +169,7 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, req *ga
 }
 
 func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.ResourceInfo, req *gateway.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
-	accessToken, ok := ctxpkg.ContextGetToken(ctx)
+	accessToken, ok := appctx.ContextGetToken(ctx)
 	if !ok || accessToken == "" {
 		return &providerpb.OpenInAppResponse{
 			Status: status.NewUnauthenticated(ctx, errtypes.InvalidCredentials("Access token is invalid or empty"), ""),
