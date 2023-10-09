@@ -13,6 +13,9 @@ on:
         type: boolean
       platforms:
         type: string
+      context:
+        type: string
+        default: .
     outputs:
       image: 
         value: ${{ jobs.docker.outputs.image }}
@@ -40,7 +43,7 @@ jobs:
         uses: docker/build-push-action@v3
         id: build
         with:
-          context: .
+          context: ${{ inputs.context }}
           file: ${{ inputs.file }}
           tags: ${{ inputs.tags }}
           load: ${{ inputs.load }}

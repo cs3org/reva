@@ -29,7 +29,7 @@ import (
 	ruser "github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/share"
 	sqlmanager "github.com/cs3org/reva/pkg/share/manager/sql"
-	mocks "github.com/cs3org/reva/pkg/share/manager/sql/mocks"
+	mocks "github.com/cs3org/reva/pkg/share/mocks"
 	_ "github.com/mattn/go-sqlite3"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

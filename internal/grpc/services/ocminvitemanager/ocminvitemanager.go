@@ -58,8 +58,8 @@ type config struct {
 	TokenExpiration   string                            `mapstructure:"token_expiration"`
 	OCMClientTimeout  int                               `mapstructure:"ocm_timeout"`
 	OCMClientInsecure bool                              `mapstructure:"ocm_insecure"`
-	GatewaySVC        string                            `mapstructure:"gatewaysvc"       validate:"required"`
-	ProviderDomain    string                            `mapstructure:"provider_domain"  validate:"required" docs:"The same domain registered in the provider authorizer"`
+	GatewaySVC        string                            `mapstructure:"gatewaysvc"                                    validate:"required"`
+	ProviderDomain    string                            `docs:"The same domain registered in the provider authorizer" mapstructure:"provider_domain" validate:"required"`
 
 	tokenExpiration time.Duration
 }

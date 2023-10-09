@@ -54,7 +54,7 @@ type Client struct {
 }
 
 type config struct {
-	BaseURL    string `mapstructure:"base_url" default:"http://localhost"`
+	BaseURL    string `default:"http://localhost" mapstructure:"base_url"`
 	APIKey     string `mapstructure:"api_key"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
 }
@@ -107,10 +107,7 @@ func timestampToTime(ctx context.Context, t *types.Timestamp) time.Time {
 }
 
 func (c *Client) convertToInviteToken(ctx context.Context, tkn *apiToken) (*invitepb.InviteToken, error) {
-	usr, err := conversions.ExtractUserID(ctx, c.GatewayClient, tkn.Initiator)
-	if err != nil {
-		return nil, err
-	}
+	usr := conversions.ExtractUserID(tkn.Initiator)
 	return &invitepb.InviteToken{
 		Token:  tkn.Token,
 		UserId: usr,

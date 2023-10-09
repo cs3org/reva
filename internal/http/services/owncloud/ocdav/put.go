@@ -37,9 +37,11 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/notification/trigger"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
+	"go.step.sm/crypto/randutil"
 )
 
 func sufferMacOSFinder(r *http.Request) bool {
@@ -219,6 +221,18 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		Opaque: &typespb.Opaque{Map: opaqueMap},
 	}
 
+	if userInCtxHasUploaderRole(ctx) {
+		ref.Path, err = randomizePath(ref.Path)
+		if err != nil {
+			log.Debug().Err(err).Msg("error randomizing path")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		uReq.Options = &provider.InitiateFileUploadRequest_IfNotExist{
+			IfNotExist: true,
+		}
+	}
+
 	// where to upload the file?
 	uRes, err := client.InitiateFileUpload(ctx, uReq)
 	if err != nil {
@@ -275,6 +289,14 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			b, err := Marshal(exception{
 				code:    SabredavBadRequest,
 				message: "The computed checksum does not match the one received from the client.",
+			})
+			HandleWebdavError(&log, w, b, err)
+			return
+		}
+		if httpRes.StatusCode == http.StatusConflict {
+			w.WriteHeader(http.StatusConflict)
+			b, err := Marshal(exception{
+				message: "The file cannot be uploaded. Try again.",
 			})
 			HandleWebdavError(&log, w, b, err)
 			return
@@ -376,6 +398,36 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	// overwrite
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func userInCtxHasUploaderRole(ctx context.Context) bool {
+	u, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return false
+	}
+	return user.HasUploaderRole(u)
+}
+
+func randomizePath(p string) (string, error) {
+	rand, err := randutil.String(5, "abcdefghijklmnopqrstuvwxyz")
+	if err != nil {
+		return "", err
+	}
+	base, ext := split(p)
+	new := base + "_" + rand
+	if ext != "" {
+		new += ext
+	}
+	return new, nil
+}
+
+func split(p string) (string, string) {
+	e := path.Ext(p)
+	if e == "" {
+		return p, ""
+	}
+	i := strings.Index(p, e)
+	return p[:i], e
 }
 
 func (s *svc) handleSpacesPut(w http.ResponseWriter, r *http.Request, spaceID string) {

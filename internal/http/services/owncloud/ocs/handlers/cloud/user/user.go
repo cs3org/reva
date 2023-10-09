@@ -158,9 +158,9 @@ func parseUpdateSelfRequest(r *http.Request) (updateSelfRequest, error) {
 // User holds user data.
 type User struct {
 	// TODO needs better naming, clarify if we need a userid, a username or both
-	ID          string `json:"id" xml:"id"`
-	DisplayName string `json:"display-name" xml:"display-name"`
-	Email       string `json:"email" xml:"email"`
-	UserType    string `json:"user-type" xml:"user-type"`
+	ID          string `json:"id"                 xml:"id"`
+	DisplayName string `json:"display-name"       xml:"display-name"`
+	Email       string `json:"email"              xml:"email"`
+	UserType    string `json:"user-type"          xml:"user-type"`
 	Language    string `json:"language,omitempty" xml:"language,omitempty"`
 }

@@ -13,5 +13,3 @@ address = "0.0.0.0:13000"
 [grpc.services.publicstorageprovider]
 mount_path = "/public/"
 mount_id = "e1a73ede-549b-4226-abdf-40e69ca8230d"
-gateway_addr = "gateway:19000"
-

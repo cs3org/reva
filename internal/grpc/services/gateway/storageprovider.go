@@ -1449,7 +1449,7 @@ func (s *svc) statAcrossProviders(ctx context.Context, req *provider.StatRequest
 			continue
 		}
 		if resp.Status.Code != rpc.Code_CODE_OK {
-			log.Err(status.NewErrorFromCode(rpc.Code_CODE_OK, "gateway"))
+			log.Err(status.NewErrorFromCode(rpc.Code_CODE_OK, "gateway")).Send()
 			continue
 		}
 		if resp.Info != nil {
@@ -1848,7 +1848,7 @@ func (s *svc) listContainerAcrossProviders(ctx context.Context, req *provider.Li
 			continue
 		}
 		if resp.Status.Code != rpc.Code_CODE_OK {
-			log.Err(status.NewErrorFromCode(rpc.Code_CODE_OK, "gateway"))
+			log.Err(status.NewErrorFromCode(rpc.Code_CODE_OK, "gateway")).Send()
 			continue
 		}
 

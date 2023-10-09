@@ -77,17 +77,17 @@ func init() {
 }
 
 type config struct {
-	MimeTypes           []string `mapstructure:"mime_types" docs:"nil;Inherited from the appprovider."`
-	IOPSecret           string   `mapstructure:"iop_secret" docs:";The IOP secret used to connect to the wopiserver."`
-	WopiURL             string   `mapstructure:"wopi_url" docs:";The wopiserver's URL."`
-	AppName             string   `mapstructure:"app_name" docs:";The App user-friendly name."`
-	AppIconURI          string   `mapstructure:"app_icon_uri" docs:";A URI to a static asset which represents the app icon."`
-	FolderBaseURL       string   `mapstructure:"folder_base_url" docs:";The base URL to generate links to navigate back to the containing folder."`
-	AppURL              string   `mapstructure:"app_url" docs:";The App URL."`
-	AppIntURL           string   `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
-	AppAPIKey           string   `mapstructure:"app_api_key" docs:";The API key used by the app, if applicable."`
-	JWTSecret           string   `mapstructure:"jwt_secret" docs:";The JWT secret to be used to retrieve the token TTL."`
-	AppDesktopOnly      bool     `mapstructure:"app_desktop_only" docs:"false;Specifies if the app can be opened only on desktop."`
+	MimeTypes           []string `docs:"nil;Inherited from the appprovider."                                         mapstructure:"mime_types"`
+	IOPSecret           string   `docs:";The IOP secret used to connect to the wopiserver."                          mapstructure:"iop_secret"`
+	WopiURL             string   `docs:";The wopiserver's URL."                                                      mapstructure:"wopi_url"`
+	AppName             string   `docs:";The App user-friendly name."                                                mapstructure:"app_name"`
+	AppIconURI          string   `docs:";A URI to a static asset which represents the app icon."                     mapstructure:"app_icon_uri"`
+	FolderBaseURL       string   `docs:";The base URL to generate links to navigate back to the containing folder."  mapstructure:"folder_base_url"`
+	AppURL              string   `docs:";The App URL."                                                               mapstructure:"app_url"`
+	AppIntURL           string   `docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL" mapstructure:"app_int_url"`
+	AppAPIKey           string   `docs:";The API key used by the app, if applicable."                                mapstructure:"app_api_key"`
+	JWTSecret           string   `docs:";The JWT secret to be used to retrieve the token TTL."                       mapstructure:"jwt_secret"`
+	AppDesktopOnly      bool     `docs:"false;Specifies if the app can be opened only on desktop."                   mapstructure:"app_desktop_only"`
 	InsecureConnections bool     `mapstructure:"insecure_connections"`
 }
 

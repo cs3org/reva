@@ -22,7 +22,7 @@ package data
 type ConfigData struct {
 	Version string `json:"version" xml:"version"`
 	Website string `json:"website" xml:"website"`
-	Host    string `json:"host" xml:"host"`
+	Host    string `json:"host"    xml:"host"`
 	Contact string `json:"contact" xml:"contact"`
-	SSL     string `json:"ssl" xml:"ssl"`
+	SSL     string `json:"ssl"     xml:"ssl"`
 }

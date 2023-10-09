@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
+	"github.com/pkg/errors"
 )
 
 // HTTPOptions to configure the Client.
@@ -372,6 +373,12 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 		// Execute the request. I don't like that there is no explicit timeout or buffer control on the input stream
 		log.Debug().Str("func", "PUTFile").Msg("sending req")
 		resp, err := c.cl.Do(req)
+		if err != nil {
+			return errors.Wrap(err, "error doing request")
+		}
+		if resp != nil {
+			defer resp.Body.Close()
+		}
 
 		// Let's support redirections... and if we retry we retry at the same FST
 		if resp != nil && resp.StatusCode == 307 {
@@ -470,6 +477,9 @@ func (c *EOSHTTPClient) Head(ctx context.Context, remoteuser string, auth eoscli
 			}
 			log.Error().Str("func", "Head").Str("url", finalurl).Str("err", e.Error()).Msg("")
 			return e
+		}
+		if resp != nil {
+			defer resp.Body.Close()
 		}
 
 		log.Debug().Str("func", "Head").Str("url", finalurl).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("")

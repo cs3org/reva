@@ -40,16 +40,16 @@ func init() {
 
 // Credentials holds a pair of secret and userid.
 type Credentials struct {
-	ID           *user.UserId    `mapstructure:"id" json:"id"`
-	Username     string          `mapstructure:"username" json:"username"`
-	Mail         string          `mapstructure:"mail" json:"mail"`
-	MailVerified bool            `mapstructure:"mail_verified" json:"mail_verified"`
-	DisplayName  string          `mapstructure:"display_name" json:"display_name"`
-	Secret       string          `mapstructure:"secret" json:"secret"`
-	Groups       []string        `mapstructure:"groups" json:"groups"`
-	UIDNumber    int64           `mapstructure:"uid_number" json:"uid_number"`
-	GIDNumber    int64           `mapstructure:"gid_number" json:"gid_number"`
-	Opaque       *typespb.Opaque `mapstructure:"opaque" json:"opaque"`
+	ID           *user.UserId    `json:"id"            mapstructure:"id"`
+	Username     string          `json:"username"      mapstructure:"username"`
+	Mail         string          `json:"mail"          mapstructure:"mail"`
+	MailVerified bool            `json:"mail_verified" mapstructure:"mail_verified"`
+	DisplayName  string          `json:"display_name"  mapstructure:"display_name"`
+	Secret       string          `json:"secret"        mapstructure:"secret"`
+	Groups       []string        `json:"groups"        mapstructure:"groups"`
+	UIDNumber    int64           `json:"uid_number"    mapstructure:"uid_number"`
+	GIDNumber    int64           `json:"gid_number"    mapstructure:"gid_number"`
+	Opaque       *typespb.Opaque `json:"opaque"        mapstructure:"opaque"`
 }
 
 type manager struct {

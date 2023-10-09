@@ -43,11 +43,11 @@ type EmailHandler struct {
 }
 
 type config struct {
-	SMTPAddress    string `mapstructure:"smtp_server" docs:";The hostname and port of the SMTP server."`
-	SenderLogin    string `mapstructure:"sender_login" docs:";The email to be used to send mails."`
-	SenderPassword string `mapstructure:"sender_password" docs:";The sender's password."`
-	DisableAuth    bool   `mapstructure:"disable_auth" docs:"false;Whether to disable SMTP auth."`
-	DefaultSender  string `mapstructure:"default_sender" docs:"no-reply@cernbox.cern.ch;Default sender when not specified in the trigger."`
+	SMTPAddress    string `docs:";The hostname and port of the SMTP server."                                 mapstructure:"smtp_server"`
+	SenderLogin    string `docs:";The email to be used to send mails."                                       mapstructure:"sender_login"`
+	SenderPassword string `docs:";The sender's password."                                                    mapstructure:"sender_password"`
+	DisableAuth    bool   `docs:"false;Whether to disable SMTP auth."                                        mapstructure:"disable_auth"`
+	DefaultSender  string `docs:"no-reply@cernbox.cern.ch;Default sender when not specified in the trigger." mapstructure:"default_sender"`
 }
 
 func (c *config) ApplyDefaults() {

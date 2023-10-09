@@ -78,7 +78,7 @@ type config struct {
 	Timeout               int64  `mapstructure:"timeout"`
 	RefreshInterval       int64  `mapstructure:"refresh"`
 	VerifyRequestHostname bool   `mapstructure:"verify_request_hostname"`
-	Insecure              bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
+	Insecure              bool   `docs:"false;Whether to skip certificate checks when sending requests." mapstructure:"insecure"`
 }
 
 func (c *config) ApplyDefaults() {

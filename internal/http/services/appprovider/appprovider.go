@@ -53,8 +53,8 @@ func init() {
 // Config holds the config options for the HTTP appprovider service.
 type Config struct {
 	Prefix     string `mapstructure:"prefix"`
-	GatewaySvc string `mapstructure:"gatewaysvc" validate:"required"`
-	Insecure   bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
+	GatewaySvc string `mapstructure:"gatewaysvc"                                              validate:"required"`
+	Insecure   bool   `docs:"false;Whether to skip certificate checks when sending requests." mapstructure:"insecure"`
 }
 
 func (c *Config) ApplyDefaults() {

@@ -54,11 +54,11 @@ type svc struct {
 
 type config struct {
 	Prefix      string `mapstructure:"prefix"`
-	GatewaySvc  string `mapstructure:"gatewaysvc"  validate:"required"`
-	AppName     string `mapstructure:"app_name" docs:";The App user-friendly name."  validate:"required"`
-	ArchiverURL string `mapstructure:"archiver_url" docs:";Internet-facing URL of the archiver service, used to serve the files to Overleaf."  validate:"required"`
-	appURL      string `mapstructure:"app_url" docs:";The App URL."   validate:"required"`
-	Insecure    bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
+	GatewaySvc  string `mapstructure:"gatewaysvc"                                                                 validate:"required"`
+	AppName     string `docs:";The App user-friendly name."                                                       mapstructure:"app_name"     validate:"required"`
+	ArchiverURL string `docs:";Internet-facing URL of the archiver service, used to serve the files to Overleaf." mapstructure:"archiver_url" validate:"required"`
+	appURL      string `docs:";The App URL."                                                                      mapstructure:"app_url"      validate:"required"`
+	Insecure    bool   `docs:"false;Whether to skip certificate checks when sending requests."                    mapstructure:"insecure"`
 	JWTSecret   string `mapstructure:"jwt_secret"`
 }
 

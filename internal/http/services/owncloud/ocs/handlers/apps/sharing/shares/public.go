@@ -19,11 +19,14 @@
 package shares
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
+	"sync"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -180,58 +183,75 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 	log := appctx.GetLogger(ctx)
 
 	ocsDataPayload := make([]*conversions.ShareData, 0)
-	// TODO(refs) why is this guard needed? Are we moving towards a gateway only for service discovery? without a gateway this is dead code.
-	if h.gatewayAddr != "" {
-		client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
-		if err != nil {
-			return ocsDataPayload, nil, err
-		}
-
-		req := link.ListPublicSharesRequest{
-			Filters: filters,
-		}
-
-		res, err := client.ListPublicShares(ctx, &req)
-		if err != nil {
-			return ocsDataPayload, nil, err
-		}
-		if res.Status.Code != rpc.Code_CODE_OK {
-			return ocsDataPayload, res.Status, nil
-		}
-
-		for _, share := range res.GetShare() {
-			info, status, err := h.getResourceInfoByID(ctx, client, share.ResourceId)
-			if err != nil || status.Code != rpc.Code_CODE_OK {
-				log.Debug().Interface("share", share).Interface("status", status).Err(err).Msg("could not stat share, skipping")
-				continue
-			}
-
-			sData := conversions.PublicShare2ShareData(share, r, h.publicURL)
-
-			sData.Name = share.DisplayName
-
-			if err := h.addFileInfo(ctx, sData, info); err != nil {
-				log.Debug().Interface("share", share).Interface("info", info).Err(err).Msg("could not add file info, skipping")
-				continue
-			}
-			h.mapUserIds(ctx, client, sData)
-
-			log.Debug().Interface("share", share).Interface("info", info).Interface("shareData", share).Msg("mapped")
-
-			ocsDataPayload = append(ocsDataPayload, sData)
-		}
-
-		return ocsDataPayload, nil, nil
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	if err != nil {
+		return ocsDataPayload, nil, err
 	}
 
-	return ocsDataPayload, nil, errors.New("bad request")
+	req := link.ListPublicSharesRequest{
+		Filters: filters,
+	}
+
+	res, err := client.ListPublicShares(ctx, &req)
+	if err != nil {
+		return ocsDataPayload, nil, err
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return ocsDataPayload, res.Status, nil
+	}
+
+	var wg sync.WaitGroup
+	workers := 50
+	input := make(chan *link.PublicShare, len(res.Share))
+	output := make(chan *conversions.ShareData, len(res.Share))
+
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(ctx context.Context, client gateway.GatewayAPIClient, input chan *link.PublicShare, output chan *conversions.ShareData, wg *sync.WaitGroup) {
+			defer wg.Done()
+
+			for share := range input {
+				info, status, err := h.getResourceInfoByID(ctx, client, share.ResourceId)
+				if err != nil || status.Code != rpc.Code_CODE_OK {
+					log.Debug().Interface("share", share.Id).Interface("status", status).Err(err).Msg("could not stat share, skipping")
+					return
+				}
+
+				sData := conversions.PublicShare2ShareData(share, r, h.publicURL)
+
+				sData.Name = share.DisplayName
+
+				if err := h.addFileInfo(ctx, sData, info); err != nil {
+					log.Debug().Interface("share", share.Id).Err(err).Msg("could not add file info, skipping")
+					return
+				}
+				h.mapUserIds(ctx, client, sData)
+
+				log.Debug().Interface("share", share.Id).Msg("mapped")
+				output <- sData
+			}
+		}(ctx, client, input, output, &wg)
+	}
+
+	for _, share := range res.Share {
+		input <- share
+	}
+	close(input)
+	wg.Wait()
+	close(output)
+
+	for s := range output {
+		ocsDataPayload = append(ocsDataPayload, s)
+	}
+
+	return ocsDataPayload, nil, nil
 }
 
 func (h *Handler) isPublicShare(r *http.Request, oid string) bool {
 	logger := appctx.GetLogger(r.Context())
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
-		logger.Err(err)
+		logger.Err(err).Send()
 	}
 
 	psRes, err := client.GetPublicShare(r.Context(), &link.GetPublicShareRequest{
@@ -244,7 +264,7 @@ func (h *Handler) isPublicShare(r *http.Request, oid string) bool {
 		},
 	})
 	if err != nil {
-		logger.Err(err)
+		logger.Err(err).Send()
 		return false
 	}
 

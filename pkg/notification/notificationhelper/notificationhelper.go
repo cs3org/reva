@@ -44,10 +44,10 @@ type NotificationHelper struct {
 
 // Config contains the configuration for the Notification Helper.
 type Config struct {
-	NatsAddress string                 `mapstructure:"nats_address" docs:";The NATS server address."`
-	NatsToken   string                 `mapstructure:"nats_token" docs:";The token to authenticate against the NATS server"`
-	NatsStream  string                 `mapstructure:"nats_stream" docs:"reva-notifications;The notifications NATS stream."`
-	Templates   map[string]interface{} `mapstructure:"templates" docs:";Notification templates for the service."`
+	NatsAddress string                 `docs:";The NATS server address."                          mapstructure:"nats_address"`
+	NatsToken   string                 `docs:";The token to authenticate against the NATS server" mapstructure:"nats_token"`
+	NatsStream  string                 `docs:"reva-notifications;The notifications NATS stream."  mapstructure:"nats_stream"`
+	Templates   map[string]interface{} `docs:";Notification templates for the service."           mapstructure:"templates"`
 }
 
 func defaultConfig() *Config {
@@ -130,7 +130,7 @@ func (nh *NotificationHelper) Stop() {
 		return
 	}
 	if err := nh.nc.Drain(); err != nil {
-		nh.Log.Error().Err(err)
+		nh.Log.Error().Err(err).Send()
 	}
 }
 

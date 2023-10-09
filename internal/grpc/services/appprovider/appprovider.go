@@ -65,8 +65,8 @@ type config struct {
 	Drivers             map[string]map[string]interface{} `mapstructure:"drivers"`
 	AppProviderURL      string                            `mapstructure:"app_provider_url"`
 	GatewaySvc          string                            `mapstructure:"gatewaysvc"`
-	MimeTypes           []string                          `mapstructure:"mime_types" docs:"nil;A list of mime types supported by this app."`
-	CustomMimeTypesJSON string                            `mapstructure:"custom_mime_types_json" docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types."`
+	MimeTypes           []string                          `docs:"nil;A list of mime types supported by this app."                                                              mapstructure:"mime_types"`
+	CustomMimeTypesJSON string                            `docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types." mapstructure:"custom_mime_types_json"`
 	Priority            uint64                            `mapstructure:"priority"`
 	Language            string                            `mapstructure:"language"`
 }

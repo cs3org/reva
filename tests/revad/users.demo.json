@@ -6,10 +6,16 @@
 			"type": 1
 		},
 		"username": "einstein",
+		"uid_number": 10,
+		"gid_number": 1000,
 		"secret": "relativity",
 		"mail": "einstein@example.org",
 		"display_name": "Albert Einstein",
-		"groups": ["sailing-lovers", "violin-haters", "physics-lovers"]
+		"groups": [
+			"sailing-lovers",
+			"violin-haters",
+			"physics-lovers"
+		]
 	},
 	{
 		"id": {
@@ -18,10 +24,16 @@
 			"type": 1
 		},
 		"username": "marie",
+		"uid_number": 20,
+		"gid_number": 2000,
 		"secret": "radioactivity",
 		"mail": "marie@example.org",
 		"display_name": "Marie Curie",
-		"groups": ["radium-lovers", "polonium-lovers", "physics-lovers"]
+		"groups": [
+			"radium-lovers",
+			"polonium-lovers",
+			"physics-lovers"
+		]
 	},
 	{
 		"id": {
@@ -30,9 +42,15 @@
 			"type": 1
 		},
 		"username": "richard",
+		"uid_number": 30,
+		"gid_number": 3000,
 		"secret": "superfluidity",
 		"mail": "richard@example.org",
 		"display_name": "Richard Feynman",
-		"groups": ["quantum-lovers", "philosophy-haters", "physics-lovers"]
+		"groups": [
+			"quantum-lovers",
+			"philosophy-haters",
+			"physics-lovers"
+		]
 	}
 ]

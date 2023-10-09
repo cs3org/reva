@@ -48,7 +48,6 @@ var (
 		configureCommand(),
 		loginCommand(),
 		whoamiCommand(),
-		importCommand(),
 		lsCommand(),
 		statCommand(),
 		uploadCommand(),

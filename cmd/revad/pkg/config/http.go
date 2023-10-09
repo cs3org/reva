@@ -25,13 +25,13 @@ import (
 
 // HTTP holds the configuration for the HTTP services.
 type HTTP struct {
-	Network  string  `mapstructure:"network"  key:"network"  default:"tcp"`
-	Address  Address `mapstructure:"address"  key:"address"`
-	CertFile string  `mapstructure:"certfile" key:"certfile"`
-	KeyFile  string  `mapstructure:"keyfile"  key:"keyfile"`
+	Network  string  `default:"tcp"  key:"network"           mapstructure:"network"`
+	Address  Address `key:"address"  mapstructure:"address"`
+	CertFile string  `key:"certfile" mapstructure:"certfile"`
+	KeyFile  string  `key:"keyfile"  mapstructure:"keyfile"`
 
-	Services    map[string]ServicesConfig `mapstructure:"-" key:"services"`
-	Middlewares map[string]map[string]any `mapstructure:"-" key:"middlewares"`
+	Services    map[string]ServicesConfig `key:"services"    mapstructure:"-"`
+	Middlewares map[string]map[string]any `key:"middlewares" mapstructure:"-"`
 
 	iterableImpl
 }

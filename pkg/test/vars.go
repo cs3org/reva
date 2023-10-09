@@ -74,7 +74,7 @@ func NewFile(path, content string) error {
 	if err != nil {
 		return err
 	}
-	_, err = file.Write([]byte(content))
+	_, err = file.WriteString(content)
 	if err != nil {
 		return err
 	}

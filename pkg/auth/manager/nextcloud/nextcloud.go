@@ -52,7 +52,7 @@ type Manager struct {
 
 // AuthManagerConfig contains config for a Nextcloud-based AuthManager.
 type AuthManagerConfig struct {
-	EndPoint     string `mapstructure:"endpoint" docs:";The Nextcloud backend endpoint for user check"`
+	EndPoint     string `docs:";The Nextcloud backend endpoint for user check" mapstructure:"endpoint"`
 	SharedSecret string `mapstructure:"shared_secret"`
 	MockHTTP     bool   `mapstructure:"mock_http"`
 }

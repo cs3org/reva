@@ -66,9 +66,9 @@ type config struct {
 	Drivers        map[string]map[string]interface{} `mapstructure:"drivers"`
 	ClientTimeout  int                               `mapstructure:"client_timeout"`
 	ClientInsecure bool                              `mapstructure:"client_insecure"`
-	GatewaySVC     string                            `mapstructure:"gatewaysvc"      validate:"required"`
-	ProviderDomain string                            `mapstructure:"provider_domain" validate:"required" docs:"The same domain registered in the provider authorizer"`
-	WebDAVEndpoint string                            `mapstructure:"webdav_endpoint" validate:"required"`
+	GatewaySVC     string                            `mapstructure:"gatewaysvc"                                    validate:"required"`
+	ProviderDomain string                            `docs:"The same domain registered in the provider authorizer" mapstructure:"provider_domain" validate:"required"`
+	WebDAVEndpoint string                            `mapstructure:"webdav_endpoint"                               validate:"required"`
 	WebappTemplate string                            `mapstructure:"webapp_template"`
 }
 
