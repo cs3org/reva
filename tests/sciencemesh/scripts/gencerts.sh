@@ -33,19 +33,15 @@ openssl req -new -x509 -days 3650 \
 createCert meshdir
 createCert stub1
 createCert stub2
-createCert nextcloud1
-createCert nextcloud2
-createCert owncloud1
-createCert owncloud2
+
 createCert revad1
-createCert wopi1
 createCert revad2
-createCert wopi2
-createCert revanextcloud1
-createCert wopinextcloud1
-createCert revanextcloud2
-createCert wopinextcloud2
-createCert revaowncloud1
-createCert wopiowncloud1
-createCert revaowncloud2
-createCert wopiowncloud2
+
+for efss in owncloud nextcloud cernbox; do
+  createCert reva${efss}1
+  createCert reva${efss}2
+  [[ "${efss}" -ne "cernbox" ]] && createCert ${efss}1
+  [[ "${efss}" -ne "cernbox" ]] && createCert ${efss}2
+  createCert wopi${efss}1
+  createCert wopi${efss}2
+done
