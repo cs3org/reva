@@ -33,37 +33,37 @@ import (
 
 // Config holds the reva configuration.
 type Config struct {
-	GRPC       *GRPC       `key:"grpc"       mapstructure:"-"      default:"{}"`
-	HTTP       *HTTP       `key:"http"       mapstructure:"-"      default:"{}"`
-	Serverless *Serverless `key:"serverless" mapstructure:"-"      default:"{}"`
-	Shared     *Shared     `key:"shared"     mapstructure:"shared" default:"{}"`
-	Log        *Log        `key:"log"        mapstructure:"log"    default:"{}" template:"-"`
-	Core       *Core       `key:"core"       mapstructure:"core"   default:"{}" template:"-"`
-	Vars       Vars        `key:"vars"       mapstructure:"vars"   default:"{}" template:"-"`
+	GRPC       *GRPC       `default:"{}" key:"grpc"       mapstructure:"-"`
+	HTTP       *HTTP       `default:"{}" key:"http"       mapstructure:"-"`
+	Serverless *Serverless `default:"{}" key:"serverless" mapstructure:"-"`
+	Shared     *Shared     `default:"{}" key:"shared"     mapstructure:"shared"`
+	Log        *Log        `default:"{}" key:"log"        mapstructure:"log"    template:"-"`
+	Core       *Core       `default:"{}" key:"core"       mapstructure:"core"   template:"-"`
+	Vars       Vars        `default:"{}" key:"vars"       mapstructure:"vars"   template:"-"`
 }
 
 // Log holds the configuration for the logger.
 type Log struct {
-	Output string `key:"output" mapstructure:"output" default:"stdout"`
-	Mode   string `key:"mode"   mapstructure:"mode"   default:"console"`
-	Level  string `key:"level"  mapstructure:"level"  default:"trace"`
+	Output string `default:"stdout"  key:"output" mapstructure:"output"`
+	Mode   string `default:"console" key:"mode"   mapstructure:"mode"`
+	Level  string `default:"trace"   key:"level"  mapstructure:"level"`
 }
 
 // Shared holds the shared configuration.
 type Shared struct {
-	JWTSecret             string   `key:"jwt_secret"                mapstructure:"jwt_secret"                default:"changemeplease"`
-	GatewaySVC            string   `key:"gatewaysvc"                mapstructure:"gatewaysvc"                default:"0.0.0.0:19000"`
-	DataGateway           string   `key:"datagateway"               mapstructure:"datagateway"               default:"http://0.0.0.0:19001/datagateway"`
-	SkipUserGroupsInToken bool     `key:"skip_user_groups_in_token" mapstructure:"skip_user_groups_in_token"`
-	BlockedUsers          []string `key:"blocked_users"             mapstructure:"blocked_users"             default:"[]"`
+	JWTSecret             string   `default:"changemeplease"                   key:"jwt_secret"                         mapstructure:"jwt_secret"`
+	GatewaySVC            string   `default:"0.0.0.0:19000"                    key:"gatewaysvc"                         mapstructure:"gatewaysvc"`
+	DataGateway           string   `default:"http://0.0.0.0:19001/datagateway" key:"datagateway"                        mapstructure:"datagateway"`
+	SkipUserGroupsInToken bool     `key:"skip_user_groups_in_token"            mapstructure:"skip_user_groups_in_token"`
+	BlockedUsers          []string `default:"[]"                               key:"blocked_users"                      mapstructure:"blocked_users"`
 }
 
 // Core holds the core configuration.
 type Core struct {
 	MaxCPUs            string `key:"max_cpus"             mapstructure:"max_cpus"`
 	ConfigDumpFile     string `key:"config_dump_file"     mapstructure:"config_dump_file"`
-	TracingEnabled     bool   `key:"tracing_enabled"      mapstructure:"tracing_enabled"      default:"true"`
-	TracingEndpoint    string `key:"tracing_endpoint"     mapstructure:"tracing_endpoint"     default:"localhost:6831"`
+	TracingEnabled     bool   `default:"true"             key:"tracing_enabled"               mapstructure:"tracing_enabled"`
+	TracingEndpoint    string `default:"localhost:6831"   key:"tracing_endpoint"              mapstructure:"tracing_endpoint"`
 	TracingCollector   string `key:"tracing_collector"    mapstructure:"tracing_collector"`
 	TracingServiceName string `key:"tracing_service_name" mapstructure:"tracing_service_name"`
 	TracingService     string `key:"tracing_service"      mapstructure:"tracing_service"`

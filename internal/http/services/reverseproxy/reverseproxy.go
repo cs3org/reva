@@ -37,8 +37,8 @@ func init() {
 }
 
 type proxyRule struct {
-	Endpoint string `mapstructure:"endpoint" json:"endpoint"`
-	Backend  string `mapstructure:"backend" json:"backend"`
+	Endpoint string `json:"endpoint" mapstructure:"endpoint"`
+	Backend  string `json:"backend"  mapstructure:"backend"`
 }
 
 type config struct {

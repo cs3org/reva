@@ -38,8 +38,17 @@ const (
 	PermissionDelete
 	// PermissionShare grants share permissions on a resource.
 	PermissionShare
+	// PermissionDeny grants permissions to deny access on a resource
+	// The recipient of the resource will then have PermissionNone.
+	PermissionDeny
+	// PermissionNone grants no permissions on a resource.
+	PermissionNone
+	// PermissionMax is to be used within value range checks.
+	PermissionMax Permissions = (1 << (iota - 1)) - 1
 	// PermissionAll grants all permissions on a resource.
-	PermissionAll Permissions = (1 << (iota - 1)) - 1
+	PermissionAll = PermissionMax - PermissionNone
+	// PermissionMin is to be used within value range checks.
+	PermissionMin = PermissionRead
 )
 
 var (
@@ -51,8 +60,8 @@ var (
 // The value must be in the valid range.
 func NewPermissions(val int) (Permissions, error) {
 	if val == int(PermissionInvalid) {
-		return PermissionInvalid, fmt.Errorf("permissions %d out of range %d - %d", val, PermissionRead, PermissionAll)
-	} else if val < int(PermissionInvalid) || int(PermissionAll) < val {
+		return PermissionInvalid, fmt.Errorf("permissions %d out of range %d - %d", val, PermissionMin, PermissionMax)
+	} else if val < int(PermissionInvalid) || int(PermissionMax) < val {
 		return PermissionInvalid, ErrPermissionNotInRange
 	}
 	return Permissions(val), nil

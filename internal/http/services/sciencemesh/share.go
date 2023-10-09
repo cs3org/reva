@@ -52,12 +52,12 @@ func (h *sharesHandler) init(c *config) error {
 }
 
 type createShareRequest struct {
-	SourcePath        string `json:"sourcePath" validate:"required"`
-	TargetPath        string `json:"targetPath" validate:"required"`
+	SourcePath        string `json:"sourcePath"        validate:"required"`
+	TargetPath        string `json:"targetPath"        validate:"required"`
 	Type              string `json:"type"`
-	Role              string `json:"role" validate:"oneof=viewer editor"`
+	Role              string `json:"role"              validate:"oneof=viewer editor"`
 	RecipientUsername string `json:"recipientUsername" validate:"required"`
-	RecipientHost     string `json:"recipientHost" validate:"required"`
+	RecipientHost     string `json:"recipientHost"     validate:"required"`
 }
 
 // CreateShare creates an OCM share.

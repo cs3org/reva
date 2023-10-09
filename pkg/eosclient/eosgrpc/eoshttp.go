@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
+	"github.com/pkg/errors"
 )
 
 // HTTPOptions to configure the Client.
@@ -487,6 +488,9 @@ func (c *EOSHTTPClient) Head(ctx context.Context, remoteuser string, auth eoscli
 			}
 			log.Error().Str("func", "Head").Str("url", finalurl).Str("err", e.Error()).Msg("")
 			return e
+		}
+		if resp != nil {
+			defer resp.Body.Close()
 		}
 
 		log.Debug().Str("func", "Head").Str("url", finalurl).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("")

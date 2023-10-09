@@ -37,11 +37,11 @@ const validTemplateNameRegex = "[a-zA-Z0-9-]"
 
 // RegistrationRequest represents a Template registration request.
 type RegistrationRequest struct {
-	Name            string `mapstructure:"name" json:"name"`
-	Handler         string `mapstructure:"handler" json:"handler"`
-	BodyTmplPath    string `mapstructure:"body_template_path" json:"body_template_path"`
-	SubjectTmplPath string `mapstructure:"subject_template_path" json:"subject_template_path"`
-	Persistent      bool   `mapstructure:"persistent" json:"persistent"`
+	Name            string `json:"name"                  mapstructure:"name"`
+	Handler         string `json:"handler"               mapstructure:"handler"`
+	BodyTmplPath    string `json:"body_template_path"    mapstructure:"body_template_path"`
+	SubjectTmplPath string `json:"subject_template_path" mapstructure:"subject_template_path"`
+	Persistent      bool   `json:"persistent"            mapstructure:"persistent"`
 }
 
 // Template represents a notification template.

@@ -454,13 +454,13 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 	// Now send the req and see what happens
 	resp, err := c.cl.MD(context.Background(), mdrq)
 	if err != nil {
-		log.Error().Err(err).Uint64("inode", inode).Str("err", err.Error())
+		log.Error().Err(err).Uint64("inode", inode).Str("err", err.Error()).Send()
 
 		return nil, err
 	}
 	rsp, err := resp.Recv()
 	if err != nil {
-		log.Error().Err(err).Uint64("inode", inode).Str("err", err.Error())
+		log.Error().Err(err).Uint64("inode", inode).Str("err", err.Error()).Send()
 		return nil, err
 	}
 
@@ -1095,7 +1095,7 @@ func (c *Client) Remove(ctx context.Context, auth eosclient.Authorization, path 
 
 	nfo, err := c.GetFileInfoByPath(ctx, auth, path)
 	if err != nil {
-		log.Warn().Err(err).Str("func", "Remove").Str("path", path).Str("err", err.Error())
+		log.Warn().Err(err).Str("func", "Remove").Str("path", path).Str("err", err.Error()).Send()
 		return err
 	}
 

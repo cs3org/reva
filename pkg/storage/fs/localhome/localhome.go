@@ -33,9 +33,9 @@ func init() {
 }
 
 type config struct {
-	Root        string `mapstructure:"root" docs:"/var/tmp/reva/;Path of root directory for user storage."`
-	ShareFolder string `mapstructure:"share_folder" docs:"/MyShares;Path for storing share references."`
-	UserLayout  string `mapstructure:"user_layout" docs:"{{.Username}};Template for user home directories"`
+	Root        string `docs:"/var/tmp/reva/;Path of root directory for user storage." mapstructure:"root"`
+	ShareFolder string `docs:"/MyShares;Path for storing share references."            mapstructure:"share_folder"`
+	UserLayout  string `docs:"{{.Username}};Template for user home directories"        mapstructure:"user_layout"`
 }
 
 func (c *config) ApplyDefaults() {

@@ -1,0 +1,324 @@
+docker compose -f ./tests/docker/docker-compose.yml up --force-recreate --always-recreate-deps --build --abort-on-container-exit -V --remove-orphans --exit-code-from acceptance-2 acceptance-2
+#0 building with "default" instance using docker driver
+
+#1 [frontend internal] load build definition from Dockerfile.revad-eos
+#1 transferring dockerfile: 1.33kB done
+#1 DONE 0.0s
+
+#2 [frontend internal] load .dockerignore
+#2 transferring context: 102B done
+#2 DONE 0.0s
+
+#3 [storage-home-ocis internal] load .dockerignore
+#3 transferring context: 102B done
+#3 DONE 0.0s
+
+#4 [storage-home-ocis internal] load build definition from Dockerfile.revad-eos
+#4 transferring dockerfile: 1.33kB done
+#4 DONE 0.0s
+
+#5 [shares internal] load build definition from Dockerfile.revad-eos
+#5 transferring dockerfile: 1.33kB done
+#5 DONE 0.0s
+
+#6 [shares internal] load .dockerignore
+#6 transferring context: 102B done
+#6 DONE 0.0s
+
+#7 [ldap-users internal] load build definition from Dockerfile.revad-eos
+#7 transferring dockerfile: 1.33kB done
+#7 DONE 0.0s
+
+#8 [eos-storage internal] load build definition from Dockerfile
+#8 transferring dockerfile: 347B done
+#8 DONE 0.0s
+
+#9 [eos-storage internal] load .dockerignore
+#9 transferring context: 2B done
+#9 DONE 0.0s
+
+#10 [ldap-users internal] load .dockerignore
+#10 transferring context: 102B done
+#10 DONE 0.0s
+
+#11 [gateway internal] load build definition from Dockerfile.revad-eos
+#11 transferring dockerfile: 1.33kB done
+#11 DONE 0.0s
+
+#12 [eos-storage internal] load metadata for gitlab-registry.cern.ch/dss/eos/eos-ci:5.1.25
+#12 DONE 0.0s
+
+#13 [eos-storage 1/5] FROM gitlab-registry.cern.ch/dss/eos/eos-ci:5.1.25
+#13 DONE 0.0s
+
+#14 [gateway internal] load .dockerignore
+#14 transferring context: 102B done
+#14 DONE 0.0s
+
+#15 [gateway internal] load metadata for gitlab-registry.cern.ch/dss/eos/eos-all:5.0.31
+#15 DONE 0.0s
+
+#16 [eos-storage internal] load build context
+#16 transferring context: 125B done
+#16 DONE 0.0s
+
+#17 [eos-storage 4/5] RUN ulimit -n 1024000 && yum install -y sssd sssd-client
+#17 CACHED
+
+#18 [eos-storage 3/5] COPY sssd/sssd.conf /etc/sssd/sssd.conf
+#18 CACHED
+
+#19 [eos-storage 2/5] COPY scripts/eos-run.sh /mnt/scripts/eos-run.sh
+#19 CACHED
+
+#20 [eos-storage 5/5] RUN chmod 0600 /etc/sssd/sssd.conf && chown root:root /etc/sssd/sssd.conf
+#20 CACHED
+
+#21 [eos-storage] exporting to image
+#21 exporting layers done
+#21 writing image sha256:50779ff49d35cb0e27158991b4926d8e98e71a1dc9d983a217899ff29ed675dc
+#21 writing image sha256:50779ff49d35cb0e27158991b4926d8e98e71a1dc9d983a217899ff29ed675dc done
+#21 naming to docker.io/library/docker-eos-storage done
+#21 DONE 0.0s
+
+#22 [storage-users-ocis internal] load .dockerignore
+#22 transferring context: 102B done
+#22 DONE 0.0s
+
+#23 [storage-users-ocis internal] load build definition from Dockerfile.revad-eos
+#23 transferring dockerfile: 1.33kB done
+#23 DONE 0.0s
+
+#24 [storage-publiclink internal] load .dockerignore
+#24 transferring context: 102B done
+#24 DONE 0.0s
+
+#25 [storage-publiclink internal] load build definition from Dockerfile.revad-eos
+#25 transferring dockerfile: 1.33kB done
+#25 DONE 0.0s
+
+#15 [storage-publiclink internal] load metadata for gitlab-registry.cern.ch/dss/eos/eos-all:5.0.31
+#15 DONE 0.0s
+
+#26 [storage-publiclink internal] load metadata for docker.io/library/golang:latest
+#26 DONE 1.4s
+
+#27 [storage-home-ocis builder 1/4] FROM docker.io/library/golang:latest@sha256:19600fdcae402165dcdab18cb9649540bde6be7274dedb5d205b2f84029fe909
+#27 DONE 0.0s
+
+#28 [storage-publiclink stage-1 1/4] FROM gitlab-registry.cern.ch/dss/eos/eos-all:5.0.31
+#28 DONE 0.0s
+
+#29 [gateway internal] load build context
+#29 transferring context: 92.02kB 0.1s done
+#29 DONE 0.1s
+
+#30 [shares internal] load build context
+#30 transferring context: 92.02kB 0.1s done
+#30 DONE 0.2s
+
+#31 [frontend internal] load build context
+#31 transferring context: 92.02kB 0.1s done
+#31 DONE 0.1s
+
+#32 [storage-publiclink builder 2/4] WORKDIR /home/reva
+#32 CACHED
+
+#33 [storage-publiclink internal] load build context
+#33 transferring context: 92.02kB 0.1s done
+#33 DONE 0.1s
+
+#34 [storage-users-ocis internal] load build context
+#34 transferring context: 92.02kB 0.1s done
+#34 DONE 0.1s
+
+#35 [storage-home-ocis internal] load build context
+#35 transferring context: 92.02kB 0.1s done
+#35 DONE 0.2s
+
+#36 [ldap-users internal] load build context
+#36 transferring context: 92.02kB 0.1s done
+#36 DONE 0.2s
+
+#37 [gateway builder 3/4] COPY . .
+#37 DONE 0.4s
+
+#38 [gateway builder 4/4] RUN make revad
+#38 0.251 go build -ldflags "`[[ -z "" ]] && echo "" || echo "-extldflags=-static"` -X github.com/cs3org/reva/cmd/revad.gitCommit= -X github.com/cs3org/reva/cmd/revad.version= -X github.com/cs3org/reva/cmd/revad.goVersion=`go version | awk '{print $3}'` -X github.com/cs3org/reva/cmd/revad.buildDate=`date +%FT%T%z`" -o ./cmd/revad/revad ./cmd/revad/main
+#38 0.276 go: downloading github.com/google/uuid v1.3.1
+#38 0.276 go: downloading github.com/pkg/errors v0.9.1
+#38 0.276 go: downloading github.com/rs/zerolog v1.28.0
+#38 0.296 go: downloading go.opencensus.io v0.24.0
+#38 0.328 go: downloading github.com/BurntSushi/toml v1.3.2
+#38 0.359 go: downloading go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.37.0
+#38 1.446 go: downloading golang.org/x/sync v0.3.0
+#38 1.535 go: downloading google.golang.org/grpc v1.58.0
+#38 1.535 go: downloading github.com/creasty/defaults v1.7.0
+#38 1.535 go: downloading github.com/mitchellh/mapstructure v1.5.0
+#38 1.623 go: downloading github.com/cs3org/go-cs3apis v0.0.0-20230727093620-0f4399be4543
+#38 1.647 go: downloading github.com/go-ldap/ldap/v3 v3.4.6
+#38 1.774 go: downloading github.com/golang/protobuf v1.5.3
+#38 1.774 go: downloading go.step.sm/crypto v0.35.0
+#38 1.774 go: downloading google.golang.org/protobuf v1.31.0
+#38 1.789 go: downloading go.opentelemetry.io/otel/trace v1.14.0
+#38 1.790 go: downloading github.com/bluele/gcache v0.0.2
+#38 1.888 go: downloading go.opentelemetry.io/otel v1.14.0
+#38 3.259 go: downloading github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
+#38 3.404 go: downloading go.opentelemetry.io/otel/exporters/jaeger v1.11.2
+#38 3.442 go: downloading go.opentelemetry.io/otel/sdk v1.11.2
+#38 3.605 go: downloading go.opentelemetry.io/otel/metric v0.34.0
+#38 3.727 go: downloading github.com/mattn/go-colorable v0.1.12
+#38 3.760 go: downloading google.golang.org/genproto v0.0.0-20230803162519-f966b187b2e5
+#38 3.826 go: downloading github.com/mileusna/useragent v1.2.1
+#38 6.475 go: downloading github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358
+#38 6.572 go: downloading github.com/go-asn1-ber/asn1-ber v1.5.5
+#38 6.776 go: downloading github.com/asim/go-micro/plugins/events/nats/v4 v4.7.0
+#38 6.897 go: downloading go-micro.dev/v4 v4.3.1-0.20211108085239-0c2041e43908
+#38 7.314 go: downloading github.com/juliangruber/go-intersect v1.1.0
+#38 7.426 go: downloading github.com/ReneKroon/ttlcache/v2 v2.11.0
+#38 7.535 go: downloading github.com/golang-jwt/jwt v3.2.2+incompatible
+#38 7.694 go: downloading github.com/studio-b12/gowebdav v0.9.0
+#38 15.58 go: downloading github.com/rs/cors v1.9.0
+#38 15.58 go: downloading github.com/go-chi/chi/v5 v5.0.8
+#38 15.58 go: downloading github.com/gdexlab/go-render v1.0.1
+#38 15.58 go: downloading github.com/go-playground/validator/v10 v10.15.4
+#38 15.59 go: downloading github.com/tus/tusd v1.13.0
+#38 15.59 go: downloading contrib.go.opencensus.io/exporter/prometheus v0.4.2
+#38 15.59 go: downloading github.com/nats-io/nats.go v1.27.0
+#38 15.59 go: downloading github.com/beevik/etree v1.2.0
+#38 15.82 go: downloading github.com/wk8/go-ordered-map v1.0.0
+#38 15.82 go: downloading github.com/glpatcern/go-mime v0.0.0-20221026162842-2a8d71ad17a9
+#38 15.82 go: downloading golang.org/x/crypto v0.13.0
+#38 15.82 go: downloading github.com/coreos/go-oidc/v3 v3.5.0
+#38 15.82 go: downloading github.com/sethvargo/go-password v0.2.0
+#38 15.82 go: downloading golang.org/x/oauth2 v0.11.0
+#38 15.83 go: downloading github.com/Masterminds/sprig v2.22.0+incompatible
+#38 16.12 go: downloading github.com/go-sql-driver/mysql v1.7.1
+#38 16.12 go: downloading github.com/gomodule/redigo v1.8.9
+#38 16.12 go: downloading github.com/aws/aws-sdk-go v1.45.1
+#38 16.24 go: downloading golang.org/x/sys v0.12.0
+#38 16.24 go: downloading github.com/go-logr/logr v1.2.4
+#38 16.57 go: downloading github.com/mattn/go-isatty v0.0.17
+#38 16.68 go: downloading github.com/nats-io/stan.go v0.10.4
+#38 16.70 go: downloading github.com/cenkalti/backoff v2.2.1+incompatible
+#38 16.79 go: downloading github.com/nats-io/nats-server/v2 v2.9.19
+#38 16.80 go: downloading github.com/nats-io/nats-streaming-server v0.25.5
+#38 17.50 go: downloading github.com/go-playground/locales v0.14.1
+#38 18.40 go: downloading github.com/go-playground/universal-translator v0.18.1
+#38 19.65 go: downloading github.com/google/go-cmp v0.5.9
+#38 19.77 go: downloading golang.org/x/net v0.14.0
+#38 20.66 go: downloading google.golang.org/genproto/googleapis/rpc v0.0.0-20230807174057-1744710a1577
+#38 20.81 go: downloading github.com/prometheus/alertmanager v0.26.0
+#38 20.81 go: downloading github.com/prometheus/client_golang v1.16.0
+#38 21.98 go: downloading github.com/prometheus/statsd_exporter v0.22.7
+#38 22.13 go: downloading github.com/bmizerany/pat v0.0.0-20170815010413-6226ea591a40
+#38 22.21 go: downloading github.com/gabriel-vasile/mimetype v1.4.2
+#38 22.27 go: downloading github.com/leodido/go-urn v1.2.4
+#38 22.88 go: downloading golang.org/x/text v0.13.0
+#38 27.74 go: downloading github.com/klauspost/compress v1.16.7
+#38 44.85 go: downloading github.com/nats-io/nkeys v0.4.4
+#38 44.85 go: downloading github.com/Masterminds/goutils v1.1.1
+#38 44.85 go: downloading github.com/nats-io/nuid v1.0.1
+#38 44.85 go: downloading github.com/Masterminds/semver v1.5.0
+#38 44.85 go: downloading github.com/huandu/xstrings v1.3.3
+#38 44.85 go: downloading github.com/imdario/mergo v0.3.12
+#38 45.26 go: downloading github.com/mitchellh/copystructure v1.2.0
+#38 45.27 go: downloading github.com/go-jose/go-jose/v3 v3.0.0
+#38 45.27 go: downloading github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da
+#38 45.27 go: downloading github.com/mattn/go-sqlite3 v1.14.17
+#38 45.56 go: downloading github.com/go-logr/stdr v1.2.2
+#38 45.69 go: downloading github.com/hashicorp/go-hclog v1.5.0
+#38 46.97 go: downloading github.com/hashicorp/go-msgpack/v2 v2.1.0
+#38 46.97 go: downloading github.com/hashicorp/raft v1.5.0
+#38 47.02 go: downloading github.com/prometheus/procfs v0.11.0
+#38 47.02 go: downloading go.etcd.io/bbolt v1.3.7
+#38 47.67 go: downloading github.com/minio/highwayhash v1.0.2
+#38 47.70 go: downloading github.com/hashicorp/go-msgpack v1.1.5
+#38 47.95 go: downloading github.com/nats-io/jwt/v2 v2.4.1
+#38 48.06 go: downloading golang.org/x/time v0.3.0
+#38 48.44 go: downloading github.com/beorn7/perks v1.0.1
+#38 48.44 go: downloading github.com/cespare/xxhash/v2 v2.2.0
+#38 48.82 go: downloading github.com/prometheus/client_model v0.4.0
+#38 48.86 go: downloading github.com/prometheus/common v0.44.0
+#38 48.87 go: downloading github.com/cespare/xxhash v1.1.0
+#38 48.87 go: downloading github.com/go-kit/log v0.2.1
+#38 48.93 go: downloading gopkg.in/yaml.v2 v2.4.0
+#38 49.05 go: downloading github.com/patrickmn/go-cache v2.1.0+incompatible
+#38 49.10 go: downloading github.com/gogo/protobuf v1.3.2
+#38 49.10 go: downloading github.com/mitchellh/reflectwalk v1.0.2
+#38 49.14 go: downloading github.com/fatih/color v1.13.0
+#38 49.22 go: downloading github.com/armon/go-metrics v0.4.1
+#38 50.29 go: downloading github.com/shurcooL/vfsgen v0.0.0-20200824052919-0d455de96546
+#38 50.29 go: downloading github.com/jmespath/go-jmespath v0.4.0
+#38 50.30 go: downloading github.com/matttproud/golang_protobuf_extensions v1.0.4
+#38 50.41 go: downloading github.com/go-logfmt/logfmt v0.5.1
+#38 50.77 go: downloading github.com/hashicorp/go-immutable-radix v1.3.1
+#38 50.77 go: downloading github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c
+#38 51.02 go: downloading github.com/shurcooL/httpfs v0.0.0-20190707220628-8d4bc4ba7749
+#38 51.03 go: downloading github.com/miekg/dns v1.1.43
+#38 51.56 go: downloading github.com/hashicorp/golang-lru v0.6.0
+#38 DONE 97.6s
+
+#39 [gateway stage-1 2/4] COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+#39 CACHED
+
+#40 [storage-home-ocis builder 3/4] COPY . .
+#40 CACHED
+
+#41 [storage-home-ocis builder 4/4] RUN make revad
+#41 CACHED
+
+#42 [storage-home-ocis stage-1 2/4] COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+#42 CACHED
+
+#43 [storage-home-ocis stage-1 3/4] COPY --from=builder /home/reva/cmd/revad/revad /usr/bin/revad
+#43 DONE 0.0s
+
+#44 [storage-home-ocis stage-1 4/4] RUN mkdir -p /etc/revad/ && touch /etc/revad/revad.toml
+#44 DONE 0.2s
+
+#45 [gateway] exporting to image
+#45 exporting layers
+#45 ...
+
+#46 [frontend] exporting to image
+#46 exporting layers 4.6s done
+#46 writing image sha256:25f1937bd1a2c2149eec7ad4214295558da354ac806cd0de609189da1dfcab7d done
+#46 naming to docker.io/library/docker-frontend done
+#46 DONE 4.6s
+
+#47 [shares] exporting to image
+#47 exporting layers 4.6s done
+#47 writing image sha256:3b4c8039a91d26b69728832dcb221b5459c4da99f9f947ee157abb6d55ccfae8 done
+#47 naming to docker.io/library/docker-shares done
+#47 DONE 4.6s
+
+#48 [storage-home-ocis] exporting to image
+#48 exporting layers 4.6s done
+#48 writing image sha256:80808e18a7ddd773995d32be339db783d4de20c82ea9a37f07edbbe6f6037836 done
+#48 naming to docker.io/library/docker-storage-home-ocis done
+#48 DONE 4.6s
+
+#49 [ldap-users] exporting to image
+#49 exporting layers 4.7s done
+#49 writing image sha256:f6e440868593eade47a3edbbe655941650f98895e1ae0cb53c1720be575cfc71 done
+#49 naming to docker.io/library/docker-ldap-users done
+#49 DONE 4.7s
+
+#50 [storage-users-ocis] exporting to image
+#50 exporting layers 4.6s done
+#50 writing image sha256:8e8e504b0939797f02ea7b70956e1191fc01d31f0074168087e39d6f9fbbab7b done
+#50 naming to docker.io/library/docker-storage-users-ocis done
+#50 DONE 4.6s
+
+#51 [storage-publiclink] exporting to image
+#51 exporting layers 4.6s done
+#51 writing image sha256:804891df2a6ec0eec32487075b03bbd23f5052c177159962b85edcf3161b739f done
+#51 naming to docker.io/library/docker-storage-publiclink done
+#51 DONE 4.6s
+
+#45 [gateway] exporting to image
+#45 exporting layers 4.7s done
+#45 writing image sha256:b4faa2f6541dfb48e4277414e9cef1771f970aff2931ddd624b20a1be2e5ab07 done
+#45 naming to docker.io/library/docker-gateway done
+#45 DONE 4.7s

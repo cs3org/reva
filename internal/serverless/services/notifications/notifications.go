@@ -44,13 +44,13 @@ import (
 )
 
 type config struct {
-	NatsAddress      string                            `mapstructure:"nats_address" docs:";The NATS server address."`
-	NatsToken        string                            `mapstructure:"nats_token" docs:"The token to authenticate against the NATS server"`
-	NatsPrefix       string                            `mapstructure:"nats_prefix" docs:"reva-notifications;The notifications NATS stream."`
-	HandlerConf      map[string]map[string]interface{} `mapstructure:"handlers" docs:";Settings for the different notification handlers."`
-	GroupingInterval int                               `mapstructure:"grouping_interval" docs:"60;Time in seconds to group incoming notification triggers"`
-	GroupingMaxSize  int                               `mapstructure:"grouping_max_size" docs:"100;Maximum number of notifications to group"`
-	StorageDriver    string                            `mapstructure:"storage_driver" docs:"mysql;The driver used to store notifications"`
+	NatsAddress      string                            `docs:";The NATS server address."                                  mapstructure:"nats_address"`
+	NatsToken        string                            `docs:"The token to authenticate against the NATS server"          mapstructure:"nats_token"`
+	NatsPrefix       string                            `docs:"reva-notifications;The notifications NATS stream."          mapstructure:"nats_prefix"`
+	HandlerConf      map[string]map[string]interface{} `docs:";Settings for the different notification handlers."         mapstructure:"handlers"`
+	GroupingInterval int                               `docs:"60;Time in seconds to group incoming notification triggers" mapstructure:"grouping_interval"`
+	GroupingMaxSize  int                               `docs:"100;Maximum number of notifications to group"               mapstructure:"grouping_max_size"`
+	StorageDriver    string                            `docs:"mysql;The driver used to store notifications"               mapstructure:"storage_driver"`
 	StorageDrivers   map[string]map[string]interface{} `mapstructure:"storage_drivers"`
 }
 

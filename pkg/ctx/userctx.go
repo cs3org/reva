@@ -32,6 +32,7 @@ const (
 	tokenKey
 	scopeKey
 	idKey
+	pathKey
 )
 
 // ContextGetUser returns the user if set in the given context.

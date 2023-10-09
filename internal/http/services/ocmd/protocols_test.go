@@ -41,12 +41,22 @@ func TestUnmarshalProtocol(t *testing.T) {
 			expected: []Protocol{},
 		},
 		{
-			raw: `{"name":"foo","options":{"unsupported":"value"}}`,
-			err: `protocol options not supported: {"unsupported":"value"}`,
-		},
-		{
 			raw: `{"unsupported":{}}`,
 			err: "protocol unsupported not recognised",
+		},
+		{
+			raw: `{"name":"foo","options":{"unsupported":"value"}}`,
+			err: `missing sharedSecret from options {"unsupported":"value"}`,
+		},
+		{
+			raw: `{"name":"ocm10format","options":{"sharedSecret":"secret"}}`,
+			expected: []Protocol{
+				&WebDAV{
+					SharedSecret: "secret",
+					Permissions:  []string{"read", "write", "share"},
+					URL:          "",
+				},
+			},
 		},
 		{
 			raw: `{"name":"multi","options":{},"webdav":{"sharedSecret":"secret","permissions":["read","write"],"url":"http://example.org"}}`,

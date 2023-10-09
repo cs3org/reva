@@ -24,6 +24,5 @@ import (
 	_ "github.com/cs3org/reva/pkg/user/manager/json"
 	_ "github.com/cs3org/reva/pkg/user/manager/ldap"
 	_ "github.com/cs3org/reva/pkg/user/manager/nextcloud"
-	_ "github.com/cs3org/reva/pkg/user/manager/owncloudsql"
 	// Add your own here.
 )

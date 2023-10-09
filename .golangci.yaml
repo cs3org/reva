@@ -52,6 +52,11 @@ linters:
     - gocyclo           # TODO: consider enabling the 'gocyclo' linter to compute and check the cyclomatic complexity of functions.
     - forbidigo         # TODO: consider enabling the 'forbidigo' linter to forbid identifiers.
     - dupl              # TODO: consider enabling the 'dupl' linter to detect code cloning.
+    - musttag
+    - ginkgolinter
+    - depguard
+    - revive
+    - nolintlint
     - golint            # deprecated since v1.41.0 - replaced by 'revive'.
     - ifshort           # deprecated since v1.48.0
     - structcheck       # deprecated since v1.49.0 - replaced by 'unused'.

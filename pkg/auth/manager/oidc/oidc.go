@@ -60,20 +60,20 @@ type mgr struct {
 }
 
 type config struct {
-	Insecure     bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
-	Issuer       string `mapstructure:"issuer" docs:";The issuer of the OIDC token."`
-	IDClaim      string `mapstructure:"id_claim" docs:"sub;The claim containing the ID of the user."`
-	UIDClaim     string `mapstructure:"uid_claim" docs:";The claim containing the UID of the user."`
-	GIDClaim     string `mapstructure:"gid_claim" docs:";The claim containing the GID of the user."`
-	GatewaySvc   string `mapstructure:"gatewaysvc" docs:";The endpoint at which the GRPC gateway is exposed."`
-	UsersMapping string `mapstructure:"users_mapping" docs:"; The optional OIDC users mapping file path"`
-	GroupClaim   string `mapstructure:"group_claim" docs:"; The group claim to be looked up to map the user (default to 'groups')."`
+	Insecure     bool   `docs:"false;Whether to skip certificate checks when sending requests."          mapstructure:"insecure"`
+	Issuer       string `docs:";The issuer of the OIDC token."                                           mapstructure:"issuer"`
+	IDClaim      string `docs:"sub;The claim containing the ID of the user."                             mapstructure:"id_claim"`
+	UIDClaim     string `docs:";The claim containing the UID of the user."                               mapstructure:"uid_claim"`
+	GIDClaim     string `docs:";The claim containing the GID of the user."                               mapstructure:"gid_claim"`
+	GatewaySvc   string `docs:";The endpoint at which the GRPC gateway is exposed."                      mapstructure:"gatewaysvc"`
+	UsersMapping string `docs:"; The optional OIDC users mapping file path"                              mapstructure:"users_mapping"`
+	GroupClaim   string `docs:"; The group claim to be looked up to map the user (default to 'groups')." mapstructure:"group_claim"`
 }
 
 type oidcUserMapping struct {
-	OIDCIssuer string `mapstructure:"oidc_issuer" json:"oidc_issuer"`
-	OIDCGroup  string `mapstructure:"oidc_group" json:"oidc_group"`
-	Username   string `mapstructure:"username" json:"username"`
+	OIDCIssuer string `json:"oidc_issuer" mapstructure:"oidc_issuer"`
+	OIDCGroup  string `json:"oidc_group"  mapstructure:"oidc_group"`
+	Username   string `json:"username"    mapstructure:"username"`
 }
 
 func (c *config) ApplyDefaults() {

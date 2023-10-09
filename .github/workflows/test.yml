@@ -13,9 +13,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Setup Go environment
-        uses: actions/setup-go@v3.3.0
+        uses: actions/setup-go@v4
         with:
           go-version-file: go.mod
+          cache: false
       - name: Test integration
         run: make test-integration
         env:
@@ -40,9 +41,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Setup Go environment
-        uses: actions/setup-go@v3.3.0
+        uses: actions/setup-go@v4
         with:
           go-version-file: go.mod
+          cache: false
       - name: Test
         run: make test-go
         env:
@@ -68,46 +70,39 @@ jobs:
     with:
       file: docker/Dockerfile.revad
       load: true
+  docker-revad-eos:
+    name: docker (docker/Dockerfile.revad-eos)
+    uses: ./.github/workflows/docker.yml
+    with:
+      file: docker/Dockerfile.revad-eos
+      load: false
   litmus:
-    needs: docker-revad
+    needs:
+      - docker-revad-eos
     strategy:
       fail-fast: false
       matrix:
-        test: [litmus-1, litmus-2, litmus-3]
+        test: [litmus-1, litmus-2]
     uses: ./.github/workflows/compose.yml
     with:
       test: ${{ matrix.test }}
-      image: ${{ needs.docker-revad.outputs.image }}
   acceptance-1:
-    needs: docker-revad
+    needs:
+      - docker-revad-eos
     uses: ./.github/workflows/compose.yml
     with:
       test: acceptance-1
-      image: ${{ needs.docker-revad.outputs.image }}
       submodules: true
   acceptance-2:
-    needs: docker-revad
+    needs:
+      - docker-revad-eos
     strategy:
       fail-fast: false
       matrix:
-        part: [1, 3, 4, 5, 6]
+        part: [1, 2, 3, 4, 5, 6]
     uses: ./.github/workflows/compose.yml
     with:
       test: acceptance-2
-      image: ${{ needs.docker-revad.outputs.image }}
       submodules: true
       parts: 6
-      part: ${{ matrix.part }}
-  acceptance-3:
-    needs: docker-revad
-    strategy:
-      fail-fast: false
-      matrix:
-        part: [9]
-    uses: ./.github/workflows/compose.yml
-    with:
-      test: acceptance-3
-      image: ${{ needs.docker-revad.outputs.image }}
-      submodules: true
-      parts: 12
       part: ${{ matrix.part }}
