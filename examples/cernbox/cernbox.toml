@@ -154,7 +154,8 @@ driver = "ocmreceived"
 mount_path = "/sciencemesh"
 mount_id = "sciencemesh"
 expose_data_server = true
-data_server_url = "https://localhost:{{ http.services.dataprovider[2].address.port }}/data"
+# this must be accessible from the GUI, therefore the hostname will be replaced
+data_server_url = "https://your.revad.org:{{ http.services.dataprovider[2].address.port }}/data"
 
 
 ### OTHER PROVIDERS ###

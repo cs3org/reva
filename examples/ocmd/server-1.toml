@@ -79,7 +79,7 @@ file = "/var/tmp/reva/shares_server_1.json"
 driver = "json"
 
 [grpc.services.ocmproviderauthorizer.drivers.json]
-providers = "/home/gianmaria/Documenti/CERN/reva2/examples/ocmd/providers.demo.json"
+providers = "providers.demo.json"
 
 ################################################################
 ##########             STORAGE PROVIDERS              ##########
@@ -121,7 +121,7 @@ data_server_url = "http://localhost:{{ http.services.dataprovider[2].address.por
 auth_manager = "json"
 
 [grpc.services.authprovider.auth_managers.json]
-users = "/home/gianmaria/Documenti/CERN/reva2/examples/ocmd/users.demo.json"
+users = "users.demo.json"
 
 
 [[grpc.services.authprovider]]
@@ -142,7 +142,7 @@ auth_manager = "ocmshares"
 driver = "json"
 
 [grpc.services.userprovider.drivers.json]
-users = "/home/gianmaria/Documenti/CERN/reva2/examples/ocmd/users.demo.json"
+users = "users.demo.json"
 
 ################################################################
 ##########              DATA PROVIDERS                ##########
