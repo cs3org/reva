@@ -1,15 +1,12 @@
 package httpclient
 
 import (
-	//"io"
-
 	"errors"
 	"net/http"
 	"time"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/trace"
-	//"net/url"
 )
 
 // TODO(labkode): harden it.
@@ -73,7 +70,6 @@ func CheckRedirect(cr func(req *http.Request, via []*http.Request) error) Option
 	return func(o *Options) {
 		o.CheckRedirect = cr
 	}
-
 }
 
 // Jar provides a function to set a custom CookieJar.
@@ -81,11 +77,10 @@ func Jar(j http.CookieJar) Option {
 	return func(o *Options) {
 		o.Jar = j
 	}
-
 }
 
 // Client wraps a http.Client but only exposes the Do method
-// to force consumers to always create a request with http.NewRequestWithContext()
+// to force consumers to always create a request with http.NewRequestWithContext().
 type Client struct {
 	c *http.Client
 }

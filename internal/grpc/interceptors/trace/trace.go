@@ -30,7 +30,6 @@ func getContext(ctx context.Context) context.Context {
 	traceID := trace.Get(ctx)
 	if traceID != "" {
 		return ctx
-
 	}
 
 	md, ok := metadata.FromIncomingContext(ctx)

@@ -20,6 +20,7 @@ package base
 
 import (
 	"context"
+
 	"github.com/cs3org/reva/pkg/prom/registry"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
@@ -29,7 +30,7 @@ func init() {
 	registry.Register("base", New)
 }
 
-// New returns a prometheus collector
+// New returns a prometheus collector.
 func New(_ context.Context, m map[string]interface{}) ([]prometheus.Collector, error) {
 	return []prometheus.Collector{
 		collectors.NewBuildInfoCollector(),

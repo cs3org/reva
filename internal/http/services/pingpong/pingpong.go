@@ -110,7 +110,7 @@ func (s *svc) getClient() (proto.PingPongServiceClient, error) {
 	return client, nil
 }
 
-// doPing will call the grpc Pong method
+// doPing will call the grpc Pong method.
 func (s *svc) doPing(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 	client, err := s.getClient()
@@ -130,11 +130,9 @@ func (s *svc) doPing(w http.ResponseWriter, r *http.Request) {
 	log.Info().Msg("pinging from http to grpc")
 
 	w.Write([]byte(pingRes.Info))
-	return
 }
 
-// doPong will be (http) called from grpc Pong
+// doPong will be (http) called from grpc Pong.
 func (s *svc) doPong(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("pong"))
-	return
 }

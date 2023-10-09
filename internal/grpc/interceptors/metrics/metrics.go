@@ -33,7 +33,7 @@ func init() {
 	registry.Register("grpc_metrics", NewPromCollectors)
 }
 
-// New returns a prometheus collector
+// New returns a prometheus collector.
 func NewPromCollectors(_ context.Context, m map[string]interface{}) ([]prometheus.Collector, error) {
 	return []prometheus.Collector{collector}, nil
 }

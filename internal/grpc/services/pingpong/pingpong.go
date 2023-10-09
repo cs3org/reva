@@ -82,7 +82,7 @@ func (s *service) Ping(ctx context.Context, _ *proto.PingRequest) (*proto.PingRe
 	}
 
 	client := httpclient.New(httpclient.RoundTripper(tr))
-	req, err := http.NewRequestWithContext(ctx, "GET", s.conf.Endpoint+"/ping", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.conf.Endpoint+"/ping", nil)
 	if err != nil {
 		log.Error().Err(err).Msg("error creating http request")
 		return nil, err
@@ -113,7 +113,7 @@ func (s *service) Pong(ctx context.Context, _ *proto.PongRequest) (*proto.PongRe
 	}
 
 	client := httpclient.New(httpclient.RoundTripper(tr))
-	req, err := http.NewRequestWithContext(ctx, "GET", s.conf.Endpoint+"/pong", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.conf.Endpoint+"/pong", nil)
 	if err != nil {
 		log.Error().Err(err).Msg("error creating http request")
 		return nil, err

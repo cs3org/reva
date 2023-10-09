@@ -23,10 +23,11 @@ package metrics
 
 import (
 	"context"
+	"net/http"
+
 	"github.com/cs3org/reva/pkg/prom/registry"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"net/http"
 )
 
 var inFlightGauge = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -79,7 +80,7 @@ func init() {
 	registry.Register("http_metrics", NewPromCollectors)
 }
 
-// New returns a prometheus collector
+// New returns a prometheus collector.
 func NewPromCollectors(_ context.Context, m map[string]interface{}) ([]prometheus.Collector, error) {
 	return []prometheus.Collector{inFlightGauge, counter, duration, responseSize}, nil
 }

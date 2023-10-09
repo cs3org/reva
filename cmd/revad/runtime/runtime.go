@@ -85,7 +85,6 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 	if err := initCPUCount(config.Core, log); err != nil {
 		return nil, err
 	}
-	initTracing(config.Core)
 
 	if opts.PidFile == "" {
 		return nil, errors.New("pid file not provided")
@@ -344,12 +343,6 @@ func handlePIDFlag(l *zerolog.Logger, pidFile string) (*grace.Watcher, error) {
 	}
 
 	return w, nil
-}
-
-func initTracing(conf *config.Core) {
-	if conf.TracingEnabled {
-		//TODO(labkode): init this
-	}
 }
 
 // adjustCPU parses string cpu and sets GOMAXPROCS

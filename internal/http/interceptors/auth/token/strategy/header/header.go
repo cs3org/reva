@@ -22,8 +22,8 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/internal/http/interceptors/auth/token/registry"
-	"github.com/cs3org/reva/pkg/auth"
 	ctxpkg "github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/auth"
 )
 
 func init() {

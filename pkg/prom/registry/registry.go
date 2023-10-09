@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -9,7 +10,7 @@ import (
 // should register at init time.
 type NewFunc func(context.Context, map[string]interface{}) ([]prometheus.Collector, error)
 
-// NewFuncs is a map containing all the registered collectors
+// NewFuncs is a map containing all the registered collectors.
 var NewFuncs = map[string]NewFunc{}
 
 // Register registers a new prometheus collector new function.
