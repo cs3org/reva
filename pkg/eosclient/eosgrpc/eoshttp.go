@@ -327,7 +327,7 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 		e := c.getRespError(resp, err)
 		if e != nil {
 			resp.Body.Close()
-			
+
 			if os.IsTimeout(e) {
 				ntries++
 				log.Warn().Str("func", "GETFile").Str("url", finalurl).Str("err", e.Error()).Int("try", ntries).Msg("recoverable network timeout")
@@ -390,7 +390,9 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 		log.Debug().Str("func", "PUTFile").Msg("sending req")
 
 		resp, err := c.doReq(req, remoteuser)
-		resp.Body.Close()
+		if resp != nil {
+			resp.Body.Close()
+		}
 
 		// Let's support redirections... and if we retry we retry at the same FST
 		if resp != nil && resp.StatusCode == 307 {
