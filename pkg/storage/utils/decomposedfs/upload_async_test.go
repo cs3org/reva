@@ -147,7 +147,11 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 		uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-		_, err = fs.Upload(ctx, uploadRef, io.NopCloser(bytes.NewReader(fileContent)), nil)
+		_, err = fs.Upload(ctx, storage.UploadRequest{
+			Ref:    uploadRef,
+			Body:   io.NopCloser(bytes.NewReader(fileContent)),
+			Length: int64(len(fileContent)),
+		}, nil)
 		Expect(err).ToNot(HaveOccurred())
 
 		uploadID = uploadIds["simple"]
@@ -306,7 +310,11 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 			uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-			_, err = fs.Upload(ctx, uploadRef, io.NopCloser(bytes.NewReader(fileContent)), nil)
+			_, err = fs.Upload(ctx, storage.UploadRequest{
+				Ref:    uploadRef,
+				Body:   io.NopCloser(bytes.NewReader(fileContent)),
+				Length: int64(len(fileContent)),
+			}, nil)
 			Expect(err).ToNot(HaveOccurred())
 
 			uploadID = uploadIds["simple"]
@@ -403,7 +411,11 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 			uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-			_, err = fs.Upload(ctx, uploadRef, io.NopCloser(bytes.NewReader(fileContent)), nil)
+			_, err = fs.Upload(ctx, storage.UploadRequest{
+				Ref:    uploadRef,
+				Body:   io.NopCloser(bytes.NewReader(fileContent)),
+				Length: int64(len(fileContent)),
+			}, nil)
 			Expect(err).ToNot(HaveOccurred())
 
 			secondUploadID = uploadIds["simple"]
