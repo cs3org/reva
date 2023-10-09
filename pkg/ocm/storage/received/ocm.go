@@ -402,8 +402,7 @@ func (d *driver) ListStorageSpaces(ctx context.Context, filters []*provider.List
 	var exists = struct{}{}
 	appendTypes := []string{}
 	for _, f := range filters {
-		switch f.Type {
-		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
+		if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE {
 			spaceType := f.GetSpaceType()
 			if spaceType == "+mountpoint" {
 				appendTypes = append(appendTypes, strings.TrimPrefix(spaceType, "+"))
@@ -427,8 +426,7 @@ func (d *driver) ListStorageSpaces(ctx context.Context, filters []*provider.List
 
 	spaces := []*provider.StorageSpace{}
 	for k := range spaceTypes {
-		switch k {
-		case "mountpoint":
+		if k == "mountpoint" {
 			for _, share := range lrsRes.Shares {
 				root := &provider.ResourceId{
 					StorageId: utils.PublicStorageProviderID,
