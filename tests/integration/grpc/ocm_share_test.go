@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
@@ -706,7 +707,7 @@ func download(ctx context.Context, gw gatewaypb.GatewayAPIClient, ref *provider.
 
 	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
 
-	httpRes, err := http.DefaultClient.Do(httpReq)
+	httpRes, err := httpclient.New().Do(httpReq)
 	if err != nil {
 		return nil, err
 	}

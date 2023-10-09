@@ -23,10 +23,10 @@ import (
 	"github.com/gofrs/uuid"
 )
 
-const Key string = "traceid"
+type key struct{}
 
 func Get(ctx context.Context) (t string) {
-	t, _ = ctx.Value(Key).(string)
+	t, _ = ctx.Value(key{}).(string)
 	return
 }
 
@@ -36,5 +36,5 @@ func Generate() string {
 
 // ContextSetTrace stores the trace in the context.
 func Set(ctx context.Context, trace string) context.Context {
-	return context.WithValue(ctx, Key, trace)
+	return context.WithValue(ctx, key{}, trace)
 }

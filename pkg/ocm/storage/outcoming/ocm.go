@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	ctxpkg "github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
@@ -416,7 +417,7 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, content io
 
 		httpReq.Header.Set(datagateway.TokenTransportHeader, token)
 
-		httpRes, err := http.DefaultClient.Do(httpReq)
+		httpRes, err := httpclient.New().Do(httpReq)
 		if err != nil {
 			return errors.Wrap(err, "error doing put request")
 		}
@@ -470,7 +471,7 @@ func (d *driver) Download(ctx context.Context, ref *provider.Reference) (io.Read
 		}
 		httpReq.Header.Set(datagateway.TokenTransportHeader, token)
 
-		httpRes, err := http.DefaultClient.Do(httpReq) //nolint:golint,bodyclose
+		httpRes, err := httpclient.New().Do(httpReq) //nolint:golint,bodyclose
 		if err != nil {
 			return err
 		}

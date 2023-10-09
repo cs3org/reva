@@ -54,7 +54,7 @@ func handler(h http.Handler) http.Handler {
 		// in case the http service will call a grpc service,
 		// we set the outgoing context so the trace information is
 		// passed through the two protocols.
-		ctx = metadata.AppendToOutgoingContext(ctx, trace.Key, traceID)
+		ctx = metadata.AppendToOutgoingContext(ctx, "revad-grpc-trace-id", traceID)
 		r = r.WithContext(ctx)
 		h.ServeHTTP(w, r)
 	})

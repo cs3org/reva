@@ -82,7 +82,7 @@ func (s *service) Ping(ctx context.Context, _ *proto.PingRequest) (*proto.PingRe
 	}
 
 	client := httpclient.New(httpclient.RoundTripper(tr))
-	req, err := http.NewRequestWithContext(ctx, "GET", s.conf.Endpoint+"/pong", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", s.conf.Endpoint+"/ping", nil)
 	if err != nil {
 		log.Error().Err(err).Msg("error creating http request")
 		return nil, err
@@ -104,7 +104,33 @@ func (s *service) Ping(ctx context.Context, _ *proto.PingRequest) (*proto.PingRe
 	return &proto.PingResponse{Info: string(data)}, nil
 }
 
-func (s *service) Pong(_ context.Context, _ *proto.PongRequest) (*proto.PongResponse, error) {
-	res := &proto.PongResponse{Info: "pong"}
-	return res, nil
+func (s *service) Pong(ctx context.Context, _ *proto.PongRequest) (*proto.PongResponse, error) {
+	log := appctx.GetLogger(ctx)
+
+	// we call the http Pong method
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+
+	client := httpclient.New(httpclient.RoundTripper(tr))
+	req, err := http.NewRequestWithContext(ctx, "GET", s.conf.Endpoint+"/pong", nil)
+	if err != nil {
+		log.Error().Err(err).Msg("error creating http request")
+		return nil, err
+	}
+
+	res, err := client.Do(req)
+	if err != nil {
+		log.Error().Err(err).Msg("eror doing http pong")
+		return nil, err
+	}
+
+	defer res.Body.Close()
+	data, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		log.Error().Err(err).Msg("error reading response body")
+		return nil, err
+	}
+
+	return &proto.PongResponse{Info: string(data)}, nil
 }

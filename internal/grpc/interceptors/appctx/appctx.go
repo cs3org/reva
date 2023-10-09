@@ -31,7 +31,7 @@ import (
 func NewUnary(log zerolog.Logger) grpc.UnaryServerInterceptor {
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		traceID := trace.Get(ctx)
-		log = log.With().Str(trace.Key, traceID).Logger()
+		log := log.With().Str("traceid", traceID).Logger()
 		ctx = appctx.WithLogger(ctx, &log)
 		res, err := handler(ctx, req)
 		return res, err
@@ -45,7 +45,7 @@ func NewStream(log zerolog.Logger) grpc.StreamServerInterceptor {
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := ss.Context()
 		traceID := trace.Get(ctx)
-		log = log.With().Str(trace.Key, traceID).Logger()
+		log := log.With().Str("traceid", traceID).Logger()
 		ctx = appctx.WithLogger(ctx, &log)
 
 		wrapped := newWrappedServerStream(ctx, ss)

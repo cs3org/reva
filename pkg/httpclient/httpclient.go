@@ -107,7 +107,6 @@ type injectTransport struct {
 }
 
 func (t injectTransport) RoundTrip(r *http.Request) (*http.Response, error) {
-	// assume the request context has not been populated with tracing information.
 	ctx := r.Context()
 
 	traceID := trace.Get(ctx)

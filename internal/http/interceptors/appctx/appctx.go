@@ -42,7 +42,7 @@ func handler(log zerolog.Logger, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		traceID := trace.Get(ctx)
-		log = log.With().Str(trace.Key, traceID).Logger()
+		log := log.With().Str("traceid", traceID).Logger()
 		ctx = appctx.WithLogger(ctx, &log)
 		r = r.WithContext(ctx)
 		h.ServeHTTP(w, r)

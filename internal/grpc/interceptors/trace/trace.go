@@ -27,10 +27,15 @@ import (
 )
 
 func getContext(ctx context.Context) context.Context {
-	var traceID string
+	traceID := trace.Get(ctx)
+	if traceID != "" {
+		return ctx
+
+	}
+
 	md, ok := metadata.FromIncomingContext(ctx)
 	if ok && md != nil {
-		if val, ok := md[trace.Key]; ok {
+		if val, ok := md["revad-grpc-trace-id"]; ok {
 			if len(val) > 0 && val[0] != "" {
 				traceID = val[0]
 			}
