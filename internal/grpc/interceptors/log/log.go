@@ -52,8 +52,10 @@ func NewUnary() grpc.UnaryServerInterceptor {
 		log := appctx.GetLogger(ctx)
 		var event *zerolog.Event
 		if code != codes.OK {
+			//nolint:zerologlint
 			event = log.Error()
 		} else {
+			//nolint:zerologlint
 			event = log.Debug()
 		}
 
@@ -92,8 +94,10 @@ func NewStream() grpc.StreamServerInterceptor {
 		log := appctx.GetLogger(ss.Context())
 		var event *zerolog.Event
 		if code != codes.OK {
+			//nolint:zerologlint
 			event = log.Error()
 		} else {
+			//nolint:zerologlint
 			event = log.Info()
 		}
 

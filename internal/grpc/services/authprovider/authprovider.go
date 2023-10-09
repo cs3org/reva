@@ -129,7 +129,7 @@ func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRe
 		}, nil
 	case errtypes.NotFound:
 		return &provider.AuthenticateResponse{
-			Status: status.NewNotFound(ctx, "unknown client id"),
+			Status: status.NewNotFound(ctx, "unknown client id: "+err.Error()),
 		}, nil
 	default:
 		err = errors.Wrap(err, "authsvc: error in Authenticate")

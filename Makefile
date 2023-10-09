@@ -18,13 +18,15 @@ toolchain: $(GOLANGCI_LINT) $(CALENS)
 
 $(GOLANGCI_LINT):
 	@mkdir -p $(@D)
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | BINDIR=$(@D) sh -s v1.50.1
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | BINDIR=$(@D) sh -s v1.54.2
 
+CALENS_DIR := $(shell mktemp -d)
 $(CALENS):
 	@mkdir -p $(@D)
-	git clone --depth 1 --branch v0.2.0 -c advice.detachedHead=false https://github.com/restic/calens.git /tmp/calens
-	cd /tmp/calens && GOBIN=$(@D) go install
-	rm -rf /tmp/calens
+	CALENS_DIR=`mktemp -d`
+	git clone --depth 1 --branch v0.2.0 -c advice.detachedHead=false https://github.com/restic/calens.git $(CALENS_DIR)
+	cd $(CALENS_DIR) && GOBIN=$(@D) go install
+	rm -rf $(CALENS_DIR)
 
 
 ################################################################################
@@ -65,17 +67,22 @@ docker-revad-ceph:
 docker-revad-eos:
 	docker build -f docker/Dockerfile.revad-eos -t revad-eos --build-arg VERSION=$(VERSION) --build-arg GIT_COMMIT=$(GIT_COMMIT) .
 
+.PHONY: docker-eos-full-tests
+docker-eos-full-tests:
+	docker build -f tests/docker/eos-storage/Dockerfile -t eos-full tests/docker/eos-storage
+
 ################################################################################
 # Test
 ################################################################################
 
-TEST				= litmus-1 litmus-2 litmus-3 acceptance-1 acceptance-2 acceptance-3
-export REVAD_IMAGE	?= revad
-export PARTS		?= 1
-export PART			?= 1
+TEST				  = litmus-1 litmus-2 acceptance-1 acceptance-2
+export REVAD_IMAGE	  ?= revad-eos
+export EOS_FULL_IMAGE ?= eos-full
+export PARTS		  ?= 1
+export PART			  ?= 1
 
 .PHONY: $(TEST)
-$(TEST): docker-revad
+$(TEST): docker-eos-full-tests docker-revad-eos
 	docker compose -f ./tests/docker/docker-compose.yml up --force-recreate --always-recreate-deps --build --abort-on-container-exit -V --remove-orphans --exit-code-from $@ $@
 
 .PHONY: test-go
@@ -128,8 +135,8 @@ toolchain-clean:
 .PHONY: docker-clean
 docker-clean:
 	docker compose -f ./tests/docker/docker-compose.yml down --rmi local -v --remove-orphans
-	docker rmi $(REVAD_IMAGE)
 
 .PHONY: clean
 clean: toolchain-clean docker-clean
 	rm -rf dist
+	rm -rf tmp

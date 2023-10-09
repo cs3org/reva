@@ -1,12 +1,36 @@
 version: "3.4"
 services:
   revad:
-    image: ${REVAD_IMAGE}
+    # image: ${REVAD_IMAGE}
+    # we build the reva image with eos because it's faster
+    # instead of uploading and share through the github runners
+    # TODO (gdelmont): in future this should be parameterized
+    # to support other reva images as before
+    build: 
+      context: ../../
+      dockerfile: docker/Dockerfile.revad-eos
     volumes:
       - ../revad:/etc/revad
     working_dir: /etc/revad/
     healthcheck:
       test: sleep 5
+  eos-storage:
+    image: ${EOS_FULL_IMAGE}
+    security_opt:
+      - seccomp:unconfined
+    ulimits:
+      nproc: 57875
+      nofile: 1024
+      core: -1
+    privileged: true
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+    hostname: eosuser.example.org
+    healthcheck:
+      test: eos file info /eos/user
+      interval: 10s
+      timeout: 5s
+      retries: 5
   litmus:
     image: registry.cern.ch/docker.io/owncloud/litmus:latest
     environment:
@@ -15,7 +39,7 @@ services:
       TESTS: basic http copymove props
   acceptance:
     image: cs3org/behat:latest
-    entrypoint: /mnt/ocis/tests/acceptance/run.sh
+    entrypoint: /mnt/acceptance/run.sh
     environment:
       OCIS_REVA_DATA_ROOT: /var/tmp/reva/data/
       DELETE_USER_DATA_CMD: rm -rf /var/tmp/reva/data/nodes/root/* /var/tmp/reva/data/nodes/*-*-*-* /var/tmp/reva/data/blobs/*
@@ -35,10 +59,10 @@ services:
     command: -c /etc/revad/frontend.toml
     volumes:
       - shared-volume:/var/tmp
-  storage-home-ocis:
+  storage-home:
     extends: revad
     hostname: storage-home
-    command: -c /etc/revad/storage-home-ocis.toml
+    command: -c /etc/revad/storage-home.toml
     volumes:
       - shared-volume:/var/tmp
   users:
@@ -56,11 +80,13 @@ services:
     environment:
       LITMUS_URL: http://frontend:20080/remote.php/webdav
     depends_on:
+      eos-storage:
+        condition: service_healthy
       gateway:
         condition: service_healthy
       frontend:
         condition: service_healthy
-      storage-home-ocis:
+      storage-home:
         condition: service_healthy
       users:
         condition: service_healthy
@@ -71,50 +97,26 @@ services:
     environment:
       LITMUS_URL: http://frontend:20080/remote.php/dav/files/4c510ada-c86b-4815-8820-42cdf82c3d51
     depends_on:
+      eos-storage:
+        condition: service_healthy
       gateway:
         condition: service_healthy
       frontend:
         condition: service_healthy
-      storage-home-ocis:
+      storage-home:
         condition: service_healthy
       users:
         condition: service_healthy
       shares:
         condition: service_healthy
-  permissions-ocis-ci:
-    extends: revad
-    command: -c /etc/revad/permissions-ocis-ci.toml
-  storage-users-ocis:
+  storage-users:
     extends: revad
     hostname: storage-users
-    command: -c /etc/revad/storage-users-ocis.toml
-    volumes:
-      - shared-volume:/var/tmp
-  litmus-3:
-    extends: litmus
-    entrypoint: /bin/sh
-    command:
-      - -c
-      - |
-        curl -s -k -u einstein:relativity -I http://frontend:20080/remote.php/dav/files/einstein
-        export LITMUS_URL=http://frontend:20080/remote.php/dav/spaces/123e4567-e89b-12d3-a456-426655440000!$$(ls /var/tmp/reva/data/spaces/personal/)
-        exec /usr/local/bin/litmus-wrapper
+    command: -c /etc/revad/storage-users.toml
     volumes:
       - shared-volume:/var/tmp
     depends_on:
-      gateway:
-        condition: service_healthy
-      frontend:
-        condition: service_healthy
-      storage-home-ocis:
-        condition: service_healthy
-      users:
-        condition: service_healthy
-      shares:
-        condition: service_healthy
-      permissions-ocis-ci:
-        condition: service_healthy
-      storage-users-ocis:
+      eos-storage:
         condition: service_healthy
   frontend-global:
     extends: revad
@@ -127,18 +129,24 @@ services:
     command: -c /etc/revad/storage-local-1.toml
     volumes:
       - shared-volume:/var/tmp
+    depends_on:
+      eos-storage:
+        condition: service_healthy
   storage-local-2:
     extends: revad
     command: -c /etc/revad/storage-local-2.toml
     volumes:
       - shared-volume:/var/tmp
+    depends_on:
+      eos-storage:
+        condition: service_healthy
   acceptance-1:
     extends: acceptance
     environment:
       PATH_TO_APITESTS: /mnt/ocis
       TEST_SERVER_URL: http://frontend:20180
-      STORAGE_DRIVER: OCIS
       TEST_REVA: 'true'
+      EXPECTED_FAILURES_FILE: /mnt/acceptance/expected-failures-on-EOS-storage.md
       REGULAR_USER_PASSWORD: relativity
       SEND_SCENARIO_LINE_REFERENCES: 'true'
       BEHAT_SUITE: apiVirtualViews
@@ -151,7 +159,7 @@ services:
         condition: service_healthy
       frontend-global:
         condition: service_healthy
-      storage-home-ocis:
+      storage-home:
         condition: service_healthy
       users:
         condition: service_healthy
@@ -179,6 +187,9 @@ services:
     command: -c /etc/revad/storage-publiclink.toml
     volumes:
       - shared-volume:/var/tmp
+    depends_on:
+      eos-storage:
+        condition: service_healthy
   ldap-users:
     extends: revad
     hostname: users
@@ -192,7 +203,6 @@ services:
     extends: acceptance
     environment:
       TEST_SERVER_URL: http://frontend:20080
-      STORAGE_DRIVER: OCIS
       TEST_WITH_LDAP: 'true'
       REVA_LDAP_HOSTNAME: ldap
       TEST_REVA: 'true'
@@ -200,9 +210,11 @@ services:
       BEHAT_FILTER_TAGS: ~@provisioning_api-app-required&&~@skipOnOcis-OCIS-Storage&&~@personalSpace&&~@skipOnGraph&&~@carddav&&~@skipOnReva&&~@skipOnRevaMaster
       DIVIDE_INTO_NUM_PARTS: ${PARTS:-1}
       RUN_PART: ${PART:-1}
-      EXPECTED_FAILURES_FILE: /mnt/acceptance/expected-failures-on-OCIS-storage.md
-      BEHAT_YML: tests/acceptance/config/behat-core.yml
+      EXPECTED_FAILURES_FILE: /mnt/acceptance/expected-failures-on-EOS-storage.md
+      BEHAT_FEATURES_DIR: /mnt/ocis/tests/acceptance/features
+      BEHAT_YML: /mnt/acceptance/config/behat-core.yml
       ACCEPTANCE_TEST_TYPE: core-api
+      BEHAT_FILTER_SUITE_FILE: /mnt/acceptance/filtered-suites-acceptance-2-EOS
     volumes:
       - shared-volume:/var/tmp
     working_dir: /mnt/ocis
@@ -211,85 +223,34 @@ services:
         condition: service_healthy
       frontend:
         condition: service_healthy
-      storage-home-ocis:
+      storage-home:
         condition: service_healthy
       shares:
         condition: service_healthy
-      storage-users-ocis:
+      storage-users:
         condition: service_healthy
       storage-publiclink:
         condition: service_healthy
       ldap-users:
         condition: service_healthy
-  ceph:
-    image: ceph/daemon
-    environment:
-      CEPH_DAEMON: demo
-      NETWORK_AUTO_DETECT: 4
-      MON_IP: 0.0.0.0
-      CEPH_PUBLIC_NETWORK: 0.0.0.0/0
-      RGW_CIVETWEB_PORT: 4000
-      RGW_NAME: ceph
-      CEPH_DEMO_UID: test-user
-      CEPH_DEMO_ACCESS_KEY: test
-      CEPH_DEMO_SECRET_KEY: test
-      CEPH_DEMO_BUCKET: test
-    healthcheck:
-      test: ceph health
-      interval: 5s
-      timeout: 5s
-      retries: 5
-  storage-home-s3ng:
-    extends: revad
-    hostname: storage-home
-    command: -c /etc/revad/storage-home-s3ng.toml
-    volumes:
-      - shared-volume:/var/tmp
-    depends_on:
-      ceph:
-        condition: service_healthy
-  storage-users-s3ng:
-    extends: revad
-    hostname: storage-users
-    command: -c /etc/revad/storage-users-s3ng.toml
-    volumes:
-      - shared-volume:/var/tmp
-    depends_on:
-      ceph:
-        condition: service_healthy
-  acceptance-3:
-    extends: acceptance
-    environment:
-      TEST_SERVER_URL: http://frontend:20080
-      STORAGE_DRIVER: S3NG
-      TEST_WITH_LDAP: 'true'
-      REVA_LDAP_HOSTNAME: ldap
-      TEST_REVA: 'true'
-      SEND_SCENARIO_LINE_REFERENCES: 'true'
-      BEHAT_FILTER_TAGS: ~@provisioning_api-app-required&&~@skipOnOcis-OCIS-Storage&&~@personalSpace&&~&&~@skipOnGraph&&~@carddav&&~@skipOnReva&&~@skipOnRevaMaster
-      DIVIDE_INTO_NUM_PARTS: ${PARTS:-1}
-      RUN_PART: ${PART:-1}
-      EXPECTED_FAILURES_FILE: /mnt/acceptance/expected-failures-on-S3NG-storage.md
-      BEHAT_YML: tests/acceptance/config/behat-core.yml
-      ACCEPTANCE_TEST_TYPE: core-api
-    volumes:
-      - shared-volume:/var/tmp
-    working_dir: /mnt/ocis
-    depends_on:
-      gateway:
-        condition: service_healthy
-      frontend:
-        condition: service_healthy
-      shares:
-        condition: service_healthy
-      storage-publiclink:
-        condition: service_healthy
-      ldap-users:
-        condition: service_healthy
-      storage-home-s3ng:
-        condition: service_healthy
-      storage-users-s3ng:
-        condition: service_healthy
-      
+  # ceph:
+  #   image: ceph/daemon
+  #   environment:
+  #     CEPH_DAEMON: demo
+  #     NETWORK_AUTO_DETECT: 4
+  #     MON_IP: 0.0.0.0
+  #     CEPH_PUBLIC_NETWORK: 0.0.0.0/0
+  #     RGW_CIVETWEB_PORT: 4000
+  #     RGW_NAME: ceph
+  #     CEPH_DEMO_UID: test-user
+  #     CEPH_DEMO_ACCESS_KEY: test
+  #     CEPH_DEMO_SECRET_KEY: test
+  #     CEPH_DEMO_BUCKET: test
+  #   healthcheck:
+  #     test: ceph health
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 5
+
 volumes:
   shared-volume:

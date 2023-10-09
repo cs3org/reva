@@ -1,0 +1,401 @@
+default:
+  autoload:
+    "": "%paths.base%/../../ocis/tests/acceptance/features/bootstrap"
+  suites:
+    coreApiMain:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiMain"
+      context: &common_ldap_suite_context
+        parameters:
+          ldapAdminPassword: admin
+          ldapUsersOU: TestUsers
+          ldapGroupsOU: TestGroups
+          ldapInitialUserFilePath: /../../config/ldap-users.ldif
+      contexts:
+        - FeatureContext: &common_feature_context_params
+            baseUrl: http://localhost:8080
+            adminUsername: admin
+            adminPassword: admin
+            regularUserPassword: 123456
+            ocPath: apps/testing/api/v1/occ
+        - AppConfigurationContext:
+        - ChecksumContext:
+        - FilesVersionsContext:
+        - TrashbinContext:
+
+    coreApiAuth:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiAuth"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - AuthContext:
+
+    coreApiAuthOcs:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiAuthOcs"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - AuthContext:
+
+    coreApiAuthWebDav:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiAuthWebDav"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - SearchContext:
+        - PublicWebDavContext:
+        - WebDavPropertiesContext:
+        - AuthContext:
+
+    coreApiCapabilities:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiCapabilities"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - CapabilitiesContext:
+        - AppConfigurationContext:
+
+    coreApiFavorites:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiFavorites"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - FavoritesContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiShareCreateSpecialToShares1:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiShareCreateSpecialToShares1"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiShareCreateSpecialToShares2:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiShareCreateSpecialToShares2"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiSharees:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiSharees"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - ShareesContext:
+        - AppConfigurationContext:
+
+    coreApiShareManagementToShares:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiShareManagementToShares"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+        - FilesVersionsContext:
+
+    coreApiShareManagementBasicToShares:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiShareManagementBasicToShares"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+        - AuthContext:
+
+    coreApiShareOperationsToShares1:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiShareOperationsToShares1"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+
+    coreApiShareOperationsToShares2:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiShareOperationsToShares2"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+
+    coreApiSharePublicLink1:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiSharePublicLink1"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiSharePublicLink2:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiSharePublicLink2"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiSharePublicLink3:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiSharePublicLink3"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiShareReshareToShares1:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiShareReshareToShares1"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+
+    coreApiShareReshareToShares2:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiShareReshareToShares2"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiShareReshareToShares3:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiShareReshareToShares3"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiShareUpdateToShares:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiShareUpdateToShares"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TrashbinContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiTrashbin:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiTrashbin"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - TrashbinContext:
+        - AppConfigurationContext:
+        - WebDavPropertiesContext:
+
+    coreApiTrashbinRestore:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiTrashbinRestore"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - TrashbinContext:
+        - AppConfigurationContext:
+        - WebDavPropertiesContext:
+
+    coreApiVersions:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiVersions"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - ChecksumContext:
+        - FilesVersionsContext:
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+        - TrashbinContext:
+
+    coreApiWebdavDelete:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavDelete"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - SearchContext:
+        - PublicWebDavContext:
+        - WebDavPropertiesContext:
+        - TrashbinContext:
+
+    coreApiWebdavLocks:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavLocks"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - WebDavLockingContext:
+        - WebDavPropertiesContext:
+
+    coreApiWebdavLocks2:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavLocks2"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - WebDavLockingContext:
+        - WebDavPropertiesContext:
+
+    coreApiWebdavLocksUnlock:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavLocksUnlock"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - WebDavLockingContext:
+        - WebDavPropertiesContext:
+
+    coreApiWebdavMove1:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavMove1"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - WebDavPropertiesContext:
+
+    coreApiWebdavMove2:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavMove2"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - WebDavPropertiesContext:
+
+    coreApiWebdavOperations:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavOperations"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - SearchContext:
+        - PublicWebDavContext:
+        - WebDavPropertiesContext:
+        - TrashbinContext:
+
+    coreApiWebdavPreviews:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavPreviews"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - WebDavPropertiesContext:
+
+    coreApiWebdavProperties1:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavProperties1"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiWebdavProperties2:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavProperties2"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - WebDavPropertiesContext:
+        - AppConfigurationContext:
+
+    coreApiWebdavUpload1:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavUpload1"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - WebDavPropertiesContext:
+
+    coreApiWebdavUpload2:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavUpload2"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+
+    coreApiWebdavUploadTUS:
+      paths:
+        - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavUploadTUS"
+      context: *common_ldap_suite_context
+      contexts:
+        - FeatureContext: *common_feature_context_params
+        - PublicWebDavContext:
+        - TUSContext:
+        - FilesVersionsContext:
+        - ChecksumContext:
+    
+    # coreApiWebdavEtagPropagation1:
+    #   paths:
+    #     - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavEtagPropagation1"
+    #   context: *common_ldap_suite_context
+    #   contexts:
+    #     - FeatureContext: *common_feature_context_params
+    #     - TrashbinContext:
+    #     - PublicWebDavContext:
+    #     - FilesVersionsContext:
+    #     - WebDavPropertiesContext:
+    #     - AppConfigurationContext:
+
+    # coreApiWebdavEtagPropagation2:
+    #   paths:
+    #     - "%paths.base%/../../ocis/tests/acceptance/features/coreApiWebdavEtagPropagation2"
+    #   context: *common_ldap_suite_context
+    #   contexts:
+    #     - FeatureContext: *common_feature_context_params
+    #     - TrashbinContext:
+    #     - PublicWebDavContext:
+    #     - FilesVersionsContext:
+    #     - WebDavPropertiesContext:
+    #     - AppConfigurationContext:
+
+  extensions:
+    rdx\behatvars\BehatVariablesExtension: ~
+
+    Cjm\Behat\StepThroughExtension: ~

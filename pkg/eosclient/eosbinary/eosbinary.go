@@ -239,7 +239,7 @@ func (c *Client) executeEOS(ctx context.Context, cmdArgs []string, auth eosclien
 	}
 
 	// add application label
-	cmd.Args = append(cmd.Args, "-a", "reva_eosclient::meta")
+	// cmd.Args = append(cmd.Args, "-a", "reva_eosclient::meta")
 
 	cmd.Args = append(cmd.Args, cmdArgs...)
 
@@ -1192,27 +1192,17 @@ func (c *Client) mapToFileInfo(ctx context.Context, kv, attrs map[string]string,
 
 	var ctimesec, ctimenanos uint64
 	if val, ok := kv["ctime"]; ok && val != "" {
-		split := strings.Split(val, ".")
-		ctimesec, err = strconv.ParseUint(split[0], 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		ctimenanos, _ = strconv.ParseUint(split[1], 10, 32)
-		if err != nil {
-			return nil, err
+		if split := strings.Split(val, "."); len(split) >= 2 {
+			ctimesec, _ = strconv.ParseUint(split[0], 10, 64)
+			ctimenanos, _ = strconv.ParseUint(split[1], 10, 32)
 		}
 	}
 
 	var atimesec, atimenanos uint64
 	if val, ok := kv["atime"]; ok && val != "" {
-		split := strings.Split(val, ".")
-		atimesec, err = strconv.ParseUint(split[0], 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		atimenanos, err = strconv.ParseUint(split[1], 10, 32)
-		if err != nil {
-			return nil, err
+		if split := strings.Split(val, "."); len(split) >= 2 {
+			atimesec, _ = strconv.ParseUint(split[0], 10, 64)
+			atimenanos, _ = strconv.ParseUint(split[1], 10, 32)
 		}
 	}
 

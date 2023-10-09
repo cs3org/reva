@@ -38,6 +38,7 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -162,7 +163,14 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 	}
 
 	var linkshares map[string]struct{}
-	listResp, err := client.ListPublicShares(ctx, &link.ListPublicSharesRequest{Filters: linkFilters})
+	listResp, err := client.ListPublicShares(ctx, &link.ListPublicSharesRequest{
+		Opaque: &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				ctxpkg.ResoucePathCtx: {Decoder: "plain", Value: []byte(parentInfo.Path)},
+			},
+		},
+		Filters: linkFilters,
+	})
 	if err == nil {
 		linkshares = make(map[string]struct{}, len(listResp.Share))
 		for i := range listResp.Share {
@@ -174,7 +182,14 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 	}
 
 	var usershares map[string]struct{}
-	listSharesResp, err := client.ListShares(ctx, &collaboration.ListSharesRequest{Filters: shareFilters})
+	listSharesResp, err := client.ListShares(ctx, &collaboration.ListSharesRequest{
+		Filters: shareFilters,
+		Opaque: &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				ctxpkg.ResoucePathCtx: {Decoder: "plain", Value: []byte(parentInfo.Path)},
+			},
+		},
+	})
 	if err == nil {
 		usershares = make(map[string]struct{}, len(listSharesResp.Shares))
 		for i := range listSharesResp.Shares {
@@ -641,7 +656,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				} else {
 					checksums.WriteString(" MD5:")
 				}
-				checksums.WriteString(string(e.Value))
+				checksums.Write(e.Value)
 			}
 			if e, ok := md.Opaque.Map["adler32"]; ok {
 				if checksums.Len() == 0 {
@@ -649,7 +664,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				} else {
 					checksums.WriteString(" ADLER32:")
 				}
-				checksums.WriteString(string(e.Value))
+				checksums.Write(e.Value)
 			}
 		}
 		if checksums.Len() > 0 {
@@ -808,7 +823,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 							} else {
 								checksums.WriteString(" MD5:")
 							}
-							checksums.WriteString(string(e.Value))
+							checksums.Write(e.Value)
 						}
 						if e, ok := md.Opaque.Map["adler32"]; ok {
 							if checksums.Len() == 0 {
@@ -816,7 +831,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 							} else {
 								checksums.WriteString(" ADLER32:")
 							}
-							checksums.WriteString(string(e.Value))
+							checksums.Write(e.Value)
 						}
 					}
 					if checksums.Len() > 13 {

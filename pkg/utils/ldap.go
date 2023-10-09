@@ -33,7 +33,7 @@ import (
 type LDAPConn struct {
 	Hostname     string `mapstructure:"hostname"`
 	Port         int    `mapstructure:"port"`
-	Insecure     bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
+	Insecure     bool   `docs:"false;Whether to skip certificate checks when sending requests." mapstructure:"insecure"`
 	CACert       string `mapstructure:"cacert"`
 	BindUsername string `mapstructure:"bind_username"`
 	BindPassword string `mapstructure:"bind_password"`

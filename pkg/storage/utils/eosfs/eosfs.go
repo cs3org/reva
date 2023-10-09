@@ -568,6 +568,9 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 
 		err := fs.c.UnsetAttr(ctx, auth, attr, false, fn)
 		if err != nil {
+			if errors.Is(err, eosclient.AttrNotExistsError) {
+				continue
+			}
 			return errors.Wrap(err, "eosfs: error unsetting xattr in eos driver")
 		}
 	}
@@ -1112,7 +1115,10 @@ func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pr
 	}
 
 	if eosACL.Type == acl.TypeLightweight {
-		attr := &eosclient.Attribute{}
+		attr := &eosclient.Attribute{
+			Type: SystemAttr,
+			Key:  fmt.Sprintf("%s.%s", lwShareAttrKey, eosACL.Qualifier),
+		}
 		if err := fs.c.UnsetAttr(ctx, rootAuth, attr, true, fn); err != nil {
 			return errors.Wrap(err, "eosfs: error removing acl for lightweight account")
 		}
@@ -1252,6 +1258,13 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
 		if err != nil {
 			return nil, err
+		}
+
+		if ref.Path != "" {
+			eosFileInfo, err = fs.c.GetFileInfoByPath(ctx, auth, filepath.Join(eosFileInfo.File, ref.Path))
+			if err != nil {
+				return nil, err
+			}
 		}
 		return fs.convertToResourceInfo(ctx, eosFileInfo)
 	}

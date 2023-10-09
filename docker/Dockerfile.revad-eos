@@ -16,7 +16,7 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
-FROM golang:alpine3.17 as builder
+FROM golang:latest as builder
 
 WORKDIR /home/reva
 COPY . .
@@ -25,13 +25,11 @@ ARG GIT_COMMIT
 ARG VERSION
 ENV GIT_COMMIT=$GIT_COMMIT
 ENV VERSION=$VERSION
-ENV CGO_ENABLED 1
+ENV CGO_ENABLED 0
 
-RUN apk add --no-cache gcc musl-dev
+RUN make revad
 
-RUN go build -ldflags "-X main.gitCommit=$GIT_COMMIT -X main.version=$VERSION -X main.goVersion=`go version | awk '{print $3}'` -X main.buildDate=`date +%FT%T%z`" -o ./cmd/revad/revad ./cmd/revad/main
-
-FROM gitlab-registry.cern.ch/dss/eos/eos-all:4.8.91
+FROM gitlab-registry.cern.ch/dss/eos/eos-all:5.0.31
 
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /home/reva/cmd/revad/revad /usr/bin/revad

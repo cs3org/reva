@@ -6,8 +6,9 @@ on:
         required: true
         type: string
       image:
-        required: true
         type: string
+      download:
+        type: boolean
       submodules:
         type: boolean
       parts:
@@ -25,10 +26,11 @@ jobs:
           submodules: ${{ inputs.submodules }}
       - name: Download image
         uses: ishworkh/docker-image-artifact-download@v1
+        if: inputs.download
         with:
           image: ${{ inputs.image }}
       - name: Test
-        run: make ${{ inputs.test }} -o docker-revad
+        run: make ${{ inputs.test }}
         env:
           REVAD_IMAGE: ${{ inputs.image }}
           PARTS: ${{ inputs.parts }}

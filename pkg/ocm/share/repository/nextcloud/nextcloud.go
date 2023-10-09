@@ -60,11 +60,11 @@ type Manager struct {
 
 // ShareManagerConfig contains config for a Nextcloud-based ShareManager.
 type ShareManagerConfig struct {
-	EndPoint     string `mapstructure:"endpoint" docs:";The Nextcloud backend endpoint for user check"`
+	EndPoint     string `docs:";The Nextcloud backend endpoint for user check"                                                                                         mapstructure:"endpoint"`
 	SharedSecret string `mapstructure:"shared_secret"`
 	WebDAVHost   string `mapstructure:"webdav_host"`
 	MockHTTP     bool   `mapstructure:"mock_http"`
-	MountID      string `mapstructure:"mount_id" docs:";The Reva mount id to identify the storage provider proxying the EFSS. Note that only one EFSS can be proxied by a given Reva process."`
+	MountID      string `docs:";The Reva mount id to identify the storage provider proxying the EFSS. Note that only one EFSS can be proxied by a given Reva process." mapstructure:"mount_id"`
 }
 
 // Action describes a REST request to forward to the Nextcloud backend.
