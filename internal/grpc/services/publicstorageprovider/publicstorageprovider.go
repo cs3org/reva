@@ -966,9 +966,11 @@ func (s *service) resolveToken(ctx context.Context, share interface{}) (*provide
 			return nil, nil, errtypes.NewErrtypeFromStatus(gsr.Status)
 		}
 		accessMethods := gsr.GetShare().GetAccessMethods()
-		if accessMethods == nil || len(accessMethods) > 0 {
+		if len(accessMethods) == 0 {
 			return nil, nil, errtypes.PermissionDenied("failed to get access to the requested resource")
 		}
+		resolvedShare = gsr.GetShare()
+		resourceID = gsr.GetShare().GetResourceId()
 		perms = accessMethods[0].GetWebdavOptions().Permissions
 	}
 
