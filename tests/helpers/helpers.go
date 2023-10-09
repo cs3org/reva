@@ -36,6 +36,7 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/datagateway"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
 	"github.com/cs3org/reva/v2/pkg/storage"
 )
@@ -128,6 +129,9 @@ func UploadGateway(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ref 
 			token, endpoint = p.Token, p.UploadEndpoint
 		}
 	}
+	if endpoint == "" || token == "" {
+		return errtypes.InternalError("could not get a suitable upload protocol")
+	}
 	httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, endpoint, bytes.NewReader(content))
 	if err != nil {
 		return errors.Wrap(err, "error creating new request")
@@ -202,20 +206,25 @@ type File struct {
 func (File) isResource() {}
 
 // CreateStructure creates the given structure.
-func CreateStructure(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, root string, f Resource) error {
+func CreateStructure(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, root *provider.Reference, f Resource) error {
+	ref := &provider.Reference{
+		ResourceId: root.ResourceId,
+		Path:       root.Path,
+	}
+
 	switch r := f.(type) {
 	case Folder:
-		if err := CreateFolder(ctx, gw, root); err != nil {
+		if err := CreateFolder(ctx, gw, ref); err != nil {
 			return err
 		}
 		for name, resource := range r {
-			p := filepath.Join(root, name)
-			if err := CreateStructure(ctx, gw, p, resource); err != nil {
+			ref.Path = filepath.Join(root.Path, name)
+			if err := CreateStructure(ctx, gw, ref, resource); err != nil {
 				return err
 			}
 		}
 	case File:
-		if err := CreateFile(ctx, gw, root, []byte(r.Content)); err != nil {
+		if err := CreateFile(ctx, gw, ref, []byte(r.Content)); err != nil {
 			return err
 		}
 	default:
@@ -225,8 +234,8 @@ func CreateStructure(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ro
 }
 
 // CreateFile creates a file in the given path with an initial content.
-func CreateFile(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, path string, content []byte) error {
-	initRes, err := gw.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{Ref: &provider.Reference{Path: path}})
+func CreateFile(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ref *provider.Reference, content []byte) error {
+	initRes, err := gw.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{Ref: ref})
 	if err != nil {
 		return err
 	}
@@ -255,9 +264,9 @@ func CreateFile(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, path st
 }
 
 // CreateFolder creates a folder in the given path.
-func CreateFolder(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, path string) error {
+func CreateFolder(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ref *provider.Reference) error {
 	res, err := gw.CreateContainer(ctx, &provider.CreateContainerRequest{
-		Ref: &provider.Reference{Path: path},
+		Ref: ref,
 	})
 	if err != nil {
 		return err
