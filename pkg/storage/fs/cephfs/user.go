@@ -105,6 +105,9 @@ func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *cephfs2.Ce
 		_type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
 		if buf, err = cv.mount.GetXattr(path, "ceph.dir.rbytes"); err == nil {
 			size, err = strconv.ParseUint(string(buf), 10, 64)
+		} else if err.Error() == errPermissionDenied {
+			// Ignore permission denied errors so ListFolder does not fail because of them.
+			err = nil
 		}
 	case syscall.S_IFLNK:
 		_type = provider.ResourceType_RESOURCE_TYPE_SYMLINK
@@ -114,10 +117,6 @@ func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *cephfs2.Ce
 		size = stat.Size
 	default:
 		return nil, errors.New("cephfs: unknown entry type")
-	}
-
-	if err != nil {
-		return
 	}
 
 	var xattrs []string
