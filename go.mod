@@ -41,9 +41,9 @@ require (
 	github.com/maxymania/go-system v0.0.0-20170110133659-647cc364bf0b
 	github.com/mileusna/useragent v1.2.1
 	github.com/mitchellh/mapstructure v1.5.0
-	github.com/nats-io/nats-server/v2 v2.9.19
+	github.com/nats-io/nats-server/v2 v2.10.2
 	github.com/nats-io/nats-streaming-server v0.25.5
-	github.com/nats-io/nats.go v1.27.0
+	github.com/nats-io/nats.go v1.30.2
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.27.10
 	github.com/pkg/errors v0.9.1
@@ -59,7 +59,6 @@ require (
 	github.com/wk8/go-ordered-map v1.0.0
 	go-micro.dev/v4 v4.3.1-0.20211108085239-0c2041e43908
 	go.opencensus.io v0.24.0
-	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.44.0
 	go.opentelemetry.io/otel/trace v1.18.0
 	go.step.sm/crypto v0.35.0
 	golang.org/x/crypto v0.13.0
@@ -88,14 +87,11 @@ require (
 	github.com/dolthub/vitess v0.0.0-20221031111135-9aad77e7b39f // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fatih/color v1.13.0 // indirect
-	github.com/felixge/httpsnoop v1.0.3 // indirect
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.5 // indirect
 	github.com/go-jose/go-jose/v3 v3.0.0 // indirect
 	github.com/go-kit/kit v0.10.0 // indirect
-	github.com/go-logr/logr v1.2.4 // indirect
-	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/errors v0.20.4 // indirect
 	github.com/go-openapi/strfmt v0.21.7 // indirect
 	github.com/gocraft/dbr/v2 v2.7.2 // indirect
@@ -111,7 +107,7 @@ require (
 	github.com/hashicorp/raft v1.5.0 // indirect
 	github.com/huandu/xstrings v1.3.3 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
-	github.com/klauspost/compress v1.16.7 // indirect
+	github.com/klauspost/compress v1.17.0 // indirect
 	github.com/leodido/go-urn v1.2.4 // indirect
 	github.com/lestrrat-go/strftime v1.0.4 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
@@ -124,8 +120,8 @@ require (
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/hashstructure v1.1.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
-	github.com/nats-io/jwt/v2 v2.4.1 // indirect
-	github.com/nats-io/nkeys v0.4.4 // indirect
+	github.com/nats-io/jwt/v2 v2.5.2 // indirect
+	github.com/nats-io/nkeys v0.4.5 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/nats-io/stan.go v0.10.4 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
@@ -147,7 +143,6 @@ require (
 	go.etcd.io/bbolt v1.3.7 // indirect
 	go.mongodb.org/mongo-driver v1.11.3 // indirect
 	go.opentelemetry.io/otel v1.18.0 // indirect
-	go.opentelemetry.io/otel/metric v1.18.0 // indirect
 	golang.org/x/mod v0.10.0 // indirect
 	golang.org/x/net v0.15.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
