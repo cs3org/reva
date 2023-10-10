@@ -127,7 +127,7 @@ func main() {
 
 	client = rhttp.GetHTTPClient(
 		rhttp.Insecure(insecuredatagateway),
-		rhttp.Timeout(time.Duration(timeout*int64(time.Hour))),
+		rhttp.Timeout(time.Duration(timeout*int64(time.Second))),
 	)
 
 	generateMainUsage()
