@@ -21,7 +21,7 @@ package useragent
 import (
 	"context"
 
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/appctx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
@@ -31,8 +31,8 @@ import (
 func NewUnary() grpc.UnaryServerInterceptor {
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		if md, ok := metadata.FromIncomingContext(ctx); ok {
-			if lst, ok := md[ctxpkg.UserAgentHeader]; ok && len(lst) != 0 {
-				ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.UserAgentHeader, lst[0])
+			if lst, ok := md[appctx.UserAgentHeader]; ok && len(lst) != 0 {
+				ctx = metadata.AppendToOutgoingContext(ctx, appctx.UserAgentHeader, lst[0])
 			}
 		}
 		return handler(ctx, req)
@@ -46,8 +46,8 @@ func NewStream() grpc.StreamServerInterceptor {
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := ss.Context()
 		if md, ok := metadata.FromIncomingContext(ctx); ok {
-			if lst, ok := md[ctxpkg.UserAgentHeader]; ok && len(lst) != 0 {
-				ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.UserAgentHeader, lst[0])
+			if lst, ok := md[appctx.UserAgentHeader]; ok && len(lst) != 0 {
+				ctx = metadata.AppendToOutgoingContext(ctx, appctx.UserAgentHeader, lst[0])
 			}
 		}
 		wrapped := newWrappedServerStream(ctx, ss)

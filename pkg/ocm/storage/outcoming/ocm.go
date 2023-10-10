@@ -34,10 +34,11 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
@@ -248,9 +249,9 @@ func (d *driver) opFromUser(ctx context.Context, userID *userv1beta1.UserId, f f
 	}
 
 	ownerCtx := context.TODO()
-	ownerCtx = ctxpkg.ContextSetToken(ownerCtx, authRes.Token)
-	ownerCtx = ctxpkg.ContextSetUser(ownerCtx, authRes.User)
-	ownerCtx = metadata.AppendToOutgoingContext(ownerCtx, ctxpkg.TokenHeader, authRes.Token)
+	ownerCtx = appctx.ContextSetToken(ownerCtx, authRes.Token)
+	ownerCtx = appctx.ContextSetUser(ownerCtx, authRes.User)
+	ownerCtx = metadata.AppendToOutgoingContext(ownerCtx, appctx.TokenHeader, authRes.Token)
 
 	return f(ownerCtx)
 }
@@ -410,14 +411,14 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, content io
 			return errtypes.InternalError("simple upload not supported")
 		}
 
-		httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, endpoint, content)
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, content)
 		if err != nil {
 			return errors.Wrap(err, "error creating new request")
 		}
 
 		httpReq.Header.Set(datagateway.TokenTransportHeader, token)
 
-		httpRes, err := http.DefaultClient.Do(httpReq)
+		httpRes, err := httpclient.New().Do(httpReq)
 		if err != nil {
 			return errors.Wrap(err, "error doing put request")
 		}
@@ -465,13 +466,13 @@ func (d *driver) Download(ctx context.Context, ref *provider.Reference) (io.Read
 			return errtypes.InternalError("simple download not supported")
 		}
 
-		httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, endpoint, nil)
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 		if err != nil {
 			return err
 		}
 		httpReq.Header.Set(datagateway.TokenTransportHeader, token)
 
-		httpRes, err := http.DefaultClient.Do(httpReq) //nolint:golint,bodyclose
+		httpRes, err := httpclient.New().Do(httpReq) //nolint:golint,bodyclose
 		if err != nil {
 			return err
 		}

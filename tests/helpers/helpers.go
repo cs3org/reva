@@ -35,7 +35,7 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/studio-b12/gowebdav"
 )
@@ -127,14 +127,14 @@ func UploadGateway(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ref 
 			token, endpoint = p.Token, p.UploadEndpoint
 		}
 	}
-	httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, endpoint, bytes.NewReader(content))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, bytes.NewReader(content))
 	if err != nil {
 		return errors.Wrap(err, "error creating new request")
 	}
 
 	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
 
-	httpRes, err := http.DefaultClient.Do(httpReq)
+	httpRes, err := httpclient.New().Do(httpReq)
 	if err != nil {
 		return errors.Wrap(err, "error doing put request")
 	}
@@ -165,13 +165,13 @@ func Download(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ref *prov
 			token, endpoint = p.Token, p.DownloadEndpoint
 		}
 	}
-	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, endpoint, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
 	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
 
-	httpRes, err := http.DefaultClient.Do(httpReq)
+	httpRes, err := httpclient.New().Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
@@ -236,14 +236,14 @@ func CreateFile(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, path st
 			token, endpoint = p.Token, p.UploadEndpoint
 		}
 	}
-	httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, endpoint, bytes.NewReader(content))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, bytes.NewReader(content))
 	if err != nil {
 		return err
 	}
 
 	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
 
-	httpRes, err := http.DefaultClient.Do(httpReq)
+	httpRes, err := httpclient.New().Do(httpReq)
 	if err != nil {
 		return err
 	}

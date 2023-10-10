@@ -32,8 +32,9 @@ import (
 	ocmproviderpb "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/scope"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/token"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
@@ -57,9 +58,9 @@ func ctxWithAuthToken(tokenManager token.Manager, user *userpb.User) context.Con
 	Expect(err).ToNot(HaveOccurred())
 	tkn, err := tokenManager.MintToken(ctx, user, scope)
 	Expect(err).ToNot(HaveOccurred())
-	ctx = ctxpkg.ContextSetToken(ctx, tkn)
-	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, tkn)
-	ctx = ctxpkg.ContextSetUser(ctx, user)
+	ctx = appctx.ContextSetToken(ctx, tkn)
+	ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, tkn)
+	ctx = appctx.ContextSetUser(ctx, user)
 	return ctx
 }
 
@@ -307,9 +308,9 @@ var _ = Describe("ocm invitation workflow", func() {
 				cernboxURL = revads["cernboxhttp"].GrpcAddress
 
 				var ok bool
-				tknMarie, ok = ctxpkg.ContextGetToken(ctxMarie)
+				tknMarie, ok = appctx.ContextGetToken(ctxMarie)
 				Expect(ok).To(BeTrue())
-				tknEinstein, ok = ctxpkg.ContextGetToken(ctxEinstein)
+				tknEinstein, ok = appctx.ContextGetToken(ctxEinstein)
 				Expect(ok).To(BeTrue())
 
 				tknRes, err := cernboxgw.GenerateInviteToken(ctxEinstein, &invitepb.GenerateInviteTokenRequest{})

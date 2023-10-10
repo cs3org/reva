@@ -22,7 +22,7 @@ import (
 	"context"
 	"sync"
 
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/preferences"
 	"github.com/cs3org/reva/pkg/preferences/registry"
@@ -43,7 +43,7 @@ func New(ctx context.Context, m map[string]interface{}) (preferences.Manager, er
 }
 
 func (m *mgr) SetKey(ctx context.Context, key, namespace, value string) error {
-	u, ok := ctxpkg.ContextGetUser(ctx)
+	u, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		return errtypes.UserRequired("preferences: error getting user from ctx")
 	}
@@ -61,7 +61,7 @@ func (m *mgr) SetKey(ctx context.Context, key, namespace, value string) error {
 }
 
 func (m *mgr) GetKey(ctx context.Context, key, namespace string) (string, error) {
-	u, ok := ctxpkg.ContextGetUser(ctx)
+	u, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		return "", errtypes.UserRequired("preferences: error getting user from ctx")
 	}

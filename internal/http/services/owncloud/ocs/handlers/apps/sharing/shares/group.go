@@ -29,7 +29,8 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
@@ -85,7 +86,7 @@ func (h *Handler) createGroupShare(w http.ResponseWriter, r *http.Request, statI
 	if shareID, ok := h.createCs3Share(ctx, w, r, c, createShareReq, statInfo); ok {
 		notify, _ := strconv.ParseBool(r.FormValue("notify"))
 		if notify {
-			granter, ok := ctxpkg.ContextGetUser(ctx)
+			granter, ok := appctx.ContextGetUser(ctx)
 			if ok {
 				h.SendShareNotification(shareID.OpaqueId, granter, groupRes.Group, statInfo)
 			}

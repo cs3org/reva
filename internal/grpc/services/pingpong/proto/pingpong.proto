@@ -16,24 +16,31 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package appctx
+syntax = "proto3";
 
-import (
-	"context"
+package revad.pingpong;
 
-	"github.com/rs/zerolog"
-)
+option go_package = "github.com/cs3org/reva/grpc/internal/services/pingpong/proto";
 
-// DeletingSharedResource flags to a storage a shared resource is being deleted not by the owner.
-var DeletingSharedResource struct{}
-
-// WithLogger returns a context with an associated logger.
-func WithLogger(ctx context.Context, l *zerolog.Logger) context.Context {
-	return l.WithContext(ctx)
+service PingPongService {
+  rpc Ping(PingRequest) returns (PingResponse);
+  rpc Pong(PongRequest) returns (PongResponse);
 }
 
-// GetLogger returns the logger associated with the given context
-// or a disabled logger in case no logger is stored inside the context.
-func GetLogger(ctx context.Context) *zerolog.Logger {
-	return zerolog.Ctx(ctx)
+message PingRequest {
+  string info = 1;
 }
+
+message PingResponse {
+  string info = 1;
+}
+message PongRequest {
+  string info = 1;
+}
+
+message PongResponse {
+  string info = 1;
+}
+
+// to compile this into grpc, cd in the directory where this file lives and execute:
+// protoc --go_out=. --go_opt=paths=source_relative  --go-grpc_out=. --go-grpc_opt=paths=source_relative pingpong.proto

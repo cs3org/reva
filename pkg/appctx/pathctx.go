@@ -16,11 +16,9 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ctx
+package appctx
 
-import (
-	"context"
-)
+import "context"
 
 // ResoucePathCtx is the key used in the opaque id for passing the resource path.
 const ResoucePathCtx = "resource_path"

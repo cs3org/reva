@@ -34,6 +34,7 @@ import (
 	_ "github.com/cs3org/reva/internal/grpc/services/ocmproviderauthorizer"
 	_ "github.com/cs3org/reva/internal/grpc/services/ocmshareprovider"
 	_ "github.com/cs3org/reva/internal/grpc/services/permissions"
+	_ "github.com/cs3org/reva/internal/grpc/services/pingpong"
 	_ "github.com/cs3org/reva/internal/grpc/services/preferences"
 	_ "github.com/cs3org/reva/internal/grpc/services/publicshareprovider"
 	_ "github.com/cs3org/reva/internal/grpc/services/publicstorageprovider"

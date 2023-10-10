@@ -34,7 +34,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+
 	"github.com/cs3org/reva/pkg/notification"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -421,7 +421,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 
 	if ok {
 		ok2 := permissionsStayUploader(before, newPermissions)
-		u, ok3 := ctxpkg.ContextGetUser(r.Context())
+		u, ok3 := appctx.ContextGetUser(r.Context())
 
 		if ok2 && ok3 {
 			notifyUploads, _ := strconv.ParseBool(newNotifyUploads[0])
@@ -451,7 +451,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 
 	if ok {
 		ok2 := permissionsStayUploader(before, newPermissions)
-		u, ok3 := ctxpkg.ContextGetUser(r.Context())
+		u, ok3 := appctx.ContextGetUser(r.Context())
 
 		if ok2 && ok3 {
 			notifyUploadsExtraRecipients := newNotifyUploadsExtraRecipients[0]

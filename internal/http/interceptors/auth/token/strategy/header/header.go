@@ -22,8 +22,9 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/internal/http/interceptors/auth/token/registry"
+
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 )
 
 func init() {
@@ -36,7 +37,7 @@ type strategy struct {
 
 // New returns a new auth strategy that checks for basic auth.
 func New(m map[string]interface{}) (auth.TokenStrategy, error) {
-	return &strategy{header: ctxpkg.TokenHeader}, nil
+	return &strategy{header: appctx.TokenHeader}, nil
 }
 
 func (s *strategy) GetToken(r *http.Request) string {

@@ -25,8 +25,9 @@ import (
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/cbox/utils"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/storage/favorite"
 	"github.com/cs3org/reva/pkg/storage/favorite/registry"
 	"github.com/cs3org/reva/pkg/utils/cfg"
@@ -68,7 +69,7 @@ func New(m map[string]interface{}) (favorite.Manager, error) {
 }
 
 func (m *mgr) ListFavorites(ctx context.Context, userID *user.UserId) ([]*provider.ResourceId, error) {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	infos := []*provider.ResourceId{}
 	query := `SELECT fileid_prefix, fileid FROM cbox_metadata WHERE uid=? AND tag_key="fav"`
 	rows, err := m.db.Query(query, user.Id.OpaqueId)
@@ -92,7 +93,7 @@ func (m *mgr) ListFavorites(ctx context.Context, userID *user.UserId) ([]*provid
 }
 
 func (m *mgr) SetFavorite(ctx context.Context, userID *user.UserId, resourceInfo *provider.ResourceInfo) error {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 
 	// The primary key is just the ID in the table, it should ideally be (uid, fileid_prefix, fileid, tag_key)
 	// For the time being, just check if the favorite already exists. If it does, return early
@@ -117,7 +118,7 @@ func (m *mgr) SetFavorite(ctx context.Context, userID *user.UserId, resourceInfo
 }
 
 func (m *mgr) UnsetFavorite(ctx context.Context, userID *user.UserId, resourceInfo *provider.ResourceInfo) error {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	stmt, err := m.db.Prepare(`DELETE FROM cbox_metadata WHERE uid=? AND fileid_prefix=? AND fileid=? AND tag_key="fav"`)
 	if err != nil {
 		return err

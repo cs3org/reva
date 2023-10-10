@@ -29,7 +29,6 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
@@ -104,7 +103,7 @@ func (um *Manager) SetHTTPClient(c *http.Client) {
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {
-	u, ok := ctxpkg.ContextGetUser(ctx)
+	u, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired(""), "nextcloud user manager: error getting user from ctx")
 		return nil, err

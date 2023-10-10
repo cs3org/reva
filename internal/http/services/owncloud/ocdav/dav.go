@@ -30,7 +30,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"google.golang.org/grpc/metadata"
@@ -107,7 +107,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		// https://github.com/owncloud/core/blob/18475dac812064b21dabcc50f25ef3ffe55691a5/tests/acceptance/features/apiWebdavOperations/propfind.feature
 		if r.URL.Path == "/files" {
 			log.Debug().Str("path", r.URL.Path).Msg("method not allowed")
-			contextUser, ok := ctxpkg.ContextGetUser(ctx)
+			contextUser, ok := appctx.ContextGetUser(ctx)
 			if ok {
 				r.URL.Path = path.Join(r.URL.Path, contextUser.Username)
 			}
@@ -147,7 +147,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			requestUserID, r.URL.Path = router.ShiftPath(r.URL.Path)
 
 			// note: some requests like OPTIONS don't forward the user
-			contextUser, ok := ctxpkg.ContextGetUser(ctx)
+			contextUser, ok := appctx.ContextGetUser(ctx)
 			if ok && isOwner(requestUserID, contextUser) {
 				// use home storage handler when user was detected
 				base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files", requestUserID)
@@ -225,9 +225,9 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				return
 			}
 
-			ctx = ctxpkg.ContextSetToken(ctx, authRes.Token)
-			ctx = ctxpkg.ContextSetUser(ctx, authRes.User)
-			ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, authRes.Token)
+			ctx = appctx.ContextSetToken(ctx, authRes.Token)
+			ctx = appctx.ContextSetUser(ctx, authRes.User)
+			ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, authRes.Token)
 
 			log.Debug().Str("token", token).Interface("user", authRes.User).Msg("OCM user authenticated")
 
@@ -274,9 +274,9 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				return
 			}
 
-			ctx = ctxpkg.ContextSetToken(ctx, res.Token)
-			ctx = ctxpkg.ContextSetUser(ctx, res.User)
-			ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, res.Token)
+			ctx = appctx.ContextSetToken(ctx, res.Token)
+			ctx = appctx.ContextSetUser(ctx, res.User)
+			ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, res.Token)
 
 			r = r.WithContext(ctx)
 

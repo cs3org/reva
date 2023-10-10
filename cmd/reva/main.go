@@ -19,6 +19,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"net/http"
@@ -27,7 +28,7 @@ import (
 	"time"
 
 	"github.com/c-bata/go-prompt"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/httpclient"
 )
 
 var (
@@ -40,7 +41,7 @@ var (
 
 	gitCommit, buildDate, version, goVersion string
 
-	client *http.Client
+	client *httpclient.Client
 
 	commands = []*command{
 		versionCommand(),
@@ -124,9 +125,11 @@ func main() {
 		}
 	}
 
-	client = rhttp.GetHTTPClient(
-		rhttp.Insecure(insecuredatagateway),
-		rhttp.Timeout(time.Duration(timeout*int64(time.Hour))),
+	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: insecuredatagateway}}
+
+	client = httpclient.New(
+		httpclient.RoundTripper(tr),
+		httpclient.Timeout(time.Duration(timeout*int64(time.Hour))),
 	)
 
 	generateMainUsage()

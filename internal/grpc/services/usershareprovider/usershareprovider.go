@@ -26,7 +26,6 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -128,7 +127,7 @@ func (s *service) isPathAllowed(path string) bool {
 }
 
 func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
-	u := ctxpkg.ContextMustGetUser(ctx)
+	u := appctx.ContextMustGetUser(ctx)
 	if req.Grant.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && req.Grant.Grantee.GetUserId().Idp == "" {
 		// use logged in user Idp as default.
 		g := &userpb.UserId{OpaqueId: req.Grant.Grantee.GetUserId().OpaqueId, Idp: u.Id.Idp, Type: userpb.UserType_USER_TYPE_PRIMARY}
@@ -184,8 +183,8 @@ func (s *service) GetShare(ctx context.Context, req *collaboration.GetShareReque
 
 func (s *service) ListShares(ctx context.Context, req *collaboration.ListSharesRequest) (*collaboration.ListSharesResponse, error) {
 	if req.Opaque != nil {
-		if v, ok := req.Opaque.Map[ctxpkg.ResoucePathCtx]; ok {
-			ctx = ctxpkg.ContextSetResourcePath(ctx, string(v.Value))
+		if v, ok := req.Opaque.Map[appctx.ResoucePathCtx]; ok {
+			ctx = appctx.ContextSetResourcePath(ctx, string(v.Value))
 		}
 	}
 

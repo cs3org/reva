@@ -33,9 +33,9 @@ import (
 	tokenregistry "github.com/cs3org/reva/internal/http/interceptors/auth/token/registry"
 	tokenwriterregistry "github.com/cs3org/reva/internal/http/interceptors/auth/tokenwriter/registry"
 	"github.com/cs3org/reva/pkg/appctx"
+
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/scope"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -167,23 +167,19 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 			}
 
 			log := appctx.GetLogger(r.Context())
-			isUnprotectedEndpoint := false
 
 			// For unprotected URLs, we try to authenticate the request in case some service needs it,
 			// but don't return any errors if it fails.
 			if utils.Skip(r.URL.Path, unprotected) {
 				log.Info().Msg("skipping auth check for: " + r.URL.Path)
-				isUnprotectedEndpoint = true
-			}
-
-			ctx, err := authenticateUser(w, r, conf, tokenStrategyChain, tokenManager, tokenWriter, credChain, isUnprotectedEndpoint)
-			if err != nil {
-				if !isUnprotectedEndpoint {
+			} else {
+				ctx, err := authenticateUser(w, r, conf, tokenStrategyChain, tokenManager, tokenWriter, credChain, false)
+				if err != nil {
 					return
 				}
-			} else {
 				r = r.WithContext(ctx)
 			}
+
 			h.ServeHTTP(w, r)
 		})
 	}
@@ -195,7 +191,7 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 	log := appctx.GetLogger(ctx)
 
 	// Add the request user-agent to the ctx
-	ctx = metadata.NewIncomingContext(ctx, metadata.New(map[string]string{ctxpkg.UserAgentHeader: r.UserAgent()}))
+	ctx = metadata.NewIncomingContext(ctx, metadata.New(map[string]string{appctx.UserAgentHeader: r.UserAgent()}))
 
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(conf.GatewaySvc))
 	if err != nil {
@@ -301,10 +297,10 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 }
 
 func ctxWithUserInfo(ctx context.Context, r *http.Request, user *userpb.User, token string) context.Context {
-	ctx = ctxpkg.ContextSetUser(ctx, user)
-	ctx = ctxpkg.ContextSetToken(ctx, token)
-	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, token)
-	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.UserAgentHeader, r.UserAgent())
+	ctx = appctx.ContextSetUser(ctx, user)
+	ctx = appctx.ContextSetToken(ctx, token)
+	ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, token)
+	ctx = metadata.AppendToOutgoingContext(ctx, appctx.UserAgentHeader, r.UserAgent())
 
 	return ctx
 }

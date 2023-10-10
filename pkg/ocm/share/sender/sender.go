@@ -31,7 +31,7 @@ import (
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/pkg/errors"
 )
 
@@ -73,8 +73,8 @@ func Send(ctx context.Context, requestBodyMap map[string]interface{}, pi *ocmpro
 		return errors.Wrap(err, "sender: error framing post request")
 	}
 	req.Header.Set("Content-Type", "application/json")
-	client := rhttp.GetHTTPClient(
-		rhttp.Timeout(5 * time.Second),
+	client := httpclient.New(
+		httpclient.Timeout(5 * time.Second),
 	)
 
 	resp, err := client.Do(req)

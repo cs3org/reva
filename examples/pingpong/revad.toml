@@ -1,0 +1,12 @@
+[log]
+
+[http]
+address = "localhost:8080"
+
+[http.services.pingpong]
+
+[grpc]
+address = "localhost:8081"
+enable_reflection = true
+
+[grpc.services.pingpong]

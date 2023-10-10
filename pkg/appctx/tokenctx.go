@@ -16,16 +16,32 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package s3
+package appctx
 
 import (
 	"context"
-
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
 )
 
-// InitiateUpload returns upload ids corresponding to different protocols it supports.
-func (fs *s3FS) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
-	return nil, errtypes.NotSupported("op not supported")
+// TokenHeader is the header to be used across grpc and http services
+// to forward the access token.
+const TokenHeader = "x-access-token"
+
+// ContextGetToken returns the token if set in the given context.
+func ContextGetToken(ctx context.Context) (string, bool) {
+	u, ok := ctx.Value(tokenKey).(string)
+	return u, ok
+}
+
+// ContextMustGetToken panics if token is not in context.
+func ContextMustGetToken(ctx context.Context) string {
+	u, ok := ContextGetToken(ctx)
+	if !ok {
+		panic("token not found in context")
+	}
+	return u
+}
+
+// ContextSetToken stores the token in the context.
+func ContextSetToken(ctx context.Context, t string) context.Context {
+	return context.WithValue(ctx, tokenKey, t)
 }

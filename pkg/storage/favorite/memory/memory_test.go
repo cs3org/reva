@@ -24,7 +24,7 @@ import (
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/appctx"
 )
 
 type environment struct {
@@ -51,11 +51,11 @@ func createEnvironment() environment {
 
 	return environment{
 		userOne:      userOne,
-		userOneCtx:   ctxpkg.ContextSetUser(context.Background(), userOne),
+		userOneCtx:   appctx.ContextSetUser(context.Background(), userOne),
 		userTwo:      userTwo,
-		userTwoCtx:   ctxpkg.ContextSetUser(context.Background(), userTwo),
+		userTwoCtx:   appctx.ContextSetUser(context.Background(), userTwo),
 		userThree:    userThree,
-		userThreeCtx: ctxpkg.ContextSetUser(context.Background(), userThree),
+		userThreeCtx: appctx.ContextSetUser(context.Background(), userThree),
 
 		resourceInfoOne: resourceInfoOne,
 		resourceInfoTwo: resourceInfoTwo,

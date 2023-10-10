@@ -35,10 +35,9 @@ import (
 	storagepb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/appctx"
+
 	"github.com/cs3org/reva/pkg/auth/scope"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token/manager/jwt"
@@ -165,7 +164,7 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, ok := ctxpkg.ContextGetToken(ctx)
+	token, ok := appctx.ContextGetToken(ctx)
 	if !ok || token == "" {
 		reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, "Access token is invalid or empty", err)
 		return
@@ -196,7 +195,7 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u := ctxpkg.ContextMustGetUser(ctx)
+	u := appctx.ContextMustGetUser(ctx)
 
 	scope, err := scope.AddResourceInfoScope(resource, authpb.Role_ROLE_VIEWER, nil)
 	if err != nil {
@@ -211,7 +210,7 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Setting up archiver request
-	archHTTPReq, err := rhttp.NewRequest(ctx, http.MethodGet, s.conf.ArchiverURL, nil)
+	archHTTPReq, err := http.NewRequestWithContext(ctx, http.MethodGet, s.conf.ArchiverURL, nil)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "overleaf: error setting up http request", nil)
 		return
@@ -227,7 +226,7 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 
 	// Setting up Overleaf request
 	appURL := s.conf.appURL + "/docs"
-	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, appURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, appURL, nil)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "overleaf: error setting up http request", nil)
 		return

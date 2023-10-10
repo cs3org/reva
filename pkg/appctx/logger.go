@@ -16,32 +16,21 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ctx
+package appctx
 
 import (
 	"context"
+
+	"github.com/rs/zerolog"
 )
 
-// TokenHeader is the header to be used across grpc and http services
-// to forward the access token.
-const TokenHeader = "x-access-token"
-
-// ContextGetToken returns the token if set in the given context.
-func ContextGetToken(ctx context.Context) (string, bool) {
-	u, ok := ctx.Value(tokenKey).(string)
-	return u, ok
+// WithLogger returns a context with an associated logger.
+func WithLogger(ctx context.Context, l *zerolog.Logger) context.Context {
+	return l.WithContext(ctx)
 }
 
-// ContextMustGetToken panics if token is not in context.
-func ContextMustGetToken(ctx context.Context) string {
-	u, ok := ContextGetToken(ctx)
-	if !ok {
-		panic("token not found in context")
-	}
-	return u
-}
-
-// ContextSetToken stores the token in the context.
-func ContextSetToken(ctx context.Context, t string) context.Context {
-	return context.WithValue(ctx, tokenKey, t)
+// GetLogger returns the logger associated with the given context
+// or a disabled logger in case no logger is stored inside the context.
+func GetLogger(ctx context.Context) *zerolog.Logger {
+	return zerolog.Ctx(ctx)
 }

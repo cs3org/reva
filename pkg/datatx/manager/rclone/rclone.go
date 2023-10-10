@@ -21,6 +21,7 @@ package rclone
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -37,7 +38,7 @@ import (
 	repoRegistry "github.com/cs3org/reva/pkg/datatx/manager/rclone/repository/registry"
 	registry "github.com/cs3org/reva/pkg/datatx/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -72,7 +73,7 @@ type config struct {
 
 type rclone struct {
 	config  *config
-	client  *http.Client
+	client  *httpclient.Client
 	storage repository.Repository
 }
 
@@ -109,7 +110,8 @@ func New(ctx context.Context, m map[string]interface{}) (txdriver.Manager, error
 	}
 	c.init(m)
 
-	client := rhttp.GetHTTPClient(rhttp.Insecure(c.Insecure))
+	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: c.Insecure}}
+	client := httpclient.New(httpclient.RoundTripper(tr))
 
 	storage, err := getStorageManager(ctx, c)
 	if err != nil {

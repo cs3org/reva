@@ -29,15 +29,12 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 )
 
 func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "move")
-	defer span.End()
-
+	ctx := r.Context()
 	srcPath := path.Join(ns, r.URL.Path)
 	dstPath, err := extractDestination(r)
 	if err != nil {
@@ -67,9 +64,7 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 }
 
 func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceID string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_move")
-	defer span.End()
-
+	ctx := r.Context()
 	dst, err := extractDestination(r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)

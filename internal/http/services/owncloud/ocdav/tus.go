@@ -33,8 +33,6 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp"
-	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
@@ -42,9 +40,7 @@ import (
 )
 
 func (s *svc) handlePathTusPost(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "tus-post")
-	defer span.End()
-
+	ctx := r.Context()
 	// read filename from metadata
 	meta := tusd.ParseMetadataHeader(r.Header.Get(HeaderUploadMetadata))
 	for _, r := range nameRules {
@@ -65,9 +61,7 @@ func (s *svc) handlePathTusPost(w http.ResponseWriter, r *http.Request, ns strin
 }
 
 func (s *svc) handleSpacesTusPost(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces-tus-post")
-	defer span.End()
-
+	ctx := r.Context()
 	// read filename from metadata
 	meta := tusd.ParseMetadataHeader(r.Header.Get(HeaderUploadMetadata))
 	if meta["filename"] == "" {
@@ -226,7 +220,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 
 		var httpRes *http.Response
 
-		httpReq, err := rhttp.NewRequest(ctx, http.MethodPatch, ep, r.Body)
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPatch, ep, r.Body)
 		if err != nil {
 			log.Debug().Err(err).Msg("wrong request")
 			w.WriteHeader(http.StatusInternalServerError)

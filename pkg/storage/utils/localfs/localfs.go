@@ -35,7 +35,8 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
@@ -152,7 +153,7 @@ func (fs *localfs) resolve(ctx context.Context, ref *provider.Reference) (p stri
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {
-	u, ok := ctxpkg.ContextGetUser(ctx)
+	u, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired(""), "local: error getting user from ctx")
 		return nil, err
@@ -272,7 +273,7 @@ func (fs *localfs) isShareFolderChild(ctx context.Context, p string) bool {
 
 // permissionSet returns the permission set for the current user.
 func (fs *localfs) permissionSet(ctx context.Context, owner *userpb.UserId) *provider.ResourcePermissions {
-	u, ok := ctxpkg.ContextGetUser(ctx)
+	u, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		return &provider.ResourcePermissions{
 			// no permissions
