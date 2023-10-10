@@ -21,10 +21,9 @@ package routingtree
 
 import (
 	"errors"
-	"path"
-	"strings"
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
 // Route represents a route inside a storage provider.
@@ -68,10 +67,10 @@ func (t *RoutingTree) addNode(r Route) *RoutingTree {
 }
 
 func (t *RoutingTree) addRoute(route, mountID string) {
-	parts := strings.Split(path.Clean(route), "/")
+	remainder := route
 	current := t
 
-	for i, name := range parts {
+	for name, remainder := router.ShiftPath(remainder); name != ""; name, remainder = router.ShiftPath(remainder) {
 		if name == "" {
 			continue
 		}
@@ -80,7 +79,7 @@ func (t *RoutingTree) addRoute(route, mountID string) {
 			Name: name,
 		}
 
-		if i == len(parts)-1 {
+		if remainder == "/" {
 			newNode.MountID = mountID
 			newNode.MountPath = route
 		}
@@ -90,10 +89,9 @@ func (t *RoutingTree) addRoute(route, mountID string) {
 }
 
 func (t *RoutingTree) findRoute(p string) (*RoutingTree, error) {
-	parts := strings.Split(path.Clean(p), "/")
 	current := t
 
-	for _, name := range parts {
+	for name, p := router.ShiftPath(p); name != ""; name, p = router.ShiftPath(p) {
 		// If the current node matches the path part, continue
 		if current.route.Name == name {
 			continue
@@ -118,6 +116,10 @@ func (t *RoutingTree) findRoute(p string) (*RoutingTree, error) {
 
 // Resolve returns a list of providers for a given path.
 func (t *RoutingTree) Resolve(p string) ([]*registrypb.ProviderInfo, error) {
+	if p == "" {
+		return nil, errors.New("empty route")
+	}
+
 	r, err := t.findRoute(p)
 	if err != nil {
 		return nil, err
