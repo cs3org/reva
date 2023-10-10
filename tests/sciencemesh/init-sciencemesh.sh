@@ -39,12 +39,12 @@ TAG_WOPISERVER=v10.2.0sm
     composer install
 
 # wopiserver source code for the config.
-[ ! -d "wopiserver" ] &&                                                        \
-    git clone --branch ${TAG_WOPISERVER} ${REPO_WOPISERVER} wopiserver          \
-    &&                                                                          \
-    mkdir -p temp/wopi-conf &&                                                  \
-    cp wopiserver/docker/etc/*.cs3.conf temp/wopi-conf/wopiserver.conf &&       \
-    cp wopiserver/wopiserver.conf temp/wopi-conf/wopiserver.defaults.conf &&    \
-    echo "shared-secret-2" > temp/wopi-conf/iopsecret &&                        \
-    echo "wopisecret" > temp/wopi-conf/wopisecret
-
+[ ! -d "wopiserver" ] &&                                                             \
+    git clone --branch ${TAG_WOPISERVER} ${REPO_WOPISERVER} wopi-sciencemesh         \
+    &&                                                                               \
+    mkdir -p temp/wopi-1-conf temp/wopi-2-conf &&                                    \
+    cp wopi-sciencemesh/docker/etc/*.cs3.conf temp/wopi-1-conf/wopiserver.conf &&    \
+    cp wopi-sciencemesh/wopiserver.conf temp/wopi-1-conf/wopiserver.defaults.conf && \
+    echo "shared-secret-2" > temp/wopi-1-conf/iopsecret &&                           \
+    echo "wopisecret" > temp/wopi-1-conf/wopisecret &&                               \
+    cp temp/wopi-1-conf/* temp/wopi-2-conf/

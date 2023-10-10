@@ -48,13 +48,21 @@ chmod +x "${ENV_ROOT}/scripts/reva-entrypoint.sh"
 
 docker run --detach --name=meshdir.docker   --network=testnet -v "${ENV_ROOT}/scripts/stub.js:/ocm-stub/stub.js" pondersource/dev-stock-ocmstub
 docker run --detach --name=firefox          --network=testnet -p 5800:5800  --shm-size 2g jlesage/firefox:latest
-docker run --detach --name=firefox-legacy   --network=testnet -p 5900:5800  --shm-size 2g jlesage/firefox:v1.18.0
-docker run --detach --name=collabora.docker --network=testnet -p 9980:9980 -t -e "extra_params=--o:ssl.enable=false" collabora/code:latest 
-docker run --detach --name=wopi.docker      --network=testnet -p 8880:8880 -t cs3org/wopiserver:latest
+#docker run --detach --name=firefox-legacy   --network=testnet -p 5900:5800  --shm-size 2g jlesage/firefox:v1.18.0
 
-#docker run --detach --name=rclone.docker    --network=testnet  rclone/rclone rcd -vv --rc-user=rcloneuser --rc-pass=eilohtho9oTahsuongeeTh7reedahPo1Ohwi3aek --rc-addr=0.0.0.0:5572 --server-side-across-configs=true --log-file=/dev/stdout
+docker run --detach --name=collabora.docker --network=testnet -p 9980:9980 -t \
+  -e "extra_params=--o:ssl.enable=false"                                      \
+  -v "${ENV_ROOT}/collabora/coolwsd.xml:/etc/coolwsd/coolwsd.xml"             \
+  collabora/code:latest 
+#docker run --detach --name=rclone.docker    --network=testnet                \
+# rcd -vv --rc-addr=0.0.0.0:5572                                              \
+# --rc-user=rcloneuser --rc-pass=eilohtho9oTahsuongeeTh7reedahPo1Ohwi3aek     \
+# --server-side-across-configs=true --log-file=/dev/stdout                    \
+# rclone/rclone:latest
 
 # EFSS1
+if [[ ${EFSS1} -ne "cernbox" ]]; then
+
 docker run --detach --network=testnet                                         \
   --name=maria1.docker                                                        \
   -e MARIADB_ROOT_PASSWORD=eilohtho9oTahsuongeeTh7reedahPo1Ohwi3aek           \
@@ -76,7 +84,34 @@ docker run --detach --network=testnet                                         \
   -v "${ENV_ROOT}/temp/${EFSS1}-1-tls:/tls"                                   \
   "pondersource/dev-stock-${EFSS1}-sciencemesh"
 
+# setup
+waitForPort maria1.docker 3306
+waitForPort "${EFSS1}1.docker" 443
+
+docker exec "${EFSS1}1.docker" bash -c "cp /tls/*.crt /usr/local/share/ca-certificates/"
+docker exec "${EFSS1}1.docker" update-ca-certificates
+docker exec "${EFSS1}1.docker" bash -c "cat /etc/ssl/certs/ca-certificates.crt >> /var/www/html/resources/config/ca-bundle.crt"
+
+docker exec -u www-data "${EFSS1}1.docker" sh "/${EFSS1}-init.sh"
+
+# run db injections
+docker exec maria1.docker mariadb -u root -peilohtho9oTahsuongeeTh7reedahPo1Ohwi3aek efss                                                               \
+  -e "insert into oc_appconfig (appid, configkey, configvalue) values ('sciencemesh', 'iopUrl', 'https://reva${EFSS1}1.docker/');"
+
+docker exec maria1.docker mariadb -u root -peilohtho9oTahsuongeeTh7reedahPo1Ohwi3aek efss                                                               \
+  -e "insert into oc_appconfig (appid, configkey, configvalue) values ('sciencemesh', 'revaSharedSecret', 'shared-secret-1');"
+
+docker exec maria1.docker mariadb -u root -peilohtho9oTahsuongeeTh7reedahPo1Ohwi3aek efss                                                               \
+  -e "insert into oc_appconfig (appid, configkey, configvalue) values ('sciencemesh', 'meshDirectoryUrl', 'https://meshdir.docker/meshdir');"
+
+docker exec maria1.docker mariadb -u root -peilohtho9oTahsuongeeTh7reedahPo1Ohwi3aek efss                                                               \
+  -e "insert into oc_appconfig (appid, configkey, configvalue) values ('sciencemesh', 'inviteManagerApikey', 'invite-manager-endpoint');"
+
+fi
+
 # EFSS2
+if [[ ${EFSS2} -ne "cernbox" ]]; then
+
 docker run --detach --network=testnet                                         \
   --name=maria2.docker                                                        \
   -e MARIADB_ROOT_PASSWORD=eilohtho9oTahsuongeeTh7reedahPo1Ohwi3aek           \
@@ -98,30 +133,7 @@ docker run --detach --network=testnet                                         \
   -v "${ENV_ROOT}/temp/${EFSS2}-2-tls:/tls"                                   \
   "pondersource/dev-stock-${EFSS2}-sciencemesh"
 
-# EFSS1
-waitForPort maria1.docker 3306
-waitForPort "${EFSS1}1.docker" 443
-
-docker exec "${EFSS1}1.docker" bash -c "cp /tls/*.crt /usr/local/share/ca-certificates/"
-docker exec "${EFSS1}1.docker" update-ca-certificates
-docker exec "${EFSS1}1.docker" bash -c "cat /etc/ssl/certs/ca-certificates.crt >> /var/www/html/resources/config/ca-bundle.crt"
-
-docker exec -u www-data "${EFSS1}1.docker" sh "/${EFSS1}-init.sh"
-
-# run db injections.
-docker exec maria1.docker mariadb -u root -peilohtho9oTahsuongeeTh7reedahPo1Ohwi3aek efss                                                               \
-  -e "insert into oc_appconfig (appid, configkey, configvalue) values ('sciencemesh', 'iopUrl', 'https://reva${EFSS1}1.docker/');"
-
-docker exec maria1.docker mariadb -u root -peilohtho9oTahsuongeeTh7reedahPo1Ohwi3aek efss                                                               \
-  -e "insert into oc_appconfig (appid, configkey, configvalue) values ('sciencemesh', 'revaSharedSecret', 'shared-secret-1');"
-
-docker exec maria1.docker mariadb -u root -peilohtho9oTahsuongeeTh7reedahPo1Ohwi3aek efss                                                               \
-  -e "insert into oc_appconfig (appid, configkey, configvalue) values ('sciencemesh', 'meshDirectoryUrl', 'https://meshdir.docker/meshdir');"
-
-docker exec maria1.docker mariadb -u root -peilohtho9oTahsuongeeTh7reedahPo1Ohwi3aek efss                                                               \
-  -e "insert into oc_appconfig (appid, configkey, configvalue) values ('sciencemesh', 'inviteManagerApikey', 'invite-manager-endpoint');"
-
-# EFSS2
+# setup
 waitForPort maria2.docker 3306
 waitForPort "${EFSS2}2.docker" 443
 
@@ -143,15 +155,18 @@ docker exec maria2.docker mariadb -u root -peilohtho9oTahsuongeeTh7reedahPo1Ohwi
 docker exec maria2.docker mariadb -u root -peilohtho9oTahsuongeeTh7reedahPo1Ohwi3aek efss                                                               \
   -e "insert into oc_appconfig (appid, configkey, configvalue) values ('sciencemesh', 'inviteManagerApikey', 'invite-manager-endpoint');"
 
-# reva
+fi
+
+# IOP: reva
 waitForCollabora
 docker run --detach --network=testnet                                         \
   --name="reva${EFSS1}1.docker"                                               \
   -e HOST="reva${EFSS1}1"                                                     \
   -p 8080:80                                                                  \
   -v "${ENV_ROOT}/../..:/reva"                                                \
-  -v "${ENV_ROOT}/revad:/etc/revad"                                           \
-  -v "${ENV_ROOT}/tls:/etc/revad/tls"                                         \
+  -v "${ENV_ROOT}/revad:/configs/revad"                                       \
+  -v "${ENV_ROOT}/cernbox:/configs/cernbox"                                   \
+  -v "${ENV_ROOT}/tls:/etc/tls"                                               \
   -v "${ENV_ROOT}/scripts/reva-run.sh:/usr/bin/reva-run.sh"                   \
   -v "${ENV_ROOT}/scripts/reva-kill.sh:/usr/bin/reva-kill.sh"                 \
   -v "${ENV_ROOT}/scripts/reva-entrypoint.sh:/entrypoint.sh"                  \
@@ -162,12 +177,40 @@ docker run --detach --network=testnet                                         \
   -e HOST="reva${EFSS2}2"                                                     \
   -p 8180:80                                                                  \
   -v "${ENV_ROOT}/../..:/reva"                                                \
-  -v "${ENV_ROOT}/revad:/etc/revad"                                           \
-  -v "${ENV_ROOT}/tls:/etc/revad/tls"                                         \
+  -v "${ENV_ROOT}/revad:/configs/revad"                                       \
+  -v "${ENV_ROOT}/cernbox:/configs/cernbox"                                   \
+  -v "${ENV_ROOT}/tls:/etc/tls"                                               \
   -v "${ENV_ROOT}/scripts/reva-run.sh:/usr/bin/reva-run.sh"                   \
   -v "${ENV_ROOT}/scripts/reva-kill.sh:/usr/bin/reva-kill.sh"                 \
   -v "${ENV_ROOT}/scripts/reva-entrypoint.sh:/entrypoint.sh"                  \
   pondersource/dev-stock-revad
+
+# IOP: wopi
+sed -i "s/your.wopi.org/wopi${EFSS1}1.docker/g" ${ENV_ROOT}/temp/wopi-1-conf/wopiserver.conf
+sed -i "s/your.revad.org/reva${EFSS1}1.docker/g" ${ENV_ROOT}/temp/wopi-1-conf/wopiserver.conf
+sed -i "s|/var/run/secrets/cert.pem|/usr/local/share/ca-certificates/wopi${EFSS1}1.crt|" ${ENV_ROOT}/temp/wopi-1-conf/wopiserver.conf
+sed -i "s|/var/run/secrets/key.pem|/usr/local/share/ca-certificates/wopi${EFSS1}1.key|" ${ENV_ROOT}/temp/wopi-1-conf/wopiserver.conf
+
+docker run --detach --network=testnet                                         \
+  --name="wopi${EFSS1}1.docker"                                               \
+  -e HOST="wopi${EFSS1}1"                                                     \
+  -p 8880:8880                                                                \
+  -v "${ENV_ROOT}/temp/wopi-1-conf:/etc/wopi"                                 \
+  -v "${ENV_ROOT}/tls:/usr/local/share/ca-certificates"                       \
+  cs3org/wopiserver:v10.2.0sm
+
+sed -i "s/your.wopi.org/wopi${EFSS2}2.docker/g" ${ENV_ROOT}/temp/wopi-2-conf/wopiserver.conf
+sed -i "s/your.revad.org/reva${EFSS2}2.docker/g" ${ENV_ROOT}/temp/wopi-2-conf/wopiserver.conf
+sed -i "s|/var/run/secrets/cert.pem|/usr/local/share/ca-certificates/wopi${EFSS2}2.crt|" ${ENV_ROOT}/temp/wopi-2-conf/wopiserver.conf
+sed -i "s|/var/run/secrets/key.pem|/usr/local/share/ca-certificates/wopi${EFSS2}2.key|" ${ENV_ROOT}/temp/wopi-2-conf/wopiserver.conf
+
+docker run --detach --network=testnet                                         \
+  --name="wopi${EFSS2}2.docker"                                               \
+  -e HOST="wopi${EFSS2}2"                                                     \
+  -p 8980:8880                                                                \
+  -v "${ENV_ROOT}/temp/wopi-2-conf:/etc/wopi"                                 \
+  -v "${ENV_ROOT}/tls:/usr/local/share/ca-certificates"                       \
+  cs3org/wopiserver:v10.2.0sm
 
 # instructions.
 echo "Now browse to http://ocmhost:5800 and inside there to https://${EFSS1}1.docker"
