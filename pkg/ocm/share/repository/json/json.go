@@ -236,7 +236,11 @@ func (m *mgr) StoreShare(ctx context.Context, ocmshare *ocm.Share) (*ocm.Share, 
 	}
 
 	ocmshare.Id = &ocm.ShareId{OpaqueId: genID()}
-	m.model.Shares[ocmshare.Id.OpaqueId] = cloneShare(ocmshare)
+	clone, err := cloneShare(ocmshare)
+	if err != nil {
+		return nil, err
+	}
+	m.model.Shares[ocmshare.Id.OpaqueId] = clone
 
 	if err := m.save(); err != nil {
 		return nil, errors.Wrap(err, "error saving share")
@@ -245,28 +249,28 @@ func (m *mgr) StoreShare(ctx context.Context, ocmshare *ocm.Share) (*ocm.Share, 
 	return ocmshare, nil
 }
 
-func cloneShare(s *ocm.Share) *ocm.Share {
+func cloneShare(s *ocm.Share) (*ocm.Share, error) {
 	d, err := utils.MarshalProtoV1ToJSON(s)
 	if err != nil {
-		panic(err)
+		return nil, errtypes.InternalError("failed to marshal ocm share")
 	}
 	var cloned ocm.Share
 	if err := utils.UnmarshalJSONToProtoV1(d, &cloned); err != nil {
-		panic(err)
+		return nil, errtypes.InternalError("failed to unmarshal ocm share")
 	}
-	return &cloned
+	return &cloned, nil
 }
 
-func cloneReceivedShare(s *ocm.ReceivedShare) *ocm.ReceivedShare {
+func cloneReceivedShare(s *ocm.ReceivedShare) (*ocm.ReceivedShare, error) {
 	d, err := utils.MarshalProtoV1ToJSON(s)
 	if err != nil {
-		panic(err)
+		return nil, errtypes.InternalError("failed to marshal ocm received share")
 	}
 	var cloned ocm.ReceivedShare
 	if err := utils.UnmarshalJSONToProtoV1(d, &cloned); err != nil {
-		panic(err)
+		return nil, errtypes.InternalError("failed to unmarshal ocm received share")
 	}
-	return &cloned
+	return &cloned, nil
 }
 
 func (m *mgr) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*ocm.Share, error) {
@@ -428,7 +432,12 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, share *ocm.ReceivedShare) 
 	share.Ctime = ts
 	share.Mtime = ts
 
-	m.model.ReceivedShares[share.Id.OpaqueId] = cloneReceivedShare(share)
+	clone, err := cloneReceivedShare(share)
+	if err != nil {
+		return nil, err
+	}
+
+	m.model.ReceivedShares[share.Id.OpaqueId] = clone
 	if err := m.save(); err != nil {
 		return nil, err
 	}
