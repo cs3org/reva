@@ -198,7 +198,7 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 	}
 	getShareRes, err := s.GetReceivedOCMShare(ctx, getShareReq)
 	if err != nil {
-		log.Err(err).Msg("gateway: error calling GetReceivedShare")
+		log.Error().Err(err).Msg("gateway: error calling GetReceivedOCMShare")
 		return &ocm.UpdateReceivedOCMShareResponse{
 			Status: &rpc.Status{
 				Code: rpc.Code_CODE_INTERNAL,
@@ -206,16 +206,23 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 		}, nil
 	}
 	if getShareRes.Status.Code != rpc.Code_CODE_OK {
-		log.Error().Msg("gateway: error calling GetReceivedShare")
+		log.Error().Msg("gateway: error calling GetReceivedOCMShare")
 		return &ocm.UpdateReceivedOCMShareResponse{
 			Status: &rpc.Status{
-				Code: rpc.Code_CODE_INTERNAL,
+				Code:    rpc.Code_CODE_INTERNAL,
+				Message: "gateway: error calling GetReceivedOCMShare",
 			},
 		}, nil
 	}
 	share := getShareRes.Share
 	if share == nil {
-		panic("gateway: error updating a received share: the share is nil")
+		log.Error().Err(err).Msg("gateway: got a nil share from GetReceivedOCMShare")
+		return &ocm.UpdateReceivedOCMShareResponse{
+			Status: &rpc.Status{
+				Code:    rpc.Code_CODE_INTERNAL,
+				Message: "gateway: got a nil share from GetReceivedOCMShare",
+			},
+		}, nil
 	}
 
 	res, err := c.UpdateReceivedOCMShare(ctx, req)
@@ -238,7 +245,6 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 				// currently no consequences
 			case ocm.ShareState_SHARE_STATE_REJECTED:
 				// TODO
-				// FIXME we are ignoring an error from removeReference here
 				return res, nil
 			}
 		case "mount_point":
