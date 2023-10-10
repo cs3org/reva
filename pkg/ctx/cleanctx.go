@@ -27,7 +27,7 @@ type cleanCtx struct {
   ctx context.Context
 }
 
-// ContextGetClean returns a new, clean context derived by the given one
+// ContextGetClean returns a new, clean context derived by the given one.
 func ContextGetClean(ctx context.Context) context.Context {
 	return cleanCtx {
     ctx: ctx,
