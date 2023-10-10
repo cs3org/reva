@@ -74,7 +74,7 @@ func ocmShareCreateCommand() *command {
 		}
 
 		if !*webdav && !*webapp && !*datatx {
-			*webdav = true
+			return errors.New("No access method chosen. Available methods: webdav, webapp, datatx\n" + cmd.Usage())
 		}
 
 		ctx := getAuthContext()
