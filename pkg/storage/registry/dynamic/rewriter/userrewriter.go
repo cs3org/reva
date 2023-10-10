@@ -24,7 +24,7 @@ import (
 	"errors"
 	"strings"
 
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 )
 
@@ -51,7 +51,7 @@ func (ur UserRewriter) GetAlias(ctx context.Context, route string) string {
 		return route
 	}
 
-	if u, ok := ctxpkg.ContextGetUser(ctx); ok {
+	if u, ok := appctx.ContextGetUser(ctx); ok {
 		return templates.WithUser(u, tpl)
 	}
 

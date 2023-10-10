@@ -50,8 +50,8 @@ type dynamic struct {
 }
 
 type config struct {
-	Rules      map[string]string `mapstructure:"rules" docs:"nil;A map from mountID to provider address"`
-	Rewrites   map[string]string `mapstructure:"rewrites" docs:"nil;A map from a path to an template alias to use when resolving"`
+	Rules      map[string]string `docs:"nil;A map from mountID to provider address"                       mapstructure:"rules"`
+	Rewrites   map[string]string `docs:"nil;A map from a path to an template alias to use when resolving" mapstructure:"rewrites"`
 	HomePath   string            `mapstructure:"home_path"`
 	DBUsername string            `mapstructure:"db_username"`
 	DBPassword string            `mapstructure:"db_password"`

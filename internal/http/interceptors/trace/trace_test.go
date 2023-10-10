@@ -1,3 +1,21 @@
+// Copyright 2018-2023 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
 package trace
 
 import (
@@ -15,15 +33,15 @@ type testPair struct {
 
 func TestGetTrace(t *testing.T) {
 	pairs := []*testPair{
-		&testPair{
+		{
 			r: newRequest(context.Background(), map[string]string{"X-Trace-ID": "def"}),
 			e: "def",
 		},
-		&testPair{
+		{
 			r: newRequest(context.Background(), map[string]string{"X-Request-ID": "abc"}),
 			e: "abc",
 		},
-		&testPair{
+		{
 			r: newRequest(trace.Set(context.Background(), "fgh"), nil),
 			e: "fgh",
 		},
@@ -37,7 +55,6 @@ func TestGetTrace(t *testing.T) {
 			return
 		}
 	}
-
 }
 
 func newRequest(ctx context.Context, headers map[string]string) *http.Request {
@@ -54,5 +71,4 @@ func TestGenerateTrace(t *testing.T) {
 		t.Fatal("expected random generated UUID 36 chars trace ID but got:" + got)
 		return
 	}
-
 }
