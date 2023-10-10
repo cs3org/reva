@@ -2,6 +2,6 @@
 
 set -e
 
-export EFSS1=nextcloud
-export EFSS2=owncloud
+export EFSS1=cernbox
+export EFSS2=nextcloud
 "./scripts/testing-sciencemesh.sh"
