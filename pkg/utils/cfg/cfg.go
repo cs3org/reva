@@ -22,7 +22,6 @@ import (
 	"errors"
 	"reflect"
 
-	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
@@ -86,5 +85,5 @@ func translateError(err error, trans ut.Translator) error {
 	for _, err := range errs {
 		translated = append(translated, errors.New(err.Translate(trans)))
 	}
-	return errtypes.Join(translated...)
+	return errors.Join(translated...)
 }
