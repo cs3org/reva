@@ -16,11 +16,16 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package dynamic_test
 
 import (
-	// Load core storage broker drivers.
-	_ "github.com/cs3org/reva/pkg/storage/registry/dynamic"
-	_ "github.com/cs3org/reva/pkg/storage/registry/static"
-	// Add your own here.
+	"testing"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
+
+func TestSql(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Dynamic driver Suite")
+}
