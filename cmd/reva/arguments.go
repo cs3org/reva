@@ -217,7 +217,7 @@ func executeCommand(cmd *command, args ...string) (bytes.Buffer, error) {
 		if err != nil {
 			return b, err
 		}
-	case <-time.After(5000 * time.Millisecond):
+	case <-time.After(15000 * time.Millisecond):
 		return b, errors.New("command timed out")
 	}
 	return b, nil
