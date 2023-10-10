@@ -35,7 +35,7 @@ prefix = ""
 # at the files/<username> endpoint? what about migration? separate reva instance
 files_namespace = "/"
 
-"allow_depth_infinity" = true
+allow_depth_infinity = true
 
 
 # similar to the dav/files endpoint we can configure a prefix for the old webdav endpoint

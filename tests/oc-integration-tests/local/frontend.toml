@@ -55,6 +55,8 @@ files_namespace = "/users/{{.Id.OpaqueId}}"
 webdav_namespace = "/users/{{.Id.OpaqueId}}"
 machine_auth_apikey = "change-me-please"
 
+allow_depth_infinity = true
+
 # serve /ocs which contains the sharing and user provisioning api of owncloud classic
 [http.services.ocs]
 machine_auth_apikey = "change-me-please"
