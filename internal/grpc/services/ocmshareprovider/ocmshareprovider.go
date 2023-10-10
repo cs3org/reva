@@ -196,7 +196,7 @@ func (s *service) getWebdavProtocol(ctx context.Context, share *ocm.Share, m *oc
 func (s *service) getWebappProtocol(share *ocm.Share) *ocmd.Webapp {
 	var b strings.Builder
 	if err := s.webappTmpl.Execute(&b, share); err != nil {
-		panic(err)
+		return nil
 	}
 	return &ocmd.Webapp{
 		URITemplate: b.String(),
@@ -217,7 +217,7 @@ func (s *service) getDataTransferProtocol(ctx context.Context, share *ocm.Share)
 		},
 	})
 	if err != nil {
-		panic(err)
+		return nil
 	}
 
 	err = s.walker.Walk(ctx, statRes.GetInfo().GetId(), func(path string, info *providerpb.ResourceInfo, err error) error {
@@ -227,7 +227,7 @@ func (s *service) getDataTransferProtocol(ctx context.Context, share *ocm.Share)
 		return nil
 	})
 	if err != nil {
-		panic(err)
+		return nil
 	}
 	return &ocmd.Datatx{
 		SourceURI: s.webdavURL(ctx, share),
@@ -238,13 +238,17 @@ func (s *service) getDataTransferProtocol(ctx context.Context, share *ocm.Share)
 func (s *service) getProtocols(ctx context.Context, share *ocm.Share) ocmd.Protocols {
 	var p ocmd.Protocols
 	for _, m := range share.AccessMethods {
+		var newProtocol ocmd.Protocol
 		switch t := m.Term.(type) {
 		case *ocm.AccessMethod_WebdavOptions:
-			p = append(p, s.getWebdavProtocol(ctx, share, t))
+			newProtocol = s.getWebdavProtocol(ctx, share, t)
 		case *ocm.AccessMethod_WebappOptions:
-			p = append(p, s.getWebappProtocol(share))
+			newProtocol = s.getWebappProtocol(share)
 		case *ocm.AccessMethod_TransferOptions:
-			p = append(p, s.getDataTransferProtocol(ctx, share))
+			newProtocol = s.getDataTransferProtocol(ctx, share)
+		}
+		if newProtocol != nil {
+			p = append(p, newProtocol)
 		}
 	}
 	return p
@@ -253,9 +257,7 @@ func (s *service) getProtocols(ctx context.Context, share *ocm.Share) ocmd.Proto
 func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest) (*ocm.CreateOCMShareResponse, error) {
 	gatewayClient, err := s.gatewaySelector.Next()
 	if err != nil {
-		return &ocm.CreateOCMShareResponse{
-			Status: status.NewInternal(ctx, err.Error()),
-		}, err
+		return nil, err
 	}
 	statRes, err := gatewayClient.Stat(ctx, &providerpb.StatRequest{
 		Ref: &providerpb.Reference{
@@ -263,9 +265,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		},
 	})
 	if err != nil {
-		return &ocm.CreateOCMShareResponse{
-			Status: status.NewInternal(ctx, err.Error()),
-		}, err
+		return nil, err
 	}
 
 	if statRes.Status.Code != rpc.Code_CODE_OK {

@@ -274,7 +274,9 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 				if cred, ok := credChain[key]; ok {
 					cred.AddWWWAuthenticate(w, r, conf.Realm)
 				} else {
-					panic("auth credential strategy: " + key + "must have been loaded in init method")
+					log.Error().Msg("auth credential strategy: " + key + "must have been loaded in init method")
+					w.WriteHeader(http.StatusInternalServerError)
+					return nil, errtypes.InternalError("no credentials found")
 				}
 			}
 			w.WriteHeader(http.StatusUnauthorized)
