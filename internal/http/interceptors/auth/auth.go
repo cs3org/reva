@@ -233,7 +233,7 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 		return nil, err
 	}
 
-	// reva token or auth token can be passed using the same tecnique (for example bearer)
+	// reva token or auth token can be passed using the same technique (for example bearer)
 	// before validating it against an auth provider, we can check directly if it's a reva
 	// token and if not try to use it for authenticating the user.
 	for _, tokenStrategy := range tokenStrategies {
