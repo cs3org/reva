@@ -32,7 +32,6 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 type Config func(*Server)
@@ -278,7 +277,6 @@ func (s *Server) getHandler() (http.Handler, error) {
 		handler = m(handler)
 	}
 
-	handler = otelhttp.NewHandler(handler, "http")
 	return handler, nil
 }
 
