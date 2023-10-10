@@ -20,33 +20,32 @@ package ctx
 
 import (
 	"context"
-  "time"
+	"time"
 )
 
 type cleanCtx struct {
-  ctx context.Context
+	ctx context.Context
 }
 
 // ContextGetClean returns a new, clean context derived by the given one.
 func ContextGetClean(ctx context.Context) context.Context {
-	return cleanCtx {
-    ctx: ctx,
-  }
+	return cleanCtx{
+		ctx: ctx,
+	}
 }
 
-
-func (c cleanCtx) Deadline () (time.Time, bool) {
-  return c.ctx.Deadline()
+func (c cleanCtx) Deadline() (time.Time, bool) {
+	return c.ctx.Deadline()
 }
 
-func (c cleanCtx) Done () <-chan struct{} {
-  return c.ctx.Done()
+func (c cleanCtx) Done() <-chan struct{} {
+	return c.ctx.Done()
 }
 
-func (c cleanCtx) Err () error {
-  return c.ctx.Err()
+func (c cleanCtx) Err() error {
+	return c.ctx.Err()
 }
 
-func (c cleanCtx) Value (key any) any {
-  return nil
+func (c cleanCtx) Value(key any) any {
+	return nil
 }
