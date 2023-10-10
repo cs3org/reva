@@ -48,7 +48,7 @@ files_namespace = "/users/{{.Id.OpaqueId}}"
 webdav_namespace = "/users/{{.Id.OpaqueId}}"
 machine_auth_apikey = "change-me-please"
 
-"allow_depth_infinity" = true
+allow_depth_infinity = true
 
 [http.services.ocs]
 machine_auth_apikey = "change-me-please"
