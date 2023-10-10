@@ -463,7 +463,7 @@ var _ = Describe("Manager", func() {
 				})
 
 				It("list the user shares", func() {
-					rshares, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
+					rshares, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{}, nil)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(rshares).ToNot(BeNil())
 					Expect(len(rshares)).To(Equal(1))
@@ -493,7 +493,7 @@ var _ = Describe("Manager", func() {
 				})
 
 				It("list the group share", func() {
-					rshares, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
+					rshares, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{}, nil)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(rshares).ToNot(BeNil())
 					Expect(len(rshares)).To(Equal(1))
@@ -531,7 +531,7 @@ var _ = Describe("Manager", func() {
 				})
 
 				It("list the user and shares", func() {
-					rshares, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
+					rshares, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{}, nil)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(rshares).ToNot(BeNil())
 					Expect(len(rshares)).To(Equal(2))
@@ -545,7 +545,7 @@ var _ = Describe("Manager", func() {
 								GranteeType: provider.GranteeType_GRANTEE_TYPE_USER,
 							},
 						},
-					})
+					}, nil)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(rshares).ToNot(BeNil())
 					Expect(len(rshares)).To(Equal(1))
@@ -560,7 +560,7 @@ var _ = Describe("Manager", func() {
 								GranteeType: provider.GranteeType_GRANTEE_TYPE_GROUP,
 							},
 						},
-					})
+					}, nil)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(rshares).ToNot(BeNil())
 					Expect(len(rshares)).To(Equal(1))

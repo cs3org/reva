@@ -91,25 +91,25 @@ func (_m *Manager) GetShare(ctx context.Context, ref *collaborationv1beta1.Share
 	return r0, r1
 }
 
-// ListReceivedShares provides a mock function with given fields: ctx, filters
-func (_m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborationv1beta1.Filter) ([]*collaborationv1beta1.ReceivedShare, error) {
-	ret := _m.Called(ctx, filters)
+// ListReceivedShares provides a mock function with given fields: ctx, filters, forUser
+func (_m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborationv1beta1.Filter, forUser *userv1beta1.UserId) ([]*collaborationv1beta1.ReceivedShare, error) {
+	ret := _m.Called(ctx, filters, forUser)
 
 	var r0 []*collaborationv1beta1.ReceivedShare
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, []*collaborationv1beta1.Filter) ([]*collaborationv1beta1.ReceivedShare, error)); ok {
-		return rf(ctx, filters)
+	if rf, ok := ret.Get(0).(func(context.Context, []*collaborationv1beta1.Filter, *userv1beta1.UserId) ([]*collaborationv1beta1.ReceivedShare, error)); ok {
+		return rf(ctx, filters, forUser)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, []*collaborationv1beta1.Filter) []*collaborationv1beta1.ReceivedShare); ok {
-		r0 = rf(ctx, filters)
+	if rf, ok := ret.Get(0).(func(context.Context, []*collaborationv1beta1.Filter, *userv1beta1.UserId) []*collaborationv1beta1.ReceivedShare); ok {
+		r0 = rf(ctx, filters, forUser)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*collaborationv1beta1.ReceivedShare)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, []*collaborationv1beta1.Filter) error); ok {
-		r1 = rf(ctx, filters)
+	if rf, ok := ret.Get(1).(func(context.Context, []*collaborationv1beta1.Filter, *userv1beta1.UserId) error); ok {
+		r1 = rf(ctx, filters, forUser)
 	} else {
 		r1 = ret.Error(1)
 	}
