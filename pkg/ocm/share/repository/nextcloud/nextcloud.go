@@ -83,8 +83,8 @@ type EfssGrantee struct {
 // EfssShare is a representation of a federated share as exchanged with the EFSS. It includes
 // all needed fields to represent a received federated share as well, see below.
 type EfssShare struct {
-	ID         *ocm.ShareId `json:"id" validate:"required"`
-	Name       string       `json:"name" validate:"required"`
+	ID         *ocm.ShareId `json:"id"    validate:"required"`
+	Name       string       `json:"name"  validate:"required"`
 	Token      string       `json:"token"`
 	ResourceID struct {
 		OpaqueID string `json:"opaque_id"`
@@ -108,10 +108,10 @@ type EfssShare struct {
 	Grantee struct {
 		ID *userpb.UserId `json:"id" validate:"required"`
 	} `json:"grantee" validate:"required"`
-	Owner   *userpb.User       `json:"owner" validate:"required"`
+	Owner   *userpb.User       `json:"owner"   validate:"required"`
 	Creator *userpb.User       `json:"creator" validate:"required"`
-	Ctime   *typespb.Timestamp `json:"ctime" validate:"required"`
-	Mtime   *typespb.Timestamp `json:"mtime" validate:"required"`
+	Ctime   *typespb.Timestamp `json:"ctime"   validate:"required"`
+	Mtime   *typespb.Timestamp `json:"mtime"   validate:"required"`
 }
 
 // ReceivedEfssShare is a representation of a received federated share as exchanged with the EFSS.
