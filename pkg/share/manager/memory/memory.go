@@ -290,11 +290,6 @@ func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 	user := ctxpkg.ContextMustGetUser(ctx)
 	if user.GetId().GetType() == userv1beta1.UserType_USER_TYPE_SERVICE {
 		// TODO: gateway missing!
-		// u, err := utils.GetUser(forUser, nil)
-		// if err != nil {
-		// return nil, errtypes.BadRequest("user not found")
-		// }
-		// user = u
 		return nil, errors.New("can't use inmem share manager and service accounts")
 	}
 	for _, s := range m.shares {
