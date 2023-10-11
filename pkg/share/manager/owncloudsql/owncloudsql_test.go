@@ -134,6 +134,7 @@ var _ = Describe("SQL manager", func() {
 				}
 			},
 			func(_ context.Context, username string) error { return nil })
+		userConverter.On("GetUser", mock.Anything, mock.Anything).Return(nil, nil)
 		mgr, err = sqlmanager.New("sqlite3", sqldb, "abcde", userConverter)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -246,7 +247,7 @@ var _ = Describe("SQL manager", func() {
 				)
 				Expect(err).ToNot(HaveOccurred())
 
-				shares, err := mgr.ListReceivedShares(ctx, []*collaboration.Filter{})
+				shares, err := mgr.ListReceivedShares(ctx, []*collaboration.Filter{}, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(shares)).To(Equal(2))
 				groupShare := shares[1]
@@ -273,7 +274,7 @@ var _ = Describe("SQL manager", func() {
 				)
 				Expect(err).ToNot(HaveOccurred())
 
-				shares, err := mgr.ListReceivedShares(ctx, []*collaboration.Filter{})
+				shares, err := mgr.ListReceivedShares(ctx, []*collaboration.Filter{}, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(shares)).To(Equal(2))
 				groupShare := shares[1]
@@ -307,7 +308,7 @@ var _ = Describe("SQL manager", func() {
 				)
 				Expect(err).ToNot(HaveOccurred())
 
-				shares, err := mgr.ListReceivedShares(ctx, []*collaboration.Filter{})
+				shares, err := mgr.ListReceivedShares(ctx, []*collaboration.Filter{}, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(shares)).To(Equal(2))
 				groupShare := shares[1]
@@ -332,7 +333,7 @@ var _ = Describe("SQL manager", func() {
 				)
 				Expect(err).ToNot(HaveOccurred())
 
-				shares, err := mgr.ListReceivedShares(ctx, []*collaboration.Filter{})
+				shares, err := mgr.ListReceivedShares(ctx, []*collaboration.Filter{}, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(shares)).To(Equal(1))
 			})
@@ -340,14 +341,14 @@ var _ = Describe("SQL manager", func() {
 
 		It("lists received shares", func() {
 			loginAs(otherUser)
-			shares, err := mgr.ListReceivedShares(ctx, []*collaboration.Filter{})
+			shares, err := mgr.ListReceivedShares(ctx, []*collaboration.Filter{}, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(1))
 		})
 
 		It("works with filters", func() {
 			loginAs(otherUser)
-			shares, err := mgr.ListReceivedShares(ctx, []*collaboration.Filter{{Type: collaboration.Filter_TYPE_EXCLUDE_DENIALS}})
+			shares, err := mgr.ListReceivedShares(ctx, []*collaboration.Filter{{Type: collaboration.Filter_TYPE_EXCLUDE_DENIALS}}, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(1))
 		})
@@ -486,7 +487,7 @@ var _ = Describe("SQL manager", func() {
 	Describe("Unshare", func() {
 		It("deletes shares", func() {
 			loginAs(otherUser)
-			shares, err := mgr.ListReceivedShares(ctx, []*collaboration.Filter{})
+			shares, err := mgr.ListReceivedShares(ctx, []*collaboration.Filter{}, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(1))
 
@@ -499,7 +500,7 @@ var _ = Describe("SQL manager", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			loginAs(otherUser)
-			shares, err = mgr.ListReceivedShares(ctx, []*collaboration.Filter{})
+			shares, err = mgr.ListReceivedShares(ctx, []*collaboration.Filter{}, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(0))
 		})

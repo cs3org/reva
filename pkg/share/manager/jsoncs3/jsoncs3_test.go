@@ -715,7 +715,7 @@ var _ = Describe("Jsoncs3", func() {
 
 		Describe("ListReceivedShares", func() {
 			It("lists the received shares", func() {
-				received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
+				received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{}, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(received)).To(Equal(1))
 				Expect(received[0].Share.ResourceId).To(Equal(sharedResource.Id))
@@ -723,7 +723,7 @@ var _ = Describe("Jsoncs3", func() {
 			})
 
 			It("syncronizes the provider cache before listing", func() {
-				received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
+				received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{}, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(received)).To(Equal(1))
 				Expect(received[0].Share.Permissions.Permissions.InitiateFileUpload).To(BeFalse())
@@ -743,7 +743,7 @@ var _ = Describe("Jsoncs3", func() {
 				cache.Shares[share.Id.OpaqueId].Permissions.Permissions.InitiateFileUpload = false
 
 				cache.Etag = "reset1" // trigger reload
-				received, err = m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
+				received, err = m.ListReceivedShares(granteeCtx, []*collaboration.Filter{}, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(received)).To(Equal(1))
 				Expect(received[0].Share.Permissions.Permissions.InitiateFileUpload).To(BeTrue())
@@ -753,7 +753,7 @@ var _ = Describe("Jsoncs3", func() {
 				m, err := jsoncs3.New(storage, nil, 0, nil, 0) // Reset in-memory cache
 				Expect(err).ToNot(HaveOccurred())
 
-				received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
+				received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{}, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(received)).To(Equal(1))
 			})
@@ -762,7 +762,7 @@ var _ = Describe("Jsoncs3", func() {
 				share2, err := m.Share(ctx, sharedResource2, grant)
 				Expect(err).ToNot(HaveOccurred())
 
-				received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
+				received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{}, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(received)).To(Equal(2))
 
@@ -773,7 +773,7 @@ var _ = Describe("Jsoncs3", func() {
 							ResourceId: sharedResource.Id,
 						},
 					},
-				})
+				}, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(received)).To(Equal(1))
 				Expect(received[0].Share.ResourceId).To(Equal(sharedResource.Id))
@@ -787,7 +787,7 @@ var _ = Describe("Jsoncs3", func() {
 							ResourceId: sharedResource2.Id,
 						},
 					},
-				})
+				}, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(received)).To(Equal(1))
 				Expect(received[0].Share.ResourceId).To(Equal(sharedResource2.Id))
@@ -807,7 +807,7 @@ var _ = Describe("Jsoncs3", func() {
 				})
 
 				It("lists the group share", func() {
-					received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
+					received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{}, nil)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(len(received)).To(Equal(2))
 					ids := []string{}
@@ -821,7 +821,7 @@ var _ = Describe("Jsoncs3", func() {
 					m, err := jsoncs3.New(storage, nil, 0, nil, 0) // Reset in-memory cache
 					Expect(err).ToNot(HaveOccurred())
 
-					received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
+					received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{}, nil)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(len(received)).To(Equal(2))
 					ids := []string{}
@@ -843,7 +843,7 @@ var _ = Describe("Jsoncs3", func() {
 					_, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state"}}, nil)
 					Expect(err).ToNot(HaveOccurred())
 
-					received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
+					received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{}, nil)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(len(received)).To(Equal(2))
 				})

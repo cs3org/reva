@@ -323,7 +323,7 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) (
 }
 
 // we list the shares that are targeted to the user in context or to the user groups.
-func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error) {
+func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter, _ *userpb.UserId) ([]*collaboration.ReceivedShare, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
 	uid := conversions.FormatUserID(user.Id)
 

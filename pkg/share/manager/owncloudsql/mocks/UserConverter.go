@@ -33,6 +33,32 @@ type UserConverter struct {
 	mock.Mock
 }
 
+// GetUser provides a mock function with given fields: userid
+func (_m *UserConverter) GetUser(userid *userv1beta1.UserId) (*userv1beta1.User, error) {
+	ret := _m.Called(userid)
+
+	var r0 *userv1beta1.User
+	var r1 error
+	if rf, ok := ret.Get(0).(func(*userv1beta1.UserId) (*userv1beta1.User, error)); ok {
+		return rf(userid)
+	}
+	if rf, ok := ret.Get(0).(func(*userv1beta1.UserId) *userv1beta1.User); ok {
+		r0 = rf(userid)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*userv1beta1.User)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(*userv1beta1.UserId) error); ok {
+		r1 = rf(userid)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // UserIDToUserName provides a mock function with given fields: ctx, userid
 func (_m *UserConverter) UserIDToUserName(ctx context.Context, userid *userv1beta1.UserId) (string, error) {
 	ret := _m.Called(ctx, userid)
