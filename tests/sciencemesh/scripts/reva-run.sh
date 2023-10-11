@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
 # create new dir and copy relevant configs there.
+rm -rf /etc/revad
 mkdir -p /etc/revad
-if [[ "${HOST::-1}" -eq "revacernbox" ]]; then
+if [ "${HOST::-1}" == "revacernbox" ]; then
   cp /configs/cernbox/* /etc/revad/
 else
   cp /configs/revad/* /etc/revad/

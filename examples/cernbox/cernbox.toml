@@ -57,7 +57,7 @@ mime_types = [
 
 [[grpc.services.appprovider]]
 driver = "wopi"
-custom_mime_types_json = "custom-mime-types-demo.json"
+custom_mime_types_json = "/etc/revad/custom-mime-types-demo.json"
 mime_types = ["application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet", "application/vnd.oasis.opendocument.presentation", "text/rtf"]
 app_provider_url = "{{ grpc.services.appprovider[0].address }}"
 language = "en-GB"
@@ -72,7 +72,7 @@ app_int_url = "http://collabora.docker:9980"
 
 # [[grpc.services.appprovider]]
 # driver = "wopi"
-# custom_mime_types_json = "custom-mime-types-demo.json"
+# custom_mime_types_json = "/etc/revad/custom-mime-types-demo.json"
 # mime_types = ["text/markdown", "application/compressed-markdown", "text/plain"]
 # app_provider_url = "{{ grpc.services.appprovider[1].address }}"
 #
@@ -98,7 +98,7 @@ ocmshares = "{{ grpc.services.authprovider[2].address }}"
 auth_manager = "json"
 
 [grpc.services.authprovider.auth_managers.json]
-users = "users.demo.json"
+users = "/etc/revad/users.demo.json"
 
 [[grpc.services.authprovider]]
 auth_manager = "machine"
@@ -190,14 +190,14 @@ driver = "json"
 
 [grpc.services.ocmproviderauthorizer.drivers.json]
 # this is used by the docker-based test deployment, not in production
-providers = "providers.testnet.json"
+providers = "/etc/revad/providers.testnet.json"
 verify_request_hostname = true
 
 [grpc.services.userprovider]
 driver = "json"
 
 [grpc.services.userprovider.drivers.json]
-users = "users.demo.json"
+users = "/etc/revad/users.demo.json"
 
 [grpc.services.datatx]
 txdriver = "rclone"
@@ -286,6 +286,10 @@ address = ":443"
 address = ":443"
 
 [http.services.sysinfo]
+
+# TODO uncomment this once the reva plugin to serve the UI is ready
+# [http.services.ui]
+# address = ":443"
 
 [http.middlewares.cors]
 [http.middlewares.log]

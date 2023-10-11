@@ -10,7 +10,7 @@ REPO_OWNCLOUD_APP=https://github.com/sciencemesh/nc-sciencemesh
 BRANCH_OWNCLOUD_APP=owncloud
 
 REPO_WOPISERVER=https://github.com/cs3org/wopiserver
-TAG_WOPISERVER=v10.2.0sm
+TAG_WOPISERVER=master
 
 # Nextcloud Sciencemesh source code.
 [ ! -d "nextcloud-sciencemesh" ] &&                                             \
@@ -39,11 +39,10 @@ TAG_WOPISERVER=v10.2.0sm
     composer install
 
 # wopiserver source code for the config.
-[ ! -d "wopiserver" ] &&                                                             \
+[ ! -d "wopi-sciencemesh" ] &&                                                       \
     git clone --branch ${TAG_WOPISERVER} ${REPO_WOPISERVER} wopi-sciencemesh         \
     &&                                                                               \
     mkdir -p temp/wopi-1-conf temp/wopi-2-conf &&                                    \
-    cp wopi-sciencemesh/docker/etc/*.cs3.conf temp/wopi-1-conf/wopiserver.conf &&    \
     cp wopi-sciencemesh/wopiserver.conf temp/wopi-1-conf/wopiserver.defaults.conf && \
     echo "shared-secret-2" > temp/wopi-1-conf/iopsecret &&                           \
     echo "wopisecret" > temp/wopi-1-conf/wopisecret &&                               \

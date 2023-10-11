@@ -20,7 +20,7 @@
         <base_url desc="HTTP endpoint for the API server, without /check or /languages postfix at the end." type="string" default=""></base_url>
         <user_name desc="LanguageTool or Duden account username for premium usage." type="string" default=""></user_name>
         <api_key desc="API key provided by LanguageTool or Duden account for premium usage." type="string" default=""></api_key>
-        <ssl_verification desc="Enable or disable SSL verification. You may have to disable it in test environments with self-signed certificates." type="string" default="true"></ssl_verification>
+        <ssl_verification desc="Enable or disable SSL verification. You may have to disable it in test environments with self-signed certificates." type="string" default="false"></ssl_verification>
         <rest_protocol desc="REST API protocol. For LanguageTool leave it blank, for Duden Korrekturserver use the string 'duden'." type="string" default=""></rest_protocol>
     </languagetool>
 

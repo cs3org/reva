@@ -183,7 +183,7 @@ refresh = 900
 
 [grpc.services.ocmproviderauthorizer.drivers.json]
 # this is used by the docker-based test deployment, not in production
-providers = "providers.testnet.json"
+providers = "/etc/revad/providers.testnet.json"
 verify_request_hostname = true
 
 [grpc.services.userprovider]
@@ -282,7 +282,7 @@ address = ":443"
 [http.services.metrics]
 address = ":443"
 metrics_data_driver_type = "json"
-metrics_data_location = "metrics.json"
+metrics_data_location = "/etc/revad/metrics.json"
 metrics_record_interval = 5000
 
 [http.services.sysinfo]
