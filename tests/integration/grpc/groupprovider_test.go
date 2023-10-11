@@ -37,7 +37,7 @@ import (
 
 var _ = Describe("group providers", func() {
 	var (
-		dependencies map[string]string
+		dependencies []RevadConfig
 		revads       map[string]*Revad
 
 		existingIdp string
@@ -243,8 +243,11 @@ var _ = Describe("group providers", func() {
 
 	Describe("the json groupprovider", func() {
 		BeforeEach(func() {
-			dependencies = map[string]string{
-				"groups": "groupprovider-json.toml",
+			dependencies = []RevadConfig{
+				{
+					Name:   "groups",
+					Config: "groupprovider-json.toml",
+				},
 			}
 			existingIdp = "http://localhost:20080"
 		})
@@ -260,8 +263,11 @@ var _ = Describe("group providers", func() {
 			if runldap == "" {
 				Skip("Skipping LDAP tests")
 			}
-			dependencies = map[string]string{
-				"groups": "groupprovider-ldap.toml",
+			dependencies = []RevadConfig{
+				{
+					Name:   "groups",
+					Config: "groupprovider-ldap.toml",
+				},
 			}
 			existingIdp = "http://localhost:20080"
 		})

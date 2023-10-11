@@ -52,7 +52,7 @@ import (
 // provider to be used in the assertion functions.
 var _ = Describe("gateway", func() {
 	var (
-		dependencies = map[string]string{}
+		dependencies = []RevadConfig{}
 		variables    = map[string]string{}
 		revads       = map[string]*Revad{}
 
@@ -91,12 +91,22 @@ var _ = Describe("gateway", func() {
 	)
 
 	BeforeEach(func() {
-		dependencies = map[string]string{
-			"gateway":     "gateway.toml",
-			"users":       "userprovider-json.toml",
-			"storage":     "storageprovider-ocis.toml",
-			"storage2":    "storageprovider-ocis.toml",
-			"permissions": "permissions-ocis-ci.toml",
+		dependencies = []RevadConfig{
+			{
+				Name:   "gateway",
+				Config: "gateway.toml"},
+			{
+				Name:   "users",
+				Config: "userprovider-json.toml"},
+			{
+				Name:   "storage",
+				Config: "storageprovider-ocis.toml"},
+			{
+				Name:   "storage2",
+				Config: "storageprovider-ocis.toml"},
+			{
+				Name:   "permissions",
+				Config: "permissions-ocis-ci.toml"},
 		}
 	})
 
@@ -163,13 +173,13 @@ var _ = Describe("gateway", func() {
 		)
 
 		BeforeEach(func() {
-			dependencies = map[string]string{
-				"gateway":     "gateway-sharded.toml",
-				"users":       "userprovider-json.toml",
-				"homestorage": "storageprovider-ocis.toml",
-				"storage":     "storageprovider-ocis.toml",
-				"storage2":    "storageprovider-ocis.toml",
-				"permissions": "permissions-ocis-ci.toml",
+			dependencies = []RevadConfig{
+				{Name: "gateway", Config: "gateway-sharded.toml"},
+				{Name: "users", Config: "userprovider-json.toml"},
+				{Name: "homestorage", Config: "storageprovider-ocis.toml"},
+				{Name: "storage", Config: "storageprovider-ocis.toml"},
+				{Name: "storage2", Config: "storageprovider-ocis.toml"},
+				{Name: "permissions", Config: "permissions-ocis-ci.toml"},
 			}
 		})
 
@@ -356,12 +366,12 @@ var _ = Describe("gateway", func() {
 		)
 
 		BeforeEach(func() {
-			dependencies = map[string]string{
-				"gateway":     "gateway.toml",
-				"users":       "userprovider-json.toml",
-				"storage":     "storageprovider-ocis.toml",
-				"storage2":    "storageprovider-ocis.toml",
-				"permissions": "permissions-ocis-ci.toml",
+			dependencies = []RevadConfig{
+				{Name: "gateway", Config: "gateway.toml"},
+				{Name: "users", Config: "userprovider-json.toml"},
+				{Name: "storage", Config: "storageprovider-ocis.toml"},
+				{Name: "storage2", Config: "storageprovider-ocis.toml"},
+				{Name: "permissions", Config: "permissions-ocis-ci.toml"},
 			}
 		})
 

@@ -18,7 +18,7 @@ require (
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20230516150832-730ac860c71d
+	github.com/cs3org/go-cs3apis v0.0.0-20230727093620-0f4399be4543
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/emvi/iso-639-1 v1.0.1
 	github.com/eventials/go-tus v0.0.0-20220610120217-05d0564bb571
@@ -29,6 +29,9 @@ require (
 	github.com/go-micro/plugins/v4/server/http v1.2.1
 	github.com/go-micro/plugins/v4/store/nats-js v1.1.0
 	github.com/go-micro/plugins/v4/store/redis v1.2.1-0.20230510195111-07cd57e1bc9d
+	github.com/go-playground/locales v0.13.0
+	github.com/go-playground/universal-translator v0.17.0
+	github.com/go-playground/validator/v10 v10.4.1
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/gofrs/flock v0.8.1
@@ -54,6 +57,7 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/nats-io/nats-server/v2 v2.9.19
 	github.com/nats-io/nats.go v1.27.0
+	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/ginkgo/v2 v2.11.0
 	github.com/onsi/gomega v1.27.8
 	github.com/owncloud/ocis/v2 v2.0.1-0.20230606150602-25d7dae4667b
@@ -64,7 +68,6 @@ require (
 	github.com/rogpeppe/go-internal v1.10.0
 	github.com/rs/cors v1.9.0
 	github.com/rs/zerolog v1.29.1
-	github.com/sciencemesh/meshdirectory-web v1.0.4
 	github.com/sethvargo/go-password v0.2.0
 	github.com/shamaton/msgpack/v2 v2.1.1
 	github.com/stretchr/testify v1.8.4
@@ -83,7 +86,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.16.0
 	go.opentelemetry.io/otel/trace v1.16.0
 	golang.org/x/crypto v0.11.0
-	golang.org/x/exp v0.0.0-20221026004748-78e5e7837ae6
+	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 	golang.org/x/oauth2 v0.10.0
 	golang.org/x/sync v0.2.0
 	golang.org/x/sys v0.10.0
@@ -155,6 +158,7 @@ require (
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/klauspost/compress v1.16.5 // indirect
 	github.com/klauspost/cpuid/v2 v2.1.0 // indirect
+	github.com/leodido/go-urn v1.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect
@@ -224,4 +228,4 @@ require (
 )
 
 // the replacement build is based on https://github.com/dragonchaser/cs3apis/tree/master
-replace github.com/cs3org/go-cs3apis => github.com/dragonchaser/go-cs3apis v0.0.0-20230918130959-ae732d4b8147
+replace github.com/cs3org/go-cs3apis => github.com/aduffeck/go-cs3apis v0.0.0-20231009082215-ad45e19edac0

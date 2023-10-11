@@ -1,0 +1,37 @@
+[log]
+mode = "json"
+
+[shared]
+gatewaysvc = "{{cernboxgw_address}}"
+
+[http]
+address = "{{grpc_address}}"
+
+[http.services.ocmd]
+
+[http.services.sciencemesh]
+provider_domain = "{{cernboxhttp_address}}"
+mesh_directory_url = "http://meshdir"
+smtp_credentials = {}
+
+[http.middlewares.cors]
+
+[http.middlewares.providerauthorizer]
+driver = "json"
+
+[http.middlewares.providerauthorizer.drivers.json]
+providers = "fixtures/ocm-providers.demo.json"
+
+[http.services.datagateway]
+
+[http.services.dataprovider]
+driver = "ocis"
+
+[http.services.dataprovider.drivers.ocis]
+root = "{{cernboxgw_root}}/storage"
+treetime_accounting = true
+treesize_accounting = true
+enable_home = true
+permissionssvc = "{{permissions_address}}"
+
+[http.services.ocdav]

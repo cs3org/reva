@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -69,7 +69,7 @@ func ocmInviteForwardCommand() *command {
 			return formatError(providerInfo.Status)
 		}
 
-		forwardToken, err := client.ForwardInvite(ctx, &invitepb.ForwardInviteRequest{
+		res, err := client.ForwardInvite(ctx, &invitepb.ForwardInviteRequest{
 			InviteToken:          inviteToken,
 			OriginSystemProvider: providerInfo.ProviderInfo,
 		})
@@ -77,10 +77,10 @@ func ocmInviteForwardCommand() *command {
 			return err
 		}
 
-		if forwardToken.Status.Code != rpc.Code_CODE_OK {
-			return formatError(forwardToken.Status)
+		if res.Status.Code != rpc.Code_CODE_OK {
+			return formatError(res.Status)
 		}
-		fmt.Println("OK")
+		fmt.Println(res)
 		return nil
 	}
 	return cmd

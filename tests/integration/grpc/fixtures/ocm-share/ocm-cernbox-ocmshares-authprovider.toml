@@ -1,0 +1,13 @@
+[log]
+mode = "json"
+
+[shared]
+gatewaysvc = "{{cernboxgw_address}}"
+
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.authprovider]
+auth_manager = "ocmshares"
+
+[grpc.services.authprovider.auth_managers.ocmshares]
