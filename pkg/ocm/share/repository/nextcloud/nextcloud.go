@@ -87,9 +87,9 @@ type EfssShare struct {
 	Name       string       `json:"name"  validate:"required"`
 	Token      string       `json:"token"`
 	ResourceID struct {
-		OpaqueID string `json:"opaque_id"`
+		OpaqueID string `json:"opaque_id" validate:"required"`
 	} `json:"resource_id" validate:"required"`
-	ResourceType  string `json:"resource_type"`
+	ResourceType  string `json:"resource_type"   validate:"omitempty"`
 	RemoteShareID string `json:"remote_share_id" validate:"required"`
 	Protocols     struct {
 		WebDAV struct {
@@ -181,7 +181,7 @@ func (sm *Manager) efssShareToOcm(resp *EfssShare) *ocm.Share {
 	// Parse the JSON struct returned by the PHP SM app into an OCM share object
 
 	// first generate the map of access methods, assuming WebDAV is always present
-	var am = make([]*ocm.AccessMethod, 1, 3)
+	var am = make([]*ocm.AccessMethod, 0, 3)
 	am = append(am, share.NewWebDavAccessMethod(conversions.RoleFromOCSPermissions(
 		conversions.Permissions(resp.Protocols.WebDAV.Permissions)).CS3ResourcePermissions()))
 	if resp.Protocols.WebApp.ViewMode != "" {
@@ -203,7 +203,10 @@ func (sm *Manager) efssShareToOcm(resp *EfssShare) *ocm.Share {
 		Grantee: &provider.Grantee{
 			Type: provider.GranteeType_GRANTEE_TYPE_USER,
 			Id: &provider.Grantee_UserId{
-				UserId: resp.Grantee.ID,
+				UserId: &userpb.UserId{
+					OpaqueId: resp.Grantee.ID.OpaqueId,
+					Idp:      resp.Grantee.ID.Idp,
+				},
 			},
 		},
 		Owner: &userpb.UserId{
@@ -322,7 +325,7 @@ func efssReceivedShareToOcm(resp *ReceivedEfssShare) *ocm.ReceivedShare {
 	// Parse the JSON struct returned by the PHP SM app into an OCM received share object
 
 	// first generate the map of protocols, assuming WebDAV is always present
-	var proto = make([]*ocm.Protocol, 1, 3)
+	var proto = make([]*ocm.Protocol, 0, 3)
 	proto = append(proto, share.NewWebDAVProtocol(resp.Share.Protocols.WebDAV.URI, resp.Share.Token, &ocm.SharePermissions{
 		Permissions: conversions.RoleFromOCSPermissions(conversions.Permissions(resp.Share.Protocols.WebDAV.Permissions)).CS3ResourcePermissions(),
 	}))
@@ -343,12 +346,22 @@ func efssReceivedShareToOcm(resp *ReceivedEfssShare) *ocm.ReceivedShare {
 		Name:          resp.Share.Name,
 		RemoteShareId: resp.Share.RemoteShareID, // sic, see https://github.com/cs3org/reva/pull/3852#discussion_r1189681465
 		Grantee: &provider.Grantee{
+			Type: provider.GranteeType_GRANTEE_TYPE_USER,
 			Id: &provider.Grantee_UserId{
-				UserId: resp.Share.Grantee.ID,
+				UserId: &userpb.UserId{
+					OpaqueId: resp.Share.Grantee.ID.OpaqueId,
+					Idp:      resp.Share.Grantee.ID.Idp,
+				},
 			},
 		},
-		Owner:        resp.Share.Owner.Id,
-		Creator:      resp.Share.Creator.Id,
+		Owner: &userpb.UserId{
+			OpaqueId: resp.Share.Owner.Id.OpaqueId,
+			Idp:      resp.Share.Owner.Id.Idp,
+		},
+		Creator: &userpb.UserId{
+			OpaqueId: resp.Share.Creator.Id.OpaqueId,
+			Idp:      resp.Share.Creator.Id.Idp,
+		},
 		Ctime:        resp.Share.Ctime,
 		Mtime:        resp.Share.Mtime,
 		ShareType:    ocm.ShareType_SHARE_TYPE_USER,

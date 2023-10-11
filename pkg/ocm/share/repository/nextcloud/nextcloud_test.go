@@ -22,6 +22,7 @@ import (
 	"context"
 	"os"
 
+	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -30,11 +31,12 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/scope"
-	masked_share "github.com/cs3org/reva/pkg/ocm/share"
+	ocmshare "github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/repository/nextcloud"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	gomegafmt "github.com/onsi/gomega/format"
 	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/grpc/metadata"
 )
@@ -42,11 +44,13 @@ import (
 func setUpNextcloudServer() (*nextcloud.Manager, *[]string, func()) {
 	var conf *nextcloud.ShareManagerConfig
 
+	gomegafmt.MaxLength = 0
 	ncHost := os.Getenv("NEXTCLOUD")
 	if len(ncHost) == 0 {
 		conf = &nextcloud.ShareManagerConfig{
 			EndPoint: "http://mock.com/apps/sciencemesh/",
 			MockHTTP: true,
+			MountID:  "MockMount",
 		}
 		nc, _ := nextcloud.NewShareManager(conf)
 		called := make([]string, 0)
@@ -58,6 +62,7 @@ func setUpNextcloudServer() (*nextcloud.Manager, *[]string, func()) {
 	conf = &nextcloud.ShareManagerConfig{
 		EndPoint: ncHost + "/apps/sciencemesh/",
 		MockHTTP: false,
+		MountID:  "MockMount",
 	}
 	nc, _ := nextcloud.NewShareManager(conf)
 	return nc, nil, func() {}
@@ -245,9 +250,9 @@ var _ = Describe("Nextcloud", func() {
 	// 	})
 	// })
 
-	// GetShare(ctx context.Context, ref *ocm.ShareReference) (*ocm.Share, error)
-	Describe("GetShare", func() {
-		It("calls the GetShare endpoint", func() {
+	// GetSentShareByToken(ctx context.Context, ref *ocm.ShareReference) (*ocm.Share, error)
+	Describe("GetSentShareByToken", func() {
+		It("calls the GetSentShareByToken endpoint", func() {
 			am, called, teardown := setUpNextcloudServer()
 			defer teardown()
 
@@ -260,9 +265,12 @@ var _ = Describe("Nextcloud", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*share).To(Equal(ocm.Share{
-				Id:         &ocm.ShareId{},
-				ResourceId: &provider.ResourceId{},
-				Name:       "",
+				Id: &ocm.ShareId{},
+				ResourceId: &provider.ResourceId{
+					OpaqueId:  "fileid-/some/path",
+					StorageId: "MockMount",
+				},
+				Name: "test share",
 				Grantee: &provider.Grantee{
 					Type: provider.GranteeType_GRANTEE_TYPE_USER,
 					Id: &provider.Grantee_UserId{
@@ -281,9 +289,9 @@ var _ = Describe("Nextcloud", func() {
 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
 				},
 				AccessMethods: []*ocm.AccessMethod{
-					masked_share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
-					// masked_share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
-					// masked_share.NewTransferAccessMethod(),
+					ocmshare.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
+					ocmshare.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
+					ocmshare.NewTransferAccessMethod(),
 				},
 				Ctime: &types.Timestamp{
 					Seconds:              1234567890,
@@ -401,11 +409,10 @@ var _ = Describe("Nextcloud", func() {
 			Expect(*shares[0]).To(Equal(ocm.Share{
 				Id: &ocm.ShareId{},
 				ResourceId: &provider.ResourceId{
-					StorageId: "",
-					OpaqueId:  "",
-					SpaceId:   "",
+					OpaqueId:  "fileid-/some/path",
+					StorageId: "MockMount",
 				},
-				Name: "",
+				Name: "test share",
 				Grantee: &provider.Grantee{
 					Type: provider.GranteeType_GRANTEE_TYPE_USER,
 					Id: &provider.Grantee_UserId{
@@ -439,9 +446,9 @@ var _ = Describe("Nextcloud", func() {
 				},
 				ShareType: ocm.ShareType_SHARE_TYPE_USER,
 				AccessMethods: []*ocm.AccessMethod{
-					masked_share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
-					// masked_share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
-					// masked_share.NewTransferAccessMethod(),
+					ocmshare.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
+					ocmshare.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
+					ocmshare.NewTransferAccessMethod(),
 				},
 				Token: "some-token",
 			}))
@@ -460,9 +467,10 @@ var _ = Describe("Nextcloud", func() {
 			Expect(len(receivedShares)).To(Equal(1))
 			Expect(*receivedShares[0]).To(Equal(ocm.ReceivedShare{
 				Id:            &ocm.ShareId{},
-				Name:          "",
+				Name:          "test share",
 				RemoteShareId: "",
 				Grantee: &provider.Grantee{
+					Type: provider.GranteeType_GRANTEE_TYPE_USER,
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{
 							Idp:      "0.0.0.0:19000",
@@ -492,8 +500,16 @@ var _ = Describe("Nextcloud", func() {
 					XXX_unrecognized:     nil,
 					XXX_sizecache:        0,
 				},
-				ShareType: ocm.ShareType_SHARE_TYPE_USER,
-				State:     ocm.ShareState_SHARE_STATE_ACCEPTED,
+				ShareType:    ocm.ShareType_SHARE_TYPE_USER,
+				ResourceType: provider.ResourceType_RESOURCE_TYPE_FILE,
+				Protocols: []*ocm.Protocol{
+					ocmshare.NewWebDAVProtocol("webdav-uri", "some-token", &ocm.SharePermissions{
+						Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
+					}),
+					ocmshare.NewWebappProtocol("app-uri-template", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
+					ocmshare.NewTransferProtocol("source-uri", "some-token", 1),
+				},
+				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
 			}))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/ListReceivedShares `)
 		})
@@ -515,9 +531,10 @@ var _ = Describe("Nextcloud", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*receivedShare).To(Equal(ocm.ReceivedShare{
 				Id:            &ocm.ShareId{},
-				Name:          "",
+				Name:          "test share",
 				RemoteShareId: "",
 				Grantee: &provider.Grantee{
+					Type: provider.GranteeType_GRANTEE_TYPE_USER,
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{
 							Idp:      "0.0.0.0:19000",
@@ -547,8 +564,16 @@ var _ = Describe("Nextcloud", func() {
 					XXX_unrecognized:     nil,
 					XXX_sizecache:        0,
 				},
-				ShareType: ocm.ShareType_SHARE_TYPE_USER,
-				State:     ocm.ShareState_SHARE_STATE_ACCEPTED,
+				ShareType:    ocm.ShareType_SHARE_TYPE_USER,
+				ResourceType: provider.ResourceType_RESOURCE_TYPE_FILE,
+				Protocols: []*ocm.Protocol{
+					ocmshare.NewWebDAVProtocol("webdav-uri", "some-token", &ocm.SharePermissions{
+						Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
+					}),
+					ocmshare.NewWebappProtocol("app-uri-template", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
+					ocmshare.NewTransferProtocol("source-uri", "some-token", 1),
+				},
+				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
 			}))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/GetReceivedShare {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`)
 		})
@@ -563,7 +588,7 @@ var _ = Describe("Nextcloud", func() {
 			receivedShare, err := am.UpdateReceivedShare(ctx, user,
 				&ocm.ReceivedShare{
 					Id:            &ocm.ShareId{},
-					Name:          "",
+					Name:          "test share",
 					RemoteShareId: "",
 					Grantee: &provider.Grantee{
 						Id: &provider.Grantee_UserId{
@@ -607,9 +632,10 @@ var _ = Describe("Nextcloud", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*receivedShare).To(Equal(ocm.ReceivedShare{
 				Id:            &ocm.ShareId{},
-				Name:          "",
+				Name:          "test share",
 				RemoteShareId: "",
 				Grantee: &provider.Grantee{
+					Type: provider.GranteeType_GRANTEE_TYPE_USER,
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{
 							Idp:      "0.0.0.0:19000",
@@ -639,10 +665,18 @@ var _ = Describe("Nextcloud", func() {
 					XXX_unrecognized:     nil,
 					XXX_sizecache:        0,
 				},
-				ShareType: ocm.ShareType_SHARE_TYPE_USER,
-				State:     ocm.ShareState_SHARE_STATE_ACCEPTED,
+				ShareType:    ocm.ShareType_SHARE_TYPE_USER,
+				ResourceType: provider.ResourceType_RESOURCE_TYPE_FILE,
+				Protocols: []*ocm.Protocol{
+					ocmshare.NewWebDAVProtocol("webdav-uri", "some-token", &ocm.SharePermissions{
+						Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
+					}),
+					ocmshare.NewWebappProtocol("app-uri-template", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
+					ocmshare.NewTransferProtocol("source-uri", "some-token", 1),
+				},
+				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
 			}))
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/UpdateReceivedShare {"received_share":{"id":{},"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"owner":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"creator":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"ctime":{"seconds":1234567890},"mtime":{"seconds":1234567890},"share_type":1,"state":2},"field_mask":{"paths":["state"]}}`)
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/UpdateReceivedShare {"received_share":{"id":{},"name":"test share","grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"owner":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"creator":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"ctime":{"seconds":1234567890},"mtime":{"seconds":1234567890},"share_type":1,"state":2},"field_mask":{"paths":["state"]}}`)
 		})
 	})
 
