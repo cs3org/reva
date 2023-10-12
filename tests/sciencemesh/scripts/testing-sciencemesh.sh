@@ -195,8 +195,8 @@ docker run --detach --network=testnet                                         \
   pondersource/dev-stock-revad
 
 # IOP: wopi
-cat "${ENV_ROOT}/wopi-sciencemesh/docker/etc/wopiserver.cs3.conf" |           \
-  sed "s/your.wopi.org/wopi${EFSS1}1.docker/g" |                              \
+sed < "${ENV_ROOT}/wopi-sciencemesh/docker/etc/wopiserver.cs3.conf"           \
+  "s/your.wopi.org/wopi${EFSS1}1.docker/g" |                                  \
   sed "s/your.revad.org/reva${EFSS1}1.docker/g" |                             \
   sed "s|your.cert.pem|/usr/local/share/ca-certificates/wopi${EFSS1}1.crt|" | \
   sed "s|your.key.pem|/usr/local/share/ca-certificates/wopi${EFSS1}1.key|"    \
@@ -212,8 +212,8 @@ docker run --detach --network=testnet                                         \
 
 docker exec "wopi${EFSS1}1.docker" update-ca-certificates >& /dev/null
 
-cat "${ENV_ROOT}/wopi-sciencemesh/docker/etc/wopiserver.cs3.conf" |           \
-  sed "s/your.wopi.org/wopi${EFSS2}2.docker/g" |                              \
+sed < "${ENV_ROOT}/wopi-sciencemesh/docker/etc/wopiserver.cs3.conf"           \
+  "s/your.wopi.org/wopi${EFSS2}2.docker/g" |                                  \
   sed "s/your.revad.org/reva${EFSS2}2.docker/g" |                             \
   sed "s|your.cert.pem|/usr/local/share/ca-certificates/wopi${EFSS2}2.crt|" | \
   sed "s|your.key.pem|/usr/local/share/ca-certificates/wopi${EFSS2}2.key|"    \
