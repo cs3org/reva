@@ -43,6 +43,13 @@ BUILD_FLAGS	= "`[[ -z "$(STATIC)" ]] && echo "" || echo "-extldflags=-static"` -
 revad:
 	go build -ldflags $(BUILD_FLAGS) -o ./cmd/revad/revad ./cmd/revad/main
 
+.PHONY: gaia
+gaia:
+	go install github.com/cs3org/gaia@latest
+
+.PHONY: cernbox-revad
+cernbox-revad: gaia
+	gaia build --with github.com/cernbox/reva-plugins --with github.com/cs3org/reva=$(shell pwd) -o ./cmd/revad/revad
 .PHONY: revad-ceph
 revad-ceph:
 	go build -ldflags $(BUILD_FLAGS) -tags ceph -o ./cmd/revad/revad ./cmd/revad/main

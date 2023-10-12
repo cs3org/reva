@@ -16,6 +16,11 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
+// NOTE: compile the grpc proto with these commands
+// and do not ask any questions, I don't have the answer
+// protoc ./Rpc.proto --go-grpc_out=.
+// protoc ./eos_grpc.proto --go_out=plugins=grpc:.
+
 package eosgrpc
 
 import (
@@ -31,6 +36,7 @@ import (
 	"strings"
 	"syscall"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/eosclient"
 	erpc "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_grpc"
@@ -94,12 +100,20 @@ type Options struct {
 	Keytab string
 
 	// Authkey is the key that authorizes this client to connect to the GRPC service
-	// It's unclear whether this will be the final solution
 	Authkey string
 
 	// SecProtocol is the comma separated list of security protocols used by xrootd.
 	// For example: "sss, unix"
 	SecProtocol string
+}
+
+func getUser(ctx context.Context) (*userpb.User, error) {
+	u, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		err := errors.Wrap(errtypes.UserRequired(""), "eosfs: error getting user from ctx")
+		return nil, err
+	}
+	return u, nil
 }
 
 func (opt *Options) init() {
@@ -149,6 +163,7 @@ func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
 	if prep == nil {
 		log.Warn().Str("Could not ping to ", "'"+opt.GrpcURI+"' ").Str("nil response", "").Msg("")
 	}
+	log.Debug().Str("Ping to ", "'"+opt.GrpcURI+"' succeeded").Msg("")
 
 	return ecl, nil
 }
@@ -268,7 +283,7 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 	rq.Command = &erpc.NSRequest_Acl{Acl: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(context.Background(), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "AddACL").Str("path", path).Str("err", e.Error()).Msg("")
@@ -315,7 +330,7 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 	rq.Command = &erpc.NSRequest_Acl{Acl: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(context.Background(), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "RemoveACL").Str("path", path).Str("err", e.Error()).Msg("")
@@ -391,7 +406,7 @@ func (c *Client) getACLForPath(ctx context.Context, auth eosclient.Authorization
 	rq.Command = &erpc.NSRequest_Acl{Acl: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(context.Background(), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "GetACLForPath").Str("path", path).Str("err", e.Error()).Msg("")
@@ -436,7 +451,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 	mdrq.Id.Ino = inode
 
 	// Now send the req and see what happens
-	resp, err := c.cl.MD(context.Background(), mdrq)
+	resp, err := c.cl.MD(appctx.ContextGetClean(ctx), mdrq)
 	if err != nil {
 		log.Error().Err(err).Uint64("inode", inode).Str("err", err.Error()).Send()
 
@@ -520,7 +535,7 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 	rq.Command = &erpc.NSRequest_Xattr{Xattr: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctx, rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 
 	if resp != nil && resp.Error != nil && resp.Error.Code == 17 {
@@ -566,7 +581,7 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 	rq.Command = &erpc.NSRequest_Xattr{Xattr: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctx, rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 
 	if resp != nil && resp.Error != nil && resp.Error.Code == 61 {
 		return eosclient.AttrNotExistsError
@@ -660,7 +675,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 	mdrq.Id.Path = []byte(path)
 
 	// Now send the req and see what happens
-	resp, err := c.cl.MD(ctx, mdrq)
+	resp, err := c.cl.MD(appctx.ContextGetClean(ctx), mdrq)
 	if err != nil {
 		log.Error().Str("func", "GetFileInfoByPath").Err(err).Str("path", path).Str("err", err.Error()).Msg("")
 
@@ -726,7 +741,7 @@ func (c *Client) GetQuota(ctx context.Context, username string, rootAuth eosclie
 	rq.Command = &erpc.NSRequest_Quota{Quota: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctx, rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		return nil, e
@@ -810,7 +825,7 @@ func (c *Client) SetQuota(ctx context.Context, rootAuth eosclient.Authorization,
 	rq.Command = &erpc.NSRequest_Quota{Quota: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctx, rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		return e
@@ -858,7 +873,7 @@ func (c *Client) Touch(ctx context.Context, auth eosclient.Authorization, path s
 	rq.Command = &erpc.NSRequest_Touch{Touch: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctx, rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "Touch").Str("path", path).Str("err", e.Error()).Msg("")
@@ -902,7 +917,7 @@ func (c *Client) Chown(ctx context.Context, auth, chownAuth eosclient.Authorizat
 	rq.Command = &erpc.NSRequest_Chown{Chown: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctx, rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "Chown").Str("path", path).Str("err", e.Error()).Msg("")
@@ -943,7 +958,7 @@ func (c *Client) Chmod(ctx context.Context, auth eosclient.Authorization, mode, 
 	rq.Command = &erpc.NSRequest_Chmod{Chmod: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctx, rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "Chmod").Str("path ", path).Str("err", e.Error()).Msg("")
@@ -985,7 +1000,7 @@ func (c *Client) CreateDir(ctx context.Context, auth eosclient.Authorization, pa
 	rq.Command = &erpc.NSRequest_Mkdir{Mkdir: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctx, rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "Createdir").Str("path", path).Str("err", e.Error()).Msg("")
@@ -1020,7 +1035,7 @@ func (c *Client) rm(ctx context.Context, auth eosclient.Authorization, path stri
 	rq.Command = &erpc.NSRequest_Unlink{Unlink: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctx, rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "rm").Str("path", path).Str("err", e.Error()).Msg("")
@@ -1056,7 +1071,7 @@ func (c *Client) rmdir(ctx context.Context, auth eosclient.Authorization, path s
 	rq.Command = &erpc.NSRequest_Rm{Rm: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctx, rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "rmdir").Str("path", path).Str("err", e.Error()).Msg("")
@@ -1109,7 +1124,7 @@ func (c *Client) Rename(ctx context.Context, auth eosclient.Authorization, oldPa
 	rq.Command = &erpc.NSRequest_Rename{Rename: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctx, rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "Rename").Str("oldPath", oldPath).Str("newPath", newPath).Str("err", e.Error()).Msg("")
@@ -1153,7 +1168,7 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 	fdrq.Authkey = c.opt.Authkey
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Find(context.Background(), fdrq)
+	resp, err := c.cl.Find(appctx.ContextGetClean(ctx), fdrq)
 	if err != nil {
 		log.Error().Err(err).Str("func", "List").Str("path", dpath).Str("err", err.Error()).Msg("grpc response")
 
@@ -1238,6 +1253,11 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 	var localfile io.WriteCloser
 	localfile = nil
 
+	u, err := getUser(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "eos: no user in ctx")
+	}
+
 	if c.opt.ReadUsesLocalTemp {
 		rand := "eosread-" + uuid.New().String()
 		localTarget := fmt.Sprintf("%s/%s", c.opt.CacheDirectory, rand)
@@ -1251,7 +1271,7 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 		}
 	}
 
-	bodystream, err := c.httpcl.GETFile(ctx, "", auth, path, localfile)
+	bodystream, err := c.httpcl.GETFile(ctx, u.Username, auth, path, localfile)
 	if err != nil {
 		log.Error().Str("func", "Read").Str("path", path).Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("err", err.Error()).Msg("")
 		return nil, errtypes.InternalError(fmt.Sprintf("can't GET local cache file '%s'", localTarget))
@@ -1268,6 +1288,11 @@ func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path s
 	log.Info().Str("func", "Write").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 	var length int64
 	length = -1
+
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eos: no user in ctx")
+	}
 
 	if c.opt.WriteUsesLocalTemp {
 		fd, err := os.CreateTemp(c.opt.CacheDirectory, "eoswrite-")
@@ -1291,10 +1316,10 @@ func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path s
 		defer wfd.Close()
 		defer os.RemoveAll(fd.Name())
 
-		return c.httpcl.PUTFile(ctx, "", auth, path, wfd, length)
+		return c.httpcl.PUTFile(ctx, u.Username, auth, path, wfd, length)
 	}
 
-	return c.httpcl.PUTFile(ctx, "", auth, path, stream, length)
+	return c.httpcl.PUTFile(ctx, u.Username, auth, path, stream, length)
 
 	// return c.httpcl.PUTFile(ctx, remoteuser, auth, urlpathng, stream)
 	// return c.WriteFile(ctx, uid, gid, path, fd.Name())
@@ -1328,7 +1353,7 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 	rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(context.Background(), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("err", e.Error()).Msg("")
@@ -1389,7 +1414,7 @@ func (c *Client) RestoreDeletedEntry(ctx context.Context, auth eosclient.Authori
 	rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(context.Background(), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "RestoreDeletedEntries").Str("key", key).Str("err", e.Error()).Msg("")
@@ -1425,7 +1450,7 @@ func (c *Client) PurgeDeletedEntries(ctx context.Context, auth eosclient.Authori
 	rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(context.Background(), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "PurgeDeletedEntries").Str("err", e.Error()).Msg("")
@@ -1475,7 +1500,7 @@ func (c *Client) RollbackToVersion(ctx context.Context, auth eosclient.Authoriza
 	rq.Command = &erpc.NSRequest_Version{Version: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(context.Background(), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "RollbackToVersion").Str("err", e.Error()).Msg("")
@@ -1555,7 +1580,7 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse) (*eosclient.FileI
 
 	if st.Type == erpc.TYPE_CONTAINER {
 		fi.IsDir = true
-		fi.Inode = st.Fmd.Inode
+		fi.Inode = st.Cmd.Inode
 		fi.FID = st.Cmd.ParentId
 		fi.UID = st.Cmd.Uid
 		fi.GID = st.Cmd.Gid

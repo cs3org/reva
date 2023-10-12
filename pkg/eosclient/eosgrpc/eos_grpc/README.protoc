@@ -1,0 +1,10 @@
+To compile the eos binding into go code:
+
+protoc --go_out=. ./Rpc.proto
+protoc ./Rpc.proto --go_out=plugins=grpc:.
+
+
+NOTE: we have to do this here in order to be sure that a compatible protoc compiler is used.
+Having a CI somewhere compiling this does NOT guarantee that the same golang and protoc will be used,
+and this has created lots of problems in the past
+

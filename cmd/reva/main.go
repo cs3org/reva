@@ -93,6 +93,7 @@ var (
 		getlockCommand(),
 		unlockCommand(),
 		helpCommand(),
+		testCommand(),
 	}
 )
 

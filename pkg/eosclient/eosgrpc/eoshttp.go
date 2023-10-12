@@ -34,7 +34,6 @@ import (
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
-	"github.com/pkg/errors"
 )
 
 // HTTPOptions to configure the Client.
@@ -77,6 +76,9 @@ type HTTPOptions struct {
 	// of course /etc/grid-security/certificates is NOT in those defaults!
 	ClientCADirs  string
 	ClientCAFiles string
+
+	// Authkey is the key that authorizes this client to connect to the EOS HTTP service
+	Authkey string
 }
 
 // Init fills the basic fields.
@@ -196,6 +198,17 @@ func rspdesc(rsp *http.Response) string {
 	return desc
 }
 
+func (c *EOSHTTPClient) doReq(req *http.Request, remoteuser string) (*http.Response, error) {
+	// Here we put the headers that are required by EOS >= 5
+	req.Header.Set("x-gateway-authorization", c.opt.Authkey)
+	req.Header.Set("x-forwarded-for", "dummy")
+	req.Header.Set("remote-user", remoteuser)
+
+	resp, err := c.cl.Do(req)
+
+	return resp, err
+}
+
 // If the error is not nil, take that
 // If there is an error coming from EOS, erturn a descriptive error.
 func (c *EOSHTTPClient) getRespError(rsp *http.Response, err error) error {
@@ -281,12 +294,13 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 
 		// Execute the request. I don't like that there is no explicit timeout or buffer control on the input stream
 		log.Debug().Str("func", "GETFile").Msg("sending req")
-		resp, err := c.cl.Do(req)
+
+		resp, err := c.doReq(req, remoteuser)
 
 		// Let's support redirections... and if we retry we have to retry at the same FST, avoid going back to the MGM
 		if resp != nil && (resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusTemporaryRedirect) {
 			// io.Copy(ioutil.Discard, resp.Body)
-			// resp.Body.Close()
+			resp.Body.Close()
 
 			loc, err := resp.Location()
 			if err != nil {
@@ -312,6 +326,8 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 		// And get an error code (if error) that is worth propagating
 		e := c.getRespError(resp, err)
 		if e != nil {
+			resp.Body.Close()
+
 			if os.IsTimeout(e) {
 				ntries++
 				log.Warn().Str("func", "GETFile").Str("url", finalurl).Str("err", e.Error()).Int("try", ntries).Msg("recoverable network timeout")
@@ -372,18 +388,15 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 
 		// Execute the request. I don't like that there is no explicit timeout or buffer control on the input stream
 		log.Debug().Str("func", "PUTFile").Msg("sending req")
-		resp, err := c.cl.Do(req)
-		if err != nil {
-			return errors.Wrap(err, "error doing request")
-		}
+
+		resp, err := c.doReq(req, remoteuser)
 		if resp != nil {
-			defer resp.Body.Close()
+			resp.Body.Close()
 		}
 
 		// Let's support redirections... and if we retry we retry at the same FST
 		if resp != nil && resp.StatusCode == 307 {
 			// io.Copy(ioutil.Discard, resp.Body)
-			// resp.Body.Close()
 
 			loc, err := resp.Location()
 			if err != nil {
@@ -465,7 +478,8 @@ func (c *EOSHTTPClient) Head(ctx context.Context, remoteuser string, auth eoscli
 			return errtypes.InternalError("Timeout with url" + finalurl)
 		}
 		// Execute the request. I don't like that there is no explicit timeout or buffer control on the input stream
-		resp, err := c.cl.Do(req)
+
+		resp, err := c.doReq(req, remoteuser)
 
 		// And get an error code (if error) that is worth propagating
 		e := c.getRespError(resp, err)
