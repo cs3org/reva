@@ -43,9 +43,10 @@ lint-fix: $(GOLANGCI_LINT)
 
 $(CALENS):
 	@mkdir -p $(@D)
-	git clone --depth 1 --branch v0.2.0 -c advice.detachedHead=false https://github.com/restic/calens.git /tmp/calens
-	cd /tmp/calens && GOBIN=$(@D) go install
-	rm -rf /tmp/calens
+	CALENS_DIR=`mktemp -d`
+	git clone --depth 1 --branch v0.2.0 -c advice.detachedHead=false https://github.com/restic/calens.git $(CALENS_DIR)
+	cd $(CALENS_DIR) && GOBIN=$(@D) go install
+	rm -rf $(CALENS_DIR)
 
 .PHONY: check-changelog
 check-changelog: $(CALENS)
