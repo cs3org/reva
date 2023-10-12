@@ -41,7 +41,6 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rserverless"
 	"github.com/cs3org/reva/pkg/sharedconf"
-	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils/list"
 	"github.com/cs3org/reva/pkg/utils/maps"
 	netutil "github.com/cs3org/reva/pkg/utils/net"
@@ -86,7 +85,6 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 	if err := initCPUCount(config.Core, log); err != nil {
 		return nil, err
 	}
-	initTracing(config.Core)
 
 	if opts.PidFile == "" {
 		return nil, errors.New("pid file not provided")
@@ -347,12 +345,6 @@ func handlePIDFlag(l *zerolog.Logger, pidFile string) (*grace.Watcher, error) {
 	return w, nil
 }
 
-func initTracing(conf *config.Core) {
-	if conf.TracingEnabled {
-		rtrace.SetTraceProvider(conf.TracingCollector, conf.TracingEndpoint, conf.TracingServiceName)
-	}
-}
-
 // adjustCPU parses string cpu and sets GOMAXPROCS
 // according to its value. It accepts either
 // a number (e.g. 3) or a percent (e.g. 50%).
@@ -411,7 +403,7 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 		if err != nil {
 			return nil, err
 		}
-		unaryChain, streamChain, err := initGRPCInterceptors(cfg.Interceptors, grpcUnprotected(services), log)
+		unaryChain, streamChain, err := initGRPCInterceptors(cfg.Interceptors, grpcUnprotected(cfg.EnableReflection, services), log)
 		if err != nil {
 			return nil, err
 		}

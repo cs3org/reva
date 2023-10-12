@@ -20,7 +20,7 @@ package net
 
 import (
 	"github.com/cs3org/reva/internal/http/services/datagateway"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/appctx"
 )
 
 type ctxKey int
@@ -29,7 +29,7 @@ const (
 	// AccessTokenIndex specifies the index of the Reva access token in a context.
 	AccessTokenIndex ctxKey = iota
 	// AccessTokenName specifies the name of the Reva access token used during requests.
-	AccessTokenName = ctxpkg.TokenHeader
+	AccessTokenName = appctx.TokenHeader
 	// TransportTokenName specifies the name of the Reva transport token used during data transfers.
 	TransportTokenName = datagateway.TokenTransportHeader
 )

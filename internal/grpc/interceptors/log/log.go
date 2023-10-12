@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -44,7 +43,7 @@ func NewUnary() grpc.UnaryServerInterceptor {
 		if p, ok := peer.FromContext(ctx); ok {
 			fromAddress = p.Addr.Network() + "://" + p.Addr.String()
 		}
-		userAgent, ok := ctxpkg.ContextGetUserAgentString(ctx)
+		userAgent, ok := appctx.ContextGetUserAgentString(ctx)
 		if !ok {
 			userAgent = ""
 		}
@@ -86,7 +85,7 @@ func NewStream() grpc.StreamServerInterceptor {
 		if p, ok := peer.FromContext(ss.Context()); ok {
 			fromAddress = p.Addr.Network() + "://" + p.Addr.String()
 		}
-		userAgent, ok := ctxpkg.ContextGetUserAgentString(ctx)
+		userAgent, ok := appctx.ContextGetUserAgentString(ctx)
 		if !ok {
 			userAgent = ""
 		}

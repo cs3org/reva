@@ -35,7 +35,7 @@ import (
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ctx2 "github.com/cs3org/reva/pkg/ctx"
+	ctx2 "github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/pkg/errors"
@@ -105,9 +105,6 @@ func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *cephfs2.Ce
 		_type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
 		if buf, err = cv.mount.GetXattr(path, "ceph.dir.rbytes"); err == nil {
 			size, err = strconv.ParseUint(string(buf), 10, 64)
-		} else if err.Error() == errPermissionDenied {
-			// Ignore permission denied errors so ListFolder does not fail because of them.
-			err = nil
 		}
 	case syscall.S_IFLNK:
 		_type = provider.ResourceType_RESOURCE_TYPE_SYMLINK
@@ -117,6 +114,10 @@ func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *cephfs2.Ce
 		size = stat.Size
 	default:
 		return nil, errors.New("cephfs: unknown entry type")
+	}
+
+	if err != nil {
+		return
 	}
 
 	var xattrs []string

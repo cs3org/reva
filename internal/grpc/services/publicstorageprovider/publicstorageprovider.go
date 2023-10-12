@@ -35,11 +35,9 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
-	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
-	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	gstatus "google.golang.org/grpc/status"
@@ -344,14 +342,6 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
-	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "CreateContainer")
-	defer span.End()
-
-	span.SetAttributes(attribute.KeyValue{
-		Key:   "reference",
-		Value: attribute.StringValue(req.Ref.String()),
-	})
-
 	cs3Ref, _, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
 	case err != nil:
@@ -397,14 +387,6 @@ func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest)
 }
 
 func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
-	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "Delete")
-	defer span.End()
-
-	span.SetAttributes(attribute.KeyValue{
-		Key:   "reference",
-		Value: attribute.StringValue(req.Ref.String()),
-	})
-
 	cs3Ref, _, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
 	case err != nil:
@@ -437,20 +419,6 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 }
 
 func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "Move")
-	defer span.End()
-
-	span.SetAttributes(
-		attribute.KeyValue{
-			Key:   "source",
-			Value: attribute.StringValue(req.Source.String()),
-		},
-		attribute.KeyValue{
-			Key:   "destination",
-			Value: attribute.StringValue(req.Destination.String()),
-		},
-	)
-
 	cs3RefSource, tknSource, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Source)
 	switch {
 	case err != nil:
@@ -500,15 +468,6 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "Stat")
-	defer span.End()
-
-	span.SetAttributes(
-		attribute.KeyValue{
-			Key:   "source",
-			Value: attribute.StringValue(req.Ref.String()),
-		})
-
 	var (
 		tkn          string
 		relativePath string

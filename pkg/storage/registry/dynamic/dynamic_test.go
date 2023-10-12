@@ -26,7 +26,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registryv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 
 	"github.com/cs3org/reva/pkg/storage"
@@ -53,17 +53,17 @@ var _ = Describe("Dynamic storage provider", func() {
 		s   *server.Server
 		m   sync.Mutex
 
-		ctxAlice = ctxpkg.ContextSetUser(context.Background(), &userpb.User{
+		ctxAlice = appctx.ContextSetUser(context.Background(), &userpb.User{
 			Id: &userpb.UserId{
 				OpaqueId: "alice",
 			},
 		})
-		ctxBob = ctxpkg.ContextSetUser(context.Background(), &userpb.User{
+		ctxBob = appctx.ContextSetUser(context.Background(), &userpb.User{
 			Id: &userpb.UserId{
 				OpaqueId: "bob",
 			},
 		})
-		ctxCharlie = ctxpkg.ContextSetUser(context.Background(), &userpb.User{
+		ctxCharlie = appctx.ContextSetUser(context.Background(), &userpb.User{
 			Id: &userpb.UserId{
 				OpaqueId: "charlie",
 			},

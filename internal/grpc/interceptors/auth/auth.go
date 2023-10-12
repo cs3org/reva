@@ -28,7 +28,6 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/scope"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
@@ -102,21 +101,21 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 
 			// If a token is present, set it anyway, as we might need the user info
 			// to decide the storage provider.
-			tkn, ok := ctxpkg.ContextGetToken(ctx)
+			tkn, ok := appctx.ContextGetToken(ctx)
 			if ok {
 				u, scopes, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr, true)
 				if err == nil {
 					if blockedUsers.IsBlocked(u.Username) {
 						return nil, status.Errorf(codes.PermissionDenied, "user %s blocked", u.Username)
 					}
-					ctx = ctxpkg.ContextSetUser(ctx, u)
-					ctx = ctxpkg.ContextSetScopes(ctx, scopes)
+					ctx = appctx.ContextSetUser(ctx, u)
+					ctx = appctx.ContextSetScopes(ctx, scopes)
 				}
 			}
 			return handler(ctx, req)
 		}
 
-		tkn, ok := ctxpkg.ContextGetToken(ctx)
+		tkn, ok := appctx.ContextGetToken(ctx)
 
 		if !ok || tkn == "" {
 			log.Warn().Msg("access token not found or empty")
@@ -134,8 +133,8 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 			return nil, status.Errorf(codes.PermissionDenied, "user %s blocked", u.Username)
 		}
 
-		ctx = ctxpkg.ContextSetUser(ctx, u)
-		ctx = ctxpkg.ContextSetScopes(ctx, scopes)
+		ctx = appctx.ContextSetUser(ctx, u)
+		ctx = appctx.ContextSetScopes(ctx, scopes)
 		return handler(ctx, req)
 	}
 	return interceptor, nil
@@ -175,12 +174,12 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 
 			// If a token is present, set it anyway, as we might need the user info
 			// to decide the storage provider.
-			tkn, ok := ctxpkg.ContextGetToken(ctx)
+			tkn, ok := appctx.ContextGetToken(ctx)
 			if ok {
 				u, scopes, err := dismantleToken(ctx, tkn, ss, tokenManager, conf.GatewayAddr, true)
 				if err == nil {
-					ctx = ctxpkg.ContextSetUser(ctx, u)
-					ctx = ctxpkg.ContextSetScopes(ctx, scopes)
+					ctx = appctx.ContextSetUser(ctx, u)
+					ctx = appctx.ContextSetScopes(ctx, scopes)
 					ss = newWrappedServerStream(ctx, ss)
 				}
 			}
@@ -188,7 +187,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 			return handler(srv, ss)
 		}
 
-		tkn, ok := ctxpkg.ContextGetToken(ctx)
+		tkn, ok := appctx.ContextGetToken(ctx)
 
 		if !ok || tkn == "" {
 			log.Warn().Msg("access token not found")
@@ -203,8 +202,8 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 		}
 
 		// store user and core access token in context.
-		ctx = ctxpkg.ContextSetUser(ctx, u)
-		ctx = ctxpkg.ContextSetScopes(ctx, scopes)
+		ctx = appctx.ContextSetUser(ctx, u)
+		ctx = appctx.ContextSetScopes(ctx, scopes)
 		wrapped := newWrappedServerStream(ctx, ss)
 		return handler(srv, wrapped)
 	}

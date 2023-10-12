@@ -43,8 +43,8 @@ import (
 	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/go-playground/validator/v10"
 )
@@ -282,12 +282,12 @@ func discoverOcmWebdavRoot(r *http.Request) (string, error) {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("sender", r.Host).Msg("received OCM 1.0 share, attempting to discover sender endpoint")
 
-	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, r.Host+"/ocm-provider", nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, r.Host+"/ocm-provider", nil)
 	if err != nil {
 		return "", err
 	}
-	httpClient := rhttp.GetHTTPClient(
-		rhttp.Timeout(time.Duration(10 * int64(time.Second))),
+	httpClient := httpclient.New(
+		httpclient.Timeout(time.Duration(10 * int64(time.Second))),
 	)
 	httpRes, err := httpClient.Do(httpReq)
 	if err != nil {

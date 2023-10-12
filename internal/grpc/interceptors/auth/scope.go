@@ -37,7 +37,6 @@ import (
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/scope"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	statuspkg "github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -305,7 +304,7 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 		if err != nil {
 			return false, err
 		}
-		ctx = metadata.AppendToOutgoingContext(context.Background(), ctxpkg.TokenHeader, token)
+		ctx = metadata.AppendToOutgoingContext(context.Background(), appctx.TokenHeader, token)
 
 		childStat, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
 		if err != nil {

@@ -30,10 +30,8 @@ import (
 	"github.com/cs3org/reva/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
-	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"go.opentelemetry.io/otel/propagation"
 )
 
 type Config func(*Server)
@@ -181,8 +179,7 @@ func (s *Server) GracefulStop() error {
 func (s *Server) registerServices() {
 	for name, svc := range s.Services {
 		// instrument services with opencensus tracing.
-		h := traceHandler(name, svc.Handler())
-		s.handlers[svc.Prefix()] = h
+		s.handlers[svc.Prefix()] = svc.Handler()
 		s.svcs[svc.Prefix()] = svc
 		s.unprotected = append(s.unprotected, getUnprotected(svc.Prefix(), svc.Unprotected())...)
 		s.log.Info().Msgf("http service enabled: %s@/%s", name, svc.Prefix())
@@ -283,14 +280,14 @@ func (s *Server) getHandler() (http.Handler, error) {
 	return handler, nil
 }
 
-func traceHandler(name string, h http.Handler) http.Handler {
+// prometheusMiddleware implements mux.MiddlewareFunc.
+/*
+func prometheusHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := rtrace.Propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
-		t := rtrace.Provider.Tracer("reva")
-		ctx, span := t.Start(ctx, name)
-		defer span.End()
-
-		rtrace.Propagator.Inject(ctx, propagation.HeaderCarrier(r.Header))
-		h.ServeHTTP(w, r.WithContext(ctx))
+		path := r.URL.Path
+		timer := prometheus.NewTimer(httpDuration.WithLabelValues(path))
+		next.ServeHTTP(w, r)
+		timer.ObserveDuration()
 	})
 }
+*/

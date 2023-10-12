@@ -22,23 +22,17 @@ import (
 	"context"
 
 	"github.com/cs3org/reva/pkg/appctx"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/trace"
 	"github.com/rs/zerolog"
-	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 )
 
 // NewUnary returns a new unary interceptor that creates the application context.
 func NewUnary(log zerolog.Logger) grpc.UnaryServerInterceptor {
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		span := trace.SpanFromContext(ctx)
-		defer span.End()
-		if !span.SpanContext().HasTraceID() {
-			ctx, span = rtrace.Provider.Tracer("grpc").Start(ctx, "grpc unary")
-		}
-
-		sub := log.With().Str("traceid", span.SpanContext().TraceID().String()).Logger()
-		ctx = appctx.WithLogger(ctx, &sub)
+		traceID := trace.Get(ctx)
+		log := log.With().Str("traceid", traceID).Logger()
+		ctx = appctx.WithLogger(ctx, &log)
 		res, err := handler(ctx, req)
 		return res, err
 	}
@@ -50,15 +44,9 @@ func NewUnary(log zerolog.Logger) grpc.UnaryServerInterceptor {
 func NewStream(log zerolog.Logger) grpc.StreamServerInterceptor {
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := ss.Context()
-		span := trace.SpanFromContext(ctx)
-		defer span.End()
-
-		if !span.SpanContext().HasTraceID() {
-			ctx, span = rtrace.Provider.Tracer("grpc").Start(ctx, "grpc stream")
-		}
-
-		sub := log.With().Str("traceid", span.SpanContext().TraceID().String()).Logger()
-		ctx = appctx.WithLogger(ctx, &sub)
+		traceID := trace.Get(ctx)
+		log := log.With().Str("traceid", traceID).Logger()
+		ctx = appctx.WithLogger(ctx, &log)
 
 		wrapped := newWrappedServerStream(ctx, ss)
 		err := handler(srv, wrapped)

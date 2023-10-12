@@ -20,6 +20,7 @@ package utils
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io"
@@ -29,7 +30,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -37,7 +38,7 @@ import (
 type APITokenManager struct {
 	oidcToken OIDCToken
 	conf      *config
-	client    *http.Client
+	client    *httpclient.Client
 }
 
 // OIDCToken stores the OIDC token used to authenticate requests to the REST API service.
@@ -63,11 +64,13 @@ func InitAPITokenManager(conf map[string]interface{}) (*APITokenManager, error) 
 		return nil, err
 	}
 
+	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: c.Insecure}}
+
 	return &APITokenManager{
 		conf: c,
-		client: rhttp.GetHTTPClient(
-			rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second))),
-			rhttp.Insecure(c.Insecure),
+		client: httpclient.New(
+			httpclient.Timeout(time.Duration(c.Timeout*int64(time.Second))),
+			httpclient.RoundTripper(tr),
 		)}, nil
 }
 

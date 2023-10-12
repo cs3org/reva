@@ -29,7 +29,6 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -112,9 +111,9 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		return res, nil
 	}
 
-	ctx = ctxpkg.ContextSetToken(ctx, token)
-	ctx = ctxpkg.ContextSetUser(ctx, res.User)
-	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, token)
+	ctx = appctx.ContextSetToken(ctx, token)
+	ctx = appctx.ContextSetUser(ctx, res.User)
+	ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, token)
 
 	// Commenting out as the token size can get too big
 	// For now, we'll try to resolve all resources on every request and cache those
@@ -148,9 +147,9 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 
 	// we need to pass the token to authenticate the CreateHome request.
 	// TODO(labkode): appending to existing context will not pass the token.
-	ctx = ctxpkg.ContextSetToken(ctx, token)
-	ctx = ctxpkg.ContextSetUser(ctx, res.User)
-	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, token) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
+	ctx = appctx.ContextSetToken(ctx, token)
+	ctx = appctx.ContextSetUser(ctx, res.User)
+	ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, token) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
 
 	// create home directory
 	if _, err = s.createHomeCache.Get(res.User.Id.OpaqueId); err != nil {

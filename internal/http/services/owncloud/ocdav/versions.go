@@ -30,9 +30,9 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
-	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 )
 
@@ -88,9 +88,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 }
 
 func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "listVersions")
-	defer span.End()
-
+	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Interface("resourceid", rid).Logger()
 
 	pf, status, err := readPropfind(r.Body)
@@ -189,9 +187,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 }
 
 func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId, key string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "restore")
-	defer span.End()
-
+	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Interface("resourceid", rid).Str("key", key).Logger()
 
 	client, err := s.getClient()
@@ -220,9 +216,7 @@ func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *s
 }
 
 func (h *VersionsHandler) doDownload(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId, key string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "restore")
-	defer span.End()
-
+	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Interface("resourceid", rid).Str("key", key).Logger()
 
 	client, err := s.getClient()
@@ -253,7 +247,7 @@ func (h *VersionsHandler) doDownload(w http.ResponseWriter, r *http.Request, s *
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fname))
 	w.Header().Set("Content-Transfer-Encoding", "binary")
 
-	down := downloader.NewDownloader(client)
+	down := downloader.NewDownloader(client, httpclient.New())
 	d, err := down.Download(ctx, resStat.Info.Path, key)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

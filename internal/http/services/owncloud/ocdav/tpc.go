@@ -36,7 +36,6 @@ import (
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rhttp"
 )
 
 const (
@@ -240,7 +239,7 @@ func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClie
 	tempReader := io.TeeReader(httpDownloadRes.Body, &wc)
 
 	// do Upload
-	httpUploadReq, err := rhttp.NewRequest(ctx, http.MethodPut, uploadEP, tempReader)
+	httpUploadReq, err := http.NewRequestWithContext(ctx, http.MethodPut, uploadEP, tempReader)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return err
@@ -362,7 +361,7 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 	}
 
 	// do download
-	httpDownloadReq, err := rhttp.NewRequest(ctx, http.MethodGet, downloadEP, nil)
+	httpDownloadReq, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadEP, nil)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return err

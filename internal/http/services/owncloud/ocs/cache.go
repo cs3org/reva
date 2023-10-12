@@ -24,14 +24,14 @@ import (
 	"net/http/httptest"
 
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+
 	"google.golang.org/grpc/metadata"
 )
 
 func (s *svc) cacheWarmup(w http.ResponseWriter, r *http.Request) {
 	if s.warmupCacheTracker != nil {
-		u, ok1 := ctxpkg.ContextGetUser(r.Context())
-		tkn, ok2 := ctxpkg.ContextGetToken(r.Context())
+		u, ok1 := appctx.ContextGetUser(r.Context())
+		tkn, ok2 := appctx.ContextGetToken(r.Context())
 		if !ok1 || !ok2 {
 			return
 		}
@@ -44,9 +44,9 @@ func (s *svc) cacheWarmup(w http.ResponseWriter, r *http.Request) {
 		// TODO: Check if we can come up with a better solution, eg, https://stackoverflow.com/a/54132324
 		ctx := context.Background()
 		ctx = appctx.WithLogger(ctx, log)
-		ctx = ctxpkg.ContextSetUser(ctx, u)
-		ctx = ctxpkg.ContextSetToken(ctx, tkn)
-		ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, tkn)
+		ctx = appctx.ContextSetUser(ctx, u)
+		ctx = appctx.ContextSetToken(ctx, tkn)
+		ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, tkn)
 
 		req, _ := http.NewRequest(http.MethodGet, "", nil)
 		req = req.WithContext(ctx)

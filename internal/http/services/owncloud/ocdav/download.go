@@ -20,10 +20,12 @@ package ocdav
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"net/http"
 	"path"
 	"strings"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -31,9 +33,8 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/archiver/manager"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
 	"github.com/cs3org/reva/pkg/storage/utils/walker"
 	"github.com/pkg/errors"
@@ -84,8 +85,8 @@ func (s *svc) authenticate(ctx context.Context, token string) (context.Context, 
 		return nil, errors.New(res.Status.Message)
 	}
 
-	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, res.Token)
-	ctx = ctxpkg.ContextSetToken(ctx, res.Token)
+	ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, res.Token)
+	ctx = appctx.ContextSetToken(ctx, res.Token)
 
 	return ctx, nil
 }
@@ -188,7 +189,11 @@ func (s *svc) downloadFile(ctx context.Context, w http.ResponseWriter, res *prov
 		s.handleHTTPError(w, err, log)
 		return
 	}
-	d := downloader.NewDownloader(c)
+
+	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: s.c.Insecure}}
+	hc := httpclient.New(httpclient.RoundTripper(tr), httpclient.Timeout(time.Duration(s.c.Timeout*int64(time.Second))))
+
+	d := downloader.NewDownloader(c, hc)
 	r, err := d.Download(ctx, res.Path, "")
 	if err != nil {
 		s.handleHTTPError(w, err, log)
@@ -226,7 +231,10 @@ func (s *svc) downloadArchive(ctx context.Context, w http.ResponseWriter, token 
 		return
 	}
 
-	downloader := downloader.NewDownloader(gtw, rhttp.Context(ctx))
+	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: s.c.Insecure}}
+	hc := httpclient.New(httpclient.RoundTripper(tr), httpclient.Timeout(time.Duration(s.c.Timeout*int64(time.Second))))
+
+	downloader := downloader.NewDownloader(gtw, hc)
 	walker := walker.NewWalker(gtw)
 
 	archiver, err := manager.NewArchiver(resources, walker, downloader, manager.Config{

@@ -22,11 +22,11 @@ import (
 	"context"
 	"net/http"
 
-	"contrib.go.opencensus.io/exporter/prometheus"
+	"github.com/cs3org/reva/pkg/prom/registry"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/utils/cfg"
-	"github.com/pkg/errors"
-	"go.opencensus.io/stats/view"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func init() {
@@ -40,15 +40,28 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 		return nil, err
 	}
 
-	pe, err := prometheus.NewExporter(prometheus.Options{
-		Namespace: "revad",
-	})
-	if err != nil {
-		return nil, errors.Wrap(err, "prometheus: error creating exporter")
+	// instantiate and register all collectors
+	collectors := []prometheus.Collector{}
+	for _, f := range registry.NewFuncs {
+		cols, err := f(ctx, m)
+		if err != nil {
+			return nil, err
+		}
+		collectors = append(collectors, cols...)
 	}
 
-	view.RegisterExporter(pe)
-	return &svc{prefix: c.Prefix, h: pe}, nil
+	// custom registry to avoid global prometheus registry that can be
+	// modified at global package level
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(collectors...)
+
+	handler := promhttp.HandlerFor(
+		reg,
+		promhttp.HandlerOpts{
+			Registry:          reg,
+			EnableOpenMetrics: true,
+		})
+	return &svc{prefix: c.Prefix, h: handler}, nil
 }
 
 type config struct {

@@ -35,10 +35,10 @@ import (
 	// TODO(labkode): this should not come from this package.
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
+
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/crypto"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/eventials/go-tus"
 	"github.com/eventials/go-tus/memorystore"
@@ -147,7 +147,7 @@ func uploadCommand() *command {
 		dataServerURL := p.UploadEndpoint
 
 		if *protocolFlag == "simple" {
-			httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, dataServerURL, fd)
+			httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, dataServerURL, fd)
 			if err != nil {
 				return err
 			}
@@ -170,7 +170,7 @@ func uploadCommand() *command {
 			// create the tus client.
 			c := tus.DefaultConfig()
 			c.Resume = true
-			c.HttpClient = client
+			c.HttpClient = client.GetNativeHTTP()
 			c.Store, err = memorystore.NewMemoryStore()
 			if err != nil {
 				return err
@@ -268,7 +268,7 @@ func checkUploadWebdavRef(protocols []*gateway.FileUploadProtocol, md os.FileInf
 	}
 
 	c := gowebdav.NewClient(p.UploadEndpoint, "", "")
-	c.SetHeader(ctxpkg.TokenHeader, token)
+	c.SetHeader(appctx.TokenHeader, token)
 	c.SetHeader("Upload-Length", strconv.FormatInt(md.Size(), 10))
 
 	if err = c.WriteStream(filePath, fd, 0700); err != nil {

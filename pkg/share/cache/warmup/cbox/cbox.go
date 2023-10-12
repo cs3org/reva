@@ -26,8 +26,9 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/scope"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/share/cache"
 	"github.com/cs3org/reva/pkg/share/cache/warmup/registry"
@@ -117,7 +118,7 @@ func (m *manager) GetResourceInfos() ([]*provider.ResourceInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx := metadata.AppendToOutgoingContext(context.Background(), ctxpkg.TokenHeader, tkn)
+	ctx := metadata.AppendToOutgoingContext(context.Background(), appctx.TokenHeader, tkn)
 
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(m.conf.GatewaySvc))
 	if err != nil {

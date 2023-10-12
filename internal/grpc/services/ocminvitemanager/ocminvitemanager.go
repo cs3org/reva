@@ -27,7 +27,6 @@ import (
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/client"
 	"github.com/cs3org/reva/pkg/ocm/invite"
@@ -130,7 +129,7 @@ func (s *service) UnprotectedEndpoints() []string {
 }
 
 func (s *service) GenerateInviteToken(ctx context.Context, req *invitepb.GenerateInviteTokenRequest) (*invitepb.GenerateInviteTokenResponse, error) {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	token := CreateToken(s.conf.tokenExpiration, user.GetId(), req.Description)
 
 	if err := s.repo.AddToken(ctx, token); err != nil {
@@ -146,7 +145,7 @@ func (s *service) GenerateInviteToken(ctx context.Context, req *invitepb.Generat
 }
 
 func (s *service) ListInviteTokens(ctx context.Context, req *invitepb.ListInviteTokensRequest) (*invitepb.ListInviteTokensResponse, error) {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	tokens, err := s.repo.ListTokens(ctx, user.Id)
 	if err != nil {
 		return &invitepb.ListInviteTokensResponse{
@@ -160,7 +159,7 @@ func (s *service) ListInviteTokens(ctx context.Context, req *invitepb.ListInvite
 }
 
 func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInviteRequest) (*invitepb.ForwardInviteResponse, error) {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 
 	ocmEndpoint, err := getOCMEndpoint(req.GetOriginSystemProvider())
 	if err != nil {
@@ -329,7 +328,7 @@ func (s *service) GetAcceptedUser(ctx context.Context, req *invitepb.GetAccepted
 }
 
 func getUserFilter(ctx context.Context, req *invitepb.GetAcceptedUserRequest) (*userpb.User, bool) {
-	user, ok := ctxpkg.ContextGetUser(ctx)
+	user, ok := appctx.ContextGetUser(ctx)
 	if ok {
 		return user, true
 	}
@@ -351,7 +350,7 @@ func getUserFilter(ctx context.Context, req *invitepb.GetAcceptedUserRequest) (*
 }
 
 func (s *service) FindAcceptedUsers(ctx context.Context, req *invitepb.FindAcceptedUsersRequest) (*invitepb.FindAcceptedUsersResponse, error) {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	acceptedUsers, err := s.repo.FindRemoteUsers(ctx, user.GetId(), req.GetFilter())
 	if err != nil {
 		return &invitepb.FindAcceptedUsersResponse{
@@ -366,7 +365,7 @@ func (s *service) FindAcceptedUsers(ctx context.Context, req *invitepb.FindAccep
 }
 
 func (s *service) DeleteAcceptedUser(ctx context.Context, req *invitepb.DeleteAcceptedUserRequest) (*invitepb.DeleteAcceptedUserResponse, error) {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	if err := s.repo.DeleteRemoteUser(ctx, user.Id, req.RemoteUserId); err != nil {
 		return &invitepb.DeleteAcceptedUserResponse{
 			Status: status.NewInternal(ctx, err, "error deleting remote users: "+err.Error()),

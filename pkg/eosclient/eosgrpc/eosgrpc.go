@@ -38,7 +38,6 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/eosclient"
 	erpc "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_grpc"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -109,7 +108,7 @@ type Options struct {
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {
-	u, ok := ctxpkg.ContextGetUser(ctx)
+	u, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired(""), "eosfs: error getting user from ctx")
 		return nil, err
@@ -284,7 +283,7 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 	rq.Command = &erpc.NSRequest_Acl{Acl: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctxpkg.ContextGetClean(ctx), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "AddACL").Str("path", path).Str("err", e.Error()).Msg("")
@@ -331,7 +330,7 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 	rq.Command = &erpc.NSRequest_Acl{Acl: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctxpkg.ContextGetClean(ctx), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "RemoveACL").Str("path", path).Str("err", e.Error()).Msg("")
@@ -407,7 +406,7 @@ func (c *Client) getACLForPath(ctx context.Context, auth eosclient.Authorization
 	rq.Command = &erpc.NSRequest_Acl{Acl: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctxpkg.ContextGetClean(ctx), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "GetACLForPath").Str("path", path).Str("err", e.Error()).Msg("")
@@ -452,7 +451,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 	mdrq.Id.Ino = inode
 
 	// Now send the req and see what happens
-	resp, err := c.cl.MD(ctxpkg.ContextGetClean(ctx), mdrq)
+	resp, err := c.cl.MD(appctx.ContextGetClean(ctx), mdrq)
 	if err != nil {
 		log.Error().Err(err).Uint64("inode", inode).Str("err", err.Error()).Send()
 
@@ -536,7 +535,7 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 	rq.Command = &erpc.NSRequest_Xattr{Xattr: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctxpkg.ContextGetClean(ctx), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 
 	if resp != nil && resp.Error != nil && resp.Error.Code == 17 {
@@ -582,7 +581,7 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 	rq.Command = &erpc.NSRequest_Xattr{Xattr: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctxpkg.ContextGetClean(ctx), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 
 	if resp != nil && resp.Error != nil && resp.Error.Code == 61 {
 		return eosclient.AttrNotExistsError
@@ -676,7 +675,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 	mdrq.Id.Path = []byte(path)
 
 	// Now send the req and see what happens
-	resp, err := c.cl.MD(ctxpkg.ContextGetClean(ctx), mdrq)
+	resp, err := c.cl.MD(appctx.ContextGetClean(ctx), mdrq)
 	if err != nil {
 		log.Error().Str("func", "GetFileInfoByPath").Err(err).Str("path", path).Str("err", err.Error()).Msg("")
 
@@ -742,7 +741,7 @@ func (c *Client) GetQuota(ctx context.Context, username string, rootAuth eosclie
 	rq.Command = &erpc.NSRequest_Quota{Quota: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctxpkg.ContextGetClean(ctx), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		return nil, e
@@ -826,7 +825,7 @@ func (c *Client) SetQuota(ctx context.Context, rootAuth eosclient.Authorization,
 	rq.Command = &erpc.NSRequest_Quota{Quota: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctxpkg.ContextGetClean(ctx), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		return e
@@ -874,7 +873,7 @@ func (c *Client) Touch(ctx context.Context, auth eosclient.Authorization, path s
 	rq.Command = &erpc.NSRequest_Touch{Touch: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctxpkg.ContextGetClean(ctx), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "Touch").Str("path", path).Str("err", e.Error()).Msg("")
@@ -918,7 +917,7 @@ func (c *Client) Chown(ctx context.Context, auth, chownAuth eosclient.Authorizat
 	rq.Command = &erpc.NSRequest_Chown{Chown: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctxpkg.ContextGetClean(ctx), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "Chown").Str("path", path).Str("err", e.Error()).Msg("")
@@ -959,7 +958,7 @@ func (c *Client) Chmod(ctx context.Context, auth eosclient.Authorization, mode, 
 	rq.Command = &erpc.NSRequest_Chmod{Chmod: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctxpkg.ContextGetClean(ctx), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "Chmod").Str("path ", path).Str("err", e.Error()).Msg("")
@@ -1001,7 +1000,7 @@ func (c *Client) CreateDir(ctx context.Context, auth eosclient.Authorization, pa
 	rq.Command = &erpc.NSRequest_Mkdir{Mkdir: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctxpkg.ContextGetClean(ctx), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "Createdir").Str("path", path).Str("err", e.Error()).Msg("")
@@ -1036,7 +1035,7 @@ func (c *Client) rm(ctx context.Context, auth eosclient.Authorization, path stri
 	rq.Command = &erpc.NSRequest_Unlink{Unlink: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctxpkg.ContextGetClean(ctx), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "rm").Str("path", path).Str("err", e.Error()).Msg("")
@@ -1072,7 +1071,7 @@ func (c *Client) rmdir(ctx context.Context, auth eosclient.Authorization, path s
 	rq.Command = &erpc.NSRequest_Rm{Rm: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctxpkg.ContextGetClean(ctx), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "rmdir").Str("path", path).Str("err", e.Error()).Msg("")
@@ -1125,7 +1124,7 @@ func (c *Client) Rename(ctx context.Context, auth eosclient.Authorization, oldPa
 	rq.Command = &erpc.NSRequest_Rename{Rename: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctxpkg.ContextGetClean(ctx), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "Rename").Str("oldPath", oldPath).Str("newPath", newPath).Str("err", e.Error()).Msg("")
@@ -1169,7 +1168,7 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 	fdrq.Authkey = c.opt.Authkey
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Find(ctxpkg.ContextGetClean(ctx), fdrq)
+	resp, err := c.cl.Find(appctx.ContextGetClean(ctx), fdrq)
 	if err != nil {
 		log.Error().Err(err).Str("func", "List").Str("path", dpath).Str("err", err.Error()).Msg("grpc response")
 
@@ -1354,7 +1353,7 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 	rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctxpkg.ContextGetClean(ctx), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("err", e.Error()).Msg("")
@@ -1415,7 +1414,7 @@ func (c *Client) RestoreDeletedEntry(ctx context.Context, auth eosclient.Authori
 	rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctxpkg.ContextGetClean(ctx), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "RestoreDeletedEntries").Str("key", key).Str("err", e.Error()).Msg("")
@@ -1451,7 +1450,7 @@ func (c *Client) PurgeDeletedEntries(ctx context.Context, auth eosclient.Authori
 	rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctxpkg.ContextGetClean(ctx), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "PurgeDeletedEntries").Str("err", e.Error()).Msg("")
@@ -1501,7 +1500,7 @@ func (c *Client) RollbackToVersion(ctx context.Context, auth eosclient.Authoriza
 	rq.Command = &erpc.NSRequest_Version{Version: msg}
 
 	// Now send the req and see what happens
-	resp, err := c.cl.Exec(ctxpkg.ContextGetClean(ctx), rq)
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
 		log.Error().Str("func", "RollbackToVersion").Str("err", e.Error()).Msg("")

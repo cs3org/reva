@@ -30,16 +30,13 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
 func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "proppatch")
-	defer span.End()
-
+	ctx := r.Context()
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
@@ -104,9 +101,7 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 }
 
 func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_proppatch")
-	defer span.End()
-
+	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()
 
 	pp, status, err := readProppatch(r.Body)
@@ -239,7 +234,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 						w.WriteHeader(http.StatusInternalServerError)
 						return nil, nil, false
 					}
-					currentUser := ctxpkg.ContextMustGetUser(ctx)
+					currentUser := appctx.ContextMustGetUser(ctx)
 					err = s.favoritesManager.UnsetFavorite(ctx, currentUser.Id, statRes.Info)
 					if err != nil {
 						w.WriteHeader(http.StatusInternalServerError)
@@ -280,7 +275,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 						w.WriteHeader(http.StatusInternalServerError)
 						return nil, nil, false
 					}
-					currentUser := ctxpkg.ContextMustGetUser(ctx)
+					currentUser := appctx.ContextMustGetUser(ctx)
 					err = s.favoritesManager.SetFavorite(ctx, currentUser.Id, statRes.Info)
 					if err != nil {
 						w.WriteHeader(http.StatusInternalServerError)

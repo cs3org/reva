@@ -27,7 +27,6 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/rs/zerolog"
 )
 
@@ -47,13 +46,9 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 		return
 	}
 
-	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "delete")
-	defer span.End()
-
 	req := &provider.DeleteRequest{Ref: ref}
 	res, err := client.Delete(ctx, req)
 	if err != nil {
-		span.RecordError(err)
 		log.Error().Err(err).Msg("error performing delete grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -96,8 +91,6 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 
 func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID string) {
 	ctx := r.Context()
-	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "spaces_delete")
-	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Logger()
 	// retrieve a specific storage space

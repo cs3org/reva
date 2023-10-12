@@ -21,6 +21,7 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -30,7 +31,6 @@ import (
 	"github.com/cs3org/reva/internal/http/services/ocmd"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/pkg/errors"
 )
 
@@ -67,11 +67,11 @@ type Config struct {
 
 // New returns a new OCMClient.
 func New(c *Config) *OCMClient {
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: c.Insecure},
+	}
 	return &OCMClient{
-		client: rhttp.GetHTTPClient(
-			rhttp.Timeout(c.Timeout),
-			rhttp.Insecure(c.Insecure),
-		),
+		client: &http.Client{Transport: tr},
 	}
 }
 

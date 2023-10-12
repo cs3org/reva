@@ -27,7 +27,6 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 )
 
 const (
@@ -79,7 +78,7 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 
 	if ff.Rules.Favorite {
 		// List the users favorite resources.
-		currentUser := ctxpkg.ContextMustGetUser(ctx)
+		currentUser := appctx.ContextMustGetUser(ctx)
 		favorites, err := s.favoritesManager.ListFavorites(ctx, currentUser.Id)
 		if err != nil {
 			log.Error().Err(err).Msg("error getting favorites")

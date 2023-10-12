@@ -21,6 +21,7 @@
 cmd/revad/revad
 cmd/revad/revad.pid
 cmd/reva/reva
+cmd/revad/main/main
 tools/release/release
 
 # Ignore pid files

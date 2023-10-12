@@ -33,7 +33,7 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
@@ -516,7 +516,7 @@ func (c *Client) setEOSAttr(ctx context.Context, auth eosclient.Authorization, a
 
 func (c *Client) handleFavAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path string, info *eosclient.FileInfo, set bool) error {
 	var err error
-	u := ctxpkg.ContextMustGetUser(ctx)
+	u := appctx.ContextMustGetUser(ctx)
 	if info == nil {
 		info, err = c.getRawFileInfoByPath(ctx, auth, path)
 		if err != nil {
@@ -1272,7 +1272,7 @@ func (c *Client) mapToFileInfo(ctx context.Context, kv, attrs map[string]string,
 
 func parseAndSetFavoriteAttr(ctx context.Context, attrs map[string]string) {
 	// Read and correctly set the favorite attr
-	if user, ok := ctxpkg.ContextGetUser(ctx); ok {
+	if user, ok := appctx.ContextGetUser(ctx); ok {
 		if favAttrStr, ok := attrs[favoritesKey]; ok {
 			favUsers, err := acl.Parse(favAttrStr, acl.ShortTextForm)
 			if err != nil {

@@ -35,7 +35,8 @@ import (
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/ocmd"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/client"
 	"github.com/cs3org/reva/pkg/ocm/share"
@@ -281,7 +282,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	}
 
 	info := statRes.Info
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	tkn := utils.RandString(32)
 	now := time.Now().UnixNano()
 	ts := &typespb.Timestamp{
@@ -373,7 +374,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 func (s *service) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareRequest) (*ocm.RemoveOCMShareResponse, error) {
 	// TODO (gdelmont): notify the remote provider using the /notification ocm endpoint
 	// https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1notifications/post
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	if err := s.repo.DeleteShare(ctx, user, req.Ref); err != nil {
 		if errors.Is(err, share.ErrShareNotFound) {
 			return &ocm.RemoveOCMShareResponse{
@@ -394,7 +395,7 @@ func (s *service) GetOCMShare(ctx context.Context, req *ocm.GetOCMShareRequest) 
 	// if the request is by token, the user does not need to be in the ctx
 	var user *userpb.User
 	if req.Ref.GetToken() == "" {
-		user = ctxpkg.ContextMustGetUser(ctx)
+		user = appctx.ContextMustGetUser(ctx)
 	}
 	ocmshare, err := s.repo.GetShare(ctx, user, req.Ref)
 	if err != nil {
@@ -438,7 +439,7 @@ func (s *service) GetOCMShareByToken(ctx context.Context, req *ocm.GetOCMShareBy
 }
 
 func (s *service) ListOCMShares(ctx context.Context, req *ocm.ListOCMSharesRequest) (*ocm.ListOCMSharesResponse, error) {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	shares, err := s.repo.ListShares(ctx, user, req.Filters)
 	if err != nil {
 		return &ocm.ListOCMSharesResponse{
@@ -454,7 +455,7 @@ func (s *service) ListOCMShares(ctx context.Context, req *ocm.ListOCMSharesReque
 }
 
 func (s *service) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareRequest) (*ocm.UpdateOCMShareResponse, error) {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	if len(req.Field) == 0 {
 		return &ocm.UpdateOCMShareResponse{
 			Status: status.NewOK(ctx),
@@ -479,7 +480,7 @@ func (s *service) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareReq
 }
 
 func (s *service) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceivedOCMSharesRequest) (*ocm.ListReceivedOCMSharesResponse, error) {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	shares, err := s.repo.ListReceivedShares(ctx, user)
 	if err != nil {
 		return &ocm.ListReceivedOCMSharesResponse{
@@ -495,7 +496,7 @@ func (s *service) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceiv
 }
 
 func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceivedOCMShareRequest) (*ocm.UpdateReceivedOCMShareResponse, error) {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	_, err := s.repo.UpdateReceivedShare(ctx, user, req.Share, req.UpdateMask)
 	if err != nil {
 		if errors.Is(err, share.ErrShareNotFound) {
@@ -515,7 +516,7 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 }
 
 func (s *service) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMShareRequest) (*ocm.GetReceivedOCMShareResponse, error) {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	ocmshare, err := s.repo.GetReceivedShare(ctx, user, req.Ref)
 	if err != nil {
 		if errors.Is(err, share.ErrShareNotFound) {

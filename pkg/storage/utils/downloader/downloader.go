@@ -30,7 +30,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/httpclient"
 )
 
 // Downloader is the interface implemented by the objects that are able to
@@ -41,14 +41,14 @@ type Downloader interface {
 
 type revaDownloader struct {
 	gtw        gateway.GatewayAPIClient
-	httpClient *http.Client
+	httpClient *httpclient.Client
 }
 
 // NewDownloader creates a Downloader from the reva gateway.
-func NewDownloader(gtw gateway.GatewayAPIClient, options ...rhttp.Option) Downloader {
+func NewDownloader(gtw gateway.GatewayAPIClient, hc *httpclient.Client) Downloader {
 	return &revaDownloader{
 		gtw:        gtw,
-		httpClient: rhttp.GetHTTPClient(options...),
+		httpClient: hc,
 	}
 }
 
@@ -92,7 +92,7 @@ func (r *revaDownloader) Download(ctx context.Context, path, versionKey string) 
 		return nil, err
 	}
 
-	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, p.DownloadEndpoint, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, p.DownloadEndpoint, nil)
 	if err != nil {
 		return nil, err
 	}

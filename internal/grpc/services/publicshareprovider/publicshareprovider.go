@@ -25,7 +25,6 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/publicshare"
@@ -136,7 +135,7 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 		}, nil
 	}
 
-	u, ok := ctxpkg.ContextGetUser(ctx)
+	u, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		log.Error().Msg("error getting user from context")
 	}
@@ -167,7 +166,7 @@ func (s *service) RemovePublicShare(ctx context.Context, req *link.RemovePublicS
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "remove").Msg("remove public share")
 
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	err := s.sm.RevokePublicShare(ctx, user, req.Ref)
 	switch err.(type) {
 	case nil:
@@ -216,7 +215,7 @@ func (s *service) GetPublicShare(ctx context.Context, req *link.GetPublicShareRe
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "get").Msg("get public share")
 
-	u, ok := ctxpkg.ContextGetUser(ctx)
+	u, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		log.Error().Msg("error getting user from context")
 	}
@@ -242,11 +241,11 @@ func (s *service) GetPublicShare(ctx context.Context, req *link.GetPublicShareRe
 func (s *service) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRequest) (*link.ListPublicSharesResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "list").Msg("list public share")
-	user, _ := ctxpkg.ContextGetUser(ctx)
+	user, _ := appctx.ContextGetUser(ctx)
 
 	if req.Opaque != nil {
-		if v, ok := req.Opaque.Map[ctxpkg.ResoucePathCtx]; ok {
-			ctx = ctxpkg.ContextSetResourcePath(ctx, string(v.Value))
+		if v, ok := req.Opaque.Map[appctx.ResoucePathCtx]; ok {
+			ctx = appctx.ContextSetResourcePath(ctx, string(v.Value))
 		}
 	}
 
@@ -269,7 +268,7 @@ func (s *service) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicS
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "update").Msg("update public share")
 
-	u, ok := ctxpkg.ContextGetUser(ctx)
+	u, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		log.Error().Msg("error getting user from context")
 	}

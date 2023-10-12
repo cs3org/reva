@@ -19,92 +19,23 @@
 package trace
 
 import (
-	"fmt"
-	"net/url"
-	"strings"
+	"context"
 
-	"go.opentelemetry.io/otel/exporters/jaeger"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/resource"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
-	"go.opentelemetry.io/otel/trace"
+	"github.com/gofrs/uuid"
 )
 
-var (
-	// Propagator is the default Reva propagator.
-	Propagator = propagation.NewCompositeTextMapPropagator(propagation.Baggage{}, propagation.TraceContext{})
+type key struct{}
 
-	// Provider is the default Reva tracer provider.
-	Provider = trace.NewNoopTracerProvider()
-)
-
-// SetTraceProvider sets the TracerProvider at a package level.
-func SetTraceProvider(collectorEndpoint string, agentEndpoint, serviceName string) {
-	// default to 'reva' as service name if not set
-	if serviceName == "" {
-		serviceName = "reva"
-	}
-
-	var exp *jaeger.Exporter
-	var err error
-
-	if agentEndpoint != "" {
-		var agentHost string
-		var agentPort string
-
-		agentHost, agentPort, err = parseAgentConfig(agentEndpoint)
-		if err != nil {
-			panic(err)
-		}
-
-		exp, err = jaeger.New(
-			jaeger.WithAgentEndpoint(
-				jaeger.WithAgentHost(agentHost),
-				jaeger.WithAgentPort(agentPort),
-			),
-		)
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	if collectorEndpoint != "" {
-		exp, err = jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(collectorEndpoint)))
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	Provider = sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exp),
-		sdktrace.WithResource(resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceNameKey.String(serviceName),
-		)),
-	)
+func Get(ctx context.Context) (t string) {
+	t, _ = ctx.Value(key{}).(string)
+	return
 }
 
-func parseAgentConfig(ae string) (string, string, error) {
-	u, err := url.Parse(ae)
-	// as per url.go:
-	// [...] Trying to parse a hostname and path
-	// without a scheme is invalid but may not necessarily return an
-	// error, due to parsing ambiguities.
-	if err == nil && u.Hostname() != "" && u.Port() != "" {
-		return u.Hostname(), u.Port(), nil
-	}
+func Generate() string {
+	return uuid.Must(uuid.NewV4()).String()
+}
 
-	p := strings.Split(ae, ":")
-	if len(p) != 2 {
-		return "", "", fmt.Errorf(fmt.Sprintf("invalid agent endpoint `%s`. expected format: `hostname:port`", ae))
-	}
-
-	switch {
-	case p[0] == "" && p[1] == "": // case ae = ":"
-		return "", "", fmt.Errorf(fmt.Sprintf("invalid agent endpoint `%s`. expected format: `hostname:port`", ae))
-	case p[0] == "":
-		return "", "", fmt.Errorf(fmt.Sprintf("invalid agent endpoint `%s`. expected format: `hostname:port`", ae))
-	}
-	return p[0], p[1], nil
+// ContextSetTrace stores the trace in the context.
+func Set(ctx context.Context, trace string) context.Context {
+	return context.WithValue(ctx, key{}, trace)
 }

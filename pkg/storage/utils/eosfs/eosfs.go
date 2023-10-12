@@ -43,7 +43,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/eosclient/eosbinary"
 	"github.com/cs3org/reva/pkg/eosclient/eosgrpc"
@@ -272,7 +272,7 @@ func (fs *eosfs) Shutdown(ctx context.Context) error {
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {
-	u, ok := ctxpkg.ContextGetUser(ctx)
+	u, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired(""), "eosfs: error getting user from ctx")
 		return nil, err
@@ -843,7 +843,7 @@ func (fs *eosfs) getUserFromID(ctx context.Context, userID *userpb.UserId) (*use
 }
 
 func (fs *eosfs) userHasWriteAccess(ctx context.Context, user *userpb.User, ref *provider.Reference) (bool, error) {
-	ctx = ctxpkg.ContextSetUser(ctx, user)
+	ctx = appctx.ContextSetUser(ctx, user)
 	resInfo, err := fs.GetMD(ctx, ref, nil)
 	if err != nil {
 		return false, err
@@ -860,7 +860,7 @@ func (fs *eosfs) userIDHasWriteAccess(ctx context.Context, userID *userpb.UserId
 }
 
 func (fs *eosfs) userHasReadAccess(ctx context.Context, user *userpb.User, ref *provider.Reference) (bool, error) {
-	ctx = ctxpkg.ContextSetUser(ctx, user)
+	ctx = appctx.ContextSetUser(ctx, user)
 	resInfo, err := fs.GetMD(ctx, ref, nil)
 	if err != nil {
 		return false, err
@@ -1554,7 +1554,7 @@ func (fs *eosfs) CreateHome(ctx context.Context) error {
 }
 
 func (fs *eosfs) runPostCreateHomeHook(ctx context.Context) error {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user := appctx.ContextMustGetUser(ctx)
 	return exec.Command(fs.conf.OnPostCreateHomeHook, user.Username).Run()
 }
 
@@ -2092,7 +2092,7 @@ func (fs *eosfs) convertToFileReference(ctx context.Context, eosFileInfo *eoscli
 
 // permissionSet returns the permission set for the current user.
 func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileInfo, owner *userpb.UserId) *provider.ResourcePermissions {
-	u, ok := ctxpkg.ContextGetUser(ctx)
+	u, ok := appctx.ContextGetUser(ctx)
 	if !ok || u.Id == nil {
 		return &provider.ResourcePermissions{
 			// no permissions

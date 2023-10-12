@@ -41,12 +41,10 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc"
 )
 
@@ -715,15 +713,6 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 		}, nil
 	}
 
-	// check DeleteRequest for any known opaque properties.
-	if req.Opaque != nil {
-		_, ok := req.Opaque.Map["deleting_shared_resource"]
-		if ok {
-			// it is a binary key; its existence signals true. Although, do not assume.
-			ctx = context.WithValue(ctx, appctx.DeletingSharedResource, true)
-		}
-	}
-
 	if err := s.storage.Delete(ctx, newRef); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
@@ -781,14 +770,6 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "stat")
-	defer span.End()
-
-	span.SetAttributes(attribute.KeyValue{
-		Key:   "reference",
-		Value: attribute.StringValue(req.Ref.String()),
-	})
-
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		// The path might be a virtual view; handle that case

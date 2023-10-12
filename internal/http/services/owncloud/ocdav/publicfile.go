@@ -27,7 +27,6 @@ import (
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	rtrace "github.com/cs3org/reva/pkg/trace"
 )
 
 // PublicFileHandler handles requests on a shared file. it needs to be wrapped in a collection.
@@ -86,9 +85,7 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 }
 
 func (s *svc) adjustResourcePathInURL(w http.ResponseWriter, r *http.Request) bool {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "adjustResourcePathInURL")
-	defer span.End()
-
+	ctx := r.Context()
 	// find actual file name
 	tokenStatInfo := ctx.Value(tokenStatInfoKey{}).(*provider.ResourceInfo)
 	sublog := appctx.GetLogger(ctx).With().Interface("tokenStatInfo", tokenStatInfo).Logger()
@@ -125,9 +122,7 @@ func (s *svc) adjustResourcePathInURL(w http.ResponseWriter, r *http.Request) bo
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace.
 func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns string, onContainer bool) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "token_propfind")
-	defer span.End()
-
+	ctx := r.Context()
 	tokenStatInfo := ctx.Value(tokenStatInfoKey{}).(*provider.ResourceInfo)
 	sublog := appctx.GetLogger(ctx).With().Interface("tokenStatInfo", tokenStatInfo).Logger()
 	sublog.Debug().Msg("handlePropfindOnToken")
