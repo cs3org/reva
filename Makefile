@@ -41,9 +41,9 @@ lint-fix: $(GOLANGCI_LINT)
 	gofmt -w .
 	$(GOLANGCI_LINT) run --fix
 
+CALENS_DIR := $(shell mktemp -d)
 $(CALENS):
 	@mkdir -p $(@D)
-	CALENS_DIR=`mktemp -d`
 	git clone --depth 1 --branch v0.2.0 -c advice.detachedHead=false https://github.com/restic/calens.git $(CALENS_DIR)
 	cd $(CALENS_DIR) && GOBIN=$(@D) go install
 	rm -rf $(CALENS_DIR)
