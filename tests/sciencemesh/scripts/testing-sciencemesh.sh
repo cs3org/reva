@@ -3,6 +3,7 @@
 ENV_ROOT=$(pwd)
 export ENV_ROOT=${ENV_ROOT}
 [ ! -d "./scripts" ] && echo "Directory ./scripts DOES NOT exist inside $ENV_ROOT, are you running this from the repo root?" && exit 1
+[ ! -d "./tls" ] && echo "Directory ./tls DOES NOT exist inside $ENV_ROOT, are you running this from the repo root?" && exit 1
 [ ! -d "./nextcloud-sciencemesh" ] && echo "Directory ./nextcloud-sciencemesh DOES NOT exist inside $ENV_ROOT, did you run ./scripts/init-sciencemesh.sh?" && exit 1
 [ ! -d "./nextcloud-sciencemesh/vendor" ] && echo "Directory ./nextcloud-sciencemesh/vendor DOES NOT exist inside $ENV_ROOT. Try: rmdir ./nextcloud-sciencemesh ; ./scripts/init-sciencemesh.sh" && exit 1
 [ ! -d "./owncloud-sciencemesh" ] && echo "Directory ./owncloud-sciencemesh DOES NOT exist inside $ENV_ROOT, did you run ./scripts/init-sciencemesh.sh?" && exit 1

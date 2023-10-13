@@ -12,6 +12,10 @@ BRANCH_OWNCLOUD_APP=owncloud
 REPO_WOPISERVER=https://github.com/cs3org/wopiserver
 TAG_WOPISERVER=master
 
+# TLS folder.
+[ ! -d "tls" ] &&
+    mkdir tls && cd scripts && ./gencerts.sh
+
 # Nextcloud Sciencemesh source code.
 [ ! -d "nextcloud-sciencemesh" ] &&                                             \
     git clone                                                                   \
