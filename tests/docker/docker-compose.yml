@@ -29,7 +29,7 @@ services:
     volumes:
       - ./eos-storage/scripts:/scripts
     environment:
-      INIT_SCRIPT: /scripts/eosbinary-init.sh
+      INIT_SCRIPT: /scripts/${STORAGE_DRIVER}-init.sh
   litmus:
     image: registry.cern.ch/docker.io/owncloud/litmus:latest
     environment:

@@ -83,16 +83,23 @@ jobs:
       fail-fast: false
       matrix:
         test: [litmus-1, litmus-2]
+        storage: ["eosclient"]
     uses: ./.github/workflows/compose.yml
     with:
       test: ${{ matrix.test }}
+      storage: ${{ matrix.storage }}
   acceptance-1:
     needs:
       - docker-revad-eos
+    strategy:
+      fail-fast: false
+      matrix:
+        storage: ["eosclient"]
     uses: ./.github/workflows/compose.yml
     with:
       test: acceptance-1
       submodules: true
+      storage: ${{ matrix.storage }}
   acceptance-2:
     needs:
       - docker-revad-eos
@@ -100,9 +107,11 @@ jobs:
       fail-fast: false
       matrix:
         part: [1, 2, 3, 4, 5, 6]
+        storage: ["eosclient"]
     uses: ./.github/workflows/compose.yml
     with:
       test: acceptance-2
       submodules: true
       parts: 6
       part: ${{ matrix.part }}
+      storage: ${{ matrix.storage }}

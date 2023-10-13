@@ -80,6 +80,7 @@ export REVAD_IMAGE	  ?= revad-eos
 export EOS_FULL_IMAGE ?= eos-full
 export PARTS		  ?= 1
 export PART			  ?= 1
+export STORAGE_DRIVER ?= eosclient
 
 .PHONY: $(TEST)
 $(TEST): docker-eos-full-tests docker-revad-eos

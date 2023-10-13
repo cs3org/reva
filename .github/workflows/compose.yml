@@ -15,6 +15,8 @@ on:
         type: number
       part:
         type: number
+      storage:
+        type: string
 
 jobs:
   compose:
@@ -35,6 +37,7 @@ jobs:
           REVAD_IMAGE: ${{ inputs.image }}
           PARTS: ${{ inputs.parts }}
           PART: ${{ inputs.part }}
+          STORAGE_DRIVER: ${{ inputs.storage }}
       - name: Clean
         if: always()
         run: make docker-clean
