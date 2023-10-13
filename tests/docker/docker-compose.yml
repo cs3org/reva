@@ -6,7 +6,7 @@ services:
     # instead of uploading and share through the github runners
     # TODO (gdelmont): in future this should be parameterized
     # to support other reva images as before
-    build: 
+    build:
       context: ../../
       dockerfile: docker/Dockerfile.revad-eos
     volumes:
@@ -61,7 +61,7 @@ services:
   storage-home:
     extends: revad
     hostname: storage-home
-    command: -c /etc/revad/storage-home.toml
+    command: -c /etc/revad/storage-home-${STORAGE_DRIVER}.toml
     volumes:
       - shared-volume:/var/tmp
   users:
@@ -111,7 +111,7 @@ services:
   storage-users:
     extends: revad
     hostname: storage-users
-    command: -c /etc/revad/storage-users.toml
+    command: -c /etc/revad/storage-users-${STORAGE_DRIVER}.toml
     volumes:
       - shared-volume:/var/tmp
     depends_on:
@@ -125,7 +125,7 @@ services:
       - shared-volume:/var/tmp
   storage-local-1:
     extends: revad
-    command: -c /etc/revad/storage-local-1.toml
+    command: -c /etc/revad/storage-local-1-${STORAGE_DRIVER}.toml
     volumes:
       - shared-volume:/var/tmp
     depends_on:
@@ -133,7 +133,7 @@ services:
         condition: service_healthy
   storage-local-2:
     extends: revad
-    command: -c /etc/revad/storage-local-2.toml
+    command: -c /etc/revad/storage-local-2-${STORAGE_DRIVER}.toml
     volumes:
       - shared-volume:/var/tmp
     depends_on:
