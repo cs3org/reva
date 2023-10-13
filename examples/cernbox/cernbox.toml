@@ -12,8 +12,8 @@ machine_api_key = "machine-api-key"
 wopi_shared_secret = "shared-secret-2"
 
 [http]
-certfile = "/etc/revad/tls/your.revad.ssl.crt"
-keyfile = "/etc/revad/tls/your.revad.ssl.key"
+certfile = "/etc/tls/your.revad.ssl.crt"
+keyfile = "/etc/tls/your.revad.ssl.key"
 
 [log]
 level = "debug"
