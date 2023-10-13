@@ -203,6 +203,10 @@ sed < "${ENV_ROOT}/wopi-sciencemesh/docker/etc/wopiserver.cs3.conf"           \
   sed "s|your.key.pem|/usr/local/share/ca-certificates/wopi${EFSS1}1.key|"    \
   > "${ENV_ROOT}/temp/wopi-1-conf/wopiserver.conf"
 
+if [ "${EFSS1}" != "cernbox" ]; then
+  echo 'lockasattr = True' >> "${ENV_ROOT}/temp/wopi-1-conf/wopiserver.conf"
+fi
+
 docker run --detach --network=testnet                                         \
   --name="wopi${EFSS1}1.docker"                                               \
   -e HOST="wopi${EFSS1}1"                                                     \
@@ -219,6 +223,10 @@ sed < "${ENV_ROOT}/wopi-sciencemesh/docker/etc/wopiserver.cs3.conf"           \
   sed "s|your.cert.pem|/usr/local/share/ca-certificates/wopi${EFSS2}2.crt|" | \
   sed "s|your.key.pem|/usr/local/share/ca-certificates/wopi${EFSS2}2.key|"    \
   > "${ENV_ROOT}/temp/wopi-2-conf/wopiserver.conf"
+
+if [ "${EFSS2}" != "cernbox" ]; then
+  echo 'lockasattr = True' >> "${ENV_ROOT}/temp/wopi-2-conf/wopiserver.conf"
+fi
 
 docker run --detach --network=testnet                                         \
   --name="wopi${EFSS2}2.docker"                                               \
