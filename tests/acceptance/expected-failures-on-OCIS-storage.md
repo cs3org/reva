@@ -296,14 +296,14 @@ API, search, favorites, config, capabilities, not existing endpoints, CORS and o
 -   [coreApiMain/main.feature:7](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/main.feature#L7) Scenario: robots.txt file should be accessible
 
 #### [Ability to return error messages in Webdav response bodies](https://github.com/owncloud/ocis/issues/1293)
--   [coreApiAuthOcs/ocsDELETEAuth.feature:10](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsDELETEAuth.feature#L10) Scenario: send DELETE requests to OCS endpoints as admin with wrong password
+-   [coreApiAuthOcs/ocsDELETEAuth.feature:7](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsDELETEAuth.feature#L7) Scenario: send DELETE requests to OCS endpoints as admin with wrong password
 -   [coreApiAuthOcs/ocsGETAuth.feature:10](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsGETAuth.feature#L10) Scenario: using OCS anonymously
 -   [coreApiAuthOcs/ocsGETAuth.feature:44](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsGETAuth.feature#L44) Scenario: using OCS with non-admin basic auth
 -   [coreApiAuthOcs/ocsGETAuth.feature:75](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsGETAuth.feature#L75) Scenario: using OCS as normal user with wrong password
 -   [coreApiAuthOcs/ocsGETAuth.feature:106](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsGETAuth.feature#L106) Scenario:using OCS with admin basic auth
 -   [coreApiAuthOcs/ocsGETAuth.feature:123](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsGETAuth.feature#L123) Scenario: using OCS as admin user with wrong password
 -   [coreApiAuthOcs/ocsPOSTAuth.feature:10](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsPOSTAuth.feature#L10) Scenario: send POST requests to OCS endpoints as normal user with wrong password
--   [coreApiAuthOcs/ocsPUTAuth.feature:10](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsPUTAuth.feature#L10) Scenario: send PUT request to OCS endpoints as admin with wrong password
+-   [coreApiAuthOcs/ocsPUTAuth.feature:7](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsPUTAuth.feature#L7) Scenario: send PUT request to OCS endpoints as admin with wrong password
 -   [coreApiSharePublicLink1/createPublicLinkShare.feature:317](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink1/createPublicLinkShare.feature#L317)
 
 #### [sending MKCOL requests to another or non-existing user's webDav endpoints as normal user should return 404](https://github.com/owncloud/ocis/issues/5049)
@@ -400,7 +400,7 @@ _ocdav: api compatibility, return correct status code_
 -   [coreApiShareManagementBasicToShares/createShareToSharesFolder.feature:716](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareManagementBasicToShares/createShareToSharesFolder.feature#L716)
 
 #### [Request to edit non-existing user by authorized admin gets unauthorized in http response](https://github.com/owncloud/ocis/issues/38423)
--   [coreApiAuthOcs/ocsPUTAuth.feature:26](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsPUTAuth.feature#L26)
+-   [coreApiAuthOcs/ocsPUTAuth.feature:22](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsPUTAuth.feature#L22)
 
 
 ### Won't fix
