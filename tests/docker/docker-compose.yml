@@ -26,11 +26,10 @@ services:
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=0
     hostname: eosuser.example.org
-    healthcheck:
-      test: eos file info /eos/user
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    volumes:
+      - ./eos-storage/scripts:/scripts
+    environment:
+      INIT_SCRIPT: /scripts/eosbinary-init.sh
   litmus:
     image: registry.cern.ch/docker.io/owncloud/litmus:latest
     environment:
