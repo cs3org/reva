@@ -229,4 +229,4 @@ require (
 )
 
 // the replacement build is based on https://github.com/dragonchaser/cs3apis/tree/master
-replace github.com/cs3org/go-cs3apis => github.com/aduffeck/go-cs3apis v0.0.0-20231009082215-ad45e19edac0
+replace github.com/cs3org/go-cs3apis => github.com/dragonchaser/go-cs3apis v0.0.0-20231013070415-81bad5867684
