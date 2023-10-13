@@ -157,8 +157,8 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 	shareRequest := &collaboration.UpdateReceivedShareRequest{
 		Share: &collaboration.ReceivedShare{
 			Share: &collaboration.Share{
-				Id:   &collaboration.ShareId{OpaqueId: shareID},
-				Hide: hideFlag,
+				Id:     &collaboration.ShareId{OpaqueId: shareID},
+				Hidden: hideFlag,
 			},
 			MountPoint: &provider.Reference{
 				Path: mountPoint,

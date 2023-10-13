@@ -68,7 +68,7 @@ type Space struct {
 type State struct {
 	State      collaboration.ShareState
 	MountPoint *provider.Reference
-	Hide       bool
+	Hidden     bool
 }
 
 // New returns a new Cache instance
@@ -118,7 +118,7 @@ func (c *Cache) Add(ctx context.Context, userID, spaceID string, rs *collaborati
 		receivedSpace.States[rs.Share.Id.GetOpaqueId()] = &State{
 			State:      rs.State,
 			MountPoint: rs.MountPoint,
-			Hide:       rs.Share.Hide,
+			Hidden:     rs.Share.Hidden,
 		}
 
 		return c.persist(ctx, userID)

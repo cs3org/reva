@@ -958,7 +958,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 	// TODO(refs) filter out "invalid" shares
 	for _, rs := range lrsRes.GetShares() {
-		if rs.Share.Hide && !showHidden {
+		if rs.Share.Hidden && !showHidden {
 			continue
 		}
 		if stateFilter != ocsStateUnknown && rs.GetState() != stateFilter {
