@@ -14,7 +14,7 @@ TAG_WOPISERVER=master
 
 # TLS folder.
 [ ! -d "tls" ] &&
-    mkdir tls && cd scripts && ./gencerts.sh
+    mkdir tls && cd scripts && ./gencerts.sh && cd -
 
 # Nextcloud Sciencemesh source code.
 [ ! -d "nextcloud-sciencemesh" ] &&                                             \

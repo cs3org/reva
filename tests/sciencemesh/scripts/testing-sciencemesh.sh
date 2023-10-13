@@ -86,7 +86,7 @@ docker run --detach --network=testnet                                         \
   -e USER="einstein"                                                          \
   -e PASS="relativity"                                                        \
   -v "${ENV_ROOT}/temp/${EFSS1}.sh:/${EFSS1}-init.sh"                         \
-  -v "${ENV_ROOT}/$EFSS1-sciencemesh:/var/www/html/apps/sciencemesh"          \
+  -v "${ENV_ROOT}/${EFSS1}-sciencemesh:/var/www/html/apps/sciencemesh"        \
   -v "${ENV_ROOT}/temp/${EFSS1}-1-tls:/tls"                                   \
   "pondersource/dev-stock-${EFSS1}-sciencemesh"
 
@@ -176,7 +176,7 @@ docker run --detach --network=testnet                                         \
   -v "${ENV_ROOT}/../..:/reva"                                                \
   -v "${ENV_ROOT}/revad:/configs/revad"                                       \
   -v "${ENV_ROOT}/cernbox:/configs/cernbox"                                   \
-  -v "${ENV_ROOT}/tls:/etc/tls"                                               \
+  -v "${ENV_ROOT}/temp/${EFSS1}-1-tls:/etc/tls"                               \
   -v "${ENV_ROOT}/scripts/reva-run.sh:/usr/bin/reva-run.sh"                   \
   -v "${ENV_ROOT}/scripts/reva-kill.sh:/usr/bin/reva-kill.sh"                 \
   -v "${ENV_ROOT}/scripts/reva-entrypoint.sh:/entrypoint.sh"                  \
@@ -189,7 +189,7 @@ docker run --detach --network=testnet                                         \
   -v "${ENV_ROOT}/../..:/reva"                                                \
   -v "${ENV_ROOT}/revad:/configs/revad"                                       \
   -v "${ENV_ROOT}/cernbox:/configs/cernbox"                                   \
-  -v "${ENV_ROOT}/tls:/etc/tls"                                               \
+  -v "${ENV_ROOT}/temp/${EFSS2}-2-tls:/etc/tls"                               \
   -v "${ENV_ROOT}/scripts/reva-run.sh:/usr/bin/reva-run.sh"                   \
   -v "${ENV_ROOT}/scripts/reva-kill.sh:/usr/bin/reva-kill.sh"                 \
   -v "${ENV_ROOT}/scripts/reva-entrypoint.sh:/entrypoint.sh"                  \
