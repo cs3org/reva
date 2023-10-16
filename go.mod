@@ -50,7 +50,7 @@ require (
 	github.com/prometheus/alertmanager v0.26.0
 	github.com/prometheus/client_golang v1.16.0
 	github.com/rs/cors v1.10.1
-	github.com/rs/zerolog v1.28.0
+	github.com/rs/zerolog v1.31.0
 	github.com/sethvargo/go-password v0.2.0
 	github.com/stretchr/testify v1.8.4
 	github.com/studio-b12/gowebdav v0.9.0
@@ -110,8 +110,8 @@ require (
 	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/leodido/go-urn v1.2.4 // indirect
 	github.com/lestrrat-go/strftime v1.0.4 // indirect
-	github.com/mattn/go-colorable v0.1.12 // indirect
-	github.com/mattn/go-isatty v0.0.17 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/mattn/go-tty v0.0.3 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
