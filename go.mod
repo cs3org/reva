@@ -39,7 +39,7 @@ require (
 	github.com/juliangruber/go-intersect v1.1.0
 	github.com/mattn/go-sqlite3 v1.14.17
 	github.com/maxymania/go-system v0.0.0-20170110133659-647cc364bf0b
-	github.com/mileusna/useragent v1.2.1
+	github.com/mileusna/useragent v1.3.4
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/nats-io/nats-server/v2 v2.9.19
 	github.com/nats-io/nats-streaming-server v0.25.5
