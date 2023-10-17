@@ -96,25 +96,20 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		log := appctx.GetLogger(ctx)
 
+		// the grpc Gateway service will route requests
+		// to the underlying grpc services, therefore, the auth
+		// knowledge about what routes are public or protected is
+		// a responsibility of the final service.
 		if utils.Skip(info.FullMethod, unprotected) {
-			log.Debug().Str("method", info.FullMethod).Msg("skipping auth")
+			// if this is unprotected, there is no point into trying to decode any token,
+			// which can create wrong assumptions on inner services.
+			// So we just bail out by not doing any user decoding.
 
-			// If a token is present, set it anyway, as we might need the user info
-			// to decide the storage provider.
-			tkn, ok := appctx.ContextGetToken(ctx)
-			if ok {
-				u, scopes, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr, true)
-				if err == nil {
-					if blockedUsers.IsBlocked(u.Username) {
-						return nil, status.Errorf(codes.PermissionDenied, "user %s blocked", u.Username)
-					}
-					ctx = appctx.ContextSetUser(ctx, u)
-					ctx = appctx.ContextSetScopes(ctx, scopes)
-				}
-			}
+			log.Debug().Str("method", info.FullMethod).Msg("skipping auth")
 			return handler(ctx, req)
 		}
 
+		// from this point on, the method must be authenticated
 		tkn, ok := appctx.ContextGetToken(ctx)
 
 		if !ok || tkn == "" {
@@ -137,6 +132,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 		ctx = appctx.ContextSetScopes(ctx, scopes)
 		return handler(ctx, req)
 	}
+
 	return interceptor, nil
 }
 
@@ -171,19 +167,11 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 
 		if utils.Skip(info.FullMethod, unprotected) {
 			log.Debug().Str("method", info.FullMethod).Msg("skipping auth")
+			// if this is unprotected, there is no point into trying to decode any token,
+			// which can create wrong assumptions on inner services.
+			// So we just bail out by not doing any user decoding.
 
-			// If a token is present, set it anyway, as we might need the user info
-			// to decide the storage provider.
-			tkn, ok := appctx.ContextGetToken(ctx)
-			if ok {
-				u, scopes, err := dismantleToken(ctx, tkn, ss, tokenManager, conf.GatewayAddr, true)
-				if err == nil {
-					ctx = appctx.ContextSetUser(ctx, u)
-					ctx = appctx.ContextSetScopes(ctx, scopes)
-					ss = newWrappedServerStream(ctx, ss)
-				}
-			}
-
+			log.Debug().Str("method", info.FullMethod).Msg("skipping auth")
 			return handler(srv, ss)
 		}
 
