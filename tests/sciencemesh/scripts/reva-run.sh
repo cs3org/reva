@@ -16,6 +16,7 @@ sed -i "s/your.efss.org/${HOST//reva/}.docker/g" /etc/revad/sciencemesh.toml
 sed -i "s/your.wopi.org/${HOST/reva/wopi/}.docker/g" /etc/revad/*.toml
 sed -i "/^mesh_directory_url /s/=.*$/= 'https:\/\/meshdir\.docker\/meshdir'/" /etc/revad/sciencemesh.toml
 sed -i "/ocmproviderauthorizer\]/{n;s/.*/driver = \"json\"/;}" /etc/revad/sciencemesh.toml
+sed -i "s/debug/trace/" /etc/revad/*.toml
 
 cp /etc/tls/*.crt /usr/local/share/ca-certificates/
 update-ca-certificates
