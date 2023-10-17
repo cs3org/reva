@@ -515,10 +515,10 @@ _ocs: api compatibility, return correct status code_
 -   [coreApiShareManagementToShares/mergeShare.feature:131](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareManagementToShares/mergeShare.feature#L131)
 
 #### [Sharing folder and sub-folder with same user but different permission,the permission of sub-folder is not obeyed ](https://github.com/owncloud/ocis/issues/2440)
--   [coreApiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature:221](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature#L221)
--   [coreApiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature:252](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature#L252)
--   [coreApiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature:351](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature#L351)
--   [coreApiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature:382](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature#L382)
+-   [coreApiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature:220](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature#L220)
+-   [coreApiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature:251](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature#L251)
+-   [coreApiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature:350](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature#L350)
+-   [coreApiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature:381](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature#L381)
 
 #### [copying the file inside Shares folder returns 404](https://github.com/owncloud/ocis/issues/3874)
 -   [coreApiWebdavProperties1/copyFile.feature:407](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties1/copyFile.feature#L407)
