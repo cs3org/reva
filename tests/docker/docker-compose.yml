@@ -15,7 +15,10 @@ services:
     healthcheck:
       test: sleep 5
   eos-storage:
-    image: ${EOS_FULL_IMAGE}
+    # image: ${EOS_FULL_IMAGE}
+    build:
+      context: eos-storage
+      dockerfile: Dockerfile
     security_opt:
       - seccomp:unconfined
     ulimits:
@@ -28,6 +31,9 @@ services:
     hostname: eosuser.example.org
     volumes:
       - ./eos-storage/scripts:/scripts
+      - ./eos-storage/cert/MyOrg-RootCA.pem:/etc/grid-security/certificates/MyOrg-RootCA.pem
+      # - ./eos-storage/cert/eoskey.pem:/etc/grid-security/hostkey.pem
+      # - ./eos-storage/cert/eoscert.pem:/etc/grid-security/hostcert.pem
     environment:
       INIT_SCRIPT: /scripts/${STORAGE_DRIVER}-init.sh
   litmus:
