@@ -60,6 +60,7 @@ require (
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/ginkgo/v2 v2.11.0
 	github.com/onsi/gomega v1.27.8
+	github.com/owncloud/libre-graph-api-go v1.0.5-0.20230512172639-d458ad6b300b
 	github.com/owncloud/ocis/v2 v2.0.1-0.20230606150602-25d7dae4667b
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/xattr v0.4.9
@@ -85,13 +86,13 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.16.0
 	go.opentelemetry.io/otel/sdk v1.16.0
 	go.opentelemetry.io/otel/trace v1.16.0
-	golang.org/x/crypto v0.11.0
+	golang.org/x/crypto v0.14.0
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
-	golang.org/x/oauth2 v0.10.0
+	golang.org/x/oauth2 v0.13.0
 	golang.org/x/sync v0.2.0
-	golang.org/x/sys v0.10.0
-	golang.org/x/term v0.10.0
-	golang.org/x/text v0.11.0
+	golang.org/x/sys v0.13.0
+	golang.org/x/term v0.13.0
+	golang.org/x/text v0.13.0
 	google.golang.org/genproto v0.0.0-20230526203410-71b5a4ffd15e
 	google.golang.org/grpc v1.56.2
 	google.golang.org/protobuf v1.31.0
@@ -213,10 +214,10 @@ require (
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.23.0 // indirect
 	golang.org/x/mod v0.10.0 // indirect
-	golang.org/x/net v0.12.0 // indirect
+	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.9.3 // indirect
-	google.golang.org/appengine v1.6.7 // indirect
+	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20230530153820-e85fd2cbaebc // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230530153820-e85fd2cbaebc // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
@@ -229,3 +230,5 @@ require (
 
 // the replacement build is based on https://github.com/dragonchaser/cs3apis/tree/master
 replace github.com/cs3org/go-cs3apis => github.com/aduffeck/go-cs3apis v0.0.0-20231009082215-ad45e19edac0
+
+replace github.com/owncloud/libre-graph-api-go => github.com/owncloud/libre-graph-api-go v1.0.5-0.20231013101137-2757d88d116d
