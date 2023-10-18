@@ -177,17 +177,6 @@ func (c *Cache) Get(ctx context.Context, userID, spaceID, shareID string) (*Stat
 	return c.ReceivedSpaces[userID].Spaces[spaceID].States[shareID], nil
 }
 
-// Sync updates the in-memory data with the data from the storage if it is outdated
-func (c *Cache) Sync(ctx context.Context, userID string) error {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Grab lock")
-	unlock := c.lockUser(userID)
-	span.End()
-	span.SetAttributes(attribute.String("cs3.userid", userID))
-	defer unlock()
-
-	return c.syncWithLock(ctx, userID)
-}
-
 // List returns a list of received shares for a given user
 // The return list is guaranteed to be thread-safe
 func (c *Cache) List(ctx context.Context, userID string) (map[string]*Space, error) {
