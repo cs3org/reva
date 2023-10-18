@@ -151,7 +151,7 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 		return nil
 	}
 
-	hideFlag, _ := strconv.ParseBool(r.URL.Query().Get("hide"))
+	hideFlag, _ := strconv.ParseBool(r.URL.Query().Get("hidden"))
 
 	// we need to add a path to the share
 	shareRequest := &collaboration.UpdateReceivedShareRequest{
