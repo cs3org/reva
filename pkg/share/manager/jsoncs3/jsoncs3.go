@@ -805,20 +805,18 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 	}
 
 	// add all spaces the user has receved shares for, this includes mount points and share state for groups
-	if m.UserReceivedStates.ReceivedSpaces[user.Id.OpaqueId] != nil {
-		spaces, err := m.UserReceivedStates.List(ctx, user.Id.OpaqueId)
-		if err != nil {
-			return nil, err
-		}
-		for ssid, rspace := range spaces {
-			if rs, ok := ssids[ssid]; ok {
-				for shareid, state := range rspace.States {
-					// overwrite state
-					rs.States[shareid] = state
-				}
-			} else {
-				ssids[ssid] = rspace
+	spaces, err := m.UserReceivedStates.List(ctx, user.Id.OpaqueId)
+	if err != nil {
+		return nil, err
+	}
+	for ssid, rspace := range spaces {
+		if rs, ok := ssids[ssid]; ok {
+			for shareid, state := range rspace.States {
+				// overwrite state
+				rs.States[shareid] = state
 			}
+		} else {
+			ssids[ssid] = rspace
 		}
 	}
 
