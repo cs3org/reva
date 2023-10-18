@@ -233,7 +233,6 @@ func CS3Share2ShareData(ctx context.Context, share *collaboration.Share) (*Share
 		// Displaynames are added later
 		UIDOwner:     LocalUserIDToString(share.GetCreator()),
 		UIDFileOwner: LocalUserIDToString(share.GetOwner()),
-		Hide:         share.Hidden,
 	}
 
 	if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {

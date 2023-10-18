@@ -974,7 +974,7 @@ var _ = Describe("Jsoncs3", func() {
 				}
 				rs.Share.Hidden = true
 
-				rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"hide", "mount_point"}}, nil)
+				rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"hidden", "mount_point"}}, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(rs.MountPoint.Path).To(Equal("newMP"))
 				Expect(rs.Share.Hidden).To(Equal(true))
@@ -1072,7 +1072,7 @@ var _ = Describe("Jsoncs3", func() {
 
 					rs.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
 					rs.Share.Hidden = true
-					rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state", "hide"}}, nil)
+					rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state", "hidden"}}, nil)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 					Expect(rs.Share.Hidden).To(Equal(true))
@@ -1101,7 +1101,7 @@ var _ = Describe("Jsoncs3", func() {
 
 					rs.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
 					rs.Share.Hidden = true
-					rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state", "hide"}}, nil)
+					rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state", "hidden"}}, nil)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 					Expect(rs.Share.Hidden).To(Equal(true))
@@ -1119,7 +1119,7 @@ var _ = Describe("Jsoncs3", func() {
 					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 
 					rs.Share.Hidden = false
-					rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state", "hide"}}, nil)
+					rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state", "hidden"}}, nil)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 					Expect(rs.Share.Hidden).To(Equal(false))

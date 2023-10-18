@@ -739,7 +739,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, share *col
 
 	share.Permissions = &collaboration.SharePermissions{Permissions: role.CS3ResourcePermissions()}
 
-	var fieldMaskPaths = []string{"permissions", "hide"}
+	var fieldMaskPaths = []string{"permissions", "hidden"}
 
 	expireDate := r.PostFormValue("expireDate")
 	var expirationTs *types.Timestamp
@@ -958,7 +958,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 	// TODO(refs) filter out "invalid" shares
 	for _, rs := range lrsRes.GetShares() {
-		if rs.Share.Hidden && !showHidden {
+		if rs.Hidden && !showHidden {
 			continue
 		}
 		if stateFilter != ocsStateUnknown && rs.GetState() != stateFilter {

@@ -157,14 +157,14 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 	shareRequest := &collaboration.UpdateReceivedShareRequest{
 		Share: &collaboration.ReceivedShare{
 			Share: &collaboration.Share{
-				Id:     &collaboration.ShareId{OpaqueId: shareID},
-				Hidden: hideFlag,
+				Id: &collaboration.ShareId{OpaqueId: shareID},
 			},
 			MountPoint: &provider.Reference{
 				Path: mountPoint,
 			},
+			Hidden: hideFlag,
 		},
-		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state", "hide"}},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state", "hidden"}},
 	}
 	if rejectShare {
 		shareRequest.Share.State = collaboration.ShareState_SHARE_STATE_REJECTED
