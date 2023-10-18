@@ -94,7 +94,6 @@ var _ = Describe("Cache", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			c = receivedsharecache.New(storage, 0*time.Second)
-			Expect(c.Sync(ctx, userID)).To(Succeed())
 			s, err := c.Get(ctx, userID, spaceID, shareID)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(s).ToNot(BeNil())
