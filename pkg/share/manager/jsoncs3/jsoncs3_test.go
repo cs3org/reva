@@ -957,7 +957,7 @@ var _ = Describe("Jsoncs3", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(rs.MountPoint.Path).To(Equal("newMP"))
-				Expect(rs.Share.Hidden).To(Equal(false))
+				Expect(rs.Hidden).To(Equal(false))
 			})
 
 			It("hides the share", func() {
@@ -972,12 +972,12 @@ var _ = Describe("Jsoncs3", func() {
 				rs.MountPoint = &providerv1beta1.Reference{
 					Path: "newMP",
 				}
-				rs.Share.Hidden = true
+				rs.Hidden = true
 
 				rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"hidden", "mount_point"}}, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(rs.MountPoint.Path).To(Equal("newMP"))
-				Expect(rs.Share.Hidden).To(Equal(true))
+				Expect(rs.Hidden).To(Equal(true))
 
 				rs, err = m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
 					Spec: &collaboration.ShareReference_Id{
@@ -986,7 +986,7 @@ var _ = Describe("Jsoncs3", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(rs.MountPoint.Path).To(Equal("newMP"))
-				Expect(rs.Share.Hidden).To(Equal(true))
+				Expect(rs.Hidden).To(Equal(true))
 			})
 
 			It("handles invalid field masks", func() {
@@ -1071,11 +1071,11 @@ var _ = Describe("Jsoncs3", func() {
 					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
 
 					rs.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
-					rs.Share.Hidden = true
+					rs.Hidden = true
 					rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state", "hidden"}}, nil)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
-					Expect(rs.Share.Hidden).To(Equal(true))
+					Expect(rs.Hidden).To(Equal(true))
 
 					m, err := jsoncs3.New(storage, nil, 0, nil, 0) // Reset in-memory cache
 					Expect(err).ToNot(HaveOccurred())
@@ -1085,7 +1085,7 @@ var _ = Describe("Jsoncs3", func() {
 							Id: gshare.Id,
 						},
 					})
-					Expect(rs.Share.Hidden).To(Equal(true))
+					Expect(rs.Hidden).To(Equal(true))
 					Expect(err).ToNot(HaveOccurred())
 					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 				})
@@ -1100,11 +1100,11 @@ var _ = Describe("Jsoncs3", func() {
 					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
 
 					rs.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
-					rs.Share.Hidden = true
+					rs.Hidden = true
 					rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state", "hidden"}}, nil)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
-					Expect(rs.Share.Hidden).To(Equal(true))
+					Expect(rs.Hidden).To(Equal(true))
 
 					m, err := jsoncs3.New(storage, nil, 0, nil, 0) // Reset in-memory cache
 					Expect(err).ToNot(HaveOccurred())
@@ -1114,22 +1114,22 @@ var _ = Describe("Jsoncs3", func() {
 							Id: gshare.Id,
 						},
 					})
-					Expect(rs.Share.Hidden).To(Equal(true))
+					Expect(rs.Hidden).To(Equal(true))
 					Expect(err).ToNot(HaveOccurred())
 					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 
-					rs.Share.Hidden = false
+					rs.Hidden = false
 					rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state", "hidden"}}, nil)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
-					Expect(rs.Share.Hidden).To(Equal(false))
+					Expect(rs.Hidden).To(Equal(false))
 
 					rs, err = m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
 						Spec: &collaboration.ShareReference_Id{
 							Id: gshare.Id,
 						},
 					})
-					Expect(rs.Share.Hidden).To(Equal(false))
+					Expect(rs.Hidden).To(Equal(false))
 					Expect(err).ToNot(HaveOccurred())
 					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 				})

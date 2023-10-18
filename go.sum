@@ -529,8 +529,8 @@ github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2/go.mod h1:SqUrOPUn
 github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f h1:lO4WD4F/rVNCu3HqELle0jiPLLBs70cWOduZpkS1E78=
 github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f/go.mod h1:cuUVRXasLTGF7a8hSLbxyZXjz+1KgoB3wDUb6vlszIc=
 github.com/docker/go-units v0.4.0/go.mod h1:fgPhTUdO+D/Jk86RDLlptpiXQzgHJF7gydDDbaIK4Dk=
-github.com/dragonchaser/go-cs3apis v0.0.0-20231013070415-81bad5867684 h1:F0zuwlUK3+8uKKki+/+VYWnbDutbS1z8SR4iiJN4syE=
-github.com/dragonchaser/go-cs3apis v0.0.0-20231013070415-81bad5867684/go.mod h1:TKUgPjk4kNU0KLd9ZxoFE74Wv6PiXckF4RB3749FztA=
+github.com/dragonchaser/go-cs3apis v0.0.0-20231018101134-aadeeb03233c h1:W12nbHzbDqM4WNDtEUNJXEzLK//0JpvKp0OdGc/yvwA=
+github.com/dragonchaser/go-cs3apis v0.0.0-20231018101134-aadeeb03233c/go.mod h1:TKUgPjk4kNU0KLd9ZxoFE74Wv6PiXckF4RB3749FztA=
 github.com/dustin/go-humanize v1.0.0 h1:VSnTsYCnlFHaM2/igO1h6X3HA71jcobQuxemgkq4zYo=
 github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
 github.com/emirpasic/gods v1.12.0/go.mod h1:YfzfFFoVP/catgzJb4IKIqXjX78Ha8FMSDh3ymbK86o=
