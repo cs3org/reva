@@ -171,6 +171,24 @@ func (s *svc) Close() error {
 
 func (s *svc) UnprotectedEndpoints() []string {
 	return []string{
+		"/cs3.gateway.v1beta1.GatewayAPI/ListShare",
+		"/cs3.gateway.v1beta1.GatewayAPI/GetAppPassword",
+		"/cs3.gateway.v1beta1.GatewayAPI/AddAppProvider",
+		"/cs3.gateway.v1beta1.GatewayAPI/ListSupportedMimeTypes",
+		"/cs3.gateway.v1beta1.GatewayAPI/Authenticate",
+		"/cs3.gateway.v1beta1.GatewayAPI/GetAuthProvider",
+		"/cs3.gateway.v1beta1.GatewayAPI/ListAuthProviders",
+		"/cs3.gateway.v1beta1.GatewayAPI/CreateOCMCoreShare",
+		"/cs3.gateway.v1beta1.GatewayAPI/AcceptInvite",
+		"/cs3.gateway.v1beta1.GatewayAPI/GetAcceptedUser",
+		"/cs3.gateway.v1beta1.GatewayAPI/IsProviderAllowed",
+		"/cs3.gateway.v1beta1.GatewayAPI/ListAllProviders",
+		"/cs3.gateway.v1beta1.GatewayAPI/GetOCMShareByToken",
+		"/cs3.gateway.v1beta1.GatewayAPI/GetPublicShareByToken",
+		"/cs3.gateway.v1beta1.GatewayAPI/GetUser",
+		"/cs3.gateway.v1beta1.GatewayAPI/GetUserByClaim",
+		"/cs3.gateway.v1beta1.GatewayAPI/GetUserGroups",
+
 		"/cs3.auth.applications.v1beta1.ApplicationsAPI/GetAppPassword",
 		"/cs3.app.registry.v1beta1.RegistryAPI/AddAppProvider",
 		"/cs3.app.registry.v1beta1.RegistryAPI/ListSupportedMimeTypes",
