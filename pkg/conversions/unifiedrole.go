@@ -23,43 +23,13 @@ const (
 	// UnifiedRoleManagerID Unified role manager id.
 	UnifiedRoleManagerID = "312c0871-5ef7-4b3a-85b6-0e4074c64049"
 
-	// UnifiedRoleUnknownID Unified role unknown id.
-	UnifiedRoleUnknownID = "d76b1f66-8cd6-4ac1-9769-468cfcb6c683"
-	// UnifiedRoleLegacyID Unified role legacy id.
-	UnifiedRoleLegacyID = "9486869a-bfa0-415e-81c4-c15e41b7cb2a"
-	// UnifiedRoleDeniedID Unified role denied id
-	UnifiedRoleDeniedID = "91a93759-19a7-41c0-adba-a2f343178b75"
-
-	// UnifiedRoleNoneID Unified role none id
-	UnifiedRoleNoneID = "312c0871-5ef7-4b3a-85b6-0e4074c64049"
-
-	// UnifiedRoleConditionSelf TODO defines constraints when the principal is the owner of the target resource
+	// UnifiedRoleConditionSelf TODO defines constraints
 	UnifiedRoleConditionSelf = "Self: @Subject.objectId == @Resource.objectId"
-	// UnifiedRoleConditionOwner TODO defines constraints when the principal is the owner of the target resource
+	// UnifiedRoleConditionOwner defines constraints when the principal is the owner of the target resource
 	UnifiedRoleConditionOwner = "Owner: @Subject.objectId Any_of @Resource.owners"
-	// UnifiedRoleConditionGrantee TODO does not exist in MS Graph, but we use it to express permissions on shared resources
+	// UnifiedRoleConditionGrantee does not exist in MS Graph, but we use it to express permissions on shared resources
 	UnifiedRoleConditionGrantee = "Grantee: @Subject.objectId Any_of @Resource.grantee"
 )
-
-// NewUnknownUnifiedRole creates an unknown role. An Unknown role has no permissions over a cs3 resource nor any ocs endpoint.
-func NewUnknownUnifiedRole() *libregraph.UnifiedRoleDefinition {
-	return &libregraph.UnifiedRoleDefinition{
-		Id:               proto.String(UnifiedRoleUnknownID),
-		Description:      proto.String("An Unknown role has no permissions over a cs3 resource nor any ocs endpoint"),
-		DisplayName:      displayName(NewUnknownRole()),
-		LibreGraphWeight: proto.Int32(0),
-	}
-}
-
-// NewDeniedUnifiedRole creates a fully denied role
-func NewDeniedUnifiedRole() *libregraph.UnifiedRoleDefinition {
-	return &libregraph.UnifiedRoleDefinition{
-		Id:               proto.String(UnifiedRoleDeniedID),
-		Description:      proto.String("A fully denied role"),
-		DisplayName:      displayName(NewDeniedRole()),
-		LibreGraphWeight: proto.Int32(0),
-	}
-}
 
 // NewViewerUnifiedRole creates a viewer role. `sharing` indicates if sharing permission should be added
 func NewViewerUnifiedRole(sharing bool) *libregraph.UnifiedRoleDefinition {
@@ -151,7 +121,7 @@ func NewCoownerUnifiedRole() *libregraph.UnifiedRoleDefinition {
 	r := NewCoownerRole()
 	return &libregraph.UnifiedRoleDefinition{
 		Id:          proto.String(UnifiedRoleCoownerID),
-		Description: proto.String(""), // TODO add the description
+		Description: proto.String("Grants co-owner permissions on a resource"),
 		DisplayName: displayName(r),
 		RolePermissions: []libregraph.UnifiedRolePermission{
 			{
@@ -180,23 +150,12 @@ func NewUploaderUnifiedRole() *libregraph.UnifiedRoleDefinition {
 	}
 }
 
-// NewNoneUnifiedRole creates a role with no permissions
-// TODO Do we need to map it?
-func NewNoneUnifiedRole() *libregraph.UnifiedRoleDefinition {
-	return &libregraph.UnifiedRoleDefinition{
-		Id:               proto.String(UnifiedRoleNoneID),
-		Description:      proto.String("A role with no permissions"),
-		DisplayName:      displayName(NewNoneRole()),
-		LibreGraphWeight: proto.Int32(0),
-	}
-}
-
 // NewManagerUnifiedRole creates a manager role
 func NewManagerUnifiedRole() *libregraph.UnifiedRoleDefinition {
 	r := NewManagerRole()
 	return &libregraph.UnifiedRoleDefinition{
 		Id:          proto.String(UnifiedRoleManagerID),
-		Description: proto.String(""), // TODO add the description
+		Description: proto.String("Grants manager permissions on a resource. Semantically equivalent to co-owner"),
 		DisplayName: displayName(r),
 		RolePermissions: []libregraph.UnifiedRolePermission{
 			{
@@ -230,12 +189,6 @@ func displayName(role *Role) *string {
 		displayName = "Uploader"
 	case RoleManager:
 		displayName = "Manager"
-	case RoleUnknown:
-		displayName = "Unknown"
-	case RoleLegacy:
-		displayName = "Legacy"
-	case RoleDenied:
-		displayName = "Denied"
 	default:
 		return nil
 	}

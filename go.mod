@@ -60,7 +60,7 @@ require (
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/ginkgo/v2 v2.11.0
 	github.com/onsi/gomega v1.27.8
-	github.com/owncloud/libre-graph-api-go v1.0.5-0.20230512172639-d458ad6b300b
+	github.com/owncloud/libre-graph-api-go v1.0.5-0.20231019070917-17ae03ef40e4
 	github.com/owncloud/ocis/v2 v2.0.1-0.20230606150602-25d7dae4667b
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/xattr v0.4.9
@@ -230,5 +230,3 @@ require (
 
 // the replacement build is based on https://github.com/dragonchaser/cs3apis/tree/master
 replace github.com/cs3org/go-cs3apis => github.com/aduffeck/go-cs3apis v0.0.0-20231009082215-ad45e19edac0
-
-replace github.com/owncloud/libre-graph-api-go => github.com/owncloud/libre-graph-api-go v1.0.5-0.20231013101137-2757d88d116d
