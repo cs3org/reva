@@ -200,7 +200,7 @@ func (c *Cache) List(ctx context.Context, userID string) (map[string]*Space, err
 			spaceCopy.States[shareID] = &State{
 				State:      state.State,
 				MountPoint: state.MountPoint,
-				Hide:       state.Hide,
+				Hidden:     state.Hidden,
 			}
 		}
 		spaces[spaceID] = spaceCopy
