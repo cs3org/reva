@@ -59,7 +59,7 @@ var (
 // i.e: /a/b/c/d/e contains prefix /a/b/c.
 func Skip(source string, prefixes []string) bool {
 	for i := range prefixes {
-		if strings.HasPrefix(source+"/", prefixes[i]+"/") {
+		if strings.HasPrefix(path.Join(source, "/"), path.Join(prefixes[i], "/")) {
 			return true
 		}
 	}
