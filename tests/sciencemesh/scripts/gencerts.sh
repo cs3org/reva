@@ -38,10 +38,10 @@ createCert revad1
 createCert revad2
 
 for efss in owncloud nextcloud cernbox; do
+  createCert ${efss}1
+  createCert ${efss}2
   createCert reva${efss}1
   createCert reva${efss}2
-  [ "${efss}" != "cernbox" ] && createCert ${efss}1
-  [ "${efss}" != "cernbox" ] && createCert ${efss}2
   createCert wopi${efss}1
   createCert wopi${efss}2
 done

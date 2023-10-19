@@ -4,10 +4,12 @@ ENV_ROOT=$(pwd)
 export ENV_ROOT=${ENV_ROOT}
 [ ! -d "./scripts" ] && echo "Directory ./scripts DOES NOT exist inside $ENV_ROOT, are you running this from the repo root?" && exit 1
 [ ! -d "./tls" ] && echo "Directory ./tls DOES NOT exist inside $ENV_ROOT, are you running this from the repo root?" && exit 1
-[ ! -d "./nextcloud-sciencemesh" ] && echo "Directory ./nextcloud-sciencemesh DOES NOT exist inside $ENV_ROOT, did you run ./scripts/init-sciencemesh.sh?" && exit 1
+[ ! -d "./nextcloud-sciencemesh" ] && echo "Directory ./nextcloud-sciencemesh DOES NOT exist inside $ENV_ROOT, did you run ./init-sciencemesh.sh?" && exit 1
 [ ! -d "./nextcloud-sciencemesh/vendor" ] && echo "Directory ./nextcloud-sciencemesh/vendor DOES NOT exist inside $ENV_ROOT. Try: rmdir ./nextcloud-sciencemesh ; ./scripts/init-sciencemesh.sh" && exit 1
-[ ! -d "./owncloud-sciencemesh" ] && echo "Directory ./owncloud-sciencemesh DOES NOT exist inside $ENV_ROOT, did you run ./scripts/init-sciencemesh.sh?" && exit 1
+[ ! -d "./owncloud-sciencemesh" ] && echo "Directory ./owncloud-sciencemesh DOES NOT exist inside $ENV_ROOT, did you run ./init-sciencemesh.sh?" && exit 1
 [ ! -d "./owncloud-sciencemesh/vendor" ] && echo "Directory ./owncloud-sciencemesh/vendor DOES NOT exist inside $ENV_ROOT. Try: rmdir ./owncloud-sciencemesh ; ./scripts/init-sciencemesh.sh" && exit 1
+[ ! -d "./cernbox-web-sciencemesh" ] && echo "Directory ./cernbox-web-sciencemesh DOES NOT exist inside $ENV_ROOT, did you run ./init-sciencemesh.sh?" && exit 1
+[ ! -d "./wopi-sciencemesh" ] && echo "Directory ./wopi-sciencemesh DOES NOT exist inside $ENV_ROOT, did you run ./init-sciencemesh.sh?" && exit 1
 
 function waitForPort {
   x=$(docker exec -it "${1}" ss -tulpn | grep -c "${2}")
@@ -66,6 +68,15 @@ docker run --detach --name=collabora.docker --network=testnet -p 9980:9980 -t \
 # --server-side-across-configs=true --log-file=/dev/stdout                    \
 # rclone/rclone:latest
 
+# this is used only by CERNBox so far, and may be used by OCIS in the future
+docker run --detach --network=testnet --name=idp.docker                       \
+  -e KEYCLOAK_ADMIN="admin" -e KEYCLOAK_ADMIN_PASSWORD="admin"                \
+  -e KC_HOSTNAME="idp.docker"                                                 \
+  -v "${ENV_ROOT}/cernbox/keycloak:/opt/keycloak/data/import"                 \
+  -p 9080:8080                                                                \
+  quay.io/keycloak/keycloak:21.1.1                                            \
+  start-dev --import-realm
+
 # EFSS1
 if [ "${EFSS1}" != "cernbox" ]; then
 
@@ -95,7 +106,7 @@ waitForPort maria1.docker 3306
 waitForPort "${EFSS1}1.docker" 443
 
 docker exec "${EFSS1}1.docker" bash -c "cp /tls/*.crt /usr/local/share/ca-certificates/"
-docker exec "${EFSS1}1.docker" update-ca-certificates
+docker exec "${EFSS1}1.docker" update-ca-certificates >& /dev/null
 docker exec "${EFSS1}1.docker" bash -c "cat /etc/ssl/certs/ca-certificates.crt >> /var/www/html/resources/config/ca-bundle.crt"
 
 docker exec -u www-data "${EFSS1}1.docker" sh "/${EFSS1}-init.sh"
@@ -114,7 +125,18 @@ docker exec maria1.docker mariadb -u root -peilohtho9oTahsuongeeTh7reedahPo1Ohwi
   -e "insert into oc_appconfig (appid, configkey, configvalue) values ('sciencemesh', 'inviteManagerApikey', 'invite-manager-endpoint');"
 
 else
-  echo "Skipping db setup for EFSS1 ${EFSS1}"
+
+# setup only
+sed < "${ENV_ROOT}/cernbox/nginx/nginx.conf"                                  \
+  "s/your.revad.org/reva${EFSS1}1.docker/" |                                  \
+  sed "s|your.cert.pem|/usr/local/share/ca-certificates/${EFSS1}1.crt|" |     \
+  sed "s|your.key.pem|/usr/local/share/ca-certificates/${EFSS1}1.key|"        \
+  > "${ENV_ROOT}/temp/cernbox-1-conf/nginx.conf"
+
+sed < "${ENV_ROOT}/cernbox/web.json"                                          \
+  "s/your.nginx.org/${EFSS1}1.docker/"                                        \
+  > "${ENV_ROOT}/temp/cernbox-1-conf/config.json"
+
 fi
 
 # EFSS2
@@ -146,7 +168,7 @@ waitForPort maria2.docker 3306
 waitForPort "${EFSS2}2.docker" 443
 
 docker exec "${EFSS2}2.docker" bash -c "cp /tls/*.crt /usr/local/share/ca-certificates/"
-docker exec "${EFSS2}2.docker" update-ca-certificates
+docker exec "${EFSS2}2.docker" update-ca-certificates >& /dev/null
 docker exec "${EFSS2}2.docker" bash -c "cat /etc/ssl/certs/ca-certificates.crt >> /var/www/html/resources/config/ca-bundle.crt"
 
 docker exec -u www-data "${EFSS2}2.docker" sh "/${EFSS2}-init.sh"
@@ -164,7 +186,18 @@ docker exec maria2.docker mariadb -u root -peilohtho9oTahsuongeeTh7reedahPo1Ohwi
   -e "insert into oc_appconfig (appid, configkey, configvalue) values ('sciencemesh', 'inviteManagerApikey', 'invite-manager-endpoint');"
 
 else
-  echo "Skipping db setup for EFSS2 ${EFSS2}"
+
+# setup only
+sed < "${ENV_ROOT}/cernbox/nginx/nginx.conf"                                  \
+  "s/your.revad.org/reva${EFSS2}2.docker/" |                                  \
+  sed "s|your.cert.pem|/usr/local/share/ca-certificates/${EFSS2}2.crt|" |     \
+  sed "s|your.key.pem|/usr/local/share/ca-certificates/${EFSS2}2.key|"        \
+  > "${ENV_ROOT}/temp/cernbox-2-conf/nginx.conf"
+
+sed < "${ENV_ROOT}/cernbox/web.json"                                          \
+  "s/your.nginx.org/${EFSS2}2.docker/"                                        \
+  > "${ENV_ROOT}/temp/cernbox-2-conf/config.json"
+
 fi
 
 # IOP: reva
@@ -203,10 +236,6 @@ sed < "${ENV_ROOT}/wopi-sciencemesh/docker/etc/wopiserver.cs3.conf"           \
   sed "s|your.key.pem|/usr/local/share/ca-certificates/wopi${EFSS1}1.key|"    \
   > "${ENV_ROOT}/temp/wopi-1-conf/wopiserver.conf"
 
-if [ "${EFSS1}" != "cernbox" ]; then
-  echo 'lockasattr = True' >> "${ENV_ROOT}/temp/wopi-1-conf/wopiserver.conf"
-fi
-
 docker run --detach --network=testnet                                         \
   --name="wopi${EFSS1}1.docker"                                               \
   -e HOST="wopi${EFSS1}1"                                                     \
@@ -224,10 +253,6 @@ sed < "${ENV_ROOT}/wopi-sciencemesh/docker/etc/wopiserver.cs3.conf"           \
   sed "s|your.key.pem|/usr/local/share/ca-certificates/wopi${EFSS2}2.key|"    \
   > "${ENV_ROOT}/temp/wopi-2-conf/wopiserver.conf"
 
-if [ "${EFSS2}" != "cernbox" ]; then
-  echo 'lockasattr = True' >> "${ENV_ROOT}/temp/wopi-2-conf/wopiserver.conf"
-fi
-
 docker run --detach --network=testnet                                         \
   --name="wopi${EFSS2}2.docker"                                               \
   -e HOST="wopi${EFSS2}2"                                                     \
@@ -237,6 +262,38 @@ docker run --detach --network=testnet                                         \
   cs3org/wopiserver:latest
 
 docker exec "wopi${EFSS2}2.docker" update-ca-certificates >& /dev/null
+
+# nginx for CERNBox, after reva
+if [ "${EFSS1}" == "cernbox" ]; then
+
+docker run --detach --network=testnet                                         \
+  --name="${EFSS1}1.docker"                                                   \
+  -v "${ENV_ROOT}/temp/cernbox-1-conf:/etc/nginx"                             \
+  -v "${ENV_ROOT}/temp/cernbox-1-conf/config.json:/etc/ocis/config.json"      \
+  -v "${ENV_ROOT}/tls:/usr/local/share/ca-certificates"                       \
+  -v "${ENV_ROOT}/cernbox-web-sciencemesh/web:/var/www/web"                   \
+  -v "${ENV_ROOT}/cernbox-web-sciencemesh/cernbox:/var/www/cernbox"           \
+  nginx
+
+docker exec "${EFSS1}1.docker" update-ca-certificates >& /dev/null
+
+fi
+
+if [ "${EFSS2}" == "cernbox" ]; then
+
+docker run --detach --network=testnet                                         \
+  --name="${EFSS2}2.docker"                                                   \
+  -v "${ENV_ROOT}/temp/cernbox-2-conf:/etc/nginx"                             \
+  -v "${ENV_ROOT}/temp/cernbox-2-conf/config.json:/etc/ocis/config.json"      \
+  -v "${ENV_ROOT}/tls:/usr/local/share/ca-certificates"                       \
+  -v "${ENV_ROOT}/cernbox-web-sciencemesh/web:/var/www/web"                   \
+  -v "${ENV_ROOT}/cernbox-web-sciencemesh/cernbox:/var/www/cernbox"           \
+  nginx
+
+docker exec "${EFSS2}2.docker" update-ca-certificates >& /dev/null
+
+fi
+
 
 # instructions.
 echo "Now browse to http://ocmhost:5800 and inside there to https://${EFSS1}1.docker"
