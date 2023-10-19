@@ -580,9 +580,9 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 			},
 		})
 		if err == nil && uRes.GetShare() != nil {
-			receivedshare = uRes.Share
 			resourceID = uRes.Share.Share.ResourceId
 			share, err = conversions.CS3Share2ShareData(ctx, uRes.Share.Share)
+			share.Hidden = uRes.Share.Hidden
 			if err != nil {
 				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 				return

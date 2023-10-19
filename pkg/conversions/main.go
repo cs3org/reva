@@ -172,6 +172,7 @@ type ShareData struct {
 	Quicklink bool `json:"quicklink,omitempty" xml:"quicklink,omitempty"`
 	// PasswordProtected represents a public share is password protected
 	// PasswordProtected bool `json:"password_protected,omitempty" xml:"password_protected,omitempty"`
+	Hidden bool `json:"hidden" xml:"hidden"`
 }
 
 // ShareeData holds share recipient search results

@@ -124,8 +124,7 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for id := range sharesToAccept {
-		fieldMask := &fieldmaskpb.FieldMask{Paths: []string{"rejectshare"}}
-		data := h.updateReceivedShare(w, r, id, mount, fieldMask)
+		data := h.updateReceivedShare(w, r, id, mount, &fieldmaskpb.FieldMask{})
 		// only render the data for the changed share
 		if id == shareID && data != nil {
 			response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
@@ -136,7 +135,8 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 // RejectReceivedShare handles DELETE Requests on /apps/files_sharing/api/v1/shares/{shareid}
 func (h *Handler) RejectReceivedShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareid")
-	data := h.updateReceivedShare(w, r, shareID, "", &fieldmaskpb.FieldMask{})
+	fieldMask := &fieldmaskpb.FieldMask{Paths: []string{"rejectshare"}}
+	data := h.updateReceivedShare(w, r, shareID, "", fieldMask)
 	if data != nil {
 		response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
 	}
@@ -160,7 +160,7 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 		case "mountpoint":
 			continue
 		case "hidden":
-			hideFlag, _ = strconv.ParseBool(chi.URLParam(r, "hidden"))
+			hideFlag, _ = strconv.ParseBool(r.URL.Query().Get("hidden"))
 		}
 	}
 	ctx := r.Context()
@@ -222,6 +222,7 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 	}
 
 	data.State = mapState(rs.GetState())
+	data.Hidden = rs.Hidden
 
 	h.addFileInfo(ctx, data, info)
 	h.mapUserIds(r.Context(), client, data)
