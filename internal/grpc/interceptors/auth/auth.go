@@ -96,15 +96,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		log := appctx.GetLogger(ctx)
 
-		// the grpc Gateway service will route requests
-		// to the underlying grpc services, therefore, the auth
-		// knowledge about what routes are public or protected is
-		// a responsibility of the final service.
 		if utils.Skip(info.FullMethod, unprotected) {
-			// if this is unprotected, there is no point into trying to decode any token,
-			// which can create wrong assumptions on inner services.
-			// So we just bail out by not doing any user decoding.
-
 			log.Debug().Str("method", info.FullMethod).Msg("skipping auth")
 			return handler(ctx, req)
 		}
@@ -166,11 +158,6 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 		log := appctx.GetLogger(ctx)
 
 		if utils.Skip(info.FullMethod, unprotected) {
-			log.Debug().Str("method", info.FullMethod).Msg("skipping auth")
-			// if this is unprotected, there is no point into trying to decode any token,
-			// which can create wrong assumptions on inner services.
-			// So we just bail out by not doing any user decoding.
-
 			log.Debug().Str("method", info.FullMethod).Msg("skipping auth")
 			return handler(srv, ss)
 		}
