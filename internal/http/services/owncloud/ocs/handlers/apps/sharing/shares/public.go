@@ -362,7 +362,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 			return
 		}
 
-		if !sRes.Info.PermissionSet.UpdateGrant {
+		if sRes.Info == nil || !sRes.Info.GetPermissionSet().UpdateGrant {
 			response.WriteOCSError(w, r, response.MetaUnauthorized.StatusCode, "missing permissions to update share", err)
 			return
 		}
