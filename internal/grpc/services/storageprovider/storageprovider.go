@@ -62,7 +62,6 @@ type config struct {
 	MountID                         string                            `docs:"-;The ID of the mounted file system."                                                                         mapstructure:"mount_id"`
 	Driver                          string                            `docs:"localhome;The storage driver to be used."                                                                     mapstructure:"driver"`
 	Drivers                         map[string]map[string]interface{} `docs:"url:pkg/storage/fs/localhome/localhome.go"                                                                    mapstructure:"drivers"`
-	TmpFolder                       string                            `docs:"/var/tmp;Path to temporary folder."                                                                           mapstructure:"tmp_folder"`
 	DataServerURL                   string                            `docs:"http://localhost/data;The URL for the data server."                                                           mapstructure:"data_server_url"`
 	ExposeDataServer                bool                              `docs:"false;Whether to expose data server."                                                                         mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
 	AvailableXS                     map[string]uint32                 `docs:"nil;List of available checksums."                                                                             mapstructure:"available_checksums"`
@@ -81,10 +80,6 @@ func (c *config) ApplyDefaults() {
 
 	if c.MountID == "" {
 		c.MountID = "00000000-0000-0000-0000-000000000000"
-	}
-
-	if c.TmpFolder == "" {
-		c.TmpFolder = "/var/tmp/reva/tmp"
 	}
 
 	if c.DataServerURL == "" {
@@ -106,7 +101,6 @@ type service struct {
 	conf               *config
 	storage            storage.FS
 	mountPath, mountID string
-	tmpFolder          string
 	dataServerURL      *url.URL
 	availableXS        []*provider.ResourceChecksumPriority
 }
@@ -163,10 +157,6 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	if err := os.MkdirAll(c.TmpFolder, 0755); err != nil {
-		return nil, err
-	}
-
 	mountPath := c.MountPath
 	mountID := c.MountID
 
@@ -200,7 +190,6 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	service := &service{
 		conf:          &c,
 		storage:       fs,
-		tmpFolder:     c.TmpFolder,
 		mountPath:     mountPath,
 		mountID:       mountID,
 		dataServerURL: u,
