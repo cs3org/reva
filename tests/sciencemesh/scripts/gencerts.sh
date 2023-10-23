@@ -21,14 +21,8 @@ function createCert {
 rm --recursive --force ../tls
 mkdir -p ../tls
 
-echo "Generating CA key"
-openssl genrsa -out ../tls/ocm-ca.key 2058
-
-echo "Generate CA self-signed certificate"
-openssl req -new -x509 -days 3650 \
-    -key ../tls/ocm-ca.key \
-    -out ../tls/ocm-ca.crt \
-    -subj "/C=RO/ST=Bucharest/L=Bucharest/O=IT/CN=ocm-ca"
+echo "Copying CA certificate"
+cp ../ca/ocm-ca* ../tls
 
 createCert meshdir
 createCert stub1
