@@ -18,7 +18,7 @@ require (
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20230727093620-0f4399be4543
+	github.com/cs3org/go-cs3apis v0.0.0-20231023073225-7748710e0781
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/emvi/iso-639-1 v1.0.1
 	github.com/eventials/go-tus v0.0.0-20220610120217-05d0564bb571
@@ -227,6 +227,3 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-// the replacement build is based on https://github.com/dragonchaser/cs3apis/tree/master
-replace github.com/cs3org/go-cs3apis => github.com/dragonchaser/go-cs3apis v0.0.0-20231018101134-aadeeb03233c
