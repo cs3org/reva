@@ -31,7 +31,7 @@ import (
 	"strconv"
 	"strings"
 
-	cephfs2 "github.com/ceph/go-ceph/cephfs"
+	goceph "github.com/ceph/go-ceph/cephfs"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -112,7 +112,7 @@ func (fs *cephfs) CreateHome(ctx context.Context) (err error) {
 	user := fs.makeUser(ctx)
 
 	// Stop createhome from running the whole thing because it is called multiple times
-	if _, err = fs.adminConn.adminMount.Statx(user.home, cephfs2.StatxMode, 0); err == nil {
+	if _, err = fs.adminConn.adminMount.Statx(user.home, goceph.StatxMode, 0); err == nil {
 		return
 	}
 
@@ -221,7 +221,7 @@ func (fs *cephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 
 	user.op(func(cv *cacheVal) {
 		var stat Statx
-		if stat, err = cv.mount.Statx(path, cephfs2.StatxBasicStats, 0); err != nil {
+		if stat, err = cv.mount.Statx(path, goceph.StatxBasicStats, 0); err != nil {
 			return
 		}
 		ri, err = user.fileAsResourceInfo(cv, path, stat, mdKeys)
@@ -245,15 +245,15 @@ func (fs *cephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 	}
 
 	user.op(func(cv *cacheVal) {
-		var dir *cephfs2.Directory
+		var dir *goceph.Directory
 		if dir, err = cv.mount.OpenDir(path); err != nil {
 			return
 		}
 		defer closeDir(dir)
 
-		var entry *cephfs2.DirEntryPlus
+		var entry *goceph.DirEntryPlus
 		var ri *provider.ResourceInfo
-		for entry, err = dir.ReadDirPlus(cephfs2.StatxBasicStats, 0); entry != nil && err == nil; entry, err = dir.ReadDirPlus(cephfs2.StatxBasicStats, 0) {
+		for entry, err = dir.ReadDirPlus(goceph.StatxBasicStats, 0); entry != nil && err == nil; entry, err = dir.ReadDirPlus(goceph.StatxBasicStats, 0) {
 			if fs.conf.HiddenDirs[entry.Name()] {
 				continue
 			}
@@ -306,7 +306,7 @@ func (fs *cephfs) ListRevisions(ctx context.Context, ref *provider.Reference) (f
 			err = errtypes.PermissionDenied("cephfs: cannot download under the virtual share folder")
 			return
 		}
-		var dir *cephfs2.Directory
+		var dir *goceph.Directory
 		if dir, err = cv.mount.OpenDir(".snap"); err != nil {
 			return
 		}
@@ -325,7 +325,7 @@ func (fs *cephfs) ListRevisions(ctx context.Context, ref *provider.Reference) (f
 			if e != nil {
 				continue
 			}
-			stat, e = cv.mount.Statx(revPath, cephfs2.StatxMtime|cephfs2.StatxSize, 0)
+			stat, e = cv.mount.Statx(revPath, goceph.StatxMtime|goceph.StatxSize, 0)
 			if e != nil {
 				continue
 			}
@@ -372,7 +372,7 @@ func (fs *cephfs) RestoreRevision(ctx context.Context, ref *provider.Reference, 
 			return
 		}
 
-		var src, dst *cephfs2.File
+		var src, dst *goceph.File
 		if src, err = cv.mount.Open(revPath, os.O_RDONLY, 0); err != nil {
 			return
 		}
@@ -575,7 +575,7 @@ func (fs *cephfs) TouchFile(ctx context.Context, ref *provider.Reference) error 
 	}
 
 	user.op(func(cv *cacheVal) {
-		var file *cephfs2.File
+		var file *goceph.File
 		defer closeFile(file)
 		if file, err = cv.mount.Open(path, os.O_CREATE|os.O_WRONLY, fs.conf.FilePerms); err != nil {
 			return

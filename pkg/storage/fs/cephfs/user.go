@@ -31,7 +31,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/errtypes"
 
-	cephfs2 "github.com/ceph/go-ceph/cephfs"
+	goceph "github.com/ceph/go-ceph/cephfs"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -92,7 +92,7 @@ func (user *User) op(cb callBack) {
 	cb(val.(*cacheVal))
 }
 
-func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *cephfs2.CephStatx, mdKeys []string) (ri *provider.ResourceInfo, err error) {
+func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *goceph.CephStatx, mdKeys []string) (ri *provider.ResourceInfo, err error) {
 	var (
 		_type  provider.ResourceType
 		target string
