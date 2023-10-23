@@ -1,6 +1,6 @@
 {
   "server": "https://your.nginx.org",
-  "theme": "https://your.nginx.org/cernbox/theme-cernbox/theme.json",
+  "theme": "https://your.nginx.org/cernbox/theme-cernbox-0.2.0/theme.json",
   "version": "0.0.0",
   "openIdConnect": {
     "metadata_url": "https://idp.docker:8443/realms/cernbox/.well-known/openid-configuration",
@@ -48,19 +48,19 @@
   "external_apps": [
     {
       "id": "jupyter",
-      "path": "/cernbox/jupyter/main.js"
+      "path": "/cernbox/jupyter-2.0.0/main.js"
     },
     {
       "id": "rootjs",
-      "path": "/cernbox/rootjs/main.js"
+      "path": "/cernbox/rootjs-2.0.0/main.js"
     },
     {
       "id": "ifc-js",
-      "path": "/cernbox/ifc-js/main.js"
+      "path": "/cernbox/ifc-js-2.0.2/main.js"
     },
     {
       "id": "top-bar",
-      "path": "/cernbox/top-bar/main.js"
+      "path": "/cernbox/top-bar-1.0.0/main.js"
     },
     {
       "id": "text-editor",
