@@ -45,7 +45,7 @@ TAG_WOPISERVER=master
     pondersource/dev-stock-owncloud-sciencemesh                                 \
     composer install
 
-# CERNBox web and extensions sources.
+# CERNBox web and extensions sources: uid=101 is nginx in the nginx container.
 [ ! -d "cernbox-web-sciencemesh" ] &&                                           \
     mkdir -p temp/cernbox-1-conf temp/cernbox-2-conf &&                         \
     cp cernbox/nginx/* temp/cernbox-1-conf &&                                   \
@@ -57,6 +57,7 @@ TAG_WOPISERVER=master
     rm -rf web.tar.gz &&                                                        \
     git clone ${REPO_CBOX_EXT} cernbox &&                                       \
     chmod -R 755 ./web ./cernbox &&                                             \
+    chown -R 101:101 ./web/ ./cernbox &&                                        \
     cd -
 
 # wopiserver source code for the config.

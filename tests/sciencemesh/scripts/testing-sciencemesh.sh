@@ -41,8 +41,8 @@ cp --force ./scripts/init-owncloud-sciencemesh.sh  ./temp/owncloud.sh
 cp --force ./scripts/init-nextcloud-sciencemesh.sh ./temp/nextcloud.sh
 
 # TLS dirs for mounting
-cp --recursive --force ./tls "./temp/${EFSS1}-1-tls"
-cp --recursive --force ./tls "./temp/${EFSS2}-2-tls"
+[ ! -d "${ENV_ROOT}/${EFSS1}-1-tls" ] && cp --recursive --force ./tls "./temp/${EFSS1}-1-tls"
+[ ! -d "${ENV_ROOT}/${EFSS2}-2-tls" ] && cp --recursive --force ./tls "./temp/${EFSS2}-2-tls"
 
 # make sure scripts are executable.
 chmod +x "${ENV_ROOT}/scripts/reva-run.sh"
@@ -50,8 +50,7 @@ chmod +x "${ENV_ROOT}/scripts/reva-kill.sh"
 chmod +x "${ENV_ROOT}/scripts/reva-entrypoint.sh"
 
 docker run --detach --name=meshdir.docker   --network=testnet -v "${ENV_ROOT}/scripts/stub.js:/ocm-stub/stub.js" pondersource/dev-stock-ocmstub
-docker run --detach --name=firefox          --network=testnet -p 5800:5800  --shm-size 2g jlesage/firefox:latest
-#docker run --detach --name=firefox-legacy   --network=testnet -p 5900:5800  --shm-size 2g jlesage/firefox:v1.18.0
+docker run --detach --name=firefox          --network=testnet -v "${ENV_ROOT}/tls:/tls" -p 5800:5800 --shm-size 2g jlesage/firefox:latest
 
 docker run --detach --name=collabora.docker --network=testnet -p 9980:9980 -t \
   -e "extra_params=--o:ssl.enable=false"                                      \
@@ -68,14 +67,19 @@ docker run --detach --name=collabora.docker --network=testnet -p 9980:9980 -t \
 # --server-side-across-configs=true --log-file=/dev/stdout                    \
 # rclone/rclone:latest
 
-# this is used only by CERNBox so far, and may be used by OCIS in the future
+# this is used only by CERNBox so far, and might be used by OCIS in the future (though OCIS embeds an IDP)
 docker run --detach --network=testnet --name=idp.docker                       \
   -e KEYCLOAK_ADMIN="admin" -e KEYCLOAK_ADMIN_PASSWORD="admin"                \
   -e KC_HOSTNAME="idp.docker"                                                 \
+  -e KC_HTTPS_CERTIFICATE_FILE="/tls/idp.crt"                                 \
+  -e KC_HTTPS_CERTIFICATE_KEY_FILE="/tls/idp.key"                             \
+  -e KC_HTTPS_PORT="8443"                                                     \
+  -v "${ENV_ROOT}/tls:/tls"                                                   \
   -v "${ENV_ROOT}/cernbox/keycloak:/opt/keycloak/data/import"                 \
-  -p 9080:8080                                                                \
+  -p 8443:8443                                                                \
   quay.io/keycloak/keycloak:21.1.1                                            \
   start-dev --import-realm
+#  -e KC_HTTPS_TRUST_STORE_FILE="ca-bundle.crt"
 
 # EFSS1
 if [ "${EFSS1}" != "cernbox" ]; then
@@ -269,7 +273,7 @@ if [ "${EFSS1}" == "cernbox" ]; then
 docker run --detach --network=testnet                                         \
   --name="${EFSS1}1.docker"                                                   \
   -v "${ENV_ROOT}/temp/cernbox-1-conf:/etc/nginx"                             \
-  -v "${ENV_ROOT}/temp/cernbox-1-conf/config.json:/etc/ocis/config.json"      \
+  -v "${ENV_ROOT}/temp/cernbox-1-conf/config.json:/var/www/web/config.json"   \
   -v "${ENV_ROOT}/tls:/usr/local/share/ca-certificates"                       \
   -v "${ENV_ROOT}/cernbox-web-sciencemesh/web:/var/www/web"                   \
   -v "${ENV_ROOT}/cernbox-web-sciencemesh/cernbox:/var/www/cernbox"           \
@@ -284,7 +288,7 @@ if [ "${EFSS2}" == "cernbox" ]; then
 docker run --detach --network=testnet                                         \
   --name="${EFSS2}2.docker"                                                   \
   -v "${ENV_ROOT}/temp/cernbox-2-conf:/etc/nginx"                             \
-  -v "${ENV_ROOT}/temp/cernbox-2-conf/config.json:/etc/ocis/config.json"      \
+  -v "${ENV_ROOT}/temp/cernbox-2-conf/config.json:/var/www/web/config.json"   \
   -v "${ENV_ROOT}/tls:/usr/local/share/ca-certificates"                       \
   -v "${ENV_ROOT}/cernbox-web-sciencemesh/web:/var/www/web"                   \
   -v "${ENV_ROOT}/cernbox-web-sciencemesh/cernbox:/var/www/cernbox"           \

@@ -3,8 +3,8 @@
   "theme": "https://your.nginx.org/cernbox/theme-cernbox/theme.json",
   "version": "0.0.0",
   "openIdConnect": {
-    "metadata_url": "http://idp.docker:8080/realms/cernbox/.well-known/openid-configuration",
-    "authority": "http://idp.docker:8080/realms/cernbox",
+    "metadata_url": "https://idp.docker:8443/realms/cernbox/.well-known/openid-configuration",
+    "authority": "https://idp.docker:8443/realms/cernbox",
     "client_id": "cernbox-oidc",
     "response_type": "code",
     "scope": "openid profile email"

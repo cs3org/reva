@@ -811,12 +811,12 @@
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
       "redirectUris": [
-        "http://localhost/*",
-        "https://www.keycloak.org/*"
+        "https://cernbox1.docker/*",
+        "https://cernbox2.docker/*"
       ],
       "webOrigins": [
-        "https://www.keycloak.org",
-        "http://localhost"
+        "https://cernbox1.docker/*",
+        "https://cernbox2.docker/*"
       ],
       "notBefore": 0,
       "bearerOnly": false,

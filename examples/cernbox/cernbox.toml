@@ -101,7 +101,7 @@ auth_manager = "oidc"
 users = "/etc/revad/users.demo.json"
 
 [grpc.services.authprovider.auth_managers.oidc]
-issuer = "http://idp.docker:8080/realms/cernbox"
+issuer = "https://idp.docker:8443/realms/cernbox"
 uid_claim = "cern_uid"
 gid_claim = "cern_gid"
 gatewaysvc = "{{ vars.internal_gateway }}:19000"

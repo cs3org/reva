@@ -37,6 +37,9 @@ createCert stub2
 createCert revad1
 createCert revad2
 
+createCert idp
+chown 1000:root ../tls/idp.*
+
 for efss in owncloud nextcloud cernbox; do
   createCert ${efss}1
   createCert ${efss}2
