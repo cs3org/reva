@@ -633,8 +633,6 @@ func getHash(s string) uint64 {
 	var res uint32
 	binary.Read(buf, binary.BigEndian, &res)
 	return uint64(res)
-	// h := fnvHash.Sum(nil)
-	// return uint64(h[0]) + uint64(h[1])*uint64(2<<8) + uint64(h[2])*uint64(2<<16) + uint64(h[3])*uint64(2<<24)
 }
 
 func encodeLock(l *provider.Lock) string {
@@ -706,8 +704,10 @@ func (fs *cephfs) GetLock(ctx context.Context, ref *provider.Reference) (*provid
 	user.op(func(cv *cacheVal) {
 		var file *goceph.File
 		defer closeFile(file)
-		// TODO(lopresti) O_RDONLY should be enough, but we want to try and grab a lock to test if a lock existed
 		if file, err = cv.mount.Open(path, os.O_RDWR, fs.conf.FilePerms); err != nil {
+			// TODO(lopresti) if user has read-only permissions, here we fail because
+			// we want to try and grab a lock to probe if a lock existed. Alternatively,
+			// we could just return the metadata if present.
 			return
 		}
 
