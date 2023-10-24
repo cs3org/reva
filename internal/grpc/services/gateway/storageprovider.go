@@ -24,7 +24,6 @@ import (
 	"net/url"
 	"path"
 	"strings"
-	"sync"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -101,200 +100,204 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 }
 
 func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	log := appctx.GetLogger(ctx)
-	// TODO: needs to be fixed
-	c, err := s.findByPath(ctx, "/users")
-	if err != nil {
-		return &provider.CreateStorageSpaceResponse{
-			Status: status.NewStatusFromErrType(ctx, "error finding path", err),
-		}, nil
-	}
+	// log := appctx.GetLogger(ctx)
+	// // TODO: needs to be fixed
+	// c, err := s.findByPath(ctx, "/users")
+	// if err != nil {
+	// 	return &provider.CreateStorageSpaceResponse{
+	// 		Status: status.NewStatusFromErrType(ctx, "error finding path", err),
+	// 	}, nil
+	// }
 
-	res, err := c.CreateStorageSpace(ctx, req)
-	if err != nil {
-		log.Err(err).Msg("gateway: error creating storage space on storage provider")
-		return &provider.CreateStorageSpaceResponse{
-			Status: status.NewInternal(ctx, err, "error calling CreateStorageSpace"),
-		}, nil
-	}
-	return res, nil
+	// res, err := c.CreateStorageSpace(ctx, req)
+	// if err != nil {
+	// 	log.Err(err).Msg("gateway: error creating storage space on storage provider")
+	// 	return &provider.CreateStorageSpaceResponse{
+	// 		Status: status.NewInternal(ctx, err, "error calling CreateStorageSpace"),
+	// 	}, nil
+	// }
+	// return res, nil
+	return nil, nil
 }
 
 func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
-	log := appctx.GetLogger(ctx)
-	var id *provider.StorageSpaceId
-	for _, f := range req.Filters {
-		if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
-			id = f.GetId()
-		}
-	}
+	// log := appctx.GetLogger(ctx)
+	// var id *provider.StorageSpaceId
+	// for _, f := range req.Filters {
+	// 	if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
+	// 		id = f.GetId()
+	// 	}
+	// }
 
-	var (
-		providers []*registry.ProviderInfo
-		err       error
-	)
-	c, err := pool.GetStorageRegistryClient(pool.Endpoint(s.c.StorageRegistryEndpoint))
-	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
-	}
+	// var (
+	// 	providers []*registry.ProviderInfo
+	// 	err       error
+	// )
+	// c, err := pool.GetStorageRegistryClient(pool.Endpoint(s.c.StorageRegistryEndpoint))
+	// if err != nil {
+	// 	return nil, errors.Wrap(err, "gateway: error getting storage registry client")
+	// }
 
-	if id != nil {
-		// query that specific storage provider
-		storageid, opaqeid, err := utils.SplitStorageSpaceID(id.OpaqueId)
-		if err != nil {
-			return &provider.ListStorageSpacesResponse{
-				Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
-			}, nil
-		}
-		res, err := c.GetStorageProviders(ctx, &registry.GetStorageProvidersRequest{
-			Ref: &provider.Reference{ResourceId: &provider.ResourceId{
-				StorageId: storageid,
-				OpaqueId:  opaqeid,
-			}},
-		})
-		if err != nil {
-			return &provider.ListStorageSpacesResponse{
-				Status: status.NewStatusFromErrType(ctx, "ListStorageSpaces filters: req "+req.String(), err),
-			}, nil
-		}
-		if res.Status.Code != rpc.Code_CODE_OK {
-			return &provider.ListStorageSpacesResponse{
-				Status: res.Status,
-			}, nil
-		}
-		providers = res.Providers
-	} else {
-		// get list of all storage providers
-		res, err := c.ListStorageProviders(ctx, &registry.ListStorageProvidersRequest{})
+	// if id != nil {
+	// 	// query that specific storage provider
+	// 	storageid, opaqeid, err := utils.SplitStorageSpaceID(id.OpaqueId)
+	// 	if err != nil {
+	// 		return &provider.ListStorageSpacesResponse{
+	// 			Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
+	// 		}, nil
+	// 	}
+	// 	res, err := c.GetStorageProviders(ctx, &registry.GetStorageProvidersRequest{
+	// 		Ref: &provider.Reference{ResourceId: &provider.ResourceId{
+	// 			StorageId: storageid,
+	// 			OpaqueId:  opaqeid,
+	// 		}},
+	// 	})
+	// 	if err != nil {
+	// 		return &provider.ListStorageSpacesResponse{
+	// 			Status: status.NewStatusFromErrType(ctx, "ListStorageSpaces filters: req "+req.String(), err),
+	// 		}, nil
+	// 	}
+	// 	if res.Status.Code != rpc.Code_CODE_OK {
+	// 		return &provider.ListStorageSpacesResponse{
+	// 			Status: res.Status,
+	// 		}, nil
+	// 	}
+	// 	providers = res.Providers
+	// } else {
+	// 	// get list of all storage providers
+	// 	res, err := c.ListStorageProviders(ctx, &registry.ListStorageProvidersRequest{})
 
-		if err != nil {
-			return &provider.ListStorageSpacesResponse{
-				Status: status.NewStatusFromErrType(ctx, "error listing providers", err),
-			}, nil
-		}
-		if res.Status.Code != rpc.Code_CODE_OK {
-			return &provider.ListStorageSpacesResponse{
-				Status: res.Status,
-			}, nil
-		}
+	// 	if err != nil {
+	// 		return &provider.ListStorageSpacesResponse{
+	// 			Status: status.NewStatusFromErrType(ctx, "error listing providers", err),
+	// 		}, nil
+	// 	}
+	// 	if res.Status.Code != rpc.Code_CODE_OK {
+	// 		return &provider.ListStorageSpacesResponse{
+	// 			Status: res.Status,
+	// 		}, nil
+	// 	}
 
-		providers = make([]*registry.ProviderInfo, 0, len(res.Providers))
-		// FIXME filter only providers that have an id set ... currently none have?
-		// bug? only ProviderPath is set
-		for i := range res.Providers {
-			// use only providers whose path does not start with a /?
-			if strings.HasPrefix(res.Providers[i].ProviderPath, "/") {
-				continue
-			}
-			providers = append(providers, res.Providers[i])
-		}
-	}
+	// 	providers = make([]*registry.ProviderInfo, 0, len(res.Providers))
+	// 	// FIXME filter only providers that have an id set ... currently none have?
+	// 	// bug? only ProviderPath is set
+	// 	for i := range res.Providers {
+	// 		// use only providers whose path does not start with a /?
+	// 		if strings.HasPrefix(res.Providers[i].ProviderPath, "/") {
+	// 			continue
+	// 		}
+	// 		providers = append(providers, res.Providers[i])
+	// 	}
+	// }
 
-	spacesFromProviders := make([][]*provider.StorageSpace, len(providers))
-	errors := make([]error, len(providers))
+	// spacesFromProviders := make([][]*provider.StorageSpace, len(providers))
+	// errors := make([]error, len(providers))
 
-	var wg sync.WaitGroup
-	for i, p := range providers {
-		wg.Add(1)
-		go s.listStorageSpacesOnProvider(ctx, req, &spacesFromProviders[i], p, &errors[i], &wg)
-	}
-	wg.Wait()
+	// var wg sync.WaitGroup
+	// for i, p := range providers {
+	// 	wg.Add(1)
+	// 	go s.listStorageSpacesOnProvider(ctx, req, &spacesFromProviders[i], p, &errors[i], &wg)
+	// }
+	// wg.Wait()
 
-	uniqueSpaces := map[string]*provider.StorageSpace{}
-	for i := range providers {
-		if errors[i] != nil {
-			if len(providers) > 1 {
-				log.Debug().Err(errors[i]).Msg("skipping provider")
-				continue
-			}
-			return &provider.ListStorageSpacesResponse{
-				Status: status.NewStatusFromErrType(ctx, "error listing space", errors[i]),
-			}, nil
-		}
-		for j := range spacesFromProviders[i] {
-			uniqueSpaces[spacesFromProviders[i][j].Id.OpaqueId] = spacesFromProviders[i][j]
-		}
-	}
-	spaces := make([]*provider.StorageSpace, 0, len(uniqueSpaces))
-	for spaceID := range uniqueSpaces {
-		spaces = append(spaces, uniqueSpaces[spaceID])
-	}
-	if len(spaces) == 0 {
-		return &provider.ListStorageSpacesResponse{
-			Status: status.NewNotFound(ctx, "space not found"),
-		}, nil
-	}
+	// uniqueSpaces := map[string]*provider.StorageSpace{}
+	// for i := range providers {
+	// 	if errors[i] != nil {
+	// 		if len(providers) > 1 {
+	// 			log.Debug().Err(errors[i]).Msg("skipping provider")
+	// 			continue
+	// 		}
+	// 		return &provider.ListStorageSpacesResponse{
+	// 			Status: status.NewStatusFromErrType(ctx, "error listing space", errors[i]),
+	// 		}, nil
+	// 	}
+	// 	for j := range spacesFromProviders[i] {
+	// 		uniqueSpaces[spacesFromProviders[i][j].Id.OpaqueId] = spacesFromProviders[i][j]
+	// 	}
+	// }
+	// spaces := make([]*provider.StorageSpace, 0, len(uniqueSpaces))
+	// for spaceID := range uniqueSpaces {
+	// 	spaces = append(spaces, uniqueSpaces[spaceID])
+	// }
+	// if len(spaces) == 0 {
+	// 	return &provider.ListStorageSpacesResponse{
+	// 		Status: status.NewNotFound(ctx, "space not found"),
+	// 	}, nil
+	// }
 
-	return &provider.ListStorageSpacesResponse{
-		Status:        status.NewOK(ctx),
-		StorageSpaces: spaces,
-	}, nil
+	// return &provider.ListStorageSpacesResponse{
+	// 	Status:        status.NewOK(ctx),
+	// 	StorageSpaces: spaces,
+	// }, nil
+	return nil, nil
 }
 
-func (s *svc) listStorageSpacesOnProvider(ctx context.Context, req *provider.ListStorageSpacesRequest, res *[]*provider.StorageSpace, p *registry.ProviderInfo, e *error, wg *sync.WaitGroup) {
-	defer wg.Done()
-	c, err := s.getStorageProviderClient(ctx, p)
-	if err != nil {
-		*e = errors.Wrap(err, "error connecting to storage provider="+p.Address)
-		return
-	}
+// func (s *svc) listStorageSpacesOnProvider(ctx context.Context, req *provider.ListStorageSpacesRequest, res *[]*provider.StorageSpace, p *registry.ProviderInfo, e *error, wg *sync.WaitGroup) {
+// 	defer wg.Done()
+// 	c, err := s.getStorageProviderClient(ctx, p)
+// 	if err != nil {
+// 		*e = errors.Wrap(err, "error connecting to storage provider="+p.Address)
+// 		return
+// 	}
 
-	r, err := c.ListStorageSpaces(ctx, req)
-	if err != nil {
-		*e = errors.Wrap(err, "gateway: error calling ListStorageSpaces")
-		return
-	}
+// 	r, err := c.ListStorageSpaces(ctx, req)
+// 	if err != nil {
+// 		*e = errors.Wrap(err, "gateway: error calling ListStorageSpaces")
+// 		return
+// 	}
 
-	*res = r.StorageSpaces
-}
+// 	*res = r.StorageSpaces
+// }
 
 func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
-	log := appctx.GetLogger(ctx)
-	// TODO: needs to be fixed
-	c, err := s.find(ctx, &provider.Reference{ResourceId: req.StorageSpace.Root})
-	if err != nil {
-		return &provider.UpdateStorageSpaceResponse{
-			Status: status.NewStatusFromErrType(ctx, "error finding ID", err),
-		}, nil
-	}
+	// log := appctx.GetLogger(ctx)
+	// // TODO: needs to be fixed
+	// c, err := s.find(ctx, &provider.Reference{ResourceId: req.StorageSpace.Root})
+	// if err != nil {
+	// 	return &provider.UpdateStorageSpaceResponse{
+	// 		Status: status.NewStatusFromErrType(ctx, "error finding ID", err),
+	// 	}, nil
+	// }
 
-	res, err := c.UpdateStorageSpace(ctx, req)
-	if err != nil {
-		log.Err(err).Msg("gateway: error creating update space on storage provider")
-		return &provider.UpdateStorageSpaceResponse{
-			Status: status.NewInternal(ctx, err, "error calling UpdateStorageSpace"),
-		}, nil
-	}
-	return res, nil
+	// res, err := c.UpdateStorageSpace(ctx, req)
+	// if err != nil {
+	// 	log.Err(err).Msg("gateway: error creating update space on storage provider")
+	// 	return &provider.UpdateStorageSpaceResponse{
+	// 		Status: status.NewInternal(ctx, err, "error calling UpdateStorageSpace"),
+	// 	}, nil
+	// }
+	// return res, nil
+	return nil, nil
 }
 
 func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
-	log := appctx.GetLogger(ctx)
-	// TODO: needs to be fixed
-	storageid, opaqeid, err := utils.SplitStorageSpaceID(req.Id.OpaqueId)
-	if err != nil {
-		return &provider.DeleteStorageSpaceResponse{
-			Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
-		}, nil
-	}
-	c, err := s.find(ctx, &provider.Reference{ResourceId: &provider.ResourceId{
-		StorageId: storageid,
-		OpaqueId:  opaqeid,
-	}})
-	if err != nil {
-		return &provider.DeleteStorageSpaceResponse{
-			Status: status.NewStatusFromErrType(ctx, "error finding path", err),
-		}, nil
-	}
+	// log := appctx.GetLogger(ctx)
+	// // TODO: needs to be fixed
+	// storageid, opaqeid, err := utils.SplitStorageSpaceID(req.Id.OpaqueId)
+	// if err != nil {
+	// 	return &provider.DeleteStorageSpaceResponse{
+	// 		Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
+	// 	}, nil
+	// }
+	// c, err := s.find(ctx, &provider.Reference{ResourceId: &provider.ResourceId{
+	// 	StorageId: storageid,
+	// 	OpaqueId:  opaqeid,
+	// }})
+	// if err != nil {
+	// 	return &provider.DeleteStorageSpaceResponse{
+	// 		Status: status.NewStatusFromErrType(ctx, "error finding path", err),
+	// 	}, nil
+	// }
 
-	res, err := c.DeleteStorageSpace(ctx, req)
-	if err != nil {
-		log.Err(err).Msg("gateway: error deleting storage space on storage provider")
-		return &provider.DeleteStorageSpaceResponse{
-			Status: status.NewInternal(ctx, err, "error calling DeleteStorageSpace"),
-		}, nil
-	}
-	return res, nil
+	// res, err := c.DeleteStorageSpace(ctx, req)
+	// if err != nil {
+	// 	log.Err(err).Msg("gateway: error deleting storage space on storage provider")
+	// 	return &provider.DeleteStorageSpaceResponse{
+	// 		Status: status.NewInternal(ctx, err, "error calling DeleteStorageSpace"),
+	// 	}, nil
+	// }
+	// return res, nil
+	return nil, nil
 }
 
 func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
