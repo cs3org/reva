@@ -702,12 +702,22 @@ func (fs *cephfs) GetLock(ctx context.Context, ref *provider.Reference) (*provid
 
 	var l *provider.Lock
 	user.op(func(cv *cacheVal) {
+		buf, errXattr := cv.mount.GetXattr(path, xattrLock)
+		if errXattr == nil {
+			if l, err = decodeLock(string(buf)); err != nil {
+				err = errors.Wrap(err, "malformed lock payload")
+				return
+			}
+		}
+
 		var file *goceph.File
 		defer closeFile(file)
 		if file, err = cv.mount.Open(path, os.O_RDWR, fs.conf.FilePerms); err != nil {
-			// TODO(lopresti) if user has read-only permissions, here we fail because
-			// we want to try and grab a lock to probe if a lock existed. Alternatively,
-			// we could just return the metadata if present.
+			// try and open with read-only permissions: if this succeeds, we just return
+			// the metadata as is, otherwise we return the error on Open()
+			if file, err = cv.mount.Open(path, os.O_RDONLY, fs.conf.FilePerms); err != nil {
+				l = nil
+			}
 			return
 		}
 
@@ -718,18 +728,11 @@ func (fs *cephfs) GetLock(ctx context.Context, ref *provider.Reference) (*provid
 			return
 		}
 
-		buf, err := cv.mount.GetXattr(path, xattrLock)
-		if err != nil {
+		if errXattr != nil {
 			// error here means we have a "foreign" flock with no CS3 metadata
 			err = nil
 			l = new(provider.Lock)
 			l.AppName = "External"
-			return
-		}
-
-		if l, err = decodeLock(string(buf)); err != nil {
-			l = nil
-			err = errors.Wrap(err, "cephfs: malformed lock payload")
 			return
 		}
 
@@ -775,7 +778,7 @@ func (fs *cephfs) RefreshLock(ctx context.Context, ref *provider.Reference, newL
 	}
 
 	if existingLockID != "" && oldLock.LockId != existingLockID {
-		return errtypes.BadRequest("mismatching existing lock id")
+		return errtypes.BadRequest("lock id does not match")
 	}
 
 	return fs.SetLock(ctx, ref, newLock)
