@@ -32,3 +32,12 @@ type Manager interface {
 	UpdateSpace(ctx context.Context, space *provider.StorageSpace) error
 	DeleteSpace(ctx context.Context, spaceID *provider.StorageSpaceId) error
 }
+
+type SpaceType string
+
+const (
+	SpaceTypeHome    SpaceType = "home"
+	SpaceTypeProject SpaceType = "project"
+)
+
+func (t SpaceType) AsString() string { return string(t) }
