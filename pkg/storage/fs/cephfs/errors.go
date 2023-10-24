@@ -51,7 +51,7 @@ func getRevaError(err error) error {
 	}
 	switch err.Error() {
 	case errNotFound:
-		return errtypes.NotFound("cephfs: dir entry not found")
+		return errtypes.NotFound("cephfs: entry not found")
 	case errPermissionDenied:
 		return errtypes.PermissionDenied("cephfs: permission denied")
 	case errFileExists:
