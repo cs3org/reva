@@ -31,6 +31,7 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	conversions "github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 )
 
 func init() {
@@ -115,7 +116,7 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) *provider.St
 func (s *service) projectSpaces(ctx context.Context, user *userpb.User) []*provider.StorageSpace {
 	projects := []*provider.StorageSpace{}
 	for _, space := range s.c.Spaces {
-		if projectBelongToUser(user, &space) {
+		if perms, ok := projectBelongToUser(user, &space); ok {
 			projects = append(projects, &provider.StorageSpace{
 				Id: &provider.StorageSpaceId{
 					OpaqueId: space.ID,
@@ -128,7 +129,8 @@ func (s *service) projectSpaces(ctx context.Context, user *userpb.User) []*provi
 				Name:      space.Name,
 				SpaceType: spaces.SpaceTypeProject.AsString(),
 				RootInfo: &provider.ResourceInfo{
-					Path: space.Path,
+					Path:          space.Path,
+					PermissionSet: perms,
 				},
 			})
 		}
@@ -136,11 +138,20 @@ func (s *service) projectSpaces(ctx context.Context, user *userpb.User) []*provi
 	return projects
 }
 
-func projectBelongToUser(user *userpb.User, project *SpaceDescription) bool {
-	return user.Id.OpaqueId == project.Owner ||
-		slices.Contains(user.Groups, project.Admins) ||
-		slices.Contains(user.Groups, project.Readers) ||
-		slices.Contains(user.Groups, project.Writers)
+func projectBelongToUser(user *userpb.User, project *SpaceDescription) (*provider.ResourcePermissions, bool) {
+	if user.Id.OpaqueId == project.Owner {
+		return conversions.NewManagerRole().CS3ResourcePermissions(), true
+	}
+	if slices.Contains(user.Groups, project.Admins) {
+		return conversions.NewManagerRole().CS3ResourcePermissions(), true
+	}
+	if slices.Contains(user.Groups, project.Readers) {
+		return conversions.NewReaderRole().CS3ResourcePermissions(), true
+	}
+	if slices.Contains(user.Groups, project.Writers) {
+		return conversions.NewEditorRole().CS3ResourcePermissions(), true
+	}
+	return nil, false
 }
 
 func (s *service) UpdateSpace(ctx context.Context, space *provider.StorageSpace) error {
