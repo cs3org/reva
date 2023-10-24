@@ -57,7 +57,7 @@ func applyTemplateStruct(l Lookuper, p setter, v reflect.Value) error {
 	return nil
 }
 
-// applyTemplateByType applies the template string to a generic type.
+// applyTemplateByType (recursively) applies the template string to a generic type.
 func applyTemplateByType(l Lookuper, p setter, v reflect.Value) error {
 	switch v.Kind() {
 	case reflect.Array, reflect.Slice:
@@ -119,31 +119,34 @@ func applyTemplateString(l Lookuper, p setter, v reflect.Value) error {
 		panic("called applyTemplateString on non string type")
 	}
 	s := v.String()
-	tmpl, is := isTemplate(s)
-	if !is {
+	tmpl, more := isTemplate(s)
+	if !more {
 		// nothing to do
 		return nil
 	}
 
-	key := keyFromTemplate(tmpl)
-	val, err := l.Lookup(key)
-	if err != nil {
-		return err
-	}
-	if val == nil {
-		return nil
-	}
+	for more {
+		key := keyFromTemplate(tmpl)
+		val, err := l.Lookup(key)
+		if err != nil {
+			return err
+		}
+		if val == nil {
+			val = ""
+		}
 
-	new, err := replaceTemplate(s, tmpl, val)
-	if err != nil {
-		return err
+		new, err := replaceTemplate(s, tmpl, val)
+		if err != nil {
+			return err
+		}
+		str, ok := convertToString(new)
+		if !ok {
+			return fmt.Errorf("value %v cannot be converted as string in the template %s", val, new)
+		}
+		s = str
+		tmpl, more = isTemplate(s)
 	}
-	str, ok := convertToString(new)
-	if !ok {
-		return fmt.Errorf("value %v cannot be converted as string in the template %s", val, new)
-	}
-
-	p.SetValue(str)
+	p.SetValue(s)
 	return nil
 }
 
@@ -159,32 +162,49 @@ func applyTemplateInterface(l Lookuper, p setter, v reflect.Value) error {
 		return applyTemplateByType(l, p, v.Elem())
 	}
 
-	tmpl, is := isTemplate(s)
-	if !is {
+	tmpl, more := isTemplate(s)
+	if !more {
 		// nothing to do
 		return nil
 	}
+	replaced := 0
+	for more {
+		key := keyFromTemplate(tmpl)
+		val, err := l.Lookup(key)
+		if err != nil {
+			return err
+		}
+		if val == nil {
+			val = ""
+		}
 
-	key := keyFromTemplate(tmpl)
-	val, err := l.Lookup(key)
-	if err != nil {
-		return err
-	}
-	if val == nil {
-		return nil
-	}
+		new, err := replaceTemplate(s, tmpl, val)
+		if err != nil {
+			return err
+		}
 
-	new, err := replaceTemplate(s, tmpl, val)
-	if err != nil {
-		return err
+		replaced++
+		str, ok := convertToString(new)
+		tmpl, more = isTemplate(str)
+
+		if !more && replaced == 1 {
+			// a single template was to be replaced, preserve type
+			p.SetValue(new)
+			return nil
+		}
+		// if more than one template is to be replaced, use the string representation
+		if !ok {
+			return fmt.Errorf("value %v cannot be converted as string in the template %s", val, new)
+		}
+		s = str
 	}
-	p.SetValue(new)
+	p.SetValue(s)
 	return nil
 }
 
 func replaceTemplate(original, tmpl string, val any) (any, error) {
 	if strings.TrimSpace(original) == tmpl {
-		// the value was directly a template, i.e. "{{ grpc.services.gateway.address }}"
+		// the value was directly a template, e.g. "{{ grpc.services.gateway.address }}"
 		return val, nil
 	}
 	// the value is of something like "something {{ template }} something else"
@@ -227,7 +247,7 @@ func convertToString(val any) (string, bool) {
 	return "", false
 }
 
-var templateRegex = regexp.MustCompile("{{.{1,}}}")
+var templateRegex = regexp.MustCompile("{{[^{}]+}}")
 
 func isTemplate(s string) (string, bool) {
 	m := templateRegex.FindString(s)
@@ -237,7 +257,10 @@ func isTemplate(s string) (string, bool) {
 func keyFromTemplate(s string) string {
 	s = strings.TrimSpace(s)
 	s = strings.TrimPrefix(s, "{{")
-	s = strings.TrimSuffix(s, "}}")
+	for strings.Index(s, "}}") > 0 {
+		//nolint: gocritic
+		s = s[:strings.Index(s, "}}")] // this is not offBy1
+	}
 	return "." + strings.TrimSpace(s)
 }
 

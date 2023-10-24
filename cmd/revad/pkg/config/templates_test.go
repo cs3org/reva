@@ -85,7 +85,8 @@ func TestApplyTemplate(t *testing.T) {
 		Vars: Vars{
 			"db_username": "root",
 			"db_password": "secretpassword",
-			"integer":     10,
+			"proto":       "http",
+			"port":        1000,
 		},
 		GRPC: &GRPC{
 			Services: map[string]ServicesConfig{
@@ -98,7 +99,7 @@ func TestApplyTemplate(t *testing.T) {
 									"db_username": "{{ vars.db_username }}",
 									"db_password": "{{ vars.db_password }}",
 									"key":         "value",
-									"int":         "{{ vars.integer }}",
+									"port":        "{{ vars.port }}",
 								},
 							},
 						},
@@ -110,7 +111,7 @@ func TestApplyTemplate(t *testing.T) {
 						Config: map[string]any{
 							"drivers": map[string]any{
 								"sql": map[string]any{
-									"db_host": "http://localhost:{{ vars.integer }}",
+									"db_host": "{{ vars.proto }}://localhost:{{ vars.port }}",
 								},
 							},
 						},
@@ -127,9 +128,9 @@ func TestApplyTemplate(t *testing.T) {
 		"db_username": "root",
 		"db_password": "secretpassword",
 		"key":         "value",
-		"int":         10,
+		"port":        1000,
 	}, cfg2.GRPC.Services["authregistry"][0].Config["drivers"].(map[string]any)["sql"])
 	assert.Equal(t, map[string]any{
-		"db_host": "http://localhost:10",
+		"db_host": "http://localhost:1000",
 	}, cfg2.GRPC.Services["other"][0].Config["drivers"].(map[string]any)["sql"])
 }
