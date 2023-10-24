@@ -49,6 +49,7 @@ import (
 	_ "github.com/cs3org/reva/pkg/share/cache/loader"
 	_ "github.com/cs3org/reva/pkg/share/cache/warmup/loader"
 	_ "github.com/cs3org/reva/pkg/share/manager/loader"
+	_ "github.com/cs3org/reva/pkg/spaces/manager/loader"
 	_ "github.com/cs3org/reva/pkg/storage/favorite/loader"
 	_ "github.com/cs3org/reva/pkg/storage/fs/loader"
 	_ "github.com/cs3org/reva/pkg/storage/registry/loader"
