@@ -1460,27 +1460,7 @@ var _ = Describe("PropfindWithoutDepthInfinity", func() {
 				req.Header.Add(net.HeaderDepth, "infinity")
 
 				handler.HandlePathPropfind(rr, req, "/")
-				Expect(rr.Code).To(Equal(http.StatusMultiStatus))
-
-				res, _, err := readResponse(rr.Result().Body)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(len(res.Responses)).To(Equal(9))
-
-				paths := []string{}
-				for _, r := range res.Responses {
-					paths = append(paths, r.Href)
-				}
-				Expect(paths).To(ConsistOf(
-					"http:/127.0.0.1:3000/foo/",
-					"http:/127.0.0.1:3000/foo/bar",
-					"http:/127.0.0.1:3000/foo/baz",
-					"http:/127.0.0.1:3000/foo/dir/",
-					"http:/127.0.0.1:3000/foo/dir/entry",
-					"http:/127.0.0.1:3000/foo/Shares/sharedFile",
-					"http:/127.0.0.1:3000/foo/Shares/sharedFile2",
-					"http:/127.0.0.1:3000/foo/Shares/sharedDir/",
-					"http:/127.0.0.1:3000/foo/Shares/sharedDir/something",
-				))
+				Expect(rr.Code).To(Equal(http.StatusBadRequest))
 			})
 		})
 
