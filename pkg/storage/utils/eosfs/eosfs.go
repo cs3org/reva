@@ -77,7 +77,7 @@ const (
 const EosLockKey = "app.lock"
 
 // LockPayloadKey is the key in the xattrs used to store the lock payload.
-const LockPayloadKey = "reva.lock.payload"
+const LockPayloadKey = "reva.lockpayload"
 
 var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
 
@@ -871,7 +871,7 @@ func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLo
 	}
 
 	if existingLockID != "" && oldLock.LockId != existingLockID {
-		return errtypes.BadRequest("mismatching existing lock id")
+		return errtypes.BadRequest("lock id does not match")
 	}
 
 	path, err := fs.resolve(ctx, ref)
@@ -887,7 +887,7 @@ func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLo
 		return errors.Wrap(err, "eosfs: cannot check if user has write access on resource")
 	}
 	if !has {
-		return errtypes.PermissionDenied(fmt.Sprintf("user %s has not write access on resource", user.Username))
+		return errtypes.PermissionDenied(fmt.Sprintf("user %s has no write access on resource", user.Username))
 	}
 
 	return fs.setLock(ctx, newLock, path)
@@ -906,10 +906,6 @@ func sameHolder(l1, l2 *provider.Lock) bool {
 
 // Unlock removes an existing lock from the given reference.
 func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	if lock.Type == provider.LockType_LOCK_TYPE_SHARED {
-		return errtypes.NotSupported("shared lock not yet implemented")
-	}
-
 	oldLock, err := fs.GetLock(ctx, ref)
 	if err != nil {
 		switch err.(type) {
@@ -942,7 +938,7 @@ func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 		return errors.Wrap(err, "eosfs: cannot check if user has write access on resource")
 	}
 	if !has {
-		return errtypes.PermissionDenied(fmt.Sprintf("user %s has not write access on resource", user.Username))
+		return errtypes.PermissionDenied(fmt.Sprintf("user %s has no write access on resource", user.Username))
 	}
 
 	path, err := fs.resolve(ctx, ref)
