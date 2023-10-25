@@ -3,6 +3,7 @@ module github.com/cs3org/reva
 require (
 	bou.ke/monkey v1.0.2
 	github.com/BurntSushi/toml v1.3.2
+	github.com/CiscoM31/godata v1.0.8
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/ReneKroon/ttlcache/v2 v2.11.0
 	github.com/asim/go-micro/plugins/events/nats/v4 v4.7.0
@@ -46,6 +47,7 @@ require (
 	github.com/nats-io/nats.go v1.27.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.27.10
+	github.com/owncloud/libre-graph-api-go v1.0.4
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/alertmanager v0.26.0
 	github.com/prometheus/client_golang v1.17.0
@@ -127,7 +129,6 @@ require (
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/oliveagle/jsonpath v0.0.0-20180606110733-2e52cf6e6852 // indirect
-	github.com/owncloud/libre-graph-api-go v1.0.4 // indirect
 	github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/pkg/term v1.1.0 // indirect
@@ -162,4 +163,4 @@ replace (
 	github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
 )
 
-replace github.com/cs3org/go-cs3apis => /home/gianmaria/Documenti/CERN/cs3apis/build/go-cs3apis
+replace github.com/cs3org/go-cs3apis => github.com/gmgigi96/go-cs3apis v0.0.0-20231025125139-a7a73cb7954e
