@@ -591,12 +591,6 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 		Interface("destination", req.Destination).
 		Msg("sharesstorageprovider: Got Move request")
 
-	if !utils.ResourceIDEqual(req.Source.ResourceId, req.Destination.ResourceId) {
-		return &provider.MoveResponse{
-			Status: status.NewUnimplemented(ctx, nil, "sharesstorageprovider: can not move between shares"),
-		}, nil
-	}
-
 	// TODO moving inside a shared tree should just be a forward of the move
 	//      but when do we rename a mounted share? Does that request even hit us?
 	//      - the registry needs to invalidate the alias
@@ -647,6 +641,12 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	if rpcStatus.Code != rpc.Code_CODE_OK {
 		return &provider.MoveResponse{
 			Status: rpcStatus,
+		}, nil
+	}
+
+	if dstReceivedShare.Share.Id.OpaqueId != srcReceivedShare.Share.Id.OpaqueId {
+		return &provider.MoveResponse{
+			Status: status.NewUnimplemented(ctx, nil, "sharesstorageprovider: can not move between shares"),
 		}, nil
 	}
 

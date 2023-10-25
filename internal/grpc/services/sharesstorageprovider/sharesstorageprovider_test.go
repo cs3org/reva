@@ -89,32 +89,8 @@ var _ = Describe("Sharesstorageprovider", func() {
 					OpaqueId: "shareid",
 				},
 				ResourceId: &sprovider.ResourceId{
-					StorageId: "share1-storageid",
-					SpaceId:   "share1-storageid",
-					OpaqueId:  "shareddir",
-				},
-				Permissions: &collaboration.SharePermissions{
-					Permissions: &sprovider.ResourcePermissions{
-						Stat:               true,
-						ListContainer:      true,
-						InitiateFileUpload: true,
-					},
-				},
-			},
-			MountPoint: &sprovider.Reference{
-				Path: "oldname",
-			},
-		}
-
-		BaseShareTwo = &collaboration.ReceivedShare{
-			State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
-			Share: &collaboration.Share{
-				Id: &collaboration.ShareId{
-					OpaqueId: "shareidtwo",
-				},
-				ResourceId: &sprovider.ResourceId{
-					StorageId: "share1-storageid",
-					SpaceId:   "share1-storageid",
+					StorageId: "storageid",
+					SpaceId:   "storageid",
 					OpaqueId:  "shareddir",
 				},
 				Permissions: &collaboration.SharePermissions{
@@ -127,6 +103,30 @@ var _ = Describe("Sharesstorageprovider", func() {
 			},
 			MountPoint: &sprovider.Reference{
 				Path: "share1-shareddir",
+			},
+		}
+
+		BaseShareTwo = &collaboration.ReceivedShare{
+			State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
+			Share: &collaboration.Share{
+				Id: &collaboration.ShareId{
+					OpaqueId: "shareid2",
+				},
+				ResourceId: &sprovider.ResourceId{
+					StorageId: "storageid",
+					SpaceId:   "storageid",
+					OpaqueId:  "shareddir2",
+				},
+				Permissions: &collaboration.SharePermissions{
+					Permissions: &sprovider.ResourcePermissions{
+						Stat:               true,
+						ListContainer:      true,
+						InitiateFileUpload: true,
+					},
+				},
+			},
+			MountPoint: &sprovider.Reference{
+				Path: "share2-shareddir2",
 			},
 		}
 
@@ -296,6 +296,12 @@ var _ = Describe("Sharesstorageprovider", func() {
 							},
 							Size: 1,
 						})
+					}
+					return resp
+				case utils.ResourceIDEqual(req.Ref.ResourceId, BaseShareTwo.Share.ResourceId):
+					resp := &sprovider.ListContainerResponse{
+						Status: status.NewOK(context.Background()),
+						Infos:  []*sprovider.ResourceInfo{},
 					}
 					return resp
 				case utils.ResourceIDEqual(req.Ref.ResourceId, BaseShareTwo.Share.ResourceId):
@@ -772,11 +778,11 @@ var _ = Describe("Sharesstorageprovider", func() {
 				req := &sprovider.MoveRequest{
 					Source: &sprovider.Reference{
 						ResourceId: ShareJail,
-						Path:       "./oldname",
+						Path:       "./share1-shareddir",
 					},
 					Destination: &sprovider.Reference{
 						ResourceId: ShareJail,
-						Path:       "./newname",
+						Path:       "./share1-shareddir-renamed",
 					},
 				}
 				res, err := s.Move(ctx, req)
@@ -790,17 +796,37 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("refuses to move a file between shares", func() {
 				req := &sprovider.MoveRequest{
 					Source: &sprovider.Reference{
-						Path: "/shares/share1-shareddir/share1-shareddir-file",
+						ResourceId: ShareJail,
+						Path:       "./share1-shareddir/share1-shareddir-file",
 					},
 					Destination: &sprovider.Reference{
-						Path: "/shares/share2-shareddir/share2-shareddir-file",
+						ResourceId: ShareJail,
+						Path:       "./share2-shareddir2/share1-shareddir-file",
 					},
 				}
 				res, err := s.Move(ctx, req)
 				gatewayClient.AssertNotCalled(GinkgoT(), "Move", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
-				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_UNIMPLEMENTED))
+			})
+
+			It("refuses to move a file between shares resolving to the same space", func() {
+				req := &sprovider.MoveRequest{
+					Source: &sprovider.Reference{
+						ResourceId: ShareJail,
+						Path:       "./share1-shareddir/share1-shareddir-file",
+					},
+					Destination: &sprovider.Reference{
+						ResourceId: ShareJail,
+						Path:       "./share2-shareddir2/share1-shareddir-file",
+					},
+				}
+				res, err := s.Move(ctx, req)
+				gatewayClient.AssertNotCalled(GinkgoT(), "Move", mock.Anything, mock.Anything)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_UNIMPLEMENTED))
 			})
 
 			It("moves a file", func() {
