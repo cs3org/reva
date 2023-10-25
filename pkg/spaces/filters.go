@@ -1,11 +1,8 @@
 package spaces
 
 import (
-	"slices"
-
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/golang/protobuf/proto"
 )
 
 type ListStorageSpaceFilter struct {
@@ -64,10 +61,4 @@ func (f ListStorageSpaceFilter) ByUser(user *userpb.UserId) ListStorageSpaceFilt
 
 func (f ListStorageSpaceFilter) List() []*providerpb.ListStorageSpacesRequest_Filter {
 	return f.filters
-}
-
-func (f ListStorageSpaceFilter) Match(filter *providerpb.ListStorageSpacesRequest_Filter) bool {
-	return slices.ContainsFunc(f.filters, func(f *providerpb.ListStorageSpacesRequest_Filter) bool {
-		return proto.Equal(f, filter)
-	})
 }

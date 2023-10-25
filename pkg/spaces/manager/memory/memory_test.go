@@ -189,7 +189,7 @@ func TestListSpaces(t *testing.T) {
 			t.Fatalf("got unexpected error creating new memory spaces provider: %+v", err)
 		}
 
-		got, err := s.ListSpaces(context.Background(), tt.user)
+		got, err := s.ListSpaces(context.Background(), tt.user, nil)
 		if err != nil {
 			t.Fatalf("got unexpected error getting list of spaces: %+v", err)
 		}

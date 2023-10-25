@@ -23,6 +23,7 @@ import (
 	"errors"
 	"slices"
 
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/spaces/manager/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
@@ -80,18 +81,37 @@ func (s *service) StoreSpace(ctx context.Context, owner *userpb.UserId, path, na
 	return errors.New("not yet implemented")
 }
 
-func (s *service) ListSpaces(ctx context.Context, user *userpb.User) ([]*provider.StorageSpace, error) {
+func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, spaceType spaces.SpaceType) []*provider.StorageSpace {
 	sp := []*provider.StorageSpace{}
 
-	// home space
-	if space := s.userSpace(ctx, user); space != nil {
-		sp = append(sp, space)
+	if spaceType == spaces.SpaceTypeHome {
+		if space := s.userSpace(ctx, user); space != nil {
+			sp = append(sp, space)
+		}
+	} else if spaceType == spaces.SpaceTypeProject {
+		projects := s.projectSpaces(ctx, user)
+		sp = append(sp, projects...)
 	}
 
-	// project spaces
-	projects := s.projectSpaces(ctx, user)
-	sp = append(sp, projects...)
+	return sp
+}
 
+func (s *service) ListSpaces(ctx context.Context, user *userpb.User, filters []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	sp := []*provider.StorageSpace{}
+	if len(filters) == 0 {
+		sp = s.listSpacesByType(ctx, user, spaces.SpaceTypeHome)
+		sp = append(sp, s.listSpacesByType(ctx, user, spaces.SpaceTypeProject)...)
+		return sp, nil
+	}
+
+	for _, filter := range filters {
+		switch filter.Type {
+		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
+			sp = append(sp, s.listSpacesByType(ctx, user, spaces.SpaceType(filter.Term.(*provider.ListStorageSpacesRequest_Filter_SpaceType).SpaceType))...)
+		default:
+			return nil, errtypes.NotSupported("filter not supported")
+		}
+	}
 	return sp, nil
 }
 

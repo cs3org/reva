@@ -87,7 +87,7 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 	user := appctx.ContextMustGetUser(ctx)
-	spaces, err := s.spaces.ListSpaces(ctx, user)
+	spaces, err := s.spaces.ListSpaces(ctx, user, req.Filters)
 	if err != nil {
 		return &provider.ListStorageSpacesResponse{
 			Status: status.NewInternal(ctx, err, "error listing storage spaces"),

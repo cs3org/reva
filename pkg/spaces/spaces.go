@@ -28,7 +28,7 @@ import (
 // Manager is the interface that stores the spaces.
 type Manager interface {
 	StoreSpace(ctx context.Context, owner *userpb.UserId, path, name string, quota *provider.Quota) error
-	ListSpaces(ctx context.Context, user *userpb.User) ([]*provider.StorageSpace, error)
+	ListSpaces(ctx context.Context, user *userpb.User, filters []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error)
 	UpdateSpace(ctx context.Context, space *provider.StorageSpace) error
 	DeleteSpace(ctx context.Context, spaceID *provider.StorageSpaceId) error
 }
