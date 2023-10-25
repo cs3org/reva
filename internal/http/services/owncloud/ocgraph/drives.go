@@ -24,13 +24,17 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strings"
 
+	"github.com/CiscoM31/godata"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	conversions "github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/utils/list"
 	libregraph "github.com/owncloud/libre-graph-api-go"
+	"github.com/pkg/errors"
 )
 
 func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
@@ -44,8 +48,22 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	odataReq, err := godata.ParseRequest(r.Context(), r.URL.Path, r.URL.Query())
+	if err != nil {
+		log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("could not get drives: query error")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	filters, err := generateCs3Filters(odataReq)
+	if err != nil {
+		log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("could not get drives: error parsing filters")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	res, err := gw.ListStorageSpaces(ctx, &providerpb.ListStorageSpacesRequest{
-		Filters: nil, // TODO: add filters
+		Filters: filters,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("error listing storage spaces")
@@ -67,6 +85,26 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+}
+
+func generateCs3Filters(request *godata.GoDataRequest) ([]*providerpb.ListStorageSpacesRequest_Filter, error) {
+	var filters spaces.ListStorageSpaceFilter
+	if request.Query.Filter != nil {
+		if request.Query.Filter.Tree.Token.Value == "eq" {
+			switch request.Query.Filter.Tree.Children[0].Token.Value {
+			case "driveType":
+				spaceType := spaces.SpaceType(strings.Trim(request.Query.Filter.Tree.Children[1].Token.Value, "'"))
+				filters = filters.BySpaceType(spaceType)
+			case "id":
+				id := strings.Trim(request.Query.Filter.Tree.Children[1].Token.Value, "'")
+				filters = filters.ByID(&providerpb.StorageSpaceId{OpaqueId: id})
+			}
+		} else {
+			err := errors.Errorf("unsupported filter operand: %s", request.Query.Filter.Tree.Token.Value)
+			return nil, err
+		}
+	}
+	return filters.List(), nil
 }
 
 func (s *svc) cs3StorageSpaceToDrive(space *providerpb.StorageSpace) *libregraph.Drive {
