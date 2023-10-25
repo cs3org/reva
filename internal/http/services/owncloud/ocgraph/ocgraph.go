@@ -88,7 +88,7 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 
 func (s *svc) routerInit() error {
 	s.router.Route("/v1.0", func(r chi.Router) {
-		r.Get("/me/drives/", s.listMySpaces)
+		r.Get("/me/drives", s.listMySpaces)
 	})
 	return nil
 }
