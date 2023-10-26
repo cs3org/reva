@@ -629,10 +629,7 @@ var fnvHash = fnv.New32a()
 func getHash(s string) uint64 {
 	fnvHash.Write([]byte(s))
 	defer fnvHash.Reset()
-	buf := bytes.NewReader(fnvHash.Sum(nil))
-	var res uint32
-	binary.Read(buf, binary.BigEndian, &res)
-	return uint64(res)
+	return uint64(fnvHash.Sum32())
 }
 
 func encodeLock(l *provider.Lock) string {
