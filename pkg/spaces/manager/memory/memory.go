@@ -166,7 +166,7 @@ func projectBelongToUser(user *userpb.User, project *SpaceDescription) (*provide
 		return conversions.NewManagerRole().CS3ResourcePermissions(), true
 	}
 	if slices.Contains(user.Groups, project.Readers) {
-		return conversions.NewReaderRole().CS3ResourcePermissions(), true
+		return conversions.NewViewerRole().CS3ResourcePermissions(), true
 	}
 	if slices.Contains(user.Groups, project.Writers) {
 		return conversions.NewEditorRole().CS3ResourcePermissions(), true
