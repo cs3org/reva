@@ -22,13 +22,10 @@
 package cephfs
 
 import (
-	"bytes"
 	"context"
 	b64 "encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"hash"
 	"hash/fnv"
 	"io"
 	"net/url"
@@ -647,11 +644,10 @@ func decodeLock(content string) (*provider.Lock, error) {
 	if err = json.Unmarshal(d, l); err != nil {
 		return nil, err
 	}
-	
+
 	return l, nil
 }
 
-// TODO(lopresti) part of this logic is duplicated from eosfs.go, should be factored out
 func (fs *cephfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	user := fs.makeUser(ctx)
 	path, err := user.resolveRef(ref)
@@ -675,6 +671,7 @@ func (fs *cephfs) SetLock(ctx context.Context, ref *provider.Reference, lock *pr
 	})
 
 	if err == nil {
+		// ok, we got the flock, now also store the related lock metadata
 		md := &provider.ArbitraryMetadata{
 			Metadata: map[string]string{
 				xattrLock: encodeLock(lock),
@@ -715,7 +712,11 @@ func (fs *cephfs) GetLock(ctx context.Context, ref *provider.Reference) (*provid
 		}
 
 		if err = file.Flock(goceph.LockEX|goceph.LockNB, 0); err == nil {
-			// success means file was not locked
+			// success means the file was not locked, drop related metadata if present
+			if l != nil {
+				fs.UnsetArbitraryMetadata(ctx, ref, []string{xattrLock})
+				l = nil
+			}
 			file.Flock(goceph.LockUN|goceph.LockNB, 0)
 			err = errtypes.NotFound("file was not locked")
 			return
@@ -742,6 +743,7 @@ func (fs *cephfs) GetLock(ctx context.Context, ref *provider.Reference) (*provid
 	return l, getRevaError(err)
 }
 
+// TODO(lopresti) part of this logic is duplicated from eosfs.go, should be factored out
 func sameHolder(l1, l2 *provider.Lock) bool {
 	same := true
 	if l1.User != nil || l2.User != nil {
