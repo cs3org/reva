@@ -674,10 +674,7 @@ func (fs *cephfs) SetLock(ctx context.Context, ref *provider.Reference, lock *pr
 			return
 		}
 
-		if err = file.Flock(op|goceph.LockNB, getHash(lock.AppName)); err != nil {
-			// already locked?
-			return
-		}
+		err = file.Flock(op|goceph.LockNB, getHash(lock.AppName))
 	})
 
 	if err == nil {
