@@ -277,11 +277,11 @@ endpoint = "{{ vars.external_reva_endpoint }}"
 enable_webapp = true
 enable_datatx = true
 
-[http.services.ocmd]
+[http.services.ocm]
 address = ":443"
 prefix = "ocm"
 
-[http.services.ocmd.config]
+[http.services.ocm.config]
 host = "{{ vars.provider_domain }}"
 
 # OCS

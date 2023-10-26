@@ -3,10 +3,10 @@ gatewaysvc = "{{ grpc.services.gateway.address }}"
 
 [vars]
 machine_api_key = "machine-api-key"
-provider_domain = "cernbox.cern.ch"
+provider_domain = "cesnet.cz"
 
 [grpc.services.gateway]
-address = "0.0.0.0:19000"
+address = "0.0.0.0:17000"
 authregistrysvc = "{{ grpc.services.authregistry.address }}"
 appregistrysvc = "{{ grpc.services.appregistry.address }}"
 storageregistrysvc = "{{ grpc.services.storageregistry.address }}"
@@ -58,14 +58,14 @@ driver = "json"
 
 # Note that ocmcore and ocmshareprovider should use the same file for storing the shares.
 [grpc.services.ocmcore.drivers.json]
-file = "/var/tmp/reva/shares_server_1.json"
+file = "/var/tmp/reva/shares_server_2.json"
 
 [grpc.services.ocminvitemanager]
 driver = "json"
 provider_domain = "{{ vars.provider_domain }}"
 
 [grpc.services.ocminvitemanager.drivers.json]
-file = "/var/tmp/reva/invites_server_1.json"
+file = "/var/tmp/reva/invites_server_2.json"
 
 [grpc.services.ocmshareprovider]
 driver = "json"
@@ -73,7 +73,7 @@ webdav_endpoint = "http://localhost:{{ http.services.ocdav.address.port }}"
 provider_domain = "{{ vars.provider_domain }}"
 
 [grpc.services.ocmshareprovider.drivers.json]
-file = "/var/tmp/reva/shares_server_1.json"
+file = "/var/tmp/reva/shares_server_2.json"
 
 [grpc.services.ocmproviderauthorizer]
 driver = "json"
@@ -162,14 +162,14 @@ machine_secret = "{{ vars.machine_api_key }}"
 [[http.services.dataprovider]]
 driver = "ocmreceived"
 
-[http.services.ocmd]
-address = "0.0.0.0:8080"
+[http.services.ocm]
+address = "0.0.0.0:80"
 expose_recipient_display_name = true
 
 [http.services.ocmprovider]
 ocm_prefix = "ocm"
-provider = "reva@cern"
-endpoint = "http://localhost:{{ http.services.ocmd.address.port }}"
+provider = "reva@cesnet"
+endpoint = "http://localhost:{{ http.services.ocm.address.port }}"
 enable_webapp = true
 enable_datatx = true
 
@@ -177,10 +177,10 @@ enable_datatx = true
 prefix = "ocs"
 
 [http.services.ocdav]
-address = "0.0.0.0:8080"
+address = "0.0.0.0:80"
 
 [http.services.datagateway]
-address = "0.0.0.0:8080"
+address = "0.0.0.0:80"
 
 [http.services.appprovider]
 
