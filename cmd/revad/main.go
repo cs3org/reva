@@ -27,6 +27,7 @@ import (
 	"path"
 	"reflect"
 	"regexp"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"syscall"
@@ -123,12 +124,17 @@ func handlePluginsFlag() {
 	// For now we just list all the plugins.
 	plugins := reva.GetPlugins("")
 	grouped := groupByNamespace(plugins)
+	bi, ok := debug.ReadBuildInfo()
+	if !ok {
+		bi = &debug.BuildInfo{}
+	}
 
 	count := 0
 	for ns, plugins := range grouped {
 		fmt.Printf("[%s]\n", ns)
 		for _, p := range plugins {
-			fmt.Printf("%s -> %s\n", p.ID.Name(), pkgOfFunction(p.New))
+			pkgName := pkgOfFunction(p.New)
+			fmt.Printf("%s -> %s (%s)\n", p.ID.Name(), pkgName, pkgVersion(bi.Deps, pkgName))
 		}
 		count++
 		if len(grouped) != count {
@@ -146,6 +152,15 @@ func pkgOfFunction(f any) string {
 	name := nameOfFunction(f)
 	i := strings.LastIndex(name, ".")
 	return name[:i]
+}
+
+func pkgVersion(deps []*debug.Module, name string) string {
+	for _, dep := range deps {
+		if strings.HasPrefix(name, dep.Path) {
+			return dep.Version
+		}
+	}
+	return "<unknown>"
 }
 
 func groupByNamespace(plugins []reva.PluginInfo) map[string][]reva.PluginInfo {
