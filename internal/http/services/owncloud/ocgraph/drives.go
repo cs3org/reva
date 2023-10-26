@@ -118,8 +118,8 @@ func (s *svc) cs3StorageSpaceToDrive(space *providerpb.StorageSpace) *libregraph
 		},
 	}
 
-	drive.Root.WebDavUrl = libregraph.PtrString(fullUrl(s.webDavBaseURL, space.RootInfo.Path))
-	drive.WebUrl = libregraph.PtrString(fullUrl(s.webBaseURL, space.RootInfo.Path))
+	drive.Root.WebDavUrl = libregraph.PtrString(fullUrl(s.c.WebDavBase, space.RootInfo.Path))
+	drive.WebUrl = libregraph.PtrString(fullUrl(s.c.WebBase, space.RootInfo.Path))
 
 	if space.Owner != nil && space.Owner.Id != nil {
 		drive.Owner = &libregraph.IdentitySet{
@@ -131,8 +131,8 @@ func (s *svc) cs3StorageSpaceToDrive(space *providerpb.StorageSpace) *libregraph
 	return drive
 }
 
-func fullUrl(base *url.URL, path string) string {
-	full, _ := url.JoinPath(base.Path, path)
+func fullUrl(base, path string) string {
+	full, _ := url.JoinPath(base, path)
 	return full
 }
 

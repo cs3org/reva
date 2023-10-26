@@ -23,7 +23,6 @@ package ocgraph
 import (
 	"context"
 	"net/http"
-	"net/url"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -31,7 +30,6 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/go-chi/chi/v5"
-	"github.com/pkg/errors"
 )
 
 func init() {
@@ -51,9 +49,6 @@ func (c *config) ApplyDefaults() {
 type svc struct {
 	c      *config
 	router *chi.Mux
-
-	webDavBaseURL *url.URL
-	webBaseURL    *url.URL
 }
 
 func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
@@ -62,21 +57,10 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 		return nil, err
 	}
 
-	webDavBase, err := url.Parse(c.WebDavBase)
-	if err != nil {
-		return nil, errors.Wrap(err, "error parsing webdav_base")
-	}
-	webBase, err := url.Parse(c.WebBase)
-	if err != nil {
-		return nil, errors.Wrap(err, "error parsing web_base")
-	}
-
 	r := chi.NewRouter()
 	s := &svc{
-		c:             &c,
-		router:        r,
-		webDavBaseURL: webDavBase,
-		webBaseURL:    webBase,
+		c:      &c,
+		router: r,
 	}
 
 	if err := s.routerInit(); err != nil {
