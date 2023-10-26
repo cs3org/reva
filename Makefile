@@ -90,7 +90,7 @@ export PART			  ?= 1
 
 .PHONY: $(TEST)
 $(TEST): docker-eos-full-tests docker-revad-eos
-	docker compose -f ./tests/docker/docker-compose.yml up --force-recreate --always-recreate-deps --build --abort-on-container-exit -V --remove-orphans --exit-code-from $@ $@
+	docker-compose -f ./tests/docker/docker-compose.yml up --force-recreate --always-recreate-deps --build --abort-on-container-exit -V --remove-orphans --exit-code-from $@ $@
 
 .PHONY: test-go
 test-go:
@@ -141,7 +141,7 @@ toolchain-clean:
 
 .PHONY: docker-clean
 docker-clean:
-	docker compose -f ./tests/docker/docker-compose.yml down --rmi local -v --remove-orphans
+	docker-compose -f ./tests/docker/docker-compose.yml down --rmi local -v --remove-orphans
 
 .PHONY: clean
 clean: toolchain-clean docker-clean
