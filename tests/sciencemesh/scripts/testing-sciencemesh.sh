@@ -4,12 +4,12 @@ ENV_ROOT=$(pwd)
 export ENV_ROOT=${ENV_ROOT}
 [ ! -d "./scripts" ] && echo "Directory ./scripts DOES NOT exist inside $ENV_ROOT, are you running this from the repo root?" && exit 1
 [ ! -d "./tls" ] && echo "Directory ./tls DOES NOT exist inside $ENV_ROOT, are you running this from the repo root?" && exit 1
-[ ! -d "./nextcloud-sciencemesh" ] && echo "Directory ./nextcloud-sciencemesh DOES NOT exist inside $ENV_ROOT, did you run ./init-sciencemesh.sh?" && exit 1
-[ ! -d "./nextcloud-sciencemesh/vendor" ] && echo "Directory ./nextcloud-sciencemesh/vendor DOES NOT exist inside $ENV_ROOT. Try: rmdir ./nextcloud-sciencemesh ; ./scripts/init-sciencemesh.sh" && exit 1
-[ ! -d "./owncloud-sciencemesh" ] && echo "Directory ./owncloud-sciencemesh DOES NOT exist inside $ENV_ROOT, did you run ./init-sciencemesh.sh?" && exit 1
-[ ! -d "./owncloud-sciencemesh/vendor" ] && echo "Directory ./owncloud-sciencemesh/vendor DOES NOT exist inside $ENV_ROOT. Try: rmdir ./owncloud-sciencemesh ; ./scripts/init-sciencemesh.sh" && exit 1
-[ ! -d "./cernbox-web-sciencemesh" ] && echo "Directory ./cernbox-web-sciencemesh DOES NOT exist inside $ENV_ROOT, did you run ./init-sciencemesh.sh?" && exit 1
-[ ! -d "./wopi-sciencemesh" ] && echo "Directory ./wopi-sciencemesh DOES NOT exist inside $ENV_ROOT, did you run ./init-sciencemesh.sh?" && exit 1
+[ ! -d "./nextcloud-sciencemesh" ] && echo "Directory ./nextcloud-sciencemesh DOES NOT exist inside $ENV_ROOT, did you run ./init.sh?" && exit 1
+[ ! -d "./nextcloud-sciencemesh/vendor" ] && echo "Directory ./nextcloud-sciencemesh/vendor DOES NOT exist inside $ENV_ROOT. Try: rmdir ./nextcloud-sciencemesh ; ./scripts/init.sh" && exit 1
+[ ! -d "./owncloud-sciencemesh" ] && echo "Directory ./owncloud-sciencemesh DOES NOT exist inside $ENV_ROOT, did you run ./init.sh?" && exit 1
+[ ! -d "./owncloud-sciencemesh/vendor" ] && echo "Directory ./owncloud-sciencemesh/vendor DOES NOT exist inside $ENV_ROOT. Try: rmdir ./owncloud-sciencemesh ; ./scripts/init.sh" && exit 1
+[ ! -d "./cernbox-web-sciencemesh" ] && echo "Directory ./cernbox-web-sciencemesh DOES NOT exist inside $ENV_ROOT, did you run ./init.sh?" && exit 1
+[ ! -d "./wopi-sciencemesh" ] && echo "Directory ./wopi-sciencemesh DOES NOT exist inside $ENV_ROOT, did you run ./init.sh?" && exit 1
 
 function waitForPort {
   x=$(docker exec -it "${1}" ss -tulpn | grep -c "${2}")
