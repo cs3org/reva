@@ -624,7 +624,7 @@ func (fs *cephfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateSt
 	return nil, errtypes.NotSupported("unimplemented")
 }
 
-var fnvHash hash.Hash32 = fnv.New32a()
+var fnvHash = fnv.New32a()
 
 func getHash(s string) uint64 {
 	fnvHash.Write([]byte(s))
