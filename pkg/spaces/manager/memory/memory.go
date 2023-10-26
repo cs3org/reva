@@ -128,7 +128,8 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) *provider.St
 		Name:      user.Username,
 		SpaceType: spaces.SpaceTypeHome.AsString(),
 		RootInfo: &provider.ResourceInfo{
-			Path: path,
+			PermissionSet: conversions.NewManagerRole().CS3ResourcePermissions(),
+			Path:          path,
 		},
 	}
 }
@@ -165,11 +166,11 @@ func projectBelongToUser(user *userpb.User, project *SpaceDescription) (*provide
 	if slices.Contains(user.Groups, project.Admins) {
 		return conversions.NewManagerRole().CS3ResourcePermissions(), true
 	}
-	if slices.Contains(user.Groups, project.Readers) {
-		return conversions.NewViewerRole().CS3ResourcePermissions(), true
-	}
 	if slices.Contains(user.Groups, project.Writers) {
 		return conversions.NewEditorRole().CS3ResourcePermissions(), true
+	}
+	if slices.Contains(user.Groups, project.Readers) {
+		return conversions.NewViewerRole().CS3ResourcePermissions(), true
 	}
 	return nil, false
 }
