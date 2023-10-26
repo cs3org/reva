@@ -52,7 +52,7 @@ type SpaceDescription struct {
 
 type Config struct {
 	Spaces    []SpaceDescription `mapstructure:"spaces"`
-	UserSpace string             `mapstructure:"user_space"`
+	UserSpace string             `mapstructure:"user_space" validate:"required"`
 }
 
 func (c *Config) ApplyDefaults() {
