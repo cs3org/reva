@@ -29,7 +29,6 @@ import (
 	"github.com/CiscoM31/godata"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	conversions "github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/utils/list"
@@ -137,8 +136,18 @@ func fullUrl(base, path string) string {
 }
 
 func cs3PermissionsToLibreGraph(perms *providerpb.ResourcePermissions) []libregraph.Permission {
-	role := conversions.RoleFromResourcePermissions(perms)
 	var p libregraph.Permission
-	p.SetRoles([]string{role.Name})
+	// we need to map the permissions to the roles
+	switch {
+	// having RemoveGrant qualifies you as a manager
+	case perms.RemoveGrant:
+		p.SetRoles([]string{"manager"})
+	// InitiateFileUpload means you are an editor
+	case perms.InitiateFileUpload:
+		p.SetRoles([]string{"editor"})
+	// Stat permission at least makes you a viewer
+	case perms.Stat:
+		p.SetRoles([]string{"viewer"})
+	}
 	return []libregraph.Permission{p}
 }
