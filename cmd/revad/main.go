@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"slices"
+
 	"os"
 	"path"
 	"reflect"
@@ -41,6 +43,7 @@ import (
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/sysinfo"
+	"github.com/cs3org/reva/pkg/utils/maps"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -129,8 +132,13 @@ func handlePluginsFlag() {
 		bi = &debug.BuildInfo{}
 	}
 
+	namespaces := maps.Keys(grouped)
+	slices.Sort(namespaces)
+
 	count := 0
-	for ns, plugins := range grouped {
+	for _, ns := range namespaces {
+		plugins := grouped[ns]
+
 		fmt.Printf("[%s]\n", ns)
 		for _, p := range plugins {
 			pkgName := pkgOfFunction(p.New)
