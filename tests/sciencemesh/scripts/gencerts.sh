@@ -21,8 +21,8 @@ function createCert {
 rm --recursive --force ../tls
 mkdir -p ../tls
 
-echo "Copying CA certificate"
-cp ../ca/ocm-ca* ../tls
+echo "Copying CA certificate and CA browser db"
+cp ../ca/* ../tls
 
 createCert meshdir
 createCert stub1
