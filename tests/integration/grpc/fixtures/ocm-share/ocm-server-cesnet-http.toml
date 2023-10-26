@@ -7,7 +7,7 @@ gatewaysvc = "{{cesnetgw_address}}"
 [http]
 address = "{{grpc_address}}"
 
-[http.services.ocmd]
+[http.services.ocm]
 
 [http.services.sciencemesh]
 provider_domain = "{{cesnethttp_address}}"

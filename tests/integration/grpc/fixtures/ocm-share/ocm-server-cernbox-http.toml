@@ -7,7 +7,7 @@ gatewaysvc = "{{cernboxgw_address}}"
 [http]
 address = "{{grpc_address}}"
 
-[http.services.ocmd]
+[http.services.ocm]
 
 [http.services.sciencemesh]
 provider_domain = "{{cernboxhttp_address}}"
