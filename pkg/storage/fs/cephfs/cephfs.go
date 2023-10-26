@@ -811,9 +811,7 @@ func (fs *cephfs) Unlock(ctx context.Context, ref *provider.Reference, lock *pro
 			return
 		}
 
-		if err = file.Flock(goceph.LockUN|goceph.LockNB, getHash(lock.AppName)); err != nil {
-			return
-		}
+		err = file.Flock(goceph.LockUN|goceph.LockNB, getHash(lock.AppName))
 	})
 
 	if err == nil {
