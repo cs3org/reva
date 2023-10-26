@@ -646,12 +646,11 @@ func decodeLock(content string) (*provider.Lock, error) {
 		return nil, err
 	}
 
-	l := new(provider.Lock)
-	err = json.Unmarshal(d, l)
-	if err != nil {
+	l := &provider.Lock{}
+	if err = json.Unmarshal(d, l); err != nil {
 		return nil, err
 	}
-
+	
 	return l, nil
 }
 
