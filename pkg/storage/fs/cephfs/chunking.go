@@ -32,7 +32,7 @@ import (
 	"strings"
 	"time"
 
-	cephfs2 "github.com/ceph/go-ceph/cephfs"
+	goceph "github.com/ceph/go-ceph/cephfs"
 	"github.com/google/uuid"
 )
 
@@ -118,7 +118,7 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (finish bool, chu
 
 	chunkTempFilename := c.getChunkTempFileName()
 	c.user.op(func(cv *cacheVal) {
-		var tmpFile *cephfs2.File
+		var tmpFile *goceph.File
 		target := filepath.Join(c.chunkFolder, chunkTempFilename)
 		tmpFile, err = cv.mount.Open(target, os.O_CREATE|os.O_WRONLY, c.user.fs.conf.FilePerms)
 		defer closeFile(tmpFile)
@@ -152,9 +152,9 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (finish bool, chu
 	// assembly the chunks when the client asks for it.
 	numEntries := 0
 	c.user.op(func(cv *cacheVal) {
-		var dir *cephfs2.Directory
-		var entry *cephfs2.DirEntry
-		var chunkFile, assembledFile *cephfs2.File
+		var dir *goceph.Directory
+		var entry *goceph.DirEntry
+		var chunkFile, assembledFile *goceph.File
 
 		dir, err = cv.mount.OpenDir(chunksFolderName)
 		defer closeDir(dir)

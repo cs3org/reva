@@ -29,7 +29,7 @@ import (
 	"os"
 	"path/filepath"
 
-	cephfs2 "github.com/ceph/go-ceph/cephfs"
+	goceph "github.com/ceph/go-ceph/cephfs"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -170,7 +170,7 @@ func (fs *cephfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 
 	// Create binary file with no content
 	user.op(func(cv *cacheVal) {
-		var f *cephfs2.File
+		var f *goceph.File
 		defer closeFile(f)
 		f, err = cv.mount.Open(binPath, os.O_CREATE|os.O_WRONLY, fs.conf.FilePerms)
 		if err != nil {
@@ -234,7 +234,7 @@ func (fs *cephfs) GetUpload(ctx context.Context, id string) (fup tusd.Upload, er
 
 	var stat Statx
 	user.op(func(cv *cacheVal) {
-		stat, err = cv.mount.Statx(binPath, cephfs2.StatxSize, 0)
+		stat, err = cv.mount.Statx(binPath, goceph.StatxSize, 0)
 	})
 	if err != nil {
 		return
