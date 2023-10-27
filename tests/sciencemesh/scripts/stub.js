@@ -6,7 +6,7 @@ const url = require('url');
 const fetch = require('node-fetch');
 const { isNativeError } = require('util/types');
 
-const SERVER_NAME = process.env.HOST || 'stub2';
+const SERVER_NAME = process.env.HOST || 'meshdir';
 const SERVER_HOST = `${SERVER_NAME}.docker`;
 const SERVER_ROOT = `https://${SERVER_HOST}`;
 const USER = `einstein`;
