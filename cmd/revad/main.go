@@ -23,10 +23,13 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"slices"
+
 	"os"
 	"path"
 	"reflect"
 	"regexp"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"syscall"
@@ -40,6 +43,7 @@ import (
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/sysinfo"
+	"github.com/cs3org/reva/pkg/utils/maps"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -123,12 +127,22 @@ func handlePluginsFlag() {
 	// For now we just list all the plugins.
 	plugins := reva.GetPlugins("")
 	grouped := groupByNamespace(plugins)
+	bi, ok := debug.ReadBuildInfo()
+	if !ok {
+		bi = &debug.BuildInfo{}
+	}
+
+	namespaces := maps.Keys(grouped)
+	slices.Sort(namespaces)
 
 	count := 0
-	for ns, plugins := range grouped {
+	for _, ns := range namespaces {
+		plugins := grouped[ns]
+
 		fmt.Printf("[%s]\n", ns)
 		for _, p := range plugins {
-			fmt.Printf("%s -> %s\n", p.ID.Name(), pkgOfFunction(p.New))
+			pkgName := pkgOfFunction(p.New)
+			fmt.Printf("%s -> %s (%s)\n", p.ID.Name(), pkgName, pkgVersion(bi.Deps, pkgName))
 		}
 		count++
 		if len(grouped) != count {
@@ -146,6 +160,15 @@ func pkgOfFunction(f any) string {
 	name := nameOfFunction(f)
 	i := strings.LastIndex(name, ".")
 	return name[:i]
+}
+
+func pkgVersion(deps []*debug.Module, name string) string {
+	for _, dep := range deps {
+		if strings.HasPrefix(name, dep.Path) {
+			return dep.Version
+		}
+	}
+	return "<unknown>"
 }
 
 func groupByNamespace(plugins []reva.PluginInfo) map[string][]reva.PluginInfo {
