@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	"github.com/CiscoM31/godata"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -75,7 +76,11 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	spaces := list.Map(res.StorageSpaces, s.cs3StorageSpaceToDrive)
+	me := appctx.ContextMustGetUser(ctx)
+
+	spaces := list.Map(res.StorageSpaces, func(space *providerpb.StorageSpace) *libregraph.Drive {
+		return s.cs3StorageSpaceToDrive(me, space)
+	})
 
 	if err := json.NewEncoder(w).Encode(map[string]any{
 		"value": spaces,
@@ -106,14 +111,15 @@ func generateCs3Filters(request *godata.GoDataRequest) ([]*providerpb.ListStorag
 	return filters.List(), nil
 }
 
-func (s *svc) cs3StorageSpaceToDrive(space *providerpb.StorageSpace) *libregraph.Drive {
+func (s *svc) cs3StorageSpaceToDrive(user *userpb.User, space *providerpb.StorageSpace) *libregraph.Drive {
 	drive := &libregraph.Drive{
-		Id:        libregraph.PtrString(space.Id.OpaqueId),
-		Name:      space.Name,
-		DriveType: libregraph.PtrString(space.SpaceType),
+		DriveAlias: libregraph.PtrString(space.SpaceType + "/" + space.Name),
+		Id:         libregraph.PtrString(space.Id.OpaqueId),
+		Name:       space.Name,
+		DriveType:  libregraph.PtrString(space.SpaceType),
 		Root: &libregraph.DriveItem{
 			Id:          libregraph.PtrString(space.Id.OpaqueId),
-			Permissions: cs3PermissionsToLibreGraph(space.RootInfo.PermissionSet),
+			Permissions: cs3PermissionsToLibreGraph(user, space.RootInfo.PermissionSet),
 		},
 	}
 
@@ -135,7 +141,7 @@ func fullUrl(base, path string) string {
 	return full
 }
 
-func cs3PermissionsToLibreGraph(perms *providerpb.ResourcePermissions) []libregraph.Permission {
+func cs3PermissionsToLibreGraph(user *userpb.User, perms *providerpb.ResourcePermissions) []libregraph.Permission {
 	var p libregraph.Permission
 	// we need to map the permissions to the roles
 	switch {
@@ -148,6 +154,14 @@ func cs3PermissionsToLibreGraph(perms *providerpb.ResourcePermissions) []libregr
 	// Stat permission at least makes you a viewer
 	case perms.Stat:
 		p.SetRoles([]string{"viewer"})
+	}
+	p.GrantedToIdentities = []libregraph.IdentitySet{
+		{
+			User: &libregraph.Identity{
+				DisplayName: user.DisplayName,
+				Id:          &user.Id.OpaqueId,
+			},
+		},
 	}
 	return []libregraph.Permission{p}
 }
