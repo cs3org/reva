@@ -19,17 +19,20 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"time"
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
+	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	ocmshare "github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/utils"
@@ -89,9 +92,41 @@ func ocmShareCreateCommand() *command {
 			return err
 		}
 
-		u := &userpb.UserId{OpaqueId: *grantee, Idp: *idp, Type: utils.UserTypeMap(*userType)}
+		token, err := readToken()
+		if err != nil {
+			fmt.Println("the token file cannot be read from file ", getTokenFile())
+			fmt.Println("make sure you have logged in before with \"reva login\"")
+			return err
+		}
+
+		res, err := client.WhoAmI(ctx, &gatewayv1beta1.WhoAmIRequest{
+			Token: token,
+		})
+		if err != nil {
+			return err
+		}
+		if res.Status.Code != rpc.Code_CODE_OK {
+			return formatError(res.Status)
+		}
+
+		d, err := utils.MarshalProtoV1ToJSON(res.User.Id)
+		if err != nil {
+			return err
+		}
+
+		o := &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				"user-filter": {
+					Decoder: "json",
+					Value:   d,
+				},
+			},
+		}
+
+		remoteUserID := &userpb.UserId{OpaqueId: *grantee, Idp: *idp, Type: userpb.UserType_USER_TYPE_FEDERATED}
 		remoteUserRes, err := client.GetAcceptedUser(ctx, &invitepb.GetAcceptedUserRequest{
-			RemoteUserId: u,
+			RemoteUserId: remoteUserID,
+			Opaque:       o,
 		})
 		if err != nil {
 			return err
@@ -102,7 +137,7 @@ func ocmShareCreateCommand() *command {
 
 		ref := &provider.Reference{Path: fn}
 		req := &provider.StatRequest{Ref: ref}
-		res, err := client.Stat(ctx, req)
+		resStat, err := client.Stat(ctx, req)
 		if err != nil {
 			return err
 		}
@@ -117,7 +152,7 @@ func ocmShareCreateCommand() *command {
 		}
 
 		shareRequest := &ocm.CreateOCMShareRequest{
-			ResourceId: res.Info.Id,
+			ResourceId: resStat.Info.Id,
 			Grantee: &provider.Grantee{
 				Type: gt,
 				// For now, we only support user shares.

@@ -308,12 +308,13 @@ func isTokenValid(token *invitepb.InviteToken) bool {
 func (s *service) GetAcceptedUser(ctx context.Context, req *invitepb.GetAcceptedUserRequest) (*invitepb.GetAcceptedUserResponse, error) {
 	logger := appctx.GetLogger(ctx)
 	user, ok := getUserFilter(ctx, req)
-	logger.Info().Msgf("GetAcceptedUser %s at %s", user.Id.OpaqueId, user.Id.Idp)
 	if !ok {
 		return &invitepb.GetAcceptedUserResponse{
 			Status: status.NewInvalidArg(ctx, "user not found"),
 		}, nil
 	}
+
+	logger.Info().Msgf("GetAcceptedUser %s at %s", user.Id.OpaqueId, user.Id.Idp)
 	remoteUser, err := s.repo.GetRemoteUser(ctx, user.GetId(), req.GetRemoteUserId())
 	if err != nil {
 		return &invitepb.GetAcceptedUserResponse{
