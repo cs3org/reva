@@ -170,7 +170,42 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) UnprotectedEndpoints() []string {
-	return []string{"/cs3.gateway.v1beta1.GatewayAPI"}
+	return []string{
+		"/cs3.gateway.v1beta1.GatewayAPI/ListShare",
+		"/cs3.gateway.v1beta1.GatewayAPI/GetAppPassword",
+		"/cs3.gateway.v1beta1.GatewayAPI/AddAppProvider",
+		"/cs3.gateway.v1beta1.GatewayAPI/ListSupportedMimeTypes",
+		"/cs3.gateway.v1beta1.GatewayAPI/Authenticate",
+		"/cs3.gateway.v1beta1.GatewayAPI/GetAuthProvider",
+		"/cs3.gateway.v1beta1.GatewayAPI/ListAuthProviders",
+		"/cs3.gateway.v1beta1.GatewayAPI/CreateOCMCoreShare",
+		"/cs3.gateway.v1beta1.GatewayAPI/AcceptInvite",
+		"/cs3.gateway.v1beta1.GatewayAPI/GetAcceptedUser",
+		"/cs3.gateway.v1beta1.GatewayAPI/IsProviderAllowed",
+		"/cs3.gateway.v1beta1.GatewayAPI/ListAllProviders",
+		"/cs3.gateway.v1beta1.GatewayAPI/GetOCMShareByToken",
+		"/cs3.gateway.v1beta1.GatewayAPI/GetPublicShareByToken",
+		"/cs3.gateway.v1beta1.GatewayAPI/GetUser",
+		"/cs3.gateway.v1beta1.GatewayAPI/GetUserByClaim",
+		"/cs3.gateway.v1beta1.GatewayAPI/GetUserGroups",
+
+		"/cs3.auth.applications.v1beta1.ApplicationsAPI/GetAppPassword",
+		"/cs3.app.registry.v1beta1.RegistryAPI/AddAppProvider",
+		"/cs3.app.registry.v1beta1.RegistryAPI/ListSupportedMimeTypes",
+		"/cs3.auth.provider.v1beta1.ProviderAPI/Authenticate",
+		"/cs3.auth.registry.v1beta1.RegistryAPI/GetAuthProvider",
+		"/cs3.auth.registry.v1beta1.RegistryAPI/ListAuthProviders",
+		"/cs3.ocm.core.v1beta1.OcmCoreAPI/CreateOCMCoreShare",
+		"/cs3.ocm.invite.v1beta1.InviteAPI/AcceptInvite",
+		"/cs3.ocm.invite.v1beta1.InviteAPI/GetAcceptedUser",
+		"/cs3.ocm.provider.v1beta1.ProviderAPI/IsProviderAllowed",
+		"/cs3.ocm.provider.v1beta1.ProviderAPI/ListAllProviders",
+		"/cs3.sharing.ocm.v1beta1.OcmAPI/GetOCMShareByToken",
+		"/cs3.sharing.link.v1beta1.LinkAPI/GetPublicShareByToken",
+		"/cs3.identity.user.v1beta1.UserAPI/GetUser",
+		"/cs3.identity.user.v1beta1.UserAPI/GetUserByClaim",
+		"/cs3.identity.user.v1beta1.UserAPI/GetUserGroups",
+	}
 }
 
 func getTokenManager(manager string, m map[string]map[string]interface{}) (token.Manager, error) {

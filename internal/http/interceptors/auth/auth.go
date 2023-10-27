@@ -168,10 +168,8 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 
 			log := appctx.GetLogger(r.Context())
 
-			// For unprotected URLs, we try to authenticate the request in case some service needs it,
-			// but don't return any errors if it fails.
 			if utils.Skip(r.URL.Path, unprotected) {
-				log.Info().Msg("skipping auth check for: " + r.URL.Path)
+				log.Info().Interface("unprotected", unprotected).Msg("skipping auth check for: " + r.URL.Path)
 			} else {
 				ctx, err := authenticateUser(w, r, conf, tokenStrategyChain, tokenManager, tokenWriter, credChain, false)
 				if err != nil {
