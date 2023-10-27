@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// This package implements the APIs defined in https://owncloud.dev/apis/http/graph/spaces/
+// This package implements the APIs defined in https://owncloud.dev/apis/http/graph/
 
 package ocgraph
 
@@ -72,7 +72,10 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 
 func (s *svc) routerInit() error {
 	s.router.Route("/v1.0", func(r chi.Router) {
-		r.Get("/me/drives", s.listMySpaces)
+		r.Route("/me", func(r chi.Router) {
+			r.Get("", s.getMe)
+			r.Get("/drives", s.listMySpaces)
+		})
 	})
 	return nil
 }
