@@ -113,7 +113,7 @@ func generateCs3Filters(request *godata.GoDataRequest) ([]*providerpb.ListStorag
 
 func (s *svc) cs3StorageSpaceToDrive(user *userpb.User, space *providerpb.StorageSpace) *libregraph.Drive {
 	drive := &libregraph.Drive{
-		DriveAlias: libregraph.PtrString(space.SpaceType + "/" + space.Name),
+		DriveAlias: libregraph.PtrString(space.RootInfo.Path),
 		Id:         libregraph.PtrString(space.Id.OpaqueId),
 		Name:       space.Name,
 		DriveType:  libregraph.PtrString(space.SpaceType),
