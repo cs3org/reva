@@ -14,11 +14,11 @@
 						"description": "CERNBox Open Cloud Mesh API"
 					},
 					"name": "CERNBox - OCM API",
-					"path": "http://127.0.0.1:19001/ocm/",
+					"path": "http://127.0.0.1:8080/ocm/",
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "127.0.0.1:19001"
+				"host": "127.0.0.1:8080"
 			},
 			{
 				"endpoint": {
@@ -27,11 +27,11 @@
 						"description": "CERNBox Webdav API"
 					},
 					"name": "CERNBox - Webdav API",
-					"path": "http://127.0.0.1:19001/remote.php/webdav/",
+					"path": "http://127.0.0.1:8080/remote.php/webdav/",
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "127.0.0.1:19001"
+				"host": "127.0.0.1:8080"
 			},
 			{
 				"endpoint": {
@@ -63,11 +63,11 @@
 						"description": "CESNET Open Cloud Mesh API"
 					},
 					"name": "CESNET - OCM API",
-					"path": "http://127.0.0.1:17001/ocm/",
+					"path": "http://127.0.0.1:80/ocm/",
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "127.0.0.1:17001"
+				"host": "127.0.0.1:80"
 			},
 			{
 				"endpoint": {
@@ -76,11 +76,11 @@
 						"description": "CESNET Webdav API"
 					},
 					"name": "CESNET - Webdav API",
-					"path": "http://127.0.0.1:17001/remote.php/webdav/",
+					"path": "http://127.0.0.1:80/remote.php/webdav/",
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "127.0.0.1:17001"
+				"host": "127.0.0.1:80"
 			},
 			{
 				"endpoint": {
