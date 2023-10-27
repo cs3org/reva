@@ -132,7 +132,8 @@ func applyTemplateString(l Lookuper, p setter, v reflect.Value) error {
 			return err
 		}
 		if val == nil {
-			val = ""
+			// key was not found, just keep it but stop further parsing
+			break
 		}
 
 		new, err := replaceTemplate(s, tmpl, val)
@@ -175,7 +176,8 @@ func applyTemplateInterface(l Lookuper, p setter, v reflect.Value) error {
 			return err
 		}
 		if val == nil {
-			val = ""
+			// key was not found, just keep it but stop further parsing
+			break
 		}
 
 		new, err := replaceTemplate(s, tmpl, val)

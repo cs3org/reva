@@ -96,10 +96,12 @@ func TestApplyTemplate(t *testing.T) {
 						Config: map[string]any{
 							"drivers": map[string]any{
 								"sql": map[string]any{
-									"db_username": "{{ vars.db_username }}",
-									"db_password": "{{ vars.db_password }}",
-									"key":         "value",
-									"port":        "{{ vars.port }}",
+									"db_username":    "{{ vars.db_username }}",
+									"db_password":    "{{ vars.db_password }}",
+									"key":            "value",
+									"port":           "{{ vars.port }}",
+									"user_and_token": "{{ vars.db_username }} and {{.Token}}",
+									"templated_path": "/path/{{.Token}}",
 								},
 							},
 						},
@@ -125,10 +127,12 @@ func TestApplyTemplate(t *testing.T) {
 	assert.ErrorIs(t, err, nil)
 	assert.Equal(t, "localhost:1901", cfg2.Shared.GatewaySVC)
 	assert.Equal(t, map[string]any{
-		"db_username": "root",
-		"db_password": "secretpassword",
-		"key":         "value",
-		"port":        1000,
+		"db_username":    "root",
+		"db_password":    "secretpassword",
+		"key":            "value",
+		"port":           1000,
+		"user_and_token": "root and {{.Token}}",
+		"templated_path": "/path/{{.Token}}",
 	}, cfg2.GRPC.Services["authregistry"][0].Config["drivers"].(map[string]any)["sql"])
 	assert.Equal(t, map[string]any{
 		"db_host": "http://localhost:1000",
