@@ -55,11 +55,22 @@ var (
 	GlobalRegistry registry.Registry = memory.New(map[string]interface{}{})
 )
 
+func appendSlash(p string) string {
+	if p == "" {
+		return "/"
+	}
+	if p[len(p)-1] == '/' {
+		return p
+	}
+	return p + "/"
+}
+
 // Skip  evaluates whether a source endpoint contains any of the prefixes.
 // i.e: /a/b/c/d/e contains prefix /a/b/c.
 func Skip(source string, prefixes []string) bool {
-	for i := range prefixes {
-		if strings.HasPrefix(path.Join(source, "/"), path.Join(prefixes[i], "/")) {
+	source = appendSlash(source)
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(source, appendSlash(prefix)) {
 			return true
 		}
 	}

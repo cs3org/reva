@@ -32,10 +32,13 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 )
@@ -69,8 +72,25 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	user := appctx.ContextMustGetUser(ctx)
+	d, err := utils.MarshalProtoV1ToJSON(user.Id)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, err.Error(), errors.New(providerInfoResp.Status.Message))
+		return
+	}
+
+	o := &types.Opaque{
+		Map: map[string]*types.OpaqueEntry{
+			"user-filter": {
+				Decoder: "json",
+				Value:   d,
+			},
+		},
+	}
+
 	remoteUserRes, err := c.GetAcceptedUser(ctx, &invitepb.GetAcceptedUserRequest{
 		RemoteUserId: &userpb.UserId{OpaqueId: shareWithUser, Idp: shareWithProvider, Type: userpb.UserType_USER_TYPE_FEDERATED},
+		Opaque:       o,
 	})
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching recipient", err)
@@ -251,11 +271,28 @@ func (h *Handler) mapUserIdsFederatedShare(ctx context.Context, gw gatewayv1beta
 func (h *Handler) mustGetRemoteUser(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, id string) *userIdentifiers {
 	s := strings.SplitN(id, "@", 2)
 	opaqueID, idp := s[0], s[1]
+
+	user := appctx.ContextMustGetUser(ctx)
+	d, err := utils.MarshalProtoV1ToJSON(user.Id)
+	if err != nil {
+		return &userIdentifiers{}
+	}
+
+	o := &types.Opaque{
+		Map: map[string]*types.OpaqueEntry{
+			"user-filter": {
+				Decoder: "json",
+				Value:   d,
+			},
+		},
+	}
+
 	userRes, err := gw.GetAcceptedUser(ctx, &invitepb.GetAcceptedUserRequest{
 		RemoteUserId: &userpb.UserId{
 			Idp:      idp,
 			OpaqueId: opaqueID,
 		},
+		Opaque: o,
 	})
 	if err != nil {
 		return &userIdentifiers{}
@@ -264,11 +301,11 @@ func (h *Handler) mustGetRemoteUser(ctx context.Context, gw gatewayv1beta1.Gatew
 		return &userIdentifiers{}
 	}
 
-	user := userRes.RemoteUser
+	remote := userRes.RemoteUser
 	return &userIdentifiers{
-		DisplayName: user.DisplayName,
-		Username:    user.Username,
-		Mail:        user.Mail,
+		DisplayName: remote.DisplayName,
+		Username:    remote.Username,
+		Mail:        remote.Mail,
 	}
 }
 
