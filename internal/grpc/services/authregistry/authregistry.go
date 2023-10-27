@@ -52,7 +52,7 @@ func (s *service) Close() error {
 
 func (s *service) UnprotectedEndpoints() []string {
 	return []string{
-		"/cs3.auth.registry.v1beta1.RegistryAPI/GetAuthProvider",
+		"/cs3.auth.registry.v1beta1.RegistryAPI/GetAuthProviders",
 		"/cs3.auth.registry.v1beta1.RegistryAPI/ListAuthProviders",
 	}
 }
