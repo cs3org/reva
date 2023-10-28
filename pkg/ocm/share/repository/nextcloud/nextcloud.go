@@ -73,35 +73,51 @@ type Action struct {
 	argS string
 }
 
-// GranteeAltMap is an alternative map to JSON-unmarshal a Grantee
+// EfssGrantee is a helper struct to JSON-unmarshal a Grantee
 // Grantees are hard to unmarshal, so unmarshalling into a map[string]interface{} first,
 // see also https://github.com/pondersource/sciencemesh-nextcloud/issues/27
-type GranteeAltMap struct {
+type EfssGrantee struct {
 	ID *provider.Grantee_UserId `json:"id"`
 }
 
-// ShareAltMap is an alternative map to JSON-unmarshal a Share.
-type ShareAltMap struct {
-	ID         *ocm.ShareId `json:"id"`
+// EfssShare is a representation of a federated share as exchanged with the EFSS. It includes
+// all needed fields to represent a received federated share as well, see below.
+type EfssShare struct {
+	ID         *ocm.ShareId `json:"id"    validate:"required"`
+	Name       string       `json:"name"  validate:"required"`
+	Token      string       `json:"token"`
 	ResourceID struct {
-		OpaqueID string `json:"opaque_id"`
-	} `json:"resource_id"`
-	RemoteShareID string `json:"remote_share_id"`
-	Permissions   int    `json:"permissions"`
-	Grantee       struct {
-		ID *userpb.UserId `json:"id"`
-	} `json:"grantee"`
-	Owner   *userpb.User       `json:"owner"`
-	Creator *userpb.User       `json:"creator"`
-	Ctime   *typespb.Timestamp `json:"ctime"`
-	Mtime   *typespb.Timestamp `json:"mtime"`
-	Token   string             `json:"token"`
+		OpaqueID string `json:"opaque_id" validate:"required"`
+	} `json:"resource_id" validate:"required"`
+	ResourceType  string `json:"resource_type"   validate:"omitempty"`
+	RemoteShareID string `json:"remote_share_id" validate:"required"`
+	Protocols     struct {
+		WebDAV struct {
+			URI         string `json:"uri"`
+			Permissions int    `json:"permissions" validate:"required"`
+		} `json:"webdav" validate:"required"`
+		WebApp struct {
+			URITemplate string `json:"uri_template"`
+			ViewMode    string `json:"view_mode"`
+		} `json:"webapp" validate:"omitempty"`
+		DataTx struct {
+			SourceURI string `json:"source_uri"`
+			Size      int    `json:"size"`
+		} `json:"transfer" validate:"omitempty"`
+	} `json:"protocols" validate:"required"`
+	Grantee struct {
+		ID *userpb.UserId `json:"id" validate:"required"`
+	} `json:"grantee" validate:"required"`
+	Owner   *userpb.User       `json:"owner"   validate:"required"`
+	Creator *userpb.User       `json:"creator" validate:"required"`
+	Ctime   *typespb.Timestamp `json:"ctime"   validate:"required"`
+	Mtime   *typespb.Timestamp `json:"mtime"   validate:"required"`
 }
 
-// ReceivedShareAltMap is an alternative map to JSON-unmarshal a ReceivedShare.
-type ReceivedShareAltMap struct {
-	Share *ShareAltMap   `json:"share"`
-	State ocm.ShareState `json:"state"`
+// ReceivedEfssShare is a representation of a received federated share as exchanged with the EFSS.
+type ReceivedEfssShare struct {
+	Share *EfssShare     `json:"share" validate:"required"`
+	State ocm.ShareState `json:"state" validate:"required"`
 }
 
 // New returns a share manager implementation that verifies against a Nextcloud backend.
@@ -161,20 +177,36 @@ func (sm *Manager) StoreShare(ctx context.Context, share *ocm.Share) (*ocm.Share
 	return share, nil
 }
 
-func (sm *Manager) efssShareToOcm(resp *ShareAltMap) *ocm.Share {
+func (sm *Manager) efssShareToOcm(resp *EfssShare) *ocm.Share {
 	// Parse the JSON struct returned by the PHP SM app into an OCM share object
+
+	// first generate the map of access methods, assuming WebDAV is always present
+	var am = make([]*ocm.AccessMethod, 0, 3)
+	am = append(am, share.NewWebDavAccessMethod(conversions.RoleFromOCSPermissions(
+		conversions.Permissions(resp.Protocols.WebDAV.Permissions)).CS3ResourcePermissions()))
+	if resp.Protocols.WebApp.ViewMode != "" {
+		am = append(am, share.NewWebappAccessMethod(utils.GetAppViewMode(resp.Protocols.WebApp.ViewMode)))
+	}
+	if resp.Protocols.DataTx.SourceURI != "" {
+		am = append(am, share.NewTransferAccessMethod())
+	}
+
+	// return the OCM Share payload
 	return &ocm.Share{
 		Id: resp.ID,
 		ResourceId: &provider.ResourceId{
 			OpaqueId:  resp.ResourceID.OpaqueID,
 			StorageId: sm.mountID,
 		},
-		Name:  "", // FIXME missing from SM app
+		Name:  resp.Name,
 		Token: resp.Token,
 		Grantee: &provider.Grantee{
 			Type: provider.GranteeType_GRANTEE_TYPE_USER,
 			Id: &provider.Grantee_UserId{
-				UserId: resp.Grantee.ID,
+				UserId: &userpb.UserId{
+					OpaqueId: resp.Grantee.ID.OpaqueId,
+					Idp:      resp.Grantee.ID.Idp,
+				},
 			},
 		},
 		Owner: &userpb.UserId{
@@ -185,19 +217,10 @@ func (sm *Manager) efssShareToOcm(resp *ShareAltMap) *ocm.Share {
 			OpaqueId: resp.Creator.Id.OpaqueId,
 			Idp:      resp.Creator.Id.Idp,
 		},
-		Ctime:     resp.Ctime,
-		Mtime:     resp.Mtime,
-		ShareType: ocm.ShareType_SHARE_TYPE_USER,
-		// FIXME the SM app does not provide methods and does not include permissions, see https://github.com/sciencemesh/nc-sciencemesh/issues/45
-		// the correct logic here is to include those access methods that come in the payload
-		AccessMethods: []*ocm.AccessMethod{
-			// FIXME for webdav we should use conversions.RoleFromOCSPermissions(conversions.Permissions(resp.Permissions))).CS3ResourcePermissions()
-			share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
-			// FIXME add if apps are supported
-			// share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
-			// FIXME add if datatx are supported
-			// share.NewTransferAccessMethod(),
-		},
+		Ctime:         resp.Ctime,
+		Mtime:         resp.Mtime,
+		ShareType:     ocm.ShareType_SHARE_TYPE_USER,
+		AccessMethods: am,
 	}
 }
 
@@ -212,11 +235,11 @@ func (sm *Manager) GetShare(ctx context.Context, user *userpb.User, ref *ocm.Sha
 		return nil, err
 	}
 
-	altResult := ShareAltMap{}
-	if err := json.Unmarshal(body, &altResult); err != nil {
+	resp := EfssShare{}
+	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, err
 	}
-	return sm.efssShareToOcm(&altResult), nil
+	return sm.efssShareToOcm(&resp), nil
 }
 
 // DeleteShare deletes the share pointed by ref.
@@ -249,11 +272,11 @@ func (sm *Manager) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.
 		return nil, err
 	}
 
-	altResult := ShareAltMap{}
-	if err := json.Unmarshal(body, &altResult); err != nil {
+	resp := EfssShare{}
+	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, err
 	}
-	return sm.efssShareToOcm(&altResult), nil
+	return sm.efssShareToOcm(&resp), nil
 }
 
 // ListShares returns the shares created by the user. If md is provided is not nil,
@@ -269,14 +292,14 @@ func (sm *Manager) ListShares(ctx context.Context, user *userpb.User, filters []
 		return nil, err
 	}
 
-	var respArr []ShareAltMap
+	var respArr []EfssShare
 	if err := json.Unmarshal(respBody, &respArr); err != nil {
 		return nil, err
 	}
 
 	var lst = make([]*ocm.Share, 0, len(respArr))
-	for _, altResult := range respArr {
-		lst = append(lst, sm.efssShareToOcm(&altResult))
+	for _, resp := range respArr {
+		lst = append(lst, sm.efssShareToOcm(&resp))
 	}
 	return lst, nil
 }
@@ -298,25 +321,53 @@ func (sm *Manager) StoreReceivedShare(ctx context.Context, share *ocm.ReceivedSh
 	return share, nil
 }
 
-func efssReceivedShareToOcm(altResultShare *ReceivedShareAltMap) *ocm.ReceivedShare {
+func efssReceivedShareToOcm(resp *ReceivedEfssShare) *ocm.ReceivedShare {
 	// Parse the JSON struct returned by the PHP SM app into an OCM received share object
+
+	// first generate the map of protocols, assuming WebDAV is always present
+	var proto = make([]*ocm.Protocol, 0, 3)
+	proto = append(proto, share.NewWebDAVProtocol(resp.Share.Protocols.WebDAV.URI, resp.Share.Token, &ocm.SharePermissions{
+		Permissions: conversions.RoleFromOCSPermissions(conversions.Permissions(resp.Share.Protocols.WebDAV.Permissions)).CS3ResourcePermissions(),
+	}))
+	if resp.Share.Protocols.WebApp.ViewMode != "" {
+		proto = append(proto, share.NewWebappProtocol(resp.Share.Protocols.WebApp.URITemplate, utils.GetAppViewMode(resp.Share.Protocols.WebApp.ViewMode)))
+	}
+	if resp.Share.Protocols.DataTx.SourceURI != "" {
+		proto = append(proto, share.NewTransferProtocol(resp.Share.Protocols.DataTx.SourceURI, resp.Share.Token, uint64(resp.Share.Protocols.DataTx.Size)))
+	}
+
+	// return the OCM Received Share payload
+	rt := provider.ResourceType_RESOURCE_TYPE_FILE
+	if resp.Share.ResourceType == "folder" {
+		rt = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+	}
 	return &ocm.ReceivedShare{
-		Id:            altResultShare.Share.ID,
-		Name:          "",                                 // FIXME missing on SM app
-		RemoteShareId: altResultShare.Share.RemoteShareID, // sic, see https://github.com/cs3org/reva/pull/3852#discussion_r1189681465
+		Id:            resp.Share.ID,
+		Name:          resp.Share.Name,
+		RemoteShareId: resp.Share.RemoteShareID, // sic, see https://github.com/cs3org/reva/pull/3852#discussion_r1189681465
 		Grantee: &provider.Grantee{
+			Type: provider.GranteeType_GRANTEE_TYPE_USER,
 			Id: &provider.Grantee_UserId{
-				UserId: altResultShare.Share.Grantee.ID,
+				UserId: &userpb.UserId{
+					OpaqueId: resp.Share.Grantee.ID.OpaqueId,
+					Idp:      resp.Share.Grantee.ID.Idp,
+				},
 			},
 		},
-		Owner:     altResultShare.Share.Owner.Id,
-		Creator:   altResultShare.Share.Creator.Id,
-		Ctime:     altResultShare.Share.Ctime,
-		Mtime:     altResultShare.Share.Mtime,
-		ShareType: ocm.ShareType_SHARE_TYPE_USER,
-		// ResourceType: provider.ResourceType_RESOURCE_TYPE_FILE or CONTAINER, missing info on SM app
-		// Protocols: []*ocm.Protocol{}   FIXME SM app does not persist multi protocols yet
-		State: altResultShare.State,
+		Owner: &userpb.UserId{
+			OpaqueId: resp.Share.Owner.Id.OpaqueId,
+			Idp:      resp.Share.Owner.Id.Idp,
+		},
+		Creator: &userpb.UserId{
+			OpaqueId: resp.Share.Creator.Id.OpaqueId,
+			Idp:      resp.Share.Creator.Id.Idp,
+		},
+		Ctime:        resp.Share.Ctime,
+		Mtime:        resp.Share.Mtime,
+		ShareType:    ocm.ShareType_SHARE_TYPE_USER,
+		ResourceType: rt,
+		Protocols:    proto,
+		State:        resp.State,
 	}
 }
 
@@ -327,7 +378,7 @@ func (sm *Manager) ListReceivedShares(ctx context.Context, user *userpb.User) ([
 		return nil, err
 	}
 
-	var respArr []ReceivedShareAltMap
+	var respArr []ReceivedEfssShare
 	if err := json.Unmarshal(respBody, &respArr); err != nil {
 		return nil, err
 	}
@@ -353,15 +404,14 @@ func (sm *Manager) GetReceivedShare(ctx context.Context, user *userpb.User, ref 
 		return nil, err
 	}
 
-	var altResult ReceivedShareAltMap
-	if err := json.Unmarshal(respBody, &altResult); err != nil {
+	var resp ReceivedEfssShare
+	if err := json.Unmarshal(respBody, &resp); err != nil {
 		return nil, err
 	}
-	altResultShare := altResult.Share
-	if altResultShare == nil {
+	if resp.Share == nil {
 		return nil, errtypes.NotFound("Received share not found from EFSS API")
 	}
-	return efssReceivedShareToOcm(&altResult), nil
+	return efssReceivedShareToOcm(&resp), nil
 }
 
 // UpdateReceivedShare updates the received share with share state.
@@ -385,16 +435,15 @@ func (sm *Manager) UpdateReceivedShare(ctx context.Context, user *userpb.User, s
 		return nil, err
 	}
 
-	var altResult ReceivedShareAltMap
-	err = json.Unmarshal(respBody, &altResult)
+	var resp ReceivedEfssShare
+	err = json.Unmarshal(respBody, &resp)
 	if err != nil {
 		return nil, err
 	}
-	altResultShare := altResult.Share
-	if altResultShare == nil {
+	if resp.Share == nil {
 		return nil, errtypes.NotFound("Received share not found from EFSS API")
 	}
-	return efssReceivedShareToOcm(&altResult), nil
+	return efssReceivedShareToOcm(&resp), nil
 }
 
 func getUsername(user *userpb.User) string {
