@@ -29,6 +29,8 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 // PublicFileHandler handles requests on a shared file. it needs to be wrapped in a collection
@@ -53,6 +55,14 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 		r = r.WithContext(ctx)
 
 		log.Debug().Str("relativePath", relativePath).Msg("PublicFileHandler func")
+		spaceid, _ := storagespace.FormatReference(
+			&provider.Reference{
+				ResourceId: &provider.ResourceId{
+					StorageId: utils.PublicStorageProviderID,
+					SpaceId:   utils.PublicStorageSpaceID,
+					OpaqueId:  token,
+				},
+			})
 
 		if relativePath != "" && relativePath != "/" {
 			// accessing the file
@@ -61,13 +71,13 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 			case MethodPropfind:
 				s.handlePropfindOnToken(w, r, h.namespace, false)
 			case http.MethodGet:
-				s.handlePathGet(w, r, h.namespace)
+				s.handleSpacesGet(w, r, spaceid)
 			case http.MethodOptions:
 				s.handleOptions(w, r)
 			case http.MethodHead:
-				s.handlePathHead(w, r, h.namespace)
+				s.handleSpacesHead(w, r, spaceid)
 			case http.MethodPut:
-				s.handlePathPut(w, r, h.namespace)
+				s.handleSpacesPut(w, r, spaceid)
 			default:
 				w.WriteHeader(http.StatusMethodNotAllowed)
 			}
@@ -79,7 +89,7 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 			case http.MethodOptions:
 				s.handleOptions(w, r)
 			case http.MethodHead:
-				s.handlePathHead(w, r, h.namespace)
+				s.handleSpacesHead(w, r, spaceid)
 			default:
 				w.WriteHeader(http.StatusMethodNotAllowed)
 			}
