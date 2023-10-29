@@ -521,6 +521,7 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 	}
 
 	s.addMissingStorageProviderID(resp.GetStorageSpace().GetRoot(), resp.GetStorageSpace().GetId())
+	s.addMissingStorageProviderID(resp.GetStorageSpace().GetRootInfo().GetId(), nil)
 	return resp, nil
 }
 
@@ -565,6 +566,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		}
 
 		s.addMissingStorageProviderID(sp.GetRoot(), sp.GetId())
+		s.addMissingStorageProviderID(sp.GetRootInfo().GetId(), nil)
 	}
 
 	return &provider.ListStorageSpacesResponse{
@@ -584,6 +586,7 @@ func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateSt
 		return nil, err
 	}
 	s.addMissingStorageProviderID(res.GetStorageSpace().GetRoot(), res.GetStorageSpace().GetId())
+	s.addMissingStorageProviderID(res.GetStorageSpace().GetRootInfo().GetId(), nil)
 	return res, nil
 }
 
