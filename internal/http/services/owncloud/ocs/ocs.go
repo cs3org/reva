@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/apps/sharing/sharees"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/apps/sharing/shares"
@@ -36,6 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/go-chi/chi/v5"
+	"github.com/jellydator/ttlcache/v2"
 	"github.com/rs/zerolog"
 )
 

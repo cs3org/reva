@@ -33,7 +33,6 @@ import (
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/server"
-	"github.com/dolthub/go-mysql-server/sql"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

@@ -34,7 +34,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/bluele/gcache"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -43,6 +42,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/jellydator/ttlcache/v2"
 
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/eosclient/eosbinary"
