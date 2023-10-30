@@ -43,7 +43,7 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/nats-io/nats-server/v2 v2.9.19
 	github.com/nats-io/nats-streaming-server v0.25.5
-	github.com/nats-io/nats.go v1.27.0
+	github.com/nats-io/nats.go v1.31.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.29.0
 	github.com/pkg/errors v0.9.1
@@ -107,7 +107,7 @@ require (
 	github.com/hashicorp/raft v1.5.0 // indirect
 	github.com/huandu/xstrings v1.3.3 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
-	github.com/klauspost/compress v1.16.7 // indirect
+	github.com/klauspost/compress v1.17.0 // indirect
 	github.com/leodido/go-urn v1.2.4 // indirect
 	github.com/lestrrat-go/strftime v1.0.4 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
@@ -121,7 +121,7 @@ require (
 	github.com/mitchellh/hashstructure v1.1.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/nats-io/jwt/v2 v2.4.1 // indirect
-	github.com/nats-io/nkeys v0.4.4 // indirect
+	github.com/nats-io/nkeys v0.4.5 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/nats-io/stan.go v0.10.4 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
