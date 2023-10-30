@@ -390,9 +390,6 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 		log.Debug().Str("func", "PUTFile").Msg("sending req")
 
 		resp, err := c.doReq(req, remoteuser)
-		if resp != nil {
-			resp.Body.Close()
-		}
 
 		// Let's support redirections... and if we retry we retry at the same FST
 		if resp != nil && resp.StatusCode == 307 {
@@ -424,6 +421,9 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 
 			log.Debug().Str("func", "PUTFile").Str("location", loc.String()).Msg("redirection")
 			nredirs++
+			if (resp != nil) && (resp.Body != nil) {
+				resp.Body.Close()
+			}
 			resp = nil
 			err = nil
 			continue
@@ -432,12 +432,17 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 		// And get an error code (if error) that is worth propagating
 		e := c.getRespError(resp, err)
 		if e != nil {
+			if (resp != nil) && (resp.Body != nil) {
+				resp.Body.Close()
+			}
 			if os.IsTimeout(e) {
 				ntries++
 				log.Warn().Str("func", "PUTFile").Str("url", finalurl).Str("err", e.Error()).Int("try", ntries).Msg("recoverable network timeout")
 				continue
 			}
+
 			log.Error().Str("func", "PUTFile").Str("url", finalurl).Str("err", e.Error()).Msg("")
+
 			return e
 		}
 
@@ -446,6 +451,9 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 			return errtypes.NotFound(fmt.Sprintf("url: %s", finalurl))
 		}
 
+		if (resp != nil) && (resp.Body != nil) {
+			resp.Body.Close()
+		}
 		return nil
 	}
 }
