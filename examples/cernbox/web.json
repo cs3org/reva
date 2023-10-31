@@ -1,0 +1,74 @@
+{
+  "server": "https://your.nginx.org",
+  "theme": "https://your.nginx.org/cernbox/theme-cernbox-0.2.0/theme.json",
+  "version": "0.0.0",
+  "openIdConnect": {
+    "metadata_url": "https://idp.docker:8443/realms/cernbox/.well-known/openid-configuration",
+    "authority": "https://idp.docker:8443/realms/cernbox",
+    "client_id": "cernbox-oidc",
+    "response_type": "code",
+    "scope": "openid profile email"
+  },
+  "options": {
+    "contextHelpers": true,
+    "enableAdvancedTable": true,
+    "runningOnEos": true,
+    "cernFeatures": true,
+    "hoverableQuickActions": true,
+    "disableFeedbackLink": true,
+    "homeFolder": "/home/{{.Id}}",
+    "previewFileMimeTypes" : [
+      "image/gif",
+      "image/png",
+      "image/jpeg"
+    ],
+    "openAppsInTab": true,
+    "editor": {
+      "autosaveEnabled": true,
+      "autosaveInterval": 120
+    },
+    "breadcrumbItemMaxLength": 30,
+    "routing": {
+      "idBased": false
+    },
+    "upload": {
+      "xhr": {
+        "timeout": 3600000
+      }
+    }
+  },
+  "apps": [
+    "files",
+    "search",
+    "preview",
+    "external",
+    "pdf-viewer",
+    "sciencemesh-app"
+  ],
+  "external_apps": [
+    {
+      "id": "jupyter",
+      "path": "/cernbox/jupyter-2.0.0/main.js"
+    },
+    {
+      "id": "rootjs",
+      "path": "/cernbox/rootjs-2.0.0/main.js"
+    },
+    {
+      "id": "ifc-js",
+      "path": "/cernbox/ifc-js-2.0.2/main.js"
+    },
+    {
+      "id": "top-bar",
+      "path": "/cernbox/top-bar-1.0.0/main.js"
+    },
+    {
+      "id": "text-editor",
+      "path": "web-app-text-editor",
+      "config": {
+        "primaryExtensions": ["txt"],
+        "extraExtensions": ["htm", "html", "css", "js", "ts", "php", "yml", "toml", "qml", "pl", "pm", "sh", "tcsh", "zsh", "conf", "ini", "inf", "make", "cmake", "mk", "in"]
+      }
+    }
+  ]
+}

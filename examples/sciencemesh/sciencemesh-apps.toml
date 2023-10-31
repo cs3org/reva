@@ -1,4 +1,3 @@
-#######  WORK IN PROGRESS  #######
 ## Example configuration for the ScienceMesh app in ownCloud 10 / Nextcloud - Apps support
 #
 ## This configuration file is to be used to enable Apps support in ScienceMesh.
@@ -10,9 +9,10 @@
 
 
 [vars]
+internal_gateway = "your.revad.org"
 provider_domain = "your.revad.org"
-wopi_endpoint = "http://wopi.docker:8880"
-wopi_shared_secret = "shared-secret"
+wopi_endpoint = "http://your.wopi.org:8880"
+wopi_shared_secret = "shared-secret-2"
 
 [log]
 level = "debug"
@@ -22,7 +22,7 @@ gatewaysvc = "{{ vars.provider_domain }}:19000"
 
 [[grpc.services.appprovider]]
 driver = "wopi"
-custom_mime_types_json = "custom-mime-types-demo.json"
+custom_mime_types_json = "/etc/revad/custom-mime-types-demo.json"
 mime_types = ["application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet", "application/vnd.oasis.opendocument.presentation", "text/rtf"]
 app_provider_url = "{{ grpc.services.appprovider[0].address }}"
 language = "en-GB"
@@ -37,7 +37,7 @@ app_int_url = "http://collabora.docker:9980"
 
 # [[grpc.services.appprovider]]
 # driver = "wopi"
-# custom_mime_types_json = "custom-mime-types-demo.json"
+# custom_mime_types_json = "/etc/revad/custom-mime-types-demo.json"
 # mime_types = ["text/markdown", "application/compressed-markdown", "text/plain"]
 # app_provider_url = "{{ grpc.services.appprovider[1].address }}"
 #

@@ -1,0 +1,100 @@
+[
+	{
+		"name": "cernbox",
+		"full_name": "CERNBox",
+		"organization": "CERN",
+		"domain": "cernbox.cern.ch",
+		"homepage": "https://cernbox.web.cern.ch",
+		"description": "CERNBox provides cloud data storage to all CERN users.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "CERNBox Open Cloud Mesh API"
+					},
+					"name": "CERNBox - OCM API",
+					"path": "http://127.0.0.1:8080/ocm/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "127.0.0.1:8080"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Webdav",
+						"description": "CERNBox Webdav API"
+					},
+					"name": "CERNBox - Webdav API",
+					"path": "http://127.0.0.1:8080/remote.php/webdav/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "127.0.0.1:8080"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Gateway",
+						"description": "CERNBox GRPC Gateway"
+					},
+					"name": "CERNBox - GRPC Gateway",
+					"path": "127.0.0.1:19000",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "127.0.0.1:19000"
+			}
+		]
+	},
+	{
+		"name": "oc-cesnet",
+		"full_name": "ownCloud@CESNET",
+		"organization": "CESNET",
+		"domain": "cesnet.cz",
+		"homepage": "https://owncloud.cesnet.cz",
+		"description": "OwnCloud has been designed for individual users.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "CESNET Open Cloud Mesh API"
+					},
+					"name": "CESNET - OCM API",
+					"path": "http://127.0.0.1:80/ocm/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "127.0.0.1:80"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Webdav",
+						"description": "CESNET Webdav API"
+					},
+					"name": "CESNET - Webdav API",
+					"path": "http://127.0.0.1:80/remote.php/webdav/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "127.0.0.1:80"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Gateway",
+						"description": "CESNET GRPC Gateway"
+					},
+					"name": "CESNET - GRPC Gateway",
+					"path": "127.0.0.1:17000",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "127.0.0.1:17000"
+			}
+		]
+	}
+]

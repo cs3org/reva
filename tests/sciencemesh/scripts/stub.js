@@ -6,7 +6,7 @@ const url = require('url');
 const fetch = require('node-fetch');
 const { isNativeError } = require('util/types');
 
-const SERVER_NAME = process.env.HOST || 'stub2';
+const SERVER_NAME = process.env.HOST || 'meshdir';
 const SERVER_HOST = `${SERVER_NAME}.docker`;
 const SERVER_ROOT = `https://${SERVER_HOST}`;
 const USER = `einstein`;
@@ -278,10 +278,11 @@ const server = https.createServer(HTTPS_OPTIONS, async (req, res) => {
         const config = {
           nextcloud1: "https://nextcloud1.docker/index.php/apps/sciencemesh/accept",
           owncloud1: "https://owncloud1.docker/index.php/apps/sciencemesh/accept",
+          cernbox1: "https://revacernbox1.docker/sciencemesh-app/invitations",
           nextcloud2: "https://nextcloud2.docker/index.php/apps/sciencemesh/accept",
           owncloud2: "https://owncloud2.docker/index.php/apps/sciencemesh/accept",
+          cernbox2: "https://revacernbox2.docker/sciencemesh-app/invitations",
           stub2: "https://stub.docker/ocm/invites/forward",
-          revad2: undefined
         };
         const items = [];
         const scriptLines = [];

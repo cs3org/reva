@@ -22,8 +22,8 @@ docker run --detach --network=testnet                                         \
   --name="revad1.docker"                                                      \
   -e HOST="revad1"                                                            \
   -v "${ENV_ROOT}/../..:/reva"                                                \
-  -v "${ENV_ROOT}/revad:/etc/revad"                                           \
-  -v "${ENV_ROOT}/tls:/etc/revad/tls"                                         \
+  -v "${ENV_ROOT}/revad:/configs/revad"                                       \
+  -v "${ENV_ROOT}/tls:/etc/tls"                                               \
   -v "${ENV_ROOT}/scripts/reva-run.sh:/usr/bin/reva-run.sh"                   \
   -v "${ENV_ROOT}/scripts/reva-kill.sh:/usr/bin/reva-kill.sh"                 \
   -v "${ENV_ROOT}/scripts/reva-entrypoint.sh:/entrypoint.sh"                  \
@@ -35,8 +35,8 @@ docker run --detach --network=testnet                                         \
   --name="revad2.docker"                                                      \
   -e HOST="revad2"                                                            \
   -v "${ENV_ROOT}/../..:/reva"                                                \
-  -v "${ENV_ROOT}/revad:/etc/revad"                                           \
-  -v "${ENV_ROOT}/tls:/etc/revad/tls"                                         \
+  -v "${ENV_ROOT}/revad:/configs/revad"                                       \
+  -v "${ENV_ROOT}/tls:/etc/tls"                                               \
   -v "${ENV_ROOT}/scripts/reva-run.sh:/usr/bin/reva-run.sh"                   \
   -v "${ENV_ROOT}/scripts/reva-kill.sh:/usr/bin/reva-kill.sh"                 \
   -v "${ENV_ROOT}/scripts/reva-entrypoint.sh:/entrypoint.sh"                  \
