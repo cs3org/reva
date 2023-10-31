@@ -96,8 +96,9 @@ func (r *Role) OCSPermissions() Permissions {
 // S = Shared
 // R = Shareable
 // M = Mounted
-// Z = Deniable (NEW).
-func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) string {
+// Z = Deniable
+// O = Openable.
+func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic, isOpenable bool) string {
 	var b strings.Builder
 	if !isPublic && isShared {
 		fmt.Fprintf(&b, "S")
@@ -123,6 +124,10 @@ func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) s
 
 	if r.ocsPermissions.Contain(PermissionDeny) && !isPublic {
 		fmt.Fprintf(&b, "Z")
+	}
+
+	if isOpenable && !isDir {
+		fmt.Fprintf(&b, "O")
 	}
 
 	return b.String()

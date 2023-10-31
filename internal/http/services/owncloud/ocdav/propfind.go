@@ -514,6 +514,26 @@ func supportLegacyOCMAccess(ctx context.Context, md *provider.ResourceInfo) {
 	}
 }
 
+func appendSlash(path string) string {
+	if path == "" {
+		return "/"
+	}
+	if path[len(path)-1] == '/' {
+		return path
+	}
+	return path + "/"
+}
+
+func (s *svc) isOpenable(path string) bool {
+	path = appendSlash(path)
+	for _, prefix := range s.c.DisabledOpenInAppPaths {
+		if strings.HasPrefix(path, appendSlash(prefix)) {
+			return false
+		}
+	}
+	return true
+}
+
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI.
@@ -567,6 +587,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			isShared,
 			false,
 			isPublic,
+			s.isOpenable(md.Path),
 		)
 		sublog.Debug().Interface("role", role).Str("dav-permissions", wdp).Msg("converted PermissionSet")
 	}
