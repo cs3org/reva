@@ -9,10 +9,8 @@ BRANCH_NEXTCLOUD_APP=nextcloud
 REPO_OWNCLOUD_APP=https://github.com/sciencemesh/nc-sciencemesh
 BRANCH_OWNCLOUD_APP=owncloud
 
+# TODO will be dropped in favour of Reva directly serving the UI
 CBOX_WEB=https://github.com/cernbox/web-release/releases/latest/download
-# TODO(lopresti) the CERNBox extensions are not released as a 'latest' bundle
-# and are for now pushed from a tgz file in this repo
-#CBOX_EXT=https://github.com/...
 
 REPO_WOPISERVER=https://github.com/cs3org/wopiserver
 TAG_WOPISERVER=master
@@ -48,22 +46,20 @@ TAG_WOPISERVER=master
     composer install
 
 # CERNBox web and extensions sources: uid=101 is nginx in the nginx container.
+# TODO the extensions are temporarily extracted from a tgz
 [ ! -d "cernbox-web-sciencemesh" ] &&                                           \
     mkdir -p temp/cernbox-1-conf temp/cernbox-2-conf &&                         \
     cp cernbox/nginx/* temp/cernbox-1-conf &&                                   \
     cp cernbox/nginx/* temp/cernbox-2-conf &&                                   \
-    mkdir -p ./cernbox-web-sciencemesh/web ./cernbox-web-sciencemesh/cernbox && \
-    cd cernbox-web-sciencemesh &&                                               \
+    mkdir cernbox-web-sciencemesh &&                                            \
+    cd cernbox-web-sciencemesh &&
+    mkdir -p ./web && mkdir -p ./cernbox &&                                     \
     wget ${CBOX_WEB}/web.tar.gz &&                                              \
     tar xf web.tar.gz -C ./web --strip-components=1 &&                          \
     rm -rf web.tar.gz &&                                                        \
     tar xf ../cernbox/cernbox-extensions-bundle.tgz &&                          \
-    sed -i "s|\"web-app-draw-io\":\"./web-app-draw-io-.........mjs\",|,|" web/index.html && \
-    chmod -R 755 ./web ./cernbox &&                                             \
-    chown -R 101:101 ./web/ ./cernbox &&                                        \
+    chmod -R 755 ./* && chown -R 101:101 ./* &&                                 \
     cd -
-
-#sed -i "s|WEB_APPS_MAP = {\"web-app-draw-io\":\"./web-app-draw-io-.........mjs\",|WEB_APPS_MAP = {\"web-app-sciencemesh-app\":\".\/web-app-sciencemesh-app-a5ecef59.mjs\",|" web/index.html && \
 
 # wopiserver source code for the config.
 [ ! -d "wopi-sciencemesh" ] &&                                                       \
