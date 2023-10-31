@@ -105,9 +105,7 @@ type EfssShare struct {
 			Size      int    `json:"size"`
 		} `json:"transfer" validate:"omitempty"`
 	} `json:"protocols" validate:"required"`
-	Grantee struct {
-		ID *userpb.UserId `json:"id" validate:"required"`
-	} `json:"grantee" validate:"required"`
+	Grantee *userpb.User       `json:"grantee" validate:"required"`
 	Owner   *userpb.User       `json:"owner"   validate:"required"`
 	Creator *userpb.User       `json:"creator" validate:"required"`
 	Ctime   *typespb.Timestamp `json:"ctime"   validate:"required"`
@@ -204,8 +202,8 @@ func (sm *Manager) efssShareToOcm(resp *EfssShare) *ocm.Share {
 			Type: provider.GranteeType_GRANTEE_TYPE_USER,
 			Id: &provider.Grantee_UserId{
 				UserId: &userpb.UserId{
-					OpaqueId: resp.Grantee.ID.OpaqueId,
-					Idp:      resp.Grantee.ID.Idp,
+					OpaqueId: resp.Grantee.Id.OpaqueId,
+					Idp:      resp.Grantee.Id.Idp,
 				},
 			},
 		},
@@ -349,8 +347,8 @@ func efssReceivedShareToOcm(resp *ReceivedEfssShare) *ocm.ReceivedShare {
 			Type: provider.GranteeType_GRANTEE_TYPE_USER,
 			Id: &provider.Grantee_UserId{
 				UserId: &userpb.UserId{
-					OpaqueId: resp.Share.Grantee.ID.OpaqueId,
-					Idp:      resp.Share.Grantee.ID.Idp,
+					OpaqueId: resp.Share.Grantee.Id.OpaqueId,
+					Idp:      resp.Share.Grantee.Id.Idp,
 				},
 			},
 		},
