@@ -526,6 +526,7 @@ func appendSlash(path string) string {
 
 func (s *svc) isOpenable(path string) bool {
 	path = appendSlash(path)
+	path = filepath.Join("/", path)
 	for _, prefix := range s.c.DisabledOpenInAppPaths {
 		if strings.HasPrefix(path, appendSlash(prefix)) {
 			return false
