@@ -16,6 +16,10 @@ const permissionsMock = `{"permissions":["Drives.ReadWriteEnabled.all","Language
 
 const valuesMock = `{"values":[{"identifier":{"extension":"ocis-accounts","bundle":"profile","setting":"language"},"value":{"bundleId":"2a506de7-99bd-4f0d-994e-c38e72c28fd9","settingId":"aa8cfbe5-95d4-4f7e-a032-c3c01f5f062f","accountUuid":"619201e3-d9ca-41ab-a03d-c995e3f876f6","resource":{"type":"TYPE_USER"},"listValue":{"values":[{"stringValue":"en"}]}}}]}`
 
+func init() {
+	global.Register("ocapi", New)
+}
+
 func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	r := chi.NewRouter()
 
