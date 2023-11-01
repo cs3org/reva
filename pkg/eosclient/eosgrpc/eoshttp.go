@@ -28,6 +28,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cs3org/reva/pkg/appctx"
@@ -234,31 +235,33 @@ func (c *EOSHTTPClient) getRespError(rsp *http.Response, err error) error {
 
 // From the basepath and the file path... build an url.
 func (c *EOSHTTPClient) buildFullURL(urlpath string, auth eosclient.Authorization) (string, error) {
-	u, err := url.Parse(c.opt.BaseURL)
-	if err != nil {
-		return "", err
-	}
-
-	u, err = u.Parse(url.PathEscape(urlpath))
-	if err != nil {
-		return "", err
-	}
-
 	// Prohibit malicious users from injecting a false uid/gid into the url
-	v := u.Query()
-	if v.Get("eos.ruid") != "" || v.Get("eos.rgid") != "" {
-		return "", errtypes.PermissionDenied("Illegal malicious url " + urlpath)
+	pos := strings.Index(urlpath, "?")
+	if pos >= 0 {
+		if strings.Index(urlpath, "eos.ruid") > pos || strings.Index(urlpath, "eos.rgid") > pos {
+			return "", errtypes.PermissionDenied("Illegal malicious url " + urlpath)
+		}
 	}
 
-	if len(auth.Role.UID) > 0 {
-		v.Set("eos.ruid", auth.Role.UID)
-	}
-	if len(auth.Role.GID) > 0 {
-		v.Set("eos.rgid", auth.Role.GID)
+	fullurl := strings.TrimRight(c.opt.BaseURL, "/")
+	fullurl += "/"
+	fullurl += strings.TrimLeft(urlpath, "/")
+
+	if pos < 0 {
+		fullurl += "?"
 	}
 
-	u.RawQuery = v.Encode()
-	return u.String(), nil
+	if auth.Role.UID != "" {
+		fullurl += fmt.Sprintf("eos.ruid=%s&eos.rgid=%s", auth.Role.UID, auth.Role.GID)
+	}
+
+	u, err := url.Parse(fullurl)
+	if err != nil {
+		return "", errtypes.PermissionDenied("Could not parse url " + urlpath)
+	}
+
+	final := strings.ReplaceAll(u.String(), "#", "%23")
+	return final, nil
 }
 
 // GETFile does an entire GET to download a full file. Returns a stream to read the content from.
@@ -272,6 +275,7 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 		log.Error().Str("func", "GETFile").Str("url", finalurl).Str("err", err.Error()).Msg("can't create request")
 		return nil, err
 	}
+	log.Debug().Str("func", "GETFile").Str("url", finalurl).Msg("")
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, finalurl, nil)
 	if err != nil {
 		log.Error().Str("func", "GETFile").Str("url", finalurl).Str("err", err.Error()).Msg("can't create request")
@@ -293,7 +297,7 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 		}
 
 		// Execute the request. I don't like that there is no explicit timeout or buffer control on the input stream
-		log.Debug().Str("func", "GETFile").Msg("sending req")
+		log.Debug().Str("func", "GETFile").Str("finalurl", finalurl).Msg("sending req")
 
 		resp, err := c.doReq(req, remoteuser)
 
@@ -308,7 +312,9 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 				return nil, err
 			}
 
-			req, err = http.NewRequestWithContext(ctx, http.MethodGet, loc.String(), nil)
+			// Very special case for eos file versions
+			final := strings.ReplaceAll(loc.String(), "#", "%23")
+			req, err = http.NewRequestWithContext(ctx, http.MethodGet, final, nil)
 			if err != nil {
 				log.Error().Str("func", "GETFile").Str("url", loc.String()).Str("err", err.Error()).Msg("can't create redirected request")
 				return nil, err
