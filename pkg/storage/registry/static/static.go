@@ -20,7 +20,6 @@ package static
 
 import (
 	"context"
-	"os"
 	"path"
 	"regexp"
 	"strings"
@@ -30,7 +29,6 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
@@ -132,7 +130,6 @@ func (b *reg) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
 }
 
 func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*registrypb.ProviderInfo, error) {
-	l := logger.New(logger.WithWriter(os.Stdout, logger.ConsoleMode))
 	// find longest match
 	var match *registrypb.ProviderInfo
 	var shardedMatches []*registrypb.ProviderInfo
@@ -195,7 +192,6 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 		}
 	}
 
-	l.Debug().Msgf(">>>>>> match: %+v %+v", match, shardedMatches)
 	if match != nil && match.ProviderPath != "" {
 		return []*registrypb.ProviderInfo{match}, nil
 	} else if len(shardedMatches) > 0 {
