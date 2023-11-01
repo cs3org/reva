@@ -30,6 +30,7 @@ import (
 	_ "github.com/cs3org/reva/internal/http/services/ocmd"
 	_ "github.com/cs3org/reva/internal/http/services/ocmprovider"
 	_ "github.com/cs3org/reva/internal/http/services/overleaf"
+	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocapi"
 	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocgraph"
 	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocs"
