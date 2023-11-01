@@ -444,7 +444,10 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 		return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error retrieving upload")
 	}
 
-	uploadInfo, _ := up.GetInfo(ctx)
+	uploadInfo, err := up.GetInfo(ctx)
+	if err != nil {
+		return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error retrieving upload info")
+	}
 
 	p := uploadInfo.MetaData[tus.CS3Prefix+"chunk"]
 	if chunking.IsChunked(p) { // check chunking v1
