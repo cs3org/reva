@@ -49,4 +49,4 @@ func (s svc) Prefix() string { return "api" }
 
 func (s svc) Close() error { return nil }
 
-func (s svc) Unprotected() []string { return nil }
+func (s svc) Unprotected() []string { return []string{"/"} }
