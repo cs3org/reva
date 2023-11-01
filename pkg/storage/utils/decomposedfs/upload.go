@@ -292,7 +292,9 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 			log.Info().Err(err).Msg("error copying checksums")
 		}
 		if bytesCopied != info.Size {
-			return errtypes.InternalError(fmt.Sprintf("mismatching upload length. expected %d, could only copy %d", info.Size, bytesCopied))
+			msg := fmt.Sprintf("mismatching upload length. expected %d, could only copy %d", info.Size, bytesCopied)
+			log.Debug().Interface("info", info).Msg(msg)
+			return errtypes.InternalError(msg)
 		}
 	}
 
