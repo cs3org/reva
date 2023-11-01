@@ -20,6 +20,7 @@ package static
 
 import (
 	"context"
+	"os"
 	"path"
 	"regexp"
 	"strings"
@@ -29,9 +30,11 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
+	"github.com/cs3org/reva/pkg/storage/registry/utils"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
@@ -40,8 +43,6 @@ import (
 func init() {
 	registry.Register("static", New)
 }
-
-var bracketRegex = regexp.MustCompile(`\[(.*?)\]`)
 
 type rule struct {
 	Mapping string            `mapstructure:"mapping"`
@@ -104,7 +105,7 @@ func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, er
 	providers := []*registrypb.ProviderInfo{}
 	for k, v := range b.c.Rules {
 		if addr := getProviderAddr(ctx, v); addr != "" {
-			combs := generateRegexCombinations(k)
+			combs := utils.GenerateRegexCombinations(k)
 			for _, c := range combs {
 				providers = append(providers, &registrypb.ProviderInfo{
 					ProviderPath: c,
@@ -131,6 +132,7 @@ func (b *reg) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
 }
 
 func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*registrypb.ProviderInfo, error) {
+	l := logger.New(logger.WithWriter(os.Stdout, logger.ConsoleMode))
 	// find longest match
 	var match *registrypb.ProviderInfo
 	var shardedMatches []*registrypb.ProviderInfo
@@ -182,7 +184,7 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 			}
 			// Check if the current rule forms a part of a reference spread across storage providers.
 			if strings.HasPrefix(prefix, fn) {
-				combs := generateRegexCombinations(prefix)
+				combs := utils.GenerateRegexCombinations(prefix)
 				for _, c := range combs {
 					shardedMatches = append(shardedMatches, &registrypb.ProviderInfo{
 						ProviderPath: c,
@@ -193,6 +195,7 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 		}
 	}
 
+	l.Debug().Msgf(">>>>>> match: %+v %+v", match, shardedMatches)
 	if match != nil && match.ProviderPath != "" {
 		return []*registrypb.ProviderInfo{match}, nil
 	} else if len(shardedMatches) > 0 {
@@ -202,26 +205,4 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	}
 
 	return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
-}
-
-func generateRegexCombinations(rex string) []string {
-	m := bracketRegex.FindString(rex)
-	r := strings.Trim(strings.Trim(m, "["), "]")
-	if r == "" {
-		return []string{rex}
-	}
-	var combinations []string
-	for i := 0; i < len(r); i++ {
-		if i < len(r)-2 && r[i+1] == '-' {
-			for j := r[i]; j <= r[i+2]; j++ {
-				p := strings.Replace(rex, m, string(j), 1)
-				combinations = append(combinations, generateRegexCombinations(p)...)
-			}
-			i += 2
-		} else {
-			p := strings.Replace(rex, m, string(r[i]), 1)
-			combinations = append(combinations, generateRegexCombinations(p)...)
-		}
-	}
-	return combinations
 }
