@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/registry/dynamic/rewriter"
 	"github.com/cs3org/reva/pkg/storage/registry/dynamic/routingtree"
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
+	"github.com/cs3org/reva/pkg/storage/registry/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -42,16 +43,18 @@ func init() {
 }
 
 type dynamic struct {
-	c   *config
-	log *zerolog.Logger
-	r   map[string]string
-	rt  *routingtree.RoutingTree
-	ur  *rewriter.UserRewriter
+	c       *config
+	log     *zerolog.Logger
+	aliases map[string]string
+	r       map[string]string
+	rt      *routingtree.RoutingTree
+	ur      *rewriter.UserRewriter
 }
 
 type config struct {
 	Rules      map[string]string `docs:"nil;A map from mountID to provider address"                       mapstructure:"rules"`
 	Rewrites   map[string]string `docs:"nil;A map from a path to an template alias to use when resolving" mapstructure:"rewrites"`
+	IDAliases  map[string]string `docs:"mil;A map containing storageID aliases, can contain simple brackets" mapstructure:"aliases"`
 	HomePath   string            `mapstructure:"home_path"`
 	DBUsername string            `mapstructure:"db_username"`
 	DBPassword string            `mapstructure:"db_password"`
@@ -76,11 +79,14 @@ func New(ctx context.Context, m map[string]interface{}) (storage.Registry, error
 		return nil, errors.Wrap(err, "error initializing routing tree")
 	}
 
+	aliases := initAliases(c.IDAliases)
+
 	d := &dynamic{
-		c:   &c,
-		log: &annotatedLog,
-		r:   c.Rules,
-		rt:  rt,
+		c:       &c,
+		log:     &annotatedLog,
+		r:       c.Rules,
+		aliases: aliases,
+		rt:      rt,
 		ur: &rewriter.UserRewriter{
 			Tpls: c.Rewrites,
 		},
@@ -112,6 +118,19 @@ func initRoutingTree(dbUsername, dbPassword, dbHost string, dbPort int, dbName s
 	}
 
 	return routingtree.New(rs), nil
+}
+
+func initAliases(aliasesConfig map[string]string) map[string]string {
+	aliases := make(map[string]string)
+
+	for aliasRegex, storageID := range aliasesConfig {
+		expandedAliases := utils.GenerateRegexCombinations(aliasRegex)
+		for _, alias := range expandedAliases {
+			aliases[alias] = storageID
+		}
+	}
+
+	return aliases
 }
 
 // ListProviders lists all available storage providers.
@@ -149,17 +168,24 @@ func (d *dynamic) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error)
 func (d *dynamic) FindProviders(ctx context.Context, ref *provider.Reference) ([]*registrypb.ProviderInfo, error) {
 	l := d.log.With().Interface("ref", ref).Logger()
 
-	if ref.ResourceId != nil {
-		if ref.ResourceId.StorageId != "" {
-			if address, ok := d.r[ref.ResourceId.StorageId]; ok {
-				return []*registrypb.ProviderInfo{{
-					ProviderId: ref.ResourceId.StorageId,
-					Address:    address,
-				}}, nil
-			}
+	l.Trace().Msg("Finding providers")
 
-			return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
+	if ref.ResourceId != nil && ref.ResourceId.StorageId != "" {
+		storageID := ref.ResourceId.StorageId
+
+		// Resolve aliased storageIDs (like eoshome-a into eoshome-i01)
+		if i, ok := d.aliases[storageID]; ok {
+			storageID = i
 		}
+
+		if address, ok := d.r[storageID]; ok {
+			return []*registrypb.ProviderInfo{{
+				ProviderId: ref.ResourceId.StorageId,
+				Address:    address,
+			}}, nil
+		}
+
+		return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
 	}
 
 	providerAlias := d.ur.GetAlias(ctx, ref.Path)
