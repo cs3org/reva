@@ -16,6 +16,9 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
+// Package tus implements a data tx manager that handles uploads using the TUS protocol.
+// reva storage drivers should implement the hasTusDatastore interface by using composition
+// of an upstream tusd.DataStore. If necessary they can also implement a tusd.DataStore directly.
 package tus
 
 import (
