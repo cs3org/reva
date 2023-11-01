@@ -36,7 +36,7 @@ type Manager interface {
 type SpaceType string
 
 const (
-	SpaceTypeHome    SpaceType = "home"
+	SpaceTypeHome    SpaceType = "personal"
 	SpaceTypeProject SpaceType = "project"
 )
 
