@@ -259,6 +259,7 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 	if info.MetaData[tus.CS3Prefix+"lockid"] != "" {
 		ctx = ctxpkg.ContextSetLockID(ctx, info.MetaData[tus.CS3Prefix+"lockid"])
 	}
+	// FIXME restore log level from file info
 
 	log := appctx.GetLogger(ctx)
 
@@ -293,7 +294,7 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 		}
 		if bytesCopied != info.Size {
 			msg := fmt.Sprintf("mismatching upload length. expected %d, could only copy %d", info.Size, bytesCopied)
-			log.Debug().Interface("info", info).Msg(msg)
+			log.Error().Interface("info", info).Msg(msg)
 			return errtypes.InternalError(msg)
 		}
 	}
