@@ -64,7 +64,6 @@ var _idRegexp = regexp.MustCompile(".*/([^/]+).info")
 // TODO needs a way to handle unknown filesize, currently uses the context
 // FIXME metadata is actually used to carry all kinds of headers
 func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, headers map[string]string) (map[string]string, error) {
-	log := appctx.GetLogger(ctx)
 
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	switch err.(type) {
@@ -75,6 +74,8 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	default:
 		return nil, err
 	}
+
+	sublog := appctx.GetLogger(ctx).With().Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Int64("uploadLength", uploadLength).Interface("headers", headers).Logger()
 
 	// permissions are checked in NewUpload below
 
@@ -196,7 +197,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	info.MetaData[tus.CS3Prefix+"ExecutantType"] = utils.UserTypeToString(usr.Id.Type)
 	info.MetaData[tus.CS3Prefix+"ExecutantUserName"] = usr.Username
 
-	info.MetaData[tus.CS3Prefix+"LogLevel"] = log.GetLevel().String()
+	info.MetaData[tus.CS3Prefix+"LogLevel"] = sublog.GetLevel().String()
 
 	// expires has been set by the storageprovider, do not expose as metadata. It is sent as a tus Upload-Expires header
 	if expiration, ok := headers["expires"]; ok {
@@ -228,7 +229,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	info, _ = upload.GetInfo(ctx)
 
-	log.Debug().Interface("node", n).Interface("headers", headers).Msg("Decomposedfs: initiated upload")
+	sublog.Debug().Interface("info", info).Msg("Decomposedfs: initiated upload")
 
 	return map[string]string{
 		"simple": info.ID,
@@ -285,10 +286,13 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 		r2 := io.TeeReader(r1, md5h)
 
 		_, subspan = tracer.Start(ctx, "io.Copy")
-		_, err = io.Copy(adler32h, r2)
+		bytesCopied, err := io.Copy(adler32h, r2)
 		subspan.End()
 		if err != nil {
 			log.Info().Err(err).Msg("error copying checksums")
+		}
+		if bytesCopied != info.Size {
+			return errtypes.InternalError(fmt.Sprintf("mismatching upload length. expected %d, could only copy %d", info.Size, bytesCopied))
 		}
 	}
 
