@@ -34,14 +34,14 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 
-	goceph "github.com/ceph/go-ceph/cephfs"
+	cephfs2 "github.com/ceph/go-ceph/cephfs"
 	"github.com/dgraph-io/ristretto"
 	"golang.org/x/sync/semaphore"
 )
 
 type cacheVal struct {
-	perm  *goceph.UserPerm
-	mount *goceph.MountInfo
+	perm  *cephfs2.UserPerm
+	mount *cephfs2.MountInfo
 }
 
 //TODO: Add to cephfs obj
@@ -63,10 +63,11 @@ func newCache() (c *connections, err error) {
 		MaxCost:     usrLimit,
 		BufferItems: 64,
 		OnEvict: func(item *ristretto.Item) {
-			v := item.Value.(cacheVal)
-			v.perm.Destroy()
-			_ = v.mount.Unmount()
-			_ = v.mount.Release()
+			if v, ok := item.Value.(*cacheVal); ok {
+				v.perm.Destroy()
+				_ = v.mount.Unmount()
+				_ = v.mount.Release()
+			}
 		},
 	})
 	if err != nil {
@@ -162,7 +163,7 @@ func newAdminConn(conf *Options) *adminConn {
 		}
 	*/
 
-	mount, err := goceph.CreateFromRados(rados)
+	mount, err := cephfs2.CreateFromRados(rados)
 	if err != nil {
 		rados.Shutdown()
 		return nil
@@ -184,8 +185,8 @@ func newAdminConn(conf *Options) *adminConn {
 }
 
 func newConn(user *User) *cacheVal {
-	var perm *goceph.UserPerm
-	mount, err := goceph.CreateMountWithId(user.fs.conf.ClientID)
+	var perm *cephfs2.UserPerm
+	mount, err := cephfs2.CreateMountWithId(user.fs.conf.ClientID)
 	if err != nil {
 		return destroyCephConn(mount, perm)
 	}
@@ -202,7 +203,7 @@ func newConn(user *User) *cacheVal {
 	}
 
 	if user != nil { //nil creates admin conn
-		perm = goceph.NewUserPerm(int(user.UidNumber), int(user.GidNumber), []int{})
+		perm = cephfs2.NewUserPerm(int(user.UidNumber), int(user.GidNumber), []int{})
 		if err = mount.SetMountPerms(perm); err != nil {
 			return destroyCephConn(mount, perm)
 		}
@@ -212,7 +213,7 @@ func newConn(user *User) *cacheVal {
 		return destroyCephConn(mount, perm)
 	}
 
-	if user != nil {
+	if user != nil && !user.fs.conf.DisableHome {
 		if err = mount.ChangeDir(user.fs.conf.Root); err != nil {
 			return destroyCephConn(mount, perm)
 		}

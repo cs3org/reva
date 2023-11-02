@@ -29,7 +29,7 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 
-	goceph "github.com/ceph/go-ceph/cephfs"
+	cephfs2 "github.com/ceph/go-ceph/cephfs"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/maxymania/go-system/posix_acl"
@@ -65,7 +65,7 @@ const (
 
 var op2int = map[rune]uint16{'r': 4, 'w': 2, 'x': 1}
 
-func getPermissionSet(user *User, stat *goceph.CephStatx, mount Mount, path string) (perm *provider.ResourcePermissions) {
+func getPermissionSet(user *User, stat *cephfs2.CephStatx, mount Mount, path string) (perm *provider.ResourcePermissions) {
 	perm = &provider.ResourcePermissions{}
 
 	if int64(stat.Uid) == user.UidNumber || int64(stat.Gid) == user.GidNumber {

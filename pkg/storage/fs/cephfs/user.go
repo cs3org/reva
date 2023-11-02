@@ -31,11 +31,11 @@ import (
 
 	"github.com/cs3org/reva/pkg/errtypes"
 
-	goceph "github.com/ceph/go-ceph/cephfs"
+	cephfs2 "github.com/ceph/go-ceph/cephfs"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ctx2 "github.com/cs3org/reva/pkg/appctx"
+	ctx2 "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/pkg/errors"
@@ -92,7 +92,7 @@ func (user *User) op(cb callBack) {
 	cb(val.(*cacheVal))
 }
 
-func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *goceph.CephStatx, mdKeys []string) (ri *provider.ResourceInfo, err error) {
+func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *cephfs2.CephStatx, mdKeys []string) (ri *provider.ResourceInfo, err error) {
 	var (
 		_type  provider.ResourceType
 		target string
@@ -105,6 +105,9 @@ func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *goceph.Cep
 		_type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
 		if buf, err = cv.mount.GetXattr(path, "ceph.dir.rbytes"); err == nil {
 			size, err = strconv.ParseUint(string(buf), 10, 64)
+		} else if err.Error() == errPermissionDenied {
+			// Ignore permission denied errors so ListFolder does not fail because of them.
+			err = nil
 		}
 	case syscall.S_IFLNK:
 		_type = provider.ResourceType_RESOURCE_TYPE_SYMLINK
@@ -114,10 +117,6 @@ func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *goceph.Cep
 		size = stat.Size
 	default:
 		return nil, errors.New("cephfs: unknown entry type")
-	}
-
-	if err != nil {
-		return
 	}
 
 	var xattrs []string

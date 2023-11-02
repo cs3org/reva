@@ -32,7 +32,7 @@ import (
 	"strings"
 	"time"
 
-	goceph "github.com/ceph/go-ceph/cephfs"
+	cephfs2 "github.com/ceph/go-ceph/cephfs"
 	"github.com/google/uuid"
 )
 
@@ -108,9 +108,7 @@ func (c *ChunkHandler) getChunkFolderName(i *ChunkBLOBInfo) (path string, err er
 }
 
 func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (finish bool, chunk string, err error) {
-	var chunkInfo *ChunkBLOBInfo
-
-	chunkInfo, err = GetChunkBLOBInfo(path)
+	chunkInfo, err := GetChunkBLOBInfo(path)
 	if err != nil {
 		err = fmt.Errorf("error getting chunk info from path: %s", path)
 		return
@@ -118,7 +116,7 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (finish bool, chu
 
 	chunkTempFilename := c.getChunkTempFileName()
 	c.user.op(func(cv *cacheVal) {
-		var tmpFile *goceph.File
+		var tmpFile *cephfs2.File
 		target := filepath.Join(c.chunkFolder, chunkTempFilename)
 		tmpFile, err = cv.mount.Open(target, os.O_CREATE|os.O_WRONLY, c.user.fs.conf.FilePerms)
 		defer closeFile(tmpFile)
@@ -152,9 +150,9 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (finish bool, chu
 	// assembly the chunks when the client asks for it.
 	numEntries := 0
 	c.user.op(func(cv *cacheVal) {
-		var dir *goceph.Directory
-		var entry *goceph.DirEntry
-		var chunkFile, assembledFile *goceph.File
+		var dir *cephfs2.Directory
+		var entry *cephfs2.DirEntry
+		var chunkFile, assembledFile *cephfs2.File
 
 		dir, err = cv.mount.OpenDir(chunksFolderName)
 		defer closeDir(dir)
@@ -223,122 +221,4 @@ func (c *ChunkHandler) WriteChunk(fn string, r io.ReadCloser) (string, string, e
 	}
 
 	return chunkInfo.Path, chunk, nil
-
-	// TODO(labkode): implement old chunking
-
-	/*
-		req2 := &provider.StartWriteSessionRequest{}
-		res2, err := client.StartWriteSession(ctx, req2)
-		if err != nil {
-			logger.Error(ctx, err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		if res2.Status.Code != rpc.Code_CODE_OK {
-			logger.Println(ctx, res2.Status)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		sessID := res2.SessionId
-		logger.Build().Str("sessID", sessID).Msg(ctx, "got write session id")
-
-		stream, err := client.Write(ctx)
-		if err != nil {
-			logger.Error(ctx, err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		buffer := make([]byte, 1024*1024*3)
-		var offset uint64
-		var numChunks uint64
-
-		for {
-			n, err := fd.Read(buffer)
-			if n > 0 {
-				req := &provider.WriteRequest{Data: buffer, Length: uint64(n), SessionId: sessID, Offset: offset}
-				err = stream.Send(req)
-				if err != nil {
-					logger.Error(ctx, err)
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-
-				numChunks++
-				offset += uint64(n)
-			}
-
-			if err == io.EOF {
-				break
-			}
-
-			if err != nil {
-				logger.Error(ctx, err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-		}
-
-		res3, err := stream.CloseAndRecv()
-		if err != nil {
-			logger.Error(ctx, err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		if res3.Status.Code != rpc.Code_CODE_OK {
-			logger.Println(ctx, err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		req4 := &provider.FinishWriteSessionRequest{Filename: chunkInfo.path, SessionId: sessID}
-		res4, err := client.FinishWriteSession(ctx, req4)
-		if err != nil {
-			logger.Error(ctx, err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		if res4.Status.Code != rpc.Code_CODE_OK {
-			logger.Println(ctx, res4.Status)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		req.Filename = chunkInfo.path
-		res, err = client.Stat(ctx, req)
-		if err != nil {
-			logger.Error(ctx, err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		if res.Status.Code != rpc.Code_CODE_OK {
-			logger.Println(ctx, res.Status)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		md2 := res.Metadata
-
-		w.Header().Add("Content-Type", md2.Mime)
-		w.Header().Set("ETag", md2.Etag)
-		w.Header().Set("OC-FileId", md2.Id)
-		w.Header().Set("OC-ETag", md2.Etag)
-		t := time.Unix(int64(md2.Mtime), 0)
-		lastModifiedString := t.Format(time.RFC1123Z)
-		w.Header().Set("Last-Modified", lastModifiedString)
-		w.Header().Set("X-OC-MTime", "accepted")
-
-		if md == nil {
-			w.WriteHeader(http.StatusCreated)
-			return
-		}
-
-		w.WriteHeader(http.StatusNoContent)
-		return
-	*/
 }
