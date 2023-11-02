@@ -29,13 +29,13 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 
 	cephfs2 "github.com/ceph/go-ceph/cephfs"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ctx2 "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/pkg/errors"
@@ -52,7 +52,7 @@ type User struct {
 }
 
 func (fs *cephfs) makeUser(ctx context.Context) *User {
-	u := ctx2.ContextMustGetUser(ctx)
+	u := appctx.ContextMustGetUser(ctx)
 	home := fs.conf.Root
 	if !fs.conf.DisableHome {
 		home = filepath.Join(fs.conf.Root, templates.WithUser(u, fs.conf.UserLayout))
