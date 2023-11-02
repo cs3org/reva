@@ -507,12 +507,17 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 			return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: could not get info for legacy chunking")
 		}
 	} else {
+		// we need to call up.DeclareLength() before writing the chunk
+		if ldx, ok := up.(tusd.LengthDeclarableUpload); ok {
+			ldx.DeclareLength(ctx, req.Length)
+		}
 		bytesWritten, err := up.WriteChunk(ctx, 0, req.Body)
 		if err != nil {
 			return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error writing to binary file")
 		}
 		if uploadInfo.SizeIsDeferred {
 			// update the size and offset
+			uploadInfo.SizeIsDeferred = false
 			uploadInfo.Size = bytesWritten
 			uploadInfo.Offset = bytesWritten
 		}
