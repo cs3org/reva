@@ -34,14 +34,14 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 
-	cephfs2 "github.com/ceph/go-ceph/cephfs"
+	goceph "github.com/ceph/go-ceph/cephfs"
 	"github.com/dgraph-io/ristretto"
 	"golang.org/x/sync/semaphore"
 )
 
 type cacheVal struct {
-	perm  *cephfs2.UserPerm
-	mount *cephfs2.MountInfo
+	perm  *goceph.UserPerm
+	mount *goceph.MountInfo
 }
 
 //TODO: Add to cephfs obj
@@ -163,7 +163,7 @@ func newAdminConn(conf *Options) *adminConn {
 		}
 	*/
 
-	mount, err := cephfs2.CreateFromRados(rados)
+	mount, err := goceph.CreateFromRados(rados)
 	if err != nil {
 		rados.Shutdown()
 		return nil
@@ -185,8 +185,8 @@ func newAdminConn(conf *Options) *adminConn {
 }
 
 func newConn(user *User) *cacheVal {
-	var perm *cephfs2.UserPerm
-	mount, err := cephfs2.CreateMountWithId(user.fs.conf.ClientID)
+	var perm *goceph.UserPerm
+	mount, err := goceph.CreateMountWithId(user.fs.conf.ClientID)
 	if err != nil {
 		return destroyCephConn(mount, perm)
 	}
@@ -203,7 +203,7 @@ func newConn(user *User) *cacheVal {
 	}
 
 	if user != nil { //nil creates admin conn
-		perm = cephfs2.NewUserPerm(int(user.UidNumber), int(user.GidNumber), []int{})
+		perm = goceph.NewUserPerm(int(user.UidNumber), int(user.GidNumber), []int{})
 		if err = mount.SetMountPerms(perm); err != nil {
 			return destroyCephConn(mount, perm)
 		}

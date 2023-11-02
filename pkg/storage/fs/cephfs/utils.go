@@ -30,33 +30,33 @@ import (
 	"path/filepath"
 	"strconv"
 
-	cephfs2 "github.com/ceph/go-ceph/cephfs"
+	goceph "github.com/ceph/go-ceph/cephfs"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 // Mount type
-type Mount = *cephfs2.MountInfo
+type Mount = *goceph.MountInfo
 
 // Statx type
-type Statx = *cephfs2.CephStatx
+type Statx = *goceph.CephStatx
 
 var dirPermFull = uint32(0777)
 var dirPermDefault = uint32(0700)
 var filePermDefault = uint32(0640)
 
-func closeDir(directory *cephfs2.Directory) {
+func closeDir(directory *goceph.Directory) {
 	if directory != nil {
 		_ = directory.Close()
 	}
 }
 
-func closeFile(file *cephfs2.File) {
+func closeFile(file *goceph.File) {
 	if file != nil {
 		_ = file.Close()
 	}
 }
 
-func destroyCephConn(mt Mount, perm *cephfs2.UserPerm) *cacheVal {
+func destroyCephConn(mt Mount, perm *goceph.UserPerm) *cacheVal {
 	if perm != nil {
 		perm.Destroy()
 	}
@@ -66,7 +66,7 @@ func destroyCephConn(mt Mount, perm *cephfs2.UserPerm) *cacheVal {
 	return nil
 }
 
-func deleteFile(mount *cephfs2.MountInfo, path string) {
+func deleteFile(mount *goceph.MountInfo, path string) {
 	_ = mount.Unlink(path)
 }
 
