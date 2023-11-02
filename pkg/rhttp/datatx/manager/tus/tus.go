@@ -38,6 +38,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/events"
+	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/metrics"
@@ -81,11 +82,15 @@ func New(m map[string]interface{}, publisher events.Publisher) (datatx.DataTX, e
 }
 
 func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
+	zlog, err := logger.FromConfig(&logger.LogConf{
+		Output: "stdtout",
+		Mode:   "console",
+		Level:  "debug",
+	})
+	if err != nil {
+		return nil, errtypes.NotSupported("could not initialize log")
+	}
 
-	// A storage backend for tusd may consist of multiple different parts which
-	// handle upload creation, locking, termination and so on. The composer is a
-	// place where all those separated pieces are joined together. In this example
-	// we only use the file store but you may plug in multiple.
 	composer := tusd.NewStoreComposer()
 
 	config := tusd.Config{
@@ -94,7 +99,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 			return errors.New("uploads must be created with a cs3 InitiateUpload call")
 		},
 		NotifyCompleteUploads: true,
-		Logger:                log.New(appctx.GetLogger(context.Background()), "", 0),
+		Logger:                log.New(zlog, "", 0),
 	}
 
 	var dataStore tusd.DataStore

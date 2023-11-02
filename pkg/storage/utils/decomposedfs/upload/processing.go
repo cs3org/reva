@@ -137,7 +137,7 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 				if tup, ok := up.(tusd.TerminatableUpload); ok {
 					terr := tup.Terminate(ctx)
 					if terr != nil {
-						log.Error().Err(terr).Msg("failed to terminate upload")
+						log.Error().Err(terr).Interface("info", info).Msg("failed to terminate upload")
 					}
 				}
 			}

@@ -333,7 +333,7 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 			if tup, ok := up.(tusd.TerminatableUpload); ok {
 				terr := tup.Terminate(ctx)
 				if terr != nil {
-					log.Error().Err(terr).Msg("failed to terminate upload")
+					log.Error().Err(terr).Interface("info", info).Msg("failed to terminate upload")
 				}
 			}
 			return err
@@ -353,7 +353,7 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 		if tup, ok := up.(tusd.TerminatableUpload); ok {
 			terr := tup.Terminate(ctx)
 			if terr != nil {
-				log.Error().Err(terr).Msg("failed to terminate upload")
+				log.Error().Err(terr).Interface("info", info).Msg("failed to terminate upload")
 			}
 		}
 		return err
@@ -394,7 +394,7 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 		if tup, ok := up.(tusd.TerminatableUpload); ok {
 			terr := tup.Terminate(ctx)
 			if terr != nil {
-				log.Error().Err(terr).Msg("failed to terminate upload")
+				log.Error().Err(terr).Interface("info", info).Msg("failed to terminate upload")
 			}
 		}
 		if err != nil {
@@ -512,8 +512,9 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 			return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error writing to binary file")
 		}
 		if uploadInfo.SizeIsDeferred {
-			// update the size
+			// update the size and offset
 			uploadInfo.Size = bytesWritten
+			uploadInfo.Offset = bytesWritten
 		}
 	}
 
