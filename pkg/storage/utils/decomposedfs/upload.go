@@ -44,6 +44,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/events"
+	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/tus"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
@@ -198,6 +199,8 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	info.MetaData[tus.CS3Prefix+"ExecutantUserName"] = usr.Username
 
 	info.MetaData[tus.CS3Prefix+"LogLevel"] = sublog.GetLevel().String()
+	// TODO at this point we have no way to figure out the output or mode of the logger. we need that to reinitialize a logger in PreFinishResponseCallback
+	// or better create a config option for the log level during PreFinishResponseCallback? might be easier for now
 
 	// expires has been set by the storageprovider, do not expose as metadata. It is sent as a tus Upload-Expires header
 	if expiration, ok := headers["expires"]; ok {
@@ -259,9 +262,18 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 	if info.MetaData[tus.CS3Prefix+"lockid"] != "" {
 		ctx = ctxpkg.ContextSetLockID(ctx, info.MetaData[tus.CS3Prefix+"lockid"])
 	}
-	// FIXME restore log level from file info
 
-	log := appctx.GetLogger(ctx)
+	// restore logger from file info
+	log, err := logger.FromConfig(&logger.LogConf{
+		Output: "stdout",
+		Mode:   "json",
+		Level:  info.MetaData[tus.CS3Prefix+"LogLevel"],
+	})
+	if err != nil {
+		return err
+	}
+
+	ctx = appctx.WithLogger(ctx, log)
 
 	// calculate the checksum of the written bytes
 	// they will all be written to the metadata later, so we cannot omit any of them
