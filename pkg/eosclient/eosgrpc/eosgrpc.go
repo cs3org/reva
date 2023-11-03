@@ -41,10 +41,10 @@ import (
 	"github.com/cs3org/reva/pkg/eosclient"
 	erpc "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_grpc"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -138,8 +138,7 @@ type Client struct {
 }
 
 // Create and connect a grpc eos Client.
-func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
-	log := appctx.GetLogger(ctx)
+func newgrpc(ctx context.Context, log *zerolog.Logger, opt *Options) (erpc.EosClient, error) {
 	log.Info().Str("Setting up GRPC towards ", "'"+opt.GrpcURI+"'").Msg("")
 
 	conn, err := grpc.Dial(opt.GrpcURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -168,9 +167,10 @@ func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
 }
 
 // New creates a new client with the given options.
-func New(opt *Options, httpOpts *HTTPOptions) (*Client, error) {
-	tlog := logger.New().With().Int("pid", os.Getpid()).Logger()
-	tlog.Debug().Str("Creating new eosgrpc client. opt: ", "'"+fmt.Sprintf("%#v", opt)+"' ").Msg("")
+func New(ctx context.Context, opt *Options, httpOpts *HTTPOptions) (*Client, error) {
+	log := appctx.GetLogger(ctx)
+
+	log.Debug().Str("Creating new eosgrpc client. opt: ", "'"+fmt.Sprintf("%#v", opt)+"' ").Msg("")
 
 	opt.init()
 	httpcl, err := NewEOSHTTPClient(httpOpts)
@@ -178,8 +178,7 @@ func New(opt *Options, httpOpts *HTTPOptions) (*Client, error) {
 		return nil, err
 	}
 
-	tctx := appctx.WithLogger(context.Background(), &tlog)
-	cl, err := newgrpc(tctx, opt)
+	cl, err := newgrpc(ctx, log, opt)
 	if err != nil {
 		return nil, err
 	}
