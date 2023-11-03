@@ -41,6 +41,10 @@ BUILD_FLAGS     = -X github.com/cs3org/reva/cmd/revad.gitCommit=$(GIT_COMMIT) -X
 
 .PHONY: revad
 revad:
+	go build -ldflags "$(BUILD_FLAGS)" -o ./cmd/revad/revad ./cmd/revad/main
+
+.PHONY: revad-static
+revad-static:
 	go build -ldflags "-extldflags=-static $(BUILD_FLAGS)" -o ./cmd/revad/revad ./cmd/revad/main
 
 .PHONY: gaia
