@@ -139,14 +139,14 @@ type Client struct {
 
 // Create and connect a grpc eos Client.
 func newgrpc(ctx context.Context, log *zerolog.Logger, opt *Options) (erpc.EosClient, error) {
-	log.Info().Str("Setting up GRPC towards ", "'"+opt.GrpcURI+"'").Msg("")
+	log.Debug().Msgf("Setting up GRPC towards '%s'", opt.GrpcURI)
 
 	conn, err := grpc.Dial(opt.GrpcURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Warn().Str("Error connecting to ", "'"+opt.GrpcURI+"' ").Str("err", err.Error()).Msg("")
+		log.Warn().Err(err).Msgf("Error connecting to '%s'", opt.GrpcURI)
 	}
 
-	log.Debug().Str("Going to ping ", "'"+opt.GrpcURI+"' ").Msg("")
+	log.Debug().Msgf("Going to ping '%s'", opt.GrpcURI)
 	ecl := erpc.NewEosClient(conn)
 	// If we can't ping... just print warnings. In the case EOS is down, grpc will take care of
 	// connecting later
@@ -155,13 +155,13 @@ func newgrpc(ctx context.Context, log *zerolog.Logger, opt *Options) (erpc.EosCl
 	prq.Message = []byte("hi this is a ping from reva")
 	prep, err := ecl.Ping(ctx, prq)
 	if err != nil {
-		log.Warn().Str("Could not ping to ", "'"+opt.GrpcURI+"' ").Str("err", err.Error()).Msg("")
+		log.Warn().Err(err).Msgf("Could not ping to '%s'", opt.GrpcURI)
 	}
 
 	if prep == nil {
-		log.Warn().Str("Could not ping to ", "'"+opt.GrpcURI+"' ").Str("nil response", "").Msg("")
+		log.Warn().Msgf("Could not ping to '%s': nil response", opt.GrpcURI)
 	}
-	log.Debug().Str("Ping to ", "'"+opt.GrpcURI+"' succeeded").Msg("")
+	log.Debug().Msgf("Ping to '%s' succeeded", opt.GrpcURI)
 
 	return ecl, nil
 }
@@ -170,7 +170,7 @@ func newgrpc(ctx context.Context, log *zerolog.Logger, opt *Options) (erpc.EosCl
 func New(ctx context.Context, opt *Options, httpOpts *HTTPOptions) (*Client, error) {
 	log := appctx.GetLogger(ctx)
 
-	log.Debug().Str("Creating new eosgrpc client. opt: ", "'"+fmt.Sprintf("%#v", opt)+"' ").Msg("")
+	log.Debug().Interface("options", opt).Msgf("Creating new eosgrpc client")
 
 	opt.init()
 	httpcl, err := NewEOSHTTPClient(httpOpts)
