@@ -63,10 +63,11 @@ func newCache() (c *connections, err error) {
 		MaxCost:     usrLimit,
 		BufferItems: 64,
 		OnEvict: func(item *ristretto.Item) {
-			v := item.Value.(cacheVal)
-			v.perm.Destroy()
-			_ = v.mount.Unmount()
-			_ = v.mount.Release()
+			if v, ok := item.Value.(*cacheVal); ok {
+				v.perm.Destroy()
+				_ = v.mount.Unmount()
+				_ = v.mount.Release()
+			}
 		},
 	})
 	if err != nil {
@@ -212,7 +213,7 @@ func newConn(user *User) *cacheVal {
 		return destroyCephConn(mount, perm)
 	}
 
-	if user != nil {
+	if user != nil && !user.fs.conf.DisableHome {
 		if err = mount.ChangeDir(user.fs.conf.Root); err != nil {
 			return destroyCephConn(mount, perm)
 		}

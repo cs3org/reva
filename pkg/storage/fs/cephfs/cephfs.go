@@ -68,7 +68,7 @@ func init() {
 	registry.Register("cephfs", New)
 }
 
-// New returns an implementation to of the storage.FS interface that talk to
+// New returns an implementation to of the storage.FS interface that talks to
 // a ceph filesystem.
 func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err error) {
 	var o Options
@@ -87,9 +87,12 @@ func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err erro
 	}
 
 	for _, dir := range []string{o.ShadowFolder, o.UploadFolder} {
-		err = adminConn.adminMount.MakeDir(dir, dirPermFull)
-		if err != nil && err.Error() != errFileExists {
-			return nil, errors.New("cephfs: can't initialise system dir " + dir + ":" + err.Error())
+		_, err := adminConn.adminMount.Statx(dir, goceph.StatxMask(goceph.StatxIno), 0)
+		if err != nil {
+			err = adminConn.adminMount.MakeDir(dir, dirPermFull)
+			if err != nil && err.Error() != errFileExists {
+				return nil, errors.New("cephfs: can't initialise system dir " + dir + ":" + err.Error())
+			}
 		}
 	}
 
