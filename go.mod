@@ -60,14 +60,14 @@ require (
 	go-micro.dev/v4 v4.3.1-0.20211108085239-0c2041e43908
 	go.opencensus.io v0.24.0
 	go.opentelemetry.io/otel/trace v1.19.0
-	go.step.sm/crypto v0.36.0
+	go.step.sm/crypto v0.36.1
 	golang.org/x/crypto v0.14.0
 	golang.org/x/oauth2 v0.13.0
 	golang.org/x/sync v0.4.0
 	golang.org/x/sys v0.13.0
 	golang.org/x/term v0.13.0
 	golang.org/x/text v0.13.0
-	google.golang.org/genproto v0.0.0-20230913181813-007df8e322eb
+	google.golang.org/genproto v0.0.0-20231002182017-d307bd883b97
 	google.golang.org/grpc v1.59.0
 	google.golang.org/protobuf v1.31.0
 	gotest.tools v2.2.0+incompatible
@@ -148,7 +148,7 @@ require (
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.12.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230920204549-e6e6cdab5c13 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20231009173412-8bfb1ae86b6c // indirect
 	gopkg.in/src-d/go-errors.v1 v1.0.0 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
