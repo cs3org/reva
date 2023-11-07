@@ -41,10 +41,10 @@ import (
 	"github.com/cs3org/reva/pkg/eosclient"
 	erpc "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_grpc"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -138,16 +138,15 @@ type Client struct {
 }
 
 // Create and connect a grpc eos Client.
-func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
-	log := appctx.GetLogger(ctx)
-	log.Info().Str("Setting up GRPC towards ", "'"+opt.GrpcURI+"'").Msg("")
+func newgrpc(ctx context.Context, log *zerolog.Logger, opt *Options) (erpc.EosClient, error) {
+	log.Debug().Msgf("Setting up GRPC towards '%s'", opt.GrpcURI)
 
 	conn, err := grpc.Dial(opt.GrpcURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Warn().Str("Error connecting to ", "'"+opt.GrpcURI+"' ").Str("err", err.Error()).Msg("")
+		log.Warn().Err(err).Msgf("Error connecting to '%s'", opt.GrpcURI)
 	}
 
-	log.Debug().Str("Going to ping ", "'"+opt.GrpcURI+"' ").Msg("")
+	log.Debug().Msgf("Going to ping '%s'", opt.GrpcURI)
 	ecl := erpc.NewEosClient(conn)
 	// If we can't ping... just print warnings. In the case EOS is down, grpc will take care of
 	// connecting later
@@ -156,21 +155,22 @@ func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
 	prq.Message = []byte("hi this is a ping from reva")
 	prep, err := ecl.Ping(ctx, prq)
 	if err != nil {
-		log.Warn().Str("Could not ping to ", "'"+opt.GrpcURI+"' ").Str("err", err.Error()).Msg("")
+		log.Warn().Err(err).Msgf("Could not ping to '%s'", opt.GrpcURI)
 	}
 
 	if prep == nil {
-		log.Warn().Str("Could not ping to ", "'"+opt.GrpcURI+"' ").Str("nil response", "").Msg("")
+		log.Warn().Msgf("Could not ping to '%s': nil response", opt.GrpcURI)
 	}
-	log.Debug().Str("Ping to ", "'"+opt.GrpcURI+"' succeeded").Msg("")
+	log.Debug().Msgf("Ping to '%s' succeeded", opt.GrpcURI)
 
 	return ecl, nil
 }
 
 // New creates a new client with the given options.
-func New(opt *Options, httpOpts *HTTPOptions) (*Client, error) {
-	tlog := logger.New().With().Int("pid", os.Getpid()).Logger()
-	tlog.Debug().Str("Creating new eosgrpc client. opt: ", "'"+fmt.Sprintf("%#v", opt)+"' ").Msg("")
+func New(ctx context.Context, opt *Options, httpOpts *HTTPOptions) (*Client, error) {
+	log := appctx.GetLogger(ctx)
+
+	log.Debug().Interface("options", opt).Msgf("Creating new eosgrpc client")
 
 	opt.init()
 	httpcl, err := NewEOSHTTPClient(httpOpts)
@@ -178,8 +178,7 @@ func New(opt *Options, httpOpts *HTTPOptions) (*Client, error) {
 		return nil, err
 	}
 
-	tctx := appctx.WithLogger(context.Background(), &tlog)
-	cl, err := newgrpc(tctx, opt)
+	cl, err := newgrpc(ctx, log, opt)
 	if err != nil {
 		return nil, err
 	}
