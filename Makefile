@@ -37,11 +37,15 @@ GIT_COMMIT	?= `git rev-parse --short HEAD`
 VERSION		?= `git describe --always`
 GO_VERSION	?= `go version | awk '{print $$3}'`
 BUILD_DATE	= `date +%FT%T%z`
-BUILD_FLAGS	= "`[[ -z "$(STATIC)" ]] && echo "" || echo "-extldflags=-static"` -X github.com/cs3org/reva/cmd/revad.gitCommit=$(GIT_COMMIT) -X github.com/cs3org/reva/cmd/revad.version=$(VERSION) -X github.com/cs3org/reva/cmd/revad.goVersion=$(GO_VERSION) -X github.com/cs3org/reva/cmd/revad.buildDate=$(BUILD_DATE)"
+BUILD_FLAGS     = -X github.com/cs3org/reva/cmd/revad.gitCommit=$(GIT_COMMIT) -X github.com/cs3org/reva/cmd/revad.version=$(VERSION) -X github.com/cs3org/reva/cmd/revad.goVersion=$(GO_VERSION) -X github.com/cs3org/reva/cmd/revad.buildDate=$(BUILD_DATE)
 
 .PHONY: revad
 revad:
-	go build -ldflags $(BUILD_FLAGS) -o ./cmd/revad/revad ./cmd/revad/main
+	go build -ldflags "$(BUILD_FLAGS)" -o ./cmd/revad/revad ./cmd/revad/main
+
+.PHONY: revad-static
+revad-static:
+	go build -ldflags "-extldflags=-static $(BUILD_FLAGS)" -o ./cmd/revad/revad ./cmd/revad/main
 
 .PHONY: gaia
 gaia:
@@ -50,13 +54,14 @@ gaia:
 .PHONY: cernbox-revad
 cernbox-revad: gaia
 	gaia build --with github.com/cernbox/reva-plugins --with github.com/cs3org/reva=$(shell pwd) -o ./cmd/revad/revad
+
 .PHONY: revad-ceph
 revad-ceph:
-	go build -ldflags $(BUILD_FLAGS) -tags ceph -o ./cmd/revad/revad ./cmd/revad/main
+	go build -ldflags "$(BUILD_FLAGS)" -tags ceph -o ./cmd/revad/revad ./cmd/revad/main
 
 .PHONY: reva
 reva:
-	go build -ldflags $(BUILD_FLAGS) -o ./cmd/reva/reva ./cmd/reva
+	go build -ldflags "-extldflags=-static $(BUILD_FLAGS)" -o ./cmd/reva/reva ./cmd/reva
 
 .PHONY: docker-reva
 docker-reva:
