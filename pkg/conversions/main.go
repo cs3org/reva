@@ -29,7 +29,9 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/mime"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/user"
+	"github.com/cs3org/reva/v2/pkg/utils"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -336,9 +338,14 @@ func ReceivedOCMShare2ShareData(share *ocm.ReceivedShare, path string) (*ShareDa
 		FileTarget:   path,
 		MimeType:     mime.Detect(share.ResourceType == provider.ResourceType_RESOURCE_TYPE_CONTAINER, share.Name),
 		ItemType:     ResourceType(share.ResourceType).String(),
-		ItemSource:   path,
-		STime:        share.Ctime.Seconds,
-		Name:         share.Name,
+		ItemSource: storagespace.FormatResourceID(provider.ResourceId{
+			StorageId: utils.OCMStorageProviderID,
+			SpaceId:   share.Id.OpaqueId,
+			OpaqueId:  share.Id.OpaqueId,
+		}),
+		STime:   share.Ctime.Seconds,
+		Name:    share.Name,
+		SpaceID: storagespace.FormatStorageID(utils.OCMStorageProviderID, share.Id.OpaqueId),
 	}
 
 	if share.Expiration != nil {

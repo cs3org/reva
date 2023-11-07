@@ -429,7 +429,7 @@ func (d *driver) ListStorageSpaces(ctx context.Context, filters []*provider.List
 		if k == "mountpoint" {
 			for _, share := range lrsRes.Shares {
 				root := &provider.ResourceId{
-					StorageId: utils.PublicStorageProviderID,
+					StorageId: utils.OCMStorageProviderID,
 					SpaceId:   share.Id.OpaqueId,
 					OpaqueId:  share.Id.OpaqueId,
 				}
