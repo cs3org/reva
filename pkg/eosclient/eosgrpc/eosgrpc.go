@@ -1238,7 +1238,6 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 	}
 
 	for _, fi := range mylst {
-
 		// For files, inherit ACLs from the parent
 		// And set the inode to that of their version folder
 		if !fi.IsDir && !isVersionFolder(dpath) {
@@ -1272,7 +1271,6 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 				}
 			}
 		}
-
 	}
 
 	return mylst, nil
