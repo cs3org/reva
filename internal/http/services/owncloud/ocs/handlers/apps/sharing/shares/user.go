@@ -155,6 +155,56 @@ func (h *Handler) isUserShare(r *http.Request, oid string) (*collaboration.Share
 	return getShareRes.GetShare(), getShareRes.GetShare() != nil
 }
 
+func (h *Handler) isFederatedShare(r *http.Request, shareID string) bool {
+	log := appctx.GetLogger(r.Context())
+	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		log.Err(err).Send()
+		return false
+	}
+
+	getShareRes, err := client.GetOCMShare(r.Context(), &ocmpb.GetOCMShareRequest{
+		Ref: &ocmpb.ShareReference{
+			Spec: &ocmpb.ShareReference_Id{
+				Id: &ocmpb.ShareId{
+					OpaqueId: shareID,
+				},
+			},
+		},
+	})
+	if err != nil {
+		log.Err(err).Send()
+		return false
+	}
+
+	return getShareRes.GetShare() != nil
+}
+
+func (h *Handler) isFederatedReceivedShare(r *http.Request, shareID string) bool {
+	log := appctx.GetLogger(r.Context())
+	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		log.Err(err).Send()
+		return false
+	}
+
+	getShareRes, err := client.GetReceivedOCMShare(r.Context(), &ocmpb.GetReceivedOCMShareRequest{
+		Ref: &ocmpb.ShareReference{
+			Spec: &ocmpb.ShareReference_Id{
+				Id: &ocmpb.ShareId{
+					OpaqueId: shareID,
+				},
+			},
+		},
+	})
+	if err != nil {
+		log.Err(err).Send()
+		return false
+	}
+
+	return getShareRes.GetShare() != nil
+}
+
 func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, share *collaboration.Share) {
 	ctx := r.Context()
 
