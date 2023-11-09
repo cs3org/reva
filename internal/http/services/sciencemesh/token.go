@@ -76,7 +76,7 @@ type token struct {
 	Token       string `json:"token"`
 	Description string `json:"description,omitempty"`
 	Expiration  uint64 `json:"expiration,omitempty"`
-	InviteLink  string `json:"invite_link"`
+	InviteLink  string `json:"invite_link,omitempty"`
 }
 
 // Generate generates an invitation token and if a recipient is specified,
