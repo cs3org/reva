@@ -519,9 +519,11 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 		}
 	} else {
 		// we need to call up.DeclareLength() before writing the chunk
-		if ldx, ok := up.(tusd.LengthDeclarableUpload); ok {
-			if err := ldx.DeclareLength(ctx, req.Length); err != nil {
-				return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error declaring length")
+		if req.Length > 0 {
+			if ldx, ok := up.(tusd.LengthDeclarableUpload); ok {
+				if err := ldx.DeclareLength(ctx, req.Length); err != nil {
+					return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error declaring length")
+				}
 			}
 		}
 		bytesWritten, err := up.WriteChunk(ctx, 0, req.Body)
