@@ -918,6 +918,10 @@ func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
 		h.removeUserShare(w, r, share)
 		return
 	}
+	if h.isFederatedShare(r, shareID) {
+		h.removeFederatedShare(w, r, shareID)
+		return
+	}
 
 	if prov, ok := h.isSpaceShare(r, shareID); ok {
 		// The request is a remove space member request.
