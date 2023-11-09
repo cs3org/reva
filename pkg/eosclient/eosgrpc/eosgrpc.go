@@ -435,7 +435,7 @@ func (c *Client) getACLForPath(ctx context.Context, auth eosclient.Authorization
 // GetFileInfoByInode returns the FileInfo by the given inode.
 func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authorization, inode uint64) (*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "GetFileInfoByInode").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Uint64("inode", inode).Msg("")
+	log.Debug().Str("func", "GetFileInfoByInode").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Uint64("inode", inode).Msg("entering")
 
 	// Initialize the common fields of the MDReq
 	mdrq, err := c.initMDRequest(ctx, auth)
@@ -480,7 +480,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 		info.Inode = inode
 	}
 
-	log.Debug().Str("func", "GetFileInfoByInode").Uint64("inode", inode).Uint64("info.Inode", info.Inode).Str("file", info.File).Uint64("size", info.Size).Str("etag", info.ETag).Msg("")
+	log.Info().Str("func", "GetFileInfoByInode").Uint64("inode", inode).Uint64("info.Inode", info.Inode).Str("file", info.File).Uint64("size", info.Size).Str("etag", info.ETag).Msg("result")
 	return c.fixupACLs(ctx, auth, info), nil
 }
 
@@ -660,7 +660,7 @@ func getAttribute(key, val string) (*eosclient.Attribute, error) {
 // GetFileInfoByPath returns the FilInfo at the given path.
 func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authorization, path string) (*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "GetFileInfoByPath").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
+	log.Debug().Str("func", "GetFileInfoByPath").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("entering")
 
 	// Initialize the common fields of the MDReq
 	mdrq, err := c.initMDRequest(ctx, auth)
@@ -710,7 +710,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 		info.Inode = inode
 	}
 
-	log.Debug().Str("func", "GetFileInfoByPath").Str("path", path).Uint64("info.Inode", info.Inode).Uint64("size", info.Size).Str("etag", info.ETag).Msg("")
+	log.Info().Str("func", "GetFileInfoByPath").Str("path", path).Uint64("info.Inode", info.Inode).Uint64("size", info.Size).Str("etag", info.ETag).Msg("result")
 	return c.fixupACLs(ctx, auth, info), nil
 }
 
@@ -1175,7 +1175,10 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 	}
 
 	var mylst []*eosclient.FileInfo
+	versionFolders := map[string]*eosclient.FileInfo{}
 	var parent *eosclient.FileInfo
+	var ownerAuth *eosclient.Authorization
+
 	i := 0
 	for {
 		rsp, err := resp.Recv()
@@ -1216,17 +1219,55 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 			continue
 		}
 
+		// If it's a version folder, store it in a map, so that for the corresponding file,
+		// we can return its inode instead
+		if isVersionFolder(myitem.File) {
+			versionFolders[myitem.File] = myitem
+		}
+
+		if ownerAuth == nil {
+			ownerAuth = &eosclient.Authorization{
+				Role: eosclient.Role{
+					UID: strconv.FormatUint(myitem.UID, 10),
+					GID: strconv.FormatUint(myitem.GID, 10),
+				},
+			}
+		}
+
 		mylst = append(mylst, myitem)
 	}
 
-	if parent.SysACL != nil {
-		for _, info := range mylst {
-			if !info.IsDir && parent != nil {
-				if info.SysACL == nil {
+	for _, fi := range mylst {
+		// For files, inherit ACLs from the parent
+		// And set the inode to that of their version folder
+		if !fi.IsDir && !isVersionFolder(dpath) {
+			if parent != nil && parent.SysACL != nil {
+				if fi.SysACL == nil {
 					log.Warn().Str("func", "List").Str("path", dpath).Str("SysACL is nil, taking parent", "").Msg("grpc response")
-					info.SysACL.Entries = parent.SysACL.Entries
+					fi.SysACL.Entries = parent.SysACL.Entries
 				} else {
-					info.SysACL.Entries = append(info.SysACL.Entries, parent.SysACL.Entries...)
+					fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
+				}
+			}
+
+			// If there is a version folder then use its info
+			// to emulate the invariability of the fileid
+			// If there is no version folder then create one
+			versionFolderPath := getVersionFolder(fi.File)
+			if vf, ok := versionFolders[versionFolderPath]; ok {
+				fi.Inode = vf.Inode
+				if vf.SysACL != nil {
+					log.Debug().Str("func", "List").Str("path", dpath).Msg("vf.SysACL is nil")
+					fi.SysACL.Entries = append(fi.SysACL.Entries, vf.SysACL.Entries...)
+				}
+				for k, v := range vf.Attrs {
+					fi.Attrs[k] = v
+				}
+			} else if err := c.CreateDir(ctx, *ownerAuth, versionFolderPath); err == nil { // Create the version folder if it doesn't exist
+				if md, err := c.GetFileInfoByPath(ctx, auth, versionFolderPath); err == nil {
+					fi.Inode = md.Inode
+				} else {
+					log.Error().Err(err).Interface("auth", ownerAuth).Str("path", versionFolderPath).Msg("got error creating version folder")
 				}
 			}
 		}
