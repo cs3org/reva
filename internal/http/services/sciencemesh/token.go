@@ -122,7 +122,9 @@ func (h *tokenHandler) prepareGenerateTokenResponse(tkn *invitepb.InviteToken) *
 	res := &token{
 		Token:       tkn.Token,
 		Description: tkn.Description,
-		InviteLink:  h.meshDirectoryURL + "?token=" + tkn.Token + "&providerDomain=" + h.providerDomain,
+	}
+	if h.meshDirectoryURL != "" {
+		res.InviteLink = h.meshDirectoryURL + "?token=" + tkn.Token + "&providerDomain=" + h.providerDomain
 	}
 	if tkn.Expiration != nil {
 		res.Expiration = tkn.Expiration.Seconds
