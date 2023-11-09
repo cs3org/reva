@@ -107,6 +107,10 @@ var _ = Describe("The ocs API", func() {
 			gatewayClient.On("ListShares", mock.Anything, mock.Anything).Return(&collaboration.ListSharesResponse{
 				Status: status.NewOK(context.Background()),
 			}, nil)
+
+			gatewayClient.On("CheckPermission", mock.Anything, mock.Anything).Return(&permissions.CheckPermissionResponse{
+				Status: status.NewOK(context.Background()),
+			}, nil)
 		})
 
 		Context("when sharing the personal space root", func() {

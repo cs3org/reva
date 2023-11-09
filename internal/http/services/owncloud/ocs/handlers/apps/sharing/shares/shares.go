@@ -233,6 +233,18 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 	sublog := appctx.GetLogger(ctx).With().Interface("ref", ref).Logger()
 
+	ok, err := utils.CheckPermission(ctx, "Shares.Write", client)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error checking user permissions")
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error checking user permissions", err)
+		return
+	}
+	if !ok {
+		sublog.Debug().Interface("user", ctxpkg.ContextMustGetUser(ctx).Id).Msg("user not allowed to create share")
+		response.WriteOCSError(w, r, response.MetaForbidden.StatusCode, "permission denied", nil)
+		return
+	}
+
 	statReq := provider.StatRequest{Ref: &ref, FieldMask: &fieldmaskpb.FieldMask{Paths: []string{"space"}}}
 	statRes, err := client.Stat(ctx, &statReq)
 	if err != nil {
@@ -722,6 +734,18 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, share *col
 	client, err := h.getClient()
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
+		return
+	}
+
+	ok, err := utils.CheckPermission(ctx, "Shares.Write", client)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error checking user permissions")
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error checking user permissions", err)
+		return
+	}
+	if !ok {
+		sublog.Debug().Interface("user", ctxpkg.ContextMustGetUser(ctx).Id).Msg("user not allowed to create share")
+		response.WriteOCSError(w, r, response.MetaForbidden.StatusCode, "permission denied", nil)
 		return
 	}
 

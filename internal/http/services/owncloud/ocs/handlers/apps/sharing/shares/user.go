@@ -163,6 +163,17 @@ func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, share 
 		return
 	}
 
+	// TODO: should we use Share.Delete here?
+	ok, err := utils.CheckPermission(ctx, "Shares.Write", uClient)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error checking user permissions", err)
+		return
+	}
+	if !ok {
+		response.WriteOCSError(w, r, response.MetaForbidden.StatusCode, "permission denied", nil)
+		return
+	}
+
 	shareRef := &collaboration.ShareReference{
 		Spec: &collaboration.ShareReference_Id{
 			Id: share.Id,

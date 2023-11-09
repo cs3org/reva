@@ -29,6 +29,12 @@ const (
 	CreateSpace string = "Drives.Create"
 	// WritePublicLink is the hardcoded name for the PublicLink.Write permission
 	WritePublicLink string = "PublicLink.Write"
+	// WriteShare is the hardcoded name for the Shares.Write permission
+	WriteShare string = "Shares.Write"
+	// ListFavorites is the hardcoded name for the Favorites.List permission
+	ListFavorites string = "Favorites.List"
+	// WriteFavorites is the hardcoded name for the Favorites.Write permission
+	WriteFavorites string = "Favorites.Write"
 )
 
 // Manager defines the interface for the permission service driver
