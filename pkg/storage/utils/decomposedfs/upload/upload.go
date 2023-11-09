@@ -163,13 +163,12 @@ func CreateNewNode(ctx context.Context, lu *lookup.Lookup, n *node.Node, fsize u
 	return f, nil
 }
 
-// AddRevisionToNode will create the target node for the Upload
-// TODO this should be CreateRevision
+// CreateRevision will create the target node for the Upload
 // - if the node does not exist it is created and assigned an id, no blob id?
 // - then always write out a revision node
 // - when postprocessing finishes copy metadata to node and replace latest revision node with previous blob info. if blobid is empty delete previous revision completely?
-func AddRevisionToNode(ctx context.Context, lu *lookup.Lookup, info tusd.FileInfo, attrs node.Attributes) (*node.Node, error) {
-	ctx, span := tracer.Start(ctx, "AddRevisionToNode")
+func CreateRevision(ctx context.Context, lu *lookup.Lookup, info tusd.FileInfo, attrs node.Attributes) (*node.Node, error) {
+	ctx, span := tracer.Start(ctx, "CreateRevision")
 	defer span.End()
 	log := appctx.GetLogger(ctx).With().Str("uploadID", info.ID).Logger()
 
@@ -188,7 +187,7 @@ func AddRevisionToNode(ctx context.Context, lu *lookup.Lookup, info tusd.FileInf
 	// -> we have to create the node on initialize upload with processing true?
 
 	var n *node.Node
-	var revisionHandle, nodeHandle *lockedfile.File
+	var nodeHandle *lockedfile.File
 	if info.MetaData[tus.CS3Prefix+"NodeId"] == "" {
 		// we need to check if the node exists via parentid & child name
 		p, err := node.ReadNode(ctx, lu, info.MetaData[tus.CS3Prefix+"SpaceRoot"], info.MetaData[tus.CS3Prefix+"NodeParentId"], false, nil, true)
@@ -268,6 +267,7 @@ func AddRevisionToNode(ctx context.Context, lu *lookup.Lookup, info tusd.FileInf
 		return nil, err
 	}
 
+	var revisionHandle *lockedfile.File
 	revisionHandle, err = createRevisionNode(ctx, lu, revisionNode)
 	defer func() {
 		if revisionHandle == nil {

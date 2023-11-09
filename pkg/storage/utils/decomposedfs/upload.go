@@ -189,7 +189,18 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	info.MetaData[tus.CS3Prefix+"SpaceOwnerOrManager"] = n.SpaceOwnerOrManager(ctx).GetOpaqueId()
 	info.MetaData[tus.CS3Prefix+"providerID"] = headers["providerID"]
 
-	info.MetaData[tus.CS3Prefix+"RevisionTime"] = time.Now().UTC().Format(time.RFC3339Nano)
+	if tusMetadata[tus.TusPrefix+"mtime"] != "" {
+		// tests require us to use the provided ocmtime as the revision time ... urgh ...
+		// this leads to not keeping track of every revision regardless of mtime. AFAICT it might even allow rewriting old revisions.
+		mtime, err := utils.MTimeToTime(info.MetaData[tus.TusPrefix+"mtime"])
+		if err != nil {
+			return nil, err
+		}
+		info.MetaData[tus.CS3Prefix+"RevisionTime"] = mtime.UTC().Format(time.RFC3339Nano)
+	} else {
+		info.MetaData[tus.CS3Prefix+"RevisionTime"] = time.Now().UTC().Format(time.RFC3339Nano)
+	}
+
 	info.MetaData[tus.CS3Prefix+"NodeId"] = n.ID
 	info.MetaData[tus.CS3Prefix+"NodeParentId"] = n.ParentID
 
@@ -347,7 +358,7 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 		prefixes.ChecksumPrefix + "adler32": adler32h.Sum(nil),
 	}
 
-	n, err := upload.AddRevisionToNode(ctx, fs.lu, info, attrs)
+	n, err := upload.CreateRevision(ctx, fs.lu, info, attrs)
 	if err != nil {
 		upload.Cleanup(ctx, fs.lu, n, info, true)
 		if tup, ok := up.(tusd.TerminatableUpload); ok {
@@ -515,11 +526,11 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 		if err != nil {
 			return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error writing to binary file")
 		}
+		uploadInfo.Offset = uploadInfo.Offset + bytesWritten
 		if uploadInfo.SizeIsDeferred {
 			// update the size and offset
 			uploadInfo.SizeIsDeferred = false
 			uploadInfo.Size = bytesWritten
-			uploadInfo.Offset = bytesWritten
 		}
 	}
 
