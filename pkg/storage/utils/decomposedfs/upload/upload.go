@@ -585,7 +585,7 @@ func Finalize(ctx context.Context, blobstore tree.Blobstore, info tusd.FileInfo,
 	err = blobstore.Upload(rn, info.Storage["Path"]) // FIXME where do we read from
 	subspan.End()
 	if err != nil {
-		return errors.Wrap(err, "failed to upload file to blostore")
+		return errors.Wrap(err, "failed to upload file to blobstore")
 	}
 
 	// FIXME use a reader
