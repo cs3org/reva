@@ -63,7 +63,11 @@ func (w *WebDAV) ToOCMProtocol() *ocm.Protocol {
 			perms.Permissions.ListContainer = true
 			perms.Permissions.Stat = true
 		case "write":
+			perms.Permissions.CreateContainer = true
 			perms.Permissions.InitiateFileUpload = true
+			perms.Permissions.Delete = true
+			perms.Permissions.Move = true
+			perms.Permissions.ListGrants = true
 		case "share":
 			perms.Reshare = true
 		}
