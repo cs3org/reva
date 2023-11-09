@@ -1,6 +1,6 @@
-Enhancement: Add search mimetype filter
+Enhancement: Add search mediatype filter
 
-Add filter MimeType filter shortcuts to search for specific document types.
+Add filter MediaType filter shortcuts to search for specific document types.
 For example, a search query MimeType:documents will search for files with the following mimetypes:
 
 application/msword
@@ -11,5 +11,6 @@ MimeType:text/markdown
 MimeType:application/rtf
 MimeType:application/vnd.apple.pages
 
-https://github.com/cs3org/reva/pull/4320        
+https://github.com/cs3org/reva/pull/4326
+https://github.com/cs3org/reva/pull/4320   
 https://github.com/owncloud/ocis/issues/7432
