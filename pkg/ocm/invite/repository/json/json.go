@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -177,7 +178,7 @@ func (m *manager) AddRemoteUser(ctx context.Context, initiator *userpb.UserId, r
 	defer m.Unlock()
 
 	for _, acceptedUser := range m.model.AcceptedUsers[initiator.GetOpaqueId()] {
-		if acceptedUser.Id.GetOpaqueId() == remoteUser.Id.OpaqueId && acceptedUser.Id.GetIdp() == remoteUser.Id.Idp {
+		if acceptedUser.Id.GetOpaqueId() == remoteUser.Id.OpaqueId && idpsEqual(acceptedUser.Id.GetIdp(), remoteUser.Id.Idp) {
 			return invite.ErrUserAlreadyAccepted
 		}
 	}
@@ -187,6 +188,31 @@ func (m *manager) AddRemoteUser(ctx context.Context, initiator *userpb.UserId, r
 		return errors.Wrap(err, "json: error saving model")
 	}
 	return nil
+}
+
+func idpsEqual(idp1, idp2 string) bool {
+	normalizeIDP := func(s string) (string, error) {
+		u, err := url.Parse(s)
+		if err != nil {
+			return "", errors.New("could not parse url")
+		}
+
+		if u.Scheme == "" {
+			return strings.ToLower(u.Path), nil // the string is just a hostname
+		}
+		return strings.ToLower(u.Hostname()), nil
+	}
+
+	domain1, err := normalizeIDP(idp1)
+	if err != nil {
+		return false
+	}
+	domain2, err := normalizeIDP(idp2)
+	if err != nil {
+		return false
+	}
+
+	return domain1 == domain2
 }
 
 func (m *manager) GetRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUserID *userpb.UserId) (*userpb.User, error) {
@@ -201,7 +227,7 @@ func (m *manager) GetRemoteUser(ctx context.Context, initiator *userpb.UserId, r
 			acceptedUser.Id.GetOpaqueId(),
 			acceptedUser.Id.GetIdp(),
 		)
-		if (acceptedUser.Id.GetOpaqueId() == remoteUserID.OpaqueId) && (remoteUserID.Idp == "" || acceptedUser.Id.GetIdp() == remoteUserID.Idp) {
+		if (acceptedUser.Id.GetOpaqueId() == remoteUserID.OpaqueId) && (remoteUserID.Idp == "" || idpsEqual(acceptedUser.Id.GetIdp(), remoteUserID.Idp)) {
 			return acceptedUser, nil
 		}
 	}
