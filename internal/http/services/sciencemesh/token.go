@@ -189,7 +189,7 @@ func (h *tokenHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 			reqres.WriteError(w, r, reqres.APIErrorAlreadyExist, "user already known", nil)
 			return
 		case rpc.Code_CODE_PERMISSION_DENIED:
-			reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, "remove service not trusted", nil)
+			reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, "remote service not trusted", nil)
 			return
 		default:
 			reqres.WriteError(w, r, reqres.APIErrorServerError, "unexpected error: "+forwardInviteResponse.Status.Message, errors.New(forwardInviteResponse.Status.Message))
