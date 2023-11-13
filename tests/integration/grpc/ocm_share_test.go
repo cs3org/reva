@@ -51,10 +51,14 @@ import (
 
 var (
 	editorPermissions = &provider.ResourcePermissions{
+		CreateContainer:      true,
+		Delete:               true,
+		GetPath:              true,
 		InitiateFileDownload: true,
 		InitiateFileUpload:   true,
 		ListContainer:        true,
-		GetPath:              true,
+		ListGrants:           true,
+		Move:                 true,
 		Stat:                 true,
 	}
 	viewerPermissions = &provider.ResourcePermissions{
@@ -574,7 +578,7 @@ var _ = Describe("ocm share", func() {
 							SpaceId:   share.Id.OpaqueId,
 						},
 						Name:          "foo",
-						Path:          "./dir/foo",
+						Path:          "foo",
 						Size:          7,
 						Type:          provider.ResourceType_RESOURCE_TYPE_FILE,
 						PermissionSet: editorPermissions,
@@ -586,7 +590,7 @@ var _ = Describe("ocm share", func() {
 							SpaceId:   share.Id.OpaqueId,
 						},
 						Name:          "bar",
-						Path:          "./dir/bar",
+						Path:          "bar",
 						Size:          0,
 						Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 						PermissionSet: editorPermissions,
