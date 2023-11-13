@@ -24,17 +24,15 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
-	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/conversions"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/rgrpc"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
-	graph "github.com/owncloud/ocis/v2/services/graph/pkg/service/v0/errorcode"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
@@ -140,6 +138,12 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "create").Msg("create public share")
 
+	if !conversions.SufficientCS3Permissions(req.GetResourceInfo().GetPermissionSet(), req.GetGrant().GetPermissions().GetPermissions()) {
+		return &link.CreatePublicShareResponse{
+			Status: status.NewInvalid(ctx, "insufficient permissions to create that kind of share"),
+		}, nil
+	}
+
 	if !s.isPathAllowed(req.ResourceInfo.Path) {
 		return &link.CreatePublicShareResponse{
 			Status: status.NewInvalid(ctx, "share creation is not allowed for the specified path"),
@@ -163,12 +167,10 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 	if err != nil {
 		log.Debug().Err(err).Str("createShare", "shares").Msg("error connecting to storage provider")
 	}
-	opaque := &typesv1beta1.Opaque{Map: map[string]*typesv1beta1.OpaqueEntry{}}
-	opaque = utils.AppendJSONToOpaque(opaque, "errorcode", graph.New(graph.InvalidAuthenticationToken, "test"))
+
 	res := &link.CreatePublicShareResponse{
 		Status: status.NewOK(ctx),
 		Share:  share,
-		Opaque: opaque,
 	}
 	return res, nil
 }
