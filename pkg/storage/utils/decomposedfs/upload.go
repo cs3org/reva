@@ -189,17 +189,22 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	info.MetaData[tus.CS3Prefix+"SpaceOwnerOrManager"] = n.SpaceOwnerOrManager(ctx).GetOpaqueId()
 	info.MetaData[tus.CS3Prefix+"providerID"] = headers["providerID"]
 
-	if tusMetadata[tus.TusPrefix+"mtime"] != "" {
-		// tests require us to use the provided ocmtime as the revision time ... urgh ...
-		// this leads to not keeping track of every revision regardless of mtime. AFAICT it might even allow rewriting old revisions.
-		mtime, err := utils.MTimeToTime(info.MetaData[tus.TusPrefix+"mtime"])
-		if err != nil {
-			return nil, err
+	/*
+		if tusMetadata[tus.TusPrefix+"mtime"] != "" {
+			// tests require us to use the provided ocmtime as the revision time ... urgh ...
+			// this leads to not keeping track of every revision regardless of mtime. AFAICT it might even allow rewriting old revisions.
+			mtime, err := utils.MTimeToTime(info.MetaData[tus.TusPrefix+"mtime"])
+			if err != nil {
+				return nil, err
+			}
+			info.MetaData[tus.CS3Prefix+"RevisionTime"] = mtime.UTC().Format(time.RFC3339Nano)
+		} else {
+			info.MetaData[tus.CS3Prefix+"RevisionTime"] = time.Now().UTC().Format(time.RFC3339Nano) // can we always use the curren time as the revision timestamp? we would have to filter them in the listing
 		}
-		info.MetaData[tus.CS3Prefix+"RevisionTime"] = mtime.UTC().Format(time.RFC3339Nano)
-	} else {
-		info.MetaData[tus.CS3Prefix+"RevisionTime"] = time.Now().UTC().Format(time.RFC3339Nano)
-	}
+	*/
+	// we always use the current time as the revision timestamp. This allows us to distinguish every upload.
+	// some tests are trying to list revisions and we will contain the most recent revision when they share the same mtime. see ListRevisions
+	info.MetaData[tus.CS3Prefix+"RevisionTime"] = time.Now().UTC().Format(time.RFC3339Nano)
 
 	info.MetaData[tus.CS3Prefix+"NodeId"] = n.ID
 	info.MetaData[tus.CS3Prefix+"NodeParentId"] = n.ParentID
