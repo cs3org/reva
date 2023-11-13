@@ -533,7 +533,6 @@ func spaceHref(ctx context.Context, baseURI, fullPath string) string {
 // prefixing it with the baseURI.
 func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string, usershares, linkshares map[string]struct{}) (*responseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
-	md.Path = strings.TrimPrefix(md.Path, ns)
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 
@@ -543,6 +542,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	if _, ok := ctx.Value(ctxSpaceID).(string); ok {
 		ref = spaceHref(ctx, baseURI, md.Path)
 	} else {
+		md.Path = strings.TrimPrefix(md.Path, ns)
 		ref = path.Join(baseURI, md.Path)
 	}
 	if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
