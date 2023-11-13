@@ -52,6 +52,10 @@ type ctxKey int
 const (
 	ctxKeyBaseURI ctxKey = iota
 	ctxOCM10
+	ctxSpaceID
+	ctxSpacePath
+	ctxSpaceFullPath
+	ctxSpaceRelativePath
 )
 
 var (

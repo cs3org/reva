@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"context"
+	"encoding/base64"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -45,7 +46,7 @@ type DavHandler struct {
 	FilesHomeHandler    *WebDavHandler
 	MetaHandler         *MetaHandler
 	TrashbinHandler     *TrashbinHandler
-	SpacesHandler       *SpacesHandler
+	SpacesHandler       *WebDavHandler
 	PublicFolderHandler *WebDavHandler
 	PublicFileHandler   *PublicFileHandler
 	OCMSharesHandler    *WebDavHandler
@@ -70,8 +71,8 @@ func (h *DavHandler) init(c *Config) error {
 	}
 	h.TrashbinHandler = new(TrashbinHandler)
 
-	h.SpacesHandler = new(SpacesHandler)
-	if err := h.SpacesHandler.init(c); err != nil {
+	h.SpacesHandler = new(WebDavHandler)
+	if err := h.SpacesHandler.init("", false); err != nil {
 		return err
 	}
 
@@ -176,6 +177,25 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		case "spaces":
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "spaces")
 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+
+			// path is of type: space_id/relative/path/from/space
+			// the space_id is the base64 encode of the path where
+			// the space is located
+			spaceID, relativeSpacePath := router.ShiftPath(r.URL.Path)
+
+			spacePath, err := getSpacePath(spaceID)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			fullPath := filepath.Join(spacePath, relativeSpacePath)
+			r.URL.Path = fullPath
+
+			ctx = context.WithValue(ctx, ctxSpaceID, spaceID)
+			ctx = context.WithValue(ctx, ctxSpaceFullPath, fullPath)
+			ctx = context.WithValue(ctx, ctxSpacePath, spacePath)
+			ctx = context.WithValue(ctx, ctxSpaceRelativePath, relativeSpacePath)
 			r = r.WithContext(ctx)
 			h.SpacesHandler.Handler(s).ServeHTTP(w, r)
 		case "ocm":
@@ -321,6 +341,14 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			HandleWebdavError(log, w, b, err)
 		}
 	})
+}
+
+func getSpacePath(spaceID string) (string, error) {
+	decoded, err := base64.StdEncoding.DecodeString(spaceID)
+	if err != nil {
+		return "", err
+	}
+	return string(decoded), nil
 }
 
 func getTokenStatInfo(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, token string) (*provider.StatResponse, error) {

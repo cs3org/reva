@@ -514,6 +514,20 @@ func supportLegacyOCMAccess(ctx context.Context, md *provider.ResourceInfo) {
 	}
 }
 
+func spaceHref(ctx context.Context, baseURI, fullPath string) string {
+	// in the context of spaces, the final URL will be baseURI + /<space_id>/relative/path/to/space
+	spacePath, ok := ctx.Value(ctxSpacePath).(string)
+	if !ok {
+		panic("space path expected to be in the context")
+	}
+	relativePath := strings.TrimPrefix(fullPath, spacePath)
+	spaceID, ok := ctx.Value(ctxSpaceID).(string)
+	if !ok {
+		panic("space id expected to be in the context")
+	}
+	return path.Join(baseURI, spaceID, relativePath)
+}
+
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI.
@@ -524,7 +538,13 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 
 	supportLegacyOCMAccess(ctx, md)
-	ref := path.Join(baseURI, md.Path)
+
+	var ref string
+	if _, ok := ctx.Value(ctxSpaceID).(string); ok {
+		ref = spaceHref(ctx, baseURI, md.Path)
+	} else {
+		ref = path.Join(baseURI, md.Path)
+	}
 	if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ref += "/"
 	}

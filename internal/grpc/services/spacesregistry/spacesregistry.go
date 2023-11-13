@@ -20,6 +20,7 @@ package spacesregistry
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -92,6 +93,12 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		return &provider.ListStorageSpacesResponse{
 			Status: status.NewInternal(ctx, err, "error listing storage spaces"),
 		}, nil
+	}
+
+	for _, s := range spaces {
+		s.Id = &provider.StorageSpaceId{
+			OpaqueId: base64.StdEncoding.EncodeToString([]byte(s.RootInfo.Path)),
+		}
 	}
 	return &provider.ListStorageSpacesResponse{
 		Status:        status.NewOK(ctx),
