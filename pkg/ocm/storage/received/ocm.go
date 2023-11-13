@@ -194,7 +194,7 @@ func getPathFromShareIDAndRelPath(shareID *ocmpb.ShareId, relPath string) string
 	return filepath.Join("/", shareID.OpaqueId, relPath)
 }
 
-func convertStatToResourceInfo(ref *provider.Reference, f fs.FileInfo, share *ocmpb.ReceivedShare, relPath string) *provider.ResourceInfo {
+func convertStatToResourceInfo(ref *provider.Reference, f fs.FileInfo, share *ocmpb.ReceivedShare) *provider.ResourceInfo {
 	t := provider.ResourceType_RESOURCE_TYPE_FILE
 	if f.IsDir() {
 		t = provider.ResourceType_RESOURCE_TYPE_CONTAINER
@@ -213,7 +213,7 @@ func convertStatToResourceInfo(ref *provider.Reference, f fs.FileInfo, share *oc
 		Type:     t,
 		Id:       ref.ResourceId,
 		MimeType: mime.Detect(f.IsDir(), f.Name()),
-		Path:     relPath,
+		Path:     name,
 		Name:     name,
 		Size:     uint64(f.Size()),
 		Mtime: &typepb.Timestamp{
@@ -241,7 +241,7 @@ func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string,
 		return nil, err
 	}
 
-	return convertStatToResourceInfo(ref, info, share, rel), nil
+	return convertStatToResourceInfo(ref, info, share), nil
 }
 
 func (d *driver) ListFolder(ctx context.Context, ref *provider.Reference, _ []string, _ []string) ([]*provider.ResourceInfo, error) {
@@ -257,7 +257,7 @@ func (d *driver) ListFolder(ctx context.Context, ref *provider.Reference, _ []st
 
 	res := make([]*provider.ResourceInfo, 0, len(list))
 	for _, r := range list {
-		res = append(res, convertStatToResourceInfo(ref, r, share, utils.MakeRelativePath(filepath.Join(rel, r.Name()))))
+		res = append(res, convertStatToResourceInfo(ref, r, share))
 	}
 	return res, nil
 }
