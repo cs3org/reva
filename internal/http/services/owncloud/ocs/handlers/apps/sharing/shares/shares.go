@@ -42,6 +42,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/conversions"
 	"github.com/cs3org/reva/v2/pkg/password"
+	"github.com/cs3org/reva/v2/pkg/permission"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc/metadata"
@@ -233,7 +234,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 	sublog := appctx.GetLogger(ctx).With().Interface("ref", ref).Logger()
 
-	ok, err := utils.CheckPermission(ctx, "Shares.Write", client)
+	ok, err := utils.CheckPermission(ctx, permission.WriteShare, client)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error checking user permissions")
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error checking user permissions", err)
@@ -737,7 +738,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, share *col
 		return
 	}
 
-	ok, err := utils.CheckPermission(ctx, "Shares.Write", client)
+	ok, err := utils.CheckPermission(ctx, permission.WriteShare, client)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error checking user permissions")
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error checking user permissions", err)

@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/conversions"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/permission"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
@@ -164,7 +165,7 @@ func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, share 
 	}
 
 	// TODO: should we use Share.Delete here?
-	ok, err := utils.CheckPermission(ctx, "Shares.Write", uClient)
+	ok, err := utils.CheckPermission(ctx, permission.WriteShare, uClient)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error checking user permissions", err)
 		return

@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/permission"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
@@ -81,7 +82,7 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 			return
 		}
 		currentUser := ctxpkg.ContextMustGetUser(ctx)
-		ok, err := utils.CheckPermission(ctx, "Favorites.List", client)
+		ok, err := utils.CheckPermission(ctx, permission.ListFavorites, client)
 		if err != nil {
 			log.Error().Err(err).Msg("error checking permission")
 			w.WriteHeader(http.StatusInternalServerError)

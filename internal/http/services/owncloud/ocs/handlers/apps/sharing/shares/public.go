@@ -31,6 +31,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/conversions"
+	"github.com/cs3org/reva/v2/pkg/permission"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/huandu/xstrings"
@@ -69,7 +70,7 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 
 	// NOTE: one is allowed to create an internal link without the `Publink.Write` permission
 	if permKey != nil && *permKey != 0 {
-		ok, err := utils.CheckPermission(ctx, "PublicLink.Write", c)
+		ok, err := utils.CheckPermission(ctx, permission.WritePublicLink, c)
 		if err != nil {
 			return nil, &ocsError{
 				Code:    response.MetaServerError.StatusCode,
@@ -326,7 +327,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 
 	// NOTE: you are allowed to update a link TO a public link without the `PublicLink.Write` permission if you created it yourself
 	if (permKey != nil && *permKey != 0) || !createdByUser {
-		ok, err := utils.CheckPermission(ctx, "PublicLink.Write", gwC)
+		ok, err := utils.CheckPermission(ctx, permission.WritePublicLink, gwC)
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "failed to check user permission", err)
 			return
@@ -693,7 +694,7 @@ func (h *Handler) checkPasswordEnforcement(ctx context.Context, user *userv1beta
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "could not check permission", err)
 		return errors.New("could not check permission")
 	}
-	ok, err := utils.CheckPermission(ctx, "ReadOnlyPublicLinkPassword.Delete", gwC)
+	ok, err := utils.CheckPermission(ctx, permission.DeleteReadOnlyPassword, gwC)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "failed to check user permission", err)
 		return errors.New("failed to check user permission")
