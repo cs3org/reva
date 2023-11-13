@@ -69,9 +69,11 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 
 	revisions = []*provider.FileVersion{}
 	np := n.InternalPath()
+	mtime, err := n.GetMTime(ctx)
+	currentRevisionPath := np + node.RevisionIDDelimiter + mtime.UTC().Format(time.RFC3339Nano)
 	if items, err := filepath.Glob(np + node.RevisionIDDelimiter + "*"); err == nil {
 		for i := range items {
-			if fs.lu.MetadataBackend().IsMetaFile(items[i]) || strings.HasSuffix(items[i], ".mlock") {
+			if fs.lu.MetadataBackend().IsMetaFile(items[i]) || strings.HasSuffix(items[i], ".mlock") || items[i] == currentRevisionPath {
 				continue
 			}
 
