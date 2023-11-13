@@ -518,7 +518,7 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 			return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: could not get info for legacy chunking")
 		}
 	} else {
-		// we need to call up.DeclareLength() before writing the chunk
+		// we need to call up.DeclareLength() before writing the chunk, but only if we actually got a length
 		if req.Length > 0 {
 			if ldx, ok := up.(tusd.LengthDeclarableUpload); ok {
 				if err := ldx.DeclareLength(ctx, req.Length); err != nil {

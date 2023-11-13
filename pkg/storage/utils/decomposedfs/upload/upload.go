@@ -429,8 +429,8 @@ func createRevisionNode(ctx context.Context, lu *lookup.Lookup, revisionNode *no
 	}
 
 	// FIXME if this is removed listing revisions breaks because it globs the dir but then filters all metadata files
-	// we also need to touch the a vorsions node here to list revisions
-	h, err := os.OpenFile(revisionPath, os.O_CREATE|os.O_EXCL, 0600)
+	// we also need to touch the versions node here to list revisions
+	h, err := os.OpenFile(revisionPath, os.O_CREATE /*|os.O_EXCL*/, 0600) // we have to allow overwriting revisions to be oc10 compatible
 	if err != nil {
 		return f, err
 	}
