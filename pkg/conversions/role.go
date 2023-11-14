@@ -154,7 +154,7 @@ func RoleFromName(name string, sharing bool) *Role {
 	case RoleSpaceEditor:
 		return NewSpaceEditorRole()
 	case RoleFileEditor:
-		return NewFileEditorRole()
+		return NewFileEditorRole(sharing)
 	case RoleUploader:
 		return NewUploaderRole()
 	case RoleManager:
@@ -271,10 +271,15 @@ func NewSpaceEditorRole() *Role {
 }
 
 // NewFileEditorRole creates a file-editor role
-func NewFileEditorRole() *Role {
+func NewFileEditorRole(sharing bool) *Role {
+	p := PermissionRead | PermissionWrite
+	if sharing {
+		p |= PermissionShare
+	}
 	return &Role{
 		Name: RoleEditor,
 		cS3ResourcePermissions: &provider.ResourcePermissions{
+			AddGrant:             sharing,
 			GetPath:              true,
 			GetQuota:             true,
 			InitiateFileDownload: true,
@@ -285,7 +290,7 @@ func NewFileEditorRole() *Role {
 			InitiateFileUpload:   true,
 			RestoreRecycleItem:   true,
 		},
-		ocsPermissions: PermissionRead | PermissionWrite,
+		ocsPermissions: p,
 	}
 }
 
