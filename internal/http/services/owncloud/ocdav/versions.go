@@ -173,8 +173,6 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 	})
 
-	mtimeRevision := map[uint64]*provider.ResourceInfo{}
-
 	for i := range versions {
 		vi := &provider.ResourceInfo{
 			// TODO(jfd) we cannot access version content, this will be a problem when trying to fetch version thumbnails
@@ -197,16 +195,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 			Size:  versions[i].Size,
 			Owner: info.Owner,
 		}
-		if existingRevision, ok := mtimeRevision[versions[i].Mtime]; ok {
-			if existingRevision.Path < vi.Path {
-				mtimeRevision[versions[i].Mtime] = vi
-			}
-		} else {
-			mtimeRevision[versions[i].Mtime] = vi
-		}
-	}
-	for _, ri := range mtimeRevision {
-		infos = append(infos, ri)
+		infos = append(infos, vi)
 	}
 
 	prefer := net.ParsePrefer(r.Header.Get("prefer"))

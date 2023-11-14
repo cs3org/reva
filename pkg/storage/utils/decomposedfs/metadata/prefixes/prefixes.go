@@ -36,6 +36,9 @@ const (
 	// updated when the file is renamed or moved
 	NameAttr string = OcisPrefix + "name"
 
+	// The current revision of the node. Used to filter the current revision from the list of revisions.
+	CurrentRevisionAttr string = OcisPrefix + "revision"
+
 	BlobIDAttr   string = OcisPrefix + "blobid"
 	BlobsizeAttr string = OcisPrefix + "blobsize"
 

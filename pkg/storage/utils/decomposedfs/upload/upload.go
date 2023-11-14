@@ -407,7 +407,7 @@ func initNewNode(ctx context.Context, lu *lookup.Lookup, info tusd.FileInfo, n *
 	attrs.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_FILE))
 	attrs.SetString(prefixes.ParentidAttr, n.ParentID)
 	attrs.SetString(prefixes.NameAttr, n.Name)
-	attrs.SetString(prefixes.MTimeAttr, info.MetaData[tus.CS3Prefix+"RevisionTime"])
+	attrs.SetString(prefixes.MTimeAttr, info.MetaData[tus.CS3Prefix+"RevisionTime"]) // TODO use mtime
 
 	// here we set the status the first time.
 	attrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+info.ID)
@@ -469,6 +469,7 @@ func SetNodeToRevision(ctx context.Context, lu *lookup.Lookup, n *node.Node, rev
 		return 0, err
 	}
 	attrs := node.Attributes{}
+	attrs.SetString(prefixes.CurrentRevisionAttr, revision)
 	attrs.SetString(prefixes.BlobIDAttr, revisionNode.BlobID)
 	attrs.SetInt64(prefixes.BlobsizeAttr, revisionNode.Blobsize)
 	attrs[prefixes.MTimeAttr] = revisionAttrs[prefixes.MTimeAttr]

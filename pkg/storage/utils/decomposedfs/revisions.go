@@ -72,11 +72,14 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 
 	revisions = []*provider.FileVersion{}
 	np := n.InternalPath()
-	mtime, err := n.GetMTime(ctx)
-	currentRevisionPath := np + node.RevisionIDDelimiter + mtime.UTC().Format(time.RFC3339Nano)
+	currentRevision, err := n.GetCurrentRevision(ctx)
+	if err != nil {
+		sublog.Error().Err(err).Msg("could not check is Current, skipping")
+		return nil, err
+	}
 	if items, err := filepath.Glob(np + node.RevisionIDDelimiter + "*"); err == nil {
 		for i := range items {
-			if fs.lu.MetadataBackend().IsMetaFile(items[i]) || items[i] == currentRevisionPath {
+			if fs.lu.MetadataBackend().IsMetaFile(items[i]) {
 				continue
 			}
 			rp := strings.SplitN(items[i], node.RevisionIDDelimiter, 2)
@@ -92,6 +95,9 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 			}
 			if !rn.Exists {
 				sublog.Error().Msg("revision does not exist, skipping")
+				continue
+			}
+			if currentRevision == rp[1] {
 				continue
 			}
 
@@ -261,6 +267,11 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	// remember mtime from node as new revision mtime
 	if err = os.Chtimes(newRevisionPath, mtime, mtime); err != nil {
 		return errtypes.InternalError("failed to change mtime of version node")
+	}
+
+	// update revision in node
+	if err = n.SetCurrentRevision(ctx, revisionKey); err != nil {
+		return errtypes.InternalError("failed to update revision for node")
 	}
 
 	// update blob id in node
