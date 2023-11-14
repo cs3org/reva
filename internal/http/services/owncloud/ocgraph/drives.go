@@ -21,14 +21,19 @@
 package ocgraph
 
 import (
+	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 
 	"github.com/CiscoM31/godata"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/spaces"
@@ -76,6 +81,16 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if isMountpointRequest(odataReq) {
+		shares, err := resolveMountpointSpaces(ctx, gw)
+		if err != nil {
+			log.Error().Err(err).Msg("error getting share spaces")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		res.StorageSpaces = append(res.StorageSpaces, shares...)
+	}
+
 	me := appctx.ContextMustGetUser(ctx)
 
 	spaces := list.Map(res.StorageSpaces, func(space *providerpb.StorageSpace) *libregraph.Drive {
@@ -89,6 +104,48 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+}
+
+func isMountpointRequest(request *godata.GoDataRequest) bool {
+	if request.Query.Filter == nil {
+		return false
+	}
+	if request.Query.Filter.Tree.Token.Value != "eq" {
+		return false
+	}
+	return request.Query.Filter.Tree.Children[0].Token.Value == "driveType" && strings.Trim(request.Query.Filter.Tree.Children[1].Token.Value, "'") == "mountpoint"
+}
+
+func resolveMountpointSpaces(ctx context.Context, gw gateway.GatewayAPIClient) ([]*providerpb.StorageSpace, error) {
+	res, err := gw.ListReceivedShares(ctx, &collaborationv1beta1.ListReceivedSharesRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	spacesRes := make([]*providerpb.StorageSpace, 0, len(res.Shares))
+	for _, s := range res.Shares {
+		stat, err := gw.Stat(ctx, &providerpb.StatRequest{
+			Ref: &providerpb.Reference{
+				ResourceId: s.Share.ResourceId,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		if stat.Status.Code != rpcv1beta1.Code_CODE_OK {
+			continue
+		}
+
+		space := &providerpb.StorageSpace{
+			RootInfo:  stat.Info,
+			Id:        &providerpb.StorageSpaceId{OpaqueId: base64.StdEncoding.EncodeToString([]byte(stat.Info.Path))},
+			Name:      path.Base(stat.Info.Path),
+			SpaceType: "mountpoint",
+		}
+		spacesRes = append(spacesRes, space)
+	}
+	return spacesRes, nil
 }
 
 func generateCs3Filters(request *godata.GoDataRequest) ([]*providerpb.ListStorageSpacesRequest_Filter, error) {
