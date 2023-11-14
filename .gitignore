@@ -39,6 +39,7 @@ docs/tech-doc-hugo
 
 dist/
 bin/
+vendor/
 
 # API acceptance tests
 tests/acceptance/output

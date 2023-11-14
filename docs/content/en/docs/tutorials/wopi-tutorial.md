@@ -30,7 +30,7 @@ git clone https://github.com/cs3org/reva
 ```
 
 ## 2. Configure Reva
-Add `disable_tus = true` under `[http.services.dataprovider]` and under `[grpc.services.storageprovider]` in the file `ocmd-server-1.toml`.
+Add `disable_tus = true` under `[http.services.dataprovider]` and under `[grpc.services.storageprovider]` in the file `server-1.toml`.
 
 ## 3. Build Reva
 Follow the instructions in https://reva.link/docs/getting-started/install-reva/ for how to build reva. If you will do local
@@ -41,51 +41,14 @@ Now you need to run Revad (the Reva daemon). Follow these steps
 from the *reva* folder:
 
 ```
-cd examples/ocm/ && ../../cmd/revad/revad -c ocmd-server-1.toml & ../../cmd/revad/revad -c ocmd-server-2.toml &.
+cd examples/ocm/ && ../../cmd/revad/revad -c server-1.toml & ../../cmd/revad/revad -c server-2.toml &.
 ``` 
 
 The Reva daemon (revad) should now be running.
 
 ## 5. Configure the wopiserver
-Follow the instructions in the readme for running the server locally ("Run the WOPI server locally", https://github.com/cs3org/wopiserver). You will need to do come changes in the config file, here is a more relevant example of a wopi config when runnning the server together with reva:
-
-```
-#
-# wopiserver.conf - basic working configuration for a docker image
-#
-
-[general]
-storagetype = cs3
-port = 8880
-allowedclients = localhost
-oosurl = https://oos.web.cern.ch
-codeurl = https://collabora.cern.ch:9980/byoa/collabora
-codimdurl = http://cbox-wopidev-01.cern.ch:8000
-tokenvalidity = 86400
-
-wopiurl = localhost:8880
-downloadurl = localhost:8880/wopi/cbox/download
-
-# Logging level. Debug enables the Flask debug mode as well.
-# Valid values are: Debug, Info, Warning, Error.
-loglevel = Debug
-
-[security]
-usehttps = no
-
-# location of the secret files. Requires a restart of the
-# WOPI server when either the files or their content change.
-wopisecretfile = /etc/wopi/wopisecret
-iopsecretfile = /etc/wopi/iopsecret
-
-[cs3]
-revahost = localhost:19000
-authtokenvalidity = 3600
-
-[io]
-# Size used for buffered xroot reads [bytes]
-chunksize = 4194304 
-```
+Follow the instructions in the readme for running the server locally ("Run the WOPI server locally", https://github.com/cs3org/wopiserver).
+You will need to do some changes in the config file, but you can start from this [reference configuration](https://github.com/cs3org/wopiserver/blob/master/docker/etc/wopiserver.cs3.conf).
 
 ## 6. Run wopiserver
 Run according to instructions in the readme ("Run the WOPI server locally", https://github.com/cs3org/wopiserver).

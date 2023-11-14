@@ -6,16 +6,22 @@ It is useful for all kinds of ScienceMesh-related development and (manual) testi
 Prerequisites: bash, git, Docker.
 
 ```
-git clone https://github.com/cs3org/reva
-cd reva
+# preparation
 cd examples/sciencemesh
-./init-sciencemesh.sh # This will prepare the Nextcloud and ownCloud-10 images
-./init-reva.sh # This will build reva and revad in the current repo and handle a few other prerequisites
-./nrro.sh
-./einstein.sh nextcloud1 # for owncloud1 / owncloud2, make sure to log in via the OC-10 GUI once before trying to access through reva-cli!
+./init.sh  # This will prepare the CERNBox, Nextcloud, and ownCloud-10 images
+./init-reva.sh   # This will build reva and revad in the current repo and handle a few other prerequisites
+
+# launch test scenario: to be executed as root. The available scenarios cover all combinations of ownCloud (o),
+# Nextcloud (n), and CERNBox (c) as EFSSs, with reva (r) as connector, and have the form xrrx.sh, x = {o, n, c},
+# that is orro.sh, orrn.sh, nrrn.sh, crrc.sh, crro.sh, crrn.sh
+./orro.sh 
+
+# to interact with the EFSSs
+./einstein.sh nextcloud1  # for owncloud1 / owncloud2, make sure to log in via the OC-10 GUI once before trying to access through reva-cli!
 ./maria2.sh
-./clean.sh # Careful! This will kill and remove all your Docker containers on the current host system! Also unrelated ones if present.
-./orro.sh
+
+# tear down the cluster
+./clean.sh  # Careful! This will kill and remove all your Docker containers on the current host system! Also unrelated ones if present.
 ```
 
 ## Reva-to-reva

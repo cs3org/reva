@@ -123,6 +123,7 @@ type Config struct {
 	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
 	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
 	PublicLinkDownload     *ConfigPublicLinkDownload         `mapstructure:"publiclink_download"`
+	DisabledOpenInAppPaths []string                          `mapstructure:"disabled_open_in_app_paths"`
 	Notifications          map[string]interface{}            `docs:"Settingsg for the Notification Helper" mapstructure:"notifications"`
 }
 

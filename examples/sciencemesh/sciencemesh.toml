@@ -5,7 +5,6 @@
 # 1. In the [vars] section below, replace `your.revad.org` with your actual domain
 # 2. If you have a Kubernetes deployment with an ingress and a route:
 # 2.1. Set the `external_reva_endpoint` var to your actual externally-visible route to reva
-# 2.2. In the [http.services.ocmprovider] section, set a `webdav_root` to include your route, e.g. `/iop/remote.php/dav/ocm/`
 # 3. Replace `your.efss.org` with the actual endpoint of your EFSS system
 # 4. Define appropriate secrets in the [vars] section: the `efss_shared_secret` must match the `oc_appconfig.configvalue` in your EFSS DB for `oc_appconfig.app_id` = `sciencemesh`
 # 5. Provide appropriate SSL full chain certificate and key files in the [http] section
@@ -16,7 +15,7 @@
 #
 # 1. Remove the `certfile` and `keyfile` entries from the [http] section
 # 2. Replace the https port `443` with a port number of your choice everywhere you find it
-# 3. Make sure all `https`-served endpoints (including `datagateway`) are adapted accordingly
+# 3. Look for `data_server_url` and replace the `https://localhost` address as indicated
 
 
 [vars]
@@ -28,8 +27,8 @@ machine_api_key = "machine-api-key"
 efss_shared_secret = "shared-secret-1"
 
 [http]
-certfile = "/etc/revad/tls/your.revad.ssl.crt"
-keyfile = "/etc/revad/tls/your.revad.ssl.key"
+certfile = "/etc/tls/your.revad.ssl.crt"
+keyfile = "/etc/tls/your.revad.ssl.key"
 
 [log]
 level = "debug"
@@ -118,6 +117,7 @@ driver = "nextcloud"
 mount_id = "nextcloud"
 expose_data_server = true
 enable_home_creation = false
+# replace https://localhost with http://localhost if reva does not serve https traffic
 data_server_url = "https://localhost:{{ http.services.dataprovider[0].address.port }}/data"
 
 [grpc.services.storageprovider.drivers.nextcloud]
@@ -183,7 +183,7 @@ refresh = 900
 
 [grpc.services.ocmproviderauthorizer.drivers.json]
 # this is used by the docker-based test deployment, not in production
-providers = "providers.testnet.json"
+providers = "/etc/revad/providers.testnet.json"
 verify_request_hostname = true
 
 [grpc.services.userprovider]
@@ -262,11 +262,11 @@ endpoint = "{{ vars.external_reva_endpoint }}"
 enable_webapp = true
 enable_datatx = true
 
-[http.services.ocmd]
+[http.services.ocm]
 address = ":443"
 prefix = "ocm"
 
-[http.services.ocmd.config]
+[http.services.ocm.config]
 host = "{{ vars.provider_domain }}"
 
 [http.services.ocs]
@@ -282,7 +282,7 @@ address = ":443"
 [http.services.metrics]
 address = ":443"
 metrics_data_driver_type = "json"
-metrics_data_location = "metrics.json"
+metrics_data_location = "/etc/revad/metrics.json"
 metrics_record_interval = 5000
 
 [http.services.sysinfo]

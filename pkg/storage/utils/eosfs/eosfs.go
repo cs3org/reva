@@ -199,7 +199,7 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 			ClientCAFiles:       c.ClientCAFiles,
 			Authkey:             c.HTTPSAuthkey,
 		}
-		eosClient, err = eosgrpc.New(eosClientOpts, eosHTTPOpts)
+		eosClient, err = eosgrpc.New(ctx, eosClientOpts, eosHTTPOpts)
 	} else {
 		eosClientOpts := &eosbinary.Options{
 			XrdcopyBinary:       c.XrdcopyBinary,

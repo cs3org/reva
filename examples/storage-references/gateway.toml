@@ -56,7 +56,7 @@ app_url = "https://your-collabora-server.org:9980"
 
 [http.services.datagateway]
 [http.services.prometheus]
-[http.services.ocmd]
+[http.services.ocm]
 [http.services.ocmprovider]
 [http.services.ocdav]
 [http.services.ocs]

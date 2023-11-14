@@ -38,7 +38,7 @@ func init() {
 // a mime type with the given extension.
 // TODO(labkode): check that we do not override mime type mappings?
 func RegisterMime(ext, mime string) {
-	mimes.Store(ext, mime)
+	mimes.Store(strings.TrimPrefix(ext, "."), mime)
 }
 
 // Detect returns the mimetype associated with the given filename.
@@ -47,9 +47,7 @@ func Detect(isDir bool, fn string) string {
 		return defaultMimeDir
 	}
 
-	ext := path.Ext(fn)
-	ext = strings.TrimPrefix(ext, ".")
-
+	ext := strings.TrimPrefix(path.Ext(fn), ".")
 	mimeType := getCustomMime(ext)
 
 	if mimeType == "" {

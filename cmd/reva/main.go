@@ -49,6 +49,7 @@ var (
 		loginCommand(),
 		whoamiCommand(),
 		lsCommand(),
+		listVersionsCommand(),
 		statCommand(),
 		uploadCommand(),
 		downloadCommand(),

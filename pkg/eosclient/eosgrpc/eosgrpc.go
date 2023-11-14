@@ -41,11 +41,10 @@ import (
 	"github.com/cs3org/reva/pkg/eosclient"
 	erpc "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_grpc"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -139,16 +138,15 @@ type Client struct {
 }
 
 // Create and connect a grpc eos Client.
-func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
-	log := appctx.GetLogger(ctx)
-	log.Info().Str("Setting up GRPC towards ", "'"+opt.GrpcURI+"'").Msg("")
+func newgrpc(ctx context.Context, log *zerolog.Logger, opt *Options) (erpc.EosClient, error) {
+	log.Debug().Msgf("Setting up GRPC towards '%s'", opt.GrpcURI)
 
 	conn, err := grpc.Dial(opt.GrpcURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Warn().Str("Error connecting to ", "'"+opt.GrpcURI+"' ").Str("err", err.Error()).Msg("")
+		log.Warn().Err(err).Msgf("Error connecting to '%s'", opt.GrpcURI)
 	}
 
-	log.Debug().Str("Going to ping ", "'"+opt.GrpcURI+"' ").Msg("")
+	log.Debug().Msgf("Going to ping '%s'", opt.GrpcURI)
 	ecl := erpc.NewEosClient(conn)
 	// If we can't ping... just print warnings. In the case EOS is down, grpc will take care of
 	// connecting later
@@ -157,21 +155,22 @@ func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
 	prq.Message = []byte("hi this is a ping from reva")
 	prep, err := ecl.Ping(ctx, prq)
 	if err != nil {
-		log.Warn().Str("Could not ping to ", "'"+opt.GrpcURI+"' ").Str("err", err.Error()).Msg("")
+		log.Warn().Err(err).Msgf("Could not ping to '%s'", opt.GrpcURI)
 	}
 
 	if prep == nil {
-		log.Warn().Str("Could not ping to ", "'"+opt.GrpcURI+"' ").Str("nil response", "").Msg("")
+		log.Warn().Msgf("Could not ping to '%s': nil response", opt.GrpcURI)
 	}
-	log.Debug().Str("Ping to ", "'"+opt.GrpcURI+"' succeeded").Msg("")
+	log.Debug().Msgf("Ping to '%s' succeeded", opt.GrpcURI)
 
 	return ecl, nil
 }
 
 // New creates a new client with the given options.
-func New(opt *Options, httpOpts *HTTPOptions) (*Client, error) {
-	tlog := logger.New().With().Int("pid", os.Getpid()).Logger()
-	tlog.Debug().Str("Creating new eosgrpc client. opt: ", "'"+fmt.Sprintf("%#v", opt)+"' ").Msg("")
+func New(ctx context.Context, opt *Options, httpOpts *HTTPOptions) (*Client, error) {
+	log := appctx.GetLogger(ctx)
+
+	log.Debug().Interface("options", opt).Msgf("Creating new eosgrpc client")
 
 	opt.init()
 	httpcl, err := NewEOSHTTPClient(httpOpts)
@@ -179,8 +178,7 @@ func New(opt *Options, httpOpts *HTTPOptions) (*Client, error) {
 		return nil, err
 	}
 
-	tctx := appctx.WithLogger(context.Background(), &tlog)
-	cl, err := newgrpc(tctx, opt)
+	cl, err := newgrpc(ctx, log, opt)
 	if err != nil {
 		return nil, err
 	}
@@ -437,7 +435,7 @@ func (c *Client) getACLForPath(ctx context.Context, auth eosclient.Authorization
 // GetFileInfoByInode returns the FileInfo by the given inode.
 func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authorization, inode uint64) (*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "GetFileInfoByInode").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Uint64("inode", inode).Msg("")
+	log.Debug().Str("func", "GetFileInfoByInode").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Uint64("inode", inode).Msg("entering")
 
 	// Initialize the common fields of the MDReq
 	mdrq, err := c.initMDRequest(ctx, auth)
@@ -469,7 +467,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 
 	log.Debug().Uint64("inode", inode).Str("rsp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 
-	info, err := c.grpcMDResponseToFileInfo(rsp)
+	info, err := c.grpcMDResponseToFileInfo(ctx, rsp)
 	if err != nil {
 		return nil, err
 	}
@@ -482,7 +480,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 		info.Inode = inode
 	}
 
-	log.Debug().Str("func", "GetFileInfoByInode").Uint64("inode", inode).Msg("")
+	log.Info().Str("func", "GetFileInfoByInode").Uint64("inode", inode).Uint64("info.Inode", info.Inode).Str("file", info.File).Uint64("size", info.Size).Str("etag", info.ETag).Msg("result")
 	return c.fixupACLs(ctx, auth, info), nil
 }
 
@@ -662,7 +660,7 @@ func getAttribute(key, val string) (*eosclient.Attribute, error) {
 // GetFileInfoByPath returns the FilInfo at the given path.
 func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authorization, path string) (*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "GetFileInfoByPath").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
+	log.Debug().Str("func", "GetFileInfoByPath").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("entering")
 
 	// Initialize the common fields of the MDReq
 	mdrq, err := c.initMDRequest(ctx, auth)
@@ -699,7 +697,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 
 	log.Debug().Str("func", "GetFileInfoByPath").Str("path", path).Str("rsp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 
-	info, err := c.grpcMDResponseToFileInfo(rsp)
+	info, err := c.grpcMDResponseToFileInfo(ctx, rsp)
 	if err != nil {
 		return nil, err
 	}
@@ -712,6 +710,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 		info.Inode = inode
 	}
 
+	log.Info().Str("func", "GetFileInfoByPath").Str("path", path).Uint64("info.Inode", info.Inode).Uint64("size", info.Size).Str("etag", info.ETag).Msg("result")
 	return c.fixupACLs(ctx, auth, info), nil
 }
 
@@ -1176,7 +1175,10 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 	}
 
 	var mylst []*eosclient.FileInfo
+	versionFolders := map[string]*eosclient.FileInfo{}
 	var parent *eosclient.FileInfo
+	var ownerAuth *eosclient.Authorization
+
 	i := 0
 	for {
 		rsp, err := resp.Recv()
@@ -1202,7 +1204,7 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 
 		log.Debug().Str("func", "List").Str("path", dpath).Str("item resp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 
-		myitem, err := c.grpcMDResponseToFileInfo(rsp)
+		myitem, err := c.grpcMDResponseToFileInfo(ctx, rsp)
 		if err != nil {
 			log.Error().Err(err).Str("func", "List").Str("path", dpath).Str("could not convert item:", fmt.Sprintf("%#v", rsp)).Str("err", err.Error()).Msg("")
 
@@ -1217,17 +1219,55 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 			continue
 		}
 
+		// If it's a version folder, store it in a map, so that for the corresponding file,
+		// we can return its inode instead
+		if isVersionFolder(myitem.File) {
+			versionFolders[myitem.File] = myitem
+		}
+
+		if ownerAuth == nil {
+			ownerAuth = &eosclient.Authorization{
+				Role: eosclient.Role{
+					UID: strconv.FormatUint(myitem.UID, 10),
+					GID: strconv.FormatUint(myitem.GID, 10),
+				},
+			}
+		}
+
 		mylst = append(mylst, myitem)
 	}
 
-	if parent.SysACL != nil {
-		for _, info := range mylst {
-			if !info.IsDir && parent != nil {
-				if info.SysACL == nil {
+	for _, fi := range mylst {
+		// For files, inherit ACLs from the parent
+		// And set the inode to that of their version folder
+		if !fi.IsDir && !isVersionFolder(dpath) {
+			if parent != nil && parent.SysACL != nil {
+				if fi.SysACL == nil {
 					log.Warn().Str("func", "List").Str("path", dpath).Str("SysACL is nil, taking parent", "").Msg("grpc response")
-					info.SysACL.Entries = parent.SysACL.Entries
+					fi.SysACL.Entries = parent.SysACL.Entries
 				} else {
-					info.SysACL.Entries = append(info.SysACL.Entries, parent.SysACL.Entries...)
+					fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
+				}
+			}
+
+			// If there is a version folder then use its info
+			// to emulate the invariability of the fileid
+			// If there is no version folder then create one
+			versionFolderPath := getVersionFolder(fi.File)
+			if vf, ok := versionFolders[versionFolderPath]; ok {
+				fi.Inode = vf.Inode
+				if vf.SysACL != nil {
+					log.Debug().Str("func", "List").Str("path", dpath).Msg("vf.SysACL is nil")
+					fi.SysACL.Entries = append(fi.SysACL.Entries, vf.SysACL.Entries...)
+				}
+				for k, v := range vf.Attrs {
+					fi.Attrs[k] = v
+				}
+			} else if err := c.CreateDir(ctx, *ownerAuth, versionFolderPath); err == nil { // Create the version folder if it doesn't exist
+				if md, err := c.GetFileInfoByPath(ctx, auth, versionFolderPath); err == nil {
+					fi.Inode = md.Inode
+				} else {
+					log.Error().Err(err).Interface("auth", ownerAuth).Str("path", versionFolderPath).Msg("got error creating version folder")
 				}
 			}
 		}
@@ -1572,11 +1612,13 @@ func getFileFromVersionFolder(p string) string {
 	return path.Join(path.Dir(p), strings.TrimPrefix(path.Base(p), versionPrefix))
 }
 
-func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse) (*eosclient.FileInfo, error) {
+func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDResponse) (*eosclient.FileInfo, error) {
 	if st.Cmd == nil && st.Fmd == nil {
 		return nil, errors.Wrap(errtypes.NotSupported(""), "Invalid response (st.Cmd and st.Fmd are nil)")
 	}
 	fi := new(eosclient.FileInfo)
+
+	log := appctx.GetLogger(ctx)
 
 	if st.Type == erpc.TYPE_CONTAINER {
 		fi.IsDir = true

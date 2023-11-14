@@ -16,7 +16,7 @@
 [http.services.datagateway]
 [http.services.dataprovider]
 [http.services.prometheus]
-[http.services.ocmd]
+[http.services.ocm]
 [http.services.ocmprovider]
 [http.services.ocdav]
 [http.services.ocs]
