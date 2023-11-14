@@ -663,7 +663,7 @@ func (t *Tree) removeNode(ctx context.Context, path string, n *node.Node) error 
 		return err
 	}
 	for _, rev := range revs {
-		if t.lookup.MetadataBackend().IsMetaFile(rev) || strings.HasSuffix(rev, ".mlock") {
+		if t.lookup.MetadataBackend().IsMetaFile(rev) {
 			continue
 		}
 

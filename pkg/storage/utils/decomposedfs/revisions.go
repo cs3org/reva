@@ -46,10 +46,13 @@ import (
 
 // ListRevisions lists the revisions of the given resource
 func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Reference) (revisions []*provider.FileVersion, err error) {
+
 	var n *node.Node
 	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
+	sublog := appctx.GetLogger(ctx).With().Str("node", n.ID).Logger()
+
 	if !n.Exists {
 		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
 		return
@@ -73,33 +76,42 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 	currentRevisionPath := np + node.RevisionIDDelimiter + mtime.UTC().Format(time.RFC3339Nano)
 	if items, err := filepath.Glob(np + node.RevisionIDDelimiter + "*"); err == nil {
 		for i := range items {
-			if fs.lu.MetadataBackend().IsMetaFile(items[i]) || strings.HasSuffix(items[i], ".mlock") || items[i] == currentRevisionPath {
+			if fs.lu.MetadataBackend().IsMetaFile(items[i]) || items[i] == currentRevisionPath {
+				continue
+			}
+			rp := strings.SplitN(items[i], node.RevisionIDDelimiter, 2)
+			if len(rp) != 2 {
+				sublog.Err(err).Str("name", items[i]).Msg("invalid revision name, skipping")
+				continue
+			}
+			sublog = sublog.With().Str("revision", rp[1]).Logger()
+			rn, err := n.ReadRevision(ctx, rp[1])
+			if err != nil {
+				sublog.Error().Err(err).Msg("could not read revision, skipping")
+				continue
+			}
+			if !rn.Exists {
+				sublog.Error().Msg("revision does not exist, skipping")
 				continue
 			}
 
-			if fi, err := os.Stat(items[i]); err == nil {
-				parts := strings.SplitN(fi.Name(), node.RevisionIDDelimiter, 2)
-				if len(parts) != 2 {
-					appctx.GetLogger(ctx).Error().Err(err).Str("name", fi.Name()).Msg("invalid revision name, skipping")
-					continue
-				}
-				mtime := fi.ModTime()
-				rev := &provider.FileVersion{
-					Key:   n.ID + node.RevisionIDDelimiter + parts[1],
-					Mtime: uint64(mtime.Unix()),
-				}
-				blobSize, err := fs.lu.ReadBlobSizeAttr(ctx, items[i])
-				if err != nil {
-					appctx.GetLogger(ctx).Error().Err(err).Str("name", fi.Name()).Msg("error reading blobsize xattr, using 0")
-				}
-				rev.Size = uint64(blobSize)
-				etag, err := node.CalculateEtag(n, mtime)
-				if err != nil {
-					return nil, errors.Wrapf(err, "error calculating etag")
-				}
-				rev.Etag = etag
-				revisions = append(revisions, rev)
+			rmtime, err := rn.GetMTime(ctx)
+			if err != nil {
+				sublog.Error().Err(err).Msg("could not get revision mtime, skipping")
+				continue
 			}
+			etag, err := node.CalculateEtag(rn, rmtime)
+			if err != nil {
+				sublog.Error().Err(err).Msg("could not calculate etag, skipping")
+				continue
+			}
+			rev := &provider.FileVersion{
+				Key:   rn.ID,
+				Mtime: uint64(rmtime.Unix()),
+				Size:  uint64(rn.Blobsize),
+				Etag:  etag,
+			}
+			revisions = append(revisions, rev)
 		}
 	}
 	// maybe we need to sort the list by key
@@ -148,22 +160,13 @@ func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Refe
 		return nil, errtypes.NotFound(f)
 	}
 
-	contentPath := fs.lu.InternalPath(spaceID, revisionKey)
-
-	blobid, err := fs.lu.ReadBlobIDAttr(ctx, contentPath)
+	revisionNode, err := n.ReadRevision(ctx, kp[1])
 	if err != nil {
-		return nil, errors.Wrapf(err, "Decomposedfs: could not read blob id of revision '%s' for node '%s'", n.ID, revisionKey)
+		return nil, errors.Wrapf(err, "Decomposedfs: could not read revision '%s' for node '%s'", kp[1], n.ID)
 	}
-	blobsize, err := fs.lu.ReadBlobSizeAttr(ctx, contentPath)
+	reader, err := fs.blobstore.Download(revisionNode)
 	if err != nil {
-		return nil, errors.Wrapf(err, "Decomposedfs: could not read blob size of revision '%s' for node '%s'", n.ID, revisionKey)
-	}
-
-	revisionNode := node.Node{SpaceID: spaceID, BlobID: blobid, Blobsize: blobsize} // blobsize is needed for the s3ng blobstore
-
-	reader, err := fs.blobstore.Download(&revisionNode)
-	if err != nil {
-		return nil, errors.Wrapf(err, "Decomposedfs: could not download blob of revision '%s' for node '%s'", n.ID, revisionKey)
+		return nil, errors.Wrapf(err, "Decomposedfs: could not download blob of revision '%s' for node '%s'", kp[1], n.ID)
 	}
 	return reader, nil
 }
