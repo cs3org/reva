@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+
 	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
 )
 
@@ -197,6 +198,7 @@ func NewViewerRole(sharing bool) *Role {
 			InitiateFileDownload: true,
 			ListContainer:        true,
 			ListRecycle:          true,
+			ListGrants:           true,
 			Stat:                 true,
 		},
 		ocsPermissions: p,
@@ -236,6 +238,7 @@ func NewEditorRole(sharing bool) *Role {
 			GetQuota:             true,
 			InitiateFileDownload: true,
 			InitiateFileUpload:   true,
+			ListGrants:           true,
 			ListContainer:        true,
 			ListRecycle:          true,
 			Move:                 true,
