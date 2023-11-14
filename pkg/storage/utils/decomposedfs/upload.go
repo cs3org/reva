@@ -213,6 +213,8 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 			if err != nil {
 				return nil, err
 			}
+		} else {
+			info.MetaData[tus.CS3Prefix+"RevisionTime"] = mtime.UTC().Format(time.RFC3339Nano)
 		}
 	}
 
