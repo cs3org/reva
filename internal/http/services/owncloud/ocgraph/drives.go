@@ -24,10 +24,12 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/CiscoM31/godata"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -116,6 +118,8 @@ func isMountpointRequest(request *godata.GoDataRequest) bool {
 	return request.Query.Filter.Tree.Children[0].Token.Value == "driveType" && strings.Trim(request.Query.Filter.Tree.Children[1].Token.Value, "'") == "mountpoint"
 }
 
+const shareJailID = "a0ca6a90-a365-4782-871e-d44447bbc668"
+
 func resolveMountpointSpaces(ctx context.Context, gw gateway.GatewayAPIClient) ([]*providerpb.StorageSpace, error) {
 	res, err := gw.ListReceivedShares(ctx, &collaborationv1beta1.ListReceivedSharesRequest{})
 	if err != nil {
@@ -139,7 +143,7 @@ func resolveMountpointSpaces(ctx context.Context, gw gateway.GatewayAPIClient) (
 
 		space := &providerpb.StorageSpace{
 			RootInfo:  stat.Info,
-			Id:        &providerpb.StorageSpaceId{OpaqueId: base64.StdEncoding.EncodeToString([]byte(stat.Info.Path))},
+			Id:        &providerpb.StorageSpaceId{OpaqueId: fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, s.Share.Id.OpaqueId)},
 			Name:      path.Base(stat.Info.Path),
 			SpaceType: "mountpoint",
 		}
@@ -178,6 +182,24 @@ func (s *svc) cs3StorageSpaceToDrive(user *userpb.User, space *providerpb.Storag
 			Id:          libregraph.PtrString(space.Id.OpaqueId),
 			Permissions: cs3PermissionsToLibreGraph(user, space.RootInfo.PermissionSet),
 		},
+	}
+
+	// for the mountpoint type the space_id used by the web to build the webdav request
+	// is taken from `root.remoteItem.id`
+	if space.SpaceType == "mountpoint" {
+		r := space.RootInfo
+		id := base64.StdEncoding.EncodeToString([]byte(space.RootInfo.Path))
+		drive.Root.RemoteItem = &libregraph.RemoteItem{
+			DriveAlias:           libregraph.PtrString(space.RootInfo.Path[1:]),
+			ETag:                 libregraph.PtrString(r.Etag),
+			Id:                   libregraph.PtrString(id),
+			Folder:               &libregraph.Folder{},
+			LastModifiedDateTime: libregraph.PtrTime(time.Unix(int64(r.Mtime.Seconds), int64(r.Mtime.Nanos))),
+			Name:                 libregraph.PtrString(space.Name),
+			Path:                 libregraph.PtrString("/"),
+			RootId:               libregraph.PtrString(id),
+			Size:                 libregraph.PtrInt64(int64(r.Size)),
+		}
 	}
 
 	drive.Root.WebDavUrl = libregraph.PtrString(fullUrl(s.c.WebDavBase, space.RootInfo.Path))
