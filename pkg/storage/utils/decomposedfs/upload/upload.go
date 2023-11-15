@@ -352,8 +352,8 @@ func SetNodeToUpload(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploa
 func ReadNode(ctx context.Context, lu *lookup.Lookup, uploadMetadata Metadata) (*node.Node, error) {
 	var n *node.Node
 	var err error
-	if uploadMetadata.NodeId == "" {
-		p, err := node.ReadNode(ctx, lu, uploadMetadata.SpaceRoot, uploadMetadata.NodeParentId, false, nil, true)
+	if uploadMetadata.NodeID == "" {
+		p, err := node.ReadNode(ctx, lu, uploadMetadata.SpaceRoot, uploadMetadata.NodeParentID, false, nil, true)
 		if err != nil {
 			return nil, err
 		}
@@ -362,7 +362,7 @@ func ReadNode(ctx context.Context, lu *lookup.Lookup, uploadMetadata Metadata) (
 			return nil, err
 		}
 	} else {
-		n, err = node.ReadNode(ctx, lu, uploadMetadata.SpaceRoot, uploadMetadata.NodeId, false, nil, true)
+		n, err = node.ReadNode(ctx, lu, uploadMetadata.SpaceRoot, uploadMetadata.NodeID, false, nil, true)
 		if err != nil {
 			return nil, err
 		}
@@ -371,7 +371,7 @@ func ReadNode(ctx context.Context, lu *lookup.Lookup, uploadMetadata Metadata) (
 }
 
 // Cleanup cleans the upload
-func Cleanup(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploadID, revision string, failure bool) {
+func Cleanup(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploadID, revision, previousRevision string, failure bool) {
 	ctx, span := tracer.Start(ctx, "Cleanup")
 	defer span.End()
 
@@ -383,6 +383,12 @@ func Cleanup(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploadID, rev
 		if err := n.UnmarkProcessing(ctx, uploadID); err != nil {
 			log := appctx.GetLogger(ctx)
 			log.Info().Str("path", n.InternalPath()).Err(err).Msg("unmarking processing failed")
+		}
+		if previousRevision != "" {
+			if err := n.SetCurrentRevision(ctx, previousRevision); err != nil {
+				log := appctx.GetLogger(ctx)
+				log.Info().Str("path", n.InternalPath()).Err(err).Msg("restoring current revision failed")
+			}
 		}
 	}
 }

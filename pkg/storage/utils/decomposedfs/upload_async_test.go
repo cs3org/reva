@@ -338,7 +338,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 		})
 
-		FIt("succeeds eventually, creating a new version", func() {
+		It("succeeds eventually, creating a new version", func() {
 			// finish postprocessing
 			con <- events.PostprocessingFinished{
 				UploadID: uploadID,

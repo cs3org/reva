@@ -130,7 +130,7 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 				}
 			}
 
-			Cleanup(ctx, lu, n, info.ID, uploadMetadata.RevisionTime, failed)
+			Cleanup(ctx, lu, n, info.ID, uploadMetadata.RevisionTime, uploadMetadata.PreviousRevisionTime, failed)
 			if !keepUpload {
 				if tup, ok := up.(tusd.TerminatableUpload); ok {
 					terr := tup.Terminate(ctx)
@@ -153,7 +153,7 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 						Id: &user.UserId{
 							Type:     user.UserType(user.UserType_value[uploadMetadata.ExecutantType]),
 							Idp:      uploadMetadata.ExecutantIdp,
-							OpaqueId: uploadMetadata.ExecutantId,
+							OpaqueId: uploadMetadata.ExecutantID,
 						},
 						Username: uploadMetadata.ExecutantUserName,
 					},

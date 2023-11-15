@@ -38,24 +38,25 @@ import (
 )
 
 type Metadata struct {
-	ID                  string
-	Filename            string
-	SpaceRoot           string
-	SpaceOwnerOrManager string
-	ProviderID          string
-	RevisionTime        string
-	MTime               string
-	NodeId              string
-	NodeParentId        string
-	ExecutantIdp        string
-	ExecutantId         string
-	ExecutantType       string
-	ExecutantUserName   string
-	LogLevel            string
-	Checksum            string
-	ChecksumSHA1        []byte
-	ChecksumADLER32     []byte
-	ChecksumMD5         []byte
+	ID                   string
+	Filename             string
+	SpaceRoot            string
+	SpaceOwnerOrManager  string
+	ProviderID           string
+	PreviousRevisionTime string
+	RevisionTime         string
+	MTime                string
+	NodeID               string
+	NodeParentID         string
+	ExecutantIdp         string
+	ExecutantID          string
+	ExecutantType        string
+	ExecutantUserName    string
+	LogLevel             string
+	Checksum             string
+	ChecksumSHA1         []byte
+	ChecksumADLER32      []byte
+	ChecksumMD5          []byte
 
 	BlobID   string
 	BlobSize int64
@@ -144,9 +145,9 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 
 	var n *node.Node
 	var nodeHandle *lockedfile.File
-	if uploadMetadata.NodeId == "" {
+	if uploadMetadata.NodeID == "" {
 		// we need to check if the node exists via parentid & child name
-		p, err := node.ReadNode(ctx, lu, uploadMetadata.SpaceRoot, uploadMetadata.NodeParentId, false, nil, true)
+		p, err := node.ReadNode(ctx, lu, uploadMetadata.SpaceRoot, uploadMetadata.NodeParentID, false, nil, true)
 		if err != nil {
 			log.Error().Err(err).Msg("could not read parent node")
 			return nil, err
@@ -178,7 +179,7 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 	}
 
 	if nodeHandle == nil {
-		n, err = node.ReadNode(ctx, lu, uploadMetadata.SpaceRoot, uploadMetadata.NodeId, false, nil, true)
+		n, err = node.ReadNode(ctx, lu, uploadMetadata.SpaceRoot, uploadMetadata.NodeID, false, nil, true)
 		if err != nil {
 			log.Error().Err(err).Msg("could not read parent node")
 			return nil, err
@@ -213,6 +214,7 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 	// hm ... check if any other revisions are still available?
 	nodeAttrs.SetInt64(prefixes.BlobsizeAttr, size) // FIXME ... argh now the propagation needs to revert the size diff propagation again
 	nodeAttrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+uploadID)
+	nodeAttrs.SetString(prefixes.CurrentRevisionAttr, uploadMetadata.RevisionTime)
 	err = n.SetXattrsWithContext(ctx, nodeAttrs, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
@@ -267,7 +269,7 @@ func (m Metadata) GetResourceID() provider.ResourceId {
 	return provider.ResourceId{
 		StorageId: m.ProviderID,
 		SpaceId:   m.SpaceRoot,
-		OpaqueId:  m.NodeId,
+		OpaqueId:  m.NodeID,
 	}
 }
 func (m Metadata) GetReference() provider.Reference {
@@ -275,7 +277,7 @@ func (m Metadata) GetReference() provider.Reference {
 		ResourceId: &provider.ResourceId{
 			StorageId: m.ProviderID,
 			SpaceId:   m.SpaceRoot,
-			OpaqueId:  m.NodeId,
+			OpaqueId:  m.NodeID,
 		},
 		// Parh is not used
 	}
@@ -284,7 +286,7 @@ func (m Metadata) GetExecutantID() userpb.UserId {
 	return userpb.UserId{
 		Type:     userpb.UserType(userpb.UserType_value[m.ExecutantType]),
 		Idp:      m.ExecutantIdp,
-		OpaqueId: m.ExecutantId,
+		OpaqueId: m.ExecutantID,
 	}
 }
 func (m Metadata) GetSpaceOwner() userpb.UserId {

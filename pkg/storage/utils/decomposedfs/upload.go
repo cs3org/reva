@@ -90,10 +90,10 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		SpaceOwnerOrManager: n.SpaceOwnerOrManager(ctx).GetOpaqueId(),
 		ProviderID:          headers["providerID"],
 		RevisionTime:        time.Now().UTC().Format(time.RFC3339Nano),
-		NodeId:              n.ID,
-		NodeParentId:        n.ParentID,
+		NodeID:              n.ID,
+		NodeParentID:        n.ParentID,
 		ExecutantIdp:        usr.Id.Idp,
-		ExecutantId:         usr.Id.OpaqueId,
+		ExecutantID:         usr.Id.OpaqueId,
 		ExecutantType:       utils.UserTypeToString(usr.Id.Type),
 		ExecutantUserName:   usr.Username,
 		LogLevel:            sublog.GetLevel().String(),
@@ -139,6 +139,12 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 			SpaceId:  checkNode.SpaceID,
 			OpaqueId: checkNode.ID,
 		}})
+		previousRevisionTime, err := n.GetCurrentRevision(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "Decomposedfs: error current revision of "+n.ID) // TODO this will be the case for all existing files
+			// fallback to mtime?
+		}
+		cs3Metadata.PreviousRevisionTime = previousRevisionTime
 	} else {
 		// check permissions of parent
 		parent, perr := n.Parent(ctx)
@@ -371,7 +377,7 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 
 	n, err := upload.UpdateMetadata(ctx, fs.lu, info.ID, info.Size, uploadMetadata)
 	if err != nil {
-		upload.Cleanup(ctx, fs.lu, n, info.ID, uploadMetadata.RevisionTime, true)
+		upload.Cleanup(ctx, fs.lu, n, info.ID, uploadMetadata.RevisionTime, uploadMetadata.PreviousRevisionTime, true)
 		if tup, ok := up.(tusd.TerminatableUpload); ok {
 			terr := tup.Terminate(ctx)
 			if terr != nil {
@@ -386,7 +392,7 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 			Id: &userpb.UserId{
 				Type:     userpb.UserType(userpb.UserType_value[uploadMetadata.ExecutantType]),
 				Idp:      uploadMetadata.ExecutantIdp,
-				OpaqueId: uploadMetadata.ExecutantId,
+				OpaqueId: uploadMetadata.ExecutantID,
 			},
 			Username: uploadMetadata.ExecutantUserName,
 		}
@@ -412,7 +418,7 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 	if !fs.o.AsyncFileUploads {
 		// handle postprocessing synchronously
 		err = upload.Finalize(ctx, fs.blobstore, uploadMetadata.RevisionTime, info, n) // moving or copying the blob only reads the blobid, no need to change the revision nodes nodeid
-		upload.Cleanup(ctx, fs.lu, n, info.ID, uploadMetadata.RevisionTime, err != nil)
+		upload.Cleanup(ctx, fs.lu, n, info.ID, uploadMetadata.RevisionTime, uploadMetadata.PreviousRevisionTime, err != nil)
 		if tup, ok := up.(tusd.TerminatableUpload); ok {
 			terr := tup.Terminate(ctx)
 			if terr != nil {
@@ -649,7 +655,10 @@ func (fs *Decomposedfs) PurgeExpiredUploads(purgedChan chan<- storage.UploadMeta
 				return err
 			}
 			if tu, ok := up.(tusd.TerminatableUpload); ok {
-				tu.Terminate(context.Background())
+				err = tu.Terminate(context.Background())
+				if err != nil {
+					return err
+				}
 			}
 			err = os.Remove(fs.lu.UploadPath(m.GetID()))
 			if err != nil {
