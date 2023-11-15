@@ -389,7 +389,9 @@ func RoleFromOCSPermissions(p Permissions, ri *provider.ResourceInfo) *Role {
 				return NewEditorRole(true)
 			}
 
-			return NewSpaceEditorRole()
+			if isSpaceRoot(ri) {
+				return NewSpaceEditorRole()
+			}
 		}
 
 		if p == PermissionRead && isSpaceRoot(ri) {
