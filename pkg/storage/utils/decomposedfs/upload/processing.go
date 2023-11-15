@@ -27,7 +27,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/logger"
-	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/tus"
 	"github.com/cs3org/reva/v2/pkg/storage/cache"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
@@ -64,6 +63,11 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload info")
 				continue // NOTE: since we can't get the upload, we can't delete the blob
 			}
+			uploadMetadata, err := ReadMetadata(ctx, lu, info.ID)
+			if err != nil {
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload metadata")
+				continue // NOTE: since we can't get the upload, we can't delete the blob
+			}
 
 			var (
 				failed     bool
@@ -73,15 +77,9 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 			var sizeDiff int64
 			// propagate sizeDiff after failed postprocessing
 
-			n, err := ReadNode(ctx, lu, info)
+			n, err := ReadNode(ctx, lu, uploadMetadata)
 			if err != nil {
-				log.Error().Err(err).Str("uploadID", ev.UploadID).
-					Str("space", info.MetaData[tus.CS3Prefix+"SpaceRoot"]).
-					Str("parent", info.MetaData[tus.CS3Prefix+"NodeParentId"]).
-					Str("node", info.MetaData[tus.CS3Prefix+"NodeId"]).
-					Str("revision", info.MetaData[tus.CS3Prefix+"RevisionTime"]).
-					Str("name", info.MetaData[tus.CS3Prefix+"filename"]).
-					Msg("could not read revision node")
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Interface("metadata", uploadMetadata).Msg("could not read revision node on postprocessing finished")
 				continue
 			}
 
@@ -93,12 +91,12 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 				failed = true
 				keepUpload = true
 			case events.PPOutcomeContinue:
-				if err := Finalize(ctx, blobstore, info, n); err != nil {
+				if err := Finalize(ctx, blobstore, uploadMetadata.RevisionTime, info, n); err != nil {
 					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not finalize upload")
 					keepUpload = true // should we keep the upload when assembling failed?
 					failed = true
 				}
-				sizeDiff, err = SetNodeToRevision(ctx, lu, n, info.MetaData[tus.CS3Prefix+"RevisionTime"])
+				sizeDiff, err = SetNodeToRevision(ctx, lu, n, uploadMetadata.RevisionTime)
 				if err != nil {
 					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could set node to revision upload")
 					keepUpload = true // should we keep the upload when assembling failed?
@@ -132,7 +130,7 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 				}
 			}
 
-			Cleanup(ctx, lu, n, info, failed)
+			Cleanup(ctx, lu, n, info.ID, uploadMetadata.RevisionTime, failed)
 			if !keepUpload {
 				if tup, ok := up.(tusd.TerminatableUpload); ok {
 					terr := tup.Terminate(ctx)
@@ -153,23 +151,23 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 					Failed:   failed,
 					ExecutingUser: &user.User{
 						Id: &user.UserId{
-							Type:     user.UserType(user.UserType_value[info.MetaData[tus.CS3Prefix+"ExecutantType"]]),
-							Idp:      info.MetaData[tus.CS3Prefix+"ExecutantIdp"],
-							OpaqueId: info.MetaData[tus.CS3Prefix+"ExecutantId"],
+							Type:     user.UserType(user.UserType_value[uploadMetadata.ExecutantType]),
+							Idp:      uploadMetadata.ExecutantIdp,
+							OpaqueId: uploadMetadata.ExecutantId,
 						},
-						Username: info.MetaData[tus.CS3Prefix+"ExecutantUserName"],
+						Username: uploadMetadata.ExecutantUserName,
 					},
 					Filename: ev.Filename,
 					FileRef: &provider.Reference{
 						ResourceId: &provider.ResourceId{
-							StorageId: info.MetaData[tus.CS3Prefix+"providerID"],
-							SpaceId:   info.MetaData[tus.CS3Prefix+"SpaceRoot"],
-							OpaqueId:  info.MetaData[tus.CS3Prefix+"SpaceRoot"],
+							StorageId: uploadMetadata.ProviderID,
+							SpaceId:   uploadMetadata.SpaceRoot,
+							OpaqueId:  uploadMetadata.SpaceRoot,
 						},
 						// FIXME this seems wrong, path is not really relative to space root
 						// actually it is: InitiateUpload calls fs.lu.Path to get the path relative to the root so soarch can index the path
 						// hm is that robust? what if the file is moved? shouldn't we store the parent id, then?
-						Path: utils.MakeRelativePath(filepath.Join(info.MetaData[tus.CS3Prefix+"dir"], info.MetaData[tus.CS3Prefix+"filename"])),
+						Path: utils.MakeRelativePath(filepath.Join(uploadMetadata.Dir, uploadMetadata.Filename)),
 					},
 					Timestamp:  utils.TimeToTS(now),
 					SpaceOwner: n.SpaceOwnerOrManager(ctx),
@@ -188,16 +186,15 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload info")
 				continue // NOTE: since we can't get the upload, we can't restart postprocessing
 			}
-
-			n, err := ReadNode(ctx, lu, info)
+			uploadMetadata, err := ReadMetadata(ctx, lu, info.ID)
 			if err != nil {
-				log.Error().Err(err).Str("uploadID", ev.UploadID).
-					Str("space", info.MetaData[tus.CS3Prefix+"SpaceRoot"]).
-					Str("parent", info.MetaData[tus.CS3Prefix+"NodeParentId"]).
-					Str("node", info.MetaData[tus.CS3Prefix+"NodeId"]).
-					Str("revision", info.MetaData[tus.CS3Prefix+"RevisionTime"]).
-					Str("name", info.MetaData[tus.CS3Prefix+"filename"]).
-					Msg("could not read revision node")
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload metadata")
+				continue // NOTE: since we can't get the upload, we can't delete the blob
+			}
+
+			n, err := ReadNode(ctx, lu, uploadMetadata)
+			if err != nil {
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Interface("metadata", uploadMetadata).Msg("could not read revision node on restart postprocessing")
 				continue
 			}
 
@@ -213,7 +210,7 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 				SpaceOwner:    n.SpaceOwnerOrManager(ctx),
 				ExecutingUser: &user.User{Id: &user.UserId{OpaqueId: "postprocessing-restart"}}, // send nil instead?
 				ResourceID:    &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID},
-				Filename:      info.MetaData[tus.CS3Prefix+"filename"],
+				Filename:      uploadMetadata.Filename,
 				Filesize:      uint64(info.Size),
 			}); err != nil {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to publish BytesReceived event")
@@ -323,18 +320,17 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload info")
 					continue
 				}
+				uploadMetadata, err := ReadMetadata(ctx, lu, info.ID)
+				if err != nil {
+					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload metadata")
+					continue // NOTE: since we can't get the upload, we can't delete the blob
+				}
 
 				// scan data should be set on the node revision not the node ... then when postprocessing finishes we need to copy the state to the node
 
-				n, err = ReadNode(ctx, lu, info)
+				n, err = ReadNode(ctx, lu, uploadMetadata)
 				if err != nil {
-					log.Error().Err(err).Str("uploadID", ev.UploadID).
-						Str("space", info.MetaData[tus.CS3Prefix+"SpaceRoot"]).
-						Str("parent", info.MetaData[tus.CS3Prefix+"NodeParentId"]).
-						Str("node", info.MetaData[tus.CS3Prefix+"NodeId"]).
-						Str("revision", info.MetaData[tus.CS3Prefix+"RevisionTime"]).
-						Str("name", info.MetaData[tus.CS3Prefix+"filename"]).
-						Msg("could not read revision node")
+					log.Error().Err(err).Str("uploadID", ev.UploadID).Interface("metadata", uploadMetadata).Msg("could not read revision node on default event")
 					continue
 				}
 			}

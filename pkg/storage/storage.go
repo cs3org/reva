@@ -104,3 +104,15 @@ type UploadRequest struct {
 	Body   io.ReadCloser
 	Length int64
 }
+
+type HasUploadMetadata interface {
+	GetUploadMetadata(uploadID string) (UploadMetadata, error)
+}
+
+type UploadMetadata interface {
+	GetResourceID() provider.ResourceId
+	GetReference() provider.Reference
+	GetExecutantID() userpb.UserId
+	GetSpaceOwner() userpb.UserId
+	GetExpires() string
+}

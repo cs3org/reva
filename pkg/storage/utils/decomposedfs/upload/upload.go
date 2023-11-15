@@ -77,7 +77,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/tus"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
@@ -98,6 +97,7 @@ func init() {
 }
 
 // CreateNewRevision will create a new revision node
+/*
 func CreateNewRevision(ctx context.Context, lu *lookup.Lookup, path string, fsize uint64) (*lockedfile.File, error) {
 	_, span := tracer.Start(ctx, "CreateNewRevision")
 	defer span.End()
@@ -115,6 +115,7 @@ func CreateNewRevision(ctx context.Context, lu *lookup.Lookup, path string, fsiz
 
 	return f, nil
 }
+*/
 
 // CreateNewNode will lock the given node and try to symlink it to the parent
 func CreateNewNode(ctx context.Context, lu *lookup.Lookup, n *node.Node, fsize uint64) (*lockedfile.File, error) {
@@ -167,14 +168,14 @@ func CreateNewNode(ctx context.Context, lu *lookup.Lookup, n *node.Node, fsize u
 // - if the node does not exist it is created and assigned an id, no blob id?
 // - then always write out a revision node
 // - when postprocessing finishes copy metadata to node and replace latest revision node with previous blob info. if blobid is empty delete previous revision completely?
-func CreateRevision(ctx context.Context, lu *lookup.Lookup, info tusd.FileInfo, attrs node.Attributes) (*node.Node, error) {
+func CreateRevision(ctx context.Context, lu *lookup.Lookup, uploadID string, size int64, uploadMetadata Metadata, attrs node.Attributes) (*node.Node, error) {
 	ctx, span := tracer.Start(ctx, "CreateRevision")
 	defer span.End()
-	log := appctx.GetLogger(ctx).With().Str("uploadID", info.ID).Logger()
+	log := appctx.GetLogger(ctx).With().Str("uploadID", uploadID).Logger()
 
 	// check lock
-	if info.MetaData[tus.CS3Prefix+"lockid"] != "" {
-		ctx = ctxpkg.ContextSetLockID(ctx, info.MetaData[tus.CS3Prefix+"lockid"])
+	if uploadMetadata.LockID != "" {
+		ctx = ctxpkg.ContextSetLockID(ctx, uploadMetadata.LockID)
 	}
 
 	var err error
@@ -188,9 +189,9 @@ func CreateRevision(ctx context.Context, lu *lookup.Lookup, info tusd.FileInfo, 
 
 	var n *node.Node
 	var nodeHandle *lockedfile.File
-	if info.MetaData[tus.CS3Prefix+"NodeId"] == "" {
+	if uploadMetadata.NodeId == "" {
 		// we need to check if the node exists via parentid & child name
-		p, err := node.ReadNode(ctx, lu, info.MetaData[tus.CS3Prefix+"SpaceRoot"], info.MetaData[tus.CS3Prefix+"NodeParentId"], false, nil, true)
+		p, err := node.ReadNode(ctx, lu, uploadMetadata.SpaceRoot, uploadMetadata.NodeParentId, false, nil, true)
 		if err != nil {
 			log.Error().Err(err).Msg("could not read parent node")
 			return nil, err
@@ -198,14 +199,14 @@ func CreateRevision(ctx context.Context, lu *lookup.Lookup, info tusd.FileInfo, 
 		if !p.Exists {
 			return nil, errtypes.PreconditionFailed("parent does not exist")
 		}
-		n, err = p.Child(ctx, info.MetaData[tus.CS3Prefix+"filename"])
+		n, err = p.Child(ctx, uploadMetadata.Filename)
 		if err != nil {
 			log.Error().Err(err).Msg("could not read parent node")
 			return nil, err
 		}
 		if !n.Exists {
 			n.ID = uuid.New().String()
-			nodeHandle, err = initNewNode(ctx, lu, info, n)
+			nodeHandle, err = initNewNode(ctx, lu, uploadID, uploadMetadata.RevisionTime, n)
 			if err != nil {
 				log.Error().Err(err).Msg("could not init new node")
 				return nil, err
@@ -222,7 +223,7 @@ func CreateRevision(ctx context.Context, lu *lookup.Lookup, info tusd.FileInfo, 
 	}
 
 	if nodeHandle == nil {
-		n, err = node.ReadNode(ctx, lu, info.MetaData[tus.CS3Prefix+"SpaceRoot"], info.MetaData[tus.CS3Prefix+"NodeId"], false, nil, true)
+		n, err = node.ReadNode(ctx, lu, uploadMetadata.SpaceRoot, uploadMetadata.NodeId, false, nil, true)
 		if err != nil {
 			log.Error().Err(err).Msg("could not read parent node")
 			return nil, err
@@ -243,7 +244,7 @@ func CreateRevision(ctx context.Context, lu *lookup.Lookup, info tusd.FileInfo, 
 		}
 	}()
 
-	err = validateRequest(ctx, info, n)
+	err = validateRequest(ctx, size, uploadMetadata, n)
 	if err != nil {
 		return nil, err
 	}
@@ -255,14 +256,14 @@ func CreateRevision(ctx context.Context, lu *lookup.Lookup, info tusd.FileInfo, 
 	// store new Blobid and Blobsize in node
 	// nodeAttrs.SetString(prefixes.BlobIDAttr, newBlobID) // BlobID is checked when removing a revision to decide if we also need to delete the node
 	// hm ... check if any other revisions are still available?
-	nodeAttrs.SetInt64(prefixes.BlobsizeAttr, info.Size) // FIXME ... argh now the propagation needs to revert the size diff propagation again
-	nodeAttrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+info.ID)
+	nodeAttrs.SetInt64(prefixes.BlobsizeAttr, size) // FIXME ... argh now the propagation needs to revert the size diff propagation again
+	nodeAttrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+uploadID)
 	err = n.SetXattrsWithContext(ctx, nodeAttrs, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
 	}
 
-	revisionNode, err := n.ReadRevision(ctx, info.MetaData[tus.CS3Prefix+"RevisionTime"])
+	revisionNode, err := n.ReadRevision(ctx, uploadMetadata.RevisionTime)
 	if err != nil {
 		return nil, err
 	}
@@ -281,19 +282,8 @@ func CreateRevision(ctx context.Context, lu *lookup.Lookup, info tusd.FileInfo, 
 		return nil, err
 	}
 
-	// set upload related metadata
-	if info.MetaData[tus.TusPrefix+"mtime"] == "" {
-		attrs.SetString(prefixes.MTimeAttr, info.MetaData[tus.CS3Prefix+"RevisionTime"])
-	} else {
-		// overwrite mtime if requested
-		mtime, err := utils.MTimeToTime(info.MetaData[tus.TusPrefix+"mtime"])
-		if err != nil {
-			return nil, err
-		}
-		attrs.SetString(prefixes.MTimeAttr, mtime.UTC().Format(time.RFC3339Nano))
-	}
 	attrs.SetString(prefixes.BlobIDAttr, newBlobID)
-	attrs.SetInt64(prefixes.BlobsizeAttr, info.Size)
+	attrs.SetInt64(prefixes.BlobsizeAttr, size)
 	// TODO we should persist all versions as writes with ranges and the blobid in the node metadata
 	// attrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+info.ID)
 
@@ -305,12 +295,12 @@ func CreateRevision(ctx context.Context, lu *lookup.Lookup, info tusd.FileInfo, 
 	return n, nil
 }
 
-func validateRequest(ctx context.Context, info tusd.FileInfo, n *node.Node) error {
+func validateRequest(ctx context.Context, size int64, uploadMetadata Metadata, n *node.Node) error {
 	if err := n.CheckLock(ctx); err != nil {
 		return err
 	}
 
-	if _, err := node.CheckQuota(ctx, n.SpaceRoot, true, uint64(n.Blobsize), uint64(info.Size)); err != nil {
+	if _, err := node.CheckQuota(ctx, n.SpaceRoot, true, uint64(n.Blobsize), uint64(size)); err != nil {
 		return err
 	}
 
@@ -325,19 +315,19 @@ func validateRequest(ctx context.Context, info tusd.FileInfo, n *node.Node) erro
 
 	// When the if-match header was set we need to check if the
 	// etag still matches before finishing the upload.
-	if ifMatch, ok := info.MetaData[tus.CS3Prefix+"if-match"]; ok {
-		if ifMatch != currentEtag {
+	if uploadMetadata.HeaderIfMatch != "" {
+		if uploadMetadata.HeaderIfMatch != currentEtag {
 			return errtypes.Aborted("etag mismatch")
 		}
 	}
 
 	// When the if-none-match header was set we need to check if any of the
 	// etags matches before finishing the upload.
-	if ifNoneMatch, ok := info.MetaData[tus.CS3Prefix+"if-none-match"]; ok {
-		if ifNoneMatch == "*" {
+	if uploadMetadata.HeaderIfNoneMatch != "" {
+		if uploadMetadata.HeaderIfNoneMatch == "*" {
 			return errtypes.Aborted("etag mismatch, resource exists")
 		}
-		for _, ifNoneMatchTag := range strings.Split(ifNoneMatch, ",") {
+		for _, ifNoneMatchTag := range strings.Split(uploadMetadata.HeaderIfNoneMatch, ",") {
 			if ifNoneMatchTag == currentEtag {
 				return errtypes.Aborted("etag mismatch")
 			}
@@ -346,11 +336,11 @@ func validateRequest(ctx context.Context, info tusd.FileInfo, n *node.Node) erro
 
 	// When the if-unmodified-since header was set we need to check if the
 	// etag still matches before finishing the upload.
-	if ifUnmodifiedSince, ok := info.MetaData[tus.CS3Prefix+"if-unmodified-since"]; ok {
+	if uploadMetadata.HeaderIfUnmodifiedSince != "" {
 		if err != nil {
 			return errtypes.InternalError(fmt.Sprintf("failed to read mtime of node: %s", err))
 		}
-		ifUnmodifiedSince, err := time.Parse(time.RFC3339Nano, ifUnmodifiedSince)
+		ifUnmodifiedSince, err := time.Parse(time.RFC3339Nano, uploadMetadata.HeaderIfUnmodifiedSince)
 		if err != nil {
 			return errtypes.InternalError(fmt.Sprintf("failed to parse if-unmodified-since time: %s", err))
 		}
@@ -366,7 +356,7 @@ func openExistingNode(ctx context.Context, lu *lookup.Lookup, n *node.Node) (*lo
 	// create and read lock existing node metadata
 	return lockedfile.OpenFile(lu.MetadataBackend().LockfilePath(n.InternalPath()), os.O_RDONLY, 0600)
 }
-func initNewNode(ctx context.Context, lu *lookup.Lookup, info tusd.FileInfo, n *node.Node) (*lockedfile.File, error) {
+func initNewNode(ctx context.Context, lu *lookup.Lookup, uploadID, mtime string, n *node.Node) (*lockedfile.File, error) {
 	nodePath := n.InternalPath()
 	// create folder structure (if needed)
 	if err := os.MkdirAll(filepath.Dir(nodePath), 0700); err != nil {
@@ -407,10 +397,10 @@ func initNewNode(ctx context.Context, lu *lookup.Lookup, info tusd.FileInfo, n *
 	attrs.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_FILE))
 	attrs.SetString(prefixes.ParentidAttr, n.ParentID)
 	attrs.SetString(prefixes.NameAttr, n.Name)
-	attrs.SetString(prefixes.MTimeAttr, info.MetaData[tus.CS3Prefix+"RevisionTime"]) // TODO use mtime
+	attrs.SetString(prefixes.MTimeAttr, mtime) // TODO use mtime
 
 	// here we set the status the first time.
-	attrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+info.ID)
+	attrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+uploadID)
 
 	// update node metadata with basic metadata
 	err = n.SetXattrsWithContext(ctx, attrs, false)
@@ -489,20 +479,20 @@ func SetNodeToRevision(ctx context.Context, lu *lookup.Lookup, n *node.Node, rev
 	return sizeDiff, nil
 }
 
-func ReadNode(ctx context.Context, lu *lookup.Lookup, info tusd.FileInfo) (*node.Node, error) {
+func ReadNode(ctx context.Context, lu *lookup.Lookup, uploadMetadata Metadata) (*node.Node, error) {
 	var n *node.Node
 	var err error
-	if info.MetaData[tus.CS3Prefix+"NodeId"] == "" {
-		p, err := node.ReadNode(ctx, lu, info.MetaData[tus.CS3Prefix+"SpaceRoot"], info.MetaData[tus.CS3Prefix+"NodeParentId"], false, nil, true)
+	if uploadMetadata.NodeId == "" {
+		p, err := node.ReadNode(ctx, lu, uploadMetadata.SpaceRoot, uploadMetadata.NodeParentId, false, nil, true)
 		if err != nil {
 			return nil, err
 		}
-		n, err = p.Child(ctx, info.MetaData[tus.CS3Prefix+"filename"])
+		n, err = p.Child(ctx, uploadMetadata.Filename)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		n, err = node.ReadNode(ctx, lu, info.MetaData[tus.CS3Prefix+"SpaceRoot"], info.MetaData[tus.CS3Prefix+"NodeId"], false, nil, true)
+		n, err = node.ReadNode(ctx, lu, uploadMetadata.SpaceRoot, uploadMetadata.NodeId, false, nil, true)
 		if err != nil {
 			return nil, err
 		}
@@ -511,16 +501,16 @@ func ReadNode(ctx context.Context, lu *lookup.Lookup, info tusd.FileInfo) (*node
 }
 
 // Cleanup cleans the upload
-func Cleanup(ctx context.Context, lu *lookup.Lookup, n *node.Node, info tusd.FileInfo, failure bool) {
+func Cleanup(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploadID, revision string, failure bool) {
 	ctx, span := tracer.Start(ctx, "Cleanup")
 	defer span.End()
 
 	if n != nil { // node can be nil when there was an error before it was created (eg. checksum-mismatch)
 		if failure {
-			removeRevision(ctx, lu, n, info.MetaData[tus.CS3Prefix+"RevisionTime"])
+			removeRevision(ctx, lu, n, revision)
 		}
 		// unset processing status
-		if err := n.UnmarkProcessing(ctx, info.ID); err != nil {
+		if err := n.UnmarkProcessing(ctx, uploadID); err != nil {
 			log := appctx.GetLogger(ctx)
 			log.Info().Str("path", n.InternalPath()).Err(err).Msg("unmarking processing failed")
 		}
@@ -561,11 +551,11 @@ func removeRevision(ctx context.Context, lu *lookup.Lookup, n *node.Node, revisi
 }
 
 // Finalize finalizes the upload (eg moves the file to the internal destination)
-func Finalize(ctx context.Context, blobstore tree.Blobstore, info tusd.FileInfo, n *node.Node) error {
+func Finalize(ctx context.Context, blobstore tree.Blobstore, revision string, info tusd.FileInfo, n *node.Node) error {
 	_, span := tracer.Start(ctx, "Finalize")
 	defer span.End()
 
-	rn, err := n.ReadRevision(ctx, info.MetaData[tus.CS3Prefix+"RevisionTime"])
+	rn, err := n.ReadRevision(ctx, revision)
 	if err != nil {
 		return errors.Wrap(err, "failed to read revision")
 	}

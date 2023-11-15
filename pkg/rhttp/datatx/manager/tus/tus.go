@@ -26,13 +26,11 @@ import (
 	"log"
 	"net/http"
 	"path"
-	"path/filepath"
 	"time"
 
 	"github.com/pkg/errors"
 	tusd "github.com/tus/tusd/pkg/handler"
 
-	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/pkg/appctx"
@@ -45,7 +43,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/cache"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
-	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -127,6 +124,8 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		}
 	}
 
+	umg, _ := fs.(storage.HasUploadMetadata)
+
 	handler, err := tusd.NewUnroutedHandler(config)
 	if err != nil {
 		return nil, err
@@ -136,28 +135,37 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		for {
 			ev := <-handler.CompleteUploads
 			info := ev.Upload
-			spaceOwner := &userv1beta1.UserId{
-				OpaqueId: info.MetaData[CS3Prefix+"SpaceOwnerOrManager"],
+			um, err := umg.GetUploadMetadata(info.ID)
+			if err != nil {
+				appctx.GetLogger(context.Background()).Error().Err(err).Msg("failed to get upload metadata on publish FileUploaded event")
 			}
-			executant := &userv1beta1.UserId{
-				Type:     userv1beta1.UserType(userv1beta1.UserType_value[info.MetaData[CS3Prefix+"ExecutantType"]]),
-				Idp:      info.MetaData[CS3Prefix+"ExecutantIdp"],
-				OpaqueId: info.MetaData[CS3Prefix+"ExecutantId"],
-			}
-			ref := &provider.Reference{
-				ResourceId: &provider.ResourceId{
-					StorageId: info.MetaData[CS3Prefix+"providerID"],
-					SpaceId:   info.MetaData[CS3Prefix+"SpaceRoot"],
-					OpaqueId:  info.MetaData[CS3Prefix+"SpaceRoot"],
-				},
-				// FIXME this seems wrong, path is not really relative to space root
-				// actually it is: InitiateUpload calls fs.lu.Path to get the path relative to the root...
-				// hm is that robust? what if the file is moved? shouldn't we store the parent id, then?
-				Path: utils.MakeRelativePath(filepath.Join(info.MetaData[CS3Prefix+"dir"], info.MetaData[CS3Prefix+"filename"])),
-			}
-			datatx.InvalidateCache(executant, ref, m.statCache)
+			/*
+				spaceOwner := &userv1beta1.UserId{
+					OpaqueId: info.MetaData[CS3Prefix+"SpaceOwnerOrManager"],
+				}
+					executant := &userv1beta1.UserId{
+						Type:     userv1beta1.UserType(userv1beta1.UserType_value[info.MetaData[CS3Prefix+"ExecutantType"]]),
+						Idp:      info.MetaData[CS3Prefix+"ExecutantIdp"],
+						OpaqueId: info.MetaData[CS3Prefix+"ExecutantId"],
+					}
+				ref := &provider.Reference{
+					ResourceId: &provider.ResourceId{
+						StorageId: info.MetaData[CS3Prefix+"providerID"],
+						SpaceId:   info.MetaData[CS3Prefix+"SpaceRoot"],
+						OpaqueId:  info.MetaData[CS3Prefix+"SpaceRoot"],
+					},
+					// FIXME this seems wrong, path is not really relative to space root
+					// actually it is: InitiateUpload calls fs.lu.Path to get the path relative to the root...
+					// hm is that robust? what if the file is moved? shouldn't we store the parent id, then?
+					Path: utils.MakeRelativePath(filepath.Join(info.MetaData[CS3Prefix+"dir"], info.MetaData[CS3Prefix+"filename"])),
+				}
+			*/
+			spaceOwner := um.GetSpaceOwner()
+			executant := um.GetExecutantID()
+			ref := um.GetReference()
+			datatx.InvalidateCache(&executant, &ref, m.statCache)
 			if m.publisher != nil {
-				if err := datatx.EmitFileUploadedEvent(spaceOwner, executant, ref, m.publisher); err != nil {
+				if err := datatx.EmitFileUploadedEvent(&spaceOwner, &executant, &ref, m.publisher); err != nil {
 					appctx.GetLogger(context.Background()).Error().Err(err).Msg("failed to publish FileUploaded event")
 				}
 			}
@@ -165,9 +173,6 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	}()
 
 	h := handler.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// filter metadata headers
-		w = NewFilterResponseWriter(w)
-
 		method := r.Method
 		// https://github.com/tus/tus-resumable-upload-protocol/blob/master/protocol.md#x-http-method-override
 		if r.Header.Get("X-HTTP-Method-Override") != "" {
@@ -181,7 +186,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				metrics.UploadsActive.Sub(1)
 			}()
 			// set etag, mtime and file id
-			setHeaders(dataStore, w, r)
+			setHeaders(dataStore, umg, w, r)
 			handler.PostFile(w, r)
 		case "HEAD":
 			handler.HeadFile(w, r)
@@ -191,7 +196,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				metrics.UploadsActive.Sub(1)
 			}()
 			// set etag, mtime and file id
-			setHeaders(dataStore, w, r)
+			setHeaders(dataStore, umg, w, r)
 			handler.PatchFile(w, r)
 		case "DELETE":
 			handler.DelFile(w, r)
@@ -223,20 +228,32 @@ type hasTusDatastore interface {
 	GetDataStore() tusd.DataStore
 }
 
-func setHeaders(datastore tusd.DataStore, w http.ResponseWriter, r *http.Request) {
+func setHeaders(datastore tusd.DataStore, umg storage.HasUploadMetadata, w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := path.Base(r.URL.Path)
-	upload, err := datastore.GetUpload(ctx, id)
+	u, err := datastore.GetUpload(ctx, id)
 	if err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Msg("could not get upload from storage")
 		return
 	}
-	info, err := upload.GetInfo(ctx)
+	info, err := u.GetInfo(ctx)
 	if err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Msg("could not get upload info for upload")
 		return
 	}
-	expires := info.MetaData[CS3Prefix+"expires"]
+	expires := ""
+	resourceid := provider.ResourceId{}
+	if umg != nil {
+		um, err := umg.GetUploadMetadata(info.ID)
+		if err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Msg("could not get upload info for upload")
+			return
+		}
+		expires = um.GetExpires()
+		resourceid = um.GetResourceID()
+	}
+
+	// FIXME expires should be part of the tus handler
 	// fallback for outdated storageproviders that implement a tus datastore
 	if expires == "" {
 		expires = info.MetaData["expires"]
@@ -244,11 +261,7 @@ func setHeaders(datastore tusd.DataStore, w http.ResponseWriter, r *http.Request
 	if expires != "" {
 		w.Header().Set(net.HeaderTusUploadExpires, expires)
 	}
-	resourceid := provider.ResourceId{
-		StorageId: info.MetaData[CS3Prefix+"providerID"],
-		SpaceId:   info.MetaData[CS3Prefix+"SpaceRoot"],
-		OpaqueId:  info.MetaData[CS3Prefix+"NodeId"],
-	}
+
 	// fallback for outdated storageproviders that implement a tus datastore
 	if resourceid.StorageId == "" {
 		resourceid.StorageId = info.MetaData["providerID"]

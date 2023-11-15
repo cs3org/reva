@@ -45,7 +45,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/logger"
-	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/tus"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
@@ -63,7 +62,7 @@ var _idRegexp = regexp.MustCompile(".*/([^/]+).info")
 // TODO read optional content for small files in this request
 // TODO InitiateUpload (and Upload) needs a way to receive the expected checksum. Maybe in metadata as 'checksum' => 'sha1 aeosvp45w5xaeoe' = lowercase, space separated?
 // TODO needs a way to handle unknown filesize, currently uses the context
-// FIXME metadata is actually used to carry all kinds of headers
+// FIXME headers is actually used to carry all kinds of headers
 func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, headers map[string]string) (map[string]string, error) {
 
 	n, err := fs.lu.NodeFromResource(ctx, ref)
@@ -85,6 +84,22 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		return nil, err
 	}
 
+	usr := ctxpkg.ContextMustGetUser(ctx)
+	cs3Metadata := upload.Metadata{
+		Filename:            n.Name,
+		SpaceRoot:           n.SpaceRoot.ID,
+		SpaceOwnerOrManager: n.SpaceOwnerOrManager(ctx).GetOpaqueId(),
+		ProviderID:          headers["providerID"],
+		RevisionTime:        time.Now().UTC().Format(time.RFC3339Nano),
+		NodeId:              n.ID,
+		NodeParentId:        n.ParentID,
+		ExecutantIdp:        usr.Id.Idp,
+		ExecutantId:         usr.Id.OpaqueId,
+		ExecutantType:       utils.UserTypeToString(usr.Id.Type),
+		ExecutantUserName:   usr.Username,
+		LogLevel:            sublog.GetLevel().String(),
+	}
+
 	tusMetadata := tusd.MetaData{}
 
 	// checksum is sent as tus Upload-Checksum header and should not magically become a metadata property
@@ -95,7 +110,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		}
 		switch parts[0] {
 		case "sha1", "md5", "adler32":
-			tusMetadata[tus.CS3Prefix+"checksum"] = checksum
+			cs3Metadata.Checksum = checksum
 		default:
 			return nil, errtypes.BadRequest("unsupported checksum algorithm: " + parts[0])
 		}
@@ -104,7 +119,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	// if mtime has been set via tus metadata, expose it as tus metadata
 	if ocmtime, ok := headers["mtime"]; ok {
 		if ocmtime != "null" {
-			tusMetadata[tus.TusPrefix+"mtime"] = ocmtime
+			tusMetadata["mtime"] = ocmtime
 		}
 	}
 
@@ -156,8 +171,6 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		return nil, err
 	}
 
-	usr := ctxpkg.ContextMustGetUser(ctx)
-
 	// treat 0 length uploads as deferred
 	sizeIsDeferred := false
 	if uploadLength == 0 {
@@ -170,13 +183,13 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		SizeIsDeferred: sizeIsDeferred,
 	}
 	if lockID, ok := ctxpkg.ContextGetLockID(ctx); ok {
-		info.MetaData[tus.CS3Prefix+"lockid"] = lockID
+		cs3Metadata.LockID = lockID
 	}
-	info.MetaData[tus.CS3Prefix+"dir"] = filepath.Dir(relative)
+	cs3Metadata.Dir = filepath.Dir(relative)
 
 	// rewrite filename for old chunking v1
 	if chunking.IsChunked(n.Name) {
-		info.MetaData[tus.CS3Prefix+"chunk"] = n.Name
+		cs3Metadata.Chunk = n.Name
 		bi, err := chunking.GetChunkBLOBInfo(n.Name)
 		if err != nil {
 			return nil, err
@@ -184,81 +197,47 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		n.Name = bi.Path
 	}
 
-	info.MetaData[tus.CS3Prefix+"filename"] = n.Name
-	info.MetaData[tus.CS3Prefix+"SpaceRoot"] = n.SpaceRoot.ID
-	info.MetaData[tus.CS3Prefix+"SpaceOwnerOrManager"] = n.SpaceOwnerOrManager(ctx).GetOpaqueId()
-	info.MetaData[tus.CS3Prefix+"providerID"] = headers["providerID"]
-
-	// we always use the current time as the revision time
-	info.MetaData[tus.CS3Prefix+"RevisionTime"] = time.Now().UTC().Format(time.RFC3339Nano)
-
-	// unless the request has an mtime that matches the current mtime
-	if tusMetadata[tus.TusPrefix+"mtime"] != "" {
-		// AFAICT the idea is to allow clients to resend requests and overwrite the latest revision
-
-		// this leads to not keeping track of every revision regardless of mtime
-		mtime, err := utils.MTimeToTime(info.MetaData[tus.TusPrefix+"mtime"])
-		if err != nil {
-			return nil, err
-		}
-
-		currentMTime, err := n.GetMTime(ctx)
-		if err != nil {
-			return nil, err
-		}
-		// if the current mtime is the same as the mtime in the request
-		if currentMTime.Equal(mtime) {
-			//  overwrite the existing revision
-			info.MetaData[tus.CS3Prefix+"RevisionTime"], err = n.GetCurrentRevision(ctx)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			info.MetaData[tus.CS3Prefix+"RevisionTime"] = mtime.UTC().Format(time.RFC3339Nano)
-		}
-	}
-
-	info.MetaData[tus.CS3Prefix+"NodeId"] = n.ID
-	info.MetaData[tus.CS3Prefix+"NodeParentId"] = n.ParentID
-
-	info.MetaData[tus.CS3Prefix+"ExecutantIdp"] = usr.Id.Idp
-	info.MetaData[tus.CS3Prefix+"ExecutantId"] = usr.Id.OpaqueId
-	info.MetaData[tus.CS3Prefix+"ExecutantType"] = utils.UserTypeToString(usr.Id.Type)
-	info.MetaData[tus.CS3Prefix+"ExecutantUserName"] = usr.Username
-
-	info.MetaData[tus.CS3Prefix+"LogLevel"] = sublog.GetLevel().String()
 	// TODO at this point we have no way to figure out the output or mode of the logger. we need that to reinitialize a logger in PreFinishResponseCallback
 	// or better create a config option for the log level during PreFinishResponseCallback? might be easier for now
 
 	// expires has been set by the storageprovider, do not expose as metadata. It is sent as a tus Upload-Expires header
 	if expiration, ok := headers["expires"]; ok {
 		if expiration != "null" { // TODO this is set by the storageprovider ... it cannot be set by cliensts, so it can never be the string 'null' ... or can it???
-			info.MetaData[tus.CS3Prefix+"expires"] = expiration
+			cs3Metadata.Expires = expiration
 		}
 	}
 	// only check preconditions if they are not empty
 	// do not expose as metadata
 	if headers["if-match"] != "" {
-		info.MetaData[tus.CS3Prefix+"if-match"] = headers["if-match"] // TODO drop?
+		cs3Metadata.HeaderIfMatch = headers["if-match"] // TODO drop?
 	}
 	if headers["if-none-match"] != "" {
-		info.MetaData[tus.CS3Prefix+"if-none-match"] = headers["if-none-match"]
+		cs3Metadata.HeaderIfNoneMatch = headers["if-none-match"]
 	}
 	if headers["if-unmodified-since"] != "" {
-		info.MetaData[tus.CS3Prefix+"if-unmodified-since"] = headers["if-unmodified-since"]
+		cs3Metadata.HeaderIfUnmodifiedSince = headers["if-unmodified-since"]
 	}
 
-	if info.MetaData[tus.CS3Prefix+"if-none-match"] == "*" && n.Exists {
+	if cs3Metadata.HeaderIfNoneMatch == "*" && n.Exists {
 		return nil, errtypes.Aborted(fmt.Sprintf("parent %s already has a child %s", n.ID, n.Name))
 	}
 
 	// create the upload
-	upload, err := fs.tusDataStore.NewUpload(ctx, info)
+	u, err := fs.tusDataStore.NewUpload(ctx, info)
 	if err != nil {
 		return nil, err
 	}
 
-	info, _ = upload.GetInfo(ctx)
+	info, err = u.GetInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// keep track of upload
+	err = upload.WriteMetadata(ctx, fs.lu, n.SpaceID, n.ID, info.ID, cs3Metadata)
+	if err != nil {
+		return nil, err
+	}
 
 	sublog.Debug().Interface("info", info).Msg("Decomposedfs: initiated upload")
 
@@ -286,16 +265,21 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 		return err
 	}
 
+	uploadMetadata, err := upload.ReadMetadata(ctx, fs.lu, info.ID)
+	if err != nil {
+		return err
+	}
+
 	// put lockID from upload back into context
-	if info.MetaData[tus.CS3Prefix+"lockid"] != "" {
-		ctx = ctxpkg.ContextSetLockID(ctx, info.MetaData[tus.CS3Prefix+"lockid"])
+	if uploadMetadata.LockID != "" {
+		ctx = ctxpkg.ContextSetLockID(ctx, uploadMetadata.LockID)
 	}
 
 	// restore logger from file info
 	log, err := logger.FromConfig(&logger.LogConf{
 		Output: "stdout",
 		Mode:   "json",
-		Level:  info.MetaData[tus.CS3Prefix+"LogLevel"],
+		Level:  uploadMetadata.LogLevel,
 	})
 	if err != nil {
 		return err
@@ -341,9 +325,9 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 
 	// compare if they match the sent checksum
 	// TODO the tus checksum extension would do this on every chunk, but I currently don't see an easy way to pass in the requested checksum. for now we do it in FinishUpload which is also called for chunked uploads
-	if info.MetaData[tus.CS3Prefix+"checksum"] != "" {
+	if uploadMetadata.Checksum != "" {
 		var err error
-		parts := strings.SplitN(info.MetaData[tus.CS3Prefix+"checksum"], " ", 2)
+		parts := strings.SplitN(uploadMetadata.Checksum, " ", 2)
 		if len(parts) != 2 {
 			return errtypes.BadRequest("invalid checksum format. must be '[algorithm] [checksum]'")
 		}
@@ -375,9 +359,21 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 		prefixes.ChecksumPrefix + "adler32": adler32h.Sum(nil),
 	}
 
-	n, err := upload.CreateRevision(ctx, fs.lu, info, attrs)
+	// set mtime for revision
+	if info.MetaData["mtime"] == "" {
+		attrs.SetString(prefixes.MTimeAttr, uploadMetadata.RevisionTime)
+	} else {
+		// overwrite mtime if requested
+		mtime, err := utils.MTimeToTime(info.MetaData["mtime"])
+		if err != nil {
+			return err
+		}
+		attrs.SetString(prefixes.MTimeAttr, mtime.UTC().Format(time.RFC3339Nano))
+	}
+
+	n, err := upload.CreateRevision(ctx, fs.lu, info.ID, info.Size, uploadMetadata, attrs)
 	if err != nil {
-		upload.Cleanup(ctx, fs.lu, n, info, true)
+		upload.Cleanup(ctx, fs.lu, n, info.ID, uploadMetadata.RevisionTime, true)
 		if tup, ok := up.(tusd.TerminatableUpload); ok {
 			terr := tup.Terminate(ctx)
 			if terr != nil {
@@ -390,11 +386,11 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 	if fs.stream != nil {
 		user := &userpb.User{
 			Id: &userpb.UserId{
-				Type:     userpb.UserType(userpb.UserType_value[info.MetaData[tus.CS3Prefix+"ExecutantType"]]),
-				Idp:      info.MetaData[tus.CS3Prefix+"ExecutantIdp"],
-				OpaqueId: info.MetaData[tus.CS3Prefix+"ExecutantId"],
+				Type:     userpb.UserType(userpb.UserType_value[uploadMetadata.ExecutantType]),
+				Idp:      uploadMetadata.ExecutantIdp,
+				OpaqueId: uploadMetadata.ExecutantId,
 			},
-			Username: info.MetaData[tus.CS3Prefix+"ExecutantUserName"],
+			Username: uploadMetadata.ExecutantUserName,
 		}
 		s, err := fs.downloadURL(ctx, info.ID)
 		if err != nil {
@@ -407,7 +403,7 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 			SpaceOwner:    n.SpaceOwnerOrManager(ctx),
 			ExecutingUser: user,
 			ResourceID:    &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID},
-			Filename:      info.MetaData[tus.CS3Prefix+"filename"],
+			Filename:      uploadMetadata.Filename,
 			Filesize:      uint64(info.Size),
 		}); err != nil {
 			return err
@@ -417,8 +413,8 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 	sizeDiff := info.Size - n.Blobsize
 	if !fs.o.AsyncFileUploads {
 		// handle postprocessing synchronously
-		err = upload.Finalize(ctx, fs.blobstore, info, n) // moving or copying the blob only reads the blobid, no need to change the revision nodes nodeid
-		upload.Cleanup(ctx, fs.lu, n, info, err != nil)
+		err = upload.Finalize(ctx, fs.blobstore, uploadMetadata.RevisionTime, info, n) // moving or copying the blob only reads the blobid, no need to change the revision nodes nodeid
+		upload.Cleanup(ctx, fs.lu, n, info.ID, uploadMetadata.RevisionTime, err != nil)
 		if tup, ok := up.(tusd.TerminatableUpload); ok {
 			terr := tup.Terminate(ctx)
 			if terr != nil {
@@ -429,7 +425,7 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 			log.Error().Err(err).Msg("failed to upload")
 			return err
 		}
-		sizeDiff, err = upload.SetNodeToRevision(ctx, fs.lu, n, info.MetaData[tus.CS3Prefix+"RevisionTime"])
+		sizeDiff, err = upload.SetNodeToRevision(ctx, fs.lu, n, uploadMetadata.RevisionTime)
 		if err != nil {
 			log.Error().Err(err).Msg("failed update Node to revision")
 			return err
@@ -492,7 +488,12 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 		return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error retrieving upload info")
 	}
 
-	p := uploadInfo.MetaData[tus.CS3Prefix+"chunk"]
+	uploadMetadata, err := upload.ReadMetadata(ctx, fs.lu, uploadInfo.ID)
+	if err != nil {
+		return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error retrieving upload metadata")
+	}
+
+	p := uploadMetadata.Chunk
 	if chunking.IsChunked(p) { // check chunking v1
 		var assembledFile string
 		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, req.Body)
@@ -566,7 +567,7 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 		return provider.ResourceInfo{}, err
 	}
 
-	n, err := upload.ReadNode(ctx, fs.lu, uploadInfo)
+	n, err := upload.ReadNode(ctx, fs.lu, uploadMetadata)
 	if err != nil {
 		return provider.ResourceInfo{}, err
 	}
@@ -576,11 +577,11 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 		// but then the search has to walk the path. it might be more efficient if search called GetPath itself ... or we send the path as additional metadata in the event
 		uploadRef := &provider.Reference{
 			ResourceId: &provider.ResourceId{
-				StorageId: uploadInfo.MetaData[tus.CS3Prefix+"providerID"],
+				StorageId: uploadMetadata.ProviderID,
 				SpaceId:   n.SpaceID,
 				OpaqueId:  n.SpaceID,
 			},
-			Path: utils.MakeRelativePath(filepath.Join(uploadInfo.MetaData[tus.CS3Prefix+"dir"], uploadInfo.MetaData[tus.CS3Prefix+"filename"])),
+			Path: utils.MakeRelativePath(filepath.Join(uploadMetadata.Dir, uploadMetadata.Filename)),
 		}
 		excutant, ok := ctxpkg.ContextGetUser(ctx)
 		if !ok {
@@ -601,14 +602,14 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 	ri := provider.ResourceInfo{
 		// fill with at least fileid, mtime and etag
 		Id: &provider.ResourceId{
-			StorageId: uploadInfo.MetaData[tus.CS3Prefix+"providerID"],
+			StorageId: uploadMetadata.ProviderID,
 			SpaceId:   n.SpaceID,
 			OpaqueId:  n.ID,
 		},
 		Etag: etag,
 	}
 
-	if mtime, err := utils.MTimeToTS(uploadInfo.MetaData[tus.TusPrefix+"mtime"]); err == nil {
+	if mtime, err := utils.MTimeToTS(uploadInfo.MetaData["mtime"]); err == nil {
 		ri.Mtime = &mtime
 	}
 
@@ -616,6 +617,11 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 }
 
 // FIXME all the below functions should needs a dedicated package ... the tusd datastore interface has no way of listing uploads, so we need to extend them
+
+// ListUploads returns a list of all incomplete uploads
+func (fs *Decomposedfs) UploadMetadata(ctx context.Context, uploadID string) (storage.UploadMetadata, error) {
+	return upload.ReadMetadata(ctx, fs.lu, uploadID)
+}
 
 // ListUploads returns a list of all incomplete uploads
 func (fs *Decomposedfs) ListUploads() ([]tusd.FileInfo, error) {
@@ -630,7 +636,11 @@ func (fs *Decomposedfs) PurgeExpiredUploads(purgedChan chan<- tusd.FileInfo) err
 	}
 
 	for _, info := range infos {
-		expires, err := strconv.Atoi(info.MetaData[tus.CS3Prefix+"expires"])
+		uploadMetadata, err := upload.ReadMetadata(context.TODO(), fs.lu, info.ID)
+		if err != nil {
+			continue
+		}
+		expires, err := strconv.Atoi(uploadMetadata.Expires)
 		if err != nil {
 			continue
 		}
@@ -644,6 +654,10 @@ func (fs *Decomposedfs) PurgeExpiredUploads(purgedChan chan<- tusd.FileInfo) err
 			if err != nil {
 				return err
 			}
+			err = os.Remove(fs.lu.UploadPath(info.ID))
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -651,7 +665,7 @@ func (fs *Decomposedfs) PurgeExpiredUploads(purgedChan chan<- tusd.FileInfo) err
 
 func (fs *Decomposedfs) uploadInfos(ctx context.Context) ([]tusd.FileInfo, error) {
 	infos := []tusd.FileInfo{}
-	infoFiles, err := filepath.Glob(filepath.Join(fs.o.Root, "uploads", "*.info")) // FIXME
+	infoFiles, err := filepath.Glob(filepath.Join(fs.o.Root, "uploads", "*.mpk")) // FIXME
 	if err != nil {
 		return nil, err
 	}
