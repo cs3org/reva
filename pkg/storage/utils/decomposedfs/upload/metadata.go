@@ -25,24 +25,41 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
+	"github.com/rogpeppe/go-internal/lockedfile"
 	"github.com/shamaton/msgpack/v2"
 )
 
 type Metadata struct {
-	Filename                string
-	SpaceRoot               string
-	SpaceOwnerOrManager     string
-	ProviderID              string
-	RevisionTime            string
-	NodeId                  string
-	NodeParentId            string
-	ExecutantIdp            string
-	ExecutantId             string
-	ExecutantType           string
-	ExecutantUserName       string
-	LogLevel                string
-	Checksum                string
+	ID                  string
+	Filename            string
+	SpaceRoot           string
+	SpaceOwnerOrManager string
+	ProviderID          string
+	RevisionTime        string
+	MTime               string
+	NodeId              string
+	NodeParentId        string
+	ExecutantIdp        string
+	ExecutantId         string
+	ExecutantType       string
+	ExecutantUserName   string
+	LogLevel            string
+	Checksum            string
+	ChecksumSHA1        []byte
+	ChecksumADLER32     []byte
+	ChecksumMD5         []byte
+
+	BlobID   string
+	BlobSize int64
+
 	Chunk                   string
 	Dir                     string
 	LockID                  string
@@ -53,7 +70,7 @@ type Metadata struct {
 }
 
 // WriteMetadata will create a metadata file to keep track of an upload
-func WriteMetadata(ctx context.Context, lu *lookup.Lookup, spaceID, nodeID, uploadID string, metadata Metadata) error {
+func WriteMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, metadata Metadata) error {
 	_, span := tracer.Start(ctx, "WriteMetadata")
 	defer span.End()
 
@@ -102,6 +119,150 @@ func ReadMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string) (Meta
 	return metadata, nil
 }
 
+// UpdateMetadata will create the target node for the Upload
+// - if the node does not exist it is created and assigned an id, no blob id?
+// - then always write out a revision node
+// - when postprocessing finishes copy metadata to node and replace latest revision node with previous blob info. if blobid is empty delete previous revision completely?
+func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, size int64, uploadMetadata Metadata) (*node.Node, error) {
+	ctx, span := tracer.Start(ctx, "UpdateMetadata")
+	defer span.End()
+	log := appctx.GetLogger(ctx).With().Str("uploadID", uploadID).Logger()
+
+	// check lock
+	if uploadMetadata.LockID != "" {
+		ctx = ctxpkg.ContextSetLockID(ctx, uploadMetadata.LockID)
+	}
+
+	var err error
+
+	// FIXME should uploads fail if they try to overwrite an existing file?
+	// but if the webdav overwrite header is set ... two concurrent requests might each create a node with a different id ... -> same problem
+	// two concurrent requests that would create a new node would return different ids ...
+	// what if we generate an id based on the parent id and the filename?
+	// - no, then renaming the file and recreating a node with the provious name would generate the same id
+	// -> we have to create the node on initialize upload with processing true?
+
+	var n *node.Node
+	var nodeHandle *lockedfile.File
+	if uploadMetadata.NodeId == "" {
+		// we need to check if the node exists via parentid & child name
+		p, err := node.ReadNode(ctx, lu, uploadMetadata.SpaceRoot, uploadMetadata.NodeParentId, false, nil, true)
+		if err != nil {
+			log.Error().Err(err).Msg("could not read parent node")
+			return nil, err
+		}
+		if !p.Exists {
+			return nil, errtypes.PreconditionFailed("parent does not exist")
+		}
+		n, err = p.Child(ctx, uploadMetadata.Filename)
+		if err != nil {
+			log.Error().Err(err).Msg("could not read parent node")
+			return nil, err
+		}
+		if !n.Exists {
+			n.ID = uuid.New().String()
+			nodeHandle, err = initNewNode(ctx, lu, uploadID, uploadMetadata.RevisionTime, n)
+			if err != nil {
+				log.Error().Err(err).Msg("could not init new node")
+				return nil, err
+			}
+			log.Info().Str("lockfile", nodeHandle.Name()).Msg("got lock file from initNewNode")
+		} else {
+			nodeHandle, err = openExistingNode(ctx, lu, n)
+			if err != nil {
+				log.Error().Err(err).Msg("could not open existing node")
+				return nil, err
+			}
+			log.Info().Str("lockfile", nodeHandle.Name()).Msg("got lock file from openExistingNode")
+		}
+	}
+
+	if nodeHandle == nil {
+		n, err = node.ReadNode(ctx, lu, uploadMetadata.SpaceRoot, uploadMetadata.NodeId, false, nil, true)
+		if err != nil {
+			log.Error().Err(err).Msg("could not read parent node")
+			return nil, err
+		}
+		nodeHandle, err = openExistingNode(ctx, lu, n)
+		if err != nil {
+			log.Error().Err(err).Msg("could not open existing node")
+			return nil, err
+		}
+		log.Info().Str("lockfile", nodeHandle.Name()).Msg("got lock file from openExistingNode")
+	}
+	defer func() {
+		if nodeHandle == nil {
+			return
+		}
+		if err := nodeHandle.Close(); err != nil {
+			log.Error().Err(err).Str("nodeid", n.ID).Str("parentid", n.ParentID).Msg("could not close lock")
+		}
+	}()
+
+	err = validateRequest(ctx, size, uploadMetadata, n)
+	if err != nil {
+		return nil, err
+	}
+
+	newBlobID := uuid.New().String()
+
+	// set processing status of node
+	nodeAttrs := node.Attributes{}
+	// store new Blobid and Blobsize in node
+	// nodeAttrs.SetString(prefixes.BlobIDAttr, newBlobID) // BlobID is checked when removing a revision to decide if we also need to delete the node
+	// hm ... check if any other revisions are still available?
+	nodeAttrs.SetInt64(prefixes.BlobsizeAttr, size) // FIXME ... argh now the propagation needs to revert the size diff propagation again
+	nodeAttrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+uploadID)
+	err = n.SetXattrsWithContext(ctx, nodeAttrs, false)
+	if err != nil {
+		return nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
+	}
+
+	/*
+		revisionNode, err := n.ReadRevision(ctx, uploadMetadata.RevisionTime)
+		if err != nil {
+			return nil, err
+		}
+
+		var revisionHandle *lockedfile.File
+		revisionHandle, err = createRevisionNode(ctx, lu, revisionNode)
+		defer func() {
+			if revisionHandle == nil {
+				return
+			}
+			if err := revisionHandle.Close(); err != nil {
+				log.Error().Err(err).Str("nodeid", revisionNode.ID).Str("parentid", revisionNode.ParentID).Msg("could not close lock")
+			}
+		}()
+		if err != nil {
+			return nil, err
+		}
+	*/
+
+	uploadMetadata.BlobID = newBlobID
+	uploadMetadata.BlobSize = size
+	// TODO we should persist all versions as writes with ranges and the blobid in the node metadata
+	// attrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+info.ID)
+
+	err = WriteMetadata(ctx, lu, uploadID, uploadMetadata)
+	if err != nil {
+		return nil, errors.Wrap(err, "Decomposedfs: could not write upload metadata")
+	}
+
+	return n, nil
+}
+
+func (m Metadata) GetID() string {
+	return m.ID
+}
+func (m Metadata) GetFilename() string {
+	return m.Filename
+}
+
+// TODO use uint64? use SizeDeferred flag is in tus? cleaner then int64 and a negative value
+func (m Metadata) GetSize() int64 {
+	return m.BlobSize
+}
 func (m Metadata) GetResourceID() provider.ResourceId {
 	return provider.ResourceId{
 		StorageId: m.ProviderID,

@@ -96,7 +96,7 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 					keepUpload = true // should we keep the upload when assembling failed?
 					failed = true
 				}
-				sizeDiff, err = SetNodeToRevision(ctx, lu, n, uploadMetadata.RevisionTime)
+				sizeDiff, err = SetNodeToUpload(ctx, lu, n, uploadMetadata)
 				if err != nil {
 					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could set node to revision upload")
 					keepUpload = true // should we keep the upload when assembling failed?

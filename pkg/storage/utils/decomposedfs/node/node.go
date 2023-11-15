@@ -128,9 +128,9 @@ func New(spaceID, id, parentID, name string, blobsize int64, blobID string, t pr
 	}
 }
 
-func (n *Node) ReadRevision(ctx context.Context, revision string) (*Node, error) {
-
-	rn := &Node{
+// RevisionNode will return a node for the revision without reading the metadata
+func (n *Node) RevisionNode(ctx context.Context, revision string) *Node {
+	return &Node{
 		SpaceID:  n.SpaceID,
 		ID:       n.ID + RevisionIDDelimiter + revision,
 		ParentID: n.ParentID,
@@ -139,6 +139,11 @@ func (n *Node) ReadRevision(ctx context.Context, revision string) (*Node, error)
 		lu:       n.lu,
 		nodeType: n.nodeType,
 	}
+}
+
+// ReadRevision will return a node for the revision and read the metadata
+func (n *Node) ReadRevision(ctx context.Context, revision string) (*Node, error) {
+	rn := n.RevisionNode(ctx, revision)
 	attrs, err := rn.Xattrs(ctx)
 	switch {
 	case metadata.IsNotExist(err):

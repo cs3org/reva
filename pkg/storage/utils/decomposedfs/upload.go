@@ -47,7 +47,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
@@ -233,8 +232,10 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		return nil, err
 	}
 
+	cs3Metadata.ID = info.ID
+
 	// keep track of upload
-	err = upload.WriteMetadata(ctx, fs.lu, n.SpaceID, n.ID, info.ID, cs3Metadata)
+	err = upload.WriteMetadata(ctx, fs.lu, info.ID, cs3Metadata)
 	if err != nil {
 		return nil, err
 	}
@@ -353,25 +354,22 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 	}
 
 	// update checksums
-	attrs := node.Attributes{
-		prefixes.ChecksumPrefix + "sha1":    sha1h.Sum(nil),
-		prefixes.ChecksumPrefix + "md5":     md5h.Sum(nil),
-		prefixes.ChecksumPrefix + "adler32": adler32h.Sum(nil),
-	}
-
+	uploadMetadata.ChecksumSHA1 = sha1h.Sum(nil)
+	uploadMetadata.ChecksumMD5 = md5h.Sum(nil)
+	uploadMetadata.ChecksumADLER32 = adler32h.Sum(nil)
 	// set mtime for revision
 	if info.MetaData["mtime"] == "" {
-		attrs.SetString(prefixes.MTimeAttr, uploadMetadata.RevisionTime)
+		uploadMetadata.MTime = uploadMetadata.RevisionTime
 	} else {
 		// overwrite mtime if requested
 		mtime, err := utils.MTimeToTime(info.MetaData["mtime"])
 		if err != nil {
 			return err
 		}
-		attrs.SetString(prefixes.MTimeAttr, mtime.UTC().Format(time.RFC3339Nano))
+		uploadMetadata.MTime = mtime.UTC().Format(time.RFC3339Nano)
 	}
 
-	n, err := upload.CreateRevision(ctx, fs.lu, info.ID, info.Size, uploadMetadata, attrs)
+	n, err := upload.UpdateMetadata(ctx, fs.lu, info.ID, info.Size, uploadMetadata)
 	if err != nil {
 		upload.Cleanup(ctx, fs.lu, n, info.ID, uploadMetadata.RevisionTime, true)
 		if tup, ok := up.(tusd.TerminatableUpload); ok {
@@ -425,7 +423,7 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 			log.Error().Err(err).Msg("failed to upload")
 			return err
 		}
-		sizeDiff, err = upload.SetNodeToRevision(ctx, fs.lu, n, uploadMetadata.RevisionTime)
+		sizeDiff, err = upload.SetNodeToUpload(ctx, fs.lu, n, uploadMetadata)
 		if err != nil {
 			log.Error().Err(err).Msg("failed update Node to revision")
 			return err
@@ -624,19 +622,19 @@ func (fs *Decomposedfs) UploadMetadata(ctx context.Context, uploadID string) (st
 }
 
 // ListUploads returns a list of all incomplete uploads
-func (fs *Decomposedfs) ListUploads() ([]tusd.FileInfo, error) {
+func (fs *Decomposedfs) ListUploads() ([]storage.UploadMetadata, error) {
 	return fs.uploadInfos(context.Background())
 }
 
 // PurgeExpiredUploads scans the fs for expired downloads and removes any leftovers
-func (fs *Decomposedfs) PurgeExpiredUploads(purgedChan chan<- tusd.FileInfo) error {
-	infos, err := fs.uploadInfos(context.Background())
+func (fs *Decomposedfs) PurgeExpiredUploads(purgedChan chan<- storage.UploadMetadata) error {
+	metadata, err := fs.uploadInfos(context.Background())
 	if err != nil {
 		return err
 	}
 
-	for _, info := range infos {
-		uploadMetadata, err := upload.ReadMetadata(context.TODO(), fs.lu, info.ID)
+	for _, m := range metadata {
+		uploadMetadata, err := upload.ReadMetadata(context.TODO(), fs.lu, m.GetID())
 		if err != nil {
 			continue
 		}
@@ -645,16 +643,15 @@ func (fs *Decomposedfs) PurgeExpiredUploads(purgedChan chan<- tusd.FileInfo) err
 			continue
 		}
 		if int64(expires) < time.Now().Unix() {
-			purgedChan <- info
-			err = os.Remove(info.Storage["BinPath"]) // FIXME
+			purgedChan <- uploadMetadata
+			up, err := fs.tusDataStore.GetUpload(context.Background(), m.GetID())
 			if err != nil {
 				return err
 			}
-			err = os.Remove(filepath.Join(fs.o.Root, "uploads", info.ID+".info"))
-			if err != nil {
-				return err
+			if tu, ok := up.(tusd.TerminatableUpload); ok {
+				tu.Terminate(context.Background())
 			}
-			err = os.Remove(fs.lu.UploadPath(info.ID))
+			err = os.Remove(fs.lu.UploadPath(m.GetID()))
 			if err != nil {
 				return err
 			}
@@ -663,28 +660,24 @@ func (fs *Decomposedfs) PurgeExpiredUploads(purgedChan chan<- tusd.FileInfo) err
 	return nil
 }
 
-func (fs *Decomposedfs) uploadInfos(ctx context.Context) ([]tusd.FileInfo, error) {
-	infos := []tusd.FileInfo{}
-	infoFiles, err := filepath.Glob(filepath.Join(fs.o.Root, "uploads", "*.mpk")) // FIXME
+func (fs *Decomposedfs) uploadInfos(ctx context.Context) ([]storage.UploadMetadata, error) {
+	metadata := []storage.UploadMetadata{}
+	metadataFiles, err := filepath.Glob(filepath.Join(fs.o.Root, "uploads", "*.mpk")) // FIXME
 	if err != nil {
 		return nil, err
 	}
 
-	for _, info := range infoFiles {
-		match := _idRegexp.FindStringSubmatch(info)
+	for _, f := range metadataFiles {
+		match := _idRegexp.FindStringSubmatch(f)
 		if match == nil || len(match) < 2 {
 			continue
 		}
-		up, err := fs.tusDataStore.GetUpload(ctx, match[1])
-		if err != nil {
-			return nil, err
-		}
-		info, err := up.GetInfo(context.Background())
+		up, err := fs.UploadMetadata(ctx, match[1])
 		if err != nil {
 			return nil, err
 		}
 
-		infos = append(infos, info)
+		metadata = append(metadata, up)
 	}
-	return infos, nil
+	return metadata, nil
 }

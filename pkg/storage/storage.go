@@ -23,8 +23,6 @@ import (
 	"io"
 	"net/url"
 
-	tusd "github.com/tus/tusd/pkg/handler"
-
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
@@ -79,8 +77,8 @@ type FS interface {
 
 // UploadsManager defines the interface for FS implementations that allow for managing uploads
 type UploadsManager interface {
-	ListUploads() ([]tusd.FileInfo, error)
-	PurgeExpiredUploads(chan<- tusd.FileInfo) error
+	ListUploads() ([]UploadMetadata, error)
+	PurgeExpiredUploads(chan<- UploadMetadata) error
 }
 
 // Registry is the interface that storage registries implement
@@ -110,6 +108,9 @@ type HasUploadMetadata interface {
 }
 
 type UploadMetadata interface {
+	GetID() string
+	GetFilename() string
+	GetSize() int64
 	GetResourceID() provider.ResourceId
 	GetReference() provider.Reference
 	GetExecutantID() userpb.UserId

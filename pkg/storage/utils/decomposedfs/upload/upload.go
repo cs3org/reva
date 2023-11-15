@@ -74,15 +74,14 @@ import (
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/v2/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rogpeppe/go-internal/lockedfile"
 	tusd "github.com/tus/tusd/pkg/handler"
@@ -116,7 +115,7 @@ func CreateNewRevision(ctx context.Context, lu *lookup.Lookup, path string, fsiz
 	return f, nil
 }
 */
-
+/*
 // CreateNewNode will lock the given node and try to symlink it to the parent
 func CreateNewNode(ctx context.Context, lu *lookup.Lookup, n *node.Node, fsize uint64) (*lockedfile.File, error) {
 	ctx, span := tracer.Start(ctx, "CreateNewNode")
@@ -163,138 +162,7 @@ func CreateNewNode(ctx context.Context, lu *lookup.Lookup, n *node.Node, fsize u
 
 	return f, nil
 }
-
-// CreateRevision will create the target node for the Upload
-// - if the node does not exist it is created and assigned an id, no blob id?
-// - then always write out a revision node
-// - when postprocessing finishes copy metadata to node and replace latest revision node with previous blob info. if blobid is empty delete previous revision completely?
-func CreateRevision(ctx context.Context, lu *lookup.Lookup, uploadID string, size int64, uploadMetadata Metadata, attrs node.Attributes) (*node.Node, error) {
-	ctx, span := tracer.Start(ctx, "CreateRevision")
-	defer span.End()
-	log := appctx.GetLogger(ctx).With().Str("uploadID", uploadID).Logger()
-
-	// check lock
-	if uploadMetadata.LockID != "" {
-		ctx = ctxpkg.ContextSetLockID(ctx, uploadMetadata.LockID)
-	}
-
-	var err error
-
-	// FIXME should uploads fail if they try to overwrite an existing file?
-	// but if the webdav overwrite header is set ... two concurrent requests might each create a node with a different id ... -> same problem
-	// two concurrent requests that would create a new node would return different ids ...
-	// what if we generate an id based on the parent id and the filename?
-	// - no, then renaming the file and recreating a node with the provious name would generate the same id
-	// -> we have to create the node on initialize upload with processing true?
-
-	var n *node.Node
-	var nodeHandle *lockedfile.File
-	if uploadMetadata.NodeId == "" {
-		// we need to check if the node exists via parentid & child name
-		p, err := node.ReadNode(ctx, lu, uploadMetadata.SpaceRoot, uploadMetadata.NodeParentId, false, nil, true)
-		if err != nil {
-			log.Error().Err(err).Msg("could not read parent node")
-			return nil, err
-		}
-		if !p.Exists {
-			return nil, errtypes.PreconditionFailed("parent does not exist")
-		}
-		n, err = p.Child(ctx, uploadMetadata.Filename)
-		if err != nil {
-			log.Error().Err(err).Msg("could not read parent node")
-			return nil, err
-		}
-		if !n.Exists {
-			n.ID = uuid.New().String()
-			nodeHandle, err = initNewNode(ctx, lu, uploadID, uploadMetadata.RevisionTime, n)
-			if err != nil {
-				log.Error().Err(err).Msg("could not init new node")
-				return nil, err
-			}
-			log.Info().Str("lockfile", nodeHandle.Name()).Msg("got lock file from initNewNode")
-		} else {
-			nodeHandle, err = openExistingNode(ctx, lu, n)
-			if err != nil {
-				log.Error().Err(err).Msg("could not open existing node")
-				return nil, err
-			}
-			log.Info().Str("lockfile", nodeHandle.Name()).Msg("got lock file from openExistingNode")
-		}
-	}
-
-	if nodeHandle == nil {
-		n, err = node.ReadNode(ctx, lu, uploadMetadata.SpaceRoot, uploadMetadata.NodeId, false, nil, true)
-		if err != nil {
-			log.Error().Err(err).Msg("could not read parent node")
-			return nil, err
-		}
-		nodeHandle, err = openExistingNode(ctx, lu, n)
-		if err != nil {
-			log.Error().Err(err).Msg("could not open existing node")
-			return nil, err
-		}
-		log.Info().Str("lockfile", nodeHandle.Name()).Msg("got lock file from openExistingNode")
-	}
-	defer func() {
-		if nodeHandle == nil {
-			return
-		}
-		if err := nodeHandle.Close(); err != nil {
-			log.Error().Err(err).Str("nodeid", n.ID).Str("parentid", n.ParentID).Msg("could not close lock")
-		}
-	}()
-
-	err = validateRequest(ctx, size, uploadMetadata, n)
-	if err != nil {
-		return nil, err
-	}
-
-	newBlobID := uuid.New().String()
-
-	// set processing status of node
-	nodeAttrs := node.Attributes{}
-	// store new Blobid and Blobsize in node
-	// nodeAttrs.SetString(prefixes.BlobIDAttr, newBlobID) // BlobID is checked when removing a revision to decide if we also need to delete the node
-	// hm ... check if any other revisions are still available?
-	nodeAttrs.SetInt64(prefixes.BlobsizeAttr, size) // FIXME ... argh now the propagation needs to revert the size diff propagation again
-	nodeAttrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+uploadID)
-	err = n.SetXattrsWithContext(ctx, nodeAttrs, false)
-	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
-	}
-
-	revisionNode, err := n.ReadRevision(ctx, uploadMetadata.RevisionTime)
-	if err != nil {
-		return nil, err
-	}
-
-	var revisionHandle *lockedfile.File
-	revisionHandle, err = createRevisionNode(ctx, lu, revisionNode)
-	defer func() {
-		if revisionHandle == nil {
-			return
-		}
-		if err := revisionHandle.Close(); err != nil {
-			log.Error().Err(err).Str("nodeid", revisionNode.ID).Str("parentid", revisionNode.ParentID).Msg("could not close lock")
-		}
-	}()
-	if err != nil {
-		return nil, err
-	}
-
-	attrs.SetString(prefixes.BlobIDAttr, newBlobID)
-	attrs.SetInt64(prefixes.BlobsizeAttr, size)
-	// TODO we should persist all versions as writes with ranges and the blobid in the node metadata
-	// attrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+info.ID)
-
-	err = revisionNode.SetXattrsWithContext(ctx, attrs, false)
-	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
-	}
-
-	return n, nil
-}
-
+*/
 func validateRequest(ctx context.Context, size int64, uploadMetadata Metadata, n *node.Node) error {
 	if err := n.CheckLock(ctx); err != nil {
 		return err
@@ -428,15 +296,15 @@ func createRevisionNode(ctx context.Context, lu *lookup.Lookup, revisionNode *no
 	return f, nil
 }
 
-func SetNodeToRevision(ctx context.Context, lu *lookup.Lookup, n *node.Node, revision string) (int64, error) {
+func SetNodeToUpload(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploadMetadata Metadata) (int64, error) {
 
 	nodePath := n.InternalPath()
 	// lock existing node metadata
-	f, err := lockedfile.OpenFile(lu.MetadataBackend().LockfilePath(nodePath), os.O_RDWR, 0600)
+	nh, err := lockedfile.OpenFile(lu.MetadataBackend().LockfilePath(nodePath), os.O_RDWR, 0600)
 	if err != nil {
 		return 0, err
 	}
-	defer f.Close()
+	defer nh.Close()
 	// read nodes
 
 	n, err = node.ReadNode(ctx, lu, n.SpaceID, n.ID, false, n.SpaceRoot, true)
@@ -444,33 +312,35 @@ func SetNodeToRevision(ctx context.Context, lu *lookup.Lookup, n *node.Node, rev
 		return 0, err
 	}
 
-	revisionNode, err := n.ReadRevision(ctx, revision)
+	sizeDiff := uploadMetadata.BlobSize - n.Blobsize
+
+	n.BlobID = uploadMetadata.BlobID
+	n.Blobsize = uploadMetadata.BlobSize
+
+	revisionNode := n.RevisionNode(ctx, uploadMetadata.RevisionTime)
+
+	rh, err := createRevisionNode(ctx, lu, revisionNode)
 	if err != nil {
 		return 0, err
 	}
+	defer rh.Close()
 
-	sizeDiff := revisionNode.Blobsize - n.Blobsize
-
-	n.BlobID = revisionNode.BlobID
-	n.Blobsize = revisionNode.Blobsize
-
-	revisionAttrs, err := revisionNode.Xattrs(ctx)
-	if err != nil {
-		return 0, err
-	}
 	attrs := node.Attributes{}
-	attrs.SetString(prefixes.CurrentRevisionAttr, revision)
-	attrs.SetString(prefixes.BlobIDAttr, revisionNode.BlobID)
-	attrs.SetInt64(prefixes.BlobsizeAttr, revisionNode.Blobsize)
-	attrs[prefixes.MTimeAttr] = revisionAttrs[prefixes.MTimeAttr]
+	attrs.SetString(prefixes.CurrentRevisionAttr, uploadMetadata.RevisionTime)
+	attrs.SetString(prefixes.BlobIDAttr, uploadMetadata.BlobID)
+	attrs.SetInt64(prefixes.BlobsizeAttr, uploadMetadata.BlobSize)
+	attrs.SetString(prefixes.MTimeAttr, uploadMetadata.MTime)
+	attrs[prefixes.ChecksumPrefix+storageprovider.XSSHA1] = uploadMetadata.ChecksumSHA1
+	attrs[prefixes.ChecksumPrefix+storageprovider.XSMD5] = uploadMetadata.ChecksumMD5
+	attrs[prefixes.ChecksumPrefix+storageprovider.XSAdler32] = uploadMetadata.ChecksumADLER32
 
-	// copy checksums TODO we need to make sure ALL old checksums are wiped
-	for k, v := range revisionAttrs {
-		if strings.HasPrefix(k, prefixes.ChecksumPrefix) {
-			attrs[k] = v
-		}
+	// write revision
+	err = revisionNode.SetXattrsWithContext(ctx, attrs, false)
+	if err != nil {
+		return 0, errors.Wrap(err, "Decomposedfs: could not write metadata")
 	}
 
+	// update node
 	err = n.SetXattrsWithContext(ctx, attrs, false)
 	if err != nil {
 		return 0, errors.Wrap(err, "Decomposedfs: could not write metadata")
