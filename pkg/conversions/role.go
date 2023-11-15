@@ -378,8 +378,7 @@ func NewManagerRole() *Role {
 
 // RoleFromOCSPermissions tries to map ocs permissions to a role
 // TODO: rethink using this. ocs permissions cannot be assigned 1:1 to roles
-// NOTE: If resharing=false in the system this function will return SpaceViewerRole instead ViewerRole
-func RoleFromOCSPermissions(p Permissions) *Role {
+func RoleFromOCSPermissions(p Permissions, ri *provider.ResourceInfo) *Role {
 	if p == PermissionInvalid {
 		return NewNoneRole()
 	}
@@ -392,11 +391,13 @@ func RoleFromOCSPermissions(p Permissions) *Role {
 
 			return NewSpaceEditorRole()
 		}
-		if p == PermissionRead|PermissionShare {
-			return NewViewerRole(true)
-		}
-		if p == PermissionRead {
+
+		if p == PermissionRead && isSpaceRoot(ri) {
 			return NewSpaceViewerRole()
+		}
+
+		if p == PermissionRead|PermissionShare && !isSpaceRoot(ri) {
+			return NewViewerRole(true)
 		}
 	}
 	if p == PermissionCreate {
@@ -404,6 +405,22 @@ func RoleFromOCSPermissions(p Permissions) *Role {
 	}
 	// legacy
 	return NewLegacyRoleFromOCSPermissions(p)
+}
+
+func isSpaceRoot(ri *provider.ResourceInfo) bool {
+	if ri == nil {
+		return false
+	}
+	if ri.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		return false
+	}
+
+	if ri.GetId().GetOpaqueId() != ri.GetSpace().GetRoot().GetOpaqueId() ||
+		ri.GetId().GetSpaceId() != ri.GetSpace().GetRoot().GetSpaceId() ||
+		ri.GetId().GetStorageId() != ri.GetSpace().GetRoot().GetStorageId() {
+		return false
+	}
+	return true
 }
 
 // NewLegacyRoleFromOCSPermissions tries to map a legacy combination of ocs permissions to cs3 resource permissions as a legacy role

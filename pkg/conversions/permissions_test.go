@@ -20,6 +20,8 @@ package conversions
 
 import (
 	"testing"
+
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 func TestNewPermissions(t *testing.T) {
@@ -141,16 +143,81 @@ func TestPermissions2Role(t *testing.T) {
 		}
 	}
 
-	table := map[Permissions]string{
-		PermissionRead | PermissionShare: RoleViewer,
-		PermissionRead | PermissionWrite | PermissionCreate | PermissionDelete | PermissionShare: RoleEditor,
-		PermissionWrite:                   RoleLegacy,
-		PermissionShare:                   RoleLegacy,
-		PermissionWrite | PermissionShare: RoleLegacy,
+	resourceInfoSpaceRoot := &provider.ResourceInfo{
+		Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+		Id: &provider.ResourceId{
+			StorageId: "storageid",
+			SpaceId:   "spaceid",
+			OpaqueId:  "spaceid",
+		},
+		Space: &provider.StorageSpace{
+			Root: &provider.ResourceId{
+				StorageId: "storageid",
+				SpaceId:   "spaceid",
+				OpaqueId:  "spaceid",
+			},
+		},
+	}
+	resourceInfoDir := &provider.ResourceInfo{
+		Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+		Id: &provider.ResourceId{
+			StorageId: "storageid",
+			SpaceId:   "spaceid",
+			OpaqueId:  "fileid",
+		},
+		Space: &provider.StorageSpace{
+			Root: &provider.ResourceId{
+				StorageId: "storageid",
+				SpaceId:   "spaceid",
+				OpaqueId:  "spaceid",
+			},
+		},
 	}
 
-	for permissions, role := range table {
-		actual := RoleFromOCSPermissions(permissions).Name
-		checkRole(role, actual)
+	type permissionOnResourceInfo2Role struct {
+		permissions  Permissions
+		resourceInfo *provider.ResourceInfo
+		role         string
+	}
+
+	table := []permissionOnResourceInfo2Role{
+		{
+			permissions:  PermissionRead | PermissionShare,
+			role:         RoleViewer,
+			resourceInfo: resourceInfoDir,
+		}, {
+			permissions:  PermissionRead | PermissionShare,
+			role:         RoleLegacy,
+			resourceInfo: resourceInfoSpaceRoot,
+		}, {
+			permissions:  PermissionRead,
+			role:         RoleLegacy,
+			resourceInfo: resourceInfoDir,
+		}, {
+			permissions:  PermissionRead,
+			role:         RoleSpaceViewer,
+			resourceInfo: resourceInfoSpaceRoot,
+		}, {
+			permissions:  PermissionRead | PermissionWrite | PermissionCreate | PermissionDelete | PermissionShare,
+			role:         RoleEditor,
+			resourceInfo: nil,
+		}, {
+			permissions:  PermissionWrite,
+			role:         RoleLegacy,
+			resourceInfo: nil,
+		}, {
+			permissions:  PermissionShare,
+			role:         RoleLegacy,
+			resourceInfo: nil,
+		}, {
+			permissions:  PermissionWrite | PermissionShare,
+			role:         RoleLegacy,
+			resourceInfo: nil,
+		},
+	}
+
+	for _, t := range table {
+		actual := RoleFromOCSPermissions(t.permissions, t.resourceInfo).Name
+		checkRole(t.role, actual)
 	}
 }
