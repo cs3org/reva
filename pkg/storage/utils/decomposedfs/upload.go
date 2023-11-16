@@ -425,6 +425,21 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 		}
 	}
 
+	if uploadMetadata.PreviousRevisionTime != "" {
+		// write revision
+		revisionNode := n.RevisionNode(ctx, uploadMetadata.RevisionTime)
+
+		rh, err := upload.CreateRevisionNode(ctx, fs.lu, revisionNode)
+		if err != nil {
+			return err
+		}
+		defer rh.Close()
+		err = upload.WriteUploadMetadataToNode(ctx, revisionNode, uploadMetadata)
+		if err != nil {
+			return err
+		}
+	}
+
 	sizeDiff := info.Size - n.Blobsize
 	if !fs.o.AsyncFileUploads {
 		// handle postprocessing synchronously
@@ -440,6 +455,7 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 			log.Error().Err(err).Msg("failed to upload")
 			return err
 		}
+		// FIXME SetNodeToUpload also creates the revision, but the tests expect them to be created before async processing starts
 		sizeDiff, err = upload.SetNodeToUpload(ctx, fs.lu, n, uploadMetadata)
 		if err != nil {
 			log.Error().Err(err).Msg("failed update Node to revision")

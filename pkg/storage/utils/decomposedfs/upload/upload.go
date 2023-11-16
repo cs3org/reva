@@ -278,7 +278,7 @@ func initNewNode(ctx context.Context, lu *lookup.Lookup, uploadID, mtime string,
 	return f, nil
 }
 
-func createRevisionNode(ctx context.Context, lu *lookup.Lookup, revisionNode *node.Node) (*lockedfile.File, error) {
+func CreateRevisionNode(ctx context.Context, lu *lookup.Lookup, revisionNode *node.Node) (*lockedfile.File, error) {
 	revisionPath := revisionNode.InternalPath()
 	// write lock existing node before reading any metadata
 	f, err := lockedfile.OpenFile(lu.MetadataBackend().LockfilePath(revisionPath), os.O_RDWR|os.O_CREATE, 0600)
@@ -317,6 +317,17 @@ func SetNodeToUpload(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploa
 	n.BlobID = uploadMetadata.BlobID
 	n.Blobsize = uploadMetadata.BlobSize
 
+	// update node
+	err = WriteUploadMetadataToNode(ctx, n, uploadMetadata)
+	if err != nil {
+		return 0, errors.Wrap(err, "Decomposedfs: could not write metadata")
+	}
+
+	return sizeDiff, nil
+}
+
+func WriteUploadMetadataToNode(ctx context.Context, n *node.Node, uploadMetadata Metadata) error {
+
 	attrs := node.Attributes{}
 	attrs.SetString(prefixes.CurrentRevisionAttr, uploadMetadata.RevisionTime)
 	attrs.SetString(prefixes.BlobIDAttr, uploadMetadata.BlobID)
@@ -326,28 +337,7 @@ func SetNodeToUpload(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploa
 	attrs[prefixes.ChecksumPrefix+storageprovider.XSMD5] = uploadMetadata.ChecksumMD5
 	attrs[prefixes.ChecksumPrefix+storageprovider.XSAdler32] = uploadMetadata.ChecksumADLER32
 
-	if uploadMetadata.PreviousRevisionTime != "" {
-		// write revision
-		revisionNode := n.RevisionNode(ctx, uploadMetadata.RevisionTime)
-
-		rh, err := createRevisionNode(ctx, lu, revisionNode)
-		if err != nil {
-			return 0, err
-		}
-		defer rh.Close()
-		err = revisionNode.SetXattrsWithContext(ctx, attrs, false)
-		if err != nil {
-			return 0, errors.Wrap(err, "Decomposedfs: could not write revision metadata")
-		}
-	}
-
-	// update node
-	err = n.SetXattrsWithContext(ctx, attrs, false)
-	if err != nil {
-		return 0, errors.Wrap(err, "Decomposedfs: could not write metadata")
-	}
-
-	return sizeDiff, nil
+	return n.SetXattrsWithContext(ctx, attrs, false)
 }
 
 func ReadNode(ctx context.Context, lu *lookup.Lookup, uploadMetadata Metadata) (*node.Node, error) {
