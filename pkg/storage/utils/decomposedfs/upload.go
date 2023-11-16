@@ -84,7 +84,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	}
 
 	usr := ctxpkg.ContextMustGetUser(ctx)
-	cs3Metadata := upload.Metadata{
+	uploadMetadata := upload.Metadata{
 		Filename:            n.Name,
 		SpaceRoot:           n.SpaceRoot.ID,
 		SpaceOwnerOrManager: n.SpaceOwnerOrManager(ctx).GetOpaqueId(),
@@ -109,7 +109,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		}
 		switch parts[0] {
 		case "sha1", "md5", "adler32":
-			cs3Metadata.Checksum = checksum
+			uploadMetadata.Checksum = checksum
 		default:
 			return nil, errtypes.BadRequest("unsupported checksum algorithm: " + parts[0])
 		}
@@ -119,7 +119,16 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	if ocmtime, ok := headers["mtime"]; ok {
 		if ocmtime != "null" {
 			tusMetadata["mtime"] = ocmtime
+			// overwrite mtime if requested
+			mtime, err := utils.MTimeToTime(ocmtime)
+			if err != nil {
+				return nil, err
+			}
+			uploadMetadata.MTime = mtime.UTC().Format(time.RFC3339Nano)
+			uploadMetadata.RevisionTime = uploadMetadata.MTime
 		}
+	} else {
+		uploadMetadata.MTime = uploadMetadata.RevisionTime
 	}
 
 	_, err = node.CheckQuota(ctx, n.SpaceRoot, n.Exists, uint64(n.Blobsize), uint64(uploadLength))
@@ -144,7 +153,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 			return nil, errors.Wrap(err, "Decomposedfs: error current revision of "+n.ID) // TODO this will be the case for all existing files
 			// fallback to mtime?
 		}
-		cs3Metadata.PreviousRevisionTime = previousRevisionTime
+		uploadMetadata.PreviousRevisionTime = previousRevisionTime
 	} else {
 		// check permissions of parent
 		parent, perr := n.Parent(ctx)
@@ -188,13 +197,13 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		SizeIsDeferred: sizeIsDeferred,
 	}
 	if lockID, ok := ctxpkg.ContextGetLockID(ctx); ok {
-		cs3Metadata.LockID = lockID
+		uploadMetadata.LockID = lockID
 	}
-	cs3Metadata.Dir = filepath.Dir(relative)
+	uploadMetadata.Dir = filepath.Dir(relative)
 
 	// rewrite filename for old chunking v1
 	if chunking.IsChunked(n.Name) {
-		cs3Metadata.Chunk = n.Name
+		uploadMetadata.Chunk = n.Name
 		bi, err := chunking.GetChunkBLOBInfo(n.Name)
 		if err != nil {
 			return nil, err
@@ -208,22 +217,22 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	// expires has been set by the storageprovider, do not expose as metadata. It is sent as a tus Upload-Expires header
 	if expiration, ok := headers["expires"]; ok {
 		if expiration != "null" { // TODO this is set by the storageprovider ... it cannot be set by cliensts, so it can never be the string 'null' ... or can it???
-			cs3Metadata.Expires = expiration
+			uploadMetadata.Expires = expiration
 		}
 	}
 	// only check preconditions if they are not empty
 	// do not expose as metadata
 	if headers["if-match"] != "" {
-		cs3Metadata.HeaderIfMatch = headers["if-match"] // TODO drop?
+		uploadMetadata.HeaderIfMatch = headers["if-match"] // TODO drop?
 	}
 	if headers["if-none-match"] != "" {
-		cs3Metadata.HeaderIfNoneMatch = headers["if-none-match"]
+		uploadMetadata.HeaderIfNoneMatch = headers["if-none-match"]
 	}
 	if headers["if-unmodified-since"] != "" {
-		cs3Metadata.HeaderIfUnmodifiedSince = headers["if-unmodified-since"]
+		uploadMetadata.HeaderIfUnmodifiedSince = headers["if-unmodified-since"]
 	}
 
-	if cs3Metadata.HeaderIfNoneMatch == "*" && n.Exists {
+	if uploadMetadata.HeaderIfNoneMatch == "*" && n.Exists {
 		return nil, errtypes.Aborted(fmt.Sprintf("parent %s already has a child %s", n.ID, n.Name))
 	}
 
@@ -238,10 +247,10 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		return nil, err
 	}
 
-	cs3Metadata.ID = info.ID
+	uploadMetadata.ID = info.ID
 
 	// keep track of upload
-	err = upload.WriteMetadata(ctx, fs.lu, info.ID, cs3Metadata)
+	err = upload.WriteMetadata(ctx, fs.lu, info.ID, uploadMetadata)
 	if err != nil {
 		return nil, err
 	}
@@ -363,17 +372,19 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 	uploadMetadata.ChecksumSHA1 = sha1h.Sum(nil)
 	uploadMetadata.ChecksumMD5 = md5h.Sum(nil)
 	uploadMetadata.ChecksumADLER32 = adler32h.Sum(nil)
-	// set mtime for revision
-	if info.MetaData["mtime"] == "" {
-		uploadMetadata.MTime = uploadMetadata.RevisionTime
-	} else {
-		// overwrite mtime if requested
-		mtime, err := utils.MTimeToTime(info.MetaData["mtime"])
-		if err != nil {
-			return err
+	/*
+		// set mtime for revision
+		if info.MetaData["mtime"] == "" {
+			uploadMetadata.MTime = uploadMetadata.RevisionTime
+		} else {
+			// overwrite mtime if requested
+			mtime, err := utils.MTimeToTime(info.MetaData["mtime"])
+			if err != nil {
+				return err
+			}
+			uploadMetadata.MTime = mtime.UTC().Format(time.RFC3339Nano)
 		}
-		uploadMetadata.MTime = mtime.UTC().Format(time.RFC3339Nano)
-	}
+	*/
 
 	uploadMetadata, n, err := upload.UpdateMetadata(ctx, fs.lu, info.ID, info.Size, uploadMetadata)
 	if err != nil {
@@ -507,7 +518,6 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 			return provider.ResourceInfo{}, errtypes.PartialContent(req.Ref.String())
 		}
 		uploadMetadata.Filename = p
-		uploadInfo.MetaData["filename"] = p
 		fd, err := os.Open(assembledFile)
 		if err != nil {
 			return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error opening assembled file")

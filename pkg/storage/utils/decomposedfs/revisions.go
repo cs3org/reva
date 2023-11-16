@@ -72,11 +72,13 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 
 	revisions = []*provider.FileVersion{}
 	np := n.InternalPath()
-	currentRevision, err := n.GetCurrentRevision(ctx)
-	if err != nil {
-		sublog.Error().Err(err).Msg("could not check is Current, skipping")
-		return nil, err
-	}
+	/*
+		currentRevision, err := n.GetCurrentRevision(ctx)
+		if err != nil {
+			sublog.Error().Err(err).Msg("could not check is Current, skipping")
+			return nil, err
+		}
+	*/
 	if items, err := filepath.Glob(np + node.RevisionIDDelimiter + "*"); err == nil {
 		for i := range items {
 			if fs.lu.MetadataBackend().IsMetaFile(items[i]) {
@@ -97,9 +99,11 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 				sublog.Error().Msg("revision does not exist, skipping")
 				continue
 			}
-			if currentRevision == rp[1] {
-				continue
-			}
+			/*
+				if currentRevision == rp[1] {
+					continue
+				}
+			*/
 
 			rmtime, err := rn.GetMTime(ctx)
 			if err != nil {

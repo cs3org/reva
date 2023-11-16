@@ -317,14 +317,6 @@ func SetNodeToUpload(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploa
 	n.BlobID = uploadMetadata.BlobID
 	n.Blobsize = uploadMetadata.BlobSize
 
-	revisionNode := n.RevisionNode(ctx, uploadMetadata.RevisionTime)
-
-	rh, err := createRevisionNode(ctx, lu, revisionNode)
-	if err != nil {
-		return 0, err
-	}
-	defer rh.Close()
-
 	attrs := node.Attributes{}
 	attrs.SetString(prefixes.CurrentRevisionAttr, uploadMetadata.RevisionTime)
 	attrs.SetString(prefixes.BlobIDAttr, uploadMetadata.BlobID)
@@ -334,10 +326,19 @@ func SetNodeToUpload(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploa
 	attrs[prefixes.ChecksumPrefix+storageprovider.XSMD5] = uploadMetadata.ChecksumMD5
 	attrs[prefixes.ChecksumPrefix+storageprovider.XSAdler32] = uploadMetadata.ChecksumADLER32
 
-	// write revision
-	err = revisionNode.SetXattrsWithContext(ctx, attrs, false)
-	if err != nil {
-		return 0, errors.Wrap(err, "Decomposedfs: could not write revision metadata")
+	if uploadMetadata.PreviousRevisionTime != "" {
+		// write revision
+		revisionNode := n.RevisionNode(ctx, uploadMetadata.RevisionTime)
+
+		rh, err := createRevisionNode(ctx, lu, revisionNode)
+		if err != nil {
+			return 0, err
+		}
+		defer rh.Close()
+		err = revisionNode.SetXattrsWithContext(ctx, attrs, false)
+		if err != nil {
+			return 0, errors.Wrap(err, "Decomposedfs: could not write revision metadata")
+		}
 	}
 
 	// update node
