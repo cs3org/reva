@@ -375,7 +375,7 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 		uploadMetadata.MTime = mtime.UTC().Format(time.RFC3339Nano)
 	}
 
-	n, err := upload.UpdateMetadata(ctx, fs.lu, info.ID, info.Size, uploadMetadata)
+	uploadMetadata, n, err := upload.UpdateMetadata(ctx, fs.lu, info.ID, info.Size, uploadMetadata)
 	if err != nil {
 		upload.Cleanup(ctx, fs.lu, n, info.ID, uploadMetadata.RevisionTime, uploadMetadata.PreviousRevisionTime, true)
 		if tup, ok := up.(tusd.TerminatableUpload); ok {
@@ -417,7 +417,7 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 	sizeDiff := info.Size - n.Blobsize
 	if !fs.o.AsyncFileUploads {
 		// handle postprocessing synchronously
-		err = upload.Finalize(ctx, fs.blobstore, uploadMetadata.RevisionTime, info, n) // moving or copying the blob only reads the blobid, no need to change the revision nodes nodeid
+		err = upload.Finalize(ctx, fs.blobstore, uploadMetadata.RevisionTime, info, n, uploadMetadata.BlobID) // moving or copying the blob only reads the blobid, no need to change the revision nodes nodeid
 		upload.Cleanup(ctx, fs.lu, n, info.ID, uploadMetadata.RevisionTime, uploadMetadata.PreviousRevisionTime, err != nil)
 		if tup, ok := up.(tusd.TerminatableUpload); ok {
 			terr := tup.Terminate(ctx)
@@ -622,7 +622,7 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 
 // FIXME all the below functions should needs a dedicated package ... the tusd datastore interface has no way of listing uploads, so we need to extend them
 
-// ListUploads returns a list of all incomplete uploads
+// UploadMetadata returns the metadata for the given upload id
 func (fs *Decomposedfs) UploadMetadata(ctx context.Context, uploadID string) (storage.UploadMetadata, error) {
 	return upload.ReadMetadata(ctx, fs.lu, uploadID)
 }

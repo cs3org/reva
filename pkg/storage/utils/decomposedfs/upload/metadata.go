@@ -124,7 +124,7 @@ func ReadMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string) (Meta
 // - if the node does not exist it is created and assigned an id, no blob id?
 // - then always write out a revision node
 // - when postprocessing finishes copy metadata to node and replace latest revision node with previous blob info. if blobid is empty delete previous revision completely?
-func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, size int64, uploadMetadata Metadata) (*node.Node, error) {
+func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, size int64, uploadMetadata Metadata) (Metadata, *node.Node, error) {
 	ctx, span := tracer.Start(ctx, "UpdateMetadata")
 	defer span.End()
 	log := appctx.GetLogger(ctx).With().Str("uploadID", uploadID).Logger()
@@ -150,29 +150,29 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 		p, err := node.ReadNode(ctx, lu, uploadMetadata.SpaceRoot, uploadMetadata.NodeParentID, false, nil, true)
 		if err != nil {
 			log.Error().Err(err).Msg("could not read parent node")
-			return nil, err
+			return Metadata{}, nil, err
 		}
 		if !p.Exists {
-			return nil, errtypes.PreconditionFailed("parent does not exist")
+			return Metadata{}, nil, errtypes.PreconditionFailed("parent does not exist")
 		}
 		n, err = p.Child(ctx, uploadMetadata.Filename)
 		if err != nil {
 			log.Error().Err(err).Msg("could not read parent node")
-			return nil, err
+			return Metadata{}, nil, err
 		}
 		if !n.Exists {
 			n.ID = uuid.New().String()
 			nodeHandle, err = initNewNode(ctx, lu, uploadID, uploadMetadata.RevisionTime, n)
 			if err != nil {
 				log.Error().Err(err).Msg("could not init new node")
-				return nil, err
+				return Metadata{}, nil, err
 			}
 			log.Info().Str("lockfile", nodeHandle.Name()).Msg("got lock file from initNewNode")
 		} else {
 			nodeHandle, err = openExistingNode(ctx, lu, n)
 			if err != nil {
 				log.Error().Err(err).Msg("could not open existing node")
-				return nil, err
+				return Metadata{}, nil, err
 			}
 			log.Info().Str("lockfile", nodeHandle.Name()).Msg("got lock file from openExistingNode")
 		}
@@ -182,12 +182,12 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 		n, err = node.ReadNode(ctx, lu, uploadMetadata.SpaceRoot, uploadMetadata.NodeID, false, nil, true)
 		if err != nil {
 			log.Error().Err(err).Msg("could not read parent node")
-			return nil, err
+			return Metadata{}, nil, err
 		}
 		nodeHandle, err = openExistingNode(ctx, lu, n)
 		if err != nil {
 			log.Error().Err(err).Msg("could not open existing node")
-			return nil, err
+			return Metadata{}, nil, err
 		}
 		log.Info().Str("lockfile", nodeHandle.Name()).Msg("got lock file from openExistingNode")
 	}
@@ -202,22 +202,21 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 
 	err = validateRequest(ctx, size, uploadMetadata, n)
 	if err != nil {
-		return nil, err
+		return Metadata{}, nil, err
 	}
 
 	newBlobID := uuid.New().String()
 
 	// set processing status of node
 	nodeAttrs := node.Attributes{}
-	// store new Blobid and Blobsize in node
-	// nodeAttrs.SetString(prefixes.BlobIDAttr, newBlobID) // BlobID is checked when removing a revision to decide if we also need to delete the node
-	// hm ... check if any other revisions are still available?
-	nodeAttrs.SetInt64(prefixes.BlobsizeAttr, size) // FIXME ... argh now the propagation needs to revert the size diff propagation again
+	// store Blobsize in node so we can propagate a sizediff
+	// do not yet update the blobid ... urgh this is fishy
+	// 	nodeAttrs.SetInt64(prefixes.BlobsizeAttr, size) // FIXME ... argh now the propagation needs to revert the size diff propagation again
 	nodeAttrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+uploadID)
 	nodeAttrs.SetString(prefixes.CurrentRevisionAttr, uploadMetadata.RevisionTime)
 	err = n.SetXattrsWithContext(ctx, nodeAttrs, false)
 	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
+		return Metadata{}, nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
 	}
 
 	/*
@@ -248,10 +247,10 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 
 	err = WriteMetadata(ctx, lu, uploadID, uploadMetadata)
 	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: could not write upload metadata")
+		return Metadata{}, nil, errors.Wrap(err, "Decomposedfs: could not write upload metadata")
 	}
 
-	return n, nil
+	return uploadMetadata, n, nil
 }
 
 func (m Metadata) GetID() string {

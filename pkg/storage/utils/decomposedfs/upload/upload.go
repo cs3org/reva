@@ -427,14 +427,13 @@ func removeRevision(ctx context.Context, lu *lookup.Lookup, n *node.Node, revisi
 }
 
 // Finalize finalizes the upload (eg moves the file to the internal destination)
-func Finalize(ctx context.Context, blobstore tree.Blobstore, revision string, info tusd.FileInfo, n *node.Node) error {
+func Finalize(ctx context.Context, blobstore tree.Blobstore, revision string, info tusd.FileInfo, n *node.Node, blobID string) error {
 	_, span := tracer.Start(ctx, "Finalize")
 	defer span.End()
 
-	rn, err := n.ReadRevision(ctx, revision)
-	if err != nil {
-		return errors.Wrap(err, "failed to read revision")
-	}
+	rn := n.RevisionNode(ctx, revision)
+	rn.BlobID = blobID
+	var err error
 	if mover, ok := blobstore.(tree.BlobstoreMover); ok {
 		err = mover.MoveBlob(rn, "", info.Storage["Bucket"], info.Storage["Key"])
 		switch err {
