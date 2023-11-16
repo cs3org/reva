@@ -407,7 +407,7 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 			SpaceOwner:    n.SpaceOwnerOrManager(ctx),
 			ExecutingUser: user,
 			ResourceID:    &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID},
-			Filename:      uploadMetadata.Filename,
+			Filename:      uploadMetadata.Filename, // TODO what and when do we publish chunking v2 names? Currently, this uses the chunk name.
 			Filesize:      uint64(info.Size),
 		}); err != nil {
 			return err
@@ -497,16 +497,17 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 		return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error retrieving upload metadata")
 	}
 
-	p := uploadMetadata.Chunk
-	if chunking.IsChunked(p) { // check chunking v1
-		var assembledFile string
-		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, req.Body)
+	if chunking.IsChunked(uploadMetadata.Chunk) { // check chunking v1, TODO, actually there is a 'OC-Chunked: 1' header, at least when the testsuite uses chunking v1
+		var assembledFile, p string
+		p, assembledFile, err = fs.chunkHandler.WriteChunk(uploadMetadata.Chunk, req.Body)
 		if err != nil {
 			return provider.ResourceInfo{}, err
 		}
 		if p == "" {
 			return provider.ResourceInfo{}, errtypes.PartialContent(req.Ref.String())
 		}
+		uploadMetadata.Filename = p
+		uploadInfo.MetaData["filename"] = p
 		fd, err := os.Open(assembledFile)
 		if err != nil {
 			return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error opening assembled file")

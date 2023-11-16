@@ -337,7 +337,7 @@ func SetNodeToUpload(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploa
 	// write revision
 	err = revisionNode.SetXattrsWithContext(ctx, attrs, false)
 	if err != nil {
-		return 0, errors.Wrap(err, "Decomposedfs: could not write metadata")
+		return 0, errors.Wrap(err, "Decomposedfs: could not write revision metadata")
 	}
 
 	// update node
