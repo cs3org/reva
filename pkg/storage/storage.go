@@ -104,7 +104,7 @@ type UploadRequest struct {
 }
 
 type HasUploadMetadata interface {
-	GetUploadMetadata(uploadID string) (UploadMetadata, error)
+	GetUploadMetadata(ctx context.Context, uploadID string) (UploadMetadata, error)
 }
 
 type UploadMetadata interface {

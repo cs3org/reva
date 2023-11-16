@@ -622,8 +622,8 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 
 // FIXME all the below functions should needs a dedicated package ... the tusd datastore interface has no way of listing uploads, so we need to extend them
 
-// UploadMetadata returns the metadata for the given upload id
-func (fs *Decomposedfs) UploadMetadata(ctx context.Context, uploadID string) (storage.UploadMetadata, error) {
+// GetUploadMetadata returns the metadata for the given upload id
+func (fs *Decomposedfs) GetUploadMetadata(ctx context.Context, uploadID string) (storage.UploadMetadata, error) {
 	return upload.ReadMetadata(ctx, fs.lu, uploadID)
 }
 
@@ -681,7 +681,7 @@ func (fs *Decomposedfs) uploadInfos(ctx context.Context) ([]storage.UploadMetada
 		if match == nil || len(match) < 2 {
 			continue
 		}
-		up, err := fs.UploadMetadata(ctx, match[1])
+		up, err := fs.GetUploadMetadata(ctx, match[1])
 		if err != nil {
 			return nil, err
 		}

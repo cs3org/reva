@@ -124,53 +124,54 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		}
 	}
 
-	umg, _ := fs.(storage.HasUploadMetadata)
-
 	handler, err := tusd.NewUnroutedHandler(config)
 	if err != nil {
 		return nil, err
 	}
 
-	go func() {
-		for {
-			ev := <-handler.CompleteUploads
-			info := ev.Upload
-			um, err := umg.GetUploadMetadata(info.ID)
-			if err != nil {
-				appctx.GetLogger(context.Background()).Error().Err(err).Msg("failed to get upload metadata on publish FileUploaded event")
-			}
-			/*
-				spaceOwner := &userv1beta1.UserId{
-					OpaqueId: info.MetaData[CS3Prefix+"SpaceOwnerOrManager"],
+	umg, ok := fs.(storage.HasUploadMetadata)
+	if ok {
+		go func() {
+			for {
+				ev := <-handler.CompleteUploads
+				info := ev.Upload
+				um, err := umg.GetUploadMetadata(context.TODO(), info.ID) // TODO we need to pass in a context, maybe with tusd 2.0. IIRC the relvease notes mention using context in more places.
+				if err != nil {
+					appctx.GetLogger(context.Background()).Error().Err(err).Msg("failed to get upload metadata on publish FileUploaded event")
 				}
-					executant := &userv1beta1.UserId{
-						Type:     userv1beta1.UserType(userv1beta1.UserType_value[info.MetaData[CS3Prefix+"ExecutantType"]]),
-						Idp:      info.MetaData[CS3Prefix+"ExecutantIdp"],
-						OpaqueId: info.MetaData[CS3Prefix+"ExecutantId"],
+				/*
+					spaceOwner := &userv1beta1.UserId{
+						OpaqueId: info.MetaData[CS3Prefix+"SpaceOwnerOrManager"],
 					}
-				ref := &provider.Reference{
-					ResourceId: &provider.ResourceId{
-						StorageId: info.MetaData[CS3Prefix+"providerID"],
-						SpaceId:   info.MetaData[CS3Prefix+"SpaceRoot"],
-						OpaqueId:  info.MetaData[CS3Prefix+"SpaceRoot"],
-					},
-					// FIXME this seems wrong, path is not really relative to space root
-					// actually it is: InitiateUpload calls fs.lu.Path to get the path relative to the root...
-					// hm is that robust? what if the file is moved? shouldn't we store the parent id, then?
-					Path: utils.MakeRelativePath(filepath.Join(info.MetaData[CS3Prefix+"dir"], info.MetaData[CS3Prefix+"filename"])),
-				}
-			*/
-			spaceOwner := um.GetSpaceOwner()
-			executant := um.GetExecutantID()
-			ref := um.GetReference()
-			datatx.InvalidateCache(&executant, &ref, m.statCache)
-			if m.publisher != nil {
-				if err := datatx.EmitFileUploadedEvent(&spaceOwner, &executant, &ref, m.publisher); err != nil {
-					appctx.GetLogger(context.Background()).Error().Err(err).Msg("failed to publish FileUploaded event")
+						executant := &userv1beta1.UserId{
+							Type:     userv1beta1.UserType(userv1beta1.UserType_value[info.MetaData[CS3Prefix+"ExecutantType"]]),
+							Idp:      info.MetaData[CS3Prefix+"ExecutantIdp"],
+							OpaqueId: info.MetaData[CS3Prefix+"ExecutantId"],
+						}
+					ref := &provider.Reference{
+						ResourceId: &provider.ResourceId{
+							StorageId: info.MetaData[CS3Prefix+"providerID"],
+							SpaceId:   info.MetaData[CS3Prefix+"SpaceRoot"],
+							OpaqueId:  info.MetaData[CS3Prefix+"SpaceRoot"],
+						},
+						// FIXME this seems wrong, path is not really relative to space root
+						// actually it is: InitiateUpload calls fs.lu.Path to get the path relative to the root...
+						// hm is that robust? what if the file is moved? shouldn't we store the parent id, then?
+						Path: utils.MakeRelativePath(filepath.Join(info.MetaData[CS3Prefix+"dir"], info.MetaData[CS3Prefix+"filename"])),
+					}
+				*/
+				spaceOwner := um.GetSpaceOwner()
+				executant := um.GetExecutantID()
+				ref := um.GetReference()
+				datatx.InvalidateCache(&executant, &ref, m.statCache)
+				if m.publisher != nil {
+					if err := datatx.EmitFileUploadedEvent(&spaceOwner, &executant, &ref, m.publisher); err != nil {
+						appctx.GetLogger(context.Background()).Error().Err(err).Msg("failed to publish FileUploaded event")
+					}
 				}
 			}
-		}
-	}()
+		}()
+	}
 
 	h := handler.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		method := r.Method
@@ -244,7 +245,7 @@ func setHeaders(datastore tusd.DataStore, umg storage.HasUploadMetadata, w http.
 	expires := ""
 	resourceid := provider.ResourceId{}
 	if umg != nil {
-		um, err := umg.GetUploadMetadata(info.ID)
+		um, err := umg.GetUploadMetadata(ctx, info.ID)
 		if err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Msg("could not get upload info for upload")
 			return
