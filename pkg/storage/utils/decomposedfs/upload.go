@@ -528,6 +528,16 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 		if err != nil {
 			return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: could not create new tus upload for legacy chunking")
 		}
+		newInfo, err = nup.GetInfo(ctx)
+		if err != nil {
+			return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: could not get info from upload")
+		}
+		uploadMetadata.ID = newInfo.ID
+		uploadMetadata.BlobSize = newInfo.Size
+		err = upload.WriteMetadata(ctx, fs.lu, newInfo.ID, uploadMetadata)
+		if err != nil {
+			return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error writing upload metadata for legacy chunking")
+		}
 
 		_, err = nup.WriteChunk(ctx, 0, fd)
 		if err != nil {
