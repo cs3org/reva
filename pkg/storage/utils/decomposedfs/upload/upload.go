@@ -375,12 +375,14 @@ func Cleanup(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploadID, rev
 			log := appctx.GetLogger(ctx)
 			log.Info().Str("path", n.InternalPath()).Err(err).Msg("unmarking processing failed")
 		}
-		if previousRevision != "" {
-			if err := n.SetCurrentRevision(ctx, previousRevision); err != nil {
-				log := appctx.GetLogger(ctx)
-				log.Info().Str("path", n.InternalPath()).Err(err).Msg("restoring current revision failed")
+		/*
+			if previousRevision != "" {
+				if err := n.SetCurrentRevision(ctx, previousRevision); err != nil {
+					log := appctx.GetLogger(ctx)
+					log.Info().Str("path", n.InternalPath()).Err(err).Msg("restoring current revision failed")
+				}
 			}
-		}
+		*/
 	}
 }
 

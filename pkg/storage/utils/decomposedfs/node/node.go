@@ -1002,6 +1002,7 @@ func (n *Node) UnsetTempEtag(ctx context.Context) (err error) {
 	return n.RemoveXattr(ctx, prefixes.TmpEtagAttr, true)
 }
 
+/*
 func (n *Node) GetCurrentRevision(ctx context.Context) (string, error) {
 	v, err := n.XattrString(ctx, prefixes.CurrentRevisionAttr)
 	if metadata.IsAttrUnset(err) {
@@ -1012,6 +1013,7 @@ func (n *Node) GetCurrentRevision(ctx context.Context) (string, error) {
 func (n *Node) SetCurrentRevision(ctx context.Context, revision string) error {
 	return n.SetXattrString(ctx, prefixes.CurrentRevisionAttr, revision)
 }
+*/
 
 func isGrantExpired(g *provider.Grant) bool {
 	if g.Expiration == nil {

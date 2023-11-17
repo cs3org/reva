@@ -22,6 +22,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -240,7 +241,12 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 		}
 	*/
 	if n.Exists {
-		uploadMetadata.PreviousRevisionTime, _ = n.GetCurrentRevision(ctx)
+		//uploadMetadata.PreviousRevisionTime, _ = n.GetCurrentRevision(ctx)
+		mtime, err := n.GetMTime(ctx)
+		if err != nil {
+			return Metadata{}, nil, errors.Wrap(err, "Decomposedfs: could not get mtime")
+		}
+		uploadMetadata.PreviousRevisionTime = mtime.UTC().Format(time.RFC3339Nano)
 	}
 
 	uploadMetadata.BlobID = newBlobID

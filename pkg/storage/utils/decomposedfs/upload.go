@@ -148,12 +148,13 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 			SpaceId:  checkNode.SpaceID,
 			OpaqueId: checkNode.ID,
 		}})
-		previousRevisionTime, err := n.GetCurrentRevision(ctx)
+		//previousRevisionTime, err := n.GetCurrentRevision(ctx)
+		previousRevisionTime, err := n.GetMTime(ctx)
 		if err != nil {
 			return nil, errors.Wrap(err, "Decomposedfs: error current revision of "+n.ID) // TODO this will be the case for all existing files
 			// fallback to mtime?
 		}
-		uploadMetadata.PreviousRevisionTime = previousRevisionTime
+		uploadMetadata.PreviousRevisionTime = previousRevisionTime.UTC().Format(time.RFC3339Nano)
 	} else {
 		// check permissions of parent
 		parent, perr := n.Parent(ctx)

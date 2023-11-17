@@ -268,9 +268,11 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	}
 
 	// update revision in node
-	if err = n.SetCurrentRevision(ctx, revisionKey); err != nil {
-		return errtypes.InternalError("failed to update revision for node")
-	}
+	/*
+		if err = n.SetCurrentRevision(ctx, revisionKey); err != nil {
+			return errtypes.InternalError("failed to update revision for node")
+		}
+	*/
 
 	// update blob id in node
 
