@@ -239,6 +239,9 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 			return nil, err
 		}
 	*/
+	if n.Exists {
+		uploadMetadata.PreviousRevisionTime, _ = n.GetCurrentRevision(ctx)
+	}
 
 	uploadMetadata.BlobID = newBlobID
 	uploadMetadata.BlobSize = size
