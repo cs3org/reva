@@ -20,6 +20,7 @@ package ocm
 
 import (
 	"context"
+	"encoding/xml"
 	"io"
 	"io/fs"
 	"net/http"
@@ -194,7 +195,11 @@ func getPathFromShareIDAndRelPath(shareID *ocmpb.ShareId, relPath string) string
 	return filepath.Join("/", shareID.OpaqueId, relPath)
 }
 
-func convertStatToResourceInfo(ref *provider.Reference, f fs.FileInfo, share *ocmpb.ReceivedShare) *provider.ResourceInfo {
+func convertStatToResourceInfo(ref *provider.Reference, f fs.FileInfo, share *ocmpb.ReceivedShare) (*provider.ResourceInfo, error) {
+	props, ok := f.Sys().(gowebdav.Props)
+	if !ok {
+		return nil, errtypes.InternalError("could not get webdav props")
+	}
 	t := provider.ResourceType_RESOURCE_TYPE_FILE
 	if f.IsDir() {
 		t = provider.ResourceType_RESOURCE_TYPE_CONTAINER
@@ -207,11 +212,15 @@ func convertStatToResourceInfo(ref *provider.Reference, f fs.FileInfo, share *oc
 		name = f.Name()
 	}
 
-	webdav, _ := getWebDAVProtocol(share.Protocols)
+	id, err := storagespace.ParseID(props.GetString(xml.Name{Space: "http://owncloud.org/ns", Local: "fileid"}))
+	if err != nil {
+		return nil, err
+	}
+	webdavProtocol, _ := getWebDAVProtocol(share.Protocols)
 
 	return &provider.ResourceInfo{
 		Type:     t,
-		Id:       ref.ResourceId,
+		Id:       &id,
 		MimeType: mime.Detect(f.IsDir(), f.Name()),
 		Path:     name,
 		Name:     name,
@@ -220,11 +229,11 @@ func convertStatToResourceInfo(ref *provider.Reference, f fs.FileInfo, share *oc
 			Seconds: uint64(f.ModTime().Unix()),
 		},
 		Owner:         share.Creator,
-		PermissionSet: webdav.Permissions.Permissions,
+		PermissionSet: webdavProtocol.Permissions.Permissions,
 		Checksum: &provider.ResourceChecksum{
 			Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID,
 		},
-	}
+	}, nil
 }
 
 func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string, _ []string) (*provider.ResourceInfo, error) {
@@ -233,7 +242,7 @@ func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string,
 		return nil, err
 	}
 
-	info, err := client.Stat(rel)
+	info, err := client.StatWithProps(rel, []string{}) // request all properties by giving an empty list
 	if err != nil {
 		if gowebdav.IsErrNotFound(err) {
 			return nil, errtypes.NotFound(ref.GetPath())
@@ -241,7 +250,7 @@ func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string,
 		return nil, err
 	}
 
-	return convertStatToResourceInfo(ref, info, share), nil
+	return convertStatToResourceInfo(ref, info, share)
 }
 
 func (d *driver) ListFolder(ctx context.Context, ref *provider.Reference, _ []string, _ []string) ([]*provider.ResourceInfo, error) {
@@ -250,14 +259,18 @@ func (d *driver) ListFolder(ctx context.Context, ref *provider.Reference, _ []st
 		return nil, err
 	}
 
-	list, err := client.ReadDir(rel)
+	list, err := client.ReadDirWithProps(rel, []string{}) // request all properties by giving an empty list
 	if err != nil {
 		return nil, err
 	}
 
 	res := make([]*provider.ResourceInfo, 0, len(list))
 	for _, r := range list {
-		res = append(res, convertStatToResourceInfo(ref, r, share))
+		info, err := convertStatToResourceInfo(ref, r, share)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, info)
 	}
 	return res, nil
 }
