@@ -233,7 +233,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	}
 
 	// revisions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
-	newRevisionPath := fs.lu.InternalPath(spaceID, node.JoinRevisionKey(nodeID, mtime.UTC().Format(time.RFC3339Nano)))
+	newRevisionPath := fs.lu.InternalPath(spaceID, node.JoinRevisionKey(nodeID, mtime.Format(time.RFC3339Nano)))
 
 	// touch new revision
 	if _, err := os.Create(newRevisionPath); err != nil {

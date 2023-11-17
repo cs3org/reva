@@ -329,7 +329,7 @@ func SetNodeToUpload(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploa
 func WriteUploadMetadataToNode(ctx context.Context, n *node.Node, uploadMetadata Metadata) error {
 
 	attrs := node.Attributes{}
-	attrs.SetString(prefixes.CurrentRevisionAttr, uploadMetadata.RevisionTime)
+	//attrs.SetString(prefixes.CurrentRevisionAttr, uploadMetadata.RevisionTime)
 	attrs.SetString(prefixes.BlobIDAttr, uploadMetadata.BlobID)
 	attrs.SetInt64(prefixes.BlobsizeAttr, uploadMetadata.BlobSize)
 	attrs.SetString(prefixes.MTimeAttr, uploadMetadata.MTime)
@@ -362,7 +362,7 @@ func ReadNode(ctx context.Context, lu *lookup.Lookup, uploadMetadata Metadata) (
 }
 
 // Cleanup cleans the upload
-func Cleanup(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploadID, revision, previousRevision string, failure bool) {
+func Cleanup(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploadID, revision string, failure bool) {
 	ctx, span := tracer.Start(ctx, "Cleanup")
 	defer span.End()
 

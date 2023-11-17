@@ -91,7 +91,7 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 				failed = true
 				keepUpload = true
 			case events.PPOutcomeContinue:
-				if err := Finalize(ctx, blobstore, uploadMetadata.RevisionTime, info, n, uploadMetadata.BlobID); err != nil {
+				if err := Finalize(ctx, blobstore, uploadMetadata.MTime, info, n, uploadMetadata.BlobID); err != nil {
 					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not finalize upload")
 					keepUpload = true // should we keep the upload when assembling failed?
 					failed = true
@@ -130,7 +130,7 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 				}
 			}
 
-			Cleanup(ctx, lu, n, info.ID, uploadMetadata.RevisionTime, uploadMetadata.PreviousRevisionTime, failed)
+			Cleanup(ctx, lu, n, info.ID, uploadMetadata.PreviousRevisionTime, failed)
 			if !keepUpload {
 				if tup, ok := up.(tusd.TerminatableUpload); ok {
 					terr := tup.Terminate(ctx)

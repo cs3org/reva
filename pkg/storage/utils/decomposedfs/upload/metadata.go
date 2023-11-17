@@ -45,19 +45,19 @@ type Metadata struct {
 	SpaceOwnerOrManager  string
 	ProviderID           string
 	PreviousRevisionTime string
-	RevisionTime         string
-	MTime                string
-	NodeID               string
-	NodeParentID         string
-	ExecutantIdp         string
-	ExecutantID          string
-	ExecutantType        string
-	ExecutantUserName    string
-	LogLevel             string
-	Checksum             string
-	ChecksumSHA1         []byte
-	ChecksumADLER32      []byte
-	ChecksumMD5          []byte
+	//RevisionTime         string
+	MTime             string
+	NodeID            string
+	NodeParentID      string
+	ExecutantIdp      string
+	ExecutantID       string
+	ExecutantType     string
+	ExecutantUserName string
+	LogLevel          string
+	Checksum          string
+	ChecksumSHA1      []byte
+	ChecksumADLER32   []byte
+	ChecksumMD5       []byte
 
 	BlobID   string
 	BlobSize int64
@@ -163,7 +163,7 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 		}
 		if !n.Exists {
 			n.ID = uuid.New().String()
-			nodeHandle, err = initNewNode(ctx, lu, uploadID, uploadMetadata.RevisionTime, n)
+			nodeHandle, err = initNewNode(ctx, lu, uploadID, uploadMetadata.MTime, n)
 			if err != nil {
 				log.Error().Err(err).Msg("could not init new node")
 				return Metadata{}, nil, err
@@ -214,7 +214,7 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 	// do not yet update the blobid ... urgh this is fishy
 	// 	nodeAttrs.SetInt64(prefixes.BlobsizeAttr, size) // FIXME ... argh now the propagation needs to revert the size diff propagation again
 	nodeAttrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+uploadID)
-	nodeAttrs.SetString(prefixes.CurrentRevisionAttr, uploadMetadata.RevisionTime)
+	//nodeAttrs.SetString(prefixes.CurrentRevisionAttr, uploadMetadata.RevisionTime)
 	err = n.SetXattrsWithContext(ctx, nodeAttrs, false)
 	if err != nil {
 		return Metadata{}, nil, errors.Wrap(err, "Decomposedfs: could not write metadata")

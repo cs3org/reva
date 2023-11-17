@@ -89,14 +89,14 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		SpaceRoot:           n.SpaceRoot.ID,
 		SpaceOwnerOrManager: n.SpaceOwnerOrManager(ctx).GetOpaqueId(),
 		ProviderID:          headers["providerID"],
-		RevisionTime:        time.Now().UTC().Format(time.RFC3339Nano),
-		NodeID:              n.ID,
-		NodeParentID:        n.ParentID,
-		ExecutantIdp:        usr.Id.Idp,
-		ExecutantID:         usr.Id.OpaqueId,
-		ExecutantType:       utils.UserTypeToString(usr.Id.Type),
-		ExecutantUserName:   usr.Username,
-		LogLevel:            sublog.GetLevel().String(),
+		//RevisionTime:        time.Now().UTC().Format(time.RFC3339Nano),
+		NodeID:            n.ID,
+		NodeParentID:      n.ParentID,
+		ExecutantIdp:      usr.Id.Idp,
+		ExecutantID:       usr.Id.OpaqueId,
+		ExecutantType:     utils.UserTypeToString(usr.Id.Type),
+		ExecutantUserName: usr.Username,
+		LogLevel:          sublog.GetLevel().String(),
 	}
 
 	tusMetadata := tusd.MetaData{}
@@ -125,10 +125,10 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 				return nil, err
 			}
 			uploadMetadata.MTime = mtime.UTC().Format(time.RFC3339Nano)
-			uploadMetadata.RevisionTime = uploadMetadata.MTime
+			//uploadMetadata.RevisionTime = uploadMetadata.MTime
 		}
-	} else {
-		uploadMetadata.MTime = uploadMetadata.RevisionTime
+		//} else {
+		//uploadMetadata.MTime = uploadMetadata.RevisionTime
 	}
 
 	_, err = node.CheckQuota(ctx, n.SpaceRoot, n.Exists, uint64(n.Blobsize), uint64(uploadLength))
@@ -389,7 +389,7 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 
 	uploadMetadata, n, err := upload.UpdateMetadata(ctx, fs.lu, info.ID, info.Size, uploadMetadata)
 	if err != nil {
-		upload.Cleanup(ctx, fs.lu, n, info.ID, uploadMetadata.RevisionTime, uploadMetadata.PreviousRevisionTime, true)
+		upload.Cleanup(ctx, fs.lu, n, info.ID, uploadMetadata.MTime, true)
 		if tup, ok := up.(tusd.TerminatableUpload); ok {
 			terr := tup.Terminate(ctx)
 			if terr != nil {
@@ -428,7 +428,7 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 
 	if uploadMetadata.PreviousRevisionTime != "" {
 		// write revision
-		revisionNode := n.RevisionNode(ctx, uploadMetadata.RevisionTime)
+		revisionNode := n.RevisionNode(ctx, uploadMetadata.PreviousRevisionTime)
 
 		rh, err := upload.CreateRevisionNode(ctx, fs.lu, revisionNode)
 		if err != nil {
@@ -444,8 +444,8 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 	sizeDiff := info.Size - n.Blobsize
 	if !fs.o.AsyncFileUploads {
 		// handle postprocessing synchronously
-		err = upload.Finalize(ctx, fs.blobstore, uploadMetadata.RevisionTime, info, n, uploadMetadata.BlobID) // moving or copying the blob only reads the blobid, no need to change the revision nodes nodeid
-		upload.Cleanup(ctx, fs.lu, n, info.ID, uploadMetadata.RevisionTime, uploadMetadata.PreviousRevisionTime, err != nil)
+		err = upload.Finalize(ctx, fs.blobstore, uploadMetadata.MTime, info, n, uploadMetadata.BlobID) // moving or copying the blob only reads the blobid, no need to change the revision nodes nodeid
+		upload.Cleanup(ctx, fs.lu, n, info.ID, uploadMetadata.MTime, err != nil)
 		if tup, ok := up.(tusd.TerminatableUpload); ok {
 			terr := tup.Terminate(ctx)
 			if terr != nil {
@@ -526,6 +526,7 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 	}
 
 	if chunking.IsChunked(uploadMetadata.Chunk) { // check chunking v1, TODO, actually there is a 'OC-Chunked: 1' header, at least when the testsuite uses chunking v1
+		// FIXME we are writing the revision with the current time as the revision time, but it should be the current mtime of the node
 		var assembledFile, p string
 		p, assembledFile, err = fs.chunkHandler.WriteChunk(uploadMetadata.Chunk, req.Body)
 		if err != nil {
