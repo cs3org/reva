@@ -72,8 +72,7 @@ const (
 	QuotaUnknown      = "-2"
 
 	// TrashIDDelimiter represents the characters used to separate the nodeid and the deletion time.
-	TrashIDDelimiter    = ".T."
-	RevisionIDDelimiter = ".REV."
+	TrashIDDelimiter = ".T."
 
 	// RootID defines the root node's ID
 	RootID = "root"
@@ -132,7 +131,7 @@ func New(spaceID, id, parentID, name string, blobsize int64, blobID string, t pr
 func (n *Node) RevisionNode(ctx context.Context, revision string) *Node {
 	return &Node{
 		SpaceID:  n.SpaceID,
-		ID:       n.ID + RevisionIDDelimiter + revision,
+		ID:       JoinRevisionKey(n.ID, revision),
 		ParentID: n.ParentID,
 		Name:     n.Name,
 		owner:    n.owner,
@@ -292,17 +291,8 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	}
 
 	// are we reading a revision?
-	revisionSuffix := ""
-	if strings.Contains(nodeID, RevisionIDDelimiter) {
-		// verify revision key format
-		kp := strings.SplitN(nodeID, RevisionIDDelimiter, 2)
-		if len(kp) == 2 {
-			// use the actual node for the metadata lookup
-			nodeID = kp[0]
-			// remember revision for blob metadata
-			revisionSuffix = RevisionIDDelimiter + kp[1]
-		}
-	}
+	var revision string
+	nodeID, revision = SplitRevisionKey(nodeID)
 
 	// read node
 	n := &Node{
@@ -317,7 +307,9 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	defer func() {
 		// when returning errors n is nil
 		if n != nil {
-			n.ID += revisionSuffix
+			if revision != "" {
+				n.ID = JoinRevisionKey(n.ID, revision)
+			}
 		}
 	}()
 
@@ -340,7 +332,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 		return nil, errtypes.InternalError("Missing parent ID on node")
 	}
 
-	if revisionSuffix == "" {
+	if revision == "" {
 		n.BlobID = attrs.String(prefixes.BlobIDAttr)
 		if n.BlobID != "" {
 			blobSize, err := attrs.Int64(prefixes.BlobsizeAttr)
@@ -350,13 +342,13 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 			n.Blobsize = blobSize
 		}
 	} else {
-		n.BlobID, err = lu.ReadBlobIDAttr(ctx, nodePath+revisionSuffix)
+		n.BlobID, err = lu.ReadBlobIDAttr(ctx, JoinRevisionKey(nodePath, revision))
 		if err != nil {
 			return nil, err
 		}
 
 		// Lookup blobsize
-		n.Blobsize, err = lu.ReadBlobSizeAttr(ctx, nodePath+revisionSuffix)
+		n.Blobsize, err = lu.ReadBlobSizeAttr(ctx, JoinRevisionKey(nodePath, revision))
 		if err != nil {
 			return nil, err
 		}

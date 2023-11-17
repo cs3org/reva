@@ -388,7 +388,7 @@ func Cleanup(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploadID, rev
 func removeRevision(ctx context.Context, lu *lookup.Lookup, n *node.Node, revision string) {
 	log := appctx.GetLogger(ctx)
 	nodePath := n.InternalPath()
-	revisionPath := nodePath + node.RevisionIDDelimiter + revision
+	revisionPath := node.JoinRevisionKey(nodePath, revision)
 	// remove revision
 	if err := utils.RemoveItem(revisionPath); err != nil {
 		log.Info().Str("path", revisionPath).Err(err).Msg("removing revision failed")

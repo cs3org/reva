@@ -657,9 +657,9 @@ func (t *Tree) removeNode(ctx context.Context, path string, n *node.Node) error 
 	}
 
 	// delete revisions
-	revs, err := filepath.Glob(n.InternalPath() + node.RevisionIDDelimiter + "*")
+	revs, err := filepath.Glob(node.JoinRevisionKey(n.InternalPath(), "*"))
 	if err != nil {
-		log.Error().Err(err).Str("path", n.InternalPath()+node.RevisionIDDelimiter+"*").Msg("glob failed badly")
+		log.Error().Err(err).Str("node", n.ID).Msg("glob failed badly")
 		return err
 	}
 	for _, rev := range revs {
