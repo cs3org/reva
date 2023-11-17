@@ -22,7 +22,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -39,13 +38,14 @@ import (
 )
 
 type Metadata struct {
-	ID                   string
-	Filename             string
-	SpaceRoot            string
-	SpaceOwnerOrManager  string
-	ProviderID           string
-	PreviousRevisionTime string
-	//RevisionTime         string
+	ID                  string
+	Filename            string
+	SpaceRoot           string
+	SpaceOwnerOrManager string
+	ProviderID          string
+	//PreviousRevisionTime string
+	// used to remove revision metadata when postprocessing result is delete -> use mtime
+	//RevisionTime      string
 	MTime             string
 	NodeID            string
 	NodeParentID      string
@@ -240,14 +240,18 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 			return nil, err
 		}
 	*/
-	if n.Exists {
-		//uploadMetadata.PreviousRevisionTime, _ = n.GetCurrentRevision(ctx)
-		mtime, err := n.GetMTime(ctx)
-		if err != nil {
-			return Metadata{}, nil, errors.Wrap(err, "Decomposedfs: could not get mtime")
+	/*
+		if n.Exists {
+			//uploadMetadata.PreviousRevisionTime, _ = n.GetCurrentRevision(ctx)
+			mtime, err := n.GetMTime(ctx)
+			if err != nil {
+				return Metadata{}, nil, errors.Wrap(err, "Decomposedfs: could not get mtime")
+			}
+			// this is currently only used as a flag. if it is not empty we will copy revision data to a new version
+			// TODO this could also be checked with the blobid
+			uploadMetadata.PreviousRevisionTime = mtime.UTC().Format(time.RFC3339Nano)
 		}
-		uploadMetadata.PreviousRevisionTime = mtime.UTC().Format(time.RFC3339Nano)
-	}
+	*/
 
 	uploadMetadata.BlobID = newBlobID
 	uploadMetadata.BlobSize = size

@@ -40,6 +40,7 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
@@ -47,6 +48,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
@@ -89,6 +91,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		SpaceRoot:           n.SpaceRoot.ID,
 		SpaceOwnerOrManager: n.SpaceOwnerOrManager(ctx).GetOpaqueId(),
 		ProviderID:          headers["providerID"],
+		MTime:               time.Now().UTC().Format(time.RFC3339Nano),
 		//RevisionTime:        time.Now().UTC().Format(time.RFC3339Nano),
 		NodeID:            n.ID,
 		NodeParentID:      n.ParentID,
@@ -149,12 +152,14 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 			OpaqueId: checkNode.ID,
 		}})
 		//previousRevisionTime, err := n.GetCurrentRevision(ctx)
-		previousRevisionTime, err := n.GetMTime(ctx)
-		if err != nil {
-			return nil, errors.Wrap(err, "Decomposedfs: error current revision of "+n.ID) // TODO this will be the case for all existing files
-			// fallback to mtime?
-		}
-		uploadMetadata.PreviousRevisionTime = previousRevisionTime.UTC().Format(time.RFC3339Nano)
+		/*
+			previousRevisionTime, err := n.GetMTime(ctx)
+			if err != nil {
+				return nil, errors.Wrap(err, "Decomposedfs: error current revision of "+n.ID) // TODO this will be the case for all existing files
+				// fallback to mtime?
+			}
+			uploadMetadata.PreviousRevisionTime = previousRevisionTime.UTC().Format(time.RFC3339Nano)
+		*/
 	} else {
 		// check permissions of parent
 		parent, perr := n.Parent(ctx)
@@ -426,16 +431,32 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 		}
 	}
 
-	if uploadMetadata.PreviousRevisionTime != "" {
-		// write revision
-		revisionNode := n.RevisionNode(ctx, uploadMetadata.PreviousRevisionTime)
+	if n.Exists {
+		// copy metadata to a revision node
+		currentAttrs, err := n.Xattrs(ctx)
+		if err != nil {
+			return err
+		}
+		previousRevisionTime, err := n.GetMTime(ctx)
+		if err != nil {
+			return err
+		}
+		rm := upload.RevisionMetadata{
+			MTime:           previousRevisionTime.UTC().Format(time.RFC3339Nano),
+			BlobID:          n.BlobID,
+			BlobSize:        n.Blobsize,
+			ChecksumSHA1:    currentAttrs[prefixes.ChecksumPrefix+storageprovider.XSSHA1],
+			ChecksumMD5:     currentAttrs[prefixes.ChecksumPrefix+storageprovider.XSMD5],
+			ChecksumADLER32: currentAttrs[prefixes.ChecksumPrefix+storageprovider.XSAdler32],
+		}
+		revisionNode := n.RevisionNode(ctx, rm.MTime)
 
 		rh, err := upload.CreateRevisionNode(ctx, fs.lu, revisionNode)
 		if err != nil {
 			return err
 		}
 		defer rh.Close()
-		err = upload.WriteUploadMetadataToNode(ctx, revisionNode, uploadMetadata)
+		err = upload.WriteRevisionMetadataToNode(ctx, revisionNode, rm)
 		if err != nil {
 			return err
 		}

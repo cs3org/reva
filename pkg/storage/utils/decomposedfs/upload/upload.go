@@ -314,11 +314,25 @@ func SetNodeToUpload(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploa
 
 	sizeDiff := uploadMetadata.BlobSize - n.Blobsize
 
+	// TODO set blobid ind size ... do we need to do this? the node is passed by reference so subsequent calls might rely on this
 	n.BlobID = uploadMetadata.BlobID
 	n.Blobsize = uploadMetadata.BlobSize
 
+	rm := RevisionMetadata{
+		MTime:           uploadMetadata.MTime,
+		BlobID:          uploadMetadata.BlobID,
+		BlobSize:        uploadMetadata.BlobSize,
+		ChecksumSHA1:    uploadMetadata.ChecksumSHA1,
+		ChecksumMD5:     uploadMetadata.ChecksumMD5,
+		ChecksumADLER32: uploadMetadata.ChecksumADLER32,
+	}
+
+	if rm.MTime == "" {
+		rm.MTime = time.Now().UTC().Format(time.RFC3339Nano)
+	}
+
 	// update node
-	err = WriteUploadMetadataToNode(ctx, n, uploadMetadata)
+	err = WriteRevisionMetadataToNode(ctx, n, rm)
 	if err != nil {
 		return 0, errors.Wrap(err, "Decomposedfs: could not write metadata")
 	}
@@ -326,16 +340,25 @@ func SetNodeToUpload(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploa
 	return sizeDiff, nil
 }
 
-func WriteUploadMetadataToNode(ctx context.Context, n *node.Node, uploadMetadata Metadata) error {
+type RevisionMetadata struct {
+	MTime           string
+	BlobID          string
+	BlobSize        int64
+	ChecksumSHA1    []byte
+	ChecksumMD5     []byte
+	ChecksumADLER32 []byte
+}
+
+func WriteRevisionMetadataToNode(ctx context.Context, n *node.Node, revisionMetadata RevisionMetadata) error {
 
 	attrs := node.Attributes{}
 	//attrs.SetString(prefixes.CurrentRevisionAttr, uploadMetadata.RevisionTime)
-	attrs.SetString(prefixes.BlobIDAttr, uploadMetadata.BlobID)
-	attrs.SetInt64(prefixes.BlobsizeAttr, uploadMetadata.BlobSize)
-	attrs.SetString(prefixes.MTimeAttr, uploadMetadata.MTime)
-	attrs[prefixes.ChecksumPrefix+storageprovider.XSSHA1] = uploadMetadata.ChecksumSHA1
-	attrs[prefixes.ChecksumPrefix+storageprovider.XSMD5] = uploadMetadata.ChecksumMD5
-	attrs[prefixes.ChecksumPrefix+storageprovider.XSAdler32] = uploadMetadata.ChecksumADLER32
+	attrs.SetString(prefixes.BlobIDAttr, revisionMetadata.BlobID)
+	attrs.SetInt64(prefixes.BlobsizeAttr, revisionMetadata.BlobSize)
+	attrs.SetString(prefixes.MTimeAttr, revisionMetadata.MTime)
+	attrs[prefixes.ChecksumPrefix+storageprovider.XSSHA1] = revisionMetadata.ChecksumSHA1
+	attrs[prefixes.ChecksumPrefix+storageprovider.XSMD5] = revisionMetadata.ChecksumMD5
+	attrs[prefixes.ChecksumPrefix+storageprovider.XSAdler32] = revisionMetadata.ChecksumADLER32
 
 	return n.SetXattrsWithContext(ctx, attrs, false)
 }

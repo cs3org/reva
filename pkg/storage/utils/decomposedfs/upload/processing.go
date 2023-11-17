@@ -130,7 +130,12 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 				}
 			}
 
-			Cleanup(ctx, lu, n, info.ID, uploadMetadata.PreviousRevisionTime, failed)
+			previousRevisionTime, err := n.GetMTime(ctx)
+			if err != nil {
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not get mtime")
+			}
+			revision := previousRevisionTime.UTC().Format(time.RFC3339Nano)
+			Cleanup(ctx, lu, n, info.ID, revision, failed)
 			if !keepUpload {
 				if tup, ok := up.(tusd.TerminatableUpload); ok {
 					terr := tup.Terminate(ctx)
