@@ -21,6 +21,7 @@ package ocm
 import (
 	"context"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -212,15 +213,22 @@ func convertStatToResourceInfo(ref *provider.Reference, f fs.FileInfo, share *oc
 		name = f.Name()
 	}
 
-	id, err := storagespace.ParseID(props.GetString(xml.Name{Space: "http://owncloud.org/ns", Local: "fileid"}))
+	remoteId, err := storagespace.ParseID(props.GetString(xml.Name{Space: "http://owncloud.org/ns", Local: "fileid"}))
 	if err != nil {
 		return nil, err
+	}
+
+	// ids are of the format <ocmstorageproviderid>$<shareid>!<opaqueid>
+	id := &provider.ResourceId{
+		StorageId: utils.OCMStorageProviderID,
+		SpaceId:   share.Id.OpaqueId,
+		OpaqueId:  fmt.Sprintf("%s:%s:%s", remoteId.StorageId, remoteId.SpaceId, remoteId.OpaqueId),
 	}
 	webdavProtocol, _ := getWebDAVProtocol(share.Protocols)
 
 	return &provider.ResourceInfo{
 		Type:     t,
-		Id:       &id,
+		Id:       id,
 		MimeType: mime.Detect(f.IsDir(), f.Name()),
 		Path:     name,
 		Name:     name,
