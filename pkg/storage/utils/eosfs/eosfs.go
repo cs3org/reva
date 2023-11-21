@@ -515,7 +515,12 @@ func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 		return errtypes.BadRequest("eosfs: no metadata set")
 	}
 
-	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
+	fn, _, err := fs.resolveRefAndGetAuth(ctx, ref)
+	if err != nil {
+		return err
+	}
+
+	rootAuth, err := fs.getRootAuth(ctx)
 	if err != nil {
 		return err
 	}
@@ -538,7 +543,7 @@ func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 
 		// TODO(labkode): SetArbitraryMetadata does not have semantics for recursivity.
 		// We set it to false
-		err := fs.c.SetAttr(ctx, auth, attr, false, false, fn)
+		err := fs.c.SetAttr(ctx, rootAuth, attr, false, false, fn)
 		if err != nil {
 			return errors.Wrap(err, "eosfs: error setting xattr in eos driver")
 		}
@@ -551,7 +556,12 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 		return errtypes.BadRequest("eosfs: no keys set")
 	}
 
-	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
+	fn, _, err := fs.resolveRefAndGetAuth(ctx, ref)
+	if err != nil {
+		return err
+	}
+
+	rootAuth, err := fs.getRootAuth(ctx)
 	if err != nil {
 		return err
 	}
@@ -566,7 +576,7 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 			Key:  k,
 		}
 
-		err := fs.c.UnsetAttr(ctx, auth, attr, false, fn)
+		err := fs.c.UnsetAttr(ctx, rootAuth, attr, false, fn)
 		if err != nil {
 			if errors.Is(err, eosclient.AttrNotExistsError) {
 				continue
@@ -578,12 +588,18 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 }
 
 func (fs *eosfs) getLockPayloads(ctx context.Context, auth eosclient.Authorization, path string) (string, string, error) {
-	data, err := fs.c.GetAttr(ctx, auth, "sys."+LockPayloadKey, path)
+
+	// sys attributes want root auth, buddy
+	rootauth, err := fs.getRootAuth(ctx)
+	if err != nil {
+		return "", "", err
+	}
+	data, err := fs.c.GetAttr(ctx, rootauth, "sys."+LockPayloadKey, path)
 	if err != nil {
 		return "", "", err
 	}
 
-	eoslock, err := fs.c.GetAttr(ctx, auth, "sys."+EosLockKey, path)
+	eoslock, err := fs.c.GetAttr(ctx, rootauth, "sys."+EosLockKey, path)
 	if err != nil {
 		return "", "", err
 	}
@@ -592,7 +608,13 @@ func (fs *eosfs) getLockPayloads(ctx context.Context, auth eosclient.Authorizati
 }
 
 func (fs *eosfs) removeLockAttrs(ctx context.Context, auth eosclient.Authorization, path string) error {
-	err := fs.c.UnsetAttr(ctx, auth, &eosclient.Attribute{
+
+	rootAuth, err := fs.getRootAuth(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = fs.c.UnsetAttr(ctx, rootAuth, &eosclient.Attribute{
 		Type: SystemAttr,
 		Key:  EosLockKey,
 	}, false, path)
@@ -600,7 +622,7 @@ func (fs *eosfs) removeLockAttrs(ctx context.Context, auth eosclient.Authorizati
 		return errors.Wrap(err, "eosfs: error unsetting the eos lock")
 	}
 
-	err = fs.c.UnsetAttr(ctx, auth, &eosclient.Attribute{
+	err = fs.c.UnsetAttr(ctx, rootAuth, &eosclient.Attribute{
 		Type: SystemAttr,
 		Key:  LockPayloadKey,
 	}, false, path)
@@ -1161,6 +1183,17 @@ func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*pr
 		return nil, err
 	}
 
+	// This is invoked just to see if it fails, I know, it's ugly
+	_, err = fs.c.GetAttrs(ctx, auth, fn)
+	if err != nil {
+		return nil, err
+	}
+
+	// Now we get the real info, I know, it's ugly
+	auth, err = fs.getRootAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
 	attrs, err := fs.c.GetAttrs(ctx, auth, fn)
 	if err != nil {
 		return nil, err
@@ -1208,7 +1241,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		fn = fs.wrap(ctx, p)
 	}
 
-	auth, err := fs.getUserAuth(ctx, u, fn)
+	auth, err := fs.getRootAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1254,13 +1287,13 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string) (*provider.ResourceInfo, error) {
 	fn := fs.wrapShadow(ctx, p)
 
-	u, err := getUser(ctx)
+	_, err := getUser(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	// lightweight accounts don't have share folders, so we're passing an empty string as path
-	auth, err := fs.getUserAuth(ctx, u, "")
+	auth, err := fs.getRootAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
