@@ -20,6 +20,7 @@ package ocm
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -60,6 +61,7 @@ type driver struct {
 
 type config struct {
 	GatewaySVC string `mapstructure:"gatewaysvc"`
+	Insecure   bool   `mapstructure:"insecure"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -153,6 +155,11 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 	// FIXME: it's still not clear from the OCM APIs how to use the shared secret
 	// will use as a token in the bearer authentication as this is the reva implementation
 	c := gowebdav.NewClient(endpoint, "", "")
+	if d.c.Insecure {
+		c.SetTransport(&http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		})
+	}
 	c.SetHeader("Authorization", "Bearer "+secret)
 
 	return c, share, rel, nil
