@@ -1174,6 +1174,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 
 		if md.Name != "" {
 			appendToOK(prop.Escaped("oc:name", md.Name))
+			appendToOK(prop.Escaped("d:displayname", md.Name))
 		}
 
 		if md.Etag != "" {
