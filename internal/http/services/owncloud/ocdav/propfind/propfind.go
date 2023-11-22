@@ -1078,7 +1078,6 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 		}
 		shareTypes = utils.ReadPlainFromOpaque(md.Opaque, "share-types")
 	}
-
 	role := conversions.RoleFromResourcePermissions(md.PermissionSet, ls != nil)
 
 	if md.Space != nil && md.Space.SpaceType != "grant" && utils.ResourceIDEqual(md.Space.Root, id) {

@@ -21,9 +21,11 @@ package conversions
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/cs3org/reva/v2/pkg/errtypes"
@@ -328,6 +330,11 @@ func ReceivedOCMShare2ShareData(share *ocm.ReceivedShare, path string) (*ShareDa
 		return nil, errtypes.InternalError("webdav endpoint not in share")
 	}
 
+	opaqueid := fmt.Sprintf("%s:%s", share.Id.OpaqueId, "/")
+	opaqueid = base64.StdEncoding.EncodeToString([]byte(opaqueid))
+
+	shareTarget := filepath.Join("/Shares", share.Name)
+
 	s := &ShareData{
 		ID:           share.Id.OpaqueId,
 		UIDOwner:     formatRemoteUser(share.Creator),
@@ -335,14 +342,14 @@ func ReceivedOCMShare2ShareData(share *ocm.ReceivedShare, path string) (*ShareDa
 		ShareWith:    share.Grantee.GetUserId().OpaqueId,
 		Permissions:  RoleFromResourcePermissions(webdav.GetPermissions().GetPermissions(), false).OCSPermissions(),
 		ShareType:    ShareTypeFederatedCloudShare,
-		Path:         path,
-		FileTarget:   path,
+		Path:         shareTarget,
+		FileTarget:   shareTarget,
 		MimeType:     mime.Detect(share.ResourceType == provider.ResourceType_RESOURCE_TYPE_CONTAINER, share.Name),
 		ItemType:     ResourceType(share.ResourceType).String(),
 		ItemSource: storagespace.FormatResourceID(provider.ResourceId{
 			StorageId: utils.OCMStorageProviderID,
 			SpaceId:   share.Id.OpaqueId,
-			OpaqueId:  share.Id.OpaqueId,
+			OpaqueId:  opaqueid,
 		}),
 		STime:   share.Ctime.Seconds,
 		Name:    share.Name,

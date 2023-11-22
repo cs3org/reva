@@ -21,7 +21,7 @@ package ocm
 import (
 	"context"
 	"crypto/tls"
-	"encoding/xml"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"io/fs"
@@ -204,10 +204,6 @@ func getPathFromShareIDAndRelPath(shareID *ocmpb.ShareId, relPath string) string
 }
 
 func convertStatToResourceInfo(ref *provider.Reference, f fs.FileInfo, share *ocmpb.ReceivedShare) (*provider.ResourceInfo, error) {
-	props, ok := f.Sys().(gowebdav.Props)
-	if !ok {
-		return nil, errtypes.InternalError("could not get webdav props")
-	}
 	t := provider.ResourceType_RESOURCE_TYPE_FILE
 	if f.IsDir() {
 		t = provider.ResourceType_RESOURCE_TYPE_CONTAINER
@@ -220,16 +216,18 @@ func convertStatToResourceInfo(ref *provider.Reference, f fs.FileInfo, share *oc
 		name = f.Name()
 	}
 
-	remoteId, err := storagespace.ParseID(props.GetString(xml.Name{Space: "http://owncloud.org/ns", Local: "fileid"}))
-	if err != nil {
-		return nil, err
+	webdavFile, ok := f.(gowebdav.File)
+	if !ok {
+		return nil, errtypes.InternalError("could not get webdav props")
 	}
+	opaqueid := fmt.Sprintf("%s:%s", share.Id.OpaqueId, webdavFile.Path())
+	opaqueid = base64.StdEncoding.EncodeToString([]byte(opaqueid))
 
 	// ids are of the format <ocmstorageproviderid>$<shareid>!<opaqueid>
 	id := &provider.ResourceId{
 		StorageId: utils.OCMStorageProviderID,
 		SpaceId:   share.Id.OpaqueId,
-		OpaqueId:  fmt.Sprintf("%s:%s:%s", remoteId.StorageId, remoteId.SpaceId, remoteId.OpaqueId),
+		OpaqueId:  opaqueid,
 	}
 	webdavProtocol, _ := getWebDAVProtocol(share.Protocols)
 
