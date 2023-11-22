@@ -139,27 +139,6 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				if err != nil {
 					appctx.GetLogger(context.Background()).Error().Err(err).Msg("failed to get upload metadata on publish FileUploaded event")
 				}
-				/*
-					spaceOwner := &userv1beta1.UserId{
-						OpaqueId: info.MetaData[CS3Prefix+"SpaceOwnerOrManager"],
-					}
-						executant := &userv1beta1.UserId{
-							Type:     userv1beta1.UserType(userv1beta1.UserType_value[info.MetaData[CS3Prefix+"ExecutantType"]]),
-							Idp:      info.MetaData[CS3Prefix+"ExecutantIdp"],
-							OpaqueId: info.MetaData[CS3Prefix+"ExecutantId"],
-						}
-					ref := &provider.Reference{
-						ResourceId: &provider.ResourceId{
-							StorageId: info.MetaData[CS3Prefix+"providerID"],
-							SpaceId:   info.MetaData[CS3Prefix+"SpaceRoot"],
-							OpaqueId:  info.MetaData[CS3Prefix+"SpaceRoot"],
-						},
-						// FIXME this seems wrong, path is not really relative to space root
-						// actually it is: InitiateUpload calls fs.lu.Path to get the path relative to the root...
-						// hm is that robust? what if the file is moved? shouldn't we store the parent id, then?
-						Path: utils.MakeRelativePath(filepath.Join(info.MetaData[CS3Prefix+"dir"], info.MetaData[CS3Prefix+"filename"])),
-					}
-				*/
 				spaceOwner := um.GetSpaceOwner()
 				executant := um.GetExecutantID()
 				ref := um.GetReference()

@@ -43,21 +43,18 @@ type Metadata struct {
 	SpaceRoot           string
 	SpaceOwnerOrManager string
 	ProviderID          string
-	//PreviousRevisionTime string
-	// used to remove revision metadata when postprocessing result is delete -> use mtime
-	//RevisionTime      string
-	MTime             string
-	NodeID            string
-	NodeParentID      string
-	ExecutantIdp      string
-	ExecutantID       string
-	ExecutantType     string
-	ExecutantUserName string
-	LogLevel          string
-	Checksum          string
-	ChecksumSHA1      []byte
-	ChecksumADLER32   []byte
-	ChecksumMD5       []byte
+	MTime               string
+	NodeID              string
+	NodeParentID        string
+	ExecutantIdp        string
+	ExecutantID         string
+	ExecutantType       string
+	ExecutantUserName   string
+	LogLevel            string
+	Checksum            string
+	ChecksumSHA1        []byte
+	ChecksumADLER32     []byte
+	ChecksumMD5         []byte
 
 	BlobID   string
 	BlobSize int64
@@ -136,14 +133,6 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 	}
 
 	var err error
-
-	// FIXME should uploads fail if they try to overwrite an existing file?
-	// but if the webdav overwrite header is set ... two concurrent requests might each create a node with a different id ... -> same problem
-	// two concurrent requests that would create a new node would return different ids ...
-	// what if we generate an id based on the parent id and the filename?
-	// - no, then renaming the file and recreating a node with the provious name would generate the same id
-	// -> we have to create the node on initialize upload with processing true?
-
 	var n *node.Node
 	var nodeHandle *lockedfile.File
 	if uploadMetadata.NodeID == "" {
@@ -212,51 +201,15 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 	nodeAttrs := node.Attributes{}
 	// store Blobsize in node so we can propagate a sizediff
 	// do not yet update the blobid ... urgh this is fishy
-	// 	nodeAttrs.SetInt64(prefixes.BlobsizeAttr, size) // FIXME ... argh now the propagation needs to revert the size diff propagation again
 	nodeAttrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+uploadID)
-	//nodeAttrs.SetString(prefixes.CurrentRevisionAttr, uploadMetadata.RevisionTime)
 	err = n.SetXattrsWithContext(ctx, nodeAttrs, false)
 	if err != nil {
 		return Metadata{}, nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
 	}
 
-	/*
-		revisionNode, err := n.ReadRevision(ctx, uploadMetadata.RevisionTime)
-		if err != nil {
-			return nil, err
-		}
-
-		var revisionHandle *lockedfile.File
-		revisionHandle, err = createRevisionNode(ctx, lu, revisionNode)
-		defer func() {
-			if revisionHandle == nil {
-				return
-			}
-			if err := revisionHandle.Close(); err != nil {
-				log.Error().Err(err).Str("nodeid", revisionNode.ID).Str("parentid", revisionNode.ParentID).Msg("could not close lock")
-			}
-		}()
-		if err != nil {
-			return nil, err
-		}
-	*/
-	/*
-		if n.Exists {
-			//uploadMetadata.PreviousRevisionTime, _ = n.GetCurrentRevision(ctx)
-			mtime, err := n.GetMTime(ctx)
-			if err != nil {
-				return Metadata{}, nil, errors.Wrap(err, "Decomposedfs: could not get mtime")
-			}
-			// this is currently only used as a flag. if it is not empty we will copy revision data to a new version
-			// TODO this could also be checked with the blobid
-			uploadMetadata.PreviousRevisionTime = mtime.UTC().Format(time.RFC3339Nano)
-		}
-	*/
-
 	uploadMetadata.BlobID = newBlobID
 	uploadMetadata.BlobSize = size
 	// TODO we should persist all versions as writes with ranges and the blobid in the node metadata
-	// attrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+info.ID)
 
 	err = WriteMetadata(ctx, lu, uploadID, uploadMetadata)
 	if err != nil {
@@ -291,7 +244,7 @@ func (m Metadata) GetReference() provider.Reference {
 			SpaceId:   m.SpaceRoot,
 			OpaqueId:  m.NodeID,
 		},
-		// Parh is not used
+		// Path is not used
 	}
 }
 func (m Metadata) GetExecutantID() userpb.UserId {

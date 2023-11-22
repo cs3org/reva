@@ -95,74 +95,6 @@ func init() {
 	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/utils/decomposedfs/upload")
 }
 
-// CreateNewRevision will create a new revision node
-/*
-func CreateNewRevision(ctx context.Context, lu *lookup.Lookup, path string, fsize uint64) (*lockedfile.File, error) {
-	_, span := tracer.Start(ctx, "CreateNewRevision")
-	defer span.End()
-
-	// create folder structure (if needed)
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return nil, err
-	}
-
-	// create and write lock new node metadata by parentid/name
-	f, err := lockedfile.OpenFile(lu.MetadataBackend().LockfilePath(path), os.O_RDWR|os.O_CREATE, 0600)
-	if err != nil {
-		return nil, err
-	}
-
-	return f, nil
-}
-*/
-/*
-// CreateNewNode will lock the given node and try to symlink it to the parent
-func CreateNewNode(ctx context.Context, lu *lookup.Lookup, n *node.Node, fsize uint64) (*lockedfile.File, error) {
-	ctx, span := tracer.Start(ctx, "CreateNewNode")
-	defer span.End()
-
-	// create folder structure (if needed)
-	if err := os.MkdirAll(filepath.Dir(n.InternalPath()), 0700); err != nil {
-		return nil, err
-	}
-
-	// create and write lock new node metadata by parentid/name
-	f, err := lockedfile.OpenFile(lu.MetadataBackend().LockfilePath(n.InternalPath()), os.O_RDWR|os.O_CREATE, 0600)
-	if err != nil {
-		return nil, err
-	}
-
-	// we also need to touch the actual node file here it stores the mtime of the resource
-	h, err := os.OpenFile(n.InternalPath(), os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		return f, err
-	}
-	h.Close()
-
-	if _, err := node.CheckQuota(ctx, n.SpaceRoot, false, 0, fsize); err != nil {
-		return f, err
-	}
-
-	// link child name to parent if it is new
-	childNameLink := filepath.Join(n.ParentPath(), n.Name)
-	relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
-	log := appctx.GetLogger(ctx).With().Str("childNameLink", childNameLink).Str("relativeNodePath", relativeNodePath).Logger()
-	log.Info().Msg("createNewNode: creating symlink")
-
-	if err = os.Symlink(relativeNodePath, childNameLink); err != nil {
-		log.Info().Err(err).Msg("createNewNode: symlink failed")
-		if errors.Is(err, iofs.ErrExist) {
-			log.Info().Err(err).Msg("createNewNode: symlink already exists")
-
-			return f, errtypes.AlreadyExists(n.Name)
-		}
-		return f, errors.Wrap(err, "Decomposedfs: could not symlink child entry")
-	}
-	log.Info().Msg("createNewNode: symlink created")
-
-	return f, nil
-}
-*/
 func validateRequest(ctx context.Context, size int64, uploadMetadata Metadata, n *node.Node) error {
 	if err := n.CheckLock(ctx); err != nil {
 		return err
@@ -350,9 +282,7 @@ type RevisionMetadata struct {
 }
 
 func WriteRevisionMetadataToNode(ctx context.Context, n *node.Node, revisionMetadata RevisionMetadata) error {
-
 	attrs := node.Attributes{}
-	//attrs.SetString(prefixes.CurrentRevisionAttr, uploadMetadata.RevisionTime)
 	attrs.SetString(prefixes.BlobIDAttr, revisionMetadata.BlobID)
 	attrs.SetInt64(prefixes.BlobsizeAttr, revisionMetadata.BlobSize)
 	attrs.SetString(prefixes.MTimeAttr, revisionMetadata.MTime)
@@ -398,14 +328,6 @@ func Cleanup(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploadID, rev
 			log := appctx.GetLogger(ctx)
 			log.Info().Str("path", n.InternalPath()).Err(err).Msg("unmarking processing failed")
 		}
-		/*
-			if previousRevision != "" {
-				if err := n.SetCurrentRevision(ctx, previousRevision); err != nil {
-					log := appctx.GetLogger(ctx)
-					log.Info().Str("path", n.InternalPath()).Err(err).Msg("restoring current revision failed")
-				}
-			}
-		*/
 	}
 }
 

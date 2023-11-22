@@ -92,14 +92,13 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		SpaceOwnerOrManager: n.SpaceOwnerOrManager(ctx).GetOpaqueId(),
 		ProviderID:          headers["providerID"],
 		MTime:               time.Now().UTC().Format(time.RFC3339Nano),
-		//RevisionTime:        time.Now().UTC().Format(time.RFC3339Nano),
-		NodeID:            n.ID,
-		NodeParentID:      n.ParentID,
-		ExecutantIdp:      usr.Id.Idp,
-		ExecutantID:       usr.Id.OpaqueId,
-		ExecutantType:     utils.UserTypeToString(usr.Id.Type),
-		ExecutantUserName: usr.Username,
-		LogLevel:          sublog.GetLevel().String(),
+		NodeID:              n.ID,
+		NodeParentID:        n.ParentID,
+		ExecutantIdp:        usr.Id.Idp,
+		ExecutantID:         usr.Id.OpaqueId,
+		ExecutantType:       utils.UserTypeToString(usr.Id.Type),
+		ExecutantUserName:   usr.Username,
+		LogLevel:            sublog.GetLevel().String(),
 	}
 
 	tusMetadata := tusd.MetaData{}
@@ -128,10 +127,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 				return nil, err
 			}
 			uploadMetadata.MTime = mtime.UTC().Format(time.RFC3339Nano)
-			//uploadMetadata.RevisionTime = uploadMetadata.MTime
 		}
-		//} else {
-		//uploadMetadata.MTime = uploadMetadata.RevisionTime
 	}
 
 	_, err = node.CheckQuota(ctx, n.SpaceRoot, n.Exists, uint64(n.Blobsize), uint64(uploadLength))
@@ -151,15 +147,6 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 			SpaceId:  checkNode.SpaceID,
 			OpaqueId: checkNode.ID,
 		}})
-		//previousRevisionTime, err := n.GetCurrentRevision(ctx)
-		/*
-			previousRevisionTime, err := n.GetMTime(ctx)
-			if err != nil {
-				return nil, errors.Wrap(err, "Decomposedfs: error current revision of "+n.ID) // TODO this will be the case for all existing files
-				// fallback to mtime?
-			}
-			uploadMetadata.PreviousRevisionTime = previousRevisionTime.UTC().Format(time.RFC3339Nano)
-		*/
 	} else {
 		// check permissions of parent
 		parent, perr := n.Parent(ctx)
@@ -378,19 +365,6 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 	uploadMetadata.ChecksumSHA1 = sha1h.Sum(nil)
 	uploadMetadata.ChecksumMD5 = md5h.Sum(nil)
 	uploadMetadata.ChecksumADLER32 = adler32h.Sum(nil)
-	/*
-		// set mtime for revision
-		if info.MetaData["mtime"] == "" {
-			uploadMetadata.MTime = uploadMetadata.RevisionTime
-		} else {
-			// overwrite mtime if requested
-			mtime, err := utils.MTimeToTime(info.MetaData["mtime"])
-			if err != nil {
-				return err
-			}
-			uploadMetadata.MTime = mtime.UTC().Format(time.RFC3339Nano)
-		}
-	*/
 
 	uploadMetadata, n, err := upload.UpdateMetadata(ctx, fs.lu, info.ID, info.Size, uploadMetadata)
 	if err != nil {
@@ -477,7 +451,6 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 			log.Error().Err(err).Msg("failed to upload")
 			return err
 		}
-		// FIXME SetNodeToUpload also creates the revision, but the tests expect them to be created before async processing starts
 		sizeDiff, err = upload.SetNodeToUpload(ctx, fs.lu, n, uploadMetadata)
 		if err != nil {
 			log.Error().Err(err).Msg("failed update Node to revision")
@@ -547,7 +520,6 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 	}
 
 	if chunking.IsChunked(uploadMetadata.Chunk) { // check chunking v1, TODO, actually there is a 'OC-Chunked: 1' header, at least when the testsuite uses chunking v1
-		// FIXME we are writing the revision with the current time as the revision time, but it should be the current mtime of the node
 		var assembledFile, p string
 		p, assembledFile, err = fs.chunkHandler.WriteChunk(uploadMetadata.Chunk, req.Body)
 		if err != nil {
@@ -679,8 +651,6 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 
 	return ri, nil
 }
-
-// FIXME all the below functions should needs a dedicated package ... the tusd datastore interface has no way of listing uploads, so we need to extend them
 
 // GetUploadMetadata returns the metadata for the given upload id
 func (fs *Decomposedfs) GetUploadMetadata(ctx context.Context, uploadID string) (storage.UploadMetadata, error) {
