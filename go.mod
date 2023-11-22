@@ -231,4 +231,4 @@ require (
 
 replace github.com/go-micro/plugins/v4/store/nats-js-kv => github.com/kobergj/plugins/v4/store/nats-js-kv v0.0.0-20231207143248-4d424e3ae348
 
-replace github.com/studio-b12/gowebdav => github.com/aduffeck/gowebdav v0.0.0-20231117083401-b14990633b9d
+replace github.com/studio-b12/gowebdav => github.com/aduffeck/gowebdav v0.0.0-20231123085457-ff658b6ea159

@@ -24,6 +24,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -90,6 +91,9 @@ func New(m map[string]interface{}) (invite.Repository, error) {
 func loadOrCreate(file string) (*inviteModel, error) {
 	_, err := os.Stat(file)
 	if os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(file), 0700); err != nil {
+			return nil, errors.Wrap(err, "error creating the ocm storage dir: "+filepath.Dir(file))
+		}
 		if err := os.WriteFile(file, []byte("{}"), 0700); err != nil {
 			return nil, errors.Wrap(err, "error creating the invite storage file: "+file)
 		}
