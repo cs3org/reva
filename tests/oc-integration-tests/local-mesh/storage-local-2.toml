@@ -23,7 +23,6 @@ root = "/var/tmp/reva/data-local-2"
 owner = "4c510ada-c86b-4815-8820-42cdf82c3d51"
 owner_idp = "http://localhost:40080"
 owner_type = "USER_TYPE_PRIMARY"
-enable_home = false
 treetime_accounting = true
 treesize_accounting = true
 
@@ -39,6 +38,5 @@ root = "/var/tmp/reva/data-local-2"
 owner = "4c510ada-c86b-4815-8820-42cdf82c3d51"
 owner_idp = "http://localhost:40080"
 owner_type = "USER_TYPE_PRIMARY"
-enable_home = false
 treetime_accounting = true
 treesize_accounting = true

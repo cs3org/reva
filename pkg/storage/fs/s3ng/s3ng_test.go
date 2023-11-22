@@ -40,7 +40,6 @@ var _ = Describe("S3ng", func() {
 
 		options = map[string]interface{}{
 			"root":           tmpRoot,
-			"enable_home":    true,
 			"share_folder":   "/Shares",
 			"permissionssvc": "any",
 			"s3.endpoint":    "http://1.2.3.4:5000",
