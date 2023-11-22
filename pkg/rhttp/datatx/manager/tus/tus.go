@@ -80,7 +80,7 @@ func New(m map[string]interface{}, publisher events.Publisher) (datatx.DataTX, e
 
 func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	zlog, err := logger.FromConfig(&logger.LogConf{
-		Output: "stdtout",
+		Output: "stdout",
 		Mode:   "console",
 		Level:  "debug",
 	})
@@ -113,14 +113,14 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	} else {
 		composable, ok := fs.(composable)
 		if !ok {
-			return nil, errtypes.NotSupported("file system does not support the tus protocol")
+			return nil, errtypes.NotSupported("storage driver does not support the tus protocol")
 		}
 
 		// let the composable storage tell tus which extensions it supports
 		composable.UseIn(composer)
 		dataStore, ok = fs.(tusd.DataStore)
 		if !ok {
-			return nil, errtypes.NotSupported("file system does not support the tus datastore")
+			return nil, errtypes.NotSupported("storage driver does not support the tus datastore")
 		}
 	}
 
