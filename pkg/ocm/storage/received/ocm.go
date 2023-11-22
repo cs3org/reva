@@ -22,7 +22,6 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/base64"
-	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -99,7 +98,16 @@ func shareInfoFromReference(ref *provider.Reference) (*ocmpb.ShareId, string) {
 		return shareInfoFromPath(ref.Path)
 	}
 
-	return &ocmpb.ShareId{OpaqueId: ref.ResourceId.OpaqueId}, ref.Path
+	if ref.ResourceId.SpaceId == ref.ResourceId.OpaqueId {
+		return &ocmpb.ShareId{OpaqueId: ref.ResourceId.SpaceId}, ref.Path
+	}
+	decodedBytes, err := base64.StdEncoding.DecodeString(ref.ResourceId.OpaqueId)
+	if err != nil {
+		// this should never happen
+		return &ocmpb.ShareId{OpaqueId: ref.ResourceId.SpaceId}, ref.Path
+	}
+	return &ocmpb.ShareId{OpaqueId: ref.ResourceId.SpaceId}, filepath.Join(string(decodedBytes), ref.Path)
+
 }
 
 func (d *driver) getWebDAVFromShare(ctx context.Context, shareID *ocmpb.ShareId) (*ocmpb.ReceivedShare, string, string, error) {
@@ -220,8 +228,7 @@ func convertStatToResourceInfo(ref *provider.Reference, f fs.FileInfo, share *oc
 	if !ok {
 		return nil, errtypes.InternalError("could not get webdav props")
 	}
-	opaqueid := fmt.Sprintf("%s:%s", share.Id.OpaqueId, webdavFile.Path())
-	opaqueid = base64.StdEncoding.EncodeToString([]byte(opaqueid))
+	opaqueid := base64.StdEncoding.EncodeToString([]byte(webdavFile.Path()))
 
 	// ids are of the format <ocmstorageproviderid>$<shareid>!<opaqueid>
 	id := &provider.ResourceId{

@@ -330,8 +330,7 @@ func ReceivedOCMShare2ShareData(share *ocm.ReceivedShare, path string) (*ShareDa
 		return nil, errtypes.InternalError("webdav endpoint not in share")
 	}
 
-	opaqueid := fmt.Sprintf("%s:%s", share.Id.OpaqueId, "/")
-	opaqueid = base64.StdEncoding.EncodeToString([]byte(opaqueid))
+	opaqueid := base64.StdEncoding.EncodeToString([]byte("/"))
 
 	shareTarget := filepath.Join("/Shares", share.Name)
 
