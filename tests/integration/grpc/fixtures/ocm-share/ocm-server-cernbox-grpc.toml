@@ -41,7 +41,6 @@ data_server_url = "http://{{cernboxhttp_address}}/data"
 root = "{{root}}/storage"
 treetime_accounting = true
 treesize_accounting = true
-enable_home = true
 permissionssvc = "{{permissions_address}}"
 
 [grpc.services.authregistry]

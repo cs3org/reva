@@ -189,7 +189,6 @@ var _ = Describe("gateway", func() {
 				"root":                revads["storage"].StorageRoot,
 				"userprovidersvc":     revads["users"].GrpcAddress,
 				"permissionssvc":      revads["permissions"].GrpcAddress,
-				"enable_home":         true,
 				"treesize_accounting": true,
 				"treetime_accounting": true,
 			}, nil)
@@ -216,7 +215,6 @@ var _ = Describe("gateway", func() {
 				"root":                revads["storage"].StorageRoot,
 				"userprovidersvc":     revads["users"].GrpcAddress,
 				"permissionssvc":      revads["permissions"].GrpcAddress,
-				"enable_home":         true,
 				"treesize_accounting": true,
 				"treetime_accounting": true,
 			}, nil)
@@ -380,7 +378,6 @@ var _ = Describe("gateway", func() {
 			fs, err = ocis.New(map[string]interface{}{
 				"root":                revads["storage"].StorageRoot,
 				"permissionssvc":      revads["permissions"].GrpcAddress,
-				"enable_home":         true,
 				"treesize_accounting": true,
 				"treetime_accounting": true,
 			}, nil)
@@ -406,7 +403,6 @@ var _ = Describe("gateway", func() {
 				"root":                revads["storage2"].StorageRoot,
 				"userprovidersvc":     revads["users"].GrpcAddress,
 				"permissionssvc":      revads["permissions"].GrpcAddress,
-				"enable_home":         true,
 				"treesize_accounting": true,
 				"treetime_accounting": true,
 			}, nil)

@@ -25,7 +25,6 @@ enable_home_creation = true
 
 [grpc.services.storageprovider.drivers.ocis]
 root = "/var/tmp/reva/data"
-enable_home = true
 treetime_accounting = true
 treesize_accounting = true
 #user_layout = 
@@ -43,6 +42,5 @@ temp_folder = "/var/tmp/reva/tmp"
 
 [http.services.dataprovider.drivers.ocis]
 root = "/var/tmp/reva/data"
-enable_home = true
 treetime_accounting = true
 treesize_accounting = true
