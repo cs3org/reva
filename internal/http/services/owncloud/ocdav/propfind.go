@@ -34,6 +34,7 @@ import (
 	"time"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -64,6 +65,8 @@ const (
 	// _propQuotaUncalculated = "-1".
 	_propQuotaUnknown = "-2"
 	// _propQuotaUnlimited    = "-3".
+
+	_disableOpenInApp string = "disable_open_in_app"
 )
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace.
@@ -524,7 +527,17 @@ func appendSlash(path string) string {
 	return path + "/"
 }
 
-func (s *svc) isOpenable(path string) bool {
+func (s *svc) isOpenable(ctx context.Context, path string) bool {
+	// try first by path, faster than looking into DB
+	if ok := s.isOpenableByPath(path); !ok {
+		return ok
+	}
+
+	// at this point, the path is not disabled and we check user preferences
+	return s.isOpenableByUserPreference(ctx, path)
+}
+
+func (s *svc) isOpenableByPath(path string) bool {
 	path = appendSlash(path)
 	path = filepath.Join("/", path)
 	for _, prefix := range s.c.DisabledOpenInAppPaths {
@@ -533,6 +546,53 @@ func (s *svc) isOpenable(path string) bool {
 		}
 	}
 	return true
+}
+
+func (s *svc) isOpenableByUserPreference(ctx context.Context, path string) bool {
+	log := appctx.GetLogger(ctx)
+
+	if !s.c.CheckUserPrefForOpenApps {
+		return true
+	}
+
+	// obtain user, if no user, then always allow open (public links, ...)
+	u, ok := appctx.ContextGetUser(ctx)
+	if !ok || u == nil {
+		return true
+	}
+
+	req := &preferences.GetKeyRequest{
+		Key: &preferences.PreferenceKey{
+			Namespace: u.Username,
+			Key:       _disableOpenInApp,
+		},
+	}
+
+	c, err := s.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting client for grpc preferences service")
+		return true
+	}
+
+	res, err := c.GetKey(ctx, req)
+	if err != nil {
+		return true // fallback to enable
+	}
+
+	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			log.Info().Msgf("key %s not set for user %s", _disableOpenInApp, u.Username)
+		} else {
+			log.Error().Msgf("error getting user preference %s for user %s", _disableOpenInApp, u.Username)
+		}
+		return true // always fallback to enable apps
+	}
+
+	log.Info().Msgf("key %s is  set for user %s with value %s", _disableOpenInApp, u.Username, res.Val)
+	if res.Val == "true" {
+		return true
+	}
+	return false
 }
 
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
@@ -588,7 +648,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			isShared,
 			false,
 			isPublic,
-			s.isOpenable(md.Path),
+			s.isOpenable(ctx, md.Path),
 		)
 		sublog.Debug().Interface("role", role).Str("dav-permissions", wdp).Msg("converted PermissionSet")
 	}

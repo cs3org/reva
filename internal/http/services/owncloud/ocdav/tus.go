@@ -303,7 +303,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 				isShared,
 				false,
 				isPublic,
-				s.isOpenable(info.Path),
+				s.isOpenable(ctx, info.Path),
 			)
 
 			w.Header().Set(HeaderContentType, info.MimeType)
