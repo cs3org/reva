@@ -178,16 +178,10 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		return nil, err
 	}
 
-	// treat 0 length uploads as deferred
-	sizeIsDeferred := false
-	if uploadLength == 0 {
-		sizeIsDeferred = true
-	}
-
 	info := tusd.FileInfo{
 		MetaData:       tusMetadata,
 		Size:           uploadLength,
-		SizeIsDeferred: sizeIsDeferred,
+		SizeIsDeferred: uploadLength == 0, // treat 0 length uploads as deferred
 	}
 	if lockID, ok := ctxpkg.ContextGetLockID(ctx); ok {
 		uploadMetadata.LockID = lockID
@@ -320,16 +314,18 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 		r2 := io.TeeReader(r1, md5h)
 
 		_, subspan = tracer.Start(ctx, "io.Copy")
-		bytesCopied, err := io.Copy(adler32h, r2)
+		/*bytesCopied*/ _, err = io.Copy(adler32h, r2)
 		subspan.End()
 		if err != nil {
 			log.Info().Err(err).Msg("error copying checksums")
 		}
-		if bytesCopied != info.Size {
-			msg := fmt.Sprintf("mismatching upload length. expected %d, could only copy %d", info.Size, bytesCopied)
-			log.Error().Interface("info", info).Msg(msg)
-			return errtypes.InternalError(msg)
-		}
+		/*
+			if bytesCopied != info.Size {
+				msg := fmt.Sprintf("mismatching upload length. expected %d, could only copy %d", info.Size, bytesCopied)
+				log.Error().Interface("info", info).Msg(msg)
+				return errtypes.InternalError(msg)
+			}
+		*/
 	}
 
 	// compare if they match the sent checksum
