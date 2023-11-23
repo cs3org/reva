@@ -67,6 +67,32 @@ func (c *config) ApplyDefaults() {
 	c.GatewaySVC = sharedconf.GetGatewaySVC(c.GatewaySVC)
 }
 
+// BearerAuthenticator represents an authenticator that adds a Bearer token to the Authorization header of HTTP requests.
+type BearerAuthenticator struct {
+	token string
+}
+
+// Authorize adds the Bearer token to the Authorization header of the provided HTTP request.
+func (b BearerAuthenticator) Authorize(_ *http.Client, r *http.Request, _ string) error {
+	r.Header.Add("Authorization", "Bearer "+b.token)
+	return nil
+}
+
+// Verify is not implemented for the BearerAuthenticator. It always returns false and nil error.
+func (BearerAuthenticator) Verify(*http.Client, *http.Response, string) (bool, error) {
+	return false, nil
+}
+
+// Clone creates a new instance of the BearerAuthenticator.
+func (BearerAuthenticator) Clone() gowebdav.Authenticator {
+	return BearerAuthenticator{}
+}
+
+// Close is not implemented for the BearerAuthenticator. It always returns nil.
+func (BearerAuthenticator) Close() error {
+	return nil
+}
+
 // New creates an OCM storage driver.
 func New(m map[string]interface{}, _ events.Stream) (storage.FS, error) {
 	var c config
@@ -162,13 +188,12 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 
 	// FIXME: it's still not clear from the OCM APIs how to use the shared secret
 	// will use as a token in the bearer authentication as this is the reva implementation
-	c := gowebdav.NewClient(endpoint, "", "")
+	c := gowebdav.NewAuthClient(endpoint, gowebdav.NewPreemptiveAuth(BearerAuthenticator{token: secret}))
 	if d.c.Insecure {
 		c.SetTransport(&http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		})
 	}
-	c.SetHeader("Authorization", "Bearer "+secret)
 
 	return c, share, rel, nil
 }
