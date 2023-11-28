@@ -23,6 +23,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
@@ -74,7 +75,7 @@ func New(ctx context.Context, m map[string]interface{}) (storage.Registry, error
 	log := appctx.GetLogger(ctx)
 	annotatedLog := log.With().Str("storageregistry", "dynamic").Logger()
 
-	rt, err := initRoutingTree(c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName)
+	rt, err := initRoutingTree(c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName, c.Rules)
 	if err != nil {
 		return nil, errors.Wrap(err, "error initializing routing tree")
 	}
@@ -95,7 +96,7 @@ func New(ctx context.Context, m map[string]interface{}) (storage.Registry, error
 	return d, nil
 }
 
-func initRoutingTree(dbUsername, dbPassword, dbHost string, dbPort int, dbName string) (*routingtree.RoutingTree, error) {
+func initRoutingTree(dbUsername, dbPassword, dbHost string, dbPort int, dbName string, rules map[string]string) (*routingtree.RoutingTree, error) {
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", dbUsername, dbPassword, dbHost, dbPort, dbName))
 	if err != nil {
 		return nil, errors.Wrap(err, "error opening sql connection")
@@ -108,13 +109,22 @@ func initRoutingTree(dbUsername, dbPassword, dbHost string, dbPort int, dbName s
 
 	rs := make(map[string]string)
 
+	missingRules := []string{}
+
 	for results.Next() {
 		var p, m string
 		err = results.Scan(&p, &m)
 		if err != nil {
 			return nil, errors.Wrap(err, "error scanning rows from db")
 		}
+		if _, ok := rules[m]; !ok {
+			missingRules = append(missingRules, m)
+		}
 		rs[p] = m
+	}
+
+	if len(missingRules) != 0 {
+		return nil, errors.New("config: missing routes for: " + strings.Join(missingRules, ", "))
 	}
 
 	return routingtree.New(rs), nil
@@ -185,7 +195,9 @@ func (d *dynamic) FindProviders(ctx context.Context, ref *provider.Reference) ([
 			}}, nil
 		}
 
-		return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
+		err := errtypes.InternalError("storage provider address not found for " + storageID)
+		l.Error().Err(err).Send()
+		return nil, err
 	}
 
 	providerAlias := d.ur.GetAlias(ctx, ref.Path)
@@ -203,7 +215,7 @@ func (d *dynamic) FindProviders(ctx context.Context, ref *provider.Reference) ([
 			})
 		} else {
 			err := errtypes.InternalError("storage provider address not configured for mountID " + p.ProviderId)
-			l.Error().Err(err).Msgf("error finding providers")
+			l.Error().Err(err).Send()
 			return nil, err
 		}
 	}

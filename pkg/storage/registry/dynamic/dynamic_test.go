@@ -63,19 +63,13 @@ var _ = Describe("Dynamic storage provider", func() {
 				OpaqueId: "bob",
 			},
 		})
-		ctxCharlie = appctx.ContextSetUser(context.Background(), &userpb.User{
-			Id: &userpb.UserId{
-				OpaqueId: "charlie",
-			},
-		})
 
 		dbHost = "localhost"
-		dbPort = 3305
+		dbPort = 33059
 		dbName = "reva_tests"
 		routes = map[string]string{
 			"/home-a":                   "eoshome-i01",
 			"/home-b":                   "eoshome-i02",
-			"/home-c":                   "eoshome-i03",
 			"/eos/user/a":               "eosuser-i01",
 			"/eos/user/b":               "eosuser-i02",
 			"/eos/project/a":            "eosproject-i00",
@@ -92,6 +86,13 @@ var _ = Describe("Dynamic storage provider", func() {
 			"eosproject-i02": "eosproject-i02:1234",
 			"cephfs":         "cephfs:1234",
 			"vaultssda01":    "vaultssda01:1234",
+		}
+		badRules = map[string]string{
+			"eoshome-i01":    "eoshome-i01:1234",
+			"eosuser-i01":    "eosuser-i01:1234",
+			"eosuser-i02":    "eosuser-i02:1234",
+			"eosproject-i02": "eosproject-i02:1234",
+			"cephfs":         "cephfs:1234",
 		}
 		rewrites = map[string]string{
 			"/home":   "/home-{{substr 0 1 .Id.OpaqueId}}",
@@ -221,11 +222,25 @@ var _ = Describe("Dynamic storage provider", func() {
 					"db_name":     dbName,
 				})
 
-				prv, _ := d.FindProviders(context.Background(), &provider.Reference{Path: "/eos/"})
-				fmt.Printf("\n\n\n%+v\n\n\n", prv)
-
 				Expect(d).ToNot(BeNil())
 				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+
+		When("passed a config missing some rules", func() {
+			It("should return an error", func() {
+				_, err = New(context.Background(), map[string]interface{}{
+					"rules":       badRules,
+					"rewrites":    rewrites,
+					"home_path":   homePath,
+					"db_username": "test",
+					"db_password": "test",
+					"db_host":     dbHost,
+					"db_port":     dbPort,
+					"db_name":     dbName,
+				})
+
+				Expect(err).To(HaveOccurred())
 			})
 		})
 
@@ -241,8 +256,6 @@ var _ = Describe("Dynamic storage provider", func() {
 					"db_port":     dbPort,
 					"db_name":     dbName,
 				})
-
-				fmt.Printf("\n\n\n%+v\n\n\n", err)
 
 				Expect(d).To(BeNil())
 				Expect(err).To(HaveOccurred())
@@ -304,14 +317,6 @@ var _ = Describe("Dynamic storage provider", func() {
 			})
 		})
 
-		When("passed context for user charlie who has home provider with a defined route but no rule in config", func() {
-			It("should return a provider not found error", func() {
-				h, err = d.GetHome(ctxCharlie)
-				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError(errtypes.InternalError("storage provider address not configured for mountID eoshome-i03")))
-			})
-		})
-
 		When("passed context without user", func() {
 			It("should return an error", func() {
 				h, err = d.GetHome(context.Background())
@@ -359,8 +364,7 @@ var _ = Describe("Dynamic storage provider", func() {
 				}
 
 				_, err := d.FindProviders(ctxAlice, ref)
-				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError(errtypes.NotFound("storage provider not found for ref resource_id:<storage_id:\"nope\" > ")))
+				Expect(err).To(MatchError(errtypes.InternalError("storage provider address not found for nope")))
 			})
 		})
 
@@ -393,17 +397,16 @@ var _ = Describe("Dynamic storage provider", func() {
 			})
 		}
 
-		When("passed a home path for user charlie who has home provider with a defined route but no rule in config", func() {
-			It("should return a provider not found error", func() {
-				_, err := d.FindProviders(ctxCharlie, testHomeRefs["/home"])
+		When("passed a path which storage id has no entry in the configuration", func() {
+			It("should return an internal error", func() {
+				_, err := d.FindProviders(context.Background(), &provider.Reference{Path: "/cephfs/project/n/notconf"})
 				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError(errtypes.InternalError("storage provider address not configured for mountID eoshome-i03")))
 			})
 		})
 
 		When("passed a non-existing path", func() {
 			It("should return a provider not found error", func() {
-				_, err := d.FindProviders(ctxCharlie, &provider.Reference{
+				_, err := d.FindProviders(ctxAlice, &provider.Reference{
 					Path: "/non/existent",
 				})
 				Expect(err).To(HaveOccurred())
