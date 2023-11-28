@@ -65,7 +65,7 @@ var _ = Describe("Dynamic storage provider", func() {
 		})
 
 		dbHost = "localhost"
-		dbPort = 3305
+		dbPort = 33059
 		dbName = "reva_tests"
 		routes = map[string]string{
 			"/home-a":                   "eoshome-i01",
@@ -222,9 +222,6 @@ var _ = Describe("Dynamic storage provider", func() {
 					"db_name":     dbName,
 				})
 
-				prv, _ := d.FindProviders(context.Background(), &provider.Reference{Path: "/eos/"})
-				fmt.Printf("\n\n\n%+v\n\n\n", prv)
-
 				Expect(d).ToNot(BeNil())
 				Expect(err).ToNot(HaveOccurred())
 			})
@@ -259,8 +256,6 @@ var _ = Describe("Dynamic storage provider", func() {
 					"db_port":     dbPort,
 					"db_name":     dbName,
 				})
-
-				fmt.Printf("\n\n\n%+v\n\n\n", err)
 
 				Expect(d).To(BeNil())
 				Expect(err).To(HaveOccurred())
