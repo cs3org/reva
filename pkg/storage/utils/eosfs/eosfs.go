@@ -587,8 +587,7 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 	return nil
 }
 
-func (fs *eosfs) getLockPayloads(ctx context.Context, auth eosclient.Authorization, path string) (string, string, error) {
-
+func (fs *eosfs) getLockPayloads(ctx context.Context, path string) (string, string, error) {
 	// sys attributes want root auth, buddy
 	rootauth, err := fs.getRootAuth(ctx)
 	if err != nil {
@@ -607,8 +606,7 @@ func (fs *eosfs) getLockPayloads(ctx context.Context, auth eosclient.Authorizati
 	return data.Val, eoslock.Val, nil
 }
 
-func (fs *eosfs) removeLockAttrs(ctx context.Context, auth eosclient.Authorization, path string) error {
-
+func (fs *eosfs) removeLockAttrs(ctx context.Context, path string) error {
 	rootAuth, err := fs.getRootAuth(ctx)
 	if err != nil {
 		return err
@@ -633,7 +631,7 @@ func (fs *eosfs) removeLockAttrs(ctx context.Context, auth eosclient.Authorizati
 	return nil
 }
 
-func (fs *eosfs) getLock(ctx context.Context, auth eosclient.Authorization, user *userpb.User, path string, ref *provider.Reference) (*provider.Lock, error) {
+func (fs *eosfs) getLock(ctx context.Context, user *userpb.User, path string, ref *provider.Reference) (*provider.Lock, error) {
 	// the cs3apis require to have the read permission on the resource
 	// to get the eventual lock.
 	has, err := fs.userHasReadAccess(ctx, user, ref)
@@ -644,7 +642,7 @@ func (fs *eosfs) getLock(ctx context.Context, auth eosclient.Authorization, user
 		return nil, errtypes.BadRequest("user has not read access on resource")
 	}
 
-	d, eosl, err := fs.getLockPayloads(ctx, auth, path)
+	d, eosl, err := fs.getLockPayloads(ctx, path)
 	if err != nil {
 		if !errors.Is(err, eosclient.AttrNotExistsError) {
 			return nil, errtypes.NotFound("lock not found for ref")
@@ -658,7 +656,7 @@ func (fs *eosfs) getLock(ctx context.Context, auth eosclient.Authorization, user
 
 	if time.Unix(int64(l.Expiration.Seconds), 0).After(time.Now()) {
 		// the lock expired
-		if err := fs.removeLockAttrs(ctx, auth, path); err != nil {
+		if err := fs.removeLockAttrs(ctx, path); err != nil {
 			return nil, err
 		}
 		return nil, errtypes.NotFound("lock not found for ref")
@@ -679,10 +677,6 @@ func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: no user in ctx")
 	}
-	auth, err := fs.getUserAuth(ctx, user, path)
-	if err != nil {
-		return nil, errors.Wrap(err, "eosfs: error getting uid and gid for user")
-	}
 
 	// the cs3apis require to have the read permission on the resource
 	// to get the eventual lock.
@@ -694,7 +688,7 @@ func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 		return nil, errtypes.BadRequest("user has no read access on resource")
 	}
 
-	return fs.getLock(ctx, auth, user, path, ref)
+	return fs.getLock(ctx, user, path, ref)
 }
 
 func (fs *eosfs) setLock(ctx context.Context, lock *provider.Lock, path string) error {
@@ -969,11 +963,7 @@ func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 	}
 	path = fs.wrap(ctx, path)
 
-	auth, err := fs.getRootAuth(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: error getting uid and gid for user")
-	}
-	return fs.removeLockAttrs(ctx, auth, path)
+	return fs.removeLockAttrs(ctx, path)
 }
 
 func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
@@ -1230,15 +1220,13 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		return nil, err
 	}
 
-	fn := ""
+	// TODO (lopresti) do we need this?
 	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT ||
 		u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
-		p, err := fs.resolve(ctx, ref)
+		_, err := fs.resolve(ctx, ref)
 		if err != nil {
 			return nil, errors.Wrap(err, "eosfs: error resolving reference")
 		}
-
-		fn = fs.wrap(ctx, p)
 	}
 
 	auth, err := fs.getRootAuth(ctx)
@@ -1275,7 +1263,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		}
 	}
 
-	fn = fs.wrap(ctx, p)
+	fn := fs.wrap(ctx, p)
 	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, fn)
 	if err != nil {
 		return nil, err
@@ -1292,7 +1280,6 @@ func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string
 		return nil, err
 	}
 
-	// lightweight accounts don't have share folders, so we're passing an empty string as path
 	auth, err := fs.getRootAuth(ctx)
 	if err != nil {
 		return nil, err
