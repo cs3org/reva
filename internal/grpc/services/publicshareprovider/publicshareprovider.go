@@ -48,6 +48,7 @@ type config struct {
 	AllowedPathsForShares          []string                          `mapstructure:"allowed_paths_for_shares"`
 	EnableExpiredSharesCleanup     bool                              `mapstructure:"enable_expired_shares_cleanup"`
 	WriteableShareMustHavePassword bool                              `mapstructure:"writeable_share_must_have_password"`
+	PublicShareMustHavePassword    bool                              `mapstructure:"public_share_must_have_password"`
 }
 
 func (c *config) init() {
@@ -151,11 +152,27 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 		}, nil
 	}
 
-	grant := req.GetGrant()
-	if grant != nil && s.conf.WriteableShareMustHavePassword &&
-		publicshare.IsWriteable(grant.GetPermissions()) && grant.Password == "" {
+	// check that this is a valid share
+	if req.GetResourceInfo().GetId().GetOpaqueId() == req.GetResourceInfo().GetId().GetSpaceId() &&
+		req.GetResourceInfo().GetSpace().GetSpaceType() == "personal" {
 		return &link.CreatePublicShareResponse{
-			Status: status.NewInvalid(ctx, "writeable shares must have a password protection"),
+			Status: status.NewInvalid(ctx, "cannot create link on space root"),
+		}, nil
+	}
+
+	// check that user has share permissions
+	// TODO Check if we need to stat again, because the client could send fake permissions
+	if !req.GetResourceInfo().GetPermissionSet().AddGrant {
+		err := errors.New("no share permission")
+		return &link.CreatePublicShareResponse{
+			Status: status.NewPermissionDenied(ctx, err, err.Error()),
+		}, nil
+	}
+
+	grant := req.GetGrant()
+	if enforcePassword(grant, s.conf) {
+		return &link.CreatePublicShareResponse{
+			Status: status.NewInvalid(ctx, "password protection is enforced"),
 		}, nil
 	}
 
@@ -286,11 +303,6 @@ func (s *service) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicS
 
 	updateR, err := s.sm.UpdatePublicShare(ctx, u, req)
 	if err != nil {
-		if errors.Is(err, publicshare.ErrShareNeedsPassword) {
-			return &link.UpdatePublicShareResponse{
-				Status: status.NewInvalid(ctx, err.Error()),
-			}, nil
-		}
 		return &link.UpdatePublicShareResponse{
 			Status: status.NewInternal(ctx, err.Error()),
 		}, nil
@@ -301,4 +313,15 @@ func (s *service) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicS
 		Share:  updateR,
 	}
 	return res, nil
+}
+
+func enforcePassword(grant *link.Grant, conf *config) bool {
+	if conf.PublicShareMustHavePassword {
+		return true
+	}
+	isReadOnly := conversions.SufficientCS3Permissions(conversions.NewViewerRole(true).CS3ResourcePermissions(), grant.GetPermissions().GetPermissions())
+	if !isReadOnly && conf.WriteableShareMustHavePassword {
+		return true
+	}
+	return false
 }
