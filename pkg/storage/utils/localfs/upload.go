@@ -317,14 +317,6 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	// the local storage does not track revisions
 	//}
 
-	// if destination exists
-	if _, err := os.Stat(np); err == nil {
-		// create revision
-		if err := upload.fs.archiveRevision(upload.ctx, np); err != nil {
-			return err
-		}
-	}
-
 	err := os.Rename(upload.binPath, np)
 	if err != nil {
 		return err

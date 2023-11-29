@@ -32,21 +32,17 @@ func init() {
 }
 
 type config struct {
-	Root        string `docs:"/var/tmp/reva/;Path of root directory for user storage." mapstructure:"root"`
-	ShareFolder string `docs:"/MyShares;Path for storing share references."            mapstructure:"share_folder"`
+	Root string `docs:"/var/tmp/reva/;Path of root directory for user storage." mapstructure:"root"`
 }
 
 func (c *config) ApplyDefaults() {
 	if c.Root == "" {
 		c.Root = "/var/tmp/reva"
 	}
-	if c.ShareFolder == "" {
-		c.ShareFolder = "/MyShares"
-	}
 }
 
 // New returns an implementation to of the storage.FS interface that talks to
-// a local filesystem with user homes disabled.
+// a local filesystem.
 func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
@@ -54,9 +50,7 @@ func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 	}
 
 	conf := localfs.Config{
-		Root:        c.Root,
-		ShareFolder: c.ShareFolder,
-		DisableHome: true,
+		Root: c.Root,
 	}
 	return localfs.NewLocalFS(&conf)
 }
