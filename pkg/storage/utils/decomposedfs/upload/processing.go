@@ -497,3 +497,58 @@ func lookupNode(ctx context.Context, spaceRoot *node.Node, path string, lu *look
 	}
 	return n, nil
 }
+
+type Progress struct {
+	Path string
+	Info tusd.FileInfo
+}
+
+func (p Progress) ID() string {
+	return p.Info.ID
+}
+func (p Progress) Filename() string {
+	return p.Info.MetaData["filename"]
+}
+func (p Progress) Size() int64 {
+	return p.Info.Size
+}
+func (p Progress) Offset() int64 {
+	return p.Info.Offset
+}
+func (p Progress) Reference() provider.Reference {
+	return provider.Reference{
+		ResourceId: &provider.ResourceId{
+			StorageId: p.Info.MetaData["providerID"],
+			SpaceId:   p.Info.Storage["SpaceRoot"],
+			OpaqueId:  p.Info.Storage["NodeId"], // Node id is always set in Initiate Upload
+		},
+	}
+}
+func (p Progress) Executant() userpb.UserId {
+	return userpb.UserId{
+		Idp:      p.Info.Storage["Idp"],
+		OpaqueId: p.Info.Storage["UserId"],
+		Type:     utils.UserTypeMap(p.Info.Storage["UserType"]),
+	}
+}
+func (p Progress) SpaceOwner() *userpb.UserId {
+	return &userpb.UserId{
+		OpaqueId: p.Info.Storage["SpaceOwnerOrManager"],
+		// TODO idp and type?
+	}
+}
+func (p Progress) Expires() time.Time {
+	mt, _ := utils.MTimeToTime(p.Info.MetaData["expires"])
+	return mt
+}
+
+func (p Progress) Purge() error {
+	// TODO we should use the upload id to look up the tus upload and Terminate() that
+	err := os.Remove(p.Info.Storage["BinPath"])
+	if err != nil {
+		return err
+	}
+
+	// remove upload metadata
+	return os.Remove(p.Path)
+}
