@@ -20,7 +20,6 @@ package decomposedfs
 
 import (
 	"context"
-	"golang.org/x/sync/errgroup"
 	iofs "io/fs"
 	"os"
 	"path/filepath"
@@ -37,6 +36,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 )
 
 // Recycle items are stored inside the node folder and start with the uuid of the deleted node.
