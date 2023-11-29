@@ -563,7 +563,7 @@ func (s *svc) isOpenableByUserPreference(ctx context.Context, path string) bool 
 
 	req := &preferences.GetKeyRequest{
 		Key: &preferences.PreferenceKey{
-			Namespace: u.Username,
+			Namespace: "core",
 			Key:       _disableOpenInApp,
 		},
 	}
@@ -589,10 +589,10 @@ func (s *svc) isOpenableByUserPreference(ctx context.Context, path string) bool 
 	}
 
 	log.Info().Msgf("key %s is  set for user %s with value %s", _disableOpenInApp, u.Username, res.Val)
-	if res.Val == "true" {
-		return true
+	if res.Val == "true" { // means is disabled
+		return false
 	}
-	return false
+	return true
 }
 
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
