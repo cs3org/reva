@@ -20,11 +20,11 @@ package decomposedfs
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -93,18 +93,17 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 			ResourceId: &provider.ResourceId{
 				StorageId: info.MetaData["providerID"],
 				SpaceId:   info.Storage["SpaceRoot"],
-				OpaqueId:  info.Storage["SpaceRoot"],
+				OpaqueId:  info.Storage["NodeId"],
 			},
-			Path: utils.MakeRelativePath(filepath.Join(info.MetaData["dir"], info.MetaData["filename"])),
 		}
-		owner, ok := ctxpkg.ContextGetUser(uploadInfo.Ctx)
+		executant, ok := ctxpkg.ContextGetUser(uploadInfo.Ctx)
 		if !ok {
 			return provider.ResourceInfo{}, errtypes.PreconditionFailed("error getting user from uploadinfo context")
 		}
 		spaceOwner := &userpb.UserId{
 			OpaqueId: info.Storage["SpaceOwnerOrManager"],
 		}
-		uff(spaceOwner, owner.Id, uploadRef)
+		uff(spaceOwner, executant.Id, uploadRef)
 	}
 
 	ri := provider.ResourceInfo{
@@ -244,33 +243,30 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 	return upload.Get(ctx, id, fs.lu, fs.tp, fs.o.Root, fs.stream, fs.o.AsyncFileUploads, fs.o.Tokens)
 }
 
+// GetUploadProgress returns the metadata for the given upload id
+func (fs *Decomposedfs) GetUploadProgress(ctx context.Context, uploadID string) (storage.UploadProgress, error) {
+	return fs.getUploadProgress(ctx, filepath.Join(fs.o.Root, "uploads", uploadID+".info"))
+}
+
 // ListUploads returns a list of all incomplete uploads
-func (fs *Decomposedfs) ListUploads() ([]tusd.FileInfo, error) {
+func (fs *Decomposedfs) ListUploads() ([]storage.UploadProgress, error) {
 	return fs.uploadInfos(context.Background())
 }
 
 // PurgeExpiredUploads scans the fs for expired downloads and removes any leftovers
-func (fs *Decomposedfs) PurgeExpiredUploads(purgedChan chan<- tusd.FileInfo) error {
-	infos, err := fs.uploadInfos(context.Background())
+func (fs *Decomposedfs) PurgeExpiredUploads(purgedChan chan<- storage.UploadProgress) error {
+	uploads, err := fs.uploadInfos(context.Background())
 	if err != nil {
 		return err
 	}
 
-	for _, info := range infos {
-		expires, err := strconv.Atoi(info.MetaData["expires"])
-		if err != nil {
-			continue
-		}
-		if int64(expires) < time.Now().Unix() {
-			purgedChan <- info
-			err = os.Remove(info.Storage["BinPath"])
-			if err != nil {
-				return err
-			}
-			err = os.Remove(filepath.Join(fs.o.Root, "uploads", info.ID+".info"))
-			if err != nil {
-				return err
-			}
+	for _, upload := range uploads {
+		if time.Now().After(upload.Expires()) {
+			// TODO check postprocessing state
+			purgedChan <- upload
+
+			_ = upload.Purge()
+			// TODO use a channel to return errors
 		}
 	}
 	return nil
@@ -297,28 +293,41 @@ func (fs *Decomposedfs) AsConcatableUpload(up tusd.Upload) tusd.ConcatableUpload
 	return up.(*upload.Upload)
 }
 
-func (fs *Decomposedfs) uploadInfos(ctx context.Context) ([]tusd.FileInfo, error) {
-	infos := []tusd.FileInfo{}
+func (fs *Decomposedfs) uploadInfos(ctx context.Context) ([]storage.UploadProgress, error) {
+	uploads := []storage.UploadProgress{}
 	infoFiles, err := filepath.Glob(filepath.Join(fs.o.Root, "uploads", "*.info"))
 	if err != nil {
 		return nil, err
 	}
 
 	for _, info := range infoFiles {
-		match := _idRegexp.FindStringSubmatch(info)
-		if match == nil || len(match) < 2 {
+		progress, err := fs.getUploadProgress(ctx, info)
+		if err != nil {
+			// Log error?
 			continue
 		}
-		up, err := fs.GetUpload(ctx, match[1])
-		if err != nil {
-			return nil, err
-		}
-		info, err := up.GetInfo(context.Background())
-		if err != nil {
-			return nil, err
-		}
 
-		infos = append(infos, info)
+		uploads = append(uploads, progress)
 	}
-	return infos, nil
+	return uploads, nil
+}
+
+func (fs *Decomposedfs) getUploadProgress(ctx context.Context, path string) (storage.UploadProgress, error) {
+	match := _idRegexp.FindStringSubmatch(path)
+	if match == nil || len(match) < 2 {
+		return nil, fmt.Errorf("invalid upload path")
+	}
+	up, err := fs.GetUpload(ctx, match[1])
+	if err != nil {
+		return nil, err
+	}
+	info, err := up.GetInfo(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	progress := upload.Progress{
+		Path: path,
+		Info: info,
+	}
+	return progress, nil
 }
