@@ -22,7 +22,6 @@ import (
 	// Load core storage filesystem backends.
 	_ "github.com/cs3org/reva/pkg/ocm/storage/outcoming"
 	_ "github.com/cs3org/reva/pkg/ocm/storage/received"
-	_ "github.com/cs3org/reva/pkg/storage/fs/cback"
 	_ "github.com/cs3org/reva/pkg/storage/fs/cephfs"
 	_ "github.com/cs3org/reva/pkg/storage/fs/eos"
 	_ "github.com/cs3org/reva/pkg/storage/fs/eosgrpc"
