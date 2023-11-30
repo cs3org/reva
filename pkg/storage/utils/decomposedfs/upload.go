@@ -244,32 +244,42 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 }
 
 // GetUploadProgress returns the metadata for the given upload id
-func (fs *Decomposedfs) GetUploadProgress(ctx context.Context, uploadID string) (storage.UploadProgress, error) {
-	return fs.getUploadProgress(ctx, filepath.Join(fs.o.Root, "uploads", uploadID+".info"))
-}
-
-// ListUploads returns a list of all incomplete uploads
-func (fs *Decomposedfs) ListUploads() ([]storage.UploadProgress, error) {
-	return fs.uploadInfos(context.Background())
-}
-
-// PurgeExpiredUploads scans the fs for expired downloads and removes any leftovers
-func (fs *Decomposedfs) PurgeExpiredUploads(purgedChan chan<- storage.UploadProgress) error {
-	uploads, err := fs.uploadInfos(context.Background())
-	if err != nil {
-		return err
-	}
-
-	for _, upload := range uploads {
-		if time.Now().After(upload.Expires()) {
-			// TODO check postprocessing state
-			purgedChan <- upload
-
-			_ = upload.Purge()
-			// TODO use a channel to return errors
+func (fs *Decomposedfs) ListUploadSessions(ctx context.Context, filter storage.UploadSessionFilter) ([]storage.UploadSession, error) {
+	var sessions []storage.UploadSession
+	if filter.Id != nil && *filter.Id != "" {
+		session, err := fs.getUploadProgress(ctx, filepath.Join(fs.o.Root, "uploads", *filter.Id+".info"))
+		if err != nil {
+			return nil, err
+		}
+		sessions = []storage.UploadSession{session}
+	} else {
+		var err error
+		sessions, err = fs.uploadSessions(ctx)
+		if err != nil {
+			return nil, err
 		}
 	}
-	return nil
+	filteredSessions := []storage.UploadSession{}
+	now := time.Now()
+	for _, session := range sessions {
+		if filter.Processing != nil && *filter.Processing != session.IsProcessing() {
+			continue
+		}
+		if filter.Expired != nil {
+			if *filter.Expired {
+				if now.Before(session.Expires()) {
+					continue
+				}
+			} else {
+				if now.After(session.Expires()) {
+					continue
+				}
+
+			}
+		}
+		filteredSessions = append(filteredSessions, session)
+	}
+	return filteredSessions, nil
 }
 
 // AsTerminatableUpload returns a TerminatableUpload
@@ -293,8 +303,8 @@ func (fs *Decomposedfs) AsConcatableUpload(up tusd.Upload) tusd.ConcatableUpload
 	return up.(*upload.Upload)
 }
 
-func (fs *Decomposedfs) uploadInfos(ctx context.Context) ([]storage.UploadProgress, error) {
-	uploads := []storage.UploadProgress{}
+func (fs *Decomposedfs) uploadSessions(ctx context.Context) ([]storage.UploadSession, error) {
+	uploads := []storage.UploadSession{}
 	infoFiles, err := filepath.Glob(filepath.Join(fs.o.Root, "uploads", "*.info"))
 	if err != nil {
 		return nil, err
@@ -312,7 +322,7 @@ func (fs *Decomposedfs) uploadInfos(ctx context.Context) ([]storage.UploadProgre
 	return uploads, nil
 }
 
-func (fs *Decomposedfs) getUploadProgress(ctx context.Context, path string) (storage.UploadProgress, error) {
+func (fs *Decomposedfs) getUploadProgress(ctx context.Context, path string) (storage.UploadSession, error) {
 	match := _idRegexp.FindStringSubmatch(path)
 	if match == nil || len(match) < 2 {
 		return nil, fmt.Errorf("invalid upload path")
@@ -325,9 +335,16 @@ func (fs *Decomposedfs) getUploadProgress(ctx context.Context, path string) (sto
 	if err != nil {
 		return nil, err
 	}
-	progress := upload.Progress{
-		Path: path,
-		Info: info,
+	// upload processing state is stored in the node, for decomposedfs the NodeId is always set by InitiateUpload
+	n, err := node.ReadNode(ctx, fs.lu, info.Storage["SpaceRoot"], info.Storage["NodeId"], true, nil, true)
+	if err != nil {
+		return nil, err
 	}
+	progress := upload.Progress{
+		Path:       path,
+		Info:       info,
+		Processing: n.IsProcessing(ctx),
+	}
+	_, progress.ScanStatus, progress.ScanTime = n.ScanData(ctx)
 	return progress, nil
 }
