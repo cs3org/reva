@@ -101,12 +101,12 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		return nil, err
 	}
 
-	if _, ok := fs.(storage.UploadsManager); ok {
-		// TODO we can currently only send updates if the fs is decomposedfs as we read very specific keys from the storage map of the tus info
+	if _, ok := fs.(storage.UploadSessionLister); ok {
+		// We can currently only send updates if the fs is decomposedfs as we read very specific keys from the storage map of the tus info
 		go func() {
 			for {
 				ev := <-handler.CompleteUploads
-				// TODO we should be able to get the upload progress with fs.GetUploadProgress, but currently tus will erase the info files
+				// We should be able to get the upload progress with fs.GetUploadProgress, but currently tus will erase the info files
 				// so we create a Progress instance here that is used to read the correct properties
 				up := upload.Progress{
 					Info: ev.Upload,
@@ -194,7 +194,6 @@ func setHeaders(fs storage.FS, w http.ResponseWriter, r *http.Request) {
 	}
 	expires := info.MetaData["expires"]
 	if expires != "" {
-		// FIXME currently info.MetaData["expires"] is an int ... but it MUST be RFC 7231 datetime format, see https://tus.io/protocols/resumable-upload#upload-expires
 		w.Header().Set(net.HeaderTusUploadExpires, expires)
 	}
 	resourceid := provider.ResourceId{

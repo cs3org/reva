@@ -502,8 +502,6 @@ type Progress struct {
 	Path       string
 	Info       tusd.FileInfo
 	Processing bool
-	ScanStatus string
-	ScanTime   time.Time
 }
 
 func (p Progress) ID() string {
@@ -523,7 +521,7 @@ func (p Progress) Reference() provider.Reference {
 		ResourceId: &provider.ResourceId{
 			StorageId: p.Info.MetaData["providerID"],
 			SpaceId:   p.Info.Storage["SpaceRoot"],
-			OpaqueId:  p.Info.Storage["NodeId"], // Node id is always set in Initiate Upload
+			OpaqueId:  p.Info.Storage["NodeId"], // Node id is always set in InitiateUpload
 		},
 	}
 }
@@ -536,8 +534,8 @@ func (p Progress) Executant() userpb.UserId {
 }
 func (p Progress) SpaceOwner() *userpb.UserId {
 	return &userpb.UserId{
+		// idp and type do not seem to be consumed and the node currently only stores the user id anyway
 		OpaqueId: p.Info.Storage["SpaceOwnerOrManager"],
-		// TODO idp and type?
 	}
 }
 func (p Progress) Expires() time.Time {
@@ -548,15 +546,8 @@ func (p Progress) Expires() time.Time {
 func (p Progress) IsProcessing() bool {
 	return p.Processing
 }
-func (p Progress) MalwareDescription() string {
-	return p.ScanStatus
-}
-func (p Progress) MalwareScanTime() time.Time {
-	return p.ScanTime
-}
 
-func (p Progress) Purge() error {
-	// TODO we should use the upload id to look up the tus upload and Terminate() that
+func (p Progress) Purge(ctx context.Context) error {
 	err := os.Remove(p.Info.Storage["BinPath"])
 	if err != nil {
 		return err
