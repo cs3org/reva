@@ -25,6 +25,7 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	tusd "github.com/tus/tusd/pkg/handler"
 )
 
 // UploadFinishedFunc is a callback function used in storage drivers to indicate that an upload has finished
@@ -36,8 +37,15 @@ type UploadRequest struct {
 	Length int64
 }
 
-// UploadsManager defines the interface for FS implementations that allow for managing uploads
+// UploadsManager defines the interface for storage drivers that allow for managing uploads
+// Deprecated: No longer used. Storage drivers should implement the UploadSessionLister.
 type UploadsManager interface {
+	ListUploads() ([]tusd.FileInfo, error)
+	PurgeExpiredUploads(chan<- tusd.FileInfo) error
+}
+
+// UploadSessionLister defines the interface for FS implementations that allow listing and purging upload sessions
+type UploadSessionLister interface {
 	// GetUploadProgress returns the upload progress
 	ListUploadSessions(ctx context.Context, filter UploadSessionFilter) ([]UploadSession, error)
 }
@@ -63,17 +71,13 @@ type UploadSession interface {
 	// IsProcessing returns true if postprocessing has not finished, yet
 	// The actual postprocessing state is tracked in the postprocessing service.
 	IsProcessing() bool
-	// MalwareDescription returns the scan result returned by the scanner
-	MalwareDescription() string
-	// MalwareScanTime returns the timestamp the upload was scanned. Default time means the item has not been scanned
-	MalwareScanTime() time.Time
 
 	// Purge allows completely removing an upload. Should emit a PostprocessingFinished event with a Delete outcome
-	Purge() error
+	Purge(ctx context.Context) error
 }
 
 type UploadSessionFilter struct {
-	Id         *string
+	ID         *string
 	Processing *bool
 	Expired    *bool
 }

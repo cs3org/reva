@@ -246,8 +246,8 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 // GetUploadProgress returns the metadata for the given upload id
 func (fs *Decomposedfs) ListUploadSessions(ctx context.Context, filter storage.UploadSessionFilter) ([]storage.UploadSession, error) {
 	var sessions []storage.UploadSession
-	if filter.Id != nil && *filter.Id != "" {
-		session, err := fs.getUploadProgress(ctx, filepath.Join(fs.o.Root, "uploads", *filter.Id+".info"))
+	if filter.ID != nil && *filter.ID != "" {
+		session, err := fs.getUploadSession(ctx, filepath.Join(fs.o.Root, "uploads", *filter.ID+".info"))
 		if err != nil {
 			return nil, err
 		}
@@ -274,7 +274,6 @@ func (fs *Decomposedfs) ListUploadSessions(ctx context.Context, filter storage.U
 				if now.After(session.Expires()) {
 					continue
 				}
-
 			}
 		}
 		filteredSessions = append(filteredSessions, session)
@@ -311,9 +310,9 @@ func (fs *Decomposedfs) uploadSessions(ctx context.Context) ([]storage.UploadSes
 	}
 
 	for _, info := range infoFiles {
-		progress, err := fs.getUploadProgress(ctx, info)
+		progress, err := fs.getUploadSession(ctx, info)
 		if err != nil {
-			// Log error?
+			appctx.GetLogger(ctx).Error().Interface("path", info).Msg("Decomposedfs: could not getUploadSession")
 			continue
 		}
 
@@ -322,7 +321,7 @@ func (fs *Decomposedfs) uploadSessions(ctx context.Context) ([]storage.UploadSes
 	return uploads, nil
 }
 
-func (fs *Decomposedfs) getUploadProgress(ctx context.Context, path string) (storage.UploadSession, error) {
+func (fs *Decomposedfs) getUploadSession(ctx context.Context, path string) (storage.UploadSession, error) {
 	match := _idRegexp.FindStringSubmatch(path)
 	if match == nil || len(match) < 2 {
 		return nil, fmt.Errorf("invalid upload path")
@@ -345,6 +344,5 @@ func (fs *Decomposedfs) getUploadProgress(ctx context.Context, path string) (sto
 		Info:       info,
 		Processing: n.IsProcessing(ctx),
 	}
-	_, progress.ScanStatus, progress.ScanTime = n.ScanData(ctx)
 	return progress, nil
 }
