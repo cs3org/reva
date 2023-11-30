@@ -22,15 +22,10 @@ import (
 	"context"
 	"io"
 	"net/url"
-	"time"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 )
-
-// UploadFinishedFunc is a callback function used in storage drivers to indicate that an upload has finished
-type UploadFinishedFunc func(spaceOwner, executant *userpb.UserId, ref *provider.Reference)
 
 // FS is the interface to implement access to the storage.
 type FS interface {
@@ -76,40 +71,6 @@ type FS interface {
 	DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error
 }
 
-// UploadsManager defines the interface for FS implementations that allow for managing uploads
-type UploadsManager interface {
-	// ListUploads returns a list of all currently known uploads
-	// TODO and their processing state
-	ListUploads() ([]UploadProgress, error)
-	// PurgeExpiredUploads purges expired uploads
-	// TODO skip uploads in progress
-	PurgeExpiredUploads(chan<- UploadProgress) error
-	// GetUploadProgress returns the upload progress
-	GetUploadProgress(ctx context.Context, uploadID string) (UploadProgress, error)
-}
-
-type UploadProgress interface {
-	// ID returns the upload id
-	ID() string
-	// Filename returns the filename of the file
-	Filename() string
-	// Size returns the size of the upload
-	Size() int64
-	// Offset returns the current offset
-	Offset() int64
-	// Reference returns a reference for the file being uploaded. May be absolute id based or relative to e.g. a space root
-	Reference() provider.Reference
-	// Executant returns the userid of the user that created the upload
-	Executant() userpb.UserId
-	// SpaceOwner returns the owner of a space if set. optional
-	SpaceOwner() *userpb.UserId
-	// Expires returns the time when the upload cen no longer be used
-	Expires() time.Time
-
-	// Purge allows completely removing an upload. Should emit a PostprocessingFinished event with a Delete outcome
-	Purge() error
-}
-
 // Registry is the interface that storage registries implement
 // for discovering storage providers
 type Registry interface {
@@ -124,10 +85,4 @@ type Registry interface {
 type PathWrapper interface {
 	Unwrap(ctx context.Context, rp string) (string, error)
 	Wrap(ctx context.Context, rp string) (string, error)
-}
-
-type UploadRequest struct {
-	Ref    *provider.Reference
-	Body   io.ReadCloser
-	Length int64
 }

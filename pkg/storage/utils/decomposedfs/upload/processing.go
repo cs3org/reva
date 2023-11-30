@@ -499,8 +499,11 @@ func lookupNode(ctx context.Context, spaceRoot *node.Node, path string, lu *look
 }
 
 type Progress struct {
-	Path string
-	Info tusd.FileInfo
+	Path       string
+	Info       tusd.FileInfo
+	Processing bool
+	ScanStatus string
+	ScanTime   time.Time
 }
 
 func (p Progress) ID() string {
@@ -540,6 +543,16 @@ func (p Progress) SpaceOwner() *userpb.UserId {
 func (p Progress) Expires() time.Time {
 	mt, _ := utils.MTimeToTime(p.Info.MetaData["expires"])
 	return mt
+}
+
+func (p Progress) IsProcessing() bool {
+	return p.Processing
+}
+func (p Progress) MalwareDescription() string {
+	return p.ScanStatus
+}
+func (p Progress) MalwareScanTime() time.Time {
+	return p.ScanTime
 }
 
 func (p Progress) Purge() error {
