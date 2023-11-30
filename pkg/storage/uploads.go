@@ -31,6 +31,7 @@ import (
 // UploadFinishedFunc is a callback function used in storage drivers to indicate that an upload has finished
 type UploadFinishedFunc func(spaceOwner, executant *userpb.UserId, ref *provider.Reference)
 
+// UploadRequest us used in FS.Upload() to carry required upload metadata
 type UploadRequest struct {
 	Ref    *provider.Reference
 	Body   io.ReadCloser
@@ -46,10 +47,11 @@ type UploadsManager interface {
 
 // UploadSessionLister defines the interface for FS implementations that allow listing and purging upload sessions
 type UploadSessionLister interface {
-	// GetUploadProgress returns the upload progress
+	// ListUploadSessions returns the upload sessions matching the given filter
 	ListUploadSessions(ctx context.Context, filter UploadSessionFilter) ([]UploadSession, error)
 }
 
+// UploadSession is the interface that storage drivers need to return whan listing upload sessions.
 type UploadSession interface {
 	// ID returns the upload id
 	ID() string
@@ -76,6 +78,7 @@ type UploadSession interface {
 	Purge(ctx context.Context) error
 }
 
+// UploadSessionFilter can be used to filter upload sessions
 type UploadSessionFilter struct {
 	ID         *string
 	Processing *bool
