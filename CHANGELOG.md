@@ -1,3 +1,26 @@
+Changelog for reva 2.16.3 (2023-11-30)
+=======================================
+
+The following sections list the changes in reva 2.16.3 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Enh #4377: Handle trashbin file listings concurrently
+
+Details
+-------
+
+*   Enhancement #4377: Handle trashbin file listings concurrently
+
+   We now use a concurrent walker to list files in the trashbin. This improves performance when
+   listing files in the trashbin.
+
+   https://github.com/owncloud/ocis/issues/7844
+   https://github.com/cs3org/reva/pull/4377
+   https://github.com/cs3org/reva/pull/4374
+
 Changelog for reva 2.16.2 (2023-10-17)
 =======================================
 
@@ -3243,6 +3266,27 @@ Details
 
    https://github.com/cs3org/reva/pull/2922
 
+Changelog for reva 2.4.1 (2022-05-24)
+=======================================
+
+The following sections list the changes in reva 2.4.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #2891: Add missing http status code
+
+Details
+-------
+
+*   Bugfix #2891: Add missing http status code
+
+   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
+   pass it through.
+
+   https://github.com/cs3org/reva/pull/2891
+
 Changelog for reva 2.4.0 (2022-05-24)
 =======================================
 
@@ -3385,27 +3429,6 @@ Details
    correct storageprovider
 
    https://github.com/cs3org/reva/pull/2792
-
-Changelog for reva 2.4.1 (2022-05-24)
-=======================================
-
-The following sections list the changes in reva 2.4.1 relevant to
-reva users. The changes are ordered by importance.
-
-Summary
--------
-
-*   Fix #2891: Add missing http status code
-
-Details
--------
-
-*   Bugfix #2891: Add missing http status code
-
-   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
-   pass it through.
-
-   https://github.com/cs3org/reva/pull/2891
 
 Changelog for reva 2.3.1 (2022-05-08)
 =======================================
