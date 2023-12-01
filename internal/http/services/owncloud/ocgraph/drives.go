@@ -132,6 +132,9 @@ func getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClient) ([]*li
 
 	spacesRes := make([]*libregraph.Drive, 0, len(res.Shares))
 	for _, s := range res.Shares {
+		if s.State == collaborationv1beta1.ShareState_SHARE_STATE_REJECTED || s.State == collaborationv1beta1.ShareState_SHARE_STATE_INVALID {
+			continue
+		}
 		share := s.Share
 		stat, err := gw.Stat(ctx, &providerpb.StatRequest{
 			Ref: &providerpb.Reference{
@@ -146,10 +149,8 @@ func getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClient) ([]*li
 			continue
 		}
 
-		// TODO (gdelmont): filter out the rejected shares
-
 		// the prefix of the remote_item.id and rootid
-		idPrefix := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s", stat.Info.Path)))
+		idPrefix := base64.StdEncoding.EncodeToString([]byte(stat.Info.Path))
 		resourceIdEnc := base64.StdEncoding.EncodeToString([]byte(resourceid.OwnCloudResourceIDWrap(stat.Info.Id)))
 
 		space := &libregraph.Drive{
