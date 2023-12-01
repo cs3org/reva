@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/CiscoM31/godata"
+	"github.com/alitto/pond"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -130,55 +131,75 @@ func getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClient) ([]*li
 		return nil, errors.New(res.Status.Message)
 	}
 
+	pool := pond.New(50, len(res.Shares))
+	spaces := make(chan *libregraph.Drive, len(res.Shares))
+
 	spacesRes := make([]*libregraph.Drive, 0, len(res.Shares))
 	for _, s := range res.Shares {
-		if s.State == collaborationv1beta1.ShareState_SHARE_STATE_REJECTED || s.State == collaborationv1beta1.ShareState_SHARE_STATE_INVALID {
-			continue
-		}
-		share := s.Share
-		stat, err := gw.Stat(ctx, &providerpb.StatRequest{
-			Ref: &providerpb.Reference{
-				ResourceId: share.ResourceId,
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		if stat.Status.Code != rpcv1beta1.Code_CODE_OK {
-			continue
-		}
-
-		// the prefix of the remote_item.id and rootid
-		idPrefix := base64.StdEncoding.EncodeToString([]byte(stat.Info.Path))
-		resourceIdEnc := base64.StdEncoding.EncodeToString([]byte(resourceid.OwnCloudResourceIDWrap(stat.Info.Id)))
-
-		space := &libregraph.Drive{
-			Id:         libregraph.PtrString(fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, share.Id.OpaqueId)),
-			DriveType:  libregraph.PtrString("mountpoint"),
-			DriveAlias: libregraph.PtrString(share.Id.OpaqueId), // this is not used, but must not be the same alias as the drive item
-			Name:       filepath.Base(stat.Info.Path),
-			Root: &libregraph.DriveItem{
-				Id: libregraph.PtrString(fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, share.Id.OpaqueId)),
-				RemoteItem: &libregraph.RemoteItem{
-					DriveAlias: libregraph.PtrString(strings.TrimPrefix(stat.Info.Path, "/")), // the drive alias must not start with /
-					ETag:       libregraph.PtrString(stat.Info.Etag),
-					Folder:     &libregraph.Folder{},
-					// The Id must correspond to the id in the OCS response, for the time being
-					// It is in the form <something>!<something-else>
-					Id:                   libregraph.PtrString(fmt.Sprintf("%s!%s", idPrefix, resourceIdEnc)),
-					LastModifiedDateTime: libregraph.PtrTime(time.Unix(int64(stat.Info.Mtime.Seconds), int64(stat.Info.Mtime.Nanos))),
-					Name:                 libregraph.PtrString(filepath.Base(stat.Info.Path)),
-					Path:                 libregraph.PtrString("/"),
-					// RootId must have the same token before ! as Id
-					// the second part for the time being is not important
-					RootId: libregraph.PtrString(fmt.Sprintf("%s!wrong_root_id", idPrefix)),
-					Size:   libregraph.PtrInt64(int64(stat.Info.Size)),
+		s := s
+		pool.Submit(func() {
+			if s.State == collaborationv1beta1.ShareState_SHARE_STATE_REJECTED || s.State == collaborationv1beta1.ShareState_SHARE_STATE_INVALID {
+				return
+			}
+			share := s.Share
+			stat, err := gw.Stat(ctx, &providerpb.StatRequest{
+				Ref: &providerpb.Reference{
+					ResourceId: share.ResourceId,
 				},
-			},
-		}
-		spacesRes = append(spacesRes, space)
+			})
+			if err != nil {
+				return
+			}
+
+			if stat.Status.Code != rpcv1beta1.Code_CODE_OK {
+				return
+			}
+
+			// the prefix of the remote_item.id and rootid
+			idPrefix := base64.StdEncoding.EncodeToString([]byte(stat.Info.Path))
+			resourceIdEnc := base64.StdEncoding.EncodeToString([]byte(resourceid.OwnCloudResourceIDWrap(stat.Info.Id)))
+
+			space := &libregraph.Drive{
+				Id:         libregraph.PtrString(fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, share.Id.OpaqueId)),
+				DriveType:  libregraph.PtrString("mountpoint"),
+				DriveAlias: libregraph.PtrString(share.Id.OpaqueId), // this is not used, but must not be the same alias as the drive item
+				Name:       filepath.Base(stat.Info.Path),
+				Root: &libregraph.DriveItem{
+					Id: libregraph.PtrString(fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, share.Id.OpaqueId)),
+					RemoteItem: &libregraph.RemoteItem{
+						DriveAlias: libregraph.PtrString(strings.TrimPrefix(stat.Info.Path, "/")), // the drive alias must not start with /
+						ETag:       libregraph.PtrString(stat.Info.Etag),
+						Folder:     &libregraph.Folder{},
+						// The Id must correspond to the id in the OCS response, for the time being
+						// It is in the form <something>!<something-else>
+						Id:                   libregraph.PtrString(fmt.Sprintf("%s!%s", idPrefix, resourceIdEnc)),
+						LastModifiedDateTime: libregraph.PtrTime(time.Unix(int64(stat.Info.Mtime.Seconds), int64(stat.Info.Mtime.Nanos))),
+						Name:                 libregraph.PtrString(filepath.Base(stat.Info.Path)),
+						Path:                 libregraph.PtrString("/"),
+						// RootId must have the same token before ! as Id
+						// the second part for the time being is not important
+						RootId: libregraph.PtrString(fmt.Sprintf("%s!wrong_root_id", idPrefix)),
+						Size:   libregraph.PtrInt64(int64(stat.Info.Size)),
+					},
+				},
+			}
+			spaces <- space
+		})
 	}
+
+	done := make(chan struct{})
+	go func() {
+		for s := range spaces {
+			spacesRes = append(spacesRes, s)
+		}
+		done <- struct{}{}
+	}()
+
+	pool.StopAndWait()
+	close(spaces)
+	<-done
+	close(done)
+
 	return spacesRes, nil
 }
 
