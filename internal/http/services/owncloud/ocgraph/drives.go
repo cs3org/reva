@@ -22,7 +22,7 @@ package ocgraph
 
 import (
 	"context"
-	"encoding/base32"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -149,8 +149,8 @@ func getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClient) ([]*li
 		// TODO (gdelmont): filter out the rejected shares
 
 		// the prefix of the remote_item.id and rootid
-		idPrefix := base32.StdEncoding.EncodeToString([]byte(fmt.Sprintf("#s%s", stat.Info.Path)))
-		resourceIdEnc := base32.StdEncoding.EncodeToString([]byte(resourceid.OwnCloudResourceIDWrap(stat.Info.Id)))
+		idPrefix := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s", stat.Info.Path)))
+		resourceIdEnc := base64.StdEncoding.EncodeToString([]byte(resourceid.OwnCloudResourceIDWrap(stat.Info.Id)))
 
 		space := &libregraph.Drive{
 			Id:         libregraph.PtrString(fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, share.Id.OpaqueId)),
