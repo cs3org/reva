@@ -92,8 +92,9 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 			ResourceId: &provider.ResourceId{
 				StorageId: info.MetaData["providerID"],
 				SpaceId:   info.Storage["SpaceRoot"],
-				OpaqueId:  info.Storage["NodeId"],
+				OpaqueId:  info.Storage["SpaceRoot"],
 			},
+			Path: utils.MakeRelativePath(filepath.Join(info.MetaData["dir"], info.MetaData["filename"])),
 		}
 		executant, ok := ctxpkg.ContextGetUser(uploadInfo.Ctx)
 		if !ok {
