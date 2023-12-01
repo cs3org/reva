@@ -20,7 +20,7 @@ package ocdav
 
 import (
 	"context"
-	"encoding/base64"
+	"encoding/base32"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -344,7 +344,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 }
 
 func getSpacePath(spaceID string) (string, error) {
-	decoded, err := base64.StdEncoding.DecodeString(spaceID)
+	decoded, err := base32.StdEncoding.DecodeString(spaceID)
 	if err != nil {
 		return "", err
 	}
