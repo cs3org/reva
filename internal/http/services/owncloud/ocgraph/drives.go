@@ -40,6 +40,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/utils/list"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"github.com/pkg/errors"
 )
@@ -149,7 +150,7 @@ func getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClient) ([]*li
 
 		// the prefix of the remote_item.id and rootid
 		idPrefix := base32.StdEncoding.EncodeToString([]byte(fmt.Sprintf("#s%s", stat.Info.Path)))
-		resourceIdEnc := base32.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s!%s", stat.Info.Id.StorageId, stat.Info.Id.OpaqueId)))
+		resourceIdEnc := base32.StdEncoding.EncodeToString([]byte(resourceid.OwnCloudResourceIDWrap(stat.Info.Id)))
 
 		space := &libregraph.Drive{
 			Id:         libregraph.PtrString(fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, share.Id.OpaqueId)),

@@ -21,6 +21,7 @@ package shares
 import (
 	"bytes"
 	"context"
+	"encoding/base32"
 	"encoding/json"
 	"fmt"
 	"mime"
@@ -1146,7 +1147,10 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		s.MimeType = parsedMt
 		// TODO STime:     &types.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
 		// TODO Storage: int
-		s.ItemSource = resourceid.OwnCloudResourceIDWrap(info.Id)
+		itemID := base32.StdEncoding.EncodeToString([]byte(fmt.Sprintf("#s%s", info.Path)))
+		itemID += "!" + base32.StdEncoding.EncodeToString([]byte(resourceid.OwnCloudResourceIDWrap(info.Id)))
+
+		s.ItemSource = itemID
 		s.FileSource = s.ItemSource
 		switch {
 		case h.sharePrefix == "/":
