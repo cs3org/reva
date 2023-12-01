@@ -27,7 +27,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -62,47 +62,46 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filters, err := generateCs3Filters(odataReq)
-	if err != nil {
-		log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("could not get drives: error parsing filters")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	res, err := gw.ListStorageSpaces(ctx, &providerpb.ListStorageSpacesRequest{
-		Filters: filters,
-	})
-	if err != nil {
-		log.Error().Err(err).Msg("error listing storage spaces")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
-		log.Error().Int("code", int(res.Status.Code)).Str("message", res.Status.Message).Msg("error listing storage spaces")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
+	var spaces []*libregraph.Drive
 	if isMountpointRequest(odataReq) {
-		shares, err := resolveMountpointSpaces(ctx, gw)
+		spaces, err = getDrivesForShares(ctx, gw)
 		if err != nil {
 			log.Error().Err(err).Msg("error getting share spaces")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		res.StorageSpaces = append(res.StorageSpaces, shares...)
+	} else {
+		filters, err := generateCs3Filters(odataReq)
+		if err != nil {
+			log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("could not get drives: error parsing filters")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		res, err := gw.ListStorageSpaces(ctx, &providerpb.ListStorageSpacesRequest{
+			Filters: filters,
+		})
+		if err != nil {
+			log.Error().Err(err).Msg("error listing storage spaces")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+			log.Error().Int("code", int(res.Status.Code)).Str("message", res.Status.Message).Msg("error listing storage spaces")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		me := appctx.ContextMustGetUser(ctx)
+		spaces = list.Map(res.StorageSpaces, func(space *providerpb.StorageSpace) *libregraph.Drive {
+			return s.cs3StorageSpaceToDrive(me, space)
+		})
 	}
-
-	me := appctx.ContextMustGetUser(ctx)
-
-	spaces := list.Map(res.StorageSpaces, func(space *providerpb.StorageSpace) *libregraph.Drive {
-		return s.cs3StorageSpaceToDrive(me, space)
-	})
 
 	if err := json.NewEncoder(w).Encode(map[string]any{
 		"value": spaces,
 	}); err != nil {
-		log.Error().Int("code", int(res.Status.Code)).Str("message", res.Status.Message).Msg("error listing storage spaces")
+		log.Error().Err(err).Msg("error marshalling spaces as json")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -120,17 +119,22 @@ func isMountpointRequest(request *godata.GoDataRequest) bool {
 
 const shareJailID = "a0ca6a90-a365-4782-871e-d44447bbc668"
 
-func resolveMountpointSpaces(ctx context.Context, gw gateway.GatewayAPIClient) ([]*providerpb.StorageSpace, error) {
+func getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClient) ([]*libregraph.Drive, error) {
 	res, err := gw.ListReceivedShares(ctx, &collaborationv1beta1.ListReceivedSharesRequest{})
 	if err != nil {
 		return nil, err
 	}
 
-	spacesRes := make([]*providerpb.StorageSpace, 0, len(res.Shares))
+	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return nil, errors.New(res.Status.Message)
+	}
+
+	spacesRes := make([]*libregraph.Drive, 0, len(res.Shares))
 	for _, s := range res.Shares {
+		share := s.Share
 		stat, err := gw.Stat(ctx, &providerpb.StatRequest{
 			Ref: &providerpb.Reference{
-				ResourceId: s.Share.ResourceId,
+				ResourceId: share.ResourceId,
 			},
 		})
 		if err != nil {
@@ -141,11 +145,35 @@ func resolveMountpointSpaces(ctx context.Context, gw gateway.GatewayAPIClient) (
 			continue
 		}
 
-		space := &providerpb.StorageSpace{
-			RootInfo:  stat.Info,
-			Id:        &providerpb.StorageSpaceId{OpaqueId: fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, s.Share.Id.OpaqueId)},
-			Name:      path.Base(stat.Info.Path),
-			SpaceType: "mountpoint",
+		// TODO (gdelmont): filter out the rejected shares
+
+		// the prefix of the remote_item.id and rootid
+		idPrefix := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("#s%s", stat.Info.Path)))
+		resourceIdEnc := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s!%s", stat.Info.Id.StorageId, stat.Info.Id.OpaqueId)))
+
+		space := &libregraph.Drive{
+			Id:         libregraph.PtrString(fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, share.Id.OpaqueId)),
+			DriveType:  libregraph.PtrString("mountpoint"),
+			DriveAlias: libregraph.PtrString(share.Id.OpaqueId), // this is not used, but must not be the same alias as the drive item
+			Name:       filepath.Base(stat.Info.Path),
+			Root: &libregraph.DriveItem{
+				Id: libregraph.PtrString(fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, share.Id.OpaqueId)),
+				RemoteItem: &libregraph.RemoteItem{
+					DriveAlias: libregraph.PtrString(strings.TrimPrefix(stat.Info.Path, "/")), // the drive alias must not start with /
+					ETag:       libregraph.PtrString(stat.Info.Etag),
+					Folder:     &libregraph.Folder{},
+					// The Id must correspond to the id in the OCS response, for the time being
+					// It is in the form <something>!<something-else>
+					Id:                   libregraph.PtrString(fmt.Sprintf("%s!%s", idPrefix, resourceIdEnc)),
+					LastModifiedDateTime: libregraph.PtrTime(time.Unix(int64(stat.Info.Mtime.Seconds), int64(stat.Info.Mtime.Nanos))),
+					Name:                 libregraph.PtrString(filepath.Base(stat.Info.Path)),
+					Path:                 libregraph.PtrString("/"),
+					// RootId must have the same token before ! as Id
+					// the second part for the time being is not important
+					RootId: libregraph.PtrString(fmt.Sprintf("%s!wrong_root_id", idPrefix)),
+					Size:   libregraph.PtrInt64(int64(stat.Info.Size)),
+				},
+			},
 		}
 		spacesRes = append(spacesRes, space)
 	}
