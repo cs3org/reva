@@ -22,7 +22,7 @@ package ocgraph
 
 import (
 	"context"
-	"encoding/base64"
+	"encoding/base32"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -148,8 +148,8 @@ func getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClient) ([]*li
 		// TODO (gdelmont): filter out the rejected shares
 
 		// the prefix of the remote_item.id and rootid
-		idPrefix := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("#s%s", stat.Info.Path)))
-		resourceIdEnc := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s!%s", stat.Info.Id.StorageId, stat.Info.Id.OpaqueId)))
+		idPrefix := base32.StdEncoding.EncodeToString([]byte(fmt.Sprintf("#s%s", stat.Info.Path)))
+		resourceIdEnc := base32.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s!%s", stat.Info.Id.StorageId, stat.Info.Id.OpaqueId)))
 
 		space := &libregraph.Drive{
 			Id:         libregraph.PtrString(fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, share.Id.OpaqueId)),
@@ -210,24 +210,6 @@ func (s *svc) cs3StorageSpaceToDrive(user *userpb.User, space *providerpb.Storag
 			Id:          libregraph.PtrString(space.Id.OpaqueId),
 			Permissions: cs3PermissionsToLibreGraph(user, space.RootInfo.PermissionSet),
 		},
-	}
-
-	// for the mountpoint type the space_id used by the web to build the webdav request
-	// is taken from `root.remoteItem.id`
-	if space.SpaceType == "mountpoint" {
-		r := space.RootInfo
-		id := base64.StdEncoding.EncodeToString([]byte(space.RootInfo.Path))
-		drive.Root.RemoteItem = &libregraph.RemoteItem{
-			DriveAlias:           libregraph.PtrString(space.RootInfo.Path[1:]),
-			ETag:                 libregraph.PtrString(r.Etag),
-			Id:                   libregraph.PtrString(id),
-			Folder:               &libregraph.Folder{},
-			LastModifiedDateTime: libregraph.PtrTime(time.Unix(int64(r.Mtime.Seconds), int64(r.Mtime.Nanos))),
-			Name:                 libregraph.PtrString(space.Name),
-			Path:                 libregraph.PtrString("/"),
-			RootId:               libregraph.PtrString(id),
-			Size:                 libregraph.PtrInt64(int64(r.Size)),
-		}
 	}
 
 	drive.Root.WebDavUrl = libregraph.PtrString(fullUrl(s.c.WebDavBase, space.RootInfo.Path))
