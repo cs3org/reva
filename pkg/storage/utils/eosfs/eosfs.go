@@ -1275,11 +1275,6 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string) (*provider.ResourceInfo, error) {
 	fn := fs.wrapShadow(ctx, p)
 
-	_, err := getUser(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	auth, err := fs.getRootAuth(ctx)
 	if err != nil {
 		return nil, err
