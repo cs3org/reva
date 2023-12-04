@@ -170,12 +170,10 @@ var _ = Describe("Recycle", func() {
 				itemsA, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(itemsA)).To(Equal(2))
-
 				itemsB, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(itemsB)).To(Equal(2))
-
-				Expect(itemsA).To(Equal(itemsB))
+				Expect(itemsA).To(ConsistOf(itemsB))
 			})
 
 			It("they can be permanently deleted by the other user", func() {

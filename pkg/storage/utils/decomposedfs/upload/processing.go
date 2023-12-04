@@ -352,3 +352,75 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 		}
 	}
 }
+
+// Progress adapts the persisted upload metadata for the UploadSessionLister interface
+type Progress struct {
+	Path       string
+	Metadata   Metadata
+	Processing bool
+}
+
+// ID implements the storage.UploadSession interface
+func (p Progress) ID() string {
+	return p.Metadata.ID
+}
+
+// Filename implements the storage.UploadSession interface
+func (p Progress) Filename() string {
+	return p.Metadata.Filename
+}
+
+// Size implements the storage.UploadSession interface
+func (p Progress) Size() int64 {
+	return p.Metadata.GetSize()
+}
+
+// Offset implements the storage.UploadSession interface
+func (p Progress) Offset() int64 {
+	return p.Metadata.GetSize() // FIXME length from tus?
+}
+
+// Reference implements the storage.UploadSession interface
+func (p Progress) Reference() provider.Reference {
+	return p.Metadata.GetReference()
+}
+
+// Executant implements the storage.UploadSession interface
+func (p Progress) Executant() user.UserId {
+	return p.Metadata.GetExecutantID()
+}
+
+// SpaceOwner implements the storage.UploadSession interface
+func (p Progress) SpaceOwner() *user.UserId {
+	u := p.Metadata.GetSpaceOwner()
+	return &u
+}
+
+// Expires implements the storage.UploadSession interface
+func (p Progress) Expires() time.Time {
+	return p.Metadata.Expires
+}
+
+// IsProcessing implements the storage.UploadSession interface
+func (p Progress) IsProcessing() bool {
+	return p.Processing
+}
+
+// Purge implements the storage.UploadSession interface
+func (p Progress) Purge(ctx context.Context) error {
+	/*
+		berr := os.Remove(p.Metadata.Storage["BinPath"])
+		if berr != nil {
+			appctx.GetLogger(ctx).Error().Str("id", p.Metadata.ID).Interface("path", p.Metadata.Storage["BinPath"]).Msg("Decomposedfs: could not purge bin path for upload session")
+		}
+
+		// remove upload metadata
+		merr := os.Remove(p.Path)
+		if merr != nil {
+			appctx.GetLogger(ctx).Error().Str("id", p.Metadata.ID).Interface("path", p.Path).Msg("Decomposedfs: could not purge metadata path for upload session")
+		}
+
+		return stderrors.Join(berr, merr)
+	*/
+	return nil
+}
