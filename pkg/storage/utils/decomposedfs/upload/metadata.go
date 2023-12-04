@@ -158,14 +158,12 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 				log.Error().Err(err).Msg("could not init new node")
 				return Metadata{}, nil, err
 			}
-			log.Info().Str("lockfile", nodeHandle.Name()).Msg("got lock file from initNewNode")
 		} else {
 			nodeHandle, err = openExistingNode(ctx, lu, n)
 			if err != nil {
 				log.Error().Err(err).Msg("could not open existing node")
 				return Metadata{}, nil, err
 			}
-			log.Info().Str("lockfile", nodeHandle.Name()).Msg("got lock file from openExistingNode")
 		}
 	}
 
@@ -180,7 +178,6 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 			log.Error().Err(err).Msg("could not open existing node")
 			return Metadata{}, nil, err
 		}
-		log.Info().Str("lockfile", nodeHandle.Name()).Msg("got lock file from openExistingNode")
 	}
 	defer func() {
 		if nodeHandle == nil {
