@@ -1215,18 +1215,9 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("eosfs: get md for ref:" + ref.String())
 
-	u, err := getUser(ctx)
+	_, err := getUser(ctx)
 	if err != nil {
 		return nil, err
-	}
-
-	// TODO (lopresti) do we need this?
-	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT ||
-		u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
-		_, err := fs.resolve(ctx, ref)
-		if err != nil {
-			return nil, errors.Wrap(err, "eosfs: error resolving reference")
-		}
 	}
 
 	auth, err := fs.getRootAuth(ctx)
