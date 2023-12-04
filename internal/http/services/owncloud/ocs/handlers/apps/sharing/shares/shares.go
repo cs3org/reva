@@ -21,7 +21,7 @@ package shares
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
+	"encoding/base32"
 	"encoding/json"
 	"fmt"
 	"mime"
@@ -1147,8 +1147,8 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		s.MimeType = parsedMt
 		// TODO STime:     &types.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
 		// TODO Storage: int
-		itemID := base64.StdEncoding.EncodeToString([]byte(info.Path))
-		itemID += "!" + base64.StdEncoding.EncodeToString([]byte(resourceid.OwnCloudResourceIDWrap(info.Id)))
+		itemID := base32.StdEncoding.EncodeToString([]byte(info.Path))
+		itemID += "!" + base32.StdEncoding.EncodeToString([]byte(resourceid.OwnCloudResourceIDWrap(info.Id)))
 
 		s.ItemSource = itemID
 		s.FileSource = s.ItemSource
