@@ -80,9 +80,9 @@ func New(m map[string]interface{}, publisher events.Publisher) (datatx.DataTX, e
 
 func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	zlog, err := logger.FromConfig(&logger.LogConf{
-		Output: "stdout",
-		Mode:   "console",
-		Level:  "debug",
+		Output: "stderr",
+		Mode:   "json",
+		Level:  "error", // FIXME introduce shared config for logging
 	})
 	if err != nil {
 		return nil, errtypes.NotSupported("could not initialize log")
@@ -129,7 +129,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		return nil, err
 	}
 
-	umg, ok := fs.(storage.UploadSessionLister)
+	usl, ok := fs.(storage.UploadSessionLister)
 	if ok {
 		// We can currently only send updates if the fs is decomposedfs as we read very specific keys from the storage map of the tus info
 		go func() {
@@ -137,7 +137,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				ev := <-handler.CompleteUploads
 				// We should be able to get the upload progress with fs.GetUploadProgress, but currently tus will erase the info files
 				// so we create a Progress instance here that is used to read the correct properties
-				sessions, err := umg.ListUploadSessions(context.Background(), storage.UploadSessionFilter{ID: &ev.Upload.ID})
+				sessions, err := usl.ListUploadSessions(context.Background(), storage.UploadSessionFilter{ID: &ev.Upload.ID})
 				if err != nil {
 					appctx.GetLogger(context.Background()).Error().Err(err).Str("id", ev.Upload.ID).Msg("failed to list upload session for upload")
 					continue
@@ -174,7 +174,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				metrics.UploadsActive.Sub(1)
 			}()
 			// set etag, mtime and file id
-			setHeaders(dataStore, umg, w, r)
+			setHeaders(dataStore, usl, w, r)
 			handler.PostFile(w, r)
 		case "HEAD":
 			handler.HeadFile(w, r)
@@ -184,7 +184,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				metrics.UploadsActive.Sub(1)
 			}()
 			// set etag, mtime and file id
-			setHeaders(dataStore, umg, w, r)
+			setHeaders(dataStore, usl, w, r)
 			handler.PatchFile(w, r)
 		case "DELETE":
 			handler.DelFile(w, r)
@@ -216,15 +216,15 @@ type hasTusDatastore interface {
 	GetDataStore() tusd.DataStore
 }
 
-func setHeaders(datastore tusd.DataStore, umg storage.UploadSessionLister, w http.ResponseWriter, r *http.Request) {
+func setHeaders(datastore tusd.DataStore, usl storage.UploadSessionLister, w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := path.Base(r.URL.Path)
-	u, err := datastore.GetUpload(ctx, id)
+	upload, err := datastore.GetUpload(ctx, id)
 	if err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Msg("could not get upload from storage")
 		return
 	}
-	info, err := u.GetInfo(ctx)
+	info, err := upload.GetInfo(ctx)
 	if err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Msg("could not get upload info for upload")
 		return
@@ -233,8 +233,8 @@ func setHeaders(datastore tusd.DataStore, umg storage.UploadSessionLister, w htt
 
 	var resourceid provider.ResourceId
 	var uploadSession storage.UploadSession
-	if umg != nil {
-		sessions, err := umg.ListUploadSessions(ctx, storage.UploadSessionFilter{ID: &id})
+	if usl != nil {
+		sessions, err := usl.ListUploadSessions(ctx, storage.UploadSessionFilter{ID: &id})
 		if err != nil {
 			appctx.GetLogger(context.Background()).Error().Err(err).Str("id", id).Msg("failed to list upload session for upload")
 			return
