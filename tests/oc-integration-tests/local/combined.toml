@@ -191,6 +191,5 @@ temp_folder = "/var/tmp/reva/tmp"
 
 [http.services.dataprovider.drivers.ocis]
 root = "/var/tmp/reva/data"
-enable_home = false
 treetime_accounting = true
 treesize_accounting = true

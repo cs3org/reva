@@ -31,7 +31,6 @@ driver = "ocis"
 root = "{{cernboxgw_root}}/storage"
 treetime_accounting = true
 treesize_accounting = true
-enable_home = true
 permissionssvc = "{{permissions_address}}"
 
 [http.services.ocdav]
