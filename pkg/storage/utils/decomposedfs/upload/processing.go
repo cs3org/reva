@@ -385,7 +385,7 @@ func (p Progress) Size() int64 {
 	if err != nil {
 		return p.Metadata.GetSize()
 	}
-	return info.Offset
+	return info.Size
 }
 
 // Offset implements the storage.UploadSession interface
