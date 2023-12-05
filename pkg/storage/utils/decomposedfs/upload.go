@@ -116,7 +116,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		}
 	}
 
-	// if mtime has been set via tus metadata, expose it as tus metadata
+	// if mtime has been set via the headers, expose it as tus metadata
 	if ocmtime, ok := headers["mtime"]; ok {
 		if ocmtime != "null" {
 			tusMetadata["mtime"] = ocmtime

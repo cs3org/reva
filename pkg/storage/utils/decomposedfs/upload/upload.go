@@ -22,7 +22,7 @@
 // 2. When the client has sent all bytes the tusd handler will call a PreFinishResponseCallback which marks the end of the transfer and the start of postprocessing.
 // 3. When async uploads are enabled the storageprovider emits an BytesReceived event, otherwise a FileUploaded event and the upload lifcycle ends.
 // 4. During async postprocessing the uploaded bytes might be read at the upload URL to determine the outcome of the postprocessing steps
-// 5. To handle async postprocessing the storageporvider has to listen to multiple events:
+// 5. To handle async postprocessing the storageprovider has to listen to multiple events:
 //   - PostprocessingFinished determines what should happen with the upload:
 //   - abort - the upload is cancelled but the bytes are kept in the upload folder, eg. when antivirus scanning encounters an error
 //     then what? can the admin retrigger the upload?
@@ -39,10 +39,10 @@
 // The first step to upload a file is making an InitiateUpload call to the storageprovider via CS3. It will return an upload id that can be used to append bytes to the upload.
 // With an upload id clients can append bytes to the upload.
 // When all bytes have been received tusd will call PreFinishResponseCallback on the storageprovider.
-// The storageprovider cannot use the tus upload metadata to persist a postprocessing status we have to store the processing status on a revision node.
+// The storageprovider cannot use the tus upload metadata to persist a postprocessing status, we have to store the processing status on a revision node instead.
 // On disk the layout for a node consists of the actual node metadata and revision nodes.
 // The revision nodes are used to capture the different revsions ...
-// * so every uploed always creates a revision node first?
+// * so every upload always creates a revision node first?
 // * and in PreFinishResponseCallback we update or create? the actual node? or do we create the node in the InitiateUpload call?
 // * We need to skip unfinished revisions when listing versions?
 // The size diff is always calculated when updating the node
@@ -50,7 +50,7 @@
 // ## Client considerations
 // When do we propagate the etag? Currently, already when an upload is in postprocessing ... why? because we update the node when all bytes are transferred?
 // Does the client expect an etag change when it uploads a file? it should not ... sync and uploads are independent last someone explained it to me
-// postprocessing könnte den content ändern und damit das etag
+// postprocessing might change the content, leading to an etag change as a result
 //
 // When the client finishes transferring all bytes it gets the 'future' etag of the resource which it currently stores as the etag for the file in its local db.
 // When the next propfind happens before postprocessing finishes the client would see the old etag and download the old version. Then, when postprocessing causes
@@ -192,7 +192,7 @@ func initNewNode(ctx context.Context, lu *lookup.Lookup, uploadID, mtime string,
 	attrs.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_FILE))
 	attrs.SetString(prefixes.ParentidAttr, n.ParentID)
 	attrs.SetString(prefixes.NameAttr, n.Name)
-	attrs.SetString(prefixes.MTimeAttr, mtime) // TODO use mtime
+	attrs.SetString(prefixes.MTimeAttr, mtime)
 
 	// here we set the status the first time.
 	attrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+uploadID)
@@ -242,7 +242,6 @@ func SetNodeToUpload(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploa
 
 	sizeDiff := uploadMetadata.BlobSize - n.Blobsize
 
-	// TODO set blobid ind size ... do we need to do this? the node is passed by reference so subsequent calls might rely on this
 	n.BlobID = uploadMetadata.BlobID
 	n.Blobsize = uploadMetadata.BlobSize
 
