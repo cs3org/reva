@@ -117,16 +117,14 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	}
 
 	// if mtime has been set via the headers, expose it as tus metadata
-	if ocmtime, ok := headers["mtime"]; ok {
-		if ocmtime != "null" {
-			tusMetadata["mtime"] = ocmtime
-			// overwrite mtime if requested
-			mtime, err := utils.MTimeToTime(ocmtime)
-			if err != nil {
-				return nil, err
-			}
-			uploadMetadata.MTime = mtime.UTC().Format(time.RFC3339Nano)
+	if ocmtime, ok := headers["mtime"]; ok && ocmtime != "null" {
+		tusMetadata["mtime"] = ocmtime
+		// overwrite mtime if requested
+		mtime, err := utils.MTimeToTime(ocmtime)
+		if err != nil {
+			return nil, err
 		}
+		uploadMetadata.MTime = mtime.UTC().Format(time.RFC3339Nano)
 	}
 
 	_, err = node.CheckQuota(ctx, n.SpaceRoot, n.Exists, uint64(n.Blobsize), uint64(uploadLength))
@@ -201,12 +199,10 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	// or better create a config option for the log level during PreFinishResponseCallback? might be easier for now
 
 	// expires has been set by the storageprovider, do not expose as metadata. It is sent as a tus Upload-Expires header
-	if expiration, ok := headers["expires"]; ok {
-		if expiration != "null" { // TODO this is set by the storageprovider ... it cannot be set by cliensts, so it can never be the string 'null' ... or can it???
-			uploadMetadata.Expires, err = utils.MTimeToTime(expiration)
-			if err != nil {
-				return nil, err
-			}
+	if expiration, ok := headers["expires"]; ok && expiration != "null" { // TODO this is set by the storageprovider ... it cannot be set by cliensts, so it can never be the string 'null' ... or can it???
+		uploadMetadata.Expires, err = utils.MTimeToTime(expiration)
+		if err != nil {
+			return nil, err
 		}
 	}
 	// only check preconditions if they are not empty
