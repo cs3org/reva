@@ -376,12 +376,20 @@ func (p Progress) Filename() string {
 
 // Size implements the storage.UploadSession interface
 func (p Progress) Size() int64 {
-	return p.Metadata.GetSize()
+	info, err := p.Upload.GetInfo(context.Background())
+	if err != nil {
+		return p.Metadata.GetSize()
+	}
+	return info.Offset
 }
 
 // Offset implements the storage.UploadSession interface
 func (p Progress) Offset() int64 {
-	return p.Metadata.GetSize() // FIXME length from tus?
+	info, err := p.Upload.GetInfo(context.Background())
+	if err != nil {
+		return 0
+	}
+	return info.Offset
 }
 
 // Reference implements the storage.UploadSession interface

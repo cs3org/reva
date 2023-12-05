@@ -742,17 +742,16 @@ func (fs *Decomposedfs) getUploadSession(ctx context.Context, path string) (stor
 	if err != nil {
 		return nil, err
 	}
-	progress := upload.Progress{
-		Path:       path,
-		Metadata:   metadata,
-		Processing: n.IsProcessing(ctx),
-	}
 	tusUpload, err := fs.tusDataStore.GetUpload(ctx, metadata.ID)
 	if err != nil {
 		return nil, err
 	}
-	if terminatableUpload, ok := tusUpload.(tusd.TerminatableUpload); ok {
-		progress.Upload = terminatableUpload
+
+	progress := upload.Progress{
+		Upload:     tusUpload,
+		Path:       path,
+		Metadata:   metadata,
+		Processing: n.IsProcessing(ctx),
 	}
 
 	return progress, nil
