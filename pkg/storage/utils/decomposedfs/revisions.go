@@ -91,11 +91,6 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 				sublog.Error().Msg("revision does not exist, skipping")
 				continue
 			}
-			/*
-				if currentRevision == revisionTime {
-					continue
-				}
-			*/
 
 			rmtime, err := rn.GetMTime(ctx)
 			if err != nil {
