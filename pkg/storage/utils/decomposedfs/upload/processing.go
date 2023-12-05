@@ -20,11 +20,14 @@ package upload
 
 import (
 	"context"
+	"errors"
+	"os"
 	"path/filepath"
 	"time"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/storage/cache"
@@ -355,6 +358,7 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 
 // Progress adapts the persisted upload metadata for the UploadSessionLister interface
 type Progress struct {
+	Upload     tusd.Upload
 	Path       string
 	Metadata   Metadata
 	Processing bool
@@ -408,19 +412,22 @@ func (p Progress) IsProcessing() bool {
 
 // Purge implements the storage.UploadSession interface
 func (p Progress) Purge(ctx context.Context) error {
-	/*
-		berr := os.Remove(p.Metadata.Storage["BinPath"])
-		if berr != nil {
-			appctx.GetLogger(ctx).Error().Str("id", p.Metadata.ID).Interface("path", p.Metadata.Storage["BinPath"]).Msg("Decomposedfs: could not purge bin path for upload session")
+	// terminate tus upload
+	var terr error
+	if terminatableUpload, ok := p.Upload.(tusd.TerminatableUpload); ok {
+		terr = terminatableUpload.Terminate(ctx)
+		if terr != nil {
+			appctx.GetLogger(ctx).Error().Str("id", p.Metadata.ID).Msg("Decomposedfs: could not terminate tus upload for session")
 		}
+	} else {
+		terr = errors.New("tus upload does not implement TerminatableUpload interface")
+	}
 
-		// remove upload metadata
-		merr := os.Remove(p.Path)
-		if merr != nil {
-			appctx.GetLogger(ctx).Error().Str("id", p.Metadata.ID).Interface("path", p.Path).Msg("Decomposedfs: could not purge metadata path for upload session")
-		}
+	// remove upload session metadata
+	merr := os.Remove(p.Path)
+	if merr != nil {
+		appctx.GetLogger(ctx).Error().Str("id", p.Metadata.ID).Interface("path", p.Path).Msg("Decomposedfs: could not purge metadata path for upload session")
+	}
 
-		return stderrors.Join(berr, merr)
-	*/
-	return nil
+	return errors.Join(terr, merr)
 }

@@ -674,7 +674,7 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 func (fs *Decomposedfs) ListUploadSessions(ctx context.Context, filter storage.UploadSessionFilter) ([]storage.UploadSession, error) {
 	var sessions []storage.UploadSession
 	if filter.ID != nil && *filter.ID != "" {
-		session, err := fs.getUploadSession(ctx, filepath.Join(fs.o.Root, "uploads", *filter.ID+".info"))
+		session, err := fs.getUploadSession(ctx, fs.lu.UploadPath("*"))
 		if err != nil {
 			return nil, err
 		}
@@ -710,7 +710,7 @@ func (fs *Decomposedfs) ListUploadSessions(ctx context.Context, filter storage.U
 
 func (fs *Decomposedfs) uploadSessions(ctx context.Context) ([]storage.UploadSession, error) {
 	uploads := []storage.UploadSession{}
-	infoFiles, err := filepath.Glob(filepath.Join(fs.o.Root, "uploads", "*.info"))
+	infoFiles, err := filepath.Glob(fs.lu.UploadPath("*"))
 	if err != nil {
 		return nil, err
 	}
@@ -747,5 +747,13 @@ func (fs *Decomposedfs) getUploadSession(ctx context.Context, path string) (stor
 		Metadata:   metadata,
 		Processing: n.IsProcessing(ctx),
 	}
+	tusUpload, err := fs.tusDataStore.GetUpload(ctx, metadata.ID)
+	if err != nil {
+		return nil, err
+	}
+	if terminatableUpload, ok := tusUpload.(tusd.TerminatableUpload); ok {
+		progress.Upload = terminatableUpload
+	}
+
 	return progress, nil
 }
