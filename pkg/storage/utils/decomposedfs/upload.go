@@ -53,6 +53,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 )
 
 var _idRegexp = regexp.MustCompile(".*/([^/]+).info")
@@ -710,19 +711,64 @@ func (fs *Decomposedfs) ListUploadSessions(ctx context.Context, filter storage.U
 
 func (fs *Decomposedfs) uploadSessions(ctx context.Context) ([]storage.UploadSession, error) {
 	uploads := []storage.UploadSession{}
-	infoFiles, err := filepath.Glob(fs.lu.UploadPath("*"))
+	sessionFiles, err := filepath.Glob(fs.lu.UploadPath("*"))
 	if err != nil {
 		return nil, err
 	}
 
-	for _, info := range infoFiles {
-		progress, err := fs.getUploadSession(ctx, info)
-		if err != nil {
-			appctx.GetLogger(ctx).Error().Interface("path", info).Msg("Decomposedfs: could not getUploadSession")
-			continue
-		}
+	numWorkers := fs.o.MaxConcurrency
+	if len(sessionFiles) < numWorkers {
+		numWorkers = len(sessionFiles)
+	}
 
-		uploads = append(uploads, progress)
+	work := make(chan string, len(sessionFiles))
+	results := make(chan storage.UploadSession, len(sessionFiles))
+
+	g, ctx := errgroup.WithContext(ctx)
+
+	// Distribute work
+	g.Go(func() error {
+		defer close(work)
+		for _, itemPath := range sessionFiles {
+			select {
+			case work <- itemPath:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		return nil
+	})
+
+	// Spawn workers that'll concurrently work the queue
+	for i := 0; i < numWorkers; i++ {
+		g.Go(func() error {
+			for path := range work {
+
+				session, err := fs.getUploadSession(ctx, path)
+				if err != nil {
+					appctx.GetLogger(ctx).Error().Interface("path", path).Msg("Decomposedfs: could not getUploadSession")
+					continue
+				}
+
+				select {
+				case results <- session:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}
+			return nil
+		})
+	}
+
+	// Wait for things to settle down, then close results chan
+	go func() {
+		_ = g.Wait() // error is checked later
+		close(results)
+	}()
+
+	// Collect results
+	for ri := range results {
+		uploads = append(uploads, ri)
 	}
 	return uploads, nil
 }
