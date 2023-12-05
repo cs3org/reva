@@ -56,7 +56,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-var _idRegexp = regexp.MustCompile(".*/([^/]+).info")
+var _idRegexp = regexp.MustCompile(".*/([^/]+).mpk")
 
 // InitiateUpload returns upload ids corresponding to different protocols it supports
 // It creates a node for new files to persist the fileid for the new child.
@@ -743,7 +743,6 @@ func (fs *Decomposedfs) uploadSessions(ctx context.Context) ([]storage.UploadSes
 	for i := 0; i < numWorkers; i++ {
 		g.Go(func() error {
 			for path := range work {
-
 				session, err := fs.getUploadSession(ctx, path)
 				if err != nil {
 					appctx.GetLogger(ctx).Error().Interface("path", path).Msg("Decomposedfs: could not getUploadSession")
@@ -784,7 +783,17 @@ func (fs *Decomposedfs) getUploadSession(ctx context.Context, path string) (stor
 		return nil, err
 	}
 	// upload processing state is stored in the node, for decomposedfs the NodeId is always set by InitiateUpload
-	n, err := node.ReadNode(ctx, fs.lu, metadata.SpaceRoot, metadata.NodeID, true, nil, true)
+	var n *node.Node
+	if metadata.NodeID == "" {
+		// read parent first
+		n, err = node.ReadNode(ctx, fs.lu, metadata.SpaceRoot, metadata.NodeParentID, true, nil, true)
+		if err != nil {
+			return nil, err
+		}
+		n, err = n.Child(ctx, metadata.Filename)
+	} else {
+		n, err = node.ReadNode(ctx, fs.lu, metadata.SpaceRoot, metadata.NodeID, true, nil, true)
+	}
 	if err != nil {
 		return nil, err
 	}
