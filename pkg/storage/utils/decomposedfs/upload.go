@@ -635,13 +635,13 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 			},
 			Path: utils.MakeRelativePath(filepath.Join(uploadMetadata.Dir, uploadMetadata.Filename)),
 		}
-		excutant, ok := ctxpkg.ContextGetUser(ctx)
+		executant, ok := ctxpkg.ContextGetUser(ctx)
 		if !ok {
 			return provider.ResourceInfo{}, errtypes.PreconditionFailed("error getting user from context")
 		}
 
 		sublog.Debug().Msg("calling upload finished func")
-		uff(n.SpaceOwnerOrManager(ctx), excutant.Id, uploadRef)
+		uff(n.SpaceOwnerOrManager(ctx), executant.Id, uploadRef)
 	}
 
 	mtime, err := n.GetMTime(ctx)
