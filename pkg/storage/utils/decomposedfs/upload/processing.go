@@ -140,10 +140,15 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 			revision := previousRevisionTime.UTC().Format(time.RFC3339Nano)
 			Cleanup(ctx, lu, n, info.ID, revision, failed)
 			if !keepUpload {
-				if tup, ok := up.(tusd.TerminatableUpload); ok {
-					terr := tup.Terminate(ctx)
-					if terr != nil {
-						log.Error().Err(terr).Interface("info", info).Msg("failed to terminate upload")
+				p := Progress{
+					Upload:     up,
+					Path:       lu.UploadPath(ev.UploadID),
+					Metadata:   uploadMetadata,
+					Processing: false,
+				}
+				if err := p.Purge(ctx); err != nil {
+					if err != nil {
+						log.Error().Err(err).Interface("info", info).Msg("failed to terminate upload")
 					}
 				}
 			}
