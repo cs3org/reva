@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/tus"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
@@ -48,7 +49,7 @@ type Propagator interface {
 }
 
 // Postprocessing starts the postprocessing result collector
-func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCache, es events.Stream, tusDataStore tusd.DataStore, blobstore tree.Blobstore, downloadURLfunc func(ctx context.Context, id string) (string, error), ch <-chan events.Event) {
+func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCache, es events.Stream, tusDataStore tus.DataStore, blobstore tree.Blobstore, downloadURLfunc func(ctx context.Context, id string) (string, error), ch <-chan events.Event) {
 	ctx := context.TODO() // we should pass the trace id in the event and initialize the trace provider here
 	ctx, span := tracer.Start(ctx, "Postprocessing")
 	defer span.End()
@@ -73,8 +74,9 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 			}
 
 			var (
-				failed     bool
-				keepUpload bool
+				failed         bool
+				deleteMetadata bool
+				purge          bool
 			)
 
 			var sizeDiff int64
@@ -92,21 +94,21 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 				fallthrough
 			case events.PPOutcomeAbort:
 				failed = true
-				keepUpload = true
 			case events.PPOutcomeContinue:
+				deleteMetadata = true
 				if err := Finalize(ctx, blobstore, uploadMetadata.MTime, info, n, uploadMetadata.BlobID); err != nil {
 					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not finalize upload")
-					keepUpload = true // should we keep the upload when assembling failed?
+					deleteMetadata = false
 					failed = true
 				}
 				sizeDiff, err = SetNodeToUpload(ctx, lu, n, uploadMetadata)
 				if err != nil {
 					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could set node to revision upload")
-					keepUpload = true // should we keep the upload when assembling failed?
+					deleteMetadata = false
 					failed = true
 				}
 			case events.PPOutcomeDelete:
-				failed = true
+				purge = true
 			}
 
 			getParent := func() *node.Node {
@@ -139,7 +141,7 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 			}
 			revision := previousRevisionTime.UTC().Format(time.RFC3339Nano)
 			Cleanup(ctx, lu, n, info.ID, revision, failed)
-			if !keepUpload {
+			if purge {
 				p := Progress{
 					Upload:     up,
 					Path:       lu.UploadPath(ev.UploadID),
@@ -147,9 +149,13 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 					Processing: false,
 				}
 				if err := p.Purge(ctx); err != nil {
-					if err != nil {
-						log.Error().Err(err).Interface("info", info).Msg("failed to terminate upload")
-					}
+					log.Info().Str("path", n.InternalPath()).Err(err).Msg("failed to purge upload")
+				}
+			}
+			if deleteMetadata {
+				err := tusDataStore.CleanupMetadata(ctx, ev.UploadID)
+				if err != nil {
+					log.Info().Str("path", n.InternalPath()).Err(err).Msg("cleaning up the tus info file failed")
 				}
 			}
 

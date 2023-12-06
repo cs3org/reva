@@ -148,7 +148,7 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 		}
 		n, err = p.Child(ctx, uploadMetadata.Filename)
 		if err != nil {
-			log.Error().Err(err).Msg("could not read parent node")
+			log.Error().Err(err).Msg("could not read child node")
 			return Metadata{}, nil, err
 		}
 		if !n.Exists {

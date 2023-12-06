@@ -55,12 +55,12 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/tus"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/store"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/jellydator/ttlcache/v2"
 	"github.com/pkg/errors"
-	tusHandler "github.com/tus/tusd/pkg/handler"
 	microstore "go-micro.dev/v4/store"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -108,7 +108,7 @@ type Decomposedfs struct {
 	chunkHandler *chunking.ChunkHandler
 	stream       events.Stream
 	cache        cache.StatCache
-	tusDataStore tusHandler.DataStore
+	tusDataStore tus.DataStore
 	blobstore    tree.Blobstore
 
 	UserCache       *ttlcache.Cache
@@ -118,7 +118,7 @@ type Decomposedfs struct {
 }
 
 // NewDefault returns an instance with default components
-func NewDefault(m map[string]interface{}, bs tree.Blobstore, tusDataStore tusHandler.DataStore, es events.Stream) (storage.FS, error) {
+func NewDefault(m map[string]interface{}, bs tree.Blobstore, tusDataStore tus.DataStore, es events.Stream) (storage.FS, error) {
 	o, err := options.New(m)
 	if err != nil {
 		return nil, err
@@ -155,7 +155,7 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore, tusDataStore tusHan
 
 // New returns an implementation of the storage.FS interface that talks to
 // a local filesystem.
-func New(o *options.Options, lu *lookup.Lookup, p Permissions, tp Tree, es events.Stream, tusDataStore tusHandler.DataStore, blobstore tree.Blobstore) (storage.FS, error) {
+func New(o *options.Options, lu *lookup.Lookup, p Permissions, tp Tree, es events.Stream, tusDataStore tus.DataStore, blobstore tree.Blobstore) (storage.FS, error) {
 	log := logger.New()
 	err := tp.Setup()
 	if err != nil {

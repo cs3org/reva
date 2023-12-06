@@ -22,13 +22,12 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree/mocks"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/tus"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/store"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/tests/helpers"
 	"github.com/stretchr/testify/mock"
-	"github.com/tus/tusd/pkg/filestore"
-	tusd "github.com/tus/tusd/pkg/handler"
 	"google.golang.org/grpc"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -69,7 +68,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		con      chan interface{}
 		uploadID string
 
-		dataStore            tusd.DataStore
+		dataStore            tus.DataStore
 		fs                   storage.FS
 		o                    *options.Options
 		lu                   *lookup.Lookup
@@ -84,7 +83,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
 		Expect(err).ToNot(HaveOccurred())
 
-		dataStore = filestore.New(filepath.Join(tmpRoot, "uploads"))
+		dataStore = tus.NewFileStore(filepath.Join(tmpRoot, "uploads"))
 
 		o, err = options.New(map[string]interface{}{
 			"root":             tmpRoot,

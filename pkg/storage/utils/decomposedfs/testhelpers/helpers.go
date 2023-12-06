@@ -28,11 +28,11 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/tus"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/store"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
-	"github.com/tus/tusd/pkg/filestore"
 	"google.golang.org/grpc"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -47,7 +47,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree/mocks"
 	"github.com/cs3org/reva/v2/tests/helpers"
-	tusHandler "github.com/tus/tusd/pkg/handler"
 )
 
 // TestEnv represents a test environment for unit tests
@@ -57,7 +56,7 @@ type TestEnv struct {
 	Tree                 *tree.Tree
 	Permissions          *mocks.PermissionsChecker
 	Blobstore            *treemocks.Blobstore
-	DataStore            tusHandler.DataStore
+	DataStore            tus.DataStore
 	Owner                *userpb.User
 	DeleteAllSpacesUser  *userpb.User
 	DeleteHomeSpacesUser *userpb.User
@@ -92,7 +91,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	if err != nil {
 		return nil, err
 	}
-	dataStore := filestore.New(filepath.Join(tmpRoot, "uploads"))
+	dataStore := tus.NewFileStore(filepath.Join(tmpRoot, "uploads"))
 	defaultConfig := map[string]interface{}{
 		"root":                tmpRoot,
 		"treetime_accounting": true,

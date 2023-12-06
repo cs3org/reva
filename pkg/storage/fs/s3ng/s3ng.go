@@ -30,7 +30,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/s3ng/blobstore"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
-	"github.com/tus/tusd/pkg/s3store"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/tus"
 )
 
 func init() {
@@ -61,7 +61,7 @@ func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 		WithS3ForcePathStyle(o.S3ForcePathStyle).
 		WithDisableSSL(o.S3DisableSSL)
 
-	tusDataStore := s3store.New(o.S3Bucket, s3.New(session.Must(session.NewSession()), s3Config))
+	tusDataStore := tus.NewS3Store(o.S3Bucket, s3.New(session.Must(session.NewSession()), s3Config))
 	tusDataStore.ObjectPrefix = o.S3UploadObjectPrefix
 	tusDataStore.MetadataObjectPrefix = o.S3UploadMetadataPrefix
 	tusDataStore.TemporaryDirectory = o.S3UploadTemporaryDirectory
