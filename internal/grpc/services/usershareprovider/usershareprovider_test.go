@@ -115,7 +115,7 @@ var _ = Describe("user share provider service", func() {
 				"insufficient permissions",
 				conversions.RoleFromName("spaceeditor", true).CS3ResourcePermissions(),
 				conversions.RoleFromName("manager", true).CS3ResourcePermissions(),
-				rpcpb.Code_CODE_INVALID_ARGUMENT,
+				rpcpb.Code_CODE_PERMISSION_DENIED,
 				0,
 			),
 			Entry(
