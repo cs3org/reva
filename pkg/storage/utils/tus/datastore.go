@@ -31,3 +31,7 @@ type DataStore interface {
 	// CleanupMetadata cleans up an upload by its ID.
 	CleanupMetadata(ctx context.Context, id string) error
 }
+
+func BuildUploadId(spaceID, blobID string) string {
+	return spaceID + ":" + blobID
+}

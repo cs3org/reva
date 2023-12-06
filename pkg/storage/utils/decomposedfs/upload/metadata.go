@@ -193,8 +193,6 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 		return Metadata{}, nil, err
 	}
 
-	newBlobID := uuid.New().String()
-
 	// set processing status of node
 	nodeAttrs := node.Attributes{}
 	// store Blobsize in node so we can propagate a sizediff
@@ -205,7 +203,6 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 		return Metadata{}, nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
 	}
 
-	uploadMetadata.BlobID = newBlobID
 	uploadMetadata.BlobSize = size
 	// TODO we should persist all versions as writes with ranges and the blobid in the node metadata
 

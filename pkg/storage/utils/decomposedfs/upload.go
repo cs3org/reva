@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt"
+	"github.com/google/uuid"
 	tusd "github.com/tus/tusd/pkg/handler"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -50,6 +51,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/tus"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
@@ -86,7 +88,10 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	}
 
 	usr := ctxpkg.ContextMustGetUser(ctx)
+
+	newBlobID := uuid.New().String()
 	uploadMetadata := upload.Metadata{
+		BlobID:              newBlobID,
 		Filename:            n.Name,
 		SpaceRoot:           n.SpaceRoot.ID,
 		SpaceOwnerOrManager: n.SpaceOwnerOrManager(ctx).GetOpaqueId(),
@@ -177,6 +182,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	}
 
 	info := tusd.FileInfo{
+		ID:             tus.BuildUploadId(n.SpaceID, uploadMetadata.BlobID),
 		MetaData:       tusMetadata,
 		Size:           uploadLength,
 		SizeIsDeferred: uploadLength == 0, // treat 0 length uploads as deferred
