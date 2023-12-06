@@ -29,10 +29,12 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/password"
+	"github.com/cs3org/reva/v2/pkg/permission"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/sharedconf"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -203,6 +205,8 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 		return nil, err
 	}
 
+	isInternalLink := grants.PermissionsEqual(req.GetGrant().GetPermissions().GetPermissions(), &provider.ResourcePermissions{})
+
 	sRes, err := gatewayClient.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: req.GetResourceInfo().GetId()}})
 	if err != nil {
 		log.Err(err).Interface("resource_id", req.GetResourceInfo().GetId()).Msg("failed to stat resource to share")
@@ -210,6 +214,23 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 			Status: status.NewInternal(ctx, "failed to stat resource to share"),
 		}, err
 	}
+
+	// all users can create internal links
+	if !isInternalLink {
+		// check if the user has the permission in the user role
+		ok, err := utils.CheckPermission(ctx, permission.WritePublicLink, gatewayClient)
+		if err != nil {
+			return &link.CreatePublicShareResponse{
+				Status: status.NewInternal(ctx, "failed check user permission to write public link"),
+			}, err
+		}
+		if !ok {
+			return &link.CreatePublicShareResponse{
+				Status: status.NewPermissionDenied(ctx, nil, "no permission to create public links"),
+			}, nil
+		}
+	}
+
 	// check that user has share permissions
 	if !sRes.GetInfo().GetPermissionSet().AddGrant {
 		return &link.CreatePublicShareResponse{
@@ -269,7 +290,7 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 
 	// validate expiration date
 	if grant.GetExpiration() != nil {
-		expirationDateTime := cs3TimestampToTime(grant.GetExpiration()).UTC()
+		expirationDateTime := utils.TSToTime(grant.GetExpiration()).UTC()
 		if expirationDateTime.Before(time.Now().UTC()) {
 			msg := fmt.Sprintf("expiration date is in the past: %s", expirationDateTime.Format(time.RFC3339))
 			return &link.CreatePublicShareResponse{
@@ -280,7 +301,7 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 
 	// enforce password if needed
 	setPassword := grant.GetPassword()
-	if enforcePassword(grant, s.conf) && len(setPassword) == 0 {
+	if !isInternalLink && enforcePassword(grant, s.conf) && len(setPassword) == 0 {
 		return &link.CreatePublicShareResponse{
 			Status: status.NewInvalidArg(ctx, "password protection is enforced"),
 		}, nil
@@ -465,10 +486,7 @@ func enforcePassword(grant *link.Grant, conf *config) bool {
 		return true
 	}
 	isReadOnly := conversions.SufficientCS3Permissions(conversions.NewViewerRole(true).CS3ResourcePermissions(), grant.GetPermissions().GetPermissions())
-	if !isReadOnly && conf.WriteableShareMustHavePassword {
-		return true
-	}
-	return false
+	return !isReadOnly && conf.WriteableShareMustHavePassword
 }
 
 func checkQuicklink(info *provider.ResourceInfo) (bool, error) {
@@ -488,8 +506,4 @@ func checkQuicklink(info *provider.ResourceInfo) (bool, error) {
 		return quickLink, nil
 	}
 	return false, nil
-}
-
-func cs3TimestampToTime(t *typesv1beta1.Timestamp) time.Time {
-	return time.Unix(int64(t.Seconds), int64(t.Nanos))
 }
