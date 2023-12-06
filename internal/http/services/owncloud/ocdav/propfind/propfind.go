@@ -64,6 +64,7 @@ const (
 	tracerName = "ocdav"
 )
 
+// these keys are used to lookup in ArbitraryMetadata, generated prop names are lowercased
 var (
 	audioKeys = []string{
 		"album",
@@ -1123,17 +1124,18 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 	appendMetadataProp := func(metadata map[string]string, tagNamespace string, name string, metadataPrefix string, keys []string) {
 		content := strings.Builder{}
 		for _, key := range keys {
+			lowerCaseKey := strings.ToLower(key)
 			if v, ok := metadata[fmt.Sprintf("%s.%s", metadataPrefix, key)]; ok {
 				content.WriteString("<")
 				content.WriteString(tagNamespace)
 				content.WriteString(":")
-				content.WriteString(key)
+				content.WriteString(lowerCaseKey)
 				content.WriteString(">")
 				content.Write(prop.Escaped("", v).InnerXML)
 				content.WriteString("</")
 				content.WriteString(tagNamespace)
 				content.WriteString(":")
-				content.WriteString(key)
+				content.WriteString(lowerCaseKey)
 				content.WriteString(">")
 			}
 		}
