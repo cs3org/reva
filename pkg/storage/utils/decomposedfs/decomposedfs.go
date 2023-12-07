@@ -254,7 +254,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 				keepUpload bool
 			)
 
-			n, err := node.ReadNode(ctx, fs.lu, up.Info.Storage["SpaceRoot"], up.Info.Storage["NodeId"], false, nil, true)
+			n, err := node.ReadNode(ctx, fs.lu, up.Session.SpaceRoot, up.Session.NodeID, false, nil, true)
 			if err != nil {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not read node")
 				continue
@@ -290,7 +290,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 			now := time.Now()
 			if failed {
 				// propagate sizeDiff after failed postprocessing
-				if err := fs.tp.Propagate(ctx, up.Node, -up.SizeDiff); err != nil {
+				if err := fs.tp.Propagate(ctx, up.Node, -up.Session.SizeDiff); err != nil {
 					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not propagate tree size change")
 				}
 			} else if p := getParent(); p != nil {
@@ -316,11 +316,11 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 					Filename:      ev.Filename,
 					FileRef: &provider.Reference{
 						ResourceId: &provider.ResourceId{
-							StorageId: up.Info.MetaData["providerID"],
-							SpaceId:   up.Info.Storage["SpaceRoot"],
-							OpaqueId:  up.Info.Storage["SpaceRoot"],
+							StorageId: up.Session.ProviderID,
+							SpaceId:   up.Session.SpaceRoot,
+							OpaqueId:  up.Session.SpaceRoot,
 						},
-						Path: utils.MakeRelativePath(filepath.Join(up.Info.MetaData["dir"], up.Info.MetaData["filename"])),
+						Path: utils.MakeRelativePath(filepath.Join(up.Session.Dir, up.Session.Filename)),
 					},
 					Timestamp:  utils.TimeToTS(now),
 					SpaceOwner: n.SpaceOwnerOrManager(ctx),
@@ -334,7 +334,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload")
 				continue
 			}
-			n, err := node.ReadNode(ctx, fs.lu, up.Info.Storage["SpaceRoot"], up.Info.Storage["NodeId"], false, nil, true)
+			n, err := node.ReadNode(ctx, fs.lu, up.Session.SpaceRoot, up.Session.NodeID, false, nil, true)
 			if err != nil {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not read node")
 				continue
@@ -346,13 +346,13 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 			}
 			// restart postprocessing
 			if err := events.Publish(ctx, fs.stream, events.BytesReceived{
-				UploadID:      up.Info.ID,
+				UploadID:      up.Session.ID,
 				URL:           s,
 				SpaceOwner:    n.SpaceOwnerOrManager(up.Ctx),
 				ExecutingUser: &user.User{Id: &user.UserId{OpaqueId: "postprocessing-restart"}}, // send nil instead?
 				ResourceID:    &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID},
-				Filename:      up.Info.Storage["NodeName"],
-				Filesize:      uint64(up.Info.Size),
+				Filename:      up.Session.Filename,
+				Filesize:      uint64(up.Session.Size),
 			}); err != nil {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to publish BytesReceived event")
 			}
@@ -457,7 +457,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 					continue
 				}
 
-				no, err := node.ReadNode(up.Ctx, fs.lu, up.Info.Storage["SpaceRoot"], up.Info.Storage["NodeId"], false, nil, false)
+				no, err := node.ReadNode(up.Ctx, fs.lu, up.Session.SpaceRoot, up.Session.NodeID, false, nil, false)
 				if err != nil {
 					log.Error().Err(err).Interface("uploadID", ev.UploadID).Msg("Failed to get node after scan")
 					continue

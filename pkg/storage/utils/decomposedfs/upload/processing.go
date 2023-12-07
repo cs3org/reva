@@ -20,13 +20,11 @@ package upload
 
 import (
 	"context"
-	"encoding/json"
 	stderrors "errors"
 	"fmt"
 	iofs "io/fs"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -42,6 +40,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/tus"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
@@ -58,29 +57,29 @@ type PermissionsChecker interface {
 }
 
 // New returns a new processing instance
-func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p PermissionsChecker, fsRoot string, pub events.Publisher, async bool, tknopts options.TokenOptions) (upload *Upload, err error) {
+func New(ctx context.Context, session tus.Session, lu *lookup.Lookup, tp Tree, p PermissionsChecker, fsRoot string, pub events.Publisher, async bool, tknopts options.TokenOptions) (upload *Upload, err error) {
 
 	log := appctx.GetLogger(ctx)
-	log.Debug().Interface("info", info).Msg("Decomposedfs: NewUpload")
+	log.Debug().Interface("session", session).Msg("Decomposedfs: NewUpload")
 
-	if info.MetaData["filename"] == "" {
+	if session.Filename == "" {
 		return nil, errors.New("Decomposedfs: missing filename in metadata")
 	}
-	if info.MetaData["dir"] == "" {
+	if session.Dir == "" {
 		return nil, errors.New("Decomposedfs: missing dir in metadata")
 	}
 
-	n, err := lu.NodeFromSpaceID(ctx, info.Storage["SpaceRoot"])
+	n, err := lu.NodeFromSpaceID(ctx, session.SpaceRoot)
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error getting space root node")
 	}
 
-	n, err = lookupNode(ctx, n, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]), lu)
+	n, err = lookupNode(ctx, n, filepath.Join(session.Dir, session.Filename), lu)
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error walking path")
 	}
 
-	log.Debug().Interface("info", info).Interface("node", n).Msg("Decomposedfs: resolved filename")
+	log.Debug().Interface("session", session).Interface("node", n).Msg("Decomposedfs: resolved filename")
 
 	// the parent owner will become the new owner
 	parent, perr := n.Parent(ctx)
@@ -122,68 +121,49 @@ func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p 
 	}
 
 	// check lock
-	if info.MetaData["lockid"] != "" {
-		ctx = ctxpkg.ContextSetLockID(ctx, info.MetaData["lockid"])
+	if session.LockID != "" {
+		ctx = ctxpkg.ContextSetLockID(ctx, session.LockID)
 	}
 	if err := n.CheckLock(ctx); err != nil {
 		return nil, err
 	}
 
-	info.ID = uuid.New().String()
+	session.ID = uuid.New().String()
 
-	binPath := filepath.Join(fsRoot, "uploads", info.ID)
 	usr := ctxpkg.ContextMustGetUser(ctx)
 
-	var (
-		spaceRoot string
-		ok        bool
-	)
-	if info.Storage != nil {
-		if spaceRoot, ok = info.Storage["SpaceRoot"]; !ok {
-			spaceRoot = n.SpaceRoot.ID
+	// fill future node info
+	if n.Exists {
+		if session.HeaderIfNoneMatch == "*" {
+			return nil, errtypes.Aborted(fmt.Sprintf("parent %s already has a child %s, id %s", n.ParentID, n.Name, n.ID))
 		}
+		session.NodeID = n.ID
+		session.NodeExists = true
 	} else {
-		spaceRoot = n.SpaceRoot.ID
+		session.NodeID = uuid.New().String()
 	}
+	session.NodeParentID = n.ParentID
+	// TODO store userid struct
+	session.ExecutantID = usr.Id.OpaqueId
+	session.ExecutantIdp = usr.Id.Idp
+	session.ExecutantType = utils.UserTypeToString(usr.Id.Type)
+	session.ExecutantUserName = usr.Username
 
-	info.Storage = map[string]string{
-		"Type":    "OCISStore",
-		"BinPath": binPath,
+	session.LogLevel = log.GetLevel().String()
 
-		"NodeId":              n.ID,
-		"NodeExists":          "true",
-		"NodeParentId":        n.ParentID,
-		"NodeName":            n.Name,
-		"SpaceRoot":           spaceRoot,
-		"SpaceOwnerOrManager": info.Storage["SpaceOwnerOrManager"],
-
-		"Idp":      usr.Id.Idp,
-		"UserId":   usr.Id.OpaqueId,
-		"UserType": utils.UserTypeToString(usr.Id.Type),
-		"UserName": usr.Username,
-
-		"LogLevel": log.GetLevel().String(),
-	}
-	if !n.Exists {
-		// fill future node info
-		info.Storage["NodeId"] = uuid.New().String()
-		info.Storage["NodeExists"] = "false"
-	}
-	if info.MetaData["if-none-match"] == "*" && info.Storage["NodeExists"] == "true" {
-		return nil, errtypes.Aborted(fmt.Sprintf("parent %s already has a child %s", n.ID, n.Name))
-	}
 	// Create binary file in the upload folder with no content
-	log.Debug().Interface("info", info).Msg("Decomposedfs: built storage info")
+	// It will be used when determining the current offset of an upload
+	log.Debug().Interface("session", session).Msg("Decomposedfs: built session info")
+	binPath := filepath.Join(fsRoot, "uploads", session.ID)
 	file, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	u := buildUpload(ctx, info, binPath, filepath.Join(fsRoot, "uploads", info.ID+".info"), lu, tp, pub, async, tknopts)
+	u := buildUpload(ctx, session, binPath, lu, tp, pub, async, tknopts)
 
-	// writeInfo creates the file by itself if necessary
-	err = u.writeInfo()
+	err = session.Persist(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -193,10 +173,7 @@ func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p 
 
 // Get returns the Upload for the given upload id
 func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot string, pub events.Publisher, async bool, tknopts options.TokenOptions) (*Upload, error) {
-	infoPath := filepath.Join(fsRoot, "uploads", id+".info")
-
-	info := tusd.FileInfo{}
-	data, err := os.ReadFile(infoPath)
+	session, err := tus.ReadSession(ctx, fsRoot, id)
 	if err != nil {
 		if errors.Is(err, iofs.ErrNotExist) {
 			// Interpret os.ErrNotExist as 404 Not Found
@@ -204,24 +181,22 @@ func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot stri
 		}
 		return nil, err
 	}
-	if err := json.Unmarshal(data, &info); err != nil {
-		return nil, err
-	}
 
-	stat, err := os.Stat(info.Storage["BinPath"])
+	binPath := filepath.Join(fsRoot, "uploads", session.ID)
+	stat, err := os.Stat(binPath)
 	if err != nil {
 		return nil, err
 	}
 
-	info.Offset = stat.Size()
+	session.Offset = stat.Size()
 
 	u := &userpb.User{
 		Id: &userpb.UserId{
-			Idp:      info.Storage["Idp"],
-			OpaqueId: info.Storage["UserId"],
-			Type:     utils.UserTypeMap(info.Storage["UserType"]),
+			Idp:      session.ExecutantIdp,
+			OpaqueId: session.ExecutantID,
+			Type:     utils.UserTypeMap(session.ExecutantType),
 		},
-		Username: info.Storage["UserName"],
+		Username: session.ExecutantUserName,
 	}
 
 	ctx = ctxpkg.ContextSetUser(ctx, u)
@@ -230,7 +205,7 @@ func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot stri
 	log, err := logger.FromConfig(&logger.LogConf{
 		Output: "stderr", // TODO use config from decomposedfs
 		Mode:   "json",   // TODO use config from decomposedfs
-		Level:  info.Storage["LogLevel"],
+		Level:  session.LogLevel,
 	})
 	if err != nil {
 		return nil, err
@@ -240,9 +215,7 @@ func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot stri
 
 	// TODO store and add traceid in file info
 
-	up := buildUpload(ctx, info, info.Storage["BinPath"], infoPath, lu, tp, pub, async, tknopts)
-	up.versionsPath = info.MetaData["versionsPath"]
-	up.SizeDiff, _ = strconv.ParseInt(info.MetaData["sizeDiff"], 10, 64)
+	up := buildUpload(ctx, session, binPath, lu, tp, pub, async, tknopts)
 	return up, nil
 }
 
@@ -258,19 +231,18 @@ func CreateNodeForUpload(upload *Upload, initAttrs node.Attributes) (*node.Node,
 	}
 
 	fsize := fi.Size()
-	spaceID := upload.Info.Storage["SpaceRoot"]
 	n := node.New(
-		spaceID,
-		upload.Info.Storage["NodeId"],
-		upload.Info.Storage["NodeParentId"],
-		upload.Info.Storage["NodeName"],
+		upload.Session.SpaceRoot,
+		upload.Session.NodeID,
+		upload.Session.NodeParentID,
+		upload.Session.Filename,
 		fsize,
-		upload.Info.ID,
+		upload.Session.ID,
 		provider.ResourceType_RESOURCE_TYPE_FILE,
 		nil,
 		upload.lu,
 	)
-	n.SpaceRoot, err = node.ReadNode(ctx, upload.lu, spaceID, spaceID, false, nil, false)
+	n.SpaceRoot, err = node.ReadNode(ctx, upload.lu, upload.Session.SpaceRoot, upload.Session.SpaceRoot, false, nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -281,16 +253,15 @@ func CreateNodeForUpload(upload *Upload, initAttrs node.Attributes) (*node.Node,
 	}
 
 	var f *lockedfile.File
-	switch upload.Info.Storage["NodeExists"] {
-	case "false":
+	if upload.Session.NodeExists {
+		f, err = updateExistingNode(upload, n, upload.Session.SpaceRoot, uint64(fsize))
+		if f != nil {
+			appctx.GetLogger(upload.Ctx).Info().Str("lockfile", f.Name()).Interface("err", err).Msg("got lock file from updateExistingNode")
+		}
+	} else {
 		f, err = initNewNode(upload, n, uint64(fsize))
 		if f != nil {
 			appctx.GetLogger(upload.Ctx).Info().Str("lockfile", f.Name()).Interface("err", err).Msg("got lock file from initNewNode")
-		}
-	default:
-		f, err = updateExistingNode(upload, n, spaceID, uint64(fsize))
-		if f != nil {
-			appctx.GetLogger(upload.Ctx).Info().Str("lockfile", f.Name()).Interface("err", err).Msg("got lock file from updateExistingNode")
 		}
 	}
 	defer func() {
@@ -306,9 +277,9 @@ func CreateNodeForUpload(upload *Upload, initAttrs node.Attributes) (*node.Node,
 	}
 
 	mtime := time.Now()
-	if upload.Info.MetaData["mtime"] != "" {
+	if upload.Session.MetaData["mtime"] != "" {
 		// overwrite mtime if requested
-		mtime, err = utils.MTimeToTime(upload.Info.MetaData["mtime"])
+		mtime, err = utils.MTimeToTime(upload.Session.MetaData["mtime"])
 		if err != nil {
 			return nil, err
 		}
@@ -321,7 +292,7 @@ func CreateNodeForUpload(upload *Upload, initAttrs node.Attributes) (*node.Node,
 	initAttrs.SetString(prefixes.NameAttr, n.Name)
 	initAttrs.SetString(prefixes.BlobIDAttr, n.BlobID)
 	initAttrs.SetInt64(prefixes.BlobsizeAttr, n.Blobsize)
-	initAttrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+upload.Info.ID)
+	initAttrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+upload.Session.ID)
 
 	// update node metadata with new blobid etc
 	err = n.SetXattrsWithContext(ctx, initAttrs, false)
@@ -330,11 +301,12 @@ func CreateNodeForUpload(upload *Upload, initAttrs node.Attributes) (*node.Node,
 	}
 
 	// add etag to metadata
-	upload.Info.MetaData["etag"], _ = node.CalculateEtag(n, mtime)
+	upload.Session.MetaData["etag"], _ = node.CalculateEtag(n, mtime)
 
 	// update nodeid for later
-	upload.Info.Storage["NodeId"] = n.ID
-	if err := upload.writeInfo(); err != nil {
+	upload.Session.NodeID = n.ID
+
+	if err := upload.Session.Persist(ctx); err != nil {
 		return nil, err
 	}
 
@@ -381,8 +353,7 @@ func initNewNode(upload *Upload, n *node.Node, fsize uint64) (*lockedfile.File, 
 	log.Info().Msg("initNewNode: symlink created")
 
 	// on a new file the sizeDiff is the fileSize
-	upload.SizeDiff = int64(fsize)
-	upload.Info.MetaData["sizeDiff"] = strconv.Itoa(int(upload.SizeDiff))
+	upload.Session.SizeDiff = int64(fsize)
 	return f, nil
 }
 
@@ -411,19 +382,17 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 
 	// When the if-match header was set we need to check if the
 	// etag still matches before finishing the upload.
-	if ifMatch, ok := upload.Info.MetaData["if-match"]; ok {
-		if ifMatch != oldNodeEtag {
-			return f, errtypes.Aborted("etag mismatch")
-		}
+	if upload.Session.HeaderIfMatch != "" && upload.Session.HeaderIfMatch != oldNodeEtag {
+		return f, errtypes.Aborted("etag mismatch")
 	}
 
 	// When the if-none-match header was set we need to check if any of the
 	// etags matches before finishing the upload.
-	if ifNoneMatch, ok := upload.Info.MetaData["if-none-match"]; ok {
-		if ifNoneMatch == "*" {
+	if upload.Session.HeaderIfNoneMatch != "" {
+		if upload.Session.HeaderIfNoneMatch == "*" {
 			return f, errtypes.Aborted("etag mismatch, resource exists")
 		}
-		for _, ifNoneMatchTag := range strings.Split(ifNoneMatch, ",") {
+		for _, ifNoneMatchTag := range strings.Split(upload.Session.HeaderIfNoneMatch, ",") {
 			if ifNoneMatchTag == oldNodeEtag {
 				return f, errtypes.Aborted("etag mismatch")
 			}
@@ -432,11 +401,8 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 
 	// When the if-unmodified-since header was set we need to check if the
 	// etag still matches before finishing the upload.
-	if ifUnmodifiedSince, ok := upload.Info.MetaData["if-unmodified-since"]; ok {
-		if err != nil {
-			return f, errtypes.InternalError(fmt.Sprintf("failed to read mtime of node: %s", err))
-		}
-		ifUnmodifiedSince, err := time.Parse(time.RFC3339Nano, ifUnmodifiedSince)
+	if upload.Session.HeaderIfUnmodifiedSince != "" {
+		ifUnmodifiedSince, err := time.Parse(time.RFC3339Nano, upload.Session.HeaderIfUnmodifiedSince)
 		if err != nil {
 			return f, errtypes.InternalError(fmt.Sprintf("failed to parse if-unmodified-since time: %s", err))
 		}
@@ -446,18 +412,16 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 		}
 	}
 
-	upload.versionsPath = upload.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+oldNodeMtime.UTC().Format(time.RFC3339Nano))
-	upload.SizeDiff = int64(fsize) - old.Blobsize
-	upload.Info.MetaData["versionsPath"] = upload.versionsPath
-	upload.Info.MetaData["sizeDiff"] = strconv.Itoa(int(upload.SizeDiff))
+	upload.Session.SizeDiff = int64(fsize) - old.Blobsize
+	upload.Session.VersionsPath = upload.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+oldNodeMtime.UTC().Format(time.RFC3339Nano))
 
 	// create version node
-	if _, err := os.Create(upload.versionsPath); err != nil {
+	if _, err := os.Create(upload.Session.VersionsPath); err != nil {
 		return f, err
 	}
 
 	// copy blob metadata to version node
-	if err := upload.lu.CopyMetadataWithSourceLock(upload.Ctx, targetPath, upload.versionsPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
+	if err := upload.lu.CopyMetadataWithSourceLock(upload.Ctx, targetPath, upload.Session.VersionsPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
 		return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
 			attributeName == prefixes.TypeAttr ||
 			attributeName == prefixes.BlobIDAttr ||
@@ -468,7 +432,7 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 	}
 
 	// keep mtime from previous version
-	if err := os.Chtimes(upload.versionsPath, oldNodeMtime, oldNodeMtime); err != nil {
+	if err := os.Chtimes(upload.Session.VersionsPath, oldNodeMtime, oldNodeMtime); err != nil {
 		return f, errtypes.InternalError(fmt.Sprintf("failed to change mtime of version node: %s", err))
 	}
 
@@ -502,37 +466,37 @@ func lookupNode(ctx context.Context, spaceRoot *node.Node, path string, lu *look
 // Progress adapts the persisted upload metadata for the UploadSessionLister interface
 type Progress struct {
 	Path       string
-	Info       tusd.FileInfo
+	Session    tus.Session
 	Processing bool
 }
 
 // ID implements the storage.UploadSession interface
 func (p Progress) ID() string {
-	return p.Info.ID
+	return p.Session.ID
 }
 
 // Filename implements the storage.UploadSession interface
 func (p Progress) Filename() string {
-	return p.Info.MetaData["filename"]
+	return p.Session.MetaData["filename"]
 }
 
 // Size implements the storage.UploadSession interface
 func (p Progress) Size() int64 {
-	return p.Info.Size
+	return p.Session.Size
 }
 
 // Offset implements the storage.UploadSession interface
 func (p Progress) Offset() int64 {
-	return p.Info.Offset
+	return p.Session.Offset
 }
 
 // Reference implements the storage.UploadSession interface
 func (p Progress) Reference() provider.Reference {
 	return provider.Reference{
 		ResourceId: &provider.ResourceId{
-			StorageId: p.Info.MetaData["providerID"],
-			SpaceId:   p.Info.Storage["SpaceRoot"],
-			OpaqueId:  p.Info.Storage["NodeId"], // Node id is always set in InitiateUpload
+			StorageId: p.Session.ProviderID,
+			SpaceId:   p.Session.SpaceRoot,
+			OpaqueId:  p.Session.NodeID,
 		},
 	}
 }
@@ -540,9 +504,9 @@ func (p Progress) Reference() provider.Reference {
 // Executant implements the storage.UploadSession interface
 func (p Progress) Executant() userpb.UserId {
 	return userpb.UserId{
-		Idp:      p.Info.Storage["Idp"],
-		OpaqueId: p.Info.Storage["UserId"],
-		Type:     utils.UserTypeMap(p.Info.Storage["UserType"]),
+		Idp:      p.Session.ExecutantIdp,
+		OpaqueId: p.Session.ExecutantID,
+		Type:     utils.UserTypeMap(p.Session.ExecutantType),
 	}
 }
 
@@ -550,14 +514,13 @@ func (p Progress) Executant() userpb.UserId {
 func (p Progress) SpaceOwner() *userpb.UserId {
 	return &userpb.UserId{
 		// idp and type do not seem to be consumed and the node currently only stores the user id anyway
-		OpaqueId: p.Info.Storage["SpaceOwnerOrManager"],
+		OpaqueId: p.Session.SpaceOwnerOrManager,
 	}
 }
 
 // Expires implements the storage.UploadSession interface
 func (p Progress) Expires() time.Time {
-	mt, _ := utils.MTimeToTime(p.Info.MetaData["expires"])
-	return mt
+	return p.Session.Expires
 }
 
 // IsProcessing implements the storage.UploadSession interface
@@ -567,15 +530,16 @@ func (p Progress) IsProcessing() bool {
 
 // Purge implements the storage.UploadSession interface
 func (p Progress) Purge(ctx context.Context) error {
-	berr := os.Remove(p.Info.Storage["BinPath"])
+	binPath := filepath.Join(filepath.Dir(p.Path), p.Session.ID) // FIXME
+	berr := os.Remove(binPath)
 	if berr != nil {
-		appctx.GetLogger(ctx).Error().Str("id", p.Info.ID).Interface("path", p.Info.Storage["BinPath"]).Msg("Decomposedfs: could not purge bin path for upload session")
+		appctx.GetLogger(ctx).Error().Str("id", p.Session.ID).Interface("path", binPath).Msg("Decomposedfs: could not purge bin path for upload session")
 	}
 
 	// remove upload metadata
-	merr := os.Remove(p.Path)
+	merr := p.Session.Purge(ctx)
 	if merr != nil {
-		appctx.GetLogger(ctx).Error().Str("id", p.Info.ID).Interface("path", p.Path).Msg("Decomposedfs: could not purge metadata path for upload session")
+		appctx.GetLogger(ctx).Error().Str("id", p.Session.ID).Interface("path", p.Path).Msg("Decomposedfs: could not purge metadata path for upload session")
 	}
 
 	return stderrors.Join(berr, merr)

@@ -38,6 +38,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/tus"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 )
@@ -53,9 +54,9 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 		return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error retrieving upload")
 	}
 
-	uploadInfo := up.(*upload.Upload)
+	upload := up.(*upload.Upload)
 
-	p := uploadInfo.Info.Storage["NodeName"]
+	p := upload.Session.Filename
 	if chunking.IsChunked(p) { // check chunking v1
 		var assembledFile string
 		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, req.Body)
@@ -63,12 +64,12 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 			return provider.ResourceInfo{}, err
 		}
 		if p == "" {
-			if err = uploadInfo.Terminate(ctx); err != nil {
+			if err = upload.Terminate(ctx); err != nil {
 				return provider.ResourceInfo{}, errors.Wrap(err, "ocfs: error removing auxiliary files")
 			}
 			return provider.ResourceInfo{}, errtypes.PartialContent(req.Ref.String())
 		}
-		uploadInfo.Info.Storage["NodeName"] = p
+		upload.Session.Filename = p
 		fd, err := os.Open(assembledFile)
 		if err != nil {
 			return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error opening assembled file")
@@ -78,30 +79,29 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 		req.Body = fd
 	}
 
-	if _, err := uploadInfo.WriteChunk(ctx, 0, req.Body); err != nil {
+	if _, err := upload.WriteChunk(ctx, 0, req.Body); err != nil {
 		return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error writing to binary file")
 	}
 
-	if err := uploadInfo.FinishUpload(ctx); err != nil {
+	if err := upload.FinishUpload(ctx); err != nil {
 		return provider.ResourceInfo{}, err
 	}
 
 	if uff != nil {
-		info := uploadInfo.Info
 		uploadRef := &provider.Reference{
 			ResourceId: &provider.ResourceId{
-				StorageId: info.MetaData["providerID"],
-				SpaceId:   info.Storage["SpaceRoot"],
-				OpaqueId:  info.Storage["SpaceRoot"],
+				StorageId: upload.Session.ProviderID,
+				SpaceId:   upload.Session.SpaceRoot,
+				OpaqueId:  upload.Session.SpaceRoot,
 			},
-			Path: utils.MakeRelativePath(filepath.Join(info.MetaData["dir"], info.MetaData["filename"])),
+			Path: utils.MakeRelativePath(filepath.Join(upload.Session.Dir, upload.Session.Filename)),
 		}
-		executant, ok := ctxpkg.ContextGetUser(uploadInfo.Ctx)
+		executant, ok := ctxpkg.ContextGetUser(upload.Ctx)
 		if !ok {
 			return provider.ResourceInfo{}, errtypes.PreconditionFailed("error getting user from uploadinfo context")
 		}
 		spaceOwner := &userpb.UserId{
-			OpaqueId: info.Storage["SpaceOwnerOrManager"],
+			OpaqueId: upload.Session.SpaceOwnerOrManager,
 		}
 		uff(spaceOwner, executant.Id, uploadRef)
 	}
@@ -109,14 +109,14 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 	ri := provider.ResourceInfo{
 		// fill with at least fileid, mtime and etag
 		Id: &provider.ResourceId{
-			StorageId: uploadInfo.Info.MetaData["providerID"],
-			SpaceId:   uploadInfo.Info.Storage["SpaceRoot"],
-			OpaqueId:  uploadInfo.Info.Storage["NodeId"],
+			StorageId: upload.Session.ProviderID,
+			SpaceId:   upload.Session.SpaceRoot,
+			OpaqueId:  upload.Session.NodeID,
 		},
-		Etag: uploadInfo.Info.MetaData["etag"],
+		Etag: upload.Session.MetaData["etag"],
 	}
 
-	if mtime, err := utils.MTimeToTS(uploadInfo.Info.MetaData["mtime"]); err == nil {
+	if mtime, err := utils.MTimeToTS(upload.Session.MetaData["mtime"]); err == nil {
 		ri.Mtime = &mtime
 	}
 
@@ -141,40 +141,35 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	// permissions are checked in NewUpload below
 
-	relative, err := fs.lu.Path(ctx, n, node.NoCheck)
+	relative, err := fs.lu.Path(ctx, n, node.NoCheck) // TODO why do we need the path here?
 	if err != nil {
 		return nil, err
 	}
 
 	lockID, _ := ctxpkg.ContextGetLockID(ctx)
 
-	info := tusd.FileInfo{
-		MetaData: tusd.MetaData{
-			"filename": filepath.Base(relative),
-			"dir":      filepath.Dir(relative),
-			"lockid":   lockID,
-		},
-		Size: uploadLength,
-		Storage: map[string]string{
-			"SpaceRoot":           n.SpaceRoot.ID,
-			"SpaceOwnerOrManager": n.SpaceOwnerOrManager(ctx).GetOpaqueId(),
-		},
-	}
+	session := tus.NewSession(ctx, fs.o.Root)
+	session.Filename = filepath.Base(relative)
+	session.Dir = filepath.Dir(relative)
+	session.LockID = lockID
+	session.Size = uploadLength
+	session.SpaceRoot = n.SpaceRoot.ID                                     // TODO SpaceRoot -> SpaceID
+	session.SpaceOwnerOrManager = n.SpaceOwnerOrManager(ctx).GetOpaqueId() // TODO needed for what?
 
 	if metadata != nil {
-		info.MetaData["providerID"] = metadata["providerID"]
+		session.ProviderID = metadata["providerID"]
 		if mtime, ok := metadata["mtime"]; ok {
 			if mtime != "null" {
-				info.MetaData["mtime"] = mtime
+				session.MetaData["mtime"] = mtime
 			}
 		}
 		if expiration, ok := metadata["expires"]; ok {
 			if expiration != "null" {
-				info.MetaData["expires"] = expiration
+				session.MetaData["expires"] = expiration
 			}
 		}
 		if _, ok := metadata["sizedeferred"]; ok {
-			info.SizeIsDeferred = true
+			session.SizeIsDeferred = true
 		}
 		if checksum, ok := metadata["checksum"]; ok {
 			parts := strings.SplitN(checksum, " ", 2)
@@ -182,42 +177,39 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 				return nil, errtypes.BadRequest("invalid checksum format. must be '[algorithm] [checksum]'")
 			}
 			switch parts[0] {
-			case "sha1", "md5", "adler32":
-				info.MetaData["checksum"] = checksum
+			case "sha1":
+				session.ChecksumSHA1 = checksum
+			case "md5":
+				session.ChecksumMD5 = checksum
+			case "adler32":
+				session.ChecksumADLER32 = checksum
 			default:
 				return nil, errtypes.BadRequest("unsupported checksum algorithm: " + parts[0])
 			}
 		}
 
 		// only check preconditions if they are not empty // TODO or is this a bad request?
-		if metadata["if-match"] != "" {
-			info.MetaData["if-match"] = metadata["if-match"]
-		}
-		if metadata["if-none-match"] != "" {
-			info.MetaData["if-none-match"] = metadata["if-none-match"]
-		}
-		if metadata["if-unmodified-since"] != "" {
-			info.MetaData["if-unmodified-since"] = metadata["if-unmodified-since"]
-		}
+		session.HeaderIfMatch = metadata["if-match"]
+		session.HeaderIfNoneMatch = metadata["if-none-match"]
+		session.HeaderIfUnmodifiedSince = metadata["if-unmodified-since"]
+
 	}
 
-	log.Debug().Interface("info", info).Interface("node", n).Interface("metadata", metadata).Msg("Decomposedfs: resolved filename")
+	log.Debug().Interface("session", session).Interface("node", n).Interface("metadata", metadata).Msg("Decomposedfs: resolved filename")
 
-	_, err = node.CheckQuota(ctx, n.SpaceRoot, n.Exists, uint64(n.Blobsize), uint64(info.Size))
+	_, err = node.CheckQuota(ctx, n.SpaceRoot, n.Exists, uint64(n.Blobsize), uint64(session.Size))
 	if err != nil {
 		return nil, err
 	}
 
-	upload, err := fs.NewUpload(ctx, info)
+	up, err := upload.New(ctx, session, fs.lu, fs.tp, fs.p, fs.o.Root, fs.stream, fs.o.AsyncFileUploads, fs.o.Tokens)
 	if err != nil {
 		return nil, err
 	}
-
-	info, _ = upload.GetInfo(ctx)
 
 	return map[string]string{
-		"simple": info.ID,
-		"tus":    info.ID,
+		"simple": up.Session.ID,
+		"tus":    up.Session.ID,
 	}, nil
 }
 
@@ -235,7 +227,7 @@ func (fs *Decomposedfs) UseIn(composer *tusd.StoreComposer) {
 
 // NewUpload returns a new tus Upload instance
 func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (tusd.Upload, error) {
-	return upload.New(ctx, info, fs.lu, fs.tp, fs.p, fs.o.Root, fs.stream, fs.o.AsyncFileUploads, fs.o.Tokens)
+	return nil, fmt.Errorf("not implemented, use InitiateUpload on the CS3 API to start a new upload")
 }
 
 // GetUpload returns the Upload for the given upload id
@@ -326,22 +318,18 @@ func (fs *Decomposedfs) getUploadSession(ctx context.Context, path string) (stor
 	if match == nil || len(match) < 2 {
 		return nil, fmt.Errorf("invalid upload path")
 	}
-	up, err := fs.GetUpload(ctx, match[1])
+	session, err := tus.ReadSession(ctx, fs.o.Root, match[1])
 	if err != nil {
 		return nil, err
 	}
-	info, err := up.GetInfo(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	// upload processing state is stored in the node, for decomposedfs the NodeId is always set by InitiateUpload
-	n, err := node.ReadNode(ctx, fs.lu, info.Storage["SpaceRoot"], info.Storage["NodeId"], true, nil, true)
+
+	n, err := node.ReadNode(ctx, fs.lu, session.SpaceRoot, session.NodeID, true, nil, true)
 	if err != nil {
 		return nil, err
 	}
 	progress := upload.Progress{
 		Path:       path,
-		Info:       info,
+		Session:    session,
 		Processing: n.IsProcessing(ctx),
 	}
 	return progress, nil
