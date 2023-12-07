@@ -29,7 +29,12 @@ import (
 // DataStore is an interface that extends the tusd.DataStore interface.
 type DataStore interface {
 	tusd.DataStore
-	NewUploadWithSession(ctx context.Context, session Session) (upload tusd.Upload, err error)
+	NewUploadWithSession(ctx context.Context, session Session) (upload Upload, err error)
+}
+
+type Upload interface {
+	tusd.Upload
+	GetID() string
 }
 
 func BuildUploadId(spaceID, blobID string) string {

@@ -214,7 +214,7 @@ func (store S3Store) NewUpload(ctx context.Context, info handler.FileInfo) (hand
 }
 
 // NewUploadWithSession creates a new tus s3 upload backed by an upload session
-func (store S3Store) NewUploadWithSession(ctx context.Context, session Session) (handler.Upload, error) {
+func (store S3Store) NewUploadWithSession(ctx context.Context, session Session) (Upload, error) {
 	// an upload larger than MaxObjectSize must throw an error
 	if session.Size > store.MaxObjectSize {
 		return nil, fmt.Errorf("s3store: upload size of %v bytes exceeds MaxObjectSize of %v bytes", session.Size, store.MaxObjectSize)
@@ -274,6 +274,10 @@ func (store S3Store) AsLengthDeclarableUpload(upload handler.Upload) handler.Len
 
 func (store S3Store) AsConcatableUpload(upload handler.Upload) handler.ConcatableUpload {
 	return upload.(*s3Upload)
+}
+
+func (upload s3Upload) GetID() string {
+	return upload.id
 }
 
 func (upload s3Upload) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {

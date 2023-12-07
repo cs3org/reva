@@ -226,21 +226,16 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	}
 
 	// NewUploadWithSession will also call Persist, TODO it should not
-	// NewUploadWithSession may change the id? eg for s3
 	nu, err := fs.tusDataStore.NewUploadWithSession(ctx, uploadSession)
 	if err != nil {
 		return nil, err
 	}
-	info, err := nu.GetInfo(ctx)
-	if err != nil {
-		return nil, err
-	}
 
-	sublog.Debug().Interface("info", info).Msg("Decomposedfs: initiated upload")
+	sublog.Debug().Interface("upload", nu).Msg("Decomposedfs: initiated upload")
 
 	return map[string]string{
-		"simple": info.ID,
-		"tus":    info.ID,
+		"simple": nu.GetID(),
+		"tus":    nu.GetID(),
 	}, nil
 }
 

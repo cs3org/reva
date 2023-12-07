@@ -60,7 +60,7 @@ func (store FileStore) UseIn(composer *handler.StoreComposer) {
 func (store FileStore) NewUpload(ctx context.Context, info handler.FileInfo) (handler.Upload, error) {
 	return nil, fmt.Errorf("fileStore: must call NewUploadSession")
 }
-func (store FileStore) NewUploadWithSession(ctx context.Context, session Session) (handler.Upload, error) {
+func (store FileStore) NewUploadWithSession(ctx context.Context, session Session) (Upload, error) {
 
 	if session.ID == "" {
 		return nil, fmt.Errorf("s3store: upload id must be set")
@@ -166,6 +166,10 @@ type fileUpload struct {
 	// been fetched yet from S3. Never read or write to it directly but instead use
 	// the GetInfo and writeInfo functions.
 	session *Session
+}
+
+func (upload *fileUpload) GetID() string {
+	return upload.id
 }
 
 func (upload *fileUpload) GetInfo(ctx context.Context) (handler.FileInfo, error) {
