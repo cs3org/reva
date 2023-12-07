@@ -375,6 +375,15 @@ func (upload s3Upload) WriteChunk(ctx context.Context, offset int64, src io.Read
 		nextPartNum += 1
 	}
 
+	session, err := upload.GetSession(ctx)
+	if err != nil {
+		return bytesUploaded - incompletePartSize, err
+	}
+	session.Offset = offset
+	if err := session.Persist(ctx); err != nil {
+		return bytesUploaded - incompletePartSize, err
+	}
+
 	return bytesUploaded - incompletePartSize, partProducer.err
 }
 
@@ -446,6 +455,10 @@ func (upload *s3Upload) GetInfo(ctx context.Context) (info handler.FileInfo, err
 }
 
 func (upload *s3Upload) GetSession(ctx context.Context) (Session, error) {
+	if upload.session != nil {
+		return *upload.session, nil
+	}
+
 	session, err := upload.fetchSession(ctx)
 	if err != nil {
 		return session, err
@@ -467,44 +480,7 @@ func (upload *s3Upload) fetchSession(ctx context.Context) (Session, error) {
 		return Session{}, err
 	}
 
-	// res, err := store.Service.GetObjectWithContext(ctx, &s3.GetObjectInput{
-	// 	Bucket: aws.String(store.Bucket),
-	// 	Key:    store.metadataKeyWithPrefix(uploadId + ".info"),
-	// })
-	// if err != nil {
-	// 	if isAwsError(err, "NoSuchKey") {
-	// 		return info, handler.ErrNotFound
-	// 	}
-
-	// 	return info, err
-	// }
-
-	// if err := json.NewDecoder(res.Body).Decode(&info); err != nil {
-	// 	return info, err
-	// }
-
-	// Get uploaded parts and their offset
-	parts, err := store.listAllParts(ctx, id)
-	if err != nil {
-		// Check if the error is caused by the upload not being found. This happens
-		// when the multipart upload has already been completed or aborted. Since
-		// we already found the info object, we know that the upload has been
-		// completed and therefore can ensure the the offset is the size.
-		// AWS S3 returns NoSuchUpload, but other implementations, such as DigitalOcean
-		// Spaces, can also return NoSuchKey.
-		if isAwsError(err, "NoSuchUpload") || isAwsError(err, "NoSuchKey") {
-			session.Offset = session.Size
-			return session, nil
-		} else {
-			return session, err
-		}
-	}
-
-	offset := int64(0)
-
-	for _, part := range parts {
-		offset += *part.Size
-	}
+	offset := session.Offset
 
 	incompletePartObject, err := store.getIncompletePartForUpload(ctx, uploadId)
 	if err != nil {
