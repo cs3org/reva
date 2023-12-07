@@ -90,7 +90,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	usr := ctxpkg.ContextMustGetUser(ctx)
 
 	newBlobID := uuid.New().String()
-	uploadMetadata := upload.Metadata{
+	uploadSession := upload.Session{
 		BlobID:              newBlobID,
 		Filename:            n.Name,
 		SpaceRoot:           n.SpaceRoot.ID,
@@ -116,7 +116,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		}
 		switch parts[0] {
 		case "sha1", "md5", "adler32":
-			uploadMetadata.Checksum = checksum
+			uploadSession.Checksum = checksum
 		default:
 			return nil, errtypes.BadRequest("unsupported checksum algorithm: " + parts[0])
 		}
@@ -130,7 +130,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		if err != nil {
 			return nil, err
 		}
-		uploadMetadata.MTime = mtime.UTC().Format(time.RFC3339Nano)
+		uploadSession.MTime = mtime.UTC().Format(time.RFC3339Nano)
 	}
 
 	_, err = node.CheckQuota(ctx, n.SpaceRoot, n.Exists, uint64(n.Blobsize), uint64(uploadLength))
@@ -182,19 +182,19 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	}
 
 	info := tusd.FileInfo{
-		ID:             tus.BuildUploadId(n.SpaceID, uploadMetadata.BlobID),
+		ID:             tus.BuildUploadId(n.SpaceID, uploadSession.BlobID),
 		MetaData:       tusMetadata,
 		Size:           uploadLength,
 		SizeIsDeferred: uploadLength == 0, // treat 0 length uploads as deferred
 	}
 	if lockID, ok := ctxpkg.ContextGetLockID(ctx); ok {
-		uploadMetadata.LockID = lockID
+		uploadSession.LockID = lockID
 	}
-	uploadMetadata.Dir = filepath.Dir(relative)
+	uploadSession.Dir = filepath.Dir(relative)
 
 	// rewrite filename for old chunking v1
 	if chunking.IsChunked(n.Name) {
-		uploadMetadata.Chunk = n.Name
+		uploadSession.Chunk = n.Name
 		bi, err := chunking.GetChunkBLOBInfo(n.Name)
 		if err != nil {
 			return nil, err
@@ -207,7 +207,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	// expires has been set by the storageprovider, do not expose as metadata. It is sent as a tus Upload-Expires header
 	if expiration, ok := headers["expires"]; ok && expiration != "null" { // TODO this is set by the storageprovider ... it cannot be set by cliensts, so it can never be the string 'null' ... or can it???
-		uploadMetadata.Expires, err = utils.MTimeToTime(expiration)
+		uploadSession.Expires, err = utils.MTimeToTime(expiration)
 		if err != nil {
 			return nil, err
 		}
@@ -215,16 +215,16 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	// only check preconditions if they are not empty
 	// do not expose as metadata
 	if headers["if-match"] != "" {
-		uploadMetadata.HeaderIfMatch = headers["if-match"] // TODO drop?
+		uploadSession.HeaderIfMatch = headers["if-match"] // TODO drop?
 	}
 	if headers["if-none-match"] != "" {
-		uploadMetadata.HeaderIfNoneMatch = headers["if-none-match"]
+		uploadSession.HeaderIfNoneMatch = headers["if-none-match"]
 	}
 	if headers["if-unmodified-since"] != "" {
-		uploadMetadata.HeaderIfUnmodifiedSince = headers["if-unmodified-since"]
+		uploadSession.HeaderIfUnmodifiedSince = headers["if-unmodified-since"]
 	}
 
-	if uploadMetadata.HeaderIfNoneMatch == "*" && n.Exists {
+	if uploadSession.HeaderIfNoneMatch == "*" && n.Exists {
 		return nil, errtypes.Aborted(fmt.Sprintf("parent %s already has a child %s", n.ID, n.Name))
 	}
 
@@ -239,10 +239,10 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		return nil, err
 	}
 
-	uploadMetadata.ID = info.ID
+	uploadSession.ID = info.ID
 
 	// keep track of upload
-	err = upload.WriteMetadata(ctx, fs.lu, info.ID, uploadMetadata)
+	err = upload.WriteMetadata(ctx, fs.lu, info.ID, uploadSession)
 	if err != nil {
 		return nil, err
 	}
@@ -811,7 +811,7 @@ func (fs *Decomposedfs) getUploadSession(ctx context.Context, path string) (stor
 	progress := upload.Progress{
 		Upload:     tusUpload,
 		Path:       path,
-		Metadata:   metadata,
+		Session:    metadata,
 		Processing: n.IsProcessing(ctx),
 	}
 

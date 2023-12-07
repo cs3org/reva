@@ -95,7 +95,7 @@ func init() {
 	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/utils/decomposedfs/upload")
 }
 
-func validateRequest(ctx context.Context, size int64, uploadMetadata Metadata, n *node.Node) error {
+func validateRequest(ctx context.Context, size int64, uploadMetadata Session, n *node.Node) error {
 	if err := n.CheckLock(ctx); err != nil {
 		return err
 	}
@@ -224,7 +224,7 @@ func CreateRevisionNode(ctx context.Context, lu *lookup.Lookup, revisionNode *no
 	return f, nil
 }
 
-func SetNodeToUpload(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploadMetadata Metadata) (int64, error) {
+func SetNodeToUpload(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploadMetadata Session) (int64, error) {
 
 	nodePath := n.InternalPath()
 	// lock existing node metadata
@@ -288,7 +288,7 @@ func WriteRevisionMetadataToNode(ctx context.Context, n *node.Node, revisionMeta
 	return n.SetXattrsWithContext(ctx, attrs, false)
 }
 
-func ReadNode(ctx context.Context, lu *lookup.Lookup, uploadMetadata Metadata) (*node.Node, error) {
+func ReadNode(ctx context.Context, lu *lookup.Lookup, uploadMetadata Session) (*node.Node, error) {
 	var n *node.Node
 	var err error
 	if uploadMetadata.NodeID == "" {

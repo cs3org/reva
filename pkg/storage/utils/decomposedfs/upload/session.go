@@ -38,7 +38,7 @@ import (
 	"github.com/shamaton/msgpack/v2"
 )
 
-type Metadata struct {
+type Session struct {
 	ID                  string
 	Filename            string
 	SpaceRoot           string
@@ -70,7 +70,7 @@ type Metadata struct {
 }
 
 // WriteMetadata will create a metadata file to keep track of an upload
-func WriteMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, metadata Metadata) error {
+func WriteMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, metadata Session) error {
 	_, span := tracer.Start(ctx, "WriteMetadata")
 	defer span.End()
 
@@ -96,7 +96,7 @@ func WriteMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, meta
 
 	return nil
 }
-func ReadMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string) (Metadata, error) {
+func ReadMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string) (Session, error) {
 	_, span := tracer.Start(ctx, "ReadMetadata")
 	defer span.End()
 
@@ -106,14 +106,14 @@ func ReadMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string) (Meta
 	msgBytes, err := os.ReadFile(uploadPath)
 	subspan.End()
 	if err != nil {
-		return Metadata{}, err
+		return Session{}, err
 	}
 
-	metadata := Metadata{}
+	metadata := Session{}
 	if len(msgBytes) > 0 {
 		err = msgpack.Unmarshal(msgBytes, &metadata)
 		if err != nil {
-			return Metadata{}, err
+			return Session{}, err
 		}
 	}
 	return metadata, nil
@@ -123,7 +123,7 @@ func ReadMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string) (Meta
 // - if the node does not exist it is created and assigned an id, no blob id?
 // - then always write out a revision node
 // - when postprocessing finishes copy metadata to node and replace latest revision node with previous blob info. if blobid is empty delete previous revision completely?
-func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, size int64, uploadMetadata Metadata) (Metadata, *node.Node, error) {
+func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, size int64, uploadMetadata Session) (Session, *node.Node, error) {
 	ctx, span := tracer.Start(ctx, "UpdateMetadata")
 	defer span.End()
 	log := appctx.GetLogger(ctx).With().Str("uploadID", uploadID).Logger()
@@ -141,28 +141,28 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 		p, err := node.ReadNode(ctx, lu, uploadMetadata.SpaceRoot, uploadMetadata.NodeParentID, false, nil, true)
 		if err != nil {
 			log.Error().Err(err).Msg("could not read parent node")
-			return Metadata{}, nil, err
+			return Session{}, nil, err
 		}
 		if !p.Exists {
-			return Metadata{}, nil, errtypes.PreconditionFailed("parent does not exist")
+			return Session{}, nil, errtypes.PreconditionFailed("parent does not exist")
 		}
 		n, err = p.Child(ctx, uploadMetadata.Filename)
 		if err != nil {
 			log.Error().Err(err).Msg("could not read child node")
-			return Metadata{}, nil, err
+			return Session{}, nil, err
 		}
 		if !n.Exists {
 			n.ID = uuid.New().String()
 			nodeHandle, err = initNewNode(ctx, lu, uploadID, uploadMetadata.MTime, n)
 			if err != nil {
 				log.Error().Err(err).Msg("could not init new node")
-				return Metadata{}, nil, err
+				return Session{}, nil, err
 			}
 		} else {
 			nodeHandle, err = openExistingNode(ctx, lu, n)
 			if err != nil {
 				log.Error().Err(err).Msg("could not open existing node")
-				return Metadata{}, nil, err
+				return Session{}, nil, err
 			}
 		}
 	}
@@ -171,12 +171,12 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 		n, err = node.ReadNode(ctx, lu, uploadMetadata.SpaceRoot, uploadMetadata.NodeID, false, nil, true)
 		if err != nil {
 			log.Error().Err(err).Msg("could not read parent node")
-			return Metadata{}, nil, err
+			return Session{}, nil, err
 		}
 		nodeHandle, err = openExistingNode(ctx, lu, n)
 		if err != nil {
 			log.Error().Err(err).Msg("could not open existing node")
-			return Metadata{}, nil, err
+			return Session{}, nil, err
 		}
 	}
 	defer func() {
@@ -190,7 +190,7 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 
 	err = validateRequest(ctx, size, uploadMetadata, n)
 	if err != nil {
-		return Metadata{}, nil, err
+		return Session{}, nil, err
 	}
 
 	// set processing status of node
@@ -200,7 +200,7 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 	nodeAttrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+uploadID)
 	err = n.SetXattrsWithContext(ctx, nodeAttrs, false)
 	if err != nil {
-		return Metadata{}, nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
+		return Session{}, nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
 	}
 
 	uploadMetadata.BlobSize = size
@@ -208,31 +208,31 @@ func UpdateMetadata(ctx context.Context, lu *lookup.Lookup, uploadID string, siz
 
 	err = WriteMetadata(ctx, lu, uploadID, uploadMetadata)
 	if err != nil {
-		return Metadata{}, nil, errors.Wrap(err, "Decomposedfs: could not write upload metadata")
+		return Session{}, nil, errors.Wrap(err, "Decomposedfs: could not write upload metadata")
 	}
 
 	return uploadMetadata, n, nil
 }
 
-func (m Metadata) GetID() string {
+func (m Session) GetID() string {
 	return m.ID
 }
-func (m Metadata) GetFilename() string {
+func (m Session) GetFilename() string {
 	return m.Filename
 }
 
 // TODO use uint64? use SizeDeferred flag is in tus? cleaner then int64 and a negative value
-func (m Metadata) GetSize() int64 {
+func (m Session) GetSize() int64 {
 	return m.BlobSize
 }
-func (m Metadata) GetResourceID() provider.ResourceId {
+func (m Session) GetResourceID() provider.ResourceId {
 	return provider.ResourceId{
 		StorageId: m.ProviderID,
 		SpaceId:   m.SpaceRoot,
 		OpaqueId:  m.NodeID,
 	}
 }
-func (m Metadata) GetReference() provider.Reference {
+func (m Session) GetReference() provider.Reference {
 	return provider.Reference{
 		ResourceId: &provider.ResourceId{
 			StorageId: m.ProviderID,
@@ -242,20 +242,20 @@ func (m Metadata) GetReference() provider.Reference {
 		// Path is not used
 	}
 }
-func (m Metadata) GetExecutantID() userpb.UserId {
+func (m Session) GetExecutantID() userpb.UserId {
 	return userpb.UserId{
 		Type:     userpb.UserType(userpb.UserType_value[m.ExecutantType]),
 		Idp:      m.ExecutantIdp,
 		OpaqueId: m.ExecutantID,
 	}
 }
-func (m Metadata) GetSpaceOwner() userpb.UserId {
+func (m Session) GetSpaceOwner() userpb.UserId {
 	return userpb.UserId{
 		// idp and type do not seem to be consumed and the node currently only stores the user id anyway
 		OpaqueId: m.SpaceOwnerOrManager,
 	}
 
 }
-func (m Metadata) GetExpires() time.Time {
+func (m Session) GetExpires() time.Time {
 	return m.Expires
 }

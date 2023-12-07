@@ -145,7 +145,7 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 				p := Progress{
 					Upload:     up,
 					Path:       lu.UploadPath(ev.UploadID),
-					Metadata:   uploadMetadata,
+					Session:    uploadMetadata,
 					Processing: false,
 				}
 				if err := p.Purge(ctx); err != nil {
@@ -371,25 +371,25 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 type Progress struct {
 	Upload     tusd.Upload
 	Path       string
-	Metadata   Metadata
+	Session    Session
 	Processing bool
 }
 
 // ID implements the storage.UploadSession interface
 func (p Progress) ID() string {
-	return p.Metadata.ID
+	return p.Session.ID
 }
 
 // Filename implements the storage.UploadSession interface
 func (p Progress) Filename() string {
-	return p.Metadata.Filename
+	return p.Session.Filename
 }
 
 // Size implements the storage.UploadSession interface
 func (p Progress) Size() int64 {
 	info, err := p.Upload.GetInfo(context.Background())
 	if err != nil {
-		return p.Metadata.GetSize()
+		return p.Session.GetSize()
 	}
 	return info.Size
 }
@@ -405,23 +405,23 @@ func (p Progress) Offset() int64 {
 
 // Reference implements the storage.UploadSession interface
 func (p Progress) Reference() provider.Reference {
-	return p.Metadata.GetReference()
+	return p.Session.GetReference()
 }
 
 // Executant implements the storage.UploadSession interface
 func (p Progress) Executant() user.UserId {
-	return p.Metadata.GetExecutantID()
+	return p.Session.GetExecutantID()
 }
 
 // SpaceOwner implements the storage.UploadSession interface
 func (p Progress) SpaceOwner() *user.UserId {
-	u := p.Metadata.GetSpaceOwner()
+	u := p.Session.GetSpaceOwner()
 	return &u
 }
 
 // Expires implements the storage.UploadSession interface
 func (p Progress) Expires() time.Time {
-	return p.Metadata.Expires
+	return p.Session.Expires
 }
 
 // IsProcessing implements the storage.UploadSession interface
@@ -436,7 +436,7 @@ func (p Progress) Purge(ctx context.Context) error {
 	if terminatableUpload, ok := p.Upload.(tusd.TerminatableUpload); ok {
 		terr = terminatableUpload.Terminate(ctx)
 		if terr != nil {
-			appctx.GetLogger(ctx).Error().Str("id", p.Metadata.ID).Msg("Decomposedfs: could not terminate tus upload for session")
+			appctx.GetLogger(ctx).Error().Str("id", p.Session.ID).Msg("Decomposedfs: could not terminate tus upload for session")
 		}
 	} else {
 		terr = errors.New("tus upload does not implement TerminatableUpload interface")
@@ -445,7 +445,7 @@ func (p Progress) Purge(ctx context.Context) error {
 	// remove upload session metadata
 	merr := os.Remove(p.Path)
 	if merr != nil {
-		appctx.GetLogger(ctx).Error().Str("id", p.Metadata.ID).Interface("path", p.Path).Msg("Decomposedfs: could not purge metadata path for upload session")
+		appctx.GetLogger(ctx).Error().Str("id", p.Session.ID).Interface("path", p.Path).Msg("Decomposedfs: could not purge metadata path for upload session")
 	}
 
 	return errors.Join(terr, merr)
