@@ -72,8 +72,6 @@ package tus
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -205,24 +203,25 @@ type s3Upload struct {
 	id    string
 	store *S3Store
 
-	// info stores the upload's current Session struct. It may be nil if it hasn't
+	// session stores the upload's current Session struct. It may be nil if it hasn't
 	// been fetched yet from S3. Never read or write to it directly but instead use
 	// the GetInfo and writeInfo functions.
 	session *Session
 }
 
-func (store S3Store) NewUpload(ctx context.Context, session Session) (handler.Upload, error) {
+func (store S3Store) NewUpload(ctx context.Context, info handler.FileInfo) (handler.Upload, error) {
+	return nil, fmt.Errorf("s3store: must call NewUploadSession")
+}
+
+// NewUploadWithSession creates a new tus s3 upload backed by an upload session
+func (store S3Store) NewUploadWithSession(ctx context.Context, session Session) (handler.Upload, error) {
 	// an upload larger than MaxObjectSize must throw an error
 	if session.Size > store.MaxObjectSize {
 		return nil, fmt.Errorf("s3store: upload size of %v bytes exceeds MaxObjectSize of %v bytes", session.Size, store.MaxObjectSize)
 	}
 
-	var uploadId string
 	if session.ID == "" {
 		return nil, fmt.Errorf("s3store: upload id must be set")
-	} else {
-		// certain tests set info.ID in advance
-		uploadId = session.ID
 	}
 
 	// Convert meta data into a map of pointers for AWS Go SDK, sigh.
@@ -237,23 +236,22 @@ func (store S3Store) NewUpload(ctx context.Context, session Session) (handler.Up
 	// Create the actual multipart upload
 	res, err := store.Service.CreateMultipartUploadWithContext(ctx, &s3.CreateMultipartUploadInput{
 		Bucket:   aws.String(store.Bucket),
-		Key:      store.keyWithPrefix(uploadId),
+		Key:      store.keyWithPrefix(session.ID),
 		Metadata: metadata,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("s3store: unable to create multipart upload:\n%s", err)
 	}
 
-	id := uploadId + "+" + *res.UploadId
-	session.ID = id
+	session.ID = session.ID + "+" + *res.UploadId
 
 	session.Storage = map[string]string{
 		"Type":   "s3store",
 		"Bucket": store.Bucket,
-		"Key":    *store.keyWithPrefix(uploadId),
+		"Key":    *store.keyWithPrefix(session.ID),
 	}
 
-	upload := &s3Upload{id, &store, nil}
+	upload := &s3Upload{session.ID, &store, &session}
 	err = session.Persist(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("s3store: unable to create info file:\n%s", err)
@@ -264,16 +262,6 @@ func (store S3Store) NewUpload(ctx context.Context, session Session) (handler.Up
 
 func (store S3Store) GetUpload(ctx context.Context, id string) (handler.Upload, error) {
 	return &s3Upload{id, &store, nil}, nil
-}
-
-// CleanupMetadata removes the metadata associated with the given ID.
-func (store S3Store) CleanupMetadata(ctx context.Context, id string) error {
-	uploadID, _ := splitIds(id)
-	_, err := store.Service.DeleteObjectWithContext(ctx, &s3.DeleteObjectInput{
-		Bucket: aws.String(store.Bucket),
-		Key:    store.metadataKeyWithPrefix(uploadID + ".info"),
-	})
-	return err
 }
 
 func (store S3Store) AsTerminatableUpload(upload handler.Upload) handler.TerminatableUpload {
@@ -464,7 +452,7 @@ func (upload *s3Upload) GetSession(ctx context.Context) (Session, error) {
 	return session, nil
 }
 
-func (upload s3Upload) fetchSession(ctx context.Context) (Session, error) {
+func (upload *s3Upload) fetchSession(ctx context.Context) (Session, error) {
 	id := upload.id
 	store := upload.store
 	uploadId, _ := splitIds(id)
@@ -605,9 +593,6 @@ func (upload s3Upload) Terminate(ctx context.Context) error {
 					},
 					{
 						Key: store.metadataKeyWithPrefix(uploadId + ".part"),
-					},
-					{
-						Key: store.metadataKeyWithPrefix(uploadId + ".info"),
 					},
 				},
 				Quiet: aws.Bool(true),
@@ -1067,22 +1052,6 @@ func (store S3Store) metadataKeyWithPrefix(key string) *string {
 	}
 
 	return aws.String(prefix + key)
-}
-
-// uid returns a unique id. These ids consist of 128 bits from a
-// cryptographically strong pseudo-random generator and are like uuids, but
-// without the dashes and significant bits.
-//
-// See: http://en.wikipedia.org/wiki/UUID#Random_UUID_probability_of_duplicates
-func uid() string {
-	id := make([]byte, 16)
-	_, err := io.ReadFull(rand.Reader, id)
-	if err != nil {
-		// This is probably an appropriate way to handle errors from our source
-		// for random bits.
-		panic(err)
-	}
-	return hex.EncodeToString(id)
 }
 
 func newMultiError(errs []error) error {

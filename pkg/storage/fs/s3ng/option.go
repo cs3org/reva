@@ -58,6 +58,9 @@ type Options struct {
 
 	// ForcePathStyle for the s3 blobstore
 	S3ForcePathStyle bool `mapstructure:"s3.force_path_style"`
+
+	// Root for the upload sessions
+	Root string `mapstructure:"root"`
 }
 
 // S3ConfigComplete return true if all required s3 fields are set

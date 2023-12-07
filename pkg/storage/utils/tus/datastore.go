@@ -20,19 +20,26 @@ package tus
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	tusd "github.com/tus/tusd/pkg/handler"
 )
 
 // DataStore is an interface that extends the tusd.DataStore interface.
 type DataStore interface {
-	NewUpload(ctx context.Context, session Session) (upload tusd.Upload, err error)
-	GetUpload(ctx context.Context, id string) (upload tusd.Upload, err error)
-
-	// CleanupMetadata cleans up an upload by its ID.
-	CleanupMetadata(ctx context.Context, id string) error
+	tusd.DataStore
+	NewUploadWithSession(ctx context.Context, session Session) (upload tusd.Upload, err error)
 }
 
 func BuildUploadId(spaceID, blobID string) string {
 	return spaceID + ":" + blobID
+}
+
+func SplitUploadId(uploadID string) (spaceID string, blobID string, err error) {
+	parts := strings.SplitN(uploadID, ":", 2)
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("invalid uploadid")
+	}
+	return parts[0], parts[1], nil
 }

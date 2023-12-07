@@ -77,25 +77,26 @@ func NewSession(ctx context.Context, root string) Session {
 }
 
 func ReadSession(ctx context.Context, root, id string) (Session, error) {
-	uploadPath := uploadPath(root, id)
+	uploadPath := sessionPath(root, id)
 
 	msgBytes, err := os.ReadFile(uploadPath)
 	if err != nil {
 		return Session{}, err
 	}
 
-	metadata := Session{}
+	session := Session{}
 	if len(msgBytes) > 0 {
-		err = msgpack.Unmarshal(msgBytes, &metadata)
+		err = msgpack.Unmarshal(msgBytes, &session)
 		if err != nil {
 			return Session{}, err
 		}
 	}
-	return metadata, nil
+	session.root = root
+	return session, nil
 }
 
 func (m Session) Persist(ctx context.Context) error {
-	uploadPath := uploadPath(m.root, m.ID)
+	uploadPath := sessionPath(m.root, m.ID)
 	// create folder structure (if needed)
 	if err := os.MkdirAll(filepath.Dir(uploadPath), 0700); err != nil {
 		return err
@@ -168,6 +169,10 @@ func (m Session) GetExpires() time.Time {
 	return m.Expires
 }
 
-func uploadPath(root, id string) string {
+func (m Session) CleanupMetadata(ctx context.Context) error {
+	return os.Remove(sessionPath(m.root, m.ID))
+}
+
+func sessionPath(root, id string) string {
 	return filepath.Join(root, "uploads", id+".mpk")
 }

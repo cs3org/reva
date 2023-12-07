@@ -225,7 +225,7 @@ func CreateRevisionNode(ctx context.Context, lu *lookup.Lookup, revisionNode *no
 	return f, nil
 }
 
-func SetNodeToUpload(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploadMetadata tus.Session) (int64, error) {
+func SetNodeToUpload(ctx context.Context, lu *lookup.Lookup, n *node.Node, rm RevisionMetadata) (int64, error) {
 
 	nodePath := n.InternalPath()
 	// lock existing node metadata
@@ -241,19 +241,10 @@ func SetNodeToUpload(ctx context.Context, lu *lookup.Lookup, n *node.Node, uploa
 		return 0, err
 	}
 
-	sizeDiff := uploadMetadata.BlobSize - n.Blobsize
+	sizeDiff := rm.BlobSize - n.Blobsize
 
-	n.BlobID = uploadMetadata.BlobID
-	n.Blobsize = uploadMetadata.BlobSize
-
-	rm := RevisionMetadata{
-		MTime:           uploadMetadata.MTime,
-		BlobID:          uploadMetadata.BlobID,
-		BlobSize:        uploadMetadata.BlobSize,
-		ChecksumSHA1:    uploadMetadata.ChecksumSHA1,
-		ChecksumMD5:     uploadMetadata.ChecksumMD5,
-		ChecksumADLER32: uploadMetadata.ChecksumADLER32,
-	}
+	n.BlobID = rm.BlobID
+	n.Blobsize = rm.BlobSize
 
 	if rm.MTime == "" {
 		rm.MTime = time.Now().UTC().Format(time.RFC3339Nano)
@@ -365,29 +356,33 @@ func Finalize(ctx context.Context, blobstore tree.Blobstore, revision string, in
 	_, span := tracer.Start(ctx, "Finalize")
 	defer span.End()
 
-	rn := n.RevisionNode(ctx, revision)
-	rn.BlobID = blobID
-	var err error
-	if mover, ok := blobstore.(tree.BlobstoreMover); ok {
-		err = mover.MoveBlob(rn, "", info.Storage["Bucket"], info.Storage["Key"])
-		switch err {
-		case nil:
-			return nil
-		case tree.ErrBlobstoreCannotMove:
-			// fallback below
-		default:
-			return err
+	/*
+		rn := n.RevisionNode(ctx, revision)
+		rn.BlobID = blobID
+		var err error
+		if mover, ok := blobstore.(tree.BlobstoreMover); ok {
+			err = mover.MoveBlob(rn, "", info.Storage["Bucket"], info.Storage["Key"])
+			switch err {
+			case nil:
+				return nil
+			case tree.ErrBlobstoreCannotMove:
+				// fallback below
+			default:
+				return err
+			}
 		}
-	}
 
-	// upload the data to the blobstore
-	_, subspan := tracer.Start(ctx, "WriteBlob")
-	err = blobstore.Upload(rn, info.Storage["Path"]) // FIXME where do we read from
-	subspan.End()
-	if err != nil {
-		return errors.Wrap(err, "failed to upload file to blobstore")
-	}
+		// upload the data to the blobstore
+		_, subspan := tracer.Start(ctx, "WriteBlob")
+		err = blobstore.Upload(rn, info.Storage["Path"]) // FIXME where do we read from
+		subspan.End()
+		if err != nil {
+			return errors.Wrap(err, "failed to upload file to blobstore")
+		}
 
+	*/
+	// TODO delete info? no ... the upload session continues, but flag it as done? no we have postprocessing for that
+	// what if a client terminates an upload while postprocessing is running?
 	// FIXME use a reader
 	return nil
 }

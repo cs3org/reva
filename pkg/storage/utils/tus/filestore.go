@@ -20,38 +20,249 @@ package tus
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
-	tusfilestore "github.com/tus/tusd/pkg/filestore"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/tus/tusd/pkg/handler"
 )
 
-// FileStore is a wrapper around tusfilestore.FileStore that provides additional functionality.
+var defaultFilePerm = os.FileMode(0664)
+
+// See the handler.DataStore interface for documentation about the different
+// methods.
 type FileStore struct {
-	tusfilestore.FileStore
+	// Relative or absolute path to store files in. FileStore does not check
+	// whether the path exists, use os.MkdirAll in this case on your own.
+	Path string
 }
 
-// NewFileStore creates a new instance of FileStore with the specified path.
+// New creates a new file based storage backend. The directory specified will
+// be used as the only storage entry. This method does not check
+// whether the path exists, use os.MkdirAll to ensure.
+// In addition, a locking mechanism is provided.
 func NewFileStore(path string) FileStore {
-	return FileStore{tusfilestore.New(path)}
+	return FileStore{path}
 }
 
-// NewUpload creates a new upload for the given file info in the file store.
-func (store FileStore) NewUpload(ctx context.Context, session Session) (handler.Upload, error) {
-	err := os.MkdirAll(filepath.Dir(filepath.Join(store.Path, session.ID)), 0755)
+// UseIn sets this store as the core data store in the passed composer and adds
+// all possible extension to it.
+func (store FileStore) UseIn(composer *handler.StoreComposer) {
+	composer.UseCore(store)
+	composer.UseTerminater(store)
+	composer.UseConcater(store)
+	composer.UseLengthDeferrer(store)
+}
+
+func (store FileStore) NewUpload(ctx context.Context, info handler.FileInfo) (handler.Upload, error) {
+	return nil, fmt.Errorf("fileStore: must call NewUploadSession")
+}
+func (store FileStore) NewUploadWithSession(ctx context.Context, session Session) (handler.Upload, error) {
+
+	if session.ID == "" {
+		return nil, fmt.Errorf("s3store: upload id must be set")
+	}
+
+	binPath := store.binPath(session.ID)
+	if err := os.MkdirAll(filepath.Dir(binPath), 0755); err != nil {
+		return nil, err
+	}
+
+	session.Storage = map[string]string{
+		"Type": "filestore",
+		"Path": binPath,
+	}
+
+	// Create binary file with no content
+	file, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = fmt.Errorf("upload directory does not exist: %s", store.Path)
+		}
+		return nil, err
+	}
+	err = file.Close()
 	if err != nil {
 		return nil, err
 	}
-	return store.FileStore.NewUpload(ctx, session.ToFileInfo())
+
+	upload := &fileUpload{session.ID, &store, &session}
+
+	err = session.Persist(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return upload, nil
 }
 
-// CleanupMetadata removes the metadata associated with the given ID.
-func (store FileStore) CleanupMetadata(_ context.Context, id string) error {
-	return os.Remove(store.infoPath(id))
+func (store FileStore) GetUpload(ctx context.Context, id string) (handler.Upload, error) {
+	return &fileUpload{
+		id:    id,
+		store: &store,
+	}, nil
+	/*
+		info := handler.FileInfo{}
+		data, err := ioutil.ReadFile(store.infoPath(id))
+		if err != nil {
+			if os.IsNotExist(err) {
+				// Interpret os.ErrNotExist as 404 Not Found
+				err = handler.ErrNotFound
+			}
+			return nil, err
+		}
+		if err := json.Unmarshal(data, &info); err != nil {
+			return nil, err
+		}
+
+		binPath := store.binPath(id)
+		infoPath := store.infoPath(id)
+		stat, err := os.Stat(binPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				// Interpret os.ErrNotExist as 404 Not Found
+				err = handler.ErrNotFound
+			}
+			return nil, err
+		}
+
+		info.Offset = stat.Size()
+
+		return &fileUpload{
+			info:     info,
+			binPath:  binPath,
+			infoPath: infoPath,
+		}, nil
+	*/
+}
+
+func (store FileStore) AsTerminatableUpload(upload handler.Upload) handler.TerminatableUpload {
+	return upload.(*fileUpload)
+}
+
+func (store FileStore) AsLengthDeclarableUpload(upload handler.Upload) handler.LengthDeclarableUpload {
+	return upload.(*fileUpload)
+}
+
+func (store FileStore) AsConcatableUpload(upload handler.Upload) handler.ConcatableUpload {
+	return upload.(*fileUpload)
+}
+
+// binPath returns the path to the file storing the binary data.
+func (store FileStore) binPath(uploadID string) string {
+	// uploadID is of the format <spaceID>:<uploadID>
+	parts := strings.SplitN(uploadID, ":", 2)
+	return filepath.Clean(filepath.Join(store.Path, "spaces", lookup.Pathify(parts[0], 1, 2), "blobs", lookup.Pathify(parts[1], 4, 2)))
+}
+
+type fileUpload struct {
+	id    string
+	store *FileStore
+
+	// session stores the upload's current Session struct. It may be nil if it hasn't
+	// been fetched yet from S3. Never read or write to it directly but instead use
+	// the GetInfo and writeInfo functions.
+	session *Session
+}
+
+func (upload *fileUpload) GetInfo(ctx context.Context) (handler.FileInfo, error) {
+	if upload.session != nil {
+		return upload.session.ToFileInfo(), nil
+	}
+
+	session, err := upload.GetSession(ctx)
+	if err != nil {
+		return handler.FileInfo{}, err
+	}
+	return session.ToFileInfo(), nil
+}
+
+func (upload *fileUpload) GetSession(ctx context.Context) (Session, error) {
+	session, err := upload.fetchSession(ctx)
+	if err != nil {
+		return session, err
+	}
+
+	upload.session = &session
+
+	return session, nil
+}
+func (upload *fileUpload) fetchSession(ctx context.Context) (Session, error) {
+	id := upload.id
+	store := upload.store
+
+	// Get file info stored in separate object
+	session, err := ReadSession(ctx, store.Path, id)
+	if err != nil {
+		return Session{}, err
+	}
+	return session, nil
+}
+
+func (upload *fileUpload) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
+	file, err := os.OpenFile(upload.store.binPath(upload.id), os.O_WRONLY|os.O_APPEND, defaultFilePerm)
+	if err != nil {
+		return 0, err
+	}
+	defer file.Close()
+
+	n, err := io.Copy(file, src)
+
+	upload.session.Offset += n
+	return n, err
+}
+
+func (upload *fileUpload) GetReader(ctx context.Context) (io.Reader, error) {
+	return os.Open(upload.store.binPath(upload.id))
+}
+
+func (upload *fileUpload) Terminate(ctx context.Context) error {
+	if err := os.Remove(upload.store.sessionPath(upload.id)); err != nil {
+		return err
+	}
+	if err := os.Remove(upload.store.binPath(upload.id)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (upload *fileUpload) ConcatUploads(ctx context.Context, uploads []handler.Upload) (err error) {
+	file, err := os.OpenFile(upload.store.binPath(upload.id), os.O_WRONLY|os.O_APPEND, defaultFilePerm)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	for _, partialUpload := range uploads {
+		fileUpload := partialUpload.(*fileUpload)
+
+		src, err := os.Open(upload.store.binPath(fileUpload.id))
+		if err != nil {
+			return err
+		}
+
+		if _, err := io.Copy(file, src); err != nil {
+			return err
+		}
+	}
+
+	return
+}
+
+func (upload *fileUpload) DeclareLength(ctx context.Context, length int64) error {
+	upload.session.Size = length
+	upload.session.SizeIsDeferred = false
+	return upload.session.Persist(ctx)
+}
+
+func (upload *fileUpload) FinishUpload(ctx context.Context) error {
+	return nil
 }
 
 // infoPath returns the path to the .info file storing the file's info.
-func (store FileStore) infoPath(id string) string {
-	return filepath.Join(store.Path, id+".info")
+func (store FileStore) sessionPath(id string) string {
+	return filepath.Join(store.Path, id+".mpk")
 }

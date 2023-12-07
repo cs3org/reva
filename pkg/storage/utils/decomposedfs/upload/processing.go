@@ -67,7 +67,7 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload info")
 				continue // NOTE: since we can't get the upload, we can't delete the blob
 			}
-			uploadMetadata, err := ReadMetadata(ctx, lu, info.ID)
+			uploadSession, err := tus.ReadSession(ctx, lu.InternalRoot(), info.ID)
 			if err != nil {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload metadata")
 				continue // NOTE: since we can't get the upload, we can't delete the blob
@@ -82,9 +82,9 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 			var sizeDiff int64
 			// propagate sizeDiff after failed postprocessing
 
-			n, err := ReadNode(ctx, lu, uploadMetadata)
+			n, err := ReadNode(ctx, lu, uploadSession)
 			if err != nil {
-				log.Error().Err(err).Str("uploadID", ev.UploadID).Interface("metadata", uploadMetadata).Msg("could not read revision node on postprocessing finished")
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Interface("metadata", uploadSession).Msg("could not read revision node on postprocessing finished")
 				continue
 			}
 
@@ -96,12 +96,19 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 				failed = true
 			case events.PPOutcomeContinue:
 				deleteMetadata = true
-				if err := Finalize(ctx, blobstore, uploadMetadata.MTime, info, n, uploadMetadata.BlobID); err != nil {
+				if err := Finalize(ctx, blobstore, uploadSession.MTime, info, n, uploadSession.BlobID); err != nil {
 					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not finalize upload")
 					deleteMetadata = false
 					failed = true
 				}
-				sizeDiff, err = SetNodeToUpload(ctx, lu, n, uploadMetadata)
+				sizeDiff, err = SetNodeToUpload(ctx, lu, n, RevisionMetadata{
+					MTime:           uploadSession.MTime,
+					BlobID:          uploadSession.BlobID,
+					BlobSize:        info.Size,
+					ChecksumSHA1:    uploadSession.ChecksumSHA1,
+					ChecksumMD5:     uploadSession.ChecksumMD5,
+					ChecksumADLER32: uploadSession.ChecksumADLER32,
+				})
 				if err != nil {
 					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could set node to revision upload")
 					deleteMetadata = false
@@ -145,7 +152,7 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 				p := Progress{
 					Upload:     up,
 					Path:       lu.UploadPath(ev.UploadID),
-					Session:    uploadMetadata,
+					Session:    uploadSession,
 					Processing: false,
 				}
 				if err := p.Purge(ctx); err != nil {
@@ -153,7 +160,7 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 				}
 			}
 			if deleteMetadata {
-				err := tusDataStore.CleanupMetadata(ctx, ev.UploadID)
+				err := uploadSession.CleanupMetadata(ctx)
 				if err != nil {
 					log.Info().Str("path", n.InternalPath()).Err(err).Msg("cleaning up the tus info file failed")
 				}
@@ -170,23 +177,23 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 					Failed:   failed,
 					ExecutingUser: &user.User{
 						Id: &user.UserId{
-							Type:     user.UserType(user.UserType_value[uploadMetadata.ExecutantType]),
-							Idp:      uploadMetadata.ExecutantIdp,
-							OpaqueId: uploadMetadata.ExecutantID,
+							Type:     user.UserType(user.UserType_value[uploadSession.ExecutantType]),
+							Idp:      uploadSession.ExecutantIdp,
+							OpaqueId: uploadSession.ExecutantID,
 						},
-						Username: uploadMetadata.ExecutantUserName,
+						Username: uploadSession.ExecutantUserName,
 					},
 					Filename: ev.Filename,
 					FileRef: &provider.Reference{
 						ResourceId: &provider.ResourceId{
-							StorageId: uploadMetadata.ProviderID,
-							SpaceId:   uploadMetadata.SpaceRoot,
-							OpaqueId:  uploadMetadata.SpaceRoot,
+							StorageId: uploadSession.ProviderID,
+							SpaceId:   uploadSession.SpaceRoot,
+							OpaqueId:  uploadSession.SpaceRoot,
 						},
 						// FIXME this seems wrong, path is not really relative to space root
 						// actually it is: InitiateUpload calls fs.lu.Path to get the path relative to the root so soarch can index the path
 						// hm is that robust? what if the file is moved? shouldn't we store the parent id, then?
-						Path: utils.MakeRelativePath(filepath.Join(uploadMetadata.Dir, uploadMetadata.Filename)),
+						Path: utils.MakeRelativePath(filepath.Join(uploadSession.Dir, uploadSession.Filename)),
 					},
 					Timestamp:  utils.TimeToTS(now),
 					SpaceOwner: n.SpaceOwnerOrManager(ctx),
@@ -205,15 +212,15 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload info")
 				continue // NOTE: since we can't get the upload, we can't restart postprocessing
 			}
-			uploadMetadata, err := ReadMetadata(ctx, lu, info.ID)
+			uploadSession, err := tus.ReadSession(ctx, lu.InternalRoot(), info.ID)
 			if err != nil {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload metadata")
 				continue // NOTE: since we can't get the upload, we can't delete the blob
 			}
 
-			n, err := ReadNode(ctx, lu, uploadMetadata)
+			n, err := ReadNode(ctx, lu, uploadSession)
 			if err != nil {
-				log.Error().Err(err).Str("uploadID", ev.UploadID).Interface("metadata", uploadMetadata).Msg("could not read revision node on restart postprocessing")
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Interface("metadata", uploadSession).Msg("could not read revision node on restart postprocessing")
 				continue
 			}
 
@@ -229,7 +236,7 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 				SpaceOwner:    n.SpaceOwnerOrManager(ctx),
 				ExecutingUser: &user.User{Id: &user.UserId{OpaqueId: "postprocessing-restart"}}, // send nil instead?
 				ResourceID:    &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID},
-				Filename:      uploadMetadata.Filename,
+				Filename:      uploadSession.Filename,
 				Filesize:      uint64(info.Size),
 			}); err != nil {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to publish BytesReceived event")
@@ -339,7 +346,7 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload info")
 					continue
 				}
-				uploadMetadata, err := ReadMetadata(ctx, lu, info.ID)
+				uploadSession, err := tus.ReadSession(ctx, lu.InternalRoot(), info.ID)
 				if err != nil {
 					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload metadata")
 					continue // NOTE: since we can't get the upload, we can't delete the blob
@@ -347,9 +354,9 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 
 				// scan data should be set on the node revision not the node ... then when postprocessing finishes we need to copy the state to the node
 
-				n, err = ReadNode(ctx, lu, uploadMetadata)
+				n, err = ReadNode(ctx, lu, uploadSession)
 				if err != nil {
-					log.Error().Err(err).Str("uploadID", ev.UploadID).Interface("metadata", uploadMetadata).Msg("could not read revision node on default event")
+					log.Error().Err(err).Str("uploadID", ev.UploadID).Interface("metadata", uploadSession).Msg("could not read revision node on default event")
 					continue
 				}
 			}

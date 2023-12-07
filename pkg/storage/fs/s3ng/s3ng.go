@@ -61,7 +61,7 @@ func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 		WithS3ForcePathStyle(o.S3ForcePathStyle).
 		WithDisableSSL(o.S3DisableSSL)
 
-	tusDataStore := tus.NewS3Store(o.S3Bucket, s3.New(session.Must(session.NewSession()), s3Config))
+	tusDataStore := tus.NewS3Store(o.Root, o.S3Bucket, s3.New(session.Must(session.NewSession()), s3Config))
 	tusDataStore.ObjectPrefix = o.S3UploadObjectPrefix
 	tusDataStore.MetadataObjectPrefix = o.S3UploadMetadataPrefix
 	tusDataStore.TemporaryDirectory = o.S3UploadTemporaryDirectory
