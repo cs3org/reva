@@ -38,12 +38,12 @@ func NewFileStore(path string) FileStore {
 }
 
 // NewUpload creates a new upload for the given file info in the file store.
-func (store FileStore) NewUpload(ctx context.Context, info handler.FileInfo) (handler.Upload, error) {
-	err := os.MkdirAll(filepath.Dir(filepath.Join(store.Path, info.ID)), 0755)
+func (store FileStore) NewUpload(ctx context.Context, session Session) (handler.Upload, error) {
+	err := os.MkdirAll(filepath.Dir(filepath.Join(store.Path, session.ID)), 0755)
 	if err != nil {
 		return nil, err
 	}
-	return store.FileStore.NewUpload(ctx, info)
+	return store.FileStore.NewUpload(ctx, session.ToFileInfo())
 }
 
 // CleanupMetadata removes the metadata associated with the given ID.

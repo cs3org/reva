@@ -371,7 +371,7 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 type Progress struct {
 	Upload     tusd.Upload
 	Path       string
-	Session    Session
+	Session    tus.Session
 	Processing bool
 }
 

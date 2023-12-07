@@ -74,7 +74,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -156,6 +155,8 @@ type S3Store struct {
 	// CPU, so it might be desirable to disable them.
 	// Note that this property is experimental and might be removed in the future!
 	DisableContentHashes bool
+
+	SessionRoot string
 }
 
 type S3API interface {
@@ -176,7 +177,7 @@ type s3APIForPresigning interface {
 }
 
 // New constructs a new storage using the supplied bucket and service object.
-func NewS3Store(bucket string, service S3API) S3Store {
+func NewS3Store(sessionRoot, bucket string, service S3API) S3Store {
 	return S3Store{
 		Bucket:             bucket,
 		Service:            service,
@@ -187,6 +188,7 @@ func NewS3Store(bucket string, service S3API) S3Store {
 		MaxObjectSize:      5 * 1024 * 1024 * 1024 * 1024,
 		MaxBufferedParts:   20,
 		TemporaryDirectory: "",
+		SessionRoot:        sessionRoot,
 	}
 }
 
@@ -203,29 +205,29 @@ type s3Upload struct {
 	id    string
 	store *S3Store
 
-	// info stores the upload's current FileInfo struct. It may be nil if it hasn't
+	// info stores the upload's current Session struct. It may be nil if it hasn't
 	// been fetched yet from S3. Never read or write to it directly but instead use
 	// the GetInfo and writeInfo functions.
-	info *handler.FileInfo
+	session *Session
 }
 
-func (store S3Store) NewUpload(ctx context.Context, info handler.FileInfo) (handler.Upload, error) {
+func (store S3Store) NewUpload(ctx context.Context, session Session) (handler.Upload, error) {
 	// an upload larger than MaxObjectSize must throw an error
-	if info.Size > store.MaxObjectSize {
-		return nil, fmt.Errorf("s3store: upload size of %v bytes exceeds MaxObjectSize of %v bytes", info.Size, store.MaxObjectSize)
+	if session.Size > store.MaxObjectSize {
+		return nil, fmt.Errorf("s3store: upload size of %v bytes exceeds MaxObjectSize of %v bytes", session.Size, store.MaxObjectSize)
 	}
 
 	var uploadId string
-	if info.ID == "" {
+	if session.ID == "" {
 		return nil, fmt.Errorf("s3store: upload id must be set")
 	} else {
 		// certain tests set info.ID in advance
-		uploadId = info.ID
+		uploadId = session.ID
 	}
 
 	// Convert meta data into a map of pointers for AWS Go SDK, sigh.
-	metadata := make(map[string]*string, len(info.MetaData))
-	for key, value := range info.MetaData {
+	metadata := make(map[string]*string, len(session.MetaData))
+	for key, value := range session.MetaData {
 		// Copying the value is required in order to prevent it from being
 		// overwritten by the next iteration.
 		v := nonPrintableRegexp.ReplaceAllString(value, "?")
@@ -243,16 +245,16 @@ func (store S3Store) NewUpload(ctx context.Context, info handler.FileInfo) (hand
 	}
 
 	id := uploadId + "+" + *res.UploadId
-	info.ID = id
+	session.ID = id
 
-	info.Storage = map[string]string{
+	session.Storage = map[string]string{
 		"Type":   "s3store",
 		"Bucket": store.Bucket,
 		"Key":    *store.keyWithPrefix(uploadId),
 	}
 
 	upload := &s3Upload{id, &store, nil}
-	err = upload.writeInfo(ctx, info)
+	err = session.Persist(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("s3store: unable to create info file:\n%s", err)
 	}
@@ -284,30 +286,6 @@ func (store S3Store) AsLengthDeclarableUpload(upload handler.Upload) handler.Len
 
 func (store S3Store) AsConcatableUpload(upload handler.Upload) handler.ConcatableUpload {
 	return upload.(*s3Upload)
-}
-
-func (upload *s3Upload) writeInfo(ctx context.Context, info handler.FileInfo) error {
-	id := upload.id
-	store := upload.store
-
-	uploadId, _ := splitIds(id)
-
-	upload.info = &info
-
-	infoJson, err := json.Marshal(info)
-	if err != nil {
-		return err
-	}
-
-	// Create object on S3 containing information about the file
-	_, err = store.Service.PutObjectWithContext(ctx, &s3.PutObjectInput{
-		Bucket:        aws.String(store.Bucket),
-		Key:           store.metadataKeyWithPrefix(uploadId + ".info"),
-		Body:          bytes.NewReader(infoJson),
-		ContentLength: aws.Int64(int64(len(infoJson))),
-	})
-
-	return err
 }
 
 func (upload s3Upload) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
@@ -464,40 +442,54 @@ func (upload *s3Upload) putPartForUpload(ctx context.Context, uploadPartInput *s
 }
 
 func (upload *s3Upload) GetInfo(ctx context.Context) (info handler.FileInfo, err error) {
-	if upload.info != nil {
-		return *upload.info, nil
+	if upload.session != nil {
+		return upload.session.ToFileInfo(), nil
 	}
 
-	info, err = upload.fetchInfo(ctx)
+	session, err := upload.GetSession(ctx)
 	if err != nil {
-		return info, err
+		return handler.FileInfo{}, err
 	}
-
-	upload.info = &info
-	return info, nil
+	return session.ToFileInfo(), nil
 }
 
-func (upload s3Upload) fetchInfo(ctx context.Context) (info handler.FileInfo, err error) {
+func (upload *s3Upload) GetSession(ctx context.Context) (Session, error) {
+	session, err := upload.fetchSession(ctx)
+	if err != nil {
+		return session, err
+	}
+
+	upload.session = &session
+
+	return session, nil
+}
+
+func (upload s3Upload) fetchSession(ctx context.Context) (Session, error) {
 	id := upload.id
 	store := upload.store
 	uploadId, _ := splitIds(id)
 
 	// Get file info stored in separate object
-	res, err := store.Service.GetObjectWithContext(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(store.Bucket),
-		Key:    store.metadataKeyWithPrefix(uploadId + ".info"),
-	})
+	session, err := ReadSession(ctx, store.SessionRoot, id)
 	if err != nil {
-		if isAwsError(err, "NoSuchKey") {
-			return info, handler.ErrNotFound
-		}
-
-		return info, err
+		return Session{}, err
 	}
 
-	if err := json.NewDecoder(res.Body).Decode(&info); err != nil {
-		return info, err
-	}
+	// res, err := store.Service.GetObjectWithContext(ctx, &s3.GetObjectInput{
+	// 	Bucket: aws.String(store.Bucket),
+	// 	Key:    store.metadataKeyWithPrefix(uploadId + ".info"),
+	// })
+	// if err != nil {
+	// 	if isAwsError(err, "NoSuchKey") {
+	// 		return info, handler.ErrNotFound
+	// 	}
+
+	// 	return info, err
+	// }
+
+	// if err := json.NewDecoder(res.Body).Decode(&info); err != nil {
+	// 	return info, err
+	// }
 
 	// Get uploaded parts and their offset
 	parts, err := store.listAllParts(ctx, id)
@@ -509,10 +501,10 @@ func (upload s3Upload) fetchInfo(ctx context.Context) (info handler.FileInfo, er
 		// AWS S3 returns NoSuchUpload, but other implementations, such as DigitalOcean
 		// Spaces, can also return NoSuchKey.
 		if isAwsError(err, "NoSuchUpload") || isAwsError(err, "NoSuchKey") {
-			info.Offset = info.Size
-			return info, nil
+			session.Offset = session.Size
+			return session, nil
 		} else {
-			return info, err
+			return session, err
 		}
 	}
 
@@ -524,16 +516,15 @@ func (upload s3Upload) fetchInfo(ctx context.Context) (info handler.FileInfo, er
 
 	incompletePartObject, err := store.getIncompletePartForUpload(ctx, uploadId)
 	if err != nil {
-		return info, err
+		return session, err
 	}
 	if incompletePartObject != nil {
 		defer incompletePartObject.Body.Close()
 		offset += *incompletePartObject.ContentLength
 	}
 
-	info.Offset = offset
-
-	return
+	session.Offset = offset
+	return session, nil
 }
 
 func (upload s3Upload) GetReader(ctx context.Context) (io.Reader, error) {
@@ -829,14 +820,13 @@ func (upload *s3Upload) concatUsingMultipart(ctx context.Context, partialUploads
 }
 
 func (upload *s3Upload) DeclareLength(ctx context.Context, length int64) error {
-	info, err := upload.GetInfo(ctx)
+	session, err := upload.GetSession(ctx)
 	if err != nil {
 		return err
 	}
-	info.Size = length
-	info.SizeIsDeferred = false
-
-	return upload.writeInfo(ctx, info)
+	session.Size = length
+	session.SizeIsDeferred = false
+	return session.Persist(ctx)
 }
 
 func (store S3Store) listAllParts(ctx context.Context, id string) (parts []*s3.Part, err error) {

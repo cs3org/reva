@@ -26,7 +26,8 @@ import (
 
 // DataStore is an interface that extends the tusd.DataStore interface.
 type DataStore interface {
-	tusd.DataStore
+	NewUpload(ctx context.Context, session Session) (upload tusd.Upload, err error)
+	GetUpload(ctx context.Context, id string) (upload tusd.Upload, err error)
 
 	// CleanupMetadata cleans up an upload by its ID.
 	CleanupMetadata(ctx context.Context, id string) error

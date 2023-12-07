@@ -90,7 +90,10 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	usr := ctxpkg.ContextMustGetUser(ctx)
 
 	newBlobID := uuid.New().String()
-	uploadSession := upload.Session{
+	uploadSession := tus.Session{
+		ID:       tus.BuildUploadId(n.SpaceID, newBlobID),
+		MetaData: tusd.MetaData{},
+
 		BlobID:              newBlobID,
 		Filename:            n.Name,
 		SpaceRoot:           n.SpaceRoot.ID,
@@ -105,8 +108,6 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		ExecutantUserName:   usr.Username,
 		LogLevel:            sublog.GetLevel().String(),
 	}
-
-	tusMetadata := tusd.MetaData{}
 
 	// checksum is sent as tus Upload-Checksum header and should not magically become a metadata property
 	if checksum, ok := headers["checksum"]; ok {
@@ -124,7 +125,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	// if mtime has been set via the headers, expose it as tus metadata
 	if ocmtime, ok := headers["mtime"]; ok && ocmtime != "null" {
-		tusMetadata["mtime"] = ocmtime
+		uploadSession.MetaData["mtime"] = ocmtime
 		// overwrite mtime if requested
 		mtime, err := utils.MTimeToTime(ocmtime)
 		if err != nil {
@@ -181,12 +182,9 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		return nil, err
 	}
 
-	info := tusd.FileInfo{
-		ID:             tus.BuildUploadId(n.SpaceID, uploadSession.BlobID),
-		MetaData:       tusMetadata,
-		Size:           uploadLength,
-		SizeIsDeferred: uploadLength == 0, // treat 0 length uploads as deferred
-	}
+	uploadSession.Size = uploadLength
+	uploadSession.SizeIsDeferred = uploadLength == 0 // treat 0 length uploads as deferred
+
 	if lockID, ok := ctxpkg.ContextGetLockID(ctx); ok {
 		uploadSession.LockID = lockID
 	}
@@ -228,35 +226,22 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		return nil, errtypes.Aborted(fmt.Sprintf("parent %s already has a child %s", n.ID, n.Name))
 	}
 
-	// create the upload
-	u, err := fs.tusDataStore.NewUpload(ctx, info)
-	if err != nil {
-		return nil, err
-	}
-
-	info, err = u.GetInfo(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	uploadSession.ID = info.ID
-
 	// keep track of upload
-	err = upload.WriteMetadata(ctx, fs.lu, info.ID, uploadSession)
+	err = uploadSession.Persist(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	sublog.Debug().Interface("info", info).Msg("Decomposedfs: initiated upload")
+	sublog.Debug().Interface("info", uploadSession).Msg("Decomposedfs: initiated upload")
 
 	return map[string]string{
-		"simple": info.ID,
-		"tus":    info.ID,
+		"simple": uploadSession.ID,
+		"tus":    uploadSession.ID,
 	}, nil
 }
 
 // GetDataStore returns the initialized Datastore
-func (fs *Decomposedfs) GetDataStore() tusd.DataStore {
+func (fs *Decomposedfs) GetDataStore() tus.DataStore {
 	return fs.tusDataStore
 }
 
@@ -558,25 +543,17 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 		}
 
 		// fake a new upload with the correct size
-		newInfo := tusd.FileInfo{
-			Size:     chunkStat.Size(),
-			MetaData: uploadInfo.MetaData,
-		}
-		nup, err := fs.tusDataStore.NewUpload(ctx, newInfo)
-		if err != nil {
-			return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: could not create new tus upload for legacy chunking")
-		}
-		newInfo, err = nup.GetInfo(ctx)
-		if err != nil {
-			return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: could not get info from upload")
-		}
-		uploadMetadata.ID = newInfo.ID
-		uploadMetadata.BlobSize = newInfo.Size
-		err = upload.WriteMetadata(ctx, fs.lu, newInfo.ID, uploadMetadata)
+		uploadMetadata.Size = chunkStat.Size()
+		uploadMetadata.BlobSize = chunkStat.Size()
+		err = upload.WriteMetadata(ctx, fs.lu, uploadMetadata.ID, uploadMetadata)
 		if err != nil {
 			return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error writing upload metadata for legacy chunking")
 		}
 
+		nup, err := fs.tusDataStore.NewUpload(ctx, uploadMetadata)
+		if err != nil {
+			return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: could not create new tus upload for legacy chunking")
+		}
 		_, err = nup.WriteChunk(ctx, 0, fd)
 		if err != nil {
 			return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error writing to binary file for legacy chunking")
