@@ -428,11 +428,8 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 	sizeDiff := info.Size - n.Blobsize
 	if !fs.o.AsyncFileUploads {
 		// handle postprocessing synchronously
-		log.Debug().Str("id", info.ID).Msg("upload.Finalize")
-		err = upload.Finalize(ctx, fs.blobstore, uploadSession.MTime, info, n, uploadSession.BlobID) // moving or copying the blob only reads the blobid, no need to change the revision nodes nodeid
-
 		log.Debug().Str("id", info.ID).Msg("upload.Cleanup")
-		upload.Cleanup(ctx, fs.lu, n, info.ID, uploadSession.MTime, err != nil)
+		upload.Cleanup(ctx, fs.lu, n, info.ID, uploadSession.MTime, false)
 		cerr := uploadSession.CleanupMetadata(ctx)
 		if cerr != nil {
 			log.Error().Err(cerr).Interface("info", info).Msg("failed to cleanup upload session metadata")
@@ -446,10 +443,6 @@ func (fs *Decomposedfs) PreFinishResponseCallback(hook tusd.HookEvent) error {
 				}
 			}
 		*/
-		if err != nil {
-			log.Error().Err(err).Msg("failed to upload")
-			return err
-		}
 		log.Debug().Str("id", info.ID).Msg("upload.SetNodeToUpload")
 		sizeDiff, err = upload.SetNodeToUpload(ctx, fs.lu, n, upload.RevisionMetadata{
 			MTime:           uploadSession.MTime,

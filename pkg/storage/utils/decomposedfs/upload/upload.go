@@ -80,12 +80,10 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/tus"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/rogpeppe/go-internal/lockedfile"
-	tusd "github.com/tus/tusd/pkg/handler"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -349,40 +347,4 @@ func removeRevision(ctx context.Context, lu *lookup.Lookup, n *node.Node, revisi
 			log.Info().Str("path", nodePath).Err(err).Msg("purging node metadata failed")
 		}
 	}
-}
-
-// Finalize finalizes the upload (eg moves the file to the internal destination)
-func Finalize(ctx context.Context, blobstore tree.Blobstore, revision string, info tusd.FileInfo, n *node.Node, blobID string) error {
-	_, span := tracer.Start(ctx, "Finalize")
-	defer span.End()
-
-	/*
-		rn := n.RevisionNode(ctx, revision)
-		rn.BlobID = blobID
-		var err error
-		if mover, ok := blobstore.(tree.BlobstoreMover); ok {
-			err = mover.MoveBlob(rn, "", info.Storage["Bucket"], info.Storage["Key"])
-			switch err {
-			case nil:
-				return nil
-			case tree.ErrBlobstoreCannotMove:
-				// fallback below
-			default:
-				return err
-			}
-		}
-
-		// upload the data to the blobstore
-		_, subspan := tracer.Start(ctx, "WriteBlob")
-		err = blobstore.Upload(rn, info.Storage["Path"]) // FIXME where do we read from
-		subspan.End()
-		if err != nil {
-			return errors.Wrap(err, "failed to upload file to blobstore")
-		}
-
-	*/
-	// TODO delete info? no ... the upload session continues, but flag it as done? no we have postprocessing for that
-	// what if a client terminates an upload while postprocessing is running?
-	// FIXME use a reader
-	return nil
 }

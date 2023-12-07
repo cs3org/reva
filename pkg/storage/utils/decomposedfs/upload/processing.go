@@ -62,12 +62,7 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload")
 				continue // NOTE: since we can't get the upload, we can't delete the blob
 			}
-			info, err := up.GetInfo(ctx)
-			if err != nil {
-				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload info")
-				continue // NOTE: since we can't get the upload, we can't delete the blob
-			}
-			uploadSession, err := tus.ReadSession(ctx, lu.InternalRoot(), info.ID)
+			uploadSession, err := tus.ReadSession(ctx, lu.InternalRoot(), ev.UploadID)
 			if err != nil {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload metadata")
 				continue // NOTE: since we can't get the upload, we can't delete the blob
@@ -96,15 +91,10 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 				failed = true
 			case events.PPOutcomeContinue:
 				deleteMetadata = true
-				if err := Finalize(ctx, blobstore, uploadSession.MTime, info, n, uploadSession.BlobID); err != nil {
-					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not finalize upload")
-					deleteMetadata = false
-					failed = true
-				}
 				sizeDiff, err = SetNodeToUpload(ctx, lu, n, RevisionMetadata{
 					MTime:           uploadSession.MTime,
 					BlobID:          uploadSession.BlobID,
-					BlobSize:        info.Size,
+					BlobSize:        uploadSession.Size,
 					ChecksumSHA1:    uploadSession.ChecksumSHA1,
 					ChecksumMD5:     uploadSession.ChecksumMD5,
 					ChecksumADLER32: uploadSession.ChecksumADLER32,
@@ -147,7 +137,7 @@ func Postprocessing(lu *lookup.Lookup, propagator Propagator, cache cache.StatCa
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not get mtime")
 			}
 			revision := previousRevisionTime.UTC().Format(time.RFC3339Nano)
-			Cleanup(ctx, lu, n, info.ID, revision, failed)
+			Cleanup(ctx, lu, n, uploadSession.ID, revision, failed)
 			if purge {
 				p := Progress{
 					Upload:     up,
