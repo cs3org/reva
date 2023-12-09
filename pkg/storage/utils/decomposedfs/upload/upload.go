@@ -19,9 +19,11 @@
 package upload
 
 import (
+	"bytes"
 	"context"
 	"crypto/md5"
 	"crypto/sha1"
+	"encoding"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -31,6 +33,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -76,8 +79,15 @@ type Tree interface {
 	ReadBlob(node *node.Node) (io.ReadCloser, error)
 	DeleteBlob(node *node.Node) error
 
+	StreamBlob(ctx context.Context, spaceid, blobid string, offset, objectSize int64, reader io.Reader, userMetadata map[string]string) error
+	BlobReader(ctx context.Context, spaceid, blobid string, offset, objectSize int64) (io.ReadCloser, error)
+
 	Propagate(ctx context.Context, node *node.Node, sizeDiff int64) (err error)
 }
+
+const (
+	OptimalPartSize = int64(16 * 1024 * 1024)
+)
 
 // Upload processes the upload
 // it implements tus tusd.Upload interface https://tus.io/protocols/resumable-upload.html#core-protocol
@@ -110,6 +120,14 @@ type Upload struct {
 	async bool
 	// tknopts hold token signing information
 	tknopts options.TokenOptions
+
+	// blob offsets
+	//BlobOffsets []int64
+
+	// hash states
+	//SHA1Enc    []byte
+	//MD5Enc     []byte
+	//ADLER32Enc []byte
 }
 
 func buildUpload(ctx context.Context, info tusd.FileInfo, binPath string, infoPath string, lu *lookup.Lookup, tp Tree, pub events.Publisher, async bool, tknopts options.TokenOptions) *Upload {
@@ -149,32 +167,75 @@ func Cleanup(upload *Upload, failure bool, keepUpload bool) {
 func (upload *Upload) WriteChunk(_ context.Context, offset int64, src io.Reader) (int64, error) {
 	ctx, span := tracer.Start(upload.Ctx, "WriteChunk")
 	defer span.End()
-	_, subspan := tracer.Start(ctx, "os.OpenFile")
-	file, err := os.OpenFile(upload.binPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
-	subspan.End()
-	if err != nil {
-		return 0, err
+
+	partsChan := make(chan *bytes.Buffer)
+	doneChan := make(chan struct{})
+	defer close(doneChan)
+
+	pp := partProducer{
+		done:  doneChan,
+		parts: partsChan,
+		r:     src,
 	}
-	defer file.Close()
+	go pp.produce(OptimalPartSize)
 
-	// calculate cheksum here? needed for the TUS checksum extension. https://tus.io/protocols/resumable-upload.html#checksum
-	// TODO but how do we get the `Upload-Checksum`? WriteChunk() only has a context, offset and the reader ...
-	// It is sent with the PATCH request, well or in the POST when the creation-with-upload extension is used
-	// but the tus handler uses a context.Background() so we cannot really check the header and put it in the context ...
-	_, subspan = tracer.Start(ctx, "io.Copy")
-	n, err := io.Copy(file, src)
-	subspan.End()
+	// The for loop will update the offset and blob offsets of the upload that we want to remember, so we always try to write the info
+	defer upload.writeInfo()
+	// TODO this adds an additional write in comparison to the filestore backend,
+	// because the filestore uses the binpart length on disk for the offset.
+	// we could try to store the upload session in s3? but it really needs locking, then.
 
-	// If the HTTP PATCH request gets interrupted in the middle (e.g. because
-	// the user wants to pause the upload), Go's net/http returns an io.ErrUnexpectedEOF.
-	// However, for the ocis driver it's not important whether the stream has ended
-	// on purpose or accidentally.
-	if err != nil && err != io.ErrUnexpectedEOF {
-		return n, err
+	var writtenBytes int64
+	blobOffsets := []string{}
+	for part := range partsChan {
+		blobOffsets = append(blobOffsets, strconv.FormatInt(offset, 10))
+		upload.Info.Storage["BlobOffsets"] = strings.Join(blobOffsets, ",")
+
+		sha1h := sha1.New()
+		md5h := md5.New()
+		adler32h := adler32.New()
+
+		r1 := io.TeeReader(part, sha1h)
+		r2 := io.TeeReader(r1, md5h)
+		r3 := io.TeeReader(r2, adler32h)
+
+		partsize := int64(part.Len())
+		_, subspan := tracer.Start(ctx, "tp.StreamBlob")
+		err := upload.tp.StreamBlob(upload.Ctx, upload.Info.Storage["SpaceRoot"], upload.Info.ID, offset, partsize, r3, map[string]string{})
+		subspan.End()
+		if err != nil {
+			// TODO can we seek to the beginning of the buffer and try again? or write to local disk?
+			return 0, err
+		}
+		// free buffer
+		part.Reset()
+
+		sha1hm, _ := sha1h.(encoding.BinaryMarshaler)
+		sha1enc, err := sha1hm.MarshalBinary()
+		if err != nil {
+			return 0, err
+		}
+		upload.Info.Storage["SHA1Enc"] = hex.EncodeToString(sha1enc)
+
+		md5hm, _ := md5h.(encoding.BinaryMarshaler)
+		md5enc, err := md5hm.MarshalBinary()
+		if err != nil {
+			return 0, err
+		}
+		upload.Info.Storage["MD5Enc"] = hex.EncodeToString(md5enc)
+
+		adler32hm, _ := adler32h.(encoding.BinaryMarshaler)
+		adler32enc, err := adler32hm.MarshalBinary()
+		if err != nil {
+			return 0, err
+		}
+		upload.Info.Storage["ADLER32Enc"] = hex.EncodeToString(adler32enc)
+
+		upload.Info.Offset += partsize
+		writtenBytes += partsize
 	}
 
-	upload.Info.Offset += n
-	return n, upload.writeInfo()
+	return writtenBytes, nil
 }
 
 // GetInfo returns the FileInfo
@@ -186,7 +247,42 @@ func (upload *Upload) GetInfo(_ context.Context) (tusd.FileInfo, error) {
 func (upload *Upload) GetReader(_ context.Context) (io.Reader, error) {
 	_, span := tracer.Start(upload.Ctx, "GetReader")
 	defer span.End()
-	return os.Open(upload.binPath)
+	blobOffsets := strings.Split(upload.Info.Storage["BlobOffsets"], ",")
+	blobparts := len(blobOffsets)
+	readers := make([]io.Reader, 0, blobparts)
+	for i, offsetStr := range blobOffsets {
+		offset, err := strconv.ParseInt(offsetStr, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		var partSize int64
+		if i < blobparts && blobparts > 1 {
+			partSize = OptimalPartSize
+		} else {
+			partSize = upload.Info.Size - offset
+		}
+		blobReader, err := upload.tp.BlobReader(upload.Ctx, upload.Info.Storage["SpaceRoot"], upload.Info.ID, offset, partSize)
+		if err != nil {
+			return nil, err
+		}
+		readers = append(readers, CloseOnEOFReader(blobReader))
+	}
+	return io.MultiReader(readers...), nil
+}
+
+type closeOnEOFReader struct {
+	rc io.ReadCloser
+}
+
+func (closer closeOnEOFReader) Read(p []byte) (int, error) {
+	n, err := closer.rc.Read(p)
+	if err == io.EOF {
+		closer.rc.Close()
+	}
+	return n, err
+}
+func CloseOnEOFReader(rc io.ReadCloser) io.Reader {
+	return closeOnEOFReader{rc: rc}
 }
 
 // FinishUpload finishes an upload and moves the file to the internal destination
@@ -200,32 +296,44 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 
 	log := appctx.GetLogger(upload.Ctx)
 
-	// calculate the checksum of the written bytes
-	// they will all be written to the metadata later, so we cannot omit any of them
-	// TODO only calculate the checksum in sync that was requested to match, the rest could be async ... but the tests currently expect all to be present
-	// TODO the hashes all implement BinaryMarshaler so we could try to persist the state for resumable upload. we would neet do keep track of the copied bytes ...
+	// unmarshal the hashes of the written blob parts
+	sha1Enc, err := hex.DecodeString(upload.Info.Storage["SHA1Enc"])
+	if err != nil {
+		Cleanup(upload, true, false)
+		return err
+	}
 	sha1h := sha1.New()
+	sha1hu, _ := sha1h.(encoding.BinaryUnmarshaler)
+	err = sha1hu.UnmarshalBinary(sha1Enc)
+	if err != nil {
+		Cleanup(upload, true, false)
+		return err
+	}
+
 	md5h := md5.New()
+	md5hu, _ := md5h.(encoding.BinaryUnmarshaler)
+	md5enc, err := hex.DecodeString(upload.Info.Storage["MD5Enc"])
+	if err != nil {
+		Cleanup(upload, true, false)
+		return err
+	}
+	err = md5hu.UnmarshalBinary(md5enc)
+	if err != nil {
+		Cleanup(upload, true, false)
+		return err
+	}
+
 	adler32h := adler32.New()
-	{
-		_, subspan := tracer.Start(ctx, "os.Open")
-		f, err := os.Open(upload.binPath)
-		subspan.End()
-		if err != nil {
-			// we can continue if no oc checksum header is set
-			log.Info().Err(err).Str("binPath", upload.binPath).Msg("error opening binPath")
-		}
-		defer f.Close()
-
-		r1 := io.TeeReader(f, sha1h)
-		r2 := io.TeeReader(r1, md5h)
-
-		_, subspan = tracer.Start(ctx, "io.Copy")
-		_, err = io.Copy(adler32h, r2)
-		subspan.End()
-		if err != nil {
-			log.Info().Err(err).Msg("error copying checksums")
-		}
+	adler32u, _ := adler32h.(encoding.BinaryUnmarshaler)
+	adler32enc, err := hex.DecodeString(upload.Info.Storage["ADLER32Enc"])
+	if err != nil {
+		Cleanup(upload, true, false)
+		return err
+	}
+	err = adler32u.UnmarshalBinary(adler32enc)
+	if err != nil {
+		Cleanup(upload, true, false)
+		return err
 	}
 
 	// compare if they match the sent checksum
@@ -342,7 +450,7 @@ func (upload *Upload) ConcatUploads(_ context.Context, uploads []tusd.Upload) (e
 func (upload *Upload) writeInfo() error {
 	_, span := tracer.Start(upload.Ctx, "writeInfo")
 	defer span.End()
-	data, err := json.Marshal(upload.Info)
+	data, err := json.Marshal(upload.Info) // FIXME write all upload session metadada
 	if err != nil {
 		return err
 	}
@@ -351,26 +459,28 @@ func (upload *Upload) writeInfo() error {
 
 // Finalize finalizes the upload (eg moves the file to the internal destination)
 func (upload *Upload) Finalize() (err error) {
-	ctx, span := tracer.Start(upload.Ctx, "Finalize")
-	defer span.End()
-	n := upload.Node
-	if n == nil {
-		var err error
-		n, err = node.ReadNode(ctx, upload.lu, upload.Info.Storage["SpaceRoot"], upload.Info.Storage["NodeId"], false, nil, false)
-		if err != nil {
-			return err
+	/*
+		ctx, span := tracer.Start(upload.Ctx, "Finalize")
+		defer span.End()
+		n := upload.Node
+		if n == nil {
+			var err error
+			n, err = node.ReadNode(ctx, upload.lu, upload.Info.Storage["SpaceRoot"], upload.Info.Storage["NodeId"], false, nil, false)
+			if err != nil {
+				return err
+			}
+			upload.Node = n
 		}
-		upload.Node = n
-	}
 
-	// upload the data to the blobstore
-	_, subspan := tracer.Start(ctx, "WriteBlob")
-	err = upload.tp.WriteBlob(n, upload.binPath)
-	subspan.End()
-	if err != nil {
-		return errors.Wrap(err, "failed to upload file to blobstore")
-	}
+		// upload the data to the blobstore
+		_, subspan := tracer.Start(ctx, "WriteBlob")
+		err = upload.tp.WriteBlob(n, upload.binPath)
+		subspan.End()
+		if err != nil {
+			return errors.Wrap(err, "failed to upload file to blobstore")
+		}
 
+	*/
 	return nil
 }
 
@@ -406,6 +516,7 @@ func (upload *Upload) cleanup(cleanNode, cleanBin, cleanInfo bool) {
 					attributeName == prefixes.TypeAttr ||
 					attributeName == prefixes.BlobIDAttr ||
 					attributeName == prefixes.BlobsizeAttr ||
+					attributeName == prefixes.BlobOffsetsAttr ||
 					attributeName == prefixes.MTimeAttr
 			}, true); err != nil {
 				upload.log.Info().Str("versionpath", p).Str("nodepath", upload.Node.InternalPath()).Err(err).Msg("renaming version node failed")

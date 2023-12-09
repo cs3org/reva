@@ -247,6 +247,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 			attributeName == prefixes.TypeAttr ||
 			attributeName == prefixes.BlobIDAttr ||
 			attributeName == prefixes.BlobsizeAttr ||
+			attributeName == prefixes.BlobOffsetsAttr ||
 			attributeName == prefixes.MTimeAttr // FIXME somewhere I mix up the revision time and the mtime, causing the restore to overwrite the other existing revisien
 	}, f, true)
 	if err != nil {
@@ -270,7 +271,8 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
 			attributeName == prefixes.TypeAttr ||
 			attributeName == prefixes.BlobIDAttr ||
-			attributeName == prefixes.BlobsizeAttr
+			attributeName == prefixes.BlobsizeAttr ||
+			attributeName == prefixes.BlobOffsetsAttr
 	}, false)
 	if err != nil {
 		return errtypes.InternalError("failed to copy blob xattrs to old revision to node: " + err.Error())

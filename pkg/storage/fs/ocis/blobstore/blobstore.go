@@ -20,6 +20,8 @@ package blobstore
 
 import (
 	"bufio"
+	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -49,8 +51,7 @@ func New(root string) (*Blobstore, error) {
 
 // Upload stores some data in the blobstore under the given key
 func (bs *Blobstore) Upload(node *node.Node, source string) error {
-
-	dest := bs.path(node)
+	dest := bs.pathFromNode(node)
 	// ensure parent path exists
 	if err := os.MkdirAll(filepath.Dir(dest), 0700); err != nil {
 		return errors.Wrap(err, "Decomposedfs: oCIS blobstore: error creating parent folders for blob")
@@ -69,40 +70,82 @@ func (bs *Blobstore) Upload(node *node.Node, source string) error {
 
 	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY, 0700)
 	if err != nil {
-		return errors.Wrapf(err, "could not open blob '%s' for writing", bs.path(node))
+		return errors.Wrapf(err, "could not open blob '%s' for writing", dest)
 	}
 
 	w := bufio.NewWriter(f)
 	_, err = w.ReadFrom(file)
 	if err != nil {
-		return errors.Wrapf(err, "could not write blob '%s'", bs.path(node))
+		return errors.Wrapf(err, "could not write blob '%s'", dest)
 	}
 
 	return w.Flush()
 }
 
+func (bs *Blobstore) StreamingUpload(ctx context.Context, spaceid, blobid string, offset, objectSize int64, reader io.Reader, userMetadata map[string]string) error {
+	dest := bs.path(spaceid, blobid)
+	if offset > 0 {
+		// write a part
+		dest = fmt.Sprintf("%s:%d-%d", dest, offset, offset+objectSize)
+	}
+
+	// ensure parent path exists
+	if err := os.MkdirAll(filepath.Dir(dest), 0700); err != nil {
+		return errors.Wrap(err, "Decomposedfs: oCIS blobstore: error creating parent folders for blob")
+	}
+
+	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY, 0700)
+	if err != nil {
+		return errors.Wrapf(err, "could not open blob '%s' for stream writing", dest)
+	}
+
+	w := bufio.NewWriter(f)
+	_, err = w.ReadFrom(reader)
+	if err != nil {
+		return errors.Wrapf(err, "could not stream write blob '%s'", dest)
+	}
+
+	return w.Flush()
+}
+func (bs *Blobstore) StreamingDownload(ctx context.Context, spaceid, blobid string, offset, objectSize int64) (io.ReadCloser, error) {
+	dest := bs.path(spaceid, blobid)
+	if offset > 0 {
+		// read a part
+		dest = fmt.Sprintf("%s:%d-%d", dest, offset, offset+objectSize)
+	}
+	file, err := os.Open(dest)
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not read blob '%s'", dest)
+	}
+	return file, nil
+}
+
 // Download retrieves a blob from the blobstore for reading
 func (bs *Blobstore) Download(node *node.Node) (io.ReadCloser, error) {
-	file, err := os.Open(bs.path(node))
+	file, err := os.Open(bs.pathFromNode(node))
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not read blob '%s'", bs.path(node))
+		return nil, errors.Wrapf(err, "could not read blob '%s'", bs.pathFromNode(node))
 	}
 	return file, nil
 }
 
 // Delete deletes a blob from the blobstore
 func (bs *Blobstore) Delete(node *node.Node) error {
-	if err := utils.RemoveItem(bs.path(node)); err != nil {
-		return errors.Wrapf(err, "could not delete blob '%s'", bs.path(node))
+	if err := utils.RemoveItem(bs.pathFromNode(node)); err != nil {
+		return errors.Wrapf(err, "could not delete blob '%s'", bs.pathFromNode(node))
 	}
 	return nil
 }
 
-func (bs *Blobstore) path(node *node.Node) string {
+func (bs *Blobstore) pathFromNode(node *node.Node) string {
+	return bs.path(node.SpaceID, node.BlobID)
+}
+
+func (bs *Blobstore) path(spaceid, blobid string) string {
 	return filepath.Join(
 		bs.root,
 		filepath.Clean(filepath.Join(
-			"/", "spaces", lookup.Pathify(node.SpaceID, 1, 2), "blobs", lookup.Pathify(node.BlobID, 4, 2)),
+			"/", "spaces", lookup.Pathify(spaceid, 1, 2), "blobs", lookup.Pathify(blobid, 4, 2)),
 		),
 	)
 }

@@ -48,6 +48,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/migrator"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
@@ -99,6 +100,9 @@ type Tree interface {
 	WriteBlob(node *node.Node, source string) error
 	ReadBlob(node *node.Node) (io.ReadCloser, error)
 	DeleteBlob(node *node.Node) error
+
+	StreamBlob(ctx context.Context, spaceid, blobid string, offset, objectSize int64, reader io.Reader, userMetadata map[string]string) error
+	BlobReader(ctx context.Context, spaceid, blobid string, offset, objectSize int64) (io.ReadCloser, error)
 
 	Propagate(ctx context.Context, node *node.Node, sizeDiff int64) (err error)
 }
@@ -1027,11 +1031,40 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 	if currentEtag != expectedEtag {
 		return nil, errtypes.Aborted(fmt.Sprintf("file changed from etag %s to %s", expectedEtag, currentEtag))
 	}
-	reader, err := fs.tp.ReadBlob(n)
+
+	val, err := n.XattrString(ctx, prefixes.BlobOffsetsAttr)
+	var blobOffsets []int64
 	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: error download blob '"+n.ID+"'")
+		// not set, single blob
+		blobOffsets = []int64{0}
+	} else {
+		offsetStrings := strings.Split(val, ",")
+		blobOffsets = make([]int64, 0, len(offsetStrings))
+		for _, s := range offsetStrings {
+			offset, err := strconv.ParseInt(s, 10, 64)
+			if err != nil {
+				return nil, errors.Wrap(err, "Decomposedfs: malformed part offset '"+s+"' in node '"+n.ID+"'")
+			}
+			blobOffsets = append(blobOffsets, offset)
+		}
 	}
-	return reader, nil
+
+	blobparts := len(blobOffsets)
+	readers := make([]io.Reader, 0, blobparts)
+	for i, offset := range blobOffsets {
+		var partSize int64
+		if i < blobparts && blobparts > 1 {
+			partSize = upload.OptimalPartSize
+		} else {
+			partSize = n.Blobsize - offset
+		}
+		blobReader, err := fs.tp.BlobReader(ctx, n.SpaceID, n.BlobID, offset, partSize)
+		if err != nil {
+			return nil, err
+		}
+		readers = append(readers, upload.CloseOnEOFReader(blobReader))
+	}
+	return io.NopCloser(io.MultiReader(readers...)), nil
 }
 
 // GetLock returns an existing lock on the given reference
