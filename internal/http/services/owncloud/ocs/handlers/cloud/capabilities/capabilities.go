@@ -16,6 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
+// Package capabilities contains the capabilities endpoint.
 package capabilities
 
 import (
@@ -28,10 +29,9 @@ import (
 
 // Handler renders the capability endpoint.
 type Handler struct {
-	c                      data.CapabilitiesData
-	defaultUploadProtocol  string
-	userAgentChunkingMap   map[string]string
-	groupBasedCapabilities map[string][]string
+	c                     data.CapabilitiesData
+	defaultUploadProtocol string
+	userAgentChunkingMap  map[string]string
 }
 
 // Init initializes this and any contained handlers.
@@ -39,7 +39,6 @@ func (h *Handler) Init(c *config.Config) {
 	h.c = c.Capabilities
 	h.defaultUploadProtocol = c.DefaultUploadProtocol
 	h.userAgentChunkingMap = c.UserAgentChunkingMap
-	h.groupBasedCapabilities = c.GroupBasedCapabilities
 
 	// capabilities
 	if h.c.Capabilities == nil {
@@ -212,12 +211,6 @@ func (h *Handler) Init(c *config.Config) {
 	// if h.c.Capabilities.Notifications.Endpoints == nil {
 	//    h.c.Capabilities.Notifications.Endpoints = []string{"list", "get", "delete"}
 	//  }
-
-	// group based
-
-	if h.c.Capabilities.GroupBased == nil {
-		h.c.Capabilities.GroupBased = &data.CapabilitiesGroupBased{}
-	}
 
 	// version
 

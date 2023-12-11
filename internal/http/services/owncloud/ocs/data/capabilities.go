@@ -58,8 +58,6 @@ type Capabilities struct {
 	Spaces       *Spaces                   `json:"spaces,omitempty" mapstructure:"spaces"        xml:"spaces,omitempty"`
 
 	Notifications *CapabilitiesNotifications `json:"notifications,omitempty" xml:"notifications,omitempty"`
-
-	GroupBased *CapabilitiesGroupBased `json:"group_based" mapstructure:"group_based" xml:"group_based"`
 }
 
 // Spaces lets a service configure its advertised options related to Storage Spaces.
@@ -226,11 +224,6 @@ type CapabilitiesFilesSharingFederation struct {
 // CapabilitiesNotifications holds a list of notification endpoints.
 type CapabilitiesNotifications struct {
 	Endpoints []string `json:"ocs-endpoints,omitempty" mapstructure:"endpoints" xml:"ocs-endpoints>element,omitempty"`
-}
-
-// CapabilitiesGroupBased holds capabilities based on the groups a user belongs to.
-type CapabilitiesGroupBased struct {
-	Capabilities []string `json:"capabilities" mapstructure:"capabilities" xml:"capabilities"`
 }
 
 // Version holds version information.

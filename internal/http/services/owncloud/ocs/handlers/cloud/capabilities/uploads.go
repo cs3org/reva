@@ -36,7 +36,7 @@ var (
 	chunkTUS chunkProtocol = "tus"
 )
 
-func (h *Handler) getCapabilitiesForUserAgent(ctx context.Context, userAgent string) data.CapabilitiesData {
+func (h *Handler) getCapabilitiesForUserAgent(_ context.Context, userAgent string) data.CapabilitiesData {
 	// Creating a copy of the capabilities struct is less expensive than taking a lock
 	c := *h.c.Capabilities
 	if userAgent != "" {
@@ -45,13 +45,6 @@ func (h *Handler) getCapabilitiesForUserAgent(ctx context.Context, userAgent str
 			if strings.Contains(userAgent, k) {
 				setCapabilitiesForChunkProtocol(chunkProtocol(v), &c)
 			}
-		}
-	}
-
-	c.GroupBased.Capabilities = []string{}
-	for capability, groups := range h.groupBasedCapabilities {
-		if ctxUserBelongsToGroups(ctx, groups) {
-			c.GroupBased.Capabilities = append(c.GroupBased.Capabilities, capability)
 		}
 	}
 
