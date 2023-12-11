@@ -23,6 +23,9 @@ address = "0.0.0.0:20080"
 [http.middlewares.cors]
 allow_credentials = true
 
+[http.middlewares.auth]
+credential_chain = ["basic"]
+
 [http.services.ocdav]
 # serve ocdav on the root path
 prefix = ""
