@@ -39,12 +39,14 @@ import (
 type Handler struct {
 	gatewayAddr             string
 	additionalInfoAttribute string
+	includeOCMSharees       bool
 }
 
 // Init initializes this and any contained handlers
 func (h *Handler) Init(c *config.Config) {
 	h.gatewayAddr = c.GatewaySvc
 	h.additionalInfoAttribute = c.AdditionalInfoAttribute
+	h.includeOCMSharees = c.IncludeOCMSharees
 }
 
 // FindSharees implements the /apps/files_sharing/api/v1/sharees endpoint
@@ -81,22 +83,24 @@ func (h *Handler) FindSharees(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	remoteUsersRes, err := gwc.FindAcceptedUsers(r.Context(), &invitepb.FindAcceptedUsersRequest{Filter: term})
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching remote users", err)
-		return
-	}
-	if remoteUsersRes.Status.Code != rpc.Code_CODE_OK {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching remote users", nil)
-		return
-	}
-	for _, user := range remoteUsersRes.GetAcceptedUsers() {
-		match := h.userAsMatch(user)
-		log.Debug().Interface("user", user).Interface("match", match).Msg("mapped")
-		if h.isExactMatch(match, term) {
-			exactUserMatches = append(exactUserMatches, match)
-		} else {
-			userMatches = append(userMatches, match)
+	if h.includeOCMSharees {
+		remoteUsersRes, err := gwc.FindAcceptedUsers(r.Context(), &invitepb.FindAcceptedUsersRequest{Filter: term})
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching remote users", err)
+			return
+		}
+		if remoteUsersRes.Status.Code != rpc.Code_CODE_OK {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching remote users", nil)
+			return
+		}
+		for _, user := range remoteUsersRes.GetAcceptedUsers() {
+			match := h.userAsMatch(user)
+			log.Debug().Interface("user", user).Interface("match", match).Msg("mapped")
+			if h.isExactMatch(match, term) {
+				exactUserMatches = append(exactUserMatches, match)
+			} else {
+				userMatches = append(userMatches, match)
+			}
 		}
 	}
 
