@@ -32,6 +32,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	"github.com/cs3org/reva/v2/internal/grpc/services/usershareprovider"
 	"github.com/cs3org/reva/v2/pkg/conversions"
@@ -53,6 +54,7 @@ var _ = Describe("user share provider service", func() {
 		gatewayClient           *cs3mocks.GatewayAPIClient
 		gatewaySelector         pool.Selectable[gateway.GatewayAPIClient]
 		checkPermissionResponse *permissions.CheckPermissionResponse
+		statResourceResponse    *providerpb.StatResponse
 	)
 
 	BeforeEach(func() {
@@ -61,8 +63,10 @@ var _ = Describe("user share provider service", func() {
 		registry.Register("mockManager", func(m map[string]interface{}) (share.Manager, error) {
 			return manager, nil
 		})
+		manager.On("UpdateShare", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&collaborationpb.Share{}, nil)
 
 		gatewayClient = &cs3mocks.GatewayAPIClient{}
+		pool.RemoveSelector("GatewaySelector" + "any")
 		gatewaySelector = pool.GetSelector[gateway.GatewayAPIClient](
 			"GatewaySelector",
 			"any",
@@ -75,6 +79,26 @@ var _ = Describe("user share provider service", func() {
 		}
 		gatewayClient.On("CheckPermission", mock.Anything, mock.Anything).
 			Return(checkPermissionResponse, nil)
+
+		statResourceResponse = &providerpb.StatResponse{
+			Status: status.NewOK(ctx),
+			Info: &providerpb.ResourceInfo{
+				PermissionSet: &providerpb.ResourcePermissions{},
+			},
+		}
+		gatewayClient.On("Stat", mock.Anything, mock.Anything).Return(statResourceResponse, nil)
+
+		getShareResponse := &collaborationpb.Share{
+			Id: &collaborationpb.ShareId{
+				OpaqueId: "shareid",
+			},
+			ResourceId: &providerpb.ResourceId{
+				StorageId: "storageid",
+				SpaceId:   "spaceid",
+				OpaqueId:  "opaqueid",
+			},
+		}
+		manager.On("GetShare", mock.Anything, mock.Anything).Return(getShareResponse, nil)
 
 		rgrpcService := usershareprovider.New(gatewaySelector, manager, []*regexp.Regexp{})
 
@@ -135,12 +159,107 @@ var _ = Describe("user share provider service", func() {
 			),
 			Entry(
 				"no WriteShare permission on user role",
-				conversions.RoleFromName("spaceeditor", true).CS3ResourcePermissions(),
 				conversions.RoleFromName("manager", true).CS3ResourcePermissions(),
+				conversions.RoleFromName("mspaceeditor", true).CS3ResourcePermissions(),
 				rpcpb.Code_CODE_PERMISSION_DENIED,
 				rpcpb.Code_CODE_PERMISSION_DENIED,
 				0,
 			),
 		)
+	})
+	Describe("UpdateShare", func() {
+		It("fails without WriteShare permission in user role", func() {
+			checkPermissionResponse.Status.Code = rpcpb.Code_CODE_PERMISSION_DENIED
+
+			updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
+				Ref: &collaborationpb.ShareReference{
+					Spec: &collaborationpb.ShareReference_Id{
+						Id: &collaborationpb.ShareId{
+							OpaqueId: "shareid",
+						},
+					},
+				},
+				Share: &collaborationpb.Share{},
+				UpdateMask: &fieldmaskpb.FieldMask{
+					Paths: []string{"permissions"},
+				},
+			})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_PERMISSION_DENIED))
+
+			manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 0)
+		})
+		It("fails when the user tries to share with elevated permissions", func() {
+			// user has only read access
+			statResourceResponse.Info.PermissionSet = &providerpb.ResourcePermissions{
+				UpdateGrant:          true,
+				InitiateFileDownload: true,
+				Stat:                 true,
+			}
+
+			// user tries to update a share to give write permissions
+			updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
+				Ref: &collaborationpb.ShareReference{
+					Spec: &collaborationpb.ShareReference_Id{
+						Id: &collaborationpb.ShareId{
+							OpaqueId: "shareid",
+						},
+					},
+				},
+				Share: &collaborationpb.Share{
+					Permissions: &collaborationpb.SharePermissions{
+						Permissions: &providerpb.ResourcePermissions{
+							Stat:                 true,
+							InitiateFileDownload: true,
+							InitiateFileUpload:   true,
+						},
+					},
+				},
+				UpdateMask: &fieldmaskpb.FieldMask{
+					Paths: []string{"permissions"},
+				},
+			})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_PERMISSION_DENIED))
+
+			manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 0)
+		})
+		It("succeeds when the user has sufficient permissions", func() {
+			// user has only read access
+			statResourceResponse.Info.PermissionSet = &providerpb.ResourcePermissions{
+				UpdateGrant:          true,
+				InitiateFileDownload: true,
+				Stat:                 true,
+			}
+
+			// user tries to update a share to give write permissions
+			updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
+				Ref: &collaborationpb.ShareReference{
+					Spec: &collaborationpb.ShareReference_Id{
+						Id: &collaborationpb.ShareId{
+							OpaqueId: "shareid",
+						},
+					},
+				},
+				Share: &collaborationpb.Share{
+					Permissions: &collaborationpb.SharePermissions{
+						Permissions: &providerpb.ResourcePermissions{
+							Stat:                 true,
+							InitiateFileDownload: true,
+						},
+					},
+				},
+				UpdateMask: &fieldmaskpb.FieldMask{
+					Paths: []string{"permissions"},
+				},
+			})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+
+			manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
+		})
 	})
 })

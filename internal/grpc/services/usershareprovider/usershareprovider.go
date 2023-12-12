@@ -21,6 +21,7 @@ package usershareprovider
 import (
 	"context"
 	"regexp"
+	"slices"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -277,6 +278,78 @@ func (s *service) ListShares(ctx context.Context, req *collaboration.ListSharesR
 }
 
 func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShareRequest) (*collaboration.UpdateShareResponse, error) {
+	log := appctx.GetLogger(ctx)
+	gatewayClient, err := s.gatewaySelector.Next()
+	if err != nil {
+		return nil, err
+	}
+
+	// check if the user has the permission to create shares at all
+	ok, err := utils.CheckPermission(ctx, permission.WriteShare, gatewayClient)
+	if err != nil {
+		return &collaboration.UpdateShareResponse{
+			Status: status.NewInternal(ctx, "failed check user permission to write share"),
+		}, err
+	}
+	if !ok {
+		return &collaboration.UpdateShareResponse{
+			Status: status.NewPermissionDenied(ctx, nil, "no permission to create user share"),
+		}, nil
+	}
+
+	// Read share from backend. We need the shared resource's id for STATing it, it might not be in
+	// the incoming request
+	currentShare, err := s.sm.GetShare(ctx,
+		&collaboration.ShareReference{
+			Spec: &collaboration.ShareReference_Id{
+				Id: req.GetShare().GetId(),
+			},
+		},
+	)
+	if err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, err.Error())
+		default:
+			st = status.NewInternal(ctx, err.Error())
+		}
+		return &collaboration.UpdateShareResponse{
+			Status: st,
+		}, nil
+	}
+
+	sRes, err := gatewayClient.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: currentShare.GetResourceId()}})
+	if err != nil {
+		log.Err(err).Interface("resource_id", req.GetShare().GetResourceId()).Msg("failed to stat resource to share")
+		return &collaboration.UpdateShareResponse{
+			Status: status.NewInternal(ctx, "failed to stat shared resource"),
+		}, err
+	}
+
+	// If this is a permissions update, check if user's permissions on the resource are sufficient to set the desired permissions
+	var newPermissions *provider.ResourcePermissions
+	if slices.Contains(req.GetUpdateMask().GetPaths(), "permissions") {
+		newPermissions = req.GetShare().GetPermissions().GetPermissions()
+	} else {
+		newPermissions = req.GetField().GetPermissions().GetPermissions()
+	}
+	if newPermissions != nil && !conversions.SufficientCS3Permissions(sRes.GetInfo().GetPermissionSet(), newPermissions) {
+		return &collaboration.UpdateShareResponse{
+			Status: status.NewPermissionDenied(ctx, nil, "insufficient permissions to create that kind of share"),
+		}, nil
+	}
+
+	// check if the requested permission are plausible for the Resource
+	// do we need more here?
+	if sRes.GetInfo().GetType() == provider.ResourceType_RESOURCE_TYPE_FILE {
+		if newPermissions.GetCreateContainer() || newPermissions.GetMove() || newPermissions.GetDelete() {
+			return &collaboration.UpdateShareResponse{
+				Status: status.NewInvalid(ctx, "cannot set the requested permissions on that type of resource"),
+			}, nil
+		}
+	}
+
 	share, err := s.sm.UpdateShare(ctx, req.Ref, req.Field.GetPermissions(), req.Share, req.UpdateMask) // TODO(labkode): check what to update
 	if err != nil {
 		return &collaboration.UpdateShareResponse{
