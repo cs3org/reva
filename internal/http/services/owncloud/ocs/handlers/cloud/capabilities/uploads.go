@@ -23,9 +23,6 @@ import (
 	"strings"
 
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
-	"github.com/cs3org/reva/pkg/appctx"
-
-	"github.com/juliangruber/go-intersect"
 )
 
 type chunkProtocol string
@@ -49,13 +46,6 @@ func (h *Handler) getCapabilitiesForUserAgent(_ context.Context, userAgent strin
 	}
 
 	return data.CapabilitiesData{Capabilities: &c, Version: h.c.Version}
-}
-
-func ctxUserBelongsToGroups(ctx context.Context, groups []string) bool {
-	if user, ok := appctx.ContextGetUser(ctx); ok {
-		return len(intersect.Simple(groups, user.Groups)) > 0
-	}
-	return false
 }
 
 func setCapabilitiesForChunkProtocol(cp chunkProtocol, c *data.Capabilities) {

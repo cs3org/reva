@@ -73,7 +73,7 @@ type Users struct {
 	// FIXME home should never be exposed ... even in oc 10
 	// home
 	TwoFactorAuthEnabled   bool                   `json:"two_factor_auth_enabled" xml:"two_factor_auth_enabled"`
-	GroupBasedCapabilities CapabilitiesGroupBased `json:"group-capabilities" xml:"group-capabilities"`
+	GroupBasedCapabilities CapabilitiesGroupBased `json:"group-capabilities"      xml:"group-capabilities"`
 }
 
 // CapabilitiesGroupBased holds capabilities based on the groups a user belongs to.

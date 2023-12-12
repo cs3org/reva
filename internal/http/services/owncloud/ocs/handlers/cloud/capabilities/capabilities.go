@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package capabilities contains the capabilities endpoint.
+// Package capabilities contains the capabilities handler.
 package capabilities
 
 import (
