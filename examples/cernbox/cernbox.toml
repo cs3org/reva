@@ -91,6 +91,7 @@ driver = "static"
 
 [grpc.services.authregistry.drivers.static.rules]
 basic = "{{ grpc.services.authprovider[0].address }}"
+bearer = "{{ grpc.services.authprovider[0].address }}"
 machine = "{{ grpc.services.authprovider[1].address }}"
 ocmshares = "{{ grpc.services.authprovider[2].address }}"
 
@@ -123,10 +124,10 @@ auth_manager = "ocmshares"
 driver = "static"
 
 [grpc.services.storageregistry.drivers.static]
-home_provider = "/home"
+home_provider = "/"
 
 [grpc.services.storageregistry.drivers.static.rules]
-"/home" = {"address" = "{{ grpc.services.storageprovider[0].address }}"}
+"/" = {"address" = "{{ grpc.services.storageprovider[0].address }}"}
 "localhome" = {"address" = "{{ grpc.services.storageprovider[0].address }}"}
 "/ocm" = {"address" = "{{ grpc.services.storageprovider[1].address }}"}
 "ocm" = {"address" = "{{ grpc.services.storageprovider[1].address }}"}
@@ -135,11 +136,11 @@ home_provider = "/home"
 
 [[grpc.services.storageprovider]]
 driver = "localhome"
-mount_path = "/home"
+mount_path = "/"
 mount_id = "localhome"
 expose_data_server = true
 data_server_url = "https://localhost:{{ http.services.dataprovider[0].address.port }}/data"
-enable_home_creation = false
+enable_home_creation = true
 
 [grpc.services.storageprovider.drivers.localhome]
 user_layout = "{{.Username}}"
@@ -232,6 +233,13 @@ file = ""
 
 
 ### HTTP ENDPOINTS ###
+
+[http.middlewares.auth]
+credential_chain = ["publicshares", "basic", "bearer"]
+token_strategy_chain = ["bearer", "header"]
+
+[http.middlewares.auth.credentials_by_user_agent]
+"mirall" = "basic"
 
 [http.services.appprovider]
 address = ":443"

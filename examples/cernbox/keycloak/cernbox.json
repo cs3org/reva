@@ -636,7 +636,9 @@
       "redirectUris": [
         "/realms/cernbox/account/*"
       ],
-      "webOrigins": [],
+      "webOrigins": [
+        "*"
+      ],
       "notBefore": 0,
       "bearerOnly": false,
       "consentRequired": false,
@@ -680,7 +682,9 @@
       "redirectUris": [
         "/realms/cernbox/account/*"
       ],
-      "webOrigins": [],
+      "webOrigins": [
+        "*"
+      ],
       "notBefore": 0,
       "bearerOnly": false,
       "consentRequired": false,
@@ -815,8 +819,7 @@
         "https://cernbox2.docker/*"
       ],
       "webOrigins": [
-        "https://cernbox1.docker/*",
-        "https://cernbox2.docker/*"
+        "*"
       ],
       "notBefore": 0,
       "bearerOnly": false,
@@ -903,7 +906,7 @@
         "/admin/cernbox/console/*"
       ],
       "webOrigins": [
-        "+"
+        "*"
       ],
       "notBefore": 0,
       "bearerOnly": false,
