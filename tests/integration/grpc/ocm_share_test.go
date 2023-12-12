@@ -54,10 +54,13 @@ var (
 		CreateContainer:      true,
 		Delete:               true,
 		GetPath:              true,
+		GetQuota:             true,
 		InitiateFileDownload: true,
 		InitiateFileUpload:   true,
 		ListContainer:        true,
 		ListGrants:           true,
+		ListRecycle:          true,
+		RestoreRecycleItem:   true,
 		Move:                 true,
 		Stat:                 true,
 	}
@@ -65,7 +68,9 @@ var (
 		Stat:                 true,
 		InitiateFileDownload: true,
 		GetPath:              true,
+		GetQuota:             true,
 		ListContainer:        true,
+		ListRecycle:          true,
 	}
 )
 
