@@ -23,9 +23,6 @@ import (
 	"strings"
 
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
-	"github.com/cs3org/reva/pkg/appctx"
-
-	"github.com/juliangruber/go-intersect"
 )
 
 type chunkProtocol string
@@ -36,7 +33,7 @@ var (
 	chunkTUS chunkProtocol = "tus"
 )
 
-func (h *Handler) getCapabilitiesForUserAgent(ctx context.Context, userAgent string) data.CapabilitiesData {
+func (h *Handler) getCapabilitiesForUserAgent(_ context.Context, userAgent string) data.CapabilitiesData {
 	// Creating a copy of the capabilities struct is less expensive than taking a lock
 	c := *h.c.Capabilities
 	if userAgent != "" {
@@ -48,21 +45,7 @@ func (h *Handler) getCapabilitiesForUserAgent(ctx context.Context, userAgent str
 		}
 	}
 
-	c.GroupBased.Capabilities = []string{}
-	for capability, groups := range h.groupBasedCapabilities {
-		if ctxUserBelongsToGroups(ctx, groups) {
-			c.GroupBased.Capabilities = append(c.GroupBased.Capabilities, capability)
-		}
-	}
-
 	return data.CapabilitiesData{Capabilities: &c, Version: h.c.Version}
-}
-
-func ctxUserBelongsToGroups(ctx context.Context, groups []string) bool {
-	if user, ok := appctx.ContextGetUser(ctx); ok {
-		return len(intersect.Simple(groups, user.Groups)) > 0
-	}
-	return false
 }
 
 func setCapabilitiesForChunkProtocol(cp chunkProtocol, c *data.Capabilities) {
