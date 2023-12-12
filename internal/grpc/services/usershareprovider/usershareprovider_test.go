@@ -20,31 +20,39 @@ package usershareprovider_test
 
 import (
 	"context"
-	"os"
+	"regexp"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaborationpb "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/grpc"
 
 	"github.com/cs3org/reva/v2/internal/grpc/services/usershareprovider"
 	"github.com/cs3org/reva/v2/pkg/conversions"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/share"
 	_ "github.com/cs3org/reva/v2/pkg/share/manager/loader"
 	"github.com/cs3org/reva/v2/pkg/share/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/share/mocks"
+	cs3mocks "github.com/cs3org/reva/v2/tests/cs3mocks/mocks"
 )
 
 var _ = Describe("user share provider service", func() {
 	var (
-		jsonDriverFile *os.File
-		ctx            context.Context
-		provider       collaborationpb.CollaborationAPIServer
-		manager        *mocks.Manager
+		ctx                     context.Context
+		provider                collaborationpb.CollaborationAPIServer
+		manager                 *mocks.Manager
+		gatewayClient           *cs3mocks.GatewayAPIClient
+		gatewaySelector         pool.Selectable[gateway.GatewayAPIClient]
+		checkPermissionResponse *permissions.CheckPermissionResponse
 	)
 
 	BeforeEach(func() {
@@ -54,20 +62,21 @@ var _ = Describe("user share provider service", func() {
 			return manager, nil
 		})
 
-		f, err := os.CreateTemp("", "reva-unit-test-*.json")
-		Expect(err).ToNot(HaveOccurred())
-		jsonDriverFile = f
-
-		rgrpcService, err := usershareprovider.New(map[string]interface{}{
-			"driver": "mockManager",
-			"drivers": map[string]map[string]interface{}{
-				"json": {
-					"file":         jsonDriverFile.Name(),
-					"gateway_addr": "https://localhost:9200",
-				},
+		gatewayClient = &cs3mocks.GatewayAPIClient{}
+		gatewaySelector = pool.GetSelector[gateway.GatewayAPIClient](
+			"GatewaySelector",
+			"any",
+			func(cc *grpc.ClientConn) gateway.GatewayAPIClient {
+				return gatewayClient
 			},
-		}, nil)
-		Expect(err).ToNot(HaveOccurred())
+		)
+		checkPermissionResponse = &permissions.CheckPermissionResponse{
+			Status: status.NewOK(ctx),
+		}
+		gatewayClient.On("CheckPermission", mock.Anything, mock.Anything).
+			Return(checkPermissionResponse, nil)
+
+		rgrpcService := usershareprovider.New(gatewaySelector, manager, []*regexp.Regexp{})
 
 		provider = rgrpcService.(collaborationpb.CollaborationAPIServer)
 		Expect(provider).ToNot(BeNil())
@@ -80,20 +89,17 @@ var _ = Describe("user share provider service", func() {
 		})
 	})
 
-	AfterEach(func() {
-		err := os.Remove(jsonDriverFile.Name())
-		Expect(err).ToNot(HaveOccurred())
-	})
-
 	Describe("CreateShare", func() {
 		DescribeTable("only requests with sufficient permissions get passed to the manager",
 			func(
 				resourceInfoPermissions *providerpb.ResourcePermissions,
 				grantPermissions *providerpb.ResourcePermissions,
-				code rpcpb.Code,
+				checkPermissionStatusCode rpcpb.Code,
+				expectedCode rpcpb.Code,
 				expectedCalls int,
 			) {
 				manager.On("Share", mock.Anything, mock.Anything, mock.Anything).Return(&collaborationpb.Share{}, nil)
+				checkPermissionResponse.Status.Code = checkPermissionStatusCode
 
 				createShareResponse, err := provider.CreateShare(ctx, &collaborationpb.CreateShareRequest{
 					ResourceInfo: &providerpb.ResourceInfo{
@@ -107,7 +113,7 @@ var _ = Describe("user share provider service", func() {
 				})
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(createShareResponse.Status.Code).To(Equal(code))
+				Expect(createShareResponse.Status.Code).To(Equal(expectedCode))
 
 				manager.AssertNumberOfCalls(GinkgoT(), "Share", expectedCalls)
 			},
@@ -115,6 +121,7 @@ var _ = Describe("user share provider service", func() {
 				"insufficient permissions",
 				conversions.RoleFromName("spaceeditor", true).CS3ResourcePermissions(),
 				conversions.RoleFromName("manager", true).CS3ResourcePermissions(),
+				rpcpb.Code_CODE_OK,
 				rpcpb.Code_CODE_PERMISSION_DENIED,
 				0,
 			),
@@ -123,7 +130,16 @@ var _ = Describe("user share provider service", func() {
 				conversions.RoleFromName("manager", true).CS3ResourcePermissions(),
 				conversions.RoleFromName("spaceeditor", true).CS3ResourcePermissions(),
 				rpcpb.Code_CODE_OK,
+				rpcpb.Code_CODE_OK,
 				1,
+			),
+			Entry(
+				"no WriteShare permission on user role",
+				conversions.RoleFromName("spaceeditor", true).CS3ResourcePermissions(),
+				conversions.RoleFromName("manager", true).CS3ResourcePermissions(),
+				rpcpb.Code_CODE_PERMISSION_DENIED,
+				rpcpb.Code_CODE_PERMISSION_DENIED,
+				0,
 			),
 		)
 	})

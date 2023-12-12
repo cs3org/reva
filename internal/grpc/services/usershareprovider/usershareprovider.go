@@ -22,6 +22,7 @@ import (
 	"context"
 	"regexp"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -34,20 +35,24 @@ import (
 	"github.com/cs3org/reva/v2/pkg/conversions"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/permission"
 	"github.com/cs3org/reva/v2/pkg/rgrpc"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/share/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/sharedconf"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 func init() {
-	rgrpc.Register("usershareprovider", New)
+	rgrpc.Register("usershareprovider", NewDefault)
 }
 
 type config struct {
 	Driver                string                            `mapstructure:"driver"`
 	Drivers               map[string]map[string]interface{} `mapstructure:"drivers"`
+	GatewayAddr           string                            `mapstructure:"gateway_addr"`
 	AllowedPathsForShares []string                          `mapstructure:"allowed_paths_for_shares"`
 }
 
@@ -58,8 +63,8 @@ func (c *config) init() {
 }
 
 type service struct {
-	conf                  *config
 	sm                    share.Manager
+	gatewaySelector       pool.Selectable[gateway.GatewayAPIClient]
 	allowedPathsForShares []*regexp.Regexp
 }
 
@@ -92,8 +97,8 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New creates a new user share provider svc
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+// New creates a new user share provider svc initialized from defaults
+func NewDefault(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)
 	if err != nil {
@@ -116,13 +121,23 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		allowedPathsForShares = append(allowedPathsForShares, regex)
 	}
 
+	gatewaySelector, err := pool.GatewaySelector(sharedconf.GetGatewaySVC(c.GatewayAddr))
+	if err != nil {
+		return nil, err
+	}
+
+	return New(gatewaySelector, sm, allowedPathsForShares), nil
+}
+
+// New creates a new user share provider svc
+func New(gatewaySelector pool.Selectable[gateway.GatewayAPIClient], sm share.Manager, allowedPathsForShares []*regexp.Regexp) rgrpc.Service {
 	service := &service{
-		conf:                  c,
 		sm:                    sm,
+		gatewaySelector:       gatewaySelector,
 		allowedPathsForShares: allowedPathsForShares,
 	}
 
-	return service, nil
+	return service
 }
 
 func (s *service) isPathAllowed(path string) bool {
@@ -139,6 +154,24 @@ func (s *service) isPathAllowed(path string) bool {
 
 func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
+
+	gatewayClient, err := s.gatewaySelector.Next()
+	if err != nil {
+		return nil, err
+	}
+
+	// check if the user has the permission to create shares at all
+	ok, err := utils.CheckPermission(ctx, permission.WriteShare, gatewayClient)
+	if err != nil {
+		return &collaboration.CreateShareResponse{
+			Status: status.NewInternal(ctx, "failed check user permission to write public link"),
+		}, err
+	}
+	if !ok {
+		return &collaboration.CreateShareResponse{
+			Status: status.NewPermissionDenied(ctx, nil, "no permission to create public links"),
+		}, nil
+	}
 
 	if req.GetGrant().GetGrantee().GetType() == provider.GranteeType_GRANTEE_TYPE_USER && req.GetGrant().GetGrantee().GetUserId().GetIdp() == "" {
 		// use logged in user Idp as default.
