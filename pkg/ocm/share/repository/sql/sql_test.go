@@ -47,7 +47,7 @@ import (
 var (
 	dbName               = "reva_tests"
 	address              = "localhost"
-	port                 = 3306
+	port                 = 33059
 	m                    sync.Mutex // for increasing the port
 	ocmShareTable        = "ocm_shares"
 	ocmAccessMethodTable = "ocm_shares_access_methods"

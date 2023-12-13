@@ -3,6 +3,7 @@
 - Aritz Brosa <aritz.brosa.iartza@cern.ch>
 - Diogo Castro <diogo.castro@cern.ch>
 - Felix Hillingshaeuser <felix@mxcore.de>
+- Gianmaria Del Monte <g.macmount@gmail.com>
 - Giuseppe Lo Presti <giuseppe.lopresti@cern.ch>
 - Hannah von Reth <vonreth@kde.org>
 - Hugo Gonzalez Labrador <github@hugo.labkode.com>

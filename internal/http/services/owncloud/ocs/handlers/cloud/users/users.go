@@ -16,6 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
+// Package users contains the users handler.
 package users
 
 import (
@@ -33,16 +34,19 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/go-chi/chi/v5"
+	"github.com/juliangruber/go-intersect"
 )
 
 // Handler renders user data for the user id given in the url path.
 type Handler struct {
-	gatewayAddr string
+	gatewayAddr            string
+	capabilitiesGroupBased map[string][]string
 }
 
 // Init initializes this and any contained handlers.
 func (h *Handler) Init(c *config.Config) {
 	h.gatewayAddr = c.GatewaySvc
+	h.capabilitiesGroupBased = c.GroupBasedCapabilities
 }
 
 // GetGroups handles GET requests on /cloud/users/groups
@@ -68,8 +72,12 @@ type Users struct {
 	UserType    string `json:"user-type"   xml:"user-type"`
 	// FIXME home should never be exposed ... even in oc 10
 	// home
-	TwoFactorAuthEnabled bool `json:"two_factor_auth_enabled" xml:"two_factor_auth_enabled"`
+	TwoFactorAuthEnabled   bool                   `json:"two_factor_auth_enabled" xml:"two_factor_auth_enabled"`
+	GroupBasedCapabilities CapabilitiesGroupBased `json:"group-capabilities"      xml:"group-capabilities"`
 }
+
+// CapabilitiesGroupBased holds capabilities based on the groups a user belongs to.
+type CapabilitiesGroupBased []string
 
 // Groups holds group data.
 type Groups struct {
@@ -134,6 +142,25 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		relative = float32(float64(used)/float64(total)) * 100
 	}
 
+	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting gateway client", fmt.Errorf("error getting gateway client"))
+		return
+	}
+
+	userGroups, err := gw.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: u.Id})
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting user groups", fmt.Errorf("error getting user groups"))
+		return
+	}
+
+	groupBasedCapabilities := CapabilitiesGroupBased{}
+	for capability, groups := range h.capabilitiesGroupBased {
+		if userBelongsToGroups(userGroups.Groups, groups) {
+			groupBasedCapabilities = append(groupBasedCapabilities, capability)
+		}
+	}
+
 	response.WriteOCSSuccess(w, r, &Users{
 		// ocs can only return the home storage quota
 		Quota: &Quota{
@@ -145,8 +172,13 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 			Relative:   relative,
 			Definition: "default",
 		},
-		DisplayName: u.DisplayName,
-		Email:       u.Mail,
-		UserType:    conversions.UserTypeString(u.Id.Type),
+		DisplayName:            u.DisplayName,
+		Email:                  u.Mail,
+		UserType:               conversions.UserTypeString(u.Id.Type),
+		GroupBasedCapabilities: groupBasedCapabilities,
 	})
+}
+
+func userBelongsToGroups(userGroups, groups []string) bool {
+	return len(intersect.Simple(groups, userGroups)) > 0
 }
