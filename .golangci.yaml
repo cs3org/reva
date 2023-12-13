@@ -15,16 +15,13 @@ issues:
 linters:
   enable:
     - bodyclose
-    - deadcode
     - errcheck
     - gosimple
     - govet
     - ineffassign
     - staticcheck
-    - structcheck
     - typecheck
     - unused
-    - varcheck
     #- depguard
     - revive
     - goimports
@@ -34,3 +31,9 @@ linters:
     - gocritic
     - prealloc
     #- gosec
+linters-settings:
+  revive:
+    ignore-generated-header: true
+    rules:
+      - name: unused-parameter
+        disabled: true
