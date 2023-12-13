@@ -154,14 +154,14 @@ func New(ctx context.Context, session tus.Session, lu *lookup.Lookup, tp Tree, p
 	// Create binary file in the upload folder with no content
 	// It will be used when determining the current offset of an upload
 	log.Debug().Interface("session", session).Msg("Decomposedfs: built session info")
-	binPath := filepath.Join(fsRoot, "uploads", session.ID)
-	file, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
+	session.BinPath = filepath.Join(fsRoot, "uploads", session.ID)
+	file, err := os.OpenFile(session.BinPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	u := buildUpload(ctx, session, binPath, lu, tp, pub, async, tknopts)
+	u := buildUpload(ctx, session, lu, tp, pub, async, tknopts)
 
 	err = session.Persist(ctx)
 	if err != nil {
@@ -182,8 +182,7 @@ func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot stri
 		return nil, err
 	}
 
-	binPath := filepath.Join(fsRoot, "uploads", session.ID)
-	stat, err := os.Stat(binPath)
+	stat, err := os.Stat(session.BinPath)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +214,7 @@ func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot stri
 
 	// TODO store and add traceid in file info
 
-	up := buildUpload(ctx, session, binPath, lu, tp, pub, async, tknopts)
+	up := buildUpload(ctx, session, lu, tp, pub, async, tknopts)
 	return up, nil
 }
 
@@ -224,7 +223,7 @@ func CreateNodeForUpload(upload *Upload, initAttrs node.Attributes) (*node.Node,
 	ctx, span := tracer.Start(upload.Ctx, "CreateNodeForUpload")
 	defer span.End()
 	_, subspan := tracer.Start(ctx, "os.Stat")
-	fi, err := os.Stat(upload.binPath)
+	fi, err := os.Stat(upload.Session.BinPath) // FIXME This stat can be omitted, we know the filesize as it is stored in the session
 	subspan.End()
 	if err != nil {
 		return nil, err

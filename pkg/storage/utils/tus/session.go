@@ -62,6 +62,9 @@ type Session struct {
 	BlobID   string
 	BlobSize int64
 
+	// BinPath holds the path to the uploaded blob
+	BinPath string
+
 	// SizeDiff size difference between new and old file version
 	SizeDiff int64
 

@@ -91,8 +91,6 @@ type Upload struct {
 	Session tus.Session
 	// node for easy access
 	Node *node.Node
-	// binPath is the path to the binary file (which has no extension)
-	binPath string
 	// lu and tp needed for file operations
 	lu *lookup.Lookup
 	tp Tree
@@ -106,10 +104,9 @@ type Upload struct {
 	tknopts options.TokenOptions
 }
 
-func buildUpload(ctx context.Context, session tus.Session, binPath string, lu *lookup.Lookup, tp Tree, pub events.Publisher, async bool, tknopts options.TokenOptions) *Upload {
+func buildUpload(ctx context.Context, session tus.Session, lu *lookup.Lookup, tp Tree, pub events.Publisher, async bool, tknopts options.TokenOptions) *Upload {
 	return &Upload{
 		Session: session,
-		binPath: binPath,
 		lu:      lu,
 		tp:      tp,
 		Ctx:     ctx,
@@ -119,7 +116,6 @@ func buildUpload(ctx context.Context, session tus.Session, binPath string, lu *l
 		log: appctx.GetLogger(ctx).
 			With().
 			Interface("session", session).
-			Str("binPath", binPath).
 			Logger(),
 	}
 }
@@ -143,7 +139,7 @@ func (upload *Upload) WriteChunk(_ context.Context, offset int64, src io.Reader)
 	ctx, span := tracer.Start(upload.Ctx, "WriteChunk")
 	defer span.End()
 	_, subspan := tracer.Start(ctx, "os.OpenFile")
-	file, err := os.OpenFile(upload.binPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
+	file, err := os.OpenFile(upload.Session.BinPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
 	subspan.End()
 	if err != nil {
 		return 0, err
@@ -179,7 +175,7 @@ func (upload *Upload) GetInfo(_ context.Context) (tusd.FileInfo, error) {
 func (upload *Upload) GetReader(_ context.Context) (io.Reader, error) {
 	_, span := tracer.Start(upload.Ctx, "GetReader")
 	defer span.End()
-	return os.Open(upload.binPath) // hm, the reader is never closed?
+	return os.Open(upload.Session.BinPath)
 }
 
 // FinishUpload finishes an upload and moves the file to the internal destination
@@ -202,11 +198,11 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 	adler32h := adler32.New()
 	{
 		_, subspan := tracer.Start(ctx, "os.Open")
-		f, err := os.Open(upload.binPath)
+		f, err := os.Open(upload.Session.BinPath)
 		subspan.End()
 		if err != nil {
 			// we can continue if no oc checksum header is set
-			log.Info().Err(err).Str("binPath", upload.binPath).Msg("error opening binPath")
+			log.Info().Err(err).Str("binPath", upload.Session.BinPath).Msg("error opening binPath")
 		}
 		defer f.Close()
 
@@ -300,7 +296,7 @@ func (upload *Upload) DeclareLength(_ context.Context, length int64) error {
 
 // ConcatUploads concatenates multiple uploads
 func (upload *Upload) ConcatUploads(_ context.Context, uploads []tusd.Upload) (err error) {
-	file, err := os.OpenFile(upload.binPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
+	file, err := os.OpenFile(upload.Session.BinPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
 	if err != nil {
 		return err
 	}
@@ -309,7 +305,7 @@ func (upload *Upload) ConcatUploads(_ context.Context, uploads []tusd.Upload) (e
 	for _, partialUpload := range uploads {
 		fileUpload := partialUpload.(*Upload)
 
-		src, err := os.Open(fileUpload.binPath)
+		src, err := os.Open(fileUpload.Session.BinPath)
 		if err != nil {
 			return err
 		}
@@ -339,7 +335,7 @@ func (upload *Upload) Finalize() (err error) {
 
 	// upload the data to the blobstore
 	_, subspan := tracer.Start(ctx, "WriteBlob")
-	err = upload.tp.WriteBlob(n, upload.binPath)
+	err = upload.tp.WriteBlob(n, upload.Session.BinPath)
 	subspan.End()
 	if err != nil {
 		return errors.Wrap(err, "failed to upload file to blobstore")
@@ -394,8 +390,8 @@ func (upload *Upload) cleanup(cleanNode, cleanBin, cleanInfo bool) {
 	}
 
 	if cleanBin {
-		if err := os.Remove(upload.binPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			upload.log.Error().Str("path", upload.binPath).Err(err).Msg("removing upload failed")
+		if err := os.Remove(upload.Session.BinPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			upload.log.Error().Str("path", upload.Session.BinPath).Err(err).Msg("removing upload failed")
 		}
 	}
 
