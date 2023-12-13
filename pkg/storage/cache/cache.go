@@ -44,12 +44,13 @@ var (
 
 // Config contains the configuring for a cache
 type Config struct {
-	Store    string   `mapstructure:"cache_store"`
-	Nodes    []string `mapstructure:"cache_nodes"`
-	Database string   `mapstructure:"cache_database"`
-	Table    string   `mapstructure:"cache_table"`
-	TTL      int      `mapstructure:"cache_ttl"`
-	Size     int      `mapstructure:"cache_size"`
+	Store              string   `mapstructure:"cache_store"`
+	Nodes              []string `mapstructure:"cache_nodes"`
+	Database           string   `mapstructure:"cache_database"`
+	Table              string   `mapstructure:"cache_table"`
+	TTL                int      `mapstructure:"cache_ttl"`
+	Size               int      `mapstructure:"cache_size"`
+	DisablePersistence bool     `mapstructure:"cache_disable_persistence"`
 }
 
 // Cache handles key value operations on caches
