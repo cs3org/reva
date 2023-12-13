@@ -162,8 +162,11 @@ func (upload *Upload) WriteChunk(_ context.Context, offset int64, src io.Reader)
 		return n, err
 	}
 
+	// update upload.Session.Offset so subsequent code flow can use it.
+	// No need to persist the session as the offset is determined by stating the blob in the GetUpload codepath.
+	// The session offset is written to disk in FinishUpload
 	upload.Session.Offset += n
-	return n, upload.Session.Persist(upload.Ctx)
+	return n, nil
 }
 
 // GetInfo returns the FileInfo
