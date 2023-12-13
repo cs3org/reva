@@ -23,13 +23,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	tusd "github.com/tus/tusd/pkg/handler"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
@@ -38,12 +37,10 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/tus"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 )
-
-var _idRegexp = regexp.MustCompile(".*/([^/]+).info")
 
 // Upload uploads data to the given resource
 // TODO Upload (and InitiateUpload) needs a way to receive the expected checksum.
@@ -54,9 +51,9 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 		return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error retrieving upload")
 	}
 
-	upload := up.(*upload.Upload)
+	session := up.(*upload.Session)
 
-	p := upload.Session.Filename
+	p := session.Filename()
 	if chunking.IsChunked(p) { // check chunking v1
 		var assembledFile string
 		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, req.Body)
@@ -64,12 +61,12 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 			return provider.ResourceInfo{}, err
 		}
 		if p == "" {
-			if err = upload.Terminate(ctx); err != nil {
-				return provider.ResourceInfo{}, errors.Wrap(err, "ocfs: error removing auxiliary files")
+			if err = session.Terminate(ctx); err != nil {
+				return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error removing auxiliary files")
 			}
 			return provider.ResourceInfo{}, errtypes.PartialContent(req.Ref.String())
 		}
-		upload.Session.Filename = p
+		session.SetStorageValue("NodeName", p)
 		fd, err := os.Open(assembledFile)
 		if err != nil {
 			return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error opening assembled file")
@@ -79,45 +76,41 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 		req.Body = fd
 	}
 
-	if _, err := upload.WriteChunk(ctx, 0, req.Body); err != nil {
+	size, err := session.WriteChunk(ctx, 0, req.Body)
+	if err != nil {
 		return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error writing to binary file")
 	}
+	session.SetSize(size)
 
-	if err := upload.FinishUpload(ctx); err != nil {
+	if err := session.FinishUpload(ctx); err != nil {
 		return provider.ResourceInfo{}, err
 	}
 
 	if uff != nil {
 		uploadRef := &provider.Reference{
 			ResourceId: &provider.ResourceId{
-				StorageId: upload.Session.ProviderID,
-				SpaceId:   upload.Session.SpaceRoot,
-				OpaqueId:  upload.Session.SpaceRoot,
+				StorageId: session.ProviderID(),
+				SpaceId:   session.SpaceID(),
+				OpaqueId:  session.SpaceID(),
 			},
-			Path: utils.MakeRelativePath(filepath.Join(upload.Session.Dir, upload.Session.Filename)),
+			Path: utils.MakeRelativePath(filepath.Join(session.Dir(), session.Filename())),
 		}
-		executant, ok := ctxpkg.ContextGetUser(upload.Ctx)
-		if !ok {
-			return provider.ResourceInfo{}, errtypes.PreconditionFailed("error getting user from uploadinfo context")
-		}
-		spaceOwner := &userpb.UserId{
-			OpaqueId: upload.Session.SpaceOwnerOrManager,
-		}
-		uff(spaceOwner, executant.Id, uploadRef)
+		executant := session.Executant()
+		uff(session.SpaceOwner(), &executant, uploadRef)
 	}
 
 	ri := provider.ResourceInfo{
 		// fill with at least fileid, mtime and etag
 		Id: &provider.ResourceId{
-			StorageId: upload.Session.ProviderID,
-			SpaceId:   upload.Session.SpaceRoot,
-			OpaqueId:  upload.Session.NodeID,
+			StorageId: session.ProviderID(),
+			SpaceId:   session.SpaceID(),
+			OpaqueId:  session.NodeID(),
 		},
-		Etag: upload.Session.MetaData["etag"],
+		Etag: session.ETag(),
 	}
 
-	if mtime, err := utils.MTimeToTS(upload.Session.MetaData["mtime"]); err == nil {
-		ri.Mtime = &mtime
+	if session.MTime().After(time.Time{}) {
+		ri.Mtime = utils.TimeToTS(session.MTime())
 	}
 
 	return ri, nil
@@ -148,28 +141,31 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	lockID, _ := ctxpkg.ContextGetLockID(ctx)
 
-	session := tus.NewSession(ctx, fs.o.Root)
-	session.Filename = filepath.Base(relative)
-	session.Dir = filepath.Dir(relative)
-	session.LockID = lockID
-	session.Size = uploadLength
-	session.SpaceRoot = n.SpaceRoot.ID                                     // TODO SpaceRoot -> SpaceID
-	session.SpaceOwnerOrManager = n.SpaceOwnerOrManager(ctx).GetOpaqueId() // TODO needed for what?
+	session := fs.sessionStore.New(ctx)
+	session.SetMetadata("filename", filepath.Base(relative))
+	session.SetStorageValue("NodeName", filepath.Base(relative))
+	session.SetMetadata("dir", filepath.Dir(relative))
+	session.SetStorageValue("Dir", filepath.Dir(relative))
+	session.SetMetadata("lockid", lockID)
+
+	session.SetSize(uploadLength)
+	session.SetStorageValue("SpaceRoot", n.SpaceRoot.ID)                                     // TODO SpaceRoot -> SpaceID
+	session.SetStorageValue("SpaceOwnerOrManager", n.SpaceOwnerOrManager(ctx).GetOpaqueId()) // TODO needed for what?
 
 	if metadata != nil {
-		session.ProviderID = metadata["providerID"]
+		session.SetMetadata("providerID", metadata["providerID"])
 		if mtime, ok := metadata["mtime"]; ok {
 			if mtime != "null" {
-				session.MetaData["mtime"] = mtime
+				session.SetMetadata("mtime", metadata["mtime"])
 			}
 		}
 		if expiration, ok := metadata["expires"]; ok {
 			if expiration != "null" {
-				session.MetaData["expires"] = expiration
+				session.SetMetadata("expires", metadata["expires"])
 			}
 		}
 		if _, ok := metadata["sizedeferred"]; ok {
-			session.SizeIsDeferred = true
+			session.SetSizeIsDeferred(true)
 		}
 		if checksum, ok := metadata["checksum"]; ok {
 			parts := strings.SplitN(checksum, " ", 2)
@@ -177,39 +173,132 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 				return nil, errtypes.BadRequest("invalid checksum format. must be '[algorithm] [checksum]'")
 			}
 			switch parts[0] {
-			case "sha1":
-				session.ChecksumSHA1 = checksum
-			case "md5":
-				session.ChecksumMD5 = checksum
-			case "adler32":
-				session.ChecksumADLER32 = checksum
+			case "sha1", "md5", "adler32":
+				session.SetMetadata("checksum", checksum)
 			default:
 				return nil, errtypes.BadRequest("unsupported checksum algorithm: " + parts[0])
 			}
 		}
 
 		// only check preconditions if they are not empty // TODO or is this a bad request?
-		session.HeaderIfMatch = metadata["if-match"]
-		session.HeaderIfNoneMatch = metadata["if-none-match"]
-		session.HeaderIfUnmodifiedSince = metadata["if-unmodified-since"]
-
+		if metadata["if-match"] != "" {
+			session.SetMetadata("if-match", metadata["if-match"])
+		}
+		if metadata["if-none-match"] != "" {
+			session.SetMetadata("if-none-match", metadata["if-none-match"])
+		}
+		if metadata["if-unmodified-since"] != "" {
+			session.SetMetadata("if-unmodified-since", metadata["if-unmodified-since"])
+		}
 	}
 
 	log.Debug().Interface("session", session).Interface("node", n).Interface("metadata", metadata).Msg("Decomposedfs: resolved filename")
 
-	_, err = node.CheckQuota(ctx, n.SpaceRoot, n.Exists, uint64(n.Blobsize), uint64(session.Size))
+	_, err = node.CheckQuota(ctx, n.SpaceRoot, n.Exists, uint64(n.Blobsize), uint64(session.Size()))
 	if err != nil {
 		return nil, err
 	}
 
-	up, err := upload.New(ctx, session, fs.lu, fs.tp, fs.p, fs.o.Root, fs.stream, fs.o.AsyncFileUploads, fs.o.Tokens)
+	if session.Filename() == "" {
+		return nil, errors.New("Decomposedfs: missing filename in metadata")
+	}
+	if session.Dir() == "" {
+		return nil, errors.New("Decomposedfs: missing dir in metadata")
+	}
+	/*
+		sn, err := fs.lu.NodeFromSpaceID(ctx, session.SpaceID())
+		if err != nil {
+			return nil, errors.Wrap(err, "Decomposedfs: error getting space root node")
+		}
+
+		// TODO InitiateUpload already has a node
+		sn, err = lookupNode(ctx, sn, filepath.Join(session.Dir, session.Filename()), fs.lu)
+		if err != nil {
+			return nil, errors.Wrap(err, "Decomposedfs: error walking path")
+		}
+
+		log.Debug().Interface("session", session).Interface("node", n).Msg("Decomposedfs: resolved filename")
+	*/
+
+	// the parent owner will become the new owner
+	parent, perr := n.Parent(ctx)
+	if perr != nil {
+		return nil, errors.Wrap(perr, "Decomposedfs: error getting parent "+n.ParentID)
+	}
+
+	// check permissions
+	var (
+		checkNode *node.Node
+		path      string
+	)
+	if n.Exists {
+		// check permissions of file to be overwritten
+		checkNode = n
+		path, _ = storagespace.FormatReference(&provider.Reference{ResourceId: &provider.ResourceId{
+			SpaceId:  checkNode.SpaceID,
+			OpaqueId: checkNode.ID,
+		}})
+	} else {
+		// check permissions of parent
+		checkNode = parent
+		path, _ = storagespace.FormatReference(&provider.Reference{ResourceId: &provider.ResourceId{
+			SpaceId:  checkNode.SpaceID,
+			OpaqueId: checkNode.ID,
+		}, Path: n.Name})
+	}
+	rp, err := fs.p.AssemblePermissions(ctx, checkNode)
+	switch {
+	case err != nil:
+		return nil, err
+	case !rp.InitiateFileUpload:
+		return nil, errtypes.PermissionDenied(path)
+	}
+
+	// are we trying to overwriting a folder with a file?
+	if n.Exists && n.IsDir(ctx) {
+		return nil, errtypes.PreconditionFailed("resource is not a file")
+	}
+
+	// check lock
+	if session.LockID() != "" {
+		ctx = ctxpkg.ContextSetLockID(ctx, session.LockID())
+	}
+	if err := n.CheckLock(ctx); err != nil {
+		return nil, err
+	}
+
+	usr := ctxpkg.ContextMustGetUser(ctx)
+
+	// fill future node info
+	if n.Exists {
+		if session.HeaderIfNoneMatch() == "*" {
+			return nil, errtypes.Aborted(fmt.Sprintf("parent %s already has a child %s, id %s", n.ParentID, n.Name, n.ID))
+		}
+		session.SetStorageValue("NodeId", n.ID)
+		session.SetStorageValue("NodeExists", "true")
+	} else {
+		session.SetStorageValue("NodeId", uuid.New().String())
+	}
+	session.SetStorageValue("NodeParentId", n.ParentID)
+	session.SetExecutant(usr)
+	session.SetStorageValue("LogLevel", log.GetLevel().String())
+
+	log.Debug().Interface("session", session).Msg("Decomposedfs: built session info")
+	// Create binary file in the upload folder with no content
+	// It will be used when determining the current offset of an upload
+	err = session.TouchBin()
+	if err != nil {
+		return nil, err
+	}
+
+	err = session.Persist(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	return map[string]string{
-		"simple": up.Session.ID,
-		"tus":    up.Session.ID,
+		"simple": session.ID(),
+		"tus":    session.ID(),
 	}, nil
 }
 
@@ -232,21 +321,21 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (tusd
 
 // GetUpload returns the Upload for the given upload id
 func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
-	return upload.Get(ctx, id, fs.lu, fs.tp, fs.o.Root, fs.stream, fs.o.AsyncFileUploads, fs.o.Tokens)
+	return fs.sessionStore.Get(ctx, id)
 }
 
 // ListUploadSessions returns the upload sessions for the given filter
 func (fs *Decomposedfs) ListUploadSessions(ctx context.Context, filter storage.UploadSessionFilter) ([]storage.UploadSession, error) {
-	var sessions []storage.UploadSession
+	var sessions []*upload.Session
 	if filter.ID != nil && *filter.ID != "" {
-		session, err := fs.getUploadSession(ctx, filepath.Join(fs.o.Root, "uploads", *filter.ID+".info"))
+		session, err := fs.sessionStore.Get(ctx, *filter.ID)
 		if err != nil {
 			return nil, err
 		}
-		sessions = []storage.UploadSession{session}
+		sessions = []*upload.Session{session}
 	} else {
 		var err error
-		sessions, err = fs.uploadSessions(ctx)
+		sessions, err = fs.sessionStore.List(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -277,60 +366,19 @@ func (fs *Decomposedfs) ListUploadSessions(ctx context.Context, filter storage.U
 // To implement the termination extension as specified in https://tus.io/protocols/resumable-upload.html#termination
 // the storage needs to implement AsTerminatableUpload
 func (fs *Decomposedfs) AsTerminatableUpload(up tusd.Upload) tusd.TerminatableUpload {
-	return up.(*upload.Upload)
+	return up.(*upload.Session)
 }
 
 // AsLengthDeclarableUpload returns a LengthDeclarableUpload
 // To implement the creation-defer-length extension as specified in https://tus.io/protocols/resumable-upload.html#creation
 // the storage needs to implement AsLengthDeclarableUpload
 func (fs *Decomposedfs) AsLengthDeclarableUpload(up tusd.Upload) tusd.LengthDeclarableUpload {
-	return up.(*upload.Upload)
+	return up.(*upload.Session)
 }
 
 // AsConcatableUpload returns a ConcatableUpload
 // To implement the concatenation extension as specified in https://tus.io/protocols/resumable-upload.html#concatenation
 // the storage needs to implement AsConcatableUpload
 func (fs *Decomposedfs) AsConcatableUpload(up tusd.Upload) tusd.ConcatableUpload {
-	return up.(*upload.Upload)
-}
-
-func (fs *Decomposedfs) uploadSessions(ctx context.Context) ([]storage.UploadSession, error) {
-	uploads := []storage.UploadSession{}
-	infoFiles, err := filepath.Glob(filepath.Join(fs.o.Root, "uploads", "*.info"))
-	if err != nil {
-		return nil, err
-	}
-
-	for _, info := range infoFiles {
-		progress, err := fs.getUploadSession(ctx, info)
-		if err != nil {
-			appctx.GetLogger(ctx).Error().Interface("path", info).Msg("Decomposedfs: could not getUploadSession")
-			continue
-		}
-
-		uploads = append(uploads, progress)
-	}
-	return uploads, nil
-}
-
-func (fs *Decomposedfs) getUploadSession(ctx context.Context, path string) (storage.UploadSession, error) {
-	match := _idRegexp.FindStringSubmatch(path)
-	if match == nil || len(match) < 2 {
-		return nil, fmt.Errorf("invalid upload path")
-	}
-	session, err := tus.ReadSession(ctx, fs.o.Root, match[1])
-	if err != nil {
-		return nil, err
-	}
-
-	n, err := node.ReadNode(ctx, fs.lu, session.SpaceRoot, session.NodeID, true, nil, true)
-	if err != nil {
-		return nil, err
-	}
-	progress := upload.Progress{
-		Path:       path,
-		Session:    session,
-		Processing: n.IsProcessing(ctx),
-	}
-	return progress, nil
+	return up.(*upload.Session)
 }

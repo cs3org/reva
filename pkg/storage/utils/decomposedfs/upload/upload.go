@@ -29,7 +29,6 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -38,15 +37,10 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/tus"
-	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/golang-jwt/jwt"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/pkg/handler"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -79,67 +73,14 @@ type Tree interface {
 	Propagate(ctx context.Context, node *node.Node, sizeDiff int64) (err error)
 }
 
-// Upload processes the upload
-// it implements tus tusd.Upload interface https://tus.io/protocols/resumable-upload.html#core-protocol
-// it also implements its termination extension as specified in https://tus.io/protocols/resumable-upload.html#termination
-// it also implements its creation-defer-length extension as specified in https://tus.io/protocols/resumable-upload.html#creation
-// it also implements its concatenation extension as specified in https://tus.io/protocols/resumable-upload.html#concatenation
-type Upload struct {
-	// we use a struct field on the upload as tus pkg will give us an empty context.Background
-	Ctx context.Context
-	// info stores the current information about the upload
-	Session tus.Session
-	// node for easy access
-	Node *node.Node
-	// lu and tp needed for file operations
-	lu *lookup.Lookup
-	tp Tree
-	// and a logger as well
-	log zerolog.Logger
-	// publisher used to publish events
-	pub events.Publisher
-	// async determines if uploads shoud be done asynchronously
-	async bool
-	// tknopts hold token signing information
-	tknopts options.TokenOptions
-}
-
-func buildUpload(ctx context.Context, session tus.Session, lu *lookup.Lookup, tp Tree, pub events.Publisher, async bool, tknopts options.TokenOptions) *Upload {
-	return &Upload{
-		Session: session,
-		lu:      lu,
-		tp:      tp,
-		Ctx:     ctx,
-		pub:     pub,
-		async:   async,
-		tknopts: tknopts,
-		log: appctx.GetLogger(ctx).
-			With().
-			Interface("session", session).
-			Logger(),
-	}
-}
-
-// Cleanup cleans the upload
-func Cleanup(upload *Upload, failure bool, keepUpload bool) {
-	ctx, span := tracer.Start(upload.Ctx, "Cleanup")
-	defer span.End()
-	upload.cleanup(failure, !keepUpload, !keepUpload)
-
-	// unset processing status
-	if upload.Node != nil { // node can be nil when there was an error before it was created (eg. checksum-mismatch)
-		if err := upload.Node.UnmarkProcessing(ctx, upload.Session.ID); err != nil {
-			upload.log.Info().Str("path", upload.Node.InternalPath()).Err(err).Msg("unmarking processing failed")
-		}
-	}
-}
+var defaultFilePerm = os.FileMode(0664)
 
 // WriteChunk writes the stream from the reader to the given offset of the upload
-func (upload *Upload) WriteChunk(_ context.Context, offset int64, src io.Reader) (int64, error) {
-	ctx, span := tracer.Start(upload.Ctx, "WriteChunk")
+func (session *Session) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
+	ctx, span := tracer.Start(session.Context(ctx), "WriteChunk")
 	defer span.End()
 	_, subspan := tracer.Start(ctx, "os.OpenFile")
-	file, err := os.OpenFile(upload.Session.BinPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
+	file, err := os.OpenFile(session.binPath(), os.O_WRONLY|os.O_APPEND, defaultFilePerm)
 	subspan.End()
 	if err != nil {
 		return 0, err
@@ -165,32 +106,32 @@ func (upload *Upload) WriteChunk(_ context.Context, offset int64, src io.Reader)
 	// update upload.Session.Offset so subsequent code flow can use it.
 	// No need to persist the session as the offset is determined by stating the blob in the GetUpload codepath.
 	// The session offset is written to disk in FinishUpload
-	upload.Session.Offset += n
+	session.info.Offset += n
 	return n, nil
 }
 
 // GetInfo returns the FileInfo
-func (upload *Upload) GetInfo(_ context.Context) (tusd.FileInfo, error) {
-	return upload.Session.ToFileInfo(), nil
+func (session *Session) GetInfo(_ context.Context) (tusd.FileInfo, error) {
+	return session.ToFileInfo(), nil
 }
 
 // GetReader returns an io.Reader for the upload
-func (upload *Upload) GetReader(_ context.Context) (io.Reader, error) {
-	_, span := tracer.Start(upload.Ctx, "GetReader")
+func (session *Session) GetReader(ctx context.Context) (io.Reader, error) {
+	_, span := tracer.Start(session.Context(ctx), "GetReader")
 	defer span.End()
-	return os.Open(upload.Session.BinPath)
+	return os.Open(session.binPath())
 }
 
 // FinishUpload finishes an upload and moves the file to the internal destination
-func (upload *Upload) FinishUpload(_ context.Context) error {
-	ctx, span := tracer.Start(upload.Ctx, "FinishUpload")
+func (session *Session) FinishUpload(ctx context.Context) error {
+	ctx, span := tracer.Start(session.Context(ctx), "FinishUpload")
 	defer span.End()
 	// set lockID to context
-	if upload.Session.LockID != "" {
-		upload.Ctx = ctxpkg.ContextSetLockID(upload.Ctx, upload.Session.LockID)
+	if session.LockID() != "" {
+		session.ctx = ctxpkg.ContextSetLockID(ctx, session.LockID())
+		ctx = session.ctx
 	}
-
-	log := appctx.GetLogger(upload.Ctx)
+	log := appctx.GetLogger(ctx)
 
 	// calculate the checksum of the written bytes
 	// they will all be written to the metadata later, so we cannot omit any of them
@@ -201,11 +142,11 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 	adler32h := adler32.New()
 	{
 		_, subspan := tracer.Start(ctx, "os.Open")
-		f, err := os.Open(upload.Session.BinPath)
+		f, err := os.Open(session.binPath())
 		subspan.End()
 		if err != nil {
 			// we can continue if no oc checksum header is set
-			log.Info().Err(err).Str("binPath", upload.Session.BinPath).Msg("error opening binPath")
+			log.Info().Err(err).Str("binPath", session.binPath()).Msg("error opening binPath")
 		}
 		defer f.Close()
 
@@ -223,17 +164,26 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 	// compare if they match the sent checksum
 	// TODO the tus checksum extension would do this on every chunk, but I currently don't see an easy way to pass in the requested checksum. for now we do it in FinishUpload which is also called for chunked uploads
 	var err error
-	switch {
-	case upload.Session.ChecksumSHA1 != "":
-		err = upload.checkHash(upload.Session.ChecksumSHA1, sha1h)
-	case upload.Session.ChecksumMD5 != "":
-		err = upload.checkHash(upload.Session.ChecksumMD5, md5h)
-	case upload.Session.ChecksumADLER32 != "":
-		err = upload.checkHash(upload.Session.ChecksumADLER32, adler32h)
-	}
-	if err != nil {
-		Cleanup(upload, true, false)
-		return err
+	if session.info.MetaData["checksum"] != "" {
+		var err error
+		parts := strings.SplitN(session.info.MetaData["checksum"], " ", 2)
+		if len(parts) != 2 {
+			return errtypes.BadRequest("invalid checksum format. must be '[algorithm] [checksum]'")
+		}
+		switch parts[0] {
+		case "sha1":
+			err = checkHash(parts[1], sha1h)
+		case "md5":
+			err = checkHash(parts[1], md5h)
+		case "adler32":
+			err = checkHash(parts[1], adler32h)
+		default:
+			err = errtypes.BadRequest("unsupported checksum algorithm: " + parts[0])
+		}
+		if err != nil {
+			session.store.Cleanup(ctx, session, true, false)
+			return err
+		}
 	}
 
 	// update checksums
@@ -243,72 +193,70 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 		prefixes.ChecksumPrefix + "adler32": adler32h.Sum(nil),
 	}
 
-	n, err := CreateNodeForUpload(upload, attrs)
+	n, err := session.store.CreateNodeForUpload(session, attrs)
 	if err != nil {
-		Cleanup(upload, true, false)
+		session.store.Cleanup(ctx, session, true, false)
 		return err
 	}
 
-	upload.Node = n
-
-	if upload.pub != nil {
-		u, _ := ctxpkg.ContextGetUser(upload.Ctx)
-		s, err := upload.URL(upload.Ctx)
+	if session.store.pub != nil {
+		u, _ := ctxpkg.ContextGetUser(ctx)
+		s, err := session.URL(ctx)
 		if err != nil {
 			return err
 		}
 
-		if err := events.Publish(ctx, upload.pub, events.BytesReceived{
-			UploadID:      upload.Session.ID,
+		if err := events.Publish(ctx, session.store.pub, events.BytesReceived{
+			UploadID:      session.ID(),
 			URL:           s,
-			SpaceOwner:    n.SpaceOwnerOrManager(upload.Ctx),
+			SpaceOwner:    n.SpaceOwnerOrManager(session.Context(ctx)),
 			ExecutingUser: u,
 			ResourceID:    &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID},
-			Filename:      upload.Session.Filename,
-			Filesize:      uint64(upload.Session.Size),
+			Filename:      session.Filename(),
+			Filesize:      uint64(session.Size()),
 		}); err != nil {
 			return err
 		}
 	}
 
-	if !upload.async {
+	if !session.store.async {
 		// handle postprocessing synchronously
-		err = upload.Finalize()
-		Cleanup(upload, err != nil, false)
+		err = session.Finalize()
+		session.store.Cleanup(ctx, session, err != nil, false)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to upload")
 			return err
 		}
 	}
 
-	return upload.tp.Propagate(upload.Ctx, n, upload.Session.SizeDiff)
+	return session.store.tp.Propagate(ctx, n, session.SizeDiff())
 }
 
 // Terminate terminates the upload
-func (upload *Upload) Terminate(_ context.Context) error {
-	upload.cleanup(true, true, true)
+func (session *Session) Terminate(_ context.Context) error {
+	session.Cleanup(true, true, true)
 	return nil
 }
 
 // DeclareLength updates the upload length information
-func (upload *Upload) DeclareLength(_ context.Context, length int64) error {
-	upload.Session.Size = length
-	upload.Session.SizeIsDeferred = false
-	return upload.Session.Persist(upload.Ctx)
+func (session *Session) DeclareLength(ctx context.Context, length int64) error {
+	session.info.Size = length
+	session.info.SizeIsDeferred = false
+	return session.Persist(session.Context(ctx))
 }
 
 // ConcatUploads concatenates multiple uploads
-func (upload *Upload) ConcatUploads(_ context.Context, uploads []tusd.Upload) (err error) {
-	file, err := os.OpenFile(upload.Session.BinPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
+func (session *Session) ConcatUploads(_ context.Context, uploads []tusd.Upload) (err error) {
+	file, err := os.OpenFile(session.binPath(), os.O_WRONLY|os.O_APPEND, defaultFilePerm)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
 	for _, partialUpload := range uploads {
-		fileUpload := partialUpload.(*Upload)
+		fileUpload := partialUpload.(*Session)
 
-		src, err := os.Open(fileUpload.Session.BinPath)
+		src, err := os.Open(fileUpload.binPath())
 		if err != nil {
 			return err
 		}
@@ -323,22 +271,17 @@ func (upload *Upload) ConcatUploads(_ context.Context, uploads []tusd.Upload) (e
 }
 
 // Finalize finalizes the upload (eg moves the file to the internal destination)
-func (upload *Upload) Finalize() (err error) {
-	ctx, span := tracer.Start(upload.Ctx, "Finalize")
+func (session *Session) Finalize() (err error) {
+	ctx, span := tracer.Start(session.Context(context.Background()), "Finalize")
 	defer span.End()
-	n := upload.Node
-	if n == nil {
-		var err error
-		n, err = node.ReadNode(ctx, upload.lu, upload.Session.SpaceRoot, upload.Session.NodeID, false, nil, false)
-		if err != nil {
-			return err
-		}
-		upload.Node = n
+	n, err := session.Node(ctx)
+	if err != nil {
+		return err
 	}
 
 	// upload the data to the blobstore
 	_, subspan := tracer.Start(ctx, "WriteBlob")
-	err = upload.tp.WriteBlob(n, upload.Session.BinPath)
+	err = session.store.tp.WriteBlob(n, session.binPath())
 	subspan.End()
 	if err != nil {
 		return errors.Wrap(err, "failed to upload file to blobstore")
@@ -347,7 +290,7 @@ func (upload *Upload) Finalize() (err error) {
 	return nil
 }
 
-func (upload *Upload) checkHash(expected string, h hash.Hash) error {
+func checkHash(expected string, h hash.Hash) error {
 	hash := hex.EncodeToString(h.Sum(nil))
 	if expected != hash {
 		return errtypes.ChecksumMismatch(fmt.Sprintf("invalid checksum: expected %s got %x", expected, hash))
@@ -355,65 +298,66 @@ func (upload *Upload) checkHash(expected string, h hash.Hash) error {
 	return nil
 }
 
+func (session *Session) removeNode(ctx context.Context) {
+	if n, err := session.Node(ctx); err != nil {
+		if err := n.Purge(ctx); err != nil {
+			appctx.GetLogger(ctx).Error().Str("nodepath", n.InternalPath()).Err(err).Msg("purging node failed")
+		}
+	}
+}
+
 // cleanup cleans up after the upload is finished
-func (upload *Upload) cleanup(cleanNode, cleanBin, cleanInfo bool) {
-	if cleanNode && upload.Node != nil {
-		switch p := upload.Session.VersionsPath; p {
+func (session *Session) Cleanup(cleanNode, cleanBin, cleanInfo bool) {
+	ctx := session.Context(context.Background())
+
+	if cleanNode {
+		switch p := session.info.MetaData["versionsPath"]; p {
 		case "":
-			// remove node
-			if err := utils.RemoveItem(upload.Node.InternalPath()); err != nil {
-				upload.log.Info().Str("path", upload.Node.InternalPath()).Err(err).Msg("removing node failed")
-			}
-
-			// no old version was present - remove child entry
-			src := filepath.Join(upload.Node.ParentPath(), upload.Node.Name)
-			if err := os.Remove(src); err != nil {
-				upload.log.Info().Str("path", upload.Node.ParentPath()).Err(err).Msg("removing node from parent failed")
-			}
-
-			// remove node from upload as it no longer exists
-			upload.Node = nil
+			session.removeNode(ctx)
 		default:
-
-			if err := upload.lu.CopyMetadata(upload.Ctx, p, upload.Node.InternalPath(), func(attributeName string, value []byte) (newValue []byte, copy bool) {
+			n, err := session.Node(ctx)
+			if err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Str("sessionid", session.ID()).Msg("reading node for session failed")
+			}
+			if err := session.store.lu.CopyMetadata(ctx, p, n.InternalPath(), func(attributeName string, value []byte) (newValue []byte, copy bool) {
 				return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
 					attributeName == prefixes.TypeAttr ||
 					attributeName == prefixes.BlobIDAttr ||
 					attributeName == prefixes.BlobsizeAttr ||
 					attributeName == prefixes.MTimeAttr
 			}, true); err != nil {
-				upload.log.Info().Str("versionpath", p).Str("nodepath", upload.Node.InternalPath()).Err(err).Msg("renaming version node failed")
+				appctx.GetLogger(ctx).Info().Str("versionpath", p).Str("nodepath", n.InternalPath()).Err(err).Msg("renaming version node failed")
 			}
 
 			if err := os.RemoveAll(p); err != nil {
-				upload.log.Info().Str("versionpath", p).Str("nodepath", upload.Node.InternalPath()).Err(err).Msg("error removing version")
+				appctx.GetLogger(ctx).Info().Str("versionpath", p).Str("nodepath", n.InternalPath()).Err(err).Msg("error removing version")
 			}
 
 		}
 	}
 
 	if cleanBin {
-		if err := os.Remove(upload.Session.BinPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			upload.log.Error().Str("path", upload.Session.BinPath).Err(err).Msg("removing upload failed")
+		if err := os.Remove(session.binPath()); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			appctx.GetLogger(ctx).Error().Str("path", session.binPath()).Err(err).Msg("removing upload failed")
 		}
 	}
 
 	if cleanInfo {
-		if err := upload.Session.Purge(upload.Ctx); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			upload.log.Error().Err(err).Str("session", upload.Session.ID).Msg("removing upload info failed")
+		if err := session.Purge(ctx); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			appctx.GetLogger(ctx).Error().Err(err).Str("session", session.ID()).Msg("removing upload info failed")
 		}
 	}
 }
 
 // URL returns a url to download an upload
-func (upload *Upload) URL(_ context.Context) (string, error) {
+func (session *Session) URL(_ context.Context) (string, error) {
 	type transferClaims struct {
 		jwt.StandardClaims
 		Target string `json:"target"`
 	}
 
-	u := joinurl(upload.tknopts.DownloadEndpoint, "tus/", upload.Session.ID)
-	ttl := time.Duration(upload.tknopts.TransferExpires) * time.Second
+	u := joinurl(session.store.tknopts.DownloadEndpoint, "tus/", session.ID())
+	ttl := time.Duration(session.store.tknopts.TransferExpires) * time.Second
 	claims := transferClaims{
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(ttl).Unix(),
@@ -425,12 +369,12 @@ func (upload *Upload) URL(_ context.Context) (string, error) {
 
 	t := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), claims)
 
-	tkn, err := t.SignedString([]byte(upload.tknopts.TransferSharedSecret))
+	tkn, err := t.SignedString([]byte(session.store.tknopts.TransferSharedSecret))
 	if err != nil {
 		return "", errors.Wrapf(err, "error signing token with claims %+v", claims)
 	}
 
-	return joinurl(upload.tknopts.DataGatewayEndpoint, tkn), nil
+	return joinurl(session.store.tknopts.DataGatewayEndpoint, tkn), nil
 }
 
 // replace with url.JoinPath after switching to go1.19

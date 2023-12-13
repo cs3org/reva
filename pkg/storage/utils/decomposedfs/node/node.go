@@ -1149,6 +1149,21 @@ func (n *Node) DeleteGrant(ctx context.Context, g *provider.Grant, acquireLock b
 	return nil
 }
 
+// Purge removes a node from disk. It dos not move it to the trash
+func (n *Node) Purge(ctx context.Context) error {
+	// remove node
+	if err := utils.RemoveItem(n.InternalPath()); err != nil {
+		return err
+	}
+
+	// remove child entry in parent
+	src := filepath.Join(n.ParentPath(), n.Name)
+	if err := os.Remove(src); err != nil {
+		return err
+	}
+	return nil
+}
+
 // ListGrants lists all grants of the current node.
 func (n *Node) ListGrants(ctx context.Context) ([]*provider.Grant, error) {
 	grantees, err := n.ListGrantees(ctx)
