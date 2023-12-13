@@ -78,9 +78,9 @@ func TTL(val time.Duration) store.Option {
 
 type disablePersistanceContextKey struct{}
 
-// DisablePersistance disables the persistence of the store by instructing it to use memory only.
+// DisablePersistence disables the persistence of the store by instructing it to use memory only.
 // Only supported by the `natsjs` and `natsjskv` implementations.
-func DisablePersistance(val bool) store.Option {
+func DisablePersistence(val bool) store.Option {
 	return func(o *store.Options) {
 		if o.Context == nil {
 			o.Context = context.Background()
