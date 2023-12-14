@@ -123,7 +123,10 @@ func (store ocisstore) Get(ctx context.Context, id string) (*Session, error) {
 func (store ocisstore) ReadSession(ctx context.Context, id string) (*Session, error) {
 	sessionPath := filepath.Join(store.root, "uploads", id+".info")
 
-	info := tusd.FileInfo{}
+	session := Session{
+		store: store,
+		info:  tusd.FileInfo{},
+	}
 	data, err := os.ReadFile(sessionPath)
 	if err != nil {
 		if errors.Is(err, iofs.ErrNotExist) {
@@ -132,13 +135,8 @@ func (store ocisstore) ReadSession(ctx context.Context, id string) (*Session, er
 		}
 		return nil, err
 	}
-	if err := json.Unmarshal(data, &info); err != nil {
+	if err := json.Unmarshal(data, &session.info); err != nil {
 		return nil, err
-	}
-
-	session := Session{
-		store: store,
-		info:  info,
 	}
 
 	stat, err := os.Stat(session.binPath())
@@ -150,7 +148,7 @@ func (store ocisstore) ReadSession(ctx context.Context, id string) (*Session, er
 		return nil, err
 	}
 
-	info.Offset = stat.Size()
+	session.info.Offset = stat.Size()
 
 	return &session, nil
 }

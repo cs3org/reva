@@ -104,7 +104,7 @@ func (session *Session) WriteChunk(ctx context.Context, offset int64, src io.Rea
 	}
 
 	// update upload.Session.Offset so subsequent code flow can use it.
-	// No need to persist the session as the offset is determined by stating the blob in the GetUpload codepath.
+	// No need to persist the session as the offset is determined by stating the blob in the GetUpload / ReadSession codepath.
 	// The session offset is written to disk in FinishUpload
 	session.info.Offset += n
 	return n, nil
