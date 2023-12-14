@@ -51,17 +51,26 @@ import (
 
 var (
 	editorPermissions = &provider.ResourcePermissions{
+		CreateContainer:      true,
+		Delete:               true,
+		GetPath:              true,
+		GetQuota:             true,
 		InitiateFileDownload: true,
 		InitiateFileUpload:   true,
 		ListContainer:        true,
-		GetPath:              true,
+		ListGrants:           true,
+		ListRecycle:          true,
+		RestoreRecycleItem:   true,
+		Move:                 true,
 		Stat:                 true,
 	}
 	viewerPermissions = &provider.ResourcePermissions{
 		Stat:                 true,
 		InitiateFileDownload: true,
 		GetPath:              true,
+		GetQuota:             true,
 		ListContainer:        true,
+		ListRecycle:          true,
 	}
 )
 
@@ -261,7 +270,7 @@ var _ = Describe("ocm share", func() {
 				Expect(statRes.Info.Id).ToNot(BeNil())
 				checkResourceInfo(statRes.Info, &provider.ResourceInfo{
 					Name:          "new-file",
-					Path:          ".",
+					Path:          "new-file",
 					Size:          4,
 					Type:          provider.ResourceType_RESOURCE_TYPE_FILE,
 					PermissionSet: viewerPermissions,
@@ -327,9 +336,18 @@ var _ = Describe("ocm share", func() {
 				webdav, ok := protocol.Term.(*ocmv1beta1.Protocol_WebdavOptions)
 				Expect(ok).To(BeTrue())
 
-				webdavClient := gowebdav.NewClient(webdav.WebdavOptions.Uri, "", "")
 				data := []byte("new-content")
+				webdavClient := gowebdav.NewClient(webdav.WebdavOptions.Uri, "", "")
 				webdavClient.SetHeader(net.HeaderContentLength, strconv.Itoa(len(data)))
+				webdavClient.SetInterceptor(func(method string, rq *http.Request) {
+					// Set the content length on the request struct directly instead of the header.
+					// The content-length header gets reset by the golang http library before
+					// sendind out the request, resulting in chunked encoding to be used which
+					// breaks the quota checks in ocdav.
+					if method == "PUT" {
+						rq.ContentLength = int64(len(data))
+					}
+				})
 				err = webdavClient.Write(".", data, 0)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -345,7 +363,7 @@ var _ = Describe("ocm share", func() {
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 				checkResourceInfo(statRes.Info, &provider.ResourceInfo{
 					Name:          "new-file",
-					Path:          ".",
+					Path:          "new-file",
 					Size:          uint64(len(data)),
 					Type:          provider.ResourceType_RESOURCE_TYPE_FILE,
 					PermissionSet: editorPermissions,
@@ -449,7 +467,7 @@ var _ = Describe("ocm share", func() {
 							OpaqueId:  share.Id.OpaqueId,
 						},
 						Name:          "foo",
-						Path:          "./dir/foo",
+						Path:          "foo",
 						Size:          7,
 						Type:          provider.ResourceType_RESOURCE_TYPE_FILE,
 						PermissionSet: viewerPermissions,
@@ -461,7 +479,7 @@ var _ = Describe("ocm share", func() {
 							OpaqueId:  share.Id.OpaqueId,
 						},
 						Name:          "bar",
-						Path:          "./dir/bar",
+						Path:          "bar",
 						Size:          0,
 						Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 						PermissionSet: viewerPermissions,
@@ -574,7 +592,7 @@ var _ = Describe("ocm share", func() {
 							SpaceId:   share.Id.OpaqueId,
 						},
 						Name:          "foo",
-						Path:          "./dir/foo",
+						Path:          "foo",
 						Size:          7,
 						Type:          provider.ResourceType_RESOURCE_TYPE_FILE,
 						PermissionSet: editorPermissions,
@@ -586,7 +604,7 @@ var _ = Describe("ocm share", func() {
 							SpaceId:   share.Id.OpaqueId,
 						},
 						Name:          "bar",
-						Path:          "./dir/bar",
+						Path:          "bar",
 						Size:          0,
 						Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 						PermissionSet: editorPermissions,
