@@ -122,6 +122,15 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 	log := appctx.GetLogger(ctx)
 
+	// remember the path from the reference
+	refpath := ref.GetPath()
+	if chunking.IsChunked(refpath) { // check chunking v1
+		chunk, err := chunking.GetChunkBLOBInfo(refpath)
+		if err != nil {
+			return nil, errtypes.BadRequest(err.Error())
+		}
+		ref.Path = chunk.Path
+	}
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	switch err.(type) {
 	case nil:
@@ -142,8 +151,8 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	lockID, _ := ctxpkg.ContextGetLockID(ctx)
 
 	session := fs.sessionStore.New(ctx)
-	session.SetMetadata("filename", filepath.Base(relative))
-	session.SetStorageValue("NodeName", filepath.Base(relative))
+	session.SetMetadata("filename", filepath.Base(refpath))
+	session.SetStorageValue("NodeName", filepath.Base(refpath))
 	session.SetMetadata("dir", filepath.Dir(relative))
 	session.SetStorageValue("Dir", filepath.Dir(relative))
 	session.SetMetadata("lockid", lockID)
