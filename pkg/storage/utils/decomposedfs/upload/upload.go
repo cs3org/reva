@@ -314,10 +314,8 @@ func (session *Session) Cleanup(cleanNode, cleanBin, cleanInfo bool) {
 	ctx := session.Context(context.Background())
 
 	if cleanNode {
-		switch p := session.info.MetaData["versionsPath"]; p {
-		case "":
-			session.removeNode(ctx)
-		default:
+		if session.NodeExists() {
+			p := session.info.MetaData["versionsPath"]
 			n, err := session.Node(ctx)
 			if err != nil {
 				appctx.GetLogger(ctx).Error().Err(err).Str("sessionid", session.ID()).Msg("reading node for session failed")
@@ -336,6 +334,8 @@ func (session *Session) Cleanup(cleanNode, cleanBin, cleanInfo bool) {
 				appctx.GetLogger(ctx).Info().Str("versionpath", p).Str("nodepath", n.InternalPath()).Err(err).Msg("error removing version")
 			}
 
+		} else {
+			session.removeNode(ctx)
 		}
 	}
 
