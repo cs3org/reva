@@ -299,10 +299,13 @@ func checkHash(expected string, h hash.Hash) error {
 }
 
 func (session *Session) removeNode(ctx context.Context) {
-	if n, err := session.Node(ctx); err != nil {
-		if err := n.Purge(ctx); err != nil {
-			appctx.GetLogger(ctx).Error().Str("nodepath", n.InternalPath()).Err(err).Msg("purging node failed")
-		}
+	n, err := session.Node(ctx)
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Str("session", session.ID()).Err(err).Msg("getting node from session failed")
+		return
+	}
+	if err := n.Purge(ctx); err != nil {
+		appctx.GetLogger(ctx).Error().Str("nodepath", n.InternalPath()).Err(err).Msg("purging node failed")
 	}
 }
 
