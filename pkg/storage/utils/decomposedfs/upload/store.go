@@ -228,7 +228,7 @@ func (store ocisstore) CreateNodeForUpload(session *Session, initAttrs node.Attr
 	}
 
 	mtime := time.Now()
-	if session.MTime().After(time.Time{}) {
+	if !session.MTime().IsZero() {
 		// overwrite mtime if requested
 		mtime = session.MTime()
 	}

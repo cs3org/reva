@@ -287,12 +287,18 @@ func (m *Session) SpaceOwner() *userpb.UserId {
 
 }
 func (m *Session) Expires() time.Time {
-	mt, _ := utils.MTimeToTime(m.info.MetaData["expires"])
-	return mt
+	var t time.Time
+	if value, ok := m.info.MetaData["expires"]; ok {
+		t, _ = utils.MTimeToTime(value)
+	}
+	return t
 }
 func (m *Session) MTime() time.Time {
-	mt, _ := utils.MTimeToTime(m.info.MetaData["mtime"])
-	return mt
+	var t time.Time
+	if value, ok := m.info.MetaData["mtime"]; ok {
+		t, _ = utils.MTimeToTime(value)
+	}
+	return t
 }
 func (m *Session) IsProcessing() bool {
 	return m.info.Storage["processing"] != "" // FIXME

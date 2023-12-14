@@ -109,7 +109,7 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 		Etag: session.ETag(),
 	}
 
-	if session.MTime().After(time.Time{}) {
+	if !session.MTime().IsZero() {
 		ri.Mtime = utils.TimeToTS(session.MTime())
 	}
 
