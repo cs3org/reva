@@ -51,7 +51,7 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 		return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error retrieving upload")
 	}
 
-	session := up.(*upload.Session)
+	session := up.(*upload.OcisSession)
 
 	p := session.Filename()
 	if chunking.IsChunked(p) { // check chunking v1
@@ -335,13 +335,13 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 
 // ListUploadSessions returns the upload sessions for the given filter
 func (fs *Decomposedfs) ListUploadSessions(ctx context.Context, filter storage.UploadSessionFilter) ([]storage.UploadSession, error) {
-	var sessions []*upload.Session
+	var sessions []*upload.OcisSession
 	if filter.ID != nil && *filter.ID != "" {
 		session, err := fs.sessionStore.Get(ctx, *filter.ID)
 		if err != nil {
 			return nil, err
 		}
-		sessions = []*upload.Session{session}
+		sessions = []*upload.OcisSession{session}
 	} else {
 		var err error
 		sessions, err = fs.sessionStore.List(ctx)
@@ -375,19 +375,19 @@ func (fs *Decomposedfs) ListUploadSessions(ctx context.Context, filter storage.U
 // To implement the termination extension as specified in https://tus.io/protocols/resumable-upload.html#termination
 // the storage needs to implement AsTerminatableUpload
 func (fs *Decomposedfs) AsTerminatableUpload(up tusd.Upload) tusd.TerminatableUpload {
-	return up.(*upload.Session)
+	return up.(*upload.OcisSession)
 }
 
 // AsLengthDeclarableUpload returns a LengthDeclarableUpload
 // To implement the creation-defer-length extension as specified in https://tus.io/protocols/resumable-upload.html#creation
 // the storage needs to implement AsLengthDeclarableUpload
 func (fs *Decomposedfs) AsLengthDeclarableUpload(up tusd.Upload) tusd.LengthDeclarableUpload {
-	return up.(*upload.Session)
+	return up.(*upload.OcisSession)
 }
 
 // AsConcatableUpload returns a ConcatableUpload
 // To implement the concatenation extension as specified in https://tus.io/protocols/resumable-upload.html#concatenation
 // the storage needs to implement AsConcatableUpload
 func (fs *Decomposedfs) AsConcatableUpload(up tusd.Upload) tusd.ConcatableUpload {
-	return up.(*upload.Session)
+	return up.(*upload.OcisSession)
 }

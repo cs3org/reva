@@ -76,7 +76,7 @@ type Tree interface {
 var defaultFilePerm = os.FileMode(0664)
 
 // WriteChunk writes the stream from the reader to the given offset of the upload
-func (session *Session) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
+func (session *OcisSession) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
 	ctx, span := tracer.Start(session.Context(ctx), "WriteChunk")
 	defer span.End()
 	_, subspan := tracer.Start(ctx, "os.OpenFile")
@@ -111,19 +111,19 @@ func (session *Session) WriteChunk(ctx context.Context, offset int64, src io.Rea
 }
 
 // GetInfo returns the FileInfo
-func (session *Session) GetInfo(_ context.Context) (tusd.FileInfo, error) {
+func (session *OcisSession) GetInfo(_ context.Context) (tusd.FileInfo, error) {
 	return session.ToFileInfo(), nil
 }
 
 // GetReader returns an io.Reader for the upload
-func (session *Session) GetReader(ctx context.Context) (io.Reader, error) {
+func (session *OcisSession) GetReader(ctx context.Context) (io.Reader, error) {
 	_, span := tracer.Start(session.Context(ctx), "GetReader")
 	defer span.End()
 	return os.Open(session.binPath())
 }
 
 // FinishUpload finishes an upload and moves the file to the internal destination
-func (session *Session) FinishUpload(ctx context.Context) error {
+func (session *OcisSession) FinishUpload(ctx context.Context) error {
 	ctx, span := tracer.Start(session.Context(ctx), "FinishUpload")
 	defer span.End()
 	// set lockID to context
@@ -233,20 +233,20 @@ func (session *Session) FinishUpload(ctx context.Context) error {
 }
 
 // Terminate terminates the upload
-func (session *Session) Terminate(_ context.Context) error {
+func (session *OcisSession) Terminate(_ context.Context) error {
 	session.Cleanup(true, true, true)
 	return nil
 }
 
 // DeclareLength updates the upload length information
-func (session *Session) DeclareLength(ctx context.Context, length int64) error {
+func (session *OcisSession) DeclareLength(ctx context.Context, length int64) error {
 	session.info.Size = length
 	session.info.SizeIsDeferred = false
 	return session.Persist(session.Context(ctx))
 }
 
 // ConcatUploads concatenates multiple uploads
-func (session *Session) ConcatUploads(_ context.Context, uploads []tusd.Upload) (err error) {
+func (session *OcisSession) ConcatUploads(_ context.Context, uploads []tusd.Upload) (err error) {
 	file, err := os.OpenFile(session.binPath(), os.O_WRONLY|os.O_APPEND, defaultFilePerm)
 	if err != nil {
 		return err
@@ -254,7 +254,7 @@ func (session *Session) ConcatUploads(_ context.Context, uploads []tusd.Upload) 
 	defer file.Close()
 
 	for _, partialUpload := range uploads {
-		fileUpload := partialUpload.(*Session)
+		fileUpload := partialUpload.(*OcisSession)
 
 		src, err := os.Open(fileUpload.binPath())
 		if err != nil {
@@ -271,7 +271,7 @@ func (session *Session) ConcatUploads(_ context.Context, uploads []tusd.Upload) 
 }
 
 // Finalize finalizes the upload (eg moves the file to the internal destination)
-func (session *Session) Finalize() (err error) {
+func (session *OcisSession) Finalize() (err error) {
 	ctx, span := tracer.Start(session.Context(context.Background()), "Finalize")
 	defer span.End()
 	n, err := session.Node(ctx)
@@ -298,7 +298,7 @@ func checkHash(expected string, h hash.Hash) error {
 	return nil
 }
 
-func (session *Session) removeNode(ctx context.Context) {
+func (session *OcisSession) removeNode(ctx context.Context) {
 	n, err := session.Node(ctx)
 	if err != nil {
 		appctx.GetLogger(ctx).Error().Str("session", session.ID()).Err(err).Msg("getting node from session failed")
@@ -310,7 +310,7 @@ func (session *Session) removeNode(ctx context.Context) {
 }
 
 // cleanup cleans up after the upload is finished
-func (session *Session) Cleanup(cleanNode, cleanBin, cleanInfo bool) {
+func (session *OcisSession) Cleanup(cleanNode, cleanBin, cleanInfo bool) {
 	ctx := session.Context(context.Background())
 
 	if cleanNode {
@@ -353,7 +353,7 @@ func (session *Session) Cleanup(cleanNode, cleanBin, cleanInfo bool) {
 }
 
 // URL returns a url to download an upload
-func (session *Session) URL(_ context.Context) (string, error) {
+func (session *OcisSession) URL(_ context.Context) (string, error) {
 	type transferClaims struct {
 		jwt.StandardClaims
 		Target string `json:"target"`

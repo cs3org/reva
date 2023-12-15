@@ -38,7 +38,13 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
-type UploadSession interface {
+// Session is the interface that OcisSession implements. By combining tus.Upload,
+// storage.UploadSession and custom functions we can reuse the same struct throughout
+// the whole upload lifecycle.
+//
+// Some functions that are only used by decomposedfs are not yet part of this interface.
+// They might be added after more refactoring.
+type Session interface {
 	tusd.Upload
 	storage.UploadSession
 	Persist(ctx context.Context) error
@@ -48,72 +54,23 @@ type UploadSession interface {
 	Cleanup(cleanNode, cleanBin, cleanInfo bool)
 }
 
-type Session struct {
-	store ocisstore
+// OcisSession extends tus upload lifecycle with postprocessing steps.
+type OcisSession struct {
+	store OcisStore
 	// for now, we keep the json files in the uploads folder
 	info tusd.FileInfo
 	// a context that is reinitialized with the executant and log from the session metadata
 	ctx context.Context
-	/*
-		ID             string
-		MetaData       tusd.MetaData
-		Size           int64
-		SizeIsDeferred bool
-		Offset         int64
-		Storage        map[string]string
-
-		Filename            string
-		SpaceRoot           string
-		SpaceOwnerOrManager string
-		ProviderID          string
-		MTime               string
-
-		NodeID       string
-		NodeParentID string
-		NodeExists   bool
-
-		ExecutantIdp      string
-		ExecutantID       string
-		ExecutantType     string
-		ExecutantUserName string
-		LogLevel          string
-		Checksum          string
-		ChecksumSHA1      string
-		ChecksumADLER32   string
-		ChecksumMD5       string
-
-		BlobID   string
-		BlobSize int64
-
-		// BinPath holds the path to the uploaded blob
-		BinPath string
-
-		// SizeDiff size difference between new and old file version
-		SizeDiff int64
-
-		// versionsPath will be empty if there was no file before
-		VersionsPath string
-
-		Chunk                   string
-		Dir                     string
-		LockID                  string
-		HeaderIfMatch           string
-		HeaderIfNoneMatch       string
-		HeaderIfUnmodifiedSince string
-		Expires                 time.Time
-
-		root string
-	*/
 }
 
-func (m *Session) Context(ctx context.Context) context.Context {
+func (m *OcisSession) Context(ctx context.Context) context.Context {
 	ctx, _ = m.ContextWithLogger(ctx) // ignore the error
 	return m.ContextWithExecutant(ctx)
 }
-func (m *Session) ContextWithExecutant(ctx context.Context) context.Context {
+func (m *OcisSession) ContextWithExecutant(ctx context.Context) context.Context {
 	return ctxpkg.ContextSetUser(ctx, m.ExecutantUser())
 }
-func (m *Session) ContextWithLogger(ctx context.Context) (context.Context, error) {
+func (m *OcisSession) ContextWithLogger(ctx context.Context) (context.Context, error) {
 	// restore logger from file info
 	log, err := logger.FromConfig(&logger.LogConf{
 		Output: "stderr", // TODO use config from decomposedfs
@@ -127,7 +84,7 @@ func (m *Session) ContextWithLogger(ctx context.Context) (context.Context, error
 	return appctx.WithLogger(ctx, &sub), nil
 }
 
-func (m *Session) Purge(ctx context.Context) error {
+func (m *OcisSession) Purge(ctx context.Context) error {
 	if err := os.Remove(sessionPath(m.store.root, m.info.ID)); err != nil {
 		return err
 	}
@@ -137,7 +94,7 @@ func (m *Session) Purge(ctx context.Context) error {
 	return nil
 }
 
-func (m *Session) TouchBin() error {
+func (m *OcisSession) TouchBin() error {
 	file, err := os.OpenFile(m.binPath(), os.O_CREATE|os.O_WRONLY, defaultFilePerm)
 	if err != nil {
 		return err
@@ -145,7 +102,7 @@ func (m *Session) TouchBin() error {
 	return file.Close()
 }
 
-func (m *Session) Persist(ctx context.Context) error {
+func (m *OcisSession) Persist(ctx context.Context) error {
 	uploadPath := sessionPath(m.store.root, m.info.ID)
 	// create folder structure (if needed)
 	if err := os.MkdirAll(filepath.Dir(uploadPath), 0700); err != nil {
@@ -161,40 +118,40 @@ func (m *Session) Persist(ctx context.Context) error {
 	return os.WriteFile(uploadPath, d, 0600)
 }
 
-func (m *Session) ToFileInfo() tusd.FileInfo {
+func (m *OcisSession) ToFileInfo() tusd.FileInfo {
 	return m.info
 }
-func (m *Session) ProviderID() string {
+func (m *OcisSession) ProviderID() string {
 	return m.info.MetaData["providerID"]
 }
-func (m *Session) SpaceID() string {
+func (m *OcisSession) SpaceID() string {
 	return m.info.Storage["SpaceRoot"]
 }
-func (m *Session) NodeID() string {
+func (m *OcisSession) NodeID() string {
 	return m.info.Storage["NodeId"]
 }
-func (m *Session) NodeParentID() string {
+func (m *OcisSession) NodeParentID() string {
 	return m.info.Storage["NodeParentId"]
 }
-func (m *Session) NodeExists() bool {
+func (m *OcisSession) NodeExists() bool {
 	return m.info.Storage["NodeExists"] == "true"
 }
-func (m *Session) LockID() string {
+func (m *OcisSession) LockID() string {
 	return m.info.MetaData["lockid"]
 }
-func (m *Session) ETag() string {
+func (m *OcisSession) ETag() string {
 	return m.info.MetaData["etag"]
 }
-func (m *Session) HeaderIfMatch() string {
+func (m *OcisSession) HeaderIfMatch() string {
 	return m.info.MetaData["if-match"]
 }
-func (m *Session) HeaderIfNoneMatch() string {
+func (m *OcisSession) HeaderIfNoneMatch() string {
 	return m.info.MetaData["if-none-match"]
 }
-func (m *Session) HeaderIfUnmodifiedSince() string {
+func (m *OcisSession) HeaderIfUnmodifiedSince() string {
 	return m.info.MetaData["if-unmodified-since"]
 }
-func (m *Session) Node(ctx context.Context) (*node.Node, error) {
+func (m *OcisSession) Node(ctx context.Context) (*node.Node, error) {
 	n, err := node.ReadNode(ctx, m.store.lu, m.SpaceID(), m.info.Storage["NodeId"], false, nil, true)
 	if err != nil {
 		return nil, err
@@ -202,48 +159,47 @@ func (m *Session) Node(ctx context.Context) (*node.Node, error) {
 	return n, nil
 }
 
-func (m *Session) ID() string {
+func (m *OcisSession) ID() string {
 	return m.info.ID
 }
-func (m *Session) Filename() string {
+func (m *OcisSession) Filename() string {
 	return m.info.Storage["NodeName"]
 }
 
-func (m *Session) SetMetadata(key, value string) {
+func (m *OcisSession) SetMetadata(key, value string) {
 	m.info.MetaData[key] = value
 }
-func (m *Session) SetStorageValue(key, value string) {
+func (m *OcisSession) SetStorageValue(key, value string) {
 	m.info.Storage[key] = value
 }
-func (m *Session) SetSize(size int64) {
+func (m *OcisSession) SetSize(size int64) {
 	m.info.Size = size
 }
-func (m *Session) SetSizeIsDeferred(value bool) {
+func (m *OcisSession) SetSizeIsDeferred(value bool) {
 	m.info.SizeIsDeferred = value
 }
 
 // TODO get rid of dir, whoever consumes the reference should be able to deal with a relative reference
-func (m *Session) Dir() string {
+func (m *OcisSession) Dir() string {
 	return m.info.Storage["Dir"]
 }
 
-// TODO use uint64? use SizeDeferred flag is in tus? cleaner then int64 and a negative value
-func (m *Session) Size() int64 {
+func (m *OcisSession) Size() int64 {
 	return m.info.Size
 }
-func (m *Session) SizeDiff() int64 {
+func (m *OcisSession) SizeDiff() int64 {
 	sizeDiff, _ := strconv.ParseInt(m.info.MetaData["sizeDiff"], 10, 64)
 	return sizeDiff
 }
 
-func (m *Session) ResourceID() provider.ResourceId {
+func (m *OcisSession) ResourceID() provider.ResourceId {
 	return provider.ResourceId{
 		StorageId: m.info.MetaData["providerID"],
 		SpaceId:   m.info.Storage["SpaceRoot"],
 		OpaqueId:  m.info.Storage["NodeId"],
 	}
 }
-func (m *Session) Reference() provider.Reference {
+func (m *OcisSession) Reference() provider.Reference {
 	return provider.Reference{
 		ResourceId: &provider.ResourceId{
 			StorageId: m.info.MetaData["providerID"],
@@ -253,14 +209,14 @@ func (m *Session) Reference() provider.Reference {
 		// Path is not used
 	}
 }
-func (m *Session) Executant() userpb.UserId {
+func (m *OcisSession) Executant() userpb.UserId {
 	return userpb.UserId{
 		Type:     userpb.UserType(userpb.UserType_value[m.info.Storage["UserType"]]),
 		Idp:      m.info.Storage["Idp"],
 		OpaqueId: m.info.Storage["UserId"],
 	}
 }
-func (m *Session) ExecutantUser() *userpb.User {
+func (m *OcisSession) ExecutantUser() *userpb.User {
 	return &userpb.User{
 		Id: &userpb.UserId{
 			Type:     userpb.UserType(userpb.UserType_value[m.info.Storage["UserType"]]),
@@ -270,42 +226,42 @@ func (m *Session) ExecutantUser() *userpb.User {
 		Username: m.info.Storage["UserName"],
 	}
 }
-func (m *Session) SetExecutant(u *userpb.User) {
+func (m *OcisSession) SetExecutant(u *userpb.User) {
 	m.info.Storage["Idp"] = u.GetId().GetIdp()
 	m.info.Storage["UserId"] = u.GetId().GetOpaqueId()
 	m.info.Storage["UserType"] = utils.UserTypeToString(u.GetId().Type)
 	m.info.Storage["UserName"] = u.GetUsername()
 }
-func (m *Session) Offset() int64 {
+func (m *OcisSession) Offset() int64 {
 	return m.info.Offset
 }
-func (m *Session) SpaceOwner() *userpb.UserId {
+func (m *OcisSession) SpaceOwner() *userpb.UserId {
 	return &userpb.UserId{
 		// idp and type do not seem to be consumed and the node currently only stores the user id anyway
 		OpaqueId: m.info.Storage["SpaceOwnerOrManager"],
 	}
 
 }
-func (m *Session) Expires() time.Time {
+func (m *OcisSession) Expires() time.Time {
 	var t time.Time
 	if value, ok := m.info.MetaData["expires"]; ok {
 		t, _ = utils.MTimeToTime(value)
 	}
 	return t
 }
-func (m *Session) MTime() time.Time {
+func (m *OcisSession) MTime() time.Time {
 	var t time.Time
 	if value, ok := m.info.MetaData["mtime"]; ok {
 		t, _ = utils.MTimeToTime(value)
 	}
 	return t
 }
-func (m *Session) IsProcessing() bool {
+func (m *OcisSession) IsProcessing() bool {
 	return m.info.Storage["processing"] != "" // FIXME
 }
 
 // binPath returns the path to the file storing the binary data.
-func (m *Session) binPath() string {
+func (m *OcisSession) binPath() string {
 	return filepath.Join(m.store.root, "uploads", m.info.ID)
 }
 

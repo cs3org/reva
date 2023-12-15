@@ -112,7 +112,7 @@ type Decomposedfs struct {
 	chunkHandler *chunking.ChunkHandler
 	stream       events.Stream
 	cache        cache.StatCache
-	sessionStore upload.UploadSessionStore
+	sessionStore upload.SessionStore
 
 	UserCache       *ttlcache.Cache
 	userSpaceIndex  *spaceidindex.Index
@@ -210,7 +210,7 @@ func New(o *options.Options, lu *lookup.Lookup, p Permissions, tp Tree, es event
 		userSpaceIndex:  userSpaceIndex,
 		groupSpaceIndex: groupSpaceIndex,
 		spaceTypeIndex:  spaceTypeIndex,
-		sessionStore:    upload.NewOCISUploadSessionStore(lu, tp, o.Root, es, o.AsyncFileUploads, o.Tokens),
+		sessionStore:    upload.NewSessionStore(lu, tp, o.Root, es, o.AsyncFileUploads, o.Tokens),
 	}
 
 	if o.AsyncFileUploads {

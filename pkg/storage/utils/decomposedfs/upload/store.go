@@ -34,7 +34,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
@@ -52,14 +51,14 @@ type PermissionsChecker interface {
 	AssemblePermissions(ctx context.Context, n *node.Node) (ap provider.ResourcePermissions, err error)
 }
 
-type UploadSessionStore interface {
-	New(ctx context.Context) *Session
-	List(ctx context.Context) ([]*Session, error)
-	Get(ctx context.Context, id string) (*Session, error)
-	Cleanup(ctx context.Context, session UploadSession, failure bool, keepUpload bool)
+type SessionStore interface {
+	New(ctx context.Context) *OcisSession
+	List(ctx context.Context) ([]*OcisSession, error)
+	Get(ctx context.Context, id string) (*OcisSession, error)
+	Cleanup(ctx context.Context, session Session, failure bool, keepUpload bool)
 }
 
-type ocisstore struct {
+type OcisStore struct {
 	lu      *lookup.Lookup
 	tp      Tree
 	root    string
@@ -68,8 +67,8 @@ type ocisstore struct {
 	tknopts options.TokenOptions
 }
 
-func NewOCISUploadSessionStore(lu *lookup.Lookup, tp Tree, root string, pub events.Publisher, async bool, tknopts options.TokenOptions) *ocisstore {
-	return &ocisstore{
+func NewSessionStore(lu *lookup.Lookup, tp Tree, root string, pub events.Publisher, async bool, tknopts options.TokenOptions) *OcisStore {
+	return &OcisStore{
 		lu:      lu,
 		tp:      tp,
 		root:    root,
@@ -79,8 +78,8 @@ func NewOCISUploadSessionStore(lu *lookup.Lookup, tp Tree, root string, pub even
 	}
 }
 
-func (store ocisstore) New(ctx context.Context) *Session {
-	return &Session{
+func (store OcisStore) New(ctx context.Context) *OcisSession {
+	return &OcisSession{
 		store: store,
 		info: tusd.FileInfo{
 			ID: uuid.New().String(),
@@ -92,8 +91,8 @@ func (store ocisstore) New(ctx context.Context) *Session {
 	}
 }
 
-func (store ocisstore) List(ctx context.Context) ([]*Session, error) {
-	uploads := []*Session{}
+func (store OcisStore) List(ctx context.Context) ([]*OcisSession, error) {
+	uploads := []*OcisSession{}
 	infoFiles, err := filepath.Glob(filepath.Join(store.root, "uploads", "*.info"))
 	if err != nil {
 		return nil, err
@@ -111,7 +110,7 @@ func (store ocisstore) List(ctx context.Context) ([]*Session, error) {
 	return uploads, nil
 }
 
-func (store ocisstore) Get(ctx context.Context, id string) (*Session, error) {
+func (store OcisStore) Get(ctx context.Context, id string) (*OcisSession, error) {
 	path := filepath.Join(store.root, "uploads", id+".info")
 	match := _idRegexp.FindStringSubmatch(path)
 	if match == nil || len(match) < 2 {
@@ -120,10 +119,10 @@ func (store ocisstore) Get(ctx context.Context, id string) (*Session, error) {
 	return store.ReadSession(ctx, match[1])
 }
 
-func (store ocisstore) ReadSession(ctx context.Context, id string) (*Session, error) {
+func (store OcisStore) ReadSession(ctx context.Context, id string) (*OcisSession, error) {
 	sessionPath := filepath.Join(store.root, "uploads", id+".info")
 
-	session := Session{
+	session := OcisSession{
 		store: store,
 		info:  tusd.FileInfo{},
 	}
@@ -154,7 +153,7 @@ func (store ocisstore) ReadSession(ctx context.Context, id string) (*Session, er
 }
 
 // Cleanup cleans the upload
-func (store ocisstore) Cleanup(ctx context.Context, session UploadSession, failure bool, keepUpload bool) {
+func (store OcisStore) Cleanup(ctx context.Context, session Session, failure bool, keepUpload bool) {
 	ctx, span := tracer.Start(session.Context(ctx), "Cleanup")
 	defer span.End()
 	session.Cleanup(failure, !keepUpload, !keepUpload)
@@ -176,7 +175,7 @@ func (store ocisstore) Cleanup(ctx context.Context, session UploadSession, failu
 // CreateNodeForUpload will create the target node for the Upload
 // FIXME move this to the node package as NodeFromUpload?
 // should we in InitiateUpload create the node first? and then the upload?
-func (store ocisstore) CreateNodeForUpload(session *Session, initAttrs node.Attributes) (*node.Node, error) {
+func (store OcisStore) CreateNodeForUpload(session *OcisSession, initAttrs node.Attributes) (*node.Node, error) {
 	ctx, span := tracer.Start(session.Context(context.Background()), "CreateNodeForUpload")
 	defer span.End()
 	n := node.New(
@@ -257,7 +256,7 @@ func (store ocisstore) CreateNodeForUpload(session *Session, initAttrs node.Attr
 	return n, nil
 }
 
-func (store ocisstore) initNewNode(ctx context.Context, session *Session, n *node.Node, fsize uint64) (*lockedfile.File, error) {
+func (store OcisStore) initNewNode(ctx context.Context, session *OcisSession, n *node.Node, fsize uint64) (*lockedfile.File, error) {
 	// create folder structure (if needed)
 	if err := os.MkdirAll(filepath.Dir(n.InternalPath()), 0700); err != nil {
 		return nil, err
@@ -301,7 +300,7 @@ func (store ocisstore) initNewNode(ctx context.Context, session *Session, n *nod
 	return f, nil
 }
 
-func (store ocisstore) updateExistingNode(ctx context.Context, session *Session, n *node.Node, spaceID string, fsize uint64) (*lockedfile.File, error) {
+func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSession, n *node.Node, spaceID string, fsize uint64) (*lockedfile.File, error) {
 	targetPath := n.InternalPath()
 
 	// write lock existing node before reading any metadata
@@ -381,28 +380,4 @@ func (store ocisstore) updateExistingNode(ctx context.Context, session *Session,
 	}
 
 	return f, nil
-}
-
-// lookupNode looks up nodes by path.
-// This method can also handle lookups for paths which contain chunking information.
-func lookupNode(ctx context.Context, spaceRoot *node.Node, path string, lu *lookup.Lookup) (*node.Node, error) {
-	p := path
-	isChunked := chunking.IsChunked(path)
-	if isChunked {
-		chunkInfo, err := chunking.GetChunkBLOBInfo(path)
-		if err != nil {
-			return nil, err
-		}
-		p = chunkInfo.Path
-	}
-
-	n, err := lu.WalkPath(ctx, spaceRoot, p, true, func(ctx context.Context, n *node.Node) error { return nil })
-	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: error walking path")
-	}
-
-	if isChunked {
-		n.Name = filepath.Base(path)
-	}
-	return n, nil
 }
