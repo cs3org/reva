@@ -67,7 +67,7 @@ func Server() {
 
 // Client builds a nats client
 func Client() events.Stream {
-	c, err := stream.NatsFromConfig("name of stream", stream.NatsConfig{
+	c, err := stream.NatsFromConfig("name of stream", false, stream.NatsConfig{
 		Endpoint: "127.0.0.1:9233",
 		Cluster:  "test-cluster",
 	})
