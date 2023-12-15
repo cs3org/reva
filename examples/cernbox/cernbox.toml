@@ -267,7 +267,7 @@ driver = "ocmreceived"
 [http.services.sciencemesh]
 address = ":443"
 provider_domain = "{{ vars.provider_domain }}"
-mesh_directory_url = "https://sciencemesh.cesnet.cz/iop/meshdir"
+mesh_directory_url = "https:/meshdir.docker/meshdir"
 ocm_mount_point = "/sciencemesh"
 
 [http.services.sciencemesh.smtp_credentials]
