@@ -37,6 +37,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/events"
+	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/metrics"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/golang-jwt/jwt"
@@ -199,6 +200,11 @@ func (session *OcisSession) FinishUpload(ctx context.Context) error {
 		return err
 	}
 
+	// increase the processing counter for every started processing
+	// will be decreased in Cleanup()
+	metrics.UploadProcessing.Inc()
+	metrics.UploadSessionsBytesReceived.Inc()
+
 	if session.store.pub != nil {
 		u, _ := ctxpkg.ContextGetUser(ctx)
 		s, err := session.URL(ctx)
@@ -227,6 +233,7 @@ func (session *OcisSession) FinishUpload(ctx context.Context) error {
 			log.Error().Err(err).Msg("failed to upload")
 			return err
 		}
+		metrics.UploadSessionsFinalized.Inc()
 	}
 
 	return session.store.tp.Propagate(ctx, n, session.SizeDiff())
