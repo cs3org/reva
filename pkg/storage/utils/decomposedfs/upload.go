@@ -214,20 +214,6 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	if session.Dir() == "" {
 		return nil, errors.New("Decomposedfs: missing dir in metadata")
 	}
-	/*
-		sn, err := fs.lu.NodeFromSpaceID(ctx, session.SpaceID())
-		if err != nil {
-			return nil, errors.Wrap(err, "Decomposedfs: error getting space root node")
-		}
-
-		// TODO InitiateUpload already has a node
-		sn, err = lookupNode(ctx, sn, filepath.Join(session.Dir, session.Filename()), fs.lu)
-		if err != nil {
-			return nil, errors.Wrap(err, "Decomposedfs: error walking path")
-		}
-
-		log.Debug().Interface("session", session).Interface("node", n).Msg("Decomposedfs: resolved filename")
-	*/
 
 	// the parent owner will become the new owner
 	parent, perr := n.Parent(ctx)
