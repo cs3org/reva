@@ -77,7 +77,20 @@ func (d *driver) InitiateUpload(ctx context.Context, ref *provider.Reference, up
 }
 
 func (d *driver) Upload(ctx context.Context, req storage.UploadRequest, _ storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
-	client, _, rel, err := d.webdavClient(ctx, nil, req.Ref)
+	shareID, _ := shareInfoFromReference(req.Ref)
+	u, err := d.GetUpload(ctx, shareID.OpaqueId)
+	if err != nil {
+		return provider.ResourceInfo{}, err
+	}
+
+	info, err := u.GetInfo(ctx)
+	if err != nil {
+		return provider.ResourceInfo{}, err
+	}
+
+	client, _, rel, err := d.webdavClient(ctx, nil, &provider.Reference{
+		Path: filepath.Join(info.MetaData["dir"], info.MetaData["filename"]),
+	})
 	if err != nil {
 		return provider.ResourceInfo{}, err
 	}
