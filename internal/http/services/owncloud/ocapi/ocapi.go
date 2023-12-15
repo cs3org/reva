@@ -12,7 +12,29 @@ const roleslistMock = `{"bundles":[{"id":"2aadd357-682c-406b-8874-293091995fdd",
 
 const assigmentMock = `{"assignments":[{"id":"412cbb5a-48cf-401b-8709-6f88d1d33b9d","accountUuid":"619201e3-d9ca-41ab-a03d-c995e3f876f6","roleId":"71881883-1768-46bd-a24d-a356a2afdf7f"}]}`
 
-const permissionsMock = `{"permissions":["Drives.ReadWriteEnabled.all","Language.ReadWrite.all","Drives.ReadWrite.all","Drives.List.all","Drives.DeleteProject.all","PublicLink.Write.all","EmailNotifications.ReadWriteDisabled.own","Drives.ReadWriteProjectQuota.all","ReadOnlyPublicLinkPassword.Delete.all","Roles.ReadWrite.all","Drives.Create.all","Accounts.ReadWrite.all","Groups.ReadWrite.all","Drives.ReadWritePersonalQuota.all","Drives.DeletePersonal.all","Logo.Write.all","Settings.ReadWrite.all","AutoAcceptShares.ReadWriteDisabled.own"]}`
+const permissionsMock = `{"permissions": [
+	"Drives.DeletePersonal.all",
+	"ReadOnlyPublicLinkPassword.Delete.all",
+	"EmailNotifications.ReadWriteDisabled.own",
+	"Groups.ReadWrite.all",
+	"Drives.List.all",
+	"Drives.ReadWritePersonalQuota.all",
+	"Drives.ReadWriteProjectQuota.all",
+	"Logo.Write.all",
+	"Favorites.Write.own",
+	"AutoAcceptShares.ReadWriteDisabled.own",
+	"PublicLink.Write.all",
+	"Drives.DeleteProject.all",
+	"Drives.ReadWriteEnabled.all",
+	"Accounts.ReadWrite.all",
+	"Language.ReadWrite.all",
+	"Roles.ReadWrite.all",
+	"Settings.ReadWrite.all",
+	"Drives.Create.all",
+	"Favorites.List.own",
+	"Drives.ReadWrite.all",
+	"Shares.Write.all"
+]}`
 
 const valuesMock = `{"values":[{"identifier":{"extension":"ocis-accounts","bundle":"profile","setting":"language"},"value":{"bundleId":"2a506de7-99bd-4f0d-994e-c38e72c28fd9","settingId":"aa8cfbe5-95d4-4f7e-a032-c3c01f5f062f","accountUuid":"619201e3-d9ca-41ab-a03d-c995e3f876f6","resource":{"type":"TYPE_USER"},"listValue":{"values":[{"stringValue":"en"}]}}}]}`
 
