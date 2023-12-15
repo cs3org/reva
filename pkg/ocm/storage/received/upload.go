@@ -32,7 +32,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/google/uuid"
@@ -48,7 +47,6 @@ import (
 )
 
 var defaultFilePerm = os.FileMode(0664)
-var _idRegexp = regexp.MustCompile(".*/([^/]+).info")
 
 func (d *driver) ListUploadSessions(ctx context.Context, filter storage.UploadSessionFilter) ([]storage.UploadSession, error) {
 	return []storage.UploadSession{}, nil
@@ -314,11 +312,11 @@ func (u *upload) FinishUpload(ctx context.Context) error {
 	// shareID, rel := shareInfoFromReference(u.Info.MetaData["ref"])
 	// p := getPathFromShareIDAndRelPath(shareID, rel)
 
-	ctx, err := utils.GetServiceUserContext(u.d.c.ServiceAccountID, u.d.gateway, u.d.c.ServiceAccountSecret)
+	serviceUserCtx, err := utils.GetServiceUserContext(u.d.c.ServiceAccountID, u.d.gateway, u.d.c.ServiceAccountSecret)
 	if err != nil {
 		return err
 	}
-	client, _, rel, err := u.d.webdavClient(ctx, &userpb.UserId{
+	client, _, rel, err := u.d.webdavClient(serviceUserCtx, &userpb.UserId{
 		OpaqueId: u.Info.MetaData["user"],
 		Idp:      u.Info.MetaData["idp"],
 	}, &provider.Reference{
