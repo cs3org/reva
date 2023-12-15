@@ -83,7 +83,7 @@ var _ = Describe("The ocs API", func() {
 
 		c := &config.Config{}
 		c.GatewaySvc = "gatewaysvc"
-		c.StatCacheDatabase = strconv.FormatInt(rand.Int63(), 10) // Use a fresh database for each test
+		c.StatCacheConfig.Database = strconv.FormatInt(rand.Int63(), 10) // Use a fresh database for each test
 		c.Init()
 		h.InitWithGetter(c, func() (gateway.GatewayAPIClient, error) {
 			return gatewayClient, nil
@@ -483,7 +483,7 @@ var _ = Describe("The ocs API", func() {
 
 				c := &config.Config{}
 				c.GatewaySvc = "gatewaysvc"
-				c.StatCacheDatabase = strconv.FormatInt(rand.Int63(), 10) // Use a fresh database for each test
+				c.StatCacheConfig.Database = strconv.FormatInt(rand.Int63(), 10) // Use a fresh database for each test
 				// this is equivalent of the ocis OCIS_SHARING_PUBLIC_WRITEABLE_SHARE_MUST_HAVE_PASSWORD=true
 				c.Capabilities = cdata.CapabilitiesData{
 					Capabilities: &cdata.Capabilities{FilesSharing: &cdata.CapabilitiesFilesSharing{Public: &cdata.CapabilitiesFilesSharingPublic{
@@ -624,7 +624,7 @@ var _ = Describe("The ocs API", func() {
 
 				c := &config.Config{}
 				c.GatewaySvc = "gatewaysvc"
-				c.StatCacheDatabase = strconv.FormatInt(rand.Int63(), 10) // Use a fresh database for each test
+				c.StatCacheConfig.Database = strconv.FormatInt(rand.Int63(), 10) // Use a fresh database for each test
 				// this is equivalent of the ocis OCIS_SHARING_PUBLIC_WRITEABLE_SHARE_MUST_HAVE_PASSWORD=true
 				c.Capabilities = cdata.CapabilitiesData{
 					Capabilities: &cdata.Capabilities{FilesSharing: &cdata.CapabilitiesFilesSharing{Public: &cdata.CapabilitiesFilesSharingPublic{
