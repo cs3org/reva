@@ -139,7 +139,7 @@ func (model *inviteModel) save() error {
 	return nil
 }
 
-func (m *manager) AddToken(ctx context.Context, token *invitepb.InviteToken) error {
+func (m *manager) AddToken(_ context.Context, token *invitepb.InviteToken) error {
 	m.Lock()
 	defer m.Unlock()
 
@@ -150,7 +150,7 @@ func (m *manager) AddToken(ctx context.Context, token *invitepb.InviteToken) err
 	return nil
 }
 
-func (m *manager) GetToken(ctx context.Context, token string) (*invitepb.InviteToken, error) {
+func (m *manager) GetToken(_ context.Context, token string) (*invitepb.InviteToken, error) {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -160,7 +160,7 @@ func (m *manager) GetToken(ctx context.Context, token string) (*invitepb.InviteT
 	return nil, invite.ErrTokenNotFound
 }
 
-func (m *manager) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*invitepb.InviteToken, error) {
+func (m *manager) ListTokens(_ context.Context, initiator *userpb.UserId) ([]*invitepb.InviteToken, error) {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -177,7 +177,7 @@ func tokenIsExpired(token *invitepb.InviteToken) bool {
 	return token.Expiration != nil && token.Expiration.Seconds < uint64(time.Now().Unix())
 }
 
-func (m *manager) AddRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.User) error {
+func (m *manager) AddRemoteUser(_ context.Context, initiator *userpb.UserId, remoteUser *userpb.User) error {
 	m.Lock()
 	defer m.Unlock()
 
@@ -238,7 +238,7 @@ func (m *manager) GetRemoteUser(ctx context.Context, initiator *userpb.UserId, r
 	return nil, errtypes.NotFound(remoteUserID.OpaqueId)
 }
 
-func (m *manager) FindRemoteUsers(ctx context.Context, initiator *userpb.UserId, query string) ([]*userpb.User, error) {
+func (m *manager) FindRemoteUsers(_ context.Context, initiator *userpb.UserId, query string) ([]*userpb.User, error) {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -257,7 +257,7 @@ func userContains(u *userpb.User, query string) bool {
 		strings.Contains(strings.ToLower(u.Mail), query) || strings.Contains(strings.ToLower(u.Id.OpaqueId), query)
 }
 
-func (m *manager) DeleteRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.UserId) error {
+func (m *manager) DeleteRemoteUser(_ context.Context, initiator *userpb.UserId, remoteUser *userpb.UserId) error {
 	m.Lock()
 	defer m.Unlock()
 

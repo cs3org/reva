@@ -232,7 +232,7 @@ type MatchValueData struct {
 }
 
 // CS3Share2ShareData converts a cs3api user share into shareData data model
-func CS3Share2ShareData(ctx context.Context, share *collaboration.Share) (*ShareData, error) {
+func CS3Share2ShareData(_ context.Context, share *collaboration.Share) (*ShareData, error) {
 	sd := &ShareData{
 		// share.permissions are mapped below
 		// Displaynames are added later
@@ -273,7 +273,7 @@ func CS3Share2ShareData(ctx context.Context, share *collaboration.Share) (*Share
 }
 
 // PublicShare2ShareData converts a cs3api public share into shareData data model
-func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL string) *ShareData {
+func PublicShare2ShareData(share *link.PublicShare, _ *http.Request, publicURL string) *ShareData {
 	sd := &ShareData{
 		// share.permissions are mapped below
 		// Displaynames are added later
@@ -324,7 +324,7 @@ func webdavInfo(protocols []*ocm.Protocol) (*ocm.WebDAVProtocol, bool) {
 }
 
 // ReceivedOCMShare2ShareData converts a cs3 ocm received share into a share data model.
-func ReceivedOCMShare2ShareData(share *ocm.ReceivedShare, path string) (*ShareData, error) {
+func ReceivedOCMShare2ShareData(share *ocm.ReceivedShare, _ string) (*ShareData, error) {
 	webdav, ok := webdavInfo(share.Protocols)
 	if !ok {
 		return nil, errtypes.InternalError("webdav endpoint not in share")

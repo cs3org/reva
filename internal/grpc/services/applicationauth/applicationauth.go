@@ -73,7 +73,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New creates a app auth provider svc
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+func New(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)
 	if err != nil {
@@ -116,7 +116,7 @@ func (s *service) GenerateAppPassword(ctx context.Context, req *appauthpb.Genera
 	}, nil
 }
 
-func (s *service) ListAppPasswords(ctx context.Context, req *appauthpb.ListAppPasswordsRequest) (*appauthpb.ListAppPasswordsResponse, error) {
+func (s *service) ListAppPasswords(ctx context.Context, _ *appauthpb.ListAppPasswordsRequest) (*appauthpb.ListAppPasswordsResponse, error) {
 	pwds, err := s.am.ListAppPasswords(ctx)
 	if err != nil {
 		return &appauthpb.ListAppPasswordsResponse{

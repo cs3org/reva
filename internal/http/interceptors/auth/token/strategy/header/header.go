@@ -35,7 +35,7 @@ type strategy struct {
 }
 
 // New returns a new auth strategy that checks for basic auth.
-func New(m map[string]interface{}) (auth.TokenStrategy, error) {
+func New(map[string]interface{}) (auth.TokenStrategy, error) {
 	return &strategy{header: ctxpkg.TokenHeader}, nil
 }
 

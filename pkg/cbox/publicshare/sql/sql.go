@@ -126,7 +126,7 @@ func New(m map[string]interface{}) (publicshare.Manager, error) {
 	return &mgr, nil
 }
 
-func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
+func (m *manager) CreatePublicShare(_ context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
 
 	tkn := utils.RandString(15)
 	now := time.Now().Unix()
@@ -260,7 +260,7 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	return m.GetPublicShare(ctx, u, req.Ref, false)
 }
 
-func (m *manager) getByToken(ctx context.Context, token string, u *user.User) (*link.PublicShare, string, error) {
+func (m *manager) getByToken(ctx context.Context, token string, _ *user.User) (*link.PublicShare, string, error) {
 	s := conversions.DBShare{Token: token}
 	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, id, stime, permissions FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND share_type=? AND token=?"
 	if err := m.db.QueryRow(query, publicShareType, token).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.Expiration, &s.ShareName, &s.ID, &s.STime, &s.Permissions); err != nil {
@@ -402,7 +402,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	return shares, nil
 }
 
-func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) error {
+func (m *manager) RevokePublicShare(_ context.Context, u *user.User, ref *link.PublicShareReference) error {
 	uid := conversions.FormatUserID(u.Id)
 	query := "delete from oc_share where "
 	params := []interface{}{}

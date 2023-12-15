@@ -34,7 +34,7 @@ func init() {
 }
 
 // New returns a new HTTP middleware that adds the X-Request-ID to the context
-func New(m map[string]interface{}) (global.Middleware, int, error) {
+func New(_ map[string]interface{}) (global.Middleware, int, error) {
 	rh := requestIDHandler{}
 	return rh.handler, defaultPriority, nil
 }

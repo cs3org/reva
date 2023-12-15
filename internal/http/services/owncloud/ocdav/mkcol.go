@@ -88,7 +88,7 @@ func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string)
 		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(rpcStatus)
 	}
 
-	return s.handleMkcol(ctx, w, r, spacelookup.MakeRelativeReference(space, parentPath, false), spacelookup.MakeRelativeReference(space, fn, false), sublog)
+	return s.handleMkcol(ctx, w, r, spacelookup.MakeRelativeReference(space, fn, false), sublog)
 }
 
 func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID string) (status int, err error) {
@@ -97,16 +97,12 @@ func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID 
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Str("handler", "mkcol").Logger()
 
-	parentRef, err := spacelookup.MakeStorageSpaceReference(spaceID, path.Dir(r.URL.Path))
-	if err != nil {
-		return http.StatusBadRequest, fmt.Errorf("invalid space id")
-	}
 	childRef, _ := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
 
-	return s.handleMkcol(ctx, w, r, &parentRef, &childRef, sublog)
+	return s.handleMkcol(ctx, w, r, &childRef, sublog)
 }
 
-func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Request, parentRef, childRef *provider.Reference, log zerolog.Logger) (status int, err error) {
+func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Request, childRef *provider.Reference, _ zerolog.Logger) (status int, err error) {
 	if r.Body != http.NoBody {
 		// We currently do not support extended mkcol https://datatracker.ietf.org/doc/rfc5689/
 		// TODO let clients send a body with properties to set on the new resource

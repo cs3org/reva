@@ -67,7 +67,7 @@ func New(m map[string]interface{}) (favorite.Manager, error) {
 	}, nil
 }
 
-func (m *mgr) ListFavorites(ctx context.Context, userID *user.UserId) ([]*provider.ResourceId, error) {
+func (m *mgr) ListFavorites(ctx context.Context, _ *user.UserId) ([]*provider.ResourceId, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
 	infos := []*provider.ResourceId{}
 	query := `SELECT fileid_prefix, fileid FROM cbox_metadata WHERE uid=? AND tag_key="fav"`
@@ -91,7 +91,7 @@ func (m *mgr) ListFavorites(ctx context.Context, userID *user.UserId) ([]*provid
 	return infos, nil
 }
 
-func (m *mgr) SetFavorite(ctx context.Context, userID *user.UserId, resourceInfo *provider.ResourceInfo) error {
+func (m *mgr) SetFavorite(ctx context.Context, _ *user.UserId, resourceInfo *provider.ResourceInfo) error {
 	user := ctxpkg.ContextMustGetUser(ctx)
 	spaceID := resourceInfo.Id.SpaceId
 
@@ -117,7 +117,7 @@ func (m *mgr) SetFavorite(ctx context.Context, userID *user.UserId, resourceInfo
 	return nil
 }
 
-func (m *mgr) UnsetFavorite(ctx context.Context, userID *user.UserId, resourceInfo *provider.ResourceInfo) error {
+func (m *mgr) UnsetFavorite(ctx context.Context, _ *user.UserId, resourceInfo *provider.ResourceInfo) error {
 	user := ctxpkg.ContextMustGetUser(ctx)
 	spaceID := resourceInfo.Id.SpaceId
 

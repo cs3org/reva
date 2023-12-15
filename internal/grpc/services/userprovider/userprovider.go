@@ -88,7 +88,7 @@ func getDriver(c *config) (user.Manager, *plugin.RevaPlugin, error) {
 }
 
 // New returns a new UserProviderServiceServer.
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+func New(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

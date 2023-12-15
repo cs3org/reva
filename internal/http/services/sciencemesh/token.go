@@ -65,11 +65,7 @@ func (h *tokenHandler) init(c *config) error {
 		return err
 	}
 
-	if err := h.initBodyTemplate(c.BodyTemplatePath); err != nil {
-		return err
-	}
-
-	return nil
+	return h.initBodyTemplate(c.BodyTemplatePath)
 }
 
 type token struct {

@@ -263,7 +263,7 @@ func (m *Manager) CreatePublicShare(ctx context.Context, u *user.User, ri *provi
 }
 
 // UpdatePublicShare updates an existing public share
-func (m *Manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link.UpdatePublicShareRequest) (*link.PublicShare, error) {
+func (m *Manager) UpdatePublicShare(ctx context.Context, _ *user.User, req *link.UpdatePublicShareRequest) (*link.PublicShare, error) {
 	if err := m.initialize(); err != nil {
 		return nil, err
 	}
@@ -305,7 +305,7 @@ func (m *Manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 }
 
 // GetPublicShare returns an existing public share
-func (m *Manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference, sign bool) (*link.PublicShare, error) {
+func (m *Manager) GetPublicShare(ctx context.Context, _ *user.User, ref *link.PublicShareReference, sign bool) (*link.PublicShare, error) {
 	if err := m.initialize(); err != nil {
 		return nil, err
 	}
@@ -535,7 +535,7 @@ func (m *Manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link
 }
 
 // GetPublicShareByToken gets an existing public share in an unauthenticated context using either a password or a signature
-func (m *Manager) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error) {
+func (m *Manager) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, _ bool) (*link.PublicShare, error) {
 	if err := m.initialize(); err != nil {
 		return nil, err
 	}

@@ -34,7 +34,7 @@ import (
 )
 
 // ListStorageSpaces lists storage spaces according to the provided filters
-func (fs *owncloudsqlfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, unrestricted bool) ([]*provider.StorageSpace, error) {
+func (fs *owncloudsqlfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, _ bool) ([]*provider.StorageSpace, error) {
 	var (
 		spaceID = "*"
 	)
@@ -84,17 +84,17 @@ func (fs *owncloudsqlfs) ListStorageSpaces(ctx context.Context, filter []*provid
 }
 
 // CreateStorageSpace creates a storage space
-func (fs *owncloudsqlfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+func (fs *owncloudsqlfs) CreateStorageSpace(context.Context, *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("unimplemented: CreateStorageSpace")
 }
 
 // UpdateStorageSpace updates a storage space
-func (fs *owncloudsqlfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+func (fs *owncloudsqlfs) UpdateStorageSpace(context.Context, *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("update storage space")
 }
 
 // DeleteStorageSpace deletes a storage space
-func (fs *owncloudsqlfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
+func (fs *owncloudsqlfs) DeleteStorageSpace(context.Context, *provider.DeleteStorageSpaceRequest) error {
 	return errtypes.NotSupported("delete storage space")
 }
 

@@ -102,7 +102,7 @@ func normalizeDomain(d string) (string, error) {
 	return u.Hostname(), nil
 }
 
-func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
+func (a *authorizer) GetInfoByDomain(_ context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
 	normalizedDomain, err := normalizeDomain(domain)
 	if err != nil {
 		return nil, err
@@ -190,7 +190,7 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, pi *ocmprovider.Prov
 	return nil
 }
 
-func (a *authorizer) ListAllProviders(ctx context.Context) ([]*ocmprovider.ProviderInfo, error) {
+func (a *authorizer) ListAllProviders(context.Context) ([]*ocmprovider.ProviderInfo, error) {
 	return a.providers, nil
 }
 

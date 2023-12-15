@@ -646,7 +646,7 @@ func ocPublicPermToCs3(pk *int) (*provider.ResourcePermissions, error) {
 }
 
 // pointer will be nil if no permission is set
-func permKeyFromRequest(r *http.Request, h *Handler) (*int, error) {
+func permKeyFromRequest(r *http.Request, _ *Handler) (*int, error) {
 	var err error
 	// phoenix sends: {"permissions": 15}. See ocPublicPermToRole struct for mapping
 
@@ -687,7 +687,7 @@ func permKeyFromRequest(r *http.Request, h *Handler) (*int, error) {
 
 // checkPasswordEnforcement checks if the password needs to be set for a link
 // some users can opt out of the enforcement based on a user permission
-func (h *Handler) checkPasswordEnforcement(ctx context.Context, user *userv1beta1.User, perm conversions.Permissions, w http.ResponseWriter, r *http.Request) error {
+func (h *Handler) checkPasswordEnforcement(ctx context.Context, _ *userv1beta1.User, perm conversions.Permissions, w http.ResponseWriter, r *http.Request) error {
 	// Non-read-only links
 	if perm != conversions.PermissionRead {
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "missing required password", nil)

@@ -31,7 +31,7 @@ import (
 )
 
 // HandleDefaultQuery processes a basic query.
-func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values, _ *config.Configuration, _ *zerolog.Logger) (int, []byte, error) {
+func HandleDefaultQuery(meshData *meshdata.MeshData, _ url.Values, _ *config.Configuration, _ *zerolog.Logger) (int, []byte, error) {
 	// Just return the plain, unfiltered data as JSON
 	data, err := json.MarshalIndent(meshData, "", "\t")
 	if err != nil {

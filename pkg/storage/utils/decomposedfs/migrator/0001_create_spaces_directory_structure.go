@@ -87,14 +87,14 @@ func (m Migration0001) moveNode(migrator *Migrator, spaceID, nodeID string) erro
 		return err
 	}
 	for _, child := range children {
-		old := filepath.Join(migrator.lu.InternalRoot(), "nodes", child.Name())
-		new := filepath.Join(migrator.lu.InternalRoot(), "spaces", lookup.Pathify(spaceID, 1, 2), "nodes", lookup.Pathify(child.Name(), 4, 2))
-		if err := os.Rename(old, new); err != nil {
+		oldPath := filepath.Join(migrator.lu.InternalRoot(), "nodes", child.Name())
+		newPath := filepath.Join(migrator.lu.InternalRoot(), "spaces", lookup.Pathify(spaceID, 1, 2), "nodes", lookup.Pathify(child.Name(), 4, 2))
+		if err := os.Rename(oldPath, newPath); err != nil {
 			migrator.log.Error().Err(err).
 				Str("space", spaceID).
 				Str("nodes", child.Name()).
-				Str("oldpath", old).
-				Str("newpath", new).
+				Str("oldpath", oldPath).
+				Str("newpath", newPath).
 				Msg("could not rename node")
 		}
 		if child.IsDir() {

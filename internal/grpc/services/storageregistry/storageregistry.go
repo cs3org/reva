@@ -70,7 +70,7 @@ func (c *config) init() {
 }
 
 // New creates a new StorageBrokerService
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+func New(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -167,9 +167,9 @@ func decodeSpace(o *typespb.Opaque) (*provider.StorageSpace, error) {
 	return nil, fmt.Errorf("missing space in opaque property")
 }
 
-func (s *service) GetHome(ctx context.Context, req *registrypb.GetHomeRequest) (*registrypb.GetHomeResponse, error) {
+func (s *service) GetHome(ctx context.Context, _ *registrypb.GetHomeRequest) (*registrypb.GetHomeResponse, error) {
 	res := &registrypb.GetHomeResponse{
-		Status: status.NewUnimplemented(ctx, nil, "getHome is no longer used. use List"),
+		Status: status.NewUnimplemented(ctx, "getHome is no longer used. use List"),
 	}
 	return res, nil
 

@@ -35,7 +35,7 @@ var _ = Describe("Ocis", func() {
 	)
 
 	BeforeEach(func() {
-		tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
+		tmpRoot, err := helpers.TempDir()
 		Expect(err).ToNot(HaveOccurred())
 
 		options = map[string]interface{}{

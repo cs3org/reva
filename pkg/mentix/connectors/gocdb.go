@@ -223,7 +223,7 @@ func (connector *GOCDBConnector) queryServices(meshData *meshdata.MeshData, site
 	return nil
 }
 
-func (connector *GOCDBConnector) queryDowntimes(meshData *meshdata.MeshData, site *meshdata.Site) error {
+func (connector *GOCDBConnector) queryDowntimes(_ *meshdata.MeshData, site *meshdata.Site) error {
 	var downtimes gocdb.Downtimes
 	if err := connector.query(&downtimes, "get_downtime_nested_services", false, true, network.URLParams{"topentity": site.Name, "ongoing_only": "yes"}); err != nil {
 		return err

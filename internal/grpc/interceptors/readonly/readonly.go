@@ -95,51 +95,51 @@ func NewUnary(map[string]interface{}) (grpc.UnaryServerInterceptor, int, error) 
 		// Don't allow the following requests types
 		case *provider.AddGrantRequest:
 			return &provider.AddGrantResponse{
-				Status: rstatus.NewPermissionDenied(ctx, nil, "permission denied: tried to add grant on readonly storage"),
+				Status: rstatus.NewPermissionDenied(ctx, "permission denied: tried to add grant on readonly storage"),
 			}, nil
 		case *provider.CreateContainerRequest:
 			return &provider.CreateContainerResponse{
-				Status: rstatus.NewPermissionDenied(ctx, nil, "permission denied: tried to create resource on read-only storage"),
+				Status: rstatus.NewPermissionDenied(ctx, "permission denied: tried to create resource on read-only storage"),
 			}, nil
 		case *provider.TouchFileRequest:
 			return &provider.TouchFileResponse{
-				Status: rstatus.NewPermissionDenied(ctx, nil, "permission denied: tried to create resource on read-only storage"),
+				Status: rstatus.NewPermissionDenied(ctx, "permission denied: tried to create resource on read-only storage"),
 			}, nil
 		case *provider.CreateHomeRequest:
 			return &provider.CreateHomeResponse{
-				Status: rstatus.NewPermissionDenied(ctx, nil, "permission denied: tried to create home on readonly storage"),
+				Status: rstatus.NewPermissionDenied(ctx, "permission denied: tried to create home on readonly storage"),
 			}, nil
 		case *provider.DeleteRequest:
 			return &provider.DeleteResponse{
-				Status: rstatus.NewPermissionDenied(ctx, nil, "permission denied: tried to delete resource on readonly storage"),
+				Status: rstatus.NewPermissionDenied(ctx, "permission denied: tried to delete resource on readonly storage"),
 			}, nil
 		case *provider.InitiateFileUploadRequest:
 			return &provider.InitiateFileUploadResponse{
-				Status: rstatus.NewPermissionDenied(ctx, nil, "permission denied: tried to upload resource on readonly storage"),
+				Status: rstatus.NewPermissionDenied(ctx, "permission denied: tried to upload resource on readonly storage"),
 			}, nil
 		case *provider.MoveRequest:
 			return &provider.MoveResponse{
-				Status: rstatus.NewPermissionDenied(ctx, nil, "permission denied: tried to move resource on readonly storage"),
+				Status: rstatus.NewPermissionDenied(ctx, "permission denied: tried to move resource on readonly storage"),
 			}, nil
 		case *provider.PurgeRecycleRequest:
 			return &provider.PurgeRecycleResponse{
-				Status: rstatus.NewPermissionDenied(ctx, nil, "permission denied: tried to purge recycle on readonly storage"),
+				Status: rstatus.NewPermissionDenied(ctx, "permission denied: tried to purge recycle on readonly storage"),
 			}, nil
 		case *provider.RemoveGrantRequest:
 			return &provider.RemoveGrantResponse{
-				Status: rstatus.NewPermissionDenied(ctx, nil, "permission denied: tried to remove grant on readonly storage"),
+				Status: rstatus.NewPermissionDenied(ctx, "permission denied: tried to remove grant on readonly storage"),
 			}, nil
 		case *provider.RestoreRecycleItemRequest:
 			return &provider.RestoreRecycleItemResponse{
-				Status: rstatus.NewPermissionDenied(ctx, nil, "permission denied: tried to restore recycle item on readonly storage"),
+				Status: rstatus.NewPermissionDenied(ctx, "permission denied: tried to restore recycle item on readonly storage"),
 			}, nil
 		case *provider.SetArbitraryMetadataRequest:
 			return &provider.SetArbitraryMetadataResponse{
-				Status: rstatus.NewPermissionDenied(ctx, nil, "permission denied: tried to set arbitrary metadata on readonly storage"),
+				Status: rstatus.NewPermissionDenied(ctx, "permission denied: tried to set arbitrary metadata on readonly storage"),
 			}, nil
 		case *provider.UnsetArbitraryMetadataRequest:
 			return &provider.UnsetArbitraryMetadataResponse{
-				Status: rstatus.NewPermissionDenied(ctx, nil, "permission denied: tried to unset arbitrary metadata on readonly storage"),
+				Status: rstatus.NewPermissionDenied(ctx, "permission denied: tried to unset arbitrary metadata on readonly storage"),
 			}, nil
 		// block unknown request types and return error
 		default:

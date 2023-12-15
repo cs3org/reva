@@ -85,8 +85,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	}
 
 	if res.User.Id == nil {
-		err := errtypes.NotFound("gateway: uid after Authenticate is nil")
-		log.Err(err).Msg("user id is nil")
+		log.Error().Err(err).Msg("gateway: uid after Authenticate is nil")
 		return &gateway.AuthenticateResponse{
 			Status: status.NewInternal(ctx, "user id is nil"),
 		}, nil
@@ -99,9 +98,9 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 
 	token, err := s.tokenmgr.MintToken(ctx, &u, res.TokenScope)
 	if err != nil {
-		err = errors.Wrap(err, "authsvc: error in MintToken")
+		log.Error().Err(err).Msg("authsvc: error in MintToken")
 		res := &gateway.AuthenticateResponse{
-			Status: status.NewUnauthenticated(ctx, err, "error creating access token"),
+			Status: status.NewUnauthenticated(ctx, "error creating access token"),
 		}
 		return res, nil
 	}
@@ -149,9 +148,8 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.WhoAmIResponse, error) {
 	u, _, err := s.tokenmgr.DismantleToken(ctx, req.Token)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error getting user from token")
 		return &gateway.WhoAmIResponse{
-			Status: status.NewUnauthenticated(ctx, err, "error dismantling token"),
+			Status: status.NewUnauthenticated(ctx, "error dismantling token"),
 		}, nil
 	}
 

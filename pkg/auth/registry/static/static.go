@@ -49,7 +49,7 @@ type reg struct {
 	rules map[string]string
 }
 
-func (r *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
+func (r *reg) ListProviders(context.Context) ([]*registrypb.ProviderInfo, error) {
 	providers := []*registrypb.ProviderInfo{}
 	for k, v := range r.rules {
 		providers = append(providers, &registrypb.ProviderInfo{
@@ -60,7 +60,7 @@ func (r *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, er
 	return providers, nil
 }
 
-func (r *reg) GetProvider(ctx context.Context, authType string) (*registrypb.ProviderInfo, error) {
+func (r *reg) GetProvider(_ context.Context, authType string) (*registrypb.ProviderInfo, error) {
 	for k, v := range r.rules {
 		if k == authType {
 			return &registrypb.ProviderInfo{

@@ -59,10 +59,10 @@ func (s *svc) handlePathHead(w http.ResponseWriter, r *http.Request, ns string) 
 		return
 	}
 
-	s.handleHead(ctx, w, r, spacelookup.MakeRelativeReference(space, fn, false), sublog)
+	s.handleHead(ctx, w, spacelookup.MakeRelativeReference(space, fn, false), sublog)
 }
 
-func (s *svc) handleHead(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
+func (s *svc) handleHead(ctx context.Context, w http.ResponseWriter, ref *provider.Reference, log zerolog.Logger) {
 	client, err := s.gatewaySelector.Next()
 	if err != nil {
 		log.Error().Err(err).Msg("error selecting next client")
@@ -116,5 +116,5 @@ func (s *svc) handleSpacesHead(w http.ResponseWriter, r *http.Request, spaceID s
 		return
 	}
 
-	s.handleHead(ctx, w, r, &ref, sublog)
+	s.handleHead(ctx, w, &ref, sublog)
 }

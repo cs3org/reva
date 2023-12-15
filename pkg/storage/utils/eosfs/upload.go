@@ -30,7 +30,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (fs *eosfs) Upload(ctx context.Context, req storage.UploadRequest, uff storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
+func (fs *eosfs) Upload(ctx context.Context, req storage.UploadRequest, _ storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
 	p, err := fs.resolve(ctx, req.Ref)
 	if err != nil {
 		return provider.ResourceInfo{}, errors.Wrap(err, "eos: error resolving reference")
@@ -89,7 +89,7 @@ func (fs *eosfs) Upload(ctx context.Context, req storage.UploadRequest, uff stor
 	return *ri, nil
 }
 
-func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
+func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, _ int64, _ map[string]string) (map[string]string, error) {
 	p, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, err

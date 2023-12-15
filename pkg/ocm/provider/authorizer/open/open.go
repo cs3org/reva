@@ -73,7 +73,7 @@ type authorizer struct {
 	providers []*ocmprovider.ProviderInfo
 }
 
-func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
+func (a *authorizer) GetInfoByDomain(_ context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
 	for _, p := range a.providers {
 		if strings.Contains(p.Domain, domain) {
 			return p, nil
@@ -82,11 +82,11 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 	return nil, errtypes.NotFound(domain)
 }
 
-func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovider.ProviderInfo) error {
+func (a *authorizer) IsProviderAllowed(_ context.Context, _ *ocmprovider.ProviderInfo) error {
 	return nil
 }
 
-func (a *authorizer) ListAllProviders(ctx context.Context) ([]*ocmprovider.ProviderInfo, error) {
+func (a *authorizer) ListAllProviders(_ context.Context) ([]*ocmprovider.ProviderInfo, error) {
 	return a.providers, nil
 }
 

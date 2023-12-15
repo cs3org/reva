@@ -35,11 +35,11 @@ type strategy struct{}
 
 // New returns a new auth strategy that checks "Bearer" OAuth Access Tokens
 // See https://tools.ietf.org/html/rfc6750#section-6.1
-func New(m map[string]interface{}) (auth.CredentialStrategy, error) {
+func New(map[string]interface{}) (auth.CredentialStrategy, error) {
 	return &strategy{}, nil
 }
 
-func (s *strategy) GetCredentials(w http.ResponseWriter, r *http.Request) (*auth.Credentials, error) {
+func (s *strategy) GetCredentials(_ http.ResponseWriter, r *http.Request) (*auth.Credentials, error) {
 	// 1. check Authorization header
 	hdr := r.Header.Get("Authorization")
 	token := strings.TrimPrefix(hdr, "Bearer ")

@@ -87,7 +87,7 @@ func (a *APITokenManager) renewAPIToken(ctx context.Context, forceRenewal bool) 
 	return nil
 }
 
-func (a *APITokenManager) getAPIToken(ctx context.Context) (string, time.Time, error) {
+func (a *APITokenManager) getAPIToken(context.Context) (string, time.Time, error) {
 
 	params := url.Values{
 		"grant_type": {"client_credentials"},

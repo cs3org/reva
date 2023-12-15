@@ -122,7 +122,7 @@ var _ = Describe("Json", func() {
 			}()
 			go func() {
 				for range receivedChan {
-				}
+				} //revive:disable-line:empty-block
 				wg.Done()
 			}()
 			err := m.(share.DumpableManager).Dump(ctx, sharesChan, receivedChan)
@@ -147,7 +147,7 @@ var _ = Describe("Json", func() {
 			wg.Add(2)
 			go func() {
 				for range sharesChan {
-				}
+				} //revive:disable-line:empty-block
 				wg.Done()
 			}()
 			go func() {

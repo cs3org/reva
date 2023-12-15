@@ -223,7 +223,7 @@ func genID() string {
 	return uuid.New().String()
 }
 
-func (m *mgr) StoreShare(ctx context.Context, ocmshare *ocm.Share) (*ocm.Share, error) {
+func (m *mgr) StoreShare(_ context.Context, ocmshare *ocm.Share) (*ocm.Share, error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -231,7 +231,7 @@ func (m *mgr) StoreShare(ctx context.Context, ocmshare *ocm.Share) (*ocm.Share, 
 		return nil, err
 	}
 
-	if _, err := m.getByKey(ctx, &ocm.ShareKey{
+	if _, err := m.getByKey(&ocm.ShareKey{
 		Owner:      ocmshare.Owner,
 		ResourceId: ocmshare.ResourceId,
 		Grantee:    ocmshare.Grantee,
@@ -277,7 +277,7 @@ func cloneReceivedShare(s *ocm.ReceivedShare) (*ocm.ReceivedShare, error) {
 	return &cloned, nil
 }
 
-func (m *mgr) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*ocm.Share, error) {
+func (m *mgr) GetShare(_ context.Context, user *userpb.User, ref *ocm.ShareReference) (*ocm.Share, error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -292,11 +292,11 @@ func (m *mgr) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareRef
 
 	switch {
 	case ref.GetId() != nil:
-		s, err = m.getByID(ctx, ref.GetId())
+		s, err = m.getByID(ref.GetId())
 	case ref.GetKey() != nil:
-		s, err = m.getByKey(ctx, ref.GetKey())
+		s, err = m.getByKey(ref.GetKey())
 	case ref.GetToken() != "":
-		return m.getByToken(ctx, ref.GetToken())
+		return m.getByToken(ref.GetToken())
 	default:
 		err = errtypes.NotFound(ref.String())
 	}
@@ -313,7 +313,7 @@ func (m *mgr) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareRef
 	return nil, share.ErrShareNotFound
 }
 
-func (m *mgr) getByToken(ctx context.Context, token string) (*ocm.Share, error) {
+func (m *mgr) getByToken(token string) (*ocm.Share, error) {
 	for _, share := range m.model.Shares {
 		if share.Token == token {
 			return share, nil
@@ -322,14 +322,14 @@ func (m *mgr) getByToken(ctx context.Context, token string) (*ocm.Share, error) 
 	return nil, errtypes.NotFound(token)
 }
 
-func (m *mgr) getByID(ctx context.Context, id *ocm.ShareId) (*ocm.Share, error) {
+func (m *mgr) getByID(id *ocm.ShareId) (*ocm.Share, error) {
 	if share, ok := m.model.Shares[id.OpaqueId]; ok {
 		return share, nil
 	}
 	return nil, errtypes.NotFound(id.String())
 }
 
-func (m *mgr) getByKey(ctx context.Context, key *ocm.ShareKey) (*ocm.Share, error) {
+func (m *mgr) getByKey(key *ocm.ShareKey) (*ocm.Share, error) {
 	for _, share := range m.model.Shares {
 		if (utils.UserEqual(key.Owner, share.Owner) || utils.UserEqual(key.Owner, share.Creator)) &&
 			utils.ResourceIDEqual(key.ResourceId, share.ResourceId) && utils.GranteeEqual(key.Grantee, share.Grantee) {
@@ -339,7 +339,7 @@ func (m *mgr) getByKey(ctx context.Context, key *ocm.ShareKey) (*ocm.Share, erro
 	return nil, share.ErrShareNotFound
 }
 
-func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) error {
+func (m *mgr) DeleteShare(_ context.Context, user *userpb.User, ref *ocm.ShareReference) error {
 	m.Lock()
 	defer m.Unlock()
 
@@ -381,11 +381,11 @@ func receivedShareEqual(ref *ocm.ShareReference, s *ocm.ReceivedShare) bool {
 	return false
 }
 
-func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*ocm.Share, error) {
+func (m *mgr) UpdateShare(context.Context, *userpb.User, *ocm.ShareReference, ...*ocm.UpdateOCMShareRequest_UpdateField) (*ocm.Share, error) {
 	return nil, errtypes.NotSupported("not yet implemented")
 }
 
-func (m *mgr) ListShares(ctx context.Context, user *userpb.User, filters []*ocm.ListOCMSharesRequest_Filter) ([]*ocm.Share, error) {
+func (m *mgr) ListShares(_ context.Context, user *userpb.User, filters []*ocm.ListOCMSharesRequest_Filter) ([]*ocm.Share, error) {
 	var ss []*ocm.Share
 
 	m.Lock()
@@ -416,7 +416,7 @@ func (m *mgr) ListShares(ctx context.Context, user *userpb.User, filters []*ocm.
 	return ss, nil
 }
 
-func (m *mgr) StoreReceivedShare(ctx context.Context, share *ocm.ReceivedShare) (*ocm.ReceivedShare, error) {
+func (m *mgr) StoreReceivedShare(_ context.Context, share *ocm.ReceivedShare) (*ocm.ReceivedShare, error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -449,7 +449,7 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, share *ocm.ReceivedShare) 
 	return share, nil
 }
 
-func (m *mgr) ListReceivedShares(ctx context.Context, user *userpb.User) ([]*ocm.ReceivedShare, error) {
+func (m *mgr) ListReceivedShares(_ context.Context, user *userpb.User) ([]*ocm.ReceivedShare, error) {
 	var rss []*ocm.ReceivedShare
 	m.Lock()
 	defer m.Unlock()
@@ -471,7 +471,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context, user *userpb.User) ([]*ocm
 	return rss, nil
 }
 
-func (m *mgr) GetReceivedShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*ocm.ReceivedShare, error) {
+func (m *mgr) GetReceivedShare(_ context.Context, user *userpb.User, ref *ocm.ShareReference) (*ocm.ReceivedShare, error) {
 	m.Lock()
 	defer m.Unlock()
 

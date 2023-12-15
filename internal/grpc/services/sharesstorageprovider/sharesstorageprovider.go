@@ -231,7 +231,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	case rpcStatus.Code == rpc.Code_CODE_NOT_FOUND:
 		// the user has access (it showed up in the clist of shares), but we cannot write here
 		return &provider.InitiateFileUploadResponse{
-			Status: status.NewFailedPrecondition(ctx, nil, rpcStatus.GetMessage()),
+			Status: status.NewFailedPrecondition(ctx, rpcStatus.GetMessage()),
 		}, nil
 	case rpcStatus.Code != rpc.Code_CODE_OK:
 		return &provider.InitiateFileUploadResponse{
@@ -241,7 +241,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 
 	if !receivedShare.GetShare().GetPermissions().GetPermissions().GetInitiateFileUpload() {
 		return &provider.InitiateFileUploadResponse{
-			Status: status.NewPermissionDenied(ctx, nil, "share does not grant InitiateFileDownload permission"),
+			Status: status.NewPermissionDenied(ctx, "share does not grant InitiateFileDownload permission"),
 		}, nil
 	}
 
@@ -325,15 +325,15 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 
 }
 
-func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
+func (s *service) GetHome(context.Context, *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
+func (s *service) CreateHome(context.Context, *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+func (s *service) CreateStorageSpace(context.Context, *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
@@ -531,11 +531,11 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	return res, nil
 }
 
-func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+func (s *service) UpdateStorageSpace(context.Context, *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
+func (s *service) DeleteStorageSpace(context.Context, *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
@@ -666,7 +666,7 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 
 	if dstReceivedShare.Share.Id.OpaqueId != srcReceivedShare.Share.Id.OpaqueId {
 		return &provider.MoveResponse{
-			Status: status.NewPermissionDenied(ctx, nil, "cross storage moves are not permitted, use copy and delete"),
+			Status: status.NewPermissionDenied(ctx, "cross storage moves are not permitted, use copy and delete"),
 		}, nil
 	}
 
@@ -683,22 +683,22 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 }
 
 // SetLock puts a lock on the given reference
-func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
+func (s *service) SetLock(context.Context, *provider.SetLockRequest) (*provider.SetLockResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 // GetLock returns an existing lock on the given reference
-func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
+func (s *service) GetLock(context.Context, *provider.GetLockRequest) (*provider.GetLockResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 // RefreshLock refreshes an existing lock on the given reference
-func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
+func (s *service) RefreshLock(context.Context, *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 // Unlock removes an existing lock from the given reference
-func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
+func (s *service) Unlock(context.Context, *provider.UnlockRequest) (*provider.UnlockResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
@@ -796,7 +796,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 
 }
 
-func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, ss provider.ProviderAPI_ListContainerStreamServer) error {
+func (s *service) ListContainerStream(*provider.ListContainerStreamRequest, provider.ProviderAPI_ListContainerStreamServer) error {
 	return gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
@@ -939,47 +939,47 @@ func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreF
 	})
 }
 
-func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss provider.ProviderAPI_ListRecycleStreamServer) error {
+func (s *service) ListRecycleStream(*provider.ListRecycleStreamRequest, provider.ProviderAPI_ListRecycleStreamServer) error {
 	return gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
+func (s *service) ListRecycle(context.Context, *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
+func (s *service) RestoreRecycleItem(context.Context, *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
+func (s *service) PurgeRecycle(context.Context, *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsRequest) (*provider.ListGrantsResponse, error) {
+func (s *service) ListGrants(context.Context, *provider.ListGrantsRequest) (*provider.ListGrantsResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (*provider.AddGrantResponse, error) {
+func (s *service) AddGrant(context.Context, *provider.AddGrantRequest) (*provider.AddGrantResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) DenyGrant(ctx context.Context, ref *provider.DenyGrantRequest) (*provider.DenyGrantResponse, error) {
+func (s *service) DenyGrant(context.Context, *provider.DenyGrantRequest) (*provider.DenyGrantResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) CreateReference(ctx context.Context, req *provider.CreateReferenceRequest) (*provider.CreateReferenceResponse, error) {
+func (s *service) CreateReference(context.Context, *provider.CreateReferenceRequest) (*provider.CreateReferenceResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
+func (s *service) CreateSymlink(context.Context, *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequest) (*provider.UpdateGrantResponse, error) {
+func (s *service) UpdateGrant(context.Context, *provider.UpdateGrantRequest) (*provider.UpdateGrantResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequest) (*provider.RemoveGrantResponse, error) {
+func (s *service) RemoveGrant(context.Context, *provider.RemoveGrantRequest) (*provider.RemoveGrantResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
@@ -1010,7 +1010,7 @@ func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest)
 }
 
 // GetQuota returns 0 free quota. It is virtual ... the shares may have a different quota ...
-func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
+func (s *service) GetQuota(ctx context.Context, _ *provider.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
 	// FIXME use req.Ref to get real quota
 	return &provider.GetQuotaResponse{
 		Status: status.NewOK(ctx),

@@ -206,7 +206,7 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 		return err
 	}
 
-	if isShareGrant(ctx) {
+	if isShareGrant(ctx) { //revive:disable-line:empty-block
 		// do not invalidate by user or group indexes
 		// FIXME we should invalidate the by-type index, but that requires reference counting
 	} else {

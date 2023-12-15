@@ -53,7 +53,7 @@ type svc struct {
 
 // New returns a new ocmd object, that implements
 // the OCM APIs specified in https://cs3org.github.io/OCM-API/docs.html
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
+func New(m map[string]interface{}, _ *zerolog.Logger) (global.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

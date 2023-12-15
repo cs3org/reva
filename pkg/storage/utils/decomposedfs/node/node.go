@@ -214,7 +214,7 @@ func (n *Node) SpaceOwnerOrManager(ctx context.Context) *userpb.UserId {
 }
 
 // ReadNode creates a new instance from an id and checks if it exists
-func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canListDisabledSpace bool, spaceRoot *Node, skipParentCheck bool) (*Node, error) {
+func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canListDisabledSpace bool, spaceRoot *Node, _ bool) (*Node, error) {
 	ctx, span := tracer.Start(ctx, "ReadNode")
 	defer span.End()
 	var err error
@@ -1138,11 +1138,7 @@ func (n *Node) DeleteGrant(ctx context.Context, g *provider.Grant, acquireLock b
 		attr = prefixes.GrantUserAcePrefix + g.Grantee.GetUserId().OpaqueId
 	}
 
-	if err = n.RemoveXattr(ctx, attr, acquireLock); err != nil {
-		return err
-	}
-
-	return nil
+	return n.RemoveXattr(ctx, attr, acquireLock)
 }
 
 // Purge removes a node from disk. It does not move it to the trash

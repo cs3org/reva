@@ -83,12 +83,12 @@ func (creds *SMTPCredentials) SendMail(recipient, subject, body string) error {
 	message += "\r\n" + base64.StdEncoding.EncodeToString([]byte(body))
 
 	if creds.DisableAuth {
-		return creds.sendMailSMTP(recipient, subject, message)
+		return creds.sendMailSMTP(recipient, message)
 	}
-	return creds.sendMailAuthSMTP(recipient, subject, message)
+	return creds.sendMailAuthSMTP(recipient, message)
 }
 
-func (creds *SMTPCredentials) sendMailAuthSMTP(recipient, subject, message string) error {
+func (creds *SMTPCredentials) sendMailAuthSMTP(recipient, message string) error {
 
 	auth := smtp.PlainAuth("", creds.SenderLogin, creds.SenderPassword, creds.SMTPServer)
 
@@ -107,7 +107,7 @@ func (creds *SMTPCredentials) sendMailAuthSMTP(recipient, subject, message strin
 	return nil
 }
 
-func (creds *SMTPCredentials) sendMailSMTP(recipient, subject, message string) error {
+func (creds *SMTPCredentials) sendMailSMTP(recipient, message string) error {
 
 	c, err := smtp.Dial(fmt.Sprintf("%s:%d", creds.SMTPServer, creds.SMTPPort))
 	if err != nil {

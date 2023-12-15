@@ -83,7 +83,7 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(statRes.Status)
 	}
 
-	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, spacelookup.MakeRelativeReference(space, fn, false), pp, sublog)
+	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, spacelookup.MakeRelativeReference(space, fn, false), pp, sublog)
 	if !ok {
 		// handleProppatch handles responses in error cases so return 0
 		return 0, nil
@@ -95,7 +95,7 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 		nRef += "/"
 	}
 
-	s.handleProppatchResponse(ctx, w, r, acceptedProps, removedProps, nRef, sublog)
+	s.handleProppatchResponse(w, acceptedProps, removedProps, nRef, sublog)
 	return 0, nil
 }
 
@@ -115,7 +115,7 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 		return http.StatusBadRequest, err
 	}
 
-	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, &ref, pp, sublog)
+	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, &ref, pp, sublog)
 	if !ok {
 		// handleProppatch handles responses in error cases so return 0
 		return 0, nil
@@ -124,11 +124,11 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 	nRef := path.Join(spaceID, r.URL.Path)
 	nRef = path.Join(ctx.Value(net.CtxKeyBaseURI).(string), nRef)
 
-	s.handleProppatchResponse(ctx, w, r, acceptedProps, removedProps, nRef, sublog)
+	s.handleProppatchResponse(w, acceptedProps, removedProps, nRef, sublog)
 	return 0, nil
 }
 
-func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, patches []Proppatch, log zerolog.Logger) ([]xml.Name, []xml.Name, bool) {
+func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, ref *provider.Reference, patches []Proppatch, log zerolog.Logger) ([]xml.Name, []xml.Name, bool) {
 
 	rreq := &provider.UnsetArbitraryMetadataRequest{
 		Ref:                   ref,
@@ -315,8 +315,8 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 	return acceptedProps, removedProps, true
 }
 
-func (s *svc) handleProppatchResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, acceptedProps, removedProps []xml.Name, path string, log zerolog.Logger) {
-	propRes, err := s.formatProppatchResponse(ctx, acceptedProps, removedProps, path)
+func (s *svc) handleProppatchResponse(w http.ResponseWriter, acceptedProps, removedProps []xml.Name, path string, log zerolog.Logger) {
+	propRes, err := s.formatProppatchResponse(acceptedProps, removedProps, path)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting proppatch response")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -330,7 +330,7 @@ func (s *svc) handleProppatchResponse(ctx context.Context, w http.ResponseWriter
 	}
 }
 
-func (s *svc) formatProppatchResponse(ctx context.Context, acceptedProps []xml.Name, removedProps []xml.Name, ref string) ([]byte, error) {
+func (s *svc) formatProppatchResponse(acceptedProps []xml.Name, removedProps []xml.Name, ref string) ([]byte, error) {
 	responses := make([]propfind.ResponseXML, 0, 1)
 	response := propfind.ResponseXML{
 		Href:     net.EncodePath(ref),

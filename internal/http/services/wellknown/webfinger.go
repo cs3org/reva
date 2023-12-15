@@ -22,6 +22,6 @@ import (
 	"net/http"
 )
 
-func (s *svc) doWebfinger(w http.ResponseWriter, r *http.Request) {
+func (s *svc) doWebfinger(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 }

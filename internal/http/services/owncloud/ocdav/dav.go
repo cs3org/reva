@@ -98,11 +98,7 @@ func (h *DavHandler) init(c *config.Config) error {
 	}
 
 	h.OCMSharesHandler = new(WebDavHandler)
-	if err := h.OCMSharesHandler.init(c.OCMNamespace, true); err != nil {
-		return err
-	}
-
-	return nil
+	return h.OCMSharesHandler.init(c.OCMNamespace, true)
 }
 
 func isOwner(userIDorName string, user *userv1beta1.User) bool {

@@ -99,7 +99,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New creates a new user share provider svc initialized from defaults
-func NewDefault(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+func NewDefault(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)
 	if err != nil {
@@ -171,7 +171,7 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 	}
 	if !ok {
 		return &collaboration.CreateShareResponse{
-			Status: status.NewPermissionDenied(ctx, nil, "no permission to create public links"),
+			Status: status.NewPermissionDenied(ctx, "no permission to create public links"),
 		}, nil
 	}
 
@@ -204,13 +204,13 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 		req.GetGrant().GetPermissions().GetPermissions(),
 	); !shareCreationAllowed {
 		return &collaboration.CreateShareResponse{
-			Status: status.NewPermissionDenied(ctx, nil, "insufficient permissions to create that kind of share"),
+			Status: status.NewPermissionDenied(ctx, "insufficient permissions to create that kind of share"),
 		}, nil
 	}
 
 	if !s.isPathAllowed(req.GetResourceInfo().GetPath()) {
 		return &collaboration.CreateShareResponse{
-			Status: status.NewFailedPrecondition(ctx, nil, "share creation is not allowed for the specified path"),
+			Status: status.NewFailedPrecondition(ctx, "share creation is not allowed for the specified path"),
 		}, nil
 	}
 
@@ -333,7 +333,7 @@ func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShar
 	}
 	if !ok {
 		return &collaboration.UpdateShareResponse{
-			Status: status.NewPermissionDenied(ctx, nil, "no permission to create user share"),
+			Status: status.NewPermissionDenied(ctx, "no permission to create user share"),
 		}, nil
 	}
 
@@ -387,7 +387,7 @@ func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShar
 	}
 	if newPermissions != nil && !conversions.SufficientCS3Permissions(sRes.GetInfo().GetPermissionSet(), newPermissions) {
 		return &collaboration.UpdateShareResponse{
-			Status: status.NewPermissionDenied(ctx, nil, "insufficient permissions to create that kind of share"),
+			Status: status.NewPermissionDenied(ctx, "insufficient permissions to create that kind of share"),
 		}, nil
 	}
 

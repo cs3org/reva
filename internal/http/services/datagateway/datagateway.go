@@ -19,7 +19,6 @@
 package datagateway
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/url"
@@ -85,7 +84,7 @@ type svc struct {
 }
 
 // New returns a new datagateway
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
+func New(m map[string]interface{}, _ *zerolog.Logger) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -161,7 +160,7 @@ func addCorsHeader(res http.ResponseWriter) {
 	headers.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
 }
 
-func (s *svc) verify(ctx context.Context, r *http.Request) (*transferClaims, error) {
+func (s *svc) verify(r *http.Request) (*transferClaims, error) {
 	// Extract transfer token from request header. If not existing, assume that it's the last path segment instead.
 	token := r.Header.Get(TokenTransportHeader)
 	if token == "" {
@@ -189,7 +188,7 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	claims, err := s.verify(ctx, r)
+	claims, err := s.verify(r)
 	if err != nil {
 		err = errors.Wrap(err, "datagateway: error validating transfer token")
 		log.Error().Err(err).Str("token", r.Header.Get(TokenTransportHeader)).Msg("invalid transfer token")
@@ -235,7 +234,7 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	claims, err := s.verify(ctx, r)
+	claims, err := s.verify(r)
 	if err != nil {
 		err = errors.Wrap(err, "datagateway: error validating transfer token")
 		log.Error().Err(err).Str("token", r.Header.Get(TokenTransportHeader)).Msg("invalid transfer token")
@@ -294,7 +293,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	claims, err := s.verify(ctx, r)
+	claims, err := s.verify(r)
 	if err != nil {
 		err = errors.Wrap(err, "datagateway: error validating transfer token")
 		log.Err(err).Str("token", r.Header.Get(TokenTransportHeader)).Msg("invalid transfer token")
@@ -354,7 +353,7 @@ func (s *svc) doPatch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	claims, err := s.verify(ctx, r)
+	claims, err := s.verify(r)
 	if err != nil {
 		err = errors.Wrap(err, "datagateway: error validating transfer token")
 		log.Err(err).Str("token", r.Header.Get(TokenTransportHeader)).Msg("invalid transfer token")

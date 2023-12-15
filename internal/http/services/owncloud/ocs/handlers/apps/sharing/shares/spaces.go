@@ -77,7 +77,7 @@ func (h *Handler) getGrantee(ctx context.Context, name string) (provider.Grantee
 	return provider.Grantee{}, fmt.Errorf("no grantee found with name %s", name)
 }
 
-func (h *Handler) addSpaceMember(w http.ResponseWriter, r *http.Request, info *provider.ResourceInfo, role *conversions.Role, roleVal []byte) {
+func (h *Handler) addSpaceMember(w http.ResponseWriter, r *http.Request, info *provider.ResourceInfo, role *conversions.Role, _ []byte) {
 	ctx := r.Context()
 
 	if info.Space.SpaceType == "personal" {

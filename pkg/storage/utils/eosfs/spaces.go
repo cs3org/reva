@@ -61,7 +61,7 @@ var (
 	egroupRegex = regexp.MustCompile(`^cernbox-project-(?P<Name>.+)-(?P<Permissions>admins|writers|readers)\z`)
 )
 
-func (fs *eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, unrestricted bool) ([]*provider.StorageSpace, error) {
+func (fs *eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, _ bool) ([]*provider.StorageSpace, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "eosfs: wrap: no user in ctx")
@@ -276,7 +276,7 @@ func (fs *eosfs) fetchCachedSpaces(ctx context.Context, user *userpb.User, space
 	return nil, errtypes.NotFound("eosfs: spaces not found in cache")
 }
 
-func (fs *eosfs) cacheSpaces(ctx context.Context, user *userpb.User, spaceType, spaceID, spacePath string, spaces []*provider.StorageSpace) {
+func (fs *eosfs) cacheSpaces(_ context.Context, user *userpb.User, spaceType, spaceID, spacePath string, spaces []*provider.StorageSpace) {
 	key := user.Id.OpaqueId + ":" + spaceType + ":" + spaceID + ":" + spacePath
 	_ = fs.spacesCache.SetWithExpire(key, spaces, time.Second*time.Duration(60))
 }
@@ -356,10 +356,10 @@ func (fs *eosfs) CreateStorageSpace(ctx context.Context, req *provider.CreateSto
 	return nil, errtypes.NotSupported("eosfs: creating storage spaces of specified type is not supported")
 }
 
-func (fs *eosfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+func (fs *eosfs) UpdateStorageSpace(context.Context, *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("update storage space")
 }
 
-func (fs *eosfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
+func (fs *eosfs) DeleteStorageSpace(context.Context, *provider.DeleteStorageSpaceRequest) error {
 	return errtypes.NotSupported("delete storage spaces")
 }

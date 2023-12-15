@@ -681,7 +681,7 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, re
 
 // findAllProviders returns a list of all storage providers
 // This is a dumb call that does not call ListStorageSpaces() on the providers: ListStorageSpaces() in the gateway can cache that better.
-func (r *registry) findAllProviders(ctx context.Context, _ string) []*registrypb.ProviderInfo {
+func (r *registry) findAllProviders(context.Context, string) []*registrypb.ProviderInfo {
 	pis := make([]*registrypb.ProviderInfo, 0, len(r.c.Providers))
 	for address := range r.c.Providers {
 		pis = append(pis, &registrypb.ProviderInfo{

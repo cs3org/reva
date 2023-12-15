@@ -79,7 +79,7 @@ func (idx *Autoincrement) Lookup(v string) ([]string, error) {
 }
 
 // LookupCtx retieves multiple exact values and allows passing in a context
-func (idx *Autoincrement) LookupCtx(ctx context.Context, values ...string) ([]string, error) {
+func (idx *Autoincrement) LookupCtx(_ context.Context, values ...string) ([]string, error) {
 	var allValues map[string]struct{}
 	if len(values) != 1 {
 		// prefetch all values with one request

@@ -73,7 +73,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New creates a new OCM provider authorizer svc
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+func New(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)
 	if err != nil {
@@ -131,7 +131,7 @@ func (s *service) IsProviderAllowed(ctx context.Context, req *ocmprovider.IsProv
 	}, nil
 }
 
-func (s *service) ListAllProviders(ctx context.Context, req *ocmprovider.ListAllProvidersRequest) (*ocmprovider.ListAllProvidersResponse, error) {
+func (s *service) ListAllProviders(ctx context.Context, _ *ocmprovider.ListAllProvidersRequest) (*ocmprovider.ListAllProvidersResponse, error) {
 	providers, err := s.pa.ListAllProviders(ctx)
 	if err != nil {
 		return &ocmprovider.ListAllProvidersResponse{

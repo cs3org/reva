@@ -32,7 +32,7 @@ import (
 type AvatarsHandler struct {
 }
 
-func (h *AvatarsHandler) init(c *config.Config) error {
+func (h *AvatarsHandler) init(*config.Config) error {
 	return nil
 }
 

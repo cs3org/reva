@@ -38,11 +38,11 @@ type mgr struct {
 }
 
 // New returns an instance of the in-memory preferences manager.
-func New(m map[string]interface{}) (preferences.Manager, error) {
+func New(map[string]interface{}) (preferences.Manager, error) {
 	return &mgr{keys: make(map[string]map[string]string)}, nil
 }
 
-func (m *mgr) SetKey(ctx context.Context, key, namespace, value string) error {
+func (m *mgr) SetKey(ctx context.Context, key, _, value string) error {
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		return errtypes.UserRequired("preferences: error getting user from ctx")
@@ -60,7 +60,7 @@ func (m *mgr) SetKey(ctx context.Context, key, namespace, value string) error {
 	return nil
 }
 
-func (m *mgr) GetKey(ctx context.Context, key, namespace string) (string, error) {
+func (m *mgr) GetKey(ctx context.Context, key, _ string) (string, error) {
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		return "", errtypes.UserRequired("preferences: error getting user from ctx")

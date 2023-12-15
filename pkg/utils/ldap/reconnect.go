@@ -268,12 +268,12 @@ func (c *ConnWithReconnect) IsClosing() bool {
 func (c *ConnWithReconnect) SetTimeout(time.Duration) {}
 
 // Bind implements the ldap.Client interface
-func (c *ConnWithReconnect) Bind(username, password string) error {
+func (c *ConnWithReconnect) Bind(string, string) error {
 	return ldap.NewError(ldap.LDAPResultNotSupported, fmt.Errorf("not implemented"))
 }
 
 // UnauthenticatedBind implements the ldap.Client interface
-func (c *ConnWithReconnect) UnauthenticatedBind(username string) error {
+func (c *ConnWithReconnect) UnauthenticatedBind(string) error {
 	return ldap.NewError(ldap.LDAPResultNotSupported, fmt.Errorf("not implemented"))
 }
 
@@ -288,12 +288,12 @@ func (c *ConnWithReconnect) ExternalBind() error {
 }
 
 // ModifyWithResult implements the ldap.Client interface
-func (c *ConnWithReconnect) ModifyWithResult(m *ldap.ModifyRequest) (*ldap.ModifyResult, error) {
+func (c *ConnWithReconnect) ModifyWithResult(*ldap.ModifyRequest) (*ldap.ModifyResult, error) {
 	return nil, ldap.NewError(ldap.LDAPResultNotSupported, fmt.Errorf("not implemented"))
 }
 
 // Compare implements the ldap.Client interface
-func (c *ConnWithReconnect) Compare(dn, attribute, value string) (bool, error) {
+func (c *ConnWithReconnect) Compare(string, string, string) (bool, error) {
 	return false, ldap.NewError(ldap.LDAPResultNotSupported, fmt.Errorf("not implemented"))
 }
 
@@ -303,18 +303,18 @@ func (c *ConnWithReconnect) PasswordModify(*ldap.PasswordModifyRequest) (*ldap.P
 }
 
 // SearchWithPaging implements the ldap.Client interface
-func (c *ConnWithReconnect) SearchWithPaging(searchRequest *ldap.SearchRequest, pagingSize uint32) (*ldap.SearchResult, error) {
+func (c *ConnWithReconnect) SearchWithPaging(*ldap.SearchRequest, uint32) (*ldap.SearchResult, error) {
 	return nil, ldap.NewError(ldap.LDAPResultNotSupported, fmt.Errorf("not implemented"))
 }
 
 // SearchAsync implements the ldap.Client interface
-func (c *ConnWithReconnect) SearchAsync(ctx context.Context, searchRequest *ldap.SearchRequest, bufferSize int) ldap.Response {
+func (c *ConnWithReconnect) SearchAsync(context.Context, *ldap.SearchRequest, int) ldap.Response {
 	// unimplemented
 	return nil
 }
 
 // NTLMUnauthenticatedBind implements the ldap.Client interface
-func (c *ConnWithReconnect) NTLMUnauthenticatedBind(domain, username string) error {
+func (c *ConnWithReconnect) NTLMUnauthenticatedBind(string, string) error {
 	return ldap.NewError(ldap.LDAPResultNotSupported, fmt.Errorf("not implemented"))
 }
 
@@ -329,18 +329,18 @@ func (c *ConnWithReconnect) Unbind() error {
 }
 
 // DirSync implements the ldap.Client interface
-func (c *ConnWithReconnect) DirSync(searchRequest *ldap.SearchRequest, flags, maxAttrCount int64, cookie []byte) (*ldap.SearchResult, error) {
+func (c *ConnWithReconnect) DirSync(*ldap.SearchRequest, int64, int64, []byte) (*ldap.SearchResult, error) {
 	return nil, ldap.NewError(ldap.LDAPResultNotSupported, fmt.Errorf("not implemented"))
 }
 
 // DirSyncAsync implements the ldap.Client interface
-func (c *ConnWithReconnect) DirSyncAsync(ctx context.Context, searchRequest *ldap.SearchRequest, bufferSize int, flags, maxAttrCount int64, cookie []byte) ldap.Response {
+func (c *ConnWithReconnect) DirSyncAsync(context.Context, *ldap.SearchRequest, int, int64, int64, []byte) ldap.Response {
 	// unimplemented
 	return nil
 }
 
 // Syncrepl implements the ldap.Client interface
-func (c *ConnWithReconnect) Syncrepl(ctx context.Context, searchRequest *ldap.SearchRequest, bufferSize int, mode ldap.ControlSyncRequestMode, cookie []byte, reloadHint bool) ldap.Response {
+func (c *ConnWithReconnect) Syncrepl(context.Context, *ldap.SearchRequest, int, ldap.ControlSyncRequestMode, []byte, bool) ldap.Response {
 	// unimplemented
 	return nil
 }

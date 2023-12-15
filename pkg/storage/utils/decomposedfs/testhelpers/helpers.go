@@ -85,7 +85,7 @@ const (
 // The default config can be overridden by providing the strings to override
 // via map as a parameter
 func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
-	tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
+	tmpRoot, err := helpers.TempDir()
 	if err != nil {
 		return nil, err
 	}

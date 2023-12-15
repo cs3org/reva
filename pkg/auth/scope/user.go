@@ -28,7 +28,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func userScope(_ context.Context, scope *authpb.Scope, resource interface{}, _ *zerolog.Logger) (bool, error) {
+func userScope(_ context.Context, _ *authpb.Scope, _ interface{}, _ *zerolog.Logger) (bool, error) {
 	// Always return true. Registered users can access all paths.
 	// TODO(ishank011): Add checks for read/write permissions.
 	return true, nil

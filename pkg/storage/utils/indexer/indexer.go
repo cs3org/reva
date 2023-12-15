@@ -96,7 +96,7 @@ func (i *StorageIndexer) Reset() error {
 }
 
 // AddIndex adds a new index to the indexer receiver.
-func (i *StorageIndexer) AddIndex(t interface{}, indexBy option.IndexBy, pkName, entityDirName, indexType string, bound *option.Bound, caseInsensitive bool) error {
+func (i *StorageIndexer) AddIndex(t interface{}, indexBy option.IndexBy, pkName, _, indexType string, bound *option.Bound, caseInsensitive bool) error {
 	var idx index.Index
 
 	var f func(metadata.Storage, ...option.Option) index.Index

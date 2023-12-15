@@ -94,7 +94,7 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 	return nil
 }
 
-func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
+func (m *manager) GetUser(_ context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
 	for _, u := range m.users {
 		if (u.Id.GetOpaqueId() == uid.OpaqueId || u.Username == uid.OpaqueId) && (uid.Idp == "" || uid.Idp == u.Id.GetIdp()) {
 			user := *u
@@ -107,7 +107,7 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingG
 	return nil, errtypes.NotFound(uid.OpaqueId)
 }
 
-func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
+func (m *manager) GetUserByClaim(_ context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
 	for _, u := range m.users {
 		if userClaim, err := extractClaim(u, claim); err == nil && value == userClaim {
 			user := *u
@@ -143,7 +143,7 @@ func userContains(u *userpb.User, query string) bool {
 		strings.Contains(strings.ToLower(u.Mail), query) || strings.Contains(strings.ToLower(u.Id.OpaqueId), query)
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
+func (m *manager) FindUsers(_ context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
 	users := []*userpb.User{}
 	for _, u := range m.users {
 		if userContains(u, query) {

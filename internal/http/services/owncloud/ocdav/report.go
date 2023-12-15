@@ -51,7 +51,7 @@ func (s *svc) handleReport(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 	if rep.SearchFiles != nil {
-		s.doSearchFiles(w, r, rep.SearchFiles)
+		w.WriteHeader(http.StatusNotImplemented)
 		return
 	}
 
@@ -62,10 +62,6 @@ func (s *svc) handleReport(w http.ResponseWriter, r *http.Request, ns string) {
 
 	// TODO(jfd): implement report
 
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-func (s *svc) doSearchFiles(w http.ResponseWriter, r *http.Request, sf *reportSearchFiles) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 

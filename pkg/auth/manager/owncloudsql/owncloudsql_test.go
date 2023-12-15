@@ -25,8 +25,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-// new returns a dummy auth manager for testing
-func new(m map[string]interface{}) (*manager, error) {
+// newDummy returns a dummy auth manager for testing
+func newDummy(m map[string]interface{}) (*manager, error) {
 	mgr := &manager{}
 	err := mgr.Configure(m)
 	if err != nil {
@@ -85,7 +85,7 @@ func TestVerify(t *testing.T) {
 		"invalid-3": {"password", "2|$2a$08$oKAQY5IhnZocP.61MwP7xu7TNeOb7Ostvk3j6UpacvaNMs.xRj7O2", false},
 	}
 
-	u, err := new(map[string]interface{}{
+	u, err := newDummy(map[string]interface{}{
 		"legacy_salt": "6Wow67q1wZQZpUUeI6G2LsWUu4XKx",
 	})
 	if err != nil {

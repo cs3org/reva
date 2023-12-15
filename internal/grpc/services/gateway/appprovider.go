@@ -149,7 +149,7 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 	accessToken, ok := ctxpkg.ContextGetToken(ctx)
 	if !ok || accessToken == "" {
 		return &providerpb.OpenInAppResponse{
-			Status: status.NewUnauthenticated(ctx, errtypes.InvalidCredentials("Access token is invalid or empty"), ""),
+			Status: status.NewUnauthenticated(ctx, "Access token is invalid or empty"),
 		}, nil
 	}
 

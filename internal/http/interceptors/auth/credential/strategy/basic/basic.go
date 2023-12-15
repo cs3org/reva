@@ -34,11 +34,11 @@ type strategy struct{}
 
 // New returns a new auth strategy that checks for basic auth.
 // See https://tools.ietf.org/html/rfc7617
-func New(m map[string]interface{}) (auth.CredentialStrategy, error) {
+func New(map[string]interface{}) (auth.CredentialStrategy, error) {
 	return &strategy{}, nil
 }
 
-func (s *strategy) GetCredentials(w http.ResponseWriter, r *http.Request) (*auth.Credentials, error) {
+func (s *strategy) GetCredentials(_ http.ResponseWriter, r *http.Request) (*auth.Credentials, error) {
 	id, secret, ok := r.BasicAuth()
 	if !ok {
 		return nil, fmt.Errorf("no basic auth provided")

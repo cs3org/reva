@@ -126,7 +126,6 @@ func ResolvePath(path string) (string, error) {
 
 // RandString is a helper to create tokens.
 func RandString(n int) string {
-	rand.Seed(time.Now().UTC().UnixNano())
 	var l = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	b := make([]rune, n)
 	for i := range b {
@@ -282,10 +281,7 @@ func MarshalProtoV1ToJSON(m proto.Message) ([]byte, error) {
 // TODO: update this once we start using V2 in CS3APIs
 func UnmarshalJSONToProtoV1(b []byte, m proto.Message) error {
 	mV2 := proto.MessageV2(m)
-	if err := protojson.Unmarshal(b, mV2); err != nil {
-		return err
-	}
-	return nil
+	return protojson.Unmarshal(b, mV2)
 }
 
 // IsRelativeReference returns true if the given reference qualifies as relative

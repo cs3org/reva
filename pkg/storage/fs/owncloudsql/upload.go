@@ -357,12 +357,12 @@ type fileUpload struct {
 }
 
 // GetInfo returns the FileInfo
-func (upload *fileUpload) GetInfo(ctx context.Context) (tusd.FileInfo, error) {
+func (upload *fileUpload) GetInfo(context.Context) (tusd.FileInfo, error) {
 	return upload.info, nil
 }
 
 // WriteChunk writes the stream from the reader to the given offset of the upload
-func (upload *fileUpload) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
+func (upload *fileUpload) WriteChunk(_ context.Context, _ int64, src io.Reader) (int64, error) {
 	file, err := os.OpenFile(upload.binPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
 	if err != nil {
 		return 0, err
@@ -388,7 +388,7 @@ func (upload *fileUpload) WriteChunk(ctx context.Context, offset int64, src io.R
 }
 
 // GetReader returns an io.Reader for the upload
-func (upload *fileUpload) GetReader(ctx context.Context) (io.Reader, error) {
+func (upload *fileUpload) GetReader(context.Context) (io.Reader, error) {
 	return os.Open(upload.binPath)
 }
 
@@ -486,7 +486,7 @@ func (fs *owncloudsqlfs) AsTerminatableUpload(upload tusd.Upload) tusd.Terminata
 }
 
 // Terminate terminates the upload
-func (upload *fileUpload) Terminate(ctx context.Context) error {
+func (upload *fileUpload) Terminate(_ context.Context) error {
 	if err := os.Remove(upload.infoPath); err != nil {
 		if !os.IsNotExist(err) {
 			return err
@@ -510,7 +510,7 @@ func (fs *owncloudsqlfs) AsLengthDeclarableUpload(upload tusd.Upload) tusd.Lengt
 }
 
 // DeclareLength updates the upload length information
-func (upload *fileUpload) DeclareLength(ctx context.Context, length int64) error {
+func (upload *fileUpload) DeclareLength(_ context.Context, length int64) error {
 	upload.info.Size = length
 	upload.info.SizeIsDeferred = false
 	return upload.writeInfo()
@@ -526,7 +526,7 @@ func (fs *owncloudsqlfs) AsConcatableUpload(upload tusd.Upload) tusd.ConcatableU
 }
 
 // ConcatUploads concatenates multiple uploads
-func (upload *fileUpload) ConcatUploads(ctx context.Context, uploads []tusd.Upload) (err error) {
+func (upload *fileUpload) ConcatUploads(_ context.Context, uploads []tusd.Upload) (err error) {
 	file, err := os.OpenFile(upload.binPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
 	if err != nil {
 		return err

@@ -1009,9 +1009,5 @@ func registerWithMicroReg(ns string, p *registrypb.ProviderInfo) error {
 	}
 
 	rOpts := []mreg.RegisterOption{mreg.RegisterTTL(time.Minute)}
-	if err := reg.Register(service, rOpts...); err != nil {
-		return err
-	}
-
-	return nil
+	return reg.Register(service, rOpts...)
 }

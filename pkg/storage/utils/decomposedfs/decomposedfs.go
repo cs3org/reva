@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"os"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -87,7 +86,6 @@ func init() {
 type Tree interface {
 	Setup() error
 
-	GetMD(ctx context.Context, node *node.Node) (os.FileInfo, error)
 	ListFolder(ctx context.Context, node *node.Node) ([]*node.Node, error)
 	// CreateHome(owner *userpb.UserId) (n *node.Node, err error)
 	CreateDir(ctx context.Context, node *node.Node) (err error)
@@ -516,7 +514,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 }
 
 // Shutdown shuts down the storage
-func (fs *Decomposedfs) Shutdown(ctx context.Context) error {
+func (fs *Decomposedfs) Shutdown(context.Context) error {
 	return nil
 }
 
@@ -776,7 +774,7 @@ func (fs *Decomposedfs) TouchFile(ctx context.Context, ref *provider.Reference, 
 // without the storage provider. In effect everything is a shadow namespace.
 // To mimic the eos and owncloud driver we only allow references as children of the "/Shares" folder
 // FIXME: This comment should explain briefly what a reference is in this context.
-func (fs *Decomposedfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) (err error) {
+func (fs *Decomposedfs) CreateReference(context.Context, string, *url.URL) (err error) {
 	return errtypes.NotSupported("not implemented")
 }
 

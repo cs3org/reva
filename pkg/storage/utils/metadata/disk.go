@@ -56,7 +56,7 @@ func (disk *Disk) Backend() string {
 }
 
 // Stat returns the metadata for the given path
-func (disk *Disk) Stat(ctx context.Context, path string) (*provider.ResourceInfo, error) {
+func (disk *Disk) Stat(_ context.Context, path string) (*provider.ResourceInfo, error) {
 	info, err := os.Stat(disk.targetPath(path))
 	if err != nil {
 		var pathError *fs.PathError
@@ -196,7 +196,7 @@ func (disk *Disk) ReadDir(_ context.Context, p string) ([]string, error) {
 }
 
 // ListDir returns a list of ResourceInfos for the entries in a given directory
-func (disk *Disk) ListDir(ctx context.Context, path string) ([]*provider.ResourceInfo, error) {
+func (disk *Disk) ListDir(_ context.Context, path string) ([]*provider.ResourceInfo, error) {
 	diskEntries, err := os.ReadDir(disk.targetPath(path))
 	if err != nil {
 		if _, ok := err.(*fs.PathError); ok {

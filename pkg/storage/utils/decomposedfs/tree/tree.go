@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -107,19 +106,6 @@ func (t *Tree) Setup() error {
 	return nil
 }
 
-// GetMD returns the metadata of a node in the tree
-func (t *Tree) GetMD(ctx context.Context, n *node.Node) (os.FileInfo, error) {
-	md, err := os.Stat(n.InternalPath())
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, errtypes.NotFound(n.ID)
-		}
-		return nil, errors.Wrap(err, "tree: error stating "+n.ID)
-	}
-
-	return md, nil
-}
-
 // TouchFile creates a new empty file
 func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool, mtime string) error {
 	if n.Exists {
@@ -167,7 +153,7 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 			return errors.Wrap(err, "Decomposedfs: could not remove symlink child entry")
 		}
 	}
-	if errors.Is(err, iofs.ErrNotExist) || link != "../"+n.ID {
+	if errors.Is(err, fs.ErrNotExist) || link != "../"+n.ID {
 		relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
 		if err = os.Symlink(relativeNodePath, childNameLink); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not symlink child entry")

@@ -104,11 +104,7 @@ func (action *FileOperationsAction) Move(source string, target string) error {
 	targetRef := &provider.Reference{Path: target}
 	req := &provider.MoveRequest{Source: sourceRef, Destination: targetRef}
 	res, err := action.session.Client().Move(action.session.Context(), req)
-	if err := net.CheckRPCInvocation("moving resource", res, err); err != nil {
-		return err
-	}
-
-	return nil
+	return net.CheckRPCInvocation("moving resource", res, err)
 }
 
 // MoveTo moves the specified source to the target directory, creating it if necessary.
@@ -126,11 +122,7 @@ func (action *FileOperationsAction) Remove(path string) error {
 	ref := &provider.Reference{Path: path}
 	req := &provider.DeleteRequest{Ref: ref}
 	res, err := action.session.Client().Delete(action.session.Context(), req)
-	if err := net.CheckRPCInvocation("deleting resource", res, err); err != nil {
-		return err
-	}
-
-	return nil
+	return net.CheckRPCInvocation("deleting resource", res, err)
 }
 
 // NewFileOperationsAction creates a new file operations action.

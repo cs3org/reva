@@ -171,7 +171,7 @@ type cs3LS struct {
 	selector pool.Selectable[gateway.GatewayAPIClient]
 }
 
-func (cls *cs3LS) Confirm(ctx context.Context, now time.Time, name0, name1 string, conditions ...Condition) (func(), error) {
+func (cls *cs3LS) Confirm(context.Context, time.Time, string, string, ...Condition) (func(), error) {
 	return nil, errors.ErrNotImplemented
 }
 
@@ -236,10 +236,10 @@ func (cls *cs3LS) Create(ctx context.Context, now time.Time, details LockDetails
 
 }
 
-func (cls *cs3LS) Refresh(ctx context.Context, now time.Time, token string, duration time.Duration) (LockDetails, error) {
+func (cls *cs3LS) Refresh(context.Context, time.Time, string, time.Duration) (LockDetails, error) {
 	return LockDetails{}, errors.ErrNotImplemented
 }
-func (cls *cs3LS) Unlock(ctx context.Context, now time.Time, ref *provider.Reference, token string) error {
+func (cls *cs3LS) Unlock(ctx context.Context, _ time.Time, ref *provider.Reference, token string) error {
 	u := ctxpkg.ContextMustGetUser(ctx)
 
 	r := &provider.UnlockRequest{

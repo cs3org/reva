@@ -114,11 +114,11 @@ func (w *wrapper) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 	return res, nil
 }
 
-func (w *wrapper) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+func (w *wrapper) DenyGrant(context.Context, *provider.Reference, *provider.Grantee) error {
 	return errtypes.NotSupported("eos: deny grant is only enabled for project spaces")
 }
 
-func (w *wrapper) getMountID(ctx context.Context, r *provider.ResourceInfo) string {
+func (w *wrapper) getMountID(ctx context.Context, _ *provider.ResourceInfo) string {
 	u := ctxpkg.ContextMustGetUser(ctx)
 	b := bytes.Buffer{}
 	if err := w.mountIDTemplate.Execute(&b, u); err != nil {

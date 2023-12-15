@@ -226,7 +226,7 @@ func (fs *localfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tu
 	return u, nil
 }
 
-func (fs *localfs) getUploadPath(ctx context.Context, uploadID string) (string, error) {
+func (fs *localfs) getUploadPath(_ context.Context, uploadID string) (string, error) {
 	return filepath.Join(fs.conf.Uploads, uploadID), nil
 }
 
@@ -291,17 +291,17 @@ type fileUpload struct {
 }
 
 // GetInfo returns the FileInfo
-func (upload *fileUpload) GetInfo(ctx context.Context) (tusd.FileInfo, error) {
+func (upload *fileUpload) GetInfo(context.Context) (tusd.FileInfo, error) {
 	return upload.info, nil
 }
 
 // GetReader returns an io.Reader for the upload
-func (upload *fileUpload) GetReader(ctx context.Context) (io.Reader, error) {
+func (upload *fileUpload) GetReader(context.Context) (io.Reader, error) {
 	return os.Open(upload.binPath)
 }
 
 // WriteChunk writes the stream from the reader to the given offset of the upload
-func (upload *fileUpload) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
+func (upload *fileUpload) WriteChunk(_ context.Context, _ int64, src io.Reader) (int64, error) {
 	file, err := os.OpenFile(upload.binPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
 	if err != nil {
 		return 0, err
@@ -385,12 +385,9 @@ func (fs *localfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpl
 }
 
 // Terminate terminates the upload
-func (upload *fileUpload) Terminate(ctx context.Context) error {
+func (upload *fileUpload) Terminate(context.Context) error {
 	if err := os.Remove(upload.infoPath); err != nil {
 		return err
 	}
-	if err := os.Remove(upload.binPath); err != nil {
-		return err
-	}
-	return nil
+	return os.Remove(upload.binPath)
 }

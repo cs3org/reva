@@ -57,7 +57,7 @@ func New(conf map[string]interface{}) (auth.Manager, error) {
 }
 
 // Authenticate authenticates the service account
-func (m *manager) Authenticate(ctx context.Context, userID string, secret string) (*userpb.User, map[string]*authpb.Scope, error) {
+func (m *manager) Authenticate(_ context.Context, userID string, secret string) (*userpb.User, map[string]*authpb.Scope, error) {
 	if err := m.authenticate(userID, secret); err != nil {
 		return nil, nil, err
 	}

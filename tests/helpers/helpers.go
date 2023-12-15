@@ -46,7 +46,7 @@ import (
 // Temporary test directories are created in reva/tmp because system
 // /tmp directories are often tmpfs mounts which do not support user
 // extended attributes.
-func TempDir(name string) (string, error) {
+func TempDir() (string, error) {
 	_, currentFileName, _, _ := runtime.Caller(0)
 	tmpDir := filepath.Join(filepath.Dir(currentFileName), "../../tmp")
 	err := os.MkdirAll(tmpDir, 0755)
@@ -64,7 +64,7 @@ func TempDir(name string) (string, error) {
 // TempFile creates a temporary file returning its path.
 // The file is filled with the provider r if not nil.
 func TempFile(r io.Reader) (string, error) {
-	dir, err := TempDir("")
+	dir, err := TempDir()
 	if err != nil {
 		return "", err
 	}

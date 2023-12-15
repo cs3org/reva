@@ -390,7 +390,7 @@ func checkPreconditions(w http.ResponseWriter, r *http.Request, log zerolog.Logg
 	return true
 }
 
-func getContentLength(w http.ResponseWriter, r *http.Request) (int64, error) {
+func getContentLength(_ http.ResponseWriter, r *http.Request) (int64, error) {
 	length, err := strconv.ParseInt(r.Header.Get(net.HeaderContentLength), 10, 64)
 	if err != nil {
 		// Fallback to Upload-Length

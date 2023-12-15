@@ -242,7 +242,7 @@ func extractGroupID(u string) *grouppb.GroupId {
 	return &grouppb.GroupId{OpaqueId: u}
 }
 
-func (m *mgr) convertToCS3Share(ctx context.Context, s DBShare, storageMountID string) (*collaboration.Share, error) {
+func (m *mgr) convertToCS3Share(ctx context.Context, s DBShare, _ string) (*collaboration.Share, error) {
 	ts := &typespb.Timestamp{
 		Seconds: uint64(s.STime),
 	}

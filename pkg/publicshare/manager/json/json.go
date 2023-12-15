@@ -338,7 +338,7 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 		share.DisplayName = req.Update.GetDisplayName()
 	case link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS:
 		old, _ := json.Marshal(share.Permissions)
-		new, _ := json.Marshal(req.Update.GetGrant().Permissions)
+		newBytes, _ := json.Marshal(req.Update.GetGrant().Permissions)
 
 		if req.GetUpdate().GetGrant().GetPassword() != "" {
 			passwordChanged = true
@@ -350,12 +350,12 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 			share.PasswordProtected = true
 		}
 
-		log.Debug().Str("json", "update grants").Msgf("from: `%v`\nto\n`%v`", old, new)
+		log.Debug().Str("json", "update grants").Msgf("from: `%v`\nto\n`%v`", old, newBytes)
 		share.Permissions = req.Update.GetGrant().GetPermissions()
 	case link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION:
 		old, _ := json.Marshal(share.Expiration)
-		new, _ := json.Marshal(req.Update.GetGrant().Expiration)
-		log.Debug().Str("json", "update expiration").Msgf("from: `%v`\nto\n`%v`", old, new)
+		newBytes, _ := json.Marshal(req.Update.GetGrant().Expiration)
+		log.Debug().Str("json", "update expiration").Msgf("from: `%v`\nto\n`%v`", old, newBytes)
 		share.Expiration = req.Update.GetGrant().Expiration
 	case link.UpdatePublicShareRequest_Update_TYPE_PASSWORD:
 		passwordChanged = true
@@ -590,7 +590,7 @@ func (m *manager) revokeExpiredPublicShare(ctx context.Context, s *link.PublicSh
 }
 
 // RevokePublicShare undocumented.
-func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) error {
+func (m *manager) RevokePublicShare(ctx context.Context, _ *user.User, ref *link.PublicShareReference) error {
 	m.mutex.Lock()
 	db, err := m.persistence.Read(ctx)
 	if err != nil {

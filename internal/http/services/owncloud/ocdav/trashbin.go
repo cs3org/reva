@@ -215,7 +215,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 
 	if depth == net.DepthZero {
 		rootHref := path.Join(refBase, key, itemPath)
-		propRes, err := h.formatTrashPropfind(ctx, s, ref.ResourceId.SpaceId, refBase, rootHref, nil, nil)
+		propRes, err := h.formatTrashPropfind(ctx, ref.ResourceId.SpaceId, refBase, rootHref, nil, nil)
 		if err != nil {
 			sublog.Error().Err(err).Msg("error formatting propfind")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -305,7 +305,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 
 	rootHref := path.Join(refBase, key, itemPath)
-	propRes, err := h.formatTrashPropfind(ctx, s, ref.ResourceId.SpaceId, refBase, rootHref, &pf, items)
+	propRes, err := h.formatTrashPropfind(ctx, ref.ResourceId.SpaceId, refBase, rootHref, &pf, items)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -321,7 +321,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 }
 
-func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, spaceID, refBase, rootHref string, pf *propfind.XML, items []*provider.RecycleItem) ([]byte, error) {
+func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, spaceID, refBase, rootHref string, pf *propfind.XML, items []*provider.RecycleItem) ([]byte, error) {
 	responses := make([]*propfind.ResponseXML, 0, len(items)+1)
 	// add trashbin dir . entry
 	responses = append(responses, &propfind.ResponseXML{
@@ -346,7 +346,7 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, space
 	})
 
 	for i := range items {
-		res, err := h.itemToPropResponse(ctx, s, spaceID, refBase, pf, items[i])
+		res, err := h.itemToPropResponse(ctx, spaceID, refBase, pf, items[i])
 		if err != nil {
 			return nil, err
 		}
@@ -368,7 +368,7 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, space
 // itemToPropResponse needs to create a listing that contains a key and destination
 // the key is the name of an entry in the trash listing
 // for now we need to limit trash to the users home, so we can expect all trash keys to have the home storage as the opaque id
-func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, spaceID, refBase string, pf *propfind.XML, item *provider.RecycleItem) (*propfind.ResponseXML, error) {
+func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, spaceID, refBase string, pf *propfind.XML, item *provider.RecycleItem) (*propfind.ResponseXML, error) {
 
 	baseURI := ctx.Value(net.CtxKeyBaseURI).(string)
 	ref := path.Join(baseURI, refBase, item.Key)

@@ -57,7 +57,6 @@ func init() {
 type Tree interface {
 	Setup() error
 
-	GetMD(ctx context.Context, node *node.Node) (os.FileInfo, error)
 	ListFolder(ctx context.Context, node *node.Node) ([]*node.Node, error)
 	// CreateHome(owner *userpb.UserId) (n *node.Node, err error)
 	CreateDir(ctx context.Context, node *node.Node) (err error)
@@ -77,7 +76,7 @@ type Tree interface {
 var defaultFilePerm = os.FileMode(0664)
 
 // WriteChunk writes the stream from the reader to the given offset of the upload
-func (session *OcisSession) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
+func (session *OcisSession) WriteChunk(ctx context.Context, _ int64, src io.Reader) (int64, error) {
 	ctx, span := tracer.Start(session.Context(ctx), "WriteChunk")
 	defer span.End()
 	_, subspan := tracer.Start(ctx, "os.OpenFile")

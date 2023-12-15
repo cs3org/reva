@@ -249,9 +249,9 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 			}
 		case "mount_point":
 			// TODO(labkode): implementing updating mount point
-			err = errtypes.NotSupported("gateway: update of mount point is not yet implemented")
+			appctx.GetLogger(ctx).Error().Msg("gateway: update of mount point is not yet implemented")
 			return &ocm.UpdateReceivedOCMShareResponse{
-				Status: status.NewUnimplemented(ctx, err, "error updating received share"),
+				Status: status.NewUnimplemented(ctx, "error updating received share"),
 			}, nil
 		default:
 			return nil, errtypes.NotSupported("updating " + req.UpdateMask.Paths[i] + " is not supported")
@@ -281,14 +281,14 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 			}
 		}
 
-		error := s.handleTransfer(ctx, share, transferDestinationPath)
-		if error != nil {
-			log.Err(error).Msg("gateway: error handling transfer in UpdateReceivedShare")
+		err = s.handleTransfer(ctx, share, transferDestinationPath)
+		if err != nil {
+			log.Err(err).Msg("gateway: error handling transfer in UpdateReceivedShare")
 			return &ocm.UpdateReceivedOCMShareResponse{
 				Status: &rpc.Status{
 					Code: rpc.Code_CODE_INTERNAL,
 				},
-			}, error
+			}, err
 		}
 	}
 	return res, nil

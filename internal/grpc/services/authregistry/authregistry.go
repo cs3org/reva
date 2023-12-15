@@ -66,7 +66,7 @@ func (c *config) init() {
 }
 
 // New creates a new AuthRegistry
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+func New(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -101,7 +101,7 @@ func getRegistry(c *config) (auth.Registry, error) {
 	return nil, errtypes.NotFound("authregistrysvc: driver not found: " + c.Driver)
 }
 
-func (s *service) ListAuthProviders(ctx context.Context, req *registrypb.ListAuthProvidersRequest) (*registrypb.ListAuthProvidersResponse, error) {
+func (s *service) ListAuthProviders(ctx context.Context, _ *registrypb.ListAuthProvidersRequest) (*registrypb.ListAuthProvidersResponse, error) {
 	pinfos, err := s.reg.ListProviders(ctx)
 	if err != nil {
 		return &registrypb.ListAuthProvidersResponse{

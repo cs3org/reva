@@ -299,7 +299,7 @@ func readLocksIntoOpaque(ctx context.Context, n *Node, ri *provider.ResourceInfo
 	return err
 }
 
-func (n *Node) hasLocks(ctx context.Context) bool {
+func (n *Node) hasLocks(context.Context) bool {
 	_, err := os.Stat(n.LockFilePath()) // FIXME better error checking
 	return err == nil
 }

@@ -85,7 +85,7 @@ func New(value map[string]interface{}) (token.Manager, error) {
 	return m, nil
 }
 
-func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error) {
+func (m *manager) MintToken(_ context.Context, u *user.User, scope map[string]*auth.Scope) (string, error) {
 	ttl := time.Duration(m.conf.Expires) * time.Second
 	claims := claims{
 		StandardClaims: jwt.StandardClaims{
@@ -108,7 +108,7 @@ func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]
 	return tkn, nil
 }
 
-func (m *manager) DismantleToken(ctx context.Context, tkn string) (*user.User, map[string]*auth.Scope, error) {
+func (m *manager) DismantleToken(_ context.Context, tkn string) (*user.User, map[string]*auth.Scope, error) {
 	token, err := jwt.ParseWithClaims(tkn, &claims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(m.conf.Secret), nil
 	})

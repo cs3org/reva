@@ -129,7 +129,7 @@ func parsePasswordPolicy(m map[string]interface{}) (*passwordPolicy, error) {
 }
 
 // New creates a new user share provider svc
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+func New(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)
 	if err != nil {
@@ -229,7 +229,7 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 		}
 		if !ok {
 			return &link.CreatePublicShareResponse{
-				Status: status.NewPermissionDenied(ctx, nil, "no permission to create public links"),
+				Status: status.NewPermissionDenied(ctx, "no permission to create public links"),
 			}, nil
 		}
 	}
@@ -253,7 +253,7 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 	// validate path
 	if !s.isPathAllowed(req.GetResourceInfo().GetPath()) {
 		return &link.CreatePublicShareResponse{
-			Status: status.NewFailedPrecondition(ctx, nil, "share creation is not allowed for the specified path"),
+			Status: status.NewFailedPrecondition(ctx, "share creation is not allowed for the specified path"),
 		}, nil
 	}
 
@@ -363,7 +363,7 @@ func (s *service) RemovePublicShare(ctx context.Context, req *link.RemovePublicS
 
 		if !sRes.GetInfo().GetPermissionSet().RemoveGrant {
 			return &link.RemovePublicShareResponse{
-				Status: status.NewPermissionDenied(ctx, nil, "no permission to delete public share"),
+				Status: status.NewPermissionDenied(ctx, "no permission to delete public share"),
 			}, err
 		}
 	}
@@ -384,7 +384,7 @@ func (s *service) GetPublicShareByToken(ctx context.Context, req *link.GetPublic
 
 	// there are 2 passes here, and the second request has no password
 	found, err := s.sm.GetPublicShareByToken(ctx, req.GetToken(), req.GetAuthentication(), req.GetSign())
-	switch v := err.(type) {
+	switch err.(type) {
 	case nil:
 		return &link.GetPublicShareByTokenResponse{
 			Status: status.NewOK(ctx),
@@ -392,7 +392,7 @@ func (s *service) GetPublicShareByToken(ctx context.Context, req *link.GetPublic
 		}, nil
 	case errtypes.InvalidCredentials:
 		return &link.GetPublicShareByTokenResponse{
-			Status: status.NewPermissionDenied(ctx, v, "wrong password"),
+			Status: status.NewPermissionDenied(ctx, "wrong password"),
 		}, nil
 	case errtypes.NotFound:
 		return &link.GetPublicShareByTokenResponse{
@@ -490,7 +490,7 @@ func (s *service) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicS
 		}
 		if !canWriteLink {
 			return &link.UpdatePublicShareResponse{
-				Status: status.NewPermissionDenied(ctx, nil, "no permission to update public share"),
+				Status: status.NewPermissionDenied(ctx, "no permission to update public share"),
 			}, nil
 		}
 	}
@@ -506,7 +506,7 @@ func (s *service) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicS
 	if !publicshare.IsCreatedByUser(*ps, user) {
 		if !sRes.GetInfo().GetPermissionSet().UpdateGrant {
 			return &link.UpdatePublicShareResponse{
-				Status: status.NewPermissionDenied(ctx, nil, "no permission to update public share"),
+				Status: status.NewPermissionDenied(ctx, "no permission to update public share"),
 			}, err
 		}
 	}

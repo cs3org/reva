@@ -162,7 +162,7 @@ func registerMimeTypes(mappingFile string) error {
 }
 
 // New creates a new storage provider svc
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+func New(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)
 	if err != nil {
@@ -329,7 +329,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	case rpc.Code_CODE_OK:
 		if req.GetIfNotExist() {
 			return &provider.InitiateFileUploadResponse{
-				Status: status.NewAlreadyExists(ctx, errors.New("already exists"), "already exists"),
+				Status: status.NewAlreadyExists(ctx, "already exists"),
 			}, nil
 		}
 	case rpc.Code_CODE_NOT_FOUND:
@@ -345,7 +345,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	if ifMatch != "" {
 		if !validateIfMatch(ifMatch, sRes.GetInfo()) {
 			return &provider.InitiateFileUploadResponse{
-				Status: status.NewFailedPrecondition(ctx, errors.New("etag mismatch"), "etag mismatch"),
+				Status: status.NewFailedPrecondition(ctx, "etag mismatch"),
 			}, nil
 		}
 		metadata["if-match"] = ifMatch
@@ -355,7 +355,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		metadata["if-unmodified-since"] = utils.TSToTime(ifUnmodifiedSince).Format(time.RFC3339Nano)
 		if !validateIfUnmodifiedSince(ifUnmodifiedSince, sRes.GetInfo()) {
 			return &provider.InitiateFileUploadResponse{
-				Status: status.NewFailedPrecondition(ctx, errors.New("resource has been modified"), "resource has been modified"),
+				Status: status.NewFailedPrecondition(ctx, "resource has been modified"),
 			}, nil
 		}
 	}
@@ -412,11 +412,11 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 			// owncloud only expects a 400 Bad request so InvalidArg is good enough for now
 			// seealso errtypes.StatusChecksumMismatch
 		case errtypes.PermissionDenied:
-			st = status.NewPermissionDenied(ctx, err, "permission denied")
+			st = status.NewPermissionDenied(ctx, err.Error())
 		case errtypes.InsufficientStorage:
-			st = status.NewInsufficientStorage(ctx, err, "insufficient storage")
+			st = status.NewInsufficientStorage(ctx, err.Error())
 		case errtypes.PreconditionFailed:
-			st = status.NewFailedPrecondition(ctx, err, "failed precondition")
+			st = status.NewFailedPrecondition(ctx, err.Error())
 		default:
 			st = status.NewInternal(ctx, "error getting upload id: "+err.Error())
 		}
@@ -474,11 +474,11 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 	return res, nil
 }
 
-func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
+func (s *service) GetHome(context.Context, *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
 	return nil, errtypes.NotSupported("unused, use the gateway to look up the user home")
 }
 
-func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
+func (s *service) CreateHome(context.Context, *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
 	return nil, errtypes.NotSupported("use CreateStorageSpace with type personal")
 }
 
@@ -491,7 +491,7 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "not found when creating space")
 		case errtypes.PermissionDenied:
-			st = status.NewPermissionDenied(ctx, err, "permission denied")
+			st = status.NewPermissionDenied(ctx, err.Error())
 		case errtypes.NotSupported:
 			// if trying to create a user home fall back to CreateHome
 			if u, ok := ctxpkg.ContextGetUser(ctx); ok && req.Type == "personal" && utils.UserEqual(req.GetOwner().Id, u.Id) {
@@ -502,10 +502,10 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 					// TODO we cannot return a space, but the gateway currently does not expect one...
 				}
 			} else {
-				st = status.NewUnimplemented(ctx, err, "not implemented")
+				st = status.NewUnimplemented(ctx, err.Error())
 			}
 		case errtypes.AlreadyExists:
-			st = status.NewAlreadyExists(ctx, err, "already exists")
+			st = status.NewAlreadyExists(ctx, err.Error())
 		case errtypes.BadRequest:
 			st = status.NewInvalid(ctx, err.Error())
 		default:
@@ -544,9 +544,9 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "not found when listing spaces")
 		case errtypes.PermissionDenied:
-			st = status.NewPermissionDenied(ctx, err, "permission denied")
+			st = status.NewPermissionDenied(ctx, err.Error())
 		case errtypes.NotSupported:
-			st = status.NewUnimplemented(ctx, err, "not implemented")
+			st = status.NewUnimplemented(ctx, err.Error())
 		default:
 			st = status.NewInternal(ctx, "error listing spaces")
 		}
@@ -603,7 +603,7 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "space not found")
 		case errtypes.PermissionDenied:
-			st = status.NewPermissionDenied(ctx, err, "permission denied")
+			st = status.NewPermissionDenied(ctx, err.Error())
 		case errtypes.BadRequest:
 			st = status.NewInvalid(ctx, err.Error())
 		default:
@@ -624,7 +624,7 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "space not found")
 		case errtypes.PermissionDenied:
-			st = status.NewPermissionDenied(ctx, err, "permission denied")
+			st = status.NewPermissionDenied(ctx, err.Error())
 		case errtypes.BadRequest:
 			st = status.NewInvalid(ctx, err.Error())
 		default:
@@ -768,7 +768,7 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "path not found when listing container")
 		case errtypes.PermissionDenied:
-			st = status.NewPermissionDenied(ctx, err, "permission denied")
+			st = status.NewPermissionDenied(ctx, err.Error())
 		default:
 			st = status.NewInternal(ctx, "error listing container: "+req.Ref.String())
 		}
@@ -855,7 +855,7 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "resource not found when listing recycle stream")
 		case errtypes.PermissionDenied:
-			st = status.NewPermissionDenied(ctx, err, "permission denied")
+			st = status.NewPermissionDenied(ctx, err.Error())
 		default:
 			st = status.NewInternal(ctx, "error listing recycle stream")
 		}
@@ -899,7 +899,7 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "resource not found when listing recycle")
 		case errtypes.PermissionDenied:
-			st = status.NewPermissionDenied(ctx, err, "permission denied")
+			st = status.NewPermissionDenied(ctx, err.Error())
 		default:
 			st = status.NewInternal(ctx, "error listing recycle")
 		}
@@ -991,7 +991,7 @@ func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsReques
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "path not found when listing grants")
 		case errtypes.PermissionDenied:
-			st = status.NewPermissionDenied(ctx, err, "permission denied")
+			st = status.NewPermissionDenied(ctx, err.Error())
 		default:
 			st = status.NewInternal(ctx, "error listing grants")
 		}
@@ -1033,7 +1033,7 @@ func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest)
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "path not found when setting grants")
 		case errtypes.PermissionDenied:
-			st = status.NewPermissionDenied(ctx, err, "permission denied")
+			st = status.NewPermissionDenied(ctx, err.Error())
 		default:
 			st = status.NewInternal(ctx, "error setting grants")
 		}
@@ -1161,7 +1161,7 @@ func (s *service) CreateReference(ctx context.Context, req *provider.CreateRefer
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "path not found when creating reference")
 		case errtypes.PermissionDenied:
-			st = status.NewPermissionDenied(ctx, err, "permission denied")
+			st = status.NewPermissionDenied(ctx, err.Error())
 		default:
 			st = status.NewInternal(ctx, "error creating reference")
 		}
@@ -1180,9 +1180,9 @@ func (s *service) CreateReference(ctx context.Context, req *provider.CreateRefer
 	}, nil
 }
 
-func (s *service) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
+func (s *service) CreateSymlink(ctx context.Context, _ *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
 	return &provider.CreateSymlinkResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CreateSymlink not implemented"), "CreateSymlink not implemented"),
+		Status: status.NewUnimplemented(ctx, "CreateSymlink not implemented"),
 	}, nil
 }
 
@@ -1194,7 +1194,7 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "path not found when getting quota")
 		case errtypes.PermissionDenied:
-			st = status.NewPermissionDenied(ctx, err, "permission denied")
+			st = status.NewPermissionDenied(ctx, err.Error())
 		default:
 			st = status.NewInternal(ctx, "error getting quota")
 		}

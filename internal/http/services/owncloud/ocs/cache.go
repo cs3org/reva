@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-func (s *svc) cacheWarmup(w http.ResponseWriter, r *http.Request) {
+func (s *svc) cacheWarmup(_ http.ResponseWriter, r *http.Request) {
 	if s.warmupCacheTracker != nil {
 		u, ok1 := ctxpkg.ContextGetUser(r.Context())
 		tkn, ok2 := ctxpkg.ContextGetToken(r.Context())

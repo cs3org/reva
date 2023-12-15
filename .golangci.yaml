@@ -8,10 +8,6 @@ issues:
       text: "SA1019:"
       linters:
         - staticcheck
-    # Exclude scopelint for tests files because of https://github.com/kyoh86/scopelint/issues/4
-    - path: _test\.go
-      linters:
-        - scopelint
 linters:
   enable:
     - bodyclose
@@ -31,9 +27,30 @@ linters:
     - gocritic
     - prealloc
     #- gosec
+
 linters-settings:
   revive:
     ignore-generated-header: true
     rules:
+      - name: context-keys-type
+      - name: time-naming
+      - name: var-declaration
+      - name: unexported-return
+      - name: errorf
+      - name: blank-imports
+      - name: context-as-argument
+      - name: dot-imports
+        # allow using ginkgo with dot imports
+        Disabled: true
       - name: unused-parameter
-        disabled: true
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: var-naming
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: indent-error-flow

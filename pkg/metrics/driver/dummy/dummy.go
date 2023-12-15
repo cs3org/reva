@@ -39,7 +39,7 @@ type MetricsDummyDriver struct {
 }
 
 // Configure configures this driver
-func (d *MetricsDummyDriver) Configure(c *config.Config) error {
+func (d *MetricsDummyDriver) Configure(_ *config.Config) error {
 	// no configuration necessary
 	return nil
 }
