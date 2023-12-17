@@ -30,21 +30,19 @@ import (
 	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ruser "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/mocks"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree/mocks"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/tus"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/store"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/tests/helpers"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
@@ -53,7 +51,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("File uploads", func() {
+var _ = Describe("Revisions", func() {
 	var (
 		ref     *provider.Reference
 		rootRef *provider.Reference
@@ -149,64 +147,6 @@ var _ = Describe("File uploads", func() {
 		ref.ResourceId = &resID
 	})
 
-	Context("the user's quota is exceeded", func() {
-		BeforeEach(func() {
-			permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
-				Stat:     true,
-				GetQuota: true,
-			}, nil)
-		})
-		When("the user wants to initiate a file upload", func() {
-			It("fails", func() {
-				var originalFunc = node.CheckQuota
-				node.CheckQuota = func(ctx context.Context, spaceRoot *node.Node, overwrite bool, oldSize, newSize uint64) (quotaSufficient bool, err error) {
-					return false, errtypes.InsufficientStorage("quota exceeded")
-				}
-				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
-				Expect(err).To(MatchError(errtypes.InsufficientStorage("quota exceeded")))
-				node.CheckQuota = originalFunc
-			})
-		})
-	})
-
-	Context("the user has insufficient permissions", func() {
-		BeforeEach(func() {
-			permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
-				Stat: true,
-			}, nil)
-		})
-
-		When("the user wants to initiate a file upload", func() {
-			It("fails", func() {
-				msg := "error: permission denied: u-s-e-r-id!u-s-e-r-id/foo"
-				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
-				Expect(err).To(MatchError(msg))
-			})
-		})
-	})
-
-	Context("with insufficient permissions, home node", func() {
-		JustBeforeEach(func() {
-			var err error
-			// the space name attribute is the stop condition in the lookup
-			h, err := lu.NodeFromResource(ctx, rootRef)
-			Expect(err).ToNot(HaveOccurred())
-			err = h.SetXattrString(ctx, prefixes.SpaceNameAttr, "username")
-			Expect(err).ToNot(HaveOccurred())
-			permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
-				Stat: true,
-			}, nil)
-		})
-
-		When("the user wants to initiate a file upload", func() {
-			It("fails", func() {
-				msg := "error: permission denied: u-s-e-r-id!u-s-e-r-id/foo"
-				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
-				Expect(err).To(MatchError(msg))
-			})
-		})
-	})
-
 	Context("with sufficient permissions", func() {
 		BeforeEach(func() {
 			permissions.On("AssemblePermissions", mock.Anything, mock.Anything).
@@ -215,47 +155,24 @@ var _ = Describe("File uploads", func() {
 					GetQuota:           true,
 					InitiateFileUpload: true,
 					ListContainer:      true,
+					ListFileVersions:   true,
 				}, nil)
 		})
 
-		When("the user initiates a non zero byte file upload", func() {
-			It("succeeds", func() {
-				uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
-
-				Expect(err).ToNot(HaveOccurred())
-				Expect(len(uploadIds)).To(Equal(2))
-				Expect(uploadIds["simple"]).ToNot(BeEmpty())
-				Expect(uploadIds["tus"]).ToNot(BeEmpty())
-
-				resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
-				Expect(err).ToNot(HaveOccurred())
-				Expect(len(resources)).To(Equal(0))
-			})
-		})
-
-		When("the user initiates a zero byte file upload", func() {
-			It("succeeds", func() {
-				uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
-
-				Expect(err).ToNot(HaveOccurred())
-				Expect(len(uploadIds)).To(Equal(2))
-				Expect(uploadIds["simple"]).ToNot(BeEmpty())
-				Expect(uploadIds["tus"]).ToNot(BeEmpty())
-
-				resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
-				Expect(err).ToNot(HaveOccurred())
-				Expect(len(resources)).To(Equal(0))
-			})
-		})
-
-		When("the user uploads a non zero byte file", func() {
+		When("the user uploads the same file twice with the same mtime", func() {
 			It("succeeds", func() {
 				var (
 					fileContent = []byte("0123456789")
 				)
 
-				uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+				ocmtime := "1000000000.100001"
+				mtime, err := utils.MTimeToTime(ocmtime)
+				Expect(err).ToNot(HaveOccurred())
 
+				// 1. Upload
+				uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{
+					"mtime": ocmtime,
+				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(uploadIds)).To(Equal(2))
 				Expect(uploadIds["simple"]).ToNot(BeEmpty())
@@ -277,32 +194,28 @@ var _ = Describe("File uploads", func() {
 					Body:   io.NopCloser(bytes.NewReader(fileContent)),
 					Length: int64(len(fileContent)),
 				}, nil)
-
 				Expect(err).ToNot(HaveOccurred())
-				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything, mock.Anything)
 
 				resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
-
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(resources)).To(Equal(1))
 				Expect(resources[0].Path).To(Equal(ref.Path))
-			})
-		})
+				Expect(resources[0].Mtime).To(Equal(utils.TimeToTS(mtime)))
 
-		When("the user uploads a zero byte file", func() {
-			It("succeeds", func() {
-				var (
-					fileContent = []byte("")
-				)
+				revisions, err := fs.ListRevisions(ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(revisions)).To(Equal(0))
 
-				uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
-
+				// 2. Upload
+				uploadIds, err = fs.InitiateUpload(ctx, ref, 10, map[string]string{
+					"mtime": ocmtime,
+				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(uploadIds)).To(Equal(2))
 				Expect(uploadIds["simple"]).ToNot(BeEmpty())
 				Expect(uploadIds["tus"]).ToNot(BeEmpty())
 
-				uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
+				uploadRef = &provider.Reference{Path: "/" + uploadIds["simple"]}
 
 				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
 					Return(nil).
@@ -310,7 +223,7 @@ var _ = Describe("File uploads", func() {
 						data, err := os.ReadFile(args.Get(1).(string))
 
 						Expect(err).ToNot(HaveOccurred())
-						Expect(data).To(Equal([]byte("")))
+						Expect(data).To(Equal([]byte("0123456789")))
 					})
 
 				_, err = fs.Upload(ctx, storage.UploadRequest{
@@ -318,37 +231,17 @@ var _ = Describe("File uploads", func() {
 					Body:   io.NopCloser(bytes.NewReader(fileContent)),
 					Length: int64(len(fileContent)),
 				}, nil)
-
 				Expect(err).ToNot(HaveOccurred())
-				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything, mock.Anything)
 
-				resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
-
+				resources, err = fs.ListFolder(ctx, rootRef, []string{}, []string{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(resources)).To(Equal(1))
 				Expect(resources[0].Path).To(Equal(ref.Path))
-			})
-		})
+				Expect(resources[0].Mtime).To(Equal(utils.TimeToTS(mtime)))
 
-		When("the user tries to upload a file without intialising the upload", func() {
-			It("fails", func() {
-				var (
-					fileContent = []byte("0123456789")
-				)
-
-				uploadRef := &provider.Reference{Path: "/some-non-existent-upload-reference"}
-				_, err := fs.Upload(ctx, storage.UploadRequest{
-					Ref:    uploadRef,
-					Body:   io.NopCloser(bytes.NewReader(fileContent)),
-					Length: int64(len(fileContent)),
-				}, nil)
-
-				Expect(err).To(HaveOccurred())
-
-				resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
-
+				revisions, err = fs.ListRevisions(ctx, ref)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(resources)).To(Equal(0))
+				Expect(len(revisions)).To(Equal(1))
 			})
 		})
 

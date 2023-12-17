@@ -63,6 +63,10 @@ func New(endpoint, region, bucket, accessKey, secretKey string) (*Blobstore, err
 	}, nil
 }
 
+func (bs *Blobstore) MoveBlob(node *node.Node, source, bucket, key string) error {
+	return nil
+}
+
 // Upload stores some data in the blobstore under the given key
 func (bs *Blobstore) Upload(node *node.Node, source string) error {
 	reader, err := os.Open(source)

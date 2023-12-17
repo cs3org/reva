@@ -22,6 +22,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree/mocks"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/tus"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/store"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -67,6 +68,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		con      chan interface{}
 		uploadID string
 
+		dataStore            tus.DataStore
 		fs                   storage.FS
 		o                    *options.Options
 		lu                   *lookup.Lookup
@@ -80,6 +82,8 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		// setup test
 		tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
 		Expect(err).ToNot(HaveOccurred())
+
+		dataStore = tus.NewFileStore(filepath.Join(tmpRoot, "uploads"))
 
 		o, err = options.New(map[string]interface{}{
 			"root":             tmpRoot,
@@ -119,7 +123,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		// setup fs
 		pub, con = make(chan interface{}), make(chan interface{})
 		tree := tree.New(lu, bs, o, store.Create())
-		fs, err = New(o, lu, NewPermissions(permissions, permissionsSelector), tree, stream.Chan{pub, con})
+		fs, err = New(o, lu, NewPermissions(permissions, permissionsSelector), tree, stream.Chan{pub, con}, dataStore, bs)
 		Expect(err).ToNot(HaveOccurred())
 
 		resp, err := fs.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{Owner: user, Type: "personal"})
@@ -139,7 +143,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			})
 
 		// start upload of a file
-		uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+		uploadIds, err := fs.InitiateUpload(ctx, ref, 10, nil)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(len(uploadIds)).To(Equal(2))
 		Expect(uploadIds["simple"]).ToNot(BeEmpty())

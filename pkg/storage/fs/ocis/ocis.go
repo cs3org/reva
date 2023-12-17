@@ -27,6 +27,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/tus"
 )
 
 func init() {
@@ -46,5 +47,7 @@ func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 		return nil, err
 	}
 
-	return decomposedfs.NewDefault(m, bs, stream)
+	tusDataStore := tus.NewFileStore(o.Root)
+
+	return decomposedfs.NewDefault(m, bs, tusDataStore, stream)
 }
