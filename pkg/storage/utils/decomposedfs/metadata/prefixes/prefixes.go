@@ -36,8 +36,9 @@ const (
 	// updated when the file is renamed or moved
 	NameAttr string = OcisPrefix + "name"
 
-	BlobIDAttr   string = OcisPrefix + "blobid"
-	BlobsizeAttr string = OcisPrefix + "blobsize"
+	BlobIDAttr      string = OcisPrefix + "blobid"
+	BlobsizeAttr    string = OcisPrefix + "blobsize"
+	BlobOffsetsAttr string = OcisPrefix + "bloboffsets"
 
 	// statusPrefix is the prefix for the node status
 	StatusPrefix string = OcisPrefix + "nodestatus"

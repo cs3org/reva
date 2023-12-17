@@ -62,6 +62,9 @@ type Blobstore interface {
 	Upload(node *node.Node, source string) error
 	Download(node *node.Node) (io.ReadCloser, error)
 	Delete(node *node.Node) error
+
+	StreamingUpload(ctx context.Context, spaceid, blobid string, offset, objectSize int64, reader io.Reader, userMetadata map[string]string) error
+	StreamingDownload(ctx context.Context, spaceid, blobid string, offset, objectSize int64) (io.ReadCloser, error)
 }
 
 // Tree manages a hierarchical tree
@@ -710,6 +713,14 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 // WriteBlob writes a blob to the blobstore
 func (t *Tree) WriteBlob(node *node.Node, source string) error {
 	return t.blobstore.Upload(node, source)
+}
+
+// StreamBlob streams a blob to the blobstore
+func (t *Tree) StreamBlob(ctx context.Context, spaceid, blobid string, offset, objectSize int64, reader io.Reader, userMetadata map[string]string) error {
+	return t.blobstore.StreamingUpload(ctx, spaceid, blobid, offset, objectSize, reader, userMetadata)
+}
+func (t *Tree) BlobReader(ctx context.Context, spaceid, blobid string, offset, objectSize int64) (io.ReadCloser, error) {
+	return t.blobstore.StreamingDownload(ctx, spaceid, blobid, offset, objectSize)
 }
 
 // ReadBlob reads a blob from the blobstore

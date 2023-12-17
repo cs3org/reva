@@ -71,24 +71,47 @@ func (bs *Blobstore) Upload(node *node.Node, source string) error {
 	}
 	defer reader.Close()
 
-	_, err = bs.client.PutObject(context.Background(), bs.bucket, bs.path(node), reader, node.Blobsize, minio.PutObjectOptions{ContentType: "application/octet-stream", SendContentMd5: true})
+	_, err = bs.client.PutObject(context.Background(), bs.bucket, bs.pathFromNode(node), reader, node.Blobsize, minio.PutObjectOptions{ContentType: "application/octet-stream", SendContentMd5: true})
 
 	if err != nil {
-		return errors.Wrapf(err, "could not store object '%s' into bucket '%s'", bs.path(node), bs.bucket)
+		return errors.Wrapf(err, "could not store object '%s' into bucket '%s'", bs.pathFromNode(node), bs.bucket)
 	}
 	return nil
 }
 
+func (bs *Blobstore) StreamingUpload(ctx context.Context, spaceid, blobid string, offset, objectSize int64, reader io.Reader, userMetadata map[string]string) error {
+	key := bs.path(spaceid, blobid)
+	if offset > 0 {
+		// write a part
+		key = fmt.Sprintf("%s:%d-%d", key, offset, offset+objectSize)
+	}
+	_, err := bs.client.PutObject(ctx, bs.bucket, key, reader, objectSize, minio.PutObjectOptions{ContentType: "application/octet-stream", SendContentMd5: true, UserMetadata: userMetadata})
+
+	if err != nil {
+		return errors.Wrapf(err, "could not stream object '%s' into bucket '%s'", key, bs.bucket)
+	}
+	return nil
+}
+
+func (bs *Blobstore) StreamingDownload(ctx context.Context, spaceid, blobid string, offset, objectSize int64) (io.ReadCloser, error) {
+	key := bs.path(spaceid, blobid)
+	if offset > 0 {
+		// read a part
+		key = fmt.Sprintf("%s:%d-%d", key, offset, offset+objectSize)
+	}
+	return bs.client.GetObject(ctx, bs.bucket, key, minio.GetObjectOptions{})
+}
+
 // Download retrieves a blob from the blobstore for reading
 func (bs *Blobstore) Download(node *node.Node) (io.ReadCloser, error) {
-	reader, err := bs.client.GetObject(context.Background(), bs.bucket, bs.path(node), minio.GetObjectOptions{})
+	reader, err := bs.client.GetObject(context.Background(), bs.bucket, bs.pathFromNode(node), minio.GetObjectOptions{})
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not download object '%s' from bucket '%s'", bs.path(node), bs.bucket)
+		return nil, errors.Wrapf(err, "could not download object '%s' from bucket '%s'", bs.pathFromNode(node), bs.bucket)
 	}
 
 	stat, err := reader.Stat()
 	if err != nil {
-		return nil, errors.Wrapf(err, "blob path: %s", bs.path(node))
+		return nil, errors.Wrapf(err, "blob path: %s", bs.pathFromNode(node))
 	}
 
 	if node.Blobsize != stat.Size {
@@ -100,14 +123,18 @@ func (bs *Blobstore) Download(node *node.Node) (io.ReadCloser, error) {
 
 // Delete deletes a blob from the blobstore
 func (bs *Blobstore) Delete(node *node.Node) error {
-	err := bs.client.RemoveObject(context.Background(), bs.bucket, bs.path(node), minio.RemoveObjectOptions{})
+	err := bs.client.RemoveObject(context.Background(), bs.bucket, bs.pathFromNode(node), minio.RemoveObjectOptions{})
 	if err != nil {
-		return errors.Wrapf(err, "could not delete object '%s' from bucket '%s'", bs.path(node), bs.bucket)
+		return errors.Wrapf(err, "could not delete object '%s' from bucket '%s'", bs.pathFromNode(node), bs.bucket)
 	}
 	return nil
 }
 
-func (bs *Blobstore) path(node *node.Node) string {
+func (bs *Blobstore) pathFromNode(node *node.Node) string {
+	return bs.path(node.SpaceID, node.BlobID)
+}
+
+func (bs *Blobstore) path(spaceid, blobid string) string {
 	// https://aws.amazon.com/de/premiumsupport/knowledge-center/s3-prefix-nested-folders-difference/
 	// Prefixes are used to partion a bucket. A prefix is everything except the filename.
 	// For a file `BucketName/foo/bar/lorem.ipsum`, `BucketName/foo/bar/` is the prefix.
@@ -116,5 +143,5 @@ func (bs *Blobstore) path(node *node.Node) string {
 	//
 	// Since the spaceID is always the same for a space, we don't need to pathify that, because it would
 	// not yield any performance gains
-	return filepath.Clean(filepath.Join(node.SpaceID, lookup.Pathify(node.BlobID, 4, 2)))
+	return filepath.Clean(filepath.Join(spaceid, lookup.Pathify(blobid, 4, 2)))
 }

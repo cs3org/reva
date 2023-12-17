@@ -208,13 +208,6 @@ func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot stri
 		return nil, err
 	}
 
-	stat, err := os.Stat(info.Storage["BinPath"])
-	if err != nil {
-		return nil, err
-	}
-
-	info.Offset = stat.Size()
-
 	u := &userpb.User{
 		Id: &userpb.UserId{
 			Idp:      info.Storage["Idp"],
@@ -250,26 +243,19 @@ func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot stri
 func CreateNodeForUpload(upload *Upload, initAttrs node.Attributes) (*node.Node, error) {
 	ctx, span := tracer.Start(upload.Ctx, "CreateNodeForUpload")
 	defer span.End()
-	_, subspan := tracer.Start(ctx, "os.Stat")
-	fi, err := os.Stat(upload.binPath)
-	subspan.End()
-	if err != nil {
-		return nil, err
-	}
-
-	fsize := fi.Size()
 	spaceID := upload.Info.Storage["SpaceRoot"]
 	n := node.New(
 		spaceID,
 		upload.Info.Storage["NodeId"],
 		upload.Info.Storage["NodeParentId"],
 		upload.Info.Storage["NodeName"],
-		fsize,
+		upload.Info.Offset,
 		upload.Info.ID,
 		provider.ResourceType_RESOURCE_TYPE_FILE,
 		nil,
 		upload.lu,
 	)
+	var err error
 	n.SpaceRoot, err = node.ReadNode(ctx, upload.lu, spaceID, spaceID, false, nil, false)
 	if err != nil {
 		return nil, err
@@ -283,12 +269,12 @@ func CreateNodeForUpload(upload *Upload, initAttrs node.Attributes) (*node.Node,
 	var f *lockedfile.File
 	switch upload.Info.Storage["NodeExists"] {
 	case "false":
-		f, err = initNewNode(upload, n, uint64(fsize))
+		f, err = initNewNode(upload, n, uint64(upload.Info.Offset))
 		if f != nil {
 			appctx.GetLogger(upload.Ctx).Info().Str("lockfile", f.Name()).Interface("err", err).Msg("got lock file from initNewNode")
 		}
 	default:
-		f, err = updateExistingNode(upload, n, spaceID, uint64(fsize))
+		f, err = updateExistingNode(upload, n, spaceID, uint64(upload.Info.Offset))
 		if f != nil {
 			appctx.GetLogger(upload.Ctx).Info().Str("lockfile", f.Name()).Interface("err", err).Msg("got lock file from updateExistingNode")
 		}
@@ -321,6 +307,7 @@ func CreateNodeForUpload(upload *Upload, initAttrs node.Attributes) (*node.Node,
 	initAttrs.SetString(prefixes.NameAttr, n.Name)
 	initAttrs.SetString(prefixes.BlobIDAttr, n.BlobID)
 	initAttrs.SetInt64(prefixes.BlobsizeAttr, n.Blobsize)
+	initAttrs.SetString(prefixes.BlobOffsetsAttr, upload.Info.Storage["BlobOffsets"])
 	initAttrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+upload.Info.ID)
 
 	// update node metadata with new blobid etc
@@ -462,6 +449,7 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 			attributeName == prefixes.TypeAttr ||
 			attributeName == prefixes.BlobIDAttr ||
 			attributeName == prefixes.BlobsizeAttr ||
+			attributeName == prefixes.BlobOffsetsAttr ||
 			attributeName == prefixes.MTimeAttr
 	}, f, true); err != nil {
 		return f, err
