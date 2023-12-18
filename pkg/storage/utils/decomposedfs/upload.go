@@ -144,7 +144,11 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	// permissions are checked in NewUpload below
 
-	relative, err := fs.lu.Path(ctx, n, node.NoCheck) // TODO why do we need the path here?
+	relative, err := fs.lu.Path(ctx, n, node.NoCheck)
+	// TODO why do we need the path here?
+	// jfd: it is used later when emitting the UploadReady event ...
+	// AAAND refPath might be . when accessing with an id / relative reference ... which causes NodeName to become . But then dir will also always be .
+	// That is why we still have to read the path here: so that the event we emit contains a relative reference with a path relative to the space root. WTF
 	if err != nil {
 		return nil, err
 	}
@@ -152,8 +156,8 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	lockID, _ := ctxpkg.ContextGetLockID(ctx)
 
 	session := fs.sessionStore.New(ctx)
-	session.SetMetadata("filename", filepath.Base(refpath))
-	session.SetStorageValue("NodeName", filepath.Base(refpath))
+	session.SetMetadata("filename", n.Name)
+	session.SetStorageValue("NodeName", n.Name)
 	session.SetMetadata("dir", filepath.Dir(relative))
 	session.SetStorageValue("Dir", filepath.Dir(relative))
 	session.SetMetadata("lockid", lockID)
