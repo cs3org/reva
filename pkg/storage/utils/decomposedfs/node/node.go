@@ -1158,10 +1158,7 @@ func (n *Node) Purge(ctx context.Context) error {
 
 	// remove child entry in parent
 	src := filepath.Join(n.ParentPath(), n.Name)
-	if err := os.Remove(src); err != nil {
-		return err
-	}
-	return nil
+	return os.Remove(src)
 }
 
 // ListGrants lists all grants of the current node.
