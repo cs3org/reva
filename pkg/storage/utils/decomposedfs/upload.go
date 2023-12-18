@@ -294,6 +294,8 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	metrics.UploadSessionsInitiated.Inc()
 
+	metrics.UploadSessionsInitiated.Inc()
+
 	return map[string]string{
 		"simple": session.ID(),
 		"tus":    session.ID(),
