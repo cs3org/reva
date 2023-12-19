@@ -60,7 +60,7 @@ require (
 	go-micro.dev/v4 v4.3.1-0.20211108085239-0c2041e43908
 	go.opencensus.io v0.24.0
 	go.opentelemetry.io/otel/trace v1.20.0
-	go.step.sm/crypto v0.39.0
+	go.step.sm/crypto v0.40.0
 	golang.org/x/crypto v0.17.0
 	golang.org/x/oauth2 v0.14.0
 	golang.org/x/sync v0.5.0
