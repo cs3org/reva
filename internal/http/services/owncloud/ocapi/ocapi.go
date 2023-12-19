@@ -12,6 +12,7 @@ const roleslistMock = `{"bundles":[{"id":"2aadd357-682c-406b-8874-293091995fdd",
 
 const assigmentMock = `{"assignments":[{"id":"412cbb5a-48cf-401b-8709-6f88d1d33b9d","accountUuid":"619201e3-d9ca-41ab-a03d-c995e3f876f6","roleId":"71881883-1768-46bd-a24d-a356a2afdf7f"}]}`
 
+// TODO(lopresti) this is currently mocked for a "primary" user, need to remove some of those permissions for other types
 const permissionsMock = `{"permissions": [
 	"Drives.DeletePersonal.all",
 	"ReadOnlyPublicLinkPassword.Delete.all",
