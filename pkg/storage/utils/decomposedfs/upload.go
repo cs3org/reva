@@ -54,10 +54,8 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 
 	session := up.(*upload.OcisSession)
 
-	p := session.Filename()
-	if chunking.IsChunked(p) { // check chunking v1
-		var assembledFile string
-		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, req.Body)
+	if session.Chunk() != "" { // check chunking v1
+		p, assembledFile, err := fs.chunkHandler.WriteChunk(session.Chunk(), req.Body)
 		if err != nil {
 			return provider.ResourceInfo{}, err
 		}
@@ -67,7 +65,6 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 			}
 			return provider.ResourceInfo{}, errtypes.PartialContent(req.Ref.String())
 		}
-		session.SetStorageValue("NodeName", p)
 		fd, err := os.Open(assembledFile)
 		if err != nil {
 			return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error opening assembled file")
@@ -125,8 +122,10 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	// remember the path from the reference
 	refpath := ref.GetPath()
+	var chunk *chunking.ChunkBLOBInfo
+	var err error
 	if chunking.IsChunked(refpath) { // check chunking v1
-		chunk, err := chunking.GetChunkBLOBInfo(refpath)
+		chunk, err = chunking.GetChunkBLOBInfo(refpath)
 		if err != nil {
 			return nil, errtypes.BadRequest(err.Error())
 		}
@@ -158,6 +157,9 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	session := fs.sessionStore.New(ctx)
 	session.SetMetadata("filename", n.Name)
 	session.SetStorageValue("NodeName", n.Name)
+	if chunk != nil {
+		session.SetStorageValue("Chunk", filepath.Base(refpath))
+	}
 	session.SetMetadata("dir", filepath.Dir(relative))
 	session.SetStorageValue("Dir", filepath.Dir(relative))
 	session.SetMetadata("lockid", lockID)

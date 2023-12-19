@@ -165,7 +165,9 @@ func (m *OcisSession) ID() string {
 func (m *OcisSession) Filename() string {
 	return m.info.Storage["NodeName"]
 }
-
+func (m *OcisSession) Chunk() string {
+	return m.info.Storage["Chunk"]
+}
 func (m *OcisSession) SetMetadata(key, value string) {
 	m.info.MetaData[key] = value
 }
