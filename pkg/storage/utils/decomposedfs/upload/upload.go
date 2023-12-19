@@ -127,11 +127,6 @@ func (session *OcisSession) GetReader(ctx context.Context) (io.Reader, error) {
 func (session *OcisSession) FinishUpload(ctx context.Context) error {
 	ctx, span := tracer.Start(session.Context(ctx), "FinishUpload")
 	defer span.End()
-	// set lockID to context
-	if session.LockID() != "" {
-		session.ctx = ctxpkg.ContextSetLockID(ctx, session.LockID())
-		ctx = session.ctx
-	}
 	log := appctx.GetLogger(ctx)
 
 	// calculate the checksum of the written bytes

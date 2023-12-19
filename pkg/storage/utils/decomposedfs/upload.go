@@ -262,9 +262,6 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	}
 
 	// check lock
-	if session.LockID() != "" {
-		ctx = ctxpkg.ContextSetLockID(ctx, session.LockID())
-	}
 	if err := n.CheckLock(ctx); err != nil {
 		return nil, err
 	}

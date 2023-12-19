@@ -59,29 +59,18 @@ type OcisSession struct {
 	store OcisStore
 	// for now, we keep the json files in the uploads folder
 	info tusd.FileInfo
-	// a context that is reinitialized with the executant and log from the session metadata
-	ctx context.Context
 }
 
-func (m *OcisSession) Context(ctx context.Context) context.Context {
-	ctx, _ = m.ContextWithLogger(ctx) // ignore the error
-	return m.ContextWithExecutant(ctx)
-}
-func (m *OcisSession) ContextWithExecutant(ctx context.Context) context.Context {
-	return ctxpkg.ContextSetUser(ctx, m.ExecutantUser())
-}
-func (m *OcisSession) ContextWithLogger(ctx context.Context) (context.Context, error) {
-	// restore logger from file info
-	log, err := logger.FromConfig(&logger.LogConf{
+func (m *OcisSession) Context(ctx context.Context) context.Context { // restore logger from file info
+	log, _ := logger.FromConfig(&logger.LogConf{
 		Output: "stderr", // TODO use config from decomposedfs
 		Mode:   "json",   // TODO use config from decomposedfs
 		Level:  m.info.Storage["LogLevel"],
 	})
-	if err != nil {
-		return ctx, err
-	}
 	sub := log.With().Int("pid", os.Getpid()).Logger()
-	return appctx.WithLogger(ctx, &sub), nil
+	ctx = appctx.WithLogger(ctx, &sub)
+	ctx = ctxpkg.ContextSetLockID(ctx, m.LockID())
+	return ctxpkg.ContextSetUser(ctx, m.ExecutantUser())
 }
 
 func (m *OcisSession) Purge(ctx context.Context) error {
