@@ -20,6 +20,7 @@ level = "debug"
 
 [shared]
 gatewaysvc = "{{ vars.internal_gateway }}:19000"
+jwt_secret = "reva-secret"
 
 [grpc.services.gateway]
 address = ":19000"
@@ -29,6 +30,7 @@ storageregistrysvc = "{{ grpc.services.storageregistry.address }}"
 preferencessvc = "{{ grpc.services.userprovider.address }}"
 userprovidersvc = "{{ grpc.services.userprovider.address }}"
 usershareprovidersvc = "{{ grpc.services.usershareprovider.address }}"
+publicshareprovidersvc = "{{ grpc.services.publicshareprovider.address }}"
 ocmcoresvc = "{{ grpc.services.ocmcore.address }}"
 ocmshareprovidersvc = "{{ grpc.services.ocmshareprovider.address }}"
 ocminvitemanagersvc = "{{ grpc.services.ocminvitemanager.address }}"
@@ -84,7 +86,7 @@ app_int_url = "http://collabora.docker:9980"
 # app_int_url = "https://codimd.docker"
 
 
-### AUTH PROVIDERS ###
+### AUTH ###
 
 [grpc.services.authregistry]
 driver = "static"
@@ -118,7 +120,7 @@ gateway_addr = "{{ vars.internal_gateway }}:19000"
 auth_manager = "ocmshares"
 
 
-### STORAGE PROVIDERS ###
+### STORAGE ###
 
 [grpc.services.storageregistry]
 driver = "static"
@@ -172,6 +174,8 @@ driver = "memory"
 
 [grpc.services.publicshareprovider]
 driver = "memory"
+
+[grpc.services.preferences]
 
 [grpc.services.ocmcore]
 driver = "json"
@@ -243,7 +247,6 @@ token_strategy_chain = ["bearer", "header"]
 
 [http.services.appprovider]
 address = ":443"
-insecure = true
 
 [http.services.datagateway]
 address = ":443"
@@ -384,6 +387,7 @@ string = "10.0.11"
 
 [http.services.ocdav]
 address = ":443"
+insecure = true
 
 [http.services.prometheus]
 address = ":443"
@@ -394,4 +398,10 @@ address = ":443"
 #address = ":443"
 
 [http.middlewares.cors]
+allowed_origins = ["*"]
+allowed_methods = ["OPTIONS", "LOCK", "GET", "HEAD", "POST", "DELETE", "PROPPATCH", "COPY", "MOVE", "UNLOCK", "PROPFIND", "MKCOL", "REPORT", "SEARCH", "PUT"]
+allowed_headers = ["Accept", "Accept-Language", "Authorization", "Content-Language", "Content-Type", "Depth", "OCS-APIREQUEST", "Referer", "sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform", "User-Agent", "X-Requested-With"]
+debug = true
+exposed_headers = []
+
 [http.middlewares.log]
