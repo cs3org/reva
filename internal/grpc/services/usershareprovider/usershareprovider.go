@@ -318,6 +318,7 @@ func (s *service) ListShares(ctx context.Context, req *collaboration.ListSharesR
 
 func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShareRequest) (*collaboration.UpdateShareResponse, error) {
 	log := appctx.GetLogger(ctx)
+	user := ctxpkg.ContextMustGetUser(ctx)
 	gatewayClient, err := s.gatewaySelector.Next()
 	if err != nil {
 		return nil, err
@@ -363,6 +364,17 @@ func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShar
 		log.Err(err).Interface("resource_id", req.GetShare().GetResourceId()).Msg("failed to stat resource to share")
 		return &collaboration.UpdateShareResponse{
 			Status: status.NewInternal(ctx, "failed to stat shared resource"),
+		}, err
+	}
+	// the requesting user needs to be either the Owner/Creator of the share or have the UpdateGrant permissions on the Resource
+	switch {
+	case utils.UserEqual(user.GetId(), currentShare.GetCreator()) || utils.UserEqual(user.GetId(), currentShare.GetOwner()):
+		fallthrough
+	case sRes.GetInfo().GetPermissionSet().UpdateGrant:
+		break
+	default:
+		return &collaboration.UpdateShareResponse{
+			Status: status.NewPermissionDenied(ctx, nil, "no permission to remove grants on shared resource"),
 		}, err
 	}
 
