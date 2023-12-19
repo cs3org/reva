@@ -325,25 +325,24 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 		return nil, errors.Wrap(err, "rgrpc: error creating unary auth interceptor")
 	}
 
-	unaryInterceptors := []grpc.UnaryServerInterceptor{authUnary}
-	for _, t := range unaryTriples {
-		unaryInterceptors = append(unaryInterceptors, t.Interceptor)
-		s.log.Info().Msgf("rgrpc: chaining grpc unary interceptor %s with priority %d", t.Name, t.Priority)
-	}
-
-	unaryInterceptors = append(unaryInterceptors,
+	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		otelgrpc.UnaryServerInterceptor(
 			otelgrpc.WithTracerProvider(s.tracerProvider),
-			otelgrpc.WithPropagators(rtrace.Propagator)),
-	)
-
-	unaryInterceptors = append([]grpc.UnaryServerInterceptor{
+			otelgrpc.WithPropagators(rtrace.Propagator),
+		),
 		appctx.NewUnary(s.log, s.tracerProvider),
 		token.NewUnary(),
 		useragent.NewUnary(),
 		log.NewUnary(),
 		recovery.NewUnary(),
-	}, unaryInterceptors...)
+		authUnary,
+	}
+
+	for _, t := range unaryTriples {
+		unaryInterceptors = append(unaryInterceptors, t.Interceptor)
+		s.log.Info().Msgf("rgrpc: chaining grpc unary interceptor %s with priority %d", t.Name, t.Priority)
+	}
+
 	unaryChain := grpc_middleware.ChainUnaryServer(unaryInterceptors...)
 
 	streamTriples := []*streamInterceptorTriple{}
