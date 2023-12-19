@@ -25,13 +25,14 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 // GetACLPerm generates a string representation of CS3APIs' ResourcePermissions
 // TODO(labkode): fine grained permission controls.
 func GetACLPerm(set *provider.ResourcePermissions) (string, error) {
 	// resource permission is denied
-	if cmp.Equal(provider.ResourcePermissions{}, *set) {
+	if cmp.Equal(provider.ResourcePermissions{}, *set, cmpopts.IgnoreUnexported(*set)) {
 		return "!r!w!x!m!u!d", nil
 	}
 
@@ -135,10 +136,10 @@ func GetGranteeType(aclType string) provider.GranteeType {
 
 // PermissionsEqual returns true if the permissions are equal.
 func PermissionsEqual(p1, p2 *provider.ResourcePermissions) bool {
-	return p1 != nil && p2 != nil && cmp.Equal(*p1, *p2)
+	return p1 != nil && p2 != nil && cmp.Equal(*p1, *p2, cmpopts.IgnoreUnexported(*p1, *p2))
 }
 
 // GranteeEqual returns true if the grantee are equal.
 func GranteeEqual(g1, g2 *provider.Grantee) bool {
-	return g1 != nil && g2 != nil && cmp.Equal(*g1, *g2)
+	return g1 != nil && g2 != nil && cmp.Equal(*g1, *g2, cmpopts.IgnoreUnexported(*g1, *g2))
 }
