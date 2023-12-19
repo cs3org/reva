@@ -154,6 +154,7 @@ func (s *service) isPathAllowed(path string) bool {
 }
 
 func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
+	log := appctx.GetLogger(ctx)
 	user := ctxpkg.ContextMustGetUser(ctx)
 
 	gatewayClient, err := s.gatewaySelector.Next()
@@ -184,9 +185,22 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 		}
 	}
 
+	sRes, err := gatewayClient.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: req.GetResourceInfo().GetId()}})
+	if err != nil {
+		log.Err(err).Interface("resource_id", req.GetResourceInfo().GetId()).Msg("failed to stat resource to share")
+		return &collaboration.CreateShareResponse{
+			Status: status.NewInternal(ctx, "failed to stat shared resource"),
+		}, err
+	}
+	// the user needs to have the AddGrant permissions on the Resource to be able to create a share
+	if !sRes.GetInfo().GetPermissionSet().AddGrant {
+		return &collaboration.CreateShareResponse{
+			Status: status.NewPermissionDenied(ctx, nil, "no permission to add grants on shared resource"),
+		}, err
+	}
 	// check if the requested share creation has sufficient permissions to do so.
 	if shareCreationAllowed := conversions.SufficientCS3Permissions(
-		req.GetResourceInfo().GetPermissionSet(),
+		sRes.GetInfo().GetPermissionSet(),
 		req.GetGrant().GetPermissions().GetPermissions(),
 	); !shareCreationAllowed {
 		return &collaboration.CreateShareResponse{
@@ -214,6 +228,8 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 }
 
 func (s *service) RemoveShare(ctx context.Context, req *collaboration.RemoveShareRequest) (*collaboration.RemoveShareResponse, error) {
+	log := appctx.GetLogger(ctx)
+	user := ctxpkg.ContextMustGetUser(ctx)
 	share, err := s.sm.GetShare(ctx, req.Ref)
 	if err != nil {
 		return &collaboration.RemoveShareResponse{

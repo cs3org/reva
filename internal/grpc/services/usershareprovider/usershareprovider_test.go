@@ -48,14 +48,17 @@ import (
 
 var _ = Describe("user share provider service", func() {
 	var (
-		ctx                     context.Context
-		provider                collaborationpb.CollaborationAPIServer
-		manager                 *mocks.Manager
-		gatewayClient           *cs3mocks.GatewayAPIClient
-		gatewaySelector         pool.Selectable[gateway.GatewayAPIClient]
-		checkPermissionResponse *permissions.CheckPermissionResponse
-		statResourceResponse    *providerpb.StatResponse
+		ctx                      context.Context
+		provider                 collaborationpb.CollaborationAPIServer
+		manager                  *mocks.Manager
+		gatewayClient            *cs3mocks.GatewayAPIClient
+		gatewaySelector          pool.Selectable[gateway.GatewayAPIClient]
+		checkPermissionResponse  *permissions.CheckPermissionResponse
+		statResourceResponse     *providerpb.StatResponse
+		cs3permissionsNoAddGrant *providerpb.ResourcePermissions
 	)
+	cs3permissionsNoAddGrant = conversions.RoleFromName("manager", true).CS3ResourcePermissions()
+	cs3permissionsNoAddGrant.AddGrant = false
 
 	BeforeEach(func() {
 		manager = &mocks.Manager{}
@@ -125,6 +128,8 @@ var _ = Describe("user share provider service", func() {
 				manager.On("Share", mock.Anything, mock.Anything, mock.Anything).Return(&collaborationpb.Share{}, nil)
 				checkPermissionResponse.Status.Code = checkPermissionStatusCode
 
+				statResourceResponse.Info.PermissionSet = resourceInfoPermissions
+
 				createShareResponse, err := provider.CreateShare(ctx, &collaborationpb.CreateShareRequest{
 					ResourceInfo: &providerpb.ResourceInfo{
 						PermissionSet: resourceInfoPermissions,
@@ -156,6 +161,14 @@ var _ = Describe("user share provider service", func() {
 				rpcpb.Code_CODE_OK,
 				rpcpb.Code_CODE_OK,
 				1,
+			),
+			Entry(
+				"no AddGrant permission on resource",
+				cs3permissionsNoAddGrant,
+				conversions.RoleFromName("spaceeditor", true).CS3ResourcePermissions(),
+				rpcpb.Code_CODE_OK,
+				rpcpb.Code_CODE_PERMISSION_DENIED,
+				0,
 			),
 			Entry(
 				"no WriteShare permission on user role",
