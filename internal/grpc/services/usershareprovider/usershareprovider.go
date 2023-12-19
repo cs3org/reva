@@ -237,6 +237,29 @@ func (s *service) RemoveShare(ctx context.Context, req *collaboration.RemoveShar
 		}, nil
 	}
 
+	gatewayClient, err := s.gatewaySelector.Next()
+	if err != nil {
+		return nil, err
+	}
+	sRes, err := gatewayClient.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: share.GetResourceId()}})
+	if err != nil {
+		log.Err(err).Interface("resource_id", share.GetResourceId()).Msg("failed to stat shared resource")
+		return &collaboration.RemoveShareResponse{
+			Status: status.NewInternal(ctx, "failed to stat shared resource"),
+		}, err
+	}
+	// the requesting user needs to be either the Owner/Creator of the share or have the RemoveGrant permissions on the Resource
+	switch {
+	case utils.UserEqual(user.GetId(), share.GetCreator()) || utils.UserEqual(user.GetId(), share.GetOwner()):
+		fallthrough
+	case sRes.GetInfo().GetPermissionSet().RemoveGrant:
+		break
+	default:
+		return &collaboration.RemoveShareResponse{
+			Status: status.NewPermissionDenied(ctx, nil, "no permission to remove grants on shared resource"),
+		}, err
+	}
+
 	err = s.sm.Unshare(ctx, req.Ref)
 	if err != nil {
 		return &collaboration.RemoveShareResponse{
