@@ -48,14 +48,18 @@ import (
 
 var _ = Describe("user share provider service", func() {
 	var (
-		ctx                     context.Context
-		provider                collaborationpb.CollaborationAPIServer
-		manager                 *mocks.Manager
-		gatewayClient           *cs3mocks.GatewayAPIClient
-		gatewaySelector         pool.Selectable[gateway.GatewayAPIClient]
-		checkPermissionResponse *permissions.CheckPermissionResponse
-		statResourceResponse    *providerpb.StatResponse
+		ctx                      context.Context
+		provider                 collaborationpb.CollaborationAPIServer
+		manager                  *mocks.Manager
+		gatewayClient            *cs3mocks.GatewayAPIClient
+		gatewaySelector          pool.Selectable[gateway.GatewayAPIClient]
+		checkPermissionResponse  *permissions.CheckPermissionResponse
+		statResourceResponse     *providerpb.StatResponse
+		cs3permissionsNoAddGrant *providerpb.ResourcePermissions
+		getShareResponse         *collaborationpb.Share
 	)
+	cs3permissionsNoAddGrant = conversions.RoleFromName("manager", true).CS3ResourcePermissions()
+	cs3permissionsNoAddGrant.AddGrant = false
 
 	BeforeEach(func() {
 		manager = &mocks.Manager{}
@@ -87,8 +91,14 @@ var _ = Describe("user share provider service", func() {
 			},
 		}
 		gatewayClient.On("Stat", mock.Anything, mock.Anything).Return(statResourceResponse, nil)
+		alice := &userpb.User{
+			Id: &userpb.UserId{
+				OpaqueId: "alice",
+			},
+			Username: "alice",
+		}
 
-		getShareResponse := &collaborationpb.Share{
+		getShareResponse = &collaborationpb.Share{
 			Id: &collaborationpb.ShareId{
 				OpaqueId: "shareid",
 			},
@@ -97,6 +107,8 @@ var _ = Describe("user share provider service", func() {
 				SpaceId:   "spaceid",
 				OpaqueId:  "opaqueid",
 			},
+			Owner:   alice.Id,
+			Creator: alice.Id,
 		}
 		manager.On("GetShare", mock.Anything, mock.Anything).Return(getShareResponse, nil)
 
@@ -105,12 +117,7 @@ var _ = Describe("user share provider service", func() {
 		provider = rgrpcService.(collaborationpb.CollaborationAPIServer)
 		Expect(provider).ToNot(BeNil())
 
-		ctx = ctxpkg.ContextSetUser(context.Background(), &userpb.User{
-			Id: &userpb.UserId{
-				OpaqueId: "alice",
-			},
-			Username: "alice",
-		})
+		ctx = ctxpkg.ContextSetUser(context.Background(), alice)
 	})
 
 	Describe("CreateShare", func() {
@@ -124,6 +131,8 @@ var _ = Describe("user share provider service", func() {
 			) {
 				manager.On("Share", mock.Anything, mock.Anything, mock.Anything).Return(&collaborationpb.Share{}, nil)
 				checkPermissionResponse.Status.Code = checkPermissionStatusCode
+
+				statResourceResponse.Info.PermissionSet = resourceInfoPermissions
 
 				createShareResponse, err := provider.CreateShare(ctx, &collaborationpb.CreateShareRequest{
 					ResourceInfo: &providerpb.ResourceInfo{
@@ -156,6 +165,14 @@ var _ = Describe("user share provider service", func() {
 				rpcpb.Code_CODE_OK,
 				rpcpb.Code_CODE_OK,
 				1,
+			),
+			Entry(
+				"no AddGrant permission on resource",
+				cs3permissionsNoAddGrant,
+				conversions.RoleFromName("spaceeditor", true).CS3ResourcePermissions(),
+				rpcpb.Code_CODE_OK,
+				rpcpb.Code_CODE_PERMISSION_DENIED,
+				0,
 			),
 			Entry(
 				"no WriteShare permission on user role",
@@ -193,7 +210,6 @@ var _ = Describe("user share provider service", func() {
 		It("fails when the user tries to share with elevated permissions", func() {
 			// user has only read access
 			statResourceResponse.Info.PermissionSet = &providerpb.ResourcePermissions{
-				UpdateGrant:          true,
 				InitiateFileDownload: true,
 				Stat:                 true,
 			}
@@ -226,13 +242,87 @@ var _ = Describe("user share provider service", func() {
 
 			manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 0)
 		})
-		It("succeeds when the user has sufficient permissions", func() {
+		It("succeeds when the user is not the owner/creator and does not have the UpdateGrant permissions", func() {
+			// user has only read access
+			statResourceResponse.Info.PermissionSet = &providerpb.ResourcePermissions{
+				InitiateFileDownload: true,
+				Stat:                 true,
+			}
+			bobId := &userpb.UserId{OpaqueId: "bob"}
+			getShareResponse.Owner = bobId
+			getShareResponse.Creator = bobId
+
+			// user tries to update a share to give write permissions
+			updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
+				Ref: &collaborationpb.ShareReference{
+					Spec: &collaborationpb.ShareReference_Id{
+						Id: &collaborationpb.ShareId{
+							OpaqueId: "shareid",
+						},
+					},
+				},
+				Share: &collaborationpb.Share{
+					Permissions: &collaborationpb.SharePermissions{
+						Permissions: &providerpb.ResourcePermissions{
+							Stat:                 true,
+							InitiateFileDownload: true,
+						},
+					},
+				},
+				UpdateMask: &fieldmaskpb.FieldMask{
+					Paths: []string{"permissions"},
+				},
+			})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_PERMISSION_DENIED))
+
+			manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 0)
+		})
+		It("succeeds when the user is the owner/creator", func() {
+			// user has only read access
+			statResourceResponse.Info.PermissionSet = &providerpb.ResourcePermissions{
+				InitiateFileDownload: true,
+				Stat:                 true,
+			}
+
+			// user tries to update a share to give write permissions
+			updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
+				Ref: &collaborationpb.ShareReference{
+					Spec: &collaborationpb.ShareReference_Id{
+						Id: &collaborationpb.ShareId{
+							OpaqueId: "shareid",
+						},
+					},
+				},
+				Share: &collaborationpb.Share{
+					Permissions: &collaborationpb.SharePermissions{
+						Permissions: &providerpb.ResourcePermissions{
+							Stat:                 true,
+							InitiateFileDownload: true,
+						},
+					},
+				},
+				UpdateMask: &fieldmaskpb.FieldMask{
+					Paths: []string{"permissions"},
+				},
+			})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+
+			manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
+		})
+		It("succeeds when the user is not the owner/creator but has the UpdateGrant permissions", func() {
 			// user has only read access
 			statResourceResponse.Info.PermissionSet = &providerpb.ResourcePermissions{
 				UpdateGrant:          true,
 				InitiateFileDownload: true,
 				Stat:                 true,
 			}
+			bobId := &userpb.UserId{OpaqueId: "bob"}
+			getShareResponse.Owner = bobId
+			getShareResponse.Creator = bobId
 
 			// user tries to update a share to give write permissions
 			updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
