@@ -12,11 +12,10 @@
   "options": {
     "contextHelpers": true,
     "enableAdvancedTable": true,
-    "runningOnEos": true,
     "cernFeatures": true,
     "hoverableQuickActions": true,
     "disableFeedbackLink": true,
-    "homeFolder": "/home/{{.Id}}",
+    "homeFolder": "/{{.Id}}",
     "previewFileMimeTypes" : [
       "image/gif",
       "image/png",

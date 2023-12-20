@@ -185,10 +185,10 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, pi *ocmprovider.Prov
 	}
 
 	switch {
-	case !providerAuthorized:
-		return errtypes.NotFound(pi.GetDomain())
 	case !a.conf.VerifyRequestHostname:
 		return nil
+	case !providerAuthorized:
+		return errtypes.NotFound(pi.GetDomain())
 	case len(pi.Services) == 0:
 		return errtypes.NotSupported(
 			fmt.Sprintf("mentix: provider %s has no supported services", pi.GetDomain()))

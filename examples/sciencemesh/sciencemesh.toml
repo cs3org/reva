@@ -161,8 +161,7 @@ driver = "nextcloud"
 provider_domain = "{{ vars.provider_domain }}"
 webdav_endpoint = "{{ vars.external_reva_endpoint }}"
 webdav_prefix = "{{ vars.external_reva_endpoint }}/remote.php/dav/files"
-# TODO the following should become {{ vars.external_reva_endpoint }}/external/{{.Token}}/...
-webapp_template = "https://your.revad.org/external/sciencemesh/{{.Token}}/{relative-path-to-shared-resource}"
+webapp_template = "{{ vars.external_reva_endpoint }}/external/sciencemesh/{{.Token}}/{relative-path-to-shared-resource}"
 
 [grpc.services.ocmshareprovider.drivers.nextcloud]
 webdav_host = "{{ vars.external_reva_endpoint }}"
