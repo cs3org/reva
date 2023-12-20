@@ -299,7 +299,7 @@ fi
 
 
 # instructions.
-echo "Now browse to http://ocmhost:5800 and inside there to https://${EFSS1}1.docker"
+echo "Now browse to http://localhost:5800 and inside there to https://${EFSS1}1.docker"
 echo "Log in as einstein / relativity"
 echo "Go to the ScienceMesh app and generate a token"
 echo "Click it to go to the meshdir server, and choose ${EFSS2}2 there."
