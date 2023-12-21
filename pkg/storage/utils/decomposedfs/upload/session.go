@@ -171,6 +171,13 @@ func (m *OcisSession) SetSizeIsDeferred(value bool) {
 }
 
 // TODO get rid of dir, whoever consumes the reference should be able to deal with a relative reference
+// Dir is only used to:
+// * fill the Path property when emitting the UploadReady event after postprocessing finished. I wonder why the UploadReady contains a finished flag ... maybe multiple distinct events would make more sense.
+// * build the reference that is passed to the FileUploaded event in the UploadFinishedFunc callback passed to the Upload call used for simple datatx put requests
+// * AFAICT only search and audir consume the path.
+//   - search needs to index from the root anyway. and it only needs the most recent path to put it in the index
+//   - audit on the other hand needs to log events with the path at the state of the event ... so it does need the full path.
+//     I think we can safely read determine the path later, right before emitting the event. and maybe make it configurable, because only audit needs it, anyway.
 func (m *OcisSession) Dir() string {
 	return m.info.Storage["Dir"]
 }
