@@ -62,6 +62,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/jellydator/ttlcache/v2"
 	"github.com/pkg/errors"
+	tusd "github.com/tus/tusd/pkg/handler"
 	microstore "go-micro.dev/v4/store"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -104,6 +105,26 @@ type Tree interface {
 	Propagate(ctx context.Context, node *node.Node, sizeDiff int64) (err error)
 }
 
+// Session is the interface that OcisSession implements. By combining tus.Upload,
+// storage.UploadSession and custom functions we can reuse the same struct throughout
+// the whole upload lifecycle.
+//
+// Some functions that are only used by decomposedfs are not yet part of this interface.
+// They might be added after more refactoring.
+type Session interface {
+	tusd.Upload
+	storage.UploadSession
+	upload.Session
+	LockID() string
+}
+
+type SessionStore interface {
+	New(ctx context.Context) *upload.OcisSession
+	List(ctx context.Context) ([]*upload.OcisSession, error)
+	Get(ctx context.Context, id string) (*upload.OcisSession, error)
+	Cleanup(ctx context.Context, session upload.Session, failure bool, keepUpload bool)
+}
+
 // Decomposedfs provides the base for decomposed filesystem implementations
 type Decomposedfs struct {
 	lu           *lookup.Lookup
@@ -113,7 +134,7 @@ type Decomposedfs struct {
 	chunkHandler *chunking.ChunkHandler
 	stream       events.Stream
 	cache        cache.StatCache
-	sessionStore upload.SessionStore
+	sessionStore SessionStore
 
 	UserCache       *ttlcache.Cache
 	userSpaceIndex  *spaceidindex.Index

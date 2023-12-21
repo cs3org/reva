@@ -33,26 +33,9 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/logger"
-	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
-
-// Session is the interface that OcisSession implements. By combining tus.Upload,
-// storage.UploadSession and custom functions we can reuse the same struct throughout
-// the whole upload lifecycle.
-//
-// Some functions that are only used by decomposedfs are not yet part of this interface.
-// They might be added after more refactoring.
-type Session interface {
-	tusd.Upload
-	storage.UploadSession
-	Persist(ctx context.Context) error
-	Node(ctx context.Context) (*node.Node, error)
-	LockID() string
-	Context(ctx context.Context) context.Context
-	Cleanup(cleanNode, cleanBin, cleanInfo bool)
-}
 
 // OcisSession extends tus upload lifecycle with postprocessing steps.
 type OcisSession struct {

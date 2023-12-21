@@ -51,13 +51,6 @@ type PermissionsChecker interface {
 	AssemblePermissions(ctx context.Context, n *node.Node) (ap provider.ResourcePermissions, err error)
 }
 
-type SessionStore interface {
-	New(ctx context.Context) *OcisSession
-	List(ctx context.Context) ([]*OcisSession, error)
-	Get(ctx context.Context, id string) (*OcisSession, error)
-	Cleanup(ctx context.Context, session Session, failure bool, keepUpload bool)
-}
-
 type OcisStore struct {
 	lu      *lookup.Lookup
 	tp      Tree
@@ -150,6 +143,13 @@ func (store OcisStore) ReadSession(ctx context.Context, id string) (*OcisSession
 	session.info.Offset = stat.Size()
 
 	return &session, nil
+}
+
+type Session interface {
+	ID() string
+	Node(ctx context.Context) (*node.Node, error)
+	Context(ctx context.Context) context.Context
+	Cleanup(cleanNode, cleanBin, cleanInfo bool)
 }
 
 // Cleanup cleans the upload

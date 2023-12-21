@@ -1150,7 +1150,7 @@ func (n *Node) DeleteGrant(ctx context.Context, g *provider.Grant, acquireLock b
 	return nil
 }
 
-// Purge removes a node from disk. It dos not move it to the trash
+// Purge removes a node from disk. It does not move it to the trash
 func (n *Node) Purge(ctx context.Context) error {
 	// remove node
 	if err := utils.RemoveItem(n.InternalPath()); err != nil {
