@@ -104,8 +104,10 @@ func (fs *Decomposedfs) Upload(ctx context.Context, req storage.UploadRequest, u
 			SpaceId:   session.SpaceID(),
 			OpaqueId:  session.NodeID(),
 		},
-		Etag: session.ETag(),
 	}
+
+	// add etag to metadata
+	ri.Etag, _ = node.CalculateEtag(session.NodeID(), session.MTime())
 
 	if !session.MTime().IsZero() {
 		ri.Mtime = utils.TimeToTS(session.MTime())
@@ -294,8 +296,6 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	if err != nil {
 		return nil, err
 	}
-
-	metrics.UploadSessionsInitiated.Inc()
 
 	metrics.UploadSessionsInitiated.Inc()
 

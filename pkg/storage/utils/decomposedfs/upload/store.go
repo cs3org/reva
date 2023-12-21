@@ -51,6 +51,7 @@ type PermissionsChecker interface {
 	AssemblePermissions(ctx context.Context, n *node.Node) (ap provider.ResourcePermissions, err error)
 }
 
+// OcisStore manages upload sessions
 type OcisStore struct {
 	lu      *lookup.Lookup
 	tp      Tree
@@ -60,6 +61,7 @@ type OcisStore struct {
 	tknopts options.TokenOptions
 }
 
+// NewSessionStore returns a new OcisStore
 func NewSessionStore(lu *lookup.Lookup, tp Tree, root string, pub events.Publisher, async bool, tknopts options.TokenOptions) *OcisStore {
 	return &OcisStore{
 		lu:      lu,
@@ -71,6 +73,7 @@ func NewSessionStore(lu *lookup.Lookup, tp Tree, root string, pub events.Publish
 	}
 }
 
+// New returns a new upload session
 func (store OcisStore) New(ctx context.Context) *OcisSession {
 	return &OcisSession{
 		store: store,
@@ -84,6 +87,7 @@ func (store OcisStore) New(ctx context.Context) *OcisSession {
 	}
 }
 
+// List lists all upload sessions
 func (store OcisStore) List(ctx context.Context) ([]*OcisSession, error) {
 	uploads := []*OcisSession{}
 	infoFiles, err := filepath.Glob(filepath.Join(store.root, "uploads", "*.info"))
@@ -103,17 +107,13 @@ func (store OcisStore) List(ctx context.Context) ([]*OcisSession, error) {
 	return uploads, nil
 }
 
+// Get returns the upload session for the given upload id
 func (store OcisStore) Get(ctx context.Context, id string) (*OcisSession, error) {
-	path := filepath.Join(store.root, "uploads", id+".info")
-	match := _idRegexp.FindStringSubmatch(path)
+	sessionPath := filepath.Join(store.root, "uploads", id+".info")
+	match := _idRegexp.FindStringSubmatch(sessionPath)
 	if match == nil || len(match) < 2 {
 		return nil, fmt.Errorf("invalid upload path")
 	}
-	return store.ReadSession(ctx, match[1])
-}
-
-func (store OcisStore) ReadSession(ctx context.Context, id string) (*OcisSession, error) {
-	sessionPath := filepath.Join(store.root, "uploads", id+".info")
 
 	session := OcisSession{
 		store: store,
@@ -145,6 +145,7 @@ func (store OcisStore) ReadSession(ctx context.Context, id string) (*OcisSession
 	return &session, nil
 }
 
+// Session is the interface used by the Cleanup call
 type Session interface {
 	ID() string
 	Node(ctx context.Context) (*node.Node, error)
@@ -152,7 +153,7 @@ type Session interface {
 	Cleanup(cleanNode, cleanBin, cleanInfo bool)
 }
 
-// Cleanup cleans the upload
+// Cleanup cleans upload metadata, binary data and processing status as necessary
 func (store OcisStore) Cleanup(ctx context.Context, session Session, failure bool, keepUpload bool) {
 	ctx, span := tracer.Start(session.Context(ctx), "Cleanup")
 	defer span.End()
@@ -173,7 +174,7 @@ func (store OcisStore) Cleanup(ctx context.Context, session Session, failure boo
 }
 
 // CreateNodeForUpload will create the target node for the Upload
-// FIXME move this to the node package as NodeFromUpload?
+// TODO move this to the node package as NodeFromUpload?
 // should we in InitiateUpload create the node first? and then the upload?
 func (store OcisStore) CreateNodeForUpload(session *OcisSession, initAttrs node.Attributes) (*node.Node, error) {
 	ctx, span := tracer.Start(session.Context(context.Background()), "CreateNodeForUpload")
@@ -245,10 +246,6 @@ func (store OcisStore) CreateNodeForUpload(session *OcisSession, initAttrs node.
 		return nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
 	}
 
-	// add etag to metadata
-	etag, _ := node.CalculateEtag(n, mtime)
-	session.SetMetadata("etag", etag)
-
 	if err := session.Persist(ctx); err != nil {
 		return nil, err
 	}
@@ -318,7 +315,7 @@ func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSess
 	if err != nil {
 		return f, err
 	}
-	oldNodeEtag, err := node.CalculateEtag(old, oldNodeMtime)
+	oldNodeEtag, err := node.CalculateEtag(old.ID, oldNodeMtime)
 	if err != nil {
 		return f, err
 	}

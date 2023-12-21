@@ -1051,7 +1051,7 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error getting mtime for '"+n.ID+"'")
 	}
-	currentEtag, err := node.CalculateEtag(n, mtime)
+	currentEtag, err := node.CalculateEtag(n.ID, mtime)
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error calculating etag for '"+n.ID+"'")
 	}
