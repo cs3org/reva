@@ -117,3 +117,19 @@ nats_enable_tls = events tls switch
 {{< /highlight >}}
 {{% /dir %}}
 
+{{% dir name="nats_username" type="string" default="event stream username" %}}
+ [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L79)
+{{< highlight toml >}}
+[grpc.services.storageprovider]
+nats_username = "event stream username"
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="nats_password" type="string" default="event stream password" %}}
+ [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L80)
+{{< highlight toml >}}
+[grpc.services.storageprovider]
+nats_password = "event stream password"
+{{< /highlight >}}
+{{% /dir %}}
+
