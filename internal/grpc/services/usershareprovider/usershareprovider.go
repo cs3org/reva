@@ -450,9 +450,16 @@ func (s *service) GetReceivedShare(ctx context.Context, req *collaboration.GetRe
 	share, err := s.sm.GetReceivedShare(ctx, req.Ref)
 	if err != nil {
 		log.Err(err).Msg("error getting received share")
-		return &collaboration.GetReceivedShareResponse{
-			Status: status.NewInternal(ctx, "error getting received share"),
-		}, nil
+		switch err.(type) {
+		case errtypes.NotFound:
+			return &collaboration.GetReceivedShareResponse{
+				Status: status.NewNotFound(ctx, "error getting received share"),
+			}, nil
+		default:
+			return &collaboration.GetReceivedShareResponse{
+				Status: status.NewInternal(ctx, "error getting received share"),
+			}, nil
+		}
 	}
 
 	res := &collaboration.GetReceivedShareResponse{
