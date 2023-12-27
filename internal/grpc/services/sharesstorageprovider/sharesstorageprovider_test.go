@@ -808,7 +808,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 				gatewayClient.AssertNotCalled(GinkgoT(), "Move", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
-				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_UNIMPLEMENTED))
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_PERMISSION_DENIED))
 			})
 
 			It("refuses to move a file between shares resolving to the same space", func() {
@@ -826,7 +826,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 				gatewayClient.AssertNotCalled(GinkgoT(), "Move", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
-				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_UNIMPLEMENTED))
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_PERMISSION_DENIED))
 			})
 
 			It("moves a file", func() {
