@@ -228,7 +228,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		// > This could also occur when the destination is on another sub-section
 		// > of the same server namespace.
 		// but we only have a not supported error
-		return errtypes.NotSupported("cannot move across spaces")
+		return errtypes.PermissionDenied("cross storage moves are not permitted, use copy and delete")
 	}
 	// if target exists delete it without trashing it
 	if newNode.Exists {
