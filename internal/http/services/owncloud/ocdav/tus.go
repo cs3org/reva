@@ -274,28 +274,29 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 			httpReq.Header.Set(net.HeaderTusResumable, r.Header.Get(net.HeaderTusResumable))
 
 			httpRes, err = s.client.Do(httpReq)
-			if err != nil {
+			if err != nil || httpRes == nil {
 				log.Error().Err(err).Msg("error doing PATCH request to data gateway")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 			defer httpRes.Body.Close()
 
-			w.Header().Set(net.HeaderUploadOffset, httpRes.Header.Get(net.HeaderUploadOffset))
-			w.Header().Set(net.HeaderTusResumable, httpRes.Header.Get(net.HeaderTusResumable))
-			w.Header().Set(net.HeaderTusUploadExpires, httpRes.Header.Get(net.HeaderTusUploadExpires))
 			if httpRes.StatusCode != http.StatusNoContent {
 				w.WriteHeader(httpRes.StatusCode)
 				return
+			}
+
+			w.Header().Set(net.HeaderUploadOffset, httpRes.Header.Get(net.HeaderUploadOffset))
+			w.Header().Set(net.HeaderTusResumable, httpRes.Header.Get(net.HeaderTusResumable))
+			w.Header().Set(net.HeaderTusUploadExpires, httpRes.Header.Get(net.HeaderTusUploadExpires))
+			if httpRes.Header.Get(net.HeaderOCMtime) != "" {
+				w.Header().Set(net.HeaderOCMtime, httpRes.Header.Get(net.HeaderOCMtime))
 			}
 
 			if resid, err := storagespace.ParseID(httpRes.Header.Get(net.HeaderOCFileID)); err == nil {
 				sReq.Ref = &provider.Reference{
 					ResourceId: &resid,
 				}
-			}
-			if httpRes != nil && httpRes.Header != nil && httpRes.Header.Get(net.HeaderOCMtime) != "" {
-				w.Header().Set(net.HeaderOCMtime, httpRes.Header.Get(net.HeaderOCMtime))
 			}
 			finishUpload = httpRes.Header.Get(net.HeaderUploadOffset) == r.Header.Get(net.HeaderUploadLength)
 		}
