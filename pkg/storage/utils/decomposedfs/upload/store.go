@@ -260,7 +260,7 @@ func (store OcisStore) initNewNode(ctx context.Context, session *OcisSession, n 
 	}
 
 	// create and write lock new node metadata
-	f, err := lockedfile.OpenFile(store.lu.MetadataBackend().LockfilePath(n.InternalPath()), os.O_RDWR|os.O_CREATE, 0600)
+	f, err := lockedfile.OpenFile(store.lu.MetadataBackend().LockfilePath(n.ParentPath()+"-"+n.Name), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +298,7 @@ func (store OcisStore) initNewNode(ctx context.Context, session *OcisSession, n 
 }
 
 func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSession, n *node.Node, spaceID string, fsize uint64) (*lockedfile.File, error) {
-	targetPath := n.InternalPath()
+	targetPath := n.ParentPath() + "-" + n.Name
 
 	// write lock existing node before reading any metadata
 	f, err := lockedfile.OpenFile(store.lu.MetadataBackend().LockfilePath(targetPath), os.O_RDWR|os.O_CREATE, 0600)

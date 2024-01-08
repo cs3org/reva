@@ -209,7 +209,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	}
 
 	// write lock node before copying metadata
-	f, err := lockedfile.OpenFile(fs.lu.MetadataBackend().LockfilePath(n.InternalPath()), os.O_RDWR|os.O_CREATE, 0600)
+	f, err := lockedfile.OpenFile(fs.lu.MetadataBackend().LockfilePath(n.ParentPath()+"-"+n.Name), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return err
 	}
@@ -262,6 +262,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 
 	// copy blob metadata from restored revision to node
 	restoredRevisionPath := fs.lu.InternalPath(spaceID, revisionKey)
+	// FIXME what do we pass as restoredRevisionPath here? shouldn't we lock by name? didn't we already lock the node? why do we have to lock the individual revisions?
 	err = fs.lu.CopyMetadata(ctx, restoredRevisionPath, nodePath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
 		if attributeName == prefixes.MTimeAttr {
 			// update mtime

@@ -84,6 +84,7 @@ func (p SyncPropagator) Propagate(ctx context.Context, n *node.Node, sizeDiff in
 
 		_, subspan := tracer.Start(ctx, "lockedfile.OpenFile")
 		parentFilename := p.lookup.MetadataBackend().LockfilePath(n.ParentPath())
+		// FIXME again no name ... lock dir metadata by id?
 		f, err = lockedfile.OpenFile(parentFilename, os.O_RDWR|os.O_CREATE, 0600)
 		subspan.End()
 		if err != nil {
