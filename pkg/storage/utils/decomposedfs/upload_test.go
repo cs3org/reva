@@ -230,6 +230,8 @@ var _ = Describe("File uploads", func() {
 
 		When("the user initiates a zero byte file upload", func() {
 			It("succeeds", func() {
+				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
+					Return(nil)
 				uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
 
 				Expect(err).ToNot(HaveOccurred())
@@ -239,7 +241,7 @@ var _ = Describe("File uploads", func() {
 
 				resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(resources)).To(Equal(0))
+				Expect(len(resources)).To(Equal(1))
 			})
 		})
 
@@ -265,47 +267,6 @@ var _ = Describe("File uploads", func() {
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(data).To(Equal([]byte("0123456789")))
-					})
-
-				_, err = fs.Upload(ctx, storage.UploadRequest{
-					Ref:    uploadRef,
-					Body:   io.NopCloser(bytes.NewReader(fileContent)),
-					Length: int64(len(fileContent)),
-				}, nil)
-
-				Expect(err).ToNot(HaveOccurred())
-				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything, mock.Anything)
-
-				resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
-
-				Expect(err).ToNot(HaveOccurred())
-				Expect(len(resources)).To(Equal(1))
-				Expect(resources[0].Path).To(Equal(ref.Path))
-			})
-		})
-
-		When("the user uploads a zero byte file", func() {
-			It("succeeds", func() {
-				var (
-					fileContent = []byte("")
-				)
-
-				uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
-
-				Expect(err).ToNot(HaveOccurred())
-				Expect(len(uploadIds)).To(Equal(2))
-				Expect(uploadIds["simple"]).ToNot(BeEmpty())
-				Expect(uploadIds["tus"]).ToNot(BeEmpty())
-
-				uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
-
-				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
-					Return(nil).
-					Run(func(args mock.Arguments) {
-						data, err := os.ReadFile(args.Get(1).(string))
-
-						Expect(err).ToNot(HaveOccurred())
-						Expect(data).To(Equal([]byte("")))
 					})
 
 				_, err = fs.Upload(ctx, storage.UploadRequest{
