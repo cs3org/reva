@@ -95,7 +95,6 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			if s.State == collaboration.ShareState_SHARE_STATE_ACCEPTED {
-				s.Hidden = h.getReceivedShareHideFlagFromShareID(r.Context(), shareID)
 				mountedShares = append(mountedShares, s)
 			}
 		}
