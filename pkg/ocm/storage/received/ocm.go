@@ -222,8 +222,8 @@ func (d *driver) Delete(ctx context.Context, ref *provider.Reference) error {
 	return client.RemoveAll(rel)
 }
 
-func (d *driver) TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) error {
-	client, _, rel, err := d.webdavClient(ctx, nil, ref)
+func (d *driver) TouchFile(ctx context.Context, ref *provider.Reference, _ bool, _ string) error {
+	client, _, rel, err := d.webdavClient(ctx, _, ref)
 	if err != nil {
 		return err
 	}
@@ -244,7 +244,7 @@ func getPathFromShareIDAndRelPath(shareID *ocmpb.ShareId, relPath string) string
 	return filepath.Join("/", shareID.OpaqueId, relPath)
 }
 
-func convertStatToResourceInfo(ref *provider.Reference, f fs.FileInfo, share *ocmpb.ReceivedShare) (*provider.ResourceInfo, error) {
+func convertStatToResourceInfo(_ *provider.Reference, f fs.FileInfo, share *ocmpb.ReceivedShare) (*provider.ResourceInfo, error) {
 	t := provider.ResourceType_RESOURCE_TYPE_FILE
 	if f.IsDir() {
 		t = provider.ResourceType_RESOURCE_TYPE_CONTAINER
@@ -343,102 +343,102 @@ func (d *driver) Download(ctx context.Context, ref *provider.Reference) (io.Read
 	return client.ReadStream(rel)
 }
 
-func (d *driver) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
+func (d *driver) GetPathByID(_ context.Context, id *provider.ResourceId) (string, error) {
 	shareID, rel := shareInfoFromReference(&provider.Reference{
 		ResourceId: id,
 	})
 	return getPathFromShareIDAndRelPath(shareID, rel), nil
 }
 
-func (d *driver) Shutdown(ctx context.Context) error {
+func (d *driver) Shutdown(context.Context) error {
 	return nil
 }
 
-func (d *driver) CreateHome(ctx context.Context) error {
+func (d *driver) CreateHome(context.Context) error {
 	return errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) GetHome(ctx context.Context) (string, error) {
+func (d *driver) GetHome(context.Context) (string, error) {
 	return "", errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
+func (d *driver) ListRevisions(context.Context, *provider.Reference) ([]*provider.FileVersion, error) {
 	return nil, errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error) {
+func (d *driver) DownloadRevision(context.Context, *provider.Reference, string) (io.ReadCloser, error) {
 	return nil, errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error {
+func (d *driver) RestoreRevision(context.Context, *provider.Reference, string) error {
 	return errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (d *driver) ListRecycle(context.Context, *provider.Reference, string, string) ([]*provider.RecycleItem, error) {
 	return nil, errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
+func (d *driver) RestoreRecycleItem(context.Context, *provider.Reference, string, string, *provider.Reference) error {
 	return errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
+func (d *driver) PurgeRecycleItem(context.Context, *provider.Reference, string, string) error {
 	return errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
+func (d *driver) EmptyRecycle(context.Context, *provider.Reference) error {
 	return errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+func (d *driver) AddGrant(context.Context, *provider.Reference, *provider.Grant) error {
 	return errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+func (d *driver) DenyGrant(context.Context, *provider.Reference, *provider.Grantee) error {
 	return errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+func (d *driver) RemoveGrant(context.Context, *provider.Reference, *provider.Grant) error {
 	return errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+func (d *driver) UpdateGrant(context.Context, *provider.Reference, *provider.Grant) error {
 	return errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
+func (d *driver) ListGrants(context.Context, *provider.Reference) ([]*provider.Grant, error) {
 	return nil, errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) GetQuota(ctx context.Context, ref *provider.Reference) ( /*TotalBytes*/ uint64 /*UsedBytes*/, uint64, uint64, error) {
+func (d *driver) GetQuota(context.Context, *provider.Reference) ( /*TotalBytes*/ uint64 /*UsedBytes*/, uint64, uint64, error) {
 	return 0, 0, 0, errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
+func (d *driver) CreateReference(context.Context, string, *url.URL) error {
 	return errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
+func (d *driver) SetArbitraryMetadata(context.Context, *provider.Reference, *provider.ArbitraryMetadata) error {
 	return errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
+func (d *driver) UnsetArbitraryMetadata(context.Context, *provider.Reference, []string) error {
 	return errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+func (d *driver) SetLock(context.Context, *provider.Reference, *provider.Lock) error {
 	return errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+func (d *driver) GetLock(context.Context, *provider.Reference) (*provider.Lock, error) {
 	return nil, errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
+func (d *driver) RefreshLock(context.Context, *provider.Reference, *provider.Lock, string) error {
 	return errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+func (d *driver) Unlock(context.Context, *provider.Reference, *provider.Lock) error {
 	return errtypes.NotSupported("operation not supported")
 }
 
@@ -497,14 +497,14 @@ func (d *driver) ListStorageSpaces(ctx context.Context, filters []*provider.List
 	return spaces, nil
 }
 
-func (d *driver) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+func (d *driver) CreateStorageSpace(context.Context, *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+func (d *driver) UpdateStorageSpace(context.Context, *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
+func (d *driver) DeleteStorageSpace(context.Context, *provider.DeleteStorageSpaceRequest) error {
 	return errtypes.NotSupported("operation not supported")
 }

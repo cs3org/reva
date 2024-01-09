@@ -45,7 +45,7 @@ func (p *ProviderPlugin) Server(*hcplugin.MuxBroker) (interface{}, error) {
 }
 
 // Client returns interface implementation for the plugin that communicates to the server end of the plugin
-func (p *ProviderPlugin) Client(b *hcplugin.MuxBroker, c *rpc.Client) (interface{}, error) {
+func (p *ProviderPlugin) Client(_ *hcplugin.MuxBroker, c *rpc.Client) (interface{}, error) {
 	return &RPCClient{Client: c}, nil
 }
 

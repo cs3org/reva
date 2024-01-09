@@ -47,7 +47,7 @@ func init() {
 	registry.Register("rclone", New)
 }
 
-func (c *config) init(m map[string]interface{}) {
+func (c *config) init(map[string]interface{}) {
 	// set sane defaults
 	if c.File == "" {
 		c.File = "/var/tmp/reva/datatx-transfers.json"
@@ -583,7 +583,7 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 }
 
 // GetTransferStatus returns the status of the transfer with the specified job id
-func (driver *rclone) GetTransferStatus(ctx context.Context, transferID string) (*datatx.TxInfo, error) {
+func (driver *rclone) GetTransferStatus(_ context.Context, transferID string) (*datatx.TxInfo, error) {
 	transfer, err := driver.pDriver.model.getTransfer(transferID)
 	if err != nil {
 		return &datatx.TxInfo{
@@ -601,7 +601,7 @@ func (driver *rclone) GetTransferStatus(ctx context.Context, transferID string) 
 }
 
 // CancelTransfer cancels the transfer with the specified transfer id
-func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*datatx.TxInfo, error) {
+func (driver *rclone) CancelTransfer(_ context.Context, transferID string) (*datatx.TxInfo, error) {
 	transfer, err := driver.pDriver.model.getTransfer(transferID)
 	if err != nil {
 		return &datatx.TxInfo{

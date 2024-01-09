@@ -233,7 +233,7 @@ func encodeJSON(res Response) ([]byte, error) {
 }
 
 // OcsV1StatusCodes returns the http status codes for the OCS API v1.
-func OcsV1StatusCodes(meta Meta) int {
+func OcsV1StatusCodes(Meta) int {
 	return http.StatusOK
 }
 

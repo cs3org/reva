@@ -64,58 +64,58 @@ type NullBackend struct{}
 func (NullBackend) Name() string { return "null" }
 
 // All reads all extended attributes for a node
-func (NullBackend) All(ctx context.Context, path string) (map[string][]byte, error) {
+func (NullBackend) All(context.Context, string) (map[string][]byte, error) {
 	return nil, errUnconfiguredError
 }
 
 // Get an extended attribute value for the given key
-func (NullBackend) Get(ctx context.Context, path, key string) ([]byte, error) {
+func (NullBackend) Get(context.Context, string, string) ([]byte, error) {
 	return []byte{}, errUnconfiguredError
 }
 
 // GetInt64 reads a string as int64 from the xattrs
-func (NullBackend) GetInt64(ctx context.Context, path, key string) (int64, error) {
+func (NullBackend) GetInt64(context.Context, string, string) (int64, error) {
 	return 0, errUnconfiguredError
 }
 
 // List retrieves a list of names of extended attributes associated with the
 // given path in the file system.
-func (NullBackend) List(ctx context.Context, path string) ([]string, error) {
+func (NullBackend) List(context.Context, string) ([]string, error) {
 	return nil, errUnconfiguredError
 }
 
 // Set sets one attribute for the given path
-func (NullBackend) Set(ctx context.Context, path string, key string, val []byte) error {
+func (NullBackend) Set(context.Context, string, string, []byte) error {
 	return errUnconfiguredError
 }
 
 // SetMultiple sets a set of attribute for the given path
-func (NullBackend) SetMultiple(ctx context.Context, path string, attribs map[string][]byte, acquireLock bool) error {
+func (NullBackend) SetMultiple(context.Context, string, map[string][]byte, bool) error {
 	return errUnconfiguredError
 }
 
 // Remove removes an extended attribute key
-func (NullBackend) Remove(ctx context.Context, path string, key string, acquireLock bool) error {
+func (NullBackend) Remove(context.Context, string, string, bool) error {
 	return errUnconfiguredError
 }
 
 // IsMetaFile returns whether the given path represents a meta file
-func (NullBackend) IsMetaFile(path string) bool { return false }
+func (NullBackend) IsMetaFile(string) bool { return false }
 
 // Purge purges the data of a given path from any cache that might hold it
-func (NullBackend) Purge(purges string) error { return errUnconfiguredError }
+func (NullBackend) Purge(string) error { return errUnconfiguredError }
 
 // Rename moves the data for a given path to a new path
-func (NullBackend) Rename(oldPath, newPath string) error { return errUnconfiguredError }
+func (NullBackend) Rename(string, string) error { return errUnconfiguredError }
 
 // MetadataPath returns the path of the file holding the metadata for the given path
-func (NullBackend) MetadataPath(path string) string { return "" }
+func (NullBackend) MetadataPath(string) string { return "" }
 
 // LockfilePath returns the path of the lock file
-func (NullBackend) LockfilePath(path string) string { return "" }
+func (NullBackend) LockfilePath(string) string { return "" }
 
 // AllWithLockedSource reads all extended attributes from the given reader
 // The path argument is used for storing the data in the cache
-func (NullBackend) AllWithLockedSource(ctx context.Context, path string, source io.Reader) (map[string][]byte, error) {
+func (NullBackend) AllWithLockedSource(context.Context, string, io.Reader) (map[string][]byte, error) {
 	return nil, errUnconfiguredError
 }

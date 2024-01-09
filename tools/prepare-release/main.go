@@ -142,8 +142,7 @@ description: >
 		os.Exit(1)
 	}
 
-	add(fmt.Sprintf("v%s", *version),
-		"changelog",
+	add("changelog",
 		"CHANGELOG.md",
 		"VERSION",
 		"RELEASE_DATE",
@@ -163,10 +162,10 @@ description: >
 	if *tag && *commit {
 		fmt.Println("RELEASE READY: you only need to\n$ git push --follow-tags")
 		os.Exit(0)
-	} else {
-		fmt.Println("Was a dry run, run with -commit and -tag to create release")
-		os.Exit(1)
 	}
+
+	fmt.Println("Was a dry run, run with -commit and -tag to create release")
+	os.Exit(1)
 }
 
 func isRepoDirty() bool {
@@ -181,7 +180,7 @@ func isRepoDirty() bool {
 	return changes != ""
 }
 
-func add(msg string, files ...string) {
+func add(files ...string) {
 	for _, f := range files {
 		cmd := exec.Command("git", "add", "--all", f)
 		cmd.Dir = "."

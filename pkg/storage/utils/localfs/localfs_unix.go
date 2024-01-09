@@ -67,7 +67,7 @@ func calcEtag(ctx context.Context, fi os.FileInfo) string {
 	return fmt.Sprintf("\"%s\"", strings.Trim(etag, "\""))
 }
 
-func (fs *localfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, uint64, error) {
+func (fs *localfs) GetQuota(ctx context.Context, _ *provider.Reference) (uint64, uint64, uint64, error) {
 	// TODO quota of which storage space?
 	// we could use the logged in user, but when a user has access to multiple storages this falls short
 	// for now return quota of root

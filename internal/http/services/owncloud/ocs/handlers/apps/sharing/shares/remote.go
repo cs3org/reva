@@ -40,7 +40,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Request, resource *provider.ResourceInfo, role *conversions.Role, roleVal []byte) {
+func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Request, resource *provider.ResourceInfo, role *conversions.Role, _ []byte) {
 	ctx := r.Context()
 
 	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
@@ -177,7 +177,7 @@ func (h *Handler) GetFederatedShare(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListFederatedShares handles GET requests on /apps/files_sharing/api/v1/shares/remote_shares.
-func (h *Handler) ListFederatedShares(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListFederatedShares(http.ResponseWriter, *http.Request) {
 	// TODO Implement pagination.
 	// TODO Implement response with HAL schemating
 }

@@ -39,7 +39,7 @@ type demoProvider struct {
 	iframeUIProvider string
 }
 
-func (p *demoProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.ViewMode, token, language string) (*appprovider.OpenInAppURL, error) {
+func (p *demoProvider) GetAppURL(_ context.Context, resource *provider.ResourceInfo, viewMode appprovider.ViewMode, token, _ string) (*appprovider.OpenInAppURL, error) {
 	url := fmt.Sprintf("<iframe src=%s/open/%s?view-mode=%s&access-token=%s />", p.iframeUIProvider, storagespace.FormatResourceID(*resource.Id), viewMode.String(), token)
 	return &appprovider.OpenInAppURL{
 		AppUrl: url,
@@ -47,7 +47,7 @@ func (p *demoProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	}, nil
 }
 
-func (p *demoProvider) GetAppProviderInfo(ctx context.Context) (*appregistry.ProviderInfo, error) {
+func (p *demoProvider) GetAppProviderInfo(context.Context) (*appregistry.ProviderInfo, error) {
 	return &appregistry.ProviderInfo{
 		Name: "demo-app",
 	}, nil

@@ -37,7 +37,7 @@ func init() {
 }
 
 // New returns a new invite manager.
-func New(m map[string]interface{}) (invite.Repository, error) {
+func New(map[string]interface{}) (invite.Repository, error) {
 	return &manager{
 		Invites:       sync.Map{},
 		AcceptedUsers: sync.Map{},
@@ -49,19 +49,19 @@ type manager struct {
 	AcceptedUsers sync.Map
 }
 
-func (m *manager) AddToken(ctx context.Context, token *invitepb.InviteToken) error {
+func (m *manager) AddToken(_ context.Context, token *invitepb.InviteToken) error {
 	m.Invites.Store(token.GetToken(), token)
 	return nil
 }
 
-func (m *manager) GetToken(ctx context.Context, token string) (*invitepb.InviteToken, error) {
+func (m *manager) GetToken(_ context.Context, token string) (*invitepb.InviteToken, error) {
 	if v, ok := m.Invites.Load(token); ok {
 		return v.(*invitepb.InviteToken), nil
 	}
 	return nil, invite.ErrTokenNotFound
 }
 
-func (m *manager) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*invitepb.InviteToken, error) {
+func (m *manager) ListTokens(_ context.Context, initiator *userpb.UserId) ([]*invitepb.InviteToken, error) {
 	tokens := []*invitepb.InviteToken{}
 	m.Invites.Range(func(_, value any) bool {
 		token := value.(*invitepb.InviteToken)
@@ -73,7 +73,7 @@ func (m *manager) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*
 	return tokens, nil
 }
 
-func (m *manager) AddRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.User) error {
+func (m *manager) AddRemoteUser(_ context.Context, initiator *userpb.UserId, remoteUser *userpb.User) error {
 	usersList, ok := m.AcceptedUsers.Load(initiator)
 	acceptedUsers := usersList.([]*userpb.User)
 	if ok {
@@ -92,7 +92,7 @@ func (m *manager) AddRemoteUser(ctx context.Context, initiator *userpb.UserId, r
 	return nil
 }
 
-func (m *manager) GetRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUserID *userpb.UserId) (*userpb.User, error) {
+func (m *manager) GetRemoteUser(_ context.Context, initiator *userpb.UserId, remoteUserID *userpb.UserId) (*userpb.User, error) {
 	usersList, ok := m.AcceptedUsers.Load(initiator)
 	if !ok {
 		return nil, errtypes.NotFound(remoteUserID.OpaqueId)
@@ -107,7 +107,7 @@ func (m *manager) GetRemoteUser(ctx context.Context, initiator *userpb.UserId, r
 	return nil, errtypes.NotFound(remoteUserID.OpaqueId)
 }
 
-func (m *manager) FindRemoteUsers(ctx context.Context, initiator *userpb.UserId, query string) ([]*userpb.User, error) {
+func (m *manager) FindRemoteUsers(_ context.Context, initiator *userpb.UserId, query string) ([]*userpb.User, error) {
 	usersList, ok := m.AcceptedUsers.Load(initiator)
 	if !ok {
 		return []*userpb.User{}, nil
@@ -129,7 +129,7 @@ func userContains(u *userpb.User, query string) bool {
 		strings.Contains(strings.ToLower(u.Mail), query) || strings.Contains(strings.ToLower(u.Id.OpaqueId), query)
 }
 
-func (m *manager) DeleteRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.UserId) error {
+func (m *manager) DeleteRemoteUser(_ context.Context, initiator *userpb.UserId, remoteUser *userpb.UserId) error {
 	usersList, ok := m.AcceptedUsers.Load(initiator)
 	if !ok {
 		return nil

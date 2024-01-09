@@ -205,7 +205,7 @@ func (mgr *jsonManager) InvalidateAppPassword(ctx context.Context, password stri
 	return mgr.save()
 }
 
-func (mgr *jsonManager) GetAppPassword(ctx context.Context, userID *userpb.UserId, password string) (*apppb.AppPassword, error) {
+func (mgr *jsonManager) GetAppPassword(_ context.Context, userID *userpb.UserId, password string) (*apppb.AppPassword, error) {
 	mgr.Lock()
 	defer mgr.Unlock()
 

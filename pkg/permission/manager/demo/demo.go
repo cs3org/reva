@@ -29,14 +29,14 @@ func init() {
 }
 
 // New returns a new demo permission manager
-func New(c map[string]interface{}) (permission.Manager, error) {
+func New(map[string]interface{}) (permission.Manager, error) {
 	return manager{}, nil
 }
 
 type manager struct {
 }
 
-func (m manager) CheckPermission(perm string, subject string, ref *provider.Reference) bool {
+func (m manager) CheckPermission(perm string, _ string, _ *provider.Reference) bool {
 	switch perm {
 	case permission.CreateSpace:
 		// TODO Users can only create their own personal space

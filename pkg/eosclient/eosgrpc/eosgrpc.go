@@ -246,7 +246,7 @@ func (c *Client) initMDRequest(ctx context.Context, auth eosclient.Authorization
 }
 
 // AddACL adds an new acl to EOS with the given aclType.
-func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, pos uint, a *acl.Entry) error {
+func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, _ uint, a *acl.Entry) error {
 
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "AddACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
@@ -291,7 +291,7 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 }
 
 // RemoveACL removes the acl from EOS.
-func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, a *acl.Entry) error {
+func (c *Client) RemoveACL(ctx context.Context, auth, _ eosclient.Authorization, path string, a *acl.Entry) error {
 
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "RemoveACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
@@ -695,7 +695,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 }
 
 // GetFileInfoByFXID returns the FileInfo by the given file id in hexadecimal
-func (c *Client) GetFileInfoByFXID(ctx context.Context, auth eosclient.Authorization, fxid string) (*eosclient.FileInfo, error) {
+func (c *Client) GetFileInfoByFXID(context.Context, eosclient.Authorization, string) (*eosclient.FileInfo, error) {
 	return nil, errtypes.NotSupported("eosgrpc: GetFileInfoByFXID not implemented")
 }
 
@@ -1507,7 +1507,7 @@ func (c *Client) ReadVersion(ctx context.Context, auth eosclient.Authorization, 
 }
 
 // GenerateToken returns a token on behalf of the resource owner to be used by lightweight accounts
-func (c *Client) GenerateToken(ctx context.Context, auth eosclient.Authorization, path string, a *acl.Entry) (string, error) {
+func (c *Client) GenerateToken(context.Context, eosclient.Authorization, string, *acl.Entry) (string, error) {
 	return "", errtypes.NotSupported("TODO")
 }
 

@@ -127,7 +127,7 @@ func NewLocalFS(c *Config) (storage.FS, error) {
 	}, nil
 }
 
-func (fs *localfs) Shutdown(ctx context.Context) error {
+func (fs *localfs) Shutdown(context.Context) error {
 	err := fs.db.Close()
 	if err != nil {
 		return errors.Wrap(err, "localfs: error closing db connection")
@@ -252,19 +252,19 @@ func (fs *localfs) getNsMatch(internal string, nss []string) string {
 	return match
 }
 
-func (fs *localfs) isShareFolder(ctx context.Context, p string) bool {
+func (fs *localfs) isShareFolder(p string) bool {
 	return strings.HasPrefix(p, fs.conf.ShareFolder)
 }
 
-func (fs *localfs) isDataTransfersFolder(ctx context.Context, p string) bool {
+func (fs *localfs) isDataTransfersFolder(p string) bool {
 	return strings.HasPrefix(p, fs.conf.DataTransfersFolder)
 }
 
-func (fs *localfs) isShareFolderRoot(ctx context.Context, p string) bool {
+func (fs *localfs) isShareFolderRoot(p string) bool {
 	return path.Clean(p) == fs.conf.ShareFolder
 }
 
-func (fs *localfs) isShareFolderChild(ctx context.Context, p string) bool {
+func (fs *localfs) isShareFolderChild(p string) bool {
 	p = path.Clean(p)
 	vals := strings.Split(p, fs.conf.ShareFolder+"/")
 	return len(vals) > 1 && vals[1] != ""
@@ -438,7 +438,7 @@ func (fs *localfs) GetPathByID(ctx context.Context, ref *provider.ResourceId) (s
 	return strings.TrimPrefix(unescapedID, "fileid-"+layout), nil
 }
 
-func (fs *localfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+func (fs *localfs) DenyGrant(context.Context, *provider.Reference, *provider.Grantee) error {
 	return errtypes.NotSupported("localfs: deny grant not supported")
 }
 
@@ -544,9 +544,9 @@ func (fs *localfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *
 func (fs *localfs) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
 	var fn string
 	switch {
-	case fs.isShareFolder(ctx, path):
+	case fs.isShareFolder(path):
 		fn = fs.wrapReferences(ctx, path)
-	case fs.isDataTransfersFolder(ctx, path):
+	case fs.isDataTransfersFolder(path):
 		fn = fs.wrap(ctx, path)
 	default:
 		return errtypes.PermissionDenied("localfs: cannot create references outside the share folder and data transfers folder")
@@ -568,7 +568,7 @@ func (fs *localfs) CreateReference(ctx context.Context, path string, targetURI *
 }
 
 // CreateStorageSpace creates a storage space
-func (fs *localfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+func (fs *localfs) CreateStorageSpace(context.Context, *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("unimplemented: CreateStorageSpace")
 }
 
@@ -579,11 +579,11 @@ func (fs *localfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 		return errors.Wrap(err, "localfs: error resolving ref")
 	}
 
-	if fs.isShareFolderRoot(ctx, np) {
+	if fs.isShareFolderRoot(np) {
 		return errtypes.PermissionDenied("localfs: cannot set metadata for the virtual share folder")
 	}
 
-	if fs.isShareFolderChild(ctx, np) {
+	if fs.isShareFolderChild(np) {
 		np = fs.wrapReferences(ctx, np)
 	} else {
 		np = fs.wrap(ctx, np)
@@ -666,11 +666,11 @@ func (fs *localfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Ref
 		return errors.Wrap(err, "localfs: error resolving ref")
 	}
 
-	if fs.isShareFolderRoot(ctx, np) {
+	if fs.isShareFolderRoot(np) {
 		return errtypes.PermissionDenied("localfs: cannot set metadata for the virtual share folder")
 	}
 
-	if fs.isShareFolderChild(ctx, np) {
+	if fs.isShareFolderChild(np) {
 		np = fs.wrapReferences(ctx, np)
 	} else {
 		np = fs.wrap(ctx, np)
@@ -715,22 +715,22 @@ func (fs *localfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Ref
 }
 
 // GetLock returns an existing lock on the given reference
-func (fs *localfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+func (fs *localfs) GetLock(context.Context, *provider.Reference) (*provider.Lock, error) {
 	return nil, errtypes.NotSupported("unimplemented")
 }
 
 // SetLock puts a lock on the given reference
-func (fs *localfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+func (fs *localfs) SetLock(context.Context, *provider.Reference, *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
 // RefreshLock refreshes an existing lock on the given reference
-func (fs *localfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
+func (fs *localfs) RefreshLock(context.Context, *provider.Reference, *provider.Lock, string) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
 // Unlock removes an existing lock from the given reference
-func (fs *localfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+func (fs *localfs) Unlock(context.Context, *provider.Reference, *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
@@ -765,7 +765,7 @@ func (fs *localfs) CreateHome(ctx context.Context) error {
 	return nil
 }
 
-func (fs *localfs) createHomeInternal(ctx context.Context, fn string) error {
+func (fs *localfs) createHomeInternal(_ context.Context, fn string) error {
 	_, err := os.Stat(fn)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -786,7 +786,7 @@ func (fs *localfs) CreateDir(ctx context.Context, ref *provider.Reference) error
 		return nil
 	}
 
-	if fs.isShareFolder(ctx, fn) {
+	if fs.isShareFolder(fn) {
 		return errtypes.PermissionDenied("localfs: cannot create folder under the share folder")
 	}
 
@@ -806,7 +806,7 @@ func (fs *localfs) CreateDir(ctx context.Context, ref *provider.Reference) error
 }
 
 // TouchFile as defined in the storage.FS interface
-func (fs *localfs) TouchFile(ctx context.Context, ref *provider.Reference, _ bool, _ string) error {
+func (fs *localfs) TouchFile(context.Context, *provider.Reference, bool, string) error {
 	return fmt.Errorf("unimplemented: TouchFile")
 }
 
@@ -816,12 +816,12 @@ func (fs *localfs) Delete(ctx context.Context, ref *provider.Reference) error {
 		return errors.Wrap(err, "localfs: error resolving ref")
 	}
 
-	if fs.isShareFolderRoot(ctx, fn) {
+	if fs.isShareFolderRoot(fn) {
 		return errtypes.PermissionDenied("localfs: cannot delete the virtual share folder")
 	}
 
 	var fp string
-	if fs.isShareFolderChild(ctx, fn) {
+	if fs.isShareFolderChild(fn) {
 		fp = fs.wrapReferences(ctx, fn)
 	} else {
 		fp = fs.wrap(ctx, fn)
@@ -859,7 +859,7 @@ func (fs *localfs) Move(ctx context.Context, oldRef, newRef *provider.Reference)
 		return errors.Wrap(err, "localfs: error resolving ref")
 	}
 
-	if fs.isShareFolder(ctx, oldName) || fs.isShareFolder(ctx, newName) {
+	if fs.isShareFolder(oldName) || fs.isShareFolder(newName) {
 		return fs.moveReferences(ctx, oldName, newName)
 	}
 
@@ -877,16 +877,12 @@ func (fs *localfs) Move(ctx context.Context, oldRef, newRef *provider.Reference)
 	if err := fs.propagate(ctx, newName); err != nil {
 		return err
 	}
-	if err := fs.propagate(ctx, path.Dir(oldName)); err != nil {
-		return err
-	}
-
-	return nil
+	return fs.propagate(ctx, path.Dir(oldName))
 }
 
 func (fs *localfs) moveReferences(ctx context.Context, oldName, newName string) error {
 
-	if fs.isShareFolderRoot(ctx, oldName) || fs.isShareFolderRoot(ctx, newName) {
+	if fs.isShareFolderRoot(oldName) || fs.isShareFolderRoot(newName) {
 		return errtypes.PermissionDenied("localfs: cannot move/rename the virtual share folder")
 	}
 
@@ -912,21 +908,17 @@ func (fs *localfs) moveReferences(ctx context.Context, oldName, newName string) 
 	if err := fs.propagate(ctx, newName); err != nil {
 		return err
 	}
-	if err := fs.propagate(ctx, path.Dir(oldName)); err != nil {
-		return err
-	}
-
-	return nil
+	return fs.propagate(ctx, path.Dir(oldName))
 }
 
-func (fs *localfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string, fieldMask []string) (*provider.ResourceInfo, error) {
+func (fs *localfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string, _ []string) (*provider.ResourceInfo, error) {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error resolving ref")
 	}
 
 	if !fs.conf.DisableHome {
-		if fs.isShareFolder(ctx, fn) {
+		if fs.isShareFolder(fn) {
 			return fs.getMDShareFolder(ctx, fn, mdKeys)
 		}
 	}
@@ -954,13 +946,13 @@ func (fs *localfs) getMDShareFolder(ctx context.Context, p string, mdKeys []stri
 		return nil, errors.Wrap(err, "localfs: error stating "+fn)
 	}
 
-	if fs.isShareFolderRoot(ctx, p) {
+	if fs.isShareFolderRoot(p) {
 		return fs.normalize(ctx, md, fn, mdKeys)
 	}
 	return fs.convertToFileReference(ctx, md, fn, mdKeys)
 }
 
-func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys, fieldMask []string) ([]*provider.ResourceInfo, error) {
+func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys, _ []string) ([]*provider.ResourceInfo, error) {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error resolving ref")
@@ -981,11 +973,11 @@ func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKe
 		return homeFiles, nil
 	}
 
-	if fs.isShareFolderRoot(ctx, fn) {
+	if fs.isShareFolderRoot(fn) {
 		return fs.listShareFolderRoot(ctx, fn, mdKeys)
 	}
 
-	if fs.isShareFolderChild(ctx, fn) {
+	if fs.isShareFolderChild(fn) {
 		return nil, errtypes.PermissionDenied("localfs: error listing folders inside the shared folder, only file references are stored inside")
 	}
 
@@ -1031,7 +1023,7 @@ func (fs *localfs) listShareFolderRoot(ctx context.Context, home string, mdKeys 
 	for _, md := range mds {
 		var info *provider.ResourceInfo
 		var err error
-		if fs.isShareFolderRoot(ctx, path.Join("/", md.Name())) {
+		if fs.isShareFolderRoot(path.Join("/", md.Name())) {
 			mdInfo, _ := md.Info()
 			info, err = fs.normalize(ctx, mdInfo, path.Join(fn, md.Name()), mdKeys)
 		} else {
@@ -1051,7 +1043,7 @@ func (fs *localfs) Download(ctx context.Context, ref *provider.Reference) (io.Re
 		return nil, errors.Wrap(err, "localfs: error resolving ref")
 	}
 
-	if fs.isShareFolder(ctx, fn) {
+	if fs.isShareFolder(fn) {
 		return nil, errtypes.PermissionDenied("localfs: cannot download under the virtual share folder")
 	}
 
@@ -1087,7 +1079,7 @@ func (fs *localfs) ListRevisions(ctx context.Context, ref *provider.Reference) (
 		return nil, errors.Wrap(err, "localfs: error resolving ref")
 	}
 
-	if fs.isShareFolder(ctx, np) {
+	if fs.isShareFolder(np) {
 		return nil, errtypes.PermissionDenied("localfs: cannot list revisions under the virtual share folder")
 	}
 
@@ -1123,7 +1115,7 @@ func (fs *localfs) DownloadRevision(ctx context.Context, ref *provider.Reference
 		return nil, errors.Wrap(err, "localfs: error resolving ref")
 	}
 
-	if fs.isShareFolder(ctx, np) {
+	if fs.isShareFolder(np) {
 		return nil, errtypes.PermissionDenied("localfs: cannot download revisions under the virtual share folder")
 	}
 
@@ -1147,7 +1139,7 @@ func (fs *localfs) RestoreRevision(ctx context.Context, ref *provider.Reference,
 		return errors.Wrap(err, "localfs: error resolving ref")
 	}
 
-	if fs.isShareFolder(ctx, np) {
+	if fs.isShareFolder(np) {
 		return errtypes.PermissionDenied("localfs: cannot restore revisions under the virtual share folder")
 	}
 
@@ -1179,7 +1171,7 @@ func (fs *localfs) RestoreRevision(ctx context.Context, ref *provider.Reference,
 	return fs.propagate(ctx, np)
 }
 
-func (fs *localfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
+func (fs *localfs) PurgeRecycleItem(ctx context.Context, _ *provider.Reference, key, _ string) error {
 	rp := fs.wrapRecycleBin(ctx, key)
 
 	if err := os.Remove(rp); err != nil {
@@ -1188,7 +1180,7 @@ func (fs *localfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference
 	return nil
 }
 
-func (fs *localfs) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
+func (fs *localfs) EmptyRecycle(ctx context.Context, _ *provider.Reference) error {
 	rp := fs.wrapRecycleBin(ctx, "/")
 
 	if err := os.RemoveAll(rp); err != nil {
@@ -1200,7 +1192,7 @@ func (fs *localfs) EmptyRecycle(ctx context.Context, ref *provider.Reference) er
 	return nil
 }
 
-func (fs *localfs) convertToRecycleItem(ctx context.Context, rp string, md os.FileInfo) *provider.RecycleItem {
+func (fs *localfs) convertToRecycleItem(ctx context.Context, _ string, md os.FileInfo) *provider.RecycleItem {
 	// trashbin items have filename.txt.d12345678
 	suffix := path.Ext(md.Name())
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
@@ -1229,7 +1221,7 @@ func (fs *localfs) convertToRecycleItem(ctx context.Context, rp string, md os.Fi
 	}
 }
 
-func (fs *localfs) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (fs *localfs) ListRecycle(ctx context.Context, _ *provider.Reference, _, _ string) ([]*provider.RecycleItem, error) {
 
 	rp := fs.wrapRecycleBin(ctx, "/")
 
@@ -1248,7 +1240,7 @@ func (fs *localfs) ListRecycle(ctx context.Context, ref *provider.Reference, key
 	return items, nil
 }
 
-func (fs *localfs) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
+func (fs *localfs) RestoreRecycleItem(ctx context.Context, _ *provider.Reference, key, _ string, restoreRef *provider.Reference) error {
 
 	suffix := path.Ext(key)
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
@@ -1264,7 +1256,7 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, ref *provider.Referen
 	switch {
 	case restoreRef != nil && restoreRef.Path != "":
 		localRestorePath = fs.wrap(ctx, restoreRef.Path)
-	case fs.isShareFolder(ctx, filePath):
+	case fs.isShareFolder(filePath):
 		localRestorePath = fs.wrapReferences(ctx, filePath)
 	default:
 		localRestorePath = fs.wrap(ctx, filePath)
@@ -1294,24 +1286,24 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, ref *provider.Referen
 	return fs.propagate(ctx, localRestorePath)
 }
 
-func (fs *localfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, unrestricted bool) ([]*provider.StorageSpace, error) {
+func (fs *localfs) ListStorageSpaces(context.Context, []*provider.ListStorageSpacesRequest_Filter, bool) ([]*provider.StorageSpace, error) {
 	return nil, errtypes.NotSupported("list storage spaces")
 }
 
 // UpdateStorageSpace updates a storage space
-func (fs *localfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+func (fs *localfs) UpdateStorageSpace(context.Context, *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("update storage space")
 }
 
 // DeleteStorageSpace deletes a storage space
-func (fs *localfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
+func (fs *localfs) DeleteStorageSpace(context.Context, *provider.DeleteStorageSpaceRequest) error {
 	return errtypes.NotSupported("delete storage space")
 }
 
 func (fs *localfs) propagate(ctx context.Context, leafPath string) error {
 
 	var root string
-	if fs.isShareFolderChild(ctx, leafPath) || strings.HasSuffix(path.Clean(leafPath), fs.conf.ShareFolder) {
+	if fs.isShareFolderChild(leafPath) || strings.HasSuffix(path.Clean(leafPath), fs.conf.ShareFolder) {
 		root = fs.wrapReferences(ctx, "/")
 	} else {
 		root = fs.wrap(ctx, "/")

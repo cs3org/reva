@@ -78,7 +78,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 	BeforeEach(func() {
 		// setup test
-		tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
+		tmpRoot, err := helpers.TempDir()
 		Expect(err).ToNot(HaveOccurred())
 
 		o, err = options.New(map[string]interface{}{

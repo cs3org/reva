@@ -38,7 +38,7 @@ func NewDownloader() downloader.Downloader {
 }
 
 // Download copies the content of a local file into the dst Writer
-func (m *mockDownloader) Download(ctx context.Context, id *providerv1beta1.ResourceId, dst io.Writer) error {
+func (m *mockDownloader) Download(_ context.Context, id *providerv1beta1.ResourceId, dst io.Writer) error {
 	f, err := os.Open(id.OpaqueId)
 	if err != nil {
 		return err

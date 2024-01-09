@@ -36,15 +36,15 @@ func init() {
 type mgr struct{}
 
 // New returns an auth manager implementation that allows to authenticate with any credentials.
-func New(c map[string]interface{}) (auth.Manager, error) {
+func New(map[string]interface{}) (auth.Manager, error) {
 	return &mgr{}, nil
 }
 
-func (m *mgr) Configure(ml map[string]interface{}) error {
+func (m *mgr) Configure(map[string]interface{}) error {
 	return nil
 }
 
-func (m *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
+func (m *mgr) Authenticate(_ context.Context, clientID, _ string) (*user.User, map[string]*authpb.Scope, error) {
 	// allow passing in uid as <opaqueid>@<idp>
 	at := strings.LastIndex(clientID, "@")
 	uid := &user.UserId{Type: user.UserType_USER_TYPE_PRIMARY}

@@ -32,7 +32,7 @@ import (
 type notifHandler struct {
 }
 
-func (h *notifHandler) init(c *config) error {
+func (h *notifHandler) init(*config) error {
 	return nil
 }
 

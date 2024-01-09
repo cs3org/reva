@@ -276,7 +276,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer httpRes.Body.Close()
-	if httpRes.StatusCode == http.StatusForbidden {
+	if httpRes.StatusCode == http.StatusForbidden { //revive:disable-line:empty-block
 		// the file upload was already finished since it is a zero byte file
 		// TODO: why do we get a 401 then!?
 	} else if httpRes.StatusCode != http.StatusOK {

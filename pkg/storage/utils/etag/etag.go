@@ -99,10 +99,9 @@ func findEtagMatch(etag string) map[string]string {
 		return m
 	} else if m = getEtagParams(eosMtimeEtag, etag); len(m) > 0 {
 		return m
-	} else {
-		m = make(map[string]string)
-		m["checksum"] = etag
-		return m
+	}
+	return map[string]string{
+		"checksum": etag,
 	}
 }
 

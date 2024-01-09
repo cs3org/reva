@@ -103,7 +103,7 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 }
 
 // GetActiveTemplate returns the name of the active template.
-func (panel *Panel) GetActiveTemplate(session *html.Session, path string) string {
+func (panel *Panel) GetActiveTemplate(_ *html.Session, path string) string {
 	validPaths := []string{templateLogin, templateManage, templateSettings, templateEdit, templateSite, templateContact, templateRegistration}
 	template := templateLogin
 

@@ -83,7 +83,7 @@ func (exchanger *BaseRequestExchanger) WantsRequest(r *http.Request) bool {
 }
 
 // HandleRequest handles the actual HTTP request.
-func (exchanger *BaseRequestExchanger) HandleRequest(resp http.ResponseWriter, req *http.Request, conf *config.Configuration, log *zerolog.Logger) error {
+func (exchanger *BaseRequestExchanger) HandleRequest(_ http.ResponseWriter, _ *http.Request, _ *config.Configuration, _ *zerolog.Logger) error {
 	return nil
 }
 

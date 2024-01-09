@@ -46,7 +46,7 @@ func init() {
 }
 
 // New returns a new manager.
-func New(c map[string]interface{}) (share.Manager, error) {
+func New(map[string]interface{}) (share.Manager, error) {
 	state := map[string]map[*collaboration.ShareId]collaboration.ShareState{}
 	mp := map[string]map[*collaboration.ShareId]*provider.Reference{}
 	return &manager{
@@ -67,7 +67,7 @@ type manager struct {
 	shareMountPoint map[string]map[*collaboration.ShareId]*provider.Reference
 }
 
-func (m *manager) add(ctx context.Context, s *collaboration.Share) {
+func (m *manager) add(_ context.Context, s *collaboration.Share) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.shares = append(m.shares, s)
@@ -116,7 +116,7 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 	return s, nil
 }
 
-func (m *manager) getByID(ctx context.Context, id *collaboration.ShareId) (*collaboration.Share, error) {
+func (m *manager) getByID(_ context.Context, id *collaboration.ShareId) (*collaboration.Share, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	for _, s := range m.shares {
@@ -127,7 +127,7 @@ func (m *manager) getByID(ctx context.Context, id *collaboration.ShareId) (*coll
 	return nil, errtypes.NotFound(id.String())
 }
 
-func (m *manager) getByKey(ctx context.Context, key *collaboration.ShareKey) (*collaboration.Share, error) {
+func (m *manager) getByKey(_ context.Context, key *collaboration.ShareKey) (*collaboration.Share, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	for _, s := range m.shares {
@@ -281,7 +281,7 @@ func (m *manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 }
 
 // we list the shares that are targeted to the user in context or to the user groups.
-func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter, forUser *userv1beta1.UserId) ([]*collaboration.ReceivedShare, error) {
+func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter, _ *userv1beta1.UserId) ([]*collaboration.ReceivedShare, error) {
 	var rss []*collaboration.ReceivedShare
 	m.lock.Lock()
 	defer m.lock.Unlock()

@@ -59,11 +59,7 @@ func (service *Service) InferMissingData() {
 
 // Verify checks if the service data is valid.
 func (service *Service) Verify() error {
-	if err := service.ServiceEndpoint.Verify(); err != nil {
-		return err
-	}
-
-	return nil
+	return service.ServiceEndpoint.Verify()
 }
 
 // ServiceType represents a service type managed by Mentix.

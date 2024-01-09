@@ -41,7 +41,7 @@ import (
 type VersionsHandler struct {
 }
 
-func (h *VersionsHandler) init(c *config.Config) error {
+func (h *VersionsHandler) init(*config.Config) error {
 	return nil
 }
 
@@ -89,7 +89,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 					},
 					Path: utils.MakeRelativePath(r.URL.Path),
 				}
-				s.handleHead(ctx, w, r, ref, *log)
+				s.handleHead(ctx, w, ref, *log)
 				return
 			case http.MethodGet:
 				log := appctx.GetLogger(ctx)

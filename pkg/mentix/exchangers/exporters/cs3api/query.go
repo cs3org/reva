@@ -33,7 +33,7 @@ import (
 )
 
 // HandleDefaultQuery processes a basic query.
-func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values, conf *config.Configuration, _ *zerolog.Logger) (int, []byte, error) {
+func HandleDefaultQuery(meshData *meshdata.MeshData, _ url.Values, conf *config.Configuration, _ *zerolog.Logger) (int, []byte, error) {
 	// Convert the mesh data
 	ocmData, err := convertMeshDataToOCMData(meshData, conf.Exporters.CS3API.ElevatedServiceTypes)
 	if err != nil {

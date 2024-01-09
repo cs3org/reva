@@ -125,32 +125,32 @@ func (storage *FileStorage) WriteAccounts(accounts *Accounts) error {
 }
 
 // SiteAdded is called when a site has been added.
-func (storage *FileStorage) SiteAdded(site *Site) {
+func (storage *FileStorage) SiteAdded(*Site) {
 	// Simply skip this action; all data is saved solely in WriteSites
 }
 
 // SiteUpdated is called when a site has been updated.
-func (storage *FileStorage) SiteUpdated(site *Site) {
+func (storage *FileStorage) SiteUpdated(*Site) {
 	// Simply skip this action; all data is saved solely in WriteSites
 }
 
 // SiteRemoved is called when a site has been removed.
-func (storage *FileStorage) SiteRemoved(site *Site) {
+func (storage *FileStorage) SiteRemoved(*Site) {
 	// Simply skip this action; all data is saved solely in WriteSites
 }
 
 // AccountAdded is called when an account has been added.
-func (storage *FileStorage) AccountAdded(account *Account) {
+func (storage *FileStorage) AccountAdded(*Account) {
 	// Simply skip this action; all data is saved solely in WriteAccounts
 }
 
 // AccountUpdated is called when an account has been updated.
-func (storage *FileStorage) AccountUpdated(account *Account) {
+func (storage *FileStorage) AccountUpdated(*Account) {
 	// Simply skip this action; all data is saved solely in WriteAccounts
 }
 
 // AccountRemoved is called when an account has been removed.
-func (storage *FileStorage) AccountRemoved(account *Account) {
+func (storage *FileStorage) AccountRemoved(*Account) {
 	// Simply skip this action; all data is saved solely in WriteAccounts
 }
 

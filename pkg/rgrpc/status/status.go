@@ -69,7 +69,7 @@ func NewInternal(ctx context.Context, msg string) *rpc.Status {
 }
 
 // NewUnauthenticated returns a Status with CODE_UNAUTHENTICATED.
-func NewUnauthenticated(ctx context.Context, err error, msg string) *rpc.Status {
+func NewUnauthenticated(ctx context.Context, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_UNAUTHENTICATED,
 		Message: msg,
@@ -78,7 +78,7 @@ func NewUnauthenticated(ctx context.Context, err error, msg string) *rpc.Status 
 }
 
 // NewPermissionDenied returns a Status with PERMISSION_DENIED.
-func NewPermissionDenied(ctx context.Context, err error, msg string) *rpc.Status {
+func NewPermissionDenied(ctx context.Context, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_PERMISSION_DENIED,
 		Message: msg,
@@ -87,7 +87,7 @@ func NewPermissionDenied(ctx context.Context, err error, msg string) *rpc.Status
 }
 
 // NewAborted returns a Status with ABORTED.
-func NewAborted(ctx context.Context, err error, msg string) *rpc.Status {
+func NewAborted(ctx context.Context, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_ABORTED,
 		Message: msg,
@@ -96,7 +96,7 @@ func NewAborted(ctx context.Context, err error, msg string) *rpc.Status {
 }
 
 // NewFailedPrecondition returns a Status with FAILED_PRECONDITION.
-func NewFailedPrecondition(ctx context.Context, err error, msg string) *rpc.Status {
+func NewFailedPrecondition(ctx context.Context, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_FAILED_PRECONDITION,
 		Message: msg,
@@ -105,7 +105,7 @@ func NewFailedPrecondition(ctx context.Context, err error, msg string) *rpc.Stat
 }
 
 // NewInsufficientStorage returns a Status with INSUFFICIENT_STORAGE.
-func NewInsufficientStorage(ctx context.Context, err error, msg string) *rpc.Status {
+func NewInsufficientStorage(ctx context.Context, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_INSUFFICIENT_STORAGE,
 		Message: msg,
@@ -114,7 +114,7 @@ func NewInsufficientStorage(ctx context.Context, err error, msg string) *rpc.Sta
 }
 
 // NewUnimplemented returns a Status with CODE_UNIMPLEMENTED.
-func NewUnimplemented(ctx context.Context, err error, msg string) *rpc.Status {
+func NewUnimplemented(ctx context.Context, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_UNIMPLEMENTED,
 		Message: msg,
@@ -123,7 +123,7 @@ func NewUnimplemented(ctx context.Context, err error, msg string) *rpc.Status {
 }
 
 // NewAlreadyExists returns a Status with CODE_ALREADY_EXISTS.
-func NewAlreadyExists(ctx context.Context, err error, msg string) *rpc.Status {
+func NewAlreadyExists(ctx context.Context, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_ALREADY_EXISTS,
 		Message: msg,
@@ -144,7 +144,7 @@ func NewInvalidArg(ctx context.Context, msg string) *rpc.Status {
 // Deprecated: NewConflict exists for historical compatibility
 // and should not be used. To create a Status with code ABORTED,
 // use NewAborted.
-func NewConflict(ctx context.Context, err error, msg string) *rpc.Status {
+func NewConflict(ctx context.Context, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_ABORTED,
 		Message: msg,
@@ -169,22 +169,22 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 	case errtypes.IsNotFound:
 		return NewNotFound(ctx, msg+": "+err.Error())
 	case errtypes.AlreadyExists:
-		return NewAlreadyExists(ctx, err, msg+": "+err.Error())
+		return NewAlreadyExists(ctx, msg+": "+e.Error())
 	case errtypes.IsInvalidCredentials:
 		// TODO this maps badly
-		return NewUnauthenticated(ctx, err, msg+": "+err.Error())
+		return NewUnauthenticated(ctx, msg+": "+err.Error())
 	case errtypes.PermissionDenied:
-		return NewPermissionDenied(ctx, e, msg+": "+err.Error())
+		return NewPermissionDenied(ctx, msg+": "+err.Error())
 	case errtypes.Locked:
 		// FIXME a locked error returns the current lockid
 		// FIXME use NewAborted as per the rpc code docs
 		return NewLocked(ctx, msg+": "+err.Error())
 	case errtypes.Aborted:
-		return NewAborted(ctx, e, msg+": "+err.Error())
+		return NewAborted(ctx, msg+": "+err.Error())
 	case errtypes.PreconditionFailed:
-		return NewFailedPrecondition(ctx, e, msg+": "+err.Error())
+		return NewFailedPrecondition(ctx, msg+": "+err.Error())
 	case errtypes.IsNotSupported:
-		return NewUnimplemented(ctx, err, msg+":"+err.Error())
+		return NewUnimplemented(ctx, msg+":"+err.Error())
 	case errtypes.BadRequest:
 		return NewInvalid(ctx, msg+":"+err.Error())
 	}
@@ -198,11 +198,11 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 			case codes.NotFound:
 				return NewNotFound(ctx, msg+": "+err.Error())
 			case codes.Unauthenticated:
-				return NewUnauthenticated(ctx, err, msg+": "+err.Error())
+				return NewUnauthenticated(ctx, msg+": "+err.Error())
 			case codes.PermissionDenied:
-				return NewPermissionDenied(ctx, err, msg+": "+err.Error())
+				return NewPermissionDenied(ctx, msg+": "+err.Error())
 			case codes.Unimplemented:
-				return NewUnimplemented(ctx, err, msg+": "+err.Error())
+				return NewUnimplemented(ctx, msg+": "+err.Error())
 			}
 		}
 		// the actual error can be wrapped multiple times

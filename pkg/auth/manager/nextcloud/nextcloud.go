@@ -109,7 +109,7 @@ func NewAuthManager(c *AuthManagerConfig) (*Manager, error) {
 }
 
 // Configure method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/auth/auth.go#L32-L35
-func (am *Manager) Configure(ml map[string]interface{}) error {
+func (am *Manager) Configure(map[string]interface{}) error {
 	return nil
 }
 

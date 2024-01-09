@@ -75,7 +75,7 @@ func initializeDB(root, dbName string) (*sql.DB, error) {
 	return db, nil
 }
 
-func (fs *localfs) addToRecycledDB(ctx context.Context, key, fileName string) error {
+func (fs *localfs) addToRecycledDB(_ context.Context, key, fileName string) error {
 	stmt, err := fs.db.Prepare("INSERT INTO recycled_entries VALUES (?, ?)")
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
@@ -87,7 +87,7 @@ func (fs *localfs) addToRecycledDB(ctx context.Context, key, fileName string) er
 	return nil
 }
 
-func (fs *localfs) getRecycledEntry(ctx context.Context, key string) (string, error) {
+func (fs *localfs) getRecycledEntry(_ context.Context, key string) (string, error) {
 	var filePath string
 	err := fs.db.QueryRow("SELECT path FROM recycled_entries WHERE key=?", key).Scan(&filePath)
 	if err != nil {
@@ -96,7 +96,7 @@ func (fs *localfs) getRecycledEntry(ctx context.Context, key string) (string, er
 	return filePath, nil
 }
 
-func (fs *localfs) removeFromRecycledDB(ctx context.Context, key string) error {
+func (fs *localfs) removeFromRecycledDB(_ context.Context, key string) error {
 	stmt, err := fs.db.Prepare("DELETE FROM recycled_entries WHERE key=?")
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
@@ -108,7 +108,7 @@ func (fs *localfs) removeFromRecycledDB(ctx context.Context, key string) error {
 	return nil
 }
 
-func (fs *localfs) addToACLDB(ctx context.Context, resource, grantee, role string) error {
+func (fs *localfs) addToACLDB(_ context.Context, resource, grantee, role string) error {
 	stmt, err := fs.db.Prepare("INSERT INTO user_interaction (resource, grantee, role) VALUES (?, ?, ?) ON CONFLICT(resource, grantee) DO UPDATE SET role=?")
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
@@ -120,7 +120,7 @@ func (fs *localfs) addToACLDB(ctx context.Context, resource, grantee, role strin
 	return nil
 }
 
-func (fs *localfs) getACLs(ctx context.Context, resource string) (*sql.Rows, error) {
+func (fs *localfs) getACLs(_ context.Context, resource string) (*sql.Rows, error) {
 	grants, err := fs.db.Query("SELECT grantee, role FROM user_interaction WHERE resource=?", resource)
 	if err != nil {
 		return nil, err
@@ -128,7 +128,7 @@ func (fs *localfs) getACLs(ctx context.Context, resource string) (*sql.Rows, err
 	return grants, nil
 }
 
-func (fs *localfs) removeFromACLDB(ctx context.Context, resource, grantee string) error {
+func (fs *localfs) removeFromACLDB(_ context.Context, resource, grantee string) error {
 	stmt, err := fs.db.Prepare("UPDATE user_interaction SET role='' WHERE resource=? AND grantee=?")
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
@@ -140,7 +140,7 @@ func (fs *localfs) removeFromACLDB(ctx context.Context, resource, grantee string
 	return nil
 }
 
-func (fs *localfs) addToFavoritesDB(ctx context.Context, resource, grantee string) error {
+func (fs *localfs) addToFavoritesDB(_ context.Context, resource, grantee string) error {
 	stmt, err := fs.db.Prepare("INSERT INTO user_interaction (resource, grantee, favorite) VALUES (?, ?, 1) ON CONFLICT(resource, grantee) DO UPDATE SET favorite=1")
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
@@ -152,7 +152,7 @@ func (fs *localfs) addToFavoritesDB(ctx context.Context, resource, grantee strin
 	return nil
 }
 
-func (fs *localfs) removeFromFavoritesDB(ctx context.Context, resource, grantee string) error {
+func (fs *localfs) removeFromFavoritesDB(_ context.Context, resource, grantee string) error {
 	stmt, err := fs.db.Prepare("UPDATE user_interaction SET favorite=0 WHERE resource=? AND grantee=?")
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
@@ -164,7 +164,7 @@ func (fs *localfs) removeFromFavoritesDB(ctx context.Context, resource, grantee 
 	return nil
 }
 
-func (fs *localfs) addToMetadataDB(ctx context.Context, resource, key, value string) error {
+func (fs *localfs) addToMetadataDB(_ context.Context, resource, key, value string) error {
 	stmt, err := fs.db.Prepare("INSERT INTO metadata (resource, key, value) VALUES (?, ?, ?) ON CONFLICT(resource, key) DO UPDATE SET value=?")
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
@@ -176,7 +176,7 @@ func (fs *localfs) addToMetadataDB(ctx context.Context, resource, key, value str
 	return nil
 }
 
-func (fs *localfs) removeFromMetadataDB(ctx context.Context, resource, key string) error {
+func (fs *localfs) removeFromMetadataDB(_ context.Context, resource, key string) error {
 	stmt, err := fs.db.Prepare("DELETE FROM metadata WHERE resource=? AND key=?")
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
@@ -188,7 +188,7 @@ func (fs *localfs) removeFromMetadataDB(ctx context.Context, resource, key strin
 	return nil
 }
 
-func (fs *localfs) getMetadata(ctx context.Context, resource string) (*sql.Rows, error) {
+func (fs *localfs) getMetadata(_ context.Context, resource string) (*sql.Rows, error) {
 	grants, err := fs.db.Query("SELECT key, value FROM metadata WHERE resource=?", resource)
 	if err != nil {
 		return nil, err
@@ -196,7 +196,7 @@ func (fs *localfs) getMetadata(ctx context.Context, resource string) (*sql.Rows,
 	return grants, nil
 }
 
-func (fs *localfs) addToReferencesDB(ctx context.Context, resource, target string) error {
+func (fs *localfs) addToReferencesDB(_ context.Context, resource, target string) error {
 	stmt, err := fs.db.Prepare("INSERT INTO share_references (resource, target) VALUES (?, ?) ON CONFLICT(resource) DO UPDATE SET target=?")
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
@@ -208,7 +208,7 @@ func (fs *localfs) addToReferencesDB(ctx context.Context, resource, target strin
 	return nil
 }
 
-func (fs *localfs) getReferenceEntry(ctx context.Context, resource string) (string, error) {
+func (fs *localfs) getReferenceEntry(_ context.Context, resource string) (string, error) {
 	var target string
 	err := fs.db.QueryRow("SELECT target FROM share_references WHERE resource=?", resource).Scan(&target)
 	if err != nil {

@@ -88,7 +88,7 @@ func getInviteRepository(c *config) (invite.Repository, error) {
 }
 
 // New creates a new OCM invite manager svc.
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+func New(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -146,7 +146,7 @@ func (s *service) GenerateInviteToken(ctx context.Context, req *invitepb.Generat
 	}, nil
 }
 
-func (s *service) ListInviteTokens(ctx context.Context, req *invitepb.ListInviteTokensRequest) (*invitepb.ListInviteTokensResponse, error) {
+func (s *service) ListInviteTokens(ctx context.Context, _ *invitepb.ListInviteTokensRequest) (*invitepb.ListInviteTokensResponse, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
 	tokens, err := s.repo.ListTokens(ctx, user.Id)
 	if err != nil {
@@ -187,11 +187,11 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 			}, nil
 		case errors.Is(err, client.ErrUserAlreadyAccepted):
 			return &invitepb.ForwardInviteResponse{
-				Status: status.NewAlreadyExists(ctx, err, err.Error()),
+				Status: status.NewAlreadyExists(ctx, err.Error()),
 			}, nil
 		case errors.Is(err, client.ErrServiceNotTrusted):
 			return &invitepb.ForwardInviteResponse{
-				Status: status.NewPermissionDenied(ctx, err, err.Error()),
+				Status: status.NewPermissionDenied(ctx, err.Error()),
 			}, nil
 		default:
 			return &invitepb.ForwardInviteResponse{
@@ -269,7 +269,7 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 	if err := s.repo.AddRemoteUser(ctx, token.GetUserId(), req.GetRemoteUser()); err != nil {
 		if errors.Is(err, invite.ErrUserAlreadyAccepted) {
 			return &invitepb.AcceptInviteResponse{
-				Status: status.NewAlreadyExists(ctx, err, err.Error()),
+				Status: status.NewAlreadyExists(ctx, err.Error()),
 			}, nil
 		}
 		return &invitepb.AcceptInviteResponse{

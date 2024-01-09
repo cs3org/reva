@@ -287,7 +287,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	}, nil
 }
 
-func (p *wopiProvider) GetAppProviderInfo(ctx context.Context) (*appregistry.ProviderInfo, error) {
+func (p *wopiProvider) GetAppProviderInfo(context.Context) (*appregistry.ProviderInfo, error) {
 	// Initially we store the mime types in a map to avoid duplicates
 	mimeTypesMap := make(map[string]bool)
 	for _, extensions := range p.appURLs {

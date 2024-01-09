@@ -32,7 +32,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (fs *s3FS) Upload(ctx context.Context, req storage.UploadRequest, uff storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
+func (fs *s3FS) Upload(ctx context.Context, req storage.UploadRequest, _ storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
 	log := appctx.GetLogger(ctx)
 
 	fn, err := fs.resolve(ctx, req.Ref)
@@ -70,6 +70,6 @@ func (fs *s3FS) Upload(ctx context.Context, req storage.UploadRequest, uff stora
 }
 
 // InitiateUpload returns upload ids corresponding to different protocols it supports
-func (fs *s3FS) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
+func (fs *s3FS) InitiateUpload(context.Context, *provider.Reference, int64, map[string]string) (map[string]string, error) {
 	return nil, errtypes.NotSupported("op not supported")
 }

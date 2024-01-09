@@ -19,7 +19,6 @@ package ocdav_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -52,7 +51,7 @@ type selector struct {
 	client gateway.GatewayAPIClient
 }
 
-func (s selector) Next(opts ...pool.Option) (gateway.GatewayAPIClient, error) {
+func (s selector) Next(_ ...pool.Option) (gateway.GatewayAPIClient, error) {
 	return s.client, nil
 }
 
@@ -382,7 +381,7 @@ var _ = Describe("ocdav", func() {
 					// MKCOL needs to check if the resource already exists to return the correct status
 					// TODO check the etag is forwarded to make the request conditional
 					// TODO should be part of the CS3 api?
-					mockPathStat("/users/username/subfolder/newfolder", status.NewAborted(ctx, errors.New("etag mismatch"), "etag mismatch"), nil)
+					mockPathStat("/users/username/subfolder/newfolder", status.NewAborted(ctx, "etag mismatch"), nil)
 
 					handler.Handler().ServeHTTP(rr, req)
 					Expect(rr).To(HaveHTTPStatus(http.StatusPreconditionFailed))
@@ -427,7 +426,7 @@ var _ = Describe("ocdav", func() {
 							Path:       "./subfolder/newfolder",
 						})
 					})).Return(&cs3storageprovider.CreateContainerResponse{
-						Status: status.NewFailedPrecondition(ctx, errors.New("parent does not exist"), "parent does not exist"),
+						Status: status.NewFailedPrecondition(ctx, "parent does not exist"),
 					}, nil)
 
 					handler.Handler().ServeHTTP(rr, req)
@@ -540,7 +539,7 @@ var _ = Describe("ocdav", func() {
 							Path:       "./newfile",
 						})
 					})).Return(&cs3gateway.InitiateFileUploadResponse{
-						Status: status.NewAborted(ctx, errors.New("parent does not exist"), "parent does not exist"),
+						Status: status.NewAborted(ctx, "parent does not exist"),
 					}, nil)
 
 					handler.Handler().ServeHTTP(rr, req)
@@ -558,7 +557,7 @@ var _ = Describe("ocdav", func() {
 							Path:       "./newfile",
 						})
 					})).Return(&cs3gateway.InitiateFileUploadResponse{
-						Status: status.NewFailedPrecondition(ctx, errors.New("precondition failed"), "precondition failed"),
+						Status: status.NewFailedPrecondition(ctx, "precondition failed"),
 					}, nil)
 
 					client.On("Stat", mock.Anything, mock.Anything).Return(&cs3storageprovider.StatResponse{
@@ -790,7 +789,7 @@ var _ = Describe("ocdav", func() {
 					mockPathStat(".", status.NewOK(ctx), nil)
 
 					client.On("Move", mock.Anything, mReq).Return(&cs3storageprovider.MoveResponse{
-						Status: status.NewAborted(ctx, fmt.Errorf("aborted"), ""),
+						Status: status.NewAborted(ctx, "aborted"),
 					}, nil)
 
 					handler.Handler().ServeHTTP(rr, req)
@@ -804,7 +803,7 @@ var _ = Describe("ocdav", func() {
 					mockPathStat(".", status.NewOK(ctx), nil)
 
 					client.On("Move", mock.Anything, mReq).Return(&cs3storageprovider.MoveResponse{
-						Status: status.NewUnimplemented(ctx, fmt.Errorf("unimplemeted"), ""),
+						Status: status.NewUnimplemented(ctx, "unimplemeted"),
 					}, nil)
 
 					handler.Handler().ServeHTTP(rr, req)
@@ -1434,20 +1433,20 @@ var _ = Describe("ocdav", func() {
 						Opaque: &cs3types.Opaque{Map: map[string]*cs3types.OpaqueEntry{
 							"lockid": {Decoder: "plain", Value: []byte("somelockid")},
 						}},
-						Status: status.NewPermissionDenied(ctx, fmt.Errorf("permission denied error"), "permission denied message"),
+						Status: status.NewPermissionDenied(ctx, "permission denied"),
 					}, nil)
 				} else {
 					client.On("Delete", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.DeleteRequest) bool {
 						return utils.ResourceEqual(req.Ref, &ref)
 					})).Return(&cs3storageprovider.DeleteResponse{
-						Status: status.NewPermissionDenied(ctx, fmt.Errorf("permission denied error"), "permission denied message"),
+						Status: status.NewPermissionDenied(ctx, "permission denied"),
 					}, nil)
 				}
 
 				if userHasAccess {
 					mockStatOK(&ref, mockInfo(map[string]interface{}{}))
 				} else {
-					mockStat(&ref, status.NewPermissionDenied(ctx, fmt.Errorf("permission denied error"), "permission denied message"), nil)
+					mockStat(&ref, status.NewPermissionDenied(ctx, "permission denied"), nil)
 				}
 
 				rr := httptest.NewRecorder()
@@ -1530,13 +1529,13 @@ var _ = Describe("ocdav", func() {
 						Opaque: &cs3types.Opaque{Map: map[string]*cs3types.OpaqueEntry{
 							"lockid": {Decoder: "plain", Value: []byte("somelockid")},
 						}},
-						Status: status.NewPermissionDenied(ctx, fmt.Errorf("permission denied error"), "permission denied message"),
+						Status: status.NewPermissionDenied(ctx, "permission denied"),
 					}, nil)
 				} else {
 					client.On("CreateContainer", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.CreateContainerRequest) bool {
 						return utils.ResourceEqual(req.Ref, &ref)
 					})).Return(&cs3storageprovider.CreateContainerResponse{
-						Status: status.NewPermissionDenied(ctx, fmt.Errorf("permission denied error"), "permission denied message"),
+						Status: status.NewPermissionDenied(ctx, "permission denied"),
 					}, nil)
 				}
 
@@ -1548,7 +1547,7 @@ var _ = Describe("ocdav", func() {
 				if userHasAccess {
 					mockStatOK(&parentRef, mockInfo(map[string]interface{}{}))
 				} else {
-					mockStat(&parentRef, status.NewPermissionDenied(ctx, fmt.Errorf("permission denied error"), "permission denied message"), nil)
+					mockStat(&parentRef, status.NewPermissionDenied(ctx, "permission denied"), nil)
 				}
 
 				rr := httptest.NewRecorder()

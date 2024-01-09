@@ -186,7 +186,7 @@ func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string, skip
 // a prefix-substring search on the group attributes ('group_name',
 // 'display_name', 'group_id') and returns the groups. FindGroups does NOT expand the
 // members of the Groups.
-func (m *manager) FindGroups(ctx context.Context, query string, skipFetchingMembers bool) ([]*grouppb.Group, error) {
+func (m *manager) FindGroups(ctx context.Context, query string, _ bool) ([]*grouppb.Group, error) {
 	log := appctx.GetLogger(ctx)
 	entries, err := m.c.LDAPIdentity.GetLDAPGroups(log, m.ldapClient, query)
 	if err != nil {

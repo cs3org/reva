@@ -70,7 +70,7 @@ func (s *svc) Handler() http.Handler {
 }
 
 // New returns a new metrics service.
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
+func New(m map[string]interface{}, _ *zerolog.Logger) (global.Service, error) {
 	// Prepare the configuration
 	conf := &config.Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {

@@ -55,7 +55,7 @@ type service struct {
 }
 
 // New returns a new PermissionsServiceServer
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+func New(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -86,7 +86,7 @@ func (s *service) Register(ss *grpc.Server) {
 	permissions.RegisterPermissionsAPIServer(ss, s)
 }
 
-func (s *service) CheckPermission(ctx context.Context, req *permissions.CheckPermissionRequest) (*permissions.CheckPermissionResponse, error) {
+func (s *service) CheckPermission(_ context.Context, req *permissions.CheckPermissionRequest) (*permissions.CheckPermissionResponse, error) {
 	var subject string
 	switch ref := req.SubjectRef.Spec.(type) {
 	case *permissions.SubjectReference_UserId:

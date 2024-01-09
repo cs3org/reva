@@ -221,7 +221,7 @@ func (w *wrapper) DenyGrant(ctx context.Context, ref *provider.Reference, g *pro
 	return errtypes.NotSupported("eos: deny grant is only enabled for project spaces")
 }
 
-func (w *wrapper) getMountID(ctx context.Context, r *provider.ResourceInfo) string {
+func (w *wrapper) getMountID(_ context.Context, r *provider.ResourceInfo) string {
 	if r == nil {
 		return ""
 	}

@@ -182,7 +182,7 @@ func (m *manager) fetchAllGroupAccounts() error {
 	return nil
 }
 
-func (m *manager) parseAndCacheGroup(ctx context.Context, groupData map[string]interface{}) (*grouppb.Group, error) {
+func (m *manager) parseAndCacheGroup(_ context.Context, groupData map[string]interface{}) (*grouppb.Group, error) {
 	id, ok := groupData["groupIdentifier"].(string)
 	if !ok {
 		return nil, errors.New("rest: missing upn in user data")
@@ -257,7 +257,7 @@ func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string, skip
 	return g, nil
 }
 
-func (m *manager) FindGroups(ctx context.Context, query string, skipFetchingMembers bool) ([]*grouppb.Group, error) {
+func (m *manager) FindGroups(_ context.Context, query string, _ bool) ([]*grouppb.Group, error) {
 
 	// Look at namespaces filters. If the query starts with:
 	// "a" or none => get egroups

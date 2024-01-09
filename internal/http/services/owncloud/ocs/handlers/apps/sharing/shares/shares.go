@@ -1534,7 +1534,7 @@ func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPI
 	return statRes.Info, statRes.Status, nil
 }
 
-func (h *Handler) createCs3Share(ctx context.Context, w http.ResponseWriter, r *http.Request, client gateway.GatewayAPIClient, req *collaboration.CreateShareRequest) (*collaboration.Share, *ocsError) {
+func (h *Handler) createCs3Share(ctx context.Context, _ http.ResponseWriter, r *http.Request, client gateway.GatewayAPIClient, req *collaboration.CreateShareRequest) (*collaboration.Share, *ocsError) {
 	logger := appctx.GetLogger(ctx)
 	exists, err := h.granteeExists(ctx, req.Grant.Grantee, req.ResourceInfo.Id)
 	if err != nil {

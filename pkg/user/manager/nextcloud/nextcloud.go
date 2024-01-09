@@ -124,7 +124,7 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 	return u, nil
 }
 
-func (um *Manager) do(ctx context.Context, a Action, username string) (int, []byte, error) {
+func (um *Manager) do(_ context.Context, a Action, username string) (int, []byte, error) {
 	url := um.endPoint + "~" + username + "/api/user/" + a.verb
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
 	if err != nil {
@@ -145,12 +145,12 @@ func (um *Manager) do(ctx context.Context, a Action, username string) (int, []by
 }
 
 // Configure method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
-func (um *Manager) Configure(ml map[string]interface{}) error {
+func (um *Manager) Configure(map[string]interface{}) error {
 	return nil
 }
 
 // GetUser method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
-func (um *Manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
+func (um *Manager) GetUser(ctx context.Context, uid *userpb.UserId, _ bool) (*userpb.User, error) {
 	bodyStr, _ := json.Marshal(uid)
 	_, respBody, err := um.do(ctx, Action{"GetUser", string(bodyStr)}, "unauthenticated")
 	if err != nil {
@@ -165,7 +165,7 @@ func (um *Manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetching
 }
 
 // GetUserByClaim method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
-func (um *Manager) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
+func (um *Manager) GetUserByClaim(ctx context.Context, claim, value string, _ bool) (*userpb.User, error) {
 	type paramsObj struct {
 		Claim string `json:"claim"`
 		Value string `json:"value"`
@@ -216,7 +216,7 @@ func (um *Manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]str
 }
 
 // FindUsers method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
-func (um *Manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
+func (um *Manager) FindUsers(ctx context.Context, query string, _ bool) ([]*userpb.User, error) {
 	user, err := getUser(ctx)
 	if err != nil {
 		return nil, err

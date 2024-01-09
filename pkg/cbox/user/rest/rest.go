@@ -190,7 +190,7 @@ func (m *manager) fetchAllUserAccounts() error {
 	return nil
 }
 
-func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]interface{}) (*userpb.User, error) {
+func (m *manager) parseAndCacheUser(_ context.Context, userData map[string]interface{}) (*userpb.User, error) {
 	upn, ok := userData["upn"].(string)
 	if !ok {
 		return nil, errors.New("rest: missing upn in user data")
@@ -256,7 +256,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipF
 	return u, nil
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
+func (m *manager) FindUsers(_ context.Context, query string, _ bool) ([]*userpb.User, error) {
 
 	// Look at namespaces filters. If the query starts with:
 	// "a" => look into primary/secondary/service accounts

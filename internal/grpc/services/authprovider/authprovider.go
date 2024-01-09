@@ -95,7 +95,7 @@ func getAuthManager(manager string, m map[string]map[string]interface{}) (auth.M
 }
 
 // New returns a new AuthProviderServiceServer.
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+func New(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -136,7 +136,7 @@ func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRe
 	password := req.ClientSecret
 
 	u, scope, err := s.authmgr.Authenticate(ctx, username, password)
-	switch v := err.(type) {
+	switch err.(type) {
 	case nil:
 		log.Info().Msgf("user %s authenticated", u.Id)
 		return &provider.AuthenticateResponse{
@@ -146,7 +146,7 @@ func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRe
 		}, nil
 	case errtypes.InvalidCredentials:
 		return &provider.AuthenticateResponse{
-			Status: status.NewPermissionDenied(ctx, v, "wrong password"),
+			Status: status.NewPermissionDenied(ctx, "wrong password"),
 		}, nil
 	case errtypes.NotFound:
 		log.Debug().Str("client_id", username).Msg("unknown client id")
@@ -154,9 +154,9 @@ func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRe
 			Status: status.NewNotFound(ctx, "unknown client id"),
 		}, nil
 	default:
-		err = errors.Wrap(err, "authsvc: error in Authenticate")
+		log.Error().Err(err).Msg("authsvc: error in Authenticate")
 		return &provider.AuthenticateResponse{
-			Status: status.NewUnauthenticated(ctx, err, "error authenticating user"),
+			Status: status.NewUnauthenticated(ctx, "error authenticating user"),
 		}, nil
 	}
 

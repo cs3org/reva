@@ -293,7 +293,7 @@ func (m *MemStore) Read(key string, opts ...store.ReadOption) ([]*store.Record, 
 // Delete removes the record based on the key. It won't return any error if it's missing
 //
 // Database and Table options aren't supported
-func (m *MemStore) Delete(key string, opts ...store.DeleteOption) error {
+func (m *MemStore) Delete(key string, _ ...store.DeleteOption) error {
 	m.lockGlob.Lock()
 	defer m.lockGlob.Unlock()
 

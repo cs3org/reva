@@ -99,7 +99,7 @@ func (m *manager) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) e
 }
 
 // FindProvider returns all providers that can provide an app for the given mimeType
-func (m *manager) FindProviders(ctx context.Context, mimeType string) ([]*registrypb.ProviderInfo, error) {
+func (m *manager) FindProviders(_ context.Context, mimeType string) ([]*registrypb.ProviderInfo, error) {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -111,7 +111,7 @@ func (m *manager) FindProviders(ctx context.Context, mimeType string) ([]*regist
 }
 
 // GetDefaultProviderForMimeType returns the default provider for the given mimeType
-func (m *manager) GetDefaultProviderForMimeType(ctx context.Context, mimeType string) (*registrypb.ProviderInfo, error) {
+func (m *manager) GetDefaultProviderForMimeType(_ context.Context, mimeType string) (*registrypb.ProviderInfo, error) {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -130,12 +130,12 @@ func (m *manager) GetDefaultProviderForMimeType(ctx context.Context, mimeType st
 }
 
 // ListProviders lists all registered Providers
-func (m *manager) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
+func (m *manager) ListProviders(context.Context) ([]*registrypb.ProviderInfo, error) {
 	return m.providers, nil
 }
 
 // ListSupportedMimeTypes lists all supported mimeTypes
-func (m *manager) ListSupportedMimeTypes(ctx context.Context) ([]*registrypb.MimeTypeInfo, error) {
+func (m *manager) ListSupportedMimeTypes(context.Context) ([]*registrypb.MimeTypeInfo, error) {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -156,7 +156,7 @@ func (m *manager) ListSupportedMimeTypes(ctx context.Context) ([]*registrypb.Mim
 }
 
 // SetDefaultProviderForMimeType sets the default provider for the given mimeType
-func (m *manager) SetDefaultProviderForMimeType(ctx context.Context, mimeType string, p *registrypb.ProviderInfo) error {
+func (m *manager) SetDefaultProviderForMimeType(_ context.Context, mimeType string, p *registrypb.ProviderInfo) error {
 	m.Lock()
 	defer m.Unlock()
 	// NOTE: this is a dirty workaround:

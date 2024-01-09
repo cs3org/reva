@@ -151,7 +151,7 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 	return false, errtypes.InternalError(msg)
 }
 
-func checkStorageRef(ctx context.Context, s *link.PublicShare, r *provider.Reference) bool {
+func checkStorageRef(_ context.Context, s *link.PublicShare, r *provider.Reference) bool {
 	// r: <resource_id:<storage_id:$storageID space_id:$spaceID opaque_id:$opaqueID> path:$path > >
 	if utils.ResourceIDEqual(s.ResourceId, r.GetResourceId()) {
 		return true

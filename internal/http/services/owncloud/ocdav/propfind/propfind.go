@@ -272,7 +272,7 @@ func (p *Handler) HandlePathPropfind(w http.ResponseWriter, r *http.Request, ns 
 		return
 	}
 
-	resourceInfos, sendTusHeaders, ok := p.getResourceInfos(ctx, w, r, pf, spaces, fn, depth, sublog)
+	resourceInfos, sendTusHeaders, ok := p.getResourceInfos(ctx, w, pf, spaces, fn, depth, sublog)
 	if !ok {
 		// getResourceInfos handles responses in case of an error so we can just return here.
 		return
@@ -404,7 +404,7 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 		res.Info,
 	}
 	if res.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth != net.DepthZero {
-		childInfos, ok := p.getSpaceResourceInfos(ctx, w, r, pf, &ref, r.URL.Path, depth, sublog)
+		childInfos, ok := p.getSpaceResourceInfos(ctx, w, pf, &ref, r.URL.Path, depth, sublog)
 		if !ok {
 			// getResourceInfos handles responses in case of an error so we can just return here.
 			return
@@ -516,7 +516,7 @@ func (p *Handler) statSpace(ctx context.Context, client gateway.GatewayAPIClient
 	return res.GetInfo(), res.GetStatus(), nil
 }
 
-func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf XML, spaces []*provider.StorageSpace, requestPath string, depth net.Depth, log zerolog.Logger) ([]*provider.ResourceInfo, bool, bool) {
+func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, pf XML, spaces []*provider.StorageSpace, requestPath string, depth net.Depth, log zerolog.Logger) ([]*provider.ResourceInfo, bool, bool) {
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "get_resource_infos")
 	span.SetAttributes(attribute.KeyValue{Key: "requestPath", Value: attribute.StringValue(requestPath)})
 	span.SetAttributes(attribute.KeyValue{Key: "depth", Value: attribute.StringValue(depth.String())})
@@ -726,7 +726,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 	return resourceInfos, sendTusHeaders, true
 }
 
-func (p *Handler) getSpaceResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf XML, ref *provider.Reference, requestPath string, depth net.Depth, log zerolog.Logger) ([]*provider.ResourceInfo, bool) {
+func (p *Handler) getSpaceResourceInfos(ctx context.Context, w http.ResponseWriter, pf XML, ref *provider.Reference, requestPath string, depth net.Depth, log zerolog.Logger) ([]*provider.ResourceInfo, bool) {
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "get_space_resource_infos")
 	span.SetAttributes(attribute.KeyValue{Key: "requestPath", Value: attribute.StringValue(requestPath)})
 	span.SetAttributes(attribute.KeyValue{Key: "depth", Value: attribute.StringValue(depth.String())})
@@ -1669,7 +1669,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 	return &response, nil
 }
 
-func activeLocks(log *zerolog.Logger, lock *provider.Lock) string {
+func activeLocks(_ *zerolog.Logger, lock *provider.Lock) string {
 	if lock == nil || lock.Type == provider.LockType_LOCK_TYPE_INVALID {
 		return ""
 	}
@@ -1781,7 +1781,7 @@ func metadataKeyOf(n *xml.Name) string {
 //
 // It returns an error if start does not contain any properties or if
 // properties contain values. Character data between properties is ignored.
-func (pn *Props) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+func (pn *Props) UnmarshalXML(d *xml.Decoder, _ xml.StartElement) error {
 	for {
 		t, err := prop.Next(d)
 		if err != nil {

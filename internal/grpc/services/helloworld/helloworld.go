@@ -43,7 +43,7 @@ type service struct {
 // New returns a new PreferencesServiceServer
 // It can be tested like this:
 // prototool grpc --address 0.0.0.0:9999 --method 'revad.helloworld.HelloWorldService/Hello' --data '{"name": "Alice"}'
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+func New(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error) {
 	c := &conf{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "helloworld: error decoding conf")
@@ -69,7 +69,7 @@ func (s *service) Register(ss *grpc.Server) {
 	proto.RegisterHelloWorldServiceServer(ss, s)
 }
 
-func (s *service) Hello(ctx context.Context, req *proto.HelloRequest) (*proto.HelloResponse, error) {
+func (s *service) Hello(_ context.Context, req *proto.HelloRequest) (*proto.HelloResponse, error) {
 	if req.Name == "" {
 		req.Name = "Mr. Nobody"
 	}

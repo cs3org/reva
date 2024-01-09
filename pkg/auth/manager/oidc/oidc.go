@@ -147,7 +147,7 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 // The clientID would be empty as we only need to validate the clientSecret variable
 // which contains the access token that we can use to contact the UserInfo endpoint
 // and get the user claims.
-func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
+func (am *mgr) Authenticate(ctx context.Context, _, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
 	ctx = am.getOAuthCtx(ctx)
 	log := appctx.GetLogger(ctx)
 

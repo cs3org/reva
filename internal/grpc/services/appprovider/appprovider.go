@@ -84,7 +84,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New creates a new AppProviderService
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+func New(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

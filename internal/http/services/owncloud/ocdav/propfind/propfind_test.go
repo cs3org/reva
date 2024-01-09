@@ -49,7 +49,7 @@ type selector struct {
 	client gateway.GatewayAPIClient
 }
 
-func (s selector) Next(opts ...pool.Option) (gateway.GatewayAPIClient, error) {
+func (s selector) Next(...pool.Option) (gateway.GatewayAPIClient, error) {
 	return s.client, nil
 }
 

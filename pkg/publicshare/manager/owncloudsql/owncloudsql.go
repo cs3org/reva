@@ -261,7 +261,7 @@ func (m *mgr) UpdatePublicShare(ctx context.Context, u *user.User, req *link.Upd
 	return m.GetPublicShare(ctx, u, req.Ref, false)
 }
 
-func (m *mgr) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference, sign bool) (share *link.PublicShare, err error) {
+func (m *mgr) GetPublicShare(ctx context.Context, _ *user.User, ref *link.PublicShareReference, sign bool) (share *link.PublicShare, err error) {
 
 	ps, err := m.getWithPassword(ctx, ref)
 	if err != nil {
@@ -454,7 +454,7 @@ func (m *mgr) ListPublicShares(ctx context.Context, u *user.User, filters []*lin
 	return shares, nil
 }
 
-func (m *mgr) RevokePublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) error {
+func (m *mgr) RevokePublicShare(_ context.Context, u *user.User, ref *link.PublicShareReference) error {
 	uid := u.Username
 	query := "delete from oc_share where "
 	params := []interface{}{}
@@ -489,7 +489,7 @@ func (m *mgr) RevokePublicShare(ctx context.Context, u *user.User, ref *link.Pub
 	return nil
 }
 
-func (m *mgr) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error) {
+func (m *mgr) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, _ bool) (*link.PublicShare, error) {
 	ps, err := m.getByToken(ctx, token)
 	if err != nil {
 		return nil, err

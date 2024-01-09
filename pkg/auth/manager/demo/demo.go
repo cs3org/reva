@@ -51,13 +51,13 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	return mgr, err
 }
 
-func (m *manager) Configure(ml map[string]interface{}) error {
+func (m *manager) Configure(map[string]interface{}) error {
 	creds := getCredentials()
 	m.credentials = creds
 	return nil
 }
 
-func (m *manager) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
+func (m *manager) Authenticate(_ context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
 	if c, ok := m.credentials[clientID]; ok {
 		if c.Secret == clientSecret {
 			var scopes map[string]*authpb.Scope

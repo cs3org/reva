@@ -168,7 +168,7 @@ func (s *svc) handleTPCPull(ctx context.Context, w http.ResponseWriter, r *http.
 	fmt.Fprintf(w, "success: Created")
 }
 
-func (s *svc) performHTTPPull(ctx context.Context, selector pool.Selectable[gateway.GatewayAPIClient], r *http.Request, w http.ResponseWriter, ns string) error {
+func (s *svc) performHTTPPull(ctx context.Context, _ pool.Selectable[gateway.GatewayAPIClient], r *http.Request, w http.ResponseWriter, ns string) error {
 	src := r.Header.Get("Source")
 	dst := path.Join(ns, r.URL.Path)
 	sublog := appctx.GetLogger(ctx)

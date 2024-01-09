@@ -278,7 +278,7 @@ func (fs *eosfs) userIDcacheWarmup() {
 	}
 }
 
-func (fs *eosfs) Shutdown(ctx context.Context) error {
+func (fs *eosfs) Shutdown(context.Context) error {
 	// TODO(labkode): in a grpc implementation we can close connections.
 	return nil
 }
@@ -354,7 +354,7 @@ func (fs *eosfs) unwrap(ctx context.Context, internal string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	external, err := fs.unwrapInternal(ctx, ns, internal, layout)
+	external, err := fs.unwrapInternal(ns, internal, layout)
 	if err != nil {
 		return "", err
 	}
@@ -378,7 +378,7 @@ func (fs *eosfs) getNsMatch(internal string, nss []string) (string, error) {
 	return match, nil
 }
 
-func (fs *eosfs) unwrapInternal(ctx context.Context, ns, np, layout string) (string, error) {
+func (fs *eosfs) unwrapInternal(ns, np, layout string) (string, error) {
 	trim := path.Join(ns, layout)
 
 	if !strings.HasPrefix(np, trim) {
@@ -472,15 +472,15 @@ func (fs *eosfs) getPath(ctx context.Context, id *provider.ResourceId) (string, 
 	return fs.unwrap(ctx, eosFileInfo.File)
 }
 
-func (fs *eosfs) isShareFolder(ctx context.Context, p string) bool {
+func (fs *eosfs) isShareFolder(_ context.Context, p string) bool {
 	return strings.HasPrefix(p, fs.conf.ShareFolder)
 }
 
-func (fs *eosfs) isShareFolderRoot(ctx context.Context, p string) bool {
+func (fs *eosfs) isShareFolderRoot(_ context.Context, p string) bool {
 	return path.Clean(p) == fs.conf.ShareFolder
 }
 
-func (fs *eosfs) isShareFolderChild(ctx context.Context, p string) bool {
+func (fs *eosfs) isShareFolderChild(_ context.Context, p string) bool {
 	p = path.Clean(p)
 	vals := strings.Split(p, fs.conf.ShareFolder+"/")
 	return len(vals) > 1 && vals[1] != ""
@@ -1202,7 +1202,7 @@ func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*pr
 	return grantList, nil
 }
 
-func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string, fieldMask []string) (*provider.ResourceInfo, error) {
+func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string, _ []string) (*provider.ResourceInfo, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("eosfs: get md for ref:" + ref.String())
 
@@ -1272,7 +1272,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	return fs.convertToResourceInfo(ctx, eosFileInfo)
 }
 
-func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string) (*provider.ResourceInfo, error) {
+func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, _ []string) (*provider.ResourceInfo, error) {
 	fn := fs.wrapShadow(ctx, p)
 
 	u, err := getUser(ctx)
@@ -1297,7 +1297,7 @@ func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string
 	return fs.convertToFileReference(ctx, eosFileInfo)
 }
 
-func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys, fieldMask []string) ([]*provider.ResourceInfo, error) {
+func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, _, _ []string) ([]*provider.ResourceInfo, error) {
 	p, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: error resolving reference")
@@ -1482,7 +1482,7 @@ func (fs *eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64,
 	return qi.AvailableBytes, qi.UsedBytes, remaining, nil
 }
 
-func (fs *eosfs) GetHome(ctx context.Context) (string, error) {
+func (fs *eosfs) GetHome(context.Context) (string, error) {
 	if !fs.conf.EnableHome {
 		return "", errtypes.NotSupported("eosfs: get home not supported")
 	}
@@ -1954,11 +1954,11 @@ func (fs *eosfs) RestoreRevision(ctx context.Context, ref *provider.Reference, r
 	return fs.c.RollbackToVersion(ctx, auth, fn, revisionKey)
 }
 
-func (fs *eosfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
+func (fs *eosfs) PurgeRecycleItem(context.Context, *provider.Reference, string, string) error {
 	return errtypes.NotSupported("eosfs: operation not supported")
 }
 
-func (fs *eosfs) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
+func (fs *eosfs) EmptyRecycle(ctx context.Context, _ *provider.Reference) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
@@ -1971,7 +1971,7 @@ func (fs *eosfs) EmptyRecycle(ctx context.Context, ref *provider.Reference) erro
 	return fs.c.PurgeDeletedEntries(ctx, auth)
 }
 
-func (fs *eosfs) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (fs *eosfs) ListRecycle(ctx context.Context, ref *provider.Reference, _, _ string) ([]*provider.RecycleItem, error) {
 	var auth eosclient.Authorization
 
 	if !fs.conf.EnableHome && fs.conf.AllowPathRecycleOperations && ref.Path != "/" {
@@ -2022,7 +2022,7 @@ func (fs *eosfs) ListRecycle(ctx context.Context, ref *provider.Reference, key, 
 	return recycleEntries, nil
 }
 
-func (fs *eosfs) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
+func (fs *eosfs) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, _ string, _ *provider.Reference) error {
 	var auth eosclient.Authorization
 
 	if !fs.conf.EnableHome && fs.conf.AllowPathRecycleOperations && ref.Path != "/" {

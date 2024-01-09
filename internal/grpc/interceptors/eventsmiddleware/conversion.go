@@ -32,7 +32,7 @@ import (
 )
 
 // ContainerCreated converts the response to an event
-func ContainerCreated(r *provider.CreateContainerResponse, req *provider.CreateContainerRequest, spaceOwner, executant *user.UserId) events.ContainerCreated {
+func ContainerCreated(_ *provider.CreateContainerResponse, req *provider.CreateContainerRequest, spaceOwner, executant *user.UserId) events.ContainerCreated {
 	return events.ContainerCreated{
 		SpaceOwner: spaceOwner,
 		Executant:  executant,
@@ -178,7 +178,7 @@ func LinkAccessFailed(r *link.GetPublicShareByTokenResponse, req *link.GetPublic
 }
 
 // LinkRemoved converts the response to an event
-func LinkRemoved(r *link.RemovePublicShareResponse, req *link.RemovePublicShareRequest, executant *user.UserId) events.LinkRemoved {
+func LinkRemoved(_ *link.RemovePublicShareResponse, req *link.RemovePublicShareRequest, executant *user.UserId) events.LinkRemoved {
 	return events.LinkRemoved{
 		Executant:  executant,
 		ShareID:    req.Ref.GetId(),
@@ -188,7 +188,7 @@ func LinkRemoved(r *link.RemovePublicShareResponse, req *link.RemovePublicShareR
 }
 
 // FileTouched converts the response to an event
-func FileTouched(r *provider.TouchFileResponse, req *provider.TouchFileRequest, spaceOwner, executant *user.UserId) events.FileTouched {
+func FileTouched(_ *provider.TouchFileResponse, req *provider.TouchFileRequest, spaceOwner, executant *user.UserId) events.FileTouched {
 	return events.FileTouched{
 		SpaceOwner: spaceOwner,
 		Executant:  executant,
@@ -198,7 +198,7 @@ func FileTouched(r *provider.TouchFileResponse, req *provider.TouchFileRequest, 
 }
 
 // FileUploaded converts the response to an event
-func FileUploaded(r *provider.InitiateFileUploadResponse, req *provider.InitiateFileUploadRequest, spaceOwner, executant *user.UserId) events.FileUploaded {
+func FileUploaded(_ *provider.InitiateFileUploadResponse, req *provider.InitiateFileUploadRequest, spaceOwner, executant *user.UserId) events.FileUploaded {
 	return events.FileUploaded{
 		SpaceOwner: spaceOwner,
 		Executant:  executant,
@@ -208,7 +208,7 @@ func FileUploaded(r *provider.InitiateFileUploadResponse, req *provider.Initiate
 }
 
 // FileDownloaded converts the response to an event
-func FileDownloaded(r *provider.InitiateFileDownloadResponse, req *provider.InitiateFileDownloadRequest, executant *user.UserId) events.FileDownloaded {
+func FileDownloaded(_ *provider.InitiateFileDownloadResponse, req *provider.InitiateFileDownloadRequest, executant *user.UserId) events.FileDownloaded {
 	return events.FileDownloaded{
 		Executant: executant,
 		Ref:       req.Ref,
@@ -233,7 +233,7 @@ func ItemTrashed(r *provider.DeleteResponse, req *provider.DeleteRequest, spaceO
 }
 
 // ItemMoved converts the response to an event
-func ItemMoved(r *provider.MoveResponse, req *provider.MoveRequest, spaceOwner, executant *user.UserId) events.ItemMoved {
+func ItemMoved(_ *provider.MoveResponse, req *provider.MoveRequest, spaceOwner, executant *user.UserId) events.ItemMoved {
 	return events.ItemMoved{
 		SpaceOwner:   spaceOwner,
 		Executant:    executant,
@@ -244,7 +244,7 @@ func ItemMoved(r *provider.MoveResponse, req *provider.MoveRequest, spaceOwner, 
 }
 
 // ItemPurged converts the response to an event
-func ItemPurged(r *provider.PurgeRecycleResponse, req *provider.PurgeRecycleRequest, executant *user.UserId) events.ItemPurged {
+func ItemPurged(_ *provider.PurgeRecycleResponse, req *provider.PurgeRecycleRequest, executant *user.UserId) events.ItemPurged {
 	return events.ItemPurged{
 		Executant: executant,
 		Ref:       req.Ref,
@@ -253,7 +253,7 @@ func ItemPurged(r *provider.PurgeRecycleResponse, req *provider.PurgeRecycleRequ
 }
 
 // ItemRestored converts the response to an event
-func ItemRestored(r *provider.RestoreRecycleItemResponse, req *provider.RestoreRecycleItemRequest, spaceOwner, executant *user.UserId) events.ItemRestored {
+func ItemRestored(_ *provider.RestoreRecycleItemResponse, req *provider.RestoreRecycleItemRequest, spaceOwner, executant *user.UserId) events.ItemRestored {
 	ref := req.Ref
 	if req.RestoreRef != nil {
 		ref = req.RestoreRef
@@ -269,7 +269,7 @@ func ItemRestored(r *provider.RestoreRecycleItemResponse, req *provider.RestoreR
 }
 
 // FileVersionRestored converts the response to an event
-func FileVersionRestored(r *provider.RestoreFileVersionResponse, req *provider.RestoreFileVersionRequest, spaceOwner, executant *user.UserId) events.FileVersionRestored {
+func FileVersionRestored(_ *provider.RestoreFileVersionResponse, req *provider.RestoreFileVersionRequest, spaceOwner, executant *user.UserId) events.FileVersionRestored {
 	return events.FileVersionRestored{
 		SpaceOwner: spaceOwner,
 		Executant:  executant,
@@ -294,7 +294,7 @@ func SpaceCreated(r *provider.CreateStorageSpaceResponse, executant *user.UserId
 }
 
 // SpaceRenamed converts the response to an event
-func SpaceRenamed(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateStorageSpaceRequest, executant *user.UserId) events.SpaceRenamed {
+func SpaceRenamed(r *provider.UpdateStorageSpaceResponse, _ *provider.UpdateStorageSpaceRequest, executant *user.UserId) events.SpaceRenamed {
 	return events.SpaceRenamed{
 		Executant: executant,
 		ID:        r.StorageSpace.Id,
@@ -305,7 +305,7 @@ func SpaceRenamed(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateSt
 }
 
 // SpaceUpdated converts the response to an event
-func SpaceUpdated(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateStorageSpaceRequest, executant *user.UserId) events.SpaceUpdated {
+func SpaceUpdated(r *provider.UpdateStorageSpaceResponse, _ *provider.UpdateStorageSpaceRequest, executant *user.UserId) events.SpaceUpdated {
 	return events.SpaceUpdated{
 		Executant: executant,
 		ID:        r.StorageSpace.Id,
@@ -315,7 +315,7 @@ func SpaceUpdated(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateSt
 }
 
 // SpaceEnabled converts the response to an event
-func SpaceEnabled(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateStorageSpaceRequest, executant *user.UserId) events.SpaceEnabled {
+func SpaceEnabled(r *provider.UpdateStorageSpaceResponse, _ *provider.UpdateStorageSpaceRequest, executant *user.UserId) events.SpaceEnabled {
 	return events.SpaceEnabled{
 		Executant: executant,
 		ID:        r.StorageSpace.Id,
@@ -326,7 +326,7 @@ func SpaceEnabled(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateSt
 
 // SpaceShared converts the response to an event
 // func SpaceShared(req *provider.AddGrantRequest, executant, sharer *user.UserId, grantee *provider.Grantee) events.SpaceShared {
-func SpaceShared(r *provider.AddGrantResponse, req *provider.AddGrantRequest, executant *user.UserId) events.SpaceShared {
+func SpaceShared(_ *provider.AddGrantResponse, req *provider.AddGrantRequest, executant *user.UserId) events.SpaceShared {
 	id := storagespace.FormatStorageID(req.Ref.ResourceId.StorageId, req.Ref.ResourceId.SpaceId)
 	return events.SpaceShared{
 		Executant:      executant,
@@ -339,7 +339,7 @@ func SpaceShared(r *provider.AddGrantResponse, req *provider.AddGrantRequest, ex
 }
 
 // SpaceUnshared  converts the response to an event
-func SpaceUnshared(r *provider.RemoveGrantResponse, req *provider.RemoveGrantRequest, executant *user.UserId) events.SpaceUnshared {
+func SpaceUnshared(_ *provider.RemoveGrantResponse, req *provider.RemoveGrantRequest, executant *user.UserId) events.SpaceUnshared {
 	id := storagespace.FormatStorageID(req.Ref.ResourceId.StorageId, req.Ref.ResourceId.SpaceId)
 	return events.SpaceUnshared{
 		Executant:      executant,
@@ -351,7 +351,7 @@ func SpaceUnshared(r *provider.RemoveGrantResponse, req *provider.RemoveGrantReq
 }
 
 // SpaceDisabled converts the response to an event
-func SpaceDisabled(r *provider.DeleteStorageSpaceResponse, req *provider.DeleteStorageSpaceRequest, executant *user.UserId) events.SpaceDisabled {
+func SpaceDisabled(_ *provider.DeleteStorageSpaceResponse, req *provider.DeleteStorageSpaceRequest, executant *user.UserId) events.SpaceDisabled {
 	return events.SpaceDisabled{
 		Executant: executant,
 		ID:        req.Id,

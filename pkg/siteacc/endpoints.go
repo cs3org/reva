@@ -94,14 +94,14 @@ func getEndpoints() []endpoint {
 	return endpoints
 }
 
-func callAdministrationEndpoint(siteacc *SiteAccounts, ep endpoint, w http.ResponseWriter, r *http.Request, session *html.Session) {
+func callAdministrationEndpoint(siteacc *SiteAccounts, _ endpoint, w http.ResponseWriter, r *http.Request, session *html.Session) {
 	if err := siteacc.ShowAdministrationPanel(w, r, session); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(fmt.Sprintf("Unable to show the administration panel: %v", err)))
 	}
 }
 
-func callAccountEndpoint(siteacc *SiteAccounts, ep endpoint, w http.ResponseWriter, r *http.Request, session *html.Session) {
+func callAccountEndpoint(siteacc *SiteAccounts, _ endpoint, w http.ResponseWriter, r *http.Request, session *html.Session) {
 	if err := siteacc.ShowAccountPanel(w, r, session); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(fmt.Sprintf("Unable to show the account panel: %v", err)))
@@ -154,11 +154,11 @@ func callMethodEndpoint(siteacc *SiteAccounts, ep endpoint, w http.ResponseWrite
 	_, _ = w.Write(jsonData)
 }
 
-func handleList(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+func handleList(siteacc *SiteAccounts, _ url.Values, _ []byte, _ *html.Session) (interface{}, error) {
 	return siteacc.AccountsManager().CloneAccounts(true), nil
 }
 
-func handleFind(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+func handleFind(siteacc *SiteAccounts, values url.Values, _ []byte, _ *html.Session) (interface{}, error) {
 	account, err := findAccount(siteacc, values.Get("by"), values.Get("value"))
 	if err != nil {
 		return nil, err
@@ -166,7 +166,7 @@ func handleFind(siteacc *SiteAccounts, values url.Values, body []byte, session *
 	return map[string]interface{}{"account": account.Clone(true)}, nil
 }
 
-func handleCreate(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+func handleCreate(siteacc *SiteAccounts, _ url.Values, body []byte, _ *html.Session) (interface{}, error) {
 	account, err := unmarshalRequestData(body)
 	if err != nil {
 		return nil, err
@@ -220,7 +220,7 @@ func handleConfigure(siteacc *SiteAccounts, values url.Values, body []byte, sess
 	return nil, nil
 }
 
-func handleRemove(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+func handleRemove(siteacc *SiteAccounts, _ url.Values, body []byte, _ *html.Session) (interface{}, error) {
 	account, err := unmarshalRequestData(body)
 	if err != nil {
 		return nil, err
@@ -234,7 +234,7 @@ func handleRemove(siteacc *SiteAccounts, values url.Values, body []byte, session
 	return nil, nil
 }
 
-func handleSiteGet(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+func handleSiteGet(siteacc *SiteAccounts, values url.Values, _ []byte, _ *html.Session) (interface{}, error) {
 	siteID := values.Get("site")
 	if siteID == "" {
 		return nil, errors.Errorf("no site specified")
@@ -285,13 +285,13 @@ func handleLogin(siteacc *SiteAccounts, values url.Values, body []byte, session 
 	return token, nil
 }
 
-func handleLogout(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+func handleLogout(siteacc *SiteAccounts, _ url.Values, _ []byte, session *html.Session) (interface{}, error) {
 	// Logout the user through the users manager
 	siteacc.UsersManager().LogoutUser(session)
 	return nil, nil
 }
 
-func handleResetPassword(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+func handleResetPassword(siteacc *SiteAccounts, _ url.Values, body []byte, _ *html.Session) (interface{}, error) {
 	account, err := unmarshalRequestData(body)
 	if err != nil {
 		return nil, err
@@ -305,7 +305,7 @@ func handleResetPassword(siteacc *SiteAccounts, values url.Values, body []byte, 
 	return nil, nil
 }
 
-func handleContact(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+func handleContact(siteacc *SiteAccounts, _ url.Values, body []byte, session *html.Session) (interface{}, error) {
 	if !session.IsUserLoggedIn() {
 		return nil, errors.Errorf("no user is currently logged in")
 	}
@@ -324,7 +324,7 @@ func handleContact(siteacc *SiteAccounts, values url.Values, body []byte, sessio
 	return nil, nil
 }
 
-func handleVerifyUserToken(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+func handleVerifyUserToken(siteacc *SiteAccounts, values url.Values, _ []byte, _ *html.Session) (interface{}, error) {
 	token := values.Get("token")
 	if token == "" {
 		return nil, errors.Errorf("no token specified")
@@ -344,7 +344,7 @@ func handleVerifyUserToken(siteacc *SiteAccounts, values url.Values, body []byte
 	return newToken, nil
 }
 
-func handleDispatchAlert(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+func handleDispatchAlert(siteacc *SiteAccounts, _ url.Values, body []byte, _ *html.Session) (interface{}, error) {
 	alertsData := &template.Data{}
 	if err := json.Unmarshal(body, alertsData); err != nil {
 		return nil, errors.Wrap(err, "unable to unmarshal the alerts data")
@@ -366,7 +366,7 @@ func handleGrantGOCDBAccess(siteacc *SiteAccounts, values url.Values, body []byt
 	return handleGrantAccess((*manager.AccountsManager).GrantGOCDBAccess, siteacc, values, body, session)
 }
 
-func handleGrantAccess(accessSetter accessSetterCallback, siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+func handleGrantAccess(accessSetter accessSetterCallback, siteacc *SiteAccounts, values url.Values, body []byte, _ *html.Session) (interface{}, error) {
 	account, err := unmarshalRequestData(body)
 	if err != nil {
 		return nil, err
@@ -418,7 +418,7 @@ func findAccount(siteacc *SiteAccounts, by string, value string) (*data.Account,
 	return account, nil
 }
 
-func processInvoker(siteacc *SiteAccounts, values url.Values, session *html.Session) (string, bool, error) {
+func processInvoker(_ *SiteAccounts, values url.Values, session *html.Session) (string, bool, error) {
 	var email string
 	var invokedByUser bool
 

@@ -142,7 +142,7 @@ func (a *authorizer) fetchProviders() ([]*ocmprovider.ProviderInfo, error) {
 	return a.providers, nil
 }
 
-func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
+func (a *authorizer) GetInfoByDomain(_ context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
 	normalizedDomain, err := normalizeDomain(domain)
 	if err != nil {
 		return nil, err
@@ -160,7 +160,7 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 	return nil, errtypes.NotFound(domain)
 }
 
-func (a *authorizer) IsProviderAllowed(ctx context.Context, pi *ocmprovider.ProviderInfo) error {
+func (a *authorizer) IsProviderAllowed(_ context.Context, pi *ocmprovider.ProviderInfo) error {
 	providers, err := a.fetchProviders()
 	if err != nil {
 		return err
@@ -239,7 +239,7 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, pi *ocmprovider.Prov
 	return nil
 }
 
-func (a *authorizer) ListAllProviders(ctx context.Context) ([]*ocmprovider.ProviderInfo, error) {
+func (a *authorizer) ListAllProviders(context.Context) ([]*ocmprovider.ProviderInfo, error) {
 	providers, err := a.fetchProviders()
 	if err != nil {
 		return nil, err

@@ -35,7 +35,7 @@ type webdavEndpoint struct {
 	token    string
 }
 
-func (s *svc) extractEndpointInfo(ctx context.Context, targetURL string) (*webdavEndpoint, error) {
+func (s *svc) extractEndpointInfo(_ context.Context, targetURL string) (*webdavEndpoint, error) {
 	if targetURL == "" {
 		return nil, errtypes.BadRequest("gateway: ref target is an empty uri")
 	}

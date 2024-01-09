@@ -101,7 +101,7 @@ func getShareRepository(c *config) (share.Repository, error) {
 }
 
 // New creates a new ocm share provider svc.
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+func New(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -171,7 +171,7 @@ func getResourceType(info *providerpb.ResourceInfo) string {
 	return "unknown"
 }
 
-func (s *service) webdavURL(ctx context.Context, share *ocm.Share) string {
+func (s *service) webdavURL(_ context.Context, share *ocm.Share) string {
 	// the url is in the form of https://cernbox.cern.ch/remote.php/dav/ocm/token
 	p, _ := url.JoinPath(s.conf.WebDAVEndpoint, "/dav/ocm", share.Token)
 	return p
@@ -306,7 +306,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	if err != nil {
 		if errors.Is(err, share.ErrShareAlreadyExisting) {
 			return &ocm.CreateOCMShareResponse{
-				Status: status.NewAlreadyExists(ctx, err, "share already exists"),
+				Status: status.NewAlreadyExists(ctx, "share already exists"),
 			}, nil
 		}
 		return &ocm.CreateOCMShareResponse{
@@ -477,7 +477,7 @@ func (s *service) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareReq
 	return res, nil
 }
 
-func (s *service) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceivedOCMSharesRequest) (*ocm.ListReceivedOCMSharesResponse, error) {
+func (s *service) ListReceivedOCMShares(ctx context.Context, _ *ocm.ListReceivedOCMSharesRequest) (*ocm.ListReceivedOCMSharesResponse, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
 	shares, err := s.repo.ListReceivedShares(ctx, user)
 	if err != nil {

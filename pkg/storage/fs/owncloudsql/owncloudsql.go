@@ -129,7 +129,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-func (c *config) init(m map[string]interface{}) {
+func (c *config) init(map[string]interface{}) {
 	if c.UserLayout == "" {
 		c.UserLayout = "{{.Username}}"
 	}
@@ -195,7 +195,7 @@ type owncloudsqlfs struct {
 	filecache    *filecache.Cache
 }
 
-func (fs *owncloudsqlfs) Shutdown(ctx context.Context) error {
+func (fs *owncloudsqlfs) Shutdown(context.Context) error {
 	return nil
 }
 
@@ -616,11 +616,11 @@ func (fs *owncloudsqlfs) resolve(ctx context.Context, ref *provider.Reference) (
 	return "", fmt.Errorf("invalid reference %+v", ref)
 }
 
-func (fs *owncloudsqlfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+func (fs *owncloudsqlfs) DenyGrant(context.Context, *provider.Reference, *provider.Grantee) error {
 	return errtypes.NotSupported("owncloudsqlfs: deny grant not supported")
 }
 
-func (fs *owncloudsqlfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+func (fs *owncloudsqlfs) AddGrant(context.Context, *provider.Reference, *provider.Grant) error {
 	return errtypes.NotSupported("owncloudsqlfs: add grant not supported")
 }
 
@@ -664,15 +664,15 @@ func isNotFound(err error) bool {
 	return false
 }
 
-func (fs *owncloudsqlfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants []*provider.Grant, err error) {
+func (fs *owncloudsqlfs) ListGrants(context.Context, *provider.Reference) (grants []*provider.Grant, err error) {
 	return []*provider.Grant{}, nil // nop
 }
 
-func (fs *owncloudsqlfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
+func (fs *owncloudsqlfs) RemoveGrant(context.Context, *provider.Reference, *provider.Grant) (err error) {
 	return nil // nop
 }
 
-func (fs *owncloudsqlfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+func (fs *owncloudsqlfs) UpdateGrant(context.Context, *provider.Reference, *provider.Grant) error {
 	return nil // nop
 }
 
@@ -725,7 +725,7 @@ func (fs *owncloudsqlfs) createHomeForUser(ctx context.Context, user string) err
 }
 
 // If home is enabled, the relative home is always the empty string
-func (fs *owncloudsqlfs) GetHome(ctx context.Context) (string, error) {
+func (fs *owncloudsqlfs) GetHome(context.Context) (string, error) {
 	if !fs.c.EnableHome {
 		return "", errtypes.NotSupported("owncloudsql: get home not supported")
 	}
@@ -794,7 +794,7 @@ func (fs *owncloudsqlfs) CreateDir(ctx context.Context, ref *provider.Reference)
 }
 
 // TouchFile as defined in the storage.FS interface
-func (fs *owncloudsqlfs) TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) error {
+func (fs *owncloudsqlfs) TouchFile(ctx context.Context, ref *provider.Reference, _ bool, mtime string) error {
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return err
@@ -862,7 +862,7 @@ func (fs *owncloudsqlfs) TouchFile(ctx context.Context, ref *provider.Reference,
 	return fs.propagate(ctx, filepath.Dir(ip))
 }
 
-func (fs *owncloudsqlfs) CreateReference(ctx context.Context, sp string, targetURI *url.URL) error {
+func (fs *owncloudsqlfs) CreateReference(context.Context, string, *url.URL) error {
 	return errtypes.NotSupported("owncloudsql: operation not supported")
 }
 
@@ -1116,22 +1116,22 @@ func (fs *owncloudsqlfs) UnsetArbitraryMetadata(ctx context.Context, ref *provid
 }
 
 // GetLock returns an existing lock on the given reference
-func (fs *owncloudsqlfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+func (fs *owncloudsqlfs) GetLock(context.Context, *provider.Reference) (*provider.Lock, error) {
 	return nil, errtypes.NotSupported("unimplemented")
 }
 
 // SetLock puts a lock on the given reference
-func (fs *owncloudsqlfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+func (fs *owncloudsqlfs) SetLock(context.Context, *provider.Reference, *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
 // RefreshLock refreshes an existing lock on the given reference
-func (fs *owncloudsqlfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
+func (fs *owncloudsqlfs) RefreshLock(context.Context, *provider.Reference, *provider.Lock, string) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
 // Unlock removes an existing lock from the given reference
-func (fs *owncloudsqlfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+func (fs *owncloudsqlfs) Unlock(context.Context, *provider.Reference, *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
@@ -1233,7 +1233,7 @@ func (fs *owncloudsqlfs) trash(ctx context.Context, ip string, rp string, origin
 	return fs.propagate(ctx, filepath.Dir(ip))
 }
 
-func (fs *owncloudsqlfs) trashVersions(ctx context.Context, ip string, origin string, dtime int64) error {
+func (fs *owncloudsqlfs) trashVersions(ctx context.Context, ip string, _ string, dtime int64) error {
 	vp := fs.getVersionsPath(ctx, ip)
 	vrp, err := fs.getVersionRecyclePath(ctx)
 	if err != nil {
@@ -1320,7 +1320,7 @@ func (fs *owncloudsqlfs) Move(ctx context.Context, oldRef, newRef *provider.Refe
 	return nil
 }
 
-func (fs *owncloudsqlfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string, fieldMask []string) (*provider.ResourceInfo, error) {
+func (fs *owncloudsqlfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string, _ []string) (*provider.ResourceInfo, error) {
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		// TODO return correct errtype
@@ -1364,7 +1364,7 @@ func (fs *owncloudsqlfs) GetMD(ctx context.Context, ref *provider.Reference, mdK
 	return fs.convertToResourceInfo(ctx, entry, ip, mdKeys)
 }
 
-func (fs *owncloudsqlfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys, fieldMask []string) ([]*provider.ResourceInfo, error) {
+func (fs *owncloudsqlfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys, _ []string) ([]*provider.ResourceInfo, error) {
 	log := appctx.GetLogger(ctx)
 
 	ip, err := fs.resolve(ctx, ref)
@@ -1606,7 +1606,7 @@ func (fs *owncloudsqlfs) ListRevisions(ctx context.Context, ref *provider.Refere
 	return revisions, nil
 }
 
-func (fs *owncloudsqlfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
+func (fs *owncloudsqlfs) DownloadRevision(context.Context, *provider.Reference, string) (io.ReadCloser, error) {
 	return nil, errtypes.NotSupported("download revision")
 }
 
@@ -1695,7 +1695,7 @@ func (fs *owncloudsqlfs) RestoreRevision(ctx context.Context, ref *provider.Refe
 	return fs.propagate(ctx, ip)
 }
 
-func (fs *owncloudsqlfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
+func (fs *owncloudsqlfs) PurgeRecycleItem(ctx context.Context, _ *provider.Reference, key, _ string) error {
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "owncloudsql: error resolving recycle path")
@@ -1755,7 +1755,7 @@ func (fs *owncloudsqlfs) PurgeRecycleItem(ctx context.Context, ref *provider.Ref
 	return nil
 }
 
-func (fs *owncloudsqlfs) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
+func (fs *owncloudsqlfs) EmptyRecycle(ctx context.Context, _ *provider.Reference) error {
 	// TODO check permission? on what? user must be the owner
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
@@ -1827,7 +1827,7 @@ func (fs *owncloudsqlfs) convertToRecycleItem(ctx context.Context, md os.FileInf
 	}
 }
 
-func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, _ *provider.Reference, _, _ string) ([]*provider.RecycleItem, error) {
 	// TODO check permission? on what? user must be the owner?
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
@@ -1855,7 +1855,7 @@ func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, ref *provider.Referenc
 	return items, nil
 }
 
-func (fs *owncloudsqlfs) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
+func (fs *owncloudsqlfs) RestoreRecycleItem(ctx context.Context, _ *provider.Reference, key, _ string, restoreRef *provider.Reference) error {
 	log := appctx.GetLogger(ctx)
 
 	base, ttime, err := splitTrashKey(key)

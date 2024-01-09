@@ -32,7 +32,7 @@ func init() {
 }
 
 // New returns a new helloworld service
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
+func New(m map[string]interface{}, _ *zerolog.Logger) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err

@@ -81,7 +81,7 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 				}
 
 			case strings.HasPrefix(k, "lightweight"):
-				if err = resolveLightweightScope(ctx, ref, tokenScope[k], user, client, mgr); err == nil {
+				if err = resolveLightweightScope(ctx, ref, user, client, mgr); err == nil {
 					return nil
 				}
 			case strings.HasPrefix(k, "ocmshare"):
@@ -129,7 +129,7 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 	return errtypes.PermissionDenied(fmt.Sprintf("access to resource %+v not allowed within the assigned scope", req))
 }
 
-func resolveLightweightScope(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, user *userpb.User, client gateway.GatewayAPIClient, mgr token.Manager) error {
+func resolveLightweightScope(ctx context.Context, ref *provider.Reference, user *userpb.User, client gateway.GatewayAPIClient, mgr token.Manager) error {
 	// Check if this ref is cached
 	key := "lw:" + user.Id.OpaqueId + scopeDelimiter + getRefKey(ref)
 	if _, err := scopeExpansionCache.Get(key); err == nil {

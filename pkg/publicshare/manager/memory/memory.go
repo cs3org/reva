@@ -43,7 +43,7 @@ func init() {
 }
 
 // New returns a new memory manager.
-func New(c map[string]interface{}) (publicshare.Manager, error) {
+func New(map[string]interface{}) (publicshare.Manager, error) {
 	return &manager{
 		shares: sync.Map{},
 	}, nil
@@ -58,7 +58,7 @@ var (
 )
 
 // CreatePublicShare adds a new entry to manager.shares
-func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
+func (m *manager) CreatePublicShare(_ context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
 	id := &link.PublicShareId{
 		OpaqueId: randString(15),
 	}
@@ -119,13 +119,13 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 		share.DisplayName = req.Update.GetDisplayName()
 	case link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS:
 		old, _ := json.Marshal(share.Permissions)
-		new, _ := json.Marshal(req.Update.GetGrant().Permissions)
-		log.Debug().Str("memory", "update grants").Msgf("from: `%v`\nto\n`%v`", old, new)
+		newbytes, _ := json.Marshal(req.Update.GetGrant().Permissions)
+		log.Debug().Str("memory", "update grants").Msgf("from: `%v`\nto\n`%v`", old, newbytes)
 		share.Permissions = req.Update.GetGrant().GetPermissions()
 	case link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION:
 		old, _ := json.Marshal(share.Expiration)
-		new, _ := json.Marshal(req.Update.GetGrant().Expiration)
-		log.Debug().Str("memory", "update expiration").Msgf("from: `%v`\nto\n`%v`", old, new)
+		newbytes, _ := json.Marshal(req.Update.GetGrant().Expiration)
+		log.Debug().Str("memory", "update expiration").Msgf("from: `%v`\nto\n`%v`", old, newbytes)
 		share.Expiration = req.Update.GetGrant().Expiration
 	case link.UpdatePublicShareRequest_Update_TYPE_PASSWORD:
 		// TODO(refs) Do public shares need Grants? Struct is defined, just not used. Fill this once it's done.
@@ -145,7 +145,7 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	return share, nil
 }
 
-func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference, sign bool) (share *link.PublicShare, err error) {
+func (m *manager) GetPublicShare(ctx context.Context, _ *user.User, ref *link.PublicShareReference, sign bool) (share *link.PublicShare, err error) {
 	// TODO(refs) return an error if the share is expired.
 
 	// Attempt to fetch public share by token
@@ -167,7 +167,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	return
 }
 
-func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, sign bool) ([]*link.PublicShare, error) {
+func (m *manager) ListPublicShares(_ context.Context, _ *user.User, filters []*link.ListPublicSharesRequest_Filter, _ bool) ([]*link.PublicShare, error) {
 	// TODO(refs) filter out expired shares
 	shares := []*link.PublicShare{}
 	m.shares.Range(func(k, v interface{}) bool {
@@ -189,7 +189,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	return shares, nil
 }
 
-func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) error {
+func (m *manager) RevokePublicShare(ctx context.Context, _ *user.User, ref *link.PublicShareReference) error {
 	// check whether the reference exists
 	switch {
 	case ref.GetId() != nil && ref.GetId().OpaqueId != "":
@@ -209,7 +209,7 @@ func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link
 	return nil
 }
 
-func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error) {
+func (m *manager) GetPublicShareByToken(_ context.Context, token string, _ *link.PublicShareAuthentication, _ bool) (*link.PublicShare, error) {
 	if ps, ok := m.shares.Load(token); ok {
 		return ps.(*link.PublicShare), nil
 	}
@@ -225,7 +225,7 @@ func randString(n int) string {
 	return string(b)
 }
 
-func (m *manager) getPublicShareByTokenID(ctx context.Context, targetID link.PublicShareId) (*link.PublicShare, error) {
+func (m *manager) getPublicShareByTokenID(_ context.Context, targetID link.PublicShareId) (*link.PublicShare, error) {
 	var found *link.PublicShare
 	m.shares.Range(func(k, v interface{}) bool {
 		id := v.(*link.PublicShare).GetId()

@@ -41,7 +41,7 @@ func (XattrsBackend) Name() string { return "xattrs" }
 // Get an extended attribute value for the given key
 // No file locking is involved here as reading a single xattr is
 // considered to be atomic.
-func (b XattrsBackend) Get(ctx context.Context, filePath, key string) ([]byte, error) {
+func (b XattrsBackend) Get(_ context.Context, filePath, key string) ([]byte, error) {
 	return xattr.Get(filePath, key)
 }
 
@@ -60,7 +60,7 @@ func (b XattrsBackend) GetInt64(ctx context.Context, filePath, key string) (int6
 
 // List retrieves a list of names of extended attributes associated with the
 // given path in the file system.
-func (XattrsBackend) List(ctx context.Context, filePath string) (attribs []string, err error) {
+func (XattrsBackend) List(_ context.Context, filePath string) (attribs []string, err error) {
 	attrs, err := xattr.List(filePath)
 	if err == nil {
 		return attrs, nil
@@ -113,7 +113,7 @@ func (b XattrsBackend) Set(ctx context.Context, path string, key string, val []b
 }
 
 // SetMultiple sets a set of attribute for the given path
-func (XattrsBackend) SetMultiple(ctx context.Context, path string, attribs map[string][]byte, acquireLock bool) (err error) {
+func (XattrsBackend) SetMultiple(_ context.Context, path string, attribs map[string][]byte, acquireLock bool) (err error) {
 	if acquireLock {
 		err := os.MkdirAll(filepath.Dir(path), 0600)
 		if err != nil {
@@ -146,7 +146,7 @@ func (XattrsBackend) SetMultiple(ctx context.Context, path string, attribs map[s
 }
 
 // Remove an extended attribute key
-func (XattrsBackend) Remove(ctx context.Context, filePath string, key string, acquireLock bool) (err error) {
+func (XattrsBackend) Remove(_ context.Context, filePath string, key string, acquireLock bool) (err error) {
 	if acquireLock {
 		lockedFile, err := lockedfile.OpenFile(filePath+filelocks.LockFileSuffix, os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {
@@ -162,10 +162,10 @@ func (XattrsBackend) Remove(ctx context.Context, filePath string, key string, ac
 func (XattrsBackend) IsMetaFile(path string) bool { return strings.HasSuffix(path, ".meta.lock") }
 
 // Purge purges the data of a given path
-func (XattrsBackend) Purge(path string) error { return nil }
+func (XattrsBackend) Purge(string) error { return nil }
 
 // Rename moves the data for a given path to a new path
-func (XattrsBackend) Rename(oldPath, newPath string) error { return nil }
+func (XattrsBackend) Rename(string, string) error { return nil }
 
 // MetadataPath returns the path of the file holding the metadata for the given path
 func (XattrsBackend) MetadataPath(path string) string { return path }

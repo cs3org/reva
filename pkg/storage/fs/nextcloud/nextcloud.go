@@ -266,7 +266,7 @@ func (nc *StorageDriver) CreateDir(ctx context.Context, ref *provider.Reference)
 }
 
 // TouchFile as defined in the storage.FS interface
-func (nc *StorageDriver) TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) error {
+func (nc *StorageDriver) TouchFile(context.Context, *provider.Reference, bool, string) error {
 	return fmt.Errorf("unimplemented: TouchFile")
 }
 
@@ -303,7 +303,7 @@ func (nc *StorageDriver) Move(ctx context.Context, oldRef, newRef *provider.Refe
 
 // GetMD as defined in the storage.FS interface
 // TODO forward fieldMask
-func (nc *StorageDriver) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string, fieldMask []string) (*provider.ResourceInfo, error) {
+func (nc *StorageDriver) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string, _ []string) (*provider.ResourceInfo, error) {
 	type paramsObj struct {
 		Ref    *provider.Reference `json:"ref"`
 		MdKeys []string            `json:"mdKeys"`
@@ -333,7 +333,7 @@ func (nc *StorageDriver) GetMD(ctx context.Context, ref *provider.Reference, mdK
 }
 
 // ListFolder as defined in the storage.FS interface
-func (nc *StorageDriver) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys, fieldMask []string) ([]*provider.ResourceInfo, error) {
+func (nc *StorageDriver) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys, _ []string) ([]*provider.ResourceInfo, error) {
 	type paramsObj struct {
 		Ref    *provider.Reference `json:"ref"`
 		MdKeys []string            `json:"mdKeys"`
@@ -468,7 +468,7 @@ func (nc *StorageDriver) RestoreRevision(ctx context.Context, ref *provider.Refe
 }
 
 // ListRecycle as defined in the storage.FS interface
-func (nc *StorageDriver) ListRecycle(ctx context.Context, ref *provider.Reference, key string, relativePath string) ([]*provider.RecycleItem, error) {
+func (nc *StorageDriver) ListRecycle(ctx context.Context, _ *provider.Reference, key string, relativePath string) ([]*provider.RecycleItem, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("ListRecycle")
 	type paramsObj struct {
@@ -499,7 +499,7 @@ func (nc *StorageDriver) ListRecycle(ctx context.Context, ref *provider.Referenc
 }
 
 // RestoreRecycleItem as defined in the storage.FS interface
-func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
+func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, _ *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
 	type paramsObj struct {
 		Key        string              `json:"key"`
 		Path       string              `json:"path"`
@@ -521,7 +521,7 @@ func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, ref *provider.R
 }
 
 // PurgeRecycleItem as defined in the storage.FS interface
-func (nc *StorageDriver) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
+func (nc *StorageDriver) PurgeRecycleItem(ctx context.Context, _ *provider.Reference, key, relativePath string) error {
 	type paramsObj struct {
 		Key  string `json:"key"`
 		Path string `json:"path"`
@@ -539,7 +539,7 @@ func (nc *StorageDriver) PurgeRecycleItem(ctx context.Context, ref *provider.Ref
 }
 
 // EmptyRecycle as defined in the storage.FS interface
-func (nc *StorageDriver) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
+func (nc *StorageDriver) EmptyRecycle(ctx context.Context, _ *provider.Reference) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("EmptyRecycle")
 
@@ -705,7 +705,7 @@ func (nc *StorageDriver) ListGrants(ctx context.Context, ref *provider.Reference
 }
 
 // GetQuota as defined in the storage.FS interface
-func (nc *StorageDriver) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, uint64, error) {
+func (nc *StorageDriver) GetQuota(ctx context.Context, _ *provider.Reference) (uint64, uint64, uint64, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("GetQuota")
 
@@ -788,27 +788,27 @@ func (nc *StorageDriver) UnsetArbitraryMetadata(ctx context.Context, ref *provid
 }
 
 // GetLock returns an existing lock on the given reference
-func (nc *StorageDriver) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+func (nc *StorageDriver) GetLock(context.Context, *provider.Reference) (*provider.Lock, error) {
 	return nil, errtypes.NotSupported("unimplemented")
 }
 
 // SetLock puts a lock on the given reference
-func (nc *StorageDriver) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+func (nc *StorageDriver) SetLock(context.Context, *provider.Reference, *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
 // RefreshLock refreshes an existing lock on the given reference
-func (nc *StorageDriver) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
+func (nc *StorageDriver) RefreshLock(context.Context, *provider.Reference, *provider.Lock, string) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
 // Unlock removes an existing lock from the given reference
-func (nc *StorageDriver) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+func (nc *StorageDriver) Unlock(context.Context, *provider.Reference, *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
 // ListStorageSpaces as defined in the storage.FS interface
-func (nc *StorageDriver) ListStorageSpaces(ctx context.Context, f []*provider.ListStorageSpacesRequest_Filter, unrestricted bool) ([]*provider.StorageSpace, error) {
+func (nc *StorageDriver) ListStorageSpaces(ctx context.Context, f []*provider.ListStorageSpacesRequest_Filter, _ bool) ([]*provider.StorageSpace, error) {
 	bodyStr, _ := json.Marshal(f)
 	_, respBody, err := nc.do(ctx, Action{"ListStorageSpaces", string(bodyStr)})
 	if err != nil {

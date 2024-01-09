@@ -95,7 +95,7 @@ func applyDefaultConfig(conf *config) {
 }
 
 // New returns a new SysInfo service.
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
+func New(m map[string]interface{}, _ *zerolog.Logger) (global.Service, error) {
 	// Prepare the configuration
 	conf, err := parseConfig(m)
 	if err != nil {

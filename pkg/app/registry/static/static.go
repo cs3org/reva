@@ -150,7 +150,7 @@ func getPriority(p *registrypb.ProviderInfo) uint64 {
 	return defaultPriority
 }
 
-func (m *manager) FindProviders(ctx context.Context, mimeType string) ([]*registrypb.ProviderInfo, error) {
+func (m *manager) FindProviders(_ context.Context, mimeType string) ([]*registrypb.ProviderInfo, error) {
 	// find longest match
 	var match string
 
@@ -177,7 +177,7 @@ func (m *manager) FindProviders(ctx context.Context, mimeType string) ([]*regist
 	return providers, nil
 }
 
-func (m *manager) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) error {
+func (m *manager) AddProvider(_ context.Context, p *registrypb.ProviderInfo) error {
 	m.Lock()
 	defer m.Unlock()
 
@@ -213,7 +213,7 @@ func (m *manager) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) e
 	return nil
 }
 
-func (m *manager) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
+func (m *manager) ListProviders(_ context.Context) ([]*registrypb.ProviderInfo, error) {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -224,7 +224,7 @@ func (m *manager) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo
 	return providers, nil
 }
 
-func (m *manager) ListSupportedMimeTypes(ctx context.Context) ([]*registrypb.MimeTypeInfo, error) {
+func (m *manager) ListSupportedMimeTypes(context.Context) ([]*registrypb.MimeTypeInfo, error) {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -267,7 +267,7 @@ func getIndex(h providerHeap, s *registrypb.ProviderInfo) (int, bool) {
 	return -1, false
 }
 
-func (m *manager) SetDefaultProviderForMimeType(ctx context.Context, mimeType string, p *registrypb.ProviderInfo) error {
+func (m *manager) SetDefaultProviderForMimeType(_ context.Context, mimeType string, p *registrypb.ProviderInfo) error {
 	m.Lock()
 	defer m.Unlock()
 
@@ -305,7 +305,7 @@ func dummyMimeType(m string, apps []*registrypb.ProviderInfo) *mimeTypeConfig {
 	}
 }
 
-func (m *manager) GetDefaultProviderForMimeType(ctx context.Context, mimeType string) (*registrypb.ProviderInfo, error) {
+func (m *manager) GetDefaultProviderForMimeType(_ context.Context, mimeType string) (*registrypb.ProviderInfo, error) {
 	m.RLock()
 	defer m.RUnlock()
 

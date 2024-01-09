@@ -64,7 +64,7 @@ func (c *config) init() {
 }
 
 // New creates a new StorageRegistryService
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+func New(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)
 	if err != nil {
@@ -128,7 +128,7 @@ func (s *svc) AddAppProvider(ctx context.Context, req *registrypb.AddAppProvider
 	return res, nil
 }
 
-func (s *svc) ListAppProviders(ctx context.Context, req *registrypb.ListAppProvidersRequest) (*registrypb.ListAppProvidersResponse, error) {
+func (s *svc) ListAppProviders(ctx context.Context, _ *registrypb.ListAppProvidersRequest) (*registrypb.ListAppProvidersResponse, error) {
 	providers, err := s.reg.ListProviders(ctx)
 	if err != nil {
 		return &registrypb.ListAppProvidersResponse{
@@ -143,7 +143,7 @@ func (s *svc) ListAppProviders(ctx context.Context, req *registrypb.ListAppProvi
 	return res, nil
 }
 
-func (s *svc) ListSupportedMimeTypes(ctx context.Context, req *registrypb.ListSupportedMimeTypesRequest) (*registrypb.ListSupportedMimeTypesResponse, error) {
+func (s *svc) ListSupportedMimeTypes(ctx context.Context, _ *registrypb.ListSupportedMimeTypesRequest) (*registrypb.ListSupportedMimeTypesResponse, error) {
 	mimeTypes, err := s.reg.ListSupportedMimeTypes(ctx)
 	if err != nil {
 		return &registrypb.ListSupportedMimeTypesResponse{

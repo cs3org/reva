@@ -112,7 +112,7 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 	return nil
 }
 
-func (m *manager) Authenticate(ctx context.Context, username string, secret string) (*user.User, map[string]*authpb.Scope, error) {
+func (m *manager) Authenticate(_ context.Context, username string, secret string) (*user.User, map[string]*authpb.Scope, error) {
 	if c, ok := m.credentials[username]; ok {
 		if c.Secret == secret {
 			var scopes map[string]*authpb.Scope

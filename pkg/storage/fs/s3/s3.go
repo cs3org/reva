@@ -106,7 +106,7 @@ func New(m map[string]interface{}, _ events.Stream) (storage.FS, error) {
 	return &s3FS{client: s3Client, config: c}, nil
 }
 
-func (fs *s3FS) Shutdown(ctx context.Context) error {
+func (fs *s3FS) Shutdown(context.Context) error {
 	return nil
 }
 
@@ -115,7 +115,7 @@ func (fs *s3FS) addRoot(p string) string {
 	return np
 }
 
-func (fs *s3FS) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
+func (fs *s3FS) resolve(_ context.Context, ref *provider.Reference) (string, error) {
 	if strings.HasPrefix(ref.Path, "/") {
 		return fs.addRoot(ref.GetPath()), nil
 	}
@@ -144,7 +144,7 @@ type s3FS struct {
 }
 
 // permissionSet returns the permission set for the current user
-func (fs *s3FS) permissionSet(ctx context.Context) *provider.ResourcePermissions {
+func (fs *s3FS) permissionSet() *provider.ResourcePermissions {
 	// TODO fix permissions for share recipients by traversing reading acls up to the root? cache acls for the parent node and reuse it
 	return &provider.ResourcePermissions{
 		// owner has all permissions
@@ -180,7 +180,7 @@ func (fs *s3FS) normalizeObject(ctx context.Context, o *s3.Object, fn string) *p
 		Type:          getResourceType(isDir),
 		Etag:          *o.ETag,
 		MimeType:      mime.Detect(isDir, fn),
-		PermissionSet: fs.permissionSet(ctx),
+		PermissionSet: fs.permissionSet(),
 		Size:          uint64(*o.Size),
 		Mtime: &types.Timestamp{
 			Seconds: uint64(o.LastModified.Unix()),
@@ -209,7 +209,7 @@ func (fs *s3FS) normalizeHead(ctx context.Context, o *s3.HeadObjectOutput, fn st
 		Type:          getResourceType(isDir),
 		Etag:          *o.ETag,
 		MimeType:      mime.Detect(isDir, fn),
-		PermissionSet: fs.permissionSet(ctx),
+		PermissionSet: fs.permissionSet(),
 		Size:          uint64(*o.ContentLength),
 		Mtime: &types.Timestamp{
 			Seconds: uint64(o.LastModified.Unix()),
@@ -229,7 +229,7 @@ func (fs *s3FS) normalizeCommonPrefix(ctx context.Context, p *s3.CommonPrefix) *
 		Type:          getResourceType(true),
 		Etag:          "TODO(labkode)",
 		MimeType:      mime.Detect(true, fn),
-		PermissionSet: fs.permissionSet(ctx),
+		PermissionSet: fs.permissionSet(),
 		Size:          0,
 		Mtime: &types.Timestamp{
 			Seconds: 0,
@@ -245,72 +245,72 @@ func (fs *s3FS) normalizeCommonPrefix(ctx context.Context, p *s3.CommonPrefix) *
 // GetPathByID returns the path pointed by the file id
 // In this implementation the file id is that path of the file without the first slash
 // thus the file id always points to the filename
-func (fs *s3FS) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
+func (fs *s3FS) GetPathByID(_ context.Context, id *provider.ResourceId) (string, error) {
 	return path.Join("/", strings.TrimPrefix(id.OpaqueId, "fileid-")), nil
 }
 
-func (fs *s3FS) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+func (fs *s3FS) AddGrant(context.Context, *provider.Reference, *provider.Grant) error {
 	return errtypes.NotSupported("s3: operation not supported")
 }
 
-func (fs *s3FS) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+func (fs *s3FS) DenyGrant(context.Context, *provider.Reference, *provider.Grantee) error {
 	return errtypes.NotSupported("s3: operation not supported")
 }
 
-func (fs *s3FS) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
+func (fs *s3FS) ListGrants(context.Context, *provider.Reference) ([]*provider.Grant, error) {
 	return nil, errtypes.NotSupported("s3: operation not supported")
 }
 
-func (fs *s3FS) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+func (fs *s3FS) RemoveGrant(context.Context, *provider.Reference, *provider.Grant) error {
 	return errtypes.NotSupported("s3: operation not supported")
 }
 
-func (fs *s3FS) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+func (fs *s3FS) UpdateGrant(context.Context, *provider.Reference, *provider.Grant) error {
 	return errtypes.NotSupported("s3: operation not supported")
 }
 
-func (fs *s3FS) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, uint64, error) {
+func (fs *s3FS) GetQuota(context.Context, *provider.Reference) (uint64, uint64, uint64, error) {
 	return 0, 0, 0, nil
 }
 
-func (fs *s3FS) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
+func (fs *s3FS) SetArbitraryMetadata(context.Context, *provider.Reference, *provider.ArbitraryMetadata) error {
 	return errtypes.NotSupported("s3: operation not supported")
 }
 
-func (fs *s3FS) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
+func (fs *s3FS) UnsetArbitraryMetadata(context.Context, *provider.Reference, []string) error {
 	return errtypes.NotSupported("s3: operation not supported")
 }
 
 // GetLock returns an existing lock on the given reference
-func (fs *s3FS) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+func (fs *s3FS) GetLock(context.Context, *provider.Reference) (*provider.Lock, error) {
 	return nil, errtypes.NotSupported("unimplemented")
 }
 
 // SetLock puts a lock on the given reference
-func (fs *s3FS) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+func (fs *s3FS) SetLock(context.Context, *provider.Reference, *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
 // RefreshLock refreshes an existing lock on the given reference
-func (fs *s3FS) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
+func (fs *s3FS) RefreshLock(context.Context, *provider.Reference, *provider.Lock, string) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
 // Unlock removes an existing lock from the given reference
-func (fs *s3FS) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+func (fs *s3FS) Unlock(context.Context, *provider.Reference, *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
-func (fs *s3FS) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
+func (fs *s3FS) CreateReference(context.Context, string, *url.URL) error {
 	// TODO(jfd):implement
 	return errtypes.NotSupported("s3: operation not supported")
 }
 
-func (fs *s3FS) GetHome(ctx context.Context) (string, error) {
+func (fs *s3FS) GetHome(context.Context) (string, error) {
 	return "", errtypes.NotSupported("eos: not supported")
 }
 
-func (fs *s3FS) CreateHome(ctx context.Context) error {
+func (fs *s3FS) CreateHome(context.Context) error {
 	return errtypes.NotSupported("s3fs: not supported")
 }
 
@@ -348,7 +348,7 @@ func (fs *s3FS) CreateDir(ctx context.Context, ref *provider.Reference) error {
 }
 
 // TouchFile as defined in the storage.FS interface
-func (fs *s3FS) TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) error {
+func (fs *s3FS) TouchFile(context.Context, *provider.Reference, bool, string) error {
 	return fmt.Errorf("unimplemented: TouchFile")
 }
 
@@ -410,11 +410,11 @@ func (fs *s3FS) Delete(ctx context.Context, ref *provider.Reference) error {
 }
 
 // CreateStorageSpace creates a storage space
-func (fs *s3FS) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+func (fs *s3FS) CreateStorageSpace(context.Context, *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("unimplemented: CreateStorageSpace")
 }
 
-func (fs *s3FS) moveObject(ctx context.Context, oldKey string, newKey string) error {
+func (fs *s3FS) moveObject(_ context.Context, oldKey string, newKey string) error {
 
 	// Copy
 	// TODO double check CopyObject can deal with >5GB files.
@@ -517,7 +517,7 @@ func (fs *s3FS) Move(ctx context.Context, oldRef, newRef *provider.Reference) er
 	return nil
 }
 
-func (fs *s3FS) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string, fieldMask []string) (*provider.ResourceInfo, error) {
+func (fs *s3FS) GetMD(ctx context.Context, ref *provider.Reference, _ []string, _ []string) (*provider.ResourceInfo, error) {
 	log := appctx.GetLogger(ctx)
 
 	fn, err := fs.resolve(ctx, ref)
@@ -580,7 +580,7 @@ func (fs *s3FS) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []str
 	return fs.normalizeHead(ctx, output, fn), nil
 }
 
-func (fs *s3FS) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys, fieldMask []string) ([]*provider.ResourceInfo, error) {
+func (fs *s3FS) ListFolder(ctx context.Context, ref *provider.Reference, _, _ []string) ([]*provider.ResourceInfo, error) {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "error resolving ref")
@@ -645,44 +645,44 @@ func (fs *s3FS) Download(ctx context.Context, ref *provider.Reference) (io.ReadC
 	return r.Body, nil
 }
 
-func (fs *s3FS) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
+func (fs *s3FS) ListRevisions(context.Context, *provider.Reference) ([]*provider.FileVersion, error) {
 	return nil, errtypes.NotSupported("list revisions")
 }
 
-func (fs *s3FS) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
+func (fs *s3FS) DownloadRevision(context.Context, *provider.Reference, string) (io.ReadCloser, error) {
 	return nil, errtypes.NotSupported("download revision")
 }
 
-func (fs *s3FS) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
+func (fs *s3FS) RestoreRevision(context.Context, *provider.Reference, string) error {
 	return errtypes.NotSupported("restore revision")
 }
 
-func (fs *s3FS) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
+func (fs *s3FS) PurgeRecycleItem(context.Context, *provider.Reference, string, string) error {
 	return errtypes.NotSupported("purge recycle item")
 }
 
-func (fs *s3FS) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
+func (fs *s3FS) EmptyRecycle(context.Context, *provider.Reference) error {
 	return errtypes.NotSupported("empty recycle")
 }
 
-func (fs *s3FS) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (fs *s3FS) ListRecycle(context.Context, *provider.Reference, string, string) ([]*provider.RecycleItem, error) {
 	return nil, errtypes.NotSupported("list recycle")
 }
 
-func (fs *s3FS) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
+func (fs *s3FS) RestoreRecycleItem(context.Context, *provider.Reference, string, string, *provider.Reference) error {
 	return errtypes.NotSupported("restore recycle")
 }
 
-func (fs *s3FS) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, unrestricted bool) ([]*provider.StorageSpace, error) {
+func (fs *s3FS) ListStorageSpaces(context.Context, []*provider.ListStorageSpacesRequest_Filter, bool) ([]*provider.StorageSpace, error) {
 	return nil, errtypes.NotSupported("list storage spaces")
 }
 
 // UpdateStorageSpace updates a storage space
-func (fs *s3FS) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+func (fs *s3FS) UpdateStorageSpace(context.Context, *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("update storage space")
 }
 
 // DeleteStorageSpace deletes a storage space
-func (fs *s3FS) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
+func (fs *s3FS) DeleteStorageSpace(context.Context, *provider.DeleteStorageSpaceRequest) error {
 	return errtypes.NotSupported("delete storage space")
 }

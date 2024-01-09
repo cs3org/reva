@@ -108,7 +108,7 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		return &provider.CreateHomeResponse{
-			Status: status.NewPermissionDenied(ctx, nil, "can't create home for anonymous user"),
+			Status: status.NewPermissionDenied(ctx, "can't create home for anonymous user"),
 		}, nil
 
 	}
@@ -709,7 +709,7 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 
 	if sourceProviderInfo.Address != destProviderInfo.Address {
 		return &provider.MoveResponse{
-			Status: status.NewPermissionDenied(ctx, nil, "cross storage moves are not permitted, use copy and delete"),
+			Status: status.NewPermissionDenied(ctx, "cross storage moves are not permitted, use copy and delete"),
 		}, nil
 	}
 
@@ -891,9 +891,9 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 	})
 }
 
-func (s *svc) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
+func (s *svc) CreateSymlink(ctx context.Context, _ *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
 	return &provider.CreateSymlinkResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CreateSymlink not implemented"), "CreateSymlink not implemented"),
+		Status: status.NewUnimplemented(ctx, "CreateSymlink not implemented"),
 	}, nil
 }
 
@@ -970,7 +970,7 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 	if si.Address != di.Address {
 		return &provider.RestoreRecycleItemResponse{
 			// TODO in Move() we return an unimplemented / supported ... align?
-			Status: status.NewPermissionDenied(ctx, err, "gateway: cross-storage restores are forbidden"),
+			Status: status.NewPermissionDenied(ctx, "gateway: cross-storage restores are forbidden"),
 		}, nil
 	}
 

@@ -44,7 +44,7 @@ var _ = Describe("Blobstore", func() {
 
 	BeforeEach(func() {
 		var err error
-		tmpRoot, err = helpers.TempDir("reva-unit-tests-*-root")
+		tmpRoot, err = helpers.TempDir()
 		Expect(err).ToNot(HaveOccurred())
 
 		data = []byte("1234567890")

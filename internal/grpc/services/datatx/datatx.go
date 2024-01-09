@@ -117,7 +117,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New creates a new datatx svc
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+func New(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)
 	if err != nil {
@@ -305,7 +305,7 @@ func (s *service) RetryTransfer(ctx context.Context, req *datatx.RetryTransferRe
 	}, nil
 }
 
-func (s *service) extractEndpointInfo(ctx context.Context, targetURL string) (*webdavEndpoint, error) {
+func (s *service) extractEndpointInfo(_ context.Context, targetURL string) (*webdavEndpoint, error) {
 	if targetURL == "" {
 		return nil, errtypes.BadRequest("datatx service: ref target is an empty uri")
 	}

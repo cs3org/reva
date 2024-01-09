@@ -36,7 +36,7 @@ func init() {
 }
 
 // New returns a new token manager.
-func New(m map[string]interface{}) (token.Manager, error) {
+func New(map[string]interface{}) (token.Manager, error) {
 	mngr := manager{}
 	return &mngr, nil
 }
@@ -48,7 +48,7 @@ type claims struct {
 	Scope map[string]*auth.Scope `json:"scope"`
 }
 
-func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error) {
+func (m *manager) MintToken(_ context.Context, u *user.User, scope map[string]*auth.Scope) (string, error) {
 	token, err := encode(&claims{u, scope})
 	if err != nil {
 		return "", errors.Wrap(err, "error encoding user")
@@ -56,7 +56,7 @@ func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]
 	return token, nil
 }
 
-func (m *manager) DismantleToken(ctx context.Context, token string) (*user.User, map[string]*auth.Scope, error) {
+func (m *manager) DismantleToken(_ context.Context, token string) (*user.User, map[string]*auth.Scope, error) {
 	c, err := decode(token)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "error decoding claims")

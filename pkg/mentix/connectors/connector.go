@@ -62,6 +62,6 @@ func (connector *BaseConnector) Activate(conf *config.Configuration, log *zerolo
 
 // UpdateMeshData updates the provided mesh data on the target side. The provided data only contains the data that
 // should be updated, not the entire data set.
-func (connector *BaseConnector) UpdateMeshData(data *meshdata.MeshData) error {
+func (connector *BaseConnector) UpdateMeshData(_ *meshdata.MeshData) error {
 	return fmt.Errorf("the connector doesn't support updating of mesh data")
 }
