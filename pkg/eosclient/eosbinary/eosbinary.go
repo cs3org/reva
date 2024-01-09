@@ -789,8 +789,8 @@ func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, pa
 
 // ListDeletedEntries returns a list of the deleted entries.
 func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization) ([]*eosclient.DeletedEntry, error) {
-	// TODO(labkode): add protection if slave is configured and alive to count how many files are in the trashbin before
-	// triggering the recycle ls call that could break the instance because of unavailable memory.
+	// Note that this may time out if the recycle has too many items:
+	// the CS3API call ListRecycle includes a check to prevent that
 	args := []string{"recycle", "ls", "-m"}
 	stdout, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {

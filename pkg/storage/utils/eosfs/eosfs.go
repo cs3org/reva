@@ -147,6 +147,10 @@ func (c *Config) ApplyDefaults() {
 		c.TokenExpiry = 3600
 	}
 
+	if c.MaxRecycleEntries == 0 {
+		c.MaxRecycleEntries = 5000
+	}
+
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
@@ -1945,6 +1949,12 @@ func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 		}
 	}
 
+	rcount, err := fs.countDeletedEntries(ctx, auth)
+	if err == nil && rcount > fs.conf.MaxRecycleEntries {
+		// ignore errors here and optimistically move on
+		return nil, errtypes.BadRequest("eosfs: too many entries found in listing recycle bin")
+	}
+
 	eosDeletedEntries, err := fs.c.ListDeletedEntries(ctx, auth)
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: error listing deleted entries")
@@ -1962,6 +1972,18 @@ func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 		}
 	}
 	return recycleEntries, nil
+}
+
+func (fs *eosfs) countDeletedEntries(ctx context.Context, auth eosclient.Authorization) (uint64, error) {
+	// Look for the recycle path, typically /eos/<instance>/proc/recycle/uid:<UID>
+	recyclePath := "output of eos recycle -m"
+	recyclePath = fmt.Sprintf("%s/uid:%s", recyclePath, auth.Role.UID)
+	// TODO: treeCount is not recursive, if we implement a calendar view we may do this on the '0' bucket
+	eosmd, err := fs.c.GetFileInfoByPath(ctx, auth, recyclePath)
+	if err != nil {
+		return 0, err
+	}
+	return eosmd.TreeCount, nil
 }
 
 func (fs *eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {

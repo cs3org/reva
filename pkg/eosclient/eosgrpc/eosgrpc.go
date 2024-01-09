@@ -1389,10 +1389,11 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 
 	msg := new(erpc.NSRequest_RecycleRequest)
 	msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(erpc.NSRequest_RecycleRequest_RECYCLE_CMD_value["LIST"])
-
 	rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
 
 	// Now send the req and see what happens
+	// Note that this may time out if the recycle has too many items:
+	// the CS3API call ListRecycle includes a check to prevent that
 	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
@@ -1409,10 +1410,6 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 	} else {
 		log.Debug().Str("func", "ListDeletedEntries").Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 	}
-	// TODO(labkode): add protection if slave is configured and alive to count how many files are in the trashbin before
-	// triggering the recycle ls call that could break the instance because of unavailable memory.
-	// FF: I agree with labkode, if we think we may have memory problems then the semantics of the grpc call`and
-	// the semantics if this func will have to change. For now this is not foreseen
 
 	ret := make([]*eosclient.DeletedEntry, 0)
 	for _, f := range resp.Recycle.Recycles {
@@ -1635,7 +1632,10 @@ func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDRespon
 			fi.Attrs[strings.TrimPrefix(k, "user.")] = string(v)
 		}
 
-		fi.Size = uint64(st.Cmd.TreeSize)
+		fi.TreeSize = uint64(st.Cmd.TreeSize)
+		fi.Size = fi.TreeSize
+		// TODO(lopresti) this info is missing in the EOS Protobuf, cf. EOS-5974
+		// fi.TreeCount = uint64(st.Cmd.TreeCount)
 
 		log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Msg("grpc response")
 	} else {
