@@ -243,6 +243,26 @@ var _ = Describe("File uploads", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(resources)).To(Equal(1))
 			})
+
+			It("fails when trying to upload empty data. 0-byte uploads are finished during initialization already", func() {
+				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
+					Return(nil)
+				uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(uploadIds)).To(Equal(2))
+				Expect(uploadIds["simple"]).ToNot(BeEmpty())
+
+				uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
+
+				_, err = fs.Upload(ctx, storage.UploadRequest{
+					Ref:    uploadRef,
+					Body:   io.NopCloser(bytes.NewReader([]byte(""))),
+					Length: 0,
+				}, nil)
+
+				Expect(err).To(HaveOccurred())
+			})
 		})
 
 		When("the user uploads a non zero byte file", func() {
