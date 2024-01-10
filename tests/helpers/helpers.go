@@ -94,20 +94,23 @@ func TempJSONFile(c any) (string, error) {
 
 // Upload can be used to initiate an upload and do the upload to a storage.FS in one step
 func Upload(ctx context.Context, fs storage.FS, ref *provider.Reference, content []byte) error {
-	uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
+	length := int64(len(content))
+	uploadIds, err := fs.InitiateUpload(ctx, ref, length, map[string]string{})
 	if err != nil {
 		return err
 	}
-	uploadID, ok := uploadIds["simple"]
-	if !ok {
-		return errors.New("simple upload method not available")
+	if length > 0 {
+		uploadID, ok := uploadIds["simple"]
+		if !ok {
+			return errors.New("simple upload method not available")
+		}
+		uploadRef := &provider.Reference{Path: "/" + uploadID}
+		_, err = fs.Upload(ctx, storage.UploadRequest{
+			Ref:    uploadRef,
+			Body:   io.NopCloser(bytes.NewReader(content)),
+			Length: int64(len(content)),
+		}, nil)
 	}
-	uploadRef := &provider.Reference{Path: "/" + uploadID}
-	_, err = fs.Upload(ctx, storage.UploadRequest{
-		Ref:    uploadRef,
-		Body:   io.NopCloser(bytes.NewReader(content)),
-		Length: int64(len(content)),
-	}, nil)
 	return err
 }
 
