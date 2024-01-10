@@ -787,6 +787,16 @@ func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, pa
 	return err
 }
 
+// GetRecyclePath returns the top-level path of the recycle bin for the current user.
+func (c *Client) GetRecyclePath(ctx context.Context, auth eosclient.Authorization) (string, error) {
+	args := []string{"recycle", "-m"}
+	stdout, _, err := c.executeEOS(ctx, args, auth)
+	if err != nil {
+		return "", err
+	}
+	return c.parseEosOutputLine(stdout)["recycle-bin"], nil
+}
+
 // ListDeletedEntries returns a list of the deleted entries.
 func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization) ([]*eosclient.DeletedEntry, error) {
 	// Note that this may time out if the recycle has too many items:
@@ -1042,7 +1052,7 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 	return finfos, nil
 }
 
-func (c Client) parseQuotaLine(line string) map[string]string {
+func (c Client) parseEosOutputLine(line string) map[string]string {
 	partsBySpace := strings.FieldsFunc(line, func(c rune) bool {
 		return c == ' '
 	})
@@ -1058,7 +1068,7 @@ func (c *Client) parseQuota(path, raw string) (*eosclient.QuotaInfo, error) {
 			continue
 		}
 
-		m := c.parseQuotaLine(rl)
+		m := c.parseEosOutputLine(rl)
 		// map[maxbytes:2000000000000 maxlogicalbytes:1000000000000 percentageusedbytes:0.49 quota:node uid:gonzalhu space:/eos/scratch/user/ usedbytes:9829986500 usedlogicalbytes:4914993250 statusfiles:ok usedfiles:334 maxfiles:1000000 statusbytes:ok]
 
 		space := m["space"]

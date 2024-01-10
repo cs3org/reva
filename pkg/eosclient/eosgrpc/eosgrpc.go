@@ -191,7 +191,7 @@ func New(ctx context.Context, opt *Options, httpOpts *HTTPOptions) (*Client, err
 }
 
 // If the error is not nil, take that
-// If there is an error coming from EOS, erturn a descriptive error.
+// If there is an error coming from EOS, return a descriptive error.
 func (c *Client) getRespError(rsp *erpc.NSResponse, err error) error {
 	if err != nil {
 		return err
@@ -1374,6 +1374,43 @@ func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, pa
 	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", source, xrdPath, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", auth.Role.UID, auth.Role.GID))
 	_, _, err := c.execute(ctx, cmd)
 	return err
+}
+
+// GetRecyclePath returns the top-level path of the recycle bin for the current user.
+func (c *Client) GetRecyclePath(ctx context.Context, auth eosclient.Authorization) (string, error) {
+	log := appctx.GetLogger(ctx)
+	log.Debug().Str("func", "GetRecyclePath").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Msg("")
+
+	// Initialize the common fields of the NSReq
+	rq, err := c.initNSRequest(ctx, auth)
+	if err != nil {
+		return "", err
+	}
+
+	msg := new(erpc.NSRequest_RecycleRequest)
+	msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(0) // TODO what command for `eos recycle` ?
+	rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
+
+	// Now send the req and see what happens
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
+	e := c.getRespError(resp, err)
+	if e != nil {
+		log.Error().Str("err", e.Error()).Msg("")
+		return "", e
+	}
+
+	if resp == nil {
+		return "", errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s'", auth.Role.UID))
+	}
+
+	if resp.GetError() != nil {
+		log.Error().Str("func", "ListDeletedEntries").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
+	} else {
+		log.Debug().Str("func", "ListDeletedEntries").Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+	}
+
+	// TODO
+	return "", nil
 }
 
 // ListDeletedEntries returns a list of the deleted entries.
