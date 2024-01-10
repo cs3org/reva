@@ -141,10 +141,20 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 	updateMask := &fieldmaskpb.FieldMask{Paths: []string{"state", "mount_point"}}
 
 	for id := range sharesToAccept {
-		data := h.updateReceivedShare(w, r, rs, updateMask)
-		// only render the data for the changed share
-		if id == shareID && data != nil {
-			response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
+		data, meta, err := h.updateReceivedShare(r.Context(), rs, updateMask)
+		if err != nil {
+			// we log an error for affected shares, for the actual share we return an error
+			if id == shareID {
+				response.WriteOCSData(w, r, meta, nil, err)
+				continue
+			} else {
+				appctx.GetLogger(ctx).Error().Err(err).Str("received_share", shareID).Str("affected_share", id).Msg("could not update affected received share")
+			}
+		} else {
+			// only render the data for the changed share
+			if id == shareID {
+				response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
+			}
 		}
 	}
 }
@@ -167,10 +177,11 @@ func (h *Handler) RejectReceivedShare(w http.ResponseWriter, r *http.Request) {
 	}
 	updateMask := &fieldmaskpb.FieldMask{Paths: []string{"state"}}
 
-	data := h.updateReceivedShare(w, r, receivedShare, updateMask)
-	if data != nil {
-		response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
+	data, meta, err := h.updateReceivedShare(r.Context(), receivedShare, updateMask)
+	if err != nil {
+		response.WriteOCSData(w, r, meta, nil, err)
 	}
+	response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
 }
 
 func (h *Handler) UpdateReceivedShare(w http.ResponseWriter, r *http.Request) {
@@ -198,15 +209,14 @@ func (h *Handler) UpdateReceivedShare(w http.ResponseWriter, r *http.Request) {
 		receivedShare.State = rs.State
 	}
 
-	data := h.updateReceivedShare(w, r, receivedShare, updateMask)
-	if data != nil {
-		response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
+	data, meta, err := h.updateReceivedShare(r.Context(), receivedShare, updateMask)
+	if err != nil {
+		response.WriteOCSData(w, r, meta, nil, err)
 	}
-	// TODO: do we need error handling here? no, but updateReceivedShare should return an error instead of using r and w. Then we need to handle the error here...
+	response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
 }
 
-func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, receivedShare *collaboration.ReceivedShare, fieldMask *fieldmaskpb.FieldMask) *conversions.ShareData {
-	ctx := r.Context()
+func (h *Handler) updateReceivedShare(ctx context.Context, receivedShare *collaboration.ReceivedShare, fieldMask *fieldmaskpb.FieldMask) (*conversions.ShareData, response.Meta, error) {
 	logger := appctx.GetLogger(ctx)
 
 	updateShareRequest := &collaboration.UpdateReceivedShareRequest{
@@ -216,23 +226,19 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, re
 
 	client, err := h.getClient()
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
-		return nil
+		return nil, response.MetaServerError, errors.Wrap(err, "error getting grpc gateway client")
 	}
 
 	shareRes, err := client.UpdateReceivedShare(ctx, updateShareRequest)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request failed", err)
-		return nil
+		return nil, response.MetaServerError, errors.Wrap(err, "grpc update received share request failed")
 	}
 
 	if shareRes.Status.Code != rpc.Code_CODE_OK {
 		if shareRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
-			return nil
+			return nil, response.MetaNotFound, errors.New(shareRes.Status.Message)
 		}
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request failed", errors.Errorf("code: %d, message: %s", shareRes.Status.Code, shareRes.Status.Message))
-		return nil
+		return nil, response.MetaServerError, errors.Errorf("grpc update received share request failed: code: %d, message: %s", shareRes.Status.Code, shareRes.Status.Message)
 	}
 
 	rs := shareRes.GetShare()
@@ -240,11 +246,10 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, re
 	info, status, err := h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
 	if err != nil || status.Code != rpc.Code_CODE_OK {
 		h.logProblems(logger, status, err, "could not stat, skipping")
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc get resource info failed", errors.Errorf("code: %d, message: %s", status.Code, status.Message))
-		return nil
+		return nil, response.MetaServerError, errors.Errorf("grpc get resource info failed: code: %d, message: %s", status.Code, status.Message)
 	}
 
-	data, err := conversions.CS3Share2ShareData(r.Context(), rs.Share)
+	data, err := conversions.CS3Share2ShareData(ctx, rs.Share)
 	if err != nil {
 		// TODO conversions.CS3Share2ShareData always returns share data, in fact it cannot return an error. we should change the signature
 		logger.Debug().Interface("share", rs.Share).Interface("shareData", data).Err(err).Msg("could not CS3Share2ShareData, skipping")
@@ -254,14 +259,14 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, re
 	data.Hidden = rs.GetHidden()
 
 	h.addFileInfo(ctx, data, info)
-	h.mapUserIds(r.Context(), client, data)
+	h.mapUserIds(ctx, client, data)
 
 	if data.State == ocsStateAccepted {
 		// Needed because received shares can be jailed in a folder in the users home
 		data.Path = path.Join(h.sharePrefix, path.Base(info.Path))
 	}
 
-	return data
+	return data, response.MetaOK, nil
 }
 
 func (h *Handler) updateReceivedFederatedShare(w http.ResponseWriter, r *http.Request, shareID string, rejectShare bool) {
