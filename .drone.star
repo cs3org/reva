@@ -5,7 +5,7 @@ OSIXIA_OPEN_LDAP = "osixia/openldap:1.3.0"
 REDIS = "redis:6-alpine"
 OC_CI_PHP = "cs3org/behat:latest"
 OC_LITMUS = "owncloud/litmus:latest"
-OC_CS3_API_VALIDATOR = "owncloud/cs3api-validator:latest"
+OC_CS3_API_VALIDATOR = "owncloud/cs3api-validator:0.2.1"
 OC_CI_BAZEL_BUILDIFIER = "owncloudci/bazel-buildifier:latest"
 
 # Shared step definitions
