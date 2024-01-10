@@ -398,12 +398,12 @@ func (h *Handler) updateExistingShareMountpoints(ctx context.Context, shareType 
 		}
 		granteeCtx = metadata.AppendToOutgoingContext(granteeCtx, ctxpkg.TokenHeader, authRes.Token)
 
-		lrs, ocsResponse := getSharesList(granteeCtx, client)
-		if ocsResponse != nil {
-			return ocsResponse.OCS.Meta.StatusCode, ocsResponse.OCS.Meta.Message, nil
+		receivedShares, err := listReceivedShares(granteeCtx, client)
+		if err != nil {
+			return response.MetaServerError.StatusCode, "could not list shares", nil
 		}
 
-		for _, s := range lrs.Shares {
+		for _, s := range receivedShares {
 			if s.GetShare().GetId() != share.Id && s.State == collaboration.ShareState_SHARE_STATE_ACCEPTED && utils.ResourceIDEqual(s.Share.ResourceId, info.GetId()) {
 				updateRequest := &collaboration.UpdateReceivedShareRequest{
 					Share: &collaboration.ReceivedShare{

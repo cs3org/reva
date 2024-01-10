@@ -116,19 +116,55 @@ var _ = Describe("The ocs API", func() {
 		)
 
 		BeforeEach(func() {
-			client.On("GetReceivedShare", mock.Anything, mock.Anything).Return(&collaboration.GetReceivedShareResponse{
+			client.On("GetReceivedShare", mock.Anything, mock.MatchedBy(func(req *collaboration.GetReceivedShareRequest) bool {
+				return req.Ref.GetId().GetOpaqueId() == "1"
+			})).Return(&collaboration.GetReceivedShareResponse{
 				Status: status.NewOK(context.Background()),
 				Share: &collaboration.ReceivedShare{
 					Share: share,
 				},
 			}, nil)
+			client.On("GetReceivedShare", mock.Anything, mock.MatchedBy(func(req *collaboration.GetReceivedShareRequest) bool {
+				return req.Ref.GetId().GetOpaqueId() == "2"
+			})).Return(&collaboration.GetReceivedShareResponse{
+				Status: status.NewOK(context.Background()),
+				Share: &collaboration.ReceivedShare{
+					Share: share2,
+				},
+			}, nil)
+			client.On("GetReceivedShare", mock.Anything, mock.MatchedBy(func(req *collaboration.GetReceivedShareRequest) bool {
+				return req.Ref.GetId().GetOpaqueId() == "3"
+			})).Return(&collaboration.GetReceivedShareResponse{
+				Status: status.NewOK(context.Background()),
+				Share: &collaboration.ReceivedShare{
+					Share: share3,
+				},
+			}, nil)
 
-			client.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
+			client.On("Stat", mock.Anything, mock.MatchedBy(func(req *provider.StatRequest) bool {
+				return req.GetRef().ResourceId.OpaqueId == resID.OpaqueId
+			})).Return(&provider.StatResponse{
 				Status: status.NewOK(context.Background()),
 				Info: &provider.ResourceInfo{
 					Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-					Path:  "/share1",
+					Name:  "share1",
 					Id:    resID,
+					Owner: alice.Id,
+					PermissionSet: &provider.ResourcePermissions{
+						Stat: true,
+					},
+					Size: 10,
+				},
+			}, nil)
+
+			client.On("Stat", mock.Anything, mock.MatchedBy(func(req *provider.StatRequest) bool {
+				return req.GetRef().ResourceId.OpaqueId == otherResID.OpaqueId
+			})).Return(&provider.StatResponse{
+				Status: status.NewOK(context.Background()),
+				Info: &provider.ResourceInfo{
+					Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+					Path:  "/share2",
+					Id:    otherResID,
 					Owner: alice.Id,
 					PermissionSet: &provider.ResourcePermissions{
 						Stat: true,
