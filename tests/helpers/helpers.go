@@ -28,17 +28,21 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 
+	"github.com/owncloud/ocis/v2/services/webdav/pkg/net"
 	"github.com/pkg/errors"
 	"github.com/studio-b12/gowebdav"
 
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/datagateway"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
 	"github.com/cs3org/reva/v2/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 // TempDir creates a temporary directory in tmp/ and returns its path
@@ -238,31 +242,38 @@ func CreateStructure(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ro
 
 // CreateFile creates a file in the given path with an initial content.
 func CreateFile(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ref *provider.Reference, content []byte) error {
-	initRes, err := gw.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{Ref: ref})
+	length := int64(len(content))
+	initRes, err := gw.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
+		Opaque: utils.AppendPlainToOpaque(&typespb.Opaque{}, net.HeaderUploadLength, strconv.FormatInt(length, 10)),
+		Ref:    ref,
+	})
 	if err != nil {
 		return err
 	}
-	var token, endpoint string
-	for _, p := range initRes.Protocols {
-		if p.Protocol == "simple" {
-			token, endpoint = p.Token, p.UploadEndpoint
+
+	if length > 0 {
+		var token, endpoint string
+		for _, p := range initRes.Protocols {
+			if p.Protocol == "simple" {
+				token, endpoint = p.Token, p.UploadEndpoint
+			}
 		}
-	}
-	httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, endpoint, bytes.NewReader(content))
-	if err != nil {
-		return err
-	}
+		httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, endpoint, bytes.NewReader(content))
+		if err != nil {
+			return err
+		}
 
-	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+		httpReq.Header.Set(datagateway.TokenTransportHeader, token)
 
-	httpRes, err := http.DefaultClient.Do(httpReq)
-	if err != nil {
-		return err
+		httpRes, err := http.DefaultClient.Do(httpReq)
+		if err != nil {
+			return err
+		}
+		if httpRes.StatusCode != http.StatusOK {
+			return errors.New(httpRes.Status)
+		}
+		defer httpRes.Body.Close()
 	}
-	if httpRes.StatusCode != http.StatusOK {
-		return errors.New(httpRes.Status)
-	}
-	defer httpRes.Body.Close()
 	return nil
 }
 
