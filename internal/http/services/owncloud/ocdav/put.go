@@ -292,7 +292,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 
 	// ony send actual PUT request if file has bytes. Otherwise the initiate file upload request creates the file
-	if length != 0 { // FIXME bring back 0 byte file upload handling, see https://github.com/owncloud/ocis/issues/2609
+	if length != 0 {
 		var ep, token string
 		for _, p := range uRes.Protocols {
 			if p.Protocol == "simple" {
