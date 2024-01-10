@@ -69,7 +69,11 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sharedResource, ocsResponse := getSharedResource(ctx, client, rs.Share.Share.ResourceId)
+	rs.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
+
+	// now we also need to determine the mount point by evaluating all other mounted shares
+
+	sharedResource, ocsResponse := getSharedResource(ctx, client, rs.Share.ResourceId)
 	if ocsResponse != nil {
 		response.WriteOCSResponse(w, r, *ocsResponse, nil)
 		return
@@ -82,12 +86,12 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// we need to sort the received shares by mount point in order to make things easier to evaluate.
-	base := path.Base(sharedResource.GetInfo().GetPath())
+	base := path.Base(sharedResource.GetInfo().GetPath()) // TODO should use name
 	mount := base
 	var mountedShares []*collaboration.ReceivedShare
 	sharesToAccept := map[string]bool{shareID: true}
 	for _, s := range lrs.Shares {
-		if utils.ResourceIDEqual(s.Share.ResourceId, rs.Share.Share.GetResourceId()) {
+		if utils.ResourceIDEqual(s.Share.ResourceId, rs.Share.GetResourceId()) {
 			if s.State == collaboration.ShareState_SHARE_STATE_ACCEPTED {
 				mount = s.MountPoint.Path
 			} else {
@@ -129,21 +133,15 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 			// TODO we could delete shares here if the stat returns code NOT FOUND ... but listening for file deletes would be better
 		}
 	}
+
 	// we need to add a path to the share
-	receivedShare := &collaboration.ReceivedShare{
-		Share: &collaboration.Share{
-			Id: &collaboration.ShareId{OpaqueId: shareID},
-		},
-		State:  collaboration.ShareState_SHARE_STATE_ACCEPTED,
-		Hidden: h.getReceivedShareHideFlagFromShareID(r.Context(), shareID),
-		MountPoint: &provider.Reference{
-			Path: mount,
-		},
+	rs.MountPoint = &provider.Reference{
+		Path: mount,
 	}
-	updateMask := &fieldmaskpb.FieldMask{Paths: []string{"state", "hidden", "mount_point"}}
+	updateMask := &fieldmaskpb.FieldMask{Paths: []string{"state", "mount_point"}}
 
 	for id := range sharesToAccept {
-		data := h.updateReceivedShare(w, r, receivedShare, updateMask)
+		data := h.updateReceivedShare(w, r, rs, updateMask)
 		// only render the data for the changed share
 		if id == shareID && data != nil {
 			response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
@@ -165,10 +163,9 @@ func (h *Handler) RejectReceivedShare(w http.ResponseWriter, r *http.Request) {
 		Share: &collaboration.Share{
 			Id: &collaboration.ShareId{OpaqueId: shareID},
 		},
-		State:  collaboration.ShareState_SHARE_STATE_REJECTED,
-		Hidden: h.getReceivedShareHideFlagFromShareID(r.Context(), shareID),
+		State: collaboration.ShareState_SHARE_STATE_REJECTED,
 	}
-	updateMask := &fieldmaskpb.FieldMask{Paths: []string{"state", "hidden"}}
+	updateMask := &fieldmaskpb.FieldMask{Paths: []string{"state"}}
 
 	data := h.updateReceivedShare(w, r, receivedShare, updateMask)
 	if data != nil {
@@ -198,14 +195,14 @@ func (h *Handler) UpdateReceivedShare(w http.ResponseWriter, r *http.Request) {
 
 	rs, _ := getReceivedShareFromID(r.Context(), client, shareID)
 	if rs != nil && rs.Share != nil {
-		receivedShare.State = rs.Share.State
+		receivedShare.State = rs.State
 	}
 
 	data := h.updateReceivedShare(w, r, receivedShare, updateMask)
 	if data != nil {
 		response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
 	}
-	// TODO: do we need error handling here?
+	// TODO: do we need error handling here? no, but updateReceivedShare should return an error instead of using r and w. Then we need to handle the error here...
 }
 
 func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, receivedShare *collaboration.ReceivedShare, fieldMask *fieldmaskpb.FieldMask) *conversions.ShareData {
@@ -249,6 +246,7 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, re
 
 	data, err := conversions.CS3Share2ShareData(r.Context(), rs.Share)
 	if err != nil {
+		// TODO conversions.CS3Share2ShareData always returns share data, in fact it cannot return an error. we should change the signature
 		logger.Debug().Interface("share", rs.Share).Interface("shareData", data).Err(err).Msg("could not CS3Share2ShareData, skipping")
 	}
 
@@ -336,21 +334,8 @@ func (h *Handler) updateReceivedFederatedShare(w http.ResponseWriter, r *http.Re
 	response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
 }
 
-// getReceivedShareHideFlagFromShareId returns the hide flag of a received share based on its ID.
-func (h *Handler) getReceivedShareHideFlagFromShareID(ctx context.Context, shareID string) bool {
-	client, err := h.getClient()
-	if err != nil {
-		return false
-	}
-	rs, _ := getReceivedShareFromID(ctx, client, shareID)
-	if rs != nil {
-		return rs.GetShare().GetHidden()
-	}
-	return false
-}
-
 // getReceivedShareFromID uses a client to the gateway to fetch a share based on its ID.
-func getReceivedShareFromID(ctx context.Context, client gateway.GatewayAPIClient, shareID string) (*collaboration.GetReceivedShareResponse, *response.Response) {
+func getReceivedShareFromID(ctx context.Context, client gateway.GatewayAPIClient, shareID string) (*collaboration.ReceivedShare, *response.Response) {
 	s, err := client.GetReceivedShare(ctx, &collaboration.GetReceivedShareRequest{
 		Ref: &collaboration.ShareReference{
 			Spec: &collaboration.ShareReference_Id{
@@ -375,7 +360,7 @@ func getReceivedShareFromID(ctx context.Context, client gateway.GatewayAPIClient
 		return nil, arbitraryOcsResponse(response.MetaBadRequest.StatusCode, e.Error())
 	}
 
-	return s, nil
+	return s.Share, nil
 }
 
 // getSharedResource attempts to get a shared resource from the storage from the resource reference.
