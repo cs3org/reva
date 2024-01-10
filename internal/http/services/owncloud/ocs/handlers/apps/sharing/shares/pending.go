@@ -249,11 +249,7 @@ func (h *Handler) updateReceivedShare(ctx context.Context, receivedShare *collab
 		return nil, response.MetaServerError, errors.Errorf("grpc get resource info failed: code: %d, message: %s", status.Code, status.Message)
 	}
 
-	data, err := conversions.CS3Share2ShareData(ctx, rs.Share)
-	if err != nil {
-		// TODO conversions.CS3Share2ShareData always returns share data, in fact it cannot return an error. we should change the signature
-		logger.Debug().Interface("share", rs.Share).Interface("shareData", data).Err(err).Msg("could not CS3Share2ShareData, skipping")
-	}
+	data := conversions.CS3Share2ShareData(ctx, rs.Share)
 
 	data.State = mapState(rs.GetState())
 	data.Hidden = rs.GetHidden()
