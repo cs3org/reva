@@ -71,11 +71,14 @@ var _ = Describe("Sharecache", func() {
 			})
 
 			It("updates the etag", func() {
-				oldEtag := c.UserShares[userid].Etag
+				uc, _ := c.UserShares.Load(userid)
+				oldEtag := uc.Etag
 				Expect(oldEtag).ToNot(BeEmpty())
 
 				Expect(c.Persist(ctx, userid)).To(Succeed())
-				Expect(c.UserShares[userid].Etag).ToNot(Equal(oldEtag))
+
+				uc, _ = c.UserShares.Load(userid)
+				Expect(uc.Etag).ToNot(Equal(oldEtag))
 			})
 		})
 	})
