@@ -1378,7 +1378,7 @@ func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, pa
 }
 
 // ListDeletedEntries returns a list of the deleted entries.
-func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization, maxentries int32, from, to time.Time) ([]*eosclient.DeletedEntry, error) {
+func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization, maxentries int, from, to time.Time) ([]*eosclient.DeletedEntry, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "ListDeletedEntries").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Msg("")
 
@@ -1388,6 +1388,7 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 		return nil, err
 	}
 
+	count := 0
 	ret := []*eosclient.DeletedEntry{}
 	for d := from; !d.After(to); d = d.AddDate(0, 0, 1) {
 		msg := new(erpc.NSRequest_RecycleRequest)
@@ -1417,6 +1418,12 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 			log.Debug().Str("func", "ListDeletedEntries").Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 		}
 
+		count += len(resp.Recycle.Recycles)
+		if count > maxentries {
+			// raise equivalent error as eos would do if the whole list was to be returned
+			return nil, errtypes.BadRequest("too long")
+		}
+
 		for _, f := range resp.Recycle.Recycles {
 			if f == nil {
 				log.Info().Msg("nil item in response")
@@ -1430,7 +1437,6 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 				DeletionMTime: f.Dtime.Sec,
 				IsDir:         (f.Type == erpc.NSResponse_RecycleResponse_RecycleInfo_TREE),
 			}
-
 			ret = append(ret, entry)
 		}
 	}
