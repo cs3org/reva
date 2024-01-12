@@ -1922,27 +1922,6 @@ func (fs *eosfs) EmptyRecycle(ctx context.Context) error {
 	return fs.c.PurgeDeletedEntries(ctx, auth)
 }
 
-func (fs *eosfs) countDeletedEntries(ctx context.Context, auth eosclient.Authorization, from, to time.Time) (uint64, error) {
-	recyclePath, err := fs.c.GetRecyclePath(ctx, auth)
-	if err != nil {
-		return 0, err
-	}
-
-	var total uint64
-	total = 0
-	for d := from; !d.After(to); d = d.AddDate(0, 0, 1) {
-		// stat the bucket 0, which includes by default the first 100K entries at most: if the user has more,
-		// the obtained count is a lower bound that is likely good enough to fail the request anyway
-		eosmd, err := fs.c.GetFileInfoByPath(ctx, auth, fmt.Sprintf("%s/uid:%s/%s/0", recyclePath, auth.Role.UID, d.Format("2006/01/31")))
-		if err != nil {
-			return 0, err
-		}
-		total += eosmd.TreeCount
-	}
-
-	return total, nil
-}
-
 func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath, from, to string) ([]*provider.RecycleItem, error) {
 	var auth eosclient.Authorization
 
@@ -1994,14 +1973,12 @@ func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath, f
 		}
 	}
 
-	// ignore errors here and optimistically move on with the listing
-	rcount, _ := fs.countDeletedEntries(ctx, auth, dateFrom, dateTo)
-	if rcount > fs.conf.MaxRecycleEntries {
-		return nil, errtypes.BadRequest("eosfs: too many entries found in listing the recycle bin")
-	}
-
-	eosDeletedEntries, err := fs.c.ListDeletedEntries(ctx, auth, dateFrom, dateTo)
+	eosDeletedEntries, err := fs.c.ListDeletedEntries(ctx, auth, fs.conf.MaxRecycleEntries, dateFrom, dateTo)
 	if err != nil {
+		if strings.Contains(err.Error(), "too long") {
+			// assume eos has returned "Message too long" because the entries exceed the given limit
+			return nil, errtypes.BadRequest("eosfs: too many entries found in listing the recycle bin")
+		}
 		return nil, errors.Wrap(err, "eosfs: error listing deleted entries")
 	}
 	recycleEntries := []*provider.RecycleItem{}

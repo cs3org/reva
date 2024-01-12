@@ -53,8 +53,7 @@ type EOSClient interface {
 	Read(ctx context.Context, auth Authorization, path string) (io.ReadCloser, error)
 	Write(ctx context.Context, auth Authorization, path string, stream io.ReadCloser) error
 	WriteFile(ctx context.Context, auth Authorization, path, source string) error
-	GetRecyclePath(ctx context.Context, auth Authorization) (string, error)
-	ListDeletedEntries(ctx context.Context, auth Authorization, from, to time.Time) ([]*DeletedEntry, error)
+	ListDeletedEntries(ctx context.Context, auth Authorization, maxentries int32, from, to time.Time) ([]*DeletedEntry, error)
 	RestoreDeletedEntry(ctx context.Context, auth Authorization, key string) error
 	PurgeDeletedEntries(ctx context.Context, auth Authorization) error
 	ListVersions(ctx context.Context, auth Authorization, p string) ([]*FileInfo, error)

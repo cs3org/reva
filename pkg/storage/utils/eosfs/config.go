@@ -179,7 +179,7 @@ type Config struct {
 
 	// Maximum entries count a ListRecycle call may return: if exceeded, ListRecycle
 	// will return a BadRequest error
-	MaxRecycleEntries uint64 `mapstructure:"max_recycle_entries"`
+	MaxRecycleEntries int32 `mapstructure:"max_recycle_entries"`
 
 	// Maximum time span in days a ListRecycle call may return: if exceeded, ListRecycle
 	// will override the "to" date with "from" + this value

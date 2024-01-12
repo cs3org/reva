@@ -1377,45 +1377,8 @@ func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, pa
 	return err
 }
 
-// GetRecyclePath returns the top-level path of the recycle bin for the current user.
-func (c *Client) GetRecyclePath(ctx context.Context, auth eosclient.Authorization) (string, error) {
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("func", "GetRecyclePath").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Msg("")
-
-	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
-	if err != nil {
-		return "", err
-	}
-
-	msg := new(erpc.NSRequest_RecycleRequest)
-	msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(0) // TODO what command for `eos recycle` ?
-	rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
-
-	// Now send the req and see what happens
-	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
-	e := c.getRespError(resp, err)
-	if e != nil {
-		log.Error().Str("err", e.Error()).Msg("")
-		return "", e
-	}
-
-	if resp == nil {
-		return "", errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s'", auth.Role.UID))
-	}
-
-	if resp.GetError() != nil {
-		log.Error().Str("func", "GetRecyclePath").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
-	} else {
-		log.Debug().Str("func", "GetRecyclePath").Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
-	}
-
-	// TODO
-	return "", nil
-}
-
 // ListDeletedEntries returns a list of the deleted entries.
-func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization, from, to time.Time) ([]*eosclient.DeletedEntry, error) {
+func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization, maxentries int32, from, to time.Time) ([]*eosclient.DeletedEntry, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "ListDeletedEntries").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Msg("")
 
@@ -1429,14 +1392,14 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 	for d := from; !d.After(to); d = d.AddDate(0, 0, 1) {
 		msg := new(erpc.NSRequest_RecycleRequest)
 		msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(erpc.NSRequest_RecycleRequest_RECYCLE_CMD_value["LIST"])
+		// msg.Listflag.Maxentries = maxentries
 		msg.Purgedate.Day = int32(d.Day())
 		msg.Purgedate.Month = int32(d.Month())
 		msg.Purgedate.Year = int32(d.Year())
 		rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
 
 		// Now send the req and see what happens
-		// Note that this may time out if the recycle has too many items:
-		// the CS3API call ListRecycle includes a check to prevent that
+		// Note that this may time out if the recycle has too many items
 		resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 		e := c.getRespError(resp, err)
 		if e != nil {
