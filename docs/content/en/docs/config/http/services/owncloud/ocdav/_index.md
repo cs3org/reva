@@ -17,7 +17,7 @@ insecure = false
 {{% /dir %}}
 
 {{% dir name="notifications" type="map[string]interface{}" default=Settingsg for the Notification Helper %}}
- [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/owncloud/ocdav/ocdav.go#L122)
+ [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/owncloud/ocdav/ocdav.go#L123)
 {{< highlight toml >}}
 [http.services.owncloud.ocdav]
 notifications = Settingsg for the Notification Helper
