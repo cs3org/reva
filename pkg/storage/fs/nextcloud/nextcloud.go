@@ -374,7 +374,7 @@ type ListRecycleRequest struct {
 }
 
 // ListRecycle as defined in the storage.FS interface.
-func (nc *StorageDriver) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (nc *StorageDriver) ListRecycle(ctx context.Context, basePath, key, relativePath, from, to string) ([]*provider.RecycleItem, error) {
 	var items []*provider.RecycleItem
 	err := nc.do(ctx, http.MethodPost, "ListRecycle", ListRecycleRequest{Key: key, Path: relativePath}, &items)
 	return items, err

@@ -21,6 +21,7 @@ package eosclient
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
@@ -53,7 +54,7 @@ type EOSClient interface {
 	Write(ctx context.Context, auth Authorization, path string, stream io.ReadCloser) error
 	WriteFile(ctx context.Context, auth Authorization, path, source string) error
 	GetRecyclePath(ctx context.Context, auth Authorization) (string, error)
-	ListDeletedEntries(ctx context.Context, auth Authorization) ([]*DeletedEntry, error)
+	ListDeletedEntries(ctx context.Context, auth Authorization, from, to time.Time) ([]*DeletedEntry, error)
 	RestoreDeletedEntry(ctx context.Context, auth Authorization, key string) error
 	PurgeDeletedEntries(ctx context.Context, auth Authorization) error
 	ListVersions(ctx context.Context, auth Authorization, p string) ([]*FileInfo, error)

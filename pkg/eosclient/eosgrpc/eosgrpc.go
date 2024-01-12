@@ -35,6 +35,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -1404,9 +1405,9 @@ func (c *Client) GetRecyclePath(ctx context.Context, auth eosclient.Authorizatio
 	}
 
 	if resp.GetError() != nil {
-		log.Error().Str("func", "ListDeletedEntries").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
+		log.Error().Str("func", "GetRecyclePath").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
 	} else {
-		log.Debug().Str("func", "ListDeletedEntries").Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+		log.Debug().Str("func", "GetRecyclePath").Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 	}
 
 	// TODO
@@ -1414,7 +1415,7 @@ func (c *Client) GetRecyclePath(ctx context.Context, auth eosclient.Authorizatio
 }
 
 // ListDeletedEntries returns a list of the deleted entries.
-func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization) ([]*eosclient.DeletedEntry, error) {
+func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization, from, to time.Time) ([]*eosclient.DeletedEntry, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "ListDeletedEntries").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Msg("")
 
@@ -1424,46 +1425,51 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 		return nil, err
 	}
 
-	msg := new(erpc.NSRequest_RecycleRequest)
-	msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(erpc.NSRequest_RecycleRequest_RECYCLE_CMD_value["LIST"])
-	rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
+	ret := []*eosclient.DeletedEntry{}
+	for d := from; !d.After(to); d = d.AddDate(0, 0, 1) {
+		msg := new(erpc.NSRequest_RecycleRequest)
+		msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(erpc.NSRequest_RecycleRequest_RECYCLE_CMD_value["LIST"])
+		msg.Purgedate.Day = int32(d.Day())
+		msg.Purgedate.Month = int32(d.Month())
+		msg.Purgedate.Year = int32(d.Year())
+		rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
 
-	// Now send the req and see what happens
-	// Note that this may time out if the recycle has too many items:
-	// the CS3API call ListRecycle includes a check to prevent that
-	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
-	e := c.getRespError(resp, err)
-	if e != nil {
-		log.Error().Str("err", e.Error()).Msg("")
-		return nil, e
-	}
-
-	if resp == nil {
-		return nil, errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s'", auth.Role.UID))
-	}
-
-	if resp.GetError() != nil {
-		log.Error().Str("func", "ListDeletedEntries").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
-	} else {
-		log.Debug().Str("func", "ListDeletedEntries").Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
-	}
-
-	ret := make([]*eosclient.DeletedEntry, 0)
-	for _, f := range resp.Recycle.Recycles {
-		if f == nil {
-			log.Info().Msg("nil item in response")
-			continue
+		// Now send the req and see what happens
+		// Note that this may time out if the recycle has too many items:
+		// the CS3API call ListRecycle includes a check to prevent that
+		resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
+		e := c.getRespError(resp, err)
+		if e != nil {
+			log.Error().Str("err", e.Error()).Msg("")
+			return nil, e
 		}
 
-		entry := &eosclient.DeletedEntry{
-			RestorePath:   string(f.Id.Path),
-			RestoreKey:    f.Key,
-			Size:          f.Size,
-			DeletionMTime: f.Dtime.Sec,
-			IsDir:         (f.Type == erpc.NSResponse_RecycleResponse_RecycleInfo_TREE),
+		if resp == nil {
+			return nil, errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s'", auth.Role.UID))
 		}
 
-		ret = append(ret, entry)
+		if resp.GetError() != nil {
+			log.Error().Str("func", "ListDeletedEntries").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
+		} else {
+			log.Debug().Str("func", "ListDeletedEntries").Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+		}
+
+		for _, f := range resp.Recycle.Recycles {
+			if f == nil {
+				log.Info().Msg("nil item in response")
+				continue
+			}
+
+			entry := &eosclient.DeletedEntry{
+				RestorePath:   string(f.Id.Path),
+				RestoreKey:    f.Key,
+				Size:          f.Size,
+				DeletionMTime: f.Dtime.Sec,
+				IsDir:         (f.Type == erpc.NSResponse_RecycleResponse_RecycleInfo_TREE),
+			}
+
+			ret = append(ret, entry)
+		}
 	}
 
 	return ret, nil

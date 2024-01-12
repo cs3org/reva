@@ -604,7 +604,7 @@ func (fs *cephfs) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 	return nil, errtypes.NotSupported("unimplemented")
 }
 
-func (fs *cephfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (fs *cephfs) ListRecycle(ctx context.Context, basePath, key, relativePath, from, to string) ([]*provider.RecycleItem, error) {
 	return nil, errtypes.NotSupported("unimplemented")
 }
 

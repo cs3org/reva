@@ -798,15 +798,25 @@ func (c *Client) GetRecyclePath(ctx context.Context, auth eosclient.Authorizatio
 }
 
 // ListDeletedEntries returns a list of the deleted entries.
-func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization) ([]*eosclient.DeletedEntry, error) {
-	// Note that this may time out if the recycle has too many items:
+func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization, from, to time.Time) ([]*eosclient.DeletedEntry, error) {
+	// Note that this may time out if the recycle has too many items or the time range is too large:
 	// the CS3API call ListRecycle includes a check to prevent that
-	args := []string{"recycle", "ls", "-m"}
-	stdout, _, err := c.executeEOS(ctx, args, auth)
-	if err != nil {
-		return nil, err
+	deleted := []*eosclient.DeletedEntry{}
+	for d := from; !d.After(to); d = d.AddDate(0, 0, 1) {
+		args := []string{"recycle", "ls", d.Format("2006/01/02"), "-m"}
+		stdout, _, err := c.executeEOS(ctx, args, auth)
+		if err != nil {
+			return nil, err
+		}
+
+		list, err := parseRecycleList(stdout)
+		if err != nil {
+			return nil, err
+		}
+		deleted = append(deleted, list...)
 	}
-	return parseRecycleList(stdout)
+
+	return deleted, nil
 }
 
 // RestoreDeletedEntry restores a deleted entry.

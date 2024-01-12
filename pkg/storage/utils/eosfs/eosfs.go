@@ -151,6 +151,10 @@ func (c *Config) ApplyDefaults() {
 		c.MaxRecycleEntries = 5000
 	}
 
+	if c.MaxDaysInRecycleList == 0 {
+		c.MaxDaysInRecycleList = 14
+	}
+
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
@@ -1918,23 +1922,28 @@ func (fs *eosfs) EmptyRecycle(ctx context.Context) error {
 	return fs.c.PurgeDeletedEntries(ctx, auth)
 }
 
-func (fs *eosfs) countDeletedEntries(ctx context.Context, auth eosclient.Authorization) (uint64, error) {
-	// Look for the recycle path, typically /eos/<instance>/proc/recycle/uid:<UID>
+func (fs *eosfs) countDeletedEntries(ctx context.Context, auth eosclient.Authorization, from, to time.Time) (uint64, error) {
 	recyclePath, err := fs.c.GetRecyclePath(ctx, auth)
 	if err != nil {
 		return 0, err
 	}
 
-	// TODO: treeCount is not recursive, once we implement a calendar view we should do this on the '0' bucket
-	eosmd, err := fs.c.GetFileInfoByPath(ctx, auth, fmt.Sprintf("%s/uid:%s", recyclePath, auth.Role.UID))
-	if err != nil {
-		return 0, err
+	var total uint64
+	total = 0
+	for d := from; !d.After(to); d = d.AddDate(0, 0, 1) {
+		// stat the bucket 0, which includes by default the first 100K entries at most: if the user has more,
+		// the obtained count is a lower bound that is likely good enough to fail the request anyway
+		eosmd, err := fs.c.GetFileInfoByPath(ctx, auth, fmt.Sprintf("%s/uid:%s/%s/0", recyclePath, auth.Role.UID, d.Format("2006/01/31")))
+		if err != nil {
+			return 0, err
+		}
+		total += eosmd.TreeCount
 	}
 
-	return eosmd.TreeCount, nil
+	return total, nil
 }
 
-func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath, from, to string) ([]*provider.RecycleItem, error) {
 	var auth eosclient.Authorization
 
 	if !fs.conf.EnableHome && fs.conf.AllowPathRecycleOperations && basePath != "/" {
@@ -1965,13 +1974,33 @@ func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 		}
 	}
 
-	// ignore errors for this check and optimistically move on with the listing
-	rcount, _ := fs.countDeletedEntries(ctx, auth)
-	if rcount > fs.conf.MaxRecycleEntries {
-		return nil, errtypes.BadRequest("eosfs: too many entries found in listing recycle bin")
+	var dateFrom, dateTo time.Time
+	if from == "" || to == "" {
+		// list recent (up to max days) entries by default
+		dateTo = time.Now()
+		dateFrom = dateTo.AddDate(0, 0, -fs.conf.MaxDaysInRecycleList)
+	} else {
+		dateFrom, err := time.Parse("2006/01/02", from)
+		if err != nil {
+			dateFrom = time.Now()
+		}
+		dateTo, err = time.Parse("2006/01/02", to)
+		if err != nil {
+			dateTo = time.Now()
+		}
+		maxDate := dateFrom.AddDate(0, 0, fs.conf.MaxDaysInRecycleList) // limit to avoid overloading EOS
+		if maxDate.Before(dateTo) {
+			dateTo = maxDate
+		}
 	}
 
-	eosDeletedEntries, err := fs.c.ListDeletedEntries(ctx, auth)
+	// ignore errors here and optimistically move on with the listing
+	rcount, _ := fs.countDeletedEntries(ctx, auth, dateFrom, dateTo)
+	if rcount > fs.conf.MaxRecycleEntries {
+		return nil, errtypes.BadRequest("eosfs: too many entries found in listing the recycle bin")
+	}
+
+	eosDeletedEntries, err := fs.c.ListDeletedEntries(ctx, auth, dateFrom, dateTo)
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: error listing deleted entries")
 	}
