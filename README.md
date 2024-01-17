@@ -35,7 +35,7 @@ $ cmd/revad/revad --version
 
 You can also read the [build from sources guide](https://reva.link/docs/getting-started/build-reva/) and the [setup tutorial](https://github.com/cs3org/reva/blob/master/docs/content/en/docs/tutorials/setup-tutorial.md).
 
-## Run tests
+## Contributing: Run tests
 
 To run unit tests do:
 `make test-go`
