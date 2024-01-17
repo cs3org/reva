@@ -67,7 +67,7 @@ require (
 	github.com/prometheus/alertmanager v0.24.0
 	github.com/prometheus/client_golang v1.16.0
 	github.com/rogpeppe/go-internal v1.10.0
-	github.com/rs/cors v1.9.0
+	github.com/rs/cors v1.10.1
 	github.com/rs/zerolog v1.29.1
 	github.com/sethvargo/go-password v0.2.0
 	github.com/shamaton/msgpack/v2 v2.1.1
