@@ -148,7 +148,7 @@ func (c *Config) ApplyDefaults() {
 	}
 
 	if c.MaxRecycleEntries == 0 {
-		c.MaxRecycleEntries = 5000
+		c.MaxRecycleEntries = 2000
 	}
 
 	if c.MaxDaysInRecycleList == 0 {
