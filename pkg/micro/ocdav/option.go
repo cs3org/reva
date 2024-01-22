@@ -63,13 +63,14 @@ type Options struct {
 	MetricsSubsystem string
 
 	// ocdav.* is internal so we need to set config options individually
-	config             config.Config
-	lockSystem         ocdav.LockSystem
-	AllowCredentials   bool
-	AllowedOrigins     []string
-	AllowedHeaders     []string
-	AllowedMethods     []string
-	AllowDepthInfinity bool
+	config                config.Config
+	lockSystem            ocdav.LockSystem
+	AllowCredentials      bool
+	AllowedOrigins        []string
+	AllowedHeaders        []string
+	AllowedMethods        []string
+	AllowDepthInfinity    bool
+	ContentSecurityPolicy string
 }
 
 // newOptions initializes the available default options.
@@ -347,6 +348,13 @@ func AllowedMethods(val []string) Option {
 func AllowedHeaders(val []string) Option {
 	return func(o *Options) {
 		o.AllowedHeaders = val
+	}
+}
+
+// ContentSecurityPolicy provides a function to set the ContentSecurityPolicy option.
+func ContentSecurityPolicy(val string) Option {
+	return func(o *Options) {
+		o.ContentSecurityPolicy = val
 	}
 }
 

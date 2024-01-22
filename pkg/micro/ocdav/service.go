@@ -26,6 +26,7 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/interceptors/auth"
 	cors2 "github.com/cs3org/reva/v2/internal/http/interceptors/cors"
 	revaLogMiddleware "github.com/cs3org/reva/v2/internal/http/interceptors/log"
+	secure2 "github.com/cs3org/reva/v2/internal/http/interceptors/secure"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/rhttp/global"
@@ -225,8 +226,12 @@ func useMiddlewares(r *chi.Mux, sopts *Options, svc global.Service, tp trace.Tra
 	// request-id
 	rm := middleware.RequestID
 
+	secure, _, err := secure2.New(map[string]interface{}{
+		"content_security_policy": sopts.ContentSecurityPolicy,
+	})
+
 	// actually register
-	r.Use(pm, tm, lm, authMiddle, rm, cm, cors)
+	r.Use(pm, tm, lm, authMiddle, rm, cm, cors, secure)
 	return nil
 }
 
