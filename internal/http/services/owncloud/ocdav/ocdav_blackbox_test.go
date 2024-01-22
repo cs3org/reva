@@ -501,7 +501,7 @@ var _ = Describe("ocdav", func() {
 				rr = httptest.NewRecorder()
 				req, err = http.NewRequest("PUT", basePath+"/newfile", strings.NewReader("new content"))
 				Expect(err).ToNot(HaveOccurred())
-				req.Header.Set(net.HeaderContentLength, "10")
+				req.Header.Set(net.HeaderContentLength, "11")
 				req = req.WithContext(ctx)
 
 			})
