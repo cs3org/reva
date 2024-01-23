@@ -303,7 +303,6 @@ func (s *svc) executePathCopy(ctx context.Context, selector pool.Selectable[gate
 			return err
 		}
 		httpUploadReq.Header.Set(datagateway.TokenTransportHeader, uploadToken)
-		httpUploadReq.Header.Set(net.HeaderUploadLength, strconv.FormatUint(cp.sourceInfo.GetSize(), 10))
 		httpUploadReq.ContentLength = int64(cp.sourceInfo.GetSize())
 
 		httpUploadRes, err := s.client.Do(httpUploadReq)
@@ -523,7 +522,6 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, sele
 			return err
 		}
 		httpUploadReq.Header.Set(datagateway.TokenTransportHeader, uploadToken)
-		httpUploadReq.Header.Set(net.HeaderUploadLength, strconv.FormatUint(cp.sourceInfo.GetSize(), 10))
 		httpUploadReq.ContentLength = int64(cp.sourceInfo.GetSize())
 
 		httpUploadRes, err := s.client.Do(httpUploadReq)
