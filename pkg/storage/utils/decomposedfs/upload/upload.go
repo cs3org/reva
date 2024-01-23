@@ -263,7 +263,7 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 
 	n, err := CreateNodeForUpload(upload, attrs)
 	if err != nil {
-		Cleanup(upload, true, false, true)
+		Cleanup(upload, true, false, false)
 		return err
 	}
 
