@@ -295,7 +295,7 @@ func (s *OcisSession) MTime() time.Time {
 	return t
 }
 
-// IsProcessing returns true if all bytes have been received. The node then has entered postprocessing state.
+// IsProcessing returns true if all bytes have been received. The session then has entered postprocessing state.
 func (s *OcisSession) IsProcessing() bool {
 	return s.info.Size == s.info.Offset
 }
