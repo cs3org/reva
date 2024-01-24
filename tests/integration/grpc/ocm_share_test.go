@@ -19,6 +19,7 @@
 package grpc_test
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net/http"
@@ -254,7 +255,7 @@ var _ = Describe("ocm share", func() {
 				webdav, ok := protocol.Term.(*ocmv1beta1.Protocol_WebdavOptions)
 				Expect(ok).To(BeTrue())
 
-				webdavClient := gowebdav.NewClient(webdav.WebdavOptions.Uri, "", "")
+				webdavClient := newWebDAVClient(webdav.WebdavOptions.Uri)
 				d, err := webdavClient.Read(".")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(d).To(Equal([]byte("test")))
@@ -337,17 +338,7 @@ var _ = Describe("ocm share", func() {
 				Expect(ok).To(BeTrue())
 
 				data := []byte("new-content")
-				webdavClient := gowebdav.NewClient(webdav.WebdavOptions.Uri, "", "")
-				webdavClient.SetHeader(net.HeaderContentLength, strconv.Itoa(len(data)))
-				webdavClient.SetInterceptor(func(method string, rq *http.Request) {
-					// Set the content length on the request struct directly instead of the header.
-					// The content-length header gets reset by the golang http library before
-					// sendind out the request, resulting in chunked encoding to be used which
-					// breaks the quota checks in ocdav.
-					if method == "PUT" {
-						rq.ContentLength = int64(len(data))
-					}
-				})
+				webdavClient := newWebDAVClient(webdav.WebdavOptions.Uri)
 				err = webdavClient.Write(".", data, 0)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -443,7 +434,7 @@ var _ = Describe("ocm share", func() {
 				webdav, ok := protocol.Term.(*ocmv1beta1.Protocol_WebdavOptions)
 				Expect(ok).To(BeTrue())
 
-				webdavClient := gowebdav.NewClient(webdav.WebdavOptions.Uri, "", "")
+				webdavClient := newWebDAVClient(webdav.WebdavOptions.Uri)
 
 				ok, err = helpers.SameContentWebDAV(webdavClient, "/", structure)
 				Expect(err).ToNot(HaveOccurred())
@@ -555,13 +546,12 @@ var _ = Describe("ocm share", func() {
 				webdav, ok := protocol.Term.(*ocmv1beta1.Protocol_WebdavOptions)
 				Expect(ok).To(BeTrue())
 
-				webdavClient := gowebdav.NewClient(webdav.WebdavOptions.Uri, "", "")
+				webdavClient := newWebDAVClient(webdav.WebdavOptions.Uri)
 				data := []byte("new-content")
-				webdavClient.SetHeader(net.HeaderUploadLength, strconv.Itoa(len(data)))
-				err = webdavClient.Write("new-file", data, 0)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(webdavClient.Write("new-file", data, 0)).To(Succeed())
 
-				Expect(webdavClient.Write("new-file", []byte("new-file"), 0)).To(Succeed())
+				data = []byte("new-file")
+				Expect(webdavClient.Write("new-file", data, 0)).To(Succeed())
 				Expect(helpers.SameContentWebDAV(webdavClient, fileToShare.Path, helpers.Folder{
 					"foo": helpers.File{
 						Content: "foo",
@@ -815,4 +805,27 @@ func checkResourceInfoList(l1, l2 []*provider.ResourceInfo) {
 		Expect(ok).To(BeTrue())
 		checkResourceInfo(ri1, ri2)
 	}
+}
+
+func newWebDAVClient(uri string) *gowebdav.Client {
+	webdavClient := gowebdav.NewClient(uri, "", "")
+	webdavClient.SetInterceptor(func(method string, rq *http.Request) {
+		if rq.Body == nil {
+			return
+		}
+
+		buf := &bytes.Buffer{}
+		n, _ := io.Copy(buf, rq.Body)
+		rq.Body = io.NopCloser(buf)
+
+		rq.Header.Add(net.HeaderContentLength, strconv.Itoa(int(n)))
+		// Set the content length on the request struct directly instead of the header.
+		// The content-length header gets reset by the golang http library before
+		// sendind out the request, resulting in chunked encoding to be used which
+		// breaks the quota checks in ocdav.
+		if method == "PUT" {
+			rq.ContentLength = n
+		}
+	})
+	return webdavClient
 }
