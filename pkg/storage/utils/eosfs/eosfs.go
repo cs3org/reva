@@ -1973,6 +1973,8 @@ func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath, f
 		}
 	}
 
+	sublog := appctx.GetLogger(ctx).With().Logger()
+	sublog.Debug().Time("from", dateFrom).Time("to", dateTo).Msg("executing ListDeletedEntries")
 	eosDeletedEntries, err := fs.c.ListDeletedEntries(ctx, auth, fs.conf.MaxRecycleEntries, dateFrom, dateTo)
 	if err != nil {
 		if strings.Contains(err.Error(), "too long") {
