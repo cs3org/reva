@@ -20,7 +20,6 @@ package auth
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/bluele/gcache"
