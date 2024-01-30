@@ -902,16 +902,11 @@ func parseRecycleList(raw string) ([]*eosclient.DeletedEntry, error) {
 // parse entries like these:
 // recycle=ls recycle-bin=/eos/backup/proc/recycle/ uid=gonzalhu gid=it size=0 deletion-time=1510823151 type=recursive-dir keylength.restore-path=45 restore-path=/eos/scratch/user/g/gonzalhu/.sys.v#.app.ico/ restore-key=0000000000a35100
 // recycle=ls recycle-bin=/eos/backup/proc/recycle/ uid=gonzalhu gid=it size=381038 deletion-time=1510823151 type=file keylength.restore-path=36 restore-path=/eos/scratch/user/g/gonzalhu/app.ico restore-key=000000002544fdb3.
+// NOTE: after EOS 5.2.0, the restore-key field is not the latest entry in the response anymore.
 func parseRecycleEntry(raw string) (*eosclient.DeletedEntry, error) {
 	partsBySpace := strings.FieldsFunc(raw, func(c rune) bool {
 		return c == ' '
 	})
-	restoreKeyPair, partsBySpace := partsBySpace[len(partsBySpace)-1], partsBySpace[:len(partsBySpace)-1]
-	restorePathPair := strings.Join(partsBySpace[8:], " ")
-
-	partsBySpace = partsBySpace[:8]
-	partsBySpace = append(partsBySpace, restorePathPair)
-	partsBySpace = append(partsBySpace, restoreKeyPair)
 
 	kv := getMap(partsBySpace)
 	size, err := strconv.ParseUint(kv["size"], 10, 64)
@@ -933,6 +928,34 @@ func parseRecycleEntry(raw string) (*eosclient.DeletedEntry, error) {
 		DeletionMTime: deletionMTime,
 		IsDir:         isDir,
 	}
+
+
+	// rewrite the restore-path to take into account the key keylength.restore-path
+	keyLengthString, ok := kv["keylength.restore-path"]
+	if !ok {
+		return nil, errors.Wrap(err, fmt.Sprintf("eos response is missing restore-key:%+v", kv))
+	}
+
+	keyLength, err := strconv.ParseUint(keyLengthString, 10, 64)
+	if err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("recycle ls response keylength.restore-path is not a number:%+v", kv))
+	}
+
+	// find the index of the restore-path key string in the raw string
+        // ... restore-path=/eos/scratch/user/g/gonzalhu/app.ico ....
+        // NOTE: this code will break if another key of the output will contain the string "restore-path=/" in it (very unlikely)
+        index:= strings.Index(raw, "restore-path=/")
+	if index == -1 {
+		return nil, errors.New(fmt.Sprintf("restore-path key not found in raw string: %s", raw))
+	}
+	start := index + len("restore-path=/") // note the key ends with /, this is to avoid getting a hit on keylength.restore-path
+	stop := uint64(start) + keyLength
+	restorePath := raw[start:stop]
+	restorePath = "/" + restorePath // if the path does not start with /, it's skipping in response
+	restorePath = strings.Trim(restorePath, " ")
+
+	entry.RestorePath = restorePath
+
 	return entry, nil
 }
 
