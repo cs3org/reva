@@ -117,11 +117,11 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 
-	var isSecretFileDrop bool
 	// Test if the target is a secret filedrop
-	tokenStatInfo := r.Context().Value(tokenStatInfoKey{}).(*provider.ResourceInfo)
+	var isSecretFileDrop bool
+	tokenStatInfo, ok := TokenStatInfoFromContext(ctx)
 	// We assume that when the uploader can create containers, but is not allowed to list them, it is a secret file drop
-	if tokenStatInfo.GetPermissionSet().CreateContainer && !tokenStatInfo.GetPermissionSet().ListContainer {
+	if ok && tokenStatInfo.GetPermissionSet().CreateContainer && !tokenStatInfo.GetPermissionSet().ListContainer {
 		isSecretFileDrop = true
 	}
 
