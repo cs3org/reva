@@ -40,7 +40,7 @@ func FindName(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, name 
 	// starts with two because "normal" humans begin counting with 1 and we say the existing file is the first one
 	for i := 2; i < len(itemMap)+3; i++ {
 		if _, ok := itemMap[fileName+" ("+strconv.Itoa(i)+")"+ext]; !ok {
-			return fileName + " (" + strconv.Itoa(i) + ")" + ext, nil, nil
+			return fileName + " (" + strconv.Itoa(i) + ")" + ext, lRes.GetStatus(), nil
 		}
 	}
 	return "", nil, errors.New("could not determine new filename")

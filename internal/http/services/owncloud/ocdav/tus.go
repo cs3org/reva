@@ -176,12 +176,12 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			if status.Code != rpc.Code_CODE_OK {
+			if status.GetCode() != rpc.Code_CODE_OK {
 				log.Error().Interface("status", status).Msg("error listing file")
 				errors.HandleErrorStatus(&log, w, status)
 				return
 			}
-			ref.Path = utils.MakeRelativePath(filepath.Join(filepath.Dir(ref.GetPath()), newName))
+			ref.Path = filepath.Join(filepath.Dir(ref.GetPath()), newName)
 			sRes.GetInfo().Name = newName
 		}
 	}
