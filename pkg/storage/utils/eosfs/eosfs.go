@@ -1954,22 +1954,17 @@ func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath, f
 	}
 
 	var dateFrom, dateTo time.Time
-	if from == "" || to == "" {
-		// list recent (up to max days) entries by default
-		dateTo = time.Now()
-		dateFrom = dateTo.AddDate(0, 0, -fs.conf.MaxDaysInRecycleList)
-	} else {
+	if from != "<nil>" && to != "<nil>" {
 		dateFrom, err := time.Parse("2006/01/02", from)
 		if err != nil {
-			dateFrom = time.Now()
+			return nil, errors.Wrap(err, fmt.Sprintf("eosfs: invalid 'from' date %s in listing the recycle bin", from))
 		}
 		dateTo, err = time.Parse("2006/01/02", to)
 		if err != nil {
-			dateTo = time.Now()
+			return nil, errors.Wrap(err, fmt.Sprintf("eosfs: invalid 'to' date %s in listing the recycle bin", to))
 		}
-		maxDate := dateFrom.AddDate(0, 0, fs.conf.MaxDaysInRecycleList) // limit to avoid overloading EOS
-		if maxDate.Before(dateTo) {
-			dateTo = maxDate
+		if dateFrom.AddDate(0, 0, fs.conf.MaxDaysInRecycleList).Before(dateTo) {
+			return nil, errtypes.BadRequest("eosfs: too many days requested in listing the recycle bin")
 		}
 	}
 
