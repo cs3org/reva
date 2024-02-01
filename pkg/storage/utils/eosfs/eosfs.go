@@ -1966,17 +1966,22 @@ func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath, f
 		if dateFrom.AddDate(0, 0, fs.conf.MaxDaysInRecycleList).Before(dateTo) {
 			return nil, errtypes.BadRequest("eosfs: too many days requested in listing the recycle bin")
 		}
+	} else {
+		// if no date range was given, list up to two days ago
+		dateTo = time.Now()
+		dateFrom = dateTo.AddDate(0, 0, -2)
 	}
 
 	sublog := appctx.GetLogger(ctx).With().Logger()
 	sublog.Debug().Time("from", dateFrom).Time("to", dateTo).Msg("executing ListDeletedEntries")
 	eosDeletedEntries, err := fs.c.ListDeletedEntries(ctx, auth, fs.conf.MaxRecycleEntries, dateFrom, dateTo)
 	if err != nil {
-		if strings.Contains(err.Error(), "too long") {
-			// assume eos has returned "Message too long" because the entries exceed the given limit
+		switch err.(type) {
+		case errtypes.IsBadRequest:
 			return nil, errtypes.BadRequest("eosfs: too many entries found in listing the recycle bin")
+		default:
+			return nil, errors.Wrap(err, "eosfs: error listing deleted entries")
 		}
-		return nil, errors.Wrap(err, "eosfs: error listing deleted entries")
 	}
 	recycleEntries := []*provider.RecycleItem{}
 	for _, entry := range eosDeletedEntries {

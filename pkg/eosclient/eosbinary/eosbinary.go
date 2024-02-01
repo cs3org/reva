@@ -789,21 +789,10 @@ func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, pa
 
 // ListDeletedEntries returns a list of the deleted entries.
 func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization, maxentries int, from, to time.Time) ([]*eosclient.DeletedEntry, error) {
-	if from.IsZero() {
-		// Full list, with a max entries cap passed to eos to avoid timeouts
-		args := []string{"recycle", "ls", "-m", fmt.Sprintf("%d", maxentries)}
-		stdout, _, err := c.executeEOS(ctx, args, auth)
-		if err != nil {
-			return nil, err
-		}
-
-		return parseRecycleList(stdout)
-	}
-
 	deleted := []*eosclient.DeletedEntry{}
 	count := 0
-	for d := from; !d.After(to); d = d.AddDate(0, 0, 1) {
-		args := []string{"recycle", "ls", d.Format("2006/01/02"), "-m", fmt.Sprintf("%d", maxentries)}
+	for d := to; !d.Before(from); d = d.AddDate(0, 0, -1) {
+		args := []string{"recycle", "ls", "-m", d.Format("2006/01/02"), fmt.Sprintf("%d", maxentries+1)}
 		stdout, _, err := c.executeEOS(ctx, args, auth)
 		if err != nil {
 			return nil, err
@@ -816,8 +805,7 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 		deleted = append(deleted, list...)
 		count += len(list)
 		if count > maxentries {
-			// raise equivalent error as eos would do if the whole list was to be returned
-			return nil, errtypes.BadRequest("too long")
+			return nil, errtypes.BadRequest("list too long")
 		}
 	}
 

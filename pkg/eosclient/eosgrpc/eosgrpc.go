@@ -1377,25 +1377,6 @@ func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, pa
 	return err
 }
 
-func (c *Client) parseDeletedEntriesList(resp *erpc.NSResponse, log *zerolog.Logger, ret *[]*eosclient.DeletedEntry) {
-	for _, f := range resp.Recycle.Recycles {
-		if f == nil {
-			log.Info().Msg("nil item in response")
-			continue
-		}
-
-		entry := &eosclient.DeletedEntry{
-			RestorePath:   string(f.Id.Path),
-			RestoreKey:    f.Key,
-			Size:          f.Size,
-			DeletionMTime: f.Dtime.Sec,
-			IsDir:         (f.Type == erpc.NSResponse_RecycleResponse_RecycleInfo_TREE),
-		}
-
-		*ret = append(*ret, entry)
-	}
-}
-
 // ListDeletedEntries returns a list of the deleted entries.
 func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization, maxentries int, from, to time.Time) ([]*eosclient.DeletedEntry, error) {
 	log := appctx.GetLogger(ctx)
@@ -1408,39 +1389,11 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 	}
 
 	ret := make([]*eosclient.DeletedEntry, 0)
-	if from.IsZero() {
-		msg := new(erpc.NSRequest_RecycleRequest)
-		msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(erpc.NSRequest_RecycleRequest_RECYCLE_CMD_value["LIST"])
-		//msg.Listflag.Maxentries = maxentries
-		rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
-
-		// Now send the req and see what happens
-		resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
-		e := c.getRespError(resp, err)
-		if e != nil {
-			log.Error().Str("err", e.Error()).Msg("")
-			return nil, e
-		}
-
-		if resp == nil {
-			return nil, errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s'", auth.Role.UID))
-		}
-
-		if resp.GetError() != nil {
-			log.Error().Str("func", "ListDeletedEntries").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
-		} else {
-			log.Debug().Str("func", "ListDeletedEntries").Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
-		}
-
-		c.parseDeletedEntriesList(resp, log, &ret)
-		return ret, nil
-	}
-
 	count := 0
-	for d := from; !d.After(to); d = d.AddDate(0, 0, 1) {
+	for d := to; !d.Before(to); d = d.AddDate(0, 0, -1) {
 		msg := new(erpc.NSRequest_RecycleRequest)
 		msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(erpc.NSRequest_RecycleRequest_RECYCLE_CMD_value["LIST"])
-		//msg.Listflag.Maxentries = maxentries
+		// msg.Listflag.Maxentries = maxentries+1
 		msg.Purgedate.Day = int32(d.Day())
 		msg.Purgedate.Month = int32(d.Month())
 		msg.Purgedate.Year = int32(d.Year())
@@ -1466,11 +1419,25 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 
 		count += len(resp.Recycle.Recycles)
 		if count > maxentries {
-			// raise equivalent error as eos would do if the whole list was to be returned
-			return nil, errtypes.BadRequest("too long")
+			return nil, errtypes.BadRequest("list too long")
 		}
 
-		c.parseDeletedEntriesList(resp, log, &ret)
+		for _, f := range resp.Recycle.Recycles {
+			if f == nil {
+				log.Info().Msg("nil item in response")
+				continue
+			}
+
+			entry := &eosclient.DeletedEntry{
+				RestorePath:   string(f.Id.Path),
+				RestoreKey:    f.Key,
+				Size:          f.Size,
+				DeletionMTime: f.Dtime.Sec,
+				IsDir:         (f.Type == erpc.NSResponse_RecycleResponse_RecycleInfo_TREE),
+			}
+
+			ret = append(ret, entry)
+		}
 	}
 
 	return ret, nil
