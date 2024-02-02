@@ -18,10 +18,6 @@
 
 package decomposedfs
 
-//go:generate make --no-print-directory -C ../../../.. mockery NAME=PermissionsChecker
-//go:generate make --no-print-directory -C ../../../.. mockery NAME=CS3PermissionsClient
-//go:generate make --no-print-directory -C ../../../.. mockery NAME=Tree
-
 import (
 	"context"
 	"fmt"
