@@ -1922,7 +1922,7 @@ func (fs *eosfs) EmptyRecycle(ctx context.Context) error {
 	return fs.c.PurgeDeletedEntries(ctx, auth)
 }
 
-func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath, from, to string) ([]*provider.RecycleItem, error) {
+func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath string, from, to *types.Timestamp) ([]*provider.RecycleItem, error) {
 	var auth eosclient.Authorization
 
 	if !fs.conf.EnableHome && fs.conf.AllowPathRecycleOperations && basePath != "/" {
@@ -1954,15 +1954,9 @@ func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath, f
 	}
 
 	var dateFrom, dateTo time.Time
-	if from != "<nil>" && to != "<nil>" {
-		dateFrom, err := time.Parse("2006/01/02", from)
-		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("eosfs: invalid 'from' date %s in listing the recycle bin", from))
-		}
-		dateTo, err = time.Parse("2006/01/02", to)
-		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("eosfs: invalid 'to' date %s in listing the recycle bin", to))
-		}
+	if from != nil && to != nil {
+		dateFrom = time.Unix(int64(from.Seconds), 0)
+		dateTo = time.Unix(int64(to.Seconds), 0)
 		if dateFrom.AddDate(0, 0, fs.conf.MaxDaysInRecycleList).Before(dateTo) {
 			return nil, errtypes.BadRequest("eosfs: too many days requested in listing the recycle bin")
 		}

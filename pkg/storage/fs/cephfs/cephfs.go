@@ -37,6 +37,7 @@ import (
 
 	goceph "github.com/ceph/go-ceph/cephfs"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typepb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
@@ -604,7 +605,7 @@ func (fs *cephfs) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 	return nil, errtypes.NotSupported("unimplemented")
 }
 
-func (fs *cephfs) ListRecycle(ctx context.Context, basePath, key, relativePath, from, to string) ([]*provider.RecycleItem, error) {
+func (fs *cephfs) ListRecycle(ctx context.Context, basePath, key, relativePath string, from, to *typepb.Timestamp) ([]*provider.RecycleItem, error) {
 	return nil, errtypes.NotSupported("unimplemented")
 }
 

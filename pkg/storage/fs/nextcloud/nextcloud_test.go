@@ -491,13 +491,13 @@ var _ = Describe("Nextcloud", func() {
 		})
 	})
 
-	// ListRecycle(ctx context.Context, key, path, from, to string) ([]*provider.RecycleItem, error)
+	// ListRecycle(ctx context.Context, key, path string, from, to *typepb.Timestamp) ([]*provider.RecycleItem, error)
 	Describe("ListRecycle", func() {
 		It("calls the ListRecycle endpoint", func() {
 			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
 
-			results, err := nc.ListRecycle(ctx, "/", "asdf", "/some/file.txt", "", "")
+			results, err := nc.ListRecycle(ctx, "/", "asdf", "/some/file.txt", nil, nil)
 			Expect(err).ToNot(HaveOccurred())
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L1085-L1110
 			Expect(len(results)).To(Equal(1))
