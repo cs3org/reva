@@ -25,8 +25,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/lookup"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 )
