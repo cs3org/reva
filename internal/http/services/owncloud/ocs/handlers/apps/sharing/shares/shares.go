@@ -150,7 +150,7 @@ func (h *Handler) startCacheWarmup(c cache.Warmup) {
 	}
 }
 
-func (h *Handler) extractReference(r *http.Request) (provider.Reference, error) {
+func (h *Handler) extractReference(r *http.Request) (*provider.Reference, error) {
 	var ref provider.Reference
 	if p := r.FormValue("path"); p != "" {
 		ref = provider.Reference{Path: path.Join(h.homeNamespace, p)}
@@ -158,10 +158,10 @@ func (h *Handler) extractReference(r *http.Request) (provider.Reference, error) 
 		var err error
 		ref, err = utils.ParseStorageSpaceReference(spaceRef)
 		if err != nil {
-			return provider.Reference{}, err
+			return nil, err
 		}
 	}
-	return ref, nil
+	return &ref, nil
 }
 
 // CreateShare handles POST requests on /apps/files_sharing/api/v1/shares.
@@ -187,7 +187,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	statReq := provider.StatRequest{
-		Ref: &ref,
+		Ref: ref,
 	}
 
 	log := appctx.GetLogger(ctx).With().Interface("ref", ref).Logger()
