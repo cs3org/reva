@@ -33,12 +33,14 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/aspects"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/mocks"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/permissions"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree/mocks"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
@@ -61,7 +63,7 @@ var _ = Describe("File uploads", func() {
 
 		o                    *options.Options
 		lu                   *lookup.Lookup
-		permissions          *mocks.PermissionsChecker
+		pmock                *mocks.PermissionsChecker
 		cs3permissionsclient *mocks.CS3PermissionsClient
 		permissionsSelector  pool.Selectable[cs3permissions.PermissionsAPIClient]
 		bs                   *treemocks.Blobstore
@@ -102,7 +104,7 @@ var _ = Describe("File uploads", func() {
 		})
 		Expect(err).ToNot(HaveOccurred())
 		lu = lookup.New(metadata.XattrsBackend{}, o)
-		permissions = &mocks.PermissionsChecker{}
+		pmock = &mocks.PermissionsChecker{}
 		cs3permissionsclient = &mocks.CS3PermissionsClient{}
 		pool.RemoveSelector("PermissionsSelector" + "any")
 		permissionsSelector = pool.GetSelector[cs3permissions.PermissionsAPIClient](
@@ -127,13 +129,19 @@ var _ = Describe("File uploads", func() {
 		cs3permissionsclient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&cs3permissions.CheckPermissionResponse{
 			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_OK},
 		}, nil)
-		permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+		pmock.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
 			Stat:     true,
 			AddGrant: true,
 		}, nil).Times(1)
 		var err error
 		tree := tree.New(lu, bs, o, store.Create())
-		fs, err = decomposedfs.New(o, lu, decomposedfs.NewPermissions(permissions, permissionsSelector), tree, nil)
+
+		aspects := aspects.Aspects{
+			Lookup:      lu,
+			Tree:        tree,
+			Permissions: permissions.NewPermissions(pmock, permissionsSelector),
+		}
+		fs, err = decomposedfs.New(o, aspects)
 		Expect(err).ToNot(HaveOccurred())
 
 		resp, err := fs.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{Owner: user, Type: "personal"})
@@ -146,7 +154,7 @@ var _ = Describe("File uploads", func() {
 
 	Context("the user's quota is exceeded", func() {
 		BeforeEach(func() {
-			permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+			pmock.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
 				Stat:     true,
 				GetQuota: true,
 			}, nil)
@@ -166,7 +174,7 @@ var _ = Describe("File uploads", func() {
 
 	Context("the user has insufficient permissions", func() {
 		BeforeEach(func() {
-			permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+			pmock.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
 				Stat: true,
 			}, nil)
 		})
@@ -188,7 +196,7 @@ var _ = Describe("File uploads", func() {
 			Expect(err).ToNot(HaveOccurred())
 			err = h.SetXattrString(ctx, prefixes.SpaceNameAttr, "username")
 			Expect(err).ToNot(HaveOccurred())
-			permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+			pmock.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
 				Stat: true,
 			}, nil)
 		})
@@ -204,7 +212,7 @@ var _ = Describe("File uploads", func() {
 
 	Context("with sufficient permissions", func() {
 		BeforeEach(func() {
-			permissions.On("AssemblePermissions", mock.Anything, mock.Anything).
+			pmock.On("AssemblePermissions", mock.Anything, mock.Anything).
 				Return(provider.ResourcePermissions{
 					Stat:               true,
 					GetQuota:           true,

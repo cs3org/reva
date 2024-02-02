@@ -24,39 +24,24 @@ import (
 
 	microstore "go-micro.dev/v4/store"
 
-	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/blobstore"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/tree"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/aspects"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/permissions"
 	"github.com/cs3org/reva/v2/pkg/store"
 )
 
 func init() {
 	registry.Register("posix", New)
-}
-
-var _spaceTypePersonal = "personal"
-
-type spaceIDGenerator struct {
-	o *options.Options
-}
-
-func (g spaceIDGenerator) Generate(spaceType string, owner *user.User) (string, error) {
-	switch spaceType {
-	case _spaceTypePersonal:
-		return templates.WithUser(owner, g.o.UserLayout), nil
-	default:
-		return "", fmt.Errorf("unsupported space type: %s", spaceType)
-	}
 }
 
 // New returns an implementation to of the storage.FS interface that talk to
@@ -98,14 +83,18 @@ func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 		return nil, err
 	}
 
-	permissions := decomposedfs.NewPermissions(node.NewPermissions(lu), permissionsSelector)
+	p := permissions.NewPermissions(node.NewPermissions(lu), permissionsSelector)
 
-	fs, err := decomposedfs.New(o, lu, permissions, tp, stream)
+	aspects := aspects.Aspects{
+		Lookup:      lu,
+		Tree:        tp,
+		Permissions: p,
+		EventStream: stream,
+	}
+	fs, err := decomposedfs.New(o, aspects)
 	if err != nil {
 		return nil, err
 	}
-
-	fs.(*decomposedfs.Decomposedfs).SetSpaceIDGenerator(spaceIDGenerator{o: o})
 
 	return fs, nil
 }

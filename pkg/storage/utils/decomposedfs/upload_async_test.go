@@ -16,10 +16,12 @@ import (
 	"github.com/cs3org/reva/v2/pkg/events/stream"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/aspects"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/mocks"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/permissions"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree/mocks"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
@@ -70,7 +72,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		fs                   storage.FS
 		o                    *options.Options
 		lu                   *lookup.Lookup
-		permissions          *mocks.PermissionsChecker
+		pmock                *mocks.PermissionsChecker
 		cs3permissionsclient *mocks.CS3PermissionsClient
 		permissionsSelector  pool.Selectable[cs3permissions.PermissionsAPIClient]
 		bs                   *treemocks.Blobstore
@@ -88,7 +90,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		lu = lookup.New(metadata.XattrsBackend{}, o)
-		permissions = &mocks.PermissionsChecker{}
+		pmock = &mocks.PermissionsChecker{}
 
 		cs3permissionsclient = &mocks.CS3PermissionsClient{}
 		pool.RemoveSelector("PermissionsSelector" + "any")
@@ -107,7 +109,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		}, nil).Times(1)
 
 		// for this test we don't care about permissions
-		permissions.On("AssemblePermissions", mock.Anything, mock.Anything).
+		pmock.On("AssemblePermissions", mock.Anything, mock.Anything).
 			Return(provider.ResourcePermissions{
 				Stat:               true,
 				GetQuota:           true,
@@ -119,7 +121,14 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		// setup fs
 		pub, con = make(chan interface{}), make(chan interface{})
 		tree := tree.New(lu, bs, o, store.Create())
-		fs, err = New(o, lu, NewPermissions(permissions, permissionsSelector), tree, stream.Chan{pub, con})
+
+		aspects := aspects.Aspects{
+			Lookup:      lu,
+			Tree:        tree,
+			Permissions: permissions.NewPermissions(pmock, permissionsSelector),
+			EventStream: stream.Chan{pub, con},
+		}
+		fs, err = New(o, aspects)
 		Expect(err).ToNot(HaveOccurred())
 
 		resp, err := fs.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{Owner: user, Type: "personal"})
