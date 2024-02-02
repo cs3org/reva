@@ -25,9 +25,11 @@ import (
 	"path/filepath"
 
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/aspects"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/permissions"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/store"
 	"github.com/google/uuid"
@@ -40,9 +42,9 @@ import (
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ruser "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/mocks"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/permissions/mocks"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree/mocks"
 	"github.com/cs3org/reva/v2/tests/helpers"
@@ -156,7 +158,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		return nil, fmt.Errorf("unknown metadata backend %s", o.MetadataBackend)
 	}
 
-	permissions := &mocks.PermissionsChecker{}
+	pmock := &mocks.PermissionsChecker{}
 
 	cs3permissionsclient := &mocks.CS3PermissionsClient{}
 	pool.RemoveSelector("PermissionsSelector" + "any")
@@ -170,7 +172,12 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 
 	bs := &treemocks.Blobstore{}
 	tree := tree.New(lu, bs, o, store.Create())
-	fs, err := decomposedfs.New(o, lu, decomposedfs.NewPermissions(permissions, permissionsSelector), tree, nil)
+	aspects := aspects.Aspects{
+		Lookup:      lu,
+		Tree:        tree,
+		Permissions: permissions.NewPermissions(pmock, permissionsSelector),
+	}
+	fs, err := decomposedfs.New(o, aspects)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +190,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		Fs:                   tmpFs,
 		Tree:                 tree,
 		Lookup:               lu,
-		Permissions:          permissions,
+		Permissions:          pmock,
 		Blobstore:            bs,
 		Owner:                owner,
 		DeleteAllSpacesUser:  deleteAllSpacesUser,
