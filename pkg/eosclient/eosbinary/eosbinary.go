@@ -929,7 +929,6 @@ func parseRecycleEntry(raw string) (*eosclient.DeletedEntry, error) {
 		IsDir:         isDir,
 	}
 
-
 	// rewrite the restore-path to take into account the key keylength.restore-path
 	keyLengthString, ok := kv["keylength.restore-path"]
 	if !ok {
@@ -942,9 +941,9 @@ func parseRecycleEntry(raw string) (*eosclient.DeletedEntry, error) {
 	}
 
 	// find the index of the restore-path key string in the raw string
-        // ... restore-path=/eos/scratch/user/g/gonzalhu/app.ico ....
-        // NOTE: this code will break if another key of the output will contain the string "restore-path=/" in it (very unlikely)
-        index:= strings.Index(raw, "restore-path=/")
+	// ... restore-path=/eos/scratch/user/g/gonzalhu/app.ico ....
+	// NOTE: this code will break if another key of the output will contain the string "restore-path=/" in it (very unlikely)
+	index := strings.Index(raw, "restore-path=/")
 	if index == -1 {
 		return nil, errors.New(fmt.Sprintf("restore-path key not found in raw string: %s", raw))
 	}
@@ -1206,7 +1205,7 @@ func (c *Client) mapToFileInfo(ctx context.Context, kv, attrs map[string]string,
 	if !mtimeSet {
 		mtimeSplit := strings.Split(kv["mtime"], ".")
 		mtimesec, _ = strconv.ParseUint(mtimeSplit[0], 10, 64)
-		mtimenanos, _= strconv.ParseUint(mtimeSplit[1], 10, 32)
+		mtimenanos, _ = strconv.ParseUint(mtimeSplit[1], 10, 32)
 	}
 
 	var ctimesec, ctimenanos uint64

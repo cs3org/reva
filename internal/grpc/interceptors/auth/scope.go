@@ -87,7 +87,7 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 			}
 		}
 	} else {
-		log.Trace().Msgf("Token scope is not ok. req:%+v, tokenScope:%+v", req, tokenScope, req, tokenScope)
+		log.Trace().Msgf("Token scope is not ok. req:%+v, tokenScope:%+v", req, tokenScope)
 	}
 
 	if checkLightweightScope(ctx, req, tokenScope, client) {
