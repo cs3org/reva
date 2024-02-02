@@ -1124,6 +1124,8 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 			st = status.NewNotFound(ctx, "path not found when listing recycle stream")
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		case errtypes.BadRequest:
+			st = status.NewInvalidArg(ctx, "too many days or too many entries")
 		default:
 			st = status.NewInternal(ctx, err, "error listing recycle stream")
 		}
@@ -1166,6 +1168,8 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 			st = status.NewNotFound(ctx, "path not found when listing recycle")
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		case errtypes.BadRequest:
+			st = status.NewInvalidArg(ctx, "too many days or too many entries")
 		default:
 			st = status.NewInternal(ctx, err, "error listing recycle")
 		}

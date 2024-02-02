@@ -227,14 +227,14 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 
 	if err != nil {
 		sublog.Error().Err(err).Msg("error calling ListRecycle")
-		if strings.Contains(err.Error(), "bad request") {
-			w.WriteHeader(http.StatusBadRequest)
-		} else {
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
+	if getRecycleRes.Status.Code == rpc.Code_CODE_INVALID_ARGUMENT {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 	if getRecycleRes.Status.Code != rpc.Code_CODE_OK {
 		HandleErrorStatus(&sublog, w, getRecycleRes.Status)
 		return
