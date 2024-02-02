@@ -48,7 +48,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
@@ -63,12 +62,20 @@ const (
 	quotaUnrestricted = 0
 )
 
+func (fs *Decomposedfs) SetSpaceIDGenerator(g SpaceIdGenerator) {
+	fs.spaceIdGenerator = g
+}
+
 // CreateStorageSpace creates a storage space
 func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	ctx = context.WithValue(ctx, utils.SpaceGrant, struct{}{})
+	u := ctxpkg.ContextMustGetUser(ctx)
 
 	// "everything is a resource" this is the unique ID for the Space resource.
-	spaceID := uuid.New().String()
+	spaceID, err := fs.spaceIdGenerator.Generate(req.Type, req.GetOwner())
+	if err != nil {
+		return nil, err
+	}
 	// allow sending a space id
 	if reqSpaceID := utils.ReadPlainFromOpaque(req.Opaque, "spaceid"); reqSpaceID != "" {
 		spaceID = reqSpaceID
@@ -77,14 +84,12 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	description := utils.ReadPlainFromOpaque(req.Opaque, "description")
 	// allow sending a spaceAlias
 	alias := utils.ReadPlainFromOpaque(req.Opaque, "spaceAlias")
-	u := ctxpkg.ContextMustGetUser(ctx)
 	if alias == "" {
 		alias = templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, fs.o.GeneralSpaceAliasTemplate)
 	}
 	// TODO enforce a uuid?
 	// TODO clarify if we want to enforce a single personal storage space or if we want to allow sending the spaceid
 	if req.Type == _spaceTypePersonal {
-		spaceID = req.GetOwner().GetId().GetOpaqueId()
 		alias = templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, fs.o.PersonalSpaceAliasTemplate)
 	}
 

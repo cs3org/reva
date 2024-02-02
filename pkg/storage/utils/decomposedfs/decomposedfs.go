@@ -60,6 +60,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/store"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/google/uuid"
 	"github.com/jellydator/ttlcache/v2"
 	"github.com/pkg/errors"
 	tusd "github.com/tus/tusd/pkg/handler"
@@ -125,6 +126,12 @@ type SessionStore interface {
 	Cleanup(ctx context.Context, session upload.Session, revertNodeMetadata, keepUpload, unmarkPostprocessing bool)
 }
 
+// SpaceIdGenerator is used to generate space ids
+type SpaceIdGenerator interface {
+	// Generate generates a new space id
+	Generate(spaceType string, owner *user.User) (string, error)
+}
+
 // Decomposedfs provides the base for decomposed filesystem implementations
 type Decomposedfs struct {
 	lu           *lookup.Lookup
@@ -140,6 +147,21 @@ type Decomposedfs struct {
 	userSpaceIndex  *spaceidindex.Index
 	groupSpaceIndex *spaceidindex.Index
 	spaceTypeIndex  *spaceidindex.Index
+
+	spaceIdGenerator SpaceIdGenerator
+}
+
+// DefaultSpaceIdGenerator is the default space id generator
+type DefaultSpaceIdGenerator struct{}
+
+// Generate generates a new space id and alias
+func (d *DefaultSpaceIdGenerator) Generate(spaceType string, owner *user.User) (string, error) {
+	switch spaceType {
+	case _spaceTypePersonal:
+		return owner.Id.OpaqueId, nil
+	default:
+		return uuid.New().String(), nil
+	}
 }
 
 // NewDefault returns an instance with default components
@@ -222,18 +244,19 @@ func New(o *options.Options, lu *lookup.Lookup, p Permissions, tp Tree, es event
 	}
 
 	fs := &Decomposedfs{
-		tp:              tp,
-		lu:              lu,
-		o:               o,
-		p:               p,
-		chunkHandler:    chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
-		stream:          es,
-		cache:           cache.GetStatCache(o.StatCache),
-		UserCache:       ttlcache.NewCache(),
-		userSpaceIndex:  userSpaceIndex,
-		groupSpaceIndex: groupSpaceIndex,
-		spaceTypeIndex:  spaceTypeIndex,
-		sessionStore:    upload.NewSessionStore(lu, tp, o.Root, es, o.AsyncFileUploads, o.Tokens),
+		tp:               tp,
+		lu:               lu,
+		o:                o,
+		p:                p,
+		chunkHandler:     chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
+		stream:           es,
+		cache:            cache.GetStatCache(o.StatCache),
+		UserCache:        ttlcache.NewCache(),
+		userSpaceIndex:   userSpaceIndex,
+		groupSpaceIndex:  groupSpaceIndex,
+		spaceTypeIndex:   spaceTypeIndex,
+		sessionStore:     upload.NewSessionStore(lu, tp, o.Root, es, o.AsyncFileUploads, o.Tokens),
+		spaceIdGenerator: &DefaultSpaceIdGenerator{},
 	}
 
 	if o.AsyncFileUploads {
