@@ -1419,12 +1419,8 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		return rsp, nil
 	}
 
-	return s.statAcrossProviders(ctx, req, providers)
-}
-
-func (s *svc) statAcrossProviders(ctx context.Context, req *provider.StatRequest, providers []*registry.ProviderInfo) (*provider.StatResponse, error) {
-	// TODO(ishank011): aggregrate properties such as etag, checksum, etc.
-	log := appctx.GetLogger(ctx)
+	// otherwise, this is a Stat for "/", which corresponds to a 0-Depth PROPFIND from web to just get the fileid:
+	// we respond with an hardcoded value, no need to poke all storage providers as we did before
 	info := &provider.ResourceInfo{
 		Id: &provider.ResourceId{
 			StorageId: "/",
@@ -1435,34 +1431,6 @@ func (s *svc) statAcrossProviders(ctx context.Context, req *provider.StatRequest
 		MimeType: "httpd/unix-directory",
 		Size:     0,
 		Mtime:    &types.Timestamp{},
-	}
-
-	for _, p := range providers {
-		c, err := s.getStorageProviderClient(ctx, p)
-		if err != nil {
-			log.Err(err).Msg("error connecting to storage provider=" + p.Address)
-			continue
-		}
-		resp, err := c.Stat(ctx, req)
-		if err != nil {
-			log.Err(err).Msgf("gateway: error calling Stat %s: %+v", req.Ref.String(), p)
-			continue
-		}
-		if resp.Status.Code != rpc.Code_CODE_OK {
-			log.Err(status.NewErrorFromCode(rpc.Code_CODE_OK, "gateway")).Send()
-			continue
-		}
-		if resp.Info != nil {
-			info.Size += resp.Info.Size
-			if utils.TSToUnixNano(resp.Info.Mtime) > utils.TSToUnixNano(info.Mtime) {
-				info.Mtime = resp.Info.Mtime
-				info.Etag = resp.Info.Etag
-				info.Checksum = resp.Info.Checksum
-			}
-			if info.Etag == "" && info.Etag != resp.Info.Etag {
-				info.Etag = resp.Info.Etag
-			}
-		}
 	}
 
 	return &provider.StatResponse{
