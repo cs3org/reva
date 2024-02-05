@@ -76,7 +76,6 @@ Synchronization features like etag propagation, setting mtime and locking files
 #### [Upload-only shares must not overwrite but create a separate file](https://github.com/owncloud/ocis/issues/1267)
 
 - [coreApiSharePublicLink2/uploadToPublicLinkShare.feature:13](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink2/uploadToPublicLinkShare.feature#L13)
-- [coreApiSharePublicLink2/uploadToPublicLinkShare.feature:121](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink2/uploadToPublicLinkShare.feature#L121)
 
 #### [oc:privatelink property not returned in webdav responses](https://github.com/owncloud/product/issues/262)
 -   [coreApiWebdavProperties/getFileProperties.feature:295](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/getFileProperties.feature#L295)
