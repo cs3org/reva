@@ -724,7 +724,7 @@ func (c *Client) Rename(ctx context.Context, auth eosclient.Authorization, oldPa
 
 // List the contents of the directory given by path.
 func (c *Client) List(ctx context.Context, auth eosclient.Authorization, path string) ([]*eosclient.FileInfo, error) {
-	args := []string{"find", "--cached --fileinfo", "--maxdepth", "1", path}
+	args := []string{"find", "--cached", "--fileinfo", "--maxdepth", "1", path}
 	stdout, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		return nil, errors.Wrapf(err, "eosclient: error listing fn=%s", path)
