@@ -28,6 +28,7 @@ package prefixes
 // "user.ocis." in the xattrs_prefix*.go files.
 const (
 	TypeAttr      string = OcisPrefix + "type"
+	IDAttr        string = OcisPrefix + "id"
 	ParentidAttr  string = OcisPrefix + "parentid"
 	OwnerIDAttr   string = OcisPrefix + "owner.id"
 	OwnerIDPAttr  string = OcisPrefix + "owner.idp"

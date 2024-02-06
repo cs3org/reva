@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -34,7 +35,10 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/pkg/xattr"
 	"github.com/rogpeppe/go-internal/lockedfile"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -48,19 +52,50 @@ func init() {
 	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/utils/decomposedfs/lookup")
 }
 
+// IDCache is a cache for node ids
+type IDCache interface {
+	Get(ctx context.Context, spaceID, nodeID string) (string, bool)
+	Set(ctx context.Context, spaceID, nodeID, val string) error
+}
+
 // Lookup implements transformations from filepath to node and back
 type Lookup struct {
 	Options *options.Options
 
 	metadataBackend metadata.Backend
+	IDCache         IDCache
 }
 
 // New returns a new Lookup instance
 func New(b metadata.Backend, o *options.Options) *Lookup {
-	return &Lookup{
+	lu := &Lookup{
 		Options:         o,
 		metadataBackend: b,
+		IDCache:         NewMemoryIDCache(),
 	}
+
+	go func() {
+		_ = lu.WarmupIDCache()
+	}()
+
+	return lu
+}
+
+func (lu *Lookup) WarmupIDCache() error {
+	return filepath.Walk(lu.Options.Root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		id, err := lu.metadataBackend.Get(context.Background(), path, prefixes.IDAttr)
+		if err == nil {
+			resourceID, err := storagespace.ParseID(string(id))
+			if err == nil {
+				lu.IDCache.Set(context.Background(), resourceID.SpaceId, resourceID.OpaqueId, path)
+			}
+		}
+		return nil
+	})
 }
 
 // MetadataBackend returns the metadata backend
@@ -260,11 +295,9 @@ func (lu *Lookup) InternalRoot() string {
 
 // InternalPath returns the internal path for a given ID
 func (lu *Lookup) InternalPath(spaceID, nodeID string) string {
-	return filepath.Join(lu.Options.Root, "spaces", Pathify(spaceID, 1, 2), "nodes", Pathify(nodeID, 4, 2))
-}
+	path, _ := lu.IDCache.Get(context.Background(), spaceID, nodeID)
 
-func (lu *Lookup) SpacePath(spaceID string) string {
-	return filepath.Join(lu.Options.Root, spaceID)
+	return path
 }
 
 // // ReferenceFromAttr returns a CS3 reference from xattr of a node.
@@ -347,7 +380,26 @@ func (lu *Lookup) CopyMetadataWithSourceLock(ctx context.Context, sourcePath, ta
 func (lu *Lookup) GenerateSpaceID(spaceType string, owner *user.User) (string, error) {
 	switch spaceType {
 	case _spaceTypePersonal:
-		return templates.WithUser(owner, lu.Options.UserLayout), nil
+		path := templates.WithUser(owner, lu.Options.UserLayout)
+
+		spaceID, err := lu.metadataBackend.Get(context.Background(), filepath.Join(lu.Options.Root, path), prefixes.IDAttr)
+		if err != nil {
+			if xattrErr, ok := err.(*xattr.Error); ok {
+				if errno, ok := xattrErr.Err.(syscall.Errno); ok && (errno == syscall.ENODATA || errno == syscall.ENOENT) {
+					return uuid.New().String(), nil
+				}
+			}
+			if os.IsNotExist(err) {
+				return uuid.New().String(), nil
+			} else {
+				return "", err
+			}
+		}
+		resID, err := storagespace.ParseID(string(spaceID))
+		if err != nil {
+			return "", err
+		}
+		return resID.SpaceId, nil
 	default:
 		return "", fmt.Errorf("unsupported space type: %s", spaceType)
 	}
