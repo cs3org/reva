@@ -116,7 +116,8 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	}
 
 	metadata := node.Attributes{}
-	metadata.SetString(prefixes.IDAttr, storagespace.FormatResourceID(provider.ResourceId{SpaceId: spaceID, OpaqueId: spaceID}))
+	metadata.SetString(prefixes.IDAttr, spaceID)
+	metadata.SetString(prefixes.SpaceIDAttr, spaceID)
 	metadata.SetString(prefixes.OwnerIDAttr, root.Owner().GetOpaqueId())
 	metadata.SetString(prefixes.OwnerIDPAttr, root.Owner().GetIdp())
 	metadata.SetString(prefixes.OwnerTypeAttr, utils.UserTypeToString(root.Owner().GetType()))
