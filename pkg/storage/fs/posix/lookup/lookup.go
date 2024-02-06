@@ -103,6 +103,22 @@ func (lu *Lookup) WarmupIDCache() error {
 	})
 }
 
+func (lu *Lookup) NodeIDFromParentAndName(ctx context.Context, parent *node.Node, name string) (string, error) {
+	id, err := lu.metadataBackend.Get(ctx, filepath.Join(parent.InternalPath(), name), prefixes.IDAttr)
+	if err != nil {
+		if xattrErr, ok := err.(*xattr.Error); ok {
+			if errno, ok := xattrErr.Err.(syscall.Errno); ok && (errno == syscall.ENODATA || errno == syscall.ENOENT) {
+				return "", errtypes.NotFound(name)
+			}
+		}
+		if os.IsNotExist(err) {
+			return "", errtypes.NotFound(name)
+		}
+		return "", err
+	}
+	return string(id), nil
+}
+
 // MetadataBackend returns the metadata backend
 func (lu *Lookup) MetadataBackend() metadata.Backend {
 	return lu.metadataBackend
