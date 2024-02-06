@@ -115,6 +115,7 @@ type PathLookup interface {
 	NodeFromID(ctx context.Context, id *provider.ResourceId) (n *Node, err error)
 
 	GenerateSpaceID(spaceType string, owner *userpb.User) (string, error)
+
 	InternalRoot() string
 	InternalPath(spaceID, nodeID string) string
 	Path(ctx context.Context, n *Node, hasPermission PermissionFunc) (path string, err error)
