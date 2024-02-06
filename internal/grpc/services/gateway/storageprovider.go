@@ -1396,6 +1396,7 @@ func (s *svc) statSharesFolder(ctx context.Context) (*provider.StatResponse, err
 }
 
 func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
+	log := appctx.GetLogger(ctx)
 	providers, err := s.findProviders(ctx, req.Ref)
 	if err != nil {
 		return &provider.StatResponse{
@@ -1412,6 +1413,7 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+providers[0].Address),
 			}, nil
 		}
+		log.Debug().Interface("ref", req.Ref).Msg("calling Stat")
 		rsp, err := c.Stat(ctx, req)
 		if err != nil || rsp.Status.Code != rpc.Code_CODE_OK {
 			return rsp, err
@@ -1421,6 +1423,7 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 
 	// otherwise, this is a Stat for "/", which corresponds to a 0-Depth PROPFIND from web to just get the fileid:
 	// we respond with an hardcoded value, no need to poke all storage providers as we did before
+	log.Debug().Interface("ref", req.Ref).Msg("sending back fake file-id")
 	info := &provider.ResourceInfo{
 		Id: &provider.ResourceId{
 			StorageId: "/",
