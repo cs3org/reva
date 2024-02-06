@@ -25,12 +25,10 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -113,6 +111,8 @@ type PathLookup interface {
 	NodeFromSpaceID(ctx context.Context, spaceID string) (n *Node, err error)
 	NodeFromResource(ctx context.Context, ref *provider.Reference) (*Node, error)
 	NodeFromID(ctx context.Context, id *provider.ResourceId) (n *Node, err error)
+
+	NodeIDFromParentAndName(ctx context.Context, n *Node, name string) (string, error)
 
 	GenerateSpaceID(spaceType string, owner *userpb.User) (string, error)
 
@@ -365,26 +365,6 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	return n, nil
 }
 
-// The os error is buried inside the fs.PathError error
-func isNotDir(err error) bool {
-	if perr, ok := err.(*fs.PathError); ok {
-		if serr, ok2 := perr.Err.(syscall.Errno); ok2 {
-			return serr == syscall.ENOTDIR
-		}
-	}
-	return false
-}
-
-func readChildNodeFromLink(path string) (string, error) {
-	link, err := os.Readlink(path)
-	if err != nil {
-		return "", err
-	}
-	nodeID := strings.TrimLeft(link, "/.")
-	nodeID = strings.ReplaceAll(nodeID, "/", "")
-	return nodeID, nil
-}
-
 // Child returns the child node with the given name
 func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 	ctx, span := tracer.Start(ctx, "Child")
@@ -396,24 +376,24 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 	} else if n.SpaceRoot != nil {
 		spaceID = n.SpaceRoot.ID
 	}
-	nodeID, err := readChildNodeFromLink(filepath.Join(n.InternalPath(), name))
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) || isNotDir(err) {
-
-			c := &Node{
-				SpaceID:   spaceID,
-				lu:        n.lu,
-				ParentID:  n.ID,
-				Name:      name,
-				SpaceRoot: n.SpaceRoot,
-			}
-			return c, nil // if the file does not exist we return a node that has Exists = false
-		}
-
-		return nil, errors.Wrap(err, "decomposedfs: Wrap: readlink error")
+	c := &Node{
+		SpaceID:   spaceID,
+		lu:        n.lu,
+		ParentID:  n.ID,
+		Name:      name,
+		SpaceRoot: n.SpaceRoot,
 	}
 
-	var c *Node
+	nodeID, err := n.lu.NodeIDFromParentAndName(ctx, n, name)
+	switch err.(type) {
+	case nil:
+		// ok
+	case errtypes.IsNotFound:
+		return c, nil // if the file does not exist we return a node that has Exists = false
+	default:
+		return nil, err
+	}
+
 	c, err = ReadNode(ctx, n.lu, spaceID, nodeID, false, n.SpaceRoot, true)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not read child node")

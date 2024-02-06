@@ -21,9 +21,11 @@ package lookup
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -86,6 +88,36 @@ func (lu *Lookup) ReadBlobIDAttr(ctx context.Context, path string) (string, erro
 		return "", errors.Wrapf(err, "error reading blobid xattr")
 	}
 	return string(attr), nil
+}
+func readChildNodeFromLink(path string) (string, error) {
+	link, err := os.Readlink(path)
+	if err != nil {
+		return "", err
+	}
+	nodeID := strings.TrimLeft(link, "/.")
+	nodeID = strings.ReplaceAll(nodeID, "/", "")
+	return nodeID, nil
+}
+
+// The os error is buried inside the fs.PathError error
+func isNotDir(err error) bool {
+	if perr, ok := err.(*fs.PathError); ok {
+		if serr, ok2 := perr.Err.(syscall.Errno); ok2 {
+			return serr == syscall.ENOTDIR
+		}
+	}
+	return false
+}
+
+func (lu *Lookup) NodeIDFromParentAndName(ctx context.Context, parent *node.Node, name string) (string, error) {
+	nodeID, err := readChildNodeFromLink(filepath.Join(parent.InternalPath(), name))
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) || isNotDir(err) {
+			return nodeID, nil // if the file does not exist we return a node that has Exists = false
+		}
+		return "", errors.Wrap(err, "decomposedfs: Wrap: readlink error")
+	}
+	return nodeID, nil
 }
 
 // TypeFromPath returns the type of the node at the given path
