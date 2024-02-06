@@ -119,7 +119,8 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 	}
 	n.SetType(provider.ResourceType_RESOURCE_TYPE_FILE)
 
-	nodePath := n.InternalPath()
+	parentPath := n.ParentPath()
+	nodePath := filepath.Join(parentPath, n.Name)
 	if err := os.MkdirAll(filepath.Dir(nodePath), 0700); err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
@@ -363,7 +364,8 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 
 // Delete deletes a node in the tree by moving it to the trash
 func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
-	path := filepath.Join(n.ParentPath(), n.Name)
+	path := n.InternalPath()
+
 	// remove entry from cache immediately to avoid inconsistencies
 	defer func() { _ = t.idCache.Delete(path) }()
 
@@ -372,18 +374,6 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	if deletingSharedResource != nil && deletingSharedResource.(bool) {
 		src := filepath.Join(n.ParentPath(), n.Name)
 		return os.Remove(src)
-	}
-
-	// get the original path
-	origin, err := t.lookup.Path(ctx, n, node.NoCheck)
-	if err != nil {
-		return
-	}
-
-	// set origin location in metadata
-	nodePath := n.InternalPath()
-	if err := n.SetXattrString(ctx, prefixes.TrashOriginAttr, origin); err != nil {
-		return err
 	}
 
 	var sizeDiff int64
@@ -395,48 +385,6 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		sizeDiff = -int64(treesize)
 	} else {
 		sizeDiff = -n.Blobsize
-	}
-
-	deletionTime := time.Now().UTC().Format(time.RFC3339Nano)
-
-	// Prepare the trash
-	trashLink := filepath.Join(t.options.Root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
-	if err := os.MkdirAll(filepath.Dir(trashLink), 0700); err != nil {
-		// Roll back changes
-		_ = n.RemoveXattr(ctx, prefixes.TrashOriginAttr, true)
-		return err
-	}
-
-	// FIXME can we just move the node into the trash dir? instead of adding another symlink and appending a trash timestamp?
-	// can we just use the mtime as the trash time?
-	// TODO store a trashed by userid
-
-	// first make node appear in the space trash
-	// parent id and name are stored as extended attributes in the node itself
-	err = os.Symlink("../../../../../nodes/"+lookup.Pathify(n.ID, 4, 2)+node.TrashIDDelimiter+deletionTime, trashLink)
-	if err != nil {
-		// Roll back changes
-		_ = n.RemoveXattr(ctx, prefixes.TrashOriginAttr, true)
-		return
-	}
-
-	// at this point we have a symlink pointing to a non existing destination, which is fine
-
-	// rename the trashed node so it is not picked up when traversing up the tree and matches the symlink
-	trashPath := nodePath + node.TrashIDDelimiter + deletionTime
-	err = os.Rename(nodePath, trashPath)
-	if err != nil {
-		// To roll back changes
-		// TODO remove symlink
-		// Roll back changes
-		_ = n.RemoveXattr(ctx, prefixes.TrashOriginAttr, true)
-		return
-	}
-	err = t.lookup.MetadataBackend().Rename(nodePath, trashPath)
-	if err != nil {
-		_ = n.RemoveXattr(ctx, prefixes.TrashOriginAttr, true)
-		_ = os.Rename(trashPath, nodePath)
-		return
 	}
 
 	// Remove lock file if it exists
