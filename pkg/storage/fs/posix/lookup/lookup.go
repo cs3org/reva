@@ -82,16 +82,21 @@ func New(b metadata.Backend, o *options.Options) *Lookup {
 }
 
 func (lu *Lookup) WarmupIDCache() error {
+	spaceID := []byte("")
 	return filepath.Walk(lu.Options.Root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
-		id, err := lu.metadataBackend.Get(context.Background(), path, prefixes.IDAttr)
+		attribs, err := lu.metadataBackend.All(context.Background(), path)
 		if err == nil {
-			resourceID, err := storagespace.ParseID(string(id))
-			if err == nil {
-				lu.IDCache.Set(context.Background(), resourceID.SpaceId, resourceID.OpaqueId, path)
+			nodeSpaceID, ok := attribs[prefixes.SpaceIDAttr]
+			if ok {
+				spaceID = nodeSpaceID
+			}
+			id, ok := attribs[prefixes.IDAttr]
+			if ok && len(spaceID) > 0 {
+				lu.IDCache.Set(context.Background(), string(spaceID), string(id), path)
 			}
 		}
 		return nil

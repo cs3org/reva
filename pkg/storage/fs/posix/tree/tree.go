@@ -33,11 +33,11 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/tree/propagator"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -267,18 +267,6 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	return nil
 }
 
-func readChildNodeFromLink(ctx context.Context, path string) (string, error) {
-	_, span := tracer.Start(ctx, "readChildNodeFromLink")
-	defer span.End()
-	link, err := os.Readlink(path)
-	if err != nil {
-		return "", err
-	}
-	nodeID := strings.TrimLeft(link, "/.")
-	nodeID = strings.ReplaceAll(nodeID, "/", "")
-	return nodeID, nil
-}
-
 // ListFolder lists the content of a folder node
 func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, error) {
 	ctx, span := tracer.Start(ctx, "ListFolder")
@@ -328,22 +316,14 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	// Spawn workers that'll concurrently work the queue
 	for i := 0; i < numWorkers; i++ {
 		g.Go(func() error {
-			var err error
 			for name := range work {
 				path := filepath.Join(dir, name)
-				nodeID := getNodeIDFromCache(ctx, path, t.idCache)
-				if nodeID == "" {
-					nodeID, err = readChildNodeFromLink(ctx, path)
-					if err != nil {
-						return err
-					}
-					err = storeNodeIDInCache(ctx, path, nodeID, t.idCache)
-					if err != nil {
-						return err
-					}
+				nodeID, err := t.lookup.MetadataBackend().Get(ctx, path, prefixes.IDAttr)
+				if err != nil {
+					return err
 				}
 
-				child, err := node.ReadNode(ctx, t.lookup, n.SpaceID, nodeID, false, n.SpaceRoot, true)
+				child, err := node.ReadNode(ctx, t.lookup, n.SpaceID, string(nodeID), false, n.SpaceRoot, true)
 				if err != nil {
 					return err
 				}
@@ -691,13 +671,22 @@ func (t *Tree) DeleteBlob(node *node.Node) error {
 func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 	ctx, span := tracer.Start(ctx, "createDirNode")
 	defer span.End()
+
+	idcache := t.lookup.(*lookup.Lookup).IDCache
 	// create a directory node
-	nodePath := n.InternalPath()
-	if err := os.MkdirAll(nodePath, 0700); err != nil {
+	parentPath, ok := idcache.Get(ctx, n.SpaceID, n.ParentID)
+	if !ok {
+		return errtypes.NotFound(n.ParentID)
+	}
+	path := filepath.Join(parentPath, n.Name)
+	if err := os.MkdirAll(path, 0700); err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
 
+	idcache.Set(ctx, n.SpaceID, n.ID, path)
+
 	attributes := n.NodeMetadata(ctx)
+	attributes[prefixes.IDAttr] = []byte(n.ID)
 	attributes[prefixes.TreesizeAttr] = []byte("0") // initialize as empty, TODO why bother? if it is not set we could treat it as 0?
 	if t.options.TreeTimeAccounting || t.options.TreeSizeAccounting {
 		attributes[prefixes.PropagationAttr] = []byte("1") // mark the node for propagation
