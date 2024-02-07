@@ -147,6 +147,9 @@ func (s *svc) setHandler() {
 		case "PATCH":
 			s.doPatch(w, r)
 			return
+		case "OPTIONS":
+			s.doOptions(w, r)
+			return
 		default:
 			w.WriteHeader(http.StatusNotImplemented)
 			return
@@ -406,6 +409,52 @@ func (s *svc) doPatch(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Err(err).Msg("error writing body after header were set")
 	}
+}
+
+func (s *svc) doOptions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	claims, err := s.verify(ctx, r)
+	if err != nil {
+		err = errors.Wrap(err, "datagateway: error validating transfer token")
+		log.Error().Err(err).Str("token", r.Header.Get(TokenTransportHeader)).Msg("invalid transfer token")
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	log.Debug().Str("target", claims.Target).Msg("sending request to internal data server")
+
+	httpClient := s.client
+	httpReq, err := rhttp.NewRequest(ctx, "OPTIONS", claims.Target, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("wrong request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	httpReq.Header = r.Header
+
+	httpRes, err := httpClient.Do(httpReq)
+	if err != nil {
+		log.Error().Err(err).Msg("error doing OPTIONS request to data service")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	defer httpRes.Body.Close()
+
+	copyHeader(w.Header(), httpRes.Header)
+
+	// add upload expiry / transfer token expiry header for tus https://tus.io/protocols/resumable-upload.html#expiration
+	w.Header().Set(UploadExpiresHeader, time.Unix(claims.ExpiresAt, 0).Format(time.RFC1123))
+
+	if httpRes.StatusCode != http.StatusOK {
+		// swallow the body and set content-length to 0 to prevent reverse proxies from trying to read from it
+		w.Header().Set("Content-Length", "0")
+		w.WriteHeader(httpRes.StatusCode)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func copyHeader(dst, src http.Header) {
