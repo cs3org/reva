@@ -22,7 +22,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/pprof"
-	"path"
 
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/utils/cfg"
@@ -39,6 +38,8 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 		return nil, err
 	}
 
+	c.ApplyDefaults()
+
 	return &svc{conf: &c}, nil
 }
 
@@ -52,10 +53,8 @@ type config struct {
 }
 
 func (c *config) ApplyDefaults() {
-
-	if c.Prefix == "" {
-		c.Prefix = "debug"
-	}
+	// pprof is always exposed at /debug
+	c.Prefix = "debug"
 }
 
 type svc struct {
@@ -72,13 +71,10 @@ func (s *svc) Unprotected() []string {
 
 func (s *svc) Handler() http.Handler {
 	mux := http.NewServeMux()
-	prefix := s.conf.Prefix
-	mux.HandleFunc(path.Join(prefix, "/pprof/"), pprof.Index)
-	mux.HandleFunc(path.Join(prefix, "/pprof/profile"), pprof.Profile)
-	mux.HandleFunc(path.Join(prefix, "/pprof/symbol"), pprof.Symbol)
-	mux.HandleFunc(path.Join(prefix, "/pprof/symbol"), pprof.Trace)
-	//return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	//	m := nett
-	//})
+	// example: /debug/pprof/profile
+	mux.HandleFunc("/pprof/", pprof.Index)
+	mux.HandleFunc("/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/pprof/trace", pprof.Trace)
 	return mux
 }
