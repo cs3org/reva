@@ -43,6 +43,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/options"
@@ -108,7 +109,7 @@ func (t *Tree) Setup() error {
 			Options: &inotifywaitgo.Options{
 				Recursive: true,
 				Events: []inotifywaitgo.EVENT{
-					inotifywaitgo.CLOSE_WRITE,
+					inotifywaitgo.CREATE,
 				},
 				Monitor: true,
 			},
@@ -119,16 +120,11 @@ func (t *Tree) Setup() error {
 			select {
 			case event := <-events:
 				for _, e := range event.Events {
-					if strings.HasSuffix(event.Filename, ".flock") {
+					if strings.HasSuffix(event.Filename, ".flock") || strings.HasSuffix(event.Filename, ".mlock") {
 						continue
 					}
 					switch e {
-					case inotifywaitgo.CLOSE_WRITE:
-						fmt.Printf("File %s close_write\n", event.Filename)
-						if err != nil {
-							fmt.Printf("Error: %s\n", err)
-							continue
-						}
+					case inotifywaitgo.CREATE:
 						t.Scan(event.Filename)
 					}
 				}
@@ -154,7 +150,7 @@ func (t *Tree) Scan(path string) error {
 	}
 
 	// lock the file for assimilation
-	lock, err := lockedfile.OpenFile(path, os.O_RDWR|os.O_CREATE, 0600)
+	lock, err := lockedfile.OpenFile(path+".flock", os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return err
 	}
