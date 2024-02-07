@@ -135,7 +135,6 @@ func (s *svc) setHandler() {
 		r = r.WithContext(ctx)
 		switch r.Method {
 		case "HEAD":
-			addCorsHeader(w)
 			s.doHead(w, r)
 			return
 		case "GET":
@@ -155,13 +154,6 @@ func (s *svc) setHandler() {
 			return
 		}
 	})
-}
-
-func addCorsHeader(res http.ResponseWriter) {
-	headers := res.Header()
-	headers.Set("Access-Control-Allow-Origin", "*")
-	headers.Set("Access-Control-Allow-Headers", "Content-Type, Origin, Authorization")
-	headers.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
 }
 
 func (s *svc) verify(ctx context.Context, r *http.Request) (*transferClaims, error) {
