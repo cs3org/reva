@@ -195,43 +195,8 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	// remove cache entry in any case to avoid inconsistencies
 	defer func() { _ = t.idCache.Delete(filepath.Join(oldNode.ParentPath(), oldNode.Name)) }()
 
-	// Always target the old node ID for xattr updates.
-	// The new node id is empty if the target does not exist
-	// and we need to overwrite the new one when overwriting an existing path.
-	// are we just renaming (parent stays the same)?
-	if oldNode.ParentID == newNode.ParentID {
-
-		// parentPath := t.lookup.InternalPath(oldNode.SpaceID, oldNode.ParentID)
-		parentPath := oldNode.ParentPath()
-
-		// rename child
-		err = os.Rename(
-			filepath.Join(parentPath, oldNode.Name),
-			filepath.Join(parentPath, newNode.Name),
-		)
-		if err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not rename child")
-		}
-
-		// update name attribute
-		if err := oldNode.SetXattrString(ctx, prefixes.NameAttr, newNode.Name); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not set name attribute")
-		}
-
-		return t.Propagate(ctx, newNode, 0)
-	}
-
 	// we are moving the node to a new parent, any target has been removed
 	// bring old node to the new parent
-
-	// rename child
-	err = os.Rename(
-		filepath.Join(oldNode.ParentPath(), oldNode.Name),
-		filepath.Join(newNode.ParentPath(), newNode.Name),
-	)
-	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not move child")
-	}
 
 	// update target parentid and name
 	attribs := node.Attributes{}
@@ -251,6 +216,21 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		sizeDiff = int64(treeSize)
 	} else {
 		sizeDiff = oldNode.Blobsize
+	}
+
+	// rename node
+	err = os.Rename(
+		filepath.Join(oldNode.ParentPath(), oldNode.Name),
+		filepath.Join(newNode.ParentPath(), newNode.Name),
+	)
+	if err != nil {
+		return errors.Wrap(err, "Decomposedfs: could not move child")
+	}
+
+	// update the id cache
+	err = t.lookup.(*lookup.Lookup).IDCache.Set(ctx, oldNode.SpaceID, oldNode.ID, filepath.Join(newNode.ParentPath(), newNode.Name))
+	if err != nil {
+		return errors.Wrap(err, "Decomposedfs: Move: could not update id cache")
 	}
 
 	// TODO inefficient because we might update several nodes twice, only propagate unchanged nodes?
