@@ -20,7 +20,6 @@ package posix
 
 import (
 	"fmt"
-	"path"
 
 	microstore "go-micro.dev/v4/store"
 
@@ -52,7 +51,7 @@ func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 		return nil, err
 	}
 
-	bs, err := blobstore.New(path.Join(o.Root))
+	bs, err := blobstore.New(o.Root)
 	if err != nil {
 		return nil, err
 	}

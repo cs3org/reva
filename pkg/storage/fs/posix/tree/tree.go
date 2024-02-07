@@ -30,6 +30,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/pablodz/inotifywaitgo/inotifywaitgo"
+	"github.com/pkg/errors"
+	"github.com/rogpeppe/go-internal/lockedfile"
+	"github.com/rs/zerolog/log"
+	"go-micro.dev/v4/store"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/sync/errgroup"
+
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
@@ -39,13 +49,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/tree/propagator"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/google/uuid"
-	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
-	"go-micro.dev/v4/store"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/sync/errgroup"
 )
 
 var tracer trace.Tracer
@@ -88,7 +91,133 @@ func New(lu node.PathLookup, bs Blobstore, o *options.Options, cache store.Store
 
 // Setup prepares the tree structure
 func (t *Tree) Setup() error {
-	return os.MkdirAll(t.options.Root, 0700)
+	err := os.MkdirAll(t.options.Root, 0700)
+	if err != nil {
+		return err
+	}
+
+	// listen for fsnotify events
+	go func() {
+		events := make(chan inotifywaitgo.FileEvent)
+		errors := make(chan error)
+
+		go inotifywaitgo.WatchPath(&inotifywaitgo.Settings{
+			Dir:        t.options.Root,
+			FileEvents: events,
+			ErrorChan:  errors,
+			Options: &inotifywaitgo.Options{
+				Recursive: true,
+				Events: []inotifywaitgo.EVENT{
+					inotifywaitgo.CLOSE_WRITE,
+				},
+				Monitor: true,
+			},
+			Verbose: true,
+		})
+
+	loopFiles:
+		for {
+			select {
+			case event := <-events:
+				for _, e := range event.Events {
+					if strings.HasSuffix(event.Filename, ".flock") {
+						continue
+					}
+					switch e {
+					case inotifywaitgo.CLOSE_WRITE:
+						fmt.Printf("File %s close_write\n", event.Filename)
+						if err != nil {
+							fmt.Printf("Error: %s\n", err)
+							continue
+						}
+						t.Scan(event.Filename)
+					}
+				}
+
+			case err := <-errors:
+				fmt.Printf("Error: %s\n", err)
+				break loopFiles
+			}
+		}
+	}()
+	return nil
+}
+
+// Scan scans the given path and updates the id chache
+func (t *Tree) Scan(path string) error {
+	_, ok := t.lookup.(*lookup.Lookup).IDCache.Get(context.Background(), "", path)
+	if ok {
+		return nil
+	}
+
+	id, err := t.lookup.MetadataBackend().Get(context.Background(), path, prefixes.IDAttr)
+	if err == nil {
+		return t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), "", string(id), path)
+	}
+
+	// lock the file for assimilation
+	lock, err := lockedfile.OpenFile(path, os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		lock.Close()
+	}()
+
+	// find the space id
+	spaceID := []byte("")
+	spaceCandidate := filepath.Dir(path)
+	for strings.HasPrefix(spaceCandidate, t.options.Root) {
+		spaceID, err = t.lookup.MetadataBackend().Get(context.Background(), spaceCandidate, prefixes.SpaceIDAttr)
+		if err == nil {
+			break
+		}
+		spaceCandidate = filepath.Dir(spaceCandidate)
+	}
+	if len(spaceID) == 0 {
+		return errors.New("could not find space id")
+	}
+
+	// check for the id attribute again after grabbing the lock, maybe the file was assimilated in the meantime
+	id, err = t.lookup.MetadataBackend().Get(context.Background(), path, prefixes.IDAttr)
+	switch err {
+	case nil:
+		return t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), path)
+	default:
+		// read parent
+		parentAttribs, err := t.lookup.MetadataBackend().All(context.Background(), filepath.Dir(path))
+		if err != nil {
+			return err
+		}
+
+		// assimilate file
+		id := uuid.New().String()
+		stat, err := os.Stat(path)
+		if err != nil {
+			return err
+		}
+
+		attributes := node.Attributes{
+			prefixes.IDAttr:       []byte(id),
+			prefixes.ParentidAttr: parentAttribs[prefixes.IDAttr],
+			prefixes.NameAttr:     []byte(filepath.Base(path)),
+			prefixes.MTimeAttr:    []byte(stat.ModTime().Format(time.RFC3339)),
+		}
+		if stat.IsDir() {
+			attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_CONTAINER))
+			attributes.SetInt64(prefixes.TreesizeAttr, stat.Size())
+		} else {
+			attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_FILE))
+			attributes.SetString(prefixes.BlobIDAttr, id)
+			attributes.SetInt64(prefixes.BlobsizeAttr, stat.Size())
+		}
+		err = t.lookup.MetadataBackend().SetMultiple(context.Background(), path, attributes, true)
+		if err != nil {
+			return err
+		}
+
+		return t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), path)
+	}
 }
 
 // GetMD returns the metadata of a node in the tree
