@@ -128,8 +128,14 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
+	// update the id cache
+	err = t.lookup.(*lookup.Lookup).IDCache.Set(ctx, n.SpaceID, n.ID, nodePath)
+	if err != nil {
+		return errors.Wrap(err, "Decomposedfs: Move: could not update id cache")
+	}
 
 	attributes := n.NodeMetadata(ctx)
+	attributes[prefixes.IDAttr] = []byte(n.ID)
 	if markprocessing {
 		attributes[prefixes.StatusPrefix] = []byte(node.ProcessingStatus)
 	}
