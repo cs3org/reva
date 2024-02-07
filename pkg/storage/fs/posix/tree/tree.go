@@ -115,7 +115,6 @@ func (t *Tree) Setup() error {
 			Verbose: true,
 		})
 
-	loopFiles:
 		for {
 			select {
 			case event := <-events:
@@ -136,7 +135,6 @@ func (t *Tree) Setup() error {
 
 			case err := <-errors:
 				fmt.Printf("Error: %s\n", err)
-				break loopFiles
 			}
 		}
 	}()
