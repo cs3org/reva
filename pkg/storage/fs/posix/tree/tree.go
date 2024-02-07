@@ -436,6 +436,9 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 				path := filepath.Join(dir, name)
 				nodeID, err := t.lookup.MetadataBackend().Get(ctx, path, prefixes.IDAttr)
 				if err != nil {
+					if metadata.IsAttrUnset(err) {
+						continue
+					}
 					return err
 				}
 
