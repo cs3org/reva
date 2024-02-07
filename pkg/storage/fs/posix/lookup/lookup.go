@@ -24,7 +24,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -38,7 +37,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.com/pkg/xattr"
 	"github.com/rogpeppe/go-internal/lockedfile"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -106,12 +104,7 @@ func (lu *Lookup) WarmupIDCache() error {
 func (lu *Lookup) NodeIDFromParentAndName(ctx context.Context, parent *node.Node, name string) (string, error) {
 	id, err := lu.metadataBackend.Get(ctx, filepath.Join(parent.InternalPath(), name), prefixes.IDAttr)
 	if err != nil {
-		if xattrErr, ok := err.(*xattr.Error); ok {
-			if errno, ok := xattrErr.Err.(syscall.Errno); ok && (errno == syscall.ENODATA || errno == syscall.ENOENT) {
-				return "", errtypes.NotFound(name)
-			}
-		}
-		if os.IsNotExist(err) {
+		if metadata.IsNotExist(err) {
 			return "", errtypes.NotFound(name)
 		}
 		return "", err
@@ -405,12 +398,7 @@ func (lu *Lookup) GenerateSpaceID(spaceType string, owner *user.User) (string, e
 
 		spaceID, err := lu.metadataBackend.Get(context.Background(), filepath.Join(lu.Options.Root, path), prefixes.IDAttr)
 		if err != nil {
-			if xattrErr, ok := err.(*xattr.Error); ok {
-				if errno, ok := xattrErr.Err.(syscall.Errno); ok && (errno == syscall.ENODATA || errno == syscall.ENOENT) {
-					return uuid.New().String(), nil
-				}
-			}
-			if os.IsNotExist(err) {
+			if metadata.IsNotExist(err) {
 				return uuid.New().String(), nil
 			} else {
 				return "", err
