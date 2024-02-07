@@ -34,6 +34,7 @@ import (
 	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocs"
 	_ "github.com/cs3org/reva/internal/http/services/pingpong"
 	_ "github.com/cs3org/reva/internal/http/services/plugins"
+	_ "github.com/cs3org/reva/internal/http/services/pprof"
 	_ "github.com/cs3org/reva/internal/http/services/preferences"
 	_ "github.com/cs3org/reva/internal/http/services/prometheus"
 	_ "github.com/cs3org/reva/internal/http/services/reverseproxy"
