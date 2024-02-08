@@ -40,6 +40,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 var (
@@ -66,7 +67,7 @@ func NewTracerProvider(opts ...Option) trace.TracerProvider {
 	}
 
 	if !options.Enabled {
-		return trace.NewNoopTracerProvider()
+		return noop.NewTracerProvider()
 	}
 
 	// default to 'reva' as service name if not set
