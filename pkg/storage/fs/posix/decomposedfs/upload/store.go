@@ -355,24 +355,29 @@ func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSess
 		}
 	}
 
-	session.info.MetaData["versionsPath"] = session.store.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+oldNodeMtime.UTC().Format(time.RFC3339Nano))
+	versionPath := n.InternalPath()
+	doVersions := false // we don't do versions for now
+	if doVersions {
+		versionPath = session.store.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+oldNodeMtime.UTC().Format(time.RFC3339Nano))
+
+		// create version node
+		if _, err := os.Create(session.info.MetaData["versionsPath"]); err != nil {
+			return f, err
+		}
+
+		// copy blob metadata to version node
+		if err := store.lu.CopyMetadataWithSourceLock(ctx, targetPath, session.info.MetaData["versionsPath"], func(attributeName string, value []byte) (newValue []byte, copy bool) {
+			return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
+				attributeName == prefixes.TypeAttr ||
+				attributeName == prefixes.BlobIDAttr ||
+				attributeName == prefixes.BlobsizeAttr ||
+				attributeName == prefixes.MTimeAttr
+		}, f, true); err != nil {
+			return f, err
+		}
+	}
 	session.info.MetaData["sizeDiff"] = strconv.FormatInt((int64(fsize) - old.Blobsize), 10)
-
-	// create version node
-	if _, err := os.Create(session.info.MetaData["versionsPath"]); err != nil {
-		return f, err
-	}
-
-	// copy blob metadata to version node
-	if err := store.lu.CopyMetadataWithSourceLock(ctx, targetPath, session.info.MetaData["versionsPath"], func(attributeName string, value []byte) (newValue []byte, copy bool) {
-		return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
-			attributeName == prefixes.TypeAttr ||
-			attributeName == prefixes.BlobIDAttr ||
-			attributeName == prefixes.BlobsizeAttr ||
-			attributeName == prefixes.MTimeAttr
-	}, f, true); err != nil {
-		return f, err
-	}
+	session.info.MetaData["versionsPath"] = versionPath
 
 	// keep mtime from previous version
 	if err := os.Chtimes(session.info.MetaData["versionsPath"], oldNodeMtime, oldNodeMtime); err != nil {
