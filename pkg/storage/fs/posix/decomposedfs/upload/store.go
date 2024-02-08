@@ -281,22 +281,6 @@ func (store OcisStore) initNewNode(ctx context.Context, session *OcisSession, n 
 		return f, err
 	}
 
-	// link child name to parent if it is new
-	childNameLink := filepath.Join(n.ParentPath(), n.Name)
-	relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
-	log := appctx.GetLogger(ctx).With().Str("childNameLink", childNameLink).Str("relativeNodePath", relativeNodePath).Logger()
-	log.Info().Msg("initNewNode: creating symlink")
-
-	if err = os.Symlink(relativeNodePath, childNameLink); err != nil {
-		log.Info().Err(err).Msg("initNewNode: symlink failed")
-		if errors.Is(err, iofs.ErrExist) {
-			log.Info().Err(err).Msg("initNewNode: symlink already exists")
-			return f, errtypes.AlreadyExists(n.Name)
-		}
-		return f, errors.Wrap(err, "Decomposedfs: could not symlink child entry")
-	}
-	log.Info().Msg("initNewNode: symlink created")
-
 	// on a new file the sizeDiff is the fileSize
 	session.info.MetaData["sizeDiff"] = strconv.FormatInt(int64(fsize), 10)
 	return f, nil
