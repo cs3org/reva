@@ -739,6 +739,16 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 		return errtypes.NotFound(n.ParentID)
 	}
 	path := filepath.Join(parentPath, n.Name)
+
+	lock, err := lockedfile.OpenFile(path+".mlock", os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = lock.Close()
+		_ = os.Remove(path + ".mlock")
+	}()
+
 	if err := os.MkdirAll(path, 0700); err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
@@ -751,7 +761,7 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 	if t.options.TreeTimeAccounting || t.options.TreeSizeAccounting {
 		attributes[prefixes.PropagationAttr] = []byte("1") // mark the node for propagation
 	}
-	return n.SetXattrsWithContext(ctx, attributes, true)
+	return n.SetXattrsWithContext(ctx, attributes, false)
 }
 
 var nodeIDRegep = regexp.MustCompile(`.*/nodes/([^.]*).*`)
