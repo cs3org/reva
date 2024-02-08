@@ -89,10 +89,9 @@ func InitDefaultTracerProvider(collector, endpoint string) {
 	defer defaultProvider.mutex.Unlock()
 	if !defaultProvider.initialized {
 		SetDefaultTracerProvider(getOtlpTracerProvider(Options{
-			Enabled:     true,
-			Collector:   collector,
 			Endpoint:    endpoint,
 			ServiceName: "reva default otlp provider",
+			Insecure:    true,
 		}))
 	}
 }
@@ -107,16 +106,17 @@ func DefaultProvider() trace.TracerProvider {
 
 // getOtelTracerProvider returns a new TracerProvider, configure for the specified service
 func getOtlpTracerProvider(options Options) trace.TracerProvider {
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
+	transportCredentials := options.TransportCredentials
+	if options.Insecure {
+		transportCredentials = insecure.NewCredentials()
+	}
 	conn, err := grpc.DialContext(ctx, options.Endpoint,
-		// Note the use of insecure transport here. TLS is recommended in production.
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
+		grpc.WithTransportCredentials(transportCredentials),
 	)
 	if err != nil {
-		panic(fmt.Errorf("failed to create gRPC connection to collector: %w", err))
+		panic(fmt.Errorf("failed to create gRPC connection to endpoint: %w", err))
 	}
 	exporter, err := otlptracegrpc.New(
 		context.Background(),
