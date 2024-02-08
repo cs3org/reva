@@ -139,24 +139,7 @@ func (t *Tree) Setup() error {
 
 // Scan scans the given path and updates the id chache
 func (t *Tree) Scan(path string) error {
-	_, ok := t.lookup.(*lookup.Lookup).IDCache.Get(context.Background(), "", path)
-	if ok {
-		return nil
-	}
-
-	id, err := t.lookup.MetadataBackend().Get(context.Background(), path, prefixes.IDAttr)
-	if err == nil {
-		return t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), "", string(id), path)
-	}
-
-	// lock the file for assimilation
-	lock, err := lockedfile.OpenFile(path+".flock", os.O_RDWR|os.O_CREATE, 0600)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		lock.Close()
-	}()
+	var err error
 
 	// find the space id
 	spaceID := []byte("")
@@ -172,7 +155,29 @@ func (t *Tree) Scan(path string) error {
 		return errors.New("could not find space id")
 	}
 
-	// check for the id attribute again after grabbing the lock, maybe the file was assimilated in the meantime
+	_, ok := t.lookup.(*lookup.Lookup).IDCache.Get(context.Background(), string(spaceID), path)
+	if ok {
+		return nil
+	}
+
+	id, err := t.lookup.MetadataBackend().Get(context.Background(), path, prefixes.IDAttr)
+	if err == nil {
+		return t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), path)
+	}
+
+	// lock the file for assimilation
+	metaLockPath := t.lookup.MetadataBackend().LockfilePath(path)
+	mlock, err := lockedfile.OpenFile(metaLockPath, os.O_RDWR|os.O_CREATE, 0600)
+
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = mlock.Close()
+		_ = os.Remove(metaLockPath)
+	}()
+
+	// check for the id attribute again after grabbing the lock, maybe the file was assimilated/created by us in the meantime
 	id, err = t.lookup.MetadataBackend().Get(context.Background(), path, prefixes.IDAttr)
 	switch err {
 	case nil:
@@ -205,7 +210,7 @@ func (t *Tree) Scan(path string) error {
 			attributes.SetString(prefixes.BlobIDAttr, id)
 			attributes.SetInt64(prefixes.BlobsizeAttr, stat.Size())
 		}
-		err = t.lookup.MetadataBackend().SetMultiple(context.Background(), path, attributes, true)
+		err = t.lookup.MetadataBackend().SetMultiple(context.Background(), path, attributes, false)
 		if err != nil {
 			return err
 		}
