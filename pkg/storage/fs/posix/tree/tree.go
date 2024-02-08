@@ -127,7 +127,7 @@ func (t *Tree) Setup() error {
 					}
 					switch e {
 					case inotifywaitgo.CREATE:
-						t.Scan(event.Filename)
+						go t.Scan(event.Filename)
 					}
 				}
 
