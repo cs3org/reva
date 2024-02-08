@@ -34,10 +34,10 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/options"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rogpeppe/go-internal/lockedfile"
@@ -211,6 +211,7 @@ func (store OcisStore) CreateNodeForUpload(session *OcisSession, initAttrs node.
 			appctx.GetLogger(ctx).Info().Str("lockfile", f.Name()).Interface("err", err).Msg("got lock file from updateExistingNode")
 		}
 	} else {
+		store.lu.(*lookup.Lookup).IDCache.Set(ctx, n.SpaceID, n.ID, filepath.Join(n.ParentPath(), n.Name))
 		f, err = store.initNewNode(ctx, session, n, uint64(session.Size()))
 		if f != nil {
 			appctx.GetLogger(ctx).Info().Str("lockfile", f.Name()).Interface("err", err).Msg("got lock file from initNewNode")
@@ -235,6 +236,7 @@ func (store OcisStore) CreateNodeForUpload(session *OcisSession, initAttrs node.
 	}
 
 	// overwrite technical information
+	initAttrs.SetString(prefixes.IDAttr, n.ID)
 	initAttrs.SetString(prefixes.MTimeAttr, mtime.UTC().Format(time.RFC3339Nano))
 	initAttrs.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_FILE))
 	initAttrs.SetString(prefixes.ParentidAttr, n.ParentID)
