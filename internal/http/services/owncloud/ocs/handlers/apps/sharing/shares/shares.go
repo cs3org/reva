@@ -1391,7 +1391,8 @@ func mapState(state collaboration.ShareState) int {
 	var mapped int
 	switch state {
 	case collaboration.ShareState_SHARE_STATE_PENDING:
-		mapped = ocsStatePending
+		mapped = ocsStateAccepted
+		// mapped = ocsStatePending
 	case collaboration.ShareState_SHARE_STATE_ACCEPTED:
 		mapped = ocsStateAccepted
 	case collaboration.ShareState_SHARE_STATE_REJECTED:
