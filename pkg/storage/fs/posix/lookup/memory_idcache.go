@@ -18,10 +18,15 @@
 
 package lookup
 
-import "context"
+import (
+	"context"
+	"sync"
+)
 
 type MemoryIDCache struct {
 	cache map[string]map[string]string
+
+	mu sync.RWMutex
 }
 
 // NewMemoryIDCache returns a new MemoryIDCache
@@ -33,6 +38,9 @@ func NewMemoryIDCache() *MemoryIDCache {
 
 // Add adds a new entry to the cache
 func (c *MemoryIDCache) Set(_ context.Context, spaceID, nodeID, val string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	spaceCache := c.cache[spaceID]
 	if spaceCache == nil {
 		spaceCache = make(map[string]string)
@@ -44,6 +52,9 @@ func (c *MemoryIDCache) Set(_ context.Context, spaceID, nodeID, val string) erro
 
 // Get returns the value for a given key
 func (c *MemoryIDCache) Get(_ context.Context, spaceID, nodeID string) (string, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	spaceCache, ok := c.cache[spaceID]
 	if !ok {
 		return "", false
