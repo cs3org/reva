@@ -1202,12 +1202,11 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 			return nil, errtypes.NotFound(dpath)
 		}
 
-		log.Debug().Str("func", "List").Str("path", dpath).Str("item resp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
+		log.Debug().Str("func", "List").Str("path", dpath).Msg("grpc response")
 
 		myitem, err := c.grpcMDResponseToFileInfo(ctx, rsp)
 		if err != nil {
 			log.Error().Err(err).Str("func", "List").Str("path", dpath).Str("could not convert item:", fmt.Sprintf("%#v", rsp)).Str("err", err.Error()).Msg("")
-
 			return nil, err
 		}
 
@@ -1415,10 +1414,10 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 		if resp.GetError() != nil {
 			log.Error().Str("func", "ListDeletedEntries").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
 		} else {
-			log.Debug().Str("func", "ListDeletedEntries").Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+			count += len(resp.Recycle.Recycles)
+			log.Debug().Str("func", "ListDeletedEntries").Int("totalcount", count).Msg("grpc response")
 		}
 
-		count += len(resp.Recycle.Recycles)
 		if count > maxentries {
 			return nil, errtypes.BadRequest("list too long")
 		}
