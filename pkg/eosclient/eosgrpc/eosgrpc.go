@@ -18,8 +18,7 @@
 
 // NOTE: compile the grpc proto with these commands
 // and do not ask any questions, I don't have the answer
-// protoc ./Rpc.proto --go-grpc_out=.
-// protoc ./eos_grpc.proto --go_out=plugins=grpc:.
+// protoc ./Rpc.proto --go_out=plugins=grpc:.
 
 package eosgrpc
 
@@ -1393,10 +1392,12 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 	for d := to; !d.Before(to); d = d.AddDate(0, 0, -1) {
 		msg := new(erpc.NSRequest_RecycleRequest)
 		msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(erpc.NSRequest_RecycleRequest_RECYCLE_CMD_value["LIST"])
-		// msg.Listflag.Maxentries = maxentries+1
+		msg.Purgedate = new(erpc.NSRequest_RecycleRequest_PurgeDate)
 		msg.Purgedate.Day = int32(d.Day())
 		msg.Purgedate.Month = int32(d.Month())
 		msg.Purgedate.Year = int32(d.Year())
+		msg.Listflag = new(erpc.NSRequest_RecycleRequest_ListFlags)
+		msg.Listflag.Maxentries = int32(maxentries + 1)
 		rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
 
 		// Now send the req and see what happens
