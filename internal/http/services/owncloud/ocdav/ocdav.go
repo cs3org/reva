@@ -114,13 +114,14 @@ type Config struct {
 	// Possible values:
 	// "bearer"				results in header: Authorization: Bearer ...token...
 	// "x-access-token":	results in header: X-Access-Token: ...token...
-	HTTPTpcPushAuthHeader  string                            `mapstructure:"http_tpc_push_auth_header"`
-	PublicURL              string                            `mapstructure:"public_url"`
-	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
-	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
-	PublicLinkDownload     *ConfigPublicLinkDownload         `mapstructure:"publiclink_download"`
-	DisabledOpenInAppPaths []string                          `mapstructure:"disabled_open_in_app_paths"`
-	Notifications          map[string]interface{}            `docs:"Settingsg for the Notification Helper" mapstructure:"notifications"`
+	HTTPTpcPushAuthHeader    string                            `mapstructure:"http_tpc_push_auth_header"`
+	PublicURL                string                            `mapstructure:"public_url"`
+	FavoriteStorageDriver    string                            `mapstructure:"favorite_storage_driver"`
+	FavoriteStorageDrivers   map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
+	PublicLinkDownload       *ConfigPublicLinkDownload         `mapstructure:"publiclink_download"`
+	DisabledOpenInAppPaths   []string                          `mapstructure:"disabled_open_in_app_paths"`
+	CheckUserPrefForOpenApps bool                              `mapstructure:"check_user_pref_for_open_apps"`
+	Notifications            map[string]interface{}            `docs:"Settingsg for the Notification Helper" mapstructure:"notifications"`
 }
 
 func (c *Config) ApplyDefaults() {
