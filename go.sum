@@ -800,6 +800,8 @@ github.com/acomagu/bufpipe v1.0.3 h1:fxAGrHZTgQ9w5QqVItgzwj235/uYZYgbXitB+dLupOk
 github.com/acomagu/bufpipe v1.0.3/go.mod h1:mxdxdup/WdsKVreO5GpW4+M/1CE2sMG4jeGJ2sYmHc4=
 github.com/aduffeck/gowebdav v0.0.0-20231215102054-212d4a4374f6 h1:ws0yvsikTQdmheKINP16tBzAHdttrHwbz/q3Fgl9X1Y=
 github.com/aduffeck/gowebdav v0.0.0-20231215102054-212d4a4374f6/go.mod h1:bHA7t77X/QFExdeAnDzK6vKM34kEZAcE1OX4MfiwjkE=
+github.com/aduffeck/inotifywaitgo v0.0.0-20240209082233-d7920a1b5f4f h1:cfOgWEQOzOcQ29R8HbIhDPtf5Hig2lj+OBTZ2xUG4gw=
+github.com/aduffeck/inotifywaitgo v0.0.0-20240209082233-d7920a1b5f4f/go.mod h1:OtzRCsYTJlIr+vAzlOtauTkfQ1c25ebFuXq8tbbf8cw=
 github.com/ajstarks/deck v0.0.0-20200831202436-30c9fc6549a9/go.mod h1:JynElWSGnm/4RlzPXRlREEwqTHAN3T56Bv2ITsFT3gY=
 github.com/ajstarks/deck/generate v0.0.0-20210309230005-c3f852c02e19/go.mod h1:T13YZdzov6OU0A1+RfKZiZN9ca6VeKdBdyDV+BY97Tk=
 github.com/ajstarks/svgo v0.0.0-20180226025133-644b8db467af/go.mod h1:K08gAheRH3/J6wwsYMMT4xOr94bZjxIelGM0+d/wbFw=
@@ -1463,8 +1465,6 @@ github.com/owncloud/ocis/v2 v2.0.0 h1:eHmUpW73dAT0X+JXRStYRzHt9gBUGlysnLg3vjJzac
 github.com/owncloud/ocis/v2 v2.0.0/go.mod h1:qH016gkfh/PNOv+xfiwD2weWY99nZTTghKhgajshYYk=
 github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c h1:rp5dCmg/yLR3mgFuSOe4oEnDDmGLROTvMragMUXpTQw=
 github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c/go.mod h1:X07ZCGwUbLaax7L0S3Tw4hpejzu63ZrrQiUe6W0hcy0=
-github.com/pablodz/inotifywaitgo v0.0.5 h1:LVKZleykhBrNxniGz4EyrzIutJtmGkoD0Wkfpe9BfHw=
-github.com/pablodz/inotifywaitgo v0.0.5/go.mod h1:OtzRCsYTJlIr+vAzlOtauTkfQ1c25ebFuXq8tbbf8cw=
 github.com/pascaldekloe/goe v0.0.0-20180627143212-57f6aae5913c/go.mod h1:lzWF7FIEvWOWxwDKqyGYQf6ZUaNfKdP144TG7ZOy1lc=
 github.com/pascaldekloe/goe v0.1.0 h1:cBOtyMzM9HTpWjXfbbunk26uA6nG3a8n06Wieeh0MwY=
 github.com/pascaldekloe/goe v0.1.0/go.mod h1:lzWF7FIEvWOWxwDKqyGYQf6ZUaNfKdP144TG7ZOy1lc=
