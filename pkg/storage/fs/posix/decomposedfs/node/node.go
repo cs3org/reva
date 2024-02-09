@@ -21,9 +21,11 @@ package node
 import (
 	"context"
 	"crypto/md5"
+	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
 	"hash"
+	"hash/adler32"
 	"io"
 	"os"
 	"path/filepath"
@@ -1335,4 +1337,31 @@ func enoughDiskSpace(path string, fileSize uint64) bool {
 		return false
 	}
 	return avalB > fileSize
+}
+
+// CalculateChecksums calculates the sha1, md5 and adler32 checksums of a file
+func CalculateChecksums(ctx context.Context, path string) (hash.Hash, hash.Hash, hash.Hash32, error) {
+	sha1h := sha1.New()
+	md5h := md5.New()
+	adler32h := adler32.New()
+
+	_, subspan := tracer.Start(ctx, "os.Open")
+	f, err := os.Open(path)
+	subspan.End()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	defer f.Close()
+
+	r1 := io.TeeReader(f, sha1h)
+	r2 := io.TeeReader(r1, md5h)
+
+	_, subspan = tracer.Start(ctx, "io.Copy")
+	_, err = io.Copy(adler32h, r2)
+	subspan.End()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return sha1h, md5h, adler32h, nil
 }

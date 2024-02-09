@@ -202,6 +202,14 @@ func (t *Tree) Scan(path string) error {
 			prefixes.NameAttr:     []byte(filepath.Base(path)),
 			prefixes.MTimeAttr:    []byte(stat.ModTime().Format(time.RFC3339)),
 		}
+
+		sha1h, md5h, adler32h, err := node.CalculateChecksums(context.Background(), path)
+		if err == nil {
+			attributes[prefixes.ChecksumPrefix+"sha1"] = sha1h.Sum(nil)
+			attributes[prefixes.ChecksumPrefix+"md5"] = md5h.Sum(nil)
+			attributes[prefixes.ChecksumPrefix+"adler32"] = adler32h.Sum(nil)
+		}
+
 		if stat.IsDir() {
 			attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_CONTAINER))
 			attributes.SetInt64(prefixes.TreesizeAttr, stat.Size())
