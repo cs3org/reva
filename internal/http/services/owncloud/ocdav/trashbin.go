@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"context"
+	"encoding/base32"
 	"encoding/xml"
 	"fmt"
 	"net/http"
@@ -43,11 +44,36 @@ import (
 // TrashbinHandler handles trashbin requests.
 type TrashbinHandler struct {
 	gatewaySvc string
+	spaces     bool
 }
 
 func (h *TrashbinHandler) init(c *Config) error {
 	h.gatewaySvc = c.GatewaySvc
 	return nil
+}
+
+func (h *TrashbinHandler) handleTrashbinSpaces(s *svc, w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	space, _ := router.ShiftPath(r.URL.Path)
+
+	spaceId, err := base32.StdEncoding.DecodeString(space)
+	if err != nil {
+		log.Error().Err(err).Msgf("error decoding space id: %s", space)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	path := string(spaceId)
+	log.Debug().Str("path", path).Msg("decoded space base path")
+
+	u := appctx.ContextMustGetUser(ctx)
+
+	if r.Method == MethodPropfind {
+		h.listTrashbin(w, r, s, u, path, "", "")
+		return
+	}
 }
 
 // Handler handles requests.
@@ -58,6 +84,11 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 
 		if r.Method == http.MethodOptions {
 			s.handleOptions(w, r)
+			return
+		}
+
+		if true { // s.spaces
+			h.handleTrashbinSpaces(s, w, r)
 			return
 		}
 
