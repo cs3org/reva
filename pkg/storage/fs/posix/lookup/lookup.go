@@ -398,7 +398,7 @@ func (lu *Lookup) GenerateSpaceID(spaceType string, owner *user.User) (string, e
 
 		spaceID, err := lu.metadataBackend.Get(context.Background(), filepath.Join(lu.Options.Root, path), prefixes.IDAttr)
 		if err != nil {
-			if metadata.IsNotExist(err) {
+			if metadata.IsNotExist(err) || metadata.IsAttrUnset(err) {
 				return uuid.New().String(), nil
 			} else {
 				return "", err
