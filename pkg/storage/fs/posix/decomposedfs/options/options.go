@@ -50,6 +50,9 @@ type Options struct {
 	// ocis fs works on top of a dir of uuid nodes
 	Root string `mapstructure:"root"`
 
+	// the upload directory where uploads in progress are stored
+	UploadDirectory string `mapstructure:"upload_directory"`
+
 	// UserLayout describes the relative path from the storage's root node to the users home node.
 	UserLayout string `mapstructure:"user_layout"`
 
@@ -157,6 +160,10 @@ func New(m map[string]interface{}) (*Options, error) {
 	}
 	if o.AsyncPropagatorOptions.PropagationDelay == 0 {
 		o.AsyncPropagatorOptions.PropagationDelay = 5 * time.Second
+	}
+
+	if o.UploadDirectory == "" {
+		o.UploadDirectory = filepath.Join(o.Root, "uploads")
 	}
 
 	return o, nil

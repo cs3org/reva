@@ -97,6 +97,11 @@ func (t *Tree) Setup() error {
 		return err
 	}
 
+	err = os.MkdirAll(t.options.UploadDirectory, 0700)
+	if err != nil {
+		return err
+	}
+
 	// listen for fsnotify events
 	go func() {
 		events := make(chan inotifywaitgo.FileEvent)
