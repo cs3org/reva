@@ -279,6 +279,7 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 
 	var f *lockedfile.File
 	// lock parent before reading treesize or tree time
+	// FIXME and we have no name ... we could try locking files by parent-child and dirs by id?
 	nodePath := filepath.Join(p.lookup.InternalRoot(), "spaces", lookup.Pathify(spaceID, 1, 2), "nodes", lookup.Pathify(nodeID, 4, 2))
 
 	_, subspan = tracer.Start(ctx, "lockedfile.OpenFile")

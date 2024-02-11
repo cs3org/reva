@@ -144,7 +144,7 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 		span.End()
 	}()
 
-	lockPath := b.LockfilePath(path)
+	lockPath := b.LockfilePath(path) // FIXME ... and we have no name
 	metaPath := b.MetadataPath(path)
 	if acquireLock {
 		_, subspan := tracer.Start(ctx, "lockedfile.OpenFile")
