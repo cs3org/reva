@@ -277,24 +277,34 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 		return errtypes.AlreadyExists(n.ID)
 	}
 
+	parentPath := n.ParentPath()
+	nodePath := filepath.Join(parentPath, n.Name)
+
+	// lock the meta file
+	metaLockPath := t.lookup.MetadataBackend().LockfilePath(nodePath)
+	mlock, err := lockedfile.OpenFile(metaLockPath, os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = mlock.Close()
+		_ = os.Remove(metaLockPath)
+	}()
+
 	if n.ID == "" {
 		n.ID = uuid.New().String()
 	}
 	n.SetType(provider.ResourceType_RESOURCE_TYPE_FILE)
 
-	parentPath := n.ParentPath()
-	nodePath := filepath.Join(parentPath, n.Name)
+	// Set id in cache
+	t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(n.SpaceID), string(n.ID), nodePath)
+
 	if err := os.MkdirAll(filepath.Dir(nodePath), 0700); err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
-	_, err := os.Create(nodePath)
+	_, err = os.Create(nodePath)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
-	}
-	// update the id cache
-	err = t.lookup.(*lookup.Lookup).IDCache.Set(ctx, n.SpaceID, n.ID, nodePath)
-	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: Move: could not update id cache")
 	}
 
 	attributes := n.NodeMetadata(ctx)
@@ -302,17 +312,15 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 	if markprocessing {
 		attributes[prefixes.StatusPrefix] = []byte(node.ProcessingStatus)
 	}
+	nodeMTime := time.Now()
 	if mtime != "" {
-		if err := n.SetMtimeString(ctx, mtime); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not set mtime")
-		}
-	} else {
-		now := time.Now()
-		if err := n.SetMtime(ctx, &now); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not set mtime")
+		nodeMTime, err = utils.MTimeToTime(mtime)
+		if err != nil {
+			return err
 		}
 	}
-	err = n.SetXattrsWithContext(ctx, attributes, true)
+	attributes[prefixes.MTimeAttr] = []byte(nodeMTime.UTC().Format(time.RFC3339Nano))
+	err = n.SetXattrsWithContext(ctx, attributes, false)
 	if err != nil {
 		return err
 	}
