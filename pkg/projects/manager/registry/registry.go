@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//	http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,10 +16,23 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package registry
 
 import (
-	// Load core spacews backends.
-	_ "github.com/cs3org/reva/pkg/spaces/manager/memory"
-	// Add your own here.
+	"context"
+
+	"github.com/cs3org/reva/pkg/projects"
 )
+
+// NewFunc is the function that the projects' catalogues implementations
+// should register at init time.
+type NewFunc func(context.Context, map[string]interface{}) (projects.Catalogue, error)
+
+// NewFuncs is a map containing all the registered projects' catalogues.
+var NewFuncs = map[string]NewFunc{}
+
+// Register registers a new project catalogue new function.
+// Not safe for concurrent use. Safe for use from package init.
+func Register(name string, f NewFunc) {
+	NewFuncs[name] = f
+}

@@ -20,17 +20,22 @@ package spacesregistry
 
 import (
 	"context"
-	"encoding/base32"
 	"errors"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/plugin"
+	"github.com/cs3org/reva/pkg/projects"
+	"github.com/cs3org/reva/pkg/projects/manager/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/spaces"
-	"github.com/cs3org/reva/pkg/spaces/manager/registry"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"google.golang.org/grpc"
@@ -55,8 +60,9 @@ func (c *config) ApplyDefaults() {
 }
 
 type service struct {
-	c      *config
-	spaces spaces.Manager
+	c        *config
+	projects projects.Catalogue
+	gw       gateway.GatewayAPIClient
 }
 
 func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
@@ -68,14 +74,21 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(sharedconf.GetGatewaySVC("")))
+	if err != nil {
+		return nil, err
+	}
+
 	svc := service{
-		c:      &c,
-		spaces: s,
+		c:        &c,
+		projects: s,
+		gw:       client,
 	}
 	return &svc, nil
 }
 
-func getSpacesDriver(ctx context.Context, driver string, cfg map[string]map[string]any) (spaces.Manager, error) {
+func getSpacesDriver(ctx context.Context, driver string, cfg map[string]map[string]any) (projects.Catalogue, error) {
 	if f, ok := registry.NewFuncs[driver]; ok {
 		return f(ctx, cfg[driver])
 	}
@@ -88,21 +101,90 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 	user := appctx.ContextMustGetUser(ctx)
-	spaces, err := s.spaces.ListSpaces(ctx, user, req.Filters)
-	if err != nil {
-		return &provider.ListStorageSpacesResponse{
-			Status: status.NewInternal(ctx, err, "error listing storage spaces"),
-		}, nil
+	filters := req.Filters
+
+	sp := []*provider.StorageSpace{}
+	if len(filters) == 0 {
+		homes, err := s.listSpacesByType(ctx, user, spaces.SpaceTypeHome)
+		if err != nil {
+			return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
+		}
+		sp = append(sp, homes...)
+
+		projects, err := s.listSpacesByType(ctx, user, spaces.SpaceTypeProject)
+		if err != nil {
+			return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
+		}
+		sp = append(sp, projects...)
 	}
 
-	for _, s := range spaces {
-		s.Id = &provider.StorageSpaceId{
-			OpaqueId: base32.StdEncoding.EncodeToString([]byte(s.RootInfo.Path)),
+	for _, filter := range filters {
+		switch filter.Type {
+		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
+			spaces, err := s.listSpacesByType(ctx, user, spaces.SpaceType(filter.Term.(*provider.ListStorageSpacesRequest_Filter_SpaceType).SpaceType))
+			if err != nil {
+				return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
+			}
+			sp = append(sp, spaces...)
+		default:
+			return nil, errtypes.NotSupported("filter not supported")
 		}
 	}
-	return &provider.ListStorageSpacesResponse{
-		Status:        status.NewOK(ctx),
-		StorageSpaces: spaces,
+	return &provider.ListStorageSpacesResponse{Status: status.NewOK(ctx), StorageSpaces: sp}, nil
+}
+
+func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, spaceType spaces.SpaceType) ([]*provider.StorageSpace, error) {
+	sp := []*provider.StorageSpace{}
+
+	if spaceType == spaces.SpaceTypeHome {
+		space, err := s.userSpace(ctx, user)
+		if err != nil {
+			return nil, err
+		}
+		if space != nil {
+			sp = append(sp, space)
+		}
+	} else if spaceType == spaces.SpaceTypeProject {
+		projects, err := s.projects.ListProjects(ctx, user)
+		if err != nil {
+			return nil, err
+		}
+		sp = append(sp, projects...)
+	}
+
+	return sp, nil
+}
+
+func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.StorageSpace, error) {
+	if utils.UserIsLightweight(user) {
+		return nil, nil // lightweight accounts and federated do not have a user space
+	}
+
+	home, err := s.gw.GetHome(ctx, &provider.GetHomeRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	stat, err := s.gw.Stat(ctx, &provider.StatRequest{
+		Ref: &provider.Reference{
+			Path: home.Path,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &provider.StorageSpace{
+		Id: &provider.StorageSpaceId{
+			OpaqueId: spaces.EncodeSpaceID(stat.Info.Id.StorageId, home.Path),
+		},
+		Owner:     user,
+		Name:      user.Username,
+		SpaceType: spaces.SpaceTypeHome.AsString(),
+		RootInfo: &provider.ResourceInfo{
+			PermissionSet: conversions.NewManagerRole().CS3ResourcePermissions(),
+			Path:          home.Path,
+		},
 	}, nil
 }
 

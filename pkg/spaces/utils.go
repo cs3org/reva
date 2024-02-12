@@ -1,4 +1,4 @@
-package utils
+package spaces
 
 import (
 	"encoding/base32"
@@ -45,12 +45,27 @@ func DecodeResourceID(raw string) (storageID, path, itemID string, ok bool) {
 // EncodeResourceID encodes the provided resource ID as a string,
 // in the format <storage_id>$<space_id>!<item_id>.
 func EncodeResourceID(r *provider.ResourceId) string {
+	if r.OpaqueId == "" {
+		panic("opaque id cannot be empty")
+	}
+	// if r.SpaceId == "" {
+	// 	panic("space id cannot be empty")
+	// }
+	if r.StorageId == "" {
+		panic("storage id cannot be empty")
+	}
 	return fmt.Sprintf("%s$%s!%s", r.StorageId, r.SpaceId, r.OpaqueId)
 }
 
 // EncodeSpaceID encodes storage ID and path to create a space ID,
 // in the format <storage_id>$<base32(<path>).
 func EncodeSpaceID(storageID, path string) string {
+	if storageID == "" {
+		panic("storage id cannot be empty")
+	}
+	if path == "" {
+		panic("path cannot be empty")
+	}
 	encodedPath := base32.StdEncoding.EncodeToString([]byte(path))
 	return fmt.Sprintf("%s$%s", storageID, encodedPath)
 }

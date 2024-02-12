@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,23 +16,10 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package registry
+package loader
 
 import (
-	"context"
-
-	"github.com/cs3org/reva/pkg/spaces"
+	// Load core spacews backends.
+	_ "github.com/cs3org/reva/pkg/projects/manager/memory"
+	// Add your own here.
 )
-
-// NewFunc is the function that space manager implementations
-// should register at init time.
-type NewFunc func(context.Context, map[string]interface{}) (spaces.Manager, error)
-
-// NewFuncs is a map containing all the registered space managers.
-var NewFuncs = map[string]NewFunc{}
-
-// Register registers a new space manager new function.
-// Not safe for concurrent use. Safe for use from package init.
-func Register(name string, f NewFunc) {
-	NewFuncs[name] = f
-}
