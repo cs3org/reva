@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/spaces"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"google.golang.org/grpc"
@@ -51,12 +52,15 @@ func init() {
 }
 
 type config struct {
-	Driver  string                    `mapstructure:"driver"`
-	Drivers map[string]map[string]any `mapstructure:"drivers"`
+	Driver    string                    `mapstructure:"driver"`
+	Drivers   map[string]map[string]any `mapstructure:"drivers"`
+	UserSpace string                    `mapstructure:"user_space" validate:"required"`
 }
 
 func (c *config) ApplyDefaults() {
-
+	if c.UserSpace == "" {
+		c.UserSpace = "/home"
+	}
 }
 
 type service struct {
@@ -160,14 +164,10 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 		return nil, nil // lightweight accounts and federated do not have a user space
 	}
 
-	home, err := s.gw.GetHome(ctx, &provider.GetHomeRequest{})
-	if err != nil {
-		return nil, err
-	}
-
+	home := templates.WithUser(user, s.c.UserSpace)
 	stat, err := s.gw.Stat(ctx, &provider.StatRequest{
 		Ref: &provider.Reference{
-			Path: home.Path,
+			Path: home,
 		},
 	})
 	if err != nil {
@@ -176,14 +176,14 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 
 	return &provider.StorageSpace{
 		Id: &provider.StorageSpaceId{
-			OpaqueId: spaces.EncodeSpaceID(stat.Info.Id.StorageId, home.Path),
+			OpaqueId: spaces.EncodeSpaceID(stat.Info.Id.StorageId, home),
 		},
 		Owner:     user,
 		Name:      user.Username,
 		SpaceType: spaces.SpaceTypeHome.AsString(),
 		RootInfo: &provider.ResourceInfo{
 			PermissionSet: conversions.NewManagerRole().CS3ResourcePermissions(),
-			Path:          home.Path,
+			Path:          home,
 		},
 	}, nil
 }
