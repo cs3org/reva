@@ -117,6 +117,7 @@ func (t *Tree) Setup() error {
 				Recursive: true,
 				Events: []inotifywaitgo.EVENT{
 					inotifywaitgo.CREATE,
+					inotifywaitgo.MOVED_TO,
 				},
 				Monitor: true,
 			},
@@ -132,7 +133,9 @@ func (t *Tree) Setup() error {
 					}
 					switch e {
 					case inotifywaitgo.CREATE:
-						go t.Scan(event.Filename)
+						go t.Scan(event.Filename, false)
+					case inotifywaitgo.MOVED_TO:
+						go t.Scan(event.Filename, true)
 					}
 				}
 
@@ -145,7 +148,7 @@ func (t *Tree) Setup() error {
 }
 
 // Scan scans the given path and updates the id chache
-func (t *Tree) Scan(path string) error {
+func (t *Tree) Scan(path string, forceRescan bool) error {
 	var err error
 
 	// find the space id
@@ -162,20 +165,18 @@ func (t *Tree) Scan(path string) error {
 		return errors.New("could not find space id")
 	}
 
-	_, ok := t.lookup.(*lookup.Lookup).IDCache.Get(context.Background(), string(spaceID), path)
-	if ok {
-		return nil
-	}
-
-	id, err := t.lookup.MetadataBackend().Get(context.Background(), path, prefixes.IDAttr)
-	if err == nil {
-		return t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), path)
+	var id []byte
+	if !forceRescan {
+		// already assimilated?
+		id, err := t.lookup.MetadataBackend().Get(context.Background(), path, prefixes.IDAttr)
+		if err == nil {
+			return t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), path)
+		}
 	}
 
 	// lock the file for assimilation
 	metaLockPath := t.lookup.MetadataBackend().LockfilePath(path)
 	mlock, err := lockedfile.OpenFile(metaLockPath, os.O_RDWR|os.O_CREATE, 0600)
-
 	if err != nil {
 		return err
 	}
@@ -188,7 +189,9 @@ func (t *Tree) Scan(path string) error {
 	id, err = t.lookup.MetadataBackend().Get(context.Background(), path, prefixes.IDAttr)
 	switch err {
 	case nil:
-		return t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), path)
+		if !forceRescan {
+			return t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), path)
+		}
 	default:
 		// read parent
 		parentAttribs, err := t.lookup.MetadataBackend().All(context.Background(), filepath.Dir(path))
@@ -230,8 +233,27 @@ func (t *Tree) Scan(path string) error {
 			return err
 		}
 
-		return t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), path)
+		if !forceRescan {
+			return t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), path)
+		}
 	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+
+	// rescan the directory recursively
+	if info.IsDir() {
+		return filepath.Walk(path, func(path string, info fs.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			return t.Scan(path, false)
+		})
+	}
+	return nil
 }
 
 // GetMD returns the metadata of a node in the tree
