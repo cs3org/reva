@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/events"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/options"
@@ -204,24 +205,25 @@ func (store OcisStore) CreateNodeForUpload(session *OcisSession, initAttrs node.
 		return nil, err
 	}
 
-	var f *lockedfile.File
+	var unlock metadata.UnlockFunc
 	if session.NodeExists() {
-		f, err = store.updateExistingNode(ctx, session, n, session.SpaceID(), uint64(session.Size()))
-		if f != nil {
-			appctx.GetLogger(ctx).Info().Str("lockfile", f.Name()).Interface("err", err).Msg("got lock file from updateExistingNode")
+		unlock, err = store.updateExistingNode(ctx, session, n, session.SpaceID(), uint64(session.Size()))
+		if unlock != nil {
+			appctx.GetLogger(ctx).Info().Interface("err", err).Msg("got lock file from updateExistingNode")
 		}
 	} else {
 		store.lu.(*lookup.Lookup).IDCache.Set(ctx, n.SpaceID, n.ID, filepath.Join(n.ParentPath(), n.Name))
-		f, err = store.initNewNode(ctx, session, n, uint64(session.Size()))
-		if f != nil {
-			appctx.GetLogger(ctx).Info().Str("lockfile", f.Name()).Interface("err", err).Msg("got lock file from initNewNode")
+		unlock, err = store.initNewNode(ctx, session, n, uint64(session.Size()))
+		if unlock != nil {
+			appctx.GetLogger(ctx).Info().Interface("err", err).Msg("got lock file from initNewNode")
 		}
 	}
 	defer func() {
-		if f == nil {
+		if unlock == nil {
 			return
 		}
-		if err := f.Close(); err != nil {
+
+		if err := unlock(); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Str("nodeid", n.ID).Str("parentid", n.ParentID).Msg("could not close lock")
 		}
 	}()
@@ -258,14 +260,14 @@ func (store OcisStore) CreateNodeForUpload(session *OcisSession, initAttrs node.
 	return n, nil
 }
 
-func (store OcisStore) initNewNode(ctx context.Context, session *OcisSession, n *node.Node, fsize uint64) (*lockedfile.File, error) {
+func (store OcisStore) initNewNode(ctx context.Context, session *OcisSession, n *node.Node, fsize uint64) (metadata.UnlockFunc, error) {
 	// create folder structure (if needed)
 	if err := os.MkdirAll(filepath.Dir(n.InternalPath()), 0700); err != nil {
 		return nil, err
 	}
 
 	// create and write lock new node metadata
-	f, err := lockedfile.OpenFile(store.lu.MetadataBackend().LockfilePath(n.InternalPath()), os.O_RDWR|os.O_CREATE, 0600)
+	unlock, err := store.lu.MetadataBackend().Lock(n.InternalPath())
 	if err != nil {
 		return nil, err
 	}
@@ -273,20 +275,20 @@ func (store OcisStore) initNewNode(ctx context.Context, session *OcisSession, n 
 	// we also need to touch the actual node file here it stores the mtime of the resource
 	h, err := os.OpenFile(n.InternalPath(), os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
-		return f, err
+		return unlock, err
 	}
 	h.Close()
 
 	if _, err := node.CheckQuota(ctx, n.SpaceRoot, false, 0, fsize); err != nil {
-		return f, err
+		return unlock, err
 	}
 
 	// on a new file the sizeDiff is the fileSize
 	session.info.MetaData["sizeDiff"] = strconv.FormatInt(int64(fsize), 10)
-	return f, nil
+	return unlock, nil
 }
 
-func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSession, n *node.Node, spaceID string, fsize uint64) (*lockedfile.File, error) {
+func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSession, n *node.Node, spaceID string, fsize uint64) (metadata.UnlockFunc, error) {
 	targetPath := n.InternalPath()
 
 	// write lock existing node before reading any metadata
@@ -295,35 +297,43 @@ func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSess
 		return nil, err
 	}
 
+	unlock := func() error {
+		err := f.Close()
+		if err != nil {
+			return err
+		}
+		return os.Remove(store.lu.MetadataBackend().LockfilePath(targetPath))
+	}
+
 	old, _ := node.ReadNode(ctx, store.lu, spaceID, n.ID, false, nil, false)
 	if _, err := node.CheckQuota(ctx, n.SpaceRoot, true, uint64(old.Blobsize), fsize); err != nil {
-		return f, err
+		return unlock, err
 	}
 
 	oldNodeMtime, err := old.GetMTime(ctx)
 	if err != nil {
-		return f, err
+		return unlock, err
 	}
 	oldNodeEtag, err := node.CalculateEtag(old.ID, oldNodeMtime)
 	if err != nil {
-		return f, err
+		return unlock, err
 	}
 
 	// When the if-match header was set we need to check if the
 	// etag still matches before finishing the upload.
 	if session.HeaderIfMatch() != "" && session.HeaderIfMatch() != oldNodeEtag {
-		return f, errtypes.Aborted("etag mismatch")
+		return unlock, errtypes.Aborted("etag mismatch")
 	}
 
 	// When the if-none-match header was set we need to check if any of the
 	// etags matches before finishing the upload.
 	if session.HeaderIfNoneMatch() != "" {
 		if session.HeaderIfNoneMatch() == "*" {
-			return f, errtypes.Aborted("etag mismatch, resource exists")
+			return unlock, errtypes.Aborted("etag mismatch, resource exists")
 		}
 		for _, ifNoneMatchTag := range strings.Split(session.HeaderIfNoneMatch(), ",") {
 			if ifNoneMatchTag == oldNodeEtag {
-				return f, errtypes.Aborted("etag mismatch")
+				return unlock, errtypes.Aborted("etag mismatch")
 			}
 		}
 	}
@@ -333,11 +343,11 @@ func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSess
 	if session.HeaderIfUnmodifiedSince() != "" {
 		ifUnmodifiedSince, err := time.Parse(time.RFC3339Nano, session.HeaderIfUnmodifiedSince())
 		if err != nil {
-			return f, errtypes.InternalError(fmt.Sprintf("failed to parse if-unmodified-since time: %s", err))
+			return unlock, errtypes.InternalError(fmt.Sprintf("failed to parse if-unmodified-since time: %s", err))
 		}
 
 		if oldNodeMtime.After(ifUnmodifiedSince) {
-			return f, errtypes.Aborted("if-unmodified-since mismatch")
+			return unlock, errtypes.Aborted("if-unmodified-since mismatch")
 		}
 	}
 
@@ -348,7 +358,7 @@ func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSess
 
 		// create version node
 		if _, err := os.Create(session.info.MetaData["versionsPath"]); err != nil {
-			return f, err
+			return unlock, err
 		}
 
 		// copy blob metadata to version node
@@ -359,7 +369,7 @@ func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSess
 				attributeName == prefixes.BlobsizeAttr ||
 				attributeName == prefixes.MTimeAttr
 		}, f, true); err != nil {
-			return f, err
+			return unlock, err
 		}
 	}
 	session.info.MetaData["sizeDiff"] = strconv.FormatInt((int64(fsize) - old.Blobsize), 10)
@@ -367,8 +377,8 @@ func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSess
 
 	// keep mtime from previous version
 	if err := os.Chtimes(session.info.MetaData["versionsPath"], oldNodeMtime, oldNodeMtime); err != nil {
-		return f, errtypes.InternalError(fmt.Sprintf("failed to change mtime of version node: %s", err))
+		return unlock, errtypes.InternalError(fmt.Sprintf("failed to change mtime of version node: %s", err))
 	}
 
-	return f, nil
+	return unlock, nil
 }

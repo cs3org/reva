@@ -173,6 +173,22 @@ func (XattrsBackend) MetadataPath(path string) string { return path }
 // LockfilePath returns the path of the lock file
 func (XattrsBackend) LockfilePath(path string) string { return path + ".mlock" }
 
+// Lock locks the metadata for the given path
+func (b XattrsBackend) Lock(path string) (UnlockFunc, error) {
+	metaLockPath := b.LockfilePath(path)
+	mlock, err := lockedfile.OpenFile(metaLockPath, os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		return nil, err
+	}
+	return func() error {
+		err := mlock.Close()
+		if err != nil {
+			return err
+		}
+		return os.Remove(metaLockPath)
+	}, nil
+}
+
 func cleanupLockfile(f *lockedfile.File) {
 	_ = f.Close()
 	_ = os.Remove(f.Name())
