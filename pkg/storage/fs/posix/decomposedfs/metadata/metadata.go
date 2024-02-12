@@ -35,6 +35,8 @@ func init() {
 
 var errUnconfiguredError = errors.New("no metadata backend configured. Bailing out")
 
+type UnlockFunc func() error
+
 // Backend defines the interface for file attribute backends
 type Backend interface {
 	Name() string
@@ -48,6 +50,7 @@ type Backend interface {
 	SetMultiple(ctx context.Context, path string, attribs map[string][]byte, acquireLock bool) error
 	Remove(ctx context.Context, path, key string, acquireLock bool) error
 
+	Lock(path string) (UnlockFunc, error)
 	Purge(path string) error
 	Rename(oldPath, newPath string) error
 	IsMetaFile(path string) bool

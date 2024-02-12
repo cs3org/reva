@@ -33,7 +33,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/pablodz/inotifywaitgo/inotifywaitgo"
 	"github.com/pkg/errors"
-	"github.com/rogpeppe/go-internal/lockedfile"
 	"github.com/rs/zerolog/log"
 	"go-micro.dev/v4/store"
 	"go.opentelemetry.io/otel"
@@ -173,14 +172,12 @@ func (t *Tree) Scan(path string, forceRescan bool) error {
 	}
 
 	// lock the file for assimilation
-	metaLockPath := t.lookup.MetadataBackend().LockfilePath(path)
-	mlock, err := lockedfile.OpenFile(metaLockPath, os.O_RDWR|os.O_CREATE, 0600)
+	unlock, err := t.lookup.MetadataBackend().Lock(path)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		_ = mlock.Close()
-		_ = os.Remove(metaLockPath)
+		_ = unlock()
 	}()
 
 	// check for the id attribute again after grabbing the lock, maybe the file was assimilated/created by us in the meantime
@@ -281,14 +278,12 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 	nodePath := filepath.Join(parentPath, n.Name)
 
 	// lock the meta file
-	metaLockPath := t.lookup.MetadataBackend().LockfilePath(nodePath)
-	mlock, err := lockedfile.OpenFile(metaLockPath, os.O_RDWR|os.O_CREATE, 0600)
+	unlock, err := t.lookup.MetadataBackend().Lock(nodePath)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		_ = mlock.Close()
-		_ = os.Remove(metaLockPath)
+		_ = unlock()
 	}()
 
 	if n.ID == "" {
@@ -788,13 +783,13 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 	}
 	path := filepath.Join(parentPath, n.Name)
 
-	lock, err := lockedfile.OpenFile(path+".mlock", os.O_RDWR|os.O_CREATE, 0600)
+	// lock the meta file
+	unlock, err := t.lookup.MetadataBackend().Lock(path)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		_ = lock.Close()
-		_ = os.Remove(path + ".mlock")
+		_ = unlock()
 	}()
 
 	if err := os.MkdirAll(path, 0700); err != nil {
