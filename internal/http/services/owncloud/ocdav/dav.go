@@ -20,7 +20,6 @@ package ocdav
 
 import (
 	"context"
-	"encoding/base32"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -31,6 +30,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/spaces"
 
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
@@ -183,18 +183,18 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			// the space is located
 			spaceID, relativeSpacePath := router.ShiftPath(r.URL.Path)
 
-			spacePath, err := getSpacePath(spaceID)
-			if err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				return
+			_, base, ok := spaces.DecodeSpaceID(spaceID)
+			if !ok {
+				// TODO: bad request
+				panic("not yet implemented")
 			}
 
-			fullPath := filepath.Join(spacePath, relativeSpacePath)
+			fullPath := filepath.Join(base, relativeSpacePath)
 			r.URL.Path = fullPath
 
 			ctx = context.WithValue(ctx, ctxSpaceID, spaceID)
 			ctx = context.WithValue(ctx, ctxSpaceFullPath, fullPath)
-			ctx = context.WithValue(ctx, ctxSpacePath, spacePath)
+			ctx = context.WithValue(ctx, ctxSpacePath, base)
 			ctx = context.WithValue(ctx, ctxSpaceRelativePath, relativeSpacePath)
 			r = r.WithContext(ctx)
 			h.SpacesHandler.Handler(s).ServeHTTP(w, r)
@@ -341,14 +341,6 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			HandleWebdavError(log, w, b, err)
 		}
 	})
-}
-
-func getSpacePath(spaceID string) (string, error) {
-	decoded, err := base32.StdEncoding.DecodeString(spaceID)
-	if err != nil {
-		return "", err
-	}
-	return string(decoded), nil
 }
 
 func getTokenStatInfo(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, token string) (*provider.StatResponse, error) {
