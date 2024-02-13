@@ -104,12 +104,21 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 	return nil, errors.New("not yet implemented")
 }
 
+func countTypeFilters(filters []*provider.ListStorageSpacesRequest_Filter) (count int) {
+	for _, f := range filters {
+		if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE {
+			count++
+		}
+	}
+	return
+}
+
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 	user := appctx.ContextMustGetUser(ctx)
 	filters := req.Filters
 
 	sp := []*provider.StorageSpace{}
-	if len(filters) == 0 {
+	if countTypeFilters(filters) == 0 {
 		homes, err := s.listSpacesByType(ctx, user, spaces.SpaceTypeHome)
 		if err != nil {
 			return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
@@ -131,6 +140,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
 			}
 			sp = append(sp, spaces...)
+		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
 		default:
 			return nil, errtypes.NotSupported("filter not supported")
 		}

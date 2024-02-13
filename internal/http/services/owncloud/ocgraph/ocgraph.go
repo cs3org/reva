@@ -27,9 +27,9 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils/cfg"
-	"github.com/go-chi/chi/v5"
 )
 
 func init() {
@@ -47,8 +47,7 @@ func (c *config) ApplyDefaults() {
 }
 
 type svc struct {
-	c      *config
-	router *chi.Mux
+	c *config
 }
 
 func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
@@ -57,40 +56,45 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 		return nil, err
 	}
 
-	r := chi.NewRouter()
 	s := &svc{
-		c:      &c,
-		router: r,
-	}
-
-	if err := s.routerInit(); err != nil {
-		return nil, err
+		c: &c,
 	}
 
 	return s, nil
-}
-
-func (s *svc) routerInit() error {
-	s.router.Route("/v1.0", func(r chi.Router) {
-		r.Route("/me", func(r chi.Router) {
-			r.Get("/", s.getMe)
-			r.Route("/drives", func(r chi.Router) {
-				r.Get("/", s.listMySpaces)
-
-			})
-		})
-		r.Route("/drives", func(r chi.Router) {
-			r.Get("/{space-id}", s.getSpace)
-		})
-	})
-	return nil
 }
 
 func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
 	return pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
 }
 
-func (s *svc) Handler() http.Handler { return s.router }
+func (s *svc) Handler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var head string
+		head, r.URL.Path = router.ShiftPath(r.URL.Path)
+
+		switch head {
+		case "v1.0":
+			head, r.URL.Path = router.ShiftPath(r.URL.Path)
+			switch head {
+			case "drives":
+				s.getSpace(w, r)
+				return
+			case "me":
+				head, r.URL.Path = router.ShiftPath(r.URL.Path)
+				switch head {
+				case "":
+					s.getMe(w, r)
+					return
+				case "drives":
+					s.listMySpaces(w, r)
+					return
+				}
+			}
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+	})
+}
 
 func (s *svc) Prefix() string { return "graph" }
 
