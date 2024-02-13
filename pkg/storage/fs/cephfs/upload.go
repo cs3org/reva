@@ -31,9 +31,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (fs *cephfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
+func (fs *cephfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, metadata map[string]string) error {
 	user := fs.makeUser(ctx)
 	p := ref.GetPath()
+
+	// TODO(lopresti) validate lock metadata if present
 
 	ok, err := IsChunked(p)
 	if err != nil {

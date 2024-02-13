@@ -285,7 +285,7 @@ func (d *driver) InitiateUpload(ctx context.Context, ref *provider.Reference, _ 
 	}, nil
 }
 
-func (d *driver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
+func (d *driver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, _ map[string]string) error {
 	client, _, rel, err := d.webdavClient(ctx, ref)
 	if err != nil {
 		return err

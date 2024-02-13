@@ -75,8 +75,9 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 			defer r.Body.Close()
 
 			ref := &provider.Reference{Path: fn}
+			metadata := map[string]string{}
 
-			err := fs.Upload(ctx, ref, r.Body)
+			err := fs.Upload(ctx, ref, r.Body, metadata)
 			switch v := err.(type) {
 			case nil:
 				w.WriteHeader(http.StatusOK)
@@ -92,6 +93,8 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				w.WriteHeader(http.StatusUnauthorized)
 			case errtypes.InsufficientStorage:
 				w.WriteHeader(http.StatusInsufficientStorage)
+			case errtypes.BadRequest:
+				w.WriteHeader(http.StatusConflict)
 			default:
 				sublog.Error().Err(v).Msg("error uploading file")
 				w.WriteHeader(http.StatusInternalServerError)

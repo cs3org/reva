@@ -707,7 +707,7 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 }
 
 // Write writes a stream to the mgm.
-func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser) error {
+func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser, metadata map[string]string) error {
 	fd, err := os.CreateTemp(c.opt.CacheDirectory, "eoswrite-")
 	if err != nil {
 		return err
@@ -720,12 +720,11 @@ func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path s
 	if err != nil {
 		return err
 	}
-
-	return c.WriteFile(ctx, auth, path, fd.Name())
+	return c.WriteFile(ctx, auth, path, fd.Name(), metadata["lockholder"])
 }
 
 // WriteFile writes an existing file to the mgm.
-func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, path, source string) error {
+func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, path, source, app string) error {
 	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
 	args := []string{"--nopbar", "--silent", "-f", source, xrdPath}
 
