@@ -39,6 +39,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/cs3org/reva/pkg/utils/list"
 	"google.golang.org/grpc"
 )
 
@@ -134,7 +135,24 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			return nil, errtypes.NotSupported("filter not supported")
 		}
 	}
+
+	// TODO: we should filter at the driver level.
+	// for now let's do it here. optimizations later :)
+	if id, ok := isFilterById(req.Filters); ok {
+		sp = list.Filter(sp, func(s *provider.StorageSpace) bool { return s.Id.OpaqueId == id })
+	}
+
 	return &provider.ListStorageSpacesResponse{Status: status.NewOK(ctx), StorageSpaces: sp}, nil
+}
+
+func isFilterById(filters []*provider.ListStorageSpacesRequest_Filter) (string, bool) {
+	for _, f := range filters {
+		switch f.Type {
+		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
+			return f.Term.(*provider.ListStorageSpacesRequest_Filter_Id).Id.OpaqueId, true
+		}
+	}
+	return "", false
 }
 
 func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, spaceType spaces.SpaceType) ([]*provider.StorageSpace, error) {

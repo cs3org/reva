@@ -56,3 +56,15 @@ func ToMap[K comparable, T any](l []T, k func(T) K) map[K]T {
 	}
 	return m
 }
+
+// Filter returns a list having the elements from l that
+// satisfy the predicate f.
+func Filter[T any](l []T, f func(T) bool) []T {
+	r := make([]T, 0)
+	for _, e := range l {
+		if f(e) {
+			r = append(r, e)
+		}
+	}
+	return r
+}
