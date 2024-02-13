@@ -48,13 +48,14 @@ func EncodeResourceID(r *provider.ResourceId) string {
 	if r.OpaqueId == "" {
 		panic("opaque id cannot be empty")
 	}
-	// if r.SpaceId == "" {
-	// 	panic("space id cannot be empty")
-	// }
+	if r.SpaceId == "" {
+		panic("space id cannot be empty")
+	}
 	if r.StorageId == "" {
 		panic("storage id cannot be empty")
 	}
-	return fmt.Sprintf("%s$%s!%s", r.StorageId, r.SpaceId, r.OpaqueId)
+	spaceID := EncodeSpaceID(r.StorageId, r.SpaceId)
+	return fmt.Sprintf("%s!%s", spaceID, r.OpaqueId)
 }
 
 // EncodeSpaceID encodes storage ID and path to create a space ID,

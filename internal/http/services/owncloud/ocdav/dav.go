@@ -178,26 +178,34 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "spaces")
 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
 
-			// path is of type: space_id/relative/path/from/space
-			// the space_id is the base64 encode of the path where
-			// the space is located
-			spaceID, relativeSpacePath := router.ShiftPath(r.URL.Path)
+			var head string
+			head, r.URL.Path = router.ShiftPath(r.URL.Path)
 
-			_, base, ok := spaces.DecodeSpaceID(spaceID)
-			if !ok {
-				// TODO: bad request
-				panic("not yet implemented")
+			switch head {
+			case "trash-bin":
+				r = r.WithContext(ctx)
+				h.TrashbinHandler.Handler(s).ServeHTTP(w, r)
+			default:
+				// path is of type: space_id/relative/path/from/space
+				// the space_id is the base64 encode of the path where
+				// the space is located
+
+				_, base, ok := spaces.DecodeSpaceID(head)
+				if !ok {
+					// TODO: bad request
+					panic("not yet implemented")
+				}
+
+				fullPath := filepath.Join(base, r.URL.Path)
+				r.URL.Path = fullPath
+
+				ctx = context.WithValue(ctx, ctxSpaceID, head)
+				ctx = context.WithValue(ctx, ctxSpaceFullPath, fullPath)
+				ctx = context.WithValue(ctx, ctxSpacePath, base)
+				ctx = context.WithValue(ctx, ctxSpaceRelativePath, r.URL.Path)
+				r = r.WithContext(ctx)
+				h.SpacesHandler.Handler(s).ServeHTTP(w, r)
 			}
-
-			fullPath := filepath.Join(base, relativeSpacePath)
-			r.URL.Path = fullPath
-
-			ctx = context.WithValue(ctx, ctxSpaceID, spaceID)
-			ctx = context.WithValue(ctx, ctxSpaceFullPath, fullPath)
-			ctx = context.WithValue(ctx, ctxSpacePath, base)
-			ctx = context.WithValue(ctx, ctxSpaceRelativePath, relativeSpacePath)
-			r = r.WithContext(ctx)
-			h.SpacesHandler.Handler(s).ServeHTTP(w, r)
 		case "ocm":
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "ocm")
 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)

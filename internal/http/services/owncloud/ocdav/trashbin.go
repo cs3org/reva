@@ -20,7 +20,6 @@ package ocdav
 
 import (
 	"context"
-	"encoding/base32"
 	"encoding/xml"
 	"fmt"
 	"net/http"
@@ -34,6 +33,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/spaces"
 
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
@@ -44,7 +44,6 @@ import (
 // TrashbinHandler handles trashbin requests.
 type TrashbinHandler struct {
 	gatewaySvc string
-	spaces     bool
 }
 
 func (h *TrashbinHandler) init(c *Config) error {
@@ -56,24 +55,53 @@ func (h *TrashbinHandler) handleTrashbinSpaces(s *svc, w http.ResponseWriter, r 
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	space, _ := router.ShiftPath(r.URL.Path)
+	var spaceId string
+	spaceId, r.URL.Path = router.ShiftPath(r.URL.Path)
 
-	spaceId, err := base32.StdEncoding.DecodeString(space)
-	if err != nil {
-		log.Error().Err(err).Msgf("error decoding space id: %s", space)
-		w.WriteHeader(http.StatusBadRequest)
-		return
+	_, base, ok := spaces.DecodeSpaceID(spaceId)
+	if !ok {
+		// TODO: bad request
+		panic("not yet implemented: bad request")
 	}
-
-	path := string(spaceId)
-	log.Debug().Str("path", path).Msg("decoded space base path")
+	log.Debug().Str("path", base).Msg("decoded space base path")
 
 	u := appctx.ContextMustGetUser(ctx)
 
 	if r.Method == MethodPropfind {
-		h.listTrashbin(w, r, s, u, path, "", "")
+		h.listTrashbin(w, r, s, u, base, "", "")
 		return
 	}
+
+	var key string
+	key, r.URL.Path = router.ShiftPath(r.URL.Path)
+	if key != "" && r.Method == MethodMove {
+		// find path in url relative to trash base
+		// trashBase := ctx.Value(ctxKeyBaseURI).(string)
+		// baseURI := path.Join(path.Dir(trashBase), "files", username)
+		// ctx = context.WithValue(ctx, ctxKeyBaseURI, baseURI)
+		// r = r.WithContext(ctx)
+
+		// TODO make request.php optional in destination header
+		dst, err := extractDestination(r)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		dst = path.Clean(dst)
+		_, dst = router.ShiftPath(dst)
+
+		log.Debug().Str("key", key).Str("dst", dst).Msg("restore")
+
+		h.restore(w, r, s, u, base, dst, key, "")
+		return
+	}
+
+	if r.Method == http.MethodDelete {
+		h.delete(w, r, s, u, base, key, "")
+		return
+	}
+
+	http.Error(w, "501 Not implemented", http.StatusNotImplemented)
 }
 
 // Handler handles requests.
