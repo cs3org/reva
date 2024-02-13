@@ -1322,7 +1322,7 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 
 // Write writes a file to the mgm
 // Somehow the same considerations as Read apply.
-func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser) error {
+func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser, metadata map[string]string) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "Write").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 	var length int64
@@ -1365,7 +1365,7 @@ func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path s
 }
 
 // WriteFile writes an existing file to the mgm. Old xrdcp utility.
-func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, path, source string) error {
+func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, path, source, app string) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "WriteFile").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Str("source", source).Msg("")
 
