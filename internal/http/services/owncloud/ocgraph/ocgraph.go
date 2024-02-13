@@ -74,7 +74,10 @@ func (s *svc) routerInit() error {
 	s.router.Route("/v1.0", func(r chi.Router) {
 		r.Route("/me", func(r chi.Router) {
 			r.Get("/", s.getMe)
-			r.Get("/drives", s.listMySpaces)
+			r.Route("/drives", func(r chi.Router) {
+				r.Get("/", s.listMySpaces)
+				r.Get("/{space-id}", s.getSpace)
+			})
 		})
 	})
 	return nil
