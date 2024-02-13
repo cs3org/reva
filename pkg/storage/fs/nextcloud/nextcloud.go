@@ -317,8 +317,8 @@ func (nc *StorageDriver) InitiateUpload(ctx context.Context, ref *provider.Refer
 	return res, err
 }
 
-// Upload as defined in the storage.FS interface.
-func (nc *StorageDriver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
+// Upload as defined in the storage.FS interface. The metadata parameters (e.g. lock context) are ignored.
+func (nc *StorageDriver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, _ map[string]string) error {
 	req, err := nc.prepareRequest(ctx, http.MethodPut, filepath.Join("/Upload/home", ref.Path), r)
 	if err != nil {
 		return err
