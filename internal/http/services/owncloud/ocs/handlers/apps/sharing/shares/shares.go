@@ -152,13 +152,19 @@ func (h *Handler) startCacheWarmup(c cache.Warmup) {
 
 func (h *Handler) extractReference(r *http.Request) (*provider.Reference, error) {
 	var ref provider.Reference
+	if spaceID := r.FormValue("space_ref"); spaceID != "" {
+		_, base, _, ok := spaces.DecodeResourceID(spaceID)
+		if !ok {
+			return nil, errors.New("bad space id format")
+		}
+
+		ref.Path = base
+	}
 	if p := r.FormValue("path"); p != "" {
-		ref = provider.Reference{Path: path.Join(h.homeNamespace, p)}
-	} else if spaceRef := r.FormValue("space_ref"); spaceRef != "" {
-		var err error
-		ref, err = utils.ParseStorageSpaceReference(spaceRef)
-		if err != nil {
-			return nil, err
+		if ref.Path == "" {
+			ref.Path = path.Join(h.homeNamespace, p)
+		} else {
+			ref.Path = path.Join(ref.Path, p)
 		}
 	}
 	return &ref, nil
