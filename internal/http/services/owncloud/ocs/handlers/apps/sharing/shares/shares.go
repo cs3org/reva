@@ -1117,8 +1117,12 @@ func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix stri
 		return nil, nil, err
 	}
 
-	target := path.Join(prefix, r.FormValue("path"))
-	info, status, err := h.getResourceInfoByPath(ctx, client, target)
+	target, err := h.extractReference(r)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error extracting reference from request", err)
+		return nil, nil, err
+	}
+	info, status, err := h.getResourceInfoByPath(ctx, client, target.Path)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc stat request", err)
 		return nil, nil, err
