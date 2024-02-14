@@ -21,7 +21,6 @@ package shares
 import (
 	"bytes"
 	"context"
-	"encoding/base32"
 	"encoding/json"
 	"fmt"
 	"mime"
@@ -49,6 +48,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/spaces"
 
 	"github.com/cs3org/reva/pkg/notification"
 	"github.com/cs3org/reva/pkg/notification/notificationhelper"
@@ -1147,8 +1147,7 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		s.MimeType = parsedMt
 		// TODO STime:     &types.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
 		// TODO Storage: int
-		itemID := base32.StdEncoding.EncodeToString([]byte(info.Path))
-		itemID += "!" + base32.StdEncoding.EncodeToString([]byte(resourceid.OwnCloudResourceIDWrap(info.Id)))
+		itemID := spaces.EncodeResourceID(info.Id)
 
 		s.ItemSource = itemID
 		s.FileSource = s.ItemSource

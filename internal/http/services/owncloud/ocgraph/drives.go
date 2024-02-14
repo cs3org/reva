@@ -22,7 +22,6 @@ package ocgraph
 
 import (
 	"context"
-	"encoding/base32"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -42,7 +41,6 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/utils/list"
-	"github.com/cs3org/reva/pkg/utils/resourceid"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"github.com/pkg/errors"
 )
@@ -181,8 +179,6 @@ func convertShareToSpace(ctx context.Context, gw gateway.GatewayAPIClient, share
 	}
 
 	// the prefix of the remote_item.id and rootid
-	idPrefix := base32.StdEncoding.EncodeToString([]byte(stat.Info.Path))
-	resourceIdEnc := base32.StdEncoding.EncodeToString([]byte(resourceid.OwnCloudResourceIDWrap(stat.Info.Id)))
 
 	space := &libregraph.Drive{
 		Id:         libregraph.PtrString(fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, share.Id.OpaqueId)),
@@ -197,13 +193,13 @@ func convertShareToSpace(ctx context.Context, gw gateway.GatewayAPIClient, share
 				Folder:     &libregraph.Folder{},
 				// The Id must correspond to the id in the OCS response, for the time being
 				// It is in the form <something>!<something-else>
-				Id:                   libregraph.PtrString(fmt.Sprintf("%s!%s", idPrefix, resourceIdEnc)),
+				Id:                   libregraph.PtrString(spaces.EncodeResourceID(stat.Info.Id)),
 				LastModifiedDateTime: libregraph.PtrTime(time.Unix(int64(stat.Info.Mtime.Seconds), int64(stat.Info.Mtime.Nanos))),
 				Name:                 libregraph.PtrString(filepath.Base(stat.Info.Path)),
 				Path:                 libregraph.PtrString("/"),
 				// RootId must have the same token before ! as Id
 				// the second part for the time being is not important
-				RootId: libregraph.PtrString(fmt.Sprintf("%s!wrong_root_id", idPrefix)),
+				RootId: libregraph.PtrString(fmt.Sprintf("%s!wrong_root_id", spaces.EncodeSpaceID(stat.Info.Id.StorageId, stat.Info.Id.SpaceId))),
 				Size:   libregraph.PtrInt64(int64(stat.Info.Size)),
 			},
 		},
