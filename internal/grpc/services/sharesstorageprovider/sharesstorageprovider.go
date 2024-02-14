@@ -810,11 +810,6 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 			return nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
 		}
 
-		gatewayClient, err := s.gatewaySelector.Next()
-		if err != nil {
-			return nil, err
-		}
-
 		infos := []*provider.ResourceInfo{}
 		for _, share := range receivedShares {
 			if share.GetState() != collaboration.ShareState_SHARE_STATE_ACCEPTED {
@@ -823,33 +818,10 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 
 			info := shareMd[share.GetShare().GetId().GetOpaqueId()]
 			if info == nil {
-				if share.GetShare().GetResourceId().GetSpaceId() == "" {
-					// convert backwards compatible share id
-					share.Share.ResourceId.StorageId, share.Share.ResourceId.SpaceId = storagespace.SplitStorageID(share.GetShare().GetResourceId().GetSpaceId())
-				}
-				statRes, err := gatewayClient.Stat(ctx, &provider.StatRequest{
-					Opaque: req.Opaque,
-					Ref: &provider.Reference{
-						ResourceId: share.Share.ResourceId,
-						Path:       ".",
-					},
-					ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
-				})
-				switch {
-				case err != nil:
-					appctx.GetLogger(ctx).Error().
-						Err(err).
-						Interface("share", share).
-						Msg("sharesstorageprovider: could not make stat request when listing virtual root, skipping")
-					continue
-				case statRes.Status.Code != rpc.Code_CODE_OK:
-					appctx.GetLogger(ctx).Debug().
-						Interface("share", share).
-						Interface("status", statRes.Status).
-						Msg("sharesstorageprovider: could not stat share when listing virtual root, skipping")
-					continue
-				}
-				info = statRes.Info
+				appctx.GetLogger(ctx).Debug().
+					Interface("share", share).
+					Msg("sharesstorageprovider: no resource info for share")
+				continue
 			}
 
 			// override resource id info
