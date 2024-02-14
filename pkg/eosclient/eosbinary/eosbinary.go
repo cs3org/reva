@@ -707,7 +707,7 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 }
 
 // Write writes a stream to the mgm.
-func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser, metadata map[string]string) error {
+func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser, app string) error {
 	fd, err := os.CreateTemp(c.opt.CacheDirectory, "eoswrite-")
 	if err != nil {
 		return err
@@ -720,7 +720,7 @@ func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path s
 	if err != nil {
 		return err
 	}
-	return c.WriteFile(ctx, auth, path, fd.Name(), metadata["lockholder"])
+	return c.WriteFile(ctx, auth, path, fd.Name(), app)
 }
 
 // WriteFile writes an existing file to the mgm.
@@ -731,7 +731,7 @@ func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, pa
 	if auth.Token != "" {
 		args[4] += "?authz=" + auth.Token
 	} else if auth.Role.UID != "" && auth.Role.GID != "" {
-		args = append(args, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s&eos.app=reva_eosclient::write", auth.Role.UID, auth.Role.GID))
+		args = append(args, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s&eos.app=%s", auth.Role.UID, auth.Role.GID, app))
 	}
 
 	_, _, err := c.executeXRDCopy(ctx, args)
