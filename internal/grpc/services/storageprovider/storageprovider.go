@@ -453,8 +453,6 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		}, nil
 	}
 
-	// extract all metadata from (custom) headers
-	// TODO(lopresti) They are defined in the http/services/ownclod/ocdav package (webdav.go) but duplicated here
 	metadata := map[string]string{}
 	var uploadLength int64
 	if req.Opaque != nil && req.Opaque.Map != nil {
@@ -475,13 +473,6 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		if req.Opaque.Map["X-OC-Mtime"] != nil {
 			metadata["mtime"] = string(req.Opaque.Map["X-OC-Mtime"].Value)
 		}
-		// in addition to the lock_id we may have the lock holder
-		if req.Opaque.Map["Lock-Holder"] != nil {
-			metadata["lockholder"] = string(req.Opaque.Map["Lock-Holder"].Value)
-		}
-	}
-	if req.LockId != "" {
-		metadata["lockid"] = req.LockId
 	}
 	uploadIDs, err := s.storage.InitiateUpload(ctx, newRef, uploadLength, metadata)
 	if err != nil {
