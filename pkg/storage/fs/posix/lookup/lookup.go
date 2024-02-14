@@ -45,6 +45,7 @@ import (
 var tracer trace.Tracer
 
 var _spaceTypePersonal = "personal"
+var _spaceTypeProject = "project"
 
 func init() {
 	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/utils/decomposedfs/lookup")
@@ -393,6 +394,8 @@ func (lu *Lookup) CopyMetadataWithSourceLock(ctx context.Context, sourcePath, ta
 // GenerateSpaceID generates a space id for the given space type and owner
 func (lu *Lookup) GenerateSpaceID(spaceType string, owner *user.User) (string, error) {
 	switch spaceType {
+	case _spaceTypeProject:
+		return uuid.New().String(), nil
 	case _spaceTypePersonal:
 		path := templates.WithUser(owner, lu.Options.UserLayout)
 

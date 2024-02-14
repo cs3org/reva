@@ -79,10 +79,10 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	description := utils.ReadPlainFromOpaque(req.Opaque, "description")
 	alias := utils.ReadPlainFromOpaque(req.Opaque, "spaceAlias")
 	if alias == "" {
-		alias = templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, fs.o.GeneralSpaceAliasTemplate)
+		alias = templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, spaceID, fs.o.GeneralSpaceAliasTemplate)
 	}
 	if req.Type == _spaceTypePersonal {
-		alias = templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, fs.o.PersonalSpaceAliasTemplate)
+		alias = templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, spaceID, fs.o.PersonalSpaceAliasTemplate)
 	}
 
 	root, err := node.ReadNode(ctx, fs.lu, spaceID, spaceID, true, nil, false) // will fall into `Exists` case below
@@ -97,7 +97,13 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 
 	// create a directory node
 	root.SetType(provider.ResourceType_RESOURCE_TYPE_CONTAINER)
-	relativeRootPath := templates.WithUser(u, fs.o.UserLayout)
+	var relativeRootPath string
+	switch req.Type {
+	case _spaceTypePersonal:
+		relativeRootPath = templates.WithUser(u, fs.o.UserLayout)
+	case _spaceTypeProject:
+		relativeRootPath = templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, spaceID, fs.o.ProjectLayout)
+	}
 	rootPath := filepath.Join(fs.o.Root, relativeRootPath)
 
 	if err := os.MkdirAll(rootPath, 0700); err != nil {
