@@ -32,6 +32,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -212,8 +213,17 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
+	// resolve date boundaries, ignore if invalid/missing
+	fromTS, _ := conversions.ParseTimestamp(r.URL.Query().Get("from"))
+	toTS, _ := conversions.ParseTimestamp(r.URL.Query().Get("to"))
+
 	// ask gateway for recycle items
-	getRecycleRes, err := gc.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: &provider.Reference{Path: basePath}, Key: path.Join(key, itemPath)})
+	getRecycleRes, err := gc.ListRecycle(ctx, &provider.ListRecycleRequest{
+		Ref:    &provider.Reference{Path: basePath},
+		FromTs: fromTS,
+		ToTs:   toTS,
+		Key:    path.Join(key, itemPath),
+	})
 
 	if err != nil {
 		sublog.Error().Err(err).Msg("error calling ListRecycle")
@@ -221,6 +231,10 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
+	if getRecycleRes.Status.Code == rpc.Code_CODE_INVALID_ARGUMENT {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 	if getRecycleRes.Status.Code != rpc.Code_CODE_OK {
 		HandleErrorStatus(&sublog, w, getRecycleRes.Status)
 		return

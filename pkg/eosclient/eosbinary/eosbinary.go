@@ -723,7 +723,7 @@ func (c *Client) Rename(ctx context.Context, auth eosclient.Authorization, oldPa
 
 // List the contents of the directory given by path.
 func (c *Client) List(ctx context.Context, auth eosclient.Authorization, path string) ([]*eosclient.FileInfo, error) {
-	args := []string{"find", "--fileinfo", "--maxdepth", "1", path}
+	args := []string{"oldfind", "--fileinfo", "--maxdepth", "1", path}
 	stdout, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		return nil, errors.Wrapf(err, "eosclient: error listing fn=%s", path)
@@ -787,15 +787,28 @@ func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, pa
 }
 
 // ListDeletedEntries returns a list of the deleted entries.
-func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization) ([]*eosclient.DeletedEntry, error) {
-	// TODO(labkode): add protection if slave is configured and alive to count how many files are in the trashbin before
-	// triggering the recycle ls call that could break the instance because of unavailable memory.
-	args := []string{"recycle", "ls", "-m"}
-	stdout, _, err := c.executeEOS(ctx, args, auth)
-	if err != nil {
-		return nil, err
+func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization, maxentries int, from, to time.Time) ([]*eosclient.DeletedEntry, error) {
+	deleted := []*eosclient.DeletedEntry{}
+	count := 0
+	for d := to; !d.Before(from); d = d.AddDate(0, 0, -1) {
+		args := []string{"recycle", "ls", "-m", d.Format("2006/01/02"), fmt.Sprintf("%d", maxentries+1)}
+		stdout, _, err := c.executeEOS(ctx, args, auth)
+		if err != nil {
+			return nil, err
+		}
+
+		list, err := parseRecycleList(stdout)
+		if err != nil {
+			return nil, err
+		}
+		deleted = append(deleted, list...)
+		count += len(list)
+		if count > maxentries {
+			return nil, errtypes.BadRequest("list too long")
+		}
 	}
-	return parseRecycleList(stdout)
+
+	return deleted, nil
 }
 
 // RestoreDeletedEntry restores a deleted entry.
@@ -1041,7 +1054,7 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 	return finfos, nil
 }
 
-func (c Client) parseQuotaLine(line string) map[string]string {
+func (c Client) parseEosOutputLine(line string) map[string]string {
 	partsBySpace := strings.FieldsFunc(line, func(c rune) bool {
 		return c == ' '
 	})
@@ -1057,7 +1070,7 @@ func (c *Client) parseQuota(path, raw string) (*eosclient.QuotaInfo, error) {
 			continue
 		}
 
-		m := c.parseQuotaLine(rl)
+		m := c.parseEosOutputLine(rl)
 		// map[maxbytes:2000000000000 maxlogicalbytes:1000000000000 percentageusedbytes:0.49 quota:node uid:gonzalhu space:/eos/scratch/user/ usedbytes:9829986500 usedlogicalbytes:4914993250 statusfiles:ok usedfiles:334 maxfiles:1000000 statusbytes:ok]
 
 		space := m["space"]
