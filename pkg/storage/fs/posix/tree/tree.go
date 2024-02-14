@@ -150,7 +150,7 @@ func (t *Tree) Scan(path string, forceRescan bool) error {
 
 	// find the space id
 	spaceID := []byte("")
-	spaceCandidate := filepath.Dir(path)
+	spaceCandidate := path
 	for strings.HasPrefix(spaceCandidate, t.options.Root) {
 		spaceID, err = t.lookup.MetadataBackend().Get(context.Background(), spaceCandidate, prefixes.SpaceIDAttr)
 		if err == nil {

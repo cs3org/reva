@@ -56,6 +56,9 @@ type Options struct {
 	// UserLayout describes the relative path from the storage's root node to the users home node.
 	UserLayout string `mapstructure:"user_layout"`
 
+	// ProjectLayout describes the relative path from the storage's root node to the project spaces root directory.
+	ProjectLayout string `mapstructure:"project_layout"`
+
 	// propagate mtime changes as tmtime (tree modification time) to the parent directory when user.ocis.propagation=1 is set on a node
 	TreeTimeAccounting bool `mapstructure:"treetime_accounting"`
 
@@ -122,6 +125,11 @@ func New(m map[string]interface{}) (*Options, error) {
 	if o.UserLayout == "" {
 		o.UserLayout = "{{.Id.OpaqueId}}"
 	}
+
+	if o.ProjectLayout == "" {
+		o.ProjectLayout = "{{.Id.OpaqueId}}"
+	}
+
 	// ensure user layout has no starting or trailing /
 	o.UserLayout = strings.Trim(o.UserLayout, "/")
 

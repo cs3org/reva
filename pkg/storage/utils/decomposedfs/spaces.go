@@ -82,12 +82,12 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	// allow sending a spaceAlias
 	alias := utils.ReadPlainFromOpaque(req.Opaque, "spaceAlias")
 	if alias == "" {
-		alias = templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, fs.o.GeneralSpaceAliasTemplate)
+		alias = templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, spaceID, fs.o.GeneralSpaceAliasTemplate)
 	}
 	// TODO enforce a uuid?
 	// TODO clarify if we want to enforce a single personal storage space or if we want to allow sending the spaceid
 	if req.Type == _spaceTypePersonal {
-		alias = templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, fs.o.PersonalSpaceAliasTemplate)
+		alias = templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, spaceID, fs.o.PersonalSpaceAliasTemplate)
 	}
 
 	root, err := node.ReadNode(ctx, fs.lu, spaceID, spaceID, true, nil, false) // will fall into `Exists` case below
