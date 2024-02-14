@@ -186,13 +186,6 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		w.Header().Set(HeaderOCMtime, "accepted")
 	}
 
-	if lockholder := r.Header.Get(HeaderLockHolder); lockholder != "" {
-		opaqueMap[HeaderLockHolder] = &typespb.OpaqueEntry{
-			Decoder: "plain",
-			Value:   []byte(lockholder),
-		}
-	}
-
 	// curl -X PUT https://demo.owncloud.com/remote.php/webdav/testcs.bin -u demo:demo -d '123' -v -H 'OC-Checksum: SHA1:40bd001563085fc35165329ea1ff5c5ecbdbbeef'
 
 	var cparts []string
@@ -278,6 +271,12 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return
 	}
 	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+	if lockid := r.Header.Get(HeaderLockID); lockid != "" {
+		httpReq.Header.Set(HeaderLockID, lockid)
+	}
+	if lockholder := r.Header.Get(HeaderLockHolder); lockholder != "" {
+		httpReq.Header.Set(HeaderLockHolder, lockholder)
+	}
 
 	httpRes, err := s.client.Do(httpReq)
 	if err != nil {

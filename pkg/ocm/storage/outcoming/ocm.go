@@ -34,6 +34,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 
 	"github.com/cs3org/reva/pkg/appctx"
@@ -403,20 +404,9 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, content io
 	}
 
 	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
-		opaqueMap := map[string]*typespb.OpaqueEntry{}
-		if lockholder := metadata["lockholder"]; lockholder != "" {
-			opaqueMap["Lock-Holder"] = &typespb.OpaqueEntry{
-				Decoder: "plain",
-				Value:   []byte(lockholder),
-			}
-		}
 		initRes, err := d.gateway.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
 			Ref:    newRef,
-			LockId: metadata["lockid"],
-			Opaque: &typespb.Opaque{
-				Map: opaqueMap,
-			},
-		})
+			LockId: metadata["lockid"]})
 		switch {
 		case err != nil:
 			return err
@@ -435,6 +425,12 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, content io
 		}
 
 		httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+		if lockid := metadata["lockid"]; lockid != "" {
+			httpReq.Header.Set(ocdav.HeaderLockID, lockid)
+		}
+		if lockholder := metadata["lockholder"]; lockholder != "" {
+			httpReq.Header.Set(ocdav.HeaderLockHolder, lockholder)
+		}
 
 		httpRes, err := httpclient.New().Do(httpReq)
 		if err != nil {
