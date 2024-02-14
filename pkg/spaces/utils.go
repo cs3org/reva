@@ -42,6 +42,19 @@ func DecodeResourceID(raw string) (storageID, path, itemID string, ok bool) {
 	return
 }
 
+// ParseResourceID converts the encoded resource id in a CS3API ResourceId.
+func ParseResourceID(raw string) (*provider.ResourceId, bool) {
+	storageID, path, itemID, ok := DecodeResourceID(raw)
+	if !ok {
+		return nil, false
+	}
+	return &provider.ResourceId{
+		StorageId: storageID,
+		SpaceId:   path,
+		OpaqueId:  itemID,
+	}, true
+}
+
 // EncodeResourceID encodes the provided resource ID as a string,
 // in the format <storage_id>$<space_id>!<item_id>.
 func EncodeResourceID(r *provider.ResourceId) string {
