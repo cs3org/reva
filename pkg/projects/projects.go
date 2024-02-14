@@ -27,6 +27,5 @@ import (
 
 // Catalogue is the interface that stores the project spaces.
 type Catalogue interface {
-	StoreProject(ctx context.Context, owner *userpb.UserId, path, name string, quota *provider.Quota) error
 	ListProjects(ctx context.Context, user *userpb.User) ([]*provider.StorageSpace, error)
 }

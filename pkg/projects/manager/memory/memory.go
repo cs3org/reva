@@ -40,7 +40,6 @@ type SpaceDescription struct {
 	StorageID string `mapstructure:"storage_id" validate:"required"`
 	Path      string `mapstructure:"path"       validate:"required"`
 	Name      string `mapstructure:"name"       validate:"required"`
-	Type      string `mapstructure:"type"       validate:"required"`
 	Owner     string `mapstructure:"owner"      validate:"required"`
 	Readers   string `mapstructure:"readers"    validate:"required"`
 	Writers   string `mapstructure:"writers"    validate:"required"`
@@ -65,10 +64,6 @@ func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
 
 func NewWithConfig(ctx context.Context, c *Config) (projects.Catalogue, error) {
 	return &service{c: c}, nil
-}
-
-func (s *service) StoreProject(ctx context.Context, owner *userpb.UserId, path, name string, quota *provider.Quota) error {
-	panic("not yet implemented")
 }
 
 func (s *service) ListProjects(ctx context.Context, user *userpb.User) ([]*provider.StorageSpace, error) {
