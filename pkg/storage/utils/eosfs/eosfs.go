@@ -833,7 +833,9 @@ func encodeLock(l *provider.Lock) (string, string, error) {
 	}
 	var a string
 	if l.AppName != "" {
-		a = l.AppName
+		// cf. upload implementation
+		r := strings.NewReplacer(" ", "_")
+		a = "reva_" + strings.ToLower(r.Replace(l.AppName))
 	} else {
 		a = "*"
 	}

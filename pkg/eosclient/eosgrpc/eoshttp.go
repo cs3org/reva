@@ -360,9 +360,9 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 }
 
 // PUTFile does an entire PUT to upload a full file, taking the data from a stream.
-func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eosclient.Authorization, urlpath string, stream io.ReadCloser, length int64) error {
+func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eosclient.Authorization, urlpath string, stream io.ReadCloser, length int64, app string) error {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "PUTFile").Str("remoteuser", remoteuser).Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", urlpath).Int64("length", length).Msg("")
+	log.Info().Str("func", "PUTFile").Str("remoteuser", remoteuser).Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", urlpath).Int64("length", length).Str("app", app).Msg("")
 
 	// Now send the req and see what happens
 	finalurl, err := c.buildFullURL(urlpath, auth)
@@ -376,6 +376,9 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 		return err
 	}
 
+	if app != "" {
+		req.Header.Set("app", app)
+	}
 	req.Close = true
 
 	ntries := 0
