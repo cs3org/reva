@@ -179,7 +179,7 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 			httpclient.RoundTripper(tr),
 		),
 		favoritesManager:   fm,
-		notificationHelper: notificationhelper.New("ocdav", c.Notifications, log),
+		notificationHelper: notificationhelper.New("ocdav", log),
 	}
 
 	// initialize handlers and set default cigs

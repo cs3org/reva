@@ -1238,7 +1238,7 @@ func (fs *localfs) convertToRecycleItem(ctx context.Context, rp string, md os.Fi
 	}
 }
 
-func (fs *localfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (fs *localfs) ListRecycle(ctx context.Context, basePath, key, relativePath string, from, to *types.Timestamp) ([]*provider.RecycleItem, error) {
 	rp := fs.wrapRecycleBin(ctx, "/")
 
 	entries, err := os.ReadDir(rp)

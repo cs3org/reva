@@ -25,6 +25,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	typepb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
 // FS is the interface to implement access to the storage.
@@ -43,7 +44,7 @@ type FS interface {
 	ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
 	DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error)
 	RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error
-	ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error)
+	ListRecycle(ctx context.Context, basePath, key, relativePath string, from, to *typepb.Timestamp) ([]*provider.RecycleItem, error)
 	RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error
 	PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error
 	EmptyRecycle(ctx context.Context) error

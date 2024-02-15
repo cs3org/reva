@@ -20,6 +20,7 @@ level = "debug"
 
 [shared]
 gatewaysvc = "{{ vars.internal_gateway }}:19000"
+jwt_secret = "reva-secret"
 
 [grpc.services.gateway]
 address = ":19000"
@@ -29,6 +30,7 @@ storageregistrysvc = "{{ grpc.services.storageregistry.address }}"
 preferencessvc = "{{ grpc.services.userprovider.address }}"
 userprovidersvc = "{{ grpc.services.userprovider.address }}"
 usershareprovidersvc = "{{ grpc.services.usershareprovider.address }}"
+publicshareprovidersvc = "{{ grpc.services.publicshareprovider.address }}"
 ocmcoresvc = "{{ grpc.services.ocmcore.address }}"
 ocmshareprovidersvc = "{{ grpc.services.ocmshareprovider.address }}"
 ocminvitemanagersvc = "{{ grpc.services.ocminvitemanager.address }}"
@@ -84,13 +86,14 @@ app_int_url = "http://collabora.docker:9980"
 # app_int_url = "https://codimd.docker"
 
 
-### AUTH PROVIDERS ###
+### AUTH ###
 
 [grpc.services.authregistry]
 driver = "static"
 
 [grpc.services.authregistry.drivers.static.rules]
 basic = "{{ grpc.services.authprovider[0].address }}"
+bearer = "{{ grpc.services.authprovider[0].address }}"
 machine = "{{ grpc.services.authprovider[1].address }}"
 ocmshares = "{{ grpc.services.authprovider[2].address }}"
 
@@ -117,16 +120,16 @@ gateway_addr = "{{ vars.internal_gateway }}:19000"
 auth_manager = "ocmshares"
 
 
-### STORAGE PROVIDERS ###
+### STORAGE ###
 
 [grpc.services.storageregistry]
 driver = "static"
 
 [grpc.services.storageregistry.drivers.static]
-home_provider = "/home"
+home_provider = "/"
 
 [grpc.services.storageregistry.drivers.static.rules]
-"/home" = {"address" = "{{ grpc.services.storageprovider[0].address }}"}
+"/" = {"address" = "{{ grpc.services.storageprovider[0].address }}"}
 "localhome" = {"address" = "{{ grpc.services.storageprovider[0].address }}"}
 "/ocm" = {"address" = "{{ grpc.services.storageprovider[1].address }}"}
 "ocm" = {"address" = "{{ grpc.services.storageprovider[1].address }}"}
@@ -135,11 +138,11 @@ home_provider = "/home"
 
 [[grpc.services.storageprovider]]
 driver = "localhome"
-mount_path = "/home"
+mount_path = "/"
 mount_id = "localhome"
 expose_data_server = true
 data_server_url = "https://localhost:{{ http.services.dataprovider[0].address.port }}/data"
-enable_home_creation = false
+enable_home_creation = true
 
 [grpc.services.storageprovider.drivers.localhome]
 user_layout = "{{.Username}}"
@@ -171,6 +174,8 @@ driver = "memory"
 
 [grpc.services.publicshareprovider]
 driver = "memory"
+
+[grpc.services.preferences]
 
 [grpc.services.ocmcore]
 driver = "json"
@@ -233,9 +238,15 @@ file = ""
 
 ### HTTP ENDPOINTS ###
 
+[http.middlewares.auth]
+credential_chain = ["publicshares", "basic", "bearer"]
+token_strategy_chain = ["bearer", "header"]
+
+[http.middlewares.auth.credentials_by_user_agent]
+"mirall" = "basic"
+
 [http.services.appprovider]
 address = ":443"
-insecure = true
 
 [http.services.datagateway]
 address = ":443"
@@ -259,7 +270,7 @@ driver = "ocmreceived"
 [http.services.sciencemesh]
 address = ":443"
 provider_domain = "{{ vars.provider_domain }}"
-mesh_directory_url = "https://sciencemesh.cesnet.cz/iop/meshdir"
+mesh_directory_url = "https:/meshdir.docker/meshdir"
 ocm_mount_point = "/sciencemesh"
 
 [http.services.sciencemesh.smtp_credentials]
@@ -376,6 +387,7 @@ string = "10.0.11"
 
 [http.services.ocdav]
 address = ":443"
+insecure = true
 
 [http.services.prometheus]
 address = ":443"
@@ -386,4 +398,10 @@ address = ":443"
 #address = ":443"
 
 [http.middlewares.cors]
+allowed_origins = ["*"]
+allowed_methods = ["OPTIONS", "LOCK", "GET", "HEAD", "POST", "DELETE", "PROPPATCH", "COPY", "MOVE", "UNLOCK", "PROPFIND", "MKCOL", "REPORT", "SEARCH", "PUT"]
+allowed_headers = ["Accept", "Accept-Language", "Authorization", "Content-Language", "Content-Type", "Depth", "OCS-APIREQUEST", "Referer", "sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform", "User-Agent", "X-Requested-With"]
+debug = true
+exposed_headers = []
+
 [http.middlewares.log]

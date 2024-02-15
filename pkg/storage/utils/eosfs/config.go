@@ -176,4 +176,12 @@ type Config struct {
 
 	// Path of the script to run after an user home folder has been created
 	OnPostCreateHomeHook string `mapstructure:"on_post_create_home_hook"`
+
+	// Maximum entries count a ListRecycle call may return: if exceeded, ListRecycle
+	// will return a BadRequest error
+	MaxRecycleEntries int `mapstructure:"max_recycle_entries"`
+
+	// Maximum time span in days a ListRecycle call may return: if exceeded, ListRecycle
+	// will override the "to" date with "from" + this value
+	MaxDaysInRecycleList int `mapstructure:"max_days_in_recycle_list"`
 }

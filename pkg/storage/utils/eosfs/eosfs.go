@@ -147,6 +147,14 @@ func (c *Config) ApplyDefaults() {
 		c.TokenExpiry = 3600
 	}
 
+	if c.MaxRecycleEntries == 0 {
+		c.MaxRecycleEntries = 2000
+	}
+
+	if c.MaxDaysInRecycleList == 0 {
+		c.MaxDaysInRecycleList = 14
+	}
+
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
@@ -1914,7 +1922,7 @@ func (fs *eosfs) EmptyRecycle(ctx context.Context) error {
 	return fs.c.PurgeDeletedEntries(ctx, auth)
 }
 
-func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath string, from, to *types.Timestamp) ([]*provider.RecycleItem, error) {
 	var auth eosclient.Authorization
 
 	if !fs.conf.EnableHome && fs.conf.AllowPathRecycleOperations && basePath != "/" {
@@ -1945,9 +1953,29 @@ func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 		}
 	}
 
-	eosDeletedEntries, err := fs.c.ListDeletedEntries(ctx, auth)
+	var dateFrom, dateTo time.Time
+	if from != nil && to != nil {
+		dateFrom = time.Unix(int64(from.Seconds), 0)
+		dateTo = time.Unix(int64(to.Seconds), 0)
+		if dateFrom.AddDate(0, 0, fs.conf.MaxDaysInRecycleList).Before(dateTo) {
+			return nil, errtypes.BadRequest("eosfs: too many days requested in listing the recycle bin")
+		}
+	} else {
+		// if no date range was given, list up to two days ago
+		dateTo = time.Now()
+		dateFrom = dateTo.AddDate(0, 0, -2)
+	}
+
+	sublog := appctx.GetLogger(ctx).With().Logger()
+	sublog.Debug().Time("from", dateFrom).Time("to", dateTo).Msg("executing ListDeletedEntries")
+	eosDeletedEntries, err := fs.c.ListDeletedEntries(ctx, auth, fs.conf.MaxRecycleEntries, dateFrom, dateTo)
 	if err != nil {
-		return nil, errors.Wrap(err, "eosfs: error listing deleted entries")
+		switch err.(type) {
+		case errtypes.IsBadRequest:
+			return nil, errtypes.BadRequest("eosfs: too many entries found in listing the recycle bin")
+		default:
+			return nil, errors.Wrap(err, "eosfs: error listing deleted entries")
+		}
 	}
 	recycleEntries := []*provider.RecycleItem{}
 	for _, entry := range eosDeletedEntries {

@@ -37,9 +37,9 @@ import (
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
+	"github.com/cs3org/reva/pkg/trace"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -243,8 +243,7 @@ func (c *Client) executeEOS(ctx context.Context, cmdArgs []string, auth eosclien
 
 	cmd.Args = append(cmd.Args, cmdArgs...)
 
-	span := trace.SpanFromContext(ctx)
-	cmd.Args = append(cmd.Args, "--comment", span.SpanContext().TraceID().String())
+	cmd.Args = append(cmd.Args, "--comment", trace.Get(ctx))
 
 	err := cmd.Run()
 
@@ -724,7 +723,7 @@ func (c *Client) Rename(ctx context.Context, auth eosclient.Authorization, oldPa
 
 // List the contents of the directory given by path.
 func (c *Client) List(ctx context.Context, auth eosclient.Authorization, path string) ([]*eosclient.FileInfo, error) {
-	args := []string{"find", "--fileinfo", "--maxdepth", "1", path}
+	args := []string{"oldfind", "--fileinfo", "--maxdepth", "1", path}
 	stdout, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		return nil, errors.Wrapf(err, "eosclient: error listing fn=%s", path)
@@ -788,15 +787,28 @@ func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, pa
 }
 
 // ListDeletedEntries returns a list of the deleted entries.
-func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization) ([]*eosclient.DeletedEntry, error) {
-	// TODO(labkode): add protection if slave is configured and alive to count how many files are in the trashbin before
-	// triggering the recycle ls call that could break the instance because of unavailable memory.
-	args := []string{"recycle", "ls", "-m"}
-	stdout, _, err := c.executeEOS(ctx, args, auth)
-	if err != nil {
-		return nil, err
+func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization, maxentries int, from, to time.Time) ([]*eosclient.DeletedEntry, error) {
+	deleted := []*eosclient.DeletedEntry{}
+	count := 0
+	for d := to; !d.Before(from); d = d.AddDate(0, 0, -1) {
+		args := []string{"recycle", "ls", "-m", d.Format("2006/01/02"), fmt.Sprintf("%d", maxentries+1)}
+		stdout, _, err := c.executeEOS(ctx, args, auth)
+		if err != nil {
+			return nil, err
+		}
+
+		list, err := parseRecycleList(stdout)
+		if err != nil {
+			return nil, err
+		}
+		deleted = append(deleted, list...)
+		count += len(list)
+		if count > maxentries {
+			return nil, errtypes.BadRequest("list too long")
+		}
 	}
-	return parseRecycleList(stdout)
+
+	return deleted, nil
 }
 
 // RestoreDeletedEntry restores a deleted entry.
@@ -902,16 +914,11 @@ func parseRecycleList(raw string) ([]*eosclient.DeletedEntry, error) {
 // parse entries like these:
 // recycle=ls recycle-bin=/eos/backup/proc/recycle/ uid=gonzalhu gid=it size=0 deletion-time=1510823151 type=recursive-dir keylength.restore-path=45 restore-path=/eos/scratch/user/g/gonzalhu/.sys.v#.app.ico/ restore-key=0000000000a35100
 // recycle=ls recycle-bin=/eos/backup/proc/recycle/ uid=gonzalhu gid=it size=381038 deletion-time=1510823151 type=file keylength.restore-path=36 restore-path=/eos/scratch/user/g/gonzalhu/app.ico restore-key=000000002544fdb3.
+// NOTE: after EOS 5.2.0, the restore-key field is not the latest entry in the response anymore.
 func parseRecycleEntry(raw string) (*eosclient.DeletedEntry, error) {
 	partsBySpace := strings.FieldsFunc(raw, func(c rune) bool {
 		return c == ' '
 	})
-	restoreKeyPair, partsBySpace := partsBySpace[len(partsBySpace)-1], partsBySpace[:len(partsBySpace)-1]
-	restorePathPair := strings.Join(partsBySpace[8:], " ")
-
-	partsBySpace = partsBySpace[:8]
-	partsBySpace = append(partsBySpace, restorePathPair)
-	partsBySpace = append(partsBySpace, restoreKeyPair)
 
 	kv := getMap(partsBySpace)
 	size, err := strconv.ParseUint(kv["size"], 10, 64)
@@ -933,6 +940,33 @@ func parseRecycleEntry(raw string) (*eosclient.DeletedEntry, error) {
 		DeletionMTime: deletionMTime,
 		IsDir:         isDir,
 	}
+
+	// rewrite the restore-path to take into account the key keylength.restore-path
+	keyLengthString, ok := kv["keylength.restore-path"]
+	if !ok {
+		return nil, errors.Wrap(err, fmt.Sprintf("eos response is missing restore-key:%+v", kv))
+	}
+
+	keyLength, err := strconv.ParseUint(keyLengthString, 10, 64)
+	if err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("recycle ls response keylength.restore-path is not a number:%+v", kv))
+	}
+
+	// find the index of the restore-path key string in the raw string
+	// ... restore-path=/eos/scratch/user/g/gonzalhu/app.ico ....
+	// NOTE: this code will break if another key of the output will contain the string "restore-path=/" in it (very unlikely)
+	index := strings.Index(raw, "restore-path=/")
+	if index == -1 {
+		return nil, errors.New(fmt.Sprintf("restore-path key not found in raw string: %s", raw))
+	}
+	start := index + len("restore-path=/") // note the key ends with /, this is to avoid getting a hit on keylength.restore-path
+	stop := uint64(start) + keyLength
+	restorePath := raw[start:stop]
+	restorePath = "/" + restorePath // if the path does not start with /, it's skipping in response
+	restorePath = strings.Trim(restorePath, " ")
+
+	entry.RestorePath = restorePath
+
 	return entry, nil
 }
 
@@ -1020,7 +1054,7 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 	return finfos, nil
 }
 
-func (c Client) parseQuotaLine(line string) map[string]string {
+func (c Client) parseEosOutputLine(line string) map[string]string {
 	partsBySpace := strings.FieldsFunc(line, func(c rune) bool {
 		return c == ' '
 	})
@@ -1036,7 +1070,7 @@ func (c *Client) parseQuota(path, raw string) (*eosclient.QuotaInfo, error) {
 			continue
 		}
 
-		m := c.parseQuotaLine(rl)
+		m := c.parseEosOutputLine(rl)
 		// map[maxbytes:2000000000000 maxlogicalbytes:1000000000000 percentageusedbytes:0.49 quota:node uid:gonzalhu space:/eos/scratch/user/ usedbytes:9829986500 usedlogicalbytes:4914993250 statusfiles:ok usedfiles:334 maxfiles:1000000 statusbytes:ok]
 
 		space := m["space"]
@@ -1182,12 +1216,8 @@ func (c *Client) mapToFileInfo(ctx context.Context, kv, attrs map[string]string,
 	}
 	if !mtimeSet {
 		mtimeSplit := strings.Split(kv["mtime"], ".")
-		if mtimesec, err = strconv.ParseUint(mtimeSplit[0], 10, 64); err != nil {
-			return nil, err
-		}
-		if mtimenanos, err = strconv.ParseUint(mtimeSplit[1], 10, 32); err != nil {
-			return nil, err
-		}
+		mtimesec, _ = strconv.ParseUint(mtimeSplit[0], 10, 64)
+		mtimenanos, _ = strconv.ParseUint(mtimeSplit[1], 10, 32)
 	}
 
 	var ctimesec, ctimenanos uint64

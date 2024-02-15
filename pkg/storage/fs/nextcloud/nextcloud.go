@@ -30,7 +30,7 @@ import (
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 
@@ -263,7 +263,7 @@ func resInfoFromEFSS(respObj *MDFromEFSS) *provider.ResourceInfo {
 		},
 		Etag:     respObj.Etag,
 		MimeType: respObj.MimeType,
-		Mtime: &typesv1beta1.Timestamp{
+		Mtime: &types.Timestamp{
 			Seconds: uint64(respObj.Mtime.Seconds),
 		},
 		Path: respObj.Path,
@@ -374,7 +374,7 @@ type ListRecycleRequest struct {
 }
 
 // ListRecycle as defined in the storage.FS interface.
-func (nc *StorageDriver) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (nc *StorageDriver) ListRecycle(ctx context.Context, basePath, key, relativePath string, from, to *types.Timestamp) ([]*provider.RecycleItem, error) {
 	var items []*provider.RecycleItem
 	err := nc.do(ctx, http.MethodPost, "ListRecycle", ListRecycleRequest{Key: key, Path: relativePath}, &items)
 	return items, err

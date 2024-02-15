@@ -18,8 +18,7 @@
 
 // NOTE: compile the grpc proto with these commands
 // and do not ask any questions, I don't have the answer
-// protoc ./Rpc.proto --go-grpc_out=.
-// protoc ./eos_grpc.proto --go_out=plugins=grpc:.
+// protoc ./Rpc.proto --go_out=plugins=grpc:.
 
 package eosgrpc
 
@@ -35,6 +34,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -191,7 +191,7 @@ func New(ctx context.Context, opt *Options, httpOpts *HTTPOptions) (*Client, err
 }
 
 // If the error is not nil, take that
-// If there is an error coming from EOS, erturn a descriptive error.
+// If there is an error coming from EOS, return a descriptive error.
 func (c *Client) getRespError(rsp *erpc.NSResponse, err error) error {
 	if err != nil {
 		return err
@@ -1202,12 +1202,11 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 			return nil, errtypes.NotFound(dpath)
 		}
 
-		log.Debug().Str("func", "List").Str("path", dpath).Str("item resp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
+		log.Debug().Str("func", "List").Str("path", dpath).Msg("grpc response")
 
 		myitem, err := c.grpcMDResponseToFileInfo(ctx, rsp)
 		if err != nil {
 			log.Error().Err(err).Str("func", "List").Str("path", dpath).Str("could not convert item:", fmt.Sprintf("%#v", rsp)).Str("err", err.Error()).Msg("")
-
 			return nil, err
 		}
 
@@ -1377,7 +1376,7 @@ func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, pa
 }
 
 // ListDeletedEntries returns a list of the deleted entries.
-func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization) ([]*eosclient.DeletedEntry, error) {
+func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization, maxentries int, from, to time.Time) ([]*eosclient.DeletedEntry, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "ListDeletedEntries").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Msg("")
 
@@ -1387,49 +1386,58 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 		return nil, err
 	}
 
-	msg := new(erpc.NSRequest_RecycleRequest)
-	msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(erpc.NSRequest_RecycleRequest_RECYCLE_CMD_value["LIST"])
-
-	rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
-
-	// Now send the req and see what happens
-	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
-	e := c.getRespError(resp, err)
-	if e != nil {
-		log.Error().Str("err", e.Error()).Msg("")
-		return nil, e
-	}
-
-	if resp == nil {
-		return nil, errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s'", auth.Role.UID))
-	}
-
-	if resp.GetError() != nil {
-		log.Error().Str("func", "ListDeletedEntries").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
-	} else {
-		log.Debug().Str("func", "ListDeletedEntries").Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
-	}
-	// TODO(labkode): add protection if slave is configured and alive to count how many files are in the trashbin before
-	// triggering the recycle ls call that could break the instance because of unavailable memory.
-	// FF: I agree with labkode, if we think we may have memory problems then the semantics of the grpc call`and
-	// the semantics if this func will have to change. For now this is not foreseen
-
 	ret := make([]*eosclient.DeletedEntry, 0)
-	for _, f := range resp.Recycle.Recycles {
-		if f == nil {
-			log.Info().Msg("nil item in response")
-			continue
+	count := 0
+	for d := to; !d.Before(to); d = d.AddDate(0, 0, -1) {
+		msg := new(erpc.NSRequest_RecycleRequest)
+		msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(erpc.NSRequest_RecycleRequest_RECYCLE_CMD_value["LIST"])
+		msg.Purgedate = new(erpc.NSRequest_RecycleRequest_PurgeDate)
+		msg.Purgedate.Day = int32(d.Day())
+		msg.Purgedate.Month = int32(d.Month())
+		msg.Purgedate.Year = int32(d.Year())
+		msg.Listflag = new(erpc.NSRequest_RecycleRequest_ListFlags)
+		msg.Listflag.Maxentries = int32(maxentries + 1)
+		rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
+
+		// Now send the req and see what happens
+		resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
+		e := c.getRespError(resp, err)
+		if e != nil {
+			log.Error().Str("err", e.Error()).Msg("")
+			return nil, e
 		}
 
-		entry := &eosclient.DeletedEntry{
-			RestorePath:   string(f.Id.Path),
-			RestoreKey:    f.Key,
-			Size:          f.Size,
-			DeletionMTime: f.Dtime.Sec,
-			IsDir:         (f.Type == erpc.NSResponse_RecycleResponse_RecycleInfo_TREE),
+		if resp == nil {
+			return nil, errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s'", auth.Role.UID))
 		}
 
-		ret = append(ret, entry)
+		if resp.GetError() != nil {
+			log.Error().Str("func", "ListDeletedEntries").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
+		} else {
+			count += len(resp.Recycle.Recycles)
+			log.Debug().Str("func", "ListDeletedEntries").Int("totalcount", count).Msg("grpc response")
+		}
+
+		if count > maxentries {
+			return nil, errtypes.BadRequest("list too long")
+		}
+
+		for _, f := range resp.Recycle.Recycles {
+			if f == nil {
+				log.Info().Msg("nil item in response")
+				continue
+			}
+
+			entry := &eosclient.DeletedEntry{
+				RestorePath:   string(f.Id.Path),
+				RestoreKey:    f.Key,
+				Size:          f.Size,
+				DeletionMTime: f.Dtime.Sec,
+				IsDir:         (f.Type == erpc.NSResponse_RecycleResponse_RecycleInfo_TREE),
+			}
+
+			ret = append(ret, entry)
+		}
 	}
 
 	return ret, nil
@@ -1635,7 +1643,10 @@ func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDRespon
 			fi.Attrs[strings.TrimPrefix(k, "user.")] = string(v)
 		}
 
-		fi.Size = uint64(st.Cmd.TreeSize)
+		fi.TreeSize = uint64(st.Cmd.TreeSize)
+		fi.Size = fi.TreeSize
+		// TODO(lopresti) this info is missing in the EOS Protobuf, cf. EOS-5974
+		// fi.TreeCount = uint64(st.Cmd.TreeCount)
 
 		log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Msg("grpc response")
 	} else {

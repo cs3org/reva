@@ -54,3 +54,5 @@ tests/ocis/tests/acceptance/work_tmp
 .air.toml
 
 toolchain/
+
+logs_test/

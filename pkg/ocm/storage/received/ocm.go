@@ -332,7 +332,7 @@ func (d *driver) RestoreRevision(ctx context.Context, ref *provider.Reference, k
 	return errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (d *driver) ListRecycle(ctx context.Context, basePath, key, relativePath string, from, to *typepb.Timestamp) ([]*provider.RecycleItem, error) {
 	return nil, errtypes.NotSupported("operation not supported")
 }
 

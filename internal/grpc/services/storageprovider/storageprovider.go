@@ -1128,7 +1128,7 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 	}
 
 	key, itemPath := router.ShiftPath(req.Key)
-	items, err := s.storage.ListRecycle(ctx, ref.GetPath(), key, itemPath)
+	items, err := s.storage.ListRecycle(ctx, ref.GetPath(), key, itemPath, req.FromTs, req.ToTs)
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
@@ -1136,6 +1136,8 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 			st = status.NewNotFound(ctx, "path not found when listing recycle stream")
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		case errtypes.BadRequest:
+			st = status.NewInvalidArg(ctx, "too many days or too many entries")
 		default:
 			st = status.NewInternal(ctx, err, "error listing recycle stream")
 		}
@@ -1169,7 +1171,7 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 		return nil, err
 	}
 	key, itemPath := router.ShiftPath(req.Key)
-	items, err := s.storage.ListRecycle(ctx, ref.GetPath(), key, itemPath)
+	items, err := s.storage.ListRecycle(ctx, ref.GetPath(), key, itemPath, req.FromTs, req.ToTs)
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
 	if err != nil {
 		var st *rpc.Status
@@ -1178,6 +1180,8 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 			st = status.NewNotFound(ctx, "path not found when listing recycle")
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		case errtypes.BadRequest:
+			st = status.NewInvalidArg(ctx, "too many days or too many entries")
 		default:
 			st = status.NewInternal(ctx, err, "error listing recycle")
 		}

@@ -29,7 +29,7 @@ ENV CGO_ENABLED 0
 
 RUN make revad
 
-FROM gitlab-registry.cern.ch/dss/eos/eos-all:5.0.31
+FROM gitlab-registry.cern.ch/dss/eos/eos-all:5.2.14
 
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /home/reva/cmd/revad/revad /usr/bin/revad

@@ -57,7 +57,7 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 	if err != nil {
 		return err
 	}
-	log.Trace().Msg("Extracting scope from token")
+	log.Trace().Msgf("Extracting scope:%+v from token", tokenScope)
 	if ref, ok := extractRef(req, tokenScope); ok {
 		// The request is for a storage reference. This can be the case for multiple scenarios:
 		// - If the path is not empty, the request might be coming from a share where the accessor is
@@ -87,7 +87,7 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 			}
 		}
 	} else {
-		log.Trace().Msg("Token scope is not ok")
+		log.Trace().Msgf("Token scope is not ok. req:%+v, tokenScope:%+v", req, tokenScope)
 	}
 
 	if checkLightweightScope(ctx, req, tokenScope, client) {
@@ -322,6 +322,8 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 func extractRefForReaderRole(req interface{}) (*provider.Reference, bool) {
 	switch v := req.(type) {
 	// Read requests
+	case *provider.GetPathRequest:
+		return &provider.Reference{ResourceId: v.ResourceId}, true
 	case *registry.GetStorageProvidersRequest:
 		return v.GetRef(), true
 	case *provider.StatRequest:
@@ -348,6 +350,8 @@ func extractRefForReaderRole(req interface{}) (*provider.Reference, bool) {
 func extractRefForUploaderRole(req interface{}) (*provider.Reference, bool) {
 	switch v := req.(type) {
 	// Write Requests
+	case *provider.GetPathRequest:
+		return &provider.Reference{ResourceId: v.ResourceId}, true
 	case *registry.GetStorageProvidersRequest:
 		return v.GetRef(), true
 	case *provider.StatRequest:
@@ -366,6 +370,8 @@ func extractRefForUploaderRole(req interface{}) (*provider.Reference, bool) {
 func extractRefForEditorRole(req interface{}) (*provider.Reference, bool) {
 	switch v := req.(type) {
 	// Remaining edit Requests
+	case *provider.GetPathRequest:
+		return &provider.Reference{ResourceId: v.ResourceId}, true
 	case *provider.DeleteRequest:
 		return v.GetRef(), true
 	case *provider.MoveRequest:
