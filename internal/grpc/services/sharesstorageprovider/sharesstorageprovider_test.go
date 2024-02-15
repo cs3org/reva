@@ -240,6 +240,12 @@ var _ = Describe("Sharesstorageprovider", func() {
 						},
 					}
 				case ".":
+					permissionSet := &sprovider.ResourcePermissions{
+						Stat: true,
+					}
+					if req.Ref.ResourceId.OpaqueId == "shareddir-merged" {
+						permissionSet.ListContainer = true
+					}
 					return &sprovider.StatResponse{
 						Status: status.NewOK(context.Background()),
 						Info: &sprovider.ResourceInfo{
@@ -248,12 +254,10 @@ var _ = Describe("Sharesstorageprovider", func() {
 							Id: &sprovider.ResourceId{
 								StorageId: "share1-storageid",
 								SpaceId:   "share1-storageid",
-								OpaqueId:  "shareddir",
+								OpaqueId:  req.Ref.ResourceId.OpaqueId,
 							},
-							PermissionSet: &sprovider.ResourcePermissions{
-								Stat: true,
-							},
-							Size: 100,
+							PermissionSet: permissionSet,
+							Size:          100,
 						},
 					}
 				default:
@@ -466,81 +470,6 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_CONTAINER))
 				Expect(res.Info.Path).To(Equal("share1-shareddir"))
 				Expect(res.Info.Size).To(Equal(uint64(100)))
-			})
-
-			It("merges permissions from multiple shares", func() {
-				s1 := &collaboration.ReceivedShare{
-					State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
-					Share: &collaboration.Share{
-						Id: &collaboration.ShareId{
-							OpaqueId: "multishare1",
-						},
-						ResourceId: &sprovider.ResourceId{
-							StorageId: "share1-storageid",
-							SpaceId:   "share1-storageid",
-							OpaqueId:  "shareddir",
-						},
-						Permissions: &collaboration.SharePermissions{
-							Permissions: &sprovider.ResourcePermissions{
-								Stat: true,
-							},
-						},
-					},
-					MountPoint: &sprovider.Reference{Path: "share1-shareddir"},
-				}
-				s2 := &collaboration.ReceivedShare{
-					State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
-					Share: &collaboration.Share{
-						Id: &collaboration.ShareId{
-							OpaqueId: "multishare2",
-						},
-						ResourceId: &sprovider.ResourceId{
-							StorageId: "share1-storageid",
-							SpaceId:   "share1-storageid",
-							OpaqueId:  "shareddir",
-						},
-						Permissions: &collaboration.SharePermissions{
-							Permissions: &sprovider.ResourcePermissions{
-								ListContainer: true,
-							},
-						},
-					},
-					MountPoint: &sprovider.Reference{Path: "share2-shareddir"},
-				}
-
-				sharingCollaborationClient.On("ListReceivedShares", mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
-					Status: status.NewOK(context.Background()),
-					Shares: []*collaboration.ReceivedShare{s1, s2},
-				}, nil)
-				sharingCollaborationClient.On("GetReceivedShare", mock.Anything, mock.Anything).Return(
-					func(_ context.Context, req *collaboration.GetReceivedShareRequest, _ ...grpc.CallOption) *collaboration.GetReceivedShareResponse {
-						switch req.Ref.GetId().GetOpaqueId() {
-						case BaseShare.Share.Id.OpaqueId:
-							return &collaboration.GetReceivedShareResponse{
-								Status: status.NewOK(context.Background()),
-								Share:  s1,
-							}
-						case BaseShareTwo.Share.Id.OpaqueId:
-							return &collaboration.GetReceivedShareResponse{
-								Status: status.NewOK(context.Background()),
-								Share:  s2,
-							}
-						default:
-							return &collaboration.GetReceivedShareResponse{
-								Status: status.NewNotFound(context.Background(), "not found"),
-							}
-						}
-					}, nil)
-
-				res, err := s.Stat(ctx, BaseStatRequest)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(res).ToNot(BeNil())
-				Expect(res.Info).ToNot(BeNil())
-				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
-				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_CONTAINER))
-				Expect(res.Info.Path).To(Equal("share1-shareddir"))
-				Expect(res.Info.PermissionSet.Stat).To(BeTrue())
-				// Expect(res.Info.PermissionSet.ListContainer).To(BeTrue()) // TODO reenable
 			})
 
 			It("stats a subfolder in a share", func() {
@@ -997,6 +926,68 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
+			})
+		})
+	})
+	Context("with two accepted shares for the same resource", func() {
+		BeforeEach(func() {
+			BaseShare.Share.Id.OpaqueId = "multishare1"
+			BaseShare.Share.ResourceId = &sprovider.ResourceId{
+				StorageId: "share1-storageid",
+				SpaceId:   "share1-storageid",
+				OpaqueId:  "shareddir-merged",
+			}
+			BaseShare.Share.Permissions = &collaboration.SharePermissions{
+				Permissions: &sprovider.ResourcePermissions{
+					Stat: true,
+				},
+			}
+			BaseShare.MountPoint = &sprovider.Reference{Path: "share1-shareddir"}
+			BaseShareTwo.Share.Id.OpaqueId = "multishare2"
+			BaseShareTwo.Share.ResourceId = BaseShare.Share.ResourceId
+			BaseShareTwo.Share.Permissions = &collaboration.SharePermissions{
+				Permissions: &sprovider.ResourcePermissions{
+					ListContainer: true,
+				},
+			}
+			BaseShareTwo.MountPoint = BaseShare.MountPoint
+
+			sharingCollaborationClient.On("ListReceivedShares", mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
+				Status: status.NewOK(context.Background()),
+				Shares: []*collaboration.ReceivedShare{BaseShare, BaseShareTwo},
+			}, nil)
+			sharingCollaborationClient.On("GetReceivedShare", mock.Anything, mock.Anything).Return(
+				func(_ context.Context, req *collaboration.GetReceivedShareRequest, _ ...grpc.CallOption) *collaboration.GetReceivedShareResponse {
+					switch req.Ref.GetId().GetOpaqueId() {
+					case BaseShare.Share.Id.OpaqueId:
+						return &collaboration.GetReceivedShareResponse{
+							Status: status.NewOK(context.Background()),
+							Share:  BaseShare,
+						}
+					case BaseShareTwo.Share.Id.OpaqueId:
+						return &collaboration.GetReceivedShareResponse{
+							Status: status.NewOK(context.Background()),
+							Share:  BaseShareTwo,
+						}
+					default:
+						return &collaboration.GetReceivedShareResponse{
+							Status: status.NewNotFound(context.Background(), "not found"),
+						}
+					}
+				}, nil)
+		})
+		Describe("Stat", func() {
+			It("merges permissions from multiple shares", func() {
+				BaseStatRequest.Ref.ResourceId.OpaqueId = "multishare2"
+				res, err := s.Stat(ctx, BaseStatRequest)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Info).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
+				Expect(res.Info.Type).To(Equal(sprovider.ResourceType_RESOURCE_TYPE_CONTAINER))
+				Expect(res.Info.Path).To(Equal("share1-shareddir"))
+				Expect(res.Info.PermissionSet.Stat).To(BeTrue())
+				Expect(res.Info.PermissionSet.ListContainer).To(BeTrue())
 			})
 		})
 	})
