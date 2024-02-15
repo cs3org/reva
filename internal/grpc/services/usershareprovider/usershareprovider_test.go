@@ -112,7 +112,7 @@ var _ = Describe("user share provider service", func() {
 		}
 		manager.On("GetShare", mock.Anything, mock.Anything).Return(getShareResponse, nil)
 
-		rgrpcService := usershareprovider.New(gatewaySelector, manager, []*regexp.Regexp{})
+		rgrpcService := usershareprovider.New(gatewaySelector, manager, []*regexp.Regexp{}, false)
 
 		provider = rgrpcService.(collaborationpb.CollaborationAPIServer)
 		Expect(provider).ToNot(BeNil())
@@ -183,6 +183,52 @@ var _ = Describe("user share provider service", func() {
 				0,
 			),
 		)
+		Context("resharing disabled", func() {
+			JustBeforeEach(func() {
+				// disable resharing
+				rgrpcService := usershareprovider.New(gatewaySelector, manager, []*regexp.Regexp{}, true)
+
+				provider = rgrpcService.(collaborationpb.CollaborationAPIServer)
+				Expect(provider).ToNot(BeNil())
+
+				// user has list grants access
+				statResourceResponse.Info.PermissionSet = &providerpb.ResourcePermissions{
+					AddGrant:   true,
+					ListGrants: true,
+				}
+			})
+			DescribeTable("rejects shares with any grant changing permissions",
+				func(
+					resourceInfoPermissions *providerpb.ResourcePermissions,
+					grantPermissions *providerpb.ResourcePermissions,
+					responseCode rpcpb.Code,
+					expectedCalls int,
+				) {
+					manager.On("Share", mock.Anything, mock.Anything, mock.Anything).Return(&collaborationpb.Share{}, nil)
+
+					createShareResponse, err := provider.CreateShare(ctx, &collaborationpb.CreateShareRequest{
+						ResourceInfo: &providerpb.ResourceInfo{
+							PermissionSet: resourceInfoPermissions,
+						},
+						Grant: &collaborationpb.ShareGrant{
+							Permissions: &collaborationpb.SharePermissions{
+								Permissions: grantPermissions,
+							},
+						},
+					})
+
+					Expect(err).ToNot(HaveOccurred())
+					Expect(createShareResponse.Status.Code).To(Equal(responseCode))
+
+					manager.AssertNumberOfCalls(GinkgoT(), "Share", expectedCalls)
+				},
+				Entry("AddGrant", conversions.RoleFromName("manager", true).CS3ResourcePermissions(), &providerpb.ResourcePermissions{AddGrant: true}, rpcpb.Code_CODE_INVALID_ARGUMENT, 0),
+				Entry("UpdateGrant", conversions.RoleFromName("manager", true).CS3ResourcePermissions(), &providerpb.ResourcePermissions{UpdateGrant: true}, rpcpb.Code_CODE_INVALID_ARGUMENT, 0),
+				Entry("RemoveGrant", conversions.RoleFromName("manager", true).CS3ResourcePermissions(), &providerpb.ResourcePermissions{RemoveGrant: true}, rpcpb.Code_CODE_INVALID_ARGUMENT, 0),
+				Entry("DenyGrant", conversions.RoleFromName("manager", true).CS3ResourcePermissions(), &providerpb.ResourcePermissions{DenyGrant: true}, rpcpb.Code_CODE_INVALID_ARGUMENT, 0),
+				Entry("ListGrants", conversions.RoleFromName("manager", true).CS3ResourcePermissions(), &providerpb.ResourcePermissions{ListGrants: true}, rpcpb.Code_CODE_OK, 1),
+			)
+		})
 	})
 	Describe("UpdateShare", func() {
 		It("fails without WriteShare permission in user role", func() {
