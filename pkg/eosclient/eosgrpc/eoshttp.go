@@ -210,8 +210,8 @@ func (c *EOSHTTPClient) doReq(req *http.Request, remoteuser string) (*http.Respo
 	return resp, err
 }
 
-// If the error is not nil, take that
-// If there is an error coming from EOS, erturn a descriptive error.
+// If the error is not nil, take that.
+// If there is an error coming from EOS, return a descriptive error.
 func (c *EOSHTTPClient) getRespError(rsp *http.Response, err error) error {
 	if err != nil {
 		return err
@@ -228,6 +228,8 @@ func (c *EOSHTTPClient) getRespError(rsp *http.Response, err error) error {
 		return errtypes.PermissionDenied(rspdesc(rsp))
 	case http.StatusNotFound:
 		return errtypes.NotFound(rspdesc(rsp))
+	case http.StatusConflict:
+		return errtypes.BadRequest(rspdesc(rsp))
 	}
 
 	return errtypes.InternalError("Err from EOS: " + rspdesc(rsp))

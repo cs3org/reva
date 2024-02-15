@@ -203,6 +203,11 @@ func (c *Client) executeXRDCopy(ctx context.Context, cmdArgs []string) (string, 
 		err = errtypes.InvalidCredentials("eosclient: no sufficient permissions for the operation")
 	}
 
+	// check for lock mismatch error
+	if strings.Contains(errBuf.String(), "file has a valid extended attribute lock") {
+		err = errtypes.BadRequest("eosclient: lock mismatch")
+	}
+
 	args := fmt.Sprintf("%s", cmd.Args)
 	env := fmt.Sprintf("%s", cmd.Env)
 	log.Info().Str("args", args).Str("env", env).Int("exit", exitStatus).Msg("eos cmd")
