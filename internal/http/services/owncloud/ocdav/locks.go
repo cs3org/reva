@@ -260,11 +260,15 @@ func (cls *cs3LS) Unlock(ctx context.Context, now time.Time, ref *provider.Refer
 		return err
 	}
 
-	switch res.Status.Code {
+	switch res.GetStatus().GetCode() {
 	case rpc.Code_CODE_OK:
 		return nil
 	case rpc.Code_CODE_FAILED_PRECONDITION:
 		return errtypes.Aborted("file is not locked")
+	case rpc.Code_CODE_LOCKED:
+		appctx.GetLogger(ctx).Error().Str("token", token).Interface("unlock", ref).
+			Msg("could not unlock " + res.GetStatus().GetMessage())
+		return errtypes.Locked("another token")
 	default:
 		return errtypes.NewErrtypeFromStatus(res.Status)
 	}
@@ -639,16 +643,19 @@ func (s *svc) unlockReference(ctx context.Context, _ http.ResponseWriter, r *htt
 		t = t[1 : len(t)-1]
 	}
 
-	switch err := s.LockSystem.Unlock(ctx, time.Now(), ref, t); err {
-	case nil:
-		return http.StatusNoContent, err
-	case errors.ErrForbidden:
-		return http.StatusForbidden, err
-	case errors.ErrLocked:
-		return http.StatusLocked, err
-	case errors.ErrNoSuchLock:
-		return http.StatusConflict, err
-	default:
-		return http.StatusInternalServerError, err
+	err := s.LockSystem.Unlock(ctx, time.Now(), ref, t)
+	if err == nil {
+		return http.StatusNoContent, nil
+	} else {
+		switch err.(type) {
+		case errtypes.Aborted, errtypes.Locked:
+			return http.StatusLocked, err
+		case errtypes.PermissionDenied:
+			return http.StatusForbidden, err
+		case errtypes.PreconditionFailed:
+			return http.StatusConflict, err
+		default:
+			return http.StatusInternalServerError, err
+		}
 	}
 }
