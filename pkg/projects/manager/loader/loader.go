@@ -19,7 +19,7 @@
 package loader
 
 import (
-	// Load core spacews backends.
+	// Load core spaces backends.
 	_ "github.com/cs3org/reva/pkg/projects/manager/memory"
 	_ "github.com/cs3org/reva/pkg/projects/manager/sql"
 	// Add your own here.
