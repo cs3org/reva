@@ -38,7 +38,9 @@ func init() {
 	registry.Register("sql", New)
 }
 
-type config struct {
+// Config is the configuration to use for the mysql driver
+// implementing the projects.Catalogue interface.
+type Config struct {
 	DBUsername string `mapstructure:"db_username"`
 	DBPassword string `mapstructure:"db_password"`
 	DBAddress  string `mapstructure:"db_address"`
@@ -46,19 +48,20 @@ type config struct {
 }
 
 type mgr struct {
-	c  *config
+	c  *Config
 	db *sql.DB
 }
 
 func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
-	var c config
+	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 	return NewFromConfig(ctx, &c)
 }
 
-type project struct {
+// Project represents a project in the DB.
+type Project struct {
 	StorageID string
 	Path      string
 	Name      string
@@ -69,7 +72,7 @@ type project struct {
 }
 
 // NewFromConfig creates a Repository with a SQL driver using the given config.
-func NewFromConfig(ctx context.Context, conf *config) (projects.Catalogue, error) {
+func NewFromConfig(ctx context.Context, conf *Config) (projects.Catalogue, error) {
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s", conf.DBUsername, conf.DBPassword, conf.DBAddress, conf.DBName))
 	if err != nil {
 		return nil, errors.Wrap(err, "sql: error opening connection to mysql database")
@@ -91,16 +94,16 @@ func (m *mgr) ListProjects(ctx context.Context, user *userpb.User) ([]*provider.
 		return nil, errors.Wrap(err, "error getting projects from db")
 	}
 
-	var dbProjects []*project
+	var dbProjects []*Project
 	for results.Next() {
-		var p project
+		var p Project
 		if err := results.Scan(&p.StorageID, &p.Path, &p.Name, &p.Owner, &p.Readers, &p.Writers, &p.Admins); err != nil {
 			return nil, errors.Wrap(err, "error scanning rows from db")
 		}
 		dbProjects = append(dbProjects, &p)
 	}
 
-	var projects []*provider.StorageSpace
+	projects := []*provider.StorageSpace{}
 	for _, p := range dbProjects {
 		if perms, ok := projectBelongToUser(user, p); ok {
 			projects = append(projects, &provider.StorageSpace{
@@ -125,7 +128,7 @@ func (m *mgr) ListProjects(ctx context.Context, user *userpb.User) ([]*provider.
 	return projects, nil
 }
 
-func projectBelongToUser(user *userpb.User, p *project) (*provider.ResourcePermissions, bool) {
+func projectBelongToUser(user *userpb.User, p *Project) (*provider.ResourcePermissions, bool) {
 	if user.Id.OpaqueId == p.Owner {
 		return conversions.NewManagerRole().CS3ResourcePermissions(), true
 	}

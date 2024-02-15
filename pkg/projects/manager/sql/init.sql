@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS projects (
+    storage_id VARCHAR(255) NOT NULL,
+    path VARCHAR(1024) NOT NULL,
+    name VARCHAR(255) NOT NULL PRIMARY KEY,
+    owner VARCHAR(255) NOT NULL,
+    readers VARCHAR(255) NOT NULL,
+    writers VARCHAR(255) NOT NULL,
+    admins VARCHAR(255) NOT NULL
+);
