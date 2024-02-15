@@ -261,6 +261,26 @@ var _ = Describe("Sharesstorageprovider", func() {
 						},
 					}
 				default:
+					if req.Ref.ResourceId.OpaqueId == "shareddir-merged" {
+						permissionSet := &sprovider.ResourcePermissions{
+							Stat:          true,
+							ListContainer: true,
+						}
+						return &sprovider.StatResponse{
+							Status: status.NewOK(context.Background()),
+							Info: &sprovider.ResourceInfo{
+								Type: sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
+								Path: "share1-shareddir",
+								Id: &sprovider.ResourceId{
+									StorageId: "share1-storageid",
+									SpaceId:   "share1-storageid",
+									OpaqueId:  req.Ref.ResourceId.OpaqueId,
+								},
+								PermissionSet: permissionSet,
+								Size:          100,
+							},
+						}
+					}
 					return &sprovider.StatResponse{
 						Status: status.NewNotFound(context.Background(), "not found"),
 					}
@@ -942,6 +962,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					Stat: true,
 				},
 			}
+			BaseShare.Share.Ctime = utils.TSNow()
 			BaseShare.MountPoint = &sprovider.Reference{Path: "share1-shareddir"}
 			BaseShareTwo.Share.Id.OpaqueId = "multishare2"
 			BaseShareTwo.Share.ResourceId = BaseShare.Share.ResourceId
@@ -951,6 +972,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 				},
 			}
 			BaseShareTwo.MountPoint = BaseShare.MountPoint
+			BaseShareTwo.Share.Ctime = utils.TSNow()
 
 			sharingCollaborationClient.On("ListReceivedShares", mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
 				Status: status.NewOK(context.Background()),
@@ -990,5 +1012,21 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Expect(res.Info.PermissionSet.ListContainer).To(BeTrue())
 			})
 		})
+		Describe("ListContainer", func() {
+			It("Returns just one item", func() {
+				req := BaseListContainerRequest
+				req.Ref.ResourceId.OpaqueId = utils.ShareStorageSpaceID
+				req.Ref.Path = ""
+				res, err := s.ListContainer(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
+				Expect(len(res.Infos)).To(Equal(1))
+
+				entry := res.Infos[0]
+				Expect(entry.Path).To(Equal("share1-shareddir"))
+			})
+		})
+
 	})
 })

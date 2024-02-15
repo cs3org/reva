@@ -810,12 +810,28 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 			return nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
 		}
 
-		infos := []*provider.ResourceInfo{}
-		for _, share := range receivedShares {
-			if share.GetState() != collaboration.ShareState_SHARE_STATE_ACCEPTED {
+		// Create map of shares that contains only the oldest share per shared resource. This is to avoid
+		// returning multiple resourceInfos for the same resource. But still be able to maintain a
+		// "somewhat" stable resourceID
+		oldestReceivedSharesByResourceID := make(map[string]*collaboration.ReceivedShare, len(receivedShares))
+		for _, receivedShare := range receivedShares {
+			if receivedShare.GetState() != collaboration.ShareState_SHARE_STATE_ACCEPTED {
 				continue
 			}
+			rIDStr := storagespace.FormatResourceID(*receivedShare.GetShare().GetResourceId())
+			if oldest, ok := oldestReceivedSharesByResourceID[rIDStr]; ok {
+				// replace if older than current oldest
+				if utils.TSToTime(receivedShare.GetShare().GetCtime()).Before(utils.TSToTime(oldest.GetShare().GetCtime())) {
+					oldestReceivedSharesByResourceID[rIDStr] = receivedShare
+				}
+			} else {
+				oldestReceivedSharesByResourceID[rIDStr] = receivedShare
+			}
+		}
 
+		// now compose the resourceInfos for the unified list of shares
+		infos := []*provider.ResourceInfo{}
+		for _, share := range oldestReceivedSharesByResourceID {
 			info := shareMd[share.GetShare().GetId().GetOpaqueId()]
 			if info == nil {
 				appctx.GetLogger(ctx).Debug().
@@ -828,7 +844,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 			info.Id = &provider.ResourceId{
 				StorageId: utils.ShareStorageProviderID,
 				SpaceId:   utils.ShareStorageSpaceID,
-				OpaqueId:  share.Share.Id.OpaqueId,
+				OpaqueId:  share.GetShare().GetId().GetOpaqueId(),
 			}
 			info.Path = filepath.Base(share.MountPoint.Path)
 			info.Name = info.Path
