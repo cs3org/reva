@@ -1,4 +1,4 @@
-// Copyright 2018-2023 CERN
+// Copyright 2018-2024 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -435,7 +435,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log := appctx.GetLogger(ctx)
-	log.Info().Interface("resource", fileRef).Str("url", openRes.AppUrl.AppUrl).Str("method", openRes.AppUrl.Method).Interface("target", openRes.AppUrl.Target).Msg("returning app URL for file")
+	log.Info().Interface("resource", &fileRef).Str("url", openRes.AppUrl.AppUrl).Str("method", openRes.AppUrl.Method).Interface("target", openRes.AppUrl.Target).Msg("returning app URL for file")
 
 	w.Header().Set("Content-Type", "application/json")
 	if _, err = w.Write(js); err != nil {
@@ -472,7 +472,7 @@ func (s *svc) handleNotify(w http.ResponseWriter, r *http.Request) {
 	// log the fileid for later correlation / monitoring
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-	log.Info().Interface("resource", fileRef).Msg("file successfully opened in app")
+	log.Info().Interface("resource", &fileRef).Msg("file successfully opened in app")
 
 	w.WriteHeader(http.StatusOK)
 }

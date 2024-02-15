@@ -1,4 +1,4 @@
-// Copyright 2018-2023 CERN
+// Copyright 2018-2024 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -172,8 +172,8 @@ func (am *Manager) Authenticate(ctx context.Context, clientID, clientSecret stri
 	}
 
 	type resultsObj struct {
-		User   user.User               `json:"user"`
-		Scopes map[string]authpb.Scope `json:"scopes"`
+		User   user.User                `json:"user"`
+		Scopes map[string]*authpb.Scope `json:"scopes"`
 	}
 	result := &resultsObj{}
 	err = json.Unmarshal(body, &result)
@@ -182,8 +182,7 @@ func (am *Manager) Authenticate(ctx context.Context, clientID, clientSecret stri
 	}
 	var pointersMap = make(map[string]*authpb.Scope)
 	for k := range result.Scopes {
-		scope := result.Scopes[k]
-		pointersMap[k] = &scope
+		pointersMap[k] = result.Scopes[k]
 	}
 	return &result.User, pointersMap, nil
 }

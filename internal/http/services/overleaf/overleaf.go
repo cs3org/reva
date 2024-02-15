@@ -1,4 +1,4 @@
-// Copyright 2018-2023 CERN
+// Copyright 2018-2024 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -137,7 +137,7 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	statRes, err := s.gtwClient.Stat(ctx, &storagepb.StatRequest{Ref: &exportRequest.ResourceRef})
+	statRes, err := s.gtwClient.Stat(ctx, &storagepb.StatRequest{Ref: exportRequest.ResourceRef})
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "Internal error accessing the resource, please try again later", err)
 		return
@@ -307,12 +307,12 @@ func getExportRequest(w http.ResponseWriter, r *http.Request) (*exportRequest, e
 	// Override is true if field is set
 	override := r.Form.Get("override") != ""
 	return &exportRequest{
-		ResourceRef: resourceRef,
+		ResourceRef: &resourceRef,
 		Override:    override,
 	}, nil
 }
 
 type exportRequest struct {
-	ResourceRef storagepb.Reference `json:"resourceId"`
-	Override    bool                `json:"override"`
+	ResourceRef *storagepb.Reference `json:"resourceId"`
+	Override    bool                 `json:"override"`
 }

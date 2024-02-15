@@ -1,4 +1,4 @@
-// Copyright 2018-2023 CERN
+// Copyright 2018-2024 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -239,8 +239,8 @@ func (s *svc) cs3StorageSpaceToDrive(user *userpb.User, space *providerpb.Storag
 		},
 	}
 
-	drive.Root.WebDavUrl = libregraph.PtrString(fullUrl(s.c.WebDavBase, space.RootInfo.Path))
-	drive.WebUrl = libregraph.PtrString(fullUrl(s.c.WebBase, space.RootInfo.Path))
+	drive.Root.WebDavUrl = libregraph.PtrString(fullURL(s.c.WebDavBase, space.RootInfo.Path))
+	drive.WebUrl = libregraph.PtrString(fullURL(s.c.WebBase, space.RootInfo.Path))
 
 	if space.Owner != nil && space.Owner.Id != nil {
 		drive.Owner = &libregraph.IdentitySet{
@@ -334,7 +334,7 @@ func shareID(spaceID string) string {
 	return "" // TODO
 }
 
-func fullUrl(base, path string) string {
+func fullURL(base, path string) string {
 	full, _ := url.JoinPath(base, path)
 	return full
 }

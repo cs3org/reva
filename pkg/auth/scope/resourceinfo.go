@@ -1,4 +1,4 @@
-// Copyright 2018-2023 CERN
+// Copyright 2018-2024 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,19 +59,19 @@ func resourceinfoScope(_ context.Context, scope *authpb.Scope, resource interfac
 	// Editor role
 	// need to return appropriate status codes in the ocs/ocdav layers.
 	case *provider.CreateContainerRequest:
-		return hasRoleEditor(*scope) && checkResourceInfo(&r, v.GetRef()), nil
+		return hasRoleEditor(scope) && checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.TouchFileRequest:
-		return hasRoleEditor(*scope) && checkResourceInfo(&r, v.GetRef()), nil
+		return hasRoleEditor(scope) && checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.DeleteRequest:
-		return hasRoleEditor(*scope) && checkResourceInfo(&r, v.GetRef()), nil
+		return hasRoleEditor(scope) && checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.MoveRequest:
-		return hasRoleEditor(*scope) && checkResourceInfo(&r, v.GetSource()) && checkResourceInfo(&r, v.GetDestination()), nil
+		return hasRoleEditor(scope) && checkResourceInfo(&r, v.GetSource()) && checkResourceInfo(&r, v.GetDestination()), nil
 	case *provider.InitiateFileUploadRequest:
-		return hasRoleEditor(*scope) && checkResourceInfo(&r, v.GetRef()), nil
+		return hasRoleEditor(scope) && checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.SetArbitraryMetadataRequest:
-		return hasRoleEditor(*scope) && checkResourceInfo(&r, v.GetRef()), nil
+		return hasRoleEditor(scope) && checkResourceInfo(&r, v.GetRef()), nil
 	case *provider.UnsetArbitraryMetadataRequest:
-		return hasRoleEditor(*scope) && checkResourceInfo(&r, v.GetRef()), nil
+		return hasRoleEditor(scope) && checkResourceInfo(&r, v.GetRef()), nil
 
 	case string:
 		return checkResourcePath(v), nil

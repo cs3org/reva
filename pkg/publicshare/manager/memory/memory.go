@@ -1,4 +1,4 @@
-// Copyright 2018-2023 CERN
+// Copyright 2018-2024 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -161,7 +161,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 
 	// Attempt to fetch public share by Id
 	if ref.GetId() != nil {
-		share, err = m.getPublicShareByTokenID(ctx, *ref.GetId())
+		share, err = m.getPublicShareByTokenID(ctx, ref.GetId())
 		if err != nil {
 			return nil, errors.New("no shares found by id")
 		}
@@ -200,7 +200,7 @@ func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link
 	// check whether the reference exists
 	switch {
 	case ref.GetId() != nil && ref.GetId().OpaqueId != "":
-		s, err := m.getPublicShareByTokenID(ctx, *ref.GetId())
+		s, err := m.getPublicShareByTokenID(ctx, ref.GetId())
 		if err != nil {
 			return errors.New("reference does not exist")
 		}
@@ -232,7 +232,7 @@ func randString(n int) string {
 	return string(b)
 }
 
-func (m *manager) getPublicShareByTokenID(ctx context.Context, targetID link.PublicShareId) (*link.PublicShare, error) {
+func (m *manager) getPublicShareByTokenID(ctx context.Context, targetID *link.PublicShareId) (*link.PublicShare, error) {
 	var found *link.PublicShare
 	m.shares.Range(func(k, v interface{}) bool {
 		id := v.(*link.PublicShare).GetId()

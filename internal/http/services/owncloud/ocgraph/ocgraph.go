@@ -1,4 +1,4 @@
-// Copyright 2018-2023 CERN
+// Copyright 2018-2024 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,8 +72,7 @@ func (s *svc) Handler() http.Handler {
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 
-		switch head {
-		case "v1.0":
+		if head == "v1.0" {
 			head, r.URL.Path = router.ShiftPath(r.URL.Path)
 			switch head {
 			case "drives":

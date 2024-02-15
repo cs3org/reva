@@ -1,4 +1,4 @@
-// Copyright 2018-2023 CERN
+// Copyright 2018-2024 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -58,6 +58,6 @@ func VerifyScope(ctx context.Context, scopeMap map[string]*authpb.Scope, resourc
 	return false, nil
 }
 
-func hasRoleEditor(scope authpb.Scope) bool {
+func hasRoleEditor(scope *authpb.Scope) bool {
 	return scope.Role == authpb.Role_ROLE_OWNER || scope.Role == authpb.Role_ROLE_EDITOR || scope.Role == authpb.Role_ROLE_UPLOADER
 }

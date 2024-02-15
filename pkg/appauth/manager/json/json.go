@@ -1,4 +1,4 @@
-// Copyright 2018-2023 CERN
+// Copyright 2018-2024 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/appauth"
 	"github.com/cs3org/reva/pkg/appauth/manager/registry"
 	"github.com/cs3org/reva/pkg/appctx"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/utils/cfg"
@@ -156,9 +157,9 @@ func (mgr *jsonManager) GenerateAppPassword(ctx context.Context, scope map[strin
 		return nil, errors.Wrap(err, "error saving new token")
 	}
 
-	clonedAppPass := *appPass
+	clonedAppPass := proto.Clone(appPass).(*apppb.AppPassword)
 	clonedAppPass.Password = token
-	return &clonedAppPass, nil
+	return clonedAppPass, nil
 }
 
 func (mgr *jsonManager) ListAppPasswords(ctx context.Context) ([]*apppb.AppPassword, error) {

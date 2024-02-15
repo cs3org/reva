@@ -1,4 +1,4 @@
-// Copyright 2018-2023 CERN
+// Copyright 2018-2024 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -148,17 +148,16 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 
 	// TODO: we should filter at the driver level.
 	// for now let's do it here. optimizations later :)
-	if id, ok := isFilterById(req.Filters); ok {
+	if id, ok := isFilterByID(req.Filters); ok {
 		sp = list.Filter(sp, func(s *provider.StorageSpace) bool { return s.Id.OpaqueId == id })
 	}
 
 	return &provider.ListStorageSpacesResponse{Status: status.NewOK(ctx), StorageSpaces: sp}, nil
 }
 
-func isFilterById(filters []*provider.ListStorageSpacesRequest_Filter) (string, bool) {
+func isFilterByID(filters []*provider.ListStorageSpacesRequest_Filter) (string, bool) {
 	for _, f := range filters {
-		switch f.Type {
-		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
+		if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
 			return f.Term.(*provider.ListStorageSpacesRequest_Filter_Id).Id.OpaqueId, true
 		}
 	}

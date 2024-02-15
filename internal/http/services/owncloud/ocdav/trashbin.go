@@ -1,4 +1,4 @@
-// Copyright 2018-2023 CERN
+// Copyright 2018-2024 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,10 +55,10 @@ func (h *TrashbinHandler) handleTrashbinSpaces(s *svc, w http.ResponseWriter, r 
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	var spaceId string
-	spaceId, r.URL.Path = router.ShiftPath(r.URL.Path)
+	var spaceID string
+	spaceID, r.URL.Path = router.ShiftPath(r.URL.Path)
 
-	_, base, ok := spaces.DecodeSpaceID(spaceId)
+	_, base, ok := spaces.DecodeSpaceID(spaceID)
 	if !ok {
 		// TODO: bad request
 		panic("not yet implemented: bad request")

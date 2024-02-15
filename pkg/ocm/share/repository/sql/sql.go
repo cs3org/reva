@@ -1,4 +1,4 @@
-// Copyright 2018-2023 CERN
+// Copyright 2018-2024 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -801,14 +801,11 @@ func (m *mgr) translateUpdateFieldMask(share *ocm.ReceivedShare, fieldMask *fiel
 		params []any
 	)
 
-	newShare := *share
-
 	for _, mask := range fieldMask.Paths {
 		switch mask {
 		case "state":
 			query.WriteString("state=?")
 			params = append(params, convertFromCS3OCMShareState(share.State))
-			newShare.State = share.State
 		default:
 			return "", nil, nil, errtypes.NotSupported("updating " + mask + " is not supported")
 		}
@@ -818,9 +815,9 @@ func (m *mgr) translateUpdateFieldMask(share *ocm.ReceivedShare, fieldMask *fiel
 	now := m.now().Unix()
 	query.WriteString("mtime=?")
 	params = append(params, now)
-	newShare.Mtime = &typesv1beta1.Timestamp{
+	share.Mtime = &typesv1beta1.Timestamp{
 		Seconds: uint64(now),
 	}
 
-	return query.String(), params, &newShare, nil
+	return query.String(), params, share, nil
 }
