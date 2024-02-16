@@ -72,10 +72,6 @@ Synchronization features like etag propagation, setting mtime and locking files
 -   [coreApiSharePublicLink1/accessToPublicLinkShare.feature:32](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink1/accessToPublicLinkShare.feature#L32)
 -   [coreApiSharePublicLink1/createPublicLinkShare.feature:288](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink1/createPublicLinkShare.feature#L288)
 
-#### [Upload-only shares must not overwrite but create a separate file](https://github.com/owncloud/ocis/issues/1267)
-
-- [coreApiSharePublicLink2/uploadToPublicLinkShare.feature:13](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink2/uploadToPublicLinkShare.feature#L13)
-
 #### [Set quota over settings](https://github.com/owncloud/ocis/issues/1290)
 _requires a [CS3 user provisioning api that can update the quota for a user](https://github.com/cs3org/cs3apis/pull/95#issuecomment-772780683)_
 - [coreApiSharePublicLink3/uploadToPublicLinkShare.feature:91](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink3/uploadToPublicLinkShare.feature#L91)
