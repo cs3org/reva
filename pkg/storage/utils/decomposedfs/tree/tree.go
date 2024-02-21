@@ -631,14 +631,15 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, pa
 		return nil, nil, err
 	}
 
+	ts := ""
 	timeSuffix := strings.SplitN(filepath.Base(deletedNodePath), node.TrashIDDelimiter, 2)
-	if len(timeSuffix) != 2 {
-		return nil, nil, errtypes.InternalError("invalid trash path")
+	if len(timeSuffix) == 2 {
+		ts = timeSuffix[1]
 	}
 
 	fn := func() error {
 
-		if err := t.removeNode(ctx, deletedNodePath, timeSuffix[1], rn); err != nil {
+		if err := t.removeNode(ctx, deletedNodePath, ts, rn); err != nil {
 			return err
 		}
 
