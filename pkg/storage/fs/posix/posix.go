@@ -31,9 +31,9 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/aspects"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/permissions"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/options"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/tree"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/v2/pkg/store"
@@ -59,14 +59,14 @@ func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 	var lu *lookup.Lookup
 	switch o.MetadataBackend {
 	case "xattrs":
-		lu = lookup.New(metadata.XattrsBackend{}, o)
+		lu = lookup.New(metadata.XattrsBackend{}, &o.Options)
 	case "messagepack":
-		lu = lookup.New(metadata.NewMessagePackBackend(o.Root, o.FileMetadataCache), o)
+		lu = lookup.New(metadata.NewMessagePackBackend(o.Root, o.FileMetadataCache), &o.Options)
 	default:
 		return nil, fmt.Errorf("unknown metadata backend %s, only 'messagepack' or 'xattrs' (default) supported", o.MetadataBackend)
 	}
 
-	tp := tree.New(lu, bs, o, store.Create(
+	tp, err := tree.New(lu, bs, o, store.Create(
 		store.Store(o.IDCache.Store),
 		store.TTL(o.IDCache.TTL),
 		store.Size(o.IDCache.Size),
@@ -76,6 +76,9 @@ func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 		store.DisablePersistence(o.IDCache.DisablePersistence),
 		store.Authentication(o.IDCache.AuthUsername, o.IDCache.AuthPassword),
 	))
+	if err != nil {
+		return nil, err
+	}
 
 	permissionsSelector, err := pool.PermissionsSelector(o.PermissionsSVC, pool.WithTLSMode(o.PermTLSMode))
 	if err != nil {
@@ -90,7 +93,7 @@ func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 		Permissions: p,
 		EventStream: stream,
 	}
-	fs, err := decomposedfs.New(o, aspects)
+	fs, err := decomposedfs.New(&o.Options, aspects)
 	if err != nil {
 		return nil, err
 	}

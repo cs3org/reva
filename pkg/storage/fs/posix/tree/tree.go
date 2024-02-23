@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/pablodz/inotifywaitgo/inotifywaitgo"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"go-micro.dev/v4/store"
@@ -45,9 +44,9 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/tree/propagator"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/options"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
@@ -64,6 +63,10 @@ type Blobstore interface {
 	Delete(node *node.Node) error
 }
 
+type Watcher interface {
+	Watch(path string)
+}
+
 // Tree manages a hierarchical tree
 type Tree struct {
 	lookup     node.PathLookup
@@ -73,20 +76,38 @@ type Tree struct {
 	options *options.Options
 
 	idCache store.Store
+	watcher Watcher
 }
 
 // PermissionCheckFunc defined a function used to check resource permissions
 type PermissionCheckFunc func(rp *provider.ResourcePermissions) bool
 
 // New returns a new instance of Tree
-func New(lu node.PathLookup, bs Blobstore, o *options.Options, cache store.Store) *Tree {
-	return &Tree{
+func New(lu node.PathLookup, bs Blobstore, o *options.Options, cache store.Store) (*Tree, error) {
+	t := &Tree{
 		lookup:     lu,
 		blobstore:  bs,
 		options:    o,
 		idCache:    cache,
-		propagator: propagator.New(lu, o),
+		propagator: propagator.New(lu, &o.Options),
 	}
+
+	watchPath := o.WatchPath
+	switch o.WatchType {
+	case "gpfsfileauditlogging":
+		var err error
+		t.watcher, err = NewGpfsFileAuditLoggingWatcher(t, o.WatchPath)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		t.watcher = NewInotifyWatcher(t)
+		watchPath = o.Root
+	}
+
+	go t.watcher.Watch(watchPath)
+
+	return t, nil
 }
 
 // Setup prepares the tree structure
@@ -101,46 +122,6 @@ func (t *Tree) Setup() error {
 		return err
 	}
 
-	// listen for fsnotify events
-	go func() {
-		events := make(chan inotifywaitgo.FileEvent)
-		errors := make(chan error)
-
-		go inotifywaitgo.WatchPath(&inotifywaitgo.Settings{
-			Dir:        t.options.Root,
-			FileEvents: events,
-			ErrorChan:  errors,
-			Options: &inotifywaitgo.Options{
-				Recursive: true,
-				Events: []inotifywaitgo.EVENT{
-					inotifywaitgo.CREATE,
-					inotifywaitgo.MOVED_TO,
-				},
-				Monitor: true,
-			},
-			Verbose: true,
-		})
-
-		for {
-			select {
-			case event := <-events:
-				for _, e := range event.Events {
-					if strings.HasSuffix(event.Filename, ".flock") || strings.HasSuffix(event.Filename, ".mlock") {
-						continue
-					}
-					switch e {
-					case inotifywaitgo.CREATE:
-						go t.Scan(event.Filename, false)
-					case inotifywaitgo.MOVED_TO:
-						go t.Scan(event.Filename, true)
-					}
-				}
-
-			case err := <-errors:
-				fmt.Printf("Error: %s\n", err)
-			}
-		}
-	}()
 	return nil
 }
 
