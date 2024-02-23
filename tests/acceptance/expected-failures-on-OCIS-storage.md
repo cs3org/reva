@@ -109,10 +109,8 @@ _ocdav: api compatibility, return correct status code_
 
 #### [send (MOVE, COPY) requests to another user's webDav endpoints as normal user gives 400 instead of 403](https://github.com/owncloud/ocis/issues/3882)
 _ocdav: api compatibility, return correct status code_
--   [coreApiAuth/webDavMOVEAuth.feature:45](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuth/webDavMOVEAuth.feature#L45) Scenario: send MOVE requests to another user's webDav endpoints as normal user
--   [coreApiAuth/webDavMOVEAuth.feature:54](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuth/webDavMOVEAuth.feature#L54) Scenario: send MOVE requests to another user's webDav endpoints as normal user using the spaces WebDAV API
--   [coreApiAuth/webDavCOPYAuth.feature:45](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuth/webDavCOPYAuth.feature#L45)
--   [coreApiAuth/webDavCOPYAuth.feature:54](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuth/webDavCOPYAuth.feature#L54)
+-   [coreApiAuth/webDavMOVEAuth.feature:55](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuth/webDavMOVEAuth.feature#L55) Scenario: send MOVE requests to another user's webDav endpoints as normal user using the spaces WebDAV API
+-   [coreApiAuth/webDavCOPYAuth.feature:55](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuth/webDavCOPYAuth.feature#L55)
 
 #### [send POST requests to another user's webDav endpoints as normal user](https://github.com/owncloud/ocis/issues/1287)
 _ocdav: api compatibility, return correct status code_
