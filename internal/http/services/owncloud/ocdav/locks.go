@@ -646,16 +646,6 @@ func (s *svc) unlockReference(ctx context.Context, _ http.ResponseWriter, r *htt
 	err := s.LockSystem.Unlock(ctx, time.Now(), ref, t)
 	if err == nil {
 		return http.StatusNoContent, nil
-	} else {
-		switch err.(type) {
-		case errtypes.Aborted, errtypes.Locked:
-			return http.StatusLocked, err
-		case errtypes.PermissionDenied:
-			return http.StatusForbidden, err
-		case errtypes.PreconditionFailed:
-			return http.StatusConflict, err
-		default:
-			return http.StatusInternalServerError, err
-		}
 	}
+	return errtypes.NewHTTPStatusCodeFromErrtype(err), err
 }

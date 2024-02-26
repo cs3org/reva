@@ -350,3 +350,37 @@ func NewErrtypeFromHTTPStatusCode(code int, message string) error {
 		return InternalError(message)
 	}
 }
+
+// NewHTTPStatusCodeFromErrtype maps an errtype to an http status
+func NewHTTPStatusCodeFromErrtype(err error) int {
+	switch err.(type) {
+	case NotFound:
+		return http.StatusNotFound
+	case AlreadyExists:
+		return http.StatusConflict
+	case NotSupported:
+		return http.StatusNotImplemented
+	case NotModified:
+		return http.StatusNotModified
+	case InvalidCredentials:
+		return http.StatusUnauthorized
+	case PermissionDenied:
+		return http.StatusForbidden
+	case Locked:
+		return http.StatusLocked
+	case Aborted:
+		return http.StatusPreconditionFailed
+	case PreconditionFailed:
+		return http.StatusMethodNotAllowed
+	case InsufficientStorage:
+		return http.StatusInsufficientStorage
+	case BadRequest:
+		return http.StatusBadRequest
+	case PartialContent:
+		return http.StatusPartialContent
+	case ChecksumMismatch:
+		return StatusChecksumMismatch
+	default:
+		return http.StatusInternalServerError
+	}
+}
