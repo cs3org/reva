@@ -520,6 +520,10 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	path := n.InternalPath()
 
+	if !strings.HasPrefix(path, t.options.Root) {
+		return errtypes.InternalError("invalid internal path")
+	}
+
 	// remove entry from cache immediately to avoid inconsistencies
 	defer func() { _ = t.idCache.Delete(path) }()
 
@@ -527,7 +531,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 
 	if deletingSharedResource != nil && deletingSharedResource.(bool) {
 		src := filepath.Join(n.ParentPath(), n.Name)
-		return os.Remove(src)
+		return os.RemoveAll(src)
 	}
 
 	var sizeDiff int64
@@ -545,7 +549,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	_ = os.Remove(n.LockFilePath())
 
 	// finally remove the entry from the parent dir
-	if err = os.Remove(path); err != nil {
+	if err = os.RemoveAll(path); err != nil {
 		// To roll back changes
 		// TODO revert the rename
 		// TODO remove symlink
