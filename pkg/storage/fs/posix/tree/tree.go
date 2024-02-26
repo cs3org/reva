@@ -161,6 +161,7 @@ func (t *Tree) Scan(path string, forceRescan bool) error {
 		_ = unlock()
 	}()
 
+	retries := 1
 	// check for the id attribute again after grabbing the lock, maybe the file was assimilated/created by us in the meantime
 	id, err = t.lookup.MetadataBackend().Get(context.Background(), path, prefixes.IDAttr)
 	switch err {
@@ -169,10 +170,27 @@ func (t *Tree) Scan(path string, forceRescan bool) error {
 			return t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), path)
 		}
 	default:
+	assimilate:
 		// read parent
 		parentAttribs, err := t.lookup.MetadataBackend().All(context.Background(), filepath.Dir(path))
 		if err != nil {
 			return err
+		}
+
+		if len(parentAttribs) == 0 {
+			if retries == 0 {
+				return fmt.Errorf("can not assimilate item: failed to assimilate parent")
+			}
+
+			// assimilate parent first
+			err = t.Scan(filepath.Dir(path), false)
+			if err != nil {
+				return err
+			}
+
+			// retry
+			retries--
+			goto assimilate
 		}
 
 		// assimilate file
