@@ -720,7 +720,7 @@ func (fs *eosfs) setLock(ctx context.Context, lock *provider.Lock, path string) 
 		Val:  eosLock,
 	}, false, false, path)
 	switch {
-	case errors.Is(err, eosclient.AttrAlreadyExistsError):
+	case errors.Is(err, eosclient.FileIsLockedError):
 		return errtypes.BadRequest("resource already locked")
 	case err != nil:
 		return errors.Wrap(err, "eosfs: error setting eos lock")

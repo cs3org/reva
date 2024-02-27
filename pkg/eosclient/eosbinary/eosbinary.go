@@ -490,8 +490,11 @@ func (c *Client) setEOSAttr(ctx context.Context, auth eosclient.Authorization, a
 	_, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		var exErr *exec.ExitError
-		if errors.As(err, &exErr) && exErr.ExitCode() == 17 {
+		if errors.As(err, &exErr) && exErr.ExitCode() == 17 { // EEXIST
 			return eosclient.AttrAlreadyExistsError
+		}
+		if errors.As(err, &exErr) && exErr.ExitCode() == 16 { // EBUSY -> Locked
+			return eosclient.FileIsLockedError
 		}
 		return err
 	}
