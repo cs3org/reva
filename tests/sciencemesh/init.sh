@@ -16,7 +16,8 @@ TAG_WOPISERVER=master
 [ ! -d "tls" ] &&
     mkdir tls && cd scripts && ./gencerts.sh && cd -
 
-# Nextcloud Sciencemesh source code.
+# Nextcloud Sciencemesh source code. We run a repackaged NC from
+# https://github.com/pondersource/dev-stock/blob/main/docker/dockerfiles/nextcloud-sciencemesh.Dockerfile
 [ ! -d "nextcloud-sciencemesh" ] &&                                             \
     git clone                                                                   \
     --branch ${BRANCH_NEXTCLOUD_APP}                                            \
@@ -29,7 +30,8 @@ TAG_WOPISERVER=master
     pondersource/dev-stock-nextcloud-sciencemesh                                \
     make composer
 
-# ownCloud Sciencemesh source code.
+# ownCloud Sciencemesh source code. We run a repackaged OC10 from
+# https://github.com/pondersource/dev-stock/blob/main/docker/dockerfiles/owncloud-sciencemesh.Dockerfile
 [ ! -d "owncloud-sciencemesh" ] &&                                              \
     git clone                                                                   \
     --branch ${BRANCH_OWNCLOUD_APP}                                             \
