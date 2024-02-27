@@ -56,7 +56,7 @@ func TestExtractDestination(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "https://example.org/remote.php/dav/src", nil)
 	request.Header.Set(HeaderDestination, "https://example.org/remote.php/dav/dst")
 
-	ctx := context.WithValue(context.Background(), ctxKeyBaseURI, "/remote.php/dav")
+	ctx := context.WithValue(context.Background(), ctxKeyBaseURI, "remote.php/dav")
 	destination, err := extractDestination(request.WithContext(ctx))
 	if err != nil {
 		t.Errorf("Expected err to be nil got %s", err)
@@ -84,6 +84,21 @@ func TestExtractDestinationWithInvalidDestination(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "https://example.org/remote.php/dav/src", nil)
 	request.Header.Set(HeaderDestination, "://example.org/remote.php/dav/dst")
 	_, err := extractDestination(request)
+	if err == nil {
+		t.Errorf("Expected err to be nil got %s", err)
+	}
+
+	if !errors.Is(err, errInvalidValue) {
+		t.Errorf("Expected error invalid value, got %s", err)
+	}
+}
+
+func TestExtractDestinationWithDestinationWrongBaseURI(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "https://example.org/remote.php/dav/src", nil)
+	request.Header.Set(HeaderDestination, "https://example.org/remote.php/dav/dst")
+
+	ctx := context.WithValue(context.Background(), ctxKeyBaseURI, "remote.php/webdav")
+	_, err := extractDestination(request.WithContext(ctx))
 	if err == nil {
 		t.Errorf("Expected err to be nil got %s", err)
 	}
