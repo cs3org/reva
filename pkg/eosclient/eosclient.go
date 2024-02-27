@@ -154,3 +154,7 @@ const AttrAlreadyExistsError = errtypes.BadRequest("attr already exists")
 // AttrNotExistsError is the error raised when removing
 // an attribute that does not exist.
 const AttrNotExistsError = errtypes.BadRequest("attr not exists")
+
+// FileIsLockedError is the error raised when attempting to set a lock
+// attribute to an already locked file with a mismatched lock
+const FileIsLockedError = errtypes.BadRequest("file is locked")
