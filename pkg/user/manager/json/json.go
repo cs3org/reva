@@ -31,7 +31,6 @@ import (
 	"github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
-	"google.golang.org/protobuf/proto"
 )
 
 func init() {
@@ -87,11 +86,11 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
 	for _, u := range m.users {
 		if (u.Id.GetOpaqueId() == uid.OpaqueId || u.Username == uid.OpaqueId) && (uid.Idp == "" || uid.Idp == u.Id.GetIdp()) {
-			user := proto.Clone(u).(*userpb.User)
+			user := *u
 			if skipFetchingGroups {
 				user.Groups = nil
 			}
-			return user, nil
+			return &user, nil
 		}
 	}
 	return nil, errtypes.NotFound(uid.OpaqueId)
@@ -100,11 +99,11 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingG
 func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
 	for _, u := range m.users {
 		if userClaim, err := extractClaim(u, claim); err == nil && value == userClaim {
-			user := proto.Clone(u).(*userpb.User)
+			user := *u
 			if skipFetchingGroups {
 				user.Groups = nil
 			}
-			return user, nil
+			return &user, nil
 		}
 	}
 	return nil, errtypes.NotFound(value)
@@ -135,11 +134,11 @@ func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroup
 	users := []*userpb.User{}
 	for _, u := range m.users {
 		if userContains(u, query) {
-			user := proto.Clone(u).(*userpb.User)
+			user := *u
 			if skipFetchingGroups {
 				user.Groups = nil
 			}
-			users = append(users, user)
+			users = append(users, &user)
 		}
 	}
 	return users, nil

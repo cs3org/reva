@@ -32,7 +32,6 @@ require (
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/golang/protobuf v1.5.3
 	github.com/gomodule/redigo v1.8.9
-	github.com/google/go-cmp v0.6.0
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.0.0
@@ -161,6 +160,7 @@ require (
 go 1.21
 
 replace (
+	github.com/cs3org/go-cs3apis => github.com/gmgigi96/go-cs3apis v0.0.0-20231025125139-a7a73cb7954e
 	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
 	github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
 )

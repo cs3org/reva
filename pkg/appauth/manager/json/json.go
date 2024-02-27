@@ -33,7 +33,6 @@ import (
 	"github.com/cs3org/reva/pkg/appauth"
 	"github.com/cs3org/reva/pkg/appauth/manager/registry"
 	"github.com/cs3org/reva/pkg/appctx"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/utils/cfg"
@@ -157,9 +156,9 @@ func (mgr *jsonManager) GenerateAppPassword(ctx context.Context, scope map[strin
 		return nil, errors.Wrap(err, "error saving new token")
 	}
 
-	clonedAppPass := proto.Clone(appPass).(*apppb.AppPassword)
+	clonedAppPass := *appPass
 	clonedAppPass.Password = token
-	return clonedAppPass, nil
+	return &clonedAppPass, nil
 }
 
 func (mgr *jsonManager) ListAppPasswords(ctx context.Context) ([]*apppb.AppPassword, error) {

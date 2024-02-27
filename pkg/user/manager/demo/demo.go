@@ -28,7 +28,6 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
-	"google.golang.org/protobuf/proto"
 )
 
 func init() {
@@ -58,11 +57,11 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
 	if user, ok := m.catalog[uid.OpaqueId]; ok {
 		if uid.Idp == "" || user.Id.Idp == uid.Idp {
-			u := proto.Clone(user).(*userpb.User)
+			u := *user
 			if skipFetchingGroups {
 				u.Groups = nil
 			}
-			return u, nil
+			return &u, nil
 		}
 	}
 	return nil, errtypes.NotFound(uid.OpaqueId)
@@ -71,11 +70,11 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingG
 func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
 	for _, u := range m.catalog {
 		if userClaim, err := extractClaim(u, claim); err == nil && value == userClaim {
-			user := proto.Clone(u).(*userpb.User)
+			user := *u
 			if skipFetchingGroups {
 				user.Groups = nil
 			}
-			return user, nil
+			return &user, nil
 		}
 	}
 	return nil, errtypes.NotFound(value)
@@ -104,11 +103,11 @@ func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroup
 	users := []*userpb.User{}
 	for _, u := range m.catalog {
 		if userContains(u, query) {
-			user := proto.Clone(u).(*userpb.User)
+			user := *u
 			if skipFetchingGroups {
 				user.Groups = nil
 			}
-			users = append(users, user)
+			users = append(users, &user)
 		}
 	}
 	return users, nil
