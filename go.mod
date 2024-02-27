@@ -57,7 +57,7 @@ require (
 	github.com/thanhpk/randstr v1.0.6
 	github.com/tus/tusd v1.13.0
 	github.com/wk8/go-ordered-map v1.0.0
-	go-micro.dev/v4 v4.3.1-0.20211108085239-0c2041e43908
+	go-micro.dev/v4 v4.10.2
 	go.opencensus.io v0.24.0
 	go.step.sm/crypto v0.43.1
 	golang.org/x/crypto v0.20.0
@@ -86,7 +86,7 @@ require (
 	github.com/dolthub/vitess v0.0.0-20221031111135-9aad77e7b39f // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fatih/color v1.16.0 // indirect
-	github.com/fsnotify/fsnotify v1.4.9 // indirect
+	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.5 // indirect
 	github.com/go-jose/go-jose/v3 v3.0.1 // indirect
