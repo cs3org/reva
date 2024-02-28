@@ -70,7 +70,7 @@ func New(b metadata.Backend, o *options.Options) *Lookup {
 	lu := &Lookup{
 		Options:         o,
 		metadataBackend: b,
-		IDCache:         NewMemoryIDCache(),
+		IDCache:         NewStoreIDCache(o),
 	}
 
 	go func() {
