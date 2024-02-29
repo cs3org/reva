@@ -665,7 +665,7 @@ func (fs *eosfs) getLock(ctx context.Context, user *userpb.User, path string, re
 		return nil, errors.Wrap(err, "eosfs: malformed lock payload")
 	}
 
-	if time.Unix(int64(l.Expiration.Seconds), 0).After(time.Now()) {
+	if time.Unix(int64(l.Expiration.Seconds), 0).Before(time.Now()) {
 		// the lock expired
 		if err := fs.removeLockAttrs(ctx, path); err != nil {
 			return nil, err
