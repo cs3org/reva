@@ -181,7 +181,7 @@ func WriteOCSData(w http.ResponseWriter, r *http.Request, m Meta, d interface{},
 func WriteOCSResponse(w http.ResponseWriter, r *http.Request, res Response, err error) {
 	if err != nil {
 		appctx.GetLogger(r.Context()).
-			Debug().
+			Error().
 			Err(err).
 			Str("ocs_msg", res.OCS.Meta.Message).
 			Msg("writing ocs error response")
