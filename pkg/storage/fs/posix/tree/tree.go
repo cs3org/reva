@@ -95,9 +95,14 @@ func New(lu node.PathLookup, bs Blobstore, o *options.Options, cache store.Store
 	}
 
 	watchPath := o.WatchPath
+	var err error
 	switch o.WatchType {
+	case "gpfswatchfolder":
+		t.watcher, err = NewGpfsWatchFolderWatcher(t, []string{"192.168.1.180:29092"})
+		if err != nil {
+			return nil, err
+		}
 	case "gpfsfileauditlogging":
-		var err error
 		t.watcher, err = NewGpfsFileAuditLoggingWatcher(t, o.WatchPath)
 		if err != nil {
 			return nil, err
@@ -179,7 +184,7 @@ func (t *Tree) Scan(path string, forceRescan bool) error {
 			return err
 		}
 
-		if len(parentAttribs) == 0 {
+		if len(parentAttribs) == 0 || len(parentAttribs[prefixes.IDAttr]) == 0 {
 			if retries == 0 {
 				return fmt.Errorf("can not assimilate item: failed to assimilate parent")
 			}
