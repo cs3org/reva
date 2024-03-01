@@ -24,6 +24,7 @@ import (
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/config"
@@ -340,6 +341,118 @@ var _ = Describe("The ocs API", func() {
 				client.AssertCalled(GinkgoT(), "UpdateReceivedShare", mock.Anything, mock.Anything)
 				client.AssertNumberOfCalls(GinkgoT(), "UpdateReceivedShare", 1)
 			})
+		})
+
+		Context("GetMountpointAndUnmountedShares ", func() {
+			storage := "storage-users-1"
+			userOneSpaceId := "first-user-id-0000-000000000000"
+			userTwoSpaceId := "second-user-id-0000-000000000000"
+			BeforeEach(func() {
+				client.On("ListReceivedShares", mock.Anything, mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
+					Status: status.NewOK(context.Background()),
+					Shares: []*collaboration.ReceivedShare{
+						{
+							Share: &collaboration.Share{
+								ResourceId: &provider.ResourceId{
+									StorageId: storage,
+									OpaqueId:  "be098d47-4518-4a96-92e3-52e904b3958d",
+									SpaceId:   userOneSpaceId,
+								},
+							},
+							State: 1,
+						},
+						{
+							Share: &collaboration.Share{
+								ResourceId: &provider.ResourceId{
+									StorageId: storage,
+									OpaqueId:  "9284d5fc-da4c-448f-a999-797a2aa1376e",
+									SpaceId:   userOneSpaceId,
+								},
+							},
+							State: 2,
+							MountPoint: &provider.Reference{
+								Path: "b.txt",
+							},
+						},
+						{
+							Share: &collaboration.Share{
+								ResourceId: &provider.ResourceId{
+									StorageId: storage,
+									OpaqueId:  "3a83e157-f03b-4cd5-b64a-d5240c6e06b5",
+									SpaceId:   userOneSpaceId,
+								},
+							},
+							State: 2,
+							MountPoint: &provider.Reference{
+								Path: "b (1).txt",
+							},
+						},
+						{
+							Share: &collaboration.Share{
+								ResourceId: &provider.ResourceId{
+									StorageId: storage,
+									OpaqueId:  "9bed6929-6691-4f5d-ba5e-b2069fe508c7",
+									SpaceId:   userTwoSpaceId,
+								},
+							},
+							State: 2,
+							MountPoint: &provider.Reference{
+								Path: "demo.tar.gz",
+							},
+						},
+						{
+							Share: &collaboration.Share{
+								ResourceId: &provider.ResourceId{
+									StorageId: storage,
+									OpaqueId:  "f1a62fe5-6acb-469c-bbe8-d5206a13b3a1",
+									SpaceId:   userOneSpaceId,
+								},
+							},
+							State: 2,
+							MountPoint: &provider.Reference{
+								Path: "a (1).txt",
+							},
+						},
+					},
+				}, nil)
+			})
+
+			DescribeTable("Resolve mountpoint name",
+				func(info *provider.ResourceInfo, expected string, unmountedLen int) {
+					// GetMountpointAndUnmountedShares check the error Stat response only
+					client.On("Stat", mock.Anything, mock.Anything).
+						Return(&provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+							Info: &provider.ResourceInfo{}}, nil)
+					fileName, unmounted, err := shares.GetMountpointAndUnmountedShares(ctx, client, info)
+					Expect(fileName).To(Equal(expected))
+					Expect(len(unmounted)).To(Equal(unmountedLen))
+					Expect(err).To(BeNil())
+				},
+				Entry("new mountpoint, name changed", &provider.ResourceInfo{
+					Name: "b.txt",
+					Id:   &provider.ResourceId{StorageId: storage, OpaqueId: "not-exist", SpaceId: userOneSpaceId},
+				}, "b (2).txt", 0),
+				Entry("new mountpoint, name changed", &provider.ResourceInfo{
+					Name: "a (1).txt",
+					Id:   &provider.ResourceId{StorageId: storage, OpaqueId: "not-exist", SpaceId: userOneSpaceId},
+				}, "a (1) (1).txt", 0),
+				Entry("new mountpoint, name is not collide", &provider.ResourceInfo{
+					Name: "file.txt",
+					Id:   &provider.ResourceId{StorageId: storage, OpaqueId: "not-exist", SpaceId: userOneSpaceId},
+				}, "file.txt", 0),
+				Entry("existing mountpoint", &provider.ResourceInfo{
+					Name: "b.txt",
+					Id:   &provider.ResourceId{StorageId: storage, OpaqueId: "9284d5fc-da4c-448f-a999-797a2aa1376e", SpaceId: userOneSpaceId},
+				}, "b.txt", 0),
+				Entry("existing mountpoint tar.gz", &provider.ResourceInfo{
+					Name: "demo.tar.gz",
+					Id:   &provider.ResourceId{StorageId: storage, OpaqueId: "not-exist", SpaceId: userOneSpaceId},
+				}, "demo (1).tar.gz", 0),
+				Entry("unmountpoint", &provider.ResourceInfo{
+					Name: "b.txt",
+					Id:   &provider.ResourceId{StorageId: storage, OpaqueId: "be098d47-4518-4a96-92e3-52e904b3958d", SpaceId: userOneSpaceId},
+				}, "b (2).txt", 1),
+			)
 		})
 	})
 })
