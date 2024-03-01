@@ -16,7 +16,7 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
-FROM quay.io/ceph/ceph:v18
+FROM quay.io/ceph/ceph:v16
 
 RUN dnf update --exclude=ceph-iscsi -y && dnf install -y \
   git \
