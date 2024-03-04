@@ -507,7 +507,7 @@ func (c *Client) fixupACLs(ctx context.Context, auth eosclient.Authorization, in
 }
 
 // SetAttr sets an extended attributes on a path.
-func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path string) error {
+func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path, app string) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "SetAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
@@ -531,6 +531,9 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 	}
 
 	rq.Command = &erpc.NSRequest_Xattr{Xattr: msg}
+	if app != "" {
+		// rq.Header.Set("app", app)
+	}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
@@ -557,7 +560,7 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 }
 
 // UnsetAttr unsets an extended attribute on a path.
-func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path string) error {
+func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path, app string) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "UnsetAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
@@ -577,6 +580,9 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 	msg.Id.Path = []byte(path)
 
 	rq.Command = &erpc.NSRequest_Xattr{Xattr: msg}
+	if app != "" {
+		// rq.Header.Set("app", app)
+	}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)

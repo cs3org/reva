@@ -460,7 +460,7 @@ func (c *Client) mergeACLsAndAttrsForFiles(ctx context.Context, auth eosclient.A
 }
 
 // SetAttr sets an extended attributes on a path.
-func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path string) error {
+func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path, app string) error {
 	if !isValidAttribute(attr) {
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
 	}
@@ -473,13 +473,16 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 		}
 		return c.handleFavAttr(ctx, auth, attr, recursive, path, info, true)
 	}
-	return c.setEOSAttr(ctx, auth, attr, errorIfExists, recursive, path)
+	return c.setEOSAttr(ctx, auth, attr, errorIfExists, recursive, path, app)
 }
 
-func (c *Client) setEOSAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path string) error {
+func (c *Client) setEOSAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path, app string) error {
 	args := []string{"attr"}
 	if recursive {
 		args = append(args, "-r")
+	}
+	if app != "" {
+		args = append(args, "-a", app)
 	}
 	args = append(args, "set")
 	if errorIfExists {
@@ -524,11 +527,11 @@ func (c *Client) handleFavAttr(ctx context.Context, auth eosclient.Authorization
 		favs.DeleteEntry(acl.TypeUser, u.Id.OpaqueId)
 	}
 	attr.Val = favs.Serialize()
-	return c.setEOSAttr(ctx, auth, attr, false, recursive, path)
+	return c.setEOSAttr(ctx, auth, attr, false, recursive, path, "")
 }
 
 // UnsetAttr unsets an extended attribute on a path.
-func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path string) error {
+func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path, app string) error {
 	if !isValidAttribute(attr) {
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
 	}
@@ -548,6 +551,9 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 		args = []string{"attr", "-r", "rm", fmt.Sprintf("%s.%s", attrTypeToString(attr.Type), attr.Key), path}
 	} else {
 		args = []string{"attr", "rm", fmt.Sprintf("%s.%s", attrTypeToString(attr.Type), attr.Key), path}
+	}
+	if app != "" {
+		args = append(args, "-a", app)
 	}
 	_, _, err = c.executeEOS(ctx, args, auth)
 	if err != nil {
