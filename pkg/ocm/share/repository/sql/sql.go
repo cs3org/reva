@@ -801,11 +801,14 @@ func (m *mgr) translateUpdateFieldMask(share *ocm.ReceivedShare, fieldMask *fiel
 		params []any
 	)
 
+	newShare := *share
+
 	for _, mask := range fieldMask.Paths {
 		switch mask {
 		case "state":
 			query.WriteString("state=?")
 			params = append(params, convertFromCS3OCMShareState(share.State))
+			newShare.State = share.State
 		default:
 			return "", nil, nil, errtypes.NotSupported("updating " + mask + " is not supported")
 		}
@@ -815,9 +818,9 @@ func (m *mgr) translateUpdateFieldMask(share *ocm.ReceivedShare, fieldMask *fiel
 	now := m.now().Unix()
 	query.WriteString("mtime=?")
 	params = append(params, now)
-	share.Mtime = &typesv1beta1.Timestamp{
+	newShare.Mtime = &typesv1beta1.Timestamp{
 		Seconds: uint64(now),
 	}
 
-	return query.String(), params, share, nil
+	return query.String(), params, &newShare, nil
 }
