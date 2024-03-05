@@ -295,12 +295,13 @@ func NewErrtypeFromStatus(status *rpc.Status) error {
 	case rpc.Code_CODE_UNIMPLEMENTED:
 		return NotSupported(status.Message)
 	case rpc.Code_CODE_PERMISSION_DENIED:
-		// FIXME add locked status!
-		if strings.HasPrefix(status.Message, "set lock: error: locked by ") {
-			return Locked(strings.TrimPrefix(status.Message, "set lock: error: locked by "))
-		}
 		return PermissionDenied(status.Message)
 	case rpc.Code_CODE_LOCKED:
+		// FIXME make something better for that
+		msg := strings.Split(status.Message, "error: locked by ")
+		if len(msg) > 1 {
+			return Locked(msg[len(msg)-1])
+		}
 		return Locked(status.Message)
 	// case rpc.Code_CODE_DATA_LOSS: ?
 	//	IsPartialContent
