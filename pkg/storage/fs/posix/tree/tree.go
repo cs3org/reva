@@ -271,7 +271,7 @@ func (t *Tree) assimilate(item scanItem) error {
 				return err
 			}
 
-			return t.Scan(item.Path, false)
+			return t.Scan(path, false)
 		})
 	}
 	return nil
