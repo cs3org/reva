@@ -265,6 +265,10 @@ func (t *Tree) assimilate(item scanItem) error {
 	// rescan the directory recursively
 	if info.IsDir() {
 		filepath.Walk(item.Path, func(path string, info fs.FileInfo, err error) error {
+			if path == item.Path {
+				return nil
+			}
+
 			if err != nil {
 				return err
 			}
