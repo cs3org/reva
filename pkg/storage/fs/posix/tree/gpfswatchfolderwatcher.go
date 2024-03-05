@@ -18,9 +18,9 @@ type GpfsWatchFolderWatcher struct {
 	c    *kafka.Consumer
 }
 
-func NewGpfsWatchFolderWatcher(tree *Tree, kafkaservers []string) (*GpfsWatchFolderWatcher, error) {
+func NewGpfsWatchFolderWatcher(tree *Tree, kafkaBrokers []string) (*GpfsWatchFolderWatcher, error) {
 	c, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers": strings.Join(kafkaservers, ","),
+		"bootstrap.servers": strings.Join(kafkaBrokers, ","),
 		"group.id":          "ocis-posixfs",
 		"auto.offset.reset": "earliest",
 	})

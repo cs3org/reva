@@ -110,7 +110,7 @@ func New(lu node.PathLookup, bs Blobstore, o *options.Options, cache store.Store
 	var err error
 	switch o.WatchType {
 	case "gpfswatchfolder":
-		t.watcher, err = NewGpfsWatchFolderWatcher(t, []string{"192.168.3.99:29092"})
+		t.watcher, err = NewGpfsWatchFolderWatcher(t, strings.Split(o.WatchFolderKafkaBrokers, ","))
 		if err != nil {
 			return nil, err
 		}
