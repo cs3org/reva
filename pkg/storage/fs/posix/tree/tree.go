@@ -32,6 +32,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go-micro.dev/v4/store"
 	"go.opentelemetry.io/otel"
@@ -41,6 +42,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/node"
@@ -67,6 +69,11 @@ type Watcher interface {
 	Watch(path string)
 }
 
+type scanItem struct {
+	Path        string
+	ForceRescan bool
+}
+
 // Tree manages a hierarchical tree
 type Tree struct {
 	lookup     node.PathLookup
@@ -75,8 +82,11 @@ type Tree struct {
 
 	options *options.Options
 
-	idCache store.Store
-	watcher Watcher
+	idCache   store.Store
+	watcher   Watcher
+	scanQueue chan scanItem
+
+	log *zerolog.Logger
 }
 
 // PermissionCheckFunc defined a function used to check resource permissions
@@ -84,19 +94,23 @@ type PermissionCheckFunc func(rp *provider.ResourcePermissions) bool
 
 // New returns a new instance of Tree
 func New(lu node.PathLookup, bs Blobstore, o *options.Options, cache store.Store) (*Tree, error) {
+
+	log := logger.New()
 	t := &Tree{
 		lookup:     lu,
 		blobstore:  bs,
 		options:    o,
 		idCache:    cache,
 		propagator: propagator.New(lu, &o.Options),
+		scanQueue:  make(chan scanItem),
+		log:        log,
 	}
 
 	watchPath := o.WatchPath
 	var err error
 	switch o.WatchType {
 	case "gpfswatchfolder":
-		t.watcher, err = NewGpfsWatchFolderWatcher(t, []string{"192.168.1.180:29092"})
+		t.watcher, err = NewGpfsWatchFolderWatcher(t, []string{"192.168.3.99:29092"})
 		if err != nil {
 			return nil, err
 		}
@@ -110,7 +124,11 @@ func New(lu node.PathLookup, bs Blobstore, o *options.Options, cache store.Store
 		watchPath = o.Root
 	}
 
+	// Start watching for fs events and put them into the queue
 	go t.watcher.Watch(watchPath)
+
+	// Handle queued fs events
+	go t.workScanQueue()
 
 	return t, nil
 }
@@ -130,13 +148,12 @@ func (t *Tree) Setup() error {
 	return nil
 }
 
-// Scan scans the given path and updates the id chache
-func (t *Tree) Scan(path string, forceRescan bool) error {
+func (t *Tree) assimilate(item scanItem) error {
 	var err error
 
 	// find the space id
 	spaceID := []byte("")
-	spaceCandidate := path
+	spaceCandidate := item.Path
 	for strings.HasPrefix(spaceCandidate, t.options.Root) {
 		spaceID, err = t.lookup.MetadataBackend().Get(context.Background(), spaceCandidate, prefixes.SpaceIDAttr)
 		if err == nil {
@@ -145,22 +162,23 @@ func (t *Tree) Scan(path string, forceRescan bool) error {
 		spaceCandidate = filepath.Dir(spaceCandidate)
 	}
 	if len(spaceID) == 0 {
-		return errors.New("could not find space id")
+		return fmt.Errorf("did not find space id for path")
 	}
 
 	var id []byte
-	if !forceRescan {
+	if !item.ForceRescan {
 		// already assimilated?
-		id, err := t.lookup.MetadataBackend().Get(context.Background(), path, prefixes.IDAttr)
+		id, err := t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.IDAttr)
 		if err == nil {
-			return t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), path)
+			t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), item.Path)
+			return nil
 		}
 	}
 
 	// lock the file for assimilation
-	unlock, err := t.lookup.MetadataBackend().Lock(path)
+	unlock, err := t.lookup.MetadataBackend().Lock(item.Path)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to lock item for assimilation")
 	}
 	defer func() {
 		_ = unlock()
@@ -168,27 +186,28 @@ func (t *Tree) Scan(path string, forceRescan bool) error {
 
 	retries := 1
 	// check for the id attribute again after grabbing the lock, maybe the file was assimilated/created by us in the meantime
-	id, err = t.lookup.MetadataBackend().Get(context.Background(), path, prefixes.IDAttr)
+	id, err = t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.IDAttr)
 	switch err {
 	case nil:
-		if !forceRescan {
-			return t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), path)
+		if !item.ForceRescan {
+			t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), item.Path)
+			return nil
 		}
 	default:
 	assimilate:
 		// read parent
-		parentAttribs, err := t.lookup.MetadataBackend().All(context.Background(), filepath.Dir(path))
+		parentAttribs, err := t.lookup.MetadataBackend().All(context.Background(), filepath.Dir(item.Path))
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to read parent item attributes")
 		}
 
 		if len(parentAttribs) == 0 || len(parentAttribs[prefixes.IDAttr]) == 0 {
 			if retries == 0 {
-				return fmt.Errorf("can not assimilate item: failed to assimilate parent")
+				return fmt.Errorf("got empty parent attribs even after assimilating")
 			}
 
 			// assimilate parent first
-			err = t.Scan(filepath.Dir(path), false)
+			err = t.assimilate(scanItem{Path: filepath.Dir(item.Path), ForceRescan: false})
 			if err != nil {
 				return err
 			}
@@ -200,19 +219,19 @@ func (t *Tree) Scan(path string, forceRescan bool) error {
 
 		// assimilate file
 		id := uuid.New().String()
-		stat, err := os.Stat(path)
+		stat, err := os.Stat(item.Path)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to stat item")
 		}
 
 		attributes := node.Attributes{
 			prefixes.IDAttr:       []byte(id),
 			prefixes.ParentidAttr: parentAttribs[prefixes.IDAttr],
-			prefixes.NameAttr:     []byte(filepath.Base(path)),
+			prefixes.NameAttr:     []byte(filepath.Base(item.Path)),
 			prefixes.MTimeAttr:    []byte(stat.ModTime().Format(time.RFC3339)),
 		}
 
-		sha1h, md5h, adler32h, err := node.CalculateChecksums(context.Background(), path)
+		sha1h, md5h, adler32h, err := node.CalculateChecksums(context.Background(), item.Path)
 		if err == nil {
 			attributes[prefixes.ChecksumPrefix+"sha1"] = sha1h.Sum(nil)
 			attributes[prefixes.ChecksumPrefix+"md5"] = md5h.Sum(nil)
@@ -227,30 +246,55 @@ func (t *Tree) Scan(path string, forceRescan bool) error {
 			attributes.SetString(prefixes.BlobIDAttr, id)
 			attributes.SetInt64(prefixes.BlobsizeAttr, stat.Size())
 		}
-		err = t.lookup.MetadataBackend().SetMultiple(context.Background(), path, attributes, false)
+		err = t.lookup.MetadataBackend().SetMultiple(context.Background(), item.Path, attributes, false)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to set attributes")
 		}
 
-		if !forceRescan {
-			return t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), path)
+		if !item.ForceRescan {
+			t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), item.Path)
+			return nil
 		}
 	}
 
-	info, err := os.Stat(path)
+	info, err := os.Stat(item.Path)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to stat item for recursive scanning")
 	}
 
 	// rescan the directory recursively
 	if info.IsDir() {
-		return filepath.Walk(path, func(path string, info fs.FileInfo, err error) error {
+		filepath.Walk(item.Path, func(path string, info fs.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
 
-			return t.Scan(path, false)
+			return t.Scan(item.Path, false)
 		})
+	}
+	return nil
+}
+
+func (t *Tree) workScanQueue() {
+	for i := 0; i < t.options.MaxConcurrency; i++ {
+		go func() {
+			for {
+				item := <-t.scanQueue
+				err := t.assimilate(item)
+				if err != nil {
+					log.Error().Err(err).Str("path", item.Path).Msg("failed to assimilate item")
+					continue
+				}
+			}
+		}()
+	}
+}
+
+// Scan scans the given path and updates the id chache
+func (t *Tree) Scan(path string, forceRescan bool) error {
+	t.scanQueue <- scanItem{
+		Path:        path,
+		ForceRescan: forceRescan,
 	}
 	return nil
 }
