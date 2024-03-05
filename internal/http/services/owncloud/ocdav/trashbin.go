@@ -61,8 +61,8 @@ func (h *TrashbinHandler) handleTrashbinSpaces(s *svc, w http.ResponseWriter, r 
 
 	_, base, ok := spaces.DecodeSpaceID(spaceID)
 	if !ok {
-		// TODO: bad request
-		panic("not yet implemented: bad request")
+		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 	log.Debug().Str("path", base).Msg("decoded space base path")
 

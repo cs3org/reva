@@ -192,8 +192,8 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 				_, base, ok := spaces.DecodeSpaceID(head)
 				if !ok {
-					// TODO: bad request
-					panic("not yet implemented")
+					w.WriteHeader(http.StatusBadRequest)
+					return
 				}
 
 				fullPath := filepath.Join(base, r.URL.Path)

@@ -768,7 +768,7 @@ func spaceFromPath(path string, lvl int) string {
 	s := strings.SplitN(path, "/", lvl+1)
 	if len(s) < lvl {
 		// TODO: outside space. what to do??
-		panic("not yet implemented")
+		return ""
 	}
 
 	return "/" + strings.Join(s[:lvl], "/")
