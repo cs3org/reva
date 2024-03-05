@@ -35,6 +35,11 @@ import (
 	"google.golang.org/grpc"
 )
 
+const (
+	_spaceTypePersonal = "personal"
+	_spaceTypeProject  = "project"
+)
+
 func init() {
 	rgrpc.Register("gateway", New)
 }
