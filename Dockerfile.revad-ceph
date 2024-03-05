@@ -16,9 +16,14 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
-FROM quay.io/ceph/ceph:v16
+FROM quay.io/ceph/ceph:v18
 
-RUN dnf update --exclude=ceph-iscsi -y && dnf install -y \
+# replace repo url with one that allows downloading the repo metadata
+# if http://download.ceph.com/rpm-reef/el8/x86_64/repodata/repomd.xml works again this can be dropped
+RUN sed -i 's/download.ceph.com/de.ceph.com/' /etc/yum.repos.d/ceph.repo
+RUN mkdir -p /etc/selinux/config
+
+RUN dnf update --exclude=ceph-iscsi,chrony -y && dnf install -y \
   git \
   gcc \
   make \
@@ -26,7 +31,7 @@ RUN dnf update --exclude=ceph-iscsi -y && dnf install -y \
   librbd-devel \
   librados-devel
 
-ADD https://golang.org/dl/go1.21.5.linux-amd64.tar.gz \
+ADD https://go.dev/dl/go1.21.5.linux-amd64.tar.gz \
   go1.21.5.linux-amd64.tar.gz
 
 RUN rm -rf /usr/local/go && \
@@ -38,13 +43,18 @@ ENV GOPATH /go
 
 WORKDIR /go/src/github/cs3org/reva
 COPY . .
+
+ARG GIT_COMMIT
+ARG VERSION
+ENV GIT_COMMIT=$GIT_COMMIT
+ENV VERSION=$VERSION
 RUN mkdir -p /go/bin && \
-    make build-revad-cephfs-docker && \
-    cp /go/src/github/cs3org/reva/cmd/revad/revad /usr/bin/revad
+  make build-revad-cephfs-docker && \
+  cp /go/src/github/cs3org/reva/cmd/revad/revad /usr/bin/revad
 
 RUN cp -r examples/ceph /etc/
 
-RUN mkdir -p /etc/revad/ && echo "" > /etc/revad/revad.toml
+RUN mkdir -p /etc/revad/ && touch /etc/revad/revad.toml
 
 EXPOSE 9999 10000
 
