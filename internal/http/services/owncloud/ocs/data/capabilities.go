@@ -185,17 +185,18 @@ type CapabilitiesAppProvider struct {
 
 // CapabilitiesFiles TODO this is storage specific, not global. What effect do these options have on the clients?
 type CapabilitiesFiles struct {
-	PrivateLinks     ocsBool                      `json:"privateLinks" xml:"privateLinks" mapstructure:"private_links"`
-	BigFileChunking  ocsBool                      `json:"bigfilechunking" xml:"bigfilechunking"`
-	Undelete         ocsBool                      `json:"undelete" xml:"undelete"`
-	Versioning       ocsBool                      `json:"versioning" xml:"versioning"`
-	Favorites        ocsBool                      `json:"favorites" xml:"favorites"`
-	FullTextSearch   ocsBool                      `json:"full_text_search" xml:"full_text_search" mapstructure:"full_text_search"`
-	Tags             ocsBool                      `json:"tags" xml:"tags"`
-	BlacklistedFiles []string                     `json:"blacklisted_files" xml:"blacklisted_files>element" mapstructure:"blacklisted_files"`
-	TusSupport       *CapabilitiesFilesTusSupport `json:"tus_support" xml:"tus_support" mapstructure:"tus_support"`
-	Archivers        []*CapabilitiesArchiver      `json:"archivers" xml:"archivers" mapstructure:"archivers"`
-	AppProviders     []*CapabilitiesAppProvider   `json:"app_providers" xml:"app_providers" mapstructure:"app_providers"`
+	BlacklistedFilesRegex string                       `json:"blacklisted_files_regex" xml:"blacklisted_files_regex"`
+	PrivateLinks          ocsBool                      `json:"privateLinks" xml:"privateLinks" mapstructure:"private_links"`
+	BigFileChunking       ocsBool                      `json:"bigfilechunking" xml:"bigfilechunking"`
+	Undelete              ocsBool                      `json:"undelete" xml:"undelete"`
+	Versioning            ocsBool                      `json:"versioning" xml:"versioning"`
+	Favorites             ocsBool                      `json:"favorites" xml:"favorites"`
+	FullTextSearch        ocsBool                      `json:"full_text_search" xml:"full_text_search" mapstructure:"full_text_search"`
+	Tags                  ocsBool                      `json:"tags" xml:"tags"`
+	BlacklistedFiles      []string                     `json:"blacklisted_files" xml:"blacklisted_files>element" mapstructure:"blacklisted_files"`
+	TusSupport            *CapabilitiesFilesTusSupport `json:"tus_support" xml:"tus_support" mapstructure:"tus_support"`
+	Archivers             []*CapabilitiesArchiver      `json:"archivers" xml:"archivers" mapstructure:"archivers"`
+	AppProviders          []*CapabilitiesAppProvider   `json:"app_providers" xml:"app_providers" mapstructure:"app_providers"`
 }
 
 // CapabilitiesDav holds dav endpoint config
