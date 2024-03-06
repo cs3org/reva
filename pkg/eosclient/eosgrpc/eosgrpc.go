@@ -204,7 +204,7 @@ func (c *Client) getRespError(rsp *erpc.NSResponse, err error) error {
 }
 
 // Common code to create and initialize a NSRequest.
-func (c *Client) initNSRequest(ctx context.Context, auth eosclient.Authorization) (*erpc.NSRequest, error) {
+func (c *Client) initNSRequest(ctx context.Context, auth eosclient.Authorization, app string) (*erpc.NSRequest, error) {
 	// Stuff filename, uid, gid into the MDRequest type
 
 	log := appctx.GetLogger(ctx)
@@ -223,12 +223,15 @@ func (c *Client) initNSRequest(ctx context.Context, auth eosclient.Authorization
 	}
 	rq.Role.Uid = uidInt
 	rq.Role.Gid = gidInt
+	if app != "" {
+		rq.Role.Groupname = app // FIXME this is going to be rq.Role.App once the GRPC interface is updated
+	}
 	rq.Authkey = c.opt.Authkey
 
 	return rq, nil
 }
 
-// Common code to create and initialize a NSRequest.
+// Common code to create and initialize a MDRequest.
 func (c *Client) initMDRequest(ctx context.Context, auth eosclient.Authorization) (*erpc.MDRequest, error) {
 	// Stuff filename, uid, gid into the MDRequest type
 
@@ -260,7 +263,7 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 	log.Info().Str("func", "AddACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Init a new NSRequest
-	rq, err := c.initNSRequest(ctx, rootAuth)
+	rq, err := c.initNSRequest(ctx, rootAuth, "")
 	if err != nil {
 		return err
 	}
@@ -311,7 +314,7 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 	sysACL := acls.Serialize()
 
 	// Init a new NSRequest
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -388,7 +391,7 @@ func (c *Client) getACLForPath(ctx context.Context, auth eosclient.Authorization
 	log.Info().Str("func", "GetACLForPath").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return nil, err
 	}
@@ -512,7 +515,7 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 	log.Info().Str("func", "SetAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, app)
 	if err != nil {
 		return err
 	}
@@ -531,9 +534,6 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 	}
 
 	rq.Command = &erpc.NSRequest_Xattr{Xattr: msg}
-	// if app != "" {
-	// rq.Header.Set("app", app)
-	// }
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
@@ -565,7 +565,7 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 	log.Info().Str("func", "UnsetAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, app)
 	if err != nil {
 		return err
 	}
@@ -575,14 +575,10 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 	var ktd = []string{attr.GetKey()}
 	msg.Keystodelete = ktd
 	msg.Recursive = recursive
-
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
 
 	rq.Command = &erpc.NSRequest_Xattr{Xattr: msg}
-	// if app != "" {
-	// rq.Header.Set("app", app)
-	// }
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
@@ -731,7 +727,7 @@ func (c *Client) GetQuota(ctx context.Context, username string, rootAuth eosclie
 	log.Info().Str("func", "GetQuota").Str("rootuid,rootgid", rootAuth.Role.UID+","+rootAuth.Role.GID).Str("username", username).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, rootAuth)
+	rq, err := c.initNSRequest(ctx, rootAuth, "")
 	if err != nil {
 		return nil, err
 	}
@@ -807,7 +803,7 @@ func (c *Client) SetQuota(ctx context.Context, rootAuth eosclient.Authorization,
 	// return errtypes.NotSupported("eosgrpc: SetQuota not implemented")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, rootAuth)
+	rq, err := c.initNSRequest(ctx, rootAuth, "")
 	if err != nil {
 		return err
 	}
@@ -865,7 +861,7 @@ func (c *Client) Touch(ctx context.Context, auth eosclient.Authorization, path s
 	log.Info().Str("func", "Touch").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -900,7 +896,7 @@ func (c *Client) Chown(ctx context.Context, auth, chownAuth eosclient.Authorizat
 	log.Info().Str("func", "Chown").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("chownuid,chowngid", chownAuth.Role.UID+","+chownAuth.Role.GID).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -944,7 +940,7 @@ func (c *Client) Chmod(ctx context.Context, auth eosclient.Authorization, mode, 
 	log.Info().Str("func", "Chmod").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("mode", mode).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -985,7 +981,7 @@ func (c *Client) CreateDir(ctx context.Context, auth eosclient.Authorization, pa
 	log.Info().Str("func", "Createdir").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -1026,7 +1022,7 @@ func (c *Client) rm(ctx context.Context, auth eosclient.Authorization, path stri
 	log.Info().Str("func", "rm").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -1061,7 +1057,7 @@ func (c *Client) rmdir(ctx context.Context, auth eosclient.Authorization, path s
 	log.Info().Str("func", "rmdir").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -1116,7 +1112,7 @@ func (c *Client) Rename(ctx context.Context, auth eosclient.Authorization, oldPa
 	log.Info().Str("func", "Rename").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("oldPath", oldPath).Str("newPath", newPath).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -1387,7 +1383,7 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 	log.Info().Str("func", "ListDeletedEntries").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return nil, err
 	}
@@ -1455,7 +1451,7 @@ func (c *Client) RestoreDeletedEntry(ctx context.Context, auth eosclient.Authori
 	log.Info().Str("func", "RestoreDeletedEntries").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("key", key).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -1493,7 +1489,7 @@ func (c *Client) PurgeDeletedEntries(ctx context.Context, auth eosclient.Authori
 	log.Info().Str("func", "PurgeDeletedEntries").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -1540,7 +1536,7 @@ func (c *Client) RollbackToVersion(ctx context.Context, auth eosclient.Authoriza
 	log.Info().Str("func", "RollbackToVersion").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Str("version", version).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
