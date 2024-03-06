@@ -261,7 +261,23 @@ var _ = Describe("Sharesstorageprovider", func() {
 						},
 					}
 				default:
-					if req.Ref.ResourceId.OpaqueId == "shareddir-merged" {
+					switch req.Ref.ResourceId.OpaqueId {
+					case "shareddir", "shareddir2":
+						permissionSet := &sprovider.ResourcePermissions{
+							Stat:          true,
+							ListContainer: true,
+						}
+						return &sprovider.StatResponse{
+							Status: status.NewOK(context.Background()),
+							Info: &sprovider.ResourceInfo{
+								Type:          sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
+								Path:          "share1-shareddir",
+								Id:            req.Ref.ResourceId,
+								PermissionSet: permissionSet,
+								Size:          100,
+							},
+						}
+					case "shareddir-merged":
 						permissionSet := &sprovider.ResourcePermissions{
 							Stat:          true,
 							ListContainer: true,
@@ -280,9 +296,10 @@ var _ = Describe("Sharesstorageprovider", func() {
 								Size:          100,
 							},
 						}
-					}
-					return &sprovider.StatResponse{
-						Status: status.NewNotFound(context.Background(), "not found"),
+					default:
+						return &sprovider.StatResponse{
+							Status: status.NewNotFound(context.Background(), "not found"),
+						}
 					}
 				}
 			},
