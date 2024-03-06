@@ -38,7 +38,6 @@ ENV VERSION=$VERSION
 RUN make reva && cp /go/src/github/cs3org/reva/cmd/reva/reva /go/bin/reva
 
 FROM scratch
-
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /go/bin/reva /usr/bin/reva
 
