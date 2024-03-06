@@ -531,9 +531,9 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 	}
 
 	rq.Command = &erpc.NSRequest_Xattr{Xattr: msg}
-	if app != "" {
-		// rq.Header.Set("app", app)
-	}
+	// if app != "" {
+	// rq.Header.Set("app", app)
+	// }
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
@@ -580,9 +580,9 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 	msg.Id.Path = []byte(path)
 
 	rq.Command = &erpc.NSRequest_Xattr{Xattr: msg}
-	if app != "" {
-		// rq.Header.Set("app", app)
-	}
+	// if app != "" {
+	// rq.Header.Set("app", app)
+	// }
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
