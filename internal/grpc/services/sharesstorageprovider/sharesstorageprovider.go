@@ -1078,10 +1078,6 @@ func (s *service) resolveAcceptedShare(ctx context.Context, ref *provider.Refere
 			return nil, lsRes.Status, nil
 		}
 		for _, receivedShare := range lsRes.Shares {
-			// make sure to skip unaccepted shares
-			if receivedShare.State != collaboration.ShareState_SHARE_STATE_ACCEPTED {
-				continue
-			}
 			if isMountPointForPath(receivedShare.MountPoint.Path, ref.Path) {
 				return receivedShare, lsRes.Status, nil
 			}
