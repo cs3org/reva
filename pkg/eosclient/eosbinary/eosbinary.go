@@ -477,12 +477,13 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 }
 
 func (c *Client) setEOSAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path, app string) error {
-	args := []string{"attr"}
-	if recursive {
-		args = append(args, "-r")
-	}
+	args := []string{}
 	if app != "" {
 		args = append(args, "-a", app)
+	}
+	args = append(args, "attr")
+	if recursive {
+		args = append(args, "-r")
 	}
 	args = append(args, "set")
 	if errorIfExists {
@@ -547,14 +548,15 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 	}
 
 	var args []string
-	if recursive {
-		args = []string{"attr", "-r", "rm", fmt.Sprintf("%s.%s", attrTypeToString(attr.Type), attr.Key), path}
-	} else {
-		args = []string{"attr", "rm", fmt.Sprintf("%s.%s", attrTypeToString(attr.Type), attr.Key), path}
-	}
 	if app != "" {
 		args = append(args, "-a", app)
 	}
+	args = append(args, "attr")
+	if recursive {
+		args = append(args, "-r")
+	}
+	args = append(args, "rm", fmt.Sprintf("%s.%s", attrTypeToString(attr.Type), attr.Key), path)
+
 	_, _, err = c.executeEOS(ctx, args, auth)
 	if err != nil {
 		var exErr *exec.ExitError
