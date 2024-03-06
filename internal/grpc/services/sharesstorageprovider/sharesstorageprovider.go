@@ -1060,8 +1060,6 @@ func (s *service) resolveAcceptedShare(ctx context.Context, ref *provider.Refere
 	// we currently need to list all shares and match the path if the request is relative to the share jail root
 	if ref.ResourceId.OpaqueId == utils.ShareStorageProviderID && ref.Path != "." {
 		// we need to list accepted shares and match the path
-
-		// look up share for this resourceid
 		lsRes, err := sharingCollaborationClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{
 			Filters: []*collaboration.Filter{
 				{
