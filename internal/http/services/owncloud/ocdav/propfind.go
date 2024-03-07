@@ -42,6 +42,7 @@ import (
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/spaces"
 
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rhttp/router"
@@ -514,6 +515,20 @@ func supportLegacyOCMAccess(ctx context.Context, md *provider.ResourceInfo) {
 	}
 }
 
+func spaceHref(ctx context.Context, baseURI, fullPath string) string {
+	// in the context of spaces, the final URL will be baseURI + /<space_id>/relative/path/to/space
+	spacePath, ok := ctx.Value(ctxSpacePath).(string)
+	if !ok {
+		panic("space path expected to be in the context")
+	}
+	relativePath := strings.TrimPrefix(fullPath, spacePath)
+	spaceID, ok := ctx.Value(ctxSpaceID).(string)
+	if !ok {
+		panic("space id expected to be in the context")
+	}
+	return path.Join(baseURI, spaceID, relativePath)
+}
+
 func appendSlash(path string) string {
 	if path == "" {
 		return "/"
@@ -540,12 +555,18 @@ func (s *svc) isOpenable(path string) bool {
 // prefixing it with the baseURI.
 func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string, usershares, linkshares map[string]struct{}) (*responseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
-	md.Path = strings.TrimPrefix(md.Path, ns)
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 
 	supportLegacyOCMAccess(ctx, md)
-	ref := path.Join(baseURI, md.Path)
+
+	var ref string
+	if _, ok := ctx.Value(ctxSpaceID).(string); ok {
+		ref = spaceHref(ctx, baseURI, md.Path)
+	} else {
+		md.Path = strings.TrimPrefix(md.Path, ns)
+		ref = path.Join(baseURI, md.Path)
+	}
 	if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ref += "/"
 	}
@@ -606,7 +627,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		// return all known properties
 
 		if md.Id != nil {
-			id := resourceid.OwnCloudResourceIDWrap(md.Id)
+			id := spaces.EncodeResourceID(md.Id)
 			propstatOK.Prop = append(propstatOK.Prop,
 				s.newProp("oc:id", id),
 				s.newProp("oc:fileid", id),
@@ -705,13 +726,13 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				// I tested the desktop client and phoenix to annotate which properties are requestted, see below cases
 				case "fileid": // phoenix only
 					if md.Id != nil {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", resourceid.OwnCloudResourceIDWrap(md.Id)))
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", spaces.EncodeResourceID(md.Id)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
 					}
 				case "id": // desktop client only
 					if md.Id != nil {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:id", resourceid.OwnCloudResourceIDWrap(md.Id)))
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:id", spaces.EncodeResourceID(md.Id)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:id", ""))
 					}

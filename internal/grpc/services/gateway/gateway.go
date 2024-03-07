@@ -57,6 +57,7 @@ type config struct {
 	DataTxEndpoint                string `mapstructure:"datatx"`
 	DataGatewayEndpoint           string `mapstructure:"datagateway"`
 	PermissionsEndpoint           string `mapstructure:"permissionssvc"`
+	SpacesEndpoint                string `mapstructure:"spacessvc"`
 	CommitShareToStorageGrant     bool   `mapstructure:"commit_share_to_storage_grant"`
 	CommitShareToStorageRef       bool   `mapstructure:"commit_share_to_storage_ref"`
 	DisableHomeCreationOnLogin    bool   `mapstructure:"disable_home_creation_on_login"`

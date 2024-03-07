@@ -30,6 +30,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/spaces"
 
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
@@ -45,7 +46,7 @@ type DavHandler struct {
 	FilesHomeHandler    *WebDavHandler
 	MetaHandler         *MetaHandler
 	TrashbinHandler     *TrashbinHandler
-	SpacesHandler       *SpacesHandler
+	SpacesHandler       *WebDavHandler
 	PublicFolderHandler *WebDavHandler
 	PublicFileHandler   *PublicFileHandler
 	OCMSharesHandler    *WebDavHandler
@@ -70,8 +71,8 @@ func (h *DavHandler) init(c *Config) error {
 	}
 	h.TrashbinHandler = new(TrashbinHandler)
 
-	h.SpacesHandler = new(SpacesHandler)
-	if err := h.SpacesHandler.init(c); err != nil {
+	h.SpacesHandler = new(WebDavHandler)
+	if err := h.SpacesHandler.init("", false); err != nil {
 		return err
 	}
 
@@ -176,8 +177,35 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		case "spaces":
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "spaces")
 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
-			r = r.WithContext(ctx)
-			h.SpacesHandler.Handler(s).ServeHTTP(w, r)
+
+			var head string
+			head, r.URL.Path = router.ShiftPath(r.URL.Path)
+
+			switch head {
+			case "trash-bin":
+				r = r.WithContext(ctx)
+				h.TrashbinHandler.Handler(s).ServeHTTP(w, r)
+			default:
+				// path is of type: space_id/relative/path/from/space
+				// the space_id is the base64 encode of the path where
+				// the space is located
+
+				_, base, ok := spaces.DecodeSpaceID(head)
+				if !ok {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+
+				fullPath := filepath.Join(base, r.URL.Path)
+				r.URL.Path = fullPath
+
+				ctx = context.WithValue(ctx, ctxSpaceID, head)
+				ctx = context.WithValue(ctx, ctxSpaceFullPath, fullPath)
+				ctx = context.WithValue(ctx, ctxSpacePath, base)
+				ctx = context.WithValue(ctx, ctxSpaceRelativePath, r.URL.Path)
+				r = r.WithContext(ctx)
+				h.SpacesHandler.Handler(s).ServeHTTP(w, r)
+			}
 		case "ocm":
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "ocm")
 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
