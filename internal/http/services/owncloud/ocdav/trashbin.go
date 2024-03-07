@@ -116,7 +116,9 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
-		if true { // s.spaces
+		// check if we are in a space
+		spaceID, _ := router.ShiftPath(r.URL.Path)
+		if _, _, ok := spaces.DecodeSpaceID(spaceID); ok {
 			h.handleTrashbinSpaces(s, w, r)
 			return
 		}
