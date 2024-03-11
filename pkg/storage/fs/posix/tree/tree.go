@@ -180,7 +180,7 @@ func (t *Tree) assimilate(item scanItem) error {
 	// lock the file for assimilation
 	unlock, err := t.lookup.MetadataBackend().Lock(item.Path)
 	if err != nil {
-		return fmt.Errorf("failed to lock item for assimilation")
+		return errors.Wrap(err, "failed to lock item for assimilation")
 	}
 	defer func() {
 		_ = unlock()
@@ -223,7 +223,7 @@ func (t *Tree) assimilate(item scanItem) error {
 		id := uuid.New().String()
 		stat, err := os.Stat(item.Path)
 		if err != nil {
-			return fmt.Errorf("failed to stat item")
+			return errors.Wrap(err, "failed to stat item")
 		}
 
 		attributes := node.Attributes{
@@ -250,7 +250,7 @@ func (t *Tree) assimilate(item scanItem) error {
 		}
 		err = t.lookup.MetadataBackend().SetMultiple(context.Background(), item.Path, attributes, false)
 		if err != nil {
-			return fmt.Errorf("failed to set attributes")
+			return errors.Wrap(err, "failed to set attributes")
 		}
 
 		if !item.ForceRescan {
@@ -261,7 +261,7 @@ func (t *Tree) assimilate(item scanItem) error {
 
 	info, err := os.Stat(item.Path)
 	if err != nil {
-		return fmt.Errorf("failed to stat item for recursive scanning")
+		return errors.Wrap(err, "failed to stat item for recursive scanning")
 	}
 
 	// rescan the directory recursively
