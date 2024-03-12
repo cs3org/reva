@@ -97,14 +97,17 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 
 	// create a directory node
 	root.SetType(provider.ResourceType_RESOURCE_TYPE_CONTAINER)
-	var relativeRootPath string
+	rootPath := root.InternalPath()
 	switch req.Type {
 	case _spaceTypePersonal:
-		relativeRootPath = templates.WithUser(u, fs.o.UserLayout)
+		if fs.o.UserLayout != "" {
+			rootPath = filepath.Join(fs.o.Root, templates.WithUser(u, fs.o.UserLayout))
+		}
 	case _spaceTypeProject:
-		relativeRootPath = templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, spaceID, fs.o.ProjectLayout)
+		if fs.o.ProjectLayout != "" {
+			rootPath = filepath.Join(fs.o.Root, templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, spaceID, fs.o.ProjectLayout))
+		}
 	}
-	rootPath := filepath.Join(fs.o.Root, relativeRootPath)
 
 	if err := os.MkdirAll(rootPath, 0700); err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error creating node")

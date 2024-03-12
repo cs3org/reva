@@ -160,7 +160,7 @@ func New(m map[string]interface{}) (*Options, error) {
 	}
 
 	if o.MaxConcurrency <= 0 {
-		o.MaxConcurrency = 100
+		o.MaxConcurrency = 5
 	}
 
 	if o.Propagator == "" {

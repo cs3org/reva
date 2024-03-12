@@ -108,7 +108,6 @@ type Decomposedfs struct {
 	p            permissions.Permissions
 	chunkHandler *chunking.ChunkHandler
 	stream       events.Stream
-	cache        cache.StatCache
 	sessionStore SessionStore
 
 	UserCache       *ttlcache.Cache
@@ -209,7 +208,6 @@ func New(o *options.Options, aspects aspects.Aspects) (storage.FS, error) {
 		p:               aspects.Permissions,
 		chunkHandler:    chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
 		stream:          aspects.EventStream,
-		cache:           cache.GetStatCache(o.StatCache),
 		UserCache:       ttlcache.NewCache(),
 		userSpaceIndex:  userSpaceIndex,
 		groupSpaceIndex: groupSpaceIndex,
@@ -267,8 +265,9 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 			}
 
 			var (
-				failed     bool
-				keepUpload bool
+				failed             bool
+				revertNodeMetadata bool
+				keepUpload         bool
 			)
 			unmarkPostprocessing := true
 
@@ -278,12 +277,14 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 				fallthrough
 			case events.PPOutcomeAbort:
 				failed = true
+				revertNodeMetadata = true
 				keepUpload = true
 				metrics.UploadSessionsAborted.Inc()
 			case events.PPOutcomeContinue:
 				if err := session.Finalize(); err != nil {
 					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not finalize upload")
 					failed = true
+					revertNodeMetadata = false
 					keepUpload = true
 					// keep postprocessing status so the upload is not deleted during housekeeping
 					unmarkPostprocessing = false
@@ -292,6 +293,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 				}
 			case events.PPOutcomeDelete:
 				failed = true
+				revertNodeMetadata = true
 				metrics.UploadSessionsDeleted.Inc()
 			}
 
@@ -318,10 +320,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 				}
 			}
 
-			fs.sessionStore.Cleanup(ctx, session, failed, keepUpload, unmarkPostprocessing)
-
-			// remove cache entry in gateway
-			fs.cache.RemoveStatContext(ctx, ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
+			fs.sessionStore.Cleanup(ctx, session, revertNodeMetadata, keepUpload, unmarkPostprocessing)
 
 			if err := events.Publish(
 				ctx,
@@ -490,9 +489,6 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 			}
 
 			metrics.UploadSessionsScanned.Inc()
-
-			// remove cache entry in gateway
-			fs.cache.RemoveStatContext(ctx, ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
 		default:
 			log.Error().Interface("event", ev).Msg("Unknown event")
 		}
