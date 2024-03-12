@@ -767,6 +767,29 @@ func (t *Tree) DeleteBlob(node *node.Node) error {
 	return t.blobstore.Delete(node)
 }
 
+// BuildSpaceIDIndexEntry returns the entry for the space id index
+func (t *Tree) BuildSpaceIDIndexEntry(spaceID, nodeID string) string {
+	return "../../../spaces/" + lookup.Pathify(spaceID, 1, 2) + "/nodes/" + lookup.Pathify(spaceID, 4, 2)
+}
+
+// ResolveSpaceIDIndexEntry returns the node id for the space id index entry
+func (t *Tree) ResolveSpaceIDIndexEntry(_, entry string) (string, string, error) {
+	return ReadSpaceAndNodeFromIndexLink(entry)
+}
+
+// ReadSpaceAndNodeFromIndexLink reads a symlink and parses space and node id if the link has the correct format, eg:
+// ../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51
+// ../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51.T.2022-02-24T12:35:18.196484592Z
+func ReadSpaceAndNodeFromIndexLink(link string) (string, string, error) {
+	// ../../../spaces/sp/ace-id/nodes/sh/or/tn/od/eid
+	// 0  1  2  3      4  5      6     7  8  9  10  11
+	parts := strings.Split(link, string(filepath.Separator))
+	if len(parts) != 12 || parts[0] != ".." || parts[1] != ".." || parts[2] != ".." || parts[3] != "spaces" || parts[6] != "nodes" {
+		return "", "", errtypes.InternalError("malformed link")
+	}
+	return strings.Join(parts[4:6], ""), strings.Join(parts[7:12], ""), nil
+}
+
 // TODO check if node exists?
 func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 	ctx, span := tracer.Start(ctx, "createDirNode")

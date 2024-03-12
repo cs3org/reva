@@ -40,7 +40,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/metrics"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/utils/download"
 	"github.com/cs3org/reva/v2/pkg/storage"
-	"github.com/cs3org/reva/v2/pkg/storage/cache"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/aspects"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/metadata"

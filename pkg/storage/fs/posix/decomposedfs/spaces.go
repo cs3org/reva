@@ -211,19 +211,6 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	return resp, nil
 }
 
-// ReadSpaceAndNodeFromIndexLink reads a symlink and parses space and node id if the link has the correct format, eg:
-// ../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51
-// ../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51.T.2022-02-24T12:35:18.196484592Z
-func ReadSpaceAndNodeFromIndexLink(link string) (string, string, error) {
-	// ../../../spaces/sp/ace-id/nodes/sh/or/tn/od/eid
-	// 0  1  2  3      4  5      6     7  8  9  10  11
-	parts := strings.Split(link, string(filepath.Separator))
-	if len(parts) != 12 || parts[0] != ".." || parts[1] != ".." || parts[2] != ".." || parts[3] != "spaces" || parts[6] != "nodes" {
-		return "", "", errtypes.InternalError("malformed link")
-	}
-	return strings.Join(parts[4:6], ""), strings.Join(parts[7:12], ""), nil
-}
-
 // ListStorageSpaces returns a list of StorageSpaces.
 // The list can be filtered by space type or space id.
 // Spaces are persisted with symlinks in /spaces/<type>/<spaceid> pointing to ../../nodes/<nodeid>, the root node of the space
@@ -427,9 +414,15 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	for i := 0; i < numWorkers; i++ {
 		errg.Go(func() error {
 			for match := range work {
-				n, err := node.ReadNode(ctx, fs.lu, match[0], match[1], true, nil, true)
+				spaceID, nodeID, err := fs.tp.ResolveSpaceIDIndexEntry(match[0], match[1])
 				if err != nil {
-					appctx.GetLogger(ctx).Error().Err(err).Str("id", match[0]).Msg("could not read node, skipping")
+					appctx.GetLogger(ctx).Error().Err(err).Str("id", nodeID).Msg("resolve space id index entry, skipping")
+					continue
+				}
+
+				n, err := node.ReadNode(ctx, fs.lu, spaceID, nodeID, true, nil, true)
+				if err != nil {
+					appctx.GetLogger(ctx).Error().Err(err).Str("id", nodeID).Msg("could not read node, skipping")
 					continue
 				}
 
@@ -445,7 +438,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 					case errtypes.NotFound:
 						// ok
 					default:
-						appctx.GetLogger(ctx).Error().Err(err).Str("id", match[0]).Msg("could not convert to storage space")
+						appctx.GetLogger(ctx).Error().Err(err).Str("id", nodeID).Msg("could not convert to storage space")
 					}
 					continue
 				}
@@ -746,7 +739,11 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 	return n.SetDTime(ctx, &dtime)
 }
 
-func (fs *Decomposedfs) updateIndexes(ctx context.Context, grantee *provider.Grantee, spaceType, spaceID, target string) error {
+// the value of `target` depends on the implementation:
+// - for ocis/s3ng it is the relative link to the space root
+// - for the posixfs it is the node id
+func (fs *Decomposedfs) updateIndexes(ctx context.Context, grantee *provider.Grantee, spaceType, spaceID, nodeID string) error {
+	target := fs.tp.BuildSpaceIDIndexEntry(spaceID, nodeID)
 	err := fs.linkStorageSpaceType(ctx, spaceType, spaceID, target)
 	if err != nil {
 		return err
