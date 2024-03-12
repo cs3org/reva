@@ -105,6 +105,9 @@ type Tree interface {
 	ReadBlob(node *Node) (io.ReadCloser, error)
 	DeleteBlob(node *Node) error
 
+	BuildSpaceIDIndexEntry(spaceID, nodeID string) string
+	ResolveSpaceIDIndexEntry(spaceID, entry string) (string, string, error)
+
 	Propagate(ctx context.Context, node *Node, sizeDiff int64) (err error)
 }
 

@@ -826,6 +826,16 @@ func (t *Tree) DeleteBlob(node *node.Node) error {
 	return t.blobstore.Delete(node)
 }
 
+// BuildSpaceIDIndexEntry returns the entry for the space id index
+func (t *Tree) BuildSpaceIDIndexEntry(spaceID, nodeID string) string {
+	return nodeID
+}
+
+// ResolveSpaceIDIndexEntry returns the node id for the space id index entry
+func (t *Tree) ResolveSpaceIDIndexEntry(spaceid, entry string) (string, string, error) {
+	return spaceid, entry, nil
+}
+
 // TODO check if node exists?
 func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 	ctx, span := tracer.Start(ctx, "createDirNode")
