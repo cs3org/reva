@@ -23,7 +23,7 @@ package mocks
 import (
 	io "io"
 
-	node "github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/node"
+	node "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	mock "github.com/stretchr/testify/mock"
 )
 

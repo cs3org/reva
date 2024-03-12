@@ -23,7 +23,7 @@ import (
 
 	microstore "go-micro.dev/v4/store"
 
-	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/options"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/store"
 )
 

@@ -29,10 +29,10 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/metadata"
-	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/metadata/prefixes"
-	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/options"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/google/uuid"
@@ -78,6 +78,16 @@ func New(b metadata.Backend, o *options.Options) *Lookup {
 	}()
 
 	return lu
+}
+
+// CacheID caches the id for the given space and node id
+func (lu *Lookup) CacheID(ctx context.Context, spaceID, nodeID, val string) error {
+	return lu.IDCache.Set(ctx, spaceID, nodeID, val)
+}
+
+// GetCachedID returns the cached id for the given space and node id
+func (lu *Lookup) GetCachedID(ctx context.Context, spaceID, nodeID string) (string, bool) {
+	return lu.IDCache.Get(ctx, spaceID, nodeID)
 }
 
 func (lu *Lookup) WarmupIDCache() error {

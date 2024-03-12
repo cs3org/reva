@@ -24,7 +24,7 @@ import (
 	"path"
 
 	"github.com/cs3org/reva/v2/pkg/storage/fs/ocis/blobstore"
-	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/node"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/tests/helpers"
 
 	. "github.com/onsi/ginkgo/v2"
