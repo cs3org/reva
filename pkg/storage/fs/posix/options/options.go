@@ -19,7 +19,7 @@
 package options
 
 import (
-	decomposedoptions "github.com/cs3org/reva/v2/pkg/storage/fs/posix/decomposedfs/options"
+	decomposedoptions "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
