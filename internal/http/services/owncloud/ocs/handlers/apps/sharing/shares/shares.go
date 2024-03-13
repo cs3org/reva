@@ -117,7 +117,7 @@ func (h *Handler) Init(c *config.Config, l *zerolog.Logger) {
 	h.ocmMountPoint = c.OCMMountPoint
 	h.listOCMShares = c.ListOCMShares
 	h.Log = l
-	h.notificationHelper = notificationhelper.New("ocs", l)
+	h.notificationHelper = notificationhelper.New("ocs", c.Notifications, l)
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
 	h.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
 
