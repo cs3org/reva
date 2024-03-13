@@ -573,10 +573,17 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 	if isParent {
 		w.WriteHeader(http.StatusConflict)
-		b, err := errors.Marshal(http.StatusBadRequest, "can not copy a folder into one of its parents", "")
+		b, err := errors.Marshal(http.StatusBadRequest, "can not copy a folder into its parent", "")
 		errors.HandleWebdavError(log, w, b, err)
 		return nil
 
+	}
+
+	if srcRef.Path == dstRef.Path {
+		w.WriteHeader(http.StatusConflict)
+		b, err := errors.Marshal(http.StatusBadRequest, "source and destination are the same", "")
+		errors.HandleWebdavError(log, w, b, err)
+		return nil
 	}
 
 	oh := r.Header.Get(net.HeaderOverwrite)
