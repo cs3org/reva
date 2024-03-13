@@ -120,7 +120,7 @@ type Config struct {
 	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
 	PublicLinkDownload     *ConfigPublicLinkDownload         `mapstructure:"publiclink_download"`
 	DisabledOpenInAppPaths []string                          `mapstructure:"disabled_open_in_app_paths"`
-	Notifications          map[string]interface{}            `docs:"Settingsg for the Notification Helper" mapstructure:"notifications"`
+	Notifications          map[string]interface{}            `mapstructure:"notifications" docs:"Settings for the Notification Helper"`
 }
 
 func (c *Config) ApplyDefaults() {
@@ -175,7 +175,7 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 			httpclient.RoundTripper(tr),
 		),
 		favoritesManager:   fm,
-		notificationHelper: notificationhelper.New("ocdav", log),
+		notificationHelper: notificationhelper.New("ocdav", c.Notifications, log),
 	}
 
 	// initialize handlers and set default cigs
