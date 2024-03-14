@@ -43,6 +43,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/tests/cs3mocks/mocks"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/grpc"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -958,14 +959,20 @@ var _ = Describe("ocdav", func() {
 				req.Header.Set(net.HeaderDestination, basePath+dstPath)
 				req.Header.Set("Overwrite", "T")
 
-				client.On("GetPath", mock.Anything, mock.Anything).Return(&cs3storageprovider.GetPathResponse{
-					Status: status.NewOK(ctx),
-					Path:   "/file",
-				}, nil).Once()
-				client.On("GetPath", mock.Anything, mock.Anything).Return(&cs3storageprovider.GetPathResponse{
-					Status: status.NewOK(ctx),
-					Path:   "/dstFileName",
-				}, nil).Once()
+				client.On("GetPath", mock.Anything, mock.Anything).Return(func(ctx context.Context, req *cs3storageprovider.GetPathRequest, _ ...grpc.CallOption) (*cs3storageprovider.GetPathResponse, error) {
+					switch req.ResourceId.OpaqueId {
+					case "dstId":
+						return &cs3storageprovider.GetPathResponse{
+							Status: status.NewOK(ctx),
+							Path:   "/dstFileName",
+						}, nil
+					default:
+						return &cs3storageprovider.GetPathResponse{
+							Status: status.NewOK(ctx),
+							Path:   "/file",
+						}, nil
+					}
+				})
 
 				client.On("Stat", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.StatRequest) bool {
 					return req.Ref.Path == mReq.Source.Path
