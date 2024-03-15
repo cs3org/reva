@@ -30,22 +30,26 @@ import (
 	"strings"
 	"time"
 
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree/propagator"
-	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go-micro.dev/v4/store"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
+
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/logger"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/options"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree/propagator"
+	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 var tracer trace.Tracer
@@ -63,6 +67,15 @@ type Blobstore interface {
 	Delete(node *node.Node) error
 }
 
+type Watcher interface {
+	Watch(path string)
+}
+
+type scanItem struct {
+	Path        string
+	ForceRescan bool
+}
+
 // Tree manages a hierarchical tree
 type Tree struct {
 	lookup     node.PathLookup
@@ -71,26 +84,225 @@ type Tree struct {
 
 	options *options.Options
 
-	idCache store.Store
+	idCache   store.Store
+	watcher   Watcher
+	scanQueue chan scanItem
+
+	log *zerolog.Logger
 }
 
 // PermissionCheckFunc defined a function used to check resource permissions
 type PermissionCheckFunc func(rp *provider.ResourcePermissions) bool
 
 // New returns a new instance of Tree
-func New(lu node.PathLookup, bs Blobstore, o *options.Options, cache store.Store) *Tree {
-	return &Tree{
+func New(lu node.PathLookup, bs Blobstore, o *options.Options, cache store.Store) (*Tree, error) {
+
+	log := logger.New()
+	t := &Tree{
 		lookup:     lu,
 		blobstore:  bs,
 		options:    o,
 		idCache:    cache,
-		propagator: propagator.New(lu, o),
+		propagator: propagator.New(lu, &o.Options),
+		scanQueue:  make(chan scanItem),
+		log:        log,
 	}
+
+	watchPath := o.WatchPath
+	var err error
+	switch o.WatchType {
+	case "gpfswatchfolder":
+		t.watcher, err = NewGpfsWatchFolderWatcher(t, strings.Split(o.WatchFolderKafkaBrokers, ","))
+		if err != nil {
+			return nil, err
+		}
+	case "gpfsfileauditlogging":
+		t.watcher, err = NewGpfsFileAuditLoggingWatcher(t, o.WatchPath)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		t.watcher = NewInotifyWatcher(t)
+		watchPath = o.Root
+	}
+
+	// Start watching for fs events and put them into the queue
+	go t.watcher.Watch(watchPath)
+
+	// Handle queued fs events
+	go t.workScanQueue()
+
+	return t, nil
 }
 
 // Setup prepares the tree structure
 func (t *Tree) Setup() error {
-	return os.MkdirAll(t.options.Root, 0700)
+	err := os.MkdirAll(t.options.Root, 0700)
+	if err != nil {
+		return err
+	}
+
+	err = os.MkdirAll(t.options.UploadDirectory, 0700)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (t *Tree) assimilate(item scanItem) error {
+	var err error
+
+	// find the space id
+	spaceID := []byte("")
+	spaceCandidate := item.Path
+	for strings.HasPrefix(spaceCandidate, t.options.Root) {
+		spaceID, err = t.lookup.MetadataBackend().Get(context.Background(), spaceCandidate, prefixes.SpaceIDAttr)
+		if err == nil {
+			break
+		}
+		spaceCandidate = filepath.Dir(spaceCandidate)
+	}
+	if len(spaceID) == 0 {
+		return fmt.Errorf("did not find space id for path")
+	}
+
+	var id []byte
+	if !item.ForceRescan {
+		// already assimilated?
+		id, err := t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.IDAttr)
+		if err == nil {
+			t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), item.Path)
+			return nil
+		}
+	}
+
+	// lock the file for assimilation
+	unlock, err := t.lookup.MetadataBackend().Lock(item.Path)
+	if err != nil {
+		return errors.Wrap(err, "failed to lock item for assimilation")
+	}
+	defer func() {
+		_ = unlock()
+	}()
+
+	retries := 1
+	// check for the id attribute again after grabbing the lock, maybe the file was assimilated/created by us in the meantime
+	id, err = t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.IDAttr)
+	switch err {
+	case nil:
+		if !item.ForceRescan {
+			t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), item.Path)
+			return nil
+		}
+	default:
+	assimilate:
+		// read parent
+		parentAttribs, err := t.lookup.MetadataBackend().All(context.Background(), filepath.Dir(item.Path))
+		if err != nil {
+			return fmt.Errorf("failed to read parent item attributes")
+		}
+
+		if len(parentAttribs) == 0 || len(parentAttribs[prefixes.IDAttr]) == 0 {
+			if retries == 0 {
+				return fmt.Errorf("got empty parent attribs even after assimilating")
+			}
+
+			// assimilate parent first
+			err = t.assimilate(scanItem{Path: filepath.Dir(item.Path), ForceRescan: false})
+			if err != nil {
+				return err
+			}
+
+			// retry
+			retries--
+			goto assimilate
+		}
+
+		// assimilate file
+		id := uuid.New().String()
+		stat, err := os.Stat(item.Path)
+		if err != nil {
+			return errors.Wrap(err, "failed to stat item")
+		}
+
+		attributes := node.Attributes{
+			prefixes.IDAttr:       []byte(id),
+			prefixes.ParentidAttr: parentAttribs[prefixes.IDAttr],
+			prefixes.NameAttr:     []byte(filepath.Base(item.Path)),
+			prefixes.MTimeAttr:    []byte(stat.ModTime().Format(time.RFC3339)),
+		}
+
+		sha1h, md5h, adler32h, err := node.CalculateChecksums(context.Background(), item.Path)
+		if err == nil {
+			attributes[prefixes.ChecksumPrefix+"sha1"] = sha1h.Sum(nil)
+			attributes[prefixes.ChecksumPrefix+"md5"] = md5h.Sum(nil)
+			attributes[prefixes.ChecksumPrefix+"adler32"] = adler32h.Sum(nil)
+		}
+
+		if stat.IsDir() {
+			attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_CONTAINER))
+			attributes.SetInt64(prefixes.TreesizeAttr, stat.Size())
+		} else {
+			attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_FILE))
+			attributes.SetString(prefixes.BlobIDAttr, id)
+			attributes.SetInt64(prefixes.BlobsizeAttr, stat.Size())
+		}
+		err = t.lookup.MetadataBackend().SetMultiple(context.Background(), item.Path, attributes, false)
+		if err != nil {
+			return errors.Wrap(err, "failed to set attributes")
+		}
+
+		if !item.ForceRescan {
+			t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), item.Path)
+			return nil
+		}
+	}
+
+	info, err := os.Stat(item.Path)
+	if err != nil {
+		return errors.Wrap(err, "failed to stat item for recursive scanning")
+	}
+
+	// rescan the directory recursively
+	if info.IsDir() {
+		filepath.Walk(item.Path, func(path string, info fs.FileInfo, err error) error {
+			if path == item.Path {
+				return nil
+			}
+
+			if err != nil {
+				return err
+			}
+
+			return t.Scan(path, false)
+		})
+	}
+	return nil
+}
+
+func (t *Tree) workScanQueue() {
+	for i := 0; i < t.options.MaxConcurrency; i++ {
+		go func() {
+			for {
+				item := <-t.scanQueue
+				err := t.assimilate(item)
+				if err != nil {
+					log.Error().Err(err).Str("path", item.Path).Msg("failed to assimilate item")
+					continue
+				}
+			}
+		}()
+	}
+}
+
+// Scan scans the given path and updates the id chache
+func (t *Tree) Scan(path string, forceRescan bool) error {
+	t.scanQueue <- scanItem{
+		Path:        path,
+		ForceRescan: forceRescan,
+	}
+	return nil
 }
 
 // GetMD returns the metadata of a node in the tree
@@ -116,35 +328,48 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 		return errtypes.AlreadyExists(n.ID)
 	}
 
+	parentPath := n.ParentPath()
+	nodePath := filepath.Join(parentPath, n.Name)
+
+	// lock the meta file
+	unlock, err := t.lookup.MetadataBackend().Lock(nodePath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = unlock()
+	}()
+
 	if n.ID == "" {
 		n.ID = uuid.New().String()
 	}
 	n.SetType(provider.ResourceType_RESOURCE_TYPE_FILE)
 
-	nodePath := n.InternalPath()
+	// Set id in cache
+	t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(n.SpaceID), string(n.ID), nodePath)
+
 	if err := os.MkdirAll(filepath.Dir(nodePath), 0700); err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
-	_, err := os.Create(nodePath)
+	_, err = os.Create(nodePath)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
 
 	attributes := n.NodeMetadata(ctx)
+	attributes[prefixes.IDAttr] = []byte(n.ID)
 	if markprocessing {
 		attributes[prefixes.StatusPrefix] = []byte(node.ProcessingStatus)
 	}
+	nodeMTime := time.Now()
 	if mtime != "" {
-		if err := n.SetMtimeString(ctx, mtime); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not set mtime")
-		}
-	} else {
-		now := time.Now()
-		if err := n.SetMtime(ctx, &now); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not set mtime")
+		nodeMTime, err = utils.MTimeToTime(mtime)
+		if err != nil {
+			return err
 		}
 	}
-	err = n.SetXattrsWithContext(ctx, attributes, true)
+	attributes[prefixes.MTimeAttr] = []byte(nodeMTime.UTC().Format(time.RFC3339Nano))
+	err = n.SetXattrsWithContext(ctx, attributes, false)
 	if err != nil {
 		return err
 	}
@@ -196,43 +421,8 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	// remove cache entry in any case to avoid inconsistencies
 	defer func() { _ = t.idCache.Delete(filepath.Join(oldNode.ParentPath(), oldNode.Name)) }()
 
-	// Always target the old node ID for xattr updates.
-	// The new node id is empty if the target does not exist
-	// and we need to overwrite the new one when overwriting an existing path.
-	// are we just renaming (parent stays the same)?
-	if oldNode.ParentID == newNode.ParentID {
-
-		// parentPath := t.lookup.InternalPath(oldNode.SpaceID, oldNode.ParentID)
-		parentPath := oldNode.ParentPath()
-
-		// rename child
-		err = os.Rename(
-			filepath.Join(parentPath, oldNode.Name),
-			filepath.Join(parentPath, newNode.Name),
-		)
-		if err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not rename child")
-		}
-
-		// update name attribute
-		if err := oldNode.SetXattrString(ctx, prefixes.NameAttr, newNode.Name); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not set name attribute")
-		}
-
-		return t.Propagate(ctx, newNode, 0)
-	}
-
 	// we are moving the node to a new parent, any target has been removed
 	// bring old node to the new parent
-
-	// rename child
-	err = os.Rename(
-		filepath.Join(oldNode.ParentPath(), oldNode.Name),
-		filepath.Join(newNode.ParentPath(), newNode.Name),
-	)
-	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not move child")
-	}
 
 	// update target parentid and name
 	attribs := node.Attributes{}
@@ -254,6 +444,21 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		sizeDiff = oldNode.Blobsize
 	}
 
+	// rename node
+	err = os.Rename(
+		filepath.Join(oldNode.ParentPath(), oldNode.Name),
+		filepath.Join(newNode.ParentPath(), newNode.Name),
+	)
+	if err != nil {
+		return errors.Wrap(err, "Decomposedfs: could not move child")
+	}
+
+	// update the id cache
+	err = t.lookup.(*lookup.Lookup).IDCache.Set(ctx, oldNode.SpaceID, oldNode.ID, filepath.Join(newNode.ParentPath(), newNode.Name))
+	if err != nil {
+		return errors.Wrap(err, "Decomposedfs: Move: could not update id cache")
+	}
+
 	// TODO inefficient because we might update several nodes twice, only propagate unchanged nodes?
 	// collect in a list, then only stat each node once
 	// also do this in a go routine ... webdav should check the etag async
@@ -267,18 +472,6 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		return errors.Wrap(err, "Decomposedfs: Move: could not propagate new node")
 	}
 	return nil
-}
-
-func readChildNodeFromLink(ctx context.Context, path string) (string, error) {
-	_, span := tracer.Start(ctx, "readChildNodeFromLink")
-	defer span.End()
-	link, err := os.Readlink(path)
-	if err != nil {
-		return "", err
-	}
-	nodeID := strings.TrimLeft(link, "/.")
-	nodeID = strings.ReplaceAll(nodeID, "/", "")
-	return nodeID, nil
 }
 
 // ListFolder lists the content of a folder node
@@ -330,22 +523,17 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	// Spawn workers that'll concurrently work the queue
 	for i := 0; i < numWorkers; i++ {
 		g.Go(func() error {
-			var err error
 			for name := range work {
 				path := filepath.Join(dir, name)
-				nodeID := getNodeIDFromCache(ctx, path, t.idCache)
-				if nodeID == "" {
-					nodeID, err = readChildNodeFromLink(ctx, path)
-					if err != nil {
-						return err
+				nodeID, err := t.lookup.MetadataBackend().Get(ctx, path, prefixes.IDAttr)
+				if err != nil {
+					if metadata.IsAttrUnset(err) {
+						continue
 					}
-					err = storeNodeIDInCache(ctx, path, nodeID, t.idCache)
-					if err != nil {
-						return err
-					}
+					return err
 				}
 
-				child, err := node.ReadNode(ctx, t.lookup, n.SpaceID, nodeID, false, n.SpaceRoot, true)
+				child, err := node.ReadNode(ctx, t.lookup, n.SpaceID, string(nodeID), false, n.SpaceRoot, true)
 				if err != nil {
 					return err
 				}
@@ -385,7 +573,12 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 
 // Delete deletes a node in the tree by moving it to the trash
 func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
-	path := filepath.Join(n.ParentPath(), n.Name)
+	path := n.InternalPath()
+
+	if !strings.HasPrefix(path, t.options.Root) {
+		return errtypes.InternalError("invalid internal path")
+	}
+
 	// remove entry from cache immediately to avoid inconsistencies
 	defer func() { _ = t.idCache.Delete(path) }()
 
@@ -393,19 +586,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 
 	if deletingSharedResource != nil && deletingSharedResource.(bool) {
 		src := filepath.Join(n.ParentPath(), n.Name)
-		return os.Remove(src)
-	}
-
-	// get the original path
-	origin, err := t.lookup.Path(ctx, n, node.NoCheck)
-	if err != nil {
-		return
-	}
-
-	// set origin location in metadata
-	nodePath := n.InternalPath()
-	if err := n.SetXattrString(ctx, prefixes.TrashOriginAttr, origin); err != nil {
-		return err
+		return os.RemoveAll(src)
 	}
 
 	var sizeDiff int64
@@ -419,53 +600,11 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		sizeDiff = -n.Blobsize
 	}
 
-	deletionTime := time.Now().UTC().Format(time.RFC3339Nano)
-
-	// Prepare the trash
-	trashLink := filepath.Join(t.options.Root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
-	if err := os.MkdirAll(filepath.Dir(trashLink), 0700); err != nil {
-		// Roll back changes
-		_ = n.RemoveXattr(ctx, prefixes.TrashOriginAttr, true)
-		return err
-	}
-
-	// FIXME can we just move the node into the trash dir? instead of adding another symlink and appending a trash timestamp?
-	// can we just use the mtime as the trash time?
-	// TODO store a trashed by userid
-
-	// first make node appear in the space trash
-	// parent id and name are stored as extended attributes in the node itself
-	err = os.Symlink("../../../../../nodes/"+lookup.Pathify(n.ID, 4, 2)+node.TrashIDDelimiter+deletionTime, trashLink)
-	if err != nil {
-		// Roll back changes
-		_ = n.RemoveXattr(ctx, prefixes.TrashOriginAttr, true)
-		return
-	}
-
-	// at this point we have a symlink pointing to a non existing destination, which is fine
-
-	// rename the trashed node so it is not picked up when traversing up the tree and matches the symlink
-	trashPath := nodePath + node.TrashIDDelimiter + deletionTime
-	err = os.Rename(nodePath, trashPath)
-	if err != nil {
-		// To roll back changes
-		// TODO remove symlink
-		// Roll back changes
-		_ = n.RemoveXattr(ctx, prefixes.TrashOriginAttr, true)
-		return
-	}
-	err = t.lookup.MetadataBackend().Rename(nodePath, trashPath)
-	if err != nil {
-		_ = n.RemoveXattr(ctx, prefixes.TrashOriginAttr, true)
-		_ = os.Rename(trashPath, nodePath)
-		return
-	}
-
 	// Remove lock file if it exists
 	_ = os.Remove(n.LockFilePath())
 
 	// finally remove the entry from the parent dir
-	if err = os.Remove(path); err != nil {
+	if err = os.RemoveAll(path); err != nil {
 		// To roll back changes
 		// TODO revert the rename
 		// TODO remove symlink
@@ -689,22 +828,51 @@ func (t *Tree) DeleteBlob(node *node.Node) error {
 	return t.blobstore.Delete(node)
 }
 
+// BuildSpaceIDIndexEntry returns the entry for the space id index
+func (t *Tree) BuildSpaceIDIndexEntry(spaceID, nodeID string) string {
+	return nodeID
+}
+
+// ResolveSpaceIDIndexEntry returns the node id for the space id index entry
+func (t *Tree) ResolveSpaceIDIndexEntry(spaceid, entry string) (string, string, error) {
+	return spaceid, entry, nil
+}
+
 // TODO check if node exists?
 func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 	ctx, span := tracer.Start(ctx, "createDirNode")
 	defer span.End()
+
+	idcache := t.lookup.(*lookup.Lookup).IDCache
 	// create a directory node
-	nodePath := n.InternalPath()
-	if err := os.MkdirAll(nodePath, 0700); err != nil {
+	parentPath, ok := idcache.Get(ctx, n.SpaceID, n.ParentID)
+	if !ok {
+		return errtypes.NotFound(n.ParentID)
+	}
+	path := filepath.Join(parentPath, n.Name)
+
+	// lock the meta file
+	unlock, err := t.lookup.MetadataBackend().Lock(path)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = unlock()
+	}()
+
+	if err := os.MkdirAll(path, 0700); err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
 
+	idcache.Set(ctx, n.SpaceID, n.ID, path)
+
 	attributes := n.NodeMetadata(ctx)
+	attributes[prefixes.IDAttr] = []byte(n.ID)
 	attributes[prefixes.TreesizeAttr] = []byte("0") // initialize as empty, TODO why bother? if it is not set we could treat it as 0?
 	if t.options.TreeTimeAccounting || t.options.TreeSizeAccounting {
 		attributes[prefixes.PropagationAttr] = []byte("1") // mark the node for propagation
 	}
-	return n.SetXattrsWithContext(ctx, attributes, true)
+	return n.SetXattrsWithContext(ctx, attributes, false)
 }
 
 var nodeIDRegep = regexp.MustCompile(`.*/nodes/([^.]*).*`)

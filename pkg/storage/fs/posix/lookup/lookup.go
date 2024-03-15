@@ -34,6 +34,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rogpeppe/go-internal/lockedfile"
 	"go.opentelemetry.io/otel"
@@ -43,9 +45,16 @@ import (
 var tracer trace.Tracer
 
 var _spaceTypePersonal = "personal"
+var _spaceTypeProject = "project"
 
 func init() {
 	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/utils/decomposedfs/lookup")
+}
+
+// IDCache is a cache for node ids
+type IDCache interface {
+	Get(ctx context.Context, spaceID, nodeID string) (string, bool)
+	Set(ctx context.Context, spaceID, nodeID, val string) error
 }
 
 // Lookup implements transformations from filepath to node and back
@@ -53,14 +62,65 @@ type Lookup struct {
 	Options *options.Options
 
 	metadataBackend metadata.Backend
+	IDCache         IDCache
 }
 
 // New returns a new Lookup instance
 func New(b metadata.Backend, o *options.Options) *Lookup {
-	return &Lookup{
+	lu := &Lookup{
 		Options:         o,
 		metadataBackend: b,
+		IDCache:         NewStoreIDCache(o),
 	}
+
+	go func() {
+		_ = lu.WarmupIDCache()
+	}()
+
+	return lu
+}
+
+// CacheID caches the id for the given space and node id
+func (lu *Lookup) CacheID(ctx context.Context, spaceID, nodeID, val string) error {
+	return lu.IDCache.Set(ctx, spaceID, nodeID, val)
+}
+
+// GetCachedID returns the cached id for the given space and node id
+func (lu *Lookup) GetCachedID(ctx context.Context, spaceID, nodeID string) (string, bool) {
+	return lu.IDCache.Get(ctx, spaceID, nodeID)
+}
+
+func (lu *Lookup) WarmupIDCache() error {
+	spaceID := []byte("")
+	return filepath.Walk(lu.Options.Root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		attribs, err := lu.metadataBackend.All(context.Background(), path)
+		if err == nil {
+			nodeSpaceID, ok := attribs[prefixes.SpaceIDAttr]
+			if ok {
+				spaceID = nodeSpaceID
+			}
+			id, ok := attribs[prefixes.IDAttr]
+			if ok && len(spaceID) > 0 {
+				lu.IDCache.Set(context.Background(), string(spaceID), string(id), path)
+			}
+		}
+		return nil
+	})
+}
+
+func (lu *Lookup) NodeIDFromParentAndName(ctx context.Context, parent *node.Node, name string) (string, error) {
+	id, err := lu.metadataBackend.Get(ctx, filepath.Join(parent.InternalPath(), name), prefixes.IDAttr)
+	if err != nil {
+		if metadata.IsNotExist(err) {
+			return "", errtypes.NotFound(name)
+		}
+		return "", err
+	}
+	return string(id), nil
 }
 
 // MetadataBackend returns the metadata backend
@@ -260,11 +320,9 @@ func (lu *Lookup) InternalRoot() string {
 
 // InternalPath returns the internal path for a given ID
 func (lu *Lookup) InternalPath(spaceID, nodeID string) string {
-	return filepath.Join(lu.Options.Root, "spaces", Pathify(spaceID, 1, 2), "nodes", Pathify(nodeID, 4, 2))
-}
+	path, _ := lu.IDCache.Get(context.Background(), spaceID, nodeID)
 
-func (lu *Lookup) SpacePath(spaceID string) string {
-	return filepath.Join(lu.Options.Root, spaceID)
+	return path
 }
 
 // // ReferenceFromAttr returns a CS3 reference from xattr of a node.
@@ -346,8 +404,24 @@ func (lu *Lookup) CopyMetadataWithSourceLock(ctx context.Context, sourcePath, ta
 // GenerateSpaceID generates a space id for the given space type and owner
 func (lu *Lookup) GenerateSpaceID(spaceType string, owner *user.User) (string, error) {
 	switch spaceType {
+	case _spaceTypeProject:
+		return uuid.New().String(), nil
 	case _spaceTypePersonal:
-		return templates.WithUser(owner, lu.Options.UserLayout), nil
+		path := templates.WithUser(owner, lu.Options.UserLayout)
+
+		spaceID, err := lu.metadataBackend.Get(context.Background(), filepath.Join(lu.Options.Root, path), prefixes.IDAttr)
+		if err != nil {
+			if metadata.IsNotExist(err) || metadata.IsAttrUnset(err) {
+				return uuid.New().String(), nil
+			} else {
+				return "", err
+			}
+		}
+		resID, err := storagespace.ParseID(string(spaceID))
+		if err != nil {
+			return "", err
+		}
+		return resID.SpaceId, nil
 	default:
 		return "", fmt.Errorf("unsupported space type: %s", spaceType)
 	}
