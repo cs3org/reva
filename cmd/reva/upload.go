@@ -24,7 +24,6 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -40,8 +39,6 @@ import (
 	"github.com/cs3org/reva/pkg/crypto"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/utils"
-	"github.com/eventials/go-tus"
-	"github.com/eventials/go-tus/memorystore"
 	"github.com/pkg/errors"
 	"github.com/studio-b12/gowebdav"
 )
@@ -50,11 +47,11 @@ func uploadCommand() *command {
 	cmd := newCommand("upload")
 	cmd.Description = func() string { return "upload a local file to the remote server" }
 	cmd.Usage = func() string { return "Usage: upload [-flags] <file_name> <remote_target>" }
-	protocolFlag := cmd.String("protocol", "tus", "the protocol to be used for uploads")
 	xsFlag := cmd.String("xs", "negotiate", "compute checksum")
+	protocolFlag := cmd.String("protocol", "simple", "protocol for file uploads: simple, negotiate")
 
 	cmd.ResetFlags = func() {
-		*protocolFlag, *xsFlag = "tus", "negotiate"
+		*protocolFlag, *xsFlag = "simple", "negotiate"
 	}
 
 	cmd.Action = func(w ...io.Writer) error {
@@ -167,40 +164,7 @@ func uploadCommand() *command {
 				return errors.New("upload: PUT request returned " + httpRes.Status)
 			}
 		} else {
-			// create the tus client.
-			c := tus.DefaultConfig()
-			c.Resume = true
-			c.HttpClient = client.GetNativeHTTP()
-			c.Store, err = memorystore.NewMemoryStore()
-			if err != nil {
-				return err
-			}
-			c.Header.Add(datagateway.TokenTransportHeader, p.Token)
-			tusc, err := tus.NewClient(dataServerURL, c)
-			if err != nil {
-				return err
-			}
-
-			metadata := map[string]string{
-				"filename": filepath.Base(target),
-				"dir":      filepath.Dir(target),
-				"checksum": fmt.Sprintf("%s %s", storageprovider.GRPC2PKGXS(xsType).String(), xs),
-			}
-
-			fingerprint := fmt.Sprintf("%s-%d-%s-%s", md.Name(), md.Size(), md.ModTime(), xs)
-
-			// create an upload from a file.
-			upload := tus.NewUpload(fd, md.Size(), metadata, fingerprint)
-
-			// create the uploader.
-			c.Store.Set(upload.Fingerprint, dataServerURL)
-			uploader := tus.NewUploader(tusc, dataServerURL, upload, 0)
-
-			// start the uploading process.
-			err = uploader.Upload()
-			if err != nil {
-				return err
-			}
+			return errors.New("protocol not known: " + *protocolFlag)
 		}
 
 		req2 := &provider.StatRequest{
