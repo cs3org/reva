@@ -40,7 +40,7 @@ import (
 	ocmproviderhttp "github.com/cs3org/reva/internal/http/services/opencloudmesh/ocmprovider"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/opencloudmesh/ocmd/reqres"
+	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/httpclient"
