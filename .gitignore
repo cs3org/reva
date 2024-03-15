@@ -56,3 +56,5 @@ tests/ocis/tests/acceptance/work_tmp
 toolchain/
 
 logs_test/
+
+tmp/
