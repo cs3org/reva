@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
@@ -659,6 +660,49 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, pa
 	}
 
 	return rn, fn, nil
+}
+
+// InitNewNode initializes a new node
+func (t *Tree) InitNewNode(ctx context.Context, n *node.Node, fsize uint64) (metadata.UnlockFunc, error) {
+	// create folder structure (if needed)
+	if err := os.MkdirAll(filepath.Dir(n.InternalPath()), 0700); err != nil {
+		return nil, err
+	}
+
+	// create and write lock new node metadata
+	unlock, err := t.lookup.MetadataBackend().Lock(n.InternalPath())
+	if err != nil {
+		return nil, err
+	}
+
+	// we also need to touch the actual node file here it stores the mtime of the resource
+	h, err := os.OpenFile(n.InternalPath(), os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return unlock, err
+	}
+	h.Close()
+
+	if _, err := node.CheckQuota(ctx, n.SpaceRoot, false, 0, fsize); err != nil {
+		return unlock, err
+	}
+
+	// link child name to parent if it is new
+	childNameLink := filepath.Join(n.ParentPath(), n.Name)
+	relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
+	log := appctx.GetLogger(ctx).With().Str("childNameLink", childNameLink).Str("relativeNodePath", relativeNodePath).Logger()
+	log.Info().Msg("initNewNode: creating symlink")
+
+	if err = os.Symlink(relativeNodePath, childNameLink); err != nil {
+		log.Info().Err(err).Msg("initNewNode: symlink failed")
+		if errors.Is(err, fs.ErrExist) {
+			log.Info().Err(err).Msg("initNewNode: symlink already exists")
+			return unlock, errtypes.AlreadyExists(n.Name)
+		}
+		return unlock, errors.Wrap(err, "Decomposedfs: could not symlink child entry")
+	}
+	log.Info().Msg("initNewNode: symlink created")
+
+	return unlock, nil
 }
 
 func (t *Tree) removeNode(ctx context.Context, path, timeSuffix string, n *node.Node) error {
