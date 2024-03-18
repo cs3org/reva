@@ -20,7 +20,6 @@ package loader
 
 import (
 	// Load core GRPC services.
-	_ "github.com/cs3org/reva/internal/grpc/interceptors/eventsmiddleware"
 	_ "github.com/cs3org/reva/internal/grpc/interceptors/noshare"
 	_ "github.com/cs3org/reva/internal/grpc/interceptors/notrashbin"
 	_ "github.com/cs3org/reva/internal/grpc/interceptors/noversions"
