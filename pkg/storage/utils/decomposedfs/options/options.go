@@ -122,14 +122,6 @@ func New(m map[string]interface{}) (*Options, error) {
 		o.MetadataBackend = "xattrs"
 	}
 
-	if o.UserLayout == "" {
-		o.UserLayout = "{{.Id.OpaqueId}}"
-	}
-
-	if o.ProjectLayout == "" {
-		o.ProjectLayout = "{{.Id.OpaqueId}}"
-	}
-
 	// ensure user layout has no starting or trailing /
 	o.UserLayout = strings.Trim(o.UserLayout, "/")
 

@@ -96,7 +96,6 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		"treetime_accounting": true,
 		"treesize_accounting": true,
 		"share_folder":        "/Shares",
-		"user_layout":         "{{.Id.OpaqueId}}",
 	}
 	// make it possible to override single config values
 	for k, v := range config {
