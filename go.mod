@@ -18,7 +18,6 @@ require (
 	github.com/cs3org/go-cs3apis v0.0.0-20230727093620-0f4399be4543
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/dolthub/go-mysql-server v0.14.0
-	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
 	github.com/gdexlab/go-render v1.0.1
 	github.com/glpatcern/go-mime v0.0.0-20221026162842-2a8d71ad17a9
 	github.com/go-chi/chi/v5 v5.0.12
@@ -47,7 +46,6 @@ require (
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.30.0
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/alertmanager v0.26.0
 	github.com/prometheus/client_golang v1.17.0
 	github.com/rs/cors v1.10.1
 	github.com/rs/zerolog v1.31.0
@@ -65,7 +63,6 @@ require (
 	golang.org/x/sync v0.6.0
 	golang.org/x/sys v0.17.0
 	golang.org/x/term v0.17.0
-	golang.org/x/text v0.14.0
 	google.golang.org/genproto v0.0.0-20240125205218-1f4bbc51befe
 	google.golang.org/grpc v1.62.0
 	google.golang.org/protobuf v1.32.0
@@ -133,8 +130,6 @@ require (
 	github.com/prometheus/common v0.44.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/shopspring/decimal v1.2.0 // indirect
-	github.com/shurcooL/httpfs v0.0.0-20190707220628-8d4bc4ba7749 // indirect
-	github.com/shurcooL/vfsgen v0.0.0-20200824052919-0d455de96546 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/stretchr/objx v0.5.0 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
@@ -144,6 +139,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.23.1 // indirect
 	golang.org/x/mod v0.13.0 // indirect
 	golang.org/x/net v0.21.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/tools v0.14.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
@@ -154,8 +150,3 @@ require (
 )
 
 go 1.21
-
-replace (
-	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
-	github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
-)

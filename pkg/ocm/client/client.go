@@ -28,7 +28,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/cs3org/reva/internal/http/services/ocmd"
+	"github.com/cs3org/reva/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/pkg/errors"
