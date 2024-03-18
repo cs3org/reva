@@ -217,20 +217,24 @@ func (store OcisStore) CreateNodeForUpload(session *OcisSession, initAttrs node.
 		// FIXME look at the disk again to see if the file has been created in between, or just try initializing a new node and do the update existing node as a fallback. <- the latter!
 
 		unlock, err = store.updateExistingNode(ctx, session, n, session.SpaceID(), uint64(session.Size()))
-		if unlock != nil {
-			appctx.GetLogger(ctx).Info().Interface("err", err).Msg("got lock file from updateExistingNode")
+		if err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Msg("failed to update existing node")
 		}
 	} else {
 		if c, ok := store.lu.(node.IDCacher); ok {
-			c.CacheID(ctx, n.SpaceID, n.ID, filepath.Join(n.ParentPath(), n.Name))
+			err := c.CacheID(ctx, n.SpaceID, n.ID, filepath.Join(n.ParentPath(), n.Name))
+			if err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Msg("failed to cache id")
+			}
 		}
 		unlock, err = store.initNewNode(ctx, session, n, uint64(session.Size()))
-		if unlock != nil {
-			appctx.GetLogger(ctx).Info().Interface("err", err).Msg("got lock file from initNewNode")
+		if err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Msg("failed to init new node")
 		}
 	}
 	defer func() {
 		if unlock == nil {
+			appctx.GetLogger(ctx).Info().Msg("did not get a unlockfunc, not unlocking")
 			return
 		}
 
