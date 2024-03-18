@@ -54,7 +54,7 @@ type PermissionsChecker interface {
 // OcisStore manages upload sessions
 type OcisStore struct {
 	lu                node.PathLookup
-	tp                Tree
+	tp                node.Tree
 	root              string
 	pub               events.Publisher
 	async             bool
@@ -63,7 +63,7 @@ type OcisStore struct {
 }
 
 // NewSessionStore returns a new OcisStore
-func NewSessionStore(lu node.PathLookup, tp Tree, root string, pub events.Publisher, async bool, tknopts options.TokenOptions, disableVersioning bool) *OcisStore {
+func NewSessionStore(lu node.PathLookup, tp node.Tree, root string, pub events.Publisher, async bool, tknopts options.TokenOptions, disableVersioning bool) *OcisStore {
 	return &OcisStore{
 		lu:                lu,
 		tp:                tp,
@@ -219,10 +219,12 @@ func (store OcisStore) CreateNodeForUpload(session *OcisSession, initAttrs node.
 				appctx.GetLogger(ctx).Error().Err(err).Msg("failed to cache id")
 			}
 		}
-		unlock, err = store.initNewNode(ctx, session, n, uint64(session.Size()))
+
+		unlock, err = store.tp.InitNewNode(ctx, n, uint64(session.Size()))
 		if err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Msg("failed to init new node")
 		}
+		session.info.MetaData["sizeDiff"] = strconv.FormatInt(session.Size(), 10)
 	}
 	defer func() {
 		if unlock == nil {
@@ -265,34 +267,6 @@ func (store OcisStore) CreateNodeForUpload(session *OcisSession, initAttrs node.
 	}
 
 	return n, nil
-}
-
-func (store OcisStore) initNewNode(ctx context.Context, session *OcisSession, n *node.Node, fsize uint64) (metadata.UnlockFunc, error) {
-	// create folder structure (if needed)
-	if err := os.MkdirAll(filepath.Dir(n.InternalPath()), 0700); err != nil {
-		return nil, err
-	}
-
-	// create and write lock new node metadata
-	unlock, err := store.lu.MetadataBackend().Lock(n.InternalPath())
-	if err != nil {
-		return nil, err
-	}
-
-	// we also need to touch the actual node file here it stores the mtime of the resource
-	h, err := os.OpenFile(n.InternalPath(), os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		return unlock, err
-	}
-	h.Close()
-
-	if _, err := node.CheckQuota(ctx, n.SpaceRoot, false, 0, fsize); err != nil {
-		return unlock, err
-	}
-
-	// on a new file the sizeDiff is the fileSize
-	session.info.MetaData["sizeDiff"] = strconv.FormatInt(int64(fsize), 10)
-	return unlock, nil
 }
 
 func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSession, n *node.Node, spaceID string, fsize uint64) (metadata.UnlockFunc, error) {
@@ -363,12 +337,12 @@ func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSess
 		versionPath = session.store.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+oldNodeMtime.UTC().Format(time.RFC3339Nano))
 
 		// create version node
-		if _, err := os.Create(session.info.MetaData["versionsPath"]); err != nil {
+		if _, err := os.Create(versionPath); err != nil {
 			return unlock, err
 		}
 
 		// copy blob metadata to version node
-		if err := store.lu.CopyMetadataWithSourceLock(ctx, targetPath, session.info.MetaData["versionsPath"], func(attributeName string, value []byte) (newValue []byte, copy bool) {
+		if err := store.lu.CopyMetadataWithSourceLock(ctx, targetPath, versionPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
 			return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
 				attributeName == prefixes.TypeAttr ||
 				attributeName == prefixes.BlobIDAttr ||

@@ -50,27 +50,6 @@ func init() {
 	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/utils/decomposedfs/upload")
 }
 
-// Tree is used to manage a tree hierarchy
-type Tree interface {
-	Setup() error
-
-	GetMD(ctx context.Context, node *node.Node) (os.FileInfo, error)
-	ListFolder(ctx context.Context, node *node.Node) ([]*node.Node, error)
-	// CreateHome(owner *userpb.UserId) (n *node.Node, err error)
-	CreateDir(ctx context.Context, node *node.Node) (err error)
-	// CreateReference(ctx context.Context, node *node.Node, targetURI *url.URL) error
-	Move(ctx context.Context, oldNode *node.Node, newNode *node.Node) (err error)
-	Delete(ctx context.Context, node *node.Node) (err error)
-	RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPath string, target *node.Node) (*node.Node, *node.Node, func() error, error)
-	PurgeRecycleItemFunc(ctx context.Context, spaceid, key, purgePath string) (*node.Node, func() error, error)
-
-	WriteBlob(node *node.Node, binPath string) error
-	ReadBlob(node *node.Node) (io.ReadCloser, error)
-	DeleteBlob(node *node.Node) error
-
-	Propagate(ctx context.Context, node *node.Node, sizeDiff int64) (err error)
-}
-
 var defaultFilePerm = os.FileMode(0664)
 
 // WriteChunk writes the stream from the reader to the given offset of the upload

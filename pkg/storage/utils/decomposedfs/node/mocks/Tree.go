@@ -26,6 +26,7 @@ import (
 
 	io "io"
 
+	metadata "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	mock "github.com/stretchr/testify/mock"
 
 	node "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
@@ -111,6 +112,32 @@ func (_m *Tree) GetMD(ctx context.Context, _a1 *node.Node) (fs.FileInfo, error) 
 
 	if rf, ok := ret.Get(1).(func(context.Context, *node.Node) error); ok {
 		r1 = rf(ctx, _a1)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// InitNewNode provides a mock function with given fields: ctx, n, fsize
+func (_m *Tree) InitNewNode(ctx context.Context, n *node.Node, fsize uint64) (metadata.UnlockFunc, error) {
+	ret := _m.Called(ctx, n, fsize)
+
+	var r0 metadata.UnlockFunc
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *node.Node, uint64) (metadata.UnlockFunc, error)); ok {
+		return rf(ctx, n, fsize)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *node.Node, uint64) metadata.UnlockFunc); ok {
+		r0 = rf(ctx, n, fsize)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(metadata.UnlockFunc)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *node.Node, uint64) error); ok {
+		r1 = rf(ctx, n, fsize)
 	} else {
 		r1 = ret.Error(1)
 	}
