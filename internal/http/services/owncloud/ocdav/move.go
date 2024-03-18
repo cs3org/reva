@@ -166,15 +166,16 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 	if err != nil {
 		switch err.(type) {
 		case errtypes.IsNotFound:
-			w.WriteHeader(http.StatusNotFound)
+			isParent = false
 		case errtypes.IsNotSupported:
 			log.Error().Err(err).Msg("can not detect recursive move operation. missing machine auth configuration?")
 			w.WriteHeader(http.StatusForbidden)
+			return
 		default:
 			log.Error().Err(err).Msg("error while trying to detect recursive move operation")
 			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
-		return
 	}
 	if isParent {
 		w.WriteHeader(http.StatusConflict)

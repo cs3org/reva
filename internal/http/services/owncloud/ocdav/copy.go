@@ -562,12 +562,16 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 	isParent, err := s.referenceIsChildOf(ctx, s.gatewaySelector, srcRef, dstRef)
 	if err != nil {
 		switch err.(type) {
+		case errtypes.IsNotFound:
+			isParent = false
 		case errtypes.IsNotSupported:
 			log.Error().Err(err).Msg("can not detect recursive copy operation. missing machine auth configuration?")
 			w.WriteHeader(http.StatusForbidden)
+			return nil
 		default:
 			log.Error().Err(err).Msg("error while trying to detect recursive copy operation")
 			w.WriteHeader(http.StatusInternalServerError)
+			return nil
 		}
 	}
 
