@@ -63,7 +63,7 @@ type OcisStore struct {
 }
 
 // NewSessionStore returns a new OcisStore
-func NewSessionStore(lu node.PathLookup, tp Tree, root string, pub events.Publisher, async bool, tknopts options.TokenOptions, DisableVersioning bool) *OcisStore {
+func NewSessionStore(lu node.PathLookup, tp Tree, root string, pub events.Publisher, async bool, tknopts options.TokenOptions, disableVersioning bool) *OcisStore {
 	return &OcisStore{
 		lu:                lu,
 		tp:                tp,
@@ -71,7 +71,7 @@ func NewSessionStore(lu node.PathLookup, tp Tree, root string, pub events.Publis
 		pub:               pub,
 		async:             async,
 		tknopts:           tknopts,
-		disableVersioning: DisableVersioning,
+		disableVersioning: disableVersioning,
 	}
 }
 

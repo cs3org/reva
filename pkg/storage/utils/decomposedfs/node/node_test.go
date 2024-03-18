@@ -161,7 +161,7 @@ var _ = Describe("Node", func() {
 			Expect(child.Blobsize).To(Equal(int64(1234)))
 		})
 
-		It("handles (broken) links including file segments by returning an non-existent node", func() {
+		It("handles broken links including file segments by returning an non-existent node", func() {
 			child, err := parent.Child(env.Ctx, "file1/broken")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(child).ToNot(BeNil())
