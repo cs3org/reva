@@ -47,11 +47,11 @@ func uploadCommand() *command {
 	cmd := newCommand("upload")
 	cmd.Description = func() string { return "upload a local file to the remote server" }
 	cmd.Usage = func() string { return "Usage: upload [-flags] <file_name> <remote_target>" }
-	protocolFlag := cmd.String("protocol", "tus", "the protocol to be used for uploads")
 	xsFlag := cmd.String("xs", "negotiate", "compute checksum")
+	protocolFlag := cmd.String("protocol", "simple", "protocol for file uploads: simple, negotiate")
 
 	cmd.ResetFlags = func() {
-		*protocolFlag, *xsFlag = "tus", "negotiate"
+		*protocolFlag, *xsFlag = "simple", "negotiate"
 	}
 
 	cmd.Action = func(w ...io.Writer) error {
