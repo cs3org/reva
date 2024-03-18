@@ -393,12 +393,10 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 	}
 
 	nodeID, err := n.lu.NodeIDFromParentAndName(ctx, n, name)
-	switch err.(type) {
-	case nil:
-		// ok
-	case errtypes.IsNotFound:
+	switch {
+	case metadata.IsNotExist(err) || metadata.IsNotDir(err):
 		return c, nil // if the file does not exist we return a node that has Exists = false
-	default:
+	case err != nil:
 		return nil, err
 	}
 
