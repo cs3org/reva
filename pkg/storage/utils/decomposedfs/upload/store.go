@@ -34,7 +34,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
@@ -54,23 +53,25 @@ type PermissionsChecker interface {
 
 // OcisStore manages upload sessions
 type OcisStore struct {
-	lu      node.PathLookup
-	tp      Tree
-	root    string
-	pub     events.Publisher
-	async   bool
-	tknopts options.TokenOptions
+	lu                node.PathLookup
+	tp                Tree
+	root              string
+	pub               events.Publisher
+	async             bool
+	tknopts           options.TokenOptions
+	disableVersioning bool
 }
 
 // NewSessionStore returns a new OcisStore
-func NewSessionStore(lu node.PathLookup, tp Tree, root string, pub events.Publisher, async bool, tknopts options.TokenOptions) *OcisStore {
+func NewSessionStore(lu node.PathLookup, tp Tree, root string, pub events.Publisher, async bool, tknopts options.TokenOptions, DisableVersioning bool) *OcisStore {
 	return &OcisStore{
-		lu:      lu,
-		tp:      tp,
-		root:    root,
-		pub:     pub,
-		async:   async,
-		tknopts: tknopts,
+		lu:                lu,
+		tp:                tp,
+		root:              root,
+		pub:               pub,
+		async:             async,
+		tknopts:           tknopts,
+		disableVersioning: DisableVersioning,
 	}
 }
 
@@ -212,7 +213,9 @@ func (store OcisStore) CreateNodeForUpload(session *OcisSession, initAttrs node.
 			appctx.GetLogger(ctx).Info().Interface("err", err).Msg("got lock file from updateExistingNode")
 		}
 	} else {
-		store.lu.(*lookup.Lookup).IDCache.Set(ctx, n.SpaceID, n.ID, filepath.Join(n.ParentPath(), n.Name))
+		if c, ok := store.lu.(node.IDCacher); ok {
+			c.CacheID(ctx, n.SpaceID, n.ID, filepath.Join(n.ParentPath(), n.Name))
+		}
 		unlock, err = store.initNewNode(ctx, session, n, uint64(session.Size()))
 		if unlock != nil {
 			appctx.GetLogger(ctx).Info().Interface("err", err).Msg("got lock file from initNewNode")
@@ -352,8 +355,7 @@ func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSess
 	}
 
 	versionPath := n.InternalPath()
-	doVersions := false // we don't do versions for now
-	if doVersions {
+	if !store.disableVersioning {
 		versionPath = session.store.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+oldNodeMtime.UTC().Format(time.RFC3339Nano))
 
 		// create version node
