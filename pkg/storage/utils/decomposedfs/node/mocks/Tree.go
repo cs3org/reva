@@ -26,6 +26,7 @@ import (
 
 	io "io"
 
+	metadata "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	mock "github.com/stretchr/testify/mock"
 
 	node "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
@@ -286,6 +287,66 @@ func (_c *Tree_GetMD_Call) Return(_a0 fs.FileInfo, _a1 error) *Tree_GetMD_Call {
 }
 
 func (_c *Tree_GetMD_Call) RunAndReturn(run func(context.Context, *node.Node) (fs.FileInfo, error)) *Tree_GetMD_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// InitNewNode provides a mock function with given fields: ctx, n, fsize
+func (_m *Tree) InitNewNode(ctx context.Context, n *node.Node, fsize uint64) (metadata.UnlockFunc, error) {
+	ret := _m.Called(ctx, n, fsize)
+
+	if len(ret) == 0 {
+		panic("no return value specified for InitNewNode")
+	}
+
+	var r0 metadata.UnlockFunc
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *node.Node, uint64) (metadata.UnlockFunc, error)); ok {
+		return rf(ctx, n, fsize)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *node.Node, uint64) metadata.UnlockFunc); ok {
+		r0 = rf(ctx, n, fsize)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(metadata.UnlockFunc)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *node.Node, uint64) error); ok {
+		r1 = rf(ctx, n, fsize)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Tree_InitNewNode_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'InitNewNode'
+type Tree_InitNewNode_Call struct {
+	*mock.Call
+}
+
+// InitNewNode is a helper method to define mock.On call
+//   - ctx context.Context
+//   - n *node.Node
+//   - fsize uint64
+func (_e *Tree_Expecter) InitNewNode(ctx interface{}, n interface{}, fsize interface{}) *Tree_InitNewNode_Call {
+	return &Tree_InitNewNode_Call{Call: _e.mock.On("InitNewNode", ctx, n, fsize)}
+}
+
+func (_c *Tree_InitNewNode_Call) Run(run func(ctx context.Context, n *node.Node, fsize uint64)) *Tree_InitNewNode_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(*node.Node), args[2].(uint64))
+	})
+	return _c
+}
+
+func (_c *Tree_InitNewNode_Call) Return(_a0 metadata.UnlockFunc, _a1 error) *Tree_InitNewNode_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *Tree_InitNewNode_Call) RunAndReturn(run func(context.Context, *node.Node, uint64) (metadata.UnlockFunc, error)) *Tree_InitNewNode_Call {
 	_c.Call.Return(run)
 	return _c
 }

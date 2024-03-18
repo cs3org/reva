@@ -836,6 +836,33 @@ func (t *Tree) ResolveSpaceIDIndexEntry(spaceid, entry string) (string, string, 
 	return spaceid, entry, nil
 }
 
+// InitNewNode initializes a new node
+func (t *Tree) InitNewNode(ctx context.Context, n *node.Node, fsize uint64) (metadata.UnlockFunc, error) {
+	// create folder structure (if needed)
+	if err := os.MkdirAll(filepath.Dir(n.InternalPath()), 0700); err != nil {
+		return nil, err
+	}
+
+	// create and write lock new node metadata
+	unlock, err := t.lookup.MetadataBackend().Lock(n.InternalPath())
+	if err != nil {
+		return nil, err
+	}
+
+	// we also need to touch the actual node file here it stores the mtime of the resource
+	h, err := os.OpenFile(n.InternalPath(), os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return unlock, err
+	}
+	h.Close()
+
+	if _, err := node.CheckQuota(ctx, n.SpaceRoot, false, 0, fsize); err != nil {
+		return unlock, err
+	}
+
+	return unlock, nil
+}
+
 // TODO check if node exists?
 func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 	ctx, span := tracer.Start(ctx, "createDirNode")
