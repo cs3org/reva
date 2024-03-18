@@ -420,4 +420,28 @@ var _ = Describe("Tree", func() {
 			})
 		})
 	})
+
+	DescribeTable("ReadSpaceAndNodeFromIndexLink",
+		func(link string, expectSpace string, expectedNode string, shouldErr bool) {
+			space, node, err := tree.ReadSpaceAndNodeFromIndexLink(link)
+			if shouldErr {
+				Expect(err).To(HaveOccurred())
+			} else {
+				Expect(err).ToNot(HaveOccurred())
+			}
+			Expect(space).To(Equal(expectSpace))
+			Expect(node).To(Equal(expectedNode))
+		},
+
+		Entry("invalid number of slashes", "../../../spaces/sp_ace-id/nodes/sh/or/tn/od/eid", "", "", true),
+		Entry("does not contain spaces", "../../../spac_s/sp/ace-id/nodes/sh/or/tn/od/eid", "", "", true),
+		Entry("does not contain nodes", "../../../spaces/sp/ace-id/nod_s/sh/or/tn/od/eid", "", "", true),
+		Entry("does not start with ..", "_./../../spaces/sp/ace-id/nodes/sh/or/tn/od/eid", "", "", true),
+		Entry("does not start with ../..", "../_./../spaces/sp/ace-id/nodes/sh/or/tn/od/eid", "", "", true),
+		Entry("does not start with ../../..", "../_./../spaces/sp/ace-id/nodes/sh/or/tn/od/eid", "", "", true),
+		Entry("invalid", "../../../spaces/space-id/nodes/sh/or/tn/od/eid", "", "", true),
+		Entry("uuid", "../../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51", "4c510ada-c86b-4815-8820-42cdf82c3d51", "4c510ada-c86b-4815-8820-42cdf82c3d51", false),
+		Entry("uuid", "../../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51.T.2022-02-24T12:35:18.196484592Z", "4c510ada-c86b-4815-8820-42cdf82c3d51", "4c510ada-c86b-4815-8820-42cdf82c3d51.T.2022-02-24T12:35:18.196484592Z", false),
+		Entry("short", "../../../spaces/sp/ace-id/nodes/sh/or/tn/od/eid", "space-id", "shortnodeid", false),
+	)
 })

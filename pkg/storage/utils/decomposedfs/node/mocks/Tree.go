@@ -36,6 +36,20 @@ type Tree struct {
 	mock.Mock
 }
 
+// BuildSpaceIDIndexEntry provides a mock function with given fields: spaceID, nodeID
+func (_m *Tree) BuildSpaceIDIndexEntry(spaceID string, nodeID string) string {
+	ret := _m.Called(spaceID, nodeID)
+
+	var r0 string
+	if rf, ok := ret.Get(0).(func(string, string) string); ok {
+		r0 = rf(spaceID, nodeID)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	return r0
+}
+
 // CreateDir provides a mock function with given fields: ctx, _a1
 func (_m *Tree) CreateDir(ctx context.Context, _a1 *node.Node) error {
 	ret := _m.Called(ctx, _a1)
@@ -217,6 +231,37 @@ func (_m *Tree) ReadBlob(_a0 *node.Node) (io.ReadCloser, error) {
 	}
 
 	return r0, r1
+}
+
+// ResolveSpaceIDIndexEntry provides a mock function with given fields: spaceID, entry
+func (_m *Tree) ResolveSpaceIDIndexEntry(spaceID string, entry string) (string, string, error) {
+	ret := _m.Called(spaceID, entry)
+
+	var r0 string
+	var r1 string
+	var r2 error
+	if rf, ok := ret.Get(0).(func(string, string) (string, string, error)); ok {
+		return rf(spaceID, entry)
+	}
+	if rf, ok := ret.Get(0).(func(string, string) string); ok {
+		r0 = rf(spaceID, entry)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	if rf, ok := ret.Get(1).(func(string, string) string); ok {
+		r1 = rf(spaceID, entry)
+	} else {
+		r1 = ret.Get(1).(string)
+	}
+
+	if rf, ok := ret.Get(2).(func(string, string) error); ok {
+		r2 = rf(spaceID, entry)
+	} else {
+		r2 = ret.Error(2)
+	}
+
+	return r0, r1, r2
 }
 
 // RestoreRecycleItemFunc provides a mock function with given fields: ctx, spaceid, key, trashPath, target
