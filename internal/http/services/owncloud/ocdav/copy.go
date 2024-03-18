@@ -583,7 +583,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 	}
 
-	if srcRef.Path == dstRef.Path {
+	if srcRef.Path == dstRef.Path && srcRef.ResourceId == dstRef.ResourceId {
 		w.WriteHeader(http.StatusConflict)
 		b, err := errors.Marshal(http.StatusBadRequest, "source and destination are the same", "")
 		errors.HandleWebdavError(log, w, b, err)
