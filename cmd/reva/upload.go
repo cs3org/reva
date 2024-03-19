@@ -164,7 +164,7 @@ func uploadCommand() *command {
 				return errors.New("upload: PUT request returned " + httpRes.Status)
 			}
 		} else {
-			return errors.New("protocol not known: " + *protocolFlag)
+			return errors.New("upload: protocol not supported: " + *protocolFlag)
 		}
 
 		req2 := &provider.StatRequest{
