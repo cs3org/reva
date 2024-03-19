@@ -29,7 +29,7 @@ You need to have [Go](https://golang.org/doc/install) (version 1.21 or higher), 
 # build
 $ git clone https://github.com/cs3org/reva
 $ cd reva
-$ make # will compile and run unit tests
+$ make revad
 $ cmd/revad/revad --version
 ```
 
