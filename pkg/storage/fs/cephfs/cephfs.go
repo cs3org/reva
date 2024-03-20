@@ -82,19 +82,9 @@ func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err erro
 		return nil, errors.New("cephfs: can't create caches")
 	}
 
-	adminConn := newAdminConn(&o)
-	if adminConn == nil {
+	adminConn, err := newAdminConn(&o)
+	if err != nil {
 		return nil, errors.Wrap(err, "cephfs: Couldn't create admin connections")
-	}
-
-	for _, dir := range []string{o.ShadowFolder, o.UploadFolder} {
-		_, err := adminConn.adminMount.Statx(dir, goceph.StatxMask(goceph.StatxIno), 0)
-		if err != nil {
-			err = adminConn.adminMount.MakeDir(dir, dirPermFull)
-			if err != nil && err.Error() != errFileExists {
-				return nil, errors.New("cephfs: can't initialise system dir " + dir + ":" + err.Error())
-			}
-		}
 	}
 
 	return &cephfs{
@@ -115,42 +105,49 @@ func (fs *cephfs) GetHome(ctx context.Context) (string, error) {
 }
 
 func (fs *cephfs) CreateHome(ctx context.Context) (err error) {
-	if fs.conf.DisableHome {
-		return errtypes.NotSupported("cephfs: GetHome() home supported disabled")
-	}
+	//if fs.conf.DisableHome {
+	//	return errtypes.NotSupported("cephfs: GetHome() home supported disabled")
+	//}
 
 	user := fs.makeUser(ctx)
+	fmt.Println("debugging user hugo", user)
 
 	// Stop createhome from running the whole thing because it is called multiple times
-	if _, err = fs.adminConn.adminMount.Statx(user.home, goceph.StatxMode, 0); err == nil {
-		return
-	}
-
-	err = walkPath(user.home, func(path string) error {
-		return fs.adminConn.adminMount.MakeDir(path, fs.conf.DirPerms)
-	}, false)
+	stat, err := fs.adminConn.adminMount.Statx(user.home, goceph.StatxMode, 0)
 	if err != nil {
-		return getRevaError(err)
+		return err
 	}
+	fmt.Println("debugging stat", stat)
+	return nil
 
-	err = fs.adminConn.adminMount.Chown(user.home, uint32(user.UidNumber), uint32(user.GidNumber))
-	if err != nil {
-		return getRevaError(err)
-	}
-
-	err = fs.adminConn.adminMount.SetXattr(user.home, "ceph.quota.max_bytes", []byte(fmt.Sprint(fs.conf.UserQuotaBytes)), 0)
-	if err != nil {
-		return getRevaError(err)
-	}
-
-	user.op(func(cv *cacheVal) {
-		err = cv.mount.MakeDir(removeLeadingSlash(fs.conf.ShareFolder), fs.conf.DirPerms)
-		if err != nil && err.Error() == errFileExists {
-			err = nil
+	/*
+		err = walkPath(user.home, func(path string) error {
+			return fs.adminConn.adminMount.MakeDir(path, fs.conf.DirPerms)
+		}, false)
+		if err != nil {
+			return getRevaError(err)
 		}
-	})
 
-	return getRevaError(err)
+		err = fs.adminConn.adminMount.Chown(user.home, uint32(user.UidNumber), uint32(user.GidNumber))
+		if err != nil {
+			return getRevaError(err)
+		}
+
+		err = fs.adminConn.adminMount.SetXattr(user.home, "ceph.quota.max_bytes", []byte(fmt.Sprint(fs.conf.UserQuotaBytes)), 0)
+		if err != nil {
+			return getRevaError(err)
+		}
+
+		user.op(func(cv *cacheVal) {
+			err = cv.mount.MakeDir(removeLeadingSlash(fs.conf.ShareFolder), fs.conf.DirPerms)
+			if err != nil && err.Error() == errFileExists {
+				err = nil
+			}
+		})
+
+		return getRevaError(err)
+	*/
+
 }
 
 func (fs *cephfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
@@ -241,34 +238,51 @@ func (fs *cephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 }
 
 func (fs *cephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (files []*provider.ResourceInfo, err error) {
-	var path string
-	user := fs.makeUser(ctx)
-	if path, err = user.resolveRef(ref); err != nil {
-		return
+	if ref == nil {
+		ref = &provider.Reference{Path: "/"}
 	}
+	fmt.Println("debugging: listing folder", ref)
+	user := fs.makeUser(ctx)
+	fmt.Println("debugging:  user", user)
+
+	fmt.Println("debugging: ceph got", ref)
+	var path string
+	if path, err = user.resolveRef(ref); err != nil {
+		return nil, err
+	}
+	fmt.Println("debugging: listing folder after user resolv ref", path)
 
 	// The user wants to access their home, create it if it doesn't exist
+	// TODO: do not need to call this, only on loging time
 	if path == fs.conf.Root {
 		if err = fs.CreateHome(ctx); err != nil {
 			return
 		}
 	}
 
+	fmt.Println("debugging: create home ok")
+
 	user.op(func(cv *cacheVal) {
 		var dir *goceph.Directory
 		if dir, err = cv.mount.OpenDir(path); err != nil {
+			fmt.Println(err)
 			return
 		}
 		defer closeDir(dir)
 
+		fmt.Println("debugging: dir obtained ", dir)
+
 		var entry *goceph.DirEntryPlus
 		var ri *provider.ResourceInfo
+
 		for entry, err = dir.ReadDirPlus(goceph.StatxBasicStats, 0); entry != nil && err == nil; entry, err = dir.ReadDirPlus(goceph.StatxBasicStats, 0) {
 			if fs.conf.HiddenDirs[entry.Name()] {
 				continue
 			}
 
+			fmt.Println("debugging: inside ReadDirPlus, before user.fileAsResourceInfo", cv, filepath.Join(path, entry.Name()), entry.Statx(), mdKeys)
 			ri, err = user.fileAsResourceInfo(cv, filepath.Join(path, entry.Name()), entry.Statx(), mdKeys)
+			fmt.Println("debugging: inside ReadDirPlus, after user.fileAsResourceInfo", cv, filepath.Join(path, entry.Name()), entry.Statx(), mdKeys)
 			if ri == nil || err != nil {
 				if err != nil {
 					log := appctx.GetLogger(ctx)

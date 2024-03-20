@@ -287,6 +287,7 @@ func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
 }
 
 func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, requestPath string) string {
+	return ns
 	// If useLoggedInUserNS is false, that implies that the request is coming from
 	// the FilesHandler method invoked by a /dav/files/fileOwner where fileOwner
 	// is not the same as the logged in user. In that case, we'll treat fileOwner

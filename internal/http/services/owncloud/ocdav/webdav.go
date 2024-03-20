@@ -19,6 +19,7 @@
 package ocdav
 
 import (
+	"fmt"
 	"net/http"
 	"path"
 )
@@ -94,6 +95,7 @@ func (h *WebDavHandler) init(ns string, useLoggedInUserNS bool) error {
 func (h *WebDavHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ns := applyLayout(r.Context(), h.namespace, h.useLoggedInUserNS, r.URL.Path)
+		fmt.Println("debugging webdav layout: ", ns, r.Context(), h.namespace, h.useLoggedInUserNS, r.URL.Path)
 		switch r.Method {
 		case MethodPropfind:
 			s.handlePathPropfind(w, r, ns)
