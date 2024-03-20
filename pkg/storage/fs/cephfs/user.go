@@ -56,6 +56,7 @@ func (fs *cephfs) makeUser(ctx context.Context) *User {
 	home := fs.conf.Root
 	if !fs.conf.DisableHome {
 		home = filepath.Join(fs.conf.Root, templates.WithUser(u, fs.conf.UserLayout))
+		fmt.Println("debugging makeUser", home)
 	}
 
 	return &User{u, fs, ctx, home}
@@ -163,36 +164,7 @@ func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *goceph.Cep
 	}
 
 	var checksum provider.ResourceChecksum
-	var md5 string
-	if _type == provider.ResourceType_RESOURCE_TYPE_FILE {
-		md5tsBA, err := cv.mount.GetXattr(path, xattrMd5ts) //local error inside if scope
-		if err == nil {
-			md5ts, _ := strconv.ParseInt(string(md5tsBA), 10, 64)
-			if stat.Mtime.Sec == md5ts {
-				md5BA, err := cv.mount.GetXattr(path, xattrMd5)
-				if err != nil {
-					md5, err = calcChecksum(path, cv.mount, stat)
-				} else {
-					md5 = string(md5BA)
-				}
-			} else {
-				md5, err = calcChecksum(path, cv.mount, stat)
-			}
-		} else {
-			md5, err = calcChecksum(path, cv.mount, stat)
-		}
-
-		if err != nil && err.Error() == errPermissionDenied {
-			checksum.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET
-		} else if err != nil {
-			return nil, errors.New("cephfs: error calculating checksum of file")
-		} else {
-			checksum.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_MD5
-			checksum.Sum = md5
-		}
-	} else {
-		checksum.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET
-	}
+	checksum.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET
 
 	var ownerID *userv1beta1.UserId
 	if stat.Uid != 0 {

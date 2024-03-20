@@ -70,6 +70,7 @@ const (
 func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	fn := path.Join(ns, r.URL.Path)
+	fmt.Println("debugging fn", fn)
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
 
@@ -81,6 +82,7 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 	}
 
 	ref := &provider.Reference{Path: fn}
+	fmt.Println("debugging reference inside webdav", fn)
 
 	parentInfo, resourceInfos, ok := s.getResourceInfos(ctx, w, r, pf, ref, false, sublog)
 	if !ok {
@@ -260,6 +262,8 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		Ref:                   ref,
 		ArbitraryMetadataKeys: metadataKeys,
 	}
+
+	fmt.Println("debugging request for", req)
 	res, err := client.Stat(ctx, req)
 	if err != nil {
 		log.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
@@ -279,6 +283,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		HandleErrorStatus(&log, w, res.Status)
 		return nil, nil, false
 	}
+	fmt.Println("debugging after client.stat", res)
 
 	if spacesPropfind {
 		res.Info.Path = ref.Path
@@ -326,6 +331,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			Ref:                   ref,
 			ArbitraryMetadataKeys: metadataKeys,
 		}
+		fmt.Println("debugging: ListContainer: ", req)
 		res, err := client.ListContainer(ctx, req)
 		if err != nil {
 			log.Error().Err(err).Msg("error sending list container grpc request")
@@ -337,6 +343,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			HandleErrorStatus(&log, w, res.Status)
 			return nil, nil, false
 		}
+		fmt.Println("debugging: ListContainer: ", res)
 		resourceInfos = append(resourceInfos, res.Infos...)
 
 	case depth == "infinity":

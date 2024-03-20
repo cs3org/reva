@@ -1,0 +1,387 @@
+    1  ip a
+    2  cd /etc/ceph
+    3  ls
+    4  vi ceph.client.admin.keyring
+    5  chmod 600 ceph.client.admin.keyring 
+    6  ls -l
+    7  ceph -s
+    8  ls
+    9  cd .ssh/
+   10  ls
+   11  more authorized_keys 
+   12  cd
+   13  history 
+   14  more /etc/ceph/ceph.client.admin.keyring 
+   15  rpm -qa|egrep 'rados|mod_|http'
+   16  rpm -qa|egrep 'rados|mod_|http -gw'
+   17  os -ef
+   18  ps -ef
+   19  ceph -s
+   20  exit
+   21  ls -lrt /etc/ceph/
+   22  ceph orch host ls
+   23  ceph -s
+   24  cd /etc/ceph
+   25  ls
+   26  cd .ssh
+   27  ls
+   28  cd
+   29  cd .ssh
+   30  ls
+   31  cat authorized_keys 
+   32  pwd
+   33  cd /etc/ceph/
+   34  vi ceph.client.admin.keyring
+   35  host CZJ3140TFP.idrac.lan
+   36  ceph orch host ls
+   37  df -h
+   38  podman ps
+   39  grep rgw /etc/hosts
+   40  ping ijc-rgw2
+   41  ping ijc-rgw3
+   42  dnf install fping
+   43  fping -qas ijc-mon1 ijc-mon2
+   44  fping -qas ijc-mon1 ijc-mon3
+   45  ping p2ios3.ijclab.in2p3.fr
+   46  ping p2io
+   47  ping p2ios3
+   48  ping ijc-rw2
+   49  ping ijc-rgw2
+   50  ping ijc-rgw3
+   51  ping ijc-rgw4
+   52  fping
+   53  podman ps
+   54  ss -lntp
+   55  p2io-s3-3.ijclab.in2p3.fr
+   56  host p2io-s3-3.ijclab.in2p3.fr
+   57  ping ijc-rgw3
+   58  ping ijc-rgw2
+   59  ping ijc-rgw3
+   60  cd /etc/ceph/
+   61  ls
+   62  ls -lhA
+   63  nano ceph.conf 
+   64  cat ceph.conf 
+   65  ceph -
+   66  ceph -s
+   67  ls
+   68  cd ..
+   69  cd ce
+   70  cd ceph/
+   71  ls
+   72  ls -lha
+   73  rm ceph.conf 
+   74  ceph orch host add
+   75  ceph -s
+   76  tail -f /var/log/ncm-cdispd.log
+   77  ccm-fetch
+   78  ip a
+   79  ccm --show /system/network/interfaces
+   80  exit
+   81  ethtool
+   82  ip a
+   83  ethtool em1
+   84  ethtool em2
+   85  ethtool em0
+   86  ip a
+   87  ethtool em3
+   88   top
+   89  lscpi
+   90  lshw
+   91  lshw|more
+   92  lspci
+   93  lspci|grep -i network
+   94  lspci|grep -i ether
+   95  lshw|more
+   96  ethtool em3
+   97  lsmem
+   98  lshw|more
+   99  top
+  100  ip a
+  101  netstat -rn
+  102  ethtool 
+  103  ethtool em1
+  104  ethtool em3
+  105  lvs
+  106  ip a
+  107  ethtoll em1
+  108  ethtool em1
+  109  rados -p bench ls
+  110  ip -br a
+  111  ethtool em1
+  112  ethtool em2
+  113  ethtool em3
+  114  ethtool em4
+  115  ip -br a
+  116  ip a
+  117  exit
+  118  ip -br a
+  119  ssh ijc-rgw4
+  120  cd /usr/local/sbin/
+  121  ls
+  122  cd ../bin/
+  123  ls
+  124  curl -4LO https://github.com/cs3org/reva/releases/download/v2.19.1/reva_v2.19.1_darwin_amd64
+  125  ls
+  126  mv reva_v2.19.1_darwin_amd64 reva
+  127  chmod +x reva 
+  128  ls -lhA
+  129  reva
+  130  ./reva
+  131  ls
+  132  cat reva 
+  133  rm reva 
+  134  curl -4LO https://github.com/cs3org/reva/releases/download/v2.19.1/revad_v2.19.1_linux_amd64
+  135  ls
+  136  mv revad_v2.19.1_linux_amd64 revad
+  137  chmod revad 
+  138  ls
+  139  chmod +x revad 
+  140  revad --version
+  141  dnf provides /lib64/libc.so.6
+  142  dnf install glibc
+  143  cat /etc/os-release 
+  144  curl -4LO https://github.com/cs3org/reva/releases/download/v2.19.0/revad_v2.19.0_linux_amd64
+  145  mv revad_v2.19.0_linux_amd64 revad
+  146  chmod +x revad 
+  147  revad --version
+  148  revad
+  149  dnf update
+  150  dnf search glibc
+  151  dnf install glibc
+  152  ./revad 
+  153  ls
+  154  dnf list
+  155  dnf list installed
+  156  rpm -qa glib
+  157  rpm -qa glibc
+  158  history
+  159  pwd
+  160  ls
+  161  ./revad 
+  162  dnf update
+  163  cat /etc/yum.repos.d/
+  164  cat /etc/yum.conf 
+  165  cd /etc/yum.quattor.repos.d/
+  166  ls
+  167  cat *
+  168  ls
+  169  grep 20240131 *
+  170  sed -i "s/20240131/20240305/g" *
+  171  dnf update
+  172  dnf install glibc
+  173  rpm -qa glibc
+  174  grep 2024 *
+  175  cat /etc/os-release 
+  176  dnf update
+  177  cd
+  178  cd /usr/local/bin/
+  179  l
+  180  ls
+  181  ./revad 
+  182  dnf module list
+  183  rpm -qa glibc
+  184  dnf search glibc-static
+  185  dnf install glibc-static
+  186  cat /etc/os-release 
+  187  cat /etc/redhat-release 
+  188  ls
+  189  curl -4L http://jabber.dsi.universite-paris-saclay.fr/portail_wifi_universite-paris-saclay_fr_interm.cer -o revad 
+  190  ./revad 
+  191  ./revad --version
+  192  cat revad 
+  193  ls
+  194  curl -4L https://github.com/cs3org/reva/releases/download/v1.28.0/reva_v1.28.0_linux_amd64 -o revad 
+  195  revad --version
+  196  cd /tmp
+  197  git clone https://github.com/cs3org/reva
+  198  cd reva/
+  199  ls
+  200  git tag -l
+  201  git checkout v1.28.0
+  202  git checkout v1.29.0
+  203  make
+  204  dnf install make
+  205  make
+  206  dnf install golang
+  207  make
+  208  dnf provides lc
+  209  dnf provides ld
+  210  ls
+  211  ceph-s
+  212  ceph -s
+  213  sudo ceph -s
+  214  cd /etc/ceph/
+  215  ls
+  216  ceph fsid
+  217  mount -t admin@f5195e24-158c-11ee-b338-5ced8c61b074.cernbox=/ /ceph
+  218  mount -t ceph admin@f5195e24-158c-11ee-b338-5ced8c61b074.cernbox=/ /ceph
+  219  mkdir ceph
+  220  mount -t ceph admin@f5195e24-158c-11ee-b338-5ced8c61b074.cernbox=/ /ceph
+  221  ls
+  222  pc ceph.client.admin.keyring /etc/ceph/
+  223  mv ceph.client.admin.keyring /etc/ceph/
+  224  mount -t ceph admin@f5195e24-158c-11ee-b338-5ced8c61b074.cernbox=/ /ceph
+  225  mkdir /ceph
+  226  mount -t ceph admin@f5195e24-158c-11ee-b338-5ced8c61b074.cernbox=/ /ceph
+  227  df -Th
+  228  dd if=/dev/urandom of=/ceph/10GiB.bin bs=1M count=10240 status=progress2
+  229  dd if=/dev/urandom of=/ceph/10GiB.bin bs=1M count=10240 status=progres2
+  230  dd if=/dev/urandom of=/ceph/10GiB.bin bs=1M count=10240 status=progress
+  231  cd /ceph/
+  232  ls
+  233  rm 10GiB.bin 
+  234  rados bench
+  235  df -Th
+  236  cd /dev/shm/
+  237  dd if=/dev/urandom of=./10GiB bs=10 count=1024
+  238  dd if=/dev/urandom of=./10GiB bs=10M count=1024
+  239  dd if=/dev/urandom of=./10GiB bs=10M count=1024 status=progress
+  240  cp 10GiB /ceph/
+  241  dd if=./10GiB of=/ceph/10GiB status=progress
+  242  ls
+  243  dd if=10GiB of=/ceph/10GiB.2 status=progress
+  244  echo 3 | tee /proc/sys/vm//drop_caches && sync
+  245  ceph osd pool craete benchbench 100 100
+  246  ceph osd pool create benchbench 100 100
+  247  rados bench -t benchbench 10 write --no-cleanup
+  248  rados bench -p benchbench 10 write --no-cleanup
+  249  rados bench -p benchbench 30 write --no-cleanup
+  250  rados bench -p benchbench 10 seq
+  251  ip -br a
+  252  ceph df -T
+  253  ceph df 
+  254  ceph osd pool set cephfs.cernbox.data pg_num 8192
+  255  ceph osd pool set cephfs.cernbox.meta pg_num 8192
+  256  ceph osd pool set cephfs.cernbox.meta pg_num 4096
+  257  ceph osd pool set cephfs.cernbox.meta pg_num 2048
+  258  ceph df
+  259  ceph osd pool set cephfs.cernbox.meta pg_num 160
+  260  ceph df
+  261  ceph osd pool set cephfs.cernbox.meta pg_num 160
+  262  ceph osd pool set cephfs.cernbox.meta pg_num 180
+  263  ceph osd pool set cephfs.cernbox.meta pg_num 400
+  264  ceph osd pool set cephfs.cernbox.meta pg_num 512
+  265  ceph osd pool set cephfs.cernbox.data pg_num 512
+  266  ceph df
+  267  dd if=10GiB of=/ceph/10GiB.2 status=progress
+  268  ceph -s
+  269  ceph osd set noscrub
+  270  ceph osd set nodeep-scrub
+  271  ceph -s
+  272  watch -n 2.5 ceph -s
+  273  ceph osd pool set cephfs.cernbox.data pg_num 8
+  274  ceph osd pool set cephfs.cernbox.data pg_num 16
+  275  ceph osd pool set cephfs.cernbox.meta pg_num 16
+  276  ceph -s
+  277  ceph osd set nodeep-scrub
+  278  ceph osd set noscrub
+  279  ceph -s
+  280  ceph df
+  281  ceph osd pool set cephfs.cernbox.meta pg_num 180
+  282  ceph osd pool set cephfs.cernbox.data pg_num 180
+  283  ceph -s
+  284  ceph df
+  285  ceph -s
+  286  watch -n 2.5 ceph -s
+  287  ceph -s
+  288  df -Th
+  289  cd /ceph/
+  290  ls
+  291  rm 10GiB*
+  292  df -Th
+  293  cd :t
+  294  cd /ceph/
+  295  ls -ha
+  296  zea
+  297  eza
+  298  ceph health
+  299  ceph -s
+  300  sudo -i
+  301  history | grep scrub
+  302  cpeh osd set scrub
+  303  ceph osd set scrub
+  304  ceph osd set -h
+  305  ceph osd set scrub
+  306  df -h
+  307  mkdir /var/kits
+  308  cd /var/kits/
+  309  mkdir reva
+  310  wget https://github.com/cs3org/reva/releases/download/v1.28.0/revad_v1.28.0_linux_amd64
+  311  rm revad_v1.28.0_linux_amd64 
+  312  wget https://github.com/cs3org/reva/releases/download/v1.28.0/revad_v1.28.0_linux_amd64
+  313  pwd
+  314  mv revad_v1.28.0_linux_amd64 reva
+  315  cd reva
+  316  chmod 755 revad_v1.28.0_linux_amd64 
+  317  ./revad_v1.28.0_linux_amd64 
+  318  more revad_v1.28.0_linux_amd64 
+  319  rm revad_v1.28.0_linux_amd64 
+  320  wget https://github.com/cs3org/reva/archive/refs/tags/v1.28.0.tar.gz
+  321  tar -xf v1.28.0.tar.gz 
+  322  ls
+  323  cd reva-1.28.0/
+  324  ls
+  325  more README.md 
+  326  make
+  327  cd ..
+  328  ls
+  329  rm v1.28.0.tar.gz 
+  330  rm -Rf reva-1.28.0/
+  331  git clone git@github.com:jouvin/reva.git
+  332  git clone https://github.com/cs3org/reva.git
+  333  ls
+  334  mv reva src
+  335  cd src
+  336  make
+  337  dnf install libpthread-devel
+  338  dnf search pthread
+  339  dnf search resolv
+  340  rpm -qa|grep libc
+  341  rpm -ql glibc-devel
+  342  git log
+  343  ls
+  344  ls cmd/
+  345  ls cmd/revad/
+  346  cd cmd/revad/revad 
+  347  cmd/revad/revad --version
+  348  cmd/revad/revad -h
+  349  df
+  350  cmd/revad/revad -plugins
+  351  ls examples/
+  352  ls examples/helloworld/
+  353  cat examples/helloworld/revad.toml 
+  354  cmd/revad/revad -c examples/helloworld/revad.toml
+  355  pwd
+  356  make
+  357  go env GOPATH
+  358  /go install github.com/cs3org/gaia@latest
+  359  go install github.com/cs3org/gaia@latest
+  360  gaia
+  361  go env GOPATH
+  362  gaia
+  363  go env GOPATH
+  364  /root/go/bin/gaia 
+  365  /root/go/bin/gaia build
+  366  /root/go/bin/gaia build --with github.com/cernbox/reva-plugins
+  367  cmd/revad/revad -plugin
+  368  cmd/revad/revad -plugins
+  369  ls
+  370  ./revad -plugins
+  371  mkdir build
+  372  mv revad build/
+  373  cd build/
+  374  ls
+  375  cd ..
+  376  mv build workshop_demo
+  377  cd workshop_demo/
+  378  cat ~/.bash_history 
+  379  history
+  380  history> command_history
+  381  vim command_history 
+  382  cd ../cmd/reva
+  383  ls
+  384  got build
+  385  go build
+  386  ./reva
+  387  history> /var/kits/reva/src/workshop_demo/command_history 

@@ -1,0 +1,16 @@
+[log]
+mode = "json"
+output = "/var/log/revad.log"
+
+[http]
+address = "localhost:8080"
+
+[http.services.helloworld]
+[http.services.prometheus]
+
+
+[grpc]
+address = "localhost:8081"
+enable_reflection = true
+
+[grpc.services.helloworld]
