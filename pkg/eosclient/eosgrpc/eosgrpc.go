@@ -224,7 +224,7 @@ func (c *Client) initNSRequest(ctx context.Context, auth eosclient.Authorization
 	rq.Role.Uid = uidInt
 	rq.Role.Gid = gidInt
 	if app != "" {
-		rq.Role.Groupname = app // FIXME this is going to be rq.Role.App once the GRPC interface is updated
+		rq.Role.App = app
 	}
 	rq.Authkey = c.opt.Authkey
 
