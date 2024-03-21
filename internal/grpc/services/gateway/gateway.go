@@ -102,6 +102,7 @@ func (c *config) ApplyDefaults() {
 	c.UserProviderEndpoint = sharedconf.GetGatewaySVC(c.UserProviderEndpoint)
 	c.GroupProviderEndpoint = sharedconf.GetGatewaySVC(c.GroupProviderEndpoint)
 	c.DataTxEndpoint = sharedconf.GetGatewaySVC(c.DataTxEndpoint)
+	c.SpacesEndpoint = sharedconf.GetGatewaySVC(c.SpacesEndpoint)
 
 	c.DataGatewayEndpoint = sharedconf.GetDataGateway(c.DataGatewayEndpoint)
 
