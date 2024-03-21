@@ -265,7 +265,11 @@ func (c *Client) executeEOS(ctx context.Context, cmdArgs []string, auth eosclien
 				// eos reports back error code 1 (EPERM) when ?
 				// eos reports back error code 7 (E2BIG) when the user is not allowed to read the directory
 				// eos reports back error code 22 (EINVAL) when the user is not allowed to enter the instance
-				err = errtypes.PermissionDenied(errBuf.String())
+				errString := errBuf.String()
+				if errString == "" {
+					errString = fmt.Sprintf("rc = %d", exitStatus)
+				}
+				err = errtypes.PermissionDenied(errString)
 			}
 		}
 	}
@@ -794,7 +798,13 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 		args := []string{"recycle", "ls", "-m", d.Format("2006/01/02"), fmt.Sprintf("%d", maxentries+1)}
 		stdout, _, err := c.executeEOS(ctx, args, auth)
 		if err != nil {
-			return nil, err
+			switch err.(type) {
+			case errtypes.IsPermissionDenied:
+				// in this context, this is an E2BIG that gets converted to PermissionDenied by executeEOS()
+				return nil, errtypes.BadRequest("list too long")
+			default:
+				return nil, err
+			}
 		}
 
 		list, err := parseRecycleList(stdout)
