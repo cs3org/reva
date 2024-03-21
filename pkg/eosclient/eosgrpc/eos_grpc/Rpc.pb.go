@@ -1198,6 +1198,7 @@ type RoleId struct {
 	Gid                  uint64   `protobuf:"varint,2,opt,name=gid,proto3" json:"gid,omitempty"`
 	Username             string   `protobuf:"bytes,3,opt,name=username,proto3" json:"username,omitempty"`
 	Groupname            string   `protobuf:"bytes,4,opt,name=groupname,proto3" json:"groupname,omitempty"`
+	App                  string   `protobuf:"bytes,5,opt,name=app,proto3" json:"app,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1252,6 +1253,13 @@ func (m *RoleId) GetUsername() string {
 func (m *RoleId) GetGroupname() string {
 	if m != nil {
 		return m.Groupname
+	}
+	return ""
+}
+
+func (m *RoleId) GetApp() string {
+	if m != nil {
+		return m.App
 	}
 	return ""
 }
