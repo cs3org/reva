@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -91,7 +92,9 @@ type ChunkHandler struct {
 
 // NewChunkHandler creates a handler for chunked uploads.
 func NewChunkHandler(ctx context.Context, fs *cephfs) *ChunkHandler {
-	return &ChunkHandler{fs.makeUser(ctx), fs.conf.UploadFolder}
+	fmt.Println("debugging NewChunkHandler", fs.makeUser(ctx), fs.conf.UploadFolder)
+	u := fs.makeUser(ctx)
+	return &ChunkHandler{u, path.Join(u.home, fs.conf.UploadFolder)}
 }
 
 func (c *ChunkHandler) getChunkTempFileName() string {
@@ -118,6 +121,7 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (finish bool, chu
 	c.user.op(func(cv *cacheVal) {
 		var tmpFile *goceph.File
 		target := filepath.Join(c.chunkFolder, chunkTempFilename)
+		fmt.Println("debugging savechunk", target, c.chunkFolder, chunkTempFilename)
 		tmpFile, err = cv.mount.Open(target, os.O_CREATE|os.O_WRONLY, c.user.fs.conf.FilePerms)
 		defer closeFile(tmpFile)
 		if err != nil {

@@ -23,6 +23,7 @@ package cephfs
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 
@@ -37,13 +38,15 @@ func (fs *cephfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 
 	ok, err := IsChunked(p)
 	if err != nil {
-		return errors.Wrap(err, "cephfs: error checking path")
+		return errors.Wrap(err, "cephfs: error checking if path is chunked")
 	}
 	if ok {
+		fmt.Println("debugging: chunked upload", p)
 		var assembledFile string
 		p, assembledFile, err = NewChunkHandler(ctx, fs).WriteChunk(p, r)
+		fmt.Println("debugging assembly", p, assembledFile, r)
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "error writing chunk %v %v %v", p, r, assembledFile)
 		}
 		if p == "" {
 			return errtypes.PartialContent(ref.String())

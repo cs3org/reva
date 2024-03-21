@@ -59,6 +59,7 @@ func (fs *cephfs) makeUser(ctx context.Context) *User {
 		fmt.Println("debugging makeUser", home)
 	}
 
+	fmt.Println("debugging makeUser user", home)
 	return &User{u, fs, ctx, home}
 }
 

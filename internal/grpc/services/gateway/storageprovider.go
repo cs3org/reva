@@ -538,148 +538,7 @@ func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFi
 }
 
 func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
-	log := appctx.GetLogger(ctx)
-	if utils.IsRelativeReference(req.Ref) {
-		return s.initiateFileUpload(ctx, req)
-	}
-	p, st := s.getPath(ctx, req.Ref)
-	if st.Code != rpc.Code_CODE_OK {
-		return &gateway.InitiateFileUploadResponse{
-			Status: st,
-		}, nil
-	}
-
-	if !s.inSharedFolder(ctx, p) {
-		return s.initiateFileUpload(ctx, req)
-	}
-
-	if s.isSharedFolder(ctx, p) {
-		log.Debug().Str("path", p).Msg("path points to shared folder")
-		err := errtypes.PermissionDenied("gateway: cannot upload to share folder: path=" + p)
-		log.Err(err).Msg("gateway: error downloading")
-		return &gateway.InitiateFileUploadResponse{
-			Status: status.NewInvalidArg(ctx, "path points to share folder"),
-		}, nil
-	}
-
-	if s.isShareName(ctx, p) {
-		log.Debug().Str("path", p).Msg("path points to share name")
-		statReq := &provider.StatRequest{Ref: req.Ref}
-		statRes, err := s.stat(ctx, statReq)
-		if err != nil {
-			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
-			}, nil
-		}
-		if statRes.Status.Code != rpc.Code_CODE_OK {
-			return &gateway.InitiateFileUploadResponse{
-				Status: statRes.Status,
-			}, nil
-		}
-
-		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-			err := errtypes.BadRequest(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
-			log.Err(err).Msg("gateway: error stating share name")
-			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error initiating upload"),
-			}, nil
-		}
-
-		ri, protocol, err := s.checkRef(ctx, statRes.Info)
-		if err != nil {
-			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
-			}, nil
-		}
-
-		if protocol == "webdav" {
-			// TODO(ishank011): pass this through the datagateway service
-			// For now, we just expose the file server to the user
-			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target)
-			if err != nil {
-				return &gateway.InitiateFileUploadResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error downloading from webdav host: "+p),
-				}, nil
-			}
-			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewOK(ctx),
-				Protocols: []*gateway.FileUploadProtocol{
-					{
-						Opaque:         opaque,
-						Protocol:       "simple",
-						UploadEndpoint: ep,
-					},
-				},
-			}, nil
-		}
-
-		// if it is a file allow upload
-		if ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
-			log.Debug().Str("path", p).Interface("ri", ri).Msg("path points to share name file")
-			req.Ref.Path = ri.Path
-			log.Debug().Str("path", ri.Path).Msg("upload")
-			return s.initiateFileUpload(ctx, req)
-		}
-
-		err = errtypes.PermissionDenied("gateway: cannot upload to share name: path=" + p)
-		log.Err(err).Msg("gateway: error uploading")
-		return &gateway.InitiateFileUploadResponse{
-			Status: status.NewInvalidArg(ctx, "path points to share name"),
-		}, nil
-	}
-
-	if s.isShareChild(ctx, p) {
-		log.Debug().Msgf("shared child: %s", p)
-		shareName, shareChild := s.splitShare(ctx, p)
-
-		statReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
-		statRes, err := s.stat(ctx, statReq)
-		if err != nil {
-			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
-			}, nil
-		}
-
-		if statRes.Status.Code != rpc.Code_CODE_OK {
-			return &gateway.InitiateFileUploadResponse{
-				Status: statRes.Status,
-			}, nil
-		}
-
-		ri, protocol, err := s.checkRef(ctx, statRes.Info)
-		if err != nil {
-			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
-			}, nil
-		}
-
-		if protocol == "webdav" {
-			// TODO(ishank011): pass this through the datagateway service
-			// For now, we just expose the file server to the user
-			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target, shareChild)
-			if err != nil {
-				return &gateway.InitiateFileUploadResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error uploading to webdav host: "+p),
-				}, nil
-			}
-			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewOK(ctx),
-				Protocols: []*gateway.FileUploadProtocol{
-					{
-						Opaque:         opaque,
-						Protocol:       "simple",
-						UploadEndpoint: ep,
-					},
-				},
-			}, nil
-		}
-
-		// append child to target
-		req.Ref.Path = path.Join(ri.Path, shareChild)
-		return s.initiateFileUpload(ctx, req)
-	}
-
-	panic("gateway: upload: unknown path:" + p)
+	return s.initiateFileUpload(ctx, req)
 }
 
 func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
@@ -703,6 +562,8 @@ func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFile
 			Status: storageRes.Status,
 		}, nil
 	}
+
+	fmt.Println("debugging initiatefileupload response", storageRes)
 
 	protocols := make([]*gateway.FileUploadProtocol, len(storageRes.Protocols))
 	for p := range storageRes.Protocols {
