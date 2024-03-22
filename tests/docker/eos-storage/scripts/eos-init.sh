@@ -26,17 +26,13 @@ eos chmod 777 /eos/dev/ec-42/
 mkdir -p /eos/
 eosxd -ofsname=$(hostname -f):/eos/ /eos/
 
-eos mkdir -p /eos/user
+echo "[EOS INIT] Init script: $INIT_SCRIPT"
 
-for letter in {a..z}; do
-  eos mkdir -p "/eos/user/$letter"
-done
+if [ -f "$INIT_SCRIPT" ]
+then
+  $INIT_SCRIPT
+fi
 
-eos vid set membership 0 +sudo
-eos vid set membership 99 +sudo
-eos vid set map -tident "*@storage-home" vuid:0 vgid:0
-eos vid set map -tident "*@storage-users" vuid:0 vgid:0
-eos vid set map -tident "*@storage-local-1" vuid:0 vgid:0
-eos vid set map -tident "*@storage-local-2" vuid:0 vgid:0
+echo "[EOS INIT] EOS initialized successfully"
 
-tail -f /dev/null
+tail -qf /var/log/eos/mgm/*.log

@@ -6,7 +6,7 @@ services:
     # instead of uploading and share through the github runners
     # TODO (gdelmont): in future this should be parameterized
     # to support other reva images as before
-    build: 
+    build:
       context: ../../
       dockerfile: docker/Dockerfile.revad-eos
     volumes:
@@ -15,7 +15,10 @@ services:
     healthcheck:
       test: sleep 5
   eos-storage:
-    image: ${EOS_FULL_IMAGE}
+    # image: ${EOS_FULL_IMAGE}
+    build:
+      context: eos-storage
+      dockerfile: Dockerfile
     security_opt:
       - seccomp:unconfined
     ulimits:
@@ -26,11 +29,13 @@ services:
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=0
     hostname: eosuser.example.org
-    healthcheck:
-      test: eos file info /eos/user
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    volumes:
+      - ./eos-storage/scripts:/scripts
+      - ./eos-storage/cert/MyOrg-RootCA.pem:/etc/grid-security/certificates/MyOrg-RootCA.pem
+      # - ./eos-storage/cert/eoskey.pem:/etc/grid-security/hostkey.pem
+      # - ./eos-storage/cert/eoscert.pem:/etc/grid-security/hostcert.pem
+    environment:
+      INIT_SCRIPT: /scripts/${STORAGE_DRIVER}-init.sh
   litmus:
     image: registry.cern.ch/docker.io/owncloud/litmus:latest
     environment:
@@ -62,7 +67,7 @@ services:
   storage-home:
     extends: revad
     hostname: storage-home
-    command: -c /etc/revad/storage-home.toml
+    command: -c /etc/revad/storage-home-${STORAGE_DRIVER}.toml
     volumes:
       - shared-volume:/var/tmp
   users:
@@ -112,7 +117,7 @@ services:
   storage-users:
     extends: revad
     hostname: storage-users
-    command: -c /etc/revad/storage-users.toml
+    command: -c /etc/revad/storage-users-${STORAGE_DRIVER}.toml
     volumes:
       - shared-volume:/var/tmp
     depends_on:
@@ -126,7 +131,7 @@ services:
       - shared-volume:/var/tmp
   storage-local-1:
     extends: revad
-    command: -c /etc/revad/storage-local-1.toml
+    command: -c /etc/revad/storage-local-1-${STORAGE_DRIVER}.toml
     volumes:
       - shared-volume:/var/tmp
     depends_on:
@@ -134,7 +139,7 @@ services:
         condition: service_healthy
   storage-local-2:
     extends: revad
-    command: -c /etc/revad/storage-local-2.toml
+    command: -c /etc/revad/storage-local-2-${STORAGE_DRIVER}.toml
     volumes:
       - shared-volume:/var/tmp
     depends_on:

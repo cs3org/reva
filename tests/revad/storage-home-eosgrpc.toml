@@ -1,0 +1,52 @@
+# This config file will start a reva service that:
+# - uses the eoshome driver to serve users, jailed into their home (/home)
+# - serves the home storage provider on grpc port 12000
+# - serves http dataprovider for this storage on port 12001
+#   - /data - dataprovider: file up and download
+#
+# The home storage will inject the username into the path and jail users into
+# their home directory
+
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+gatewaysvc = "gateway:19000"
+
+[grpc]
+address = "0.0.0.0:12000"
+
+# This is a storage provider that grants direct access to the wrapped storage
+# the context path wrapper reads tho username from the context and prefixes the relative storage path with it
+[grpc.services.storageprovider]
+driver = "eosgrpchome"
+mount_path = "/home"
+mount_id = "123e4567-e89b-12d3-a456-426655440000"
+expose_data_server = true
+data_server_url = "http://storage-home:12001/data"
+enable_home_creation = true
+
+[grpc.services.storageprovider.drivers.eosgrpchome]
+namespace = "/eos/user"
+master_url = "root://eosuser.example.org"
+master_grpc_uri = "eosuser.example.org:50051"
+user_layout = "/"
+grpc_auth_key = "secretkey"
+xrdcopy_binary = "/usr/local/bin/xrdcopy"
+write_uses_local_temp = false
+
+
+# we have a locally running dataprovider
+[http]
+address = "0.0.0.0:12001"
+
+[http.services.dataprovider]
+driver = "eosgrpchome"
+temp_folder = "/var/tmp/reva/tmp"
+
+[http.services.dataprovider.drivers.eosgrpchome]
+namespace = "/eos/user"
+master_url = "https://eosuser.example.org:443"
+master_grpc_uri = "eosuser.example.org:50051"
+user_layout = "/"
+grpc_auth_key = "secretkey"
+xrdcopy_binary = "/usr/local/bin/xrdcopy"
+write_uses_local_temp = false
