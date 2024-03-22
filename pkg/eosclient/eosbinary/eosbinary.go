@@ -446,21 +446,11 @@ func (c *Client) getRawFileInfoByPath(ctx context.Context, auth eosclient.Author
 
 func (c *Client) mergeACLsAndAttrsForFiles(ctx context.Context, auth eosclient.Authorization, info *eosclient.FileInfo) *eosclient.FileInfo {
 	// We need to inherit the ACLs for the parent directory as these are not available for files
-	// And the attributes from the version folders
 	if !info.IsDir {
 		parentInfo, err := c.getRawFileInfoByPath(ctx, auth, path.Dir(info.File))
 		// Even if this call fails, at least return the current file object
 		if err == nil {
 			info.SysACL.Entries = append(info.SysACL.Entries, parentInfo.SysACL.Entries...)
-		}
-
-		// We need to merge attrs set for the version folders, so get those resolved for the current user
-		versionFolderInfo, err := c.GetFileInfoByPath(ctx, auth, getVersionFolder(info.File))
-		if err == nil {
-			info.SysACL.Entries = append(info.SysACL.Entries, versionFolderInfo.SysACL.Entries...)
-			for k, v := range versionFolderInfo.Attrs {
-				info.Attrs[k] = v
-			}
 		}
 	}
 
@@ -473,23 +463,12 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
 	}
 
-	var info *eosclient.FileInfo
-	var err error
-	// We need to set the attrs on the version folder as they are not persisted across writes
-	// Except for the sys.eval.useracl attr as EOS uses that to determine if it needs to obey
-	// the user ACLs set on the file
-	if !(attr.Type == eosclient.SystemAttr && attr.Key == userACLEvalKey) {
-		info, err = c.getRawFileInfoByPath(ctx, auth, path)
+	// Favorites need to be stored per user so handle these separately
+	if attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
+		info, err := c.getRawFileInfoByPath(ctx, auth, path)
 		if err != nil {
 			return err
 		}
-		if !info.IsDir {
-			path = getVersionFolder(path)
-		}
-	}
-
-	// Favorites need to be stored per user so handle these separately
-	if attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
 		return c.handleFavAttr(ctx, auth, attr, recursive, path, info, true)
 	}
 	return c.setEOSAttr(ctx, auth, attr, errorIfExists, recursive, path)
@@ -549,23 +528,13 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
 	}
 
-	var info *eosclient.FileInfo
 	var err error
-	// We need to set the attrs on the version folder as they are not persisted across writes
-	// Except for the sys.eval.useracl attr as EOS uses that to determine if it needs to obey
-	// the user ACLs set on the file
-	if !(attr.Type == eosclient.SystemAttr && attr.Key == userACLEvalKey) {
-		info, err = c.getRawFileInfoByPath(ctx, auth, path)
+	// Favorites need to be stored per user so handle these separately
+	if attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
+		info, err := c.getRawFileInfoByPath(ctx, auth, path)
 		if err != nil {
 			return err
 		}
-		if !info.IsDir {
-			path = getVersionFolder(path)
-		}
-	}
-
-	// Favorites need to be stored per user so handle these separately
-	if attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
 		return c.handleFavAttr(ctx, auth, attr, recursive, path, info, false)
 	}
 
@@ -588,21 +557,12 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 
 // GetAttr returns the attribute specified by key.
 func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, key, path string) (*eosclient.Attribute, error) {
-	// As SetAttr set the attr on the version folder, we will read the attribute on it
-	// if the resource is not a folder
-	info, err := c.getRawFileInfoByPath(ctx, auth, path)
-	if err != nil {
-		return nil, err
-	}
-	if !info.IsDir {
-		path = getVersionFolder(path)
-	}
-
 	args := []string{"attr", "get", key, path}
 	attrOut, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		return nil, err
 	}
+
 	attr, err := deserializeAttribute(attrOut)
 	if err != nil {
 		return nil, err
@@ -612,14 +572,6 @@ func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, key,
 
 // GetAttrs returns all the attributes of a resource.
 func (c *Client) GetAttrs(ctx context.Context, auth eosclient.Authorization, path string) ([]*eosclient.Attribute, error) {
-	info, err := c.getRawFileInfoByPath(ctx, auth, path)
-	if err != nil {
-		return nil, err
-	}
-	if !info.IsDir {
-		path = getVersionFolder(path)
-	}
-
 	args := []string{"attr", "ls", path}
 	attrOut, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
