@@ -277,7 +277,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 
 	js, err := json.Marshal(
 		map[string]interface{}{
-			"file_id": spaces.EncodeResourceID(statFileRes.Info.Id),
+			"file_id": spaces.EncodeResourceID(statRes.Info.Id),
 		},
 	)
 	if err != nil {
