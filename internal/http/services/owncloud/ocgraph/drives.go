@@ -198,8 +198,8 @@ func convertShareToSpace(ctx context.Context, gw gateway.GatewayAPIClient, share
 				Name:                 libregraph.PtrString(filepath.Base(stat.Info.Path)),
 				Path:                 libregraph.PtrString("/"),
 				// RootId must have the same token before ! as Id
-				// the second part for the time being is not important
-				RootId: libregraph.PtrString(fmt.Sprintf("%s!wrong_root_id", spaces.EncodeSpaceID(stat.Info.Id.StorageId, stat.Info.Id.SpaceId))),
+				// the second part for the time being is not used
+				RootId: libregraph.PtrString(fmt.Sprintf("%s!unused_root_id", spaces.EncodeSpaceID(stat.Info.Id.StorageId, stat.Info.Id.SpaceId))),
 				Size:   libregraph.PtrInt64(int64(stat.Info.Size)),
 			},
 		},
