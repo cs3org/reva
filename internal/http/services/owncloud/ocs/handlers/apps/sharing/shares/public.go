@@ -30,18 +30,20 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/huandu/xstrings"
+	"github.com/rs/zerolog/log"
+
 	"github.com/cs3org/reva/v2/pkg/conversions"
 	"github.com/cs3org/reva/v2/pkg/permission"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/huandu/xstrings"
-	"github.com/rs/zerolog/log"
+
+	"github.com/pkg/errors"
 
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
-	"github.com/pkg/errors"
 )
 
 var _defaultPublicLinkPermission = 1
@@ -148,7 +150,7 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 		if err := h.passwordValidator.Validate(password); err != nil {
 			return nil, &ocsError{
 				Code:    response.MetaBadRequest.StatusCode,
-				Message: xstrings.FirstRuneToUpper(err.Error()),
+				Message: err.Error(),
 				Error:   fmt.Errorf("password validation failed: %w", err),
 			}
 		}
