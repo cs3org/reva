@@ -260,16 +260,18 @@ func (c *Client) executeEOS(ctx context.Context, cmdArgs []string, auth eosclien
 			case 0:
 				err = nil
 			case int(syscall.ENOENT):
-				err = errtypes.NotFound(errBuf.String())
+				err = errtypes.NotFound("eosclient: " + errBuf.String())
 			case int(syscall.EPERM), int(syscall.E2BIG), int(syscall.EINVAL):
-				// eos reports back error code 1 (EPERM) when ?
+				// eos reports back error code 1 (EPERM) as a PermissionDenied error
 				// eos reports back error code 7 (E2BIG) when the user is not allowed to read the directory
 				// eos reports back error code 22 (EINVAL) when the user is not allowed to enter the instance
 				errString := errBuf.String()
 				if errString == "" {
 					errString = fmt.Sprintf("rc = %d", exitStatus)
 				}
-				err = errtypes.PermissionDenied(errString)
+				err = errtypes.PermissionDenied("eosclient: " + errString)
+			default:
+				err = errtypes.InternalError(fmt.Sprintf("eosclient: error while executing command: %s", errBuf.String()))
 			}
 		}
 	}
@@ -277,11 +279,6 @@ func (c *Client) executeEOS(ctx context.Context, cmdArgs []string, auth eosclien
 	args := fmt.Sprintf("%s", cmd.Args)
 	env := fmt.Sprintf("%s", cmd.Env)
 	log.Info().Str("args", args).Str("env", env).Int("exit", exitStatus).Str("err", errBuf.String()).Msg("eos cmd")
-
-	if err != nil && exitStatus != int(syscall.ENOENT) { // don't wrap the errtypes.NotFoundError
-		err = errors.Wrap(err, "eosclient: error while executing command")
-	}
-
 	return outBuf.String(), errBuf.String(), err
 }
 
