@@ -222,7 +222,7 @@ func (am *mgr) Authenticate(ctx context.Context, _, clientSecret string) (*user.
 
 	claims, err := extractClaims(clientSecret)
 	if err != nil {
-		return nil, nil, errtypes.PermissionDenied("oidc token not valid")
+		return nil, nil, errtypes.PermissionDenied(fmt.Sprintf("error extracting claims from oidc token: %+v", err))
 	}
 
 	issuer, ok := extractIssuer(claims)
@@ -248,7 +248,7 @@ func (am *mgr) Authenticate(ctx context.Context, _, clientSecret string) (*user.
 
 	tkn, err := provider.Verifier(config).Verify(ctx, clientSecret)
 	if err != nil {
-		return nil, nil, errtypes.PermissionDenied(fmt.Sprintf("oidc token not valid: %+v", err))
+		return nil, nil, errtypes.PermissionDenied(fmt.Sprintf("oidc token failed verification: %+v", err))
 	}
 
 	sub, err := am.doUserMapping(tkn, claims)
