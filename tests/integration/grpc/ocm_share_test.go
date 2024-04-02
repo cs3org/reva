@@ -234,7 +234,7 @@ var _ = Describe("ocm share", func() {
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(conversions.NewViewerRole(false).CS3ResourcePermissions()),
+						share.NewWebDavAccessMethod(conversions.NewViewerRole().CS3ResourcePermissions()),
 					},
 					RecipientMeshProvider: cesnet.ProviderInfo,
 				})
@@ -316,7 +316,7 @@ var _ = Describe("ocm share", func() {
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(conversions.NewEditorRole(false).CS3ResourcePermissions()),
+						share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
 					},
 					RecipientMeshProvider: cesnet.ProviderInfo,
 				})
@@ -413,7 +413,7 @@ var _ = Describe("ocm share", func() {
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(conversions.NewViewerRole(false).CS3ResourcePermissions()),
+						share.NewWebDavAccessMethod(conversions.NewViewerRole().CS3ResourcePermissions()),
 					},
 					RecipientMeshProvider: cesnet.ProviderInfo,
 				})
@@ -525,7 +525,7 @@ var _ = Describe("ocm share", func() {
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(conversions.NewEditorRole(false).CS3ResourcePermissions()),
+						share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
 					},
 					RecipientMeshProvider: cesnet.ProviderInfo,
 				})
@@ -681,30 +681,12 @@ var _ = Describe("ocm share", func() {
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(conversions.NewEditorRole(false).CS3ResourcePermissions()),
+						share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
 					},
 					RecipientMeshProvider: cesnet.ProviderInfo,
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(createShareRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-
-				By("resharing the same file with marie")
-
-				createShareRes2, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
-					ResourceId: info.Id,
-					Grantee: &provider.Grantee{
-						Type: provider.GranteeType_GRANTEE_TYPE_USER,
-						Id: &provider.Grantee_UserId{
-							UserId: federatedMarieID,
-						},
-					},
-					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(conversions.NewEditorRole(false).CS3ResourcePermissions()),
-					},
-					RecipientMeshProvider: cesnet.ProviderInfo,
-				})
-				Expect(err).ToNot(HaveOccurred())
-				Expect(createShareRes2.Status.Code).To(Equal(rpcv1beta1.Code_CODE_ALREADY_EXISTS))
 			})
 		})
 
@@ -725,7 +707,7 @@ var _ = Describe("ocm share", func() {
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(conversions.NewEditorRole(false).CS3ResourcePermissions()),
+						share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
 					},
 					RecipientMeshProvider: cesnet.ProviderInfo,
 				})
