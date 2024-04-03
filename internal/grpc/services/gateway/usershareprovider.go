@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"path"
 
+	"github.com/alitto/pond"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -253,8 +254,57 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *collaboration.ListRec
 	return res, nil
 }
 
-func (s *svc) ListExistingReceivedShares(context.Context, *collaboration.ListReceivedSharesRequest) (*gateway.ListExistingReceivedSharesResponse, error) {
-	panic("ListExistingReceivedShares: not yet implemented")
+func (s *svc) ListExistingReceivedShares(ctx context.Context, req *collaboration.ListReceivedSharesRequest) (*gateway.ListExistingReceivedSharesResponse, error) {
+	rshares, err := s.ListReceivedShares(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	sharesCh := make(chan *gateway.SharedResourceInfo, len(rshares.Shares))
+	pool := pond.New(50, len(rshares.Shares))
+	for _, rs := range rshares.Shares {
+		rs := rs
+		pool.Submit(func() {
+			if rs.State == collaboration.ShareState_SHARE_STATE_REJECTED || rs.State == collaboration.ShareState_SHARE_STATE_INVALID {
+				return
+			}
+
+			// TODO(lopresti) incorporate the cache layer from internal/http/services/owncloud/ocs/handlers/apps/sharing/shares/shares.go
+			stat, err := s.Stat(ctx, &provider.StatRequest{
+				Ref: &provider.Reference{
+					ResourceId: rs.Share.ResourceId,
+				},
+			})
+			if err != nil {
+				return
+			}
+			if stat.Status.Code != rpc.Code_CODE_OK {
+				return
+			}
+
+			sharesCh <- &gateway.SharedResourceInfo{
+				ResourceInfo: stat.Info,
+				Share:        rs,
+			}
+		})
+	}
+
+	sris := make([]*gateway.SharedResourceInfo, 0, len(rshares.Shares))
+	done := make(chan struct{})
+	go func() {
+		for s := range sharesCh {
+			sris = append(sris, s)
+		}
+		done <- struct{}{}
+	}()
+	pool.StopAndWait()
+	close(sharesCh)
+	<-done
+	close(done)
+
+	return &gateway.ListExistingReceivedSharesResponse{
+		Shares: sris,
+	}, nil
 }
 
 func (s *svc) GetReceivedShare(ctx context.Context, req *collaboration.GetReceivedShareRequest) (*collaboration.GetReceivedShareResponse, error) {
