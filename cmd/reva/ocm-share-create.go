@@ -186,9 +186,9 @@ func getAccessMethods(webdav, webapp, datatx bool, rol string) ([]*ocm.AccessMet
 func getOCMSharePerm(p string) (*provider.ResourcePermissions, error) {
 	switch p {
 	case viewerPermission:
-		return conversions.NewViewerRole(false).CS3ResourcePermissions(), nil
+		return conversions.NewViewerRole().CS3ResourcePermissions(), nil
 	case editorPermission:
-		return conversions.NewEditorRole(false).CS3ResourcePermissions(), nil
+		return conversions.NewEditorRole().CS3ResourcePermissions(), nil
 	}
 	return nil, errors.New("invalid rol: " + p)
 }

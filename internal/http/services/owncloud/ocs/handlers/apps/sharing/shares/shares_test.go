@@ -272,10 +272,15 @@ var _ = Describe("The ocs API", func() {
 						Id:    resID,
 						Owner: user.Id,
 						PermissionSet: &provider.ResourcePermissions{
-							Stat:        true,
-							AddGrant:    true,
-							UpdateGrant: true,
-							RemoveGrant: true,
+							Stat:                 true,
+							ListContainer:        true,
+							AddGrant:             true,
+							UpdateGrant:          true,
+							RemoveGrant:          true,
+							GetPath:              true,
+							GetQuota:             true,
+							InitiateFileDownload: true,
+							ListRecycle:          true,
 						},
 						Size: 10,
 					},
@@ -311,7 +316,7 @@ var _ = Describe("The ocs API", func() {
 					form.Add("shareType", "0")
 					form.Add("path", "/newshare")
 					form.Add("name", "newshare")
-					form.Add("permissions", "16")
+					form.Add("permissions", "1")
 					form.Add("shareWith", "admin")
 					req := httptest.NewRequest("POST", "/apps/files_sharing/api/v1/shares", strings.NewReader(form.Encode()))
 					req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -362,7 +367,7 @@ var _ = Describe("The ocs API", func() {
 					form.Add("shareType", "0")
 					form.Add("path", "/newshare")
 					form.Add("name", "newshare")
-					form.Add("permissions", "16")
+					form.Add("permissions", "1")
 					form.Add("shareWith", "admin")
 					req := httptest.NewRequest("POST", "/apps/files_sharing/api/v1/shares", strings.NewReader(form.Encode()))
 					req.Header.Set("Content-Type", "application/x-www-form-urlencoded")

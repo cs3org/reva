@@ -182,7 +182,7 @@ func TestPermissions2Role(t *testing.T) {
 
 	table := []permissionOnResourceInfo2Role{
 		{
-			permissions:  PermissionRead | PermissionShare,
+			permissions:  PermissionRead,
 			role:         RoleViewer,
 			resourceInfo: resourceInfoDir,
 		}, {
@@ -191,14 +191,10 @@ func TestPermissions2Role(t *testing.T) {
 			resourceInfo: resourceInfoSpaceRoot,
 		}, {
 			permissions:  PermissionRead,
-			role:         RoleLegacy,
-			resourceInfo: resourceInfoDir,
-		}, {
-			permissions:  PermissionRead,
 			role:         RoleSpaceViewer,
 			resourceInfo: resourceInfoSpaceRoot,
 		}, {
-			permissions:  PermissionRead | PermissionWrite | PermissionCreate | PermissionDelete | PermissionShare,
+			permissions:  PermissionRead | PermissionWrite | PermissionCreate | PermissionDelete,
 			role:         RoleEditor,
 			resourceInfo: nil,
 		}, {

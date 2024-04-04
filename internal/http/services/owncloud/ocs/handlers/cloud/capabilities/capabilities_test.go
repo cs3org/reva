@@ -35,24 +35,27 @@ func TestMarshal(t *testing.T) {
 		},
 	}
 
-	jsonExpect := `{"capabilities":{"core":null,"checksums":null,"files":null,"dav":null,"files_sharing":{"api_enabled":true,"resharing":false,"group_sharing":false,"sharing_roles":false,"deny_access":false,"auto_accept_share":false,"share_with_group_members_only":false,"share_with_membership_groups_only":false,"search_min_length":0,"default_permissions":0,"user_enumeration":null,"federation":null,"public":null,"user":null}},"version":null}`
-	xmlExpect := `<CapabilitiesData><capabilities><files_sharing><api_enabled>1</api_enabled><resharing>0</resharing><group_sharing>0</group_sharing><sharing_roles>0</sharing_roles><deny_access>0</deny_access><auto_accept_share>0</auto_accept_share><share_with_group_members_only>0</share_with_group_members_only><share_with_membership_groups_only>0</share_with_membership_groups_only><search_min_length>0</search_min_length><default_permissions>0</default_permissions></files_sharing></capabilities></CapabilitiesData>`
+	// TODO: remove resharing from these strings once web defaults to resharing=false
+	jsonExpect := `{"capabilities":{"core":null,"checksums":null,"files":null,"dav":null,"files_sharing":{"api_enabled":true,"group_sharing":false,"sharing_roles":false,"deny_access":false,"auto_accept_share":false,"share_with_group_members_only":false,"share_with_membership_groups_only":false,"search_min_length":0,"default_permissions":0,"user_enumeration":null,"federation":null,"public":null,"user":null,"resharing":false}},"version":null}`
+	xmlExpect := `<CapabilitiesData><capabilities><files_sharing><api_enabled>1</api_enabled><group_sharing>0</group_sharing><sharing_roles>0</sharing_roles><deny_access>0</deny_access><auto_accept_share>0</auto_accept_share><share_with_group_members_only>0</share_with_group_members_only><share_with_membership_groups_only>0</share_with_membership_groups_only><search_min_length>0</search_min_length><default_permissions>0</default_permissions><resharing>0</resharing></files_sharing></capabilities></CapabilitiesData>`
 
 	jsonData, err := json.Marshal(&cd)
 	if err != nil {
-		t.Fail()
+		t.Fatal("cant marshal json")
 	}
 
 	if string(jsonData) != jsonExpect {
-		t.Fail()
+		t.Log(string(jsonData))
+		t.Fatal("json data does not match")
 	}
 
 	xmlData, err := xml.Marshal(&cd)
 	if err != nil {
-		t.Fail()
+		t.Fatal("cant marshal xml")
 	}
 
 	if string(xmlData) != xmlExpect {
-		t.Fail()
+		t.Log(string(xmlData))
+		t.Fatal("xml data does not match")
 	}
 }
