@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -33,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/conversions"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	sharespkg "github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/sharecache"
@@ -41,6 +43,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/tests/cs3mocks/mocks"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -153,8 +156,16 @@ var _ = Describe("Jsoncs3", func() {
 		storage, err = metadata.NewDiskStorage(tmpdir)
 		Expect(err).ToNot(HaveOccurred())
 
+		pool.RemoveSelector("GatewaySelector" + "com.owncloud.api.gateway")
 		client = &mocks.GatewayAPIClient{}
-		m, err = jsoncs3.New(storage, client, 0, nil, 0)
+		gatewaySelector := pool.GetSelector[gatewayv1beta1.GatewayAPIClient](
+			"GatewaySelector",
+			"com.owncloud.api.gateway",
+			func(cc *grpc.ClientConn) gatewayv1beta1.GatewayAPIClient {
+				return client
+			},
+		)
+		m, err = jsoncs3.New(storage, gatewaySelector, 0, nil, 0)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
