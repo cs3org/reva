@@ -1,3 +1,26 @@
+Changelog for reva 2.19.3 (2024-04-04)
+=======================================
+
+The following sections list the changes in reva 2.19.3 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #4607: Mask user email in output
+
+Details
+-------
+
+*   Bugfix #4607: Mask user email in output
+
+   We have fixed a bug where the user email was not masked in the output and the user emails could be
+   enumerated through the sharee search.
+
+   https://github.com/owncloud/ocis/issues/8726
+   https://github.com/cs3org/reva/pull/4607
+   https://github.com/cs3org/reva/pull/4603
+
 Changelog for reva 2.19.2 (2024-03-13)
 =======================================
 
@@ -4331,6 +4354,27 @@ Details
 
    https://github.com/cs3org/reva/pull/2922
 
+Changelog for reva 2.4.1 (2022-05-24)
+=======================================
+
+The following sections list the changes in reva 2.4.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #2891: Add missing http status code
+
+Details
+-------
+
+*   Bugfix #2891: Add missing http status code
+
+   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
+   pass it through.
+
+   https://github.com/cs3org/reva/pull/2891
+
 Changelog for reva 2.4.0 (2022-05-24)
 =======================================
 
@@ -4473,27 +4517,6 @@ Details
    correct storageprovider
 
    https://github.com/cs3org/reva/pull/2792
-
-Changelog for reva 2.4.1 (2022-05-24)
-=======================================
-
-The following sections list the changes in reva 2.4.1 relevant to
-reva users. The changes are ordered by importance.
-
-Summary
--------
-
-*   Fix #2891: Add missing http status code
-
-Details
--------
-
-*   Bugfix #2891: Add missing http status code
-
-   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
-   pass it through.
-
-   https://github.com/cs3org/reva/pull/2891
 
 Changelog for reva 2.3.1 (2022-05-08)
 =======================================
