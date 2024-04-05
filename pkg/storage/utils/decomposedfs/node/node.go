@@ -99,9 +99,9 @@ type Tree interface {
 	RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPath string, target *Node) (*Node, *Node, func() error, error)
 	PurgeRecycleItemFunc(ctx context.Context, spaceid, key, purgePath string) (*Node, func() error, error)
 
-	WriteBlob(node *Node, source string) error
-	ReadBlob(node *Node) (io.ReadCloser, error)
-	DeleteBlob(node *Node) error
+	WriteBlob(spaceID, blobId string, blobSize int64, source string) error
+	ReadBlob(spaceID, blobId string, blobSize int64) (io.ReadCloser, error)
+	DeleteBlob(spaceID, blobId string) error
 
 	Propagate(ctx context.Context, node *Node, sizeDiff int64) (err error)
 }

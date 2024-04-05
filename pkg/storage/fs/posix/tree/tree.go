@@ -21,7 +21,6 @@ package tree
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -56,9 +55,9 @@ func init() {
 
 // Blobstore defines an interface for storing blobs in a blobstore
 type Blobstore interface {
-	Upload(node *node.Node, source string) error
-	Download(node *node.Node) (io.ReadCloser, error)
-	Delete(node *node.Node) error
+	Upload(spaceID, blobID string, blobSize int64, source string) error
+	Download(spaceID, blobID string, blobSize int64) (io.ReadCloser, error)
+	Delete(spaceID, blobID string) error
 }
 
 // Tree manages a hierarchical tree
@@ -616,7 +615,7 @@ func (t *Tree) removeNode(ctx context.Context, path string, n *node.Node) error 
 
 	// delete blob from blobstore
 	if n.BlobID != "" {
-		if err := t.DeleteBlob(n); err != nil {
+		if err := t.DeleteBlob(n.SpaceID, n.BlobID); err != nil {
 			log.Error().Err(err).Str("blobID", n.BlobID).Msg("error purging nodes blob")
 			return err
 		}
@@ -645,7 +644,7 @@ func (t *Tree) removeNode(ctx context.Context, path string, n *node.Node) error 
 		}
 
 		if bID != "" {
-			if err := t.DeleteBlob(&node.Node{SpaceID: n.SpaceID, BlobID: bID}); err != nil {
+			if err := t.DeleteBlob(n.SpaceID, bID); err != nil {
 				log.Error().Err(err).Str("revision", rev).Str("blobID", bID).Msg("error removing revision node blob")
 				return err
 			}
@@ -662,29 +661,22 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 }
 
 // WriteBlob writes a blob to the blobstore
-func (t *Tree) WriteBlob(node *node.Node, source string) error {
-	return t.blobstore.Upload(node, source)
+func (t *Tree) WriteBlob(spaceID, blobID string, blobSize int64, source string) error {
+	return t.blobstore.Upload(spaceID, blobID, blobSize, source)
 }
 
 // ReadBlob reads a blob from the blobstore
-func (t *Tree) ReadBlob(node *node.Node) (io.ReadCloser, error) {
-	if node.BlobID == "" {
+func (t *Tree) ReadBlob(spaceID, blobID string, blobSize int64) (io.ReadCloser, error) {
+	if blobID == "" {
 		// there is no blob yet - we are dealing with a 0 byte file
 		return io.NopCloser(bytes.NewReader([]byte{})), nil
 	}
-	return t.blobstore.Download(node)
+	return t.blobstore.Download(spaceID, blobID, blobSize)
 }
 
 // DeleteBlob deletes a blob from the blobstore
-func (t *Tree) DeleteBlob(node *node.Node) error {
-	if node == nil {
-		return fmt.Errorf("could not delete blob, nil node was given")
-	}
-	if node.BlobID == "" {
-		return fmt.Errorf("could not delete blob, node with empty blob id was given")
-	}
-
-	return t.blobstore.Delete(node)
+func (t *Tree) DeleteBlob(spaceID, blobID string) error {
+	return t.blobstore.Delete(spaceID, blobID)
 }
 
 // TODO check if node exists?

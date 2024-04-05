@@ -86,7 +86,7 @@ var _ = Describe("Recycle", func() {
 
 			It("they can be permanently deleted by this user", func() {
 				// mock call to blobstore
-				env.Blobstore.On("Delete", mock.Anything).Return(nil).Times(2)
+				env.Blobstore.On("Delete", mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return(nil).Times(2)
 
 				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
 				Expect(err).ToNot(HaveOccurred())
@@ -104,7 +104,7 @@ var _ = Describe("Recycle", func() {
 			})
 
 			It("they can be restored", func() {
-				env.Blobstore.On("Delete", mock.Anything).Return(nil).Times(2)
+				env.Blobstore.On("Delete", mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return(nil).Times(2)
 
 				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
 				Expect(err).ToNot(HaveOccurred())
@@ -177,7 +177,7 @@ var _ = Describe("Recycle", func() {
 			})
 
 			It("they can be permanently deleted by the other user", func() {
-				env.Blobstore.On("Delete", mock.Anything).Return(nil).Times(2)
+				env.Blobstore.On("Delete", mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return(nil).Times(2)
 
 				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
 				Expect(err).ToNot(HaveOccurred())
@@ -206,7 +206,7 @@ var _ = Describe("Recycle", func() {
 			})
 
 			It("they can be restored by the other user", func() {
-				env.Blobstore.On("Delete", mock.Anything).Return(nil).Times(2)
+				env.Blobstore.On("Delete", mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return(nil).Times(2)
 
 				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
 				Expect(err).ToNot(HaveOccurred())

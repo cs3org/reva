@@ -67,9 +67,9 @@ type Tree interface {
 	RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPath string, target *node.Node) (*node.Node, *node.Node, func() error, error)
 	PurgeRecycleItemFunc(ctx context.Context, spaceid, key, purgePath string) (*node.Node, func() error, error)
 
-	WriteBlob(node *node.Node, binPath string) error
-	ReadBlob(node *node.Node) (io.ReadCloser, error)
-	DeleteBlob(node *node.Node) error
+	WriteBlob(spaceID, blobID string, blobSize int64, binPath string) error
+	ReadBlob(spaceID, blobID string, blobSize int64) (io.ReadCloser, error)
+	DeleteBlob(spaceID, blobID string) error
 
 	Propagate(ctx context.Context, node *node.Node, sizeDiff int64) (err error)
 }
@@ -276,14 +276,10 @@ func (session *OcisSession) ConcatUploads(_ context.Context, uploads []tusd.Uplo
 func (session *OcisSession) Finalize() (err error) {
 	ctx, span := tracer.Start(session.Context(context.Background()), "Finalize")
 	defer span.End()
-	n, err := session.Node(ctx)
-	if err != nil {
-		return err
-	}
 
 	// upload the data to the blobstore
 	_, subspan := tracer.Start(ctx, "WriteBlob")
-	err = session.store.tp.WriteBlob(n, session.binPath())
+	err = session.store.tp.WriteBlob(session.SpaceID(), session.ID(), session.Size(), session.binPath())
 	subspan.End()
 	if err != nil {
 		return errors.Wrap(err, "failed to upload file to blobstore")

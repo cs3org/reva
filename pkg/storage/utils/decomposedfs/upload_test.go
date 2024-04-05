@@ -238,7 +238,7 @@ var _ = Describe("File uploads", func() {
 
 		When("the user initiates a zero byte file upload", func() {
 			It("succeeds", func() {
-				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
+				bs.On("Upload", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("int64"), mock.AnythingOfType("string")).
 					Return(nil)
 				uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
 
@@ -253,7 +253,7 @@ var _ = Describe("File uploads", func() {
 			})
 
 			It("fails when trying to upload empty data. 0-byte uploads are finished during initialization already", func() {
-				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
+				bs.On("Upload", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("int64"), mock.AnythingOfType("string")).
 					Return(nil)
 				uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
 
@@ -288,10 +288,10 @@ var _ = Describe("File uploads", func() {
 
 				uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
+				bs.On("Upload", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("int64"), mock.AnythingOfType("string")).
 					Return(nil).
 					Run(func(args mock.Arguments) {
-						data, err := os.ReadFile(args.Get(1).(string))
+						data, err := os.ReadFile(args.Get(3).(string))
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(data).To(Equal([]byte("0123456789")))
@@ -304,7 +304,7 @@ var _ = Describe("File uploads", func() {
 				}, nil)
 
 				Expect(err).ToNot(HaveOccurred())
-				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything, mock.Anything)
+				bs.AssertCalled(GinkgoT(), "Upload", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("int64"), mock.AnythingOfType("string"))
 
 				resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
 
