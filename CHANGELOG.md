@@ -1,3 +1,24 @@
+Changelog for reva 2.19.4 (2024-04-05)
+=======================================
+
+The following sections list the changes in reva 2.19.4 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #4612: Use gateway selector in jsoncs3
+
+Details
+-------
+
+*   Bugfix #4612: Use gateway selector in jsoncs3
+
+   The jsoncs3 user share manager now uses the gateway selector to get a fresh client before making
+   requests and uses the configured logger from the context.
+
+   https://github.com/cs3org/reva/pull/4612
+
 Changelog for reva 2.19.3 (2024-04-04)
 =======================================
 
@@ -4354,27 +4375,6 @@ Details
 
    https://github.com/cs3org/reva/pull/2922
 
-Changelog for reva 2.4.1 (2022-05-24)
-=======================================
-
-The following sections list the changes in reva 2.4.1 relevant to
-reva users. The changes are ordered by importance.
-
-Summary
--------
-
-*   Fix #2891: Add missing http status code
-
-Details
--------
-
-*   Bugfix #2891: Add missing http status code
-
-   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
-   pass it through.
-
-   https://github.com/cs3org/reva/pull/2891
-
 Changelog for reva 2.4.0 (2022-05-24)
 =======================================
 
@@ -4517,6 +4517,27 @@ Details
    correct storageprovider
 
    https://github.com/cs3org/reva/pull/2792
+
+Changelog for reva 2.4.1 (2022-05-24)
+=======================================
+
+The following sections list the changes in reva 2.4.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #2891: Add missing http status code
+
+Details
+-------
+
+*   Bugfix #2891: Add missing http status code
+
+   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
+   pass it through.
+
+   https://github.com/cs3org/reva/pull/2891
 
 Changelog for reva 2.3.1 (2022-05-08)
 =======================================
