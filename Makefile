@@ -178,8 +178,7 @@ dist: gen-doc
 
 .PHONY: mockery
 mockery: $(MOCKERY)
-	$(MOCKERY) --dir $(PWD) --output $(PWD)/mocks --boilerplate-file ./.templates/mockery.go.tmpl --name $(NAME)
-	@echo ""
+	$(MOCKERY) --boilerplate-file ./.templates/mockery.go.tmpl
 
 .PHONY: go-generate
 go-generate:
