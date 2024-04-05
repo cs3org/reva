@@ -24,7 +24,6 @@ import (
 	"path"
 
 	"github.com/cs3org/reva/v2/pkg/storage/fs/ocis/blobstore"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/tests/helpers"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -34,7 +33,8 @@ import (
 var _ = Describe("Blobstore", func() {
 	var (
 		tmpRoot     string
-		blobNode    *node.Node
+		spaceID     string
+		blobID      string
 		blobPath    string
 		blobSrcFile string
 		data        []byte
@@ -48,10 +48,8 @@ var _ = Describe("Blobstore", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		data = []byte("1234567890")
-		blobNode = &node.Node{
-			SpaceID: "wonderfullspace",
-			BlobID:  "huuuuugeblob",
-		}
+		spaceID = "wonderfullspace"
+		blobID = "huuuuugeblob"
 		blobPath = path.Join(tmpRoot, "spaces", "wo", "nderfullspace", "blobs", "hu", "uu", "uu", "ge", "blob")
 
 		blobSrcFile = path.Join(tmpRoot, "blobsrc")
@@ -77,7 +75,7 @@ var _ = Describe("Blobstore", func() {
 				Expect(os.WriteFile(blobSrcFile, data, 0700)).To(Succeed())
 			})
 			It("writes the blob", func() {
-				err := bs.Upload(blobNode, blobSrcFile)
+				err := bs.Upload(spaceID, blobID, int64(len(data)), blobSrcFile)
 				Expect(err).ToNot(HaveOccurred())
 
 				writtenBytes, err := os.ReadFile(blobPath)
@@ -95,7 +93,7 @@ var _ = Describe("Blobstore", func() {
 
 		Describe("Download", func() {
 			It("cleans the key", func() {
-				reader, err := bs.Download(blobNode)
+				reader, err := bs.Download(spaceID, blobID, int64(len(data)))
 				Expect(err).ToNot(HaveOccurred())
 
 				readData, err := io.ReadAll(reader)
@@ -104,7 +102,7 @@ var _ = Describe("Blobstore", func() {
 			})
 
 			It("returns a reader to the blob", func() {
-				reader, err := bs.Download(blobNode)
+				reader, err := bs.Download(spaceID, blobID, int64(len(data)))
 				Expect(err).ToNot(HaveOccurred())
 
 				readData, err := io.ReadAll(reader)
@@ -118,7 +116,7 @@ var _ = Describe("Blobstore", func() {
 				_, err := os.Stat(blobPath)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = bs.Delete(blobNode)
+				err = bs.Delete(spaceID, blobID)
 				Expect(err).ToNot(HaveOccurred())
 
 				_, err = os.Stat(blobPath)

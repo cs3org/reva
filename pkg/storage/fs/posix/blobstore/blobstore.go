@@ -26,7 +26,6 @@ import (
 	"path/filepath"
 
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 )
@@ -49,8 +48,8 @@ func New(root string) (*Blobstore, error) {
 }
 
 // Upload stores some data in the blobstore under the given key
-func (bs *Blobstore) Upload(node *node.Node, source string) error {
-	dest, err := bs.path(node)
+func (bs *Blobstore) Upload(spaceID, blobID string, blobSize int64, source string) error {
+	dest, err := bs.path(spaceID, blobID)
 	if err != nil {
 		return err
 	}
@@ -85,8 +84,8 @@ func (bs *Blobstore) Upload(node *node.Node, source string) error {
 }
 
 // Download retrieves a blob from the blobstore for reading
-func (bs *Blobstore) Download(node *node.Node) (io.ReadCloser, error) {
-	dest, err := bs.path(node)
+func (bs *Blobstore) Download(spaceID, blobID string, blobSize int64) (io.ReadCloser, error) {
+	dest, err := bs.path(spaceID, blobID)
 	if err != nil {
 		return nil, err
 	}
@@ -94,12 +93,20 @@ func (bs *Blobstore) Download(node *node.Node) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not read blob '%s'", dest)
 	}
+	fi, err := file.Stat()
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not stat blob '%s'", dest)
+	}
+	if fi.Size() != blobSize {
+		return nil, fmt.Errorf("blob has unexpected size. %d bytes expected, got %d bytes", blobSize, fi.Size())
+	}
+
 	return file, nil
 }
 
 // Delete deletes a blob from the blobstore
-func (bs *Blobstore) Delete(node *node.Node) error {
-	dest, err := bs.path(node)
+func (bs *Blobstore) Delete(spaceID, blobID string) error {
+	dest, err := bs.path(spaceID, blobID)
 	if err != nil {
 		return err
 	}
@@ -109,14 +116,17 @@ func (bs *Blobstore) Delete(node *node.Node) error {
 	return nil
 }
 
-func (bs *Blobstore) path(node *node.Node) (string, error) {
-	if node.BlobID == "" {
-		return "", fmt.Errorf("blobstore: BlobID is empty")
+func (bs *Blobstore) path(spaceID, blobID string) (string, error) {
+	if spaceID == "" {
+		return "", fmt.Errorf("blobstore: spaceID is empty")
+	}
+	if blobID == "" {
+		return "", fmt.Errorf("blobstore: blobID is empty")
 	}
 	return filepath.Join(
 		bs.root,
 		filepath.Clean(filepath.Join(
-			"/", "spaces", lookup.Pathify(node.SpaceID, 1, 2), "blobs", lookup.Pathify(node.BlobID, 4, 2)),
+			"/", "spaces", lookup.Pathify(spaceID, 1, 2), "blobs", lookup.Pathify(blobID, 4, 2)),
 		),
 	), nil
 }

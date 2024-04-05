@@ -1045,7 +1045,7 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 	if currentEtag != expectedEtag {
 		return nil, errtypes.Aborted(fmt.Sprintf("file changed from etag %s to %s", expectedEtag, currentEtag))
 	}
-	reader, err := fs.tp.ReadBlob(n)
+	reader, err := fs.tp.ReadBlob(n.SpaceID, n.BlobID, n.Blobsize)
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error download blob '"+n.ID+"'")
 	}
