@@ -18,9 +18,6 @@
 
 FROM quay.io/ceph/ceph:v18
 
-# replace repo url with one that allows downloading the repo metadata
-# if http://download.ceph.com/rpm-reef/el8/x86_64/repodata/repomd.xml works again this can be dropped
-RUN sed -i 's/download.ceph.com/de.ceph.com/' /etc/yum.repos.d/ceph.repo
 RUN mkdir -p /etc/selinux/config
 
 RUN dnf update --exclude=ceph-iscsi,chrony -y && dnf install -y \
