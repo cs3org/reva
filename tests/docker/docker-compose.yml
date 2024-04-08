@@ -20,7 +20,7 @@ services:
       - seccomp:unconfined
     ulimits:
       nproc: 57875
-      nofile: 1024
+      nofile: 1024000
       core: -1
     privileged: true
     sysctls:
