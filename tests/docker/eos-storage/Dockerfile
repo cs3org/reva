@@ -8,6 +8,8 @@ COPY sssd/sssd.conf /etc/sssd/sssd.conf
 # docker run myeoscontainer --ulimit nofiles:1024000:1024000
 # or in the ulimits directive for docker compose
 
+RUN yum install -y sssd sssd-client
+
 RUN chmod 0600 /etc/sssd/sssd.conf && chown root:root /etc/sssd/sssd.conf
 
 ENTRYPOINT /mnt/scripts/eos-run.sh
