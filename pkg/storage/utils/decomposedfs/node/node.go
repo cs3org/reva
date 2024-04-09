@@ -1276,6 +1276,12 @@ func (n *Node) IsProcessing(ctx context.Context) bool {
 	return err == nil && strings.HasPrefix(v, ProcessingStatus)
 }
 
+// ProcessingID returns the latest upload session id
+func (n *Node) ProcessingID(ctx context.Context) (string, error) {
+	v, err := n.XattrString(ctx, prefixes.StatusPrefix)
+	return strings.TrimPrefix(v, ProcessingStatus), err
+}
+
 // IsSpaceRoot checks if the node is a space root
 func (n *Node) IsSpaceRoot(ctx context.Context) bool {
 	_, err := n.Xattr(ctx, prefixes.SpaceNameAttr)

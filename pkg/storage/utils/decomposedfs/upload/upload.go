@@ -314,12 +314,12 @@ func (session *OcisSession) Cleanup(revertNodeMetadata, cleanBin, cleanInfo bool
 	ctx := session.Context(context.Background())
 
 	if revertNodeMetadata {
+		n, err := session.Node(ctx)
+		if err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("node", n.ID).Str("sessionid", session.ID()).Msg("reading node for session failed")
+		}
 		if session.NodeExists() {
 			p := session.info.MetaData["versionsPath"]
-			n, err := session.Node(ctx)
-			if err != nil {
-				appctx.GetLogger(ctx).Error().Err(err).Str("sessionid", session.ID()).Msg("reading node for session failed")
-			}
 			if err := session.store.lu.CopyMetadata(ctx, p, n.InternalPath(), func(attributeName string, value []byte) (newValue []byte, copy bool) {
 				return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
 					attributeName == prefixes.TypeAttr ||
@@ -335,7 +335,15 @@ func (session *OcisSession) Cleanup(revertNodeMetadata, cleanBin, cleanInfo bool
 			}
 
 		} else {
-			session.removeNode(ctx)
+			// if no other upload session is in progress (processing id != session id) or has finished (processing id == "")
+			latestSession, err := n.ProcessingID(ctx)
+			if err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Str("node", n.ID).Str("sessionid", session.ID()).Msg("reading processingid for session failed")
+			}
+			if latestSession == session.ID() {
+				// actually delete the node
+				session.removeNode(ctx)
+			}
 		}
 	}
 
