@@ -85,8 +85,10 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		o, err = options.New(map[string]interface{}{
-			"root":             tmpRoot,
-			"asyncfileuploads": true,
+			"root":                tmpRoot,
+			"asyncfileuploads":    true,
+			"treetime_accounting": true,
+			"treesize_accounting": true,
 		})
 		Expect(err).ToNot(HaveOccurred())
 
@@ -477,7 +479,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			Expect(utils.ReadPlainFromOpaque(item.Opaque, "status")).To(Equal(""))
 		})
 
-		FIt("correctly calculates the size when the second upload is finishes, even if first is deleted", func() {
+		It("correctly calculates the size when the second upload is finishes, even if first is deleted", func() {
 			// finish postprocessing of second upload
 			con <- events.PostprocessingFinished{
 				UploadID: secondUploadID,
@@ -500,11 +502,16 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			// size should match the second upload
 			Expect(item.Size).To(Equal(uint64(len(file2Content))))
 
+			// parent size should match second upload as well
+			parentInfo, err := fs.GetMD(ctx, rootRef, []string{}, []string{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(parentInfo.Size).To(Equal(uint64(len(file2Content))))
+
 			// finish postprocessing of first upload
 			con <- events.PostprocessingFinished{
 				UploadID: uploadID,
-				//				Outcome:  events.PPOutcomeDelete, // This will completely delete the file
-				Outcome: events.PPOutcomeAbort, // This as well ... fck
+				Outcome:  events.PPOutcomeDelete,
+				// Outcome: events.PPOutcomeAbort, // This as well ... fck
 			}
 			// wait for upload to be ready
 			ev, ok = (<-pub).(events.UploadReady)
@@ -519,6 +526,10 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			// size should still match the second upload
 			Expect(item.Size).To(Equal(uint64(len(file2Content))))
 
+			// parent size should still match second upload as well
+			parentInfo, err = fs.GetMD(ctx, rootRef, []string{}, []string{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(parentInfo.Size).To(Equal(uint64(len(file2Content))))
 		})
 	})
 })
