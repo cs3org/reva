@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -49,6 +50,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree/propagator"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/usermapper"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
@@ -82,9 +84,10 @@ type Tree struct {
 
 	options *options.Options
 
-	idCache   store.Store
-	watcher   Watcher
-	scanQueue chan scanItem
+	userMapper *usermapper.Mapper
+	idCache    store.Store
+	watcher    Watcher
+	scanQueue  chan scanItem
 
 	log *zerolog.Logger
 }
@@ -93,12 +96,12 @@ type Tree struct {
 type PermissionCheckFunc func(rp *provider.ResourcePermissions) bool
 
 // New returns a new instance of Tree
-func New(lu node.PathLookup, bs Blobstore, o *options.Options, cache store.Store) (*Tree, error) {
-
+func New(lu node.PathLookup, bs Blobstore, um *usermapper.Mapper, o *options.Options, cache store.Store) (*Tree, error) {
 	log := logger.New()
 	t := &Tree{
 		lookup:     lu,
 		blobstore:  bs,
+		userMapper: um,
 		options:    o,
 		idCache:    cache,
 		propagator: propagator.New(lu, &o.Options),
@@ -151,12 +154,24 @@ func (t *Tree) Setup() error {
 func (t *Tree) assimilate(item scanItem) error {
 	var err error
 
-	// find the space id
+	// find the space id, scope by the according user
 	spaceID := []byte("")
 	spaceCandidate := item.Path
 	for strings.HasPrefix(spaceCandidate, t.options.Root) {
 		spaceID, err = t.lookup.MetadataBackend().Get(context.Background(), spaceCandidate, prefixes.SpaceIDAttr)
 		if err == nil {
+			// set the uid and gid for the space
+			fi, err := os.Stat(spaceCandidate)
+			if err != nil {
+				return err
+			}
+			sys := fi.Sys().(*syscall.Stat_t)
+			uid := int(sys.Uid)
+			gid := int(sys.Gid)
+			_, err = t.userMapper.ScopeUserByIds(uid, gid)
+			if err != nil {
+				return err
+			}
 			break
 		}
 		spaceCandidate = filepath.Dir(spaceCandidate)
@@ -522,6 +537,10 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	for i := 0; i < numWorkers; i++ {
 		g.Go(func() error {
 			for name := range work {
+				unscope, err := t.userMapper.ScopeUser(ctx)
+				if err != nil {
+					return err
+				}
 				path := filepath.Join(dir, name)
 				nodeID, err := t.lookup.MetadataBackend().Get(ctx, path, prefixes.IDAttr)
 				if err != nil {
@@ -547,6 +566,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 						return ctx.Err()
 					}
 				}
+				unscope()
 			}
 			return nil
 		})

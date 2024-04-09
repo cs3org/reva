@@ -51,6 +51,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/spaceidindex"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/usermapper"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
@@ -105,6 +106,7 @@ type Decomposedfs struct {
 	tp           node.Tree
 	o            *options.Options
 	p            permissions.Permissions
+	um           *usermapper.Mapper
 	chunkHandler *chunking.ChunkHandler
 	stream       events.Stream
 	sessionStore SessionStore
@@ -205,14 +207,15 @@ func New(o *options.Options, aspects aspects.Aspects) (storage.FS, error) {
 		lu:              aspects.Lookup,
 		o:               o,
 		p:               aspects.Permissions,
+		um:              aspects.UserMapper,
 		chunkHandler:    chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
 		stream:          aspects.EventStream,
 		UserCache:       ttlcache.NewCache(),
 		userSpaceIndex:  userSpaceIndex,
 		groupSpaceIndex: groupSpaceIndex,
 		spaceTypeIndex:  spaceTypeIndex,
-		sessionStore:    upload.NewSessionStore(aspects.Lookup, aspects.Tree, o.Root, aspects.EventStream, o.AsyncFileUploads, o.Tokens, aspects.DisableVersioning),
 	}
+	fs.sessionStore = upload.NewSessionStore(fs, aspects, o.Root, o.AsyncFileUploads, o.Tokens)
 
 	if o.AsyncFileUploads {
 		if fs.stream == nil {

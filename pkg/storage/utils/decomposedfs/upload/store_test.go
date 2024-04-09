@@ -24,7 +24,7 @@ func TestInitNewNode(t *testing.T) {
 	lookup := lookup.New(metadata.NewMessagePackBackend(root, cache.Config{}), &options.Options{Root: root})
 	tp := tree.New(lookup, nil, &options.Options{}, nil)
 
-	store := NewSessionStore(lookup, tp, root, nil, false, options.TokenOptions{}, false)
+	store := NewSessionStore(nil, lookup, tp, root, nil, false, options.TokenOptions{}, false)
 
 	rootNode := node.New("e48c4e7a-beac-4b82-b991-a5cff7b8c39c", "e48c4e7a-beac-4b82-b991-a5cff7b8c39c", "", "", 0, "", providerv1beta1.ResourceType_RESOURCE_TYPE_CONTAINER, &userv1beta1.UserId{}, lookup)
 	rootNode.Exists = true

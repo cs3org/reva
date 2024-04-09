@@ -298,18 +298,20 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	session.SetStorageValue("LogLevel", log.GetLevel().String())
 
 	log.Debug().Interface("session", session).Msg("Decomposedfs: built session info")
-	// Create binary file in the upload folder with no content
-	// It will be used when determining the current offset of an upload
-	err = session.TouchBin()
+
+	err = fs.um.RunInBaseScope(func() error {
+		// Create binary file in the upload folder with no content
+		// It will be used when determining the current offset of an upload
+		err := session.TouchBin()
+		if err != nil {
+			return err
+		}
+
+		return session.Persist(ctx)
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	err = session.Persist(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	metrics.UploadSessionsInitiated.Inc()
 
 	if uploadLength == 0 {
@@ -345,7 +347,13 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (tusd
 
 // GetUpload returns the Upload for the given upload id
 func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
-	return fs.sessionStore.Get(ctx, id)
+	var ul tusd.Upload
+	var err error
+	fs.um.RunInBaseScope(func() error {
+		ul, err = fs.sessionStore.Get(ctx, id)
+		return err
+	})
+	return ul, err
 }
 
 // ListUploadSessions returns the upload sessions for the given filter

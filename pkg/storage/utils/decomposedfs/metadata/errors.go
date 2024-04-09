@@ -23,6 +23,7 @@ import (
 	"os"
 	"syscall"
 
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
@@ -30,6 +31,9 @@ import (
 // IsNotExist checks if there is a os not exists error buried inside the xattr error,
 // as we cannot just use os.IsNotExist().
 func IsNotExist(err error) bool {
+	if _, ok := err.(errtypes.IsNotFound); ok {
+		return true
+	}
 	if os.IsNotExist(errors.Cause(err)) {
 		return true
 	}

@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -33,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/usermapper"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/google/uuid"
@@ -61,16 +63,18 @@ type IDCache interface {
 type Lookup struct {
 	Options *options.Options
 
-	metadataBackend metadata.Backend
 	IDCache         IDCache
+	metadataBackend metadata.Backend
+	userMapper      *usermapper.Mapper
 }
 
 // New returns a new Lookup instance
-func New(b metadata.Backend, o *options.Options) *Lookup {
+func New(b metadata.Backend, um *usermapper.Mapper, o *options.Options) *Lookup {
 	lu := &Lookup{
 		Options:         o,
 		metadataBackend: b,
 		IDCache:         NewStoreIDCache(o),
+		userMapper:      um,
 	}
 
 	go func() {
@@ -92,6 +96,10 @@ func (lu *Lookup) GetCachedID(ctx context.Context, spaceID, nodeID string) (stri
 
 func (lu *Lookup) WarmupIDCache() error {
 	spaceID := []byte("")
+
+	uid := 99
+	gid := 99
+
 	return filepath.Walk(lu.Options.Root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -102,7 +110,21 @@ func (lu *Lookup) WarmupIDCache() error {
 			nodeSpaceID, ok := attribs[prefixes.SpaceIDAttr]
 			if ok {
 				spaceID = nodeSpaceID
+
+				// set the uid and gid for the space
+				fi, err := os.Stat(path)
+				if err != nil {
+					return err
+				}
+				sys := fi.Sys().(*syscall.Stat_t)
+				uid = int(sys.Uid)
+				gid = int(sys.Gid)
+				_, err = lu.userMapper.ScopeUserByIds(uid, gid)
+				if err != nil {
+					return err
+				}
 			}
+
 			id, ok := attribs[prefixes.IDAttr]
 			if ok && len(spaceID) > 0 {
 				lu.IDCache.Set(context.Background(), string(spaceID), string(id), path)

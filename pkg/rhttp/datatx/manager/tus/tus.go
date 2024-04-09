@@ -82,7 +82,7 @@ func New(m map[string]interface{}, publisher events.Publisher) (datatx.DataTX, e
 }
 
 func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
-	composable, ok := fs.(composable)
+	composable, ok := fs.(storage.ComposableFS)
 	if !ok {
 		return nil, errtypes.NotSupported("file system does not support the tus protocol")
 	}

@@ -19,10 +19,13 @@
 package posix
 
 import (
+	"context"
 	"fmt"
 
+	tusd "github.com/tus/tusd/pkg/handler"
 	microstore "go-micro.dev/v4/store"
 
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage"
@@ -36,11 +39,21 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/permissions"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/usermapper"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/middleware"
 	"github.com/cs3org/reva/v2/pkg/store"
+	"github.com/pkg/errors"
 )
 
 func init() {
 	registry.Register("posix", New)
+}
+
+type posixFS struct {
+	storage.FS
+
+	um *usermapper.Mapper
 }
 
 // New returns an implementation to of the storage.FS interface that talk to
@@ -56,17 +69,19 @@ func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 		return nil, err
 	}
 
+	um := usermapper.New()
+
 	var lu *lookup.Lookup
 	switch o.MetadataBackend {
 	case "xattrs":
-		lu = lookup.New(metadata.XattrsBackend{}, &o.Options)
+		lu = lookup.New(metadata.XattrsBackend{}, um, &o.Options)
 	case "messagepack":
-		lu = lookup.New(metadata.NewMessagePackBackend(o.Root, o.FileMetadataCache), &o.Options)
+		lu = lookup.New(metadata.NewMessagePackBackend(o.Root, o.FileMetadataCache), usermapper.New(), &o.Options)
 	default:
 		return nil, fmt.Errorf("unknown metadata backend %s, only 'messagepack' or 'xattrs' (default) supported", o.MetadataBackend)
 	}
 
-	tp, err := tree.New(lu, bs, o, store.Create(
+	tp, err := tree.New(lu, bs, um, o, store.Create(
 		store.Store(o.IDCache.Store),
 		store.TTL(o.IDCache.TTL),
 		store.Size(o.IDCache.Size),
@@ -88,15 +103,78 @@ func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 	p := permissions.NewPermissions(node.NewPermissions(lu), permissionsSelector)
 
 	aspects := aspects.Aspects{
-		Lookup:      lu,
-		Tree:        tp,
-		Permissions: p,
-		EventStream: stream,
+		Lookup:            lu,
+		Tree:              tp,
+		Permissions:       p,
+		EventStream:       stream,
+		UserMapper:        um,
+		DisableVersioning: true,
 	}
-	fs, err := decomposedfs.New(&o.Options, aspects)
+
+	dfs, err := decomposedfs.New(&o.Options, aspects)
 	if err != nil {
 		return nil, err
 	}
 
+	scopeUserHook := func(methodName string, ctx context.Context, ref *provider.Reference) (middleware.UnHook, error) {
+		if methodName == "ListStorageSpaces" {
+			return nil, nil
+		}
+
+		unscope, err := um.ScopeUser(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to scope user")
+		}
+
+		return unscope, nil
+	}
+
+	mw := middleware.NewFS(dfs, scopeUserHook)
+	fs := &posixFS{
+		FS: mw,
+		um: um,
+	}
+
 	return fs, nil
+}
+
+// ListUploadSessions returns the upload sessions matching the given filter
+func (fs *posixFS) ListUploadSessions(ctx context.Context, filter storage.UploadSessionFilter) ([]storage.UploadSession, error) {
+	return fs.FS.(storage.UploadSessionLister).ListUploadSessions(ctx, filter)
+}
+
+// UseIn tells the tus upload middleware which extensions it supports.
+func (fs *posixFS) UseIn(composer *tusd.StoreComposer) {
+	fs.FS.(storage.ComposableFS).UseIn(composer)
+}
+
+// NewUpload returns a new tus Upload instance
+func (fs *posixFS) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.Upload, err error) {
+	return fs.FS.(tusd.DataStore).NewUpload(ctx, info)
+}
+
+// NewUpload returns a new tus Upload instance
+func (fs *posixFS) GetUpload(ctx context.Context, id string) (upload tusd.Upload, err error) {
+	return fs.FS.(tusd.DataStore).GetUpload(ctx, id)
+}
+
+// AsTerminatableUpload returns a TerminatableUpload
+// To implement the termination extension as specified in https://tus.io/protocols/resumable-upload.html#termination
+// the storage needs to implement AsTerminatableUpload
+func (fs *posixFS) AsTerminatableUpload(up tusd.Upload) tusd.TerminatableUpload {
+	return up.(*upload.OcisSession)
+}
+
+// AsLengthDeclarableUpload returns a LengthDeclarableUpload
+// To implement the creation-defer-length extension as specified in https://tus.io/protocols/resumable-upload.html#creation
+// the storage needs to implement AsLengthDeclarableUpload
+func (fs *posixFS) AsLengthDeclarableUpload(up tusd.Upload) tusd.LengthDeclarableUpload {
+	return up.(*upload.OcisSession)
+}
+
+// AsConcatableUpload returns a ConcatableUpload
+// To implement the concatenation extension as specified in https://tus.io/protocols/resumable-upload.html#concatenation
+// the storage needs to implement AsConcatableUpload
+func (fs *posixFS) AsConcatableUpload(up tusd.Upload) tusd.ConcatableUpload {
+	return up.(*upload.OcisSession)
 }

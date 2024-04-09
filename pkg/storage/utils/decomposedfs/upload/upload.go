@@ -143,6 +143,15 @@ func (session *OcisSession) FinishUpload(ctx context.Context) error {
 		prefixes.ChecksumPrefix + "adler32": adler32h.Sum(nil),
 	}
 
+	// At this point we scope by the user to create the final file in the final location
+	if session.store.um != nil {
+		unscope, err := session.store.um.ScopeUser(ctx)
+		if err != nil {
+			return errors.Wrap(err, "failed to scope user")
+		}
+		defer unscope()
+	}
+
 	n, err := session.store.CreateNodeForUpload(session, attrs)
 	if err != nil {
 		session.store.Cleanup(ctx, session, true, false, false)
@@ -198,7 +207,9 @@ func (session *OcisSession) Terminate(_ context.Context) error {
 func (session *OcisSession) DeclareLength(ctx context.Context, length int64) error {
 	session.info.Size = length
 	session.info.SizeIsDeferred = false
-	return session.Persist(session.Context(ctx))
+	return session.store.um.RunInBaseScope(func() error {
+		return session.Persist(session.Context(ctx))
+	})
 }
 
 // ConcatUploads concatenates multiple uploads
@@ -270,7 +281,7 @@ func (session *OcisSession) Cleanup(revertNodeMetadata, cleanBin, cleanInfo bool
 	ctx := session.Context(context.Background())
 
 	if revertNodeMetadata {
-		if session.NodeExists() {
+		if session.NodeExists() && session.info.MetaData["versionsPath"] != "" {
 			p := session.info.MetaData["versionsPath"]
 			n, err := session.Node(ctx)
 			if err != nil {
