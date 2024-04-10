@@ -53,7 +53,7 @@ import (
 const getUserCtxErrMsg = "error getting user from context"
 
 func init() {
-	rgrpc.Register("publicshareprovider", New)
+	rgrpc.Register("publicshareprovider", NewDefault)
 }
 
 type config struct {
@@ -127,9 +127,8 @@ func parsePasswordPolicy(m map[string]interface{}) (*passwordPolicy, error) {
 	return p, nil
 }
 
-// New creates a new user share provider svc
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-
+// New creates a new public share provider svc initialized from defaults
+func NewDefault(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -146,6 +145,15 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	gatewaySelector, err := pool.GatewaySelector(sharedconf.GetGatewaySVC(c.GatewayAddr))
+	if err != nil {
+		return nil, err
+	}
+	return New(gatewaySelector, sm, c, p)
+}
+
+// New creates a new user share provider svc
+func New(gatewaySelector pool.Selectable[gateway.GatewayAPIClient], sm publicshare.Manager, c *config, p *passwordPolicy) (rgrpc.Service, error) {
 	allowedPathsForShares := make([]*regexp.Regexp, 0, len(c.AllowedPathsForShares))
 	for _, s := range c.AllowedPathsForShares {
 		regex, err := regexp.Compile(s)
@@ -153,11 +161,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 			return nil, err
 		}
 		allowedPathsForShares = append(allowedPathsForShares, regex)
-	}
-
-	gatewaySelector, err := pool.GatewaySelector(sharedconf.GetGatewaySVC(c.GatewayAddr))
-	if err != nil {
-		return nil, err
 	}
 
 	service := &service{
