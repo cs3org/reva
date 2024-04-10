@@ -344,6 +344,7 @@ func (session *OcisSession) Cleanup(revertNodeMetadata, cleanBin, cleanInfo bool
 				// actually delete the node
 				session.removeNode(ctx)
 			}
+			// FIXME else if the upload has become a revision, delete the revision
 		}
 	}
 
