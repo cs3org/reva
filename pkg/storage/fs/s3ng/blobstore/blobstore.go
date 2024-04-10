@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/pkg/errors"
@@ -75,19 +76,14 @@ func New(endpoint, region, bucket, accessKey, secretKey string, defaultPutOption
 }
 
 // Upload stores some data in the blobstore under the given key
-func (bs *Blobstore) Upload(spaceID, blobID string, blobSize int64, source string) error {
-	dest, err := bs.path(spaceID, blobID)
-	if err != nil {
-		return err
-	}
-
+func (bs *Blobstore) Upload(node *node.Node, source string) error {
 	reader, err := os.Open(source)
 	if err != nil {
 		return errors.Wrap(err, "can not open source file to upload")
 	}
 	defer reader.Close()
 
-	_, err = bs.client.PutObject(context.Background(), bs.bucket, dest, reader, blobSize, minio.PutObjectOptions{
+	_, err = bs.client.PutObject(context.Background(), bs.bucket, bs.path(node), reader, node.Blobsize, minio.PutObjectOptions{
 		ContentType:           "application/octet-stream",
 		SendContentMd5:        bs.defaultPutOptions.SendContentMd5,
 		ConcurrentStreamParts: bs.defaultPutOptions.ConcurrentStreamParts,
@@ -98,54 +94,40 @@ func (bs *Blobstore) Upload(spaceID, blobID string, blobSize int64, source strin
 	})
 
 	if err != nil {
-		return errors.Wrapf(err, "could not store object '%s' into bucket '%s'", dest, bs.bucket)
+		return errors.Wrapf(err, "could not store object '%s' into bucket '%s'", bs.path(node), bs.bucket)
 	}
 	return nil
 }
 
 // Download retrieves a blob from the blobstore for reading
-func (bs *Blobstore) Download(spaceID, blobID string, blobSize int64) (io.ReadCloser, error) {
-	dest, err := bs.path(spaceID, blobID)
+func (bs *Blobstore) Download(node *node.Node) (io.ReadCloser, error) {
+	reader, err := bs.client.GetObject(context.Background(), bs.bucket, bs.path(node), minio.GetObjectOptions{})
 	if err != nil {
-		return nil, err
-	}
-	reader, err := bs.client.GetObject(context.Background(), bs.bucket, dest, minio.GetObjectOptions{})
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not download object '%s' from bucket '%s'", dest, bs.bucket)
+		return nil, errors.Wrapf(err, "could not download object '%s' from bucket '%s'", bs.path(node), bs.bucket)
 	}
 
 	stat, err := reader.Stat()
 	if err != nil {
-		return nil, errors.Wrapf(err, "blob path: %s", dest)
+		return nil, errors.Wrapf(err, "blob path: %s", bs.path(node))
 	}
 
-	if blobSize != stat.Size {
-		return nil, fmt.Errorf("blob has unexpected size. %d bytes expected, got %d bytes", blobSize, stat.Size)
+	if node.Blobsize != stat.Size {
+		return nil, fmt.Errorf("blob has unexpected size. %d bytes expected, got %d bytes", node.Blobsize, stat.Size)
 	}
 
 	return reader, nil
 }
 
 // Delete deletes a blob from the blobstore
-func (bs *Blobstore) Delete(spaceID, blobID string) error {
-	dest, err := bs.path(spaceID, blobID)
+func (bs *Blobstore) Delete(node *node.Node) error {
+	err := bs.client.RemoveObject(context.Background(), bs.bucket, bs.path(node), minio.RemoveObjectOptions{})
 	if err != nil {
-		return err
-	}
-	err = bs.client.RemoveObject(context.Background(), bs.bucket, dest, minio.RemoveObjectOptions{})
-	if err != nil {
-		return errors.Wrapf(err, "could not delete object '%s' from bucket '%s'", dest, bs.bucket)
+		return errors.Wrapf(err, "could not delete object '%s' from bucket '%s'", bs.path(node), bs.bucket)
 	}
 	return nil
 }
 
-func (bs *Blobstore) path(spaceID, blobID string) (string, error) {
-	if spaceID == "" {
-		return "", fmt.Errorf("blobstore: spaceID is empty")
-	}
-	if blobID == "" {
-		return "", fmt.Errorf("blobstore: blobID is empty")
-	}
+func (bs *Blobstore) path(node *node.Node) string {
 	// https://aws.amazon.com/de/premiumsupport/knowledge-center/s3-prefix-nested-folders-difference/
 	// Prefixes are used to partion a bucket. A prefix is everything except the filename.
 	// For a file `BucketName/foo/bar/lorem.ipsum`, `BucketName/foo/bar/` is the prefix.
@@ -154,5 +136,5 @@ func (bs *Blobstore) path(spaceID, blobID string) (string, error) {
 	//
 	// Since the spaceID is always the same for a space, we don't need to pathify that, because it would
 	// not yield any performance gains
-	return filepath.Clean(filepath.Join(spaceID, lookup.Pathify(blobID, 4, 2))), nil
+	return filepath.Clean(filepath.Join(node.SpaceID, lookup.Pathify(node.BlobID, 4, 2)))
 }

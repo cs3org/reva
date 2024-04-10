@@ -19,6 +19,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/aspects"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/permissions"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/permissions/mocks"
@@ -141,13 +142,13 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		Expect(err).ToNot(HaveOccurred())
 		ref.ResourceId = &resID
 
-		bs.On("Upload", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("int64"), mock.AnythingOfType("string")).
+		bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
 			Return(nil).
 			Run(func(args mock.Arguments) {
-				size := args.Get(2).(int64)
-				data, err := os.ReadFile(args.Get(3).(string))
+				n := args.Get(0).(*node.Node)
+				data, err := os.ReadFile(args.Get(1).(string))
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(data)).To(Equal(int(size)))
+				Expect(len(data)).To(Equal(int(n.Blobsize)))
 			})
 
 		// start upload of a file
