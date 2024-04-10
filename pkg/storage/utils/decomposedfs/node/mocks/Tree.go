@@ -138,17 +138,17 @@ func (_c *Tree_Delete_Call) RunAndReturn(run func(context.Context, *node.Node) e
 	return _c
 }
 
-// DeleteBlob provides a mock function with given fields: spaceID, blobId
-func (_m *Tree) DeleteBlob(spaceID string, blobId string) error {
-	ret := _m.Called(spaceID, blobId)
+// DeleteBlob provides a mock function with given fields: _a0
+func (_m *Tree) DeleteBlob(_a0 *node.Node) error {
+	ret := _m.Called(_a0)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DeleteBlob")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(string, string) error); ok {
-		r0 = rf(spaceID, blobId)
+	if rf, ok := ret.Get(0).(func(*node.Node) error); ok {
+		r0 = rf(_a0)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -162,15 +162,14 @@ type Tree_DeleteBlob_Call struct {
 }
 
 // DeleteBlob is a helper method to define mock.On call
-//   - spaceID string
-//   - blobId string
-func (_e *Tree_Expecter) DeleteBlob(spaceID interface{}, blobId interface{}) *Tree_DeleteBlob_Call {
-	return &Tree_DeleteBlob_Call{Call: _e.mock.On("DeleteBlob", spaceID, blobId)}
+//   - _a0 *node.Node
+func (_e *Tree_Expecter) DeleteBlob(_a0 interface{}) *Tree_DeleteBlob_Call {
+	return &Tree_DeleteBlob_Call{Call: _e.mock.On("DeleteBlob", _a0)}
 }
 
-func (_c *Tree_DeleteBlob_Call) Run(run func(spaceID string, blobId string)) *Tree_DeleteBlob_Call {
+func (_c *Tree_DeleteBlob_Call) Run(run func(_a0 *node.Node)) *Tree_DeleteBlob_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string))
+		run(args[0].(*node.Node))
 	})
 	return _c
 }
@@ -180,7 +179,7 @@ func (_c *Tree_DeleteBlob_Call) Return(_a0 error) *Tree_DeleteBlob_Call {
 	return _c
 }
 
-func (_c *Tree_DeleteBlob_Call) RunAndReturn(run func(string, string) error) *Tree_DeleteBlob_Call {
+func (_c *Tree_DeleteBlob_Call) RunAndReturn(run func(*node.Node) error) *Tree_DeleteBlob_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -469,9 +468,9 @@ func (_c *Tree_PurgeRecycleItemFunc_Call) RunAndReturn(run func(context.Context,
 	return _c
 }
 
-// ReadBlob provides a mock function with given fields: spaceID, blobId, blobSize
-func (_m *Tree) ReadBlob(spaceID string, blobId string, blobSize int64) (io.ReadCloser, error) {
-	ret := _m.Called(spaceID, blobId, blobSize)
+// ReadBlob provides a mock function with given fields: _a0
+func (_m *Tree) ReadBlob(_a0 *node.Node) (io.ReadCloser, error) {
+	ret := _m.Called(_a0)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ReadBlob")
@@ -479,19 +478,19 @@ func (_m *Tree) ReadBlob(spaceID string, blobId string, blobSize int64) (io.Read
 
 	var r0 io.ReadCloser
 	var r1 error
-	if rf, ok := ret.Get(0).(func(string, string, int64) (io.ReadCloser, error)); ok {
-		return rf(spaceID, blobId, blobSize)
+	if rf, ok := ret.Get(0).(func(*node.Node) (io.ReadCloser, error)); ok {
+		return rf(_a0)
 	}
-	if rf, ok := ret.Get(0).(func(string, string, int64) io.ReadCloser); ok {
-		r0 = rf(spaceID, blobId, blobSize)
+	if rf, ok := ret.Get(0).(func(*node.Node) io.ReadCloser); ok {
+		r0 = rf(_a0)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(io.ReadCloser)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(string, string, int64) error); ok {
-		r1 = rf(spaceID, blobId, blobSize)
+	if rf, ok := ret.Get(1).(func(*node.Node) error); ok {
+		r1 = rf(_a0)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -505,16 +504,14 @@ type Tree_ReadBlob_Call struct {
 }
 
 // ReadBlob is a helper method to define mock.On call
-//   - spaceID string
-//   - blobId string
-//   - blobSize int64
-func (_e *Tree_Expecter) ReadBlob(spaceID interface{}, blobId interface{}, blobSize interface{}) *Tree_ReadBlob_Call {
-	return &Tree_ReadBlob_Call{Call: _e.mock.On("ReadBlob", spaceID, blobId, blobSize)}
+//   - _a0 *node.Node
+func (_e *Tree_Expecter) ReadBlob(_a0 interface{}) *Tree_ReadBlob_Call {
+	return &Tree_ReadBlob_Call{Call: _e.mock.On("ReadBlob", _a0)}
 }
 
-func (_c *Tree_ReadBlob_Call) Run(run func(spaceID string, blobId string, blobSize int64)) *Tree_ReadBlob_Call {
+func (_c *Tree_ReadBlob_Call) Run(run func(_a0 *node.Node)) *Tree_ReadBlob_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].(int64))
+		run(args[0].(*node.Node))
 	})
 	return _c
 }
@@ -524,7 +521,7 @@ func (_c *Tree_ReadBlob_Call) Return(_a0 io.ReadCloser, _a1 error) *Tree_ReadBlo
 	return _c
 }
 
-func (_c *Tree_ReadBlob_Call) RunAndReturn(run func(string, string, int64) (io.ReadCloser, error)) *Tree_ReadBlob_Call {
+func (_c *Tree_ReadBlob_Call) RunAndReturn(run func(*node.Node) (io.ReadCloser, error)) *Tree_ReadBlob_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -703,17 +700,17 @@ func (_c *Tree_TouchFile_Call) RunAndReturn(run func(context.Context, *node.Node
 	return _c
 }
 
-// WriteBlob provides a mock function with given fields: spaceID, blobId, blobSize, source
-func (_m *Tree) WriteBlob(spaceID string, blobId string, blobSize int64, source string) error {
-	ret := _m.Called(spaceID, blobId, blobSize, source)
+// WriteBlob provides a mock function with given fields: _a0, source
+func (_m *Tree) WriteBlob(_a0 *node.Node, source string) error {
+	ret := _m.Called(_a0, source)
 
 	if len(ret) == 0 {
 		panic("no return value specified for WriteBlob")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(string, string, int64, string) error); ok {
-		r0 = rf(spaceID, blobId, blobSize, source)
+	if rf, ok := ret.Get(0).(func(*node.Node, string) error); ok {
+		r0 = rf(_a0, source)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -727,17 +724,15 @@ type Tree_WriteBlob_Call struct {
 }
 
 // WriteBlob is a helper method to define mock.On call
-//   - spaceID string
-//   - blobId string
-//   - blobSize int64
+//   - _a0 *node.Node
 //   - source string
-func (_e *Tree_Expecter) WriteBlob(spaceID interface{}, blobId interface{}, blobSize interface{}, source interface{}) *Tree_WriteBlob_Call {
-	return &Tree_WriteBlob_Call{Call: _e.mock.On("WriteBlob", spaceID, blobId, blobSize, source)}
+func (_e *Tree_Expecter) WriteBlob(_a0 interface{}, source interface{}) *Tree_WriteBlob_Call {
+	return &Tree_WriteBlob_Call{Call: _e.mock.On("WriteBlob", _a0, source)}
 }
 
-func (_c *Tree_WriteBlob_Call) Run(run func(spaceID string, blobId string, blobSize int64, source string)) *Tree_WriteBlob_Call {
+func (_c *Tree_WriteBlob_Call) Run(run func(_a0 *node.Node, source string)) *Tree_WriteBlob_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].(int64), args[3].(string))
+		run(args[0].(*node.Node), args[1].(string))
 	})
 	return _c
 }
@@ -747,7 +742,7 @@ func (_c *Tree_WriteBlob_Call) Return(_a0 error) *Tree_WriteBlob_Call {
 	return _c
 }
 
-func (_c *Tree_WriteBlob_Call) RunAndReturn(run func(string, string, int64, string) error) *Tree_WriteBlob_Call {
+func (_c *Tree_WriteBlob_Call) RunAndReturn(run func(*node.Node, string) error) *Tree_WriteBlob_Call {
 	_c.Call.Return(run)
 	return _c
 }

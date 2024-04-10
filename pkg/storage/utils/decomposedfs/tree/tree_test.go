@@ -128,7 +128,7 @@ var _ = Describe("Tree", func() {
 				})
 
 				It("does not delete the blob from the blobstore", func() {
-					env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.AnythingOfType("string"), mock.AnythingOfType("string"))
+					env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.AnythingOfType("*node.Node"))
 				})
 			})
 		})
@@ -139,7 +139,7 @@ var _ = Describe("Tree", func() {
 			)
 
 			JustBeforeEach(func() {
-				env.Blobstore.On("Delete", mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return(nil)
+				env.Blobstore.On("Delete", mock.AnythingOfType("*node.Node")).Return(nil)
 				trashPath = path.Join(env.Root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
 				Expect(t.Delete(env.Ctx, n)).To(Succeed())
 			})
@@ -160,7 +160,7 @@ var _ = Describe("Tree", func() {
 				})
 
 				It("deletes the blob from the blobstore", func() {
-					env.Blobstore.AssertCalled(GinkgoT(), "Delete", mock.AnythingOfType("string"), mock.AnythingOfType("string"))
+					env.Blobstore.AssertCalled(GinkgoT(), "Delete", mock.AnythingOfType("*node.Node"))
 				})
 			})
 
@@ -264,7 +264,7 @@ var _ = Describe("Tree", func() {
 				trashPath = path.Join(env.Root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
 				Expect(t.Delete(env.Ctx, n)).To(Succeed())
 
-				env.Blobstore.On("Delete", mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return(nil)
+				env.Blobstore.On("Delete", mock.Anything).Return(nil)
 			})
 
 			Describe("PurgeRecycleItemFunc", func() {

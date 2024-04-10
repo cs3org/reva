@@ -67,9 +67,9 @@ type Tree interface {
 	RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPath string, target *node.Node) (*node.Node, *node.Node, func() error, error)
 	PurgeRecycleItemFunc(ctx context.Context, spaceid, key, purgePath string) (*node.Node, func() error, error)
 
-	WriteBlob(spaceID, blobID string, blobSize int64, binPath string) error
-	ReadBlob(spaceID, blobID string, blobSize int64) (io.ReadCloser, error)
-	DeleteBlob(spaceID, blobID string) error
+	WriteBlob(node *node.Node, binPath string) error
+	ReadBlob(node *node.Node) (io.ReadCloser, error)
+	DeleteBlob(node *node.Node) error
 
 	Propagate(ctx context.Context, node *node.Node, sizeDiff int64) (err error)
 }
@@ -277,9 +277,11 @@ func (session *OcisSession) Finalize() (err error) {
 	ctx, span := tracer.Start(session.Context(context.Background()), "Finalize")
 	defer span.End()
 
+	revisionNode := &node.Node{SpaceID: session.SpaceID(), BlobID: session.ID(), Blobsize: session.Size()}
+
 	// upload the data to the blobstore
 	_, subspan := tracer.Start(ctx, "WriteBlob")
-	err = session.store.tp.WriteBlob(session.SpaceID(), session.ID(), session.Size(), session.binPath())
+	err = session.store.tp.WriteBlob(revisionNode, session.binPath())
 	subspan.End()
 	if err != nil {
 		return errors.Wrap(err, "failed to upload file to blobstore")
@@ -342,7 +344,7 @@ func (session *OcisSession) Cleanup(revertNodeMetadata, cleanBin, cleanInfo bool
 				// actually delete the node
 				session.removeNode(ctx)
 			}
-			// FIXME else if the upload has become a revision, delete the revision
+			// FIXME else if the upload has become a revision, delete the revision, or if it is the last one, delete the node
 		}
 	}
 
