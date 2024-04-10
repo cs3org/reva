@@ -19,6 +19,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/aspects"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/permissions"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/permissions/mocks"
@@ -61,7 +62,8 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			Username: "username",
 		}
 
-		fileContent = []byte("0123456789")
+		fileContent  = []byte("0123456789")
+		file2Content = []byte("01234567890123456789")
 
 		ctx = ruser.ContextSetUser(context.Background(), user)
 
@@ -84,8 +86,10 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		o, err = options.New(map[string]interface{}{
-			"root":             tmpRoot,
-			"asyncfileuploads": true,
+			"root":                tmpRoot,
+			"asyncfileuploads":    true,
+			"treetime_accounting": true,
+			"treesize_accounting": true,
 		})
 		Expect(err).ToNot(HaveOccurred())
 
@@ -141,10 +145,10 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
 			Return(nil).
 			Run(func(args mock.Arguments) {
+				n := args.Get(0).(*node.Node)
 				data, err := os.ReadFile(args.Get(1).(string))
-
 				Expect(err).ToNot(HaveOccurred())
-				Expect(data).To(Equal(fileContent))
+				Expect(len(data)).To(Equal(int(n.Blobsize)))
 			})
 
 		// start upload of a file
@@ -412,7 +416,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 		JustBeforeEach(func() {
 			// upload again
-			uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+			uploadIds, err := fs.InitiateUpload(ctx, ref, 20, map[string]string{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(uploadIds)).To(Equal(2))
 			Expect(uploadIds["simple"]).ToNot(BeEmpty())
@@ -422,8 +426,8 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 			_, err = fs.Upload(ctx, storage.UploadRequest{
 				Ref:    uploadRef,
-				Body:   io.NopCloser(bytes.NewReader(fileContent)),
-				Length: int64(len(fileContent)),
+				Body:   io.NopCloser(bytes.NewReader(file2Content)),
+				Length: int64(len(file2Content)),
 			}, nil)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -456,7 +460,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		})
 
 		It("removes processing status when second upload is finished, even if first isn't", func() {
-			// finish postprocessing
+			// finish postprocessing of second upload
 			con <- events.PostprocessingFinished{
 				UploadID: secondUploadID,
 				Outcome:  events.PPOutcomeContinue,
@@ -474,6 +478,59 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			item := resources[0]
 			Expect(item.Path).To(Equal(ref.Path))
 			Expect(utils.ReadPlainFromOpaque(item.Opaque, "status")).To(Equal(""))
+		})
+
+		It("correctly calculates the size when the second upload is finishes, even if first is deleted", func() {
+			// finish postprocessing of second upload
+			con <- events.PostprocessingFinished{
+				UploadID: secondUploadID,
+				Outcome:  events.PPOutcomeContinue,
+			}
+			// wait for upload to be ready
+			ev, ok := (<-pub).(events.UploadReady)
+			Expect(ok).To(BeTrue())
+			Expect(ev.Failed).To(BeFalse())
+
+			// check processing status
+			resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(resources)).To(Equal(1))
+
+			item := resources[0]
+			Expect(item.Path).To(Equal(ref.Path))
+			Expect(utils.ReadPlainFromOpaque(item.Opaque, "status")).To(Equal(""))
+
+			// size should match the second upload
+			Expect(item.Size).To(Equal(uint64(len(file2Content))))
+
+			// parent size should match second upload as well
+			parentInfo, err := fs.GetMD(ctx, rootRef, []string{}, []string{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(parentInfo.Size).To(Equal(uint64(len(file2Content))))
+
+			// finish postprocessing of first upload
+			con <- events.PostprocessingFinished{
+				UploadID: uploadID,
+				Outcome:  events.PPOutcomeDelete,
+				// Outcome: events.PPOutcomeAbort, // This as well ... fck
+			}
+			// wait for upload to be ready
+			ev, ok = (<-pub).(events.UploadReady)
+			Expect(ok).To(BeTrue())
+			Expect(ev.Failed).To(BeTrue())
+
+			// check processing status
+			resources, err = fs.ListFolder(ctx, rootRef, []string{}, []string{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(resources)).To(Equal(1))
+
+			// size should still match the second upload
+			Expect(item.Size).To(Equal(uint64(len(file2Content))))
+
+			// parent size should still match second upload as well
+			parentInfo, err = fs.GetMD(ctx, rootRef, []string{}, []string{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(parentInfo.Size).To(Equal(uint64(len(file2Content))))
 		})
 	})
 })
