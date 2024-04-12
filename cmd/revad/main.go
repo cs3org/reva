@@ -42,7 +42,6 @@ import (
 	"github.com/cs3org/reva/cmd/revad/runtime"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/plugin"
-	"github.com/cs3org/reva/pkg/sysinfo"
 	"github.com/cs3org/reva/pkg/utils/maps"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -70,12 +69,6 @@ func Main() {
 	flag.Parse()
 
 	initPlugins()
-
-	// initialize the global system information
-	if err := sysinfo.InitSystemInfo(&sysinfo.RevaVersion{Version: version, BuildDate: buildDate, GitCommit: gitCommit, GoVersion: goVersion}); err != nil {
-		fmt.Fprintf(os.Stderr, "error initializing system info: %s\n", err.Error())
-		// This is not really a fatal error, so don't panic
-	}
 
 	handleVersionFlag()
 	handleSignalFlag()
