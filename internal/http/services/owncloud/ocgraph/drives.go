@@ -188,7 +188,7 @@ func convertShareToSpace(ctx context.Context, gw gateway.GatewayAPIClient, share
 		Root: &libregraph.DriveItem{
 			Id: libregraph.PtrString(fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, share.Id.OpaqueId)),
 			RemoteItem: &libregraph.RemoteItem{
-				DriveAlias: libregraph.PtrString(strings.TrimSuffix(strings.TrimPrefix(stat.Info.Path, "/"), relativePathToSpaceId(stat.Info))), // the drive alias must not start with /
+				DriveAlias: libregraph.PtrString(strings.TrimSuffix(strings.TrimPrefix(stat.Info.Path, "/"), relativePathToSpaceID(stat.Info))), // the drive alias must not start with /
 				ETag:       libregraph.PtrString(stat.Info.Etag),
 				Folder:     &libregraph.Folder{},
 				// The Id must correspond to the id in the OCS response, for the time being
@@ -196,7 +196,7 @@ func convertShareToSpace(ctx context.Context, gw gateway.GatewayAPIClient, share
 				Id:                   libregraph.PtrString(spaces.EncodeResourceID(stat.Info.Id)),
 				LastModifiedDateTime: libregraph.PtrTime(time.Unix(int64(stat.Info.Mtime.Seconds), int64(stat.Info.Mtime.Nanos))),
 				Name:                 libregraph.PtrString(filepath.Base(stat.Info.Path)),
-				Path:                 libregraph.PtrString(relativePathToSpaceId(stat.Info)),
+				Path:                 libregraph.PtrString(relativePathToSpaceID(stat.Info)),
 				// RootId must have the same token before ! as Id
 				// the second part for the time being is not used
 				RootId: libregraph.PtrString(fmt.Sprintf("%s!unused_root_id", spaces.EncodeSpaceID(stat.Info.Id.StorageId, stat.Info.Id.SpaceId))),
@@ -207,7 +207,7 @@ func convertShareToSpace(ctx context.Context, gw gateway.GatewayAPIClient, share
 	return space, nil
 }
 
-func relativePathToSpaceId(info *providerpb.ResourceInfo) string {
+func relativePathToSpaceID(info *providerpb.ResourceInfo) string {
 	return strings.TrimPrefix(info.Path, info.Id.SpaceId)
 }
 

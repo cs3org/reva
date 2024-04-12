@@ -1145,7 +1145,7 @@ func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix stri
 	return collaborationFilters, linkFilters, nil
 }
 
-func relativePathToSpaceId(info *provider.ResourceInfo) string {
+func relativePathToSpaceID(info *provider.ResourceInfo) string {
 	return strings.TrimPrefix(info.Path, info.Id.SpaceId)
 }
 
@@ -1167,8 +1167,8 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		s.FileSource = s.ItemSource
 		switch {
 		case h.sharePrefix == "/":
-			s.FileTarget = relativePathToSpaceId(info)
-			s.Path = relativePathToSpaceId(info)
+			s.FileTarget = relativePathToSpaceID(info)
+			s.Path = relativePathToSpaceID(info)
 		case s.ShareType == conversions.ShareTypePublicLink:
 			s.FileTarget = path.Join("/", path.Base(info.Path))
 			s.Path = path.Join("/", path.Base(info.Path))
