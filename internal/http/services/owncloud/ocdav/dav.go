@@ -185,38 +185,36 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			}
 
 			// OC10 and Nextcloud (OCM 1.0) are using basic auth for carrying the
-			// shared token.
-			var token string
+			// ocm share id.
+			var ocmshare string
 			username, _, ok := r.BasicAuth()
 			if ok {
 				// OCM 1.0
-				token = username
-				r.URL.Path = filepath.Join("/", token, r.URL.Path)
-				ctx = context.WithValue(ctx, net.CtxOCM10, true)
+				ocmshare = username
+				r.URL.Path = filepath.Join("/", ocmshare, r.URL.Path)
 			} else {
-				token, _ = router.ShiftPath(r.URL.Path)
-				ctx = context.WithValue(ctx, net.CtxOCM10, false)
+				ocmshare, _ = router.ShiftPath(r.URL.Path)
 			}
 
-			authRes, err := handleOCMAuth(ctx, c, token)
+			authRes, err := handleOCMAuth(ctx, c, ocmshare)
 			switch {
 			case err != nil:
 				log.Error().Err(err).Msg("error during ocm authentication")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			case authRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
-				log.Debug().Str("token", token).Msg("permission denied")
+				log.Debug().Str("ocmshare", ocmshare).Msg("permission denied")
 				fallthrough
 			case authRes.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
-				log.Debug().Str("token", token).Msg("unauthorized")
+				log.Debug().Str("ocmshare", ocmshare).Msg("unauthorized")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			case authRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
-				log.Debug().Str("token", token).Msg("not found")
+				log.Debug().Str("ocmshare", ocmshare).Msg("not found")
 				w.WriteHeader(http.StatusNotFound)
 				return
 			case authRes.Status.Code != rpc.Code_CODE_OK:
-				log.Error().Str("token", token).Interface("status", authRes.Status).Msg("grpc auth request failed")
+				log.Error().Str("ocmshare", ocmshare).Interface("status", authRes.Status).Msg("grpc auth request failed")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -225,7 +223,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			ctx = ctxpkg.ContextSetUser(ctx, authRes.User)
 			ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, authRes.Token)
 
-			log.Debug().Str("token", token).Interface("user", authRes.User).Msg("OCM user authenticated")
+			log.Debug().Str("ocmshare", ocmshare).Interface("user", authRes.User).Msg("OCM user authenticated")
 
 			r = r.WithContext(ctx)
 			h.OCMSharesHandler.Handler(s).ServeHTTP(w, r)
