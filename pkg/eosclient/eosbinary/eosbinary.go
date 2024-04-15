@@ -271,7 +271,7 @@ func (c *Client) executeEOS(ctx context.Context, cmdArgs []string, auth eosclien
 				}
 				err = errtypes.PermissionDenied("eosclient: " + errString)
 			default:
-				err = errtypes.InternalError(fmt.Sprintf("eosclient: error while executing command: %s", errBuf.String()))
+				err = errors.Wrap(err, fmt.Sprintf("eosclient: error while executing command: %s", errBuf.String()))
 			}
 		}
 	}
