@@ -149,7 +149,7 @@ func NewDefault(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error
 	if err != nil {
 		return nil, err
 	}
-	return New(gatewaySelector, sm, c, p), nil
+	return New(gatewaySelector, sm, c, p)
 }
 
 // New creates a new user share provider svc
