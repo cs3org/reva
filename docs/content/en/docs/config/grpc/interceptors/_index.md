@@ -11,4 +11,5 @@ To configure an GRPC interceptor you need to follow this convention in the confi
 {{< highlight toml >}}
 [grpc.interceptors.interceptor_name]
 ... config ...
+{{</ highlight  >}}
 
