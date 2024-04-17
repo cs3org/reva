@@ -58,6 +58,7 @@ func checkLightweightPath(path string) bool {
 		"/ocs/v1.php/cloud/user",
 		"/remote.php/webdav",
 		"/remote.php/dav/files",
+		"/remote.php/dav/spaces",
 		"/thumbnails",
 		"/app/open",
 		"/app/new",
@@ -66,7 +67,7 @@ func checkLightweightPath(path string) bool {
 		"/data",
 		"/app/open",
 		"/projects",
-		"/graph/v1.0/me",
+		"/graph",
 	}
 	for _, p := range paths {
 		if strings.HasPrefix(path, p) {
