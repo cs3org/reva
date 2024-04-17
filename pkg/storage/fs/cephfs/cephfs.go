@@ -45,17 +45,12 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
+	"go-micro.dev/v4/util/log"
 )
 
 const (
-	xattrTrustedNs = "trusted."
-	xattrEID       = xattrTrustedNs + "eid"
-	xattrMd5       = xattrTrustedNs + "checksum"
-	xattrMd5ts     = xattrTrustedNs + "checksumTS"
-	xattrRef       = xattrTrustedNs + "ref"
-	xattrUserNs    = "user."
-	snap           = ".snap"
-	xattrLock      = xattrUserNs + "reva.lockpayload"
+	xattrUserNs = "user."
+	xattrLock   = xattrUserNs + "reva.lockpayload"
 )
 
 type cephfs struct {
@@ -84,7 +79,7 @@ func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err erro
 
 	adminConn, err := newAdminConn(&o)
 	if err != nil {
-		return nil, errors.Wrap(err, "cephfs: Couldn't create admin connections")
+		return nil, errors.Wrap(err, "cephfs: couldn't create admin connections")
 	}
 
 	return &cephfs{
@@ -96,28 +91,36 @@ func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err erro
 
 func (fs *cephfs) GetHome(ctx context.Context) (string, error) {
 	if fs.conf.DisableHome {
-		return "", errtypes.NotSupported("cephfs: GetHome() home supported disabled")
+		return "", errtypes.NotSupported("cephfs: GetHome disabled by config")
 	}
 
+	log := appctx.GetLogger(ctx)
 	user := fs.makeUser(ctx)
 
+	log.Debug().Interface("user", user).Msg("GetHome for user")
 	return user.home, nil
 }
 
 func (fs *cephfs) CreateHome(ctx context.Context) (err error) {
-	//if fs.conf.DisableHome {
-	//	return errtypes.NotSupported("cephfs: GetHome() home supported disabled")
-	//}
+	if fs.conf.DisableHome {
+		return errtypes.NotSupported("cephfs: CreateHome disabled by config")
+	}
+
+	log := appctx.GetLogger(ctx)
 
 	user := fs.makeUser(ctx)
-	fmt.Println("debugging user hugo", user)
+	log.Debug().Interface("user", user).Msg("CreateHome for user")
 
-	// Stop createhome from running the whole thing because it is called multiple times
+	// Skip home creation if the directory already exists.
+	// We do not check for all necessary attributes, only for the existence of the directory.
 	stat, err := fs.adminConn.adminMount.Statx(user.home, goceph.StatxMode, 0)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "error stating user home when trying to create it")
 	}
-	fmt.Println("debugging stat", stat)
+
+	log.Debug().Interface("stat", stat).Msgf("home is %s")
+
+	// TODO: create home only on: no such file or directory error
 	return nil
 
 	/*
@@ -219,6 +222,10 @@ func (fs *cephfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) 
 }
 
 func (fs *cephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (ri *provider.ResourceInfo, err error) {
+	if ref == nil {
+		return nil, errors.New("error: ref is nil")
+	}
+
 	var path string
 	user := fs.makeUser(ctx)
 
@@ -239,8 +246,10 @@ func (fs *cephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 
 func (fs *cephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (files []*provider.ResourceInfo, err error) {
 	if ref == nil {
-		ref = &provider.Reference{Path: "/"}
+		return nil, errors.New("error: ref is nil")
 	}
+
+	log.Debug().Interface("ref", ref)
 	fmt.Println("debugging: listing folder", ref)
 	user := fs.makeUser(ctx)
 	fmt.Println("debugging:  user", user)
@@ -318,104 +327,20 @@ func (fs *cephfs) Download(ctx context.Context, ref *provider.Reference) (rc io.
 }
 
 func (fs *cephfs) ListRevisions(ctx context.Context, ref *provider.Reference) (fvs []*provider.FileVersion, err error) {
-	//TODO(tmourati): Fix entry id logic
-	var path string
-	user := fs.makeUser(ctx)
-	if path, err = user.resolveRef(ref); err != nil {
-		return nil, errors.Wrap(err, "cephfs: error resolving ref")
-	}
-
-	user.op(func(cv *cacheVal) {
-		if strings.HasPrefix(path, removeLeadingSlash(fs.conf.ShareFolder)) {
-			err = errtypes.PermissionDenied("cephfs: cannot download under the virtual share folder")
-			return
-		}
-		var dir *goceph.Directory
-		if dir, err = cv.mount.OpenDir(".snap"); err != nil {
-			return
-		}
-		defer closeDir(dir)
-
-		for d, _ := dir.ReadDir(); d != nil; d, _ = dir.ReadDir() {
-			var revPath string
-			var stat Statx
-			var e error
-
-			if strings.HasPrefix(d.Name(), ".") {
-				continue
-			}
-
-			revPath, e = resolveRevRef(cv.mount, ref, d.Name())
-			if e != nil {
-				continue
-			}
-			stat, e = cv.mount.Statx(revPath, goceph.StatxMtime|goceph.StatxSize, 0)
-			if e != nil {
-				continue
-			}
-			fvs = append(fvs, &provider.FileVersion{
-				Key:   d.Name(),
-				Size:  stat.Size,
-				Mtime: uint64(stat.Mtime.Sec),
-			})
-		}
-	})
-
-	return fvs, getRevaError(err)
+	return nil, errtypes.NotSupported("cephfs:  RestoreRevision not supported")
 }
 
 func (fs *cephfs) DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (file io.ReadCloser, err error) {
-	//TODO(tmourati): Fix entry id logic
-	user := fs.makeUser(ctx)
-
-	user.op(func(cv *cacheVal) {
-		var revPath string
-		revPath, err = resolveRevRef(cv.mount, ref, key)
-		if err != nil {
-			return
-		}
-
-		file, err = cv.mount.Open(revPath, os.O_RDONLY, 0)
-	})
-
-	return file, getRevaError(err)
+	return nil, errtypes.NotSupported("cephfs:  RestoreRevision not supported")
 }
 
 func (fs *cephfs) RestoreRevision(ctx context.Context, ref *provider.Reference, key string) (err error) {
-	//TODO(tmourati): Fix entry id logic
-	var path string
-	user := fs.makeUser(ctx)
-	if path, err = user.resolveRef(ref); err != nil {
-		return errors.Wrap(err, "cephfs: error resolving ref")
-	}
-
-	user.op(func(cv *cacheVal) {
-		var revPath string
-		if revPath, err = resolveRevRef(cv.mount, ref, key); err != nil {
-			err = errors.Wrap(err, "cephfs: error resolving revision ref "+ref.String())
-			return
-		}
-
-		var src, dst *goceph.File
-		if src, err = cv.mount.Open(revPath, os.O_RDONLY, 0); err != nil {
-			return
-		}
-		defer closeFile(src)
-
-		if dst, err = cv.mount.Open(path, os.O_WRONLY|os.O_TRUNC, 0); err != nil {
-			return
-		}
-		defer closeFile(dst)
-
-		_, err = io.Copy(dst, src)
-	})
-
-	return getRevaError(err)
+	return errtypes.NotSupported("cephfs:  RestoreRevision not supported")
 }
 
 func (fs *cephfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (str string, err error) {
 	//TODO(tmourati): Add entry id logic
-	return "", errtypes.NotSupported("cephfs: entry IDs currently not supported")
+	return "", errtypes.NotSupported("cephfs: ids currently not supported")
 }
 
 func (fs *cephfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
@@ -517,24 +442,7 @@ func (fs *cephfs) GetQuota(ctx context.Context, ref *provider.Reference) (total 
 }
 
 func (fs *cephfs) CreateReference(ctx context.Context, path string, targetURI *url.URL) (err error) {
-	user := fs.makeUser(ctx)
-
-	user.op(func(cv *cacheVal) {
-		if !strings.HasPrefix(strings.TrimPrefix(path, user.home), fs.conf.ShareFolder) {
-			err = errors.New("cephfs: can't create reference outside a share folder")
-		} else {
-			err = cv.mount.MakeDir(path, fs.conf.DirPerms)
-		}
-	})
-	if err != nil {
-		return getRevaError(err)
-	}
-
-	user.op(func(cv *cacheVal) {
-		err = cv.mount.SetXattr(path, xattrRef, []byte(targetURI.String()), 0)
-	})
-
-	return getRevaError(err)
+	return errors.New("error: CreateReference not implemented")
 }
 
 func (fs *cephfs) Shutdown(ctx context.Context) (err error) {
