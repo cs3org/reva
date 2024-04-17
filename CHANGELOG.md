@@ -1,3 +1,36 @@
+Changelog for reva 2.19.5 (2024-04-17)
+=======================================
+
+The following sections list the changes in reva 2.19.5 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #4626: Fix public share update
+*   Fix #4634: Fix access to files withing a public link targeting a space root
+
+Details
+-------
+
+*   Bugfix #4626: Fix public share update
+
+   We fixed the permission check for updating public shares. When updating the permissions of a
+   public share while not providing a password, the check must be against the new permissions to
+   take into account that users can opt out only for view permissions.
+
+   https://github.com/cs3org/reva/pull/4626
+   https://github.com/cs3org/reva/pull/4622
+
+*   Bugfix #4634: Fix access to files withing a public link targeting a space root
+
+   We fixed an issue that prevented users from opening documents within a public share that
+   targets a space root.
+
+   https://github.com/owncloud/ocis/issues/8691
+   https://github.com/cs3org/reva/pull/4634/
+   https://github.com/cs3org/reva/pull/4632/
+
 Changelog for reva 2.19.4 (2024-04-05)
 =======================================
 
@@ -4375,6 +4408,27 @@ Details
 
    https://github.com/cs3org/reva/pull/2922
 
+Changelog for reva 2.4.1 (2022-05-24)
+=======================================
+
+The following sections list the changes in reva 2.4.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #2891: Add missing http status code
+
+Details
+-------
+
+*   Bugfix #2891: Add missing http status code
+
+   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
+   pass it through.
+
+   https://github.com/cs3org/reva/pull/2891
+
 Changelog for reva 2.4.0 (2022-05-24)
 =======================================
 
@@ -4517,27 +4571,6 @@ Details
    correct storageprovider
 
    https://github.com/cs3org/reva/pull/2792
-
-Changelog for reva 2.4.1 (2022-05-24)
-=======================================
-
-The following sections list the changes in reva 2.4.1 relevant to
-reva users. The changes are ordered by importance.
-
-Summary
--------
-
-*   Fix #2891: Add missing http status code
-
-Details
--------
-
-*   Bugfix #2891: Add missing http status code
-
-   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
-   pass it through.
-
-   https://github.com/cs3org/reva/pull/2891
 
 Changelog for reva 2.3.1 (2022-05-08)
 =======================================
