@@ -49,8 +49,6 @@ RUN mkdir -p /go/bin && \
   make revad-ceph && \
   cp /go/src/github/cs3org/reva/cmd/revad/revad /usr/bin/revad
 
-RUN cp -r examples/ceph /etc/
-
 RUN mkdir -p /etc/revad/ && touch /etc/revad/revad.toml
 
 EXPOSE 9999 10000
