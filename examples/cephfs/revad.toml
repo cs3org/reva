@@ -1,0 +1,143 @@
+[log]
+output = "/var/log/revad/revad.log"
+mode = "json"
+level = "debug"
+
+[shared]
+gatewaysvc = "localhost:9142"
+jwt_secret = "$JWTSECRET"
+skip_user_groups_in_token = true
+
+[grpc]
+address = "localhost:9142"
+
+[grpc.services.gateway]
+commit_share_to_storage_grant = true
+disable_home_creation_on_login = false
+transfer_expires = 86400 # seconds
+etag_cache_ttl = 0
+#create_home_cache_ttl = 86400 # seconds
+transfer_shared_secret = "$TRANSFERSECRET"
+authregistrysvc = "localhost:9142"
+storageregistrysvc = "localhost:9142"
+userprovidersvc = "localhost:9142"
+datagateway = "https://$HOSTNAME/datagateway"
+
+[grpc.services.storageprovider]
+driver = "cephfs"
+mount_path = "/"
+mount_id = "cephfs"
+data_server_url = "http://localhost:9143/data"
+
+[grpc.services.storageprovider.drivers.cephfs]
+root = "/"
+config = "/etc/ceph/ceph.conf"
+keyring = "/etc/ceph/ceph.client.cernbox.keyring"
+client_id = "cernbox"
+disable_home = false
+enable_recycle = false
+dir_perms = 0o777
+file_perms = 0o666
+user_layout = "/users/{{.Username}}"
+
+[grpc.services.gateway.token_managers.jwt]
+expires = 1500
+
+[grpc.services.authregistry]
+driver = "static"
+
+[grpc.services.authregistry.drivers.static.rules]
+basic = "localhost:9142"
+bearer = "localhost:9158"
+
+[grpc.services.storageregistry]	
+driver = "static"
+
+[grpc.services.storageregistry.drivers.static]
+#home_provider = "/"
+
+[grpc.services.storageregistry.drivers.static.rules]
+"/" = {"address" = "localhost:9142"}
+
+[grpc.services.userprovider]
+driver = "json"
+
+[grpc.services.userprovider.drivers.json]
+users = "/etc/revad/test_users.json"
+
+[grpc.services.authprovider]
+auth_manager = "json"
+
+[grpc.services.authprovider.auth_managers.json]
+users = "/etc/revad/test_users.json"
+
+[http]
+address = "0.0.0.0:9143"
+
+[http.middlewares.auth]
+credential_chain = ["basic", "bearer"]
+token_strategy_chain = ["bearer", "header"]
+
+[http.middlewares.auth.credentials_by_user_agent]
+"mirall" = "basic"
+
+[http.middlewares.cors]
+allowed_origins = ["*"]
+allowed_methods = ["OPTIONS", "LOCK", "GET", "HEAD", "POST", "DELETE", "PROPPATCH", "COPY", "MOVE", "UNLOCK", "PROPFIND", "MKCOL", "REPORT", "SEARCH", "PUT"]
+allowed_headers = ["Accept", "Accept-Language", "Authorization", "Content-Language", "Content-Type", "Depth", "OCS-APIREQUEST", "Referer", "sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform", "User-Agent", "X-Requested-With"]
+debug = true
+exposed_headers = []
+
+[http.services.datagateway]
+transfer_shared_secret = "$TRANSFERSECRET"
+timeout = 86400
+insecure = true
+prefix = "datagateway"
+
+
+[http.services.ocdav]
+files_namespace = "/"
+webdav_namespace = "/"
+timeout = 86400
+insecure = true
+enable_http_tpc = false
+
+[http.services.ocs.config]
+version = "1.8"
+website = "reva"
+host = "https://$HOSTNAME:443"
+ssl = "false"
+
+[http.services.ocs.capabilities.capabilities.core]
+poll_interval = 60
+webdav_root = "remote.php/webdav/"
+status = { installed = true, maintenance = false, nwwsaDbUpgrade = false, version = "10.0.11.5", versionstring = "10.0.11", edition = "community", productname = "reva", hostname = "" }
+support_url_signing = false
+
+[http.services.ocs.capabilities.capabilities.checksums]
+supported_types = ["sha1", "md5", "adler32"]
+
+[http.services.ocs.capabilities.capabilities.dav]
+chunkingParallelUploadDisabled = false
+
+[http.services.ocs.capabilities.capabilities.files]
+private_links = false
+bigfilechunking = true
+blacklisted_files = [  ]
+undelete = true
+versioning = true
+
+[http.services.dataprovider]
+driver = "cephfs"
+
+[http.services.dataprovider.drivers.cephfs]
+root = "/"
+config = "/etc/ceph/ceph.conf"
+keyring = "/etc/ceph/ceph.client.cernbox.keyring"
+client_id = "cernbox"
+disable_home = false
+enable_recycle = false
+dir_perms = 0o777
+file_perms = 0o666
+user_layout = "/users/{{.Username}}"
+
