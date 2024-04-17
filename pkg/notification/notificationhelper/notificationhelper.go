@@ -47,7 +47,7 @@ type Config struct {
 	NatsAddress string                 `docs:";The NATS server address."                          mapstructure:"nats_address"`
 	NatsToken   string                 `docs:";The token to authenticate against the NATS server" mapstructure:"nats_token"`
 	NatsStream  string                 `docs:"reva-notifications;The notifications NATS stream."  mapstructure:"nats_stream"`
-	Templates   map[string]interface{} `docs:"nil;Notification templates for the service."           mapstructure:"templates"`
+	Templates   map[string]interface{} `docs:"nil;Notification templates for the service."        mapstructure:"templates"`
 }
 
 func defaultConfig() *Config {

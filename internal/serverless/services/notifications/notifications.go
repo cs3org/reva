@@ -45,9 +45,9 @@ import (
 
 type config struct {
 	NatsAddress      string                            `docs:";The NATS server address."                                  mapstructure:"nats_address"`
-	NatsToken        string                            `docs:";The token to authenticate against the NATS server"          mapstructure:"nats_token"`
+	NatsToken        string                            `docs:";The token to authenticate against the NATS server"         mapstructure:"nats_token"`
 	NatsPrefix       string                            `docs:"reva-notifications;The notifications NATS stream."          mapstructure:"nats_prefix"`
-	HandlerConf      map[string]map[string]interface{} `docs:"nil;Settings for the different notification handlers."         mapstructure:"handlers"`
+	HandlerConf      map[string]map[string]interface{} `docs:"nil;Settings for the different notification handlers."      mapstructure:"handlers"`
 	GroupingInterval int                               `docs:"60;Time in seconds to group incoming notification triggers" mapstructure:"grouping_interval"`
 	GroupingMaxSize  int                               `docs:"100;Maximum number of notifications to group"               mapstructure:"grouping_max_size"`
 	StorageDriver    string                            `docs:"mysql;The driver used to store notifications"               mapstructure:"storage_driver"`
