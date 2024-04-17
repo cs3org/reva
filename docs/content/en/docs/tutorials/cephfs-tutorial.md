@@ -8,6 +8,8 @@ description: >
 
 This is a guide on how to set up Reva in your local environment and connect it to an existing CephFS cluster.
 
+For questions on this tutorial plase refer to https://github.com/cs3org/reva/discussions/4610
+
 ### 1. CephFS setup
 You need to have an existing CephFS installation in the machine where you will deploy Reva.
 Even though is not needed for Reva to have CephFS mounted on the machine where Reva will run, we highly recommend it 
@@ -128,3 +130,6 @@ OK
 
 $ reva whoami
 ```
+
+
+
