@@ -22,13 +22,7 @@
 package cephfs
 
 import (
-	"crypto/md5"
-	"encoding/hex"
-	"fmt"
-	"io"
-	"os"
 	"path/filepath"
-	"strconv"
 
 	goceph "github.com/ceph/go-ceph/cephfs"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -72,75 +66,6 @@ func deleteFile(mount *goceph.MountInfo, path string) {
 
 func isDir(t provider.ResourceType) bool {
 	return t == provider.ResourceType_RESOURCE_TYPE_CONTAINER
-}
-
-// TODO: Use when fileids are available
-/*
-func (fs *cephfs) makeFIDPath(fid string) string {
-	return "" // filepath.Join(fs.conf.EIDFolder, fid) EIDFolder does not exist
-}
-
-func (fs *cephfs) makeFID(absolutePath string, inode string) (rid *provider.ResourceId, err error) {
-	sum := md5.New()
-	sum.Write([]byte(absolutePath))
-	fid := fmt.Sprintf("%s-%s", hex.EncodeToString(sum.Sum(nil)), inode)
-	rid = &provider.ResourceId{OpaqueId: fid}
-
-	_ = fs.adminConn.adminMount.Link(absolutePath, fs.makeFIDPath(fid))
-	_ = fs.adminConn.adminMount.SetXattr(absolutePath, xattrEID, []byte(fid), 0)
-
-	return
-}
-
-func (fs *cephfs) getFIDPath(cv *cacheVal, path string) (fid string, err error) {
-	var buffer []byte
-	if buffer, err = cv.mount.GetXattr(path, xattrEID); err != nil {
-		return
-	}
-
-	return fs.makeFIDPath(string(buffer)), err
-}
-*/
-
-func calcChecksum(filepath string, mt Mount, stat Statx) (checksum string, err error) {
-	file, err := mt.Open(filepath, os.O_RDONLY, 0)
-	defer closeFile(file)
-	if err != nil {
-		return
-	}
-	hash := md5.New()
-	if _, err = io.Copy(hash, file); err != nil {
-		return
-	}
-	checksum = hex.EncodeToString(hash.Sum(nil))
-	// we don't care if they fail, the checksum will just be recalculated if an error happens
-	_ = mt.SetXattr(filepath, xattrMd5ts, []byte(strconv.FormatInt(stat.Mtime.Sec, 10)), 0)
-	_ = mt.SetXattr(filepath, xattrMd5, []byte(checksum), 0)
-
-	return
-}
-
-func resolveRevRef(mt Mount, ref *provider.Reference, revKey string) (str string, err error) {
-	var buf []byte
-	if ref.GetResourceId() != nil {
-		str, err = mt.Readlink(filepath.Join(snap, revKey, ref.ResourceId.OpaqueId))
-		if err != nil {
-			return "", fmt.Errorf("cephfs: invalid reference %+v", ref)
-		}
-	} else if str = ref.GetPath(); str != "" {
-		buf, err = mt.GetXattr(str, xattrEID)
-		if err != nil {
-			return
-		}
-		str, err = mt.Readlink(filepath.Join(snap, revKey, string(buf)))
-		if err != nil {
-			return
-		}
-	} else {
-		return "", fmt.Errorf("cephfs: empty reference %+v", ref)
-	}
-
-	return filepath.Join(snap, revKey, str), err
 }
 
 func removeLeadingSlash(path string) string {
@@ -196,55 +121,3 @@ func walkPath(path string, f func(string) error, reverse bool) (err error) {
 
 	return
 }
-
-// TODO: Use when fileids are available
-/*
-func (fs *cephfs) writeIndex(oid string, value string) (err error) {
-	return fs.adminConn.radosIO.WriteFull(oid, []byte(value))
-}
-
-func (fs *cephfs) removeIndex(oid string) error {
-	return fs.adminConn.radosIO.Delete(oid)
-}
-
-func (fs *cephfs) resolveIndex(oid string) (fullPath string, err error) {
-	var i int
-	var currPath strings.Builder
-	root := string(filepath.Separator)
-	offset := uint64(0)
-	io := fs.adminConn.radosIO
-	bsize := 4096
-	buffer := make([]byte, bsize)
-	for {
-		for { //read object
-			i, err = io.Read(oid, buffer, offset)
-			offset += uint64(bsize)
-			currPath.Write(buffer)
-			if err == nil && i >= bsize {
-				buffer = buffer[:0]
-				continue
-			} else {
-				offset = 0
-				break
-			}
-		}
-		if err != nil {
-			return
-		}
-
-		ss := strings.SplitN(currPath.String(), string(filepath.Separator), 2)
-		if len(ss) != 2 {
-			if currPath.String() == root {
-				return
-			}
-
-			return "", fmt.Errorf("cephfs: entry id is not in the form of \"parentID/entryname\"")
-		}
-		parentOID := ss[0]
-		entryName := ss[1]
-		fullPath = filepath.Join(entryName, fullPath)
-		oid = parentOID
-		currPath.Reset()
-	}
-}
-*/

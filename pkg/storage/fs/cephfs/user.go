@@ -203,13 +203,13 @@ func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *goceph.Cep
 	return
 }
 
-func (user *User) resolveRef(ref *provider.Reference) (str string, err error) {
+func (user *User) resolveRef(ref *provider.Reference) (string, error) {
 	if ref == nil {
-		return "", fmt.Errorf("cephfs: nil reference")
+		return "", fmt.Errorf("cephfs: nil reference provided")
 	}
 
-	if str = ref.GetPath(); str == "" {
-		return "", errtypes.NotSupported("cephfs: entry IDs not currently supported")
+	if ref.GetPath() == "" {
+		return "", errtypes.NotSupported("cephfs: path not provided, id based refs are not supported")
 	}
 	return
 }
