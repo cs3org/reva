@@ -11,4 +11,6 @@ To configure an HTTP service you need to follow this convention in the config fi
 {{< highlight toml >}}
 [http.services.service_name]
 ... config ...
+{{</ highlight >}}
+
 

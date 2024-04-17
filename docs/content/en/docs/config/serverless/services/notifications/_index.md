@@ -16,11 +16,11 @@ nats_address = ""
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="nats_token" type="string" default="The token to authenticate against the NATS server" %}}
- [[Ref]](https://github.com/cs3org/reva/tree/master/internal/serverless/services/notifications/notifications.go#L48)
+{{% dir name="nats_token" type="string" default="" %}}
+The token to authenticate against the NATS server [[Ref]](https://github.com/cs3org/reva/tree/master/internal/serverless/services/notifications/notifications.go#L48)
 {{< highlight toml >}}
 [serverless.services.notifications]
-nats_token = "The token to authenticate against the NATS server"
+nats_token = ""
 {{< /highlight >}}
 {{% /dir %}}
 
@@ -32,11 +32,11 @@ nats_prefix = "reva-notifications"
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="handlers" type="map[string]map[string]interface{}" default= %}}
+{{% dir name="handlers" type="map[string]map[string]interface{}" default=nil %}}
 Settings for the different notification handlers. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/serverless/services/notifications/notifications.go#L50)
 {{< highlight toml >}}
 [serverless.services.notifications]
-handlers = 
+handlers = nil
 {{< /highlight >}}
 {{% /dir %}}
 
