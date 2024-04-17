@@ -116,3 +116,15 @@ tail /var/log/revad/revad.log
 ```
 
 ### Connect to revad
+
+The Reva daemon listens on port `9143` (configured in `/etc/revad/revad.toml`)
+Let's use the reva client cli to connect to it:
+
+```
+$ reva -host localhost:9143 -insecure login basic
+username: einstein
+password: 
+OK
+
+$ reva whoami
+```
