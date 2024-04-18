@@ -52,6 +52,8 @@ const (
 	RoleUploader = "uploader"
 	// RoleManager grants manager permissions on a resource. Semantically equivalent to co-owner.
 	RoleManager = "manager"
+	// RoleSecureView grants secure view permissions on a resource or space.
+	RoleSecureView = "secure-view"
 
 	// RoleUnknown is used for unknown roles.
 	RoleUnknown = "unknown"
@@ -159,6 +161,8 @@ func RoleFromName(name string) *Role {
 		return NewUploaderRole()
 	case RoleManager:
 		return NewManagerRole()
+	case RoleSecureView:
+		return NewSecureViewRole()
 	default:
 		return NewUnknownRole()
 	}
@@ -360,6 +364,18 @@ func NewManagerRole() *Role {
 			DenyGrant:   true, // managers can deny access to sub folders
 		},
 		ocsPermissions: PermissionAll,
+	}
+}
+
+// NewSecureViewRole creates a secure view role
+func NewSecureViewRole() *Role {
+	return &Role{
+		Name: RoleSecureView,
+		cS3ResourcePermissions: &provider.ResourcePermissions{
+			GetPath:       true,
+			ListContainer: true,
+			Stat:          true,
+		},
 	}
 }
 
