@@ -75,6 +75,21 @@ func TestSufficientPermissions(t *testing.T) {
 			Sufficient: false,
 		},
 		{
+			Existing:   RoleFromName("secure-view").CS3ResourcePermissions(),
+			Requested:  RoleFromName("secure-view").CS3ResourcePermissions(),
+			Sufficient: true,
+		},
+		{
+			Existing:   RoleFromName("secure-view").CS3ResourcePermissions(),
+			Requested:  RoleFromName("viewer").CS3ResourcePermissions(),
+			Sufficient: false,
+		},
+		{
+			Existing:   RoleFromName("secure-view").CS3ResourcePermissions(),
+			Requested:  RoleFromName("editor").CS3ResourcePermissions(),
+			Sufficient: false,
+		},
+		{
 			Existing: &providerv1beta1.ResourcePermissions{
 				// all permissions, used for personal space owners
 				AddGrant:             true,
