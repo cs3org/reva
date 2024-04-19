@@ -84,7 +84,7 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 
 func (m *manager) Authenticate(ctx context.Context, ocmshare, sharedSecret string) (*userpb.User, map[string]*authpb.Scope, error) {
 	log := appctx.GetLogger(ctx).With().Str("ocmshare", ocmshare).Logger()
-	// We need to use GetOCMShareByToken, as GetOCMShare would requir a user in the context
+	// We need to use GetOCMShareByToken, as GetOCMShare would require a user in the context
 	shareRes, err := m.gw.GetOCMShareByToken(ctx, &ocm.GetOCMShareByTokenRequest{
 		Token: sharedSecret,
 	})

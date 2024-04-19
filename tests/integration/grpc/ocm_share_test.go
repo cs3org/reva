@@ -34,9 +34,12 @@ import (
 	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storagep "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/datagateway"
 	"github.com/cs3org/reva/v2/pkg/conversions"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/ocm/share"
+	ocm "github.com/cs3org/reva/v2/pkg/ocm/storage/received"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/ocis"
@@ -45,6 +48,8 @@ import (
 	"github.com/owncloud/ocis/v2/services/webdav/pkg/net"
 	"github.com/pkg/errors"
 	"github.com/studio-b12/gowebdav"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -241,7 +246,40 @@ var _ = Describe("ocm share", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(createShareRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
-				By("marie access the share")
+				// get auth context for ocm share
+				ocmCtx := context.Background()
+				authRes, err := cernboxgw.Authenticate(ocmCtx, &gatewaypb.AuthenticateRequest{
+					Type:         "ocmshares",
+					ClientId:     createShareRes.GetShare().GetId().GetOpaqueId(),
+					ClientSecret: createShareRes.GetShare().GetToken(),
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(authRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				// create ocm context
+				ocmCtx = ctxpkg.ContextSetToken(ocmCtx, authRes.Token)
+				ocmCtx = metadata.AppendToOutgoingContext(ocmCtx, ctxpkg.TokenHeader, authRes.Token)
+				// I commented this because we currently do return a space ... but IMO we should not. the share is not accepted / synced yet
+				/*
+					// try finding the space by path
+					lssRes, err := cernboxgw.ListStorageSpaces(ocmCtx, &provider.ListStorageSpacesRequest{
+						Opaque: &typespb.Opaque{
+							Map: map[string]*typespb.OpaqueEntry{
+								"path": {
+									Decoder: "plain",
+									Value:   []byte("/public/" + createShareRes.GetShare().GetId().GetOpaqueId()),
+								},
+								"metadata": {
+									Decoder: "plain",
+									Value:   []byte("*"),
+								},
+							},
+						}})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(lssRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+					Expect(lssRes.StorageSpaces).To(HaveLen(0), "pending ocm share should not be listed as a space")
+				*/
+				By("marie accepts the share")
 				listRes, err := cesnetgw.ListReceivedOCMShares(ctxMarie, &ocmv1beta1.ListReceivedOCMSharesRequest{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -250,12 +288,51 @@ var _ = Describe("ocm share", func() {
 
 				share := listRes.Shares[0]
 				Expect(share.Protocols).To(HaveLen(1))
+				Expect(share.State).To(Equal(ocmv1beta1.ShareState_SHARE_STATE_PENDING))
+
+				share.State = ocmv1beta1.ShareState_SHARE_STATE_ACCEPTED
+				_, err = cesnetgw.UpdateReceivedOCMShare(ctxMarie, &ocmv1beta1.UpdateReceivedOCMShareRequest{
+					Share:      share,
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				By("marie accesses the share")
+
+				// try finding the space by path again
+				lssRes, err := cernboxgw.ListStorageSpaces(ocmCtx, &provider.ListStorageSpacesRequest{
+					Opaque: &typespb.Opaque{
+						Map: map[string]*typespb.OpaqueEntry{
+							"path": {
+								Decoder: "plain",
+								Value:   []byte("/public/" + createShareRes.GetShare().GetId().GetOpaqueId()),
+							},
+							"metadata": {
+								Decoder: "plain",
+								Value:   []byte("*"),
+							},
+						},
+					}})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(lssRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(lssRes.StorageSpaces).To(HaveLen(1), "accepted ocm share should be listed as a space")
+
+				listRes, err = cesnetgw.ListReceivedOCMShares(ctxMarie, &ocmv1beta1.ListReceivedOCMSharesRequest{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				Expect(listRes.Shares).To(HaveLen(1))
+
+				share = listRes.Shares[0]
+				Expect(share.Protocols).To(HaveLen(1))
+				Expect(share.State).To(Equal(ocmv1beta1.ShareState_SHARE_STATE_ACCEPTED))
 
 				protocol := share.Protocols[0]
 				webdav, ok := protocol.Term.(*ocmv1beta1.Protocol_WebdavOptions)
 				Expect(ok).To(BeTrue())
 
-				webdavClient := newWebDAVClient(webdav.WebdavOptions.Uri)
+				webdavClient := newWebDAVClient(webdav.WebdavOptions)
 				d, err := webdavClient.Read(".")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(d).To(Equal([]byte("test")))
@@ -338,7 +415,7 @@ var _ = Describe("ocm share", func() {
 				Expect(ok).To(BeTrue())
 
 				data := []byte("new-content")
-				webdavClient := newWebDAVClient(webdav.WebdavOptions.Uri)
+				webdavClient := newWebDAVClient(webdav.WebdavOptions)
 				err = webdavClient.Write(".", data, 0)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -420,7 +497,7 @@ var _ = Describe("ocm share", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(createShareRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
-				By("marie see the content of the folder")
+				By("marie accepts the share")
 				listRes, err := cesnetgw.ListReceivedOCMShares(ctxMarie, &ocmv1beta1.ListReceivedOCMSharesRequest{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -429,12 +506,64 @@ var _ = Describe("ocm share", func() {
 
 				share := listRes.Shares[0]
 				Expect(share.Protocols).To(HaveLen(1))
+				Expect(share.State).To(Equal(ocmv1beta1.ShareState_SHARE_STATE_PENDING))
+
+				share.State = ocmv1beta1.ShareState_SHARE_STATE_ACCEPTED
+				_, err = cesnetgw.UpdateReceivedOCMShare(ctxMarie, &ocmv1beta1.UpdateReceivedOCMShareRequest{
+					Share:      share,
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				// get auth context for ocm share
+				ocmCtx := context.Background()
+				authRes, err := cernboxgw.Authenticate(ocmCtx, &gatewaypb.AuthenticateRequest{
+					Type:         "ocmshares",
+					ClientId:     createShareRes.GetShare().GetId().GetOpaqueId(),
+					ClientSecret: createShareRes.GetShare().GetToken(),
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(authRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				// create ocm context
+				ocmCtx = ctxpkg.ContextSetToken(ocmCtx, authRes.Token)
+				ocmCtx = metadata.AppendToOutgoingContext(ocmCtx, ctxpkg.TokenHeader, authRes.Token)
+
+				// try finding the space by path again
+				lssRes, err := cernboxgw.ListStorageSpaces(ocmCtx, &provider.ListStorageSpacesRequest{
+					Opaque: &typespb.Opaque{
+						Map: map[string]*typespb.OpaqueEntry{
+							"path": {
+								Decoder: "plain",
+								Value:   []byte("/public/" + createShareRes.GetShare().GetId().GetOpaqueId()),
+							},
+							"metadata": {
+								Decoder: "plain",
+								Value:   []byte("*"),
+							},
+						},
+					}})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(lssRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(lssRes.StorageSpaces).To(HaveLen(1), "accepted ocm share should be listed as a space")
+
+				By("marie see the content of the folder")
+				listRes, err = cesnetgw.ListReceivedOCMShares(ctxMarie, &ocmv1beta1.ListReceivedOCMSharesRequest{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				Expect(listRes.Shares).To(HaveLen(1))
+
+				share = listRes.Shares[0]
+				Expect(share.Protocols).To(HaveLen(1))
+				Expect(share.State).To(Equal(ocmv1beta1.ShareState_SHARE_STATE_ACCEPTED))
 
 				protocol := share.Protocols[0]
 				webdav, ok := protocol.Term.(*ocmv1beta1.Protocol_WebdavOptions)
 				Expect(ok).To(BeTrue())
 
-				webdavClient := newWebDAVClient(webdav.WebdavOptions.Uri)
+				webdavClient := newWebDAVClient(webdav.WebdavOptions)
 
 				ok, err = helpers.SameContentWebDAV(webdavClient, "/", structure)
 				Expect(err).ToNot(HaveOccurred())
@@ -546,7 +675,7 @@ var _ = Describe("ocm share", func() {
 				webdav, ok := protocol.Term.(*ocmv1beta1.Protocol_WebdavOptions)
 				Expect(ok).To(BeTrue())
 
-				webdavClient := newWebDAVClient(webdav.WebdavOptions.Uri)
+				webdavClient := newWebDAVClient(webdav.WebdavOptions)
 				data := []byte("new-content")
 				Expect(webdavClient.Write("new-file", data, 0)).To(Succeed())
 
@@ -789,8 +918,8 @@ func checkResourceInfoList(l1, l2 []*provider.ResourceInfo) {
 	}
 }
 
-func newWebDAVClient(uri string) *gowebdav.Client {
-	webdavClient := gowebdav.NewClient(uri, "", "")
+func newWebDAVClient(options *ocmv1beta1.WebDAVProtocol) *gowebdav.Client {
+	webdavClient := gowebdav.NewAuthClient(options.Uri, gowebdav.NewPreemptiveAuth(ocm.BearerAuthenticator{Token: options.SharedSecret}))
 	webdavClient.SetInterceptor(func(method string, rq *http.Request) {
 		if rq.Body == nil {
 			return
