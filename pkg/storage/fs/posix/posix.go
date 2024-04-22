@@ -117,8 +117,19 @@ func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 	}
 
 	scopeUserHook := func(methodName string, ctx context.Context, ref *provider.Reference) (middleware.UnHook, error) {
-		if methodName == "ListStorageSpaces" {
+		switch methodName {
+		case "ListStorageSpaces":
 			return nil, nil
+		case "CreateStorageSpace":
+			spaceType, ok := ctx.Value("spaceType").(string)
+			if !ok {
+				break
+			}
+
+			if spaceType == "project" {
+				// project spaces should not be scoped to a user
+				return nil, nil
+			}
 		}
 
 		unscope, err := um.ScopeUser(ctx)
