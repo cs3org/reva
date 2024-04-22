@@ -65,11 +65,11 @@ type Lookup struct {
 
 	IDCache         IDCache
 	metadataBackend metadata.Backend
-	userMapper      *usermapper.Mapper
+	userMapper      usermapper.Mapper
 }
 
 // New returns a new Lookup instance
-func New(b metadata.Backend, um *usermapper.Mapper, o *options.Options) *Lookup {
+func New(b metadata.Backend, um usermapper.Mapper, o *options.Options) *Lookup {
 	lu := &Lookup{
 		Options:         o,
 		metadataBackend: b,

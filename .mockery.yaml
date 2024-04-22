@@ -29,6 +29,9 @@ packages:
     github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree:
         interfaces:
             Blobstore:
+    github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/usermapper:
+        interfaces:
+            Mapper:
     github.com/cs3org/reva/v2/pkg/storage/utils/indexer:
         interfaces:
             Indexer:

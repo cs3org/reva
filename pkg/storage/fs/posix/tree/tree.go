@@ -84,7 +84,7 @@ type Tree struct {
 
 	options *options.Options
 
-	userMapper *usermapper.Mapper
+	userMapper usermapper.Mapper
 	idCache    store.Store
 	watcher    Watcher
 	scanQueue  chan scanItem
@@ -96,7 +96,7 @@ type Tree struct {
 type PermissionCheckFunc func(rp *provider.ResourcePermissions) bool
 
 // New returns a new instance of Tree
-func New(lu node.PathLookup, bs Blobstore, um *usermapper.Mapper, o *options.Options, cache store.Store) (*Tree, error) {
+func New(lu node.PathLookup, bs Blobstore, um usermapper.Mapper, o *options.Options, cache store.Store) (*Tree, error) {
 	log := logger.New()
 	t := &Tree{
 		lookup:     lu,

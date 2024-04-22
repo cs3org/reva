@@ -30,23 +30,31 @@ import (
 	revactx "github.com/cs3org/reva/v2/pkg/ctx"
 )
 
-type Mapper struct {
+type Mapper interface {
+	RunInBaseScope(f func() error) error
+	MapUser(username string) (int, int, error)
+	ScopeBase() (func() error, error)
+	ScopeUser(ctx context.Context) (func() error, error)
+	ScopeUserByIds(uid, gid int) (func() error, error)
+}
+
+type UnixMapper struct {
 	baseUid int
 }
 
 type UnscopeFunc func() error
 
 // New returns a new user mapper
-func New() *Mapper {
+func NewUnixMapper() *UnixMapper {
 	baseUid, _ := unix.SetfsuidRetUid(-1)
 
-	return &Mapper{
+	return &UnixMapper{
 		baseUid: baseUid,
 	}
 }
 
 // RunInUserScope runs the given function in the scope of the base user
-func (um *Mapper) RunInBaseScope(f func() error) error {
+func (um *UnixMapper) RunInBaseScope(f func() error) error {
 	if um == nil {
 		return f()
 	}
@@ -61,12 +69,12 @@ func (um *Mapper) RunInBaseScope(f func() error) error {
 }
 
 // ScopeBase returns to the base uid and gid returning a function that can be used to restore the previous scope
-func (um *Mapper) ScopeBase() (func() error, error) {
+func (um *UnixMapper) ScopeBase() (func() error, error) {
 	return um.ScopeUserByIds(um.baseUid)
 }
 
 // MapUser returns the user and group ids for the given username
-func (u *Mapper) MapUser(username string) (int, error) {
+func (u *UnixMapper) MapUser(username string) (int, error) {
 	userDetails, err := user.Lookup(username)
 	if err != nil {
 		return 0, err
@@ -80,7 +88,7 @@ func (u *Mapper) MapUser(username string) (int, error) {
 	return uid, nil
 }
 
-func (um *Mapper) ScopeUser(ctx context.Context) (func() error, error) {
+func (um *UnixMapper) ScopeUser(ctx context.Context) (func() error, error) {
 	u := revactx.ContextMustGetUser(ctx)
 
 	uid, err := um.MapUser(u.Username)
@@ -89,7 +97,7 @@ func (um *Mapper) ScopeUser(ctx context.Context) (func() error, error) {
 	}
 	return um.ScopeUserByIds(uid)
 }
-func (um *Mapper) ScopeUserByIds(uid int) (func() error, error) {
+func (um *UnixMapper) ScopeUserByIds(uid int) (func() error, error) {
 	runtime.LockOSThread() // Lock this Goroutine to the current OS thread
 
 	prevUid, err := unix.SetfsuidRetUid(uid)

@@ -59,7 +59,7 @@ type OcisStore struct {
 	fs                storage.FS
 	lu                node.PathLookup
 	tp                node.Tree
-	um                *usermapper.Mapper
+	um                usermapper.Mapper
 	root              string
 	pub               events.Publisher
 	async             bool

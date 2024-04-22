@@ -53,7 +53,7 @@ func init() {
 type posixFS struct {
 	storage.FS
 
-	um *usermapper.Mapper
+	um usermapper.Mapper
 }
 
 // New returns an implementation to of the storage.FS interface that talk to
@@ -69,14 +69,14 @@ func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 		return nil, err
 	}
 
-	um := usermapper.New()
+	um := usermapper.NewUnixMapper()
 
 	var lu *lookup.Lookup
 	switch o.MetadataBackend {
 	case "xattrs":
 		lu = lookup.New(metadata.XattrsBackend{}, um, &o.Options)
 	case "messagepack":
-		lu = lookup.New(metadata.NewMessagePackBackend(o.Root, o.FileMetadataCache), usermapper.New(), &o.Options)
+		lu = lookup.New(metadata.NewMessagePackBackend(o.Root, o.FileMetadataCache), um, &o.Options)
 	default:
 		return nil, fmt.Errorf("unknown metadata backend %s, only 'messagepack' or 'xattrs' (default) supported", o.MetadataBackend)
 	}
