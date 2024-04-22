@@ -3,10 +3,11 @@ OC_CI_GOLANG = "owncloudci/golang:1.21"
 OC_CI_ALPINE = "owncloudci/alpine:latest"
 OSIXIA_OPEN_LDAP = "osixia/openldap:1.3.0"
 REDIS = "redis:6-alpine"
-OC_CI_PHP = "cs3org/behat:latest"
+OC_CI_PHP = "owncloudci/php:%s"
 OC_LITMUS = "owncloud/litmus:latest"
 OC_CS3_API_VALIDATOR = "owncloud/cs3api-validator:0.2.1"
 OC_CI_BAZEL_BUILDIFIER = "owncloudci/bazel-buildifier:latest"
+DEFAULT_PHP_VERSION = "8.2"
 
 # Shared step definitions
 def licenseScanStep():
@@ -252,7 +253,7 @@ def virtualViews():
             cloneApiTestReposStep(),
             {
                 "name": "APIAcceptanceTestsOcisStorage",
-                "image": OC_CI_PHP,
+                "image": OC_CI_PHP % DEFAULT_PHP_VERSION,
                 "commands": [
                     "cd /drone/src/tmp/testrunner",
                     "make test-acceptance-from-core-api",
@@ -597,7 +598,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                     cloneApiTestReposStep(),
                     {
                         "name": "APIAcceptanceTestsOcisStorage",
-                        "image": OC_CI_PHP,
+                        "image": OC_CI_PHP % DEFAULT_PHP_VERSION,
                         "commands": [
                             "cd /drone/src/tmp/testrunner",
                             "make test-acceptance-from-core-api",
@@ -673,7 +674,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                     cloneApiTestReposStep(),
                     {
                         "name": "APIAcceptanceTestsS3ngStorage",
-                        "image": OC_CI_PHP,
+                        "image": OC_CI_PHP % DEFAULT_PHP_VERSION,
                         "commands": [
                             "cd /drone/src/tmp/testrunner",
                             "make test-acceptance-from-core-api",
