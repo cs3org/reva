@@ -75,17 +75,17 @@ func TestSufficientPermissions(t *testing.T) {
 			Sufficient: false,
 		},
 		{
-			Existing:   RoleFromName("secure-view").CS3ResourcePermissions(),
-			Requested:  RoleFromName("secure-view").CS3ResourcePermissions(),
+			Existing:   RoleFromName("secure-viewer").CS3ResourcePermissions(),
+			Requested:  RoleFromName("secure-viewer").CS3ResourcePermissions(),
 			Sufficient: true,
 		},
 		{
-			Existing:   RoleFromName("secure-view").CS3ResourcePermissions(),
+			Existing:   RoleFromName("secure-viewer").CS3ResourcePermissions(),
 			Requested:  RoleFromName("viewer").CS3ResourcePermissions(),
 			Sufficient: false,
 		},
 		{
-			Existing:   RoleFromName("secure-view").CS3ResourcePermissions(),
+			Existing:   RoleFromName("secure-viewer").CS3ResourcePermissions(),
 			Requested:  RoleFromName("editor").CS3ResourcePermissions(),
 			Sufficient: false,
 		},
