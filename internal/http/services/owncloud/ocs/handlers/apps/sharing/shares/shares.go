@@ -633,7 +633,7 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if share == nil {
+	if h.listOCMShares && share == nil {
 		// check if we have a federated share
 		req := &ocm.GetOCMShareRequest{
 			Ref: &ocm.ShareReference{
@@ -661,7 +661,7 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if share == nil {
+	if h.listOCMShares && share == nil {
 		// check if we have an incoming federated share
 		req := &ocm.GetReceivedOCMShareRequest{
 			Ref: &ocm.ShareReference{
@@ -908,7 +908,7 @@ func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
 		h.removeUserShare(w, r, share)
 		return
 	}
-	if h.isFederatedShare(r, shareID) {
+	if h.listOCMShares && h.isFederatedShare(r, shareID) {
 		h.removeFederatedShare(w, r, shareID)
 		return
 	}
