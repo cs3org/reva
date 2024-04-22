@@ -185,13 +185,17 @@ func (am *mgr) isIssuerAllowed(issuer string) bool {
 }
 
 func (am *mgr) doUserMapping(tkn *oidc.IDToken, claims jwt.MapClaims) (string, error) {
+	var sub = tkn.Subject
+	if am.c.IDClaim != "sub" && claims[am.c.IDClaim] != nil {
+		sub, _ = claims[am.c.IDClaim].(string)
+	}
 	if len(am.oidcUsersMapping) == 0 {
-		return tkn.Subject, nil
+		return sub, nil
 	}
 	// we need the custom claims for the mapping
 	if claims[am.c.GroupClaim] == nil {
 		// we are required to perform a user mapping but the group claim is not available
-		return tkn.Subject, nil
+		return sub, nil
 	}
 
 	mappings := make([]string, 0, len(am.oidcUsersMapping))
