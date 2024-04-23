@@ -106,7 +106,7 @@ type Decomposedfs struct {
 	tp           node.Tree
 	o            *options.Options
 	p            permissions.Permissions
-	um           *usermapper.Mapper
+	um           usermapper.Mapper
 	chunkHandler *chunking.ChunkHandler
 	stream       events.Stream
 	sessionStore SessionStore
@@ -200,6 +200,12 @@ func New(o *options.Options, aspects aspects.Aspects) (storage.FS, error) {
 	err = spaceTypeIndex.Init()
 	if err != nil {
 		return nil, err
+	}
+
+	// set a nil usermapper if we don't have one
+	if aspects.UserMapper == nil {
+		var nilum *usermapper.UnixMapper
+		aspects.UserMapper = nilum
 	}
 
 	fs := &Decomposedfs{
@@ -868,7 +874,7 @@ func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKe
 		}
 	}
 	if addSpace {
-		if md.Space, err = fs.storageSpaceFromNode(ctx, node, true); err != nil {
+		if md.Space, err = fs.StorageSpaceFromNode(ctx, node, true); err != nil {
 			return nil, err
 		}
 	}

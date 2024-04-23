@@ -20,7 +20,6 @@ package decomposedfs
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"strings"
 

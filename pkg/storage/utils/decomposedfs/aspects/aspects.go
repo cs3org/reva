@@ -32,5 +32,5 @@ type Aspects struct {
 	Permissions       permissions.Permissions
 	EventStream       events.Stream
 	DisableVersioning bool
-	UserMapper        *usermapper.Mapper
+	UserMapper        usermapper.Mapper
 }

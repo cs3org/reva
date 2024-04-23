@@ -199,7 +199,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		}
 	}
 
-	space, err := fs.storageSpaceFromNode(ctx, root, true)
+	space, err := fs.StorageSpaceFromNode(ctx, root, true)
 	if err != nil {
 		return nil, err
 	}
@@ -289,7 +289,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			// return empty list
 			return spaces, nil
 		}
-		space, err := fs.storageSpaceFromNode(ctx, n, checkNodePermissions)
+		space, err := fs.StorageSpaceFromNode(ctx, n, checkNodePermissions)
 		if err != nil {
 			return nil, err
 		}
@@ -432,7 +432,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 					continue
 				}
 
-				space, err := fs.storageSpaceFromNode(ctx, n, checkNodePermissions)
+				space, err := fs.StorageSpaceFromNode(ctx, n, checkNodePermissions)
 				if err != nil {
 					switch err.(type) {
 					case errtypes.IsPermissionDenied:
@@ -485,7 +485,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			return nil, err
 		}
 		if n.Exists {
-			space, err := fs.storageSpaceFromNode(ctx, n, checkNodePermissions)
+			space, err := fs.StorageSpaceFromNode(ctx, n, checkNodePermissions)
 			if err != nil {
 				return nil, err
 			}
@@ -670,7 +670,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}
 
 	// send back the updated data from the storage
-	updatedSpace, err := fs.storageSpaceFromNode(ctx, spaceNode, false)
+	updatedSpace, err := fs.StorageSpaceFromNode(ctx, spaceNode, false)
 	if err != nil {
 		return nil, err
 	}
@@ -779,7 +779,7 @@ func (fs *Decomposedfs) linkStorageSpaceType(ctx context.Context, spaceType, spa
 	return fs.spaceTypeIndex.Add(spaceType, spaceID, target)
 }
 
-func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, checkPermissions bool) (*provider.StorageSpace, error) {
+func (fs *Decomposedfs) StorageSpaceFromNode(ctx context.Context, n *node.Node, checkPermissions bool) (*provider.StorageSpace, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
 	if checkPermissions {
 		rp, err := fs.p.AssemblePermissions(ctx, n)

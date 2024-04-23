@@ -149,7 +149,9 @@ func (session *OcisSession) FinishUpload(ctx context.Context) error {
 		if err != nil {
 			return errors.Wrap(err, "failed to scope user")
 		}
-		defer unscope()
+		if unscope != nil {
+			defer unscope()
+		}
 	}
 
 	n, err := session.store.CreateNodeForUpload(session, attrs)

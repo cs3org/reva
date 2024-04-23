@@ -9,6 +9,7 @@ import (
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/cache"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/aspects"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
@@ -24,7 +25,11 @@ func TestInitNewNode(t *testing.T) {
 	lookup := lookup.New(metadata.NewMessagePackBackend(root, cache.Config{}), &options.Options{Root: root})
 	tp := tree.New(lookup, nil, &options.Options{}, nil)
 
-	store := NewSessionStore(nil, lookup, tp, root, nil, false, options.TokenOptions{}, false)
+	aspects := aspects.Aspects{
+		Lookup: lookup,
+		Tree:   tp,
+	}
+	store := NewSessionStore(nil, aspects, root, false, options.TokenOptions{})
 
 	rootNode := node.New("e48c4e7a-beac-4b82-b991-a5cff7b8c39c", "e48c4e7a-beac-4b82-b991-a5cff7b8c39c", "", "", 0, "", providerv1beta1.ResourceType_RESOURCE_TYPE_CONTAINER, &userv1beta1.UserId{}, lookup)
 	rootNode.Exists = true

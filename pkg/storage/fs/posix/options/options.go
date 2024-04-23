@@ -27,6 +27,8 @@ import (
 type Options struct {
 	decomposedoptions.Options
 
+	UseSpaceGroups bool `mapstructure:"use_space_groups"`
+
 	WatchType               string `mapstructure:"watch_type"`
 	WatchPath               string `mapstructure:"watch_path"`
 	WatchFolderKafkaBrokers string `mapstructure:"watch_folder_kafka_brokers"`

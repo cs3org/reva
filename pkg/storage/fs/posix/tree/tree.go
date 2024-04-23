@@ -166,9 +166,8 @@ func (t *Tree) assimilate(item scanItem) error {
 				return err
 			}
 			sys := fi.Sys().(*syscall.Stat_t)
-			uid := int(sys.Uid)
 			gid := int(sys.Gid)
-			_, err = t.userMapper.ScopeUserByIds(uid, gid)
+			_, err = t.userMapper.ScopeUserByIds(-1, gid)
 			if err != nil {
 				return err
 			}

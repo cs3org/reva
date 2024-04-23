@@ -34,7 +34,7 @@ import (
 type UnHook func() error
 
 // Hook is a function that is called before the actual method is executed.
-type Hook func(methodName string, ctx context.Context, ref *provider.Reference) (UnHook, error)
+type Hook func(methodName string, ctx context.Context, spaceID string) (context.Context, UnHook, error)
 
 // FS is a storage.FS implementation that wraps another storage.FS and calls hooks before and after each method.
 type FS struct {
@@ -91,9 +91,13 @@ func (f *FS) AsConcatableUpload(up tusd.Upload) tusd.ConcatableUpload {
 }
 
 func (f *FS) GetHome(ctx context.Context) (string, error) {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("GetHome", ctx, nil)
+		ctx, unhook, err = hook("GetHome", ctx, "")
 		if err != nil {
 			return "", err
 		}
@@ -114,9 +118,13 @@ func (f *FS) GetHome(ctx context.Context) (string, error) {
 }
 
 func (f *FS) CreateHome(ctx context.Context) error {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("CreateHome", ctx, nil)
+		ctx, unhook, err = hook("CreateHome", ctx, "")
 		if err != nil {
 			return err
 		}
@@ -137,9 +145,13 @@ func (f *FS) CreateHome(ctx context.Context) error {
 }
 
 func (f *FS) CreateDir(ctx context.Context, ref *provider.Reference) error {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("CreateDir", ctx, nil)
+		ctx, unhook, err = hook("CreateDir", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return err
 		}
@@ -160,9 +172,13 @@ func (f *FS) CreateDir(ctx context.Context, ref *provider.Reference) error {
 }
 
 func (f *FS) TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) error {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("TouchFile", ctx, nil)
+		ctx, unhook, err = hook("TouchFile", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return err
 		}
@@ -183,9 +199,13 @@ func (f *FS) TouchFile(ctx context.Context, ref *provider.Reference, markprocess
 }
 
 func (f *FS) Delete(ctx context.Context, ref *provider.Reference) error {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("Delete", ctx, nil)
+		ctx, unhook, err = hook("Delete", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return err
 		}
@@ -206,9 +226,13 @@ func (f *FS) Delete(ctx context.Context, ref *provider.Reference) error {
 }
 
 func (f *FS) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("Move", ctx, nil)
+		ctx, unhook, err = hook("Move", ctx, oldRef.GetResourceId().GetSpaceId())
 		if err != nil {
 			return err
 		}
@@ -229,9 +253,13 @@ func (f *FS) Move(ctx context.Context, oldRef, newRef *provider.Reference) error
 }
 
 func (f *FS) GetMD(ctx context.Context, ref *provider.Reference, mdKeys, fieldMask []string) (*provider.ResourceInfo, error) {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("GetMD", ctx, nil)
+		ctx, unhook, err = hook("GetMD", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return nil, err
 		}
@@ -252,9 +280,13 @@ func (f *FS) GetMD(ctx context.Context, ref *provider.Reference, mdKeys, fieldMa
 }
 
 func (f *FS) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys, fieldMask []string) ([]*provider.ResourceInfo, error) {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("ListFolder", ctx, nil)
+		ctx, unhook, err = hook("ListFolder", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return nil, err
 		}
@@ -275,9 +307,13 @@ func (f *FS) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys, fi
 }
 
 func (f *FS) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("InitiateUpload", ctx, nil)
+		ctx, unhook, err = hook("InitiateUpload", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return nil, err
 		}
@@ -298,9 +334,13 @@ func (f *FS) InitiateUpload(ctx context.Context, ref *provider.Reference, upload
 }
 
 func (f *FS) Upload(ctx context.Context, req storage.UploadRequest, uploadFunc storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("Upload", ctx, nil)
+		ctx, unhook, err = hook("Upload", ctx, req.Ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return provider.ResourceInfo{}, err
 		}
@@ -321,9 +361,13 @@ func (f *FS) Upload(ctx context.Context, req storage.UploadRequest, uploadFunc s
 }
 
 func (f *FS) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("Download", ctx, nil)
+		ctx, unhook, err = hook("Download", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return nil, err
 		}
@@ -344,9 +388,13 @@ func (f *FS) Download(ctx context.Context, ref *provider.Reference) (io.ReadClos
 }
 
 func (f *FS) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("ListRevisions", ctx, nil)
+		ctx, unhook, err = hook("ListRevisions", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return nil, err
 		}
@@ -367,9 +415,13 @@ func (f *FS) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*pro
 }
 
 func (f *FS) DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error) {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("DownloadRevision", ctx, nil)
+		ctx, unhook, err = hook("DownloadRevision", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return nil, err
 		}
@@ -390,9 +442,13 @@ func (f *FS) DownloadRevision(ctx context.Context, ref *provider.Reference, key 
 }
 
 func (f *FS) RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("RestoreRevision", ctx, nil)
+		ctx, unhook, err = hook("RestoreRevision", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return err
 		}
@@ -413,9 +469,13 @@ func (f *FS) RestoreRevision(ctx context.Context, ref *provider.Reference, key s
 }
 
 func (f *FS) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("ListRecycle", ctx, nil)
+		ctx, unhook, err = hook("ListRecycle", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return nil, err
 		}
@@ -436,9 +496,13 @@ func (f *FS) ListRecycle(ctx context.Context, ref *provider.Reference, key, rela
 }
 
 func (f *FS) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("RestoreRecycleItem", ctx, nil)
+		ctx, unhook, err = hook("RestoreRecycleItem", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return err
 		}
@@ -459,9 +523,13 @@ func (f *FS) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, ke
 }
 
 func (f *FS) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("PurgeRecycleItem", ctx, nil)
+		ctx, unhook, err = hook("PurgeRecycleItem", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return err
 		}
@@ -482,9 +550,13 @@ func (f *FS) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key,
 }
 
 func (f *FS) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("EmptyRecycle", ctx, nil)
+		ctx, unhook, err = hook("EmptyRecycle", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return err
 		}
@@ -501,9 +573,13 @@ func (f *FS) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
 }
 
 func (f *FS) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("GetPathByID", ctx, nil)
+		ctx, unhook, err = hook("GetPathByID", ctx, id.GetSpaceId())
 		if err != nil {
 			return "", err
 		}
@@ -524,9 +600,13 @@ func (f *FS) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, 
 }
 
 func (f *FS) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("AddGrant", ctx, nil)
+		ctx, unhook, err = hook("AddGrant", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return err
 		}
@@ -547,9 +627,13 @@ func (f *FS) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.
 }
 
 func (f *FS) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("DenyGrant", ctx, nil)
+		ctx, unhook, err = hook("DenyGrant", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return err
 		}
@@ -570,9 +654,13 @@ func (f *FS) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider
 }
 
 func (f *FS) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("RemoveGrant", ctx, nil)
+		ctx, unhook, err = hook("RemoveGrant", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return err
 		}
@@ -593,9 +681,13 @@ func (f *FS) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provid
 }
 
 func (f *FS) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("UpdateGrant", ctx, nil)
+		ctx, unhook, err = hook("UpdateGrant", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return err
 		}
@@ -616,9 +708,13 @@ func (f *FS) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provid
 }
 
 func (f *FS) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("ListGrants", ctx, nil)
+		ctx, unhook, err = hook("ListGrants", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return nil, err
 		}
@@ -639,9 +735,13 @@ func (f *FS) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provid
 }
 
 func (f *FS) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, uint64, error) {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("GetQuota", ctx, nil)
+		ctx, unhook, err = hook("GetQuota", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return 0, 0, 0, err
 		}
@@ -662,9 +762,13 @@ func (f *FS) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uin
 }
 
 func (f *FS) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("CreateReference", ctx, nil)
+		ctx, unhook, err = hook("CreateReference", ctx, "")
 		if err != nil {
 			return err
 		}
@@ -685,9 +789,13 @@ func (f *FS) CreateReference(ctx context.Context, path string, targetURI *url.UR
 }
 
 func (f *FS) Shutdown(ctx context.Context) error {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("Shutdown", ctx, nil)
+		ctx, unhook, err = hook("Shutdown", ctx, "")
 		if err != nil {
 			return err
 		}
@@ -708,9 +816,13 @@ func (f *FS) Shutdown(ctx context.Context) error {
 }
 
 func (f *FS) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("SetArbitraryMetadata", ctx, nil)
+		ctx, unhook, err = hook("SetArbitraryMetadata", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return err
 		}
@@ -731,9 +843,13 @@ func (f *FS) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, 
 }
 
 func (f *FS) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("UnsetArbitraryMetadata", ctx, nil)
+		ctx, unhook, err = hook("UnsetArbitraryMetadata", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return err
 		}
@@ -754,9 +870,13 @@ func (f *FS) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference
 }
 
 func (f *FS) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("SetLock", ctx, nil)
+		ctx, unhook, err = hook("SetLock", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return err
 		}
@@ -777,9 +897,13 @@ func (f *FS) SetLock(ctx context.Context, ref *provider.Reference, lock *provide
 }
 
 func (f *FS) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("GetLock", ctx, nil)
+		ctx, unhook, err = hook("GetLock", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return nil, err
 		}
@@ -800,9 +924,13 @@ func (f *FS) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lo
 }
 
 func (f *FS) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("RefreshLock", ctx, nil)
+		ctx, unhook, err = hook("RefreshLock", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return err
 		}
@@ -823,9 +951,13 @@ func (f *FS) RefreshLock(ctx context.Context, ref *provider.Reference, lock *pro
 }
 
 func (f *FS) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("Unlock", ctx, nil)
+		ctx, unhook, err = hook("Unlock", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
 			return err
 		}
@@ -846,9 +978,13 @@ func (f *FS) Unlock(ctx context.Context, ref *provider.Reference, lock *provider
 }
 
 func (f *FS) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, unrestricted bool) ([]*provider.StorageSpace, error) {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("ListStorageSpaces", ctx, nil)
+		ctx, unhook, err = hook("ListStorageSpaces", ctx, "")
 		if err != nil {
 			return nil, err
 		}
@@ -872,9 +1008,13 @@ func (f *FS) CreateStorageSpace(ctx context.Context, req *provider.CreateStorage
 	// pass the space type to the hook, different types of spaces might require different handling
 	ctx = context.WithValue(ctx, "spaceType", req.Type)
 
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("CreateStorageSpace", ctx, nil)
+		ctx, unhook, err = hook("CreateStorageSpace", ctx, "")
 		if err != nil {
 			return nil, err
 		}
@@ -895,9 +1035,13 @@ func (f *FS) CreateStorageSpace(ctx context.Context, req *provider.CreateStorage
 }
 
 func (f *FS) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("UpdateStorageSpace", ctx, nil)
+		ctx, unhook, err = hook("UpdateStorageSpace", ctx, req.StorageSpace.GetId().GetOpaqueId())
 		if err != nil {
 			return nil, err
 		}
@@ -918,9 +1062,13 @@ func (f *FS) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorage
 }
 
 func (f *FS) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
-	unhooks := []UnHook{}
+	var (
+		err     error
+		unhook  UnHook
+		unhooks []UnHook
+	)
 	for _, hook := range f.hooks {
-		unhook, err := hook("DeleteStorageSpace", ctx, nil)
+		ctx, unhook, err = hook("DeleteStorageSpace", ctx, req.GetId().GetOpaqueId())
 		if err != nil {
 			return err
 		}

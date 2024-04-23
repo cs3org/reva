@@ -21,11 +21,12 @@ package posix
 import (
 	"context"
 	"fmt"
+	"os"
+	"syscall"
 
 	tusd "github.com/tus/tusd/pkg/handler"
 	microstore "go-micro.dev/v4/store"
 
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage"
@@ -116,31 +117,49 @@ func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 		return nil, err
 	}
 
-	scopeUserHook := func(methodName string, ctx context.Context, ref *provider.Reference) (middleware.UnHook, error) {
-		switch methodName {
-		case "ListStorageSpaces":
-			return nil, nil
-		case "CreateStorageSpace":
-			spaceType, ok := ctx.Value("spaceType").(string)
+	hooks := []middleware.Hook{}
+	resolveSpaceHook := func(methodName string, ctx context.Context, spaceID string) (context.Context, middleware.UnHook, error) {
+		if spaceID == "" {
+			return ctx, nil, nil
+		}
+
+		spaceRoot := lu.InternalPath(spaceID, spaceID)
+		fi, err := os.Stat(spaceRoot)
+		ctx = context.WithValue(ctx, "spaceGID", fi.Sys().(*syscall.Stat_t).Gid)
+
+		// root, err := node.ReadNode(ctx, lu, spaceID, spaceID, true, nil, false)
+		// if err != nil {
+		// 	return nil, err
+		// }
+
+		// space, err := dfs.(*decomposedfs.Decomposedfs).StorageSpaceFromNode(ctx, root, false)
+		// if err != nil {
+		// 	return nil, err
+		// }
+		// // pass the space type to the hook, different types of spaces might require different handling
+		// ctx = context.WithValue(ctx, "space", space)
+
+		return ctx, nil, err
+	}
+	hooks = append(hooks, resolveSpaceHook)
+	if o.UseSpaceGroups {
+		scopeSpaceGroupHook := func(methodName string, ctx context.Context, spaceID string) (context.Context, middleware.UnHook, error) {
+			spaceGID, ok := ctx.Value("spaceType").(int)
 			if !ok {
-				break
+				return ctx, nil, nil
 			}
 
-			if spaceType == "project" {
-				// project spaces should not be scoped to a user
-				return nil, nil
+			unscope, err := um.ScopeUserByIds(-1, spaceGID)
+			if err != nil {
+				return ctx, nil, errors.Wrap(err, "failed to scope user")
 			}
-		}
 
-		unscope, err := um.ScopeUser(ctx)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to scope user")
+			return ctx, unscope, nil
 		}
-
-		return unscope, nil
+		hooks = append(hooks, scopeSpaceGroupHook)
 	}
 
-	mw := middleware.NewFS(dfs, scopeUserHook)
+	mw := middleware.NewFS(dfs, hooks...)
 	fs := &posixFS{
 		FS: mw,
 		um: um,

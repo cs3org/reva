@@ -40,6 +40,7 @@ type Mapper interface {
 
 type UnixMapper struct {
 	baseUid int
+	baseGid int
 }
 
 type UnscopeFunc func() error
@@ -47,9 +48,11 @@ type UnscopeFunc func() error
 // New returns a new user mapper
 func NewUnixMapper() *UnixMapper {
 	baseUid, _ := unix.SetfsuidRetUid(-1)
+	baseGid, _ := unix.SetfsgidRetGid(-1)
 
 	return &UnixMapper{
 		baseUid: baseUid,
+		baseGid: baseGid,
 	}
 }
 
@@ -70,46 +73,82 @@ func (um *UnixMapper) RunInBaseScope(f func() error) error {
 
 // ScopeBase returns to the base uid and gid returning a function that can be used to restore the previous scope
 func (um *UnixMapper) ScopeBase() (func() error, error) {
-	return um.ScopeUserByIds(um.baseUid)
+	return um.ScopeUserByIds(um.baseUid, um.baseGid)
 }
 
 // MapUser returns the user and group ids for the given username
-func (u *UnixMapper) MapUser(username string) (int, error) {
+func (u *UnixMapper) MapUser(username string) (int, int, error) {
+	if u == nil {
+		return 0, 0, nil
+	}
+
 	userDetails, err := user.Lookup(username)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
 	uid, err := strconv.Atoi(userDetails.Uid)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
+	}
+	gid, err := strconv.Atoi(userDetails.Gid)
+	if err != nil {
+		return 0, 0, err
 	}
 
-	return uid, nil
+	return uid, gid, nil
 }
 
 func (um *UnixMapper) ScopeUser(ctx context.Context) (func() error, error) {
+	if um == nil {
+		return nil, nil
+	}
+
 	u := revactx.ContextMustGetUser(ctx)
 
-	uid, err := um.MapUser(u.Username)
+	uid, gid, err := um.MapUser(u.Username)
 	if err != nil {
 		return nil, err
 	}
-	return um.ScopeUserByIds(uid)
+	return um.ScopeUserByIds(uid, gid)
 }
-func (um *UnixMapper) ScopeUserByIds(uid int) (func() error, error) {
+
+func (um *UnixMapper) ScopeUserByIds(uid, gid int) (func() error, error) {
+	if um == nil {
+		return nil, nil
+	}
+
 	runtime.LockOSThread() // Lock this Goroutine to the current OS thread
 
-	prevUid, err := unix.SetfsuidRetUid(uid)
-	if err != nil {
-		return nil, err
+	var err error
+	var prevUid int
+	var prevGid int
+	if uid >= 0 {
+		prevUid, err = unix.SetfsuidRetUid(uid)
+		if err != nil {
+			return nil, err
+		}
+		if testUid, _ := unix.SetfsuidRetUid(-1); testUid != uid {
+			return nil, fmt.Errorf("failed to setfsuid to %d", uid)
+		}
 	}
-	if testUid, _ := unix.SetfsuidRetUid(-1); testUid != uid {
-		return nil, fmt.Errorf("failed to setfsuid to %d", uid)
+	if gid >= 0 {
+		prevGid, err = unix.SetfsgidRetGid(uid)
+		if err != nil {
+			return nil, err
+		}
+		if testGid, _ := unix.SetfsgidRetGid(-1); testGid != gid {
+			return nil, fmt.Errorf("failed to setfsuid to %d", gid)
+		}
 	}
 
 	return func() error {
-		_ = unix.Setfsuid(prevUid)
+		if uid >= 0 {
+			_ = unix.Setfsuid(prevUid)
+		}
+		if gid >= 0 {
+			_ = unix.Setfsuid(prevGid)
+		}
 		runtime.UnlockOSThread()
 		return nil
 	}, nil
