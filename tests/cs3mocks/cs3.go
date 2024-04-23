@@ -23,9 +23,6 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 )
 
-//go:generate make --no-print-directory -C ../.. mockery NAME=GatewayAPIClient
-//go:generate make --no-print-directory -C ../.. mockery NAME=CollaborationAPIClient
-
 // GatewayAPIClient provides the mocks for the gateway.GatewayAPIClient
 type GatewayAPIClient interface {
 	gateway.GatewayAPIClient
