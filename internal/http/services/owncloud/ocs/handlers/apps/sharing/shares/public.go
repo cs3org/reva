@@ -295,9 +295,14 @@ func (h *Handler) isPublicShare(r *http.Request, oid string) (*link.PublicShare,
 			},
 		},
 	})
-	if err != nil {
-		logger.Err(err)
+	switch {
+	case err != nil:
+		log.Err(err).Send()
 		return nil, false
+	case psRes.Status.Code == rpc.Code_CODE_OK:
+		fallthrough
+	case psRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
+		log.Error().Str("message", psRes.GetStatus().GetMessage()).Str("code", psRes.GetStatus().GetCode().String()).Msg("isPublicShare received unexpected status")
 	}
 
 	return psRes.GetShare(), psRes.GetShare() != nil
