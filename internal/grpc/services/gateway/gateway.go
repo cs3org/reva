@@ -29,10 +29,12 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
+	"github.com/cs3org/reva/pkg/share/cache"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"google.golang.org/grpc"
 )
 
@@ -65,13 +67,18 @@ type config struct {
 	TransferExpires               int64  `mapstructure:"transfer_expires"`
 	TokenManager                  string `mapstructure:"token_manager"`
 	// ShareFolder is the location where to create shares in the recipient's storage provider.
-	ShareFolder         string                            `mapstructure:"share_folder"`
-	DataTransfersFolder string                            `mapstructure:"data_transfers_folder"`
-	HomeMapping         string                            `mapstructure:"home_mapping"`
-	TokenManagers       map[string]map[string]interface{} `mapstructure:"token_managers"`
-	EtagCacheTTL        int                               `mapstructure:"etag_cache_ttl"`
-	AllowedUserAgents   map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
-	CreateHomeCacheTTL  int                               `mapstructure:"create_home_cache_ttl"`
+	ShareFolder              string                            `mapstructure:"share_folder"`
+	DataTransfersFolder      string                            `mapstructure:"data_transfers_folder"`
+	HomeMapping              string                            `mapstructure:"home_mapping"`
+	TokenManagers            map[string]map[string]interface{} `mapstructure:"token_managers"`
+	AllowedUserAgents        map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
+	CacheWarmupDriver        string                            `mapstructure:"cache_warmup_driver"`
+	CacheWarmupDrivers       map[string]map[string]interface{} `mapstructure:"cache_warmup_drivers"`
+	EtagCacheTTL             int                               `mapstructure:"etag_cache_ttl"`
+	CreateHomeCacheTTL       int                               `mapstructure:"create_home_cache_ttl"`
+	ResourceInfoCacheDriver  string                            `mapstructure:"resource_info_cache_type"`
+	ResourceInfoCacheTTL     int                               `mapstructure:"resource_info_cache_ttl"`
+	ResourceInfoCacheDrivers map[string]map[string]interface{} `mapstructure:"resource_info_caches"`
 }
 
 // sets defaults.
@@ -116,11 +123,13 @@ func (c *config) ApplyDefaults() {
 }
 
 type svc struct {
-	c               *config
-	dataGatewayURL  url.URL
-	tokenmgr        token.Manager
-	etagCache       *ttlcache.Cache `mapstructure:"etag_cache"`
-	createHomeCache *ttlcache.Cache `mapstructure:"create_home_cache"`
+	c                    *config
+	dataGatewayURL       url.URL
+	tokenmgr             token.Manager
+	etagCache            *ttlcache.Cache `mapstructure:"etag_cache"`
+	createHomeCache      *ttlcache.Cache `mapstructure:"create_home_cache"`
+	resourceInfoCache    cache.ResourceInfoCache
+	resourceInfoCacheTTL time.Duration
 }
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
@@ -151,12 +160,21 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	_ = createHomeCache.SetTTL(time.Duration(c.CreateHomeCacheTTL) * time.Second)
 	createHomeCache.SkipTTLExtensionOnHit(true)
 
+	rCache, _ := getCacheManager(c)
+	if c.ResourceInfoCacheTTL > 0 {
+		cwm, err := getCacheWarmupManager(c)
+		if err == nil {
+			go startCacheWarmup(cwm, rCache, c.ResourceInfoCacheTTL)
+		}
+	}
+
 	s := &svc{
-		c:               &c,
-		dataGatewayURL:  *u,
-		tokenmgr:        tokenManager,
-		etagCache:       etagCache,
-		createHomeCache: createHomeCache,
+		c:                 &c,
+		dataGatewayURL:    *u,
+		tokenmgr:          tokenManager,
+		etagCache:         etagCache,
+		createHomeCache:   createHomeCache,
+		resourceInfoCache: rCache,
 	}
 
 	return s, nil
@@ -216,4 +234,30 @@ func getTokenManager(manager string, m map[string]map[string]interface{}) (token
 	}
 
 	return nil, errtypes.NotFound(fmt.Sprintf("driver %s not found for token manager", manager))
+}
+
+func getCacheManager(c *config.Config) (cache.ResourceInfoCache, error) {
+	if f, ok := cachereg.NewFuncs[c.ResourceInfoCacheDriver]; ok {
+		return f(c.ResourceInfoCacheDrivers[c.ResourceInfoCacheDriver])
+	}
+	return nil, fmt.Errorf("driver not found: %s", c.ResourceInfoCacheDriver)
+}
+
+func getCacheWarmupManager(c *config.Config) (cache.Warmup, error) {
+	if f, ok := warmupreg.NewFuncs[c.CacheWarmupDriver]; ok {
+		return f(c.CacheWarmupDrivers[c.CacheWarmupDriver])
+	}
+	return nil, fmt.Errorf("driver not found: %s", c.CacheWarmupDriver)
+}
+
+func startCacheWarmup(cw cache.Warmup, rCache cache.ResourceInfoCache, ttl Duration) {
+	time.Sleep(2 * time.Second)
+	infos, err := cw.GetResourceInfos()
+	if err != nil {
+		return
+	}
+	for _, r := range infos {
+		key := resourceid.OwnCloudResourceIDWrap(r.Id)
+		_ = h.resourceInfoCache.SetWithExpire(key, r, h.resourceInfoCacheTTL)
+	}
 }
