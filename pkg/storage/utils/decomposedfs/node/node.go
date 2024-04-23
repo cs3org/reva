@@ -504,7 +504,7 @@ func (n *Node) readOwner(ctx context.Context) (*userpb.UserId, error) {
 func (n *Node) PermissionSet(ctx context.Context) (provider.ResourcePermissions, bool) {
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
-		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
+		appctx.GetLogger(ctx).Debug().Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Msg("no user in context, returning default permissions")
 		return NoPermissions(), false
 	}
 	if utils.UserEqual(u.Id, n.SpaceRoot.Owner()) {
@@ -573,7 +573,7 @@ func (n *Node) SetMtime(ctx context.Context, t *time.Time) (err error) {
 
 // SetEtag sets the temporary etag of a node if it differs from the current etag
 func (n *Node) SetEtag(ctx context.Context, val string) (err error) {
-	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
+	sublog := appctx.GetLogger(ctx).With().Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Logger()
 	var tmTime time.Time
 	if tmTime, err = n.GetTMTime(ctx); err != nil {
 		return
@@ -626,7 +626,7 @@ func (n *Node) IsDir(ctx context.Context) bool {
 
 // AsResourceInfo return the node as CS3 ResourceInfo
 func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissions, mdKeys, fieldMask []string, returnBasename bool) (ri *provider.ResourceInfo, err error) {
-	sublog := appctx.GetLogger(ctx).With().Interface("node", n.ID).Logger()
+	sublog := appctx.GetLogger(ctx).With().Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Logger()
 
 	var fn string
 	nodeType := n.Type(ctx)
@@ -835,9 +835,9 @@ func (n *Node) readChecksumIntoResourceChecksum(ctx context.Context, algo string
 			Sum:  hex.EncodeToString(v),
 		}
 	case metadata.IsAttrUnset(err):
-		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", n.InternalPath()).Str("algorithm", algo).Msg("checksum not set")
+		appctx.GetLogger(ctx).Debug().Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Str("nodepath", n.InternalPath()).Str("algorithm", algo).Msg("checksum not set")
 	default:
-		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", n.InternalPath()).Str("algorithm", algo).Msg("could not read checksum")
+		appctx.GetLogger(ctx).Error().Err(err).Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Str("nodepath", n.InternalPath()).Str("algorithm", algo).Msg("could not read checksum")
 	}
 }
 
@@ -855,9 +855,9 @@ func (n *Node) readChecksumIntoOpaque(ctx context.Context, algo string, ri *prov
 			Value:   []byte(hex.EncodeToString(v)),
 		}
 	case metadata.IsAttrUnset(err):
-		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", n.InternalPath()).Str("algorithm", algo).Msg("checksum not set")
+		appctx.GetLogger(ctx).Debug().Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Str("nodepath", n.InternalPath()).Str("algorithm", algo).Msg("checksum not set")
 	default:
-		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", n.InternalPath()).Str("algorithm", algo).Msg("could not read checksum")
+		appctx.GetLogger(ctx).Error().Err(err).Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Str("nodepath", n.InternalPath()).Str("algorithm", algo).Msg("could not read checksum")
 	}
 }
 
@@ -882,12 +882,12 @@ func (n *Node) readQuotaIntoOpaque(ctx context.Context, ri *provider.ResourceInf
 				Value:   []byte(v),
 			}
 		} else {
-			appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", n.InternalPath()).Str("quota", v).Msg("malformed quota")
+			appctx.GetLogger(ctx).Error().Err(err).Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Str("nodepath", n.InternalPath()).Str("quota", v).Msg("malformed quota")
 		}
 	case metadata.IsAttrUnset(err):
-		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", n.InternalPath()).Msg("quota not set")
+		appctx.GetLogger(ctx).Debug().Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Str("nodepath", n.InternalPath()).Msg("quota not set")
 	default:
-		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", n.InternalPath()).Msg("could not read quota")
+		appctx.GetLogger(ctx).Error().Err(err).Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Str("nodepath", n.InternalPath()).Msg("could not read quota")
 	}
 }
 
@@ -1005,7 +1005,7 @@ func isGrantExpired(g *provider.Grant) bool {
 func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap provider.ResourcePermissions, accessDenied bool, err error) {
 	// check if the current user is the owner
 	if utils.UserEqual(u.Id, n.Owner()) {
-		appctx.GetLogger(ctx).Debug().Str("node", n.ID).Msg("user is owner, returning owner permissions")
+		appctx.GetLogger(ctx).Debug().Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Msg("user is owner, returning owner permissions")
 		return OwnerPermissions(), false, nil
 	}
 
@@ -1023,7 +1023,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 	// we read all grantees from the node
 	var grantees []string
 	if grantees, err = n.ListGrantees(ctx); err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("error listing grantees")
+		appctx.GetLogger(ctx).Error().Err(err).Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Msg("error listing grantees")
 		return NoPermissions(), true, err
 	}
 
@@ -1064,15 +1064,15 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 			}
 			AddPermissions(&ap, g.GetPermissions())
 		case metadata.IsAttrUnset(err):
-			appctx.GetLogger(ctx).Error().Interface("node", n).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")
+			appctx.GetLogger(ctx).Error().Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")
 			// continue with next segment
 		default:
-			appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Str("grant", grantees[i]).Msg("error reading permissions")
+			appctx.GetLogger(ctx).Error().Err(err).Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Str("grant", grantees[i]).Msg("error reading permissions")
 			// continue with next segment
 		}
 	}
 
-	appctx.GetLogger(ctx).Debug().Interface("permissions", ap).Interface("node", n).Interface("user", u).Msg("returning aggregated permissions")
+	appctx.GetLogger(ctx).Debug().Interface("permissions", ap).Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Interface("user", u).Msg("returning aggregated permissions")
 	return ap, false, nil
 }
 
@@ -1126,7 +1126,7 @@ func (n *Node) IsDenied(ctx context.Context) bool {
 func (n *Node) ListGrantees(ctx context.Context) (grantees []string, err error) {
 	attrs, err := n.Xattrs(ctx)
 	if err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Str("node", n.ID).Msg("error listing attributes")
+		appctx.GetLogger(ctx).Error().Err(err).Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Msg("error listing attributes")
 		return nil, err
 	}
 	for name := range attrs {
@@ -1193,7 +1193,8 @@ func (n *Node) ListGrants(ctx context.Context) ([]*provider.Grant, error) {
 			appctx.GetLogger(ctx).
 				Error().
 				Err(err).
-				Str("node", n.ID).
+				Str("spaceid", n.SpaceID).
+				Str("nodeid", n.ID).
 				Str("grantee", g).
 				Msg("error reading grant")
 			continue
@@ -1265,6 +1266,12 @@ func (n *Node) UnmarkProcessing(ctx context.Context, uploadID string) error {
 func (n *Node) IsProcessing(ctx context.Context) bool {
 	v, err := n.XattrString(ctx, prefixes.StatusPrefix)
 	return err == nil && strings.HasPrefix(v, ProcessingStatus)
+}
+
+// ProcessingID returns the latest upload session id
+func (n *Node) ProcessingID(ctx context.Context) (string, error) {
+	v, err := n.XattrString(ctx, prefixes.StatusPrefix)
+	return strings.TrimPrefix(v, ProcessingStatus), err
 }
 
 // IsSpaceRoot checks if the node is a space root

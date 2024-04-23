@@ -100,12 +100,12 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	rootPath := root.InternalPath()
 	switch req.Type {
 	case _spaceTypePersonal:
-		if fs.o.UserLayout != "" {
-			rootPath = filepath.Join(fs.o.Root, templates.WithUser(u, fs.o.UserLayout))
+		if fs.o.PersonalSpacePathTemplate != "" {
+			rootPath = filepath.Join(fs.o.Root, templates.WithUser(u, fs.o.PersonalSpacePathTemplate))
 		}
-	case _spaceTypeProject:
-		if fs.o.ProjectLayout != "" {
-			rootPath = filepath.Join(fs.o.Root, templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, spaceID, fs.o.ProjectLayout))
+	default:
+		if fs.o.GeneralSpacePathTemplate != "" {
+			rootPath = filepath.Join(fs.o.Root, templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, spaceID, fs.o.GeneralSpacePathTemplate))
 		}
 	}
 
@@ -798,7 +798,7 @@ func (fs *Decomposedfs) StorageSpaceFromNode(ctx context.Context, n *node.Node, 
 		}
 	}
 
-	sublog := appctx.GetLogger(ctx).With().Str("space", n.SpaceRoot.ID).Logger()
+	sublog := appctx.GetLogger(ctx).With().Str("spaceid", n.SpaceID).Logger()
 
 	var err error
 	// TODO apply more filters

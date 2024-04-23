@@ -372,6 +372,7 @@ func (s *service) RemovePublicShare(ctx context.Context, req *link.RemovePublicS
 		}, err
 	}
 	return &link.RemovePublicShareResponse{
+		Opaque: utils.AppendJSONToOpaque(nil, "resourceid", ps.GetResourceId()),
 		Status: status.NewOK(ctx),
 	}, nil
 }
@@ -554,7 +555,19 @@ func (s *service) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicS
 	}
 	updatePassword := req.GetUpdate().GetType() == link.UpdatePublicShareRequest_Update_TYPE_PASSWORD
 	setPassword := grant.GetPassword()
+
+	// we update permissions with an empty password and password is not set on the public share
+	emptyPasswordInPermissionUpdate := len(setPassword) == 0 && updatePermissions && !ps.PasswordProtected
+
+	// password is updated, we use the current permissions to check if the user can opt out
 	if updatePassword && !isInternalLink && enforcePassword(canOptOut, ps.GetPermissions().GetPermissions(), s.conf) && len(setPassword) == 0 {
+		return &link.UpdatePublicShareResponse{
+			Status: status.NewInvalidArg(ctx, "password protection is enforced"),
+		}, nil
+	}
+
+	// permissions are updated, we use the new permissions to check if the user can opt out
+	if emptyPasswordInPermissionUpdate && !isInternalLink && enforcePassword(canOptOut, grant.GetPermissions().GetPermissions(), s.conf) && len(setPassword) == 0 {
 		return &link.UpdatePublicShareResponse{
 			Status: status.NewInvalidArg(ctx, "password protection is enforced"),
 		}, nil
