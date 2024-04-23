@@ -71,7 +71,9 @@ type Options struct {
 	PermTLSMode              pool.TLSMode
 
 	PersonalSpaceAliasTemplate string `mapstructure:"personalspacealias_template"`
+	PersonalSpacePathTemplate  string `mapstructure:"personalspacepath_template"`
 	GeneralSpaceAliasTemplate  string `mapstructure:"generalspacealias_template"`
+	GeneralSpacePathTemplate   string `mapstructure:"generalspacepath_template"`
 
 	AsyncFileUploads bool `mapstructure:"asyncfileuploads"`
 
