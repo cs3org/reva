@@ -328,6 +328,7 @@ func (s *svc) ListExistingReceivedShares(ctx context.Context, req *collaboration
 			}
 
 			// TODO(lopresti) incorporate the cache layer from internal/http/services/owncloud/ocs/handlers/apps/sharing/shares/shares.go
+			//s.resourceInfoCache
 			stat, err := s.Stat(ctx, &provider.StatRequest{
 				Ref: &provider.Reference{
 					ResourceId: rs.Share.ResourceId,
