@@ -180,10 +180,31 @@ func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, space
 		if err != nil {
 			return nil, err
 		}
+		if err := s.addQuotaToProjects(ctx, projects); err != nil {
+			return nil, err
+		}
 		sp = append(sp, projects...)
 	}
 
 	return sp, nil
+}
+
+func (s *service) addQuotaToProjects(ctx context.Context, projects []*provider.StorageSpace) error {
+	for _, proj := range projects {
+		quota, err := s.gw.GetQuota(ctx, &gateway.GetQuotaRequest{
+			Ref: &provider.Reference{
+				Path: proj.RootInfo.Path,
+			},
+		})
+		if err != nil {
+			return err
+		}
+		proj.Quota = &provider.Quota{
+			QuotaMaxBytes:  quota.TotalBytes,
+			RemainingBytes: quota.TotalBytes - quota.UsedBytes,
+		}
+	}
+	return nil
 }
 
 func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.StorageSpace, error) {
