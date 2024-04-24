@@ -191,8 +191,17 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 		return nil, nil // lightweight accounts and federated do not have a user space
 	}
 
-	home := templates.WithUser(user, s.c.UserSpace)
+	home := templates.WithUser(user, s.c.UserSpace) // TODO: we can use gw.GetHome() call
 	stat, err := s.gw.Stat(ctx, &provider.StatRequest{
+		Ref: &provider.Reference{
+			Path: home,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	quota, err := s.gw.GetQuota(ctx, &gateway.GetQuotaRequest{
 		Ref: &provider.Reference{
 			Path: home,
 		},
@@ -211,6 +220,9 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 		RootInfo: &provider.ResourceInfo{
 			PermissionSet: conversions.NewManagerRole().CS3ResourcePermissions(),
 			Path:          home,
+		},
+		Quota: &provider.Quota{
+			QuotaMaxBytes: quota.TotalBytes,
 		},
 	}, nil
 }

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"path"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -250,6 +251,10 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *collaboration.ListRec
 		return nil, errors.Wrap(err, "gateway: error calling ListReceivedShares")
 	}
 	return res, nil
+}
+
+func (s *svc) ListExistingReceivedShares(context.Context, *collaboration.ListReceivedSharesRequest) (*gateway.ListExistingReceivedSharesResponse, error) {
+	panic("ListExistingReceivedShares: not yet implemented")
 }
 
 func (s *svc) GetReceivedShare(ctx context.Context, req *collaboration.GetReceivedShareRequest) (*collaboration.GetReceivedShareResponse, error) {

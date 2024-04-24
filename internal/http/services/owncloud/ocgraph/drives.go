@@ -253,6 +253,13 @@ func (s *svc) cs3StorageSpaceToDrive(user *userpb.User, space *providerpb.Storag
 			},
 		}
 	}
+
+	if space.Quota != nil {
+		drive.Quota = &libregraph.Quota{
+			Total:     libregraph.PtrInt64(int64(space.Quota.QuotaMaxBytes)),
+			Remaining: libregraph.PtrInt64(int64(space.Quota.QuotaMaxBytes)), // FIXME
+		}
+	}
 	return drive
 }
 

@@ -138,7 +138,7 @@ require (
 go 1.21
 
 replace (
-	github.com/cs3org/go-cs3apis => github.com/gmgigi96/go-cs3apis v0.0.0-20231025125139-a7a73cb7954e
+	github.com/cs3org/go-cs3apis => github.com/gmgigi96/go-cs3apis v0.0.0-20240424151533-8e7c31f06d27
 	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
 	github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
 )
