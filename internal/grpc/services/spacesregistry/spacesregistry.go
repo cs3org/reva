@@ -222,7 +222,8 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 			Path:          home,
 		},
 		Quota: &provider.Quota{
-			QuotaMaxBytes: quota.TotalBytes,
+			QuotaMaxBytes:  quota.TotalBytes,
+			RemainingBytes: quota.TotalBytes - quota.UsedBytes,
 		},
 	}, nil
 }
