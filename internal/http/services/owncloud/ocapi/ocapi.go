@@ -32,24 +32,13 @@ const assigmentMock = `{"assignments":[{"id":"412cbb5a-48cf-401b-8709-6f88d1d33b
 
 // TODO(lopresti) this is currently mocked for a "primary" user, need to remove some of those permissions for other types.
 const permissionsMock = `{"permissions": [
-	"Drives.DeletePersonal.all",
 	"ReadOnlyPublicLinkPassword.Delete.all",
 	"EmailNotifications.ReadWriteDisabled.own",
-	"Groups.ReadWrite.all",
-	"Drives.List.all",
-	"Drives.ReadWritePersonalQuota.all",
-	"Drives.ReadWriteProjectQuota.all",
-	"Logo.Write.all",
 	"Favorites.Write.own",
 	"AutoAcceptShares.ReadWriteDisabled.own",
 	"PublicLink.Write.all",
-	"Drives.DeleteProject.all",
 	"Drives.ReadWriteEnabled.all",
-	"Accounts.ReadWrite.all",
 	"Language.ReadWrite.all",
-	"Roles.ReadWrite.all",
-	"Settings.ReadWrite.all",
-	"Drives.Create.all",
 	"Favorites.List.own",
 	"Drives.ReadWrite.all",
 	"Shares.Write.all"
