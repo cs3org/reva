@@ -62,9 +62,10 @@ type Capabilities struct {
 
 // Spaces lets a service configure its advertised options related to Storage Spaces.
 type Spaces struct {
-	Version  string  `json:"version"  mapstructure:"version"  xml:"version"`
-	Enabled  ocsBool `json:"enabled"  mapstructure:"enabled"  xml:"enabled"`
-	Projects ocsBool `json:"projects" mapstructure:"projects" xml:"projects"`
+	Version   string  `json:"version"  mapstructure:"version"  xml:"version"`
+	Enabled   ocsBool `json:"enabled"  mapstructure:"enabled"  xml:"enabled"`
+	Projects  ocsBool `json:"projects" mapstructure:"projects" xml:"projects"`
+	ShareJail ocsBool `json:"share_jail" mapstructure:"share_jail" xml:"share_jail"`
 }
 
 // CapabilitiesCore holds webdav config.
