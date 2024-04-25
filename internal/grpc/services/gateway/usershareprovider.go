@@ -257,13 +257,17 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *collaboration.ListRec
 func (s *svc) ListExistingReceivedShares(ctx context.Context, req *collaboration.ListReceivedSharesRequest) (*gateway.ListExistingReceivedSharesResponse, error) {
 	rshares, err := s.ListReceivedShares(ctx, req)
 	if err != nil {
-		return nil, err
+		err := errors.Wrap(err, "gateway: error calling ListExistingReceivedShares")
+		return &gateway.ListExistingReceivedSharesResponse{
+			Status: status.NewInternal(ctx, err, "error listing received shares"),
+		}, nil
 	}
 
 	sharesCh := make(chan *gateway.SharedResourceInfo, len(rshares.Shares))
 	pool := pond.New(50, len(rshares.Shares))
 	for _, rs := range rshares.Shares {
 		rs := rs
+		// TODO (gdelmont): we should report any eventual error raised by the goroutines
 		pool.Submit(func() {
 			if rs.State == collaboration.ShareState_SHARE_STATE_REJECTED || rs.State == collaboration.ShareState_SHARE_STATE_INVALID {
 				return
@@ -304,6 +308,7 @@ func (s *svc) ListExistingReceivedShares(ctx context.Context, req *collaboration
 
 	return &gateway.ListExistingReceivedSharesResponse{
 		Shares: sris,
+		Status: status.NewOK(ctx),
 	}, nil
 }
 

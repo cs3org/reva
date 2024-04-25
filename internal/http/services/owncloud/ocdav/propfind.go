@@ -622,6 +622,11 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		Status: "HTTP/1.1 404 Not Found",
 		Prop:   []*propertyXML{},
 	}
+
+	propstatOK.Prop = append(propstatOK.Prop,
+		s.newProp("oc:name", path.Base(md.Path)),
+	)
+
 	// when allprops has been requested
 	if pf.Allprop != nil {
 		// return all known properties
