@@ -310,9 +310,16 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 
 			now := time.Now()
 			if failed {
-				// propagate sizeDiff after failed postprocessing
-				if err := fs.tp.Propagate(ctx, n, -session.SizeDiff()); err != nil {
-					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not propagate tree size change")
+				// if no other upload session is in progress (processing id != session id) or has finished (processing id == "")
+				latestSession, err := n.ProcessingID(ctx)
+				if err != nil {
+					log.Error().Err(err).Str("node", n.ID).Str("uploadID", ev.UploadID).Msg("reading node for session failed")
+				}
+				if latestSession == session.ID() {
+					// propagate reverted sizeDiff after failed postprocessing
+					if err := fs.tp.Propagate(ctx, n, -session.SizeDiff()); err != nil {
+						log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not propagate tree size change")
+					}
 				}
 			} else if p := getParent(); p != nil {
 				// update parent tmtime to propagate etag change after successful postprocessing
