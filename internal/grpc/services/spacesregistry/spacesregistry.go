@@ -24,6 +24,7 @@ import (
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -41,6 +42,7 @@ import (
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/cs3org/reva/pkg/utils/list"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 func init() {
@@ -53,9 +55,10 @@ func init() {
 }
 
 type config struct {
-	Driver    string                    `mapstructure:"driver"`
-	Drivers   map[string]map[string]any `mapstructure:"drivers"`
-	UserSpace string                    `mapstructure:"user_space" validate:"required"`
+	Driver        string                    `mapstructure:"driver"`
+	Drivers       map[string]map[string]any `mapstructure:"drivers"`
+	UserSpace     string                    `mapstructure:"user_space" validate:"required"`
+	MachineSecret string                    `mapstructure:"machine_secret" validate:"required"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -191,7 +194,33 @@ func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, space
 
 func (s *service) addQuotaToProjects(ctx context.Context, projects []*provider.StorageSpace) error {
 	for _, proj := range projects {
-		quota, err := s.gw.GetQuota(ctx, &gateway.GetQuotaRequest{
+		// To get the quota for a project, we cannot do the request
+		// on behalf of the current logged user, because the project
+		// is owned by an other account, in general different from the
+		// logged in user.
+		// We need then to impersonate the owner and ask the quota
+		// on behalf of him.
+
+		authRes, err := s.gw.Authenticate(ctx, &gateway.AuthenticateRequest{
+			Type:         "machine",
+			ClientId:     proj.Owner.Id.OpaqueId,
+			ClientSecret: s.c.MachineSecret,
+		})
+		if err != nil {
+			return err
+		}
+		if authRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+			return errors.New(authRes.Status.Message)
+		}
+
+		token := authRes.Token
+		owner := authRes.User
+
+		ownerCtx := appctx.ContextSetToken(ctx, token)
+		ownerCtx = metadata.AppendToOutgoingContext(ownerCtx, appctx.TokenHeader, token)
+		ownerCtx = appctx.ContextSetUser(ownerCtx, owner)
+
+		quota, err := s.gw.GetQuota(ownerCtx, &gateway.GetQuotaRequest{
 			Ref: &provider.Reference{
 				Path: proj.RootInfo.Path,
 			},
