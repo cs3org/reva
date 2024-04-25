@@ -41,7 +41,7 @@ require (
 	github.com/nats-io/nats.go v1.33.1
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.30.0
-	github.com/owncloud/libre-graph-api-go v1.0.5-0.20231113143725-09bf34dc9afb
+	github.com/owncloud/libre-graph-api-go v1.0.5-0.20240425090020-dba6d1507c38
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.19.0
 	github.com/rs/cors v1.10.1

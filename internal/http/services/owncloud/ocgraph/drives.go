@@ -142,6 +142,11 @@ func convertShareToSpace(share *gateway.SharedResourceInfo) *libregraph.Drive {
 		DriveType:  libregraph.PtrString("mountpoint"),
 		DriveAlias: libregraph.PtrString(share.Share.Share.Id.OpaqueId), // this is not used, but must not be the same alias as the drive item
 		Name:       filepath.Base(share.ResourceInfo.Path),
+		Quota: &libregraph.Quota{
+			Total:     libregraph.PtrInt64(24154390300000),
+			Used:      libregraph.PtrInt64(3141592),
+			Remaining: libregraph.PtrInt64(24154387158408),
+		},
 		Root: &libregraph.DriveItem{
 			Id: libregraph.PtrString(fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, share.Share.Share.Id.OpaqueId)),
 			RemoteItem: &libregraph.RemoteItem{
