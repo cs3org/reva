@@ -183,7 +183,7 @@ func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, space
 		if err != nil {
 			return nil, err
 		}
-		if err := s.addQuotaToProjects(ctx, projects); err != nil {
+		if err := s.decorateProjects(ctx, projects); err != nil {
 			return nil, err
 		}
 		sp = append(sp, projects...)
@@ -192,8 +192,10 @@ func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, space
 	return sp, nil
 }
 
-func (s *service) addQuotaToProjects(ctx context.Context, projects []*provider.StorageSpace) error {
+func (s *service) decorateProjects(ctx context.Context, projects []*provider.StorageSpace) error {
 	for _, proj := range projects {
+		// ADD QUOTA
+
 		// To get the quota for a project, we cannot do the request
 		// on behalf of the current logged user, because the project
 		// is owned by an other account, in general different from the
@@ -232,6 +234,21 @@ func (s *service) addQuotaToProjects(ctx context.Context, projects []*provider.S
 			QuotaMaxBytes:  quota.TotalBytes,
 			RemainingBytes: quota.TotalBytes - quota.UsedBytes,
 		}
+
+		// ADD LAST ACTIVITY
+		statRes, err := s.gw.Stat(ctx, &provider.StatRequest{
+			Ref: &provider.Reference{
+				Path: proj.RootInfo.Path,
+			},
+		})
+		if err != nil {
+			return err
+		}
+		if statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+			return errors.New(statRes.Status.Message)
+		}
+
+		proj.Mtime = statRes.Info.Mtime
 	}
 	return nil
 }

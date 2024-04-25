@@ -222,6 +222,10 @@ func (s *svc) cs3StorageSpaceToDrive(user *userpb.User, space *providerpb.Storag
 			Used:      libregraph.PtrInt64(int64(space.Quota.QuotaMaxBytes - space.Quota.RemainingBytes)),
 		}
 	}
+
+	if space.Mtime != nil {
+		drive.LastModifiedDateTime = libregraph.PtrTime(time.Unix(int64(space.Mtime.Seconds), int64(space.Mtime.Nanos)))
+	}
 	return drive
 }
 
