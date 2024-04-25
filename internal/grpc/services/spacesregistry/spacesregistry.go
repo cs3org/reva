@@ -216,7 +216,7 @@ func (s *service) addQuotaToProjects(ctx context.Context, projects []*provider.S
 		token := authRes.Token
 		owner := authRes.User
 
-		ownerCtx := appctx.ContextSetToken(ctx, token)
+		ownerCtx := appctx.ContextSetToken(context.TODO(), token)
 		ownerCtx = metadata.AppendToOutgoingContext(ownerCtx, appctx.TokenHeader, token)
 		ownerCtx = appctx.ContextSetUser(ownerCtx, owner)
 
