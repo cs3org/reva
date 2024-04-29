@@ -1,3 +1,60 @@
+Changelog for reva 2.19.6 (2024-04-29)
+=======================================
+
+The following sections list the changes in reva 2.19.6 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #4654: Write blob based on session id
+*   Fix #4666: Fix uploading via a public link
+*   Fix #4665: Fix creating documents in nested folders of public shares
+*   Enh #4655: Bump mockery to v2.40.2
+*   Enh #4664: Add ScanData to Uploadsession
+
+Details
+-------
+
+*   Bugfix #4654: Write blob based on session id
+
+   Decomposedfs now uses the session id and size when moving an uplode to the blobstore. This fixes
+   a cornercase that prevents an upload session from correctly being finished when another
+   upload session to the file was started and already finished.
+
+   https://github.com/cs3org/reva/pull/4654
+   https://github.com/cs3org/reva/pull/4615
+
+*   Bugfix #4666: Fix uploading via a public link
+
+   Fix http error when uploading via a public link
+
+   https://github.com/owncloud/ocis/issues/8699
+   https://github.com/cs3org/reva/pull/4666
+   https://github.com/cs3org/reva/pull/4589
+
+*   Bugfix #4665: Fix creating documents in nested folders of public shares
+
+   We fixed a bug that prevented creating new documented in a nested folder of a public share.
+
+   https://github.com/owncloud/ocis/issues/8957
+   https://github.com/cs3org/reva/pull/4665
+   https://github.com/cs3org/reva/pull/4660
+
+*   Enhancement #4655: Bump mockery to v2.40.2
+
+   We switched to the latest mockery and changed to .mockery.yaml based mock generation.
+
+   https://github.com/cs3org/reva/pull/4655
+   https://github.com/cs3org/reva/pull/4614
+
+*   Enhancement #4664: Add ScanData to Uploadsession
+
+   Adds virus scan results to the upload session.
+
+   https://github.com/cs3org/reva/pull/4664
+   https://github.com/cs3org/reva/pull/4657
+
 Changelog for reva 2.19.5 (2024-04-17)
 =======================================
 
@@ -3881,34 +3938,6 @@ Details
 
    https://github.com/cs3org/reva/pull/3083
 
-Changelog for reva 2.7.1 (2022-07-15)
-=======================================
-
-The following sections list the changes in reva 2.7.1 relevant to
-reva users. The changes are ordered by importance.
-
-Summary
--------
-
-*   Fix #3080: Make dataproviders return more headers
-*   Enh #3046: Add user filter
-
-Details
--------
-
-*   Bugfix #3080: Make dataproviders return more headers
-
-   Instead of ocdav doing an additional Stat request we now rely on the dataprovider to return the
-   necessary metadata information as headers.
-
-   https://github.com/owncloud/reva/issues/3080
-
-*   Enhancement #3046: Add user filter
-
-   This PR adds the ability to filter spaces by user-id
-
-   https://github.com/cs3org/reva/pull/3046
-
 Changelog for reva 2.7.0 (2022-07-15)
 =======================================
 
@@ -4040,6 +4069,34 @@ Details
    https://github.com/owncloud/ocis/issues/2144
    https://github.com/owncloud/ocis/issues/3073
    https://github.com/cs3org/reva/pull/2977
+
+Changelog for reva 2.7.1 (2022-07-15)
+=======================================
+
+The following sections list the changes in reva 2.7.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #3080: Make dataproviders return more headers
+*   Enh #3046: Add user filter
+
+Details
+-------
+
+*   Bugfix #3080: Make dataproviders return more headers
+
+   Instead of ocdav doing an additional Stat request we now rely on the dataprovider to return the
+   necessary metadata information as headers.
+
+   https://github.com/owncloud/reva/issues/3080
+
+*   Enhancement #3046: Add user filter
+
+   This PR adds the ability to filter spaces by user-id
+
+   https://github.com/cs3org/reva/pull/3046
 
 Changelog for reva 2.6.1 (2022-06-27)
 =======================================
@@ -4408,27 +4465,6 @@ Details
 
    https://github.com/cs3org/reva/pull/2922
 
-Changelog for reva 2.4.1 (2022-05-24)
-=======================================
-
-The following sections list the changes in reva 2.4.1 relevant to
-reva users. The changes are ordered by importance.
-
-Summary
--------
-
-*   Fix #2891: Add missing http status code
-
-Details
--------
-
-*   Bugfix #2891: Add missing http status code
-
-   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
-   pass it through.
-
-   https://github.com/cs3org/reva/pull/2891
-
 Changelog for reva 2.4.0 (2022-05-24)
 =======================================
 
@@ -4571,6 +4607,27 @@ Details
    correct storageprovider
 
    https://github.com/cs3org/reva/pull/2792
+
+Changelog for reva 2.4.1 (2022-05-24)
+=======================================
+
+The following sections list the changes in reva 2.4.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #2891: Add missing http status code
+
+Details
+-------
+
+*   Bugfix #2891: Add missing http status code
+
+   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
+   pass it through.
+
+   https://github.com/cs3org/reva/pull/2891
 
 Changelog for reva 2.3.1 (2022-05-08)
 =======================================
