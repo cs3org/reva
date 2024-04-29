@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -179,6 +180,13 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	session.SetSize(uploadLength)
 	session.SetStorageValue("SpaceRoot", n.SpaceRoot.ID)                                     // TODO SpaceRoot -> SpaceID
 	session.SetStorageValue("SpaceOwnerOrManager", n.SpaceOwnerOrManager(ctx).GetOpaqueId()) // TODO needed for what?
+
+	// remember the gid of the space
+	fi, err := os.Stat(n.SpaceRoot.InternalPath())
+	if err != nil {
+		return nil, err
+	}
+	session.SetStorageValue("SpaceGid", fmt.Sprintf("%d", (fi.Sys().(*syscall.Stat_t).Gid)))
 
 	iid, _ := ctxpkg.ContextGetInitiator(ctx)
 	session.SetMetadata("initiatorid", iid)

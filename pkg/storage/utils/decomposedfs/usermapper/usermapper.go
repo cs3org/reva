@@ -58,10 +58,6 @@ func NewUnixMapper() *UnixMapper {
 
 // RunInUserScope runs the given function in the scope of the base user
 func (um *UnixMapper) RunInBaseScope(f func() error) error {
-	if um == nil {
-		return f()
-	}
-
 	unscope, err := um.ScopeBase()
 	if err != nil {
 		return err
@@ -73,51 +69,22 @@ func (um *UnixMapper) RunInBaseScope(f func() error) error {
 
 // ScopeBase returns to the base uid and gid returning a function that can be used to restore the previous scope
 func (um *UnixMapper) ScopeBase() (func() error, error) {
-	return um.ScopeUserByIds(um.baseUid, um.baseGid)
+	return um.ScopeUserByIds(-1, um.baseGid)
 }
 
-// MapUser returns the user and group ids for the given username
-func (u *UnixMapper) MapUser(username string) (int, int, error) {
-	if u == nil {
-		return 0, 0, nil
-	}
-
-	userDetails, err := user.Lookup(username)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	uid, err := strconv.Atoi(userDetails.Uid)
-	if err != nil {
-		return 0, 0, err
-	}
-	gid, err := strconv.Atoi(userDetails.Gid)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	return uid, gid, nil
-}
-
+// ScopeUser returns to the base uid and gid returning a function that can be used to restore the previous scope
 func (um *UnixMapper) ScopeUser(ctx context.Context) (func() error, error) {
-	if um == nil {
-		return nil, nil
-	}
-
 	u := revactx.ContextMustGetUser(ctx)
 
-	uid, gid, err := um.MapUser(u.Username)
+	uid, gid, err := um.mapUser(u.Username)
 	if err != nil {
 		return nil, err
 	}
 	return um.ScopeUserByIds(uid, gid)
 }
 
+// ScopeUserByIds scopes the current user to the given uid and gid returning a function that can be used to restore the previous scope
 func (um *UnixMapper) ScopeUserByIds(uid, gid int) (func() error, error) {
-	if um == nil {
-		return nil, nil
-	}
-
 	runtime.LockOSThread() // Lock this Goroutine to the current OS thread
 
 	var err error
@@ -133,12 +100,12 @@ func (um *UnixMapper) ScopeUserByIds(uid, gid int) (func() error, error) {
 		}
 	}
 	if gid >= 0 {
-		prevGid, err = unix.SetfsgidRetGid(uid)
+		prevGid, err = unix.SetfsgidRetGid(gid)
 		if err != nil {
 			return nil, err
 		}
 		if testGid, _ := unix.SetfsgidRetGid(-1); testGid != gid {
-			return nil, fmt.Errorf("failed to setfsuid to %d", gid)
+			return nil, fmt.Errorf("failed to setfsgid to %d", gid)
 		}
 	}
 
@@ -147,9 +114,27 @@ func (um *UnixMapper) ScopeUserByIds(uid, gid int) (func() error, error) {
 			_ = unix.Setfsuid(prevUid)
 		}
 		if gid >= 0 {
-			_ = unix.Setfsuid(prevGid)
+			_ = unix.Setfsgid(prevGid)
 		}
 		runtime.UnlockOSThread()
 		return nil
 	}, nil
+}
+
+func (u *UnixMapper) mapUser(username string) (int, int, error) {
+	userDetails, err := user.Lookup(username)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	uid, err := strconv.Atoi(userDetails.Uid)
+	if err != nil {
+		return 0, 0, err
+	}
+	gid, err := strconv.Atoi(userDetails.Gid)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return uid, gid, nil
 }

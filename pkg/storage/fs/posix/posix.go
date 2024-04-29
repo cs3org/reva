@@ -51,6 +51,8 @@ func init() {
 	registry.Register("posix", New)
 }
 
+var _spaceGID = "spaceGID"
+
 type posixFS struct {
 	storage.FS
 
@@ -125,31 +127,23 @@ func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 
 		spaceRoot := lu.InternalPath(spaceID, spaceID)
 		fi, err := os.Stat(spaceRoot)
-		ctx = context.WithValue(ctx, "spaceGID", fi.Sys().(*syscall.Stat_t).Gid)
+		if err != nil {
+			return ctx, nil, err
+		}
 
-		// root, err := node.ReadNode(ctx, lu, spaceID, spaceID, true, nil, false)
-		// if err != nil {
-		// 	return nil, err
-		// }
-
-		// space, err := dfs.(*decomposedfs.Decomposedfs).StorageSpaceFromNode(ctx, root, false)
-		// if err != nil {
-		// 	return nil, err
-		// }
-		// // pass the space type to the hook, different types of spaces might require different handling
-		// ctx = context.WithValue(ctx, "space", space)
+		ctx = context.WithValue(ctx, _spaceGID, fi.Sys().(*syscall.Stat_t).Gid)
 
 		return ctx, nil, err
 	}
 	hooks = append(hooks, resolveSpaceHook)
 	if o.UseSpaceGroups {
 		scopeSpaceGroupHook := func(methodName string, ctx context.Context, spaceID string) (context.Context, middleware.UnHook, error) {
-			spaceGID, ok := ctx.Value("spaceType").(int)
+			spaceGID, ok := ctx.Value(_spaceGID).(uint32)
 			if !ok {
 				return ctx, nil, nil
 			}
 
-			unscope, err := um.ScopeUserByIds(-1, spaceGID)
+			unscope, err := um.ScopeUserByIds(-1, int(spaceGID))
 			if err != nil {
 				return ctx, nil, errors.Wrap(err, "failed to scope user")
 			}

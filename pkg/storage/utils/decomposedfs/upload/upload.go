@@ -26,6 +26,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -143,9 +144,14 @@ func (session *OcisSession) FinishUpload(ctx context.Context) error {
 		prefixes.ChecksumPrefix + "adler32": adler32h.Sum(nil),
 	}
 
-	// At this point we scope by the user to create the final file in the final location
-	if session.store.um != nil {
-		unscope, err := session.store.um.ScopeUser(ctx)
+	// At this point we scope by the space to create the final file in the final location
+	if session.store.um != nil && session.info.Storage["SpaceGid"] != "" {
+		gid, err := strconv.Atoi(session.info.Storage["SpaceGid"])
+		if err != nil {
+			return errors.Wrap(err, "failed to parse space gid")
+		}
+
+		unscope, err := session.store.um.ScopeUserByIds(-1, gid)
 		if err != nil {
 			return errors.Wrap(err, "failed to scope user")
 		}
@@ -244,7 +250,8 @@ func (session *OcisSession) Finalize() (err error) {
 	ctx, span := tracer.Start(session.Context(context.Background()), "Finalize")
 	defer span.End()
 
-	revisionNode := &node.Node{SpaceID: session.SpaceID(), BlobID: session.ID(), Blobsize: session.Size()}
+	revisionNode := node.New(session.SpaceID(), session.NodeID(), "", "", session.Size(), session.ID(),
+		provider.ResourceType_RESOURCE_TYPE_FILE, session.SpaceOwner(), session.store.lu)
 
 	// upload the data to the blobstore
 	_, subspan := tracer.Start(ctx, "WriteBlob")

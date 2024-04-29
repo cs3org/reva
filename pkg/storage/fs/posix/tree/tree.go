@@ -536,10 +536,6 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	for i := 0; i < numWorkers; i++ {
 		g.Go(func() error {
 			for name := range work {
-				unscope, err := t.userMapper.ScopeUser(ctx)
-				if err != nil {
-					return err
-				}
 				path := filepath.Join(dir, name)
 				nodeID, err := t.lookup.MetadataBackend().Get(ctx, path, prefixes.IDAttr)
 				if err != nil {
@@ -565,7 +561,6 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 						return ctx.Err()
 					}
 				}
-				unscope()
 			}
 			return nil
 		})
