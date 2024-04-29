@@ -493,6 +493,12 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 					log.Error().Err(err).Interface("uploadID", ev.UploadID).Msg("Failed to get node after scan")
 					continue
 				}
+				sublog := log.With().Str("spaceid", session.SpaceID()).Str("nodeid", session.NodeID()).Logger()
+
+				session.SetScanData(res.Description, res.Scandate)
+				if err := session.Persist(ctx); err != nil {
+					sublog.Error().Err(err).Msg("Failed to persist scan results")
+				}
 			}
 
 			if err := n.SetScanData(ctx, res.Description, res.Scandate); err != nil {
