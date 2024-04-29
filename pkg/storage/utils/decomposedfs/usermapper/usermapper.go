@@ -30,20 +30,44 @@ import (
 	revactx "github.com/cs3org/reva/v2/pkg/ctx"
 )
 
+// Mapper is the interface that wraps the basic mapping methods
 type Mapper interface {
 	RunInBaseScope(f func() error) error
-	MapUser(username string) (int, int, error)
 	ScopeBase() (func() error, error)
 	ScopeUser(ctx context.Context) (func() error, error)
 	ScopeUserByIds(uid, gid int) (func() error, error)
 }
 
+// UnscopeFunc is a function that unscopes the current user
+type UnscopeFunc func() error
+
+// NullMapper is a user mapper that does nothing
+type NullMapper struct{}
+
+// RunInBaseScope runs the given function in the scope of the base user
+func (nm *NullMapper) RunInBaseScope(f func() error) error {
+	return f()
+}
+
+// ScopeBase returns to the base uid and gid returning a function that can be used to restore the previous scope
+func (nm *NullMapper) ScopeBase() (func() error, error) {
+	return func() error { return nil }, nil
+}
+
+// ScopeUser returns to the base uid and gid returning a function that can be used to restore the previous scope
+func (nm *NullMapper) ScopeUser(ctx context.Context) (func() error, error) {
+	return func() error { return nil }, nil
+}
+
+func (nm *NullMapper) ScopeUserByIds(uid, gid int) (func() error, error) {
+	return func() error { return nil }, nil
+}
+
+// UnixMapper is a user mapper that maps users to unix uids and gids
 type UnixMapper struct {
 	baseUid int
 	baseGid int
 }
-
-type UnscopeFunc func() error
 
 // New returns a new user mapper
 func NewUnixMapper() *UnixMapper {

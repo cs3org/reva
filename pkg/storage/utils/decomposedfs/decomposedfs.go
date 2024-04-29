@@ -202,10 +202,9 @@ func New(o *options.Options, aspects aspects.Aspects) (storage.FS, error) {
 		return nil, err
 	}
 
-	// set a nil usermapper if we don't have one
+	// set a null usermapper if we don't have one
 	if aspects.UserMapper == nil {
-		var nilum *usermapper.UnixMapper
-		aspects.UserMapper = nilum
+		aspects.UserMapper = &usermapper.NullMapper{}
 	}
 
 	fs := &Decomposedfs{
