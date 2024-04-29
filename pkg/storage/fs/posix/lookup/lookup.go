@@ -97,7 +97,6 @@ func (lu *Lookup) GetCachedID(ctx context.Context, spaceID, nodeID string) (stri
 func (lu *Lookup) WarmupIDCache() error {
 	spaceID := []byte("")
 
-	uid := 99
 	gid := 99
 
 	return filepath.Walk(lu.Options.Root, func(path string, info os.FileInfo, err error) error {
@@ -117,9 +116,8 @@ func (lu *Lookup) WarmupIDCache() error {
 					return err
 				}
 				sys := fi.Sys().(*syscall.Stat_t)
-				uid = int(sys.Uid)
 				gid = int(sys.Gid)
-				_, err = lu.userMapper.ScopeUserByIds(uid, gid)
+				_, err = lu.userMapper.ScopeUserByIds(-1, gid)
 				if err != nil {
 					return err
 				}
