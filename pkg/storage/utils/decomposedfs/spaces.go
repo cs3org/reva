@@ -76,6 +76,24 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		spaceID = reqSpaceID
 	}
 
+	// Check if space already exists
+	rootPath := ""
+	switch req.Type {
+	case _spaceTypePersonal:
+		if fs.o.PersonalSpacePathTemplate != "" {
+			rootPath = filepath.Join(fs.o.Root, templates.WithUser(u, fs.o.PersonalSpacePathTemplate))
+		}
+	default:
+		if fs.o.GeneralSpacePathTemplate != "" {
+			rootPath = filepath.Join(fs.o.Root, templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, spaceID, fs.o.GeneralSpacePathTemplate))
+		}
+	}
+	if rootPath != "" {
+		if _, err := os.Stat(rootPath); err == nil {
+			return nil, errtypes.AlreadyExists("decomposedfs: spaces: space already exists")
+		}
+	}
+
 	description := utils.ReadPlainFromOpaque(req.Opaque, "description")
 	alias := utils.ReadPlainFromOpaque(req.Opaque, "spaceAlias")
 	if alias == "" {
@@ -97,16 +115,8 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 
 	// create a directory node
 	root.SetType(provider.ResourceType_RESOURCE_TYPE_CONTAINER)
-	rootPath := root.InternalPath()
-	switch req.Type {
-	case _spaceTypePersonal:
-		if fs.o.PersonalSpacePathTemplate != "" {
-			rootPath = filepath.Join(fs.o.Root, templates.WithUser(u, fs.o.PersonalSpacePathTemplate))
-		}
-	default:
-		if fs.o.GeneralSpacePathTemplate != "" {
-			rootPath = filepath.Join(fs.o.Root, templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, spaceID, fs.o.GeneralSpacePathTemplate))
-		}
+	if rootPath == "" {
+		rootPath = root.InternalPath()
 	}
 
 	if err := os.MkdirAll(rootPath, 0750); err != nil {
