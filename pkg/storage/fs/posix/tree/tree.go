@@ -298,6 +298,10 @@ func (t *Tree) workScanQueue() {
 		go func() {
 			for {
 				item := <-t.scanQueue
+
+				// give it some time to settle down
+				time.Sleep(100 * time.Millisecond)
+
 				err := t.assimilate(item)
 				if err != nil {
 					log.Error().Err(err).Str("path", item.Path).Msg("failed to assimilate item")
