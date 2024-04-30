@@ -66,6 +66,12 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+type CtxKey int
+
+const (
+	CtxKeySpaceID CtxKey = iota
+)
+
 var (
 	tracer trace.Tracer
 

@@ -46,6 +46,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/options"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
@@ -539,6 +540,16 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	// Spawn workers that'll concurrently work the queue
 	for i := 0; i < numWorkers; i++ {
 		g.Go(func() error {
+			// switch user if necessary
+			spaceGID, ok := ctx.Value(decomposedfs.CtxKeySpaceID).(uint32)
+			if ok {
+				unscope, err := t.userMapper.ScopeUserByIds(-1, int(spaceGID))
+				if err != nil {
+					return errors.Wrap(err, "failed to scope user")
+				}
+				defer unscope()
+			}
+
 			for name := range work {
 				path := filepath.Join(dir, name)
 				nodeID, err := t.lookup.MetadataBackend().Get(ctx, path, prefixes.IDAttr)

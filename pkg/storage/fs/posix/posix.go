@@ -51,8 +51,6 @@ func init() {
 	registry.Register("posix", New)
 }
 
-var _spaceGID = "spaceGID"
-
 type posixFS struct {
 	storage.FS
 
@@ -131,14 +129,14 @@ func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 			return ctx, nil, err
 		}
 
-		ctx = context.WithValue(ctx, _spaceGID, fi.Sys().(*syscall.Stat_t).Gid)
+		ctx = context.WithValue(ctx, decomposedfs.CtxKeySpaceID, fi.Sys().(*syscall.Stat_t).Gid)
 
 		return ctx, nil, err
 	}
 	hooks = append(hooks, resolveSpaceHook)
 	if o.UseSpaceGroups {
 		scopeSpaceGroupHook := func(methodName string, ctx context.Context, spaceID string) (context.Context, middleware.UnHook, error) {
-			spaceGID, ok := ctx.Value(_spaceGID).(uint32)
+			spaceGID, ok := ctx.Value(decomposedfs.CtxKeySpaceID).(uint32)
 			if !ok {
 				return ctx, nil, nil
 			}
