@@ -51,7 +51,6 @@ type ctxKey int
 
 const (
 	ctxKeyBaseURI ctxKey = iota
-	ctxOCM10
 )
 
 var (
