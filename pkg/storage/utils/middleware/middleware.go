@@ -28,6 +28,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 )
 
 // UnHook is a function that is called after the actual method is executed.
@@ -1036,12 +1037,15 @@ func (f *FS) CreateStorageSpace(ctx context.Context, req *provider.CreateStorage
 
 func (f *FS) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	var (
-		err     error
 		unhook  UnHook
 		unhooks []UnHook
 	)
 	for _, hook := range f.hooks {
-		ctx, unhook, err = hook("UpdateStorageSpace", ctx, req.StorageSpace.GetId().GetOpaqueId())
+		id, err := storagespace.ParseID(req.StorageSpace.GetId().GetOpaqueId())
+		if err != nil {
+			return nil, err
+		}
+		ctx, unhook, err = hook("UpdateStorageSpace", ctx, id.SpaceId)
 		if err != nil {
 			return nil, err
 		}
