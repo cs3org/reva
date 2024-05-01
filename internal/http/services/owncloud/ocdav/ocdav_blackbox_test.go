@@ -30,6 +30,7 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	cs3user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	cs3rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	cs3storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	cs3types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav"
@@ -180,6 +181,9 @@ var _ = Describe("ocdav", func() {
 			},
 		}
 
+		client.On("GetPublicShare", mock.Anything, mock.Anything).Return(&link.GetPublicShareResponse{
+			Status: status.NewNotFound(ctx, "not found")},
+			nil)
 		client.On("GetUser", mock.Anything, mock.Anything).Return(&cs3user.GetUserResponse{
 			Status: status.NewNotFound(ctx, "not found"),
 		}, nil)
