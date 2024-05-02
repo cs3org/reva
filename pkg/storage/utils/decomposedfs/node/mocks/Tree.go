@@ -26,6 +26,7 @@ import (
 
 	io "io"
 
+	metadata "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	mock "github.com/stretchr/testify/mock"
 
 	node "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
@@ -42,6 +43,53 @@ type Tree_Expecter struct {
 
 func (_m *Tree) EXPECT() *Tree_Expecter {
 	return &Tree_Expecter{mock: &_m.Mock}
+}
+
+// BuildSpaceIDIndexEntry provides a mock function with given fields: spaceID, nodeID
+func (_m *Tree) BuildSpaceIDIndexEntry(spaceID string, nodeID string) string {
+	ret := _m.Called(spaceID, nodeID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for BuildSpaceIDIndexEntry")
+	}
+
+	var r0 string
+	if rf, ok := ret.Get(0).(func(string, string) string); ok {
+		r0 = rf(spaceID, nodeID)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	return r0
+}
+
+// Tree_BuildSpaceIDIndexEntry_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'BuildSpaceIDIndexEntry'
+type Tree_BuildSpaceIDIndexEntry_Call struct {
+	*mock.Call
+}
+
+// BuildSpaceIDIndexEntry is a helper method to define mock.On call
+//   - spaceID string
+//   - nodeID string
+func (_e *Tree_Expecter) BuildSpaceIDIndexEntry(spaceID interface{}, nodeID interface{}) *Tree_BuildSpaceIDIndexEntry_Call {
+	return &Tree_BuildSpaceIDIndexEntry_Call{Call: _e.mock.On("BuildSpaceIDIndexEntry", spaceID, nodeID)}
+}
+
+func (_c *Tree_BuildSpaceIDIndexEntry_Call) Run(run func(spaceID string, nodeID string)) *Tree_BuildSpaceIDIndexEntry_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *Tree_BuildSpaceIDIndexEntry_Call) Return(_a0 string) *Tree_BuildSpaceIDIndexEntry_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *Tree_BuildSpaceIDIndexEntry_Call) RunAndReturn(run func(string, string) string) *Tree_BuildSpaceIDIndexEntry_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // CreateDir provides a mock function with given fields: ctx, _a1
@@ -239,6 +287,66 @@ func (_c *Tree_GetMD_Call) Return(_a0 fs.FileInfo, _a1 error) *Tree_GetMD_Call {
 }
 
 func (_c *Tree_GetMD_Call) RunAndReturn(run func(context.Context, *node.Node) (fs.FileInfo, error)) *Tree_GetMD_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// InitNewNode provides a mock function with given fields: ctx, n, fsize
+func (_m *Tree) InitNewNode(ctx context.Context, n *node.Node, fsize uint64) (metadata.UnlockFunc, error) {
+	ret := _m.Called(ctx, n, fsize)
+
+	if len(ret) == 0 {
+		panic("no return value specified for InitNewNode")
+	}
+
+	var r0 metadata.UnlockFunc
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *node.Node, uint64) (metadata.UnlockFunc, error)); ok {
+		return rf(ctx, n, fsize)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *node.Node, uint64) metadata.UnlockFunc); ok {
+		r0 = rf(ctx, n, fsize)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(metadata.UnlockFunc)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *node.Node, uint64) error); ok {
+		r1 = rf(ctx, n, fsize)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Tree_InitNewNode_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'InitNewNode'
+type Tree_InitNewNode_Call struct {
+	*mock.Call
+}
+
+// InitNewNode is a helper method to define mock.On call
+//   - ctx context.Context
+//   - n *node.Node
+//   - fsize uint64
+func (_e *Tree_Expecter) InitNewNode(ctx interface{}, n interface{}, fsize interface{}) *Tree_InitNewNode_Call {
+	return &Tree_InitNewNode_Call{Call: _e.mock.On("InitNewNode", ctx, n, fsize)}
+}
+
+func (_c *Tree_InitNewNode_Call) Run(run func(ctx context.Context, n *node.Node, fsize uint64)) *Tree_InitNewNode_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(*node.Node), args[2].(uint64))
+	})
+	return _c
+}
+
+func (_c *Tree_InitNewNode_Call) Return(_a0 metadata.UnlockFunc, _a1 error) *Tree_InitNewNode_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *Tree_InitNewNode_Call) RunAndReturn(run func(context.Context, *node.Node, uint64) (metadata.UnlockFunc, error)) *Tree_InitNewNode_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -522,6 +630,70 @@ func (_c *Tree_ReadBlob_Call) Return(_a0 io.ReadCloser, _a1 error) *Tree_ReadBlo
 }
 
 func (_c *Tree_ReadBlob_Call) RunAndReturn(run func(*node.Node) (io.ReadCloser, error)) *Tree_ReadBlob_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ResolveSpaceIDIndexEntry provides a mock function with given fields: spaceID, entry
+func (_m *Tree) ResolveSpaceIDIndexEntry(spaceID string, entry string) (string, string, error) {
+	ret := _m.Called(spaceID, entry)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ResolveSpaceIDIndexEntry")
+	}
+
+	var r0 string
+	var r1 string
+	var r2 error
+	if rf, ok := ret.Get(0).(func(string, string) (string, string, error)); ok {
+		return rf(spaceID, entry)
+	}
+	if rf, ok := ret.Get(0).(func(string, string) string); ok {
+		r0 = rf(spaceID, entry)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	if rf, ok := ret.Get(1).(func(string, string) string); ok {
+		r1 = rf(spaceID, entry)
+	} else {
+		r1 = ret.Get(1).(string)
+	}
+
+	if rf, ok := ret.Get(2).(func(string, string) error); ok {
+		r2 = rf(spaceID, entry)
+	} else {
+		r2 = ret.Error(2)
+	}
+
+	return r0, r1, r2
+}
+
+// Tree_ResolveSpaceIDIndexEntry_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ResolveSpaceIDIndexEntry'
+type Tree_ResolveSpaceIDIndexEntry_Call struct {
+	*mock.Call
+}
+
+// ResolveSpaceIDIndexEntry is a helper method to define mock.On call
+//   - spaceID string
+//   - entry string
+func (_e *Tree_Expecter) ResolveSpaceIDIndexEntry(spaceID interface{}, entry interface{}) *Tree_ResolveSpaceIDIndexEntry_Call {
+	return &Tree_ResolveSpaceIDIndexEntry_Call{Call: _e.mock.On("ResolveSpaceIDIndexEntry", spaceID, entry)}
+}
+
+func (_c *Tree_ResolveSpaceIDIndexEntry_Call) Run(run func(spaceID string, entry string)) *Tree_ResolveSpaceIDIndexEntry_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *Tree_ResolveSpaceIDIndexEntry_Call) Return(_a0 string, _a1 string, _a2 error) *Tree_ResolveSpaceIDIndexEntry_Call {
+	_c.Call.Return(_a0, _a1, _a2)
+	return _c
+}
+
+func (_c *Tree_ResolveSpaceIDIndexEntry_Call) RunAndReturn(run func(string, string) (string, string, error)) *Tree_ResolveSpaceIDIndexEntry_Call {
 	_c.Call.Return(run)
 	return _c
 }

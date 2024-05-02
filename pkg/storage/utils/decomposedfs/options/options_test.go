@@ -43,7 +43,7 @@ var _ = Describe("Options", func() {
 		})
 
 		It("sets defaults", func() {
-			Expect(len(o.UserLayout) > 0).To(BeTrue())
+			Expect(o.MetadataBackend).ToNot(BeEmpty())
 		})
 
 		Context("with unclean root path configuration", func() {
