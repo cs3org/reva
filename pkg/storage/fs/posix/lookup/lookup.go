@@ -94,10 +94,11 @@ func (lu *Lookup) GetCachedID(ctx context.Context, spaceID, nodeID string) (stri
 	return lu.IDCache.Get(ctx, spaceID, nodeID)
 }
 
+// WarmupIDCache warms up the id cache
 func (lu *Lookup) WarmupIDCache() error {
 	spaceID := []byte("")
 
-	gid := 99
+	var gid int
 
 	return filepath.Walk(lu.Options.Root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -132,6 +133,7 @@ func (lu *Lookup) WarmupIDCache() error {
 	})
 }
 
+// NodeFromPath returns the node for the given path
 func (lu *Lookup) NodeIDFromParentAndName(ctx context.Context, parent *node.Node, name string) (string, error) {
 	id, err := lu.metadataBackend.Get(ctx, filepath.Join(parent.InternalPath(), name), prefixes.IDAttr)
 	if err != nil {
@@ -446,25 +448,4 @@ func (lu *Lookup) GenerateSpaceID(spaceType string, owner *user.User) (string, e
 	default:
 		return "", fmt.Errorf("unsupported space type: %s", spaceType)
 	}
-}
-
-// DetectBackendOnDisk returns the name of the metadata backend being used on disk
-func DetectBackendOnDisk(root string) string {
-	matches, _ := filepath.Glob(filepath.Join(root, "spaces", "*", "*"))
-	if len(matches) > 0 {
-		base := matches[len(matches)-1]
-		spaceid := strings.ReplaceAll(
-			strings.TrimPrefix(base, filepath.Join(root, "spaces")),
-			"/", "")
-		spaceRoot := Pathify(spaceid, 4, 2)
-		_, err := os.Stat(filepath.Join(base, "nodes", spaceRoot+".mpk"))
-		if err == nil {
-			return "mpk"
-		}
-		_, err = os.Stat(filepath.Join(base, "nodes", spaceRoot+".ini"))
-		if err == nil {
-			return "ini"
-		}
-	}
-	return "xattrs"
 }
