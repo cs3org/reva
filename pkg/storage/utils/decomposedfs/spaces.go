@@ -119,7 +119,13 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		rootPath = root.InternalPath()
 	}
 
-	if err := os.MkdirAll(rootPath, 0750); err != nil {
+	// set 755 permissions for the base dir
+	if err := os.MkdirAll(filepath.Dir(rootPath), 0755); err != nil {
+		return nil, errors.Wrap(err, "Decomposedfs: error creating node")
+	}
+
+	// 770 permissions for the space
+	if err := os.MkdirAll(rootPath, 0770); err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error creating node")
 	}
 
