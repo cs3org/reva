@@ -197,7 +197,7 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 	}
 
 	log := appctx.GetLogger(ctx)
-	log.Debug().Msgf("Sending OCM /shares POST to %s: %s", url, body)
+	log.Info().Str("url", url).Msgf("Sending OCM share: %s", body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating request")

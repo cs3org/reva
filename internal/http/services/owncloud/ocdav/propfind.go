@@ -532,8 +532,8 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
 	md.Path = strings.TrimPrefix(md.Path, ns)
 
-	// see internal/http/services/owncloud/ocdav/dav.go#L191-212:
-	// /<token>/ was injected in front of the path for the routing to work, we now remove it
+	// see internal/http/services/owncloud/ocdav/dav.go:
+	// /<token>/ was injected in front of the public-link or ocm path for the routing to work, we now remove it
 	_, md.Path = router.ShiftPath(md.Path)
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)

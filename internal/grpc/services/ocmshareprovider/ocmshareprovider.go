@@ -178,13 +178,13 @@ func getResourceType(info *providerpb.ResourceInfo) string {
 	return "unknown"
 }
 
-func (s *service) webdavURL(ctx context.Context, share *ocm.Share) string {
-	// the url is in the form of https://cernbox.cern.ch/remote.php/dav/ocm/token
-	p, _ := url.JoinPath(s.conf.WebDAVEndpoint, "/remote.php/dav/ocm", share.Token)
+func (s *service) webdavURL(share *ocm.Share) string {
+	// the url is expected to be in the form https://ourserver/remote.php/dav/ocm/{ShareId}, see c.WebdavRoot in ocmprovider.go
+	p, _ := url.JoinPath(s.conf.WebDAVEndpoint, "/remote.php/dav/ocm", share.Id.OpaqueId)
 	return p
 }
 
-func (s *service) getWebdavProtocol(ctx context.Context, share *ocm.Share, m *ocm.AccessMethod_WebdavOptions) *ocmd.WebDAV {
+func (s *service) getWebdavProtocol(share *ocm.Share, m *ocm.AccessMethod_WebdavOptions) *ocmd.WebDAV {
 	var perms []string
 	if m.WebdavOptions.Permissions.InitiateFileDownload {
 		perms = append(perms, "read")
@@ -195,7 +195,7 @@ func (s *service) getWebdavProtocol(ctx context.Context, share *ocm.Share, m *oc
 
 	return &ocmd.WebDAV{
 		Permissions:  perms,
-		URL:          s.webdavURL(ctx, share),
+		URL:          s.webdavURL(share),
 		SharedSecret: share.Token,
 	}
 }
@@ -233,7 +233,7 @@ func (s *service) getDataTransferProtocol(ctx context.Context, share *ocm.Share)
 		panic(err)
 	}
 	return &ocmd.Datatx{
-		SourceURI: s.webdavURL(ctx, share),
+		SourceURI: s.webdavURL(share),
 		Size:      size,
 	}
 }
@@ -248,7 +248,7 @@ func (s *service) getProtocols(ctx context.Context, share *ocm.Share) ocmd.Proto
 	for _, m := range share.AccessMethods {
 		switch t := m.Term.(type) {
 		case *ocm.AccessMethod_WebdavOptions:
-			p = append(p, s.getWebdavProtocol(ctx, share, t))
+			p = append(p, s.getWebdavProtocol(share, t))
 		case *ocm.AccessMethod_WebappOptions:
 			p = append(p, s.getWebappProtocol(share))
 		case *ocm.AccessMethod_TransferOptions:
