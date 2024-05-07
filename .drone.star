@@ -714,7 +714,6 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
 
     return pipelines
 
-
 def posixfsIntegrationTests(parallelRuns, skipExceptParts = []):
     pipelines = []
     debugPartsEnabled = (len(skipExceptParts) != 0)
@@ -790,7 +789,6 @@ def posixfsIntegrationTests(parallelRuns, skipExceptParts = []):
         )
 
     return pipelines
-
 
 def checkStarlark():
     return {
