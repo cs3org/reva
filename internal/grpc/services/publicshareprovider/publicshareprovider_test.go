@@ -12,6 +12,8 @@ import (
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/grpc/services/publicshareprovider"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/permission"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/publicshare/mocks"
@@ -130,14 +132,6 @@ var _ = Describe("PublicShareProvider", func() {
 			InitiateFileUpload:   true,
 		}
 
-		createdLink = &link.PublicShare{
-			PasswordProtected: true,
-			Permissions: &link.PublicSharePermissions{
-				Permissions: linkPermissions,
-			},
-			Creator: user.Id,
-		}
-
 		revaConfig = map[string]interface{}{
 			"driver": "mockManager",
 			"drivers": map[string]map[string]interface{}{
@@ -182,6 +176,14 @@ var _ = Describe("PublicShareProvider", func() {
 				EXPECT().
 				Stat(mock.Anything, mock.Anything).
 				Return(statResourceResponse, nil)
+
+			createdLink = &link.PublicShare{
+				PasswordProtected: true,
+				Permissions: &link.PublicSharePermissions{
+					Permissions: linkPermissions,
+				},
+				Creator: user.Id,
+			}
 		})
 		It("creates a public share with password", func() {
 			manager.
@@ -260,9 +262,13 @@ var _ = Describe("PublicShareProvider", func() {
 			Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_OK))
 			Expect(res.GetShare()).To(Equal(createdLink))
 		})
-		It("has no share permission on the resource to create internal link", func() {
+		It("has no share permission on the resource, can create internal link", func() {
 			// internal links are created with empty permissions
 			linkPermissions := &providerpb.ResourcePermissions{}
+			manager.
+				EXPECT().
+				CreatePublicShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				Return(createdLink, nil)
 
 			// internal link creation should not check user permissions
 			gatewayClient.EXPECT().CheckPermission(mock.Anything, mock.Anything).Unset()
@@ -287,8 +293,8 @@ var _ = Describe("PublicShareProvider", func() {
 
 			res, err := provider.CreatePublicShare(ctx, req)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
-			Expect(res.GetStatus().GetMessage()).To(Equal("no share permission"))
+			Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_OK))
+			Expect(res.GetShare()).To(Equal(createdLink))
 		})
 		It("fails to check create public share user permission", func() {
 			gatewayClient.EXPECT().CheckPermission(mock.Anything, mock.Anything).Unset()
@@ -427,12 +433,6 @@ var _ = Describe("PublicShareProvider", func() {
 					},
 					ArbitraryMetadata: &providerpb.ArbitraryMetadata{Metadata: map[string]string{"quicklink": "true"}},
 					Path:              "./NewFolder/file.txt",
-					Id: &providerpb.ResourceId{
-						StorageId: "storage-id",
-						OpaqueId:  "project-id",
-						SpaceId:   "project-id",
-					},
-					Space: &providerpb.StorageSpace{SpaceType: "project"},
 				},
 				Grant: &link.Grant{
 					Permissions: &link.PublicSharePermissions{
@@ -531,7 +531,7 @@ var _ = Describe("PublicShareProvider", func() {
 			Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
 			Expect(res.GetStatus().GetMessage()).To(ContainSubstring("expiration date is in the past"))
 		})
-		It("create public share with valid expiration", func() {
+		It("create public share with valid expiration date", func() {
 			tomorrow := time.Now().AddDate(0, 0, 1)
 			tsTomorrow := utils.TimeToTS(tomorrow)
 
@@ -918,6 +918,758 @@ var _ = Describe("PublicShareProvider", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_INTERNAL))
 				Expect(res.GetStatus().GetMessage()).To(Equal("failed to stat shared resource"))
+			})
+		})
+	})
+	Describe("Updating a PublicShare", func() {
+		var (
+			existingLink *link.PublicShare
+			updatedLink  *link.PublicShare
+		)
+
+		BeforeEach(func() {
+			// stat the shared resource to get the users resource permissions
+			gatewayClient.
+				EXPECT().
+				Stat(mock.Anything, mock.Anything).
+				Return(statResourceResponse, nil)
+
+			existingLink = &link.PublicShare{
+				Id: &link.PublicShareId{
+					OpaqueId: "share-id",
+				},
+				Token: "token",
+				Permissions: &link.PublicSharePermissions{
+					Permissions: &providerpb.ResourcePermissions{
+						Stat:                 true,
+						ListContainer:        true,
+						InitiateFileDownload: true,
+						AddGrant:             true,
+					},
+				},
+				Creator: user.GetId(),
+			}
+		})
+		Context("succeeds when the user downgrades a public link to internal", func() {
+			BeforeEach(func() {
+				linkPermissions = &providerpb.ResourcePermissions{}
+				updatedLink = &link.PublicShare{
+					Id: &link.PublicShareId{
+						OpaqueId: "share-id",
+					},
+					Permissions: &link.PublicSharePermissions{
+						Permissions: linkPermissions,
+					},
+					DisplayName: "Updated Link",
+				}
+			})
+			It("fails when it cannot load the existing share", func() {
+				manager.
+					EXPECT().
+					GetPublicShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Return(nil, errors.New("transport error"))
+
+				gatewayClient.
+					EXPECT().
+					Stat(mock.Anything, mock.Anything).
+					Unset()
+
+				req := &link.UpdatePublicShareRequest{
+					Update: &link.UpdatePublicShareRequest_Update{
+						Type: link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
+						Grant: &link.Grant{
+							Permissions: &link.PublicSharePermissions{
+								Permissions: linkPermissions,
+							},
+						},
+					},
+				}
+
+				res, err := provider.UpdatePublicShare(ctx, req)
+				Expect(err).To(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_INTERNAL))
+			})
+			It("fails when it cannot connect to the storage provider", func() {
+				manager.
+					EXPECT().
+					GetPublicShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Once().Return(existingLink, nil)
+
+				gatewayClient.
+					EXPECT().
+					Stat(mock.Anything, mock.Anything).
+					Unset()
+				gatewayClient.
+					EXPECT().
+					Stat(mock.Anything, mock.Anything).
+					Return(nil, errors.New("transport error"))
+
+				req := &link.UpdatePublicShareRequest{
+					Update: &link.UpdatePublicShareRequest_Update{
+						Type: link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
+						Grant: &link.Grant{
+							Permissions: &link.PublicSharePermissions{
+								Permissions: linkPermissions,
+							},
+						},
+					},
+				}
+
+				res, err := provider.UpdatePublicShare(ctx, req)
+				Expect(err).To(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_INTERNAL))
+			})
+			It("fails when it cannot find the shared resource", func() {
+				manager.
+					EXPECT().
+					GetPublicShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Once().Return(existingLink, nil)
+
+				gatewayClient.
+					EXPECT().
+					Stat(mock.Anything, mock.Anything).
+					Unset()
+
+				statResourceResponse.Status = status.NewNotFound(context.TODO(), "not found")
+				statResourceResponse.Info = nil
+				gatewayClient.
+					EXPECT().
+					Stat(mock.Anything, mock.Anything).
+					Return(statResourceResponse, nil)
+
+				req := &link.UpdatePublicShareRequest{
+					Update: &link.UpdatePublicShareRequest_Update{
+						Type: link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
+						Grant: &link.Grant{
+							Permissions: &link.PublicSharePermissions{
+								Permissions: linkPermissions,
+							},
+						},
+					},
+				}
+
+				res, err := provider.UpdatePublicShare(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_NOT_FOUND))
+			})
+			It("fails when it cannot store share information", func() {
+				manager.
+					EXPECT().
+					GetPublicShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Once().Return(existingLink, nil)
+
+				manager.
+					EXPECT().
+					UpdatePublicShare(mock.Anything, mock.Anything, mock.Anything).
+					Once().Return(nil, errors.New("storage error"))
+
+				req := &link.UpdatePublicShareRequest{
+					Update: &link.UpdatePublicShareRequest_Update{
+						Type: link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
+						Grant: &link.Grant{
+							Permissions: &link.PublicSharePermissions{
+								Permissions: linkPermissions,
+							},
+						},
+					},
+				}
+
+				res, err := provider.UpdatePublicShare(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_INTERNAL))
+				Expect(res.GetStatus().GetMessage()).To(Equal("storage error"))
+			})
+			It("fails when the user is neither the creator nor the owner of the share", func() {
+				existingLink.Creator = &userpb.UserId{
+					OpaqueId: "admin",
+				}
+				manager.
+					EXPECT().
+					GetPublicShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Once().Return(existingLink, nil)
+
+				checkPermissionResponse.Status.Code = rpc.Code_CODE_PERMISSION_DENIED
+				gatewayClient.
+					EXPECT().
+					CheckPermission(mock.Anything, mock.Anything).
+					Return(checkPermissionResponse, nil)
+
+				gatewayClient.
+					EXPECT().
+					Stat(mock.Anything, mock.Anything).
+					Unset()
+
+				req := &link.UpdatePublicShareRequest{
+					Update: &link.UpdatePublicShareRequest_Update{
+						Type: link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
+						Grant: &link.Grant{
+							Permissions: &link.PublicSharePermissions{
+								Permissions: linkPermissions,
+							},
+						},
+					},
+
+					Ref: &link.PublicShareReference{
+						Spec: &link.PublicShareReference_Id{
+							Id: &link.PublicShareId{
+								OpaqueId: "share-id",
+							},
+						},
+					},
+				}
+
+				res, err := provider.UpdatePublicShare(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_PERMISSION_DENIED))
+
+			})
+			It("fails when user is neither the resource owner nor the share creator", func() {
+				existingLink.Creator = &userpb.UserId{
+					OpaqueId: "admin",
+				}
+				manager.
+					EXPECT().
+					GetPublicShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Once().Return(existingLink, nil)
+
+				checkPermissionResponse.Status.Code = rpc.Code_CODE_PERMISSION_DENIED
+				gatewayClient.
+					EXPECT().
+					CheckPermission(mock.Anything, mock.Anything).
+					Return(checkPermissionResponse, nil)
+
+				gatewayClient.
+					EXPECT().
+					Stat(mock.Anything, mock.Anything).
+					Unset()
+
+				linkPermissions.Delete = true
+				req := &link.UpdatePublicShareRequest{
+					Update: &link.UpdatePublicShareRequest_Update{
+						Type: link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
+						Grant: &link.Grant{
+							Permissions: &link.PublicSharePermissions{
+								Permissions: linkPermissions,
+							},
+						},
+					},
+
+					Ref: &link.PublicShareReference{
+						Spec: &link.PublicShareReference_Id{
+							Id: &link.PublicShareId{
+								OpaqueId: "share-id",
+							},
+						},
+					},
+				}
+
+				res, err := provider.UpdatePublicShare(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_PERMISSION_DENIED))
+
+			})
+			It("succeeds", func() {
+				manager.
+					EXPECT().
+					GetPublicShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Once().Return(existingLink, nil)
+
+				manager.
+					EXPECT().
+					UpdatePublicShare(mock.Anything, mock.Anything, mock.Anything).
+					Once().Return(updatedLink, nil)
+
+				req := &link.UpdatePublicShareRequest{
+					Update: &link.UpdatePublicShareRequest_Update{
+						Type: link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
+						Grant: &link.Grant{
+							Permissions: &link.PublicSharePermissions{
+								Permissions: linkPermissions,
+							},
+						},
+					},
+
+					Ref: &link.PublicShareReference{
+						Spec: &link.PublicShareReference_Id{
+							Id: &link.PublicShareId{
+								OpaqueId: "share-id",
+							},
+						},
+					},
+				}
+
+				res, err := provider.UpdatePublicShare(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_OK))
+				Expect(res.GetShare()).To(Equal(updatedLink))
+			})
+			It("succeeds even if the user is no manager or owner on the resource", func() {
+				manager.
+					EXPECT().
+					GetPublicShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Once().Return(existingLink, nil)
+
+				manager.
+					EXPECT().
+					UpdatePublicShare(mock.Anything, mock.Anything, mock.Anything).
+					Once().Return(updatedLink, nil)
+
+				statResourceResponse.Info.PermissionSet.UpdateGrant = false
+
+				req := &link.UpdatePublicShareRequest{
+					Update: &link.UpdatePublicShareRequest_Update{
+						Type: link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
+						Grant: &link.Grant{
+							Permissions: &link.PublicSharePermissions{
+								Permissions: linkPermissions,
+							},
+						},
+					},
+
+					Ref: &link.PublicShareReference{
+						Spec: &link.PublicShareReference_Id{
+							Id: &link.PublicShareId{
+								OpaqueId: "share-id",
+							},
+						},
+					},
+				}
+
+				res, err := provider.UpdatePublicShare(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_OK))
+				Expect(res.GetShare()).To(Equal(updatedLink))
+			})
+		})
+		Context("when the user changes permissions", func() {
+			BeforeEach(func() {
+				linkPermissions = &providerpb.ResourcePermissions{
+					Stat:                 true,
+					AddGrant:             true,
+					Delete:               true,
+					Move:                 true,
+					InitiateFileDownload: true,
+					InitiateFileUpload:   true,
+					CreateContainer:      true,
+					ListContainer:        true,
+					ListGrants:           true,
+				}
+
+				updatedLink = &link.PublicShare{
+					Id: &link.PublicShareId{
+						OpaqueId: "share-id",
+					},
+					Permissions: &link.PublicSharePermissions{
+						Permissions: linkPermissions,
+					},
+					DisplayName: "Updated Link",
+				}
+
+				manager.
+					EXPECT().
+					GetPublicShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Once().Return(existingLink, nil)
+			})
+			It("fails when the user has not enough permissions on the resource", func() {
+				statResourceResponse.Info.PermissionSet.Delete = false
+
+				req := &link.UpdatePublicShareRequest{
+					Update: &link.UpdatePublicShareRequest_Update{
+						Type: link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
+						Grant: &link.Grant{
+							Permissions: &link.PublicSharePermissions{
+								Permissions: linkPermissions,
+							},
+						},
+					},
+				}
+
+				res, err := provider.UpdatePublicShare(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
+				Expect(res.GetStatus().GetMessage()).To(Equal("insufficient permissions to update that kind of share"))
+			})
+			It("fails when the permissions client is not responding", func() {
+				gatewayClient.
+					EXPECT().
+					CheckPermission(mock.Anything, mock.Anything).
+					Return(nil, errors.New("transport error"))
+
+				req := &link.UpdatePublicShareRequest{
+					Update: &link.UpdatePublicShareRequest_Update{
+						Type: link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
+						Grant: &link.Grant{
+							Permissions: &link.PublicSharePermissions{
+								Permissions: linkPermissions,
+							},
+						},
+					},
+				}
+
+				res, err := provider.UpdatePublicShare(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_INTERNAL))
+				Expect(res.GetStatus().GetMessage()).To(Equal("transport error"))
+			})
+			It("fails when the user has no permission to write public shares and is not the creator", func() {
+				checkPermissionResponse.Status.Code = rpc.Code_CODE_PERMISSION_DENIED
+				gatewayClient.
+					EXPECT().
+					CheckPermission(mock.Anything, mock.Anything).
+					Return(checkPermissionResponse, nil)
+
+				existingLink.Creator = &userpb.UserId{
+					OpaqueId: "admin",
+				}
+				gatewayClient.
+					EXPECT().
+					Stat(mock.Anything, mock.Anything).
+					Unset()
+
+				req := &link.UpdatePublicShareRequest{
+					Update: &link.UpdatePublicShareRequest_Update{
+						Type: link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
+						Grant: &link.Grant{
+							Permissions: &link.PublicSharePermissions{
+								Permissions: linkPermissions,
+							},
+						},
+					},
+				}
+
+				res, err := provider.UpdatePublicShare(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_PERMISSION_DENIED))
+				Expect(res.GetStatus().GetMessage()).To(Equal("no permission to update public share"))
+			})
+			It("fails when the user is not the creator and has no manager or owner permissions", func() {
+				existingLink.Creator = &userpb.UserId{
+					OpaqueId: "admin",
+				}
+
+				gatewayClient.
+					EXPECT().
+					CheckPermission(mock.Anything, mock.Anything).
+					Return(checkPermissionResponse, nil)
+
+				statResourceResponse.Info.PermissionSet.UpdateGrant = false
+
+				req := &link.UpdatePublicShareRequest{
+					Update: &link.UpdatePublicShareRequest_Update{
+						Type: link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
+						Grant: &link.Grant{
+							Permissions: &link.PublicSharePermissions{
+								Permissions: linkPermissions,
+							},
+						},
+					},
+				}
+
+				res, err := provider.UpdatePublicShare(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_PERMISSION_DENIED))
+				Expect(res.GetStatus().GetMessage()).To(Equal("no permission to update public share"))
+			})
+			It("fails when the expiration date is in the past", func() {
+				yesterday := time.Now().AddDate(0, 0, -1)
+				req := &link.UpdatePublicShareRequest{
+					Update: &link.UpdatePublicShareRequest_Update{
+						Type: link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION,
+						Grant: &link.Grant{
+							Expiration: utils.TimeToTS(yesterday),
+						},
+					},
+				}
+
+				res, err := provider.UpdatePublicShare(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
+				Expect(res.GetStatus().GetMessage()).To(ContainSubstring("expiration date is in the past"))
+			})
+			It("fails when the password is changed to on a writable share", func() {
+				gatewayClient.
+					EXPECT().
+					CheckPermission(
+						mock.Anything,
+						mock.MatchedBy(
+							func(req *permissions.CheckPermissionRequest) bool {
+								return req.GetPermission() == permission.DeleteReadOnlyPassword
+							},
+						),
+					).
+					Return(checkPermissionResponse, nil)
+
+				req := &link.UpdatePublicShareRequest{
+					Update: &link.UpdatePublicShareRequest_Update{
+						Type: link.UpdatePublicShareRequest_Update_TYPE_PASSWORD,
+						Grant: &link.Grant{
+							Password: "",
+						},
+					},
+				}
+
+				res, err := provider.UpdatePublicShare(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
+				Expect(res.GetStatus().GetMessage()).To(ContainSubstring("password protection is enforced"))
+			})
+			It("fails when the password is already empty on a writable share", func() {
+				gatewayClient.
+					EXPECT().
+					CheckPermission(
+						mock.Anything,
+						mock.MatchedBy(
+							func(req *permissions.CheckPermissionRequest) bool {
+								return req.GetPermission() == permission.DeleteReadOnlyPassword
+							},
+						),
+					).
+					Return(checkPermissionResponse, nil)
+
+				req := &link.UpdatePublicShareRequest{
+					Update: &link.UpdatePublicShareRequest_Update{
+						Type: link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
+						Grant: &link.Grant{
+							Permissions: &link.PublicSharePermissions{
+								Permissions: &providerpb.ResourcePermissions{
+									Stat:                 true,
+									ListContainer:        true,
+									InitiateFileDownload: true,
+									Move:                 true,
+								},
+							},
+						},
+					},
+				}
+
+				res, err := provider.UpdatePublicShare(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
+				Expect(res.GetStatus().GetMessage()).To(ContainSubstring("password protection is enforced"))
+			})
+			It("succeeds when the password is empty on a readable share with opt out permission", func() {
+				gatewayClient.
+					EXPECT().
+					CheckPermission(
+						mock.Anything,
+						mock.MatchedBy(
+							func(req *permissions.CheckPermissionRequest) bool {
+								return req.GetPermission() == permission.DeleteReadOnlyPassword
+							},
+						),
+					).
+					Return(checkPermissionResponse, nil)
+
+				manager.
+					EXPECT().
+					UpdatePublicShare(mock.Anything, mock.Anything, mock.Anything).
+					Once().Return(updatedLink, nil)
+
+				req := &link.UpdatePublicShareRequest{
+					Update: &link.UpdatePublicShareRequest_Update{
+						Type: link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
+						Grant: &link.Grant{
+							Permissions: &link.PublicSharePermissions{
+								Permissions: &providerpb.ResourcePermissions{
+									Stat:                 true,
+									ListContainer:        true,
+									InitiateFileDownload: true,
+								},
+							},
+						},
+					},
+				}
+
+				res, err := provider.UpdatePublicShare(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_OK))
+				Expect(res.GetShare()).To(Equal(updatedLink))
+			})
+			It("fails when the updated password doesn't fulfil the policy", func() {
+				gatewayClient.
+					EXPECT().
+					CheckPermission(
+						mock.Anything,
+						mock.MatchedBy(
+							func(req *permissions.CheckPermissionRequest) bool {
+								return req.GetPermission() == permission.DeleteReadOnlyPassword
+							},
+						),
+					).
+					Return(checkPermissionResponse, nil)
+
+				req := &link.UpdatePublicShareRequest{
+					Update: &link.UpdatePublicShareRequest_Update{
+						Type: link.UpdatePublicShareRequest_Update_TYPE_PASSWORD,
+						Grant: &link.Grant{
+							Password: "Test",
+						},
+					},
+				}
+
+				res, err := provider.UpdatePublicShare(ctx, req)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
+				Expect(res.GetStatus().GetMessage()).To(ContainSubstring("characters are required"))
+			})
+		})
+		Context("when the user gets a public share", func() {
+			BeforeEach(func() {
+				manager.
+					EXPECT().
+					GetPublicShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Once().Return(existingLink, nil)
+
+				gatewayClient.EXPECT().Stat(mock.Anything, mock.Anything).Unset()
+			})
+			It("succeeds", func() {
+				res, err := provider.GetPublicShare(ctx, &link.GetPublicShareRequest{
+					Ref: &link.PublicShareReference{
+						Spec: &link.PublicShareReference_Id{
+							Id: &link.PublicShareId{
+								OpaqueId: "share-id",
+							},
+						},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetShare()).To(Equal(existingLink))
+			})
+			It("fails when it finds no share", func() {
+				manager.EXPECT().GetPublicShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Unset()
+				manager.
+					EXPECT().
+					GetPublicShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Once().Return(nil, errtypes.NotFound("not found"))
+				res, err := provider.GetPublicShare(ctx, &link.GetPublicShareRequest{
+					Ref: &link.PublicShareReference{
+						Spec: &link.PublicShareReference_Id{
+							Id: &link.PublicShareId{
+								OpaqueId: "share-id",
+							},
+						},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_NOT_FOUND))
+				Expect(res.GetStatus().GetMessage()).To(ContainSubstring("not found"))
+			})
+			It("fails when it finds no share due to internal error", func() {
+				manager.EXPECT().GetPublicShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Unset()
+				manager.
+					EXPECT().
+					GetPublicShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Once().Return(nil, errtypes.InternalError("internal error"))
+				res, err := provider.GetPublicShare(ctx, &link.GetPublicShareRequest{
+					Ref: &link.PublicShareReference{
+						Spec: &link.PublicShareReference_Id{
+							Id: &link.PublicShareId{
+								OpaqueId: "share-id",
+							},
+						},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_INTERNAL))
+				Expect(res.GetStatus().GetMessage()).To(ContainSubstring("internal error"))
+			})
+			It("fails when the share manager response is empty", func() {
+				manager.EXPECT().GetPublicShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Unset()
+				manager.
+					EXPECT().
+					GetPublicShare(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Once().Return(nil, nil)
+				res, err := provider.GetPublicShare(ctx, &link.GetPublicShareRequest{
+					Ref: &link.PublicShareReference{
+						Spec: &link.PublicShareReference_Id{
+							Id: &link.PublicShareId{
+								OpaqueId: "share-id",
+							},
+						},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_NOT_FOUND))
+				Expect(res.GetStatus().GetMessage()).To(ContainSubstring("not found"))
+			})
+		})
+		Context("when the user gets a public share by token", func() {
+			BeforeEach(func() {
+				manager.
+					EXPECT().
+					GetPublicShareByToken(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Once().Return(existingLink, nil)
+
+				gatewayClient.EXPECT().Stat(mock.Anything, mock.Anything).Unset()
+			})
+			It("succeeds", func() {
+				res, err := provider.GetPublicShareByToken(ctx, &link.GetPublicShareByTokenRequest{
+					Token: "token",
+					Authentication: &link.PublicShareAuthentication{
+						Spec: &link.PublicShareAuthentication_Password{
+							Password: "password",
+						},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetShare()).To(Equal(existingLink))
+			})
+			It("fails with invalid credentials", func() {
+				manager.EXPECT().GetPublicShareByToken(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Unset()
+				manager.
+					EXPECT().
+					GetPublicShareByToken(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Once().Return(nil, errtypes.InvalidCredentials("wrong password"))
+
+				res, err := provider.GetPublicShareByToken(ctx, &link.GetPublicShareByTokenRequest{
+					Token: "token",
+					Authentication: &link.PublicShareAuthentication{
+						Spec: &link.PublicShareAuthentication_Password{
+							Password: "password",
+						},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_PERMISSION_DENIED))
+				Expect(res.GetStatus().GetMessage()).To(Equal("wrong password"))
+			})
+			It("fails with an unknown token", func() {
+				manager.EXPECT().GetPublicShareByToken(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Unset()
+				manager.
+					EXPECT().
+					GetPublicShareByToken(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Once().Return(nil, errtypes.NotFound("public share not found"))
+
+				res, err := provider.GetPublicShareByToken(ctx, &link.GetPublicShareByTokenRequest{
+					Token: "token",
+					Authentication: &link.PublicShareAuthentication{
+						Spec: &link.PublicShareAuthentication_Password{
+							Password: "password",
+						},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_NOT_FOUND))
+				Expect(res.GetStatus().GetMessage()).To(Equal("unknown token"))
+			})
+			It("fails with an unknown error", func() {
+				manager.EXPECT().GetPublicShareByToken(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Unset()
+				manager.
+					EXPECT().
+					GetPublicShareByToken(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Once().Return(nil, errtypes.InternalError("internal error"))
+
+				res, err := provider.GetPublicShareByToken(ctx, &link.GetPublicShareByTokenRequest{
+					Token: "token",
+					Authentication: &link.PublicShareAuthentication{
+						Spec: &link.PublicShareAuthentication_Password{
+							Password: "password",
+						},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.GetStatus().GetCode()).To(Equal(rpc.Code_CODE_INTERNAL))
+				Expect(res.GetStatus().GetMessage()).To(Equal("unexpected error"))
 			})
 		})
 	})
