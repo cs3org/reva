@@ -98,10 +98,7 @@ require (
 	google.golang.org/protobuf v1.32.0
 )
 
-require (
-	kernel.org/pub/linux/libs/security/libcap/cap v1.2.69 // indirect
-	kernel.org/pub/linux/libs/security/libcap/psx v1.2.69 // indirect
-)
+require github.com/confluentinc/confluent-kafka-go/v2 v2.3.0
 
 require (
 	github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358 // indirect
@@ -118,7 +115,6 @@ require (
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cloudflare/circl v1.3.3 // indirect
-	github.com/confluentinc/confluent-kafka-go v1.9.2
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/cornelk/hashmap v1.0.8 // indirect
