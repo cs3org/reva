@@ -1,0 +1,18 @@
+[
+  {
+    "id": {
+      "opaque_id": "einstein",
+      "type": 1
+    },
+    "username": "einstein",
+    "secret": "relativity",
+    "mail": "example@org",
+    "display_name": "Einstein",
+    "groups": [
+      "sailing-lovers",
+      "violin-haters",
+      "physics-lovers"
+    ],
+    "uid_number": 4000
+  }
+]

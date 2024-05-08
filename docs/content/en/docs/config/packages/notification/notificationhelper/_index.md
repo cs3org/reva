@@ -32,11 +32,11 @@ nats_stream = "reva-notifications"
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="templates" type="map[string]interface{}" default= %}}
+{{% dir name="templates" type="map[string]interface{}" default=nil %}}
 Notification templates for the service. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/notification/notificationhelper/notificationhelper.go#L50)
 {{< highlight toml >}}
 [notification.notificationhelper]
-templates = 
+templates = nil
 {{< /highlight >}}
 {{% /dir %}}
 

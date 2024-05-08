@@ -11,4 +11,5 @@ To configure an HTTP middleware you need to follow this convention in the config
 {{< highlight toml >}}
 [http.middlewares.middleware_name]
 ... config ...
+{{</ highlight >}}
 

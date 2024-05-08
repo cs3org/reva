@@ -29,7 +29,8 @@ import (
 
 var noPermissions = &provider.ResourcePermissions{}
 
-// GetACLPerm generates a string representation of CS3APIs' ResourcePermissions
+// GetACLPerm generates a string representation of CS3APIs' ResourcePermissions,
+// modeled after the EOS ACLs.
 // TODO(labkode): fine grained permission controls.
 func GetACLPerm(set *provider.ResourcePermissions) (string, error) {
 	// resource permission is denied
@@ -39,7 +40,7 @@ func GetACLPerm(set *provider.ResourcePermissions) (string, error) {
 
 	var b strings.Builder
 
-	if set.Stat || set.InitiateFileDownload {
+	if set.Stat || set.InitiateFileDownload || set.ListGrants {
 		b.WriteString("r")
 	}
 	if set.CreateContainer || set.InitiateFileUpload || set.Delete || set.Move {
@@ -48,11 +49,8 @@ func GetACLPerm(set *provider.ResourcePermissions) (string, error) {
 	if set.ListContainer || set.ListFileVersions {
 		b.WriteString("x")
 	}
-	if set.AddGrant || set.ListGrants || set.RemoveGrant {
+	if set.AddGrant || set.RemoveGrant {
 		b.WriteString("m")
-	}
-	if set.GetQuota {
-		b.WriteString("q")
 	}
 
 	if set.Delete {
@@ -64,10 +62,10 @@ func GetACLPerm(set *provider.ResourcePermissions) (string, error) {
 	return b.String(), nil
 }
 
-// GetGrantPermissionSet converts CS3APIs' ResourcePermissions from a string
-// TODO(labkode): add more fine grained controls.
+// GetGrantPermissionSet converts CS3APIs' ResourcePermissions from a string:
 // EOS acls are a mix of ACLs and POSIX permissions. More details can be found in
-// https://github.com/cern-eos/eos/blob/master/doc/configuration/permission.rst
+// https://github.com/cern-eos/eos/blob/master/doc/citrine/configuration/permission.rst.
+// TODO(labkode): add more fine grained controls.
 func GetGrantPermissionSet(perm string) *provider.ResourcePermissions {
 	var rp provider.ResourcePermissions // default to 0 == all denied
 
@@ -75,6 +73,7 @@ func GetGrantPermissionSet(perm string) *provider.ResourcePermissions {
 		rp.GetPath = true
 		rp.Stat = true
 		rp.InitiateFileDownload = true
+		rp.ListGrants = true
 	}
 
 	if strings.Contains(perm, "w") && !strings.Contains(perm, "!w") {
@@ -100,12 +99,7 @@ func GetGrantPermissionSet(perm string) *provider.ResourcePermissions {
 
 	if strings.Contains(perm, "m") && !strings.Contains(perm, "!m") {
 		rp.AddGrant = true
-		rp.ListGrants = true
 		rp.RemoveGrant = true
-	}
-
-	if strings.Contains(perm, "q") && !strings.Contains(perm, "!q") {
-		rp.GetQuota = true
 	}
 
 	return &rp

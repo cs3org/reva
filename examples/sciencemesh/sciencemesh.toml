@@ -1,0 +1,290 @@
+## Example configuration for the ScienceMesh app in ownCloud 10 / Nextcloud
+#
+## To contextualize this configuration for your deployment, please follow these steps:
+#
+# 1. In the [vars] section below, replace `your.revad.org` with your actual domain
+# 2. If you have a Kubernetes deployment with an ingress and a route:
+# 2.1. Set the `external_reva_endpoint` var to your actual externally-visible route to reva
+# 3. Replace `your.efss.org` with the actual endpoint of your EFSS system
+# 4. Define appropriate secrets in the [vars] section: the `efss_shared_secret` must match the `oc_appconfig.configvalue` in your EFSS DB for `oc_appconfig.app_id` = `sciencemesh`
+# 5. Provide appropriate SSL full chain certificate and key files in the [http] section
+#
+# If you want to terminate the SSL connection to reva at your reverse proxy system
+# (e.g. at your Kubernetes ingress), then you can configure reva to use http instead.
+# For that, you need to follow these steps:
+#
+# 1. Remove the `certfile` and `keyfile` entries from the [http] section
+# 2. Replace the https port `443` with a port number of your choice everywhere you find it
+# 3. Look for `data_server_url` and replace the `https://localhost` address as indicated
+
+
+[vars]
+internal_gateway = "your.revad.org"
+provider_domain = "your.revad.org"
+external_reva_endpoint = "https://your.revad.org"   # append here any route if applicable
+efss_sciencemesh_endpoint = "https://your.efss.org/index.php/apps/sciencemesh/"
+machine_api_key = "machine-api-key"
+efss_shared_secret = "shared-secret-1"
+
+[http]
+certfile = "/etc/tls/your.revad.ssl.crt"
+keyfile = "/etc/tls/your.revad.ssl.key"
+
+[log]
+level = "debug"
+
+[shared]
+gatewaysvc = "{{ vars.internal_gateway }}:19000"
+
+[grpc.services.gateway]
+address = ":19000"
+authregistrysvc = "{{ grpc.services.authregistry.address }}"
+appregistrysvc = "{{ grpc.services.appregistry.address }}"
+storageregistrysvc = "{{ grpc.services.storageregistry.address }}"
+preferencessvc = "{{ grpc.services.userprovider.address }}"
+userprovidersvc = "{{ grpc.services.userprovider.address }}"
+usershareprovidersvc = "{{ grpc.services.usershareprovider.address }}"
+ocmcoresvc = "{{ grpc.services.ocmcore.address }}"
+ocmshareprovidersvc = "{{ grpc.services.ocmshareprovider.address }}"
+ocminvitemanagersvc = "{{ grpc.services.ocminvitemanager.address }}"
+ocmproviderauthorizersvc = "{{ grpc.services.ocmproviderauthorizer.address }}"
+datagateway = "https://{{ http.services.datagateway.address }}/data"
+
+transfer_expires = 6     # give it a moment
+commit_share_to_storage_grant = true
+commit_share_to_storage_ref = true
+
+
+[grpc.services.appregistry]
+driver = "static"
+
+[grpc.services.appregistry.drivers.static]
+mime_types = [
+    {"mime_type" = "text/plain", "extension" = "txt", "name" = "Text file", "description" = "Text file", "allow_creation" = true},
+    {"mime_type" = "text/markdown", "extension" = "md", "name" = "Markdown file", "description" = "Markdown file", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.text", "extension" = "odt", "name" = "OpenDocument", "description" = "OpenDocument text document", "default_app" = "Collabora", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.spreadsheet", "extension" = "ods", "name" = "OpenSpreadsheet", "description" = "OpenDocument spreadsheet document", "default_app" = "Collabora", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.presentation", "extension" = "odp", "name" = "OpenPresentation", "description" = "OpenDocument presentation document", "default_app" = "Collabora", "allow_creation" = true},
+    {"mime_type" = "application/vnd.jupyter", "extension" = "ipynb", "name" = "Jupyter Notebook", "description" = "Jupyter Notebook"}
+]
+
+
+### AUTH PROVIDERS ###
+
+[grpc.services.authregistry]
+driver = "static"
+
+[grpc.services.authregistry.drivers.static.rules]
+basic = "{{ grpc.services.authprovider[0].address }}"
+machine = "{{ grpc.services.authprovider[1].address }}"
+ocmshares = "{{ grpc.services.authprovider[2].address }}"
+
+[[grpc.services.authprovider]]
+auth_manager = "nextcloud"
+
+[grpc.services.authprovider.auth_managers.nextcloud]
+endpoint = "{{ vars.efss_sciencemesh_endpoint }}"
+shared_secret = "{{ vars.efss_shared_secret }}"
+mock_http = false
+
+[[grpc.services.authprovider]]
+auth_manager = "machine"
+
+[grpc.services.authprovider.auth_managers.machine]
+api_key = "{{ vars.machine_api_key }}"
+gateway_addr = "{{ vars.internal_gateway }}:19000"
+
+[[grpc.services.authprovider]]
+auth_manager = "ocmshares"
+
+
+### STORAGE PROVIDERS ###
+
+[grpc.services.storageregistry]
+driver = "static"
+
+[grpc.services.storageregistry.drivers.static]
+home_provider = "/home"
+
+[grpc.services.storageregistry.drivers.static.rules]
+"/home" = {"address" = "{{ grpc.services.storageprovider[0].address }}"}
+"nextcloud" = {"address" = "{{ grpc.services.storageprovider[0].address }}"}
+"/ocm" = {"address" = "{{ grpc.services.storageprovider[1].address }}"}
+"ocm" = {"address" = "{{ grpc.services.storageprovider[1].address }}"}
+
+[[grpc.services.storageprovider]]
+driver = "nextcloud"
+mount_id = "nextcloud"
+expose_data_server = true
+enable_home_creation = false
+# replace https://localhost with http://localhost if reva does not serve https traffic
+data_server_url = "https://localhost:{{ http.services.dataprovider[0].address.port }}/data"
+
+[grpc.services.storageprovider.drivers.nextcloud]
+endpoint = "{{ vars.efss_sciencemesh_endpoint }}"
+shared_secret = "{{ vars.efss_shared_secret }}"
+mock_http = false
+
+[[grpc.services.storageprovider]]
+driver = "ocmoutcoming"
+mount_id = "ocm"
+mount_path = "/ocm"
+expose_data_server = true
+enable_home_creation = false
+data_server_url = "{{ vars.external_reva_endpoint }}/data"
+
+[grpc.services.storageprovider.drivers.ocmoutcoming]
+machine_secret = "{{ vars.machine_api_key }}"
+
+
+### OTHER PROVIDERS ###
+
+[grpc.services.usershareprovider]
+driver = "memory"
+
+[grpc.services.ocmcore]
+driver = "nextcloud"
+
+[grpc.services.ocmcore.drivers.nextcloud]
+host = "{{ vars.external_reva_endpoint }}"
+endpoint = "{{ vars.efss_sciencemesh_endpoint }}"
+shared_secret = "{{ vars.efss_shared_secret }}"
+mock_http = false
+
+[grpc.services.ocminvitemanager]
+# TODO the driver should be "nextcloud" once it is implemented
+driver = "json"
+provider_domain = "{{ vars.provider_domain }}"
+
+[grpc.services.ocmshareprovider]
+driver = "nextcloud"
+provider_domain = "{{ vars.provider_domain }}"
+webdav_endpoint = "{{ vars.external_reva_endpoint }}"
+webdav_prefix = "{{ vars.external_reva_endpoint }}/remote.php/dav/files"
+webapp_template = "{{ vars.external_reva_endpoint }}/external/sciencemesh/{{.Token}}/{relative-path-to-shared-resource}"
+
+[grpc.services.ocmshareprovider.drivers.nextcloud]
+webdav_host = "{{ vars.external_reva_endpoint }}"
+endpoint = "{{ vars.efss_sciencemesh_endpoint }}"
+shared_secret = "{{ vars.efss_shared_secret }}"
+mock_http = false
+mount_id = "nextcloud"
+
+[grpc.services.ocmproviderauthorizer]
+driver = "mentix"
+
+[grpc.services.ocmproviderauthorizer.drivers.mentix]
+url = "https://iop.sciencemesh.uni-muenster.de/iop/mentix/cs3"
+verify_request_hostname = true
+insecure = false
+timeout = 10
+refresh = 900
+
+[grpc.services.ocmproviderauthorizer.drivers.json]
+# this is used by the docker-based test deployment, not in production
+providers = "/etc/revad/providers.testnet.json"
+verify_request_hostname = true
+
+[grpc.services.userprovider]
+driver = "nextcloud"
+
+[grpc.services.userprovider.drivers.nextcloud]
+endpoint = "{{ vars.efss_sciencemesh_endpoint }}"
+shared_secret = "{{ vars.efss_shared_secret }}"
+mock_http = false
+
+[grpc.services.datatx]
+txdriver = "rclone"
+storagedriver = "json"
+remove_transfer_on_cancel = true
+
+[grpc.services.datatx.txdrivers.rclone]
+# rclone endpoint
+endpoint = "http://rclone.docker"
+# basic auth is used
+auth_user = "rcloneuser"
+auth_pass = "eilohtho9oTahsuongeeTh7reedahPo1Ohwi3aek"
+auth_header = "x-access-token"
+job_status_check_interval = 2000
+job_timeout = 120000
+storagedriver = "json"
+remove_transfer_job_on_cancel = true
+
+[grpc.services.datatx.storagedrivers.json]
+file = ""
+
+[grpc.services.datatx.txdrivers.rclone.storagedrivers.json]
+file = ""
+
+
+### HTTP ENDPOINTS ###
+
+[http.services.appprovider]
+address = ":443"
+insecure = true
+
+[http.services.datagateway]
+address = ":443"
+
+[[http.services.dataprovider]]
+driver = "nextcloud"
+
+[http.services.dataprovider.drivers.nextcloud]
+endpoint = "{{ vars.efss_sciencemesh_endpoint }}"
+shared_secret = "{{ vars.efss_shared_secret }}"
+mock_http = false
+
+[[http.services.dataprovider]]
+address = ":443"
+driver = "ocmoutcoming"
+
+[http.services.dataprovider.drivers.ocmoutcoming]
+machine_secret = "{{ vars.machine_api_key }}"
+
+[http.services.sciencemesh]
+address = ":443"
+provider_domain = "{{ vars.provider_domain }}"
+mesh_directory_url = "https://sciencemesh.cesnet.cz/iop/meshdir"
+ocm_mount_point = "/sciencemesh"
+
+[http.services.sciencemesh.smtp_credentials]
+disable_auth = true
+sender_mail = "sciencemesh@{{ vars.provider_domain }}"
+smtp_server = "smtp.{{ vars.provider_domain }}"
+smtp_port = 25
+
+[http.services.ocmprovider]
+address = ":443"
+ocm_prefix = "ocm"
+provider = "Reva for ownCloud/Nextcloud"
+endpoint = "{{ vars.external_reva_endpoint }}"
+enable_webapp = true
+enable_datatx = true
+
+[http.services.ocm]
+address = ":443"
+prefix = "ocm"
+
+[http.services.ocm.config]
+host = "{{ vars.provider_domain }}"
+
+[http.services.ocs]
+address = ":443"
+prefix = "ocs"
+
+[http.services.ocdav]
+address = ":443"
+
+[http.services.prometheus]
+address = ":443"
+
+[http.services.metrics]
+address = ":443"
+metrics_data_driver_type = "json"
+metrics_data_location = "/etc/revad/metrics.json"
+metrics_record_interval = 5000
+
+[http.services.sysinfo]
+
+[http.middlewares.cors]
+[http.middlewares.log]
