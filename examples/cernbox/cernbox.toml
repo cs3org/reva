@@ -199,7 +199,8 @@ webapp_template = "{{ vars.external_reva_endpoint }}/external/sciencemesh/{{.Tok
 file = "{{ vars.ocmshares_json_file }}"
 
 [grpc.services.ocmproviderauthorizer]
-driver = "json"
+driver = "open"    # pure OCM, all remote shares are accepted
+#driver = "json"   # to enable sciencemesh
 
 [grpc.services.ocmproviderauthorizer.drivers.json]
 # this is used by the docker-based test deployment, not in production
