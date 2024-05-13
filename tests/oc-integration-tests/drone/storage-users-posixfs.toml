@@ -22,6 +22,8 @@ mount_id = "1284d238-aa92-42ce-bdc4-0b0000009157"
 [grpc.services.storageprovider.drivers.posix]
 root = "/drone/src/tmp/reva/data"
 permissionssvc = "localhost:10000"
+treetime_accounting = true
+treesize_accounting = true
 personalspacepath_template = "users/{{.User.Username}}"
 generalspacepath_template = "projects/{{.SpaceId}}"
 
@@ -41,6 +43,8 @@ temp_folder = "/drone/src/tmp/reva/tmp"
 [http.services.dataprovider.drivers.posix]
 root = "/drone/src/tmp/reva/data"
 permissionssvc = "localhost:10000"
+treetime_accounting = true
+treesize_accounting = true
 
 [http.services.dataprovider.drivers.posix.idcache]
 cache_store = "redis"
