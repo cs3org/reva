@@ -18,6 +18,9 @@
 
 package ocmshareprovider
 
+// This package implements the OCM client API: it allows shares created on this Reva instance
+// to be sent to a remote EFSS system via OCM.
+
 import (
 	"context"
 	"fmt"
@@ -70,7 +73,7 @@ type config struct {
 	GatewaySVC     string                            `mapstructure:"gatewaysvc"                                    validate:"required"`
 	ProviderDomain string                            `docs:"The same domain registered in the provider authorizer" mapstructure:"provider_domain" validate:"required"`
 	WebDAVEndpoint string                            `mapstructure:"webdav_endpoint"                               validate:"required"`
-	WebappTemplate string                            `mapstructure:"webapp_template"`
+	WebappTemplate string                            `mapstructure:"webapp_template"                               validate:"required"`
 }
 
 type service struct {
@@ -88,9 +91,6 @@ func (c *config) ApplyDefaults() {
 	}
 	if c.ClientTimeout == 0 {
 		c.ClientTimeout = 10
-	}
-	if c.WebappTemplate == "" {
-		c.WebappTemplate = "https://cernbox.cern.ch/external/sciencemesh/{{.Token}}{relative-path-to-shared-resource}"
 	}
 
 	c.GatewaySVC = sharedconf.GetGatewaySVC(c.GatewaySVC)
@@ -180,6 +180,7 @@ func getResourceType(info *providerpb.ResourceInfo) string {
 
 func (s *service) webdavURL(share *ocm.Share) string {
 	// the url is expected to be in the form https://ourserver/remote.php/dav/ocm/{ShareId}, see c.WebdavRoot in ocmprovider.go
+	// TODO(lopresti) take the root from http.services.ocmprovider's config
 	p, _ := url.JoinPath(s.conf.WebDAVEndpoint, "/remote.php/dav/ocm", share.Id.OpaqueId)
 	return p
 }
