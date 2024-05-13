@@ -25,9 +25,9 @@ permissionssvc = "localhost:10000"
 personalspacepath_template = "users/{{.User.Username}}"
 generalspacepath_template = "projects/{{.SpaceId}}"
 
-[grpc.services.storageprovider.id_cache]
-store = "redis"
-nodes = "redis:6379"
+[grpc.services.storageprovider.drivers.posix.idcache]
+cache_store = "redis"
+cache_nodes = [ "redis://redis:6379" ]
 
 
 # we have a locally running dataprovider
@@ -42,6 +42,6 @@ temp_folder = "/drone/src/tmp/reva/tmp"
 root = "/drone/src/tmp/reva/data"
 permissionssvc = "localhost:10000"
 
-[http.services.dataprovider.id_cache]
-store = "redis"
-nodes = "redis:6379"
+[http.services.dataprovider.drivers.posix.idcache]
+cache_store = "redis"
+cache_nodes = [ "redis://redis:6379" ]
