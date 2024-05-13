@@ -1,3 +1,23 @@
+Changelog for reva 2.19.7 (2024-05-13)
+=======================================
+
+The following sections list the changes in reva 2.19.7 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Enh #4673: Add virus filter to list uploads sessions
+
+Details
+-------
+
+*   Enhancement #4673: Add virus filter to list uploads sessions
+
+   Adds a filter for filtering for infected uploads
+
+   https://github.com/cs3org/reva/pull/4673
+
 Changelog for reva 2.19.6 (2024-04-29)
 =======================================
 
@@ -4465,6 +4485,27 @@ Details
 
    https://github.com/cs3org/reva/pull/2922
 
+Changelog for reva 2.4.1 (2022-05-24)
+=======================================
+
+The following sections list the changes in reva 2.4.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #2891: Add missing http status code
+
+Details
+-------
+
+*   Bugfix #2891: Add missing http status code
+
+   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
+   pass it through.
+
+   https://github.com/cs3org/reva/pull/2891
+
 Changelog for reva 2.4.0 (2022-05-24)
 =======================================
 
@@ -4607,27 +4648,6 @@ Details
    correct storageprovider
 
    https://github.com/cs3org/reva/pull/2792
-
-Changelog for reva 2.4.1 (2022-05-24)
-=======================================
-
-The following sections list the changes in reva 2.4.1 relevant to
-reva users. The changes are ordered by importance.
-
-Summary
--------
-
-*   Fix #2891: Add missing http status code
-
-Details
--------
-
-*   Bugfix #2891: Add missing http status code
-
-   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
-   pass it through.
-
-   https://github.com/cs3org/reva/pull/2891
 
 Changelog for reva 2.3.1 (2022-05-08)
 =======================================
