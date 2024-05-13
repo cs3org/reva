@@ -237,7 +237,7 @@ func (store OcisStore) CreateNodeForUpload(session *OcisSession, initAttrs node.
 
 		unlock, err = store.tp.InitNewNode(ctx, n, uint64(session.Size()))
 		if err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Msg("failed to init new node")
+			appctx.GetLogger(ctx).Error().Str("path", n.InternalPath()).Err(err).Msg("failed to init new node")
 		}
 		session.info.MetaData["sizeDiff"] = strconv.FormatInt(session.Size(), 10)
 	}
