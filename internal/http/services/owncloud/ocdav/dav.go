@@ -217,7 +217,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			authRes, err := handleOCMAuth(ctx, c, ocmshare, token)
 			switch {
 			case err != nil:
-				log.Error().Err(err).Msg("error during ocm authentication")
+				log.Error().Err(err).Msg("error during OCM authentication")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			case authRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
@@ -240,6 +240,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			ctx = appctx.ContextSetToken(ctx, authRes.Token)
 			ctx = appctx.ContextSetUser(ctx, authRes.User)
 			ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, authRes.Token)
+			ctx = context.WithValue(ctx, ctxOCM, true)
 
 			log.Debug().Str("token", token).Interface("user", authRes.User).Msg("OCM user authenticated")
 

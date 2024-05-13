@@ -530,11 +530,13 @@ func (s *svc) isOpenable(path string) bool {
 // prefixing it with the baseURI.
 func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string, usershares, linkshares map[string]struct{}) (*responseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
-	md.Path = strings.TrimPrefix(md.Path, ns)
 
-	// see internal/http/services/owncloud/ocdav/dav.go:
-	// /<token>/ was injected in front of the public-link or ocm path for the routing to work, we now remove it
-	_, md.Path = router.ShiftPath(md.Path)
+	md.Path = strings.TrimPrefix(md.Path, ns)
+	ocm, _ := ctx.Value(ctxOCM).(bool)
+	if ocm {
+		// /<token>/ was injected in front of the OCM path for the routing to work, we now remove it (see internal/http/services/owncloud/ocdav/dav.go)
+		_, md.Path = router.ShiftPath(md.Path)
+	}
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 	ref := path.Join(baseURI, md.Path)
