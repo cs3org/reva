@@ -41,7 +41,6 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/ocm/client"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/repository/registry"
 	"github.com/cs3org/reva/pkg/plugin"
@@ -79,7 +78,7 @@ type config struct {
 type service struct {
 	conf       *config
 	repo       share.Repository
-	client     *client.OCMClient
+	client     *ocmd.OCMClient
 	gateway    gateway.GatewayAPIClient
 	webappTmpl *template.Template
 	walker     walker.Walker
@@ -119,11 +118,6 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	client := client.New(&client.Config{
-		Timeout:  time.Duration(c.ClientTimeout) * time.Second,
-		Insecure: c.ClientInsecure,
-	})
-
 	gateway, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySVC))
 	if err != nil {
 		return nil, err
@@ -135,10 +129,11 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	}
 	walker := walker.NewWalker(gateway)
 
+	ocmcl := ocmd.NewClient(time.Duration(c.ClientTimeout)*time.Second, c.ClientInsecure)
 	service := &service{
 		conf:       &c,
 		repo:       repo,
-		client:     client,
+		client:     ocmcl,
 		gateway:    gateway,
 		webappTmpl: tpl,
 		walker:     walker,
@@ -180,7 +175,7 @@ func getResourceType(info *providerpb.ResourceInfo) string {
 
 func (s *service) webdavURL(share *ocm.Share) string {
 	// the url is expected to be in the form https://ourserver/remote.php/dav/ocm/{ShareId}, see c.WebdavRoot in ocmprovider.go
-	// TODO(lopresti) take the root from http.services.ocmprovider's config
+	// TODO(lopresti) take the root from http.services.wellknown.ocmprovider's config
 	p, _ := url.JoinPath(s.conf.WebDAVEndpoint, "/remote.php/dav/ocm", share.Id.OpaqueId)
 	return p
 }
@@ -324,7 +319,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		}, nil
 	}
 
-	newShareReq := &client.NewShareRequest{
+	newShareReq := &ocmd.NewShareRequest{
 		ShareWith:  formatOCMUser(req.Grantee.GetUserId()),
 		Name:       ocmshare.Name,
 		ProviderID: ocmshare.Id.OpaqueId,
@@ -349,11 +344,11 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	newShareRes, err := s.client.NewShare(ctx, ocmEndpoint, newShareReq)
 	if err != nil {
 		switch {
-		case errors.Is(err, client.ErrInvalidParameters):
+		case errors.Is(err, ocmd.ErrInvalidParameters):
 			return &ocm.CreateOCMShareResponse{
 				Status: status.NewInvalidArg(ctx, err.Error()),
 			}, nil
-		case errors.Is(err, client.ErrServiceNotTrusted):
+		case errors.Is(err, ocmd.ErrServiceNotTrusted):
 			return &ocm.CreateOCMShareResponse{
 				Status: status.NewInvalidArg(ctx, err.Error()),
 			}, nil

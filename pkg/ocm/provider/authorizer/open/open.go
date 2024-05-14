@@ -20,12 +20,17 @@ package open
 
 import (
 	"context"
+	"net/url"
+	"path/filepath"
 	"strings"
+	"time"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	client "github.com/cs3org/reva/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
 	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/pkg/errors"
 )
 
 func init() {
@@ -61,25 +66,50 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 			return p, nil
 		}
 	}
+
 	// not yet known: try to discover the remote OCM endpoint
-	//TODO
-	// return a fake provider info record for this domain, including the OCM service
+	ocmClient := client.NewOCMClient(time.Duration(10)*time.Second, true)
+	ocmCaps, err := ocmClient.Discover(ctx, domain)
+	if err != nil {
+		return nil, errors.Wrap(err, "error probing OCM services at remote server")
+	}
+	var path string
+	for _, t := range ocmCaps.ResourceTypes {
+		webdavRoot, ok := t.Protocols["webdav"]
+		if ok {
+			// assume the first resourceType that exposes a webdav root is OK to use: as a matter of fact,
+			// no implementation exists yet that exposes multiple resource types with different roots.
+			path = filepath.Join(ocmCaps.Endpoint, webdavRoot)
+		}
+	}
+	host, _ := url.Parse(ocmCaps.Endpoint)
+
+	// return a provider info record for this domain, including the OCM service
 	return &ocmprovider.ProviderInfo{
 		Name:         "ocm_" + domain,
-		FullName:     "",
+		FullName:     ocmCaps.Provider,
 		Description:  "OCM service at " + domain,
 		Organization: domain,
 		Domain:       domain,
-		Homepage:     "https://" + domain,
+		Homepage:     "",
 		Email:        "",
 		Properties:   map[string]string{},
-		Services: []*ocmprovider.Service{{
-			Endpoint: &ocmprovider.ServiceEndpoint{
-				Type: &ocmprovider.ServiceType{Name: "OCM"},
-				Path: "",
+		Services: []*ocmprovider.Service{
+			{
+				Endpoint: &ocmprovider.ServiceEndpoint{
+					Type: &ocmprovider.ServiceType{Name: "OCM"},
+					Path: ocmCaps.Endpoint,
+				},
+				Host: host.Hostname(),
 			},
-			Host: "",
-		}},
+			{
+				Endpoint: &ocmprovider.ServiceEndpoint{
+					Type: &ocmprovider.ServiceType{Name: "Webdav"},
+					Path: path,
+				},
+				Host: host.Hostname(),
+			},
+		},
 	}, nil
 }
 
