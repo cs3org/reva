@@ -280,9 +280,6 @@ _The below features have been added after I last categorized them. AFAICT they a
 - [coreApiWebdavMove2/moveFile.feature:120](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L120)
 - [coreApiWebdavMove2/moveFile.feature:121](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L121)
 - [coreApiWebdavMove2/moveFile.feature:126](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L126)
-- [coreApiWebdavMove1/moveFolder.feature:253](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove1/moveFolder.feature#L253)
-- [coreApiWebdavMove1/moveFolder.feature:254](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove1/moveFolder.feature#L254)
-- [coreApiWebdavMove1/moveFolder.feature:259](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove1/moveFolder.feature#L259)
 
 ### posixfs doesn't do versions at that point
 - [coreApiWebdavUploadTUS/uploadFile.feature:146](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFile.feature#L146)
@@ -309,6 +306,9 @@ _The below features have been added after I last categorized them. AFAICT they a
 - [coreApiVersions/fileVersions.feature:266](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L266)
 - [coreApiVersions/fileVersions.feature:423](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L423)
 - [coreApiVersions/fileVersions.feature:437](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L437)
+- [coreApiWebdavMove2/moveFile.feature:45](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L45)
+- [coreApiWebdavMove2/moveFile.feature:46](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L46)
+- [coreApiWebdavMove2/moveFile.feature:51](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L51)
 
 ### posixfs doesn't do trashbin at that point
 - [coreApiTrashbin/trashbinDelete.feature:53](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinDelete.feature#L53)
@@ -425,7 +425,15 @@ _The below features have been added after I last categorized them. AFAICT they a
 - [coreApiWebdavEtagPropagation2/restoreFromTrash.feature:95](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavEtagPropagation2/restoreFromTrash.feature#L95)
 - [coreApiWebdavEtagPropagation2/restoreFromTrash.feature:96](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavEtagPropagation2/restoreFromTrash.feature#L96)
 - [coreApiWebdavEtagPropagation2/restoreVersion.feature:13](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavEtagPropagation2/restoreVersion.feature#L13)
-
+- [coreApiWebdavMove2/moveFile.feature:141](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L141)
+- [coreApiWebdavMove2/moveFile.feature:142](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L142)
+- [coreApiWebdavMove2/moveFile.feature:147](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L147)
+- [coreApiWebdavOperations/listFiles.feature:233](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavOperations/listFiles.feature#L233)
+- [coreApiWebdavOperations/listFiles.feature:234](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavOperations/listFiles.feature#L234)
+- [coreApiWebdavOperations/listFiles.feature:239](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavOperations/listFiles.feature#L239)
+- [coreApiWebdavMove1/moveFolder.feature:275](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove1/moveFolder.feature#L275)
+- [coreApiWebdavMove1/moveFolder.feature:276](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove1/moveFolder.feature#L276)
+- [coreApiWebdavMove1/moveFolder.feature:281](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove1/moveFolder.feature#L281)
 
 - Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
