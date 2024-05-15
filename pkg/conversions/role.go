@@ -322,6 +322,7 @@ func NewUploaderRole() *Role {
 			GetPath:            true,
 			CreateContainer:    true,
 			InitiateFileUpload: true,
+			ListContainer:      true,
 		},
 		ocsPermissions: PermissionCreate,
 	}
