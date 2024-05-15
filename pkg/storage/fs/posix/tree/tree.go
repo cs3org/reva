@@ -154,7 +154,6 @@ func (t *Tree) Setup() error {
 
 func (t *Tree) assimilate(item scanItem) error {
 	var err error
-
 	// find the space id, scope by the according user
 	spaceID := []byte("")
 	spaceCandidate := item.Path
@@ -204,8 +203,8 @@ func (t *Tree) assimilate(item scanItem) error {
 	id, err = t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.IDAttr)
 	switch err {
 	case nil:
+		t.lookup.(*lookup.Lookup).CacheID(context.Background(), string(spaceID), string(id), item.Path)
 		if !item.ForceRescan {
-			t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), item.Path)
 			return nil
 		}
 	default:
@@ -266,8 +265,8 @@ func (t *Tree) assimilate(item scanItem) error {
 			return errors.Wrap(err, "failed to set attributes")
 		}
 
+		t.lookup.(*lookup.Lookup).CacheID(context.Background(), string(spaceID), string(id), item.Path)
 		if !item.ForceRescan {
-			t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), item.Path)
 			return nil
 		}
 	}
@@ -288,7 +287,11 @@ func (t *Tree) assimilate(item scanItem) error {
 				return err
 			}
 
-			return t.Scan(path, false)
+			// rescan in a blocking fashion
+			return t.assimilate(scanItem{
+				Path:        path,
+				ForceRescan: item.ForceRescan,
+			})
 		})
 	}
 	return nil
@@ -435,9 +438,6 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		}
 	}
 
-	// remove cache entry in any case to avoid inconsistencies
-	defer func() { _ = t.idCache.Delete(filepath.Join(oldNode.ParentPath(), oldNode.Name)) }()
-
 	// we are moving the node to a new parent, any target has been removed
 	// bring old node to the new parent
 
@@ -471,7 +471,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	}
 
 	// update the id cache
-	err = t.lookup.(*lookup.Lookup).IDCache.Set(ctx, oldNode.SpaceID, oldNode.ID, filepath.Join(newNode.ParentPath(), newNode.Name))
+	err = t.assimilate(scanItem{Path: newNode.ParentPath(), ForceRescan: true})
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: Move: could not update id cache")
 	}
