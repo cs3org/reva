@@ -100,6 +100,21 @@ var _ = Describe("ACE", func() {
 	})
 
 	Describe("converting permissions", func() {
+		It("converts t", func() {
+			userGrant.Permissions.Stat = true
+			newGrant := ace.FromGrant(userGrant).Grant()
+			userGrant.Permissions.Stat = false
+			Expect(newGrant.Permissions.Stat).To(BeTrue())
+			Expect(newGrant.Permissions.Delete).To(BeFalse())
+
+			userGrant.Permissions.GetPath = true
+			newGrant = ace.FromGrant(userGrant).Grant()
+			fmt.Println(newGrant.Permissions)
+			userGrant.Permissions.GetPath = false
+			Expect(newGrant.Permissions.GetPath).To(BeTrue())
+			Expect(newGrant.Permissions.Delete).To(BeFalse())
+		})
+
 		It("converts r", func() {
 			userGrant.Permissions.Stat = true
 			newGrant := ace.FromGrant(userGrant).Grant()
@@ -149,6 +164,14 @@ var _ = Describe("ACE", func() {
 			newGrant := ace.FromGrant(userGrant).Grant()
 			userGrant.Permissions.CreateContainer = false
 			Expect(newGrant.Permissions.CreateContainer).To(BeTrue())
+			Expect(newGrant.Permissions.Delete).To(BeFalse())
+		})
+
+		It("converts x", func() {
+			userGrant.Permissions.ListContainer = true
+			newGrant := ace.FromGrant(userGrant).Grant()
+			userGrant.Permissions.ListContainer = false
+			Expect(newGrant.Permissions.ListContainer).To(BeTrue())
 			Expect(newGrant.Permissions.Delete).To(BeFalse())
 		})
 

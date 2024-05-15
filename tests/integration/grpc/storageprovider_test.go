@@ -312,9 +312,10 @@ var _ = Describe("storage providers", func() {
 					},
 				},
 				Permissions: &storagep.ResourcePermissions{
-					Stat:   true,
-					Move:   true,
-					Delete: false,
+					Stat:                 true,
+					Move:                 true,
+					Delete:               false,
+					InitiateFileDownload: true,
 				},
 			}
 			addRes, err := serviceClient.AddGrant(ctx, &storagep.AddGrantRequest{Ref: subdirRef, Grant: grant})
@@ -329,6 +330,7 @@ var _ = Describe("storage providers", func() {
 			Expect(readGrant.Permissions.Stat).To(BeTrue())
 			Expect(readGrant.Permissions.Move).To(BeTrue())
 			Expect(readGrant.Permissions.Delete).To(BeFalse())
+			Expect(readGrant.Permissions.InitiateFileDownload).To(BeTrue())
 
 			By("updating the grant")
 			grant.Permissions.Delete = true
@@ -344,6 +346,7 @@ var _ = Describe("storage providers", func() {
 			Expect(readGrant.Permissions.Stat).To(BeTrue())
 			Expect(readGrant.Permissions.Move).To(BeTrue())
 			Expect(readGrant.Permissions.Delete).To(BeTrue())
+			Expect(readGrant.Permissions.InitiateFileDownload).To(BeTrue())
 
 			By("deleting a grant")
 			delRes, err := serviceClient.RemoveGrant(ctx, &storagep.RemoveGrantRequest{Ref: subdirRef, Grant: readGrant})
