@@ -68,7 +68,7 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 	}
 
 	// not yet known: try to discover the remote OCM endpoint
-	ocmClient := client.NewOCMClient(time.Duration(10)*time.Second, true)
+	ocmClient := client.NewClient(time.Duration(10)*time.Second, true)
 	ocmCaps, err := ocmClient.Discover(ctx, domain)
 	if err != nil {
 		return nil, errors.Wrap(err, "error probing OCM services at remote server")

@@ -28,7 +28,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/cs3org/reva/internal/http/services/opencloudmesh/ocmprovider"
+	"github.com/cs3org/reva/internal/http/services/wellknown"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/pkg/errors"
@@ -74,7 +74,7 @@ func NewClient(timeout time.Duration, insecure bool) *OCMClient {
 
 // Discover returns a number of properties used to discover the capabilities offered by a remote cloud storage.
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1ocm-provider/get
-func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*ocmprovider.DiscoveryData, error) {
+func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*wellknown.OcmDiscoveryData, error) {
 	url, err := url.JoinPath(endpoint, "/ocm-provider")
 	if err != nil {
 		return nil, err
@@ -97,7 +97,7 @@ func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*ocmprovider
 		return nil, err
 	}
 
-	var disco ocmprovider.DiscoveryData
+	var disco wellknown.OcmDiscoveryData
 	err = json.Unmarshal(body, &disco)
 	if err != nil {
 		log := appctx.GetLogger(ctx)
