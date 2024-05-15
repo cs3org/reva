@@ -63,5 +63,10 @@ func IsNotDir(err error) bool {
 			return serr == syscall.ENOTDIR
 		}
 	}
+	if xerr, ok := errors.Cause(err).(*xattr.Error); ok {
+		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
+			return serr == syscall.ENOTDIR
+		}
+	}
 	return false
 }

@@ -1006,9 +1006,6 @@ func (f *FS) ListStorageSpaces(ctx context.Context, filter []*provider.ListStora
 }
 
 func (f *FS) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	// pass the space type to the hook, different types of spaces might require different handling
-	ctx = context.WithValue(ctx, "spaceType", req.Type)
-
 	var (
 		err     error
 		unhook  UnHook

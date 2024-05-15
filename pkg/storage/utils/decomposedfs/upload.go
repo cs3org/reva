@@ -357,9 +357,9 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (tusd
 func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
 	var ul tusd.Upload
 	var err error
-	fs.um.RunInBaseScope(func() error {
+	_ = fs.um.RunInBaseScope(func() error {
 		ul, err = fs.sessionStore.Get(ctx, id)
-		return err
+		return nil
 	})
 	return ul, err
 }

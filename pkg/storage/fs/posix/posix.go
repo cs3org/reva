@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 // Copyright 2018-2021 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -129,14 +132,14 @@ func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 			return ctx, nil, err
 		}
 
-		ctx = context.WithValue(ctx, decomposedfs.CtxKeySpaceID, fi.Sys().(*syscall.Stat_t).Gid)
+		ctx = context.WithValue(ctx, decomposedfs.CtxKeySpaceGID, fi.Sys().(*syscall.Stat_t).Gid)
 
 		return ctx, nil, err
 	}
 	hooks = append(hooks, resolveSpaceHook)
 	if o.UseSpaceGroups {
 		scopeSpaceGroupHook := func(methodName string, ctx context.Context, spaceID string) (context.Context, middleware.UnHook, error) {
-			spaceGID, ok := ctx.Value(decomposedfs.CtxKeySpaceID).(uint32)
+			spaceGID, ok := ctx.Value(decomposedfs.CtxKeySpaceGID).(uint32)
 			if !ok {
 				return ctx, nil, nil
 			}

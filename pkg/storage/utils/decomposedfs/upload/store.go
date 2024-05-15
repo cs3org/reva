@@ -237,7 +237,7 @@ func (store OcisStore) CreateNodeForUpload(session *OcisSession, initAttrs node.
 
 		unlock, err = store.tp.InitNewNode(ctx, n, uint64(session.Size()))
 		if err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Msg("failed to init new node")
+			appctx.GetLogger(ctx).Error().Str("path", n.InternalPath()).Err(err).Msg("failed to init new node")
 		}
 		session.info.MetaData["sizeDiff"] = strconv.FormatInt(session.Size(), 10)
 	}
@@ -350,9 +350,8 @@ func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSess
 		}
 	}
 
-	versionPath := n.InternalPath()
 	if !store.disableVersioning {
-		versionPath = session.store.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+oldNodeMtime.UTC().Format(time.RFC3339Nano))
+		versionPath := session.store.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+oldNodeMtime.UTC().Format(time.RFC3339Nano))
 
 		// create version node
 		if _, err := os.Create(versionPath); err != nil {

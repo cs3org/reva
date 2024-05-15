@@ -156,7 +156,7 @@ func (session *OcisSession) FinishUpload(ctx context.Context) error {
 			return errors.Wrap(err, "failed to scope user")
 		}
 		if unscope != nil {
-			defer unscope()
+			defer func() { _ = unscope() }()
 		}
 	}
 

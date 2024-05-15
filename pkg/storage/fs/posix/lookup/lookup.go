@@ -126,7 +126,7 @@ func (lu *Lookup) WarmupIDCache() error {
 
 			id, ok := attribs[prefixes.IDAttr]
 			if ok && len(spaceID) > 0 {
-				lu.IDCache.Set(context.Background(), string(spaceID), string(id), path)
+				_ = lu.IDCache.Set(context.Background(), string(spaceID), string(id), path)
 			}
 		}
 		return nil

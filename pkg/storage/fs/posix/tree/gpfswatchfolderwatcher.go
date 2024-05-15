@@ -1,88 +1,63 @@
 package tree
 
 import (
+	"context"
 	"encoding/json"
-	"fmt"
-	"os"
-	"os/signal"
+	"log"
 	"strconv"
 	"strings"
-	"syscall"
-	"time"
 
-	"github.com/confluentinc/confluent-kafka-go/kafka"
+	kafka "github.com/segmentio/kafka-go"
 )
 
 type GpfsWatchFolderWatcher struct {
-	tree *Tree
-	c    *kafka.Consumer
+	tree    *Tree
+	brokers []string
 }
 
 func NewGpfsWatchFolderWatcher(tree *Tree, kafkaBrokers []string) (*GpfsWatchFolderWatcher, error) {
-	c, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers": strings.Join(kafkaBrokers, ","),
-		"group.id":          "ocis-posixfs",
-		"auto.offset.reset": "earliest",
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	w := &GpfsWatchFolderWatcher{
-		tree: tree,
-		c:    c,
-	}
-
-	return w, nil
+	return &GpfsWatchFolderWatcher{
+		tree:    tree,
+		brokers: kafkaBrokers,
+	}, nil
 }
 
 func (w *GpfsWatchFolderWatcher) Watch(topic string) {
-	err := w.c.SubscribeTopics([]string{topic}, nil)
-	if err != nil {
-		return
-	}
-
-	// Set up a channel for handling Ctrl-C, etc
-	sigchan := make(chan os.Signal, 1)
-	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
-
-	// Process messages
-	run := true
+	r := kafka.NewReader(kafka.ReaderConfig{
+		Brokers: w.brokers,
+		GroupID: "ocis-posixfs",
+		Topic:   topic,
+	})
 
 	lwev := &lwe{}
-	for run {
-		select {
-		case sig := <-sigchan:
-			fmt.Printf("Caught signal %v: terminating\n", sig)
-			run = false
-		default:
-			ev, err := w.c.ReadMessage(100 * time.Millisecond)
-			if err != nil {
-				// Errors are informational and automatically handled by the consumer
-				continue
-			}
+	for {
+		m, err := r.ReadMessage(context.Background())
+		if err != nil {
+			break
+		}
 
-			err = json.Unmarshal([]byte(ev.Value), lwev)
-			if err != nil {
-				continue
-			}
+		err = json.Unmarshal(m.Value, lwev)
+		if err != nil {
+			continue
+		}
 
-			if strings.HasSuffix(lwev.Path, ".flock") || strings.HasSuffix(lwev.Path, ".mlock") {
-				continue
-			}
+		if strings.HasSuffix(lwev.Path, ".flock") || strings.HasSuffix(lwev.Path, ".mlock") {
+			continue
+		}
 
-			switch {
-			case strings.Contains(lwev.Event, "IN_CREATE"):
-				go w.tree.Scan(lwev.Path, false)
-			case strings.Contains(lwev.Event, "IN_CLOSE_WRITE"):
-				bytesWritten, err := strconv.Atoi(lwev.BytesWritten)
-				if err == nil && bytesWritten > 0 {
-					go w.tree.Scan(lwev.Path, false)
-				}
-			case strings.Contains(lwev.Event, "IN_MOVED_TO"):
-				go w.tree.Scan(lwev.Path, true)
+		switch {
+		case strings.Contains(lwev.Event, "IN_CREATE"):
+			go func() { _ = w.tree.Scan(lwev.Path, false) }()
+		case strings.Contains(lwev.Event, "IN_CLOSE_WRITE"):
+			bytesWritten, err := strconv.Atoi(lwev.BytesWritten)
+			if err == nil && bytesWritten > 0 {
+				go func() { _ = w.tree.Scan(lwev.Path, false) }()
 			}
+		case strings.Contains(lwev.Event, "IN_MOVED_TO"):
+			go func() { _ = w.tree.Scan(lwev.Path, true) }()
 		}
 	}
-
+	if err := r.Close(); err != nil {
+		log.Fatal("failed to close reader:", err)
+	}
 }

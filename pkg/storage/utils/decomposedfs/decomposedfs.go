@@ -69,7 +69,7 @@ import (
 type CtxKey int
 
 const (
-	CtxKeySpaceID CtxKey = iota
+	CtxKeySpaceGID CtxKey = iota
 )
 
 var (
