@@ -53,7 +53,7 @@ func (um *UnixMapper) RunInBaseScope(f func() error) error {
 	if err != nil {
 		return err
 	}
-	defer unscope()
+	defer func() { _ = unscope() }()
 
 	return f()
 }

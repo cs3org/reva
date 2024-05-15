@@ -79,7 +79,9 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 	if err != nil {
 		return err
 	}
-	defer unlockFunc()
+	defer func() {
+		_ = unlockFunc()
+	}()
 
 	if grant != nil {
 		return errtypes.AlreadyExists(filepath.Join(grantNode.ParentID, grantNode.Name))
@@ -175,7 +177,9 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 	if err != nil {
 		return err
 	}
-	defer unlockFunc()
+	defer func() {
+		_ = unlockFunc()
+	}()
 
 	if grant == nil {
 		return errtypes.NotFound("grant not found")
@@ -236,7 +240,9 @@ func (fs *Decomposedfs) UpdateGrant(ctx context.Context, ref *provider.Reference
 	if err != nil {
 		return err
 	}
-	defer unlockFunc()
+	defer func() {
+		_ = unlockFunc()
+	}()
 
 	if grant == nil {
 		// grant not found

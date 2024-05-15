@@ -47,14 +47,14 @@ func (w *GpfsWatchFolderWatcher) Watch(topic string) {
 
 		switch {
 		case strings.Contains(lwev.Event, "IN_CREATE"):
-			go w.tree.Scan(lwev.Path, false)
+			go func() { _ = w.tree.Scan(lwev.Path, false) }()
 		case strings.Contains(lwev.Event, "IN_CLOSE_WRITE"):
 			bytesWritten, err := strconv.Atoi(lwev.BytesWritten)
 			if err == nil && bytesWritten > 0 {
-				go w.tree.Scan(lwev.Path, false)
+				go func() { _ = w.tree.Scan(lwev.Path, false) }()
 			}
 		case strings.Contains(lwev.Event, "IN_MOVED_TO"):
-			go w.tree.Scan(lwev.Path, true)
+			go func() { _ = w.tree.Scan(lwev.Path, true) }()
 		}
 	}
 	if err := r.Close(); err != nil {

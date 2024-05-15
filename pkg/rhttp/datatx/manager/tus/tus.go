@@ -193,12 +193,6 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	return h, nil
 }
 
-// Composable is the interface that a struct needs to implement
-// to be composable, so that it can support the TUS methods
-type composable interface {
-	UseIn(composer *tusd.StoreComposer)
-}
-
 func setHeaders(fs storage.FS, w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := path.Base(r.URL.Path)

@@ -45,9 +45,9 @@ func (iw *InotifyWatcher) Watch(path string) {
 				}
 				switch e {
 				case inotifywaitgo.CREATE:
-					go iw.tree.Scan(event.Filename, false)
+					go func() { _ = iw.tree.Scan(event.Filename, false) }()
 				case inotifywaitgo.MOVED_TO:
-					go iw.tree.Scan(event.Filename, true)
+					go func() { _ = iw.tree.Scan(event.Filename, true) }()
 				}
 			}
 

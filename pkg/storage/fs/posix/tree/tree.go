@@ -184,7 +184,7 @@ func (t *Tree) assimilate(item scanItem) error {
 		// already assimilated?
 		id, err := t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.IDAttr)
 		if err == nil {
-			t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(spaceID), string(id), item.Path)
+			_ = t.lookup.(*lookup.Lookup).CacheID(context.Background(), string(spaceID), string(id), item.Path)
 			return nil
 		}
 	}
@@ -203,7 +203,7 @@ func (t *Tree) assimilate(item scanItem) error {
 	id, err = t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.IDAttr)
 	switch err {
 	case nil:
-		t.lookup.(*lookup.Lookup).CacheID(context.Background(), string(spaceID), string(id), item.Path)
+		_ = t.lookup.(*lookup.Lookup).CacheID(context.Background(), string(spaceID), string(id), item.Path)
 		if !item.ForceRescan {
 			return nil
 		}
@@ -265,7 +265,7 @@ func (t *Tree) assimilate(item scanItem) error {
 			return errors.Wrap(err, "failed to set attributes")
 		}
 
-		t.lookup.(*lookup.Lookup).CacheID(context.Background(), string(spaceID), string(id), item.Path)
+		_ = t.lookup.(*lookup.Lookup).CacheID(context.Background(), string(spaceID), id, item.Path)
 		if !item.ForceRescan {
 			return nil
 		}
@@ -278,7 +278,7 @@ func (t *Tree) assimilate(item scanItem) error {
 
 	// rescan the directory recursively
 	if info.IsDir() {
-		filepath.Walk(item.Path, func(path string, info fs.FileInfo, err error) error {
+		return filepath.Walk(item.Path, func(path string, info fs.FileInfo, err error) error {
 			if path == item.Path {
 				return nil
 			}
@@ -366,7 +366,7 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 	n.SetType(provider.ResourceType_RESOURCE_TYPE_FILE)
 
 	// Set id in cache
-	t.lookup.(*lookup.Lookup).IDCache.Set(context.Background(), string(n.SpaceID), string(n.ID), nodePath)
+	_ = t.lookup.(*lookup.Lookup).CacheID(context.Background(), n.SpaceID, n.ID, nodePath)
 
 	if err := os.MkdirAll(filepath.Dir(nodePath), 0700); err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
@@ -541,13 +541,13 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	for i := 0; i < numWorkers; i++ {
 		g.Go(func() error {
 			// switch user if necessary
-			spaceGID, ok := ctx.Value(decomposedfs.CtxKeySpaceID).(uint32)
+			spaceGID, ok := ctx.Value(decomposedfs.CtxKeySpaceGID).(uint32)
 			if ok {
 				unscope, err := t.userMapper.ScopeUserByIds(-1, int(spaceGID))
 				if err != nil {
 					return errors.Wrap(err, "failed to scope user")
 				}
-				defer unscope()
+				defer func() { _ = unscope() }()
 			}
 
 			for name := range work {
@@ -918,7 +918,7 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
 
-	idcache.Set(ctx, n.SpaceID, n.ID, path)
+	_ = idcache.Set(ctx, n.SpaceID, n.ID, path)
 
 	attributes := n.NodeMetadata(ctx)
 	attributes[prefixes.IDAttr] = []byte(n.ID)
@@ -999,23 +999,4 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	}
 
 	return
-}
-
-func getNodeIDFromCache(ctx context.Context, path string, cache store.Store) string {
-	_, span := tracer.Start(ctx, "getNodeIDFromCache")
-	defer span.End()
-	recs, err := cache.Read(path)
-	if err == nil && len(recs) > 0 {
-		return string(recs[0].Value)
-	}
-	return ""
-}
-
-func storeNodeIDInCache(ctx context.Context, path string, nodeID string, cache store.Store) error {
-	_, span := tracer.Start(ctx, "storeNodeIDInCache")
-	defer span.End()
-	return cache.Write(&store.Record{
-		Key:   path,
-		Value: []byte(nodeID),
-	})
 }
