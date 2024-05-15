@@ -1,0 +1,51 @@
+# This config file will start a reva service that:
+# - uses the posix driver to serve users (/users)
+# - serves the storage provider on grpc port 11000
+# - serves http dataprovider for this storage on port 11001
+#   - /data - dataprovider: file up and download
+
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+gatewaysvc = "localhost:19000"
+
+[grpc]
+address = "0.0.0.0:11000"
+
+# This is a storage provider that grants direct access to the wrapped storage
+[grpc.services.storageprovider]
+driver = "posix"
+expose_data_server = true
+data_server_url = "http://revad-services:11001/data"
+gateway_addr = "0.0.0.0:19000"
+mount_id = "1284d238-aa92-42ce-bdc4-0b0000009157"
+
+[grpc.services.storageprovider.drivers.posix]
+root = "/drone/src/tmp/reva/data"
+permissionssvc = "localhost:10000"
+treetime_accounting = true
+treesize_accounting = true
+personalspacepath_template = "users/{{.User.Username}}"
+generalspacepath_template = "projects/{{.SpaceId}}"
+
+[grpc.services.storageprovider.drivers.posix.idcache]
+cache_store = "redis"
+cache_nodes = [ "redis://redis:6379" ]
+
+
+# we have a locally running dataprovider
+[http]
+address = "0.0.0.0:11001"
+
+[http.services.dataprovider]
+driver = "posix"
+temp_folder = "/drone/src/tmp/reva/tmp"
+
+[http.services.dataprovider.drivers.posix]
+root = "/drone/src/tmp/reva/data"
+permissionssvc = "localhost:10000"
+treetime_accounting = true
+treesize_accounting = true
+
+[http.services.dataprovider.drivers.posix.idcache]
+cache_store = "redis"
+cache_nodes = [ "redis://redis:6379" ]
