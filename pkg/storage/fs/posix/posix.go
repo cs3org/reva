@@ -121,23 +121,22 @@ func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 	}
 
 	hooks := []middleware.Hook{}
-	resolveSpaceHook := func(methodName string, ctx context.Context, spaceID string) (context.Context, middleware.UnHook, error) {
-		if spaceID == "" {
-			return ctx, nil, nil
-		}
+	if o.UseSpaceGroups {
+		resolveSpaceHook := func(methodName string, ctx context.Context, spaceID string) (context.Context, middleware.UnHook, error) {
+			if spaceID == "" {
+				return ctx, nil, nil
+			}
 
-		spaceRoot := lu.InternalPath(spaceID, spaceID)
-		fi, err := os.Stat(spaceRoot)
-		if err != nil {
+			spaceRoot := lu.InternalPath(spaceID, spaceID)
+			fi, err := os.Stat(spaceRoot)
+			if err != nil {
+				return ctx, nil, err
+			}
+
+			ctx = context.WithValue(ctx, decomposedfs.CtxKeySpaceGID, fi.Sys().(*syscall.Stat_t).Gid)
+
 			return ctx, nil, err
 		}
-
-		ctx = context.WithValue(ctx, decomposedfs.CtxKeySpaceGID, fi.Sys().(*syscall.Stat_t).Gid)
-
-		return ctx, nil, err
-	}
-	hooks = append(hooks, resolveSpaceHook)
-	if o.UseSpaceGroups {
 		scopeSpaceGroupHook := func(methodName string, ctx context.Context, spaceID string) (context.Context, middleware.UnHook, error) {
 			spaceGID, ok := ctx.Value(decomposedfs.CtxKeySpaceGID).(uint32)
 			if !ok {
@@ -151,7 +150,7 @@ func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 
 			return ctx, unscope, nil
 		}
-		hooks = append(hooks, scopeSpaceGroupHook)
+		hooks = append(hooks, resolveSpaceHook, scopeSpaceGroupHook)
 	}
 
 	mw := middleware.NewFS(dfs, hooks...)
