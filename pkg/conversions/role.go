@@ -48,7 +48,9 @@ const (
 	RoleFileEditor = "file-editor"
 	// RoleCoowner grants co-owner permissions on a resource.
 	RoleCoowner = "coowner"
-	// RoleUploader grants uploader permission to upload onto a resource.
+	// RoleEditorLite grants permission to upload and download to a resource.
+	RoleEditorLite = "editor-lite"
+	// RoleUploader grants uploader permission to upload onto a resource (no download).
 	RoleUploader = "uploader"
 	// RoleManager grants manager permissions on a resource. Semantically equivalent to co-owner.
 	RoleManager = "manager"
@@ -313,10 +315,10 @@ func NewCoownerRole() *Role {
 	}
 }
 
-// NewUploaderRole creates an uploader role
-func NewUploaderRole() *Role {
+// NewEditorLiteRole creates an editor-lite role
+func NewEditorLiteRole() *Role {
 	return &Role{
-		Name: RoleUploader,
+		Name: RoleEditorLite,
 		cS3ResourcePermissions: &provider.ResourcePermissions{
 			Stat:                 true,
 			GetPath:              true,
@@ -325,6 +327,20 @@ func NewUploaderRole() *Role {
 			InitiateFileDownload: true,
 			ListContainer:        true,
 			Move:                 true,
+		},
+		ocsPermissions: PermissionCreate,
+	}
+}
+
+// NewUploaderRole creates an uploader role with no download permissions
+func NewUploaderRole() *Role {
+	return &Role{
+		Name: RoleUploader,
+		cS3ResourcePermissions: &provider.ResourcePermissions{
+			Stat:               true,
+			GetPath:            true,
+			CreateContainer:    true,
+			InitiateFileUpload: true,
 		},
 		ocsPermissions: PermissionCreate,
 	}
@@ -527,6 +543,9 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions, islink bool) 
 		}
 	}
 	if r.ocsPermissions == PermissionCreate {
+		if rp.GetPath && rp.InitiateFileDownload && rp.ListContainer && rp.Move {
+			r.Name = RoleEditorLite
+		}
 		r.Name = RoleUploader
 		return r
 	}
