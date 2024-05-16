@@ -318,11 +318,13 @@ func NewUploaderRole() *Role {
 	return &Role{
 		Name: RoleUploader,
 		cS3ResourcePermissions: &provider.ResourcePermissions{
-			Stat:               true,
-			GetPath:            true,
-			CreateContainer:    true,
-			InitiateFileUpload: true,
-			ListContainer:      true,
+			Stat:                 true,
+			GetPath:              true,
+			CreateContainer:      true,
+			InitiateFileUpload:   true,
+			InitiateFileDownload: true,
+			ListContainer:        true,
+			Move:                 true,
 		},
 		ocsPermissions: PermissionCreate,
 	}
