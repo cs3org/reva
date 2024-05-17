@@ -1171,6 +1171,18 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 		}
 	}
 
+	convertRFC3339ToRFC1123 := func(metadata map[string]string, tagNamespace string, name string, metadataPrefix string, keys []string) {
+		for _, key := range keys {
+			mdKey := fmt.Sprintf("%s.%s", metadataPrefix, key)
+			if v, ok := metadata[mdKey]; ok {
+				parsedTime, err := time.Parse(time.RFC3339, v)
+				if err == nil {
+					metadata[mdKey] = parsedTime.Format(net.RFC1123)
+				}
+			}
+		}
+	}
+
 	// when allprops has been requested
 	if pf.Allprop != nil {
 		// return all known properties
@@ -1273,6 +1285,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 			appendMetadataProp(k, "oc", "audio", "libre.graph.audio", audioKeys)
 			appendMetadataProp(k, "oc", "location", "libre.graph.location", locationKeys)
 			appendMetadataProp(k, "oc", "image", "libre.graph.image", imageKeys)
+			convertRFC3339ToRFC1123(k, "oc", "photo", "libre.graph.photo", []string{"takenDateTime"})
 			appendMetadataProp(k, "oc", "photo", "libre.graph.photo", photoKeys)
 		}
 
@@ -1561,6 +1574,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					}
 				case "photo":
 					if k := md.GetArbitraryMetadata().GetMetadata(); k != nil {
+						convertRFC3339ToRFC1123(k, "oc", "photo", "libre.graph.photo", []string{"takenDateTime"})
 						appendMetadataProp(k, "oc", "photo", "libre.graph.photo", photoKeys)
 					}
 				case "name":
