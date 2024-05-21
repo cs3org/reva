@@ -25,6 +25,7 @@ func (iw *InotifyWatcher) Watch(path string) {
 		Dir:        path,
 		FileEvents: events,
 		ErrorChan:  errors,
+		KillOthers: true,
 		Options: &inotifywaitgo.Options{
 			Recursive: true,
 			Events: []inotifywaitgo.EVENT{
