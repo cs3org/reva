@@ -545,6 +545,7 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions, islink bool) 
 	if r.ocsPermissions == PermissionCreate {
 		if rp.GetPath && rp.InitiateFileDownload && rp.ListContainer && rp.Move {
 			r.Name = RoleEditorLite
+			return r
 		}
 		r.Name = RoleUploader
 		return r
