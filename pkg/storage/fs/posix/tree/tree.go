@@ -288,7 +288,7 @@ assimilate:
 
 	if fi.IsDir() {
 		attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_CONTAINER))
-		attributes.SetInt64(prefixes.TreesizeAttr, fi.Size())
+		attributes.SetInt64(prefixes.TreesizeAttr, calculateTreeSize(path))
 	} else {
 		attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_FILE))
 		attributes.SetString(prefixes.BlobIDAttr, id)
@@ -302,6 +302,20 @@ assimilate:
 	_ = t.lookup.(*lookup.Lookup).CacheID(context.Background(), spaceID, id, path)
 
 	return fi, nil
+}
+
+func calculateTreeSize(path string) int64 {
+	var size int64
+	filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return nil
+	})
+	return size
 }
 
 func (t *Tree) workScanQueue() {
