@@ -160,16 +160,18 @@ func (t *Tree) assimilate(item scanItem) error {
 	for strings.HasPrefix(spaceCandidate, t.options.Root) {
 		spaceID, err = t.lookup.MetadataBackend().Get(context.Background(), spaceCandidate, prefixes.SpaceIDAttr)
 		if err == nil {
-			// set the uid and gid for the space
-			fi, err := os.Stat(spaceCandidate)
-			if err != nil {
-				return err
-			}
-			sys := fi.Sys().(*syscall.Stat_t)
-			gid := int(sys.Gid)
-			_, err = t.userMapper.ScopeUserByIds(-1, gid)
-			if err != nil {
-				return err
+			if t.options.UseSpaceGroups {
+				// set the uid and gid for the space
+				fi, err := os.Stat(spaceCandidate)
+				if err != nil {
+					return err
+				}
+				sys := fi.Sys().(*syscall.Stat_t)
+				gid := int(sys.Gid)
+				_, err = t.userMapper.ScopeUserByIds(-1, gid)
+				if err != nil {
+					return err
+				}
 			}
 			break
 		}
