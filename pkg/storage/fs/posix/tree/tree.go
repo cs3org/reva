@@ -200,86 +200,28 @@ func (t *Tree) assimilate(item scanItem) error {
 		_ = unlock()
 	}()
 
-	retries := 1
 	// check for the id attribute again after grabbing the lock, maybe the file was assimilated/created by us in the meantime
 	id, err = t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.IDAttr)
-	switch err {
-	case nil:
+	var fi fs.FileInfo
+	if err == nil {
 		_ = t.lookup.(*lookup.Lookup).CacheID(context.Background(), string(spaceID), string(id), item.Path)
-		if !item.ForceRescan {
-			return nil
-		}
-	default:
-	assimilate:
-		// read parent
-		parentAttribs, err := t.lookup.MetadataBackend().All(context.Background(), filepath.Dir(item.Path))
-		if err != nil {
-			return fmt.Errorf("failed to read parent item attributes")
-		}
-
-		if len(parentAttribs) == 0 || len(parentAttribs[prefixes.IDAttr]) == 0 {
-			if retries == 0 {
-				return fmt.Errorf("got empty parent attribs even after assimilating")
-			}
-
-			// assimilate parent first
-			err = t.assimilate(scanItem{Path: filepath.Dir(item.Path), ForceRescan: false})
+		if item.ForceRescan {
+			fi, err = t.updateFile(item.Path, string(id), string(spaceID))
 			if err != nil {
 				return err
 			}
-
-			// retry
-			retries--
-			goto assimilate
 		}
-
-		// assimilate file
-		id := uuid.New().String()
-		stat, err := os.Stat(item.Path)
+	} else {
+		// assimilate new file
+		newId := uuid.New().String()
+		fi, err = t.updateFile(item.Path, newId, string(spaceID))
 		if err != nil {
-			return errors.Wrap(err, "failed to stat item")
+			return err
 		}
-
-		attributes := node.Attributes{
-			prefixes.IDAttr:       []byte(id),
-			prefixes.ParentidAttr: parentAttribs[prefixes.IDAttr],
-			prefixes.NameAttr:     []byte(filepath.Base(item.Path)),
-			prefixes.MTimeAttr:    []byte(stat.ModTime().Format(time.RFC3339)),
-		}
-
-		sha1h, md5h, adler32h, err := node.CalculateChecksums(context.Background(), item.Path)
-		if err == nil {
-			attributes[prefixes.ChecksumPrefix+"sha1"] = sha1h.Sum(nil)
-			attributes[prefixes.ChecksumPrefix+"md5"] = md5h.Sum(nil)
-			attributes[prefixes.ChecksumPrefix+"adler32"] = adler32h.Sum(nil)
-		}
-
-		if stat.IsDir() {
-			attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_CONTAINER))
-			attributes.SetInt64(prefixes.TreesizeAttr, stat.Size())
-		} else {
-			attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_FILE))
-			attributes.SetString(prefixes.BlobIDAttr, id)
-			attributes.SetInt64(prefixes.BlobsizeAttr, stat.Size())
-		}
-		err = t.lookup.MetadataBackend().SetMultiple(context.Background(), item.Path, attributes, false)
-		if err != nil {
-			return errors.Wrap(err, "failed to set attributes")
-		}
-
-		_ = t.lookup.(*lookup.Lookup).CacheID(context.Background(), string(spaceID), id, item.Path)
-		if !item.ForceRescan {
-			return nil
-		}
-	}
-
-	info, err := os.Stat(item.Path)
-	if err != nil {
-		return errors.Wrap(err, "failed to stat item for recursive scanning")
 	}
 
 	// rescan the directory recursively
-	if info.IsDir() {
+	if item.ForceRescan && fi.IsDir() {
 		return filepath.Walk(item.Path, func(path string, info fs.FileInfo, err error) error {
 			if path == item.Path {
 				return nil
@@ -297,6 +239,69 @@ func (t *Tree) assimilate(item scanItem) error {
 		})
 	}
 	return nil
+}
+
+func (t *Tree) updateFile(path, id, spaceID string) (fs.FileInfo, error) {
+	retries := 1
+assimilate:
+	// read parent
+	parentAttribs, err := t.lookup.MetadataBackend().All(context.Background(), filepath.Dir(path))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read parent item attributes")
+	}
+
+	if len(parentAttribs) == 0 || len(parentAttribs[prefixes.IDAttr]) == 0 {
+		if retries == 0 {
+			return nil, fmt.Errorf("got empty parent attribs even after assimilating")
+		}
+
+		// assimilate parent first
+		err = t.assimilate(scanItem{Path: filepath.Dir(path), ForceRescan: false})
+		if err != nil {
+			return nil, err
+		}
+
+		// retry
+		retries--
+		goto assimilate
+	}
+
+	// assimilate file
+	fi, err := os.Stat(path)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to stat item")
+	}
+
+	attributes := node.Attributes{
+		prefixes.IDAttr:       []byte(id),
+		prefixes.ParentidAttr: parentAttribs[prefixes.IDAttr],
+		prefixes.NameAttr:     []byte(filepath.Base(path)),
+		prefixes.MTimeAttr:    []byte(fi.ModTime().Format(time.RFC3339)),
+	}
+
+	sha1h, md5h, adler32h, err := node.CalculateChecksums(context.Background(), path)
+	if err == nil {
+		attributes[prefixes.ChecksumPrefix+"sha1"] = sha1h.Sum(nil)
+		attributes[prefixes.ChecksumPrefix+"md5"] = md5h.Sum(nil)
+		attributes[prefixes.ChecksumPrefix+"adler32"] = adler32h.Sum(nil)
+	}
+
+	if fi.IsDir() {
+		attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_CONTAINER))
+		attributes.SetInt64(prefixes.TreesizeAttr, fi.Size())
+	} else {
+		attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_FILE))
+		attributes.SetString(prefixes.BlobIDAttr, id)
+		attributes.SetInt64(prefixes.BlobsizeAttr, fi.Size())
+	}
+	err = t.lookup.MetadataBackend().SetMultiple(context.Background(), path, attributes, false)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to set attributes")
+	}
+
+	_ = t.lookup.(*lookup.Lookup).CacheID(context.Background(), spaceID, id, path)
+
+	return fi, nil
 }
 
 func (t *Tree) workScanQueue() {
