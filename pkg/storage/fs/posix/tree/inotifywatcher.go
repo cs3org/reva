@@ -31,6 +31,7 @@ func (iw *InotifyWatcher) Watch(path string) {
 			Events: []inotifywaitgo.EVENT{
 				inotifywaitgo.CREATE,
 				inotifywaitgo.MOVED_TO,
+				inotifywaitgo.CLOSE_WRITE,
 			},
 			Monitor: true,
 		},
@@ -48,6 +49,8 @@ func (iw *InotifyWatcher) Watch(path string) {
 				case inotifywaitgo.CREATE:
 					go func() { _ = iw.tree.Scan(event.Filename, false) }()
 				case inotifywaitgo.MOVED_TO:
+					go func() { _ = iw.tree.Scan(event.Filename, true) }()
+				case inotifywaitgo.CLOSE_WRITE:
 					go func() { _ = iw.tree.Scan(event.Filename, true) }()
 				}
 			}
