@@ -294,6 +294,9 @@ assimilate:
 	if fi.IsDir() {
 		attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_CONTAINER))
 		attributes.SetInt64(prefixes.TreesizeAttr, 0)
+		if previousAttribs != nil && previousAttribs[prefixes.TreesizeAttr] != nil {
+			attributes[prefixes.TreesizeAttr] = previousAttribs[prefixes.TreesizeAttr]
+		}
 		attributes[prefixes.PropagationAttr] = []byte("1")
 	} else {
 		attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_FILE))
