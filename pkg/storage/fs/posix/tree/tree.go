@@ -272,6 +272,11 @@ assimilate:
 		return nil, errors.Wrap(err, "failed to stat item")
 	}
 
+	previousAttribs, err := t.lookup.MetadataBackend().All(context.Background(), path)
+	if err != nil && !metadata.IsAttrUnset(err) {
+		return nil, errors.Wrap(err, "failed to get item attribs")
+	}
+
 	attributes := node.Attributes{
 		prefixes.IDAttr:       []byte(id),
 		prefixes.ParentidAttr: parentAttribs[prefixes.IDAttr],
@@ -288,11 +293,25 @@ assimilate:
 
 	if fi.IsDir() {
 		attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_CONTAINER))
-		attributes.SetInt64(prefixes.TreesizeAttr, calculateTreeSize(path))
+		attributes.SetInt64(prefixes.TreesizeAttr, 0)
+		attributes[prefixes.PropagationAttr] = []byte("1")
 	} else {
 		attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_FILE))
 		attributes.SetString(prefixes.BlobIDAttr, id)
 		attributes.SetInt64(prefixes.BlobsizeAttr, fi.Size())
+
+		// propagate the change
+		sizeDiff := fi.Size()
+		if previousAttribs != nil && previousAttribs[prefixes.BlobsizeAttr] != nil {
+			oldSize, err := attributes.Int64(prefixes.BlobsizeAttr)
+			if err == nil {
+				sizeDiff -= oldSize
+			}
+		}
+
+		n := node.New(spaceID, id, string(parentAttribs[prefixes.IDAttr]), filepath.Base(path), fi.Size(), "", provider.ResourceType_RESOURCE_TYPE_FILE, nil, t.lookup)
+		n.SpaceRoot = &node.Node{SpaceID: spaceID, ID: spaceID}
+		t.Propagate(context.Background(), n, sizeDiff)
 	}
 	err = t.lookup.MetadataBackend().SetMultiple(context.Background(), path, attributes, false)
 	if err != nil {
@@ -302,20 +321,6 @@ assimilate:
 	_ = t.lookup.(*lookup.Lookup).CacheID(context.Background(), spaceID, id, path)
 
 	return fi, nil
-}
-
-func calculateTreeSize(path string) int64 {
-	var size int64
-	filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			size += info.Size()
-		}
-		return nil
-	})
-	return size
 }
 
 func (t *Tree) workScanQueue() {

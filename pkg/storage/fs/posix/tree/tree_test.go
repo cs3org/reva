@@ -262,4 +262,40 @@ var _ = Describe("Tree", func() {
 			})
 		})
 	})
+
+	Describe("propagation", func() {
+		It("propagates new files in a directory", func() {
+			Expect(os.Mkdir(env.Root+"/users/"+env.Owner.Username+"/assimilated", 0700)).To(Succeed())
+			time.Sleep(100 * time.Millisecond) // Give it some time to settle down
+			Expect(os.WriteFile(env.Root+"/users/"+env.Owner.Username+"/assimilated/file.txt", []byte("hello world"), 0600)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+
+					Path: "/assimilated",
+				})
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(n).ToNot(BeNil())
+				g.Expect(n.Type(env.Ctx)).To(Equal(provider.ResourceType_RESOURCE_TYPE_CONTAINER))
+				g.Expect(n.ID).ToNot(BeEmpty())
+				g.Expect(n.GetTreeSize(env.Ctx)).To(Equal(uint64(11)))
+			}).Should(Succeed())
+
+			Expect(os.WriteFile(env.Root+"/users/"+env.Owner.Username+"/assimilated/file2.txt", []byte("hello world"), 0600)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+
+					Path: "/assimilated",
+				})
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(n).ToNot(BeNil())
+				g.Expect(n.Type(env.Ctx)).To(Equal(provider.ResourceType_RESOURCE_TYPE_CONTAINER))
+				g.Expect(n.ID).ToNot(BeEmpty())
+				g.Expect(n.GetTreeSize(env.Ctx)).To(Equal(uint64(22)))
+			}).Should(Succeed())
+		})
+	})
 })
