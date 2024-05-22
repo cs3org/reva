@@ -1,11 +1,14 @@
 package tree_test
 
 import (
+	"log"
 	"os"
+	"strings"
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	helpers "github.com/cs3org/reva/v2/pkg/storage/fs/posix/testhelpers"
+	"github.com/shirou/gopsutil/process"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -21,8 +24,27 @@ var _ = Describe("Tree", func() {
 		env, err = helpers.NewTestEnv(nil)
 		Expect(err).ToNot(HaveOccurred())
 
-		// wait for the inotify watcher to start
-		time.Sleep(1 * time.Second)
+		Eventually(func() bool {
+			// Get all running processes
+			processes, err := process.Processes()
+			if err != nil {
+				panic("could not get processes: " + err.Error())
+			}
+
+			// Search for the process named "inotifywait"
+			for _, p := range processes {
+				name, err := p.Name()
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+
+				if strings.Contains(name, "inotifywait") {
+					return true
+				}
+			}
+			return false
+		}).Should(BeTrue())
 	})
 
 	AfterEach(func() {

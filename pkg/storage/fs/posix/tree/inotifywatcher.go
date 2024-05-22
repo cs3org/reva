@@ -56,10 +56,14 @@ func (iw *InotifyWatcher) Watch(path string) {
 			}
 
 		case err := <-errors:
-			if err.Error() == inotifywaitgo.NOT_INSTALLED {
+			switch err.Error() {
+			case inotifywaitgo.NOT_INSTALLED:
 				panic("Error: inotifywait is not installed")
+			case inotifywaitgo.INVALID_EVENT:
+				// ignore
+			default:
+				fmt.Printf("Error: %s\n", err)
 			}
-			fmt.Printf("Error: %s\n", err)
 		}
 	}
 }
