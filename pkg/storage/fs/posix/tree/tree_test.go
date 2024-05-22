@@ -176,6 +176,7 @@ var _ = Describe("Tree", func() {
 
 			It("handles files in directories", func() {
 				Expect(os.Mkdir(env.Root+"/users/"+env.Owner.Username+"/assimilated", 0700)).To(Succeed())
+				time.Sleep(100 * time.Millisecond) // Give it some time to settle down
 				Expect(os.WriteFile(env.Root+"/users/"+env.Owner.Username+"/assimilated/file.txt", []byte("hello world"), 0600)).To(Succeed())
 
 				Eventually(func(g Gomega) {
@@ -220,6 +221,7 @@ var _ = Describe("Tree", func() {
 
 			It("handles moved directories", func() {
 				Expect(os.Mkdir(env.Root+"/users/"+env.Owner.Username+"/original", 0700)).To(Succeed())
+				time.Sleep(100 * time.Millisecond) // Give it some time to settle down
 				Expect(os.WriteFile(env.Root+"/users/"+env.Owner.Username+"/original/file.txt", []byte("hello world"), 0600)).To(Succeed())
 
 				dirId := ""
