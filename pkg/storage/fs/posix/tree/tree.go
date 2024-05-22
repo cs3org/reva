@@ -311,7 +311,10 @@ assimilate:
 
 		n := node.New(spaceID, id, string(parentAttribs[prefixes.IDAttr]), filepath.Base(path), fi.Size(), "", provider.ResourceType_RESOURCE_TYPE_FILE, nil, t.lookup)
 		n.SpaceRoot = &node.Node{SpaceID: spaceID, ID: spaceID}
-		t.Propagate(context.Background(), n, sizeDiff)
+		err = t.Propagate(context.Background(), n, sizeDiff)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to propagate")
+		}
 	}
 	err = t.lookup.MetadataBackend().SetMultiple(context.Background(), path, attributes, false)
 	if err != nil {
