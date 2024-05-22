@@ -35,7 +35,7 @@ func (iw *InotifyWatcher) Watch(path string) {
 			},
 			Monitor: true,
 		},
-		Verbose: true,
+		Verbose: false,
 	})
 
 	for {
