@@ -243,27 +243,31 @@ func (t *Tree) assimilate(item scanItem) error {
 
 func (t *Tree) updateFile(path, id, spaceID string) (fs.FileInfo, error) {
 	retries := 1
+	parentID := ""
 assimilate:
-	// read parent
-	parentAttribs, err := t.lookup.MetadataBackend().All(context.Background(), filepath.Dir(path))
-	if err != nil {
-		return nil, fmt.Errorf("failed to read parent item attributes")
-	}
-
-	if len(parentAttribs) == 0 || len(parentAttribs[prefixes.IDAttr]) == 0 {
-		if retries == 0 {
-			return nil, fmt.Errorf("got empty parent attribs even after assimilating")
-		}
-
-		// assimilate parent first
-		err = t.assimilate(scanItem{Path: filepath.Dir(path), ForceRescan: false})
+	if id != spaceID {
+		// read parent
+		parentAttribs, err := t.lookup.MetadataBackend().All(context.Background(), filepath.Dir(path))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to read parent item attributes")
 		}
 
-		// retry
-		retries--
-		goto assimilate
+		if len(parentAttribs) == 0 || len(parentAttribs[prefixes.IDAttr]) == 0 {
+			if retries == 0 {
+				return nil, fmt.Errorf("got empty parent attribs even after assimilating")
+			}
+
+			// assimilate parent first
+			err = t.assimilate(scanItem{Path: filepath.Dir(path), ForceRescan: false})
+			if err != nil {
+				return nil, err
+			}
+
+			// retry
+			retries--
+			goto assimilate
+		}
+		parentID = string(parentAttribs[prefixes.IDAttr])
 	}
 
 	// assimilate file
@@ -278,10 +282,12 @@ assimilate:
 	}
 
 	attributes := node.Attributes{
-		prefixes.IDAttr:       []byte(id),
-		prefixes.ParentidAttr: parentAttribs[prefixes.IDAttr],
-		prefixes.NameAttr:     []byte(filepath.Base(path)),
-		prefixes.MTimeAttr:    []byte(fi.ModTime().Format(time.RFC3339)),
+		prefixes.IDAttr:    []byte(id),
+		prefixes.NameAttr:  []byte(filepath.Base(path)),
+		prefixes.MTimeAttr: []byte(fi.ModTime().Format(time.RFC3339)),
+	}
+	if len(parentID) > 0 {
+		attributes[prefixes.ParentidAttr] = []byte(parentID)
 	}
 
 	sha1h, md5h, adler32h, err := node.CalculateChecksums(context.Background(), path)
@@ -312,7 +318,7 @@ assimilate:
 			}
 		}
 
-		n := node.New(spaceID, id, string(parentAttribs[prefixes.IDAttr]), filepath.Base(path), fi.Size(), "", provider.ResourceType_RESOURCE_TYPE_FILE, nil, t.lookup)
+		n := node.New(spaceID, id, parentID, filepath.Base(path), fi.Size(), "", provider.ResourceType_RESOURCE_TYPE_FILE, nil, t.lookup)
 		n.SpaceRoot = &node.Node{SpaceID: spaceID, ID: spaceID}
 		err = t.Propagate(context.Background(), n, sizeDiff)
 		if err != nil {
@@ -503,7 +509,11 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	}
 
 	// update the id cache
-	err = t.assimilate(scanItem{Path: newNode.ParentPath(), ForceRescan: true})
+	if newNode.ID == "" {
+		newNode.ID = uuid.NewString()
+	}
+	_ = t.lookup.(*lookup.Lookup).CacheID(ctx, newNode.SpaceID, newNode.ID, filepath.Join(newNode.ParentPath(), newNode.Name))
+	err = t.assimilate(scanItem{Path: newNode.InternalPath(), ForceRescan: true})
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: Move: could not update id cache")
 	}
