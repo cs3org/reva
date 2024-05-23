@@ -1,5 +1,5 @@
 # images
-OC_CI_GOLANG = "owncloudci/golang:1.22"
+OC_CI_GOLANG = "owncloudci/golang:1.22@sha256:bc1ff4ac994a432146b0424207ca89985491496fcc534156cad5ad5d9e7e216d"
 OC_CI_ALPINE = "owncloudci/alpine:latest"
 OSIXIA_OPEN_LDAP = "osixia/openldap:1.3.0"
 REDIS = "redis:6-alpine"
