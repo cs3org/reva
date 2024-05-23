@@ -1150,9 +1150,17 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 		for _, key := range keys {
 			kebabCaseKey := strcase.ToKebab(key)
 			if v, ok := metadata[fmt.Sprintf("%s.%s", metadataPrefix, key)]; ok {
-				content.WriteString(fmt.Sprintf("<%s:%s>", tagNamespace, kebabCaseKey))
+				content.WriteString("<")
+				content.WriteString(tagNamespace)
+				content.WriteString(":")
+				content.WriteString(kebabCaseKey)
+				content.WriteString(">")
 				content.Write(prop.Escaped("", v).InnerXML)
-				content.WriteString(fmt.Sprintf("</%s:%s>", tagNamespace, kebabCaseKey))
+				content.WriteString("</")
+				content.WriteString(tagNamespace)
+				content.WriteString(":")
+				content.WriteString(kebabCaseKey)
+				content.WriteString(">")
 			}
 		}
 
