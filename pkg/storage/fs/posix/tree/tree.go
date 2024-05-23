@@ -510,7 +510,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 
 	// update the id cache
 	if newNode.ID == "" {
-		newNode.ID = uuid.NewString()
+		newNode.ID = oldNode.ID
 	}
 	_ = t.lookup.(*lookup.Lookup).CacheID(ctx, newNode.SpaceID, newNode.ID, filepath.Join(newNode.ParentPath(), newNode.Name))
 	err = t.assimilate(scanItem{Path: newNode.InternalPath(), ForceRescan: true})
