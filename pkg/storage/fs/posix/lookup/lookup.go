@@ -30,10 +30,10 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/usermapper"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
@@ -73,12 +73,12 @@ func New(b metadata.Backend, um usermapper.Mapper, o *options.Options) *Lookup {
 	lu := &Lookup{
 		Options:         o,
 		metadataBackend: b,
-		IDCache:         NewStoreIDCache(o),
+		IDCache:         NewStoreIDCache(&o.Options),
 		userMapper:      um,
 	}
 
 	go func() {
-		_ = lu.WarmupIDCache()
+		_ = lu.WarmupIDCache(o.Root)
 	}()
 
 	return lu
@@ -95,12 +95,12 @@ func (lu *Lookup) GetCachedID(ctx context.Context, spaceID, nodeID string) (stri
 }
 
 // WarmupIDCache warms up the id cache
-func (lu *Lookup) WarmupIDCache() error {
+func (lu *Lookup) WarmupIDCache(root string) error {
 	spaceID := []byte("")
 
 	var gid int
 
-	return filepath.Walk(lu.Options.Root, func(path string, info os.FileInfo, err error) error {
+	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -121,6 +121,31 @@ func (lu *Lookup) WarmupIDCache() error {
 				_, err = lu.userMapper.ScopeUserByIds(-1, gid)
 				if err != nil {
 					return err
+				}
+			}
+
+			if len(spaceID) == 0 {
+				// try to find space
+				spaceCandidate := path
+				for strings.HasPrefix(spaceCandidate, lu.Options.Root) {
+					spaceID, err = lu.MetadataBackend().Get(context.Background(), spaceCandidate, prefixes.SpaceIDAttr)
+					if err == nil {
+						if lu.Options.UseSpaceGroups {
+							// set the uid and gid for the space
+							fi, err := os.Stat(spaceCandidate)
+							if err != nil {
+								return err
+							}
+							sys := fi.Sys().(*syscall.Stat_t)
+							gid := int(sys.Gid)
+							_, err = lu.userMapper.ScopeUserByIds(-1, gid)
+							if err != nil {
+								return err
+							}
+						}
+						break
+					}
+					spaceCandidate = filepath.Dir(spaceCandidate)
 				}
 			}
 

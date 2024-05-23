@@ -306,9 +306,12 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		newNode.ID = oldNode.ID
 	}
 	_ = t.lookup.(*lookup.Lookup).CacheID(ctx, newNode.SpaceID, newNode.ID, filepath.Join(newNode.ParentPath(), newNode.Name))
-	err = t.assimilate(scanItem{Path: newNode.InternalPath(), ForceRescan: true})
-	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: Move: could not update id cache")
+	// update id cache for the moved subtree
+	if oldNode.IsDir(ctx) {
+		err = t.lookup.(*lookup.Lookup).WarmupIDCache(filepath.Join(newNode.ParentPath(), newNode.Name))
+		if err != nil {
+			return err
+		}
 	}
 
 	// TODO inefficient because we might update several nodes twice, only propagate unchanged nodes?
