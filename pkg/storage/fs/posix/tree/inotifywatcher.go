@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/pablodz/inotifywaitgo/inotifywaitgo"
 )
 
@@ -49,7 +50,10 @@ func (iw *InotifyWatcher) Watch(path string) {
 				case inotifywaitgo.CREATE:
 					go func() { _ = iw.tree.Scan(event.Filename, false) }()
 				case inotifywaitgo.MOVED_TO:
-					go func() { _ = iw.tree.Scan(event.Filename, true) }()
+					go func() {
+						_ = iw.tree.Scan(event.Filename, true)
+						_ = iw.tree.lookup.(*lookup.Lookup).WarmupIDCache(event.Filename)
+					}()
 				case inotifywaitgo.CLOSE_WRITE:
 					go func() { _ = iw.tree.Scan(event.Filename, true) }()
 				}

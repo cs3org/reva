@@ -7,6 +7,8 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
 )
 
 type GpfsFileAuditLoggingWatcher struct {
@@ -65,10 +67,13 @@ start:
 			case "CLOSE":
 				bytesWritten, err := strconv.Atoi(ev.BytesWritten)
 				if err == nil && bytesWritten > 0 {
-					go func() { _ = w.tree.Scan(ev.Path, false) }()
+					go func() { _ = w.tree.Scan(ev.Path, true) }()
 				}
 			case "RENAME":
-				go func() { _ = w.tree.Scan(ev.Path, true) }()
+				go func() {
+					_ = w.tree.Scan(ev.Path, true)
+					_ = w.tree.lookup.(*lookup.Lookup).WarmupIDCache(ev.Path)
+				}()
 			}
 		case io.EOF:
 			time.Sleep(1 * time.Second)

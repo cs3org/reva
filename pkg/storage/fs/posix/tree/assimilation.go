@@ -163,11 +163,10 @@ func (t *Tree) assimilate(item scanItem) error {
 
 	// check for the id attribute again after grabbing the lock, maybe the file was assimilated/created by us in the meantime
 	id, err = t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.IDAttr)
-	var fi fs.FileInfo
 	if err == nil {
 		_ = t.lookup.(*lookup.Lookup).CacheID(context.Background(), string(spaceID), string(id), item.Path)
 		if item.ForceRescan {
-			fi, err = t.updateFile(item.Path, string(id), string(spaceID))
+			_, err = t.updateFile(item.Path, string(id), string(spaceID))
 			if err != nil {
 				return err
 			}
@@ -175,29 +174,10 @@ func (t *Tree) assimilate(item scanItem) error {
 	} else {
 		// assimilate new file
 		newId := uuid.New().String()
-		fi, err = t.updateFile(item.Path, newId, string(spaceID))
+		_, err = t.updateFile(item.Path, newId, string(spaceID))
 		if err != nil {
 			return err
 		}
-	}
-
-	// rescan the directory recursively
-	if item.ForceRescan && fi.IsDir() {
-		return filepath.Walk(item.Path, func(path string, info fs.FileInfo, err error) error {
-			if path == item.Path {
-				return nil
-			}
-
-			if err != nil {
-				return err
-			}
-
-			// rescan in a blocking fashion
-			return t.assimilate(scanItem{
-				Path:        path,
-				ForceRescan: item.ForceRescan,
-			})
-		})
 	}
 	return nil
 }

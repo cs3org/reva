@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
 	kafka "github.com/segmentio/kafka-go"
 )
 
@@ -51,10 +52,13 @@ func (w *GpfsWatchFolderWatcher) Watch(topic string) {
 		case strings.Contains(lwev.Event, "IN_CLOSE_WRITE"):
 			bytesWritten, err := strconv.Atoi(lwev.BytesWritten)
 			if err == nil && bytesWritten > 0 {
-				go func() { _ = w.tree.Scan(lwev.Path, false) }()
+				go func() { _ = w.tree.Scan(lwev.Path, true) }()
 			}
 		case strings.Contains(lwev.Event, "IN_MOVED_TO"):
-			go func() { _ = w.tree.Scan(lwev.Path, true) }()
+			go func() {
+				_ = w.tree.Scan(lwev.Path, true)
+				_ = w.tree.lookup.(*lookup.Lookup).WarmupIDCache(lwev.Path)
+			}()
 		}
 	}
 	if err := r.Close(); err != nil {
