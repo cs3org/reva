@@ -48,7 +48,9 @@ const (
 	RoleFileEditor = "file-editor"
 	// RoleCoowner grants co-owner permissions on a resource.
 	RoleCoowner = "coowner"
-	// RoleUploader grants uploader permission to upload onto a resource.
+	// RoleEditorLite grants permission to upload and download to a resource.
+	RoleEditorLite = "editor-lite"
+	// RoleUploader grants uploader permission to upload onto a resource (no download).
 	RoleUploader = "uploader"
 	// RoleManager grants manager permissions on a resource. Semantically equivalent to co-owner.
 	RoleManager = "manager"
@@ -104,6 +106,7 @@ func (r *Role) OCSPermissions() Permissions {
 // M = Mounted
 // Z = Deniable (NEW)
 // P = Purge from trashbin
+// X = SecureViewable
 func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) string {
 	var b strings.Builder
 	if !isPublic && isShared {
@@ -137,6 +140,10 @@ func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) s
 
 	if r.CS3ResourcePermissions().PurgeRecycle {
 		fmt.Fprintf(&b, "P")
+	}
+
+	if r.Name == RoleSecureViewer {
+		fmt.Fprintf(&b, "X")
 	}
 
 	return b.String()
@@ -313,7 +320,24 @@ func NewCoownerRole() *Role {
 	}
 }
 
-// NewUploaderRole creates an uploader role
+// NewEditorLiteRole creates an editor-lite role
+func NewEditorLiteRole() *Role {
+	return &Role{
+		Name: RoleEditorLite,
+		cS3ResourcePermissions: &provider.ResourcePermissions{
+			Stat:                 true,
+			GetPath:              true,
+			CreateContainer:      true,
+			InitiateFileUpload:   true,
+			InitiateFileDownload: true,
+			ListContainer:        true,
+			Move:                 true,
+		},
+		ocsPermissions: PermissionCreate,
+	}
+}
+
+// NewUploaderRole creates an uploader role with no download permissions
 func NewUploaderRole() *Role {
 	return &Role{
 		Name: RoleUploader,
@@ -522,8 +546,15 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions, islink bool) 
 			r.Name = RoleViewer
 			return r
 		}
+	} else if rp.Stat && rp.GetPath && rp.ListContainer && !rp.InitiateFileUpload && !rp.Delete && !rp.AddGrant {
+		r.Name = RoleSecureViewer
+		return r
 	}
 	if r.ocsPermissions == PermissionCreate {
+		if rp.GetPath && rp.InitiateFileDownload && rp.ListContainer && rp.Move {
+			r.Name = RoleEditorLite
+			return r
+		}
 		r.Name = RoleUploader
 		return r
 	}
