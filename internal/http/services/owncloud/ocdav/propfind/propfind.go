@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"github.com/iancoleman/strcase"
 	"io"
 	"net/http"
 	"net/url"
@@ -1147,19 +1148,11 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 	appendMetadataProp := func(metadata map[string]string, tagNamespace string, name string, metadataPrefix string, keys []string) {
 		content := strings.Builder{}
 		for _, key := range keys {
-			lowerCaseKey := strings.ToLower(key)
+			kebabCaseKey := strcase.ToKebab(key)
 			if v, ok := metadata[fmt.Sprintf("%s.%s", metadataPrefix, key)]; ok {
-				content.WriteString("<")
-				content.WriteString(tagNamespace)
-				content.WriteString(":")
-				content.WriteString(lowerCaseKey)
-				content.WriteString(">")
+				content.WriteString(fmt.Sprintf("<%s:%s>", tagNamespace, kebabCaseKey))
 				content.Write(prop.Escaped("", v).InnerXML)
-				content.WriteString("</")
-				content.WriteString(tagNamespace)
-				content.WriteString(":")
-				content.WriteString(lowerCaseKey)
-				content.WriteString(">")
+				content.WriteString(fmt.Sprintf("</%s:%s>", tagNamespace, kebabCaseKey))
 			}
 		}
 
