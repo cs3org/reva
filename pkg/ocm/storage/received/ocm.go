@@ -155,16 +155,8 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 		return nil, nil, "", err
 	}
 
-	// inject the secret as 'username' for OCM v1.0 basic auhentication:
-	// this is deprecated but still used by Nextcloud v28 (latest stable) at least.
-	parsedURL, err := url.Parse(endpoint)
-	if err != nil {
-		return nil, nil, "", err
-	}
-	parsedURL.User = url.UserPassword(secret, "")
-
-	// and use it also as bearer authentication according to OCM v1.1+
-	c := gowebdav.NewClient(parsedURL.String(), "", "")
+	// use the secret as bearer authentication according to OCM v1.1+
+	c := gowebdav.NewClient(endpoint, "", "")
 	c.SetHeader("Authorization", "Bearer "+secret)
 
 	log := appctx.GetLogger(ctx)
