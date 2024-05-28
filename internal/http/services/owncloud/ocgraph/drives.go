@@ -198,10 +198,13 @@ func (s *svc) cs3StorageSpaceToDrive(user *userpb.User, space *providerpb.Storag
 		Id:         libregraph.PtrString(space.Id.OpaqueId),
 		Name:       space.Name,
 		DriveType:  libregraph.PtrString(space.SpaceType),
-		Root: &libregraph.DriveItem{
+	}
+
+	if space.SpaceType != "personal" {
+		drive.Root = &libregraph.DriveItem{
 			Id:          libregraph.PtrString(space.Id.OpaqueId),
 			Permissions: cs3PermissionsToLibreGraph(user, space.RootInfo.PermissionSet),
-		},
+		}
 	}
 
 	drive.Root.WebDavUrl = libregraph.PtrString(fullURL(s.c.WebDavBase, space.RootInfo.Path))
