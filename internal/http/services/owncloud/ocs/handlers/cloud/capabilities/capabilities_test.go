@@ -23,13 +23,13 @@ import (
 	"encoding/xml"
 	"testing"
 
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/data"
+	"github.com/cs3org/reva/v2/pkg/owncloud/ocs"
 )
 
 func TestMarshal(t *testing.T) {
-	cd := data.CapabilitiesData{
-		Capabilities: &data.Capabilities{
-			FilesSharing: &data.CapabilitiesFilesSharing{
+	cd := ocs.CapabilitiesData{
+		Capabilities: &ocs.Capabilities{
+			FilesSharing: &ocs.CapabilitiesFilesSharing{
 				APIEnabled: true,
 			},
 		},

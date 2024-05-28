@@ -34,16 +34,17 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/go-chi/chi/v5"
+	"github.com/stretchr/testify/mock"
+
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/config"
-	cdata "github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/data"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/handlers/apps/sharing/shares"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/owncloud/ocs"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 	cs3mocks "github.com/cs3org/reva/v2/tests/cs3mocks/mocks"
-	"github.com/go-chi/chi/v5"
-	"github.com/stretchr/testify/mock"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -489,11 +490,11 @@ var _ = Describe("The ocs API", func() {
 				c := &config.Config{}
 				c.GatewaySvc = "gatewaysvc"
 				c.StatCacheConfig.Database = strconv.FormatInt(rand.Int63(), 10) // Use a fresh database for each test
-				// this is equivalent of the ocis OCIS_SHARING_PUBLIC_WRITEABLE_SHARE_MUST_HAVE_PASSWORD=true
-				c.Capabilities = cdata.CapabilitiesData{
-					Capabilities: &cdata.Capabilities{FilesSharing: &cdata.CapabilitiesFilesSharing{Public: &cdata.CapabilitiesFilesSharingPublic{
-						Password: &cdata.CapabilitiesFilesSharingPublicPassword{
-							EnforcedFor: &cdata.CapabilitiesFilesSharingPublicPasswordEnforcedFor{
+				// this is the equivalent of the ocis OCIS_SHARING_PUBLIC_WRITEABLE_SHARE_MUST_HAVE_PASSWORD=true
+				c.Capabilities = ocs.CapabilitiesData{
+					Capabilities: &ocs.Capabilities{FilesSharing: &ocs.CapabilitiesFilesSharing{Public: &ocs.CapabilitiesFilesSharingPublic{
+						Password: &ocs.CapabilitiesFilesSharingPublicPassword{
+							EnforcedFor: &ocs.CapabilitiesFilesSharingPublicPasswordEnforcedFor{
 								ReadOnly:        false,
 								ReadWrite:       true,
 								ReadWriteDelete: true,
@@ -630,11 +631,11 @@ var _ = Describe("The ocs API", func() {
 				c := &config.Config{}
 				c.GatewaySvc = "gatewaysvc"
 				c.StatCacheConfig.Database = strconv.FormatInt(rand.Int63(), 10) // Use a fresh database for each test
-				// this is equivalent of the ocis OCIS_SHARING_PUBLIC_WRITEABLE_SHARE_MUST_HAVE_PASSWORD=true
-				c.Capabilities = cdata.CapabilitiesData{
-					Capabilities: &cdata.Capabilities{FilesSharing: &cdata.CapabilitiesFilesSharing{Public: &cdata.CapabilitiesFilesSharingPublic{
-						Password: &cdata.CapabilitiesFilesSharingPublicPassword{
-							EnforcedFor: &cdata.CapabilitiesFilesSharingPublicPasswordEnforcedFor{
+				// this is the equivalent of the ocis OCIS_SHARING_PUBLIC_WRITEABLE_SHARE_MUST_HAVE_PASSWORD=true
+				c.Capabilities = ocs.CapabilitiesData{
+					Capabilities: &ocs.Capabilities{FilesSharing: &ocs.CapabilitiesFilesSharing{Public: &ocs.CapabilitiesFilesSharingPublic{
+						Password: &ocs.CapabilitiesFilesSharingPublicPassword{
+							EnforcedFor: &ocs.CapabilitiesFilesSharingPublicPasswordEnforcedFor{
 								ReadOnly:        false,
 								ReadWrite:       true,
 								ReadWriteDelete: true,
