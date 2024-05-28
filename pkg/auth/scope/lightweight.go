@@ -38,6 +38,8 @@ func lightweightAccountScope(_ context.Context, scope *authpb.Scope, resource in
 	switch v := resource.(type) {
 	case *collaboration.ListReceivedSharesRequest:
 		return true, nil
+	case *provider.ListStorageSpacesRequest:
+		return true, nil
 	case string:
 		return checkLightweightPath(v), nil
 	}
@@ -56,6 +58,7 @@ func checkLightweightPath(path string) bool {
 		"/ocs/v1.php/cloud/user",
 		"/remote.php/webdav",
 		"/remote.php/dav/files",
+		"/remote.php/dav/spaces",
 		"/thumbnails",
 		"/app/open",
 		"/app/new",
@@ -64,6 +67,7 @@ func checkLightweightPath(path string) bool {
 		"/data",
 		"/app/open",
 		"/projects",
+		"/graph",
 	}
 	for _, p := range paths {
 		if strings.HasPrefix(path, p) {
