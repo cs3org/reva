@@ -1,6 +1,7 @@
 package tree_test
 
 import (
+	"crypto/rand"
 	"log"
 	"os"
 	"strings"
@@ -14,57 +15,101 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Tree", Serial, func() {
+func generateRandomString(length int) (string, error) {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	charsetLength := len(charset)
+
+	randomBytes := make([]byte, length)
+	_, err := rand.Read(randomBytes)
+	if err != nil {
+		return "", err
+	}
+
+	for i := 0; i < length; i++ {
+		randomBytes[i] = charset[int(randomBytes[i])%charsetLength]
+	}
+
+	return string(randomBytes), nil
+}
+
+var (
+	env *helpers.TestEnv
+
+	root string
+)
+
+var _ = SynchronizedBeforeSuite(func() {
+	var err error
+	env, err = helpers.NewTestEnv(nil)
+	Expect(err).ToNot(HaveOccurred())
+
+	Eventually(func() bool {
+		// Get all running processes
+		processes, err := process.Processes()
+		if err != nil {
+			panic("could not get processes: " + err.Error())
+		}
+
+		// Search for the process named "inotifywait"
+		for _, p := range processes {
+			name, err := p.Name()
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+
+			if strings.Contains(name, "inotifywait") {
+				return true
+			}
+		}
+
+		// Give it some time to setup the watches
+		time.Sleep(2 * time.Second)
+		return false
+	}).Should(BeTrue())
+}, func() {})
+
+var _ = SynchronizedAfterSuite(func() {}, func() {
+	if env != nil {
+		env.Cleanup()
+	}
+})
+
+var _ = Describe("Tree", func() {
 	var (
-		env *helpers.TestEnv
+		subtree string
 	)
 
-	JustBeforeEach(func() {
-		SetDefaultEventuallyTimeout(5 * time.Second)
+	BeforeEach(func() {
+		SetDefaultEventuallyTimeout(15 * time.Second)
 
 		var err error
-		env, err = helpers.NewTestEnv(nil)
+		subtree, err = generateRandomString(10)
 		Expect(err).ToNot(HaveOccurred())
+		subtree = "/" + subtree
+		root = env.Root + "/users/" + env.Owner.Username + subtree
+		Expect(os.Mkdir(root, 0700)).To(Succeed())
 
-		Eventually(func() bool {
-			// Get all running processes
-			processes, err := process.Processes()
-			if err != nil {
-				panic("could not get processes: " + err.Error())
-			}
-
-			// Search for the process named "inotifywait"
-			for _, p := range processes {
-				name, err := p.Name()
-				if err != nil {
-					log.Println(err)
-					continue
-				}
-
-				if strings.Contains(name, "inotifywait") {
-					return true
-				}
-			}
-			return false
-		}).Should(BeTrue())
-	})
-
-	AfterEach(func() {
-		if env != nil {
-			env.Cleanup()
-		}
+		Eventually(func(g Gomega) {
+			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       subtree,
+			})
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(n.Exists).To(BeTrue())
+		}).Should(Succeed())
 	})
 
 	Describe("assimilation", func() {
 		Describe("of files", func() {
 			It("handles new files", func() {
-				_, err := os.Create(env.Root + "/users/" + env.Owner.Username + "/assimilated.txt")
+				_, err := os.Create(root + "/assimilated.txt")
 				Expect(err).ToNot(HaveOccurred())
 
 				Eventually(func(g Gomega) {
 					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
-						Path:       "/assimilated.txt",
+						Path:       subtree + "/assimilated.txt",
 					})
 					g.Expect(err).ToNot(HaveOccurred())
 					g.Expect(n).ToNot(BeNil())
@@ -76,13 +121,13 @@ var _ = Describe("Tree", Serial, func() {
 
 			It("handles changed files", func() {
 				// Create empty file
-				f, err := os.Create(env.Root + "/users/" + env.Owner.Username + "/changed.txt")
+				_, err := os.Create(root + "/changed.txt")
 				Expect(err).ToNot(HaveOccurred())
 
 				Eventually(func(g Gomega) {
 					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
-						Path:       "/changed.txt",
+						Path:       subtree + "/changed.txt",
 					})
 					g.Expect(err).ToNot(HaveOccurred())
 					g.Expect(n).ToNot(BeNil())
@@ -91,14 +136,12 @@ var _ = Describe("Tree", Serial, func() {
 				}).ProbeEvery(200 * time.Millisecond).Should(Succeed())
 
 				// Change file content
-				_, err = f.Write([]byte("hello world"))
-				Expect(err).ToNot(HaveOccurred())
-				Expect(f.Close()).To(Succeed())
+				Expect(os.WriteFile(root+"/changed.txt", []byte("hello world"), 0600)).To(Succeed())
 
 				Eventually(func(g Gomega) {
 					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
-						Path:       "/changed.txt",
+						Path:       subtree + "/changed.txt",
 					})
 					g.Expect(err).ToNot(HaveOccurred())
 					g.Expect(n).ToNot(BeNil())
@@ -109,13 +152,13 @@ var _ = Describe("Tree", Serial, func() {
 			})
 
 			It("handles deleted files", func() {
-				_, err := os.Create(env.Root + "/users/" + env.Owner.Username + "/deleted.txt")
+				_, err := os.Create(root + "/deleted.txt")
 				Expect(err).ToNot(HaveOccurred())
 
 				Eventually(func(g Gomega) {
 					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
-						Path:       "/deleted.txt",
+						Path:       subtree + "/deleted.txt",
 					})
 					g.Expect(err).ToNot(HaveOccurred())
 					g.Expect(n).ToNot(BeNil())
@@ -123,12 +166,12 @@ var _ = Describe("Tree", Serial, func() {
 					g.Expect(n.ID).ToNot(BeEmpty())
 				}).Should(Succeed())
 
-				Expect(os.Remove(env.Root + "/users/" + env.Owner.Username + "/deleted.txt")).To(Succeed())
+				Expect(os.Remove(root + "/deleted.txt")).To(Succeed())
 
 				Eventually(func(g Gomega) {
 					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
-						Path:       "/deleted.txt",
+						Path:       subtree + "/deleted.txt",
 					})
 					g.Expect(err).ToNot(HaveOccurred())
 					g.Expect(n.Exists).To(BeFalse())
@@ -137,7 +180,7 @@ var _ = Describe("Tree", Serial, func() {
 
 			It("handles moved files", func() {
 				// Create empty file
-				_, err := os.Create(env.Root + "/users/" + env.Owner.Username + "/original.txt")
+				_, err := os.Create(root + "/original.txt")
 				Expect(err).ToNot(HaveOccurred())
 
 				fileID := ""
@@ -145,7 +188,7 @@ var _ = Describe("Tree", Serial, func() {
 				Eventually(func(g Gomega) {
 					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
-						Path:       "/original.txt",
+						Path:       subtree + "/original.txt",
 					})
 					g.Expect(err).ToNot(HaveOccurred())
 					g.Expect(n).ToNot(BeNil())
@@ -156,13 +199,13 @@ var _ = Describe("Tree", Serial, func() {
 				}).Should(Succeed())
 
 				// Move file
-				Expect(os.Rename(env.Root+"/users/"+env.Owner.Username+"/original.txt", env.Root+"/users/"+env.Owner.Username+"/moved.txt")).To(Succeed())
+				Expect(os.Rename(root+"/original.txt", root+"/moved.txt")).To(Succeed())
 
 				// Wait for the file to be indexed
 				Eventually(func(g Gomega) {
 					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
-						Path:       "/original.txt",
+						Path:       subtree + "/original.txt",
 					})
 					g.Expect(err).ToNot(HaveOccurred())
 					g.Expect(n.Exists).To(BeFalse())
@@ -171,7 +214,7 @@ var _ = Describe("Tree", Serial, func() {
 				Eventually(func(g Gomega) {
 					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
-						Path:       "/moved.txt",
+						Path:       subtree + "/moved.txt",
 					})
 					g.Expect(err).ToNot(HaveOccurred())
 					g.Expect(n).ToNot(BeNil())
@@ -184,12 +227,12 @@ var _ = Describe("Tree", Serial, func() {
 
 		Describe("of directories", func() {
 			It("handles new directories", func() {
-				Expect(os.Mkdir(env.Root+"/users/"+env.Owner.Username+"/assimilated", 0700)).To(Succeed())
+				Expect(os.Mkdir(root+"/assimilated", 0700)).To(Succeed())
 
 				Eventually(func(g Gomega) {
 					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
-						Path:       "/assimilated",
+						Path:       subtree + "/assimilated",
 					})
 					g.Expect(err).ToNot(HaveOccurred())
 					g.Expect(n).ToNot(BeNil())
@@ -199,15 +242,14 @@ var _ = Describe("Tree", Serial, func() {
 			})
 
 			It("handles files in directories", func() {
-				Expect(os.Mkdir(env.Root+"/users/"+env.Owner.Username+"/assimilated", 0700)).To(Succeed())
+				Expect(os.Mkdir(root+"/assimilated", 0700)).To(Succeed())
 				time.Sleep(100 * time.Millisecond) // Give it some time to settle down
-				Expect(os.WriteFile(env.Root+"/users/"+env.Owner.Username+"/assimilated/file.txt", []byte("hello world"), 0600)).To(Succeed())
+				Expect(os.WriteFile(root+"/assimilated/file.txt", []byte("hello world"), 0600)).To(Succeed())
 
 				Eventually(func(g Gomega) {
 					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
-
-						Path: "/assimilated",
+						Path:       subtree + "/assimilated",
 					})
 					g.Expect(err).ToNot(HaveOccurred())
 					g.Expect(n).ToNot(BeNil())
@@ -218,12 +260,12 @@ var _ = Describe("Tree", Serial, func() {
 			})
 
 			It("handles deleted directories", func() {
-				Expect(os.Mkdir(env.Root+"/users/"+env.Owner.Username+"/deleted", 0700)).To(Succeed())
+				Expect(os.Mkdir(root+"/deleted", 0700)).To(Succeed())
 
 				Eventually(func(g Gomega) {
 					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
-						Path:       "/deleted",
+						Path:       subtree + "/deleted",
 					})
 					g.Expect(err).ToNot(HaveOccurred())
 					g.Expect(n).ToNot(BeNil())
@@ -231,12 +273,12 @@ var _ = Describe("Tree", Serial, func() {
 					g.Expect(n.ID).ToNot(BeEmpty())
 				}).Should(Succeed())
 
-				Expect(os.Remove(env.Root + "/users/" + env.Owner.Username + "/deleted")).To(Succeed())
+				Expect(os.Remove(root + "/deleted")).To(Succeed())
 
 				Eventually(func(g Gomega) {
 					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
-						Path:       "/deleted",
+						Path:       subtree + "/deleted",
 					})
 					g.Expect(err).ToNot(HaveOccurred())
 					g.Expect(n.Exists).To(BeFalse())
@@ -244,15 +286,15 @@ var _ = Describe("Tree", Serial, func() {
 			})
 
 			It("handles moved directories", func() {
-				Expect(os.Mkdir(env.Root+"/users/"+env.Owner.Username+"/original", 0700)).To(Succeed())
+				Expect(os.Mkdir(root+"/original", 0700)).To(Succeed())
 				time.Sleep(100 * time.Millisecond) // Give it some time to settle down
-				Expect(os.WriteFile(env.Root+"/users/"+env.Owner.Username+"/original/file.txt", []byte("hello world"), 0600)).To(Succeed())
+				Expect(os.WriteFile(root+"/original/file.txt", []byte("hello world"), 0600)).To(Succeed())
 
 				dirId := ""
 				Eventually(func(g Gomega) {
 					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
-						Path:       "/original",
+						Path:       subtree + "/original",
 					})
 					g.Expect(err).ToNot(HaveOccurred())
 					g.Expect(n).ToNot(BeNil())
@@ -262,12 +304,12 @@ var _ = Describe("Tree", Serial, func() {
 					dirId = n.ID
 				}).Should(Succeed())
 
-				Expect(os.Rename(env.Root+"/users/"+env.Owner.Username+"/original", env.Root+"/users/"+env.Owner.Username+"/moved")).To(Succeed())
+				Expect(os.Rename(root+"/original", root+"/moved")).To(Succeed())
 
 				Eventually(func(g Gomega) {
 					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
-						Path:       "/original",
+						Path:       subtree + "/original",
 					})
 					g.Expect(err).ToNot(HaveOccurred())
 					g.Expect(n.Exists).To(BeFalse())
@@ -276,7 +318,7 @@ var _ = Describe("Tree", Serial, func() {
 				Eventually(func(g Gomega) {
 					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
-						Path:       "/moved",
+						Path:       subtree + "/moved",
 					})
 					g.Expect(err).ToNot(HaveOccurred())
 					g.Expect(n).ToNot(BeNil())
@@ -291,15 +333,15 @@ var _ = Describe("Tree", Serial, func() {
 
 	Describe("propagation", func() {
 		It("propagates new files in a directory", func() {
-			Expect(os.Mkdir(env.Root+"/users/"+env.Owner.Username+"/assimilated", 0700)).To(Succeed())
+			Expect(os.Mkdir(root+"/assimilated", 0700)).To(Succeed())
 			time.Sleep(100 * time.Millisecond) // Give it some time to settle down
-			Expect(os.WriteFile(env.Root+"/users/"+env.Owner.Username+"/assimilated/file.txt", []byte("hello world"), 0600)).To(Succeed())
+			Expect(os.WriteFile(root+"/assimilated/file.txt", []byte("hello world"), 0600)).To(Succeed())
 
 			Eventually(func(g Gomega) {
 				n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 					ResourceId: env.SpaceRootRes,
 
-					Path: "/assimilated",
+					Path: subtree + "/assimilated",
 				})
 				g.Expect(err).ToNot(HaveOccurred())
 				g.Expect(n).ToNot(BeNil())
@@ -308,13 +350,13 @@ var _ = Describe("Tree", Serial, func() {
 				g.Expect(n.GetTreeSize(env.Ctx)).To(Equal(uint64(11)))
 			}).Should(Succeed())
 
-			Expect(os.WriteFile(env.Root+"/users/"+env.Owner.Username+"/assimilated/file2.txt", []byte("hello world"), 0600)).To(Succeed())
+			Expect(os.WriteFile(root+"/assimilated/file2.txt", []byte("hello world"), 0600)).To(Succeed())
 
 			Eventually(func(g Gomega) {
 				n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 					ResourceId: env.SpaceRootRes,
 
-					Path: "/assimilated",
+					Path: subtree + "/assimilated",
 				})
 				g.Expect(err).ToNot(HaveOccurred())
 				g.Expect(n).ToNot(BeNil())
