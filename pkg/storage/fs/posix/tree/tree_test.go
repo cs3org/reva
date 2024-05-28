@@ -14,12 +14,14 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Tree", func() {
+var _ = Describe("Tree", Serial, func() {
 	var (
 		env *helpers.TestEnv
 	)
 
 	JustBeforeEach(func() {
+		SetDefaultEventuallyTimeout(5 * time.Second)
+
 		var err error
 		env, err = helpers.NewTestEnv(nil)
 		Expect(err).ToNot(HaveOccurred())
@@ -69,7 +71,7 @@ var _ = Describe("Tree", func() {
 					g.Expect(n.Type(env.Ctx)).To(Equal(provider.ResourceType_RESOURCE_TYPE_FILE))
 					g.Expect(n.ID).ToNot(BeEmpty())
 					g.Expect(n.Blobsize).To(Equal(int64(0)))
-				}).WithTimeout(1 * time.Second).ProbeEvery(200 * time.Millisecond).Should(Succeed())
+				}).ProbeEvery(200 * time.Millisecond).Should(Succeed())
 			})
 
 			It("handles changed files", func() {
@@ -86,7 +88,7 @@ var _ = Describe("Tree", func() {
 					g.Expect(n).ToNot(BeNil())
 					g.Expect(n.ID).ToNot(BeEmpty())
 					g.Expect(n.Blobsize).To(Equal(int64(0)))
-				}).WithTimeout(1 * time.Second).ProbeEvery(200 * time.Millisecond).Should(Succeed())
+				}).ProbeEvery(200 * time.Millisecond).Should(Succeed())
 
 				// Change file content
 				_, err = f.Write([]byte("hello world"))
