@@ -333,7 +333,7 @@ _The below features have been added after I last categorized them. AFAICT they a
 - [coreApiTrashbin/trashbinFilesFolders.feature:141](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L141)
 - [coreApiTrashbin/trashbinFilesFolders.feature:146](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L146)
 - [coreApiTrashbin/trashbinFilesFolders.feature:164](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L164)
-- [coreApiTrashbin/trashbinFilesFolders.feature:179](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L179)
+- [coreApiTrashbin/trashbinFilesFolders.feature:169](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L169)
 - [coreApiTrashbin/trashbinFilesFolders.feature:315](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L315)
 - [coreApiTrashbin/trashbinFilesFolders.feature:316](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L316)
 - [coreApiTrashbin/trashbinFilesFolders.feature:317](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L317)
