@@ -1,5 +1,5 @@
 # images
-OC_CI_GOLANG = "owncloudci/golang:1.21"
+OC_CI_GOLANG = "owncloudci/golang:1.22@sha256:bc1ff4ac994a432146b0424207ca89985491496fcc534156cad5ad5d9e7e216d"
 OC_CI_ALPINE = "owncloudci/alpine:latest"
 OSIXIA_OPEN_LDAP = "osixia/openldap:1.3.0"
 REDIS = "redis:6-alpine"
@@ -103,7 +103,7 @@ def cephService():
 def main(ctx):
     # In order to run specific parts only, specify the parts as
     # ocisIntegrationTests(6, [1, 4])     - this will only run 1st and 4th parts
-    # implemented for: ocisIntegrationTests and s3ngIntegrationTests
+    # implemented for: ocisIntegrationTests, posixfsIntegrationTests and s3ngIntegrationTests
     return [
         checkStarlark(),
         checkGoGenerate(),
@@ -117,7 +117,7 @@ def main(ctx):
         cs3ApiValidatorS3NG(),
         # virtual views don't work on edge at the moment
         #virtualViews(),
-    ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12)
+    ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12) + posixfsIntegrationTests(6)
 
 def coverage():
     return {
@@ -698,6 +698,83 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                 "services": [
                     ldapService(),
                     cephService(),
+                ],
+                "depends_on": ["unit-test-coverage"],
+            },
+        )
+
+    return pipelines
+
+def posixfsIntegrationTests(parallelRuns, skipExceptParts = []):
+    pipelines = []
+    debugPartsEnabled = (len(skipExceptParts) != 0)
+    for runPart in range(1, parallelRuns + 1):
+        if debugPartsEnabled and runPart not in skipExceptParts:
+            continue
+
+        pipelines.append(
+            {
+                "kind": "pipeline",
+                "type": "docker",
+                "name": "posixfs-integration-tests-%s" % runPart,
+                "platform": {
+                    "os": "linux",
+                    "arch": "amd64",
+                },
+                "trigger": {
+                    "ref": [
+                        "refs/heads/master",
+                        "refs/heads/edge",
+                        "refs/pull/**",
+                    ],
+                },
+                "steps": [
+                    makeStep("build-ci"),
+                    {
+                        "name": "revad-services",
+                        "image": OC_CI_GOLANG,
+                        "detach": True,
+                        "commands": [
+                            "cd /drone/src/tests/oc-integration-tests/drone/",
+                            "/drone/src/cmd/revad/revad -c frontend.toml &",
+                            "/drone/src/cmd/revad/revad -c gateway.toml &",
+                            "/drone/src/cmd/revad/revad -c shares.toml &",
+                            "/drone/src/cmd/revad/revad -c storage-shares.toml &",
+                            "/drone/src/cmd/revad/revad -c machine-auth.toml &",
+                            "/drone/src/cmd/revad/revad -c storage-users-posixfs.toml &",
+                            "/drone/src/cmd/revad/revad -c storage-publiclink.toml &",
+                            "/drone/src/cmd/revad/revad -c permissions-ocis-ci.toml &",
+                            "/drone/src/cmd/revad/revad -c ldap-users.toml",
+                        ],
+                    },
+                    cloneApiTestReposStep(),
+                    {
+                        "name": "APIAcceptanceTestsPosixStorage",
+                        "image": OC_CI_PHP,
+                        "commands": [
+                            "cd /drone/src/tmp/testrunner",
+                            "make test-acceptance-from-core-api",
+                        ],
+                        "environment": {
+                            "TEST_SERVER_URL": "http://revad-services:20080",
+                            "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
+                            "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/users/* /drone/src/tmp/reva/data/indexes/by-type/*",
+                            "STORAGE_DRIVER": "ocis",
+                            "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
+                            "TEST_WITH_LDAP": "true",
+                            "REVA_LDAP_HOSTNAME": "ldap",
+                            "TEST_REVA": "true",
+                            "SEND_SCENARIO_LINE_REFERENCES": "true",
+                            "BEHAT_FILTER_TAGS": "~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnGraph&&~@caldav&&~@carddav&&~@skipOnReva&&~@env-config",
+                            "DIVIDE_INTO_NUM_PARTS": parallelRuns,
+                            "RUN_PART": runPart,
+                            "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-POSIX-storage.md",
+                        },
+                    },
+                ],
+                "services": [
+                    redisService(),
+                    ldapService(),
                 ],
                 "depends_on": ["unit-test-coverage"],
             },

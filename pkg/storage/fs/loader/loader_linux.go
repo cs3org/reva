@@ -16,21 +16,10 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package aspects
+package loader
 
 import (
-	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/permissions"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/usermapper"
+	// Load core storage filesystem backends.
+	_ "github.com/cs3org/reva/v2/pkg/storage/fs/posix"
+	// Add your own here
 )
-
-// Aspects holds dependencies for handling aspects of the decomposedfs
-type Aspects struct {
-	Lookup            node.PathLookup
-	Tree              node.Tree
-	Permissions       permissions.Permissions
-	EventStream       events.Stream
-	DisableVersioning bool
-	UserMapper        usermapper.Mapper
-}
