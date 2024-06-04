@@ -59,12 +59,11 @@ var _ = SynchronizedBeforeSuite(func() {
 			}
 
 			if strings.Contains(name, "inotifywait") {
+				// Give it some time to setup the watches
+				time.Sleep(2 * time.Second)
 				return true
 			}
 		}
-
-		// Give it some time to setup the watches
-		time.Sleep(2 * time.Second)
 		return false
 	}).Should(BeTrue())
 }, func() {})
