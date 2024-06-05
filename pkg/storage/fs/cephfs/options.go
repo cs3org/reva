@@ -38,7 +38,19 @@ type Options struct {
 	DirPerms       uint32 `mapstructure:"dir_perms"`
 	FilePerms      uint32 `mapstructure:"file_perms"`
 	UserQuotaBytes uint64 `mapstructure:"user_quota_bytes"`
-	HiddenDirs     map[string]bool
+	// Path of the recycle bin. If empty, recycling is disabled.
+	RecyclePath string `mapstructure:"recycle_path"`
+	// Depth of the Recycle bin location, that is after how many path components
+	// the recycle path is located: this allows supporting recycles such as
+	// /top-level/s/space/.recycle with a depth = 3. Defaults to 0.
+	RecyclePathDepth int `mapstructure:"recycle_path_depth"`
+	// Maximum entries count a ListRecycle call may return: if exceeded, ListRecycle
+	// will return a BadRequest error
+	MaxRecycleEntries int `mapstructure:"max_recycle_entries"`
+	// Maximum time span in days a ListRecycle call may return: if exceeded, ListRecycle
+	// will override the "to" date with "from" + this value
+	MaxDaysInRecycleList int `mapstructure:"max_days_in_recycle_list"`
+	HiddenDirs           map[string]bool
 }
 
 func (c *Options) ApplyDefaults() {
@@ -83,6 +95,9 @@ func (c *Options) ApplyDefaults() {
 		"..":                               true,
 		removeLeadingSlash(c.UploadFolder): true,
 	}
+	if c.RecyclePath != "" {
+		c.HiddenDirs[c.RecyclePath] = true
+	}
 
 	if c.DirPerms == 0 {
 		c.DirPerms = dirPermDefault
@@ -94,5 +109,13 @@ func (c *Options) ApplyDefaults() {
 
 	if c.UserQuotaBytes == 0 {
 		c.UserQuotaBytes = 50000000000
+	}
+
+	if c.MaxDaysInRecycleList == 0 {
+		c.MaxDaysInRecycleList = 14
+	}
+
+	if c.MaxRecycleEntries == 0 {
+		c.MaxRecycleEntries = 2000
 	}
 }
