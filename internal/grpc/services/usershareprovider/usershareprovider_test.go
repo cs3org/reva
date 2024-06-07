@@ -20,20 +20,12 @@ package usershareprovider_test
 
 import (
 	"context"
-	"regexp"
-
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaborationpb "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	"github.com/stretchr/testify/mock"
-	"google.golang.org/grpc"
-	"google.golang.org/protobuf/types/known/fieldmaskpb"
-
 	"github.com/cs3org/reva/v2/internal/grpc/services/usershareprovider"
 	"github.com/cs3org/reva/v2/pkg/conversions"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
@@ -43,7 +35,16 @@ import (
 	_ "github.com/cs3org/reva/v2/pkg/share/manager/loader"
 	"github.com/cs3org/reva/v2/pkg/share/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/share/mocks"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	cs3mocks "github.com/cs3org/reva/v2/tests/cs3mocks/mocks"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/mock"
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
+	"path/filepath"
+	"regexp"
 )
 
 var _ = Describe("user share provider service", func() {
@@ -118,6 +119,193 @@ var _ = Describe("user share provider service", func() {
 		Expect(provider).ToNot(BeNil())
 
 		ctx = ctxpkg.ContextSetUser(context.Background(), alice)
+	})
+
+	Describe("UpdateReceivedShare", func() {
+		DescribeTable("validates the share update request",
+			func(
+				req *collaborationpb.UpdateReceivedShareRequest,
+				expectedStatus *rpcpb.Status,
+				expectedError error,
+			) {
+
+				res, err := provider.UpdateReceivedShare(ctx, req)
+
+				switch expectedError {
+				case nil:
+					Expect(err).To(BeNil())
+				}
+
+				Expect(res.GetStatus().GetCode()).To(Equal(expectedStatus.GetCode()))
+				Expect(res.GetStatus().GetMessage()).To(ContainSubstring(expectedStatus.GetMessage()))
+			},
+			Entry(
+				"no received share",
+				&collaborationpb.UpdateReceivedShareRequest{},
+				status.NewInvalid(ctx, "updating requires"),
+				nil,
+			),
+			Entry(
+				"no share",
+				&collaborationpb.UpdateReceivedShareRequest{
+					Share: &collaborationpb.ReceivedShare{},
+				},
+				status.NewInvalid(ctx, "share missing"),
+				nil,
+			),
+			Entry(
+				"no share id",
+				&collaborationpb.UpdateReceivedShareRequest{
+					Share: &collaborationpb.ReceivedShare{
+						Share: &collaborationpb.Share{},
+					},
+				},
+				status.NewInvalid(ctx, "share id missing"),
+				nil,
+			),
+			Entry(
+				"no share opaque id",
+				&collaborationpb.UpdateReceivedShareRequest{
+					Share: &collaborationpb.ReceivedShare{
+						Share: &collaborationpb.Share{
+							Id: &collaborationpb.ShareId{},
+						},
+					},
+				},
+				status.NewInvalid(ctx, "share id empty"),
+				nil,
+			),
+		)
+
+		DescribeTable("fails if getting the share fails",
+			func(
+				req *collaborationpb.UpdateReceivedShareRequest,
+				expectedStatus *rpcpb.Status,
+				expectedError error,
+			) {
+				gatewayClient.EXPECT().
+					GetReceivedShare(mock.Anything, mock.Anything, mock.Anything).
+					RunAndReturn(func(ctx context.Context, request *collaborationpb.GetReceivedShareRequest, option ...grpc.CallOption) (*collaborationpb.GetReceivedShareResponse, error) {
+						return &collaborationpb.GetReceivedShareResponse{
+							Status: expectedStatus,
+						}, expectedError
+					})
+
+				res, err := provider.UpdateReceivedShare(ctx, req)
+
+				switch expectedError {
+				case nil:
+					Expect(err).To(BeNil())
+				default:
+					Expect(err).To(MatchError(expectedError))
+				}
+
+				switch expectedStatus {
+				case nil:
+					Expect(expectedStatus).To(BeNil())
+				default:
+					Expect(res.GetStatus().GetCode()).To(Equal(expectedStatus.GetCode()))
+					Expect(res.GetStatus().GetMessage()).To(ContainSubstring(expectedStatus.GetMessage()))
+				}
+			},
+			Entry(
+				"requesting the share errors",
+				&collaborationpb.UpdateReceivedShareRequest{
+					Share: &collaborationpb.ReceivedShare{
+						Share: &collaborationpb.Share{
+							Id: &collaborationpb.ShareId{
+								OpaqueId: "1",
+							},
+						},
+					},
+				},
+				nil,
+				errors.New("some"),
+			),
+			Entry(
+				"requesting the share fails",
+				&collaborationpb.UpdateReceivedShareRequest{
+					Share: &collaborationpb.ReceivedShare{
+						Share: &collaborationpb.Share{
+							Id: &collaborationpb.ShareId{
+								OpaqueId: "1",
+							},
+						},
+					},
+				},
+				status.NewInvalid(ctx, "something"),
+				nil,
+			),
+		)
+
+		DescribeTable("fails if the resource stat fails",
+			func(
+				req *collaborationpb.UpdateReceivedShareRequest,
+				expectedStatus *rpcpb.Status,
+				expectedError error,
+			) {
+				gatewayClient.EXPECT().
+					GetReceivedShare(mock.Anything, mock.Anything, mock.Anything).
+					RunAndReturn(func(ctx context.Context, request *collaborationpb.GetReceivedShareRequest, option ...grpc.CallOption) (*collaborationpb.GetReceivedShareResponse, error) {
+						return &collaborationpb.GetReceivedShareResponse{
+							Status: status.NewOK(ctx),
+						}, nil
+					})
+				gatewayClient.EXPECT().Stat(mock.Anything, mock.Anything, mock.Anything).Unset()
+				gatewayClient.EXPECT().
+					Stat(mock.Anything, mock.Anything, mock.Anything).
+					RunAndReturn(func(ctx context.Context, request *providerpb.StatRequest, option ...grpc.CallOption) (*providerpb.StatResponse, error) {
+						return &providerpb.StatResponse{
+							Status: expectedStatus,
+						}, expectedError
+					})
+
+				res, err := provider.UpdateReceivedShare(ctx, req)
+
+				switch expectedError {
+				case nil:
+					Expect(err).To(BeNil())
+				default:
+					Expect(err).To(MatchError(expectedError))
+				}
+
+				switch expectedStatus {
+				case nil:
+					Expect(expectedStatus).To(BeNil())
+				default:
+					Expect(res.GetStatus().GetCode()).To(Equal(expectedStatus.GetCode()))
+					Expect(res.GetStatus().GetMessage()).To(ContainSubstring(expectedStatus.GetMessage()))
+				}
+			},
+			Entry(
+				"stat the resource errors",
+				&collaborationpb.UpdateReceivedShareRequest{
+					Share: &collaborationpb.ReceivedShare{
+						Share: &collaborationpb.Share{
+							Id: &collaborationpb.ShareId{
+								OpaqueId: "1",
+							},
+						},
+					},
+				},
+				nil,
+				errors.New("some"),
+			),
+			Entry(
+				"stat the resource fails",
+				&collaborationpb.UpdateReceivedShareRequest{
+					Share: &collaborationpb.ReceivedShare{
+						Share: &collaborationpb.Share{
+							Id: &collaborationpb.ShareId{
+								OpaqueId: "1",
+							},
+						},
+					},
+				},
+				status.NewInvalid(ctx, "something"),
+				nil,
+			),
+		)
 	})
 
 	Describe("CreateShare", func() {
@@ -397,4 +585,135 @@ var _ = Describe("user share provider service", func() {
 			manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
 		})
 	})
+})
+
+var _ = Describe("helpers", func() {
+	type GetAvailableMountpointArgs struct {
+		withName                   string
+		withResourceId             *providerpb.ResourceId
+		listReceivedSharesResponse *collaborationpb.ListReceivedSharesResponse
+		listReceivedSharesError    error
+		expectedName               string
+	}
+	DescribeTable("GetAvailableMountpoint",
+		func(args GetAvailableMountpointArgs) {
+			gatewayClient := cs3mocks.NewGatewayAPIClient(GinkgoT())
+
+			gatewayClient.EXPECT().
+				ListReceivedShares(mock.Anything, mock.Anything).
+				RunAndReturn(func(ctx context.Context, request *collaborationpb.ListReceivedSharesRequest, option ...grpc.CallOption) (*collaborationpb.ListReceivedSharesResponse, error) {
+					return args.listReceivedSharesResponse, args.listReceivedSharesError
+				})
+
+			statCallCount := 0
+
+			for _, s := range args.listReceivedSharesResponse.GetShares() {
+				if s.GetState() != collaborationpb.ShareState_SHARE_STATE_ACCEPTED {
+					continue
+				}
+
+				// add one for every accepted share where the resource id matches
+				if utils.ResourceIDEqual(s.GetShare().GetResourceId(), args.withResourceId) {
+					statCallCount++
+				}
+
+				// add one for every accepted share where the mountpoint patch matches
+				if s.GetMountPoint().GetPath() == filepath.Clean(args.withName) {
+					statCallCount++
+				}
+			}
+
+			if statCallCount > 0 {
+				gatewayClient.EXPECT().
+					Stat(mock.Anything, mock.Anything, mock.Anything).
+					RunAndReturn(func(ctx context.Context, request *providerpb.StatRequest, option ...grpc.CallOption) (*providerpb.StatResponse, error) {
+						return &providerpb.StatResponse{
+							Status: status.NewOK(ctx),
+						}, nil
+					}).Times(statCallCount)
+			}
+
+			availableMountpoint, err := usershareprovider.GetAvailableMountpoint(context.Background(), gatewayClient, args.withResourceId, args.withName)
+
+			if args.listReceivedSharesError != nil {
+				Expect(err).To(HaveOccurred(), "expected error, got none")
+				return
+			}
+
+			Expect(availableMountpoint).To(Equal(args.expectedName), "expected mountpoint %s, got %s", args.expectedName, availableMountpoint)
+
+			gatewayClient.EXPECT().Stat(mock.Anything, mock.Anything, mock.Anything).Unset()
+		},
+		Entry(
+			"listing received shares errors",
+			GetAvailableMountpointArgs{
+				listReceivedSharesError: errors.New("some error"),
+			},
+		),
+		Entry(
+			"returns the given name if no shares are found",
+			GetAvailableMountpointArgs{
+				withName: "name1",
+				listReceivedSharesResponse: &collaborationpb.ListReceivedSharesResponse{
+					Status: status.NewOK(context.Background()),
+				},
+				expectedName: "name1",
+			},
+		),
+		Entry(
+			"returns the path as name if a share with the same resourceId is found",
+			GetAvailableMountpointArgs{
+				withName: "name",
+				withResourceId: &providerpb.ResourceId{
+					StorageId: "1",
+					OpaqueId:  "2",
+					SpaceId:   "3",
+				},
+				listReceivedSharesResponse: &collaborationpb.ListReceivedSharesResponse{
+					Status: status.NewOK(context.Background()),
+					Shares: []*collaborationpb.ReceivedShare{
+						{
+							State: collaborationpb.ShareState_SHARE_STATE_ACCEPTED,
+							MountPoint: &providerpb.Reference{
+								Path: "path",
+							},
+							Share: &collaborationpb.Share{
+								ResourceId: &providerpb.ResourceId{
+									StorageId: "1",
+									OpaqueId:  "2",
+									SpaceId:   "3",
+								},
+							},
+						},
+					},
+				},
+				expectedName: "path",
+			},
+		),
+		Entry(
+			"enumerates the name if a share with the same path already exists",
+			GetAvailableMountpointArgs{
+				withName: "some name",
+				listReceivedSharesResponse: &collaborationpb.ListReceivedSharesResponse{
+					Status: status.NewOK(context.Background()),
+					Shares: []*collaborationpb.ReceivedShare{
+						{
+							State: collaborationpb.ShareState_SHARE_STATE_ACCEPTED,
+							MountPoint: &providerpb.Reference{
+								Path: "some name",
+							},
+							Share: &collaborationpb.Share{
+								ResourceId: &providerpb.ResourceId{
+									StorageId: "1",
+									OpaqueId:  "2",
+									SpaceId:   "3",
+								},
+							},
+						},
+					},
+				},
+				expectedName: "some name (1)",
+			},
+		),
+	)
 })

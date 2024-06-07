@@ -559,9 +559,9 @@ func (s *service) UpdateReceivedShare(ctx context.Context, req *collaboration.Up
 	switch {
 	case err != nil:
 		fallthrough
-	case receivedShare.GetStatus().GetCode() != rpc.Code_CODE_OK:
+	case resourceStat.GetStatus().GetCode() != rpc.Code_CODE_OK:
 		return &collaboration.UpdateReceivedShareResponse{
-			Status: receivedShare.GetStatus(),
+			Status: resourceStat.GetStatus(),
 		}, err
 	}
 
@@ -584,7 +584,7 @@ func (s *service) UpdateReceivedShare(ctx context.Context, req *collaboration.Up
 		}
 
 		// check if the requested mount point is available and if not, find a suitable one
-		availableMountpoint, _, err := GetMountpointAndUnmountedShares(ctx, gatewayClient,
+		availableMountpoint, err := GetAvailableMountpoint(ctx, gatewayClient,
 			resourceStat.GetInfo().GetId(),
 			requestedMountpoint,
 		)
@@ -618,22 +618,25 @@ func (s *service) UpdateReceivedShare(ctx context.Context, req *collaboration.Up
 	}, nil
 }
 
-// GetMountpointAndUnmountedShares returns a new or existing mountpoint for the given info and produces a list of unmounted received shares for the same resource
-func GetMountpointAndUnmountedShares(ctx context.Context, gwc gateway.GatewayAPIClient, id *provider.ResourceId, name string) (string, []*collaboration.ReceivedShare, error) {
-	var unmountedShares []*collaboration.ReceivedShare
-	receivedShares, err := listReceivedShares(ctx, gwc)
+// GetAvailableMountpoint returns a new or existing mountpoint
+func GetAvailableMountpoint(ctx context.Context, gwc gateway.GatewayAPIClient, id *provider.ResourceId, name string) (string, error) {
+	listReceivedSharesRes, err := gwc.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
 	if err != nil {
-		return "", unmountedShares, err
+		return "", errtypes.InternalError("grpc list received shares request failed")
+	}
+
+	if err := errtypes.NewErrtypeFromStatus(listReceivedSharesRes.GetStatus()); err != nil {
+		return "", err
 	}
 
 	// we need to sort the received shares by mount point in order to make things easier to evaluate.
 	base := filepath.Clean(name)
 	mount := base
 	existingMountpoint := ""
-	mountedShares := make([]string, 0, len(receivedShares))
+	mountedShares := make([]string, 0, len(listReceivedSharesRes.GetShares()))
 	var pathExists bool
 
-	for _, s := range receivedShares {
+	for _, s := range listReceivedSharesRes.GetShares() {
 		resourceIDEqual := utils.ResourceIDEqual(s.GetShare().GetResourceId(), id)
 
 		if resourceIDEqual && s.State == collaboration.ShareState_SHARE_STATE_ACCEPTED {
@@ -642,11 +645,6 @@ func GetMountpointAndUnmountedShares(ctx context.Context, gwc gateway.GatewayAPI
 			if err == nil {
 				existingMountpoint = s.GetMountPoint().GetPath()
 			}
-		}
-
-		if resourceIDEqual && s.State != collaboration.ShareState_SHARE_STATE_ACCEPTED {
-			// a share to the resource already exists but is not mounted, collect the unmounted share
-			unmountedShares = append(unmountedShares, s)
 		}
 
 		if s.State == collaboration.ShareState_SHARE_STATE_ACCEPTED {
@@ -665,7 +663,7 @@ func GetMountpointAndUnmountedShares(ctx context.Context, gwc gateway.GatewayAPI
 
 	if existingMountpoint != "" {
 		// we want to reuse the same mountpoint for all unmounted shares to the same resource
-		return existingMountpoint, unmountedShares, nil
+		return existingMountpoint, nil
 	}
 
 	// If the mount point really already exists, we need to insert a number into the filename
@@ -681,22 +679,10 @@ func GetMountpointAndUnmountedShares(ctx context.Context, gwc gateway.GatewayAPI
 			}
 			mount = name + " (" + strconv.Itoa(i) + ")" + ext
 			if !slices.Contains(mountedShares, mount) {
-				return mount, unmountedShares, nil
+				return mount, nil
 			}
 		}
 	}
-	return mount, unmountedShares, nil
-}
 
-// listReceivedShares list all received shares for the current user.
-func listReceivedShares(ctx context.Context, client gateway.GatewayAPIClient) ([]*collaboration.ReceivedShare, error) {
-	res, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
-	if err != nil {
-		return nil, errtypes.InternalError("grpc list received shares request failed")
-	}
-
-	if err := errtypes.NewErrtypeFromStatus(res.Status); err != nil {
-		return nil, err
-	}
-	return res.Shares, nil
+	return mount, nil
 }
