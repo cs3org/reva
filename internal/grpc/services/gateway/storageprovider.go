@@ -301,6 +301,9 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 		spaces = append(spaces, decodeSpaces(providerInfo)...)
 	}
 
+	log := appctx.GetLogger(ctx)
+	log.Info().Interface("spaces", spaces).Msg("ListStorageSpaces")
+
 	return &provider.ListStorageSpacesResponse{
 		Status:        status.NewOK(ctx),
 		StorageSpaces: spaces,
@@ -636,6 +639,9 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 	}
 
 	res, err := c.CreateContainer(ctx, req)
+
+	log := appctx.GetLogger(ctx)
+	log.Info().Interface("res", res).Interface("err", err).Msg("CreateContainer")
 	if err != nil {
 		return &provider.CreateContainerResponse{
 			Status: status.NewStatusFromErrType(ctx, "gateway could not call CreateContainer", err),

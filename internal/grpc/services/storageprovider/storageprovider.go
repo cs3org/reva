@@ -586,6 +586,7 @@ func (s *Service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 
 		s.addMissingStorageProviderID(sp.GetRoot(), sp.GetId())
 	}
+	log.Info().Interface("spaces", spaces).Msg("ListStorageSpaces")
 
 	return &provider.ListStorageSpacesResponse{
 		Status:        status.NewOK(ctx),
@@ -679,6 +680,8 @@ func (s *Service) CreateContainer(ctx context.Context, req *provider.CreateConta
 	}
 
 	err := s.Storage.CreateDir(ctx, req.Ref)
+	log := appctx.GetLogger(ctx)
+	log.Info().Interface("err", err).Msg("CreateContainer")
 
 	return &provider.CreateContainerResponse{
 		Status: status.NewStatusFromErrType(ctx, "create container", err),
