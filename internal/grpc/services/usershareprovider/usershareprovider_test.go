@@ -20,12 +20,22 @@ package usershareprovider_test
 
 import (
 	"context"
+	"path/filepath"
+	"regexp"
+
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaborationpb "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/mock"
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
+
 	"github.com/cs3org/reva/v2/internal/grpc/services/usershareprovider"
 	"github.com/cs3org/reva/v2/pkg/conversions"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
@@ -37,14 +47,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/share/mocks"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	cs3mocks "github.com/cs3org/reva/v2/tests/cs3mocks/mocks"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	"github.com/pkg/errors"
-	"github.com/stretchr/testify/mock"
-	"google.golang.org/grpc"
-	"google.golang.org/protobuf/types/known/fieldmaskpb"
-	"path/filepath"
-	"regexp"
 )
 
 var _ = Describe("user share provider service", func() {
@@ -211,7 +213,11 @@ var _ = Describe("user share provider service", func() {
 			Entry(
 				"requesting the share errors",
 				&collaborationpb.UpdateReceivedShareRequest{
+					UpdateMask: &fieldmaskpb.FieldMask{
+						Paths: []string{"state"},
+					},
 					Share: &collaborationpb.ReceivedShare{
+						State: collaborationpb.ShareState_SHARE_STATE_ACCEPTED,
 						Share: &collaborationpb.Share{
 							Id: &collaborationpb.ShareId{
 								OpaqueId: "1",
@@ -225,7 +231,11 @@ var _ = Describe("user share provider service", func() {
 			Entry(
 				"requesting the share fails",
 				&collaborationpb.UpdateReceivedShareRequest{
+					UpdateMask: &fieldmaskpb.FieldMask{
+						Paths: []string{"state"},
+					},
 					Share: &collaborationpb.ReceivedShare{
+						State: collaborationpb.ShareState_SHARE_STATE_ACCEPTED,
 						Share: &collaborationpb.Share{
 							Id: &collaborationpb.ShareId{
 								OpaqueId: "1",
@@ -280,7 +290,11 @@ var _ = Describe("user share provider service", func() {
 			Entry(
 				"stat the resource errors",
 				&collaborationpb.UpdateReceivedShareRequest{
+					UpdateMask: &fieldmaskpb.FieldMask{
+						Paths: []string{"state"},
+					},
 					Share: &collaborationpb.ReceivedShare{
+						State: collaborationpb.ShareState_SHARE_STATE_ACCEPTED,
 						Share: &collaborationpb.Share{
 							Id: &collaborationpb.ShareId{
 								OpaqueId: "1",
@@ -294,7 +308,11 @@ var _ = Describe("user share provider service", func() {
 			Entry(
 				"stat the resource fails",
 				&collaborationpb.UpdateReceivedShareRequest{
+					UpdateMask: &fieldmaskpb.FieldMask{
+						Paths: []string{"state"},
+					},
 					Share: &collaborationpb.ReceivedShare{
+						State: collaborationpb.ShareState_SHARE_STATE_ACCEPTED,
 						Share: &collaborationpb.Share{
 							Id: &collaborationpb.ShareId{
 								OpaqueId: "1",

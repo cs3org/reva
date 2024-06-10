@@ -34,7 +34,6 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/conversions"
@@ -53,6 +52,7 @@ import (
 const (
 	_fieldMaskPathMountPoint  = "mount_point"
 	_fieldMaskPathPermissions = "permissions"
+	_fieldMaskPathState       = "state"
 )
 
 func init() {
@@ -530,76 +530,74 @@ func (s *service) UpdateReceivedShare(ctx context.Context, req *collaboration.Up
 		}, nil
 	}
 
-	gatewayClient, err := s.gatewaySelector.Next()
-	if err != nil {
-		return nil, err
-	}
-
-	receivedShare, err := gatewayClient.GetReceivedShare(ctx, &collaboration.GetReceivedShareRequest{
-		Ref: &collaboration.ShareReference{
-			Spec: &collaboration.ShareReference_Id{
-				Id: req.GetShare().GetShare().GetId(),
-			},
-		},
-	})
-	switch {
-	case err != nil:
-		fallthrough
-	case receivedShare.GetStatus().GetCode() != rpc.Code_CODE_OK:
-		return &collaboration.UpdateReceivedShareResponse{
-			Status: receivedShare.GetStatus(),
-		}, err
-	}
-
-	resourceStat, err := gatewayClient.Stat(ctx, &provider.StatRequest{
-		Ref: &provider.Reference{
-			ResourceId: receivedShare.GetShare().GetShare().GetResourceId(),
-		},
-	})
-	switch {
-	case err != nil:
-		fallthrough
-	case resourceStat.GetStatus().GetCode() != rpc.Code_CODE_OK:
-		return &collaboration.UpdateReceivedShareResponse{
-			Status: resourceStat.GetStatus(),
-		}, err
-	}
-
-	// check if the update mask is nil and if so, initialize it
-	if req.GetUpdateMask() == nil {
-		req.UpdateMask = &fieldmaskpb.FieldMask{Paths: []string{}}
-	}
-
-	// handle mount point related updates
-	{
-		// find a suitable mount point
-		var requestedMountpoint string
-		switch {
-		case slices.Contains(req.GetUpdateMask().GetPaths(), _fieldMaskPathMountPoint) && req.GetShare().GetMountPoint().GetPath() != "":
-			requestedMountpoint = req.GetShare().GetMountPoint().GetPath()
-		case receivedShare.GetShare().GetMountPoint().GetPath() != "":
-			requestedMountpoint = receivedShare.GetShare().GetMountPoint().GetPath()
-		default:
-			requestedMountpoint = resourceStat.GetInfo().GetName()
-		}
-
-		// check if the requested mount point is available and if not, find a suitable one
-		availableMountpoint, err := GetAvailableMountpoint(ctx, gatewayClient,
-			resourceStat.GetInfo().GetId(),
-			requestedMountpoint,
-		)
+	isStateTransitionShareAccepted := slices.Contains(req.GetUpdateMask().GetPaths(), _fieldMaskPathState) && req.GetShare().GetState() == collaboration.ShareState_SHARE_STATE_ACCEPTED
+	if isStateTransitionShareAccepted {
+		gatewayClient, err := s.gatewaySelector.Next()
 		if err != nil {
+			return nil, err
+		}
+
+		receivedShare, err := gatewayClient.GetReceivedShare(ctx, &collaboration.GetReceivedShareRequest{
+			Ref: &collaboration.ShareReference{
+				Spec: &collaboration.ShareReference_Id{
+					Id: req.GetShare().GetShare().GetId(),
+				},
+			},
+		})
+		switch {
+		case err != nil:
+			fallthrough
+		case receivedShare.GetStatus().GetCode() != rpc.Code_CODE_OK:
 			return &collaboration.UpdateReceivedShareResponse{
-				Status: status.NewInternal(ctx, err.Error()),
-			}, nil
+				Status: receivedShare.GetStatus(),
+			}, err
 		}
 
-		if !slices.Contains(req.GetUpdateMask().GetPaths(), _fieldMaskPathMountPoint) {
-			req.GetUpdateMask().Paths = append(req.GetUpdateMask().GetPaths(), _fieldMaskPathMountPoint)
+		resourceStat, err := gatewayClient.Stat(ctx, &provider.StatRequest{
+			Ref: &provider.Reference{
+				ResourceId: receivedShare.GetShare().GetShare().GetResourceId(),
+			},
+		})
+		switch {
+		case err != nil:
+			fallthrough
+		case resourceStat.GetStatus().GetCode() != rpc.Code_CODE_OK:
+			return &collaboration.UpdateReceivedShareResponse{
+				Status: resourceStat.GetStatus(),
+			}, err
 		}
 
-		req.GetShare().MountPoint = &provider.Reference{
-			Path: availableMountpoint,
+		// handle mount point related updates
+		{
+			// find a suitable mount point
+			var requestedMountpoint string
+			switch {
+			case slices.Contains(req.GetUpdateMask().GetPaths(), _fieldMaskPathMountPoint) && req.GetShare().GetMountPoint().GetPath() != "":
+				requestedMountpoint = req.GetShare().GetMountPoint().GetPath()
+			case receivedShare.GetShare().GetMountPoint().GetPath() != "":
+				requestedMountpoint = receivedShare.GetShare().GetMountPoint().GetPath()
+			default:
+				requestedMountpoint = resourceStat.GetInfo().GetName()
+			}
+
+			// check if the requested mount point is available and if not, find a suitable one
+			availableMountpoint, err := GetAvailableMountpoint(ctx, gatewayClient,
+				resourceStat.GetInfo().GetId(),
+				requestedMountpoint,
+			)
+			if err != nil {
+				return &collaboration.UpdateReceivedShareResponse{
+					Status: status.NewInternal(ctx, err.Error()),
+				}, nil
+			}
+
+			if !slices.Contains(req.GetUpdateMask().GetPaths(), _fieldMaskPathMountPoint) {
+				req.GetUpdateMask().Paths = append(req.GetUpdateMask().GetPaths(), _fieldMaskPathMountPoint)
+			}
+
+			req.GetShare().MountPoint = &provider.Reference{
+				Path: availableMountpoint,
+			}
 		}
 	}
 
