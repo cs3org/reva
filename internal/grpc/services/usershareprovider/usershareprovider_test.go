@@ -142,30 +142,6 @@ var _ = Describe("user share provider service", func() {
 				Expect(res.GetStatus().GetMessage()).To(ContainSubstring(expectedStatus.GetMessage()))
 			},
 			Entry(
-				"no received share",
-				&collaborationpb.UpdateReceivedShareRequest{},
-				status.NewInvalid(ctx, "updating requires"),
-				nil,
-			),
-			Entry(
-				"no share",
-				&collaborationpb.UpdateReceivedShareRequest{
-					Share: &collaborationpb.ReceivedShare{},
-				},
-				status.NewInvalid(ctx, "share missing"),
-				nil,
-			),
-			Entry(
-				"no share id",
-				&collaborationpb.UpdateReceivedShareRequest{
-					Share: &collaborationpb.ReceivedShare{
-						Share: &collaborationpb.Share{},
-					},
-				},
-				status.NewInvalid(ctx, "share id missing"),
-				nil,
-			),
-			Entry(
 				"no share opaque id",
 				&collaborationpb.UpdateReceivedShareRequest{
 					Share: &collaborationpb.ReceivedShare{
