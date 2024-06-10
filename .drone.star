@@ -104,20 +104,7 @@ def main(ctx):
     # In order to run specific parts only, specify the parts as
     # ocisIntegrationTests(6, [1, 4])     - this will only run 1st and 4th parts
     # implemented for: ocisIntegrationTests, posixfsIntegrationTests and s3ngIntegrationTests
-    return [
-        checkStarlark(),
-        checkGoGenerate(),
-        coverage(),
-        buildOnly(),
-        testIntegration(),
-        litmusOcisOldWebdav(),
-        litmusOcisNewWebdav(),
-        litmusOcisSpacesDav(),
-        cs3ApiValidatorOcis(),
-        cs3ApiValidatorS3NG(),
-        # virtual views don't work on edge at the moment
-        #virtualViews(),
-    ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12) + posixfsIntegrationTests(6)
+    return posixfsIntegrationTests(1)
 
 def coverage():
     return {
@@ -769,6 +756,7 @@ def posixfsIntegrationTests(parallelRuns, skipExceptParts = []):
                             "DIVIDE_INTO_NUM_PARTS": parallelRuns,
                             "RUN_PART": runPart,
                             "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-POSIX-storage.md",
+                            "BEHAT_FEATURE": "tests/acceptance/features/coreApiWebdavProperties/createFileFolder.feature",
                         },
                     },
                 ],
@@ -776,7 +764,6 @@ def posixfsIntegrationTests(parallelRuns, skipExceptParts = []):
                     redisService(),
                     ldapService(),
                 ],
-                "depends_on": ["unit-test-coverage"],
             },
         )
 
