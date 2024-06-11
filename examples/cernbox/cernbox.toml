@@ -393,8 +393,6 @@ insecure = true
 [http.services.prometheus]
 address = ":443"
 
-[http.services.sysinfo]
-
 #[http.services.ui]
 #address = ":443"
 

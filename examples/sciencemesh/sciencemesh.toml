@@ -284,7 +284,5 @@ metrics_data_driver_type = "json"
 metrics_data_location = "/etc/revad/metrics.json"
 metrics_record_interval = 5000
 
-[http.services.sysinfo]
-
 [http.middlewares.cors]
 [http.middlewares.log]
