@@ -16,7 +16,7 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
-FROM quay.io/ceph/ceph:v18
+FROM quay.io/ceph/ceph:v18.2
 
 RUN mkdir -p /etc/selinux/config
 
@@ -28,12 +28,12 @@ RUN dnf update --exclude=ceph-iscsi,chrony -y && dnf install -y \
   librbd-devel \
   librados-devel
 
-ADD https://go.dev/dl/go1.21.5.linux-amd64.tar.gz \
-  go1.21.5.linux-amd64.tar.gz
+ADD https://go.dev/dl/go1.22.2.linux-amd64.tar.gz \
+  go1.22.2.linux-amd64.tar.gz
 
 RUN rm -rf /usr/local/go && \
-  tar -C /usr/local -xzf go1.21.5.linux-amd64.tar.gz && \
-  rm go1.21.5.linux-amd64.tar.gz
+  tar -C /usr/local -xzf go1.22.2.linux-amd64.tar.gz && \
+  rm go1.22.2.linux-amd64.tar.gz
 
 ENV PATH /go/bin:/usr/local/go/bin:$PATH
 ENV GOPATH /go
