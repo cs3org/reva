@@ -85,7 +85,7 @@ func (c *Config) Init() {
 	}
 
 	if c.NameValidation.InvalidNames == nil {
-		c.NameValidation.InvalidNames = []string{"..", "."}
+		c.NameValidation.InvalidNames = []string{".."}
 	}
 
 	if c.NameValidation.MaxLength == 0 {
