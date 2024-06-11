@@ -1,0 +1,7 @@
+[ceph-quincy-el9]
+name=Ceph Quincy EL9
+baseurl=http://linuxsoft.cern.ch/mirror/download.ceph.com/rpm-quincy/el9/x86_64
+enabled=1
+gpgcheck=True
+gpgkey=http://linuxsoft.cern.ch/mirror/download.ceph.com/release.asc
+priority=9

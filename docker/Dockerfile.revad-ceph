@@ -20,6 +20,7 @@ FROM cern/alma9-base
 
 RUN mkdir -p /etc/selinux/config
 
+COPY docker/ceph9el.repo /etc/yum.repos.d/
 RUN dnf update --exclude=ceph-iscsi,chrony -y && dnf install -y \
   git \
   gcc \
