@@ -281,7 +281,7 @@ assimilate:
 }
 
 // WarmupIDCache warms up the id cache
-func (t *Tree) WarmupIDCache(root string) error {
+func (t *Tree) WarmupIDCache(root string, assimilate bool) error {
 	spaceID := []byte("")
 
 	scopeSpace := func(spaceCandidate string) error {
@@ -337,9 +337,8 @@ func (t *Tree) WarmupIDCache(root string) error {
 			id, ok := attribs[prefixes.IDAttr]
 			if ok {
 				_ = t.lookup.(*lookup.Lookup).CacheID(context.Background(), string(spaceID), string(id), path)
-			} else {
-				// assimilate
-
+			} else if assimilate {
+				t.Scan(path, false)
 			}
 		}
 		return nil

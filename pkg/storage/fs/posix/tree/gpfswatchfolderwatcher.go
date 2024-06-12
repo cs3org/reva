@@ -56,7 +56,7 @@ func (w *GpfsWatchFolderWatcher) Watch(topic string) {
 		case strings.Contains(lwev.Event, "IN_MOVED_TO"):
 			go func() {
 				_ = w.tree.Scan(lwev.Path, true)
-				_ = w.tree.WarmupIDCache(lwev.Path)
+				_ = w.tree.WarmupIDCache(lwev.Path, false)
 			}()
 		}
 	}

@@ -51,7 +51,7 @@ func (iw *InotifyWatcher) Watch(path string) {
 				case inotifywaitgo.MOVED_TO:
 					go func() {
 						_ = iw.tree.Scan(event.Filename, true)
-						_ = iw.tree.WarmupIDCache(event.Filename)
+						_ = iw.tree.WarmupIDCache(event.Filename, false)
 					}()
 				case inotifywaitgo.CLOSE_WRITE:
 					go func() { _ = iw.tree.Scan(event.Filename, true) }()
