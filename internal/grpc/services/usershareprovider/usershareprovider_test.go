@@ -627,7 +627,7 @@ var _ = Describe("helpers", func() {
 					}).Times(statCallCount)
 			}
 
-			availableMountpoint, err := usershareprovider.GetAvailableMountpoint(context.Background(), gatewayClient, args.withResourceId, args.withName)
+			availableMountpoint, err := usershareprovider.GetAvailableMountpoint(context.Background(), gatewayClient, args.withResourceId, args.withName, nil)
 
 			if args.listReceivedSharesError != nil {
 				Expect(err).To(HaveOccurred(), "expected error, got none")
