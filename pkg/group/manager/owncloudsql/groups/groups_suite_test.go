@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2021 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,12 +16,16 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package groups_test
 
 import (
-	// Load core group manager drivers.
-	_ "github.com/cs3org/reva/v2/pkg/group/manager/json"
-	_ "github.com/cs3org/reva/v2/pkg/group/manager/ldap"
-	_ "github.com/cs3org/reva/v2/pkg/group/manager/owncloudsql"
-	// Add your own here
+	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
+
+func TestGroups(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Groups Suite")
+}
