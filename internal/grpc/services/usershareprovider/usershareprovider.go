@@ -548,8 +548,13 @@ func (s *service) UpdateReceivedShare(ctx context.Context, req *collaboration.Up
 }
 
 // GetAvailableMountpoint returns a new or existing mountpoint
-func GetAvailableMountpoint(ctx context.Context, gwc gateway.GatewayAPIClient, id *provider.ResourceId, name string) (string, error) {
-	listReceivedSharesRes, err := gwc.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+func GetAvailableMountpoint(ctx context.Context, gwc gateway.GatewayAPIClient, id *provider.ResourceId, name string, userId *userpb.UserId) (string, error) {
+	listReceivedSharesReq := &collaboration.ListReceivedSharesRequest{}
+	if userId != nil {
+		listReceivedSharesReq.Opaque = utils.AppendJSONToOpaque(nil, "userid", userId)
+	}
+
+	listReceivedSharesRes, err := gwc.ListReceivedShares(ctx, listReceivedSharesReq)
 	if err != nil {
 		return "", errtypes.InternalError("grpc list received shares request failed")
 	}
@@ -644,10 +649,14 @@ func setReceivedShareMountPoint(ctx context.Context, gwc gateway.GatewayAPIClien
 
 	// handle mount point related updates
 	{
+		var userID *userpb.UserId
+		_ = utils.ReadJSONFromOpaque(req.Opaque, "userid", &userID)
+
 		// check if the requested mount point is available and if not, find a suitable one
 		availableMountpoint, err := GetAvailableMountpoint(ctx, gwc,
 			resourceStat.GetInfo().GetId(),
 			resourceStat.GetInfo().GetName(),
+			userID,
 		)
 		if err != nil {
 			return status.NewInternal(ctx, err.Error()), nil
