@@ -27,7 +27,6 @@ The expected failures in this file are from features in the owncloud/ocis repo.
 -   [coreApiMain/checksums.feature:218](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/checksums.feature#L218)
 -   [coreApiMain/checksums.feature:239](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/checksums.feature#L239)
 -   [coreApiMain/checksums.feature:240](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/checksums.feature#L240)
--   [coreApiMain/checksums.feature:268](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/checksums.feature#L268)
 -   [coreApiMain/checksums.feature:279](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/checksums.feature#L279)
 -   [coreApiMain/checksums.feature:280](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/checksums.feature#L280)
 -   [coreApiMain/checksums.feature:295](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/checksums.feature#L295)
