@@ -101,6 +101,9 @@ func (c *Config) ApplyDefaults() {
 	if c.DefaultQuotaBytes == 0 {
 		c.DefaultQuotaBytes = 2000000000000 // 1 TB logical
 	}
+	if c.DefaultSecondaryQuotaBytes == 0 {
+		c.DefaultSecondaryQuotaBytes = c.DefaultQuotaBytes
+	}
 	if c.DefaultQuotaFiles == 0 {
 		c.DefaultQuotaFiles = 1000000 // 1 Million
 	}
@@ -1489,12 +1492,16 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 		return err
 	}
 
-	// set quota for user
+	// set quota for user, depending on its type
+	quotaBytes := fs.conf.DefaultQuotaBytes
+	if u.Id.Type != userpb.UserType_USER_TYPE_PRIMARY {
+		quotaBytes = fs.conf.DefaultSecondaryQuotaBytes
+	}
 	quotaInfo := &eosclient.SetQuotaInfo{
 		Username:  u.Username,
 		UID:       auth.Role.UID,
 		GID:       auth.Role.GID,
-		MaxBytes:  fs.conf.DefaultQuotaBytes,
+		MaxBytes:  quotaBytes,
 		MaxFiles:  fs.conf.DefaultQuotaFiles,
 		QuotaNode: fs.conf.QuotaNode,
 	}
