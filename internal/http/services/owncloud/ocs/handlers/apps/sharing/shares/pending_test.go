@@ -24,7 +24,6 @@ import (
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/go-chi/chi/v5"
@@ -259,7 +258,7 @@ var _ = Describe("The ocs API", func() {
 
 			It("accepts both pending shares", func() {
 				client.On("UpdateReceivedShare", mock.Anything, mock.MatchedBy(func(req *collaboration.UpdateReceivedShareRequest) bool {
-					return req.Share.Share.Id.OpaqueId == "1"
+					return req.Share.Share.Id.OpaqueId == "1" && req.Share.MountPoint.Path == "share1"
 				})).Return(&collaboration.UpdateReceivedShareResponse{
 					Status: status.NewOK(context.Background()),
 					Share: &collaboration.ReceivedShare{
@@ -270,7 +269,7 @@ var _ = Describe("The ocs API", func() {
 				}, nil)
 
 				client.On("UpdateReceivedShare", mock.Anything, mock.MatchedBy(func(req *collaboration.UpdateReceivedShareRequest) bool {
-					return req.Share.Share.Id.OpaqueId == "2"
+					return req.Share.Share.Id.OpaqueId == "2" && req.Share.MountPoint.Path == "share1"
 				})).Return(&collaboration.UpdateReceivedShareResponse{
 					Status: status.NewOK(context.Background()),
 					Share: &collaboration.ReceivedShare{
@@ -320,7 +319,7 @@ var _ = Describe("The ocs API", func() {
 
 			It("accepts the remaining pending share", func() {
 				client.On("UpdateReceivedShare", mock.Anything, mock.MatchedBy(func(req *collaboration.UpdateReceivedShareRequest) bool {
-					return req.Share.Share.Id.OpaqueId == "2"
+					return req.Share.Share.Id.OpaqueId == "2" && req.Share.MountPoint.Path == "existing/mountpoint"
 				})).Return(&collaboration.UpdateReceivedShareResponse{
 					Status: status.NewOK(context.Background()),
 					Share: &collaboration.ReceivedShare{
@@ -417,26 +416,6 @@ var _ = Describe("The ocs API", func() {
 					},
 				}, nil)
 			})
-
-			DescribeTable("Resolve unmounted shares",
-				func(info *provider.ResourceInfo, unmountedLen int) {
-					// GetMountpointAndUnmountedShares check the error Stat response only
-					client.On("Stat", mock.Anything, mock.Anything).
-						Return(&provider.StatResponse{Status: &rpc.Status{Code: rpc.Code_CODE_OK},
-							Info: &provider.ResourceInfo{}}, nil)
-					unmounted, err := shares.GetUnmountedShares(ctx, client, info.GetId())
-					Expect(len(unmounted)).To(Equal(unmountedLen))
-					Expect(err).To(BeNil())
-				},
-				Entry("new mountpoint, name changed", &provider.ResourceInfo{
-					Name: "b.txt",
-					Id:   &provider.ResourceId{StorageId: storage, OpaqueId: "not-exist", SpaceId: userOneSpaceId},
-				}, 0),
-				Entry("unmountpoint", &provider.ResourceInfo{
-					Name: "b.txt",
-					Id:   &provider.ResourceId{StorageId: storage, OpaqueId: "be098d47-4518-4a96-92e3-52e904b3958d", SpaceId: userOneSpaceId},
-				}, 1),
-			)
 		})
 	})
 })
