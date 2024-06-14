@@ -582,15 +582,15 @@ var _ = Describe("user share provider service", func() {
 })
 
 var _ = Describe("helpers", func() {
-	type GetAvailableMountpointArgs struct {
+	type GetMountpointAndUnmountedSharesArgs struct {
 		withName                   string
 		withResourceId             *providerpb.ResourceId
 		listReceivedSharesResponse *collaborationpb.ListReceivedSharesResponse
 		listReceivedSharesError    error
 		expectedName               string
 	}
-	DescribeTable("GetAvailableMountpoint",
-		func(args GetAvailableMountpointArgs) {
+	DescribeTable("GetMountpointAndUnmountedShares",
+		func(args GetMountpointAndUnmountedSharesArgs) {
 			gatewayClient := cs3mocks.NewGatewayAPIClient(GinkgoT())
 
 			gatewayClient.EXPECT().
@@ -627,7 +627,7 @@ var _ = Describe("helpers", func() {
 					}).Times(statCallCount)
 			}
 
-			availableMountpoint, err := usershareprovider.GetAvailableMountpoint(context.Background(), gatewayClient, args.withResourceId, args.withName, nil)
+			availableMountpoint, _, err := usershareprovider.GetMountpointAndUnmountedShares(context.Background(), gatewayClient, args.withResourceId, args.withName, nil)
 
 			if args.listReceivedSharesError != nil {
 				Expect(err).To(HaveOccurred(), "expected error, got none")
@@ -640,13 +640,13 @@ var _ = Describe("helpers", func() {
 		},
 		Entry(
 			"listing received shares errors",
-			GetAvailableMountpointArgs{
+			GetMountpointAndUnmountedSharesArgs{
 				listReceivedSharesError: errors.New("some error"),
 			},
 		),
 		Entry(
 			"returns the given name if no shares are found",
-			GetAvailableMountpointArgs{
+			GetMountpointAndUnmountedSharesArgs{
 				withName: "name1",
 				listReceivedSharesResponse: &collaborationpb.ListReceivedSharesResponse{
 					Status: status.NewOK(context.Background()),
@@ -656,7 +656,7 @@ var _ = Describe("helpers", func() {
 		),
 		Entry(
 			"returns the path as name if a share with the same resourceId is found",
-			GetAvailableMountpointArgs{
+			GetMountpointAndUnmountedSharesArgs{
 				withName: "name",
 				withResourceId: &providerpb.ResourceId{
 					StorageId: "1",
@@ -686,7 +686,7 @@ var _ = Describe("helpers", func() {
 		),
 		Entry(
 			"enumerates the name if a share with the same path already exists",
-			GetAvailableMountpointArgs{
+			GetMountpointAndUnmountedSharesArgs{
 				withName: "some name",
 				listReceivedSharesResponse: &collaborationpb.ListReceivedSharesResponse{
 					Status: status.NewOK(context.Background()),
