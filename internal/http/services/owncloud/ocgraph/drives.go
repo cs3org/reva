@@ -200,6 +200,8 @@ func (s *svc) cs3StorageSpaceToDrive(user *userpb.User, space *providerpb.Storag
 		DriveType:  libregraph.PtrString(space.SpaceType),
 	}
 
+	drive.Root = &libregraph.DriveItem{}
+
 	if space.SpaceType != "personal" {
 		drive.Root = &libregraph.DriveItem{
 			Id:          libregraph.PtrString(space.Id.OpaqueId),
