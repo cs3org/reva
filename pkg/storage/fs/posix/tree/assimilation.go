@@ -338,7 +338,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate bool) error {
 			if ok {
 				_ = t.lookup.(*lookup.Lookup).CacheID(context.Background(), string(spaceID), string(id), path)
 			} else if assimilate {
-				t.Scan(path, false)
+				_ = t.Scan(path, false)
 			}
 		}
 		return nil
