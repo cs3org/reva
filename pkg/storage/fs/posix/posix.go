@@ -85,7 +85,7 @@ func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 		return nil, fmt.Errorf("unknown metadata backend %s, only 'messagepack' or 'xattrs' (default) supported", o.MetadataBackend)
 	}
 
-	tp, err := tree.New(lu, bs, um, o, store.Create(
+	tp, err := tree.New(lu, bs, um, o, stream, store.Create(
 		store.Store(o.IDCache.Store),
 		store.TTL(o.IDCache.TTL),
 		store.Size(o.IDCache.Size),

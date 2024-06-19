@@ -43,6 +43,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/options"
@@ -91,6 +92,7 @@ type Tree struct {
 	scanQueue     chan scanItem
 	scanDebouncer *ScanDebouncer
 
+	es  events.Stream
 	log *zerolog.Logger
 }
 
@@ -98,7 +100,7 @@ type Tree struct {
 type PermissionCheckFunc func(rp *provider.ResourcePermissions) bool
 
 // New returns a new instance of Tree
-func New(lu node.PathLookup, bs Blobstore, um usermapper.Mapper, o *options.Options, cache store.Store) (*Tree, error) {
+func New(lu node.PathLookup, bs Blobstore, um usermapper.Mapper, o *options.Options, es events.Stream, cache store.Store) (*Tree, error) {
 	log := logger.New()
 	scanQueue := make(chan scanItem)
 	t := &Tree{
@@ -112,6 +114,7 @@ func New(lu node.PathLookup, bs Blobstore, um usermapper.Mapper, o *options.Opti
 		scanDebouncer: NewScanDebouncer(500*time.Millisecond, func(item scanItem) {
 			scanQueue <- item
 		}),
+		es:  es,
 		log: log,
 	}
 
@@ -155,6 +158,12 @@ func New(lu node.PathLookup, bs Blobstore, um usermapper.Mapper, o *options.Opti
 	}()
 
 	return t, nil
+}
+
+func (t *Tree) PublishEvent(ev interface{}) {
+	if err := events.Publish(context.Background(), t.es, ev); err != nil {
+		t.log.Error().Err(err).Interface("event", ev).Msg("failed to publish event")
+	}
 }
 
 // Setup prepares the tree structure

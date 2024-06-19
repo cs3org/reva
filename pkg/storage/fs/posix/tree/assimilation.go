@@ -29,14 +29,18 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
+
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/google/uuid"
-	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
+	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 type ScanDebouncer struct {
@@ -118,9 +122,11 @@ func (t *Tree) assimilate(item scanItem) error {
 	// find the space id, scope by the according user
 	spaceID := []byte("")
 	spaceCandidate := item.Path
+	spaceAttrs := node.Attributes{}
 	for strings.HasPrefix(spaceCandidate, t.options.Root) {
-		spaceID, err = t.lookup.MetadataBackend().Get(context.Background(), spaceCandidate, prefixes.SpaceIDAttr)
-		if err == nil {
+		spaceAttrs, err = t.lookup.MetadataBackend().All(context.Background(), spaceCandidate)
+		if err == nil && len(spaceAttrs[prefixes.SpaceIDAttr]) > 0 {
+			spaceID = spaceAttrs[prefixes.SpaceIDAttr]
 			if t.options.UseSpaceGroups {
 				// set the uid and gid for the space
 				fi, err := os.Stat(spaceCandidate)
@@ -161,22 +167,99 @@ func (t *Tree) assimilate(item scanItem) error {
 		_ = unlock()
 	}()
 
+	user := &userv1beta1.UserId{
+		Idp:      string(spaceAttrs[prefixes.OwnerIDPAttr]),
+		OpaqueId: string(spaceAttrs[prefixes.OwnerIDAttr]),
+	}
+
 	// check for the id attribute again after grabbing the lock, maybe the file was assimilated/created by us in the meantime
 	id, err = t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.IDAttr)
 	if err == nil {
+		previousPath, ok := t.lookup.(*lookup.Lookup).GetCachedID(context.Background(), string(spaceID), string(id))
+
 		_ = t.lookup.(*lookup.Lookup).CacheID(context.Background(), string(spaceID), string(id), item.Path)
 		if item.ForceRescan {
-			_, err = t.updateFile(item.Path, string(id), string(spaceID))
+			previousParentID, err := t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.ParentidAttr)
 			if err != nil {
 				return err
+			}
+
+			fi, err := t.updateFile(item.Path, string(id), string(spaceID))
+			if err != nil {
+				return err
+			}
+
+			// was it moved?
+			if ok && previousPath != item.Path {
+				if fi.IsDir() {
+					// if it was moved and it is a directory we need to propagate the move
+					go t.WarmupIDCache(item.Path, false)
+				}
+
+				parentID, err := t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.ParentidAttr)
+				if err == nil && len(parentID) > 0 {
+					ref := &provider.Reference{
+						ResourceId: &provider.ResourceId{
+							SpaceId:  string(spaceID),
+							OpaqueId: string(parentID),
+						},
+						Path: filepath.Base(item.Path),
+					}
+					oldRef := &provider.Reference{
+						ResourceId: &provider.ResourceId{
+							SpaceId:  string(spaceID),
+							OpaqueId: string(previousParentID),
+						},
+						Path: filepath.Base(previousPath),
+					}
+					t.PublishEvent(events.ItemMoved{
+						SpaceOwner:   user,
+						Executant:    user,
+						Owner:        user,
+						Ref:          ref,
+						OldReference: oldRef,
+						Timestamp:    utils.TSNow(),
+					})
+				}
 			}
 		}
 	} else {
 		// assimilate new file
 		newId := uuid.New().String()
-		_, err = t.updateFile(item.Path, newId, string(spaceID))
+		fi, err := t.updateFile(item.Path, newId, string(spaceID))
 		if err != nil {
 			return err
+		}
+
+		ref := &provider.Reference{
+			ResourceId: &provider.ResourceId{
+				SpaceId:  string(spaceID),
+				OpaqueId: newId,
+			},
+		}
+		if fi.IsDir() {
+			t.PublishEvent(events.ContainerCreated{
+				SpaceOwner: user,
+				Executant:  user,
+				Owner:      user,
+				Ref:        ref,
+				Timestamp:  utils.TSNow(),
+			})
+		} else {
+			if fi.Size() == 0 {
+				t.PublishEvent(events.FileTouched{
+					SpaceOwner: user,
+					Executant:  user,
+					Ref:        ref,
+					Timestamp:  utils.TSNow(),
+				})
+			} else {
+				t.PublishEvent(events.UploadReady{
+					SpaceOwner: user,
+					FileRef:    ref,
+					Timestamp:  utils.TSNow(),
+				})
+			}
 		}
 	}
 	return nil
