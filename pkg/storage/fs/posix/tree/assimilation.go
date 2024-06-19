@@ -388,6 +388,10 @@ func (t *Tree) WarmupIDCache(root string, assimilate bool) error {
 			return err
 		}
 
+		if strings.HasSuffix(path, ".flock") || strings.HasSuffix(path, ".mlock") {
+			return nil
+		}
+
 		attribs, err := t.lookup.MetadataBackend().All(context.Background(), path)
 		if err == nil {
 			nodeSpaceID := attribs[prefixes.SpaceIDAttr]
