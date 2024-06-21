@@ -200,15 +200,17 @@ func (t *Tree) assimilate(item scanItem) error {
 				if err == nil && len(parentID) > 0 {
 					ref := &provider.Reference{
 						ResourceId: &provider.ResourceId{
-							SpaceId:  string(spaceID),
-							OpaqueId: string(parentID),
+							StorageId: t.options.MountID,
+							SpaceId:   string(spaceID),
+							OpaqueId:  string(parentID),
 						},
 						Path: filepath.Base(item.Path),
 					}
 					oldRef := &provider.Reference{
 						ResourceId: &provider.ResourceId{
-							SpaceId:  string(spaceID),
-							OpaqueId: string(previousParentID),
+							StorageId: t.options.MountID,
+							SpaceId:   string(spaceID),
+							OpaqueId:  string(previousParentID),
 						},
 						Path: filepath.Base(previousPath),
 					}
@@ -233,8 +235,9 @@ func (t *Tree) assimilate(item scanItem) error {
 
 		ref := &provider.Reference{
 			ResourceId: &provider.ResourceId{
-				SpaceId:  string(spaceID),
-				OpaqueId: newId,
+				StorageId: t.options.MountID,
+				SpaceId:   string(spaceID),
+				OpaqueId:  newId,
 			},
 		}
 		if fi.IsDir() {
