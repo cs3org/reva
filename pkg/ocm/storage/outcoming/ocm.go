@@ -68,6 +68,7 @@ func (c *config) ApplyDefaults() {
 }
 
 // New creates an OCM storage driver.
+// This driver exposes local resources to remote OCM users.
 func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
@@ -147,6 +148,9 @@ func (d *driver) shareAndRelativePathFromRef(ctx context.Context, ref *provider.
 		path = filepath.Join(path, ref.Path)
 	}
 	path = makeRelative(path)
+
+	log := appctx.GetLogger(ctx)
+	log.Info().Interface("ref", ref).Str("path", path).Str("token", token).Msg("Accessing OCM share")
 
 	share, err := d.resolveToken(ctx, token)
 	if err != nil {

@@ -82,8 +82,8 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 	return nil
 }
 
-func (m *manager) Authenticate(ctx context.Context, token, _ string) (*userpb.User, map[string]*authpb.Scope, error) {
-	log := appctx.GetLogger(ctx).With().Str("token", token).Logger()
+func (m *manager) Authenticate(ctx context.Context, ocmshare, token string) (*userpb.User, map[string]*authpb.Scope, error) {
+	log := appctx.GetLogger(ctx).With().Str("token", token).Str("ocmshare", ocmshare).Logger()
 	shareRes, err := m.gw.GetOCMShareByToken(ctx, &ocm.GetOCMShareByTokenRequest{
 		Token: token,
 	})
@@ -101,6 +101,12 @@ func (m *manager) Authenticate(ctx context.Context, token, _ string) (*userpb.Us
 	case shareRes.Status.Code != rpc.Code_CODE_OK:
 		log.Error().Interface("status", shareRes.Status).Msg("got unexpected error in the grpc call to GetOCMShare")
 		return nil, nil, errtypes.InternalError(shareRes.Status.Message)
+	}
+
+	// validate OCM share id if given (OCM v1.1)
+	if ocmshare != "" && shareRes.GetShare().GetId().GetOpaqueId() != ocmshare {
+		log.Error().Str("requested_share", ocmshare).Str("share_from_provider", shareRes.GetShare().GetId().GetOpaqueId()).Msg("mismatching ocm share id for existing secret")
+		return nil, nil, errtypes.InvalidCredentials("invalid shared secret")
 	}
 
 	// the user authenticated using the ocmshares authentication method

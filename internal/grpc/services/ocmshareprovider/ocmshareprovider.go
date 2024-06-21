@@ -18,6 +18,9 @@
 
 package ocmshareprovider
 
+// This package implements the OCM client API: it allows shares created on this Reva instance
+// to be sent to a remote EFSS system via OCM.
+
 import (
 	"context"
 	"fmt"
@@ -38,7 +41,6 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/ocm/client"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/repository/registry"
 	"github.com/cs3org/reva/pkg/plugin"
@@ -70,13 +72,13 @@ type config struct {
 	GatewaySVC     string                            `mapstructure:"gatewaysvc"                                    validate:"required"`
 	ProviderDomain string                            `docs:"The same domain registered in the provider authorizer" mapstructure:"provider_domain" validate:"required"`
 	WebDAVEndpoint string                            `mapstructure:"webdav_endpoint"                               validate:"required"`
-	WebappTemplate string                            `mapstructure:"webapp_template"`
+	WebappTemplate string                            `mapstructure:"webapp_template"                               validate:"required"`
 }
 
 type service struct {
 	conf       *config
 	repo       share.Repository
-	client     *client.OCMClient
+	client     *ocmd.OCMClient
 	gateway    gateway.GatewayAPIClient
 	webappTmpl *template.Template
 	walker     walker.Walker
@@ -88,9 +90,6 @@ func (c *config) ApplyDefaults() {
 	}
 	if c.ClientTimeout == 0 {
 		c.ClientTimeout = 10
-	}
-	if c.WebappTemplate == "" {
-		c.WebappTemplate = "https://cernbox.cern.ch/external/sciencemesh/{{.Token}}{relative-path-to-shared-resource}"
 	}
 
 	c.GatewaySVC = sharedconf.GetGatewaySVC(c.GatewaySVC)
@@ -119,11 +118,6 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	client := client.New(&client.Config{
-		Timeout:  time.Duration(c.ClientTimeout) * time.Second,
-		Insecure: c.ClientInsecure,
-	})
-
 	gateway, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySVC))
 	if err != nil {
 		return nil, err
@@ -135,10 +129,11 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	}
 	walker := walker.NewWalker(gateway)
 
+	ocmcl := ocmd.NewClient(time.Duration(c.ClientTimeout)*time.Second, c.ClientInsecure)
 	service := &service{
 		conf:       &c,
 		repo:       repo,
-		client:     client,
+		client:     ocmcl,
 		gateway:    gateway,
 		webappTmpl: tpl,
 		walker:     walker,
@@ -178,13 +173,14 @@ func getResourceType(info *providerpb.ResourceInfo) string {
 	return "unknown"
 }
 
-func (s *service) webdavURL(ctx context.Context, share *ocm.Share) string {
-	// the url is in the form of https://cernbox.cern.ch/remote.php/dav/ocm/token
-	p, _ := url.JoinPath(s.conf.WebDAVEndpoint, "/remote.php/dav/ocm", share.Token)
+func (s *service) webdavURL(share *ocm.Share) string {
+	// the url is expected to be in the form https://ourserver/remote.php/dav/ocm/{ShareId}, see c.WebdavRoot in ocmprovider.go
+	// TODO(lopresti) take the root from http.services.wellknown.ocmprovider's config
+	p, _ := url.JoinPath(s.conf.WebDAVEndpoint, "/remote.php/dav/ocm", share.Id.OpaqueId)
 	return p
 }
 
-func (s *service) getWebdavProtocol(ctx context.Context, share *ocm.Share, m *ocm.AccessMethod_WebdavOptions) *ocmd.WebDAV {
+func (s *service) getWebdavProtocol(share *ocm.Share, m *ocm.AccessMethod_WebdavOptions) *ocmd.WebDAV {
 	var perms []string
 	if m.WebdavOptions.Permissions.InitiateFileDownload {
 		perms = append(perms, "read")
@@ -195,7 +191,7 @@ func (s *service) getWebdavProtocol(ctx context.Context, share *ocm.Share, m *oc
 
 	return &ocmd.WebDAV{
 		Permissions:  perms,
-		URL:          s.webdavURL(ctx, share),
+		URL:          s.webdavURL(share),
 		SharedSecret: share.Token,
 	}
 }
@@ -233,7 +229,7 @@ func (s *service) getDataTransferProtocol(ctx context.Context, share *ocm.Share)
 		panic(err)
 	}
 	return &ocmd.Datatx{
-		SourceURI: s.webdavURL(ctx, share),
+		SourceURI: s.webdavURL(share),
 		Size:      size,
 	}
 }
@@ -248,7 +244,7 @@ func (s *service) getProtocols(ctx context.Context, share *ocm.Share) ocmd.Proto
 	for _, m := range share.AccessMethods {
 		switch t := m.Term.(type) {
 		case *ocm.AccessMethod_WebdavOptions:
-			p = append(p, s.getWebdavProtocol(ctx, share, t))
+			p = append(p, s.getWebdavProtocol(share, t))
 		case *ocm.AccessMethod_WebappOptions:
 			p = append(p, s.getWebappProtocol(share))
 		case *ocm.AccessMethod_TransferOptions:
@@ -323,7 +319,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		}, nil
 	}
 
-	newShareReq := &client.NewShareRequest{
+	newShareReq := &ocmd.NewShareRequest{
 		ShareWith:  formatOCMUser(req.Grantee.GetUserId()),
 		Name:       ocmshare.Name,
 		ProviderID: ocmshare.Id.OpaqueId,
@@ -348,11 +344,11 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	newShareRes, err := s.client.NewShare(ctx, ocmEndpoint, newShareReq)
 	if err != nil {
 		switch {
-		case errors.Is(err, client.ErrInvalidParameters):
+		case errors.Is(err, ocmd.ErrInvalidParameters):
 			return &ocm.CreateOCMShareResponse{
 				Status: status.NewInvalidArg(ctx, err.Error()),
 			}, nil
-		case errors.Is(err, client.ErrServiceNotTrusted):
+		case errors.Is(err, ocmd.ErrServiceNotTrusted):
 			return &ocm.CreateOCMShareResponse{
 				Status: status.NewInvalidArg(ctx, err.Error()),
 			}, nil

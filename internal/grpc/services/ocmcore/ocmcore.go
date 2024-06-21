@@ -18,6 +18,8 @@
 
 package ocmcore
 
+// This package implements the core OCM API for receiving external shares from remote EFSS systems.
+
 import (
 	"context"
 	"fmt"
@@ -102,7 +104,7 @@ func (s *service) UnprotectedEndpoints() []string {
 	return []string{"/cs3.ocm.core.v1beta1.OcmCoreAPI/CreateOCMCoreShare"}
 }
 
-// CreateOCMCoreShare is called when an OCM request comes into this reva instance from.
+// CreateOCMCoreShare is called when a remote OCM request comes into this reva instance.
 func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCMCoreShareRequest) (*ocmcore.CreateOCMCoreShareResponse, error) {
 	if req.ShareType != ocm.ShareType_SHARE_TYPE_USER {
 		return nil, errtypes.NotSupported("share type not supported")

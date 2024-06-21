@@ -17,6 +17,6 @@
 [http.services.dataprovider]
 [http.services.prometheus]
 [http.services.ocm]
-[http.services.ocmprovider]
+[http.services.wellknown.ocmprovider]
 [http.services.ocdav]
 [http.services.ocs]

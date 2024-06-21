@@ -26,9 +26,9 @@ import (
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/ocm/client"
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/repository/registry"
 	"github.com/cs3org/reva/pkg/plugin"
@@ -66,7 +66,7 @@ type config struct {
 type service struct {
 	conf      *config
 	repo      invite.Repository
-	ocmClient *client.OCMClient
+	ocmClient *ocmd.OCMClient
 }
 
 func (c *config) ApplyDefaults() {
@@ -110,12 +110,9 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	}
 
 	service := &service{
-		conf: &c,
-		repo: repo,
-		ocmClient: client.New(&client.Config{
-			Timeout:  time.Duration(c.OCMClientTimeout) * time.Second,
-			Insecure: c.OCMClientInsecure,
-		}),
+		conf:      &c,
+		repo:      repo,
+		ocmClient: ocmd.NewClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure),
 	}
 	return service, nil
 }
@@ -166,7 +163,7 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 		return nil, err
 	}
 
-	remoteUser, err := s.ocmClient.InviteAccepted(ctx, ocmEndpoint, &client.InviteAcceptedRequest{
+	remoteUser, err := s.ocmClient.InviteAccepted(ctx, ocmEndpoint, &ocmd.InviteAcceptedRequest{
 		Token:             req.InviteToken.GetToken(),
 		RecipientProvider: s.conf.ProviderDomain,
 		UserID:            user.GetId().GetOpaqueId(),
@@ -175,19 +172,19 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 	})
 	if err != nil {
 		switch {
-		case errors.Is(err, client.ErrTokenInvalid):
+		case errors.Is(err, ocmd.ErrTokenInvalid):
 			return &invitepb.ForwardInviteResponse{
 				Status: status.NewInvalid(ctx, "token not valid"),
 			}, nil
-		case errors.Is(err, client.ErrTokenNotFound):
+		case errors.Is(err, ocmd.ErrTokenNotFound):
 			return &invitepb.ForwardInviteResponse{
 				Status: status.NewNotFound(ctx, "token not found"),
 			}, nil
-		case errors.Is(err, client.ErrUserAlreadyAccepted):
+		case errors.Is(err, ocmd.ErrUserAlreadyAccepted):
 			return &invitepb.ForwardInviteResponse{
 				Status: status.NewAlreadyExists(ctx, err, err.Error()),
 			}, nil
-		case errors.Is(err, client.ErrServiceNotTrusted):
+		case errors.Is(err, ocmd.ErrServiceNotTrusted):
 			return &invitepb.ForwardInviteResponse{
 				Status: status.NewPermissionDenied(ctx, err, err.Error()),
 			}, nil
