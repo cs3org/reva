@@ -117,6 +117,63 @@ func (t *Tree) Scan(path string, forceRescan bool) error {
 	return nil
 }
 
+func (t *Tree) HandleFileDelete(path string) error {
+	spaceID, nodeID, err := t.lookup.(*lookup.Lookup).IDsForPath(context.Background(), path)
+	if err != nil {
+		return fmt.Errorf("could not find id for path %s", path)
+	}
+
+	owner, parentSpaceID, parentID, err := t.getOwnerAndIDs(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+
+	t.PublishEvent(events.ItemTrashed{
+		Owner:     owner,
+		Executant: owner,
+		Ref: &provider.Reference{
+			ResourceId: &provider.ResourceId{
+				StorageId: t.options.MountID,
+				SpaceId:   string(parentSpaceID),
+				OpaqueId:  string(parentID),
+			},
+			Path: filepath.Base(path),
+		},
+		ID: &provider.ResourceId{
+			StorageId: t.options.MountID,
+			SpaceId:   spaceID,
+			OpaqueId:  nodeID,
+		},
+		Timestamp: utils.TSNow(),
+	})
+
+	return nil
+}
+
+func (t *Tree) getOwnerAndIDs(path string) (*userv1beta1.UserId, string, string, error) {
+	attrs, err := t.lookup.MetadataBackend().All(context.Background(), path)
+	if err != nil {
+		return nil, "", "", err
+	}
+
+	spaceID, ok := attrs[prefixes.SpaceIDAttr]
+	if !ok {
+		return nil, "", "", fmt.Errorf("could not find space id for path %s", path)
+	}
+
+	id, ok := attrs[prefixes.IDAttr]
+	if !ok {
+		return nil, "", "", fmt.Errorf("could not find id for path %s", path)
+	}
+
+	owner := &userv1beta1.UserId{
+		Idp:      string(attrs[prefixes.OwnerIDPAttr]),
+		OpaqueId: string(attrs[prefixes.OwnerIDAttr]),
+	}
+
+	return owner, string(id), string(spaceID), nil
+}
+
 func (t *Tree) assimilate(item scanItem) error {
 	var err error
 	// find the space id, scope by the according user
