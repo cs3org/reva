@@ -88,3 +88,17 @@ func (PersonalDataExtracted) Unmarshal(v []byte) (interface{}, error) {
 	err := json.Unmarshal(v, &e)
 	return e, err
 }
+
+// BackchannelLogout is emitted when the callback revived from the identity provider
+type BackchannelLogout struct {
+	Executant *user.UserId
+	SessionId string
+	Timestamp *types.Timestamp
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (BackchannelLogout) Unmarshal(v []byte) (interface{}, error) {
+	e := BackchannelLogout{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
