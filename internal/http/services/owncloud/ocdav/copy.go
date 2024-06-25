@@ -95,7 +95,7 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 		return
 	}
 
-	if err := ValidateName(path.Base(dst), s.nameValidators); err != nil {
+	if err := ValidateDestination(path.Base(dst), s.nameValidators); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		b, err := errors.Marshal(http.StatusBadRequest, "destination failed naming rules", "")
 		errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)

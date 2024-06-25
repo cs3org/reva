@@ -67,7 +67,7 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 		return
 	}
 
-	if err := ValidateName(path.Base(dstPath), s.nameValidators); err != nil {
+	if err := ValidateDestination(path.Base(dstPath), s.nameValidators); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		b, err := errors.Marshal(http.StatusBadRequest, "destination naming rules", "")
 		errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
