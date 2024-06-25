@@ -310,7 +310,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	// TODO: needs to be fixed
 	ref := &provider.Reference{ResourceId: req.StorageSpace.Root}
-	c, _, err := s.find(ctx, ref)
+	c, _, err := s.findUnique(ctx, ref)
 	if err != nil {
 		return &provider.UpdateStorageSpaceResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find reference %+v", ref), err),
@@ -347,7 +347,7 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 	}
 
 	ref := &provider.Reference{ResourceId: &rid}
-	c, _, err := s.find(ctx, ref)
+	c, _, err := s.findUnique(ctx, ref)
 	if err != nil {
 		return &provider.DeleteStorageSpaceResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find reference %+v", ref), err),
@@ -494,7 +494,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 	// TODO(ishank011): enable downloading references spread across storage providers, eg. /eos
 	var c provider.ProviderAPIClient
 	var err error
-	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	c, _, req.Ref, err = s.findAndUnwrapUnique(ctx, req.Ref)
 	if err != nil {
 		return &gateway.InitiateFileDownloadResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
@@ -549,7 +549,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
 	var c provider.ProviderAPIClient
 	var err error
-	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	c, _, req.Ref, err = s.findAndUnwrapUnique(ctx, req.Ref)
 	if err != nil {
 		return &gateway.InitiateFileUploadResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
@@ -614,7 +614,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 }
 
 func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
-	c, _, ref, err := s.findAndUnwrap(ctx, &provider.Reference{ResourceId: req.ResourceId})
+	c, _, ref, err := s.findAndUnwrapUnique(ctx, &provider.Reference{ResourceId: req.ResourceId})
 	if err != nil {
 		return &provider.GetPathResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find reference %+v", ref), err),
@@ -628,7 +628,7 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
 	var c provider.ProviderAPIClient
 	var err error
-	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	c, _, req.Ref, err = s.findAndUnwrapUnique(ctx, req.Ref)
 	if err != nil {
 		return &provider.CreateContainerResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
@@ -648,7 +648,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 func (s *svc) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*provider.TouchFileResponse, error) {
 	var c provider.ProviderAPIClient
 	var err error
-	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	c, _, req.Ref, err = s.findAndUnwrapUnique(ctx, req.Ref)
 	if err != nil {
 		return &provider.TouchFileResponse{
 			Status: status.NewStatusFromErrType(ctx, "TouchFile ref="+req.Ref.String(), err),
@@ -670,7 +670,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 	// TODO(ishank011): enable deleting references spread across storage providers, eg. /eos
 	var c provider.ProviderAPIClient
 	var err error
-	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	c, _, req.Ref, err = s.findAndUnwrapUnique(ctx, req.Ref)
 	if err != nil {
 		return &provider.DeleteResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
@@ -688,14 +688,14 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 }
 
 func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	c, sourceProviderInfo, sref, err := s.findAndUnwrap(ctx, req.Source)
+	c, sourceProviderInfo, sref, err := s.findAndUnwrapUnique(ctx, req.Source)
 	if err != nil {
 		return &provider.MoveResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Source), err),
 		}, nil
 	}
 
-	_, destProviderInfo, dref, err := s.findAndUnwrap(ctx, req.Destination)
+	_, destProviderInfo, dref, err := s.findAndUnwrapUnique(ctx, req.Destination)
 	if err != nil {
 		return &provider.MoveResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Source), err),
@@ -717,7 +717,7 @@ func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitra
 	// TODO(ishank011): enable for references spread across storage providers, eg. /eos
 	var c provider.ProviderAPIClient
 	var err error
-	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	c, _, req.Ref, err = s.findAndUnwrapUnique(ctx, req.Ref)
 	if err != nil {
 		return &provider.SetArbitraryMetadataResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
@@ -739,7 +739,7 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 	// TODO(ishank011): enable for references spread across storage providers, eg. /eos
 	var c provider.ProviderAPIClient
 	var err error
-	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	c, _, req.Ref, err = s.findAndUnwrapUnique(ctx, req.Ref)
 	if err != nil {
 		return &provider.UnsetArbitraryMetadataResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
@@ -761,7 +761,7 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 func (s *svc) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
 	var c provider.ProviderAPIClient
 	var err error
-	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	c, _, req.Ref, err = s.findAndUnwrapUnique(ctx, req.Ref)
 	if err != nil {
 		return &provider.SetLockResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
@@ -781,7 +781,7 @@ func (s *svc) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provi
 
 // GetLock returns an existing lock on the given reference
 func (s *svc) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
-	c, _, err := s.find(ctx, req.Ref)
+	c, _, err := s.findUnique(ctx, req.Ref)
 	if err != nil {
 		return &provider.GetLockResponse{
 			Status: status.NewStatusFromErrType(ctx, "GetLock ref="+req.Ref.String(), err),
@@ -801,7 +801,7 @@ func (s *svc) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provi
 
 // RefreshLock refreshes an existing lock on the given reference
 func (s *svc) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
-	c, _, err := s.find(ctx, req.Ref)
+	c, _, err := s.findUnique(ctx, req.Ref)
 	if err != nil {
 		return &provider.RefreshLockResponse{
 			Status: status.NewStatusFromErrType(ctx, "RefreshLock ref="+req.Ref.String(), err),
@@ -821,7 +821,7 @@ func (s *svc) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest)
 
 // Unlock removes an existing lock from the given reference
 func (s *svc) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
-	c, _, err := s.find(ctx, req.Ref)
+	c, _, err := s.findUnique(ctx, req.Ref)
 	if err != nil {
 		return &provider.UnlockResponse{
 			Status: status.NewStatusFromErrType(ctx, "Unlock ref="+req.Ref.String(), err),
@@ -862,7 +862,7 @@ func (s *svc) ListContainerStream(_ *provider.ListContainerStreamRequest, _ gate
 
 // ListContainer lists the Resoure infos for a given resource by forwarding the request to the responsible provider.
 func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	c, _, ref, err := s.findAndUnwrap(ctx, req.Ref)
+	c, _, ref, err := s.findAndUnwrapUnique(ctx, req.Ref)
 	if err != nil {
 		// we have no provider -> not found
 		return &provider.ListContainerResponse{
@@ -887,7 +887,7 @@ func (s *svc) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequ
 func (s *svc) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
 	var c provider.ProviderAPIClient
 	var err error
-	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	c, _, req.Ref, err = s.findAndUnwrapUnique(ctx, req.Ref)
 	if err != nil {
 		return &provider.ListFileVersionsResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
@@ -900,7 +900,7 @@ func (s *svc) ListFileVersions(ctx context.Context, req *provider.ListFileVersio
 func (s *svc) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest) (*provider.RestoreFileVersionResponse, error) {
 	var c provider.ProviderAPIClient
 	var err error
-	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
+	c, _, req.Ref, err = s.findAndUnwrapUnique(ctx, req.Ref)
 	if err != nil {
 		return &provider.RestoreFileVersionResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
@@ -923,7 +923,7 @@ func (s *svc) ListRecycleStream(_ *provider.ListRecycleStreamRequest, _ gateway.
 
 // TODO use the ListRecycleRequest.Ref to only list the trash of a specific storage
 func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
-	c, _, ref, err := s.findAndUnwrap(ctx, req.Ref)
+	c, _, ref, err := s.findAndUnwrapUnique(ctx, req.Ref)
 	if err != nil {
 		return &provider.ListRecycleResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
@@ -939,14 +939,14 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 }
 
 func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
-	c, si, ref, err := s.findAndUnwrap(ctx, req.Ref)
+	c, si, ref, err := s.findAndUnwrapUnique(ctx, req.Ref)
 	if err != nil {
 		return &provider.RestoreRecycleItemResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
 		}, nil
 	}
 
-	_, di, rref, err := s.findAndUnwrap(ctx, req.RestoreRef)
+	_, di, rref, err := s.findAndUnwrapUnique(ctx, req.RestoreRef)
 	if err != nil {
 		return &provider.RestoreRecycleItemResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
@@ -973,7 +973,7 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 }
 
 func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
-	c, _, relativeReference, err := s.findAndUnwrap(ctx, req.Ref)
+	c, _, relativeReference, err := s.findAndUnwrapUnique(ctx, req.Ref)
 	if err != nil {
 		return &provider.PurgeRecycleResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
@@ -995,7 +995,7 @@ func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleReques
 }
 
 func (s *svc) GetQuota(ctx context.Context, req *gateway.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
-	c, _, relativeReference, err := s.findAndUnwrap(ctx, req.Ref)
+	c, _, relativeReference, err := s.findAndUnwrapUnique(ctx, req.Ref)
 	if err != nil {
 		return &provider.GetQuotaResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not find space for ref=%+v", req.Ref), err),
@@ -1014,20 +1014,10 @@ func (s *svc) GetQuota(ctx context.Context, req *gateway.GetQuotaRequest) (*prov
 	return res, nil
 }
 
-// find looks up the provider that is responsible for the given request
+// findUnique looks up the provider that is responsible for the given request
 // It will return a client that the caller can use to make the call, as well as the ProviderInfo. It:
 // - contains the provider path, which is the mount point of the provider
 // - may contain a list of storage spaces with their id and space path
-func (s *svc) find(ctx context.Context, ref *provider.Reference) (provider.ProviderAPIClient, *registry.ProviderInfo, error) {
-	p, err := s.findSpaces(ctx, ref)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	client, err := s.getStorageProviderClient(ctx, p[0])
-	return client, p[0], err
-}
-
 func (s *svc) findUnique(ctx context.Context, ref *provider.Reference) (provider.ProviderAPIClient, *registry.ProviderInfo, error) {
 	p, err := s.findSingleSpace(ctx, ref)
 	if err != nil {
@@ -1036,29 +1026,6 @@ func (s *svc) findUnique(ctx context.Context, ref *provider.Reference) (provider
 
 	client, err := s.getStorageProviderClient(ctx, p[0])
 	return client, p[0], err
-}
-
-// FIXME findAndUnwrap currently just returns the first provider ... which may not be what is needed.
-// for the ListRecycle call we need an exact match, for Stat and List we need to query all related providers
-func (s *svc) findAndUnwrap(ctx context.Context, ref *provider.Reference) (provider.ProviderAPIClient, *registry.ProviderInfo, *provider.Reference, error) {
-	c, p, err := s.find(ctx, ref)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	var (
-		root      *provider.ResourceId
-		mountPath string
-	)
-	for _, space := range decodeSpaces(p) {
-		mountPath = decodePath(space)
-		root = space.Root
-		break // TODO can there be more than one space for a path?
-	}
-
-	relativeReference := unwrap(ref, mountPath, root)
-
-	return c, p, relativeReference, nil
 }
 
 func (s *svc) findAndUnwrapUnique(ctx context.Context, ref *provider.Reference) (provider.ProviderAPIClient, *registry.ProviderInfo, *provider.Reference, error) {
@@ -1103,39 +1070,6 @@ func (s *svc) getStorageRegistryClient(_ context.Context, address string) (regis
 		c:     c,
 		cache: s.providerCache,
 	}, nil
-}
-
-func (s *svc) findSpaces(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
-	switch {
-	case ref == nil:
-		return nil, errtypes.BadRequest("missing reference")
-	case ref.ResourceId != nil:
-		if ref.ResourceId.OpaqueId == "" {
-			ref.ResourceId.OpaqueId = ref.ResourceId.SpaceId
-		}
-	case ref.Path != "": //  TODO implement a mount path cache in the registry?
-		// nothing to do here either
-	default:
-		return nil, errtypes.BadRequest("invalid reference, at least path or id must be set")
-	}
-
-	filters := map[string]string{
-		"mask": "root", // we only need the root for routing
-		"path": ref.Path,
-	}
-	if ref.ResourceId != nil {
-		filters["storage_id"] = ref.ResourceId.StorageId
-		filters["space_id"] = ref.ResourceId.SpaceId
-		filters["opaque_id"] = ref.ResourceId.OpaqueId
-	}
-
-	listReq := &registry.ListStorageProvidersRequest{
-		Opaque: &typesv1beta1.Opaque{Map: make(map[string]*typesv1beta1.OpaqueEntry)},
-	}
-
-	sdk.EncodeOpaqueMap(listReq.Opaque, filters)
-
-	return s.findProvider(ctx, listReq)
 }
 
 func (s *svc) findSingleSpace(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
