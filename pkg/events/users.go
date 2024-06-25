@@ -89,7 +89,7 @@ func (PersonalDataExtracted) Unmarshal(v []byte) (interface{}, error) {
 	return e, err
 }
 
-// BackchannelLogout is emitted when the callback revived from the identity provider
+// BackchannelLogout is emitted when the callback from the identity provider is received
 type BackchannelLogout struct {
 	Executant *user.UserId
 	SessionId string
