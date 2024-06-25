@@ -106,7 +106,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 		w.WriteHeader(http.StatusPreconditionFailed)
 		return
 	}
-	if err := ValidateName(path.Base(meta["filename"]), s.nameValidators); err != nil {
+	if err := ValidateName(filename(meta["filename"]), s.nameValidators); err != nil {
 		w.WriteHeader(http.StatusPreconditionFailed)
 		return
 	}

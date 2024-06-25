@@ -113,10 +113,9 @@ func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
 	defer span.End()
 
 	fn := path.Join(ns, r.URL.Path)
-
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
 
-	if err := ValidateName(filepath.Base(fn), s.nameValidators); err != nil {
+	if err := ValidateName(filename(r.URL.Path), s.nameValidators); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		b, err := errors.Marshal(http.StatusBadRequest, err.Error(), "")
 		errors.HandleWebdavError(&sublog, w, b, err)
@@ -412,7 +411,7 @@ func (s *svc) handleSpacesPut(w http.ResponseWriter, r *http.Request, spaceID st
 		return
 	}
 
-	if err := ValidateName(filepath.Base(ref.Path), s.nameValidators); err != nil {
+	if err := ValidateName(filename(ref.Path), s.nameValidators); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		b, err := errors.Marshal(http.StatusBadRequest, err.Error(), "")
 		errors.HandleWebdavError(&sublog, w, b, err)
