@@ -134,8 +134,8 @@ func (t *Tree) HandleFileDelete(path string) error {
 		Ref: &provider.Reference{
 			ResourceId: &provider.ResourceId{
 				StorageId: t.options.MountID,
-				SpaceId:   string(parentSpaceID),
-				OpaqueId:  string(parentID),
+				SpaceId:   parentSpaceID,
+				OpaqueId:  parentID,
 			},
 			Path: filepath.Base(path),
 		},
@@ -250,7 +250,7 @@ func (t *Tree) assimilate(item scanItem) error {
 			if ok && previousPath != item.Path {
 				if fi.IsDir() {
 					// if it was moved and it is a directory we need to propagate the move
-					go t.WarmupIDCache(item.Path, false)
+					go func() { _ = t.WarmupIDCache(item.Path, false) }()
 				}
 
 				parentID, err := t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.ParentidAttr)
