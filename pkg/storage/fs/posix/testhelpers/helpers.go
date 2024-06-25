@@ -100,6 +100,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		"treesize_accounting":        true,
 		"personalspacepath_template": "users/{{.User.Username}}",
 		"generalspacepath_template":  "projects/{{.SpaceId}}",
+		"watch_fs":                   true,
 	}
 	// make it possible to override single config values
 	for k, v := range config {
