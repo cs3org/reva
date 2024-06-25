@@ -148,6 +148,10 @@ func New(lu node.PathLookup, bs Blobstore, um usermapper.Mapper, o *options.Opti
 }
 
 func (t *Tree) PublishEvent(ev interface{}) {
+	if t.es == nil {
+		return
+	}
+
 	if err := events.Publish(context.Background(), t.es, ev); err != nil {
 		t.log.Error().Err(err).Interface("event", ev).Msg("failed to publish event")
 	}
