@@ -93,7 +93,7 @@ func (b XattrsBackend) All(ctx context.Context, filePath string) (attribs map[st
 	attribs = make(map[string][]byte, len(attrNames))
 	for _, name := range attrNames {
 		var val []byte
-		if val, xerr = xattr.Get(filePath, name); xerr != nil {
+		if val, xerr = xattr.Get(filePath, name); xerr != nil && !IsAttrUnset(xerr) {
 			xerrs++
 		} else {
 			attribs[name] = val
