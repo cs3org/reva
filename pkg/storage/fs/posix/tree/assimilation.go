@@ -210,8 +210,7 @@ func (t *Tree) assimilate(item scanItem) error {
 		// already assimilated?
 		id, err := t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.IDAttr)
 		if err == nil {
-			_ = t.lookup.(*lookup.Lookup).CacheID(context.Background(), string(spaceID), string(id), item.Path)
-			return nil
+			return t.lookup.(*lookup.Lookup).CacheID(context.Background(), string(spaceID), string(id), item.Path)
 		}
 	}
 
