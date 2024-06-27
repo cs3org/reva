@@ -93,33 +93,39 @@ func (s *Selector[T]) Next(opts ...Option) (T, error) {
 		opt(&options)
 	}
 
-	address := s.id
+	target := s.id
 	if options.registry != nil {
 		services, err := options.registry.GetService(s.id)
 		if err != nil {
 			return *new(T), fmt.Errorf("%s: %w", s.id, err)
 		}
 
-		nodeAddress, err := registry.GetNodeAddress(services)
+		transport, nodeAddress, err := registry.GetNodeAddress(services)
 		if err != nil {
 			return *new(T), fmt.Errorf("%s: %w", s.id, err)
 		}
-
-		address = nodeAddress
+		switch transport {
+		case "dns":
+			target = "dns:///" + nodeAddress
+		case "unix":
+			target = transport + ":" + nodeAddress
+		default:
+			target = nodeAddress
+		}
 	}
 
-	existingClient, ok := s.clientMap.Load(address)
+	existingClient, ok := s.clientMap.Load(target)
 	if ok {
 		return existingClient.(T), nil
 	}
 
-	conn, err := NewConn(address, allOpts...)
+	conn, err := NewConn(target, allOpts...)
 	if err != nil {
-		return *new(T), errors.Wrap(err, fmt.Sprintf("could not create connection for %s to %s", s.id, address))
+		return *new(T), errors.Wrap(err, fmt.Sprintf("could not create connection for %s to %s", s.id, target))
 	}
 
 	newClient := s.clientFactory(conn)
-	s.clientMap.Store(address, newClient)
+	s.clientMap.Store(target, newClient)
 
 	return newClient, nil
 }

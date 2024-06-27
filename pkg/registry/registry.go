@@ -44,12 +44,12 @@ func GetRegistry() mRegistry.Registry {
 }
 
 // GetNodeAddress returns a random address from the service nodes
-func GetNodeAddress(services []*mRegistry.Service) (string, error) {
+func GetNodeAddress(services []*mRegistry.Service) (string, string, error) {
 	next := selector.Random(services)
 	node, err := next()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return node.Address, nil
+	return node.Metadata["transport"], node.Address, nil
 }
