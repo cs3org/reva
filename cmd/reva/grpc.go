@@ -56,14 +56,14 @@ func getClient() (gateway.GatewayAPIClient, error) {
 
 func getConn() (*grpc.ClientConn, error) {
 	if insecure {
-		return grpc.Dial(conf.Host, grpc.WithTransportCredentials(ins.NewCredentials()))
+		return grpc.NewClient(conf.Host, grpc.WithTransportCredentials(ins.NewCredentials()))
 	}
 
 	// TODO(labkode): if in the future we want client-side certificate validation,
 	// we need to load the client cert here
 	tlsconf := &tls.Config{InsecureSkipVerify: skipverify}
 	creds := credentials.NewTLS(tlsconf)
-	return grpc.Dial(conf.Host, grpc.WithTransportCredentials(creds))
+	return grpc.NewClient(conf.Host, grpc.WithTransportCredentials(creds))
 }
 
 func formatError(status *rpc.Status) error {

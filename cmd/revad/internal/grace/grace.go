@@ -189,6 +189,9 @@ func (w *Watcher) WritePID() error {
 }
 
 func newListener(network, addr string) (net.Listener, error) {
+	if network == "dns" {
+		network = "tcp"
+	}
 	return net.Listen(network, addr)
 }
 
