@@ -78,7 +78,7 @@ func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 	var lu *lookup.Lookup
 	switch o.MetadataBackend {
 	case "xattrs":
-		lu = lookup.New(metadata.XattrsBackend{}, um, o)
+		lu = lookup.New(metadata.NewXattrsBackend(o.Root, o.FileMetadataCache), um, o)
 	case "messagepack":
 		lu = lookup.New(metadata.NewMessagePackBackend(o.Root, o.FileMetadataCache), um, o)
 	default:
