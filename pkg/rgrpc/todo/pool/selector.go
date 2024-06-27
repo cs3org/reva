@@ -20,6 +20,7 @@ package pool
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	appProvider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
@@ -94,22 +95,22 @@ func (s *Selector[T]) Next(opts ...Option) (T, error) {
 	}
 
 	target := s.id
-	if options.registry != nil {
-		services, err := options.registry.GetService(s.id)
-		if err != nil {
-			return *new(T), fmt.Errorf("%s: %w", s.id, err)
-		}
+	prefix := strings.SplitN(s.id, ":", 2)[0]
+	switch prefix {
+	case "dns", "unix":
+		// use target as is
+	default:
+		// use service registry to look up address
+		if options.registry != nil {
+			services, err := options.registry.GetService(s.id)
+			if err != nil {
+				return *new(T), fmt.Errorf("%s: %w", s.id, err)
+			}
 
-		transport, nodeAddress, err := registry.GetNodeAddress(services)
-		if err != nil {
-			return *new(T), fmt.Errorf("%s: %w", s.id, err)
-		}
-		switch transport {
-		case "dns":
-			target = "dns:///" + nodeAddress
-		case "unix":
-			target = transport + ":" + nodeAddress
-		default:
+			nodeAddress, err := registry.GetNodeAddress(services)
+			if err != nil {
+				return *new(T), fmt.Errorf("%s: %w", s.id, err)
+			}
 			target = nodeAddress
 		}
 	}
