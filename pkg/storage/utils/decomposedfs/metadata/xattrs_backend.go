@@ -213,10 +213,22 @@ func (b XattrsBackend) Remove(ctx context.Context, path string, key string, acqu
 func (XattrsBackend) IsMetaFile(path string) bool { return strings.HasSuffix(path, ".meta.lock") }
 
 // Purge purges the data of a given path
-func (XattrsBackend) Purge(path string) error { return nil }
+func (b XattrsBackend) Purge(path string) error {
+	return b.metaCache.RemoveMetadata(b.cacheKey(path))
+}
 
 // Rename moves the data for a given path to a new path
-func (XattrsBackend) Rename(oldPath, newPath string) error { return nil }
+func (b XattrsBackend) Rename(oldPath, newPath string) error {
+	data := map[string][]byte{}
+	err := b.metaCache.PullFromCache(b.cacheKey(oldPath), &data)
+	if err == nil {
+		err = b.metaCache.PushToCache(b.cacheKey(newPath), data)
+		if err != nil {
+			return err
+		}
+	}
+	return b.metaCache.RemoveMetadata(b.cacheKey(oldPath))
+}
 
 // MetadataPath returns the path of the file holding the metadata for the given path
 func (XattrsBackend) MetadataPath(path string) string { return path }

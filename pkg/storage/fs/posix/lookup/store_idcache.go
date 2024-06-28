@@ -47,6 +47,34 @@ func NewStoreIDCache(o *options.Options) *StoreIDCache {
 	}
 }
 
+// Delete removes an entry from the cache
+func (c *StoreIDCache) Delete(_ context.Context, spaceID, nodeID string) error {
+	v, err := c.cache.Read(cacheKey(spaceID, nodeID))
+	if err == nil {
+		err := c.cache.Delete(reverseCacheKey(string(v[0].Value)))
+		if err != nil {
+			return err
+		}
+	}
+
+	return c.cache.Delete(cacheKey(spaceID, nodeID))
+}
+
+// DeleteByPath removes an entry from the cache
+func (c *StoreIDCache) DeleteByPath(ctx context.Context, path string) error {
+	spaceID, nodeID, ok := c.GetByPath(ctx, path)
+	if !ok {
+		return nil
+	}
+
+	err := c.cache.Delete(reverseCacheKey(string(path)))
+	if err != nil {
+		return err
+	}
+
+	return c.cache.Delete(cacheKey(spaceID, nodeID))
+}
+
 // Add adds a new entry to the cache
 func (c *StoreIDCache) Set(_ context.Context, spaceID, nodeID, val string) error {
 	err := c.cache.Write(&microstore.Record{
@@ -72,8 +100,8 @@ func (c *StoreIDCache) Get(_ context.Context, spaceID, nodeID string) (string, b
 	return string(records[0].Value), true
 }
 
-// GetReverse returns the key for a given value
-func (c *StoreIDCache) GetReverse(_ context.Context, val string) (string, string, bool) {
+// GetByPath returns the key for a given value
+func (c *StoreIDCache) GetByPath(_ context.Context, val string) (string, string, bool) {
 	records, err := c.cache.Read(reverseCacheKey(val))
 	if err != nil || len(records) == 0 {
 		return "", "", false

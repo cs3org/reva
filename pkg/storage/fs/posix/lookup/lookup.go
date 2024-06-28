@@ -55,8 +55,12 @@ func init() {
 // IDCache is a cache for node ids
 type IDCache interface {
 	Get(ctx context.Context, spaceID, nodeID string) (string, bool)
-	GetReverse(ctx context.Context, path string) (string, string, bool)
+	GetByPath(ctx context.Context, path string) (string, string, bool)
+
 	Set(ctx context.Context, spaceID, nodeID, val string) error
+
+	Delete(ctx context.Context, spaceID, nodeID string) error
+	DeleteByPath(ctx context.Context, path string) error
 }
 
 // Lookup implements transformations from filepath to node and back
@@ -92,7 +96,7 @@ func (lu *Lookup) GetCachedID(ctx context.Context, spaceID, nodeID string) (stri
 
 // IDsForPath returns the space and opaque id for the given path
 func (lu *Lookup) IDsForPath(ctx context.Context, path string) (string, string, error) {
-	spaceID, nodeID, ok := lu.IDCache.GetReverse(ctx, path)
+	spaceID, nodeID, ok := lu.IDCache.GetByPath(ctx, path)
 	if !ok {
 		return "", "", fmt.Errorf("path %s not found in cache", path)
 	}
