@@ -61,6 +61,8 @@ type IDCache interface {
 
 	Delete(ctx context.Context, spaceID, nodeID string) error
 	DeleteByPath(ctx context.Context, path string) error
+
+	DeletePath(ctx context.Context, path string) error
 }
 
 // Lookup implements transformations from filepath to node and back
@@ -84,12 +86,12 @@ func New(b metadata.Backend, um usermapper.Mapper, o *options.Options) *Lookup {
 	return lu
 }
 
-// CacheID caches the id for the given space and node id
+// CacheID caches the path for the given space and node id
 func (lu *Lookup) CacheID(ctx context.Context, spaceID, nodeID, val string) error {
 	return lu.IDCache.Set(ctx, spaceID, nodeID, val)
 }
 
-// GetCachedID returns the cached id for the given space and node id
+// GetCachedID returns the cached path for the given space and node id
 func (lu *Lookup) GetCachedID(ctx context.Context, spaceID, nodeID string) (string, bool) {
 	return lu.IDCache.Get(ctx, spaceID, nodeID)
 }

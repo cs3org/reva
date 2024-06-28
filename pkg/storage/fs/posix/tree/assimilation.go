@@ -118,12 +118,12 @@ func (t *Tree) Scan(path string, forceRescan bool) error {
 }
 
 func (t *Tree) HandleFileDelete(path string) error {
-	spaceID, nodeID, err := t.lookup.(*lookup.Lookup).IDsForPath(context.Background(), path)
-	if err != nil {
-		return fmt.Errorf("could not find id for path %s", path)
-	}
+	// purge metadata
+	_ = t.lookup.(*lookup.Lookup).IDCache.DeleteByPath(context.Background(), path)
+	_ = t.lookup.MetadataBackend().Purge(path)
 
-	owner, parentSpaceID, parentID, err := t.getOwnerAndIDs(filepath.Dir(path))
+	// send event
+	owner, spaceID, nodeID, parentID, err := t.getOwnerAndIDs(filepath.Dir(path))
 	if err != nil {
 		return err
 	}
@@ -134,7 +134,7 @@ func (t *Tree) HandleFileDelete(path string) error {
 		Ref: &provider.Reference{
 			ResourceId: &provider.ResourceId{
 				StorageId: t.options.MountID,
-				SpaceId:   parentSpaceID,
+				SpaceId:   spaceID,
 				OpaqueId:  parentID,
 			},
 			Path: filepath.Base(path),
@@ -150,28 +150,37 @@ func (t *Tree) HandleFileDelete(path string) error {
 	return nil
 }
 
-func (t *Tree) getOwnerAndIDs(path string) (*userv1beta1.UserId, string, string, error) {
+func (t *Tree) getOwnerAndIDs(path string) (*userv1beta1.UserId, string, string, string, error) {
+	lu := t.lookup.(*lookup.Lookup)
+
+	spaceID, nodeID, err := lu.IDsForPath(context.Background(), path)
+	if err != nil {
+		return nil, "", "", "", err
+	}
+
 	attrs, err := t.lookup.MetadataBackend().All(context.Background(), path)
 	if err != nil {
-		return nil, "", "", err
+		return nil, "", "", "", err
 	}
 
-	spaceID, ok := attrs[prefixes.SpaceIDAttr]
+	parentID := string(attrs[prefixes.ParentidAttr])
+
+	spacePath, ok := lu.GetCachedID(context.Background(), spaceID, spaceID)
 	if !ok {
-		return nil, "", "", fmt.Errorf("could not find space id for path %s", path)
+		return nil, "", "", "", fmt.Errorf("could not find space root for path %s", path)
 	}
 
-	id, ok := attrs[prefixes.IDAttr]
-	if !ok {
-		return nil, "", "", fmt.Errorf("could not find id for path %s", path)
+	spaceAttrs, err := t.lookup.MetadataBackend().All(context.Background(), spacePath)
+	if err != nil {
+		return nil, "", "", "", err
 	}
 
 	owner := &userv1beta1.UserId{
-		Idp:      string(attrs[prefixes.OwnerIDPAttr]),
-		OpaqueId: string(attrs[prefixes.OwnerIDAttr]),
+		Idp:      string(spaceAttrs[prefixes.OwnerIDPAttr]),
+		OpaqueId: string(spaceAttrs[prefixes.OwnerIDAttr]),
 	}
 
-	return owner, string(id), string(spaceID), nil
+	return owner, string(nodeID), string(spaceID), parentID, nil
 }
 
 func (t *Tree) assimilate(item scanItem) error {
@@ -247,6 +256,10 @@ func (t *Tree) assimilate(item scanItem) error {
 
 			// was it moved?
 			if ok && previousPath != item.Path {
+				// purge original metadata. Only delete the path entry using DeletePath(reverse lookup), not the whole entry pair.
+				_ = t.lookup.(*lookup.Lookup).IDCache.DeletePath(context.Background(), previousPath)
+				_ = t.lookup.MetadataBackend().Purge(previousPath)
+
 				if fi.IsDir() {
 					// if it was moved and it is a directory we need to propagate the move
 					go func() { _ = t.WarmupIDCache(item.Path, false) }()

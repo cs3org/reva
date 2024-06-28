@@ -75,6 +75,11 @@ func (c *StoreIDCache) DeleteByPath(ctx context.Context, path string) error {
 	return c.cache.Delete(cacheKey(spaceID, nodeID))
 }
 
+// DeletePath removes only the path entry from the cache
+func (c *StoreIDCache) DeletePath(ctx context.Context, path string) error {
+	return c.cache.Delete(reverseCacheKey(path))
+}
+
 // Add adds a new entry to the cache
 func (c *StoreIDCache) Set(_ context.Context, spaceID, nodeID, val string) error {
 	err := c.cache.Write(&microstore.Record{
