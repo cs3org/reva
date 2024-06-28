@@ -44,8 +44,15 @@ import (
 	tx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/registry"
 	"github.com/pkg/errors"
+	"github.com/sercand/kuberesolver/v5"
 	"google.golang.org/grpc"
 )
+
+func init() {
+	// grpc go resolver.Register must only be called during initialization time (i.e. in
+	// an init() function), and is not thread-safe.
+	kuberesolver.RegisterInCluster()
+}
 
 type Selectable[T any] interface {
 	Next(opts ...Option) (T, error)
@@ -97,7 +104,7 @@ func (s *Selector[T]) Next(opts ...Option) (T, error) {
 	target := s.id
 	prefix := strings.SplitN(s.id, ":", 2)[0]
 	switch prefix {
-	case "dns", "unix":
+	case "dns", "unix", "kubernetes":
 		// use target as is
 	default:
 		// use service registry to look up address
