@@ -71,6 +71,7 @@ require (
 	github.com/rs/cors v1.10.1
 	github.com/rs/zerolog v1.32.0
 	github.com/segmentio/kafka-go v0.4.47
+	github.com/sercand/kuberesolver/v5 v5.1.1
 	github.com/sethvargo/go-password v0.2.0
 	github.com/shamaton/msgpack/v2 v2.1.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
