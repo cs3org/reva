@@ -202,7 +202,7 @@ func (b XattrsBackend) Remove(ctx context.Context, path string, key string, acqu
 		return err
 	}
 
-	attribs, err := b.All(ctx, path)
+	attribs, err := b.getAll(ctx, path, true)
 	if err != nil {
 		return err
 	}
