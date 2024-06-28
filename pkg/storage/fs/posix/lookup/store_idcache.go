@@ -67,7 +67,7 @@ func (c *StoreIDCache) DeleteByPath(ctx context.Context, path string) error {
 		return nil
 	}
 
-	err := c.cache.Delete(reverseCacheKey(string(path)))
+	err := c.cache.Delete(reverseCacheKey(path))
 	if err != nil {
 		return err
 	}

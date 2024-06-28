@@ -16,6 +16,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/events/stream"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/storage/cache"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/aspects"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
@@ -138,7 +139,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		})
 		Expect(err).ToNot(HaveOccurred())
 
-		lu = lookup.New(metadata.XattrsBackend{}, o)
+		lu = lookup.New(metadata.NewXattrsBackend(o.Root, cache.Config{}), o)
 		pmock = &mocks.PermissionsChecker{}
 
 		cs3permissionsclient = &mocks.CS3PermissionsClient{}
