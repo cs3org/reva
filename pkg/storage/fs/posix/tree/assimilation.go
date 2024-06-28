@@ -180,7 +180,7 @@ func (t *Tree) getOwnerAndIDs(path string) (*userv1beta1.UserId, string, string,
 		OpaqueId: string(spaceAttrs[prefixes.OwnerIDAttr]),
 	}
 
-	return owner, string(nodeID), string(spaceID), parentID, nil
+	return owner, nodeID, spaceID, parentID, nil
 }
 
 func (t *Tree) assimilate(item scanItem) error {
