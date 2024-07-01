@@ -377,7 +377,7 @@ func (s *svc) denyGrant(ctx context.Context, id *provider.ResourceId, g *provide
 		// TODO add creator
 	}
 
-	c, _, err := s.find(ctx, ref)
+	c, _, err := s.findUnique(ctx, ref)
 	if err != nil {
 		appctx.GetLogger(ctx).
 			Err(err).
@@ -413,7 +413,7 @@ func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider
 		Opaque: opaque,
 	}
 
-	c, _, err := s.find(ctx, ref)
+	c, _, err := s.findUnique(ctx, ref)
 	if err != nil {
 		appctx.GetLogger(ctx).
 			Err(err).
@@ -443,7 +443,7 @@ func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, grant *p
 		Grant:  grant,
 	}
 
-	c, _, err := s.find(ctx, ref)
+	c, _, err := s.findUnique(ctx, ref)
 	if err != nil {
 		appctx.GetLogger(ctx).
 			Err(err).
@@ -481,7 +481,7 @@ func (s *svc) removeGrant(ctx context.Context, id *provider.ResourceId, g *provi
 		Opaque: opaque,
 	}
 
-	c, _, err := s.find(ctx, ref)
+	c, _, err := s.findUnique(ctx, ref)
 	if err != nil {
 		appctx.GetLogger(ctx).
 			Err(err).
@@ -513,7 +513,7 @@ func (s *svc) listGrants(ctx context.Context, id *provider.ResourceId) (*provide
 		Ref: ref,
 	}
 
-	c, _, err := s.find(ctx, ref)
+	c, _, err := s.findUnique(ctx, ref)
 	if err != nil {
 		appctx.GetLogger(ctx).
 			Err(err).
