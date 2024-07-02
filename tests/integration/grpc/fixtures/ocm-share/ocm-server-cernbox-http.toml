@@ -33,4 +33,8 @@ treetime_accounting = true
 treesize_accounting = true
 permissionssvc = "{{permissions_address}}"
 
+[http.services.dataprovider.drivers.ocis.filemetadatacache]
+cache_store = "noop"
+
+
 [http.services.ocdav]
