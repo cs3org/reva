@@ -43,6 +43,9 @@ treetime_accounting = true
 treesize_accounting = true
 permissionssvc = "{{permissions_address}}"
 
+[grpc.services.storageprovider.drivers.ocis.filemetadatacache]
+cache_store = "noop"
+
 [grpc.services.authregistry]
 driver = "static"
 
