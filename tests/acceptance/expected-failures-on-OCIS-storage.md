@@ -259,5 +259,21 @@ _The below features have been added after I last categorized them. AFAICT they a
 - [coreApiWebdavMove1/moveFolder.feature:254](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove1/moveFolder.feature#L254)
 - [coreApiWebdavMove1/moveFolder.feature:259](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove1/moveFolder.feature#L259)
 
+### [expected failures due to introduction of `..` mask](https://github.com/cs3org/reva/pull/4740)
+
+- [coreApiWebdavProperties/createFileFolder.feature:206](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/createFileFolder.feature#L206)
+- [coreApiWebdavProperties/createFileFolder.feature:209](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/createFileFolder.feature#L209)
+- [coreApiWebdavProperties/createFileFolder.feature:210](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/createFileFolder.feature#L210)
+- [coreApiWebdavProperties/createFileFolder.feature:212](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/createFileFolder.feature#L212)
+- [coreApiWebdavProperties/createFileFolder.feature:213](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/createFileFolder.feature#L213)
+- [coreApiWebdavProperties/createFileFolder.feature:218](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/createFileFolder.feature#L218)
+- [coreApiWebdavProperties/createFileFolder.feature:220](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/createFileFolder.feature#L220)
+- [coreApiWebdavProperties/createFileFolder.feature:221](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/createFileFolder.feature#L221)
+- [coreApiWebdavProperties/createFileFolder.feature:230](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/createFileFolder.feature#L230)
+- [coreApiWebdavProperties/createFileFolder.feature:233](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/createFileFolder.feature#L233)
+- [coreApiWebdavProperties/createFileFolder.feature:234](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/createFileFolder.feature#L234)
+- [coreApiWebdavProperties/createFileFolder.feature:236](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/createFileFolder.feature#L236)
+- [coreApiWebdavProperties/createFileFolder.feature:237](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/createFileFolder.feature#L237)
+
 - Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
