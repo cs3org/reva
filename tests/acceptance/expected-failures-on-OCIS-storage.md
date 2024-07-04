@@ -267,5 +267,10 @@ _The below features have been added after I last categorized them. AFAICT they a
 - [coreApiWebdavProperties/createFileFolder.feature:236](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/createFileFolder.feature#L236)
 - [coreApiWebdavProperties/createFileFolder.feature:237](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/createFileFolder.feature#L237)
 
+### [Fix Content-Disposition header for download requests](https://github.com/cs3org/reva/pull/4748)
+
+- [coreApiVersions/fileVersions.feature:158](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L158)
+- [coreApiVersions/fileVersions.feature:176](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L176)
+
 - Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
