@@ -132,7 +132,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 			if r.Header.Get(net.HeaderDepth) == "" {
 				w.WriteHeader(http.StatusMethodNotAllowed)
-				b, err := errors.Marshal(http.StatusMethodNotAllowed, "Listing members of this collection is disabled", "")
+				b, err := errors.Marshal(http.StatusMethodNotAllowed, "Listing members of this collection is disabled", "", "ERR_LISTING_MEMBERS_NOT_ALLOWED")
 				if err != nil {
 					log.Error().Msgf("error marshaling xml response: %s", b)
 					w.WriteHeader(http.StatusInternalServerError)
@@ -312,11 +312,11 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			case res.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
 				w.WriteHeader(http.StatusUnauthorized)
 				if hasValidBasicAuthHeader {
-					b, err := errors.Marshal(http.StatusUnauthorized, "Username or password was incorrect", "")
+					b, err := errors.Marshal(http.StatusUnauthorized, "Username or password was incorrect", "", "ERR_INVALID_CREDENTIALS")
 					errors.HandleWebdavError(log, w, b, err)
 					return
 				}
-				b, err := errors.Marshal(http.StatusUnauthorized, "No 'Authorization: Basic' header found", "")
+				b, err := errors.Marshal(http.StatusUnauthorized, "No 'Authorization: Basic' header found", "", "ERR_MISSING_BASIC_AUTH")
 				errors.HandleWebdavError(log, w, b, err)
 				return
 			case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
@@ -358,7 +358,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				if !userExists {
 					w.Header().Add(WwwAuthenticate, fmt.Sprintf("Bearer realm=\"%s\", charset=\"UTF-8\"", r.Host))
 					w.WriteHeader(http.StatusUnauthorized)
-					b, err := errors.Marshal(http.StatusUnauthorized, "No 'Authorization: Bearer' header found", "")
+					b, err := errors.Marshal(http.StatusUnauthorized, "No 'Authorization: Bearer' header found", "", "ERR_MISSING_BEARER_AUTH")
 					errors.HandleWebdavError(log, w, b, err)
 					return
 				}
@@ -388,7 +388,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 		default:
 			w.WriteHeader(http.StatusNotFound)
-			b, err := errors.Marshal(http.StatusNotFound, "File not found in root", "")
+			b, err := errors.Marshal(http.StatusNotFound, "File not found in root", "", "ERR_FILE_NOT_FOUND")
 			errors.HandleWebdavError(log, w, b, err)
 		}
 	})
