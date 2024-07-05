@@ -493,7 +493,7 @@ var _ = Describe("ocdav", func() {
 
 					handler.Handler().ServeHTTP(rr, req)
 					Expect(rr).To(HaveHTTPStatus(http.StatusNotFound))
-					Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception><s:message>Resource not found</s:message></d:error>"), "Body must have a not found sabredav exception")
+					Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception><s:message>Resource not found</s:message><s:errorcode></s:errorcode></d:error>"), "Body must have a not found sabredav exception")
 
 				})
 			})
@@ -1098,7 +1098,7 @@ var _ = Describe("ocdav", func() {
 
 			handler.Handler().ServeHTTP(rr, req)
 			Expect(rr).To(HaveHTTPStatus(http.StatusMethodNotAllowed))
-			Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\MethodNotAllowed</s:exception><s:message>deleting spaces via dav is not allowed</s:message></d:error>"), "Body must have a sabredav exception")
+			Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\MethodNotAllowed</s:exception><s:message>deleting spaces via dav is not allowed</s:message><s:errorcode></s:errorcode></d:error>"), "Body must have a sabredav exception")
 		})
 		It("with invalid if header return bad request status", func() {
 			rr := httptest.NewRecorder()
@@ -1121,7 +1121,7 @@ var _ = Describe("ocdav", func() {
 
 				handler.Handler().ServeHTTP(rr, req)
 				Expect(rr).To(HaveHTTPStatus(http.StatusUnsupportedMediaType))
-				Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\UnsupportedMediaType</s:exception><s:message>body must be empty</s:message></d:error>"), "Body must have a sabredav exception")
+				Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\UnsupportedMediaType</s:exception><s:message>body must be empty</s:message><s:errorcode></s:errorcode></d:error>"), "Body must have a sabredav exception")
 			},
 			Entry("MOVE", "MOVE", "/webdav/source"),
 			Entry("COPY", "COPY", "/webdav/source"),
@@ -1220,7 +1220,7 @@ var _ = Describe("ocdav", func() {
 				handler.Handler().ServeHTTP(rr, req)
 				Expect(rr).To(HaveHTTPStatus(expectedStatus))
 				if expectedStatus == http.StatusInternalServerError {
-					Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception></s:exception><s:message>unexpected io error</s:message></d:error>"), "Body must have a sabredav exception")
+					Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception></s:exception><s:message>unexpected io error</s:message><s:errorcode></s:errorcode></d:error>"), "Body must have a sabredav exception")
 				} else {
 					Expect(rr).To(HaveHTTPBody(""), "Body must be empty")
 				}
@@ -1262,7 +1262,7 @@ var _ = Describe("ocdav", func() {
 				handler.Handler().ServeHTTP(rr, req)
 				Expect(rr).To(HaveHTTPStatus(expectedStatus))
 				if expectedStatus == http.StatusInternalServerError {
-					Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception></s:exception><s:message>unexpected io error</s:message></d:error>"), "Body must have a sabredav exception")
+					Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception></s:exception><s:message>unexpected io error</s:message><s:errorcode></s:errorcode></d:error>"), "Body must have a sabredav exception")
 				} else {
 					Expect(rr).To(HaveHTTPBody(""), "Body must be empty")
 				}
@@ -1306,7 +1306,7 @@ var _ = Describe("ocdav", func() {
 				handler.Handler().ServeHTTP(rr, req)
 				Expect(rr).To(HaveHTTPStatus(expectedStatus))
 				if expectedStatus == http.StatusInternalServerError {
-					Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception></s:exception><s:message>unexpected io error</s:message></d:error>"), "Body must have a sabredav exception")
+					Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception></s:exception><s:message>unexpected io error</s:message><s:errorcode></s:errorcode></d:error>"), "Body must have a sabredav exception")
 				} else {
 					Expect(rr).To(HaveHTTPBody(""), "Body must be empty")
 				}
@@ -1350,7 +1350,7 @@ var _ = Describe("ocdav", func() {
 				handler.Handler().ServeHTTP(rr, req)
 				Expect(rr).To(HaveHTTPStatus(expectedStatus))
 				if expectedStatus == http.StatusInternalServerError {
-					Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception></s:exception><s:message>unexpected io error</s:message></d:error>"), "Body must have a sabredav exception")
+					Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception></s:exception><s:message>unexpected io error</s:message><s:errorcode></s:errorcode></d:error>"), "Body must have a sabredav exception")
 				} else {
 					Expect(rr).To(HaveHTTPBody(""), "Body must be empty")
 				}
@@ -1482,7 +1482,7 @@ var _ = Describe("ocdav", func() {
 				handler.Handler().ServeHTTP(rr, req)
 				Expect(rr).To(HaveHTTPStatus(expectedStatus))
 				if expectedStatus == http.StatusNotFound {
-					Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception><s:message>Resource not found</s:message></d:error>"), "Body must have a not found sabredav exception")
+					Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception><s:message>Resource not found</s:message><s:errorcode></s:errorcode></d:error>"), "Body must have a not found sabredav exception")
 				} else {
 					Expect(rr).To(HaveHTTPBody(""), "Body must be empty")
 				}
@@ -1527,7 +1527,7 @@ var _ = Describe("ocdav", func() {
 				handler.Handler().ServeHTTP(rr, req)
 				Expect(rr).To(HaveHTTPStatus(expectedStatus))
 				if expectedStatus == http.StatusNotFound {
-					Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception><s:message>Resource not found</s:message></d:error>"), "Body must have a not found sabredav exception")
+					Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception><s:message>Resource not found</s:message><s:errorcode></s:errorcode></d:error>"), "Body must have a not found sabredav exception")
 				} else {
 					Expect(rr).To(HaveHTTPBody(""), "Body must be empty")
 				}
@@ -1594,13 +1594,13 @@ var _ = Describe("ocdav", func() {
 				} else {
 					if userHasAccess {
 						if locked {
-							Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\Locked</s:exception><s:message></s:message></d:error>"), "Body must have a locked sabredav exception")
+							Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\Locked</s:exception><s:message></s:message><s:errorcode></s:errorcode></d:error>"), "Body must have a locked sabredav exception")
 							Expect(rr).To(HaveHTTPHeaderWithValue("Lock-Token", "<somelockid>"))
 						} else {
-							Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\Forbidden</s:exception><s:message></s:message></d:error>"), "Body must have a forbidden sabredav exception")
+							Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\Forbidden</s:exception><s:message></s:message><s:errorcode></s:errorcode></d:error>"), "Body must have a forbidden sabredav exception")
 						}
 					} else {
-						Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception><s:message>Resource not found</s:message></d:error>"), "Body must have a not found sabredav exception")
+						Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception><s:message>Resource not found</s:message><s:errorcode></s:errorcode></d:error>"), "Body must have a not found sabredav exception")
 					}
 				}
 			},
@@ -1695,13 +1695,13 @@ var _ = Describe("ocdav", func() {
 				} else {
 					if userHasAccess {
 						if locked {
-							Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\Locked</s:exception><s:message></s:message></d:error>"), "Body must have a locked sabredav exception")
+							Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\Locked</s:exception><s:message></s:message><s:errorcode></s:errorcode></d:error>"), "Body must have a locked sabredav exception")
 							Expect(rr).To(HaveHTTPHeaderWithValue("Lock-Token", "<somelockid>"))
 						} else {
-							Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\Forbidden</s:exception><s:message></s:message></d:error>"), "Body must have a forbidden sabredav exception")
+							Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\Forbidden</s:exception><s:message></s:message><s:errorcode></s:errorcode></d:error>"), "Body must have a forbidden sabredav exception")
 						}
 					} else {
-						Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception><s:message>Resource not found</s:message></d:error>"), "Body must have a not found sabredav exception")
+						Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception><s:message>Resource not found</s:message><s:errorcode></s:errorcode></d:error>"), "Body must have a not found sabredav exception")
 					}
 				}
 			},
