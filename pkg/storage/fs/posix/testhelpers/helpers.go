@@ -100,6 +100,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		"treesize_accounting":        true,
 		"personalspacepath_template": "users/{{.User.Username}}",
 		"generalspacepath_template":  "projects/{{.SpaceId}}",
+		"watch_fs":                   true,
 	}
 	// make it possible to override single config values
 	for k, v := range config {
@@ -154,7 +155,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	var lu *lookup.Lookup
 	switch o.MetadataBackend {
 	case "xattrs":
-		lu = lookup.New(metadata.XattrsBackend{}, um, o)
+		lu = lookup.New(metadata.NewXattrsBackend(o.Root, o.FileMetadataCache), um, o)
 	case "messagepack":
 		lu = lookup.New(metadata.NewMessagePackBackend(o.Root, o.FileMetadataCache), um, o)
 	default:
@@ -174,7 +175,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	)
 
 	bs := &treemocks.Blobstore{}
-	tree, err := tree.New(lu, bs, um, o, store.Create())
+	tree, err := tree.New(lu, bs, um, o, nil, store.Create())
 	if err != nil {
 		return nil, err
 	}
