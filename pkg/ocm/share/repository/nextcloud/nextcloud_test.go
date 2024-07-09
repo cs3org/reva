@@ -226,16 +226,10 @@ var _ = Describe("Nextcloud", func() {
 	// 			Ctime: &types.Timestamp{
 	// 				Seconds:              1234567890,
 	// 				Nanos:                0,
-	// 				XXX_NoUnkeyedLiteral: struct{}{},
-	// 				XXX_unrecognized:     nil,
-	// 				XXX_sizecache:        0,
 	// 			},
 	// 			Mtime: &types.Timestamp{
 	// 				Seconds:              1234567890,
 	// 				Nanos:                0,
-	// 				XXX_NoUnkeyedLiteral: struct{}{},
-	// 				XXX_unrecognized:     nil,
-	// 				XXX_sizecache:        0,
 	// 			},
 	// 		}))
 	// 		checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/addReceivedShare {"md":{"opaque_id":"fileid-/some/path"},"g":{"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"permissions":{"permissions":{"get_path":true}}},"provider_domain":"cern.ch","resource_type":"file","provider_id":2,"owner_opaque_id":"einstein","owner_display_name":"Albert Einstein","protocol":{"name":"webdav","options":{"sharedSecret":"secret","permissions":"webdav-property"}}}`)
@@ -278,18 +272,12 @@ var _ = Describe("Nextcloud", func() {
 					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Ctime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				Mtime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 			}))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/GetShare {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`)
@@ -352,16 +340,10 @@ var _ = Describe("Nextcloud", func() {
 	// 			Ctime: &types.Timestamp{
 	// 				Seconds:              1234567890,
 	// 				Nanos:                0,
-	// 				XXX_NoUnkeyedLiteral: struct{}{},
-	// 				XXX_unrecognized:     nil,
-	// 				XXX_sizecache:        0,
 	// 			},
 	// 			Mtime: &types.Timestamp{
 	// 				Seconds:              1234567890,
 	// 				Nanos:                0,
-	// 				XXX_NoUnkeyedLiteral: struct{}{},
-	// 				XXX_unrecognized:     nil,
-	// 				XXX_sizecache:        0,
 	// 			},
 	// 		}))
 	// 		checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/UpdateShare {"ref":{"Spec":{"Id":{"opaque_id":"some-share-id"}}},"p":{"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true,"deny_grant":true}}}`)
@@ -410,18 +392,12 @@ var _ = Describe("Nextcloud", func() {
 					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Ctime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				Mtime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 			}))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/ListShares [{"type":4,"Term":{"Creator":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}}]`)
@@ -460,18 +436,12 @@ var _ = Describe("Nextcloud", func() {
 					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Ctime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				Mtime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
 			}))
@@ -516,18 +486,12 @@ var _ = Describe("Nextcloud", func() {
 					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Ctime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				Mtime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
 			}))
@@ -565,18 +529,12 @@ var _ = Describe("Nextcloud", func() {
 						Type:     userpb.UserType_USER_TYPE_PRIMARY,
 					},
 					Ctime: &types.Timestamp{
-						Seconds:              1234567890,
-						Nanos:                0,
-						XXX_NoUnkeyedLiteral: struct{}{},
-						XXX_unrecognized:     nil,
-						XXX_sizecache:        0,
+						Seconds: 1234567890,
+						Nanos:   0,
 					},
 					Mtime: &types.Timestamp{
-						Seconds:              1234567890,
-						Nanos:                0,
-						XXX_NoUnkeyedLiteral: struct{}{},
-						XXX_unrecognized:     nil,
-						XXX_sizecache:        0,
+						Seconds: 1234567890,
+						Nanos:   0,
 					},
 					State: ocm.ShareState_SHARE_STATE_ACCEPTED,
 				},
@@ -607,18 +565,12 @@ var _ = Describe("Nextcloud", func() {
 					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Ctime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				Mtime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
 			}))

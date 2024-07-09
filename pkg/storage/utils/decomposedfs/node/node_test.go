@@ -31,6 +31,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/protobuf/testing/protocmp"
 )
 
 var _ = Describe("Node", func() {
@@ -225,7 +226,7 @@ var _ = Describe("Node", func() {
 				storedLock := &provider.Lock{}
 				err = json.Unmarshal(ri.Opaque.Map["lock"].Value, storedLock)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(storedLock).To(Equal(lock))
+				Expect(storedLock).To(BeComparableTo(lock, protocmp.Transform()))
 			})
 		})
 	})
@@ -346,7 +347,7 @@ var _ = Describe("Node", func() {
 
 			o := n.SpaceOwnerOrManager(env.Ctx)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(o).To(Equal(env.Owner.Id))
+			Expect(o).To(BeComparableTo(env.Owner.Id, protocmp.Transform()))
 		})
 
 	})

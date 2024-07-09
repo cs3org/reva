@@ -168,7 +168,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 		gatewaySelector = pool.GetSelector[gateway.GatewayAPIClient](
 			"GatewaySelector",
 			"any",
-			func(cc *grpc.ClientConn) gateway.GatewayAPIClient {
+			func(cc grpc.ClientConnInterface) gateway.GatewayAPIClient {
 				return gatewayClient
 			},
 		)
@@ -178,7 +178,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 		sharingCollaborationSelector = pool.GetSelector[collaboration.CollaborationAPIClient](
 			"SharingCollaborationSelector",
 			"any",
-			func(cc *grpc.ClientConn) collaboration.CollaborationAPIClient {
+			func(cc grpc.ClientConnInterface) collaboration.CollaborationAPIClient {
 				return sharingCollaborationClient
 			},
 		)

@@ -37,6 +37,7 @@ import (
 	indexermocks "github.com/cs3org/reva/v2/pkg/storage/utils/indexer/mocks"
 	storagemocks "github.com/cs3org/reva/v2/pkg/storage/utils/metadata/mocks"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -326,9 +327,9 @@ var _ = Describe("Manager", func() {
 						Expect(err).ToNot(HaveOccurred())
 						Expect(returnedShare).ToNot(BeNil())
 						Expect(returnedShare.Id.OpaqueId).To(Equal(share.Id.OpaqueId))
-						Expect(returnedShare.Owner).To(Equal(share.Owner))
-						Expect(returnedShare.Grantee).To(Equal(share.Grantee))
-						Expect(returnedShare.Permissions).To(Equal(share.Permissions))
+						Expect(returnedShare.Owner).To(BeComparableTo(share.Owner, protocmp.Transform()))
+						Expect(returnedShare.Grantee).To(BeComparableTo(share.Grantee, protocmp.Transform()))
+						Expect(returnedShare.Permissions).To(BeComparableTo(share.Permissions, protocmp.Transform()))
 					})
 				})
 
@@ -375,9 +376,9 @@ var _ = Describe("Manager", func() {
 						Expect(err).ToNot(HaveOccurred())
 						Expect(returnedShare).ToNot(BeNil())
 						Expect(returnedShare.Id.OpaqueId).To(Equal(share2.Id.OpaqueId))
-						Expect(returnedShare.Owner).To(Equal(share2.Owner))
-						Expect(returnedShare.Grantee).To(Equal(share2.Grantee))
-						Expect(returnedShare.Permissions).To(Equal(share2.Permissions))
+						Expect(returnedShare.Owner).To(BeComparableTo(share2.Owner, protocmp.Transform()))
+						Expect(returnedShare.Grantee).To(BeComparableTo(share2.Grantee, protocmp.Transform()))
+						Expect(returnedShare.Permissions).To(BeComparableTo(share2.Permissions, protocmp.Transform()))
 					})
 				})
 			})
@@ -399,8 +400,8 @@ var _ = Describe("Manager", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(returnedShare).ToNot(BeNil())
 					Expect(returnedShare.Id.OpaqueId).To(Equal(share.Id.OpaqueId))
-					Expect(returnedShare.Owner).To(Equal(share.Owner))
-					Expect(returnedShare.Grantee).To(Equal(share.Grantee))
+					Expect(returnedShare.Owner).To(BeComparableTo(share.Owner, protocmp.Transform()))
+					Expect(returnedShare.Grantee).To(BeComparableTo(share.Grantee, protocmp.Transform()))
 					Expect(returnedShare.Permissions).To(Equal(share.Permissions))
 				})
 			})
@@ -587,9 +588,9 @@ var _ = Describe("Manager", func() {
 						Expect(err).ToNot(HaveOccurred())
 						Expect(rshare).ToNot(BeNil())
 						Expect(rshare.Share.Id.OpaqueId).To(Equal(share2.Id.OpaqueId))
-						Expect(rshare.Share.Owner).To(Equal(share2.Owner))
-						Expect(rshare.Share.Grantee).To(Equal(share2.Grantee))
-						Expect(rshare.Share.Permissions).To(Equal(share2.Permissions))
+						Expect(rshare.Share.Owner).To(BeComparableTo(share2.Owner, protocmp.Transform()))
+						Expect(rshare.Share.Grantee).To(BeComparableTo(share2.Grantee, protocmp.Transform()))
+						Expect(rshare.Share.Permissions).To(BeComparableTo(share2.Permissions, protocmp.Transform()))
 						Expect(rshare.State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
 						Expect(rshare.MountPoint.ResourceId.StorageId).To(Equal("storageid"))
 						Expect(rshare.MountPoint.ResourceId.OpaqueId).To(Equal("opaqueid"))

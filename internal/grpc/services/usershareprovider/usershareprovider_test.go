@@ -77,7 +77,7 @@ var _ = Describe("user share provider service", func() {
 		gatewaySelector = pool.GetSelector[gateway.GatewayAPIClient](
 			"GatewaySelector",
 			"any",
-			func(cc *grpc.ClientConn) gateway.GatewayAPIClient {
+			func(cc grpc.ClientConnInterface) gateway.GatewayAPIClient {
 				return gatewayClient
 			},
 		)

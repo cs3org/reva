@@ -164,7 +164,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	permissionsSelector := pool.GetSelector[cs3permissions.PermissionsAPIClient](
 		"PermissionsSelector",
 		"any",
-		func(cc *grpc.ClientConn) cs3permissions.PermissionsAPIClient {
+		func(cc grpc.ClientConnInterface) cs3permissions.PermissionsAPIClient {
 			return cs3permissionsclient
 		},
 	)

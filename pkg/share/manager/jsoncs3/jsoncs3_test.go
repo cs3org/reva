@@ -44,6 +44,7 @@ import (
 	"github.com/cs3org/reva/v2/tests/cs3mocks/mocks"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -161,7 +162,7 @@ var _ = Describe("Jsoncs3", func() {
 		gatewaySelector := pool.GetSelector[gatewayv1beta1.GatewayAPIClient](
 			"GatewaySelector",
 			"com.owncloud.api.gateway",
-			func(cc *grpc.ClientConn) gatewayv1beta1.GatewayAPIClient {
+			func(cc grpc.ClientConnInterface) gatewayv1beta1.GatewayAPIClient {
 				return client
 			},
 		)
@@ -417,7 +418,7 @@ var _ = Describe("Jsoncs3", func() {
 					ResourceId: sharedResource.Id,
 					Grantee:    grant.Grantee,
 				})
-				Expect(s.ResourceId).To(Equal(sharedResource.Id))
+				Expect(s.ResourceId).To(BeComparableTo(sharedResource.Id, protocmp.Transform()))
 				Expect(s.Id.OpaqueId).To(Equal(share.Id.OpaqueId))
 			})
 
@@ -730,7 +731,7 @@ var _ = Describe("Jsoncs3", func() {
 				received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{}, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(received)).To(Equal(1))
-				Expect(received[0].Share.ResourceId).To(Equal(sharedResource.Id))
+				Expect(received[0].Share.ResourceId).To(BeComparableTo(sharedResource.Id, protocmp.Transform()))
 				Expect(received[0].State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
 			})
 
@@ -788,7 +789,7 @@ var _ = Describe("Jsoncs3", func() {
 				}, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(received)).To(Equal(1))
-				Expect(received[0].Share.ResourceId).To(Equal(sharedResource.Id))
+				Expect(received[0].Share.ResourceId).To(BeComparableTo(sharedResource.Id, protocmp.Transform()))
 				Expect(received[0].State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
 				Expect(received[0].Share.Id).To(Equal(share.Id))
 
@@ -802,7 +803,7 @@ var _ = Describe("Jsoncs3", func() {
 				}, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(received)).To(Equal(1))
-				Expect(received[0].Share.ResourceId).To(Equal(sharedResource2.Id))
+				Expect(received[0].Share.ResourceId).To(BeComparableTo(sharedResource2.Id, protocmp.Transform()))
 				Expect(received[0].State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
 				Expect(received[0].Share.Id).To(Equal(share2.Id))
 			})
