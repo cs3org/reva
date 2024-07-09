@@ -75,6 +75,7 @@ func (s *service) UnprotectedEndpoints() []string {
 
 func (s *service) Register(ss *grpc.Server) {
 	provider.RegisterProviderAPIServer(ss, s)
+	provider.RegisterSpacesAPIServer(ss, s)
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {

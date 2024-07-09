@@ -77,6 +77,7 @@ func (s *service) UnprotectedEndpoints() []string {
 
 func (s *service) Register(ss *grpc.Server) {
 	provider.RegisterProviderAPIServer(ss, s)
+	provider.RegisterSpacesAPIServer(ss, s)
 }
 
 // NewDefault returns a new instance of the SharesStorageProvider service with default dependencies

@@ -116,6 +116,7 @@ func (s *Service) UnprotectedEndpoints() []string { return []string{} }
 
 func (s *Service) Register(ss *grpc.Server) {
 	provider.RegisterProviderAPIServer(ss, s)
+	provider.RegisterSpacesAPIServer(ss, s)
 }
 
 func parseXSTypes(xsTypes map[string]uint32) ([]*provider.ResourceChecksumPriority, error) {
