@@ -50,13 +50,13 @@ func (iw *InotifyWatcher) Watch(path string) {
 				case inotifywaitgo.DELETE:
 					go func() { _ = iw.tree.HandleFileDelete(event.Filename) }()
 				case inotifywaitgo.CREATE:
-					go func() { _ = iw.tree.Scan(event.Filename, false) }()
+					go func() { _ = iw.tree.Scan(event.Filename, ActionCreate, event.IsDir, false) }()
 				case inotifywaitgo.MOVED_TO:
 					go func() {
-						_ = iw.tree.Scan(event.Filename, true)
+						_ = iw.tree.Scan(event.Filename, ActionMove, event.IsDir, true)
 					}()
 				case inotifywaitgo.CLOSE_WRITE:
-					go func() { _ = iw.tree.Scan(event.Filename, true) }()
+					go func() { _ = iw.tree.Scan(event.Filename, ActionUpdate, event.IsDir, true) }()
 				}
 			}
 
