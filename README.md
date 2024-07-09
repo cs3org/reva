@@ -23,7 +23,6 @@ You need to have [Go](https://golang.org/doc/install) (version 1.16 or higher), 
 ```
 $ git clone https://github.com/cs3org/reva
 $ cd reva
-$ make deps
 $ make build
 $ mkdir -p /etc/revad
 $ cp examples/storage-references/users.demo.json /etc/revad/users.json
