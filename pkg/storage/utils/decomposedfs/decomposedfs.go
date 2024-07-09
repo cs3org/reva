@@ -855,11 +855,6 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 		return err
 	}
 
-	// check lock on target
-	if err := newNode.CheckLock(ctx); err != nil {
-		return err
-	}
-
 	return fs.tp.Move(ctx, oldNode, newNode)
 }
 
