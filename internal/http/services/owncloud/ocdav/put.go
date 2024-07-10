@@ -276,6 +276,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	uReq := &provider.InitiateFileUploadRequest{
 		Ref:    ref,
 		Opaque: opaque,
+		LockId: requestLockToken(r),
 	}
 	if ifMatch := r.Header.Get(net.HeaderIfMatch); ifMatch != "" {
 		uReq.Options = &provider.InitiateFileUploadRequest_IfMatch{IfMatch: ifMatch}
