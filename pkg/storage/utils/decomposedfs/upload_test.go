@@ -130,7 +130,7 @@ var _ = Describe("File uploads", func() {
 		cs3permissionsclient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&cs3permissions.CheckPermissionResponse{
 			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_OK},
 		}, nil)
-		pmock.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+		pmock.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
 			Stat:     true,
 			AddGrant: true,
 		}, nil).Times(1)
@@ -155,7 +155,7 @@ var _ = Describe("File uploads", func() {
 
 	Context("the user's quota is exceeded", func() {
 		BeforeEach(func() {
-			pmock.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+			pmock.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
 				Stat:     true,
 				GetQuota: true,
 			}, nil)
@@ -175,7 +175,7 @@ var _ = Describe("File uploads", func() {
 
 	Context("the user has insufficient permissions", func() {
 		BeforeEach(func() {
-			pmock.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+			pmock.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
 				Stat: true,
 			}, nil)
 		})
@@ -197,7 +197,7 @@ var _ = Describe("File uploads", func() {
 			Expect(err).ToNot(HaveOccurred())
 			err = h.SetXattrString(ctx, prefixes.SpaceNameAttr, "username")
 			Expect(err).ToNot(HaveOccurred())
-			pmock.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+			pmock.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
 				Stat: true,
 			}, nil)
 		})
@@ -214,7 +214,7 @@ var _ = Describe("File uploads", func() {
 	Context("with sufficient permissions", func() {
 		BeforeEach(func() {
 			pmock.On("AssemblePermissions", mock.Anything, mock.Anything).
-				Return(provider.ResourcePermissions{
+				Return(&provider.ResourcePermissions{
 					Stat:               true,
 					GetQuota:           true,
 					InitiateFileUpload: true,

@@ -160,7 +160,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 		// for this test we don't care about permissions
 		pmock.On("AssemblePermissions", mock.Anything, mock.Anything).
-			Return(provider.ResourcePermissions{
+			Return(&provider.ResourcePermissions{
 				Stat:               true,
 				GetQuota:           true,
 				InitiateFileUpload: true,

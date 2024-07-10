@@ -178,7 +178,7 @@ var _ = Describe("Decomposed", func() {
 
 		Describe("CreateDir", func() {
 			JustBeforeEach(func() {
-				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
 					Stat:            true,
 					CreateContainer: true,
 				}, nil)

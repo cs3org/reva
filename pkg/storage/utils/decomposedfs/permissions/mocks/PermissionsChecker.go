@@ -43,22 +43,24 @@ func (_m *PermissionsChecker) EXPECT() *PermissionsChecker_Expecter {
 }
 
 // AssemblePermissions provides a mock function with given fields: ctx, n
-func (_m *PermissionsChecker) AssemblePermissions(ctx context.Context, n *node.Node) (providerv1beta1.ResourcePermissions, error) {
+func (_m *PermissionsChecker) AssemblePermissions(ctx context.Context, n *node.Node) (*providerv1beta1.ResourcePermissions, error) {
 	ret := _m.Called(ctx, n)
 
 	if len(ret) == 0 {
 		panic("no return value specified for AssemblePermissions")
 	}
 
-	var r0 providerv1beta1.ResourcePermissions
+	var r0 *providerv1beta1.ResourcePermissions
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *node.Node) (providerv1beta1.ResourcePermissions, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *node.Node) (*providerv1beta1.ResourcePermissions, error)); ok {
 		return rf(ctx, n)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *node.Node) providerv1beta1.ResourcePermissions); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *node.Node) *providerv1beta1.ResourcePermissions); ok {
 		r0 = rf(ctx, n)
 	} else {
-		r0 = ret.Get(0).(providerv1beta1.ResourcePermissions)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*providerv1beta1.ResourcePermissions)
+		}
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, *node.Node) error); ok {
@@ -89,33 +91,35 @@ func (_c *PermissionsChecker_AssemblePermissions_Call) Run(run func(ctx context.
 	return _c
 }
 
-func (_c *PermissionsChecker_AssemblePermissions_Call) Return(ap providerv1beta1.ResourcePermissions, err error) *PermissionsChecker_AssemblePermissions_Call {
+func (_c *PermissionsChecker_AssemblePermissions_Call) Return(ap *providerv1beta1.ResourcePermissions, err error) *PermissionsChecker_AssemblePermissions_Call {
 	_c.Call.Return(ap, err)
 	return _c
 }
 
-func (_c *PermissionsChecker_AssemblePermissions_Call) RunAndReturn(run func(context.Context, *node.Node) (providerv1beta1.ResourcePermissions, error)) *PermissionsChecker_AssemblePermissions_Call {
+func (_c *PermissionsChecker_AssemblePermissions_Call) RunAndReturn(run func(context.Context, *node.Node) (*providerv1beta1.ResourcePermissions, error)) *PermissionsChecker_AssemblePermissions_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // AssembleTrashPermissions provides a mock function with given fields: ctx, n
-func (_m *PermissionsChecker) AssembleTrashPermissions(ctx context.Context, n *node.Node) (providerv1beta1.ResourcePermissions, error) {
+func (_m *PermissionsChecker) AssembleTrashPermissions(ctx context.Context, n *node.Node) (*providerv1beta1.ResourcePermissions, error) {
 	ret := _m.Called(ctx, n)
 
 	if len(ret) == 0 {
 		panic("no return value specified for AssembleTrashPermissions")
 	}
 
-	var r0 providerv1beta1.ResourcePermissions
+	var r0 *providerv1beta1.ResourcePermissions
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *node.Node) (providerv1beta1.ResourcePermissions, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *node.Node) (*providerv1beta1.ResourcePermissions, error)); ok {
 		return rf(ctx, n)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *node.Node) providerv1beta1.ResourcePermissions); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *node.Node) *providerv1beta1.ResourcePermissions); ok {
 		r0 = rf(ctx, n)
 	} else {
-		r0 = ret.Get(0).(providerv1beta1.ResourcePermissions)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*providerv1beta1.ResourcePermissions)
+		}
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, *node.Node) error); ok {
@@ -146,12 +150,12 @@ func (_c *PermissionsChecker_AssembleTrashPermissions_Call) Run(run func(ctx con
 	return _c
 }
 
-func (_c *PermissionsChecker_AssembleTrashPermissions_Call) Return(ap providerv1beta1.ResourcePermissions, err error) *PermissionsChecker_AssembleTrashPermissions_Call {
+func (_c *PermissionsChecker_AssembleTrashPermissions_Call) Return(ap *providerv1beta1.ResourcePermissions, err error) *PermissionsChecker_AssembleTrashPermissions_Call {
 	_c.Call.Return(ap, err)
 	return _c
 }
 
-func (_c *PermissionsChecker_AssembleTrashPermissions_Call) RunAndReturn(run func(context.Context, *node.Node) (providerv1beta1.ResourcePermissions, error)) *PermissionsChecker_AssembleTrashPermissions_Call {
+func (_c *PermissionsChecker_AssembleTrashPermissions_Call) RunAndReturn(run func(context.Context, *node.Node) (*providerv1beta1.ResourcePermissions, error)) *PermissionsChecker_AssembleTrashPermissions_Call {
 	_c.Call.Return(run)
 	return _c
 }

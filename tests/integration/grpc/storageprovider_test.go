@@ -85,7 +85,7 @@ var _ = Describe("storage providers", func() {
 
 		ctx            context.Context
 		providerClient storagep.ProviderAPIClient
-		spacesClient   storagep.SpaceAPIClient
+		spacesClient   storagep.SpacesAPIClient
 		user           = &userpb.User{
 			Id: &userpb.UserId{
 				Idp:      "0.0.0.0:19000",
@@ -121,6 +121,7 @@ var _ = Describe("storage providers", func() {
 		revads, err = startRevads(dependencies, variables)
 		Expect(err).ToNot(HaveOccurred())
 		providerClient, err = pool.GetStorageProviderServiceClient(revads["storage"].GrpcAddress)
+		Expect(err).ToNot(HaveOccurred())
 		spacesClient, err = pool.GetSpacesProviderServiceClient(revads["storage"].GrpcAddress)
 		Expect(err).ToNot(HaveOccurred())
 	})

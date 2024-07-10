@@ -28,7 +28,7 @@ import (
 
 func TestWrapResourceID(t *testing.T) {
 	expected := "storageid" + "$" + "spaceid" + "!" + "opaqueid"
-	wrapped := storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"})
+	wrapped := storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"})
 
 	if wrapped != expected {
 		t.Errorf("wrapped id doesn't have the expected format: got %s expected %s", wrapped, expected)

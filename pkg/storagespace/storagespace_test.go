@@ -66,27 +66,27 @@ func TestSplitStorageID(t *testing.T) {
 func TestParseID(t *testing.T) {
 	tests := []struct {
 		input       string
-		expected    provider.ResourceId
+		expected    *provider.ResourceId
 		expectedErr error
 	}{
 		{
 			"spaceid" + _idDelimiter + "opaqueid",
-			provider.ResourceId{SpaceId: "spaceid", OpaqueId: "opaqueid"},
+			&provider.ResourceId{SpaceId: "spaceid", OpaqueId: "opaqueid"},
 			nil,
 		},
 		{
 			"storageid" + _storageIDDelimiter + "spaceid" + _idDelimiter + "opaqueid",
-			provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"},
+			&provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"},
 			nil,
 		},
 		{
 			"",
-			provider.ResourceId{},
+			&provider.ResourceId{},
 			ErrInvalidSpaceID,
 		},
 		{
 			"spaceid",
-			provider.ResourceId{SpaceId: "spaceid"},
+			&provider.ResourceId{SpaceId: "spaceid"},
 			nil,
 		},
 	}
@@ -111,7 +111,7 @@ func TestParseID(t *testing.T) {
 
 func TestFormatResourceID(t *testing.T) {
 	expected := "spaceid" + _idDelimiter + "opaqueid"
-	wrapped := FormatResourceID(provider.ResourceId{SpaceId: "spaceid", OpaqueId: "opaqueid"})
+	wrapped := FormatResourceID(&provider.ResourceId{SpaceId: "spaceid", OpaqueId: "opaqueid"})
 
 	if wrapped != expected {
 		t.Errorf("wrapped id doesn't have the expected format: got %s expected %s", wrapped, expected)
@@ -313,29 +313,29 @@ func TestFormatAndParseReference(t *testing.T) {
 			t.Errorf("failed to parse space reference: %s error: %s", formatted, err)
 		}
 		if !(utils.ResourceIDEqual(parsed.ResourceId, tt.expected.ResourceId) && parsed.Path == tt.expected.Path) {
-			t.Errorf("Formatted then parsed references don't match the original got: %v expected %v", parsed, tt.expected)
+			t.Errorf("Formatted then parsed references don't match the original got: %s expected %s", parsed.String(), tt.expected.String())
 		}
 	}
 }
 
 func TestUpdateLegacyResourceID(t *testing.T) {
 	tests := []struct {
-		orig     provider.ResourceId
-		expected provider.ResourceId
+		orig     *provider.ResourceId
+		expected *provider.ResourceId
 	}{
 		{
-			orig:     provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"},
-			expected: provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"},
+			orig:     &provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"},
+			expected: &provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"},
 		},
 		{
-			orig:     provider.ResourceId{StorageId: "storageid$spaceid", SpaceId: "", OpaqueId: "opaqueid"},
-			expected: provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"},
+			orig:     &provider.ResourceId{StorageId: "storageid$spaceid", SpaceId: "", OpaqueId: "opaqueid"},
+			expected: &provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"},
 		},
 	}
 
 	for _, tt := range tests {
 		updated := UpdateLegacyResourceID(tt.orig)
-		if !(utils.ResourceIDEqual(&updated, &tt.expected)) {
+		if !(utils.ResourceIDEqual(updated, tt.expected)) {
 			t.Errorf("Updating resourceid failed, got: %v expected %v", updated, tt.expected)
 		}
 	}

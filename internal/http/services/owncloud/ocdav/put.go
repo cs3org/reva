@@ -230,7 +230,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 			w.Header().Set(net.HeaderETag, sRes.Info.Etag)
 			w.Header().Set(net.HeaderOCETag, sRes.Info.Etag)
-			w.Header().Set(net.HeaderOCFileID, storagespace.FormatResourceID(*sRes.Info.Id))
+			w.Header().Set(net.HeaderOCFileID, storagespace.FormatResourceID(sRes.Info.Id))
 			w.Header().Set(net.HeaderLastModified, net.RFC1123Z(sRes.Info.Mtime))
 
 			w.WriteHeader(http.StatusCreated)

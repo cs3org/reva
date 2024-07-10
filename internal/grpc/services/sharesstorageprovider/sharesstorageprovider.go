@@ -433,7 +433,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				space := &provider.StorageSpace{
 					Opaque: opaque,
 					Id: &provider.StorageSpaceId{
-						OpaqueId: storagespace.FormatResourceID(*virtualRootID),
+						OpaqueId: storagespace.FormatResourceID(virtualRootID),
 					},
 					SpaceType: "virtual",
 					//Owner:     &userv1beta1.User{Id: receivedShare.Share.Owner}, // FIXME actually, the mount point belongs to the recipient
@@ -455,7 +455,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				// we know a grant for this resource
 				space := &provider.StorageSpace{
 					Id: &provider.StorageSpaceId{
-						OpaqueId: storagespace.FormatResourceID(*root),
+						OpaqueId: storagespace.FormatResourceID(root),
 					},
 					SpaceType: "grant",
 					Owner:     &userv1beta1.User{Id: receivedShare.Share.Owner},
@@ -509,7 +509,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				space := &provider.StorageSpace{
 					Opaque: opaque,
 					Id: &provider.StorageSpaceId{
-						OpaqueId: storagespace.FormatResourceID(*root),
+						OpaqueId: storagespace.FormatResourceID(root),
 					},
 					SpaceType: "mountpoint",
 					Owner:     &userv1beta1.User{Id: receivedShare.Share.Owner}, // FIXME actually, the mount point belongs to the recipient
@@ -819,7 +819,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 			if receivedShare.GetState() != collaboration.ShareState_SHARE_STATE_ACCEPTED {
 				continue
 			}
-			rIDStr := storagespace.FormatResourceID(*receivedShare.GetShare().GetResourceId())
+			rIDStr := storagespace.FormatResourceID(receivedShare.GetShare().GetResourceId())
 			if oldest, ok := oldestReceivedSharesByResourceID[rIDStr]; ok {
 				// replace if older than current oldest
 				if utils.TSToTime(receivedShare.GetShare().GetCtime()).Before(utils.TSToTime(oldest.GetShare().GetCtime())) {

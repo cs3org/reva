@@ -187,14 +187,14 @@ var _ = Describe("Node", func() {
 		Describe("the Etag field", func() {
 			It("is set", func() {
 				perms := node.OwnerPermissions()
-				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, []string{}, false)
+				ri, err := n.AsResourceInfo(env.Ctx, perms, []string{}, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(ri.Etag)).To(Equal(34))
 			})
 
 			It("changes when the tmtime is set", func() {
 				perms := node.OwnerPermissions()
-				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, []string{}, false)
+				ri, err := n.AsResourceInfo(env.Ctx, perms, []string{}, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(ri.Etag)).To(Equal(34))
 				before := ri.Etag
@@ -202,7 +202,7 @@ var _ = Describe("Node", func() {
 				tmtime := time.Now()
 				Expect(n.SetTMTime(env.Ctx, &tmtime)).To(Succeed())
 
-				ri, err = n.AsResourceInfo(env.Ctx, &perms, []string{}, []string{}, false)
+				ri, err = n.AsResourceInfo(env.Ctx, perms, []string{}, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(ri.Etag)).To(Equal(34))
 				Expect(ri.Etag).ToNot(Equal(before))
@@ -218,7 +218,7 @@ var _ = Describe("Node", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				perms := node.OwnerPermissions()
-				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, []string{}, false)
+				ri, err := n.AsResourceInfo(env.Ctx, perms, []string{}, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ri.Opaque).ToNot(BeNil())
 				Expect(ri.Opaque.Map["lock"]).ToNot(BeNil())
@@ -243,7 +243,7 @@ var _ = Describe("Node", func() {
 			nodePSpace, err := env.Lookup.NodeFromSpaceID(env.Ctx, pSpace.SpaceId)
 			Expect(err).ToNot(HaveOccurred())
 			u := ctxpkg.ContextMustGetUser(env.Ctx)
-			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
 				UpdateGrant: true,
 				Stat:        true,
 			}, nil).Times(1)
@@ -264,13 +264,13 @@ var _ = Describe("Node", func() {
 			Expect(err).ToNot(HaveOccurred())
 			perms, _ := nodePSpace.PermissionSet(env.Ctx)
 			expected := ocsconv.NewManagerRole().CS3ResourcePermissions()
-			Expect(grants.PermissionsEqual(&perms, expected)).To(BeTrue())
+			Expect(grants.PermissionsEqual(perms, expected)).To(BeTrue())
 		})
 		It("Checks the Editor permissions on a project space and a denial", func() {
 			storageSpace, err := env.CreateTestStorageSpace("project", &provider.Quota{QuotaMaxBytes: 2000})
 			Expect(err).ToNot(HaveOccurred())
 			u := ctxpkg.ContextMustGetUser(env.Ctx)
-			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
 				UpdateGrant: true,
 				Stat:        true,
 			}, nil).Times(1)
@@ -293,8 +293,8 @@ var _ = Describe("Node", func() {
 			Expect(err).ToNot(HaveOccurred())
 			permissionsActual, _ := spaceRoot.PermissionSet(env.Ctx)
 			permissionsExpected := ocsconv.NewEditorRole().CS3ResourcePermissions()
-			Expect(grants.PermissionsEqual(&permissionsActual, permissionsExpected)).To(BeTrue())
-			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+			Expect(grants.PermissionsEqual(permissionsActual, permissionsExpected)).To(BeTrue())
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
 				Stat:            true,
 				CreateContainer: true,
 			}, nil).Times(1)
@@ -307,7 +307,7 @@ var _ = Describe("Node", func() {
 			)
 			Expect(err).ToNot(HaveOccurred())
 			// adding a denial on the subpath
-			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
 				DenyGrant: true,
 				Stat:      true,
 			}, nil).Times(1)
@@ -332,7 +332,7 @@ var _ = Describe("Node", func() {
 			Expect(err).ToNot(HaveOccurred())
 			subfolderActual, denied := subfolder.PermissionSet(env.Ctx)
 			subfolderExpected := ocsconv.NewDeniedRole().CS3ResourcePermissions()
-			Expect(grants.PermissionsEqual(&subfolderActual, subfolderExpected)).To(BeTrue())
+			Expect(grants.PermissionsEqual(subfolderActual, subfolderExpected)).To(BeTrue())
 			Expect(denied).To(BeTrue())
 		})
 	})

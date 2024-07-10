@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -227,7 +228,7 @@ var _ = Describe("Nextcloud", func() {
 			mdKeys := []string{"val1", "val2", "val3"}
 			result, err := nc.GetMD(ctx, ref, mdKeys, nil)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(*result).To(Equal(provider.ResourceInfo{
+			Expect(result).To(BeComparableTo(provider.ResourceInfo{
 				Opaque: &types.Opaque{
 					Map: nil,
 				},
@@ -277,7 +278,7 @@ var _ = Describe("Nextcloud", func() {
 				ArbitraryMetadata: &provider.ArbitraryMetadata{
 					Metadata: map[string]string{"some": "arbi", "trary": "meta", "da": "ta"},
 				},
-			}))
+			}, protocmp.Transform()))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/GetMD {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"},"mdKeys":["val1","val2","val3"]}`)
 		})
 	})
@@ -299,7 +300,7 @@ var _ = Describe("Nextcloud", func() {
 			results, err := nc.ListFolder(ctx, ref, mdKeys, []string{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(results)).To(Equal(1))
-			Expect(*results[0]).To(Equal(provider.ResourceInfo{
+			Expect(results[0]).To(BeComparableTo(&provider.ResourceInfo{
 				Opaque: &types.Opaque{
 					Map: nil,
 				},
@@ -349,7 +350,7 @@ var _ = Describe("Nextcloud", func() {
 				ArbitraryMetadata: &provider.ArbitraryMetadata{
 					Metadata: map[string]string{"some": "arbi", "trary": "meta", "da": "ta"},
 				},
-			}))
+			}, protocmp.Transform()))
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/ListFolder {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some"},"mdKeys":["val1","val2","val3"]}`)
 		})
@@ -447,7 +448,7 @@ var _ = Describe("Nextcloud", func() {
 			Expect(err).ToNot(HaveOccurred())
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L1003-L1023
 			Expect(len(results)).To(Equal(2))
-			Expect(*results[0]).To(Equal(provider.FileVersion{
+			Expect(results[0]).To(BeComparableTo(&provider.FileVersion{
 				Opaque: &types.Opaque{
 					Map: map[string]*types.OpaqueEntry{
 						"some": {
@@ -459,8 +460,8 @@ var _ = Describe("Nextcloud", func() {
 				Size:  uint64(12345),
 				Mtime: uint64(1234567890),
 				Etag:  "deadb00f",
-			}))
-			Expect(*results[1]).To(Equal(provider.FileVersion{
+			}, protocmp.Transform()))
+			Expect(results[1]).To(BeComparableTo(&provider.FileVersion{
 				Opaque: &types.Opaque{
 					Map: map[string]*types.OpaqueEntry{
 						"different": {
@@ -472,7 +473,7 @@ var _ = Describe("Nextcloud", func() {
 				Size:  uint64(12345),
 				Mtime: uint64(1234567890),
 				Etag:  "deadbeef",
-			}))
+			}, protocmp.Transform()))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/ListRevisions {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"}`)
 		})
 	})
@@ -531,7 +532,7 @@ var _ = Describe("Nextcloud", func() {
 			Expect(err).ToNot(HaveOccurred())
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L1085-L1110
 			Expect(len(results)).To(Equal(1))
-			Expect(*results[0]).To(Equal(provider.RecycleItem{
+			Expect(results[0]).To(BeComparableTo(&provider.RecycleItem{
 				Opaque: &types.Opaque{},
 				Key:    "some-deleted-version",
 				Ref: &provider.Reference{
@@ -540,7 +541,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 				Size:         uint64(12345),
 				DeletionTime: &types.Timestamp{Seconds: uint64(1234567890)},
-			}))
+			}, protocmp.Transform()))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/ListRecycle {"key":"asdf","path":"/some/file.txt"}`)
 		})
 	})
@@ -929,7 +930,7 @@ var _ = Describe("Nextcloud", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(spaces)).To(Equal(1))
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L1341-L1366
-			Expect(*spaces[0]).To(Equal(provider.StorageSpace{
+			Expect(spaces[0]).To(BeComparableTo(&provider.StorageSpace{
 				Opaque: &types.Opaque{
 					Map: map[string](*types.OpaqueEntry){
 						"foo": &types.OpaqueEntry{Value: []byte("sama")},
@@ -957,7 +958,7 @@ var _ = Describe("Nextcloud", func() {
 				Mtime: &types.Timestamp{
 					Seconds: uint64(1234567890),
 				},
-			}))
+			}, protocmp.Transform()))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/ListStorageSpaces [{"type":3,"Term":{"Owner":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},{"type":2,"Term":{"Id":{"opaque_id":"opaque-id"}}},{"type":4,"Term":{"SpaceType":"home"}}]`)
 		})
 	})
@@ -990,7 +991,7 @@ var _ = Describe("Nextcloud", func() {
 				Type: "home",
 			})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(*result).To(Equal(provider.CreateStorageSpaceResponse{
+			Expect(result).To(BeComparableTo(&provider.CreateStorageSpaceResponse{
 				Opaque: nil,
 				Status: nil,
 				StorageSpace: &provider.StorageSpace{
@@ -1022,7 +1023,7 @@ var _ = Describe("Nextcloud", func() {
 						Seconds: uint64(1234567890),
 					},
 				},
-			}))
+			}, protocmp.Transform()))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/CreateStorageSpace {"opaque":{"map":{"bar":{"value":"c2FtYQ=="},"foo":{"value":"c2FtYQ=="}}},"owner":{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}},"type":"home","name":"My Storage Space","quota":{"quota_max_bytes":456,"quota_max_files":123}}`)
 		})
 	})

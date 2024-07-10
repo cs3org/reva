@@ -276,7 +276,7 @@ func (r *registry) ListProviders(ctx context.Context, filters map[string]string)
 		if filters["opaque_id"] == "" {
 			filters["opaque_id"] = filters["space_id"]
 		}
-		id := storagespace.FormatResourceID(providerpb.ResourceId{
+		id := storagespace.FormatResourceID(&providerpb.ResourceId{
 			StorageId: filters["storage_id"],
 			SpaceId:   filters["space_id"],
 			OpaqueId:  filters["opaque_id"],

@@ -289,7 +289,7 @@ var _ = Describe("Tree", func() {
 		var dir *node.Node
 
 		JustBeforeEach(func() {
-			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
 				CreateContainer: true,
 				Stat:            true,
 			}, nil)
@@ -306,7 +306,7 @@ var _ = Describe("Tree", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				perms := node.OwnerPermissions()
-				riBefore, err := dir.AsResourceInfo(env.Ctx, &perms, []string{}, []string{}, false)
+				riBefore, err := dir.AsResourceInfo(env.Ctx, perms, []string{}, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				err = env.Tree.Propagate(env.Ctx, file, 0)
@@ -318,7 +318,7 @@ var _ = Describe("Tree", func() {
 					OpaqueId:  dir.ID,
 				})
 				Expect(err).ToNot(HaveOccurred())
-				riAfter, err := dir.AsResourceInfo(env.Ctx, &perms, []string{}, []string{}, false)
+				riAfter, err := dir.AsResourceInfo(env.Ctx, perms, []string{}, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(riAfter.Etag).ToNot(Equal(riBefore.Etag))
 			})
