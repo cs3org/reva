@@ -452,9 +452,9 @@ var _ = Describe("Recycle", func() {
 })
 
 func registerPermissions(m *mocks.PermissionsChecker, uid string, exp *provider.ResourcePermissions) {
-	p := provider.ResourcePermissions{}
+	p := &provider.ResourcePermissions{}
 	if exp != nil {
-		p = *exp
+		p = exp
 	}
 	m.On("AssemblePermissions",
 		mock.MatchedBy(func(ctx context.Context) bool {

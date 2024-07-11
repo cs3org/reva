@@ -25,6 +25,7 @@ import (
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -152,7 +153,7 @@ var _ = Describe("Node locks", func() {
 			It("returns the lock", func() {
 				l, err := n.ReadLock(env.Ctx, false)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(l).To(Equal(lockByUser))
+				Expect(l).To(BeComparableTo(lockByUser, protocmp.Transform()))
 			})
 
 			It("reports an error when the node wasn't locked", func() {

@@ -25,6 +25,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/ace"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -83,7 +84,7 @@ var _ = Describe("ACE", func() {
 			grant := ace.Grant()
 			// do not check opaque values
 			grant.Grantee.Opaque = nil
-			Expect(grant).To(Equal(userGrant))
+			Expect(grant).To(BeComparableTo(userGrant, protocmp.Transform()))
 		})
 	})
 

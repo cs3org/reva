@@ -65,11 +65,11 @@ var _ = Describe("Spaces", func() {
 
 		fooClient.On("ListStorageSpaces", mock.Anything, mock.Anything).Return(
 			func(_ context.Context, req *provider.ListStorageSpacesRequest, _ ...grpc.CallOption) *provider.ListStorageSpacesResponse {
-				rid := provider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "foospace"}
+				rid := &provider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "foospace"}
 				spaces := []*provider.StorageSpace{
 					{
 						Id:        &provider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(rid)},
-						Root:      &rid,
+						Root:      rid,
 						Name:      "Foo space",
 						SpaceType: "personal",
 						Owner:     alice,
@@ -87,11 +87,11 @@ var _ = Describe("Spaces", func() {
 			}, nil)
 		barClient.On("ListStorageSpaces", mock.Anything, mock.Anything).Return(
 			func(_ context.Context, req *provider.ListStorageSpacesRequest, _ ...grpc.CallOption) *provider.ListStorageSpacesResponse {
-				rid := provider.ResourceId{StorageId: "provider-1", SpaceId: "barspace", OpaqueId: "barspace"}
+				rid := &provider.ResourceId{StorageId: "provider-1", SpaceId: "barspace", OpaqueId: "barspace"}
 				spaces := []*provider.StorageSpace{
 					{
 						Id:        &provider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(rid)},
-						Root:      &rid,
+						Root:      rid,
 						Name:      "Bar space",
 						SpaceType: "personal",
 						Owner:     alice,
@@ -109,18 +109,18 @@ var _ = Describe("Spaces", func() {
 			}, nil)
 		bazClient.On("ListStorageSpaces", mock.Anything, mock.Anything).Return(
 			func(_ context.Context, req *provider.ListStorageSpacesRequest, _ ...grpc.CallOption) *provider.ListStorageSpacesResponse {
-				rid1 := provider.ResourceId{StorageId: "provider-1", SpaceId: "bazspace1", OpaqueId: "bazspace1"}
-				rid2 := provider.ResourceId{StorageId: "provider-1", SpaceId: "bazspace2", OpaqueId: "bazspace2"}
+				rid1 := &provider.ResourceId{StorageId: "provider-1", SpaceId: "bazspace1", OpaqueId: "bazspace1"}
+				rid2 := &provider.ResourceId{StorageId: "provider-1", SpaceId: "bazspace2", OpaqueId: "bazspace2"}
 				space1 := &provider.StorageSpace{
 					Id:        &provider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(rid1)},
-					Root:      &rid1,
+					Root:      rid1,
 					Name:      "Baz space 1",
 					SpaceType: "project",
 					Owner:     alice,
 				}
 				space2 := &provider.StorageSpace{
 					Id:        &provider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(rid2)},
-					Root:      &rid2,
+					Root:      rid2,
 					Name:      "Baz space 2",
 					SpaceType: "project",
 					Owner:     alice,

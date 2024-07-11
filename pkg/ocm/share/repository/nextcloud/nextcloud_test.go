@@ -34,6 +34,7 @@ import (
 	. "github.com/onsi/gomega"
 	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/testing/protocmp"
 )
 
 func setUpNextcloudServer() (*nextcloud.Manager, *[]string, func()) {
@@ -226,16 +227,10 @@ var _ = Describe("Nextcloud", func() {
 	// 			Ctime: &types.Timestamp{
 	// 				Seconds:              1234567890,
 	// 				Nanos:                0,
-	// 				XXX_NoUnkeyedLiteral: struct{}{},
-	// 				XXX_unrecognized:     nil,
-	// 				XXX_sizecache:        0,
 	// 			},
 	// 			Mtime: &types.Timestamp{
 	// 				Seconds:              1234567890,
 	// 				Nanos:                0,
-	// 				XXX_NoUnkeyedLiteral: struct{}{},
-	// 				XXX_unrecognized:     nil,
-	// 				XXX_sizecache:        0,
 	// 			},
 	// 		}))
 	// 		checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/addReceivedShare {"md":{"opaque_id":"fileid-/some/path"},"g":{"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"permissions":{"permissions":{"get_path":true}}},"provider_domain":"cern.ch","resource_type":"file","provider_id":2,"owner_opaque_id":"einstein","owner_display_name":"Albert Einstein","protocol":{"name":"webdav","options":{"sharedSecret":"secret","permissions":"webdav-property"}}}`)
@@ -256,7 +251,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 			})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(*share).To(Equal(ocm.Share{
+			Expect(share).To(BeComparableTo(&ocm.Share{
 				Id: &ocm.ShareId{},
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
@@ -278,20 +273,14 @@ var _ = Describe("Nextcloud", func() {
 					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Ctime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				Mtime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
-			}))
+			}, protocmp.Transform()))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/GetShare {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`)
 		})
 	})
@@ -352,16 +341,10 @@ var _ = Describe("Nextcloud", func() {
 	// 			Ctime: &types.Timestamp{
 	// 				Seconds:              1234567890,
 	// 				Nanos:                0,
-	// 				XXX_NoUnkeyedLiteral: struct{}{},
-	// 				XXX_unrecognized:     nil,
-	// 				XXX_sizecache:        0,
 	// 			},
 	// 			Mtime: &types.Timestamp{
 	// 				Seconds:              1234567890,
 	// 				Nanos:                0,
-	// 				XXX_NoUnkeyedLiteral: struct{}{},
-	// 				XXX_unrecognized:     nil,
-	// 				XXX_sizecache:        0,
 	// 			},
 	// 		}))
 	// 		checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/UpdateShare {"ref":{"Spec":{"Id":{"opaque_id":"some-share-id"}}},"p":{"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true,"deny_grant":true}}}`)
@@ -388,7 +371,7 @@ var _ = Describe("Nextcloud", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(1))
-			Expect(*shares[0]).To(Equal(ocm.Share{
+			Expect(shares[0]).To(BeComparableTo(&ocm.Share{
 				Id: &ocm.ShareId{},
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
@@ -410,20 +393,14 @@ var _ = Describe("Nextcloud", func() {
 					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Ctime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				Mtime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
-			}))
+			}, protocmp.Transform()))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/ListShares [{"type":4,"Term":{"Creator":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}}]`)
 		})
 	})
@@ -437,7 +414,7 @@ var _ = Describe("Nextcloud", func() {
 			receivedShares, err := am.ListReceivedShares(ctx, user)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(receivedShares)).To(Equal(1))
-			Expect(*receivedShares[0]).To(Equal(ocm.ReceivedShare{
+			Expect(receivedShares[0]).To(BeComparableTo(&ocm.ReceivedShare{
 				Id:            &ocm.ShareId{},
 				RemoteShareId: "",
 				Grantee: &provider.Grantee{
@@ -460,21 +437,15 @@ var _ = Describe("Nextcloud", func() {
 					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Ctime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				Mtime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
-			}))
+			}, protocmp.Transform()))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/ListReceivedShares `)
 		})
 	})
@@ -493,7 +464,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 			})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(*receivedShare).To(Equal(ocm.ReceivedShare{
+			Expect(receivedShare).To(BeComparableTo(ocm.ReceivedShare{
 				Id:            &ocm.ShareId{},
 				RemoteShareId: "",
 				Grantee: &provider.Grantee{
@@ -516,21 +487,15 @@ var _ = Describe("Nextcloud", func() {
 					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Ctime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				Mtime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
-			}))
+			}, protocmp.Transform()))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/GetReceivedShare {"Spec":{"Id":{"opaque_id":"some-share-id"}}}`)
 		})
 	})
@@ -565,18 +530,12 @@ var _ = Describe("Nextcloud", func() {
 						Type:     userpb.UserType_USER_TYPE_PRIMARY,
 					},
 					Ctime: &types.Timestamp{
-						Seconds:              1234567890,
-						Nanos:                0,
-						XXX_NoUnkeyedLiteral: struct{}{},
-						XXX_unrecognized:     nil,
-						XXX_sizecache:        0,
+						Seconds: 1234567890,
+						Nanos:   0,
 					},
 					Mtime: &types.Timestamp{
-						Seconds:              1234567890,
-						Nanos:                0,
-						XXX_NoUnkeyedLiteral: struct{}{},
-						XXX_unrecognized:     nil,
-						XXX_sizecache:        0,
+						Seconds: 1234567890,
+						Nanos:   0,
 					},
 					State: ocm.ShareState_SHARE_STATE_ACCEPTED,
 				},
@@ -584,7 +543,7 @@ var _ = Describe("Nextcloud", func() {
 					Paths: []string{"state"},
 				})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(*receivedShare).To(Equal(ocm.ReceivedShare{
+			Expect(receivedShare).To(BeComparableTo(ocm.ReceivedShare{
 				Id:            &ocm.ShareId{},
 				RemoteShareId: "",
 				Grantee: &provider.Grantee{
@@ -607,21 +566,15 @@ var _ = Describe("Nextcloud", func() {
 					Type:     userpb.UserType_USER_TYPE_PRIMARY,
 				},
 				Ctime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				Mtime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
-			}))
+			}, protocmp.Transform()))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/UpdateReceivedShare {"received_share":{"id":{},"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"owner":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"creator":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"ctime":{"seconds":1234567890},"mtime":{"seconds":1234567890},"state":2},"field_mask":{"paths":["state"]}}`)
 		})
 	})

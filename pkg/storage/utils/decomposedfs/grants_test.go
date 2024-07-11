@@ -81,7 +81,7 @@ var _ = Describe("Grants", func() {
 
 	Context("with no permissions", func() {
 		JustBeforeEach(func() {
-			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{}, nil)
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{}, nil)
 		})
 
 		Describe("AddGrant", func() {
@@ -94,7 +94,7 @@ var _ = Describe("Grants", func() {
 
 	Context("with insufficient permissions", func() {
 		JustBeforeEach(func() {
-			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
 				Stat: true,
 			}, nil)
 		})
@@ -109,7 +109,7 @@ var _ = Describe("Grants", func() {
 
 	Context("with sufficient permissions", func() {
 		JustBeforeEach(func() {
-			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
 				Stat:        true,
 				AddGrant:    true,
 				ListGrants:  true,

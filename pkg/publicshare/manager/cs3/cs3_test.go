@@ -31,6 +31,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 	"golang.org/x/crypto/bcrypt"
+	"google.golang.org/protobuf/proto"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -182,7 +183,11 @@ var _ = Describe("Cs3", func() {
 			h, err := bcrypt.GenerateFromPassword([]byte(grant.Password), bcrypt.DefaultCost)
 			Expect(err).ToNot(HaveOccurred())
 			hashedPassword = string(h)
-			shareJSON, err := json.Marshal(publicshare.WithPassword{PublicShare: *existingShare, Password: hashedPassword})
+			tmpShare := &publicshare.WithPassword{
+				Password: hashedPassword,
+			}
+			proto.Merge(&tmpShare.PublicShare, existingShare)
+			shareJSON, err := json.Marshal(tmpShare)
 			Expect(err).ToNot(HaveOccurred())
 			storage.On("SimpleDownload", mock.Anything, mock.MatchedBy(func(in string) bool {
 				return strings.HasPrefix(in, "publicshares/")
@@ -204,10 +209,11 @@ var _ = Describe("Cs3", func() {
 					wg.Done()
 				}()
 				go func() {
-					sharesChan <- &publicshare.WithPassword{
-						Password:    "foo",
-						PublicShare: *existingShare,
+					tmpShare := &publicshare.WithPassword{
+						Password: hashedPassword,
 					}
+					proto.Merge(&tmpShare.PublicShare, existingShare)
+					sharesChan <- tmpShare
 					close(sharesChan)
 					wg.Done()
 				}()

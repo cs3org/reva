@@ -73,7 +73,7 @@ var _ = Describe("Decomposed", func() {
 					ResourceId: env.SpaceRootRes,
 					Path:       "/dir2",
 				}
-				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{CreateContainer: true, Stat: true}, nil)
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{CreateContainer: true, Stat: true}, nil)
 				err := env.Fs.CreateDir(env.Ctx, dir2)
 				Expect(err).ToNot(HaveOccurred())
 				ri, err := env.Fs.GetMD(env.Ctx, dir2, []string{}, []string{})
@@ -85,7 +85,7 @@ var _ = Describe("Decomposed", func() {
 					ResourceId: env.SpaceRootRes,
 					Path:       "/dir1/dir2",
 				}
-				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{CreateContainer: true, Stat: true}, nil)
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{CreateContainer: true, Stat: true}, nil)
 				err := env.Fs.CreateDir(env.Ctx, dir2)
 				Expect(err).ToNot(HaveOccurred())
 				ri, err := env.Fs.GetMD(env.Ctx, dir2, []string{}, []string{})
@@ -93,7 +93,7 @@ var _ = Describe("Decomposed", func() {
 				Expect(ri.Path).To(Equal(dir2.Path))
 			})
 			It("dir already exists", func() {
-				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{CreateContainer: true}, nil)
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{CreateContainer: true}, nil)
 				err := env.Fs.CreateDir(env.Ctx, ref)
 				Expect(err).To(HaveOccurred())
 				Expect(err).Should(MatchError(errtypes.AlreadyExists("/dir1")))
@@ -103,7 +103,7 @@ var _ = Describe("Decomposed", func() {
 					ResourceId: env.SpaceRootRes,
 					Path:       "/dir1/dir3",
 				}
-				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{CreateContainer: true}, nil)
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{CreateContainer: true}, nil)
 				err := env.Fs.CreateDir(env.Ctx, dir3)
 				Expect(err).ToNot(HaveOccurred())
 				err = env.Fs.CreateDir(env.Ctx, dir3)
@@ -115,7 +115,7 @@ var _ = Describe("Decomposed", func() {
 					ResourceId: env.SpaceRootRes,
 					Path:       "/dir1/dir2/dir3",
 				}
-				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{CreateContainer: true}, nil)
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{CreateContainer: true}, nil)
 				err := env.Fs.CreateDir(env.Ctx, dir2)
 				Expect(err).To(HaveOccurred())
 				Expect(err).Should(MatchError(errtypes.PreconditionFailed("/dir1/dir2")))
@@ -125,7 +125,7 @@ var _ = Describe("Decomposed", func() {
 					ResourceId: env.SpaceRootRes,
 					Path:       "/dir1/dir2/dir3/dir4",
 				}
-				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{CreateContainer: true}, nil)
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{CreateContainer: true}, nil)
 				err := env.Fs.CreateDir(env.Ctx, dir2)
 				Expect(err).To(HaveOccurred())
 				Expect(err).Should(MatchError(errtypes.PreconditionFailed("error: not found: dir2")))
@@ -136,7 +136,7 @@ var _ = Describe("Decomposed", func() {
 	Describe("Delete", func() {
 		Context("with no permissions", func() {
 			It("returns an error", func() {
-				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{}, nil)
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{}, nil)
 
 				err := env.Fs.Delete(env.Ctx, ref)
 
@@ -146,7 +146,7 @@ var _ = Describe("Decomposed", func() {
 
 		Context("with insufficient permissions", func() {
 			It("returns an error", func() {
-				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
 					Stat:   true,
 					Delete: false,
 				}, nil)
@@ -159,7 +159,7 @@ var _ = Describe("Decomposed", func() {
 
 		Context("with sufficient permissions", func() {
 			JustBeforeEach(func() {
-				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
 					Stat:   true,
 					Delete: true,
 				}, nil)

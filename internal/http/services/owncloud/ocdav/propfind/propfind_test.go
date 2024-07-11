@@ -128,7 +128,7 @@ var _ = Describe("PropfindWithDepthInfinity", func() {
 					},
 				},
 			},
-			Id:   &sprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})},
+			Id:   &sprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})},
 			Root: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"},
 			Name: "foospace",
 		}
@@ -141,7 +141,7 @@ var _ = Describe("PropfindWithDepthInfinity", func() {
 					},
 				},
 			},
-			Id:   &sprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooquxspace", OpaqueId: "root"})},
+			Id:   &sprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooquxspace", OpaqueId: "root"})},
 			Root: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooquxspace", OpaqueId: "root"},
 			Name: "fooquxspace",
 		}
@@ -154,7 +154,7 @@ var _ = Describe("PropfindWithDepthInfinity", func() {
 					},
 				},
 			},
-			Id:   &sprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooFileShareSpace", OpaqueId: "sharedfile"})},
+			Id:   &sprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooFileShareSpace", OpaqueId: "sharedfile"})},
 			Root: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooFileShareSpace", OpaqueId: "sharedfile"},
 			Name: "fooFileShareSpace",
 		}
@@ -167,7 +167,7 @@ var _ = Describe("PropfindWithDepthInfinity", func() {
 					},
 				},
 			},
-			Id:   &sprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooFileShareSpace2", OpaqueId: "sharedfile2"})},
+			Id:   &sprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooFileShareSpace2", OpaqueId: "sharedfile2"})},
 			Root: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooFileShareSpace2", OpaqueId: "sharedfile2"},
 			Name: "fooFileShareSpace2",
 		}
@@ -180,7 +180,7 @@ var _ = Describe("PropfindWithDepthInfinity", func() {
 					},
 				},
 			},
-			Id:   &sprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooDirShareSpace", OpaqueId: "shareddir"})},
+			Id:   &sprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooDirShareSpace", OpaqueId: "shareddir"})},
 			Root: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooDirShareSpace", OpaqueId: "shareddir"},
 			Name: "fooDirShareSpace",
 		}
@@ -787,7 +787,7 @@ var _ = Describe("PropfindWithDepthInfinity", func() {
 			Expect(err).ToNot(HaveOccurred())
 			req = req.WithContext(ctx)
 
-			spaceID := storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
+			spaceID := storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
 			spaceIDUrl := net.EncodePath(spaceID)
 			handler.HandleSpacesPropfind(rr, req, spaceID)
 			Expect(rr.Code).To(Equal(http.StatusMultiStatus))
@@ -822,7 +822,7 @@ var _ = Describe("PropfindWithDepthInfinity", func() {
 			Expect(err).ToNot(HaveOccurred())
 			req = req.WithContext(ctx)
 
-			spaceID := storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
+			spaceID := storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
 			handler.HandleSpacesPropfind(rr, req, spaceID)
 			Expect(rr.Code).To(Equal(http.StatusMultiStatus))
 
@@ -838,7 +838,7 @@ var _ = Describe("PropfindWithDepthInfinity", func() {
 			Expect(err).ToNot(HaveOccurred())
 			req = req.WithContext(ctx)
 
-			spaceID := storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
+			spaceID := storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
 			handler.HandleSpacesPropfind(rr, req, spaceID)
 			Expect(rr.Code).To(Equal(http.StatusMultiStatus))
 
@@ -855,7 +855,7 @@ var _ = Describe("PropfindWithDepthInfinity", func() {
 			Expect(err).ToNot(HaveOccurred())
 			req = req.WithContext(ctx)
 
-			spaceID := storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
+			spaceID := storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
 			handler.HandleSpacesPropfind(rr, req, spaceID)
 			Expect(rr.Code).To(Equal(http.StatusMultiStatus))
 
@@ -873,7 +873,7 @@ var _ = Describe("PropfindWithDepthInfinity", func() {
 			Expect(err).ToNot(HaveOccurred())
 			req = req.WithContext(ctx)
 
-			spaceID := storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
+			spaceID := storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
 			handler.HandleSpacesPropfind(rr, req, spaceID)
 			Expect(rr.Code).To(Equal(http.StatusMultiStatus))
 
@@ -959,7 +959,7 @@ var _ = Describe("PropfindWithoutDepthInfinity", func() {
 					},
 				},
 			},
-			Id:   &sprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})},
+			Id:   &sprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})},
 			Root: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"},
 			Name: "foospace",
 		}
@@ -972,7 +972,7 @@ var _ = Describe("PropfindWithoutDepthInfinity", func() {
 					},
 				},
 			},
-			Id:   &sprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooquxspace", OpaqueId: "root"})},
+			Id:   &sprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooquxspace", OpaqueId: "root"})},
 			Root: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooquxspace", OpaqueId: "root"},
 			Name: "fooquxspace",
 		}
@@ -985,7 +985,7 @@ var _ = Describe("PropfindWithoutDepthInfinity", func() {
 					},
 				},
 			},
-			Id:   &sprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooFileShareSpace", OpaqueId: "sharedfile"})},
+			Id:   &sprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooFileShareSpace", OpaqueId: "sharedfile"})},
 			Root: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooFileShareSpace", OpaqueId: "sharedfile"},
 			Name: "fooFileShareSpace",
 		}
@@ -998,7 +998,7 @@ var _ = Describe("PropfindWithoutDepthInfinity", func() {
 					},
 				},
 			},
-			Id:   &sprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooFileShareSpace2", OpaqueId: "sharedfile2"})},
+			Id:   &sprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooFileShareSpace2", OpaqueId: "sharedfile2"})},
 			Root: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooFileShareSpace2", OpaqueId: "sharedfile2"},
 			Name: "fooFileShareSpace2",
 		}
@@ -1011,7 +1011,7 @@ var _ = Describe("PropfindWithoutDepthInfinity", func() {
 					},
 				},
 			},
-			Id:   &sprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooDirShareSpace", OpaqueId: "shareddir"})},
+			Id:   &sprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooDirShareSpace", OpaqueId: "shareddir"})},
 			Root: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooDirShareSpace", OpaqueId: "shareddir"},
 			Name: "fooDirShareSpace",
 		}
@@ -1598,7 +1598,7 @@ var _ = Describe("PropfindWithoutDepthInfinity", func() {
 			Expect(err).ToNot(HaveOccurred())
 			req = req.WithContext(ctx)
 
-			spaceID := storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
+			spaceID := storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
 			spaceIDUrl := net.EncodePath(spaceID)
 			handler.HandleSpacesPropfind(rr, req, spaceID)
 			Expect(rr.Code).To(Equal(http.StatusMultiStatus))
@@ -1633,7 +1633,7 @@ var _ = Describe("PropfindWithoutDepthInfinity", func() {
 			Expect(err).ToNot(HaveOccurred())
 			req = req.WithContext(ctx)
 
-			spaceID := storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
+			spaceID := storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
 			handler.HandleSpacesPropfind(rr, req, spaceID)
 			Expect(rr.Code).To(Equal(http.StatusMultiStatus))
 
@@ -1649,7 +1649,7 @@ var _ = Describe("PropfindWithoutDepthInfinity", func() {
 			Expect(err).ToNot(HaveOccurred())
 			req = req.WithContext(ctx)
 
-			spaceID := storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
+			spaceID := storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
 			handler.HandleSpacesPropfind(rr, req, spaceID)
 			Expect(rr.Code).To(Equal(http.StatusMultiStatus))
 
@@ -1666,7 +1666,7 @@ var _ = Describe("PropfindWithoutDepthInfinity", func() {
 			Expect(err).ToNot(HaveOccurred())
 			req = req.WithContext(ctx)
 
-			spaceID := storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
+			spaceID := storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
 			handler.HandleSpacesPropfind(rr, req, spaceID)
 			Expect(rr.Code).To(Equal(http.StatusMultiStatus))
 
@@ -1684,7 +1684,7 @@ var _ = Describe("PropfindWithoutDepthInfinity", func() {
 			Expect(err).ToNot(HaveOccurred())
 			req = req.WithContext(ctx)
 
-			spaceID := storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
+			spaceID := storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
 			handler.HandleSpacesPropfind(rr, req, spaceID)
 			Expect(rr.Code).To(Equal(http.StatusBadRequest))
 

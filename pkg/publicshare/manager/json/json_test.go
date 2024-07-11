@@ -34,6 +34,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/json/persistence/cs3"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
 	"golang.org/x/crypto/bcrypt"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -123,8 +125,8 @@ var _ = Describe("Json", func() {
 
 				Expect(len(pshares)).To(Equal(1))
 				Expect(bcrypt.CompareHashAndPassword([]byte(pshares[0].Password), []byte("foo"))).To(Succeed())
-				Expect(pshares[0].PublicShare.Creator).To(Equal(user1.Id))
-				Expect(pshares[0].PublicShare.ResourceId).To(Equal(sharedResource.Id))
+				Expect(pshares[0].PublicShare.Creator).To(BeComparableTo(user1.Id, protocmp.Transform()))
+				Expect(pshares[0].PublicShare.ResourceId).To(BeComparableTo(sharedResource.Id, protocmp.Transform()))
 			})
 		})
 
@@ -148,10 +150,11 @@ var _ = Describe("Json", func() {
 					wg.Done()
 				}()
 				go func() {
-					sharesChan <- &publicshare.WithPassword{
-						Password:    "foo",
-						PublicShare: *existingShare,
+					tmpShare := &publicshare.WithPassword{
+						Password: "foo",
 					}
+					proto.Merge(&tmpShare.PublicShare, existingShare)
+					sharesChan <- tmpShare
 					close(sharesChan)
 					wg.Done()
 				}()

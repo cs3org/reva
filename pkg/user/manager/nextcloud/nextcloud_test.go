@@ -23,6 +23,7 @@ import (
 	"os"
 
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 
@@ -206,7 +207,7 @@ var _ = Describe("Nextcloud", func() {
 			users, err := um.FindUsers(ctx, "some-query", false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(users)).To(Equal(1))
-			Expect(*users[0]).To(Equal(userpb.User{
+			Expect(users[0]).To(BeComparableTo(&userpb.User{
 				Id: &userpb.UserId{
 					Idp:      "some-idp",
 					OpaqueId: "some-opaque-user-id",
@@ -220,7 +221,7 @@ var _ = Describe("Nextcloud", func() {
 				Opaque:       nil,
 				UidNumber:    0,
 				GidNumber:    0,
-			}))
+			}, protocmp.Transform()))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/user/FindUsers some-query`)
 		})
 	})

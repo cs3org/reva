@@ -60,7 +60,7 @@ var _ = Describe("Spaces", func() {
 					return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_PERMISSION_DENIED}}
 				},
 				nil)
-			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(func(ctx context.Context, n *node.Node) provider.ResourcePermissions {
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(func(ctx context.Context, n *node.Node) *provider.ResourcePermissions {
 				if ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == "25b69780-5f39-43be-a7ac-a9b9e9fe4230" {
 					return node.OwnerPermissions() // id of owner/admin
 				}
@@ -218,7 +218,7 @@ var _ = Describe("Spaces", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 				env.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}, nil)
-				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
 					Stat:     true,
 					AddGrant: true,
 					GetQuota: true,
@@ -287,14 +287,14 @@ var _ = Describe("Spaces", func() {
 				}, nil)
 
 			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(
-				func(ctx context.Context, n *node.Node) provider.ResourcePermissions {
+				func(ctx context.Context, n *node.Node) *provider.ResourcePermissions {
 					switch ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId() {
 					case manager.GetId().GetOpaqueId():
 						return node.OwnerPermissions() // id of owner/admin
 					case editor.GetId().GetOpaqueId():
-						return provider.ResourcePermissions{InitiateFileUpload: true} // mock editor
+						return &provider.ResourcePermissions{InitiateFileUpload: true} // mock editor
 					case viewer.GetId().GetOpaqueId():
-						return provider.ResourcePermissions{Stat: true} // mock viewer
+						return &provider.ResourcePermissions{Stat: true} // mock viewer
 					default:
 						return node.NoPermissions()
 					}

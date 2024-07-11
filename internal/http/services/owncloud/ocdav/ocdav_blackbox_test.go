@@ -172,7 +172,7 @@ var _ = Describe("ocdav", func() {
 					},
 				},
 			},
-			Id:   &cs3storageprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})},
+			Id:   &cs3storageprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(&cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})},
 			Root: &cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "userspace", OpaqueId: "root"},
 			Name: "username",
 			RootInfo: &cs3storageprovider.ResourceInfo{
@@ -864,7 +864,7 @@ var _ = Describe("ocdav", func() {
 				// setup the request
 				// set the webdav endpoint to test
 				basePath = "/webdav"
-				userspace.Id = &cs3storageprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "userspace", OpaqueId: "userspace"})}
+				userspace.Id = &cs3storageprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(&cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "userspace", OpaqueId: "userspace"})}
 				userspace.Root = &cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "userspace", OpaqueId: "userspace"}
 
 				// path based requests at the /webdav endpoint first look up the storage space
@@ -938,7 +938,7 @@ var _ = Describe("ocdav", func() {
 		BeforeEach(func() {
 			basePath = "/dav/spaces"
 
-			userspace.Id = &cs3storageprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "userspace", OpaqueId: "userspace"})}
+			userspace.Id = &cs3storageprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(&cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "userspace", OpaqueId: "userspace"})}
 			userspace.Root = &cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "userspace", OpaqueId: "userspace"}
 			// path based requests at the /webdav endpoint first look up the storage space
 			client.On("ListStorageSpaces", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.ListStorageSpacesRequest) bool {

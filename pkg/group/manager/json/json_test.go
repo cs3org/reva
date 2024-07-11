@@ -27,6 +27,9 @@ import (
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/google/go-cmp/cmp"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 )
 
 var ctx = context.Background()
@@ -112,13 +115,13 @@ func TestUserManager(t *testing.T) {
 
 	// positive test GetGroup
 	resGroup, _ := manager.GetGroup(ctx, gid, false)
-	if !reflect.DeepEqual(resGroup, group) {
+	if !proto.Equal(resGroup, group) {
 		t.Fatalf("group differs: expected=%v got=%v", group, resGroup)
 	}
 
 	// positive test GetGroup without members
 	resGroupWithoutMembers, _ := manager.GetGroup(ctx, gid, true)
-	if !reflect.DeepEqual(resGroupWithoutMembers, groupWithoutMembers) {
+	if !proto.Equal(resGroupWithoutMembers, groupWithoutMembers) {
 		t.Fatalf("group differs: expected=%v got=%v", groupWithoutMembers, resGroupWithoutMembers)
 	}
 
@@ -131,7 +134,7 @@ func TestUserManager(t *testing.T) {
 
 	// positive test GetGroupByClaim by mail
 	resGroupByEmail, _ := manager.GetGroupByClaim(ctx, "mail", "sailing-lovers@example.org", false)
-	if !reflect.DeepEqual(resGroupByEmail, group) {
+	if !proto.Equal(resGroupByEmail, group) {
 		t.Fatalf("group differs: expected=%v got=%v", group, resGroupByEmail)
 	}
 
@@ -144,7 +147,7 @@ func TestUserManager(t *testing.T) {
 
 	// test GetMembers
 	resMembers, _ := manager.GetMembers(ctx, gid)
-	if !reflect.DeepEqual(resMembers, members) {
+	if !cmp.Equal(resMembers, members, protocmp.Transform()) {
 		t.Fatalf("members differ: expected=%v got=%v", members, resMembers)
 	}
 

@@ -169,7 +169,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	permissionsSelector := pool.GetSelector[cs3permissions.PermissionsAPIClient](
 		"PermissionsSelector",
 		"any",
-		func(cc *grpc.ClientConn) cs3permissions.PermissionsAPIClient {
+		func(cc grpc.ClientConnInterface) cs3permissions.PermissionsAPIClient {
 			return cs3permissionsclient
 		},
 	)
@@ -285,7 +285,7 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 		Status: &v1beta11.Status{Code: v1beta11.Code_CODE_OK},
 	}, nil)
 	// Permissions required for setup below
-	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(providerv1beta1.ResourcePermissions{
+	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&providerv1beta1.ResourcePermissions{
 		Stat:     true,
 		AddGrant: true,
 	}, nil).Times(1) //
@@ -319,7 +319,7 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	}
 
 	// Create dir1
-	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(providerv1beta1.ResourcePermissions{
+	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&providerv1beta1.ResourcePermissions{
 		Stat:            true,
 		CreateContainer: true,
 	}, nil).Times(1) // Permissions required for setup below
@@ -335,7 +335,7 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	}
 
 	// Create subdir1 in dir1
-	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(providerv1beta1.ResourcePermissions{
+	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&providerv1beta1.ResourcePermissions{
 		Stat:            true,
 		CreateContainer: true,
 	}, nil).Times(1) // Permissions required for setup below
@@ -351,7 +351,7 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	}
 
 	// Create emptydir
-	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(providerv1beta1.ResourcePermissions{
+	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&providerv1beta1.ResourcePermissions{
 		Stat:            true,
 		CreateContainer: true,
 	}, nil).Times(1) // Permissions required for setup below

@@ -26,6 +26,7 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"google.golang.org/protobuf/proto"
 )
 
 var ctx = context.Background()
@@ -114,7 +115,7 @@ func TestUserManager(t *testing.T) {
 
 	// positive test GetUserByClaim by mail
 	resUserByEmail, _ := manager.GetUserByClaim(ctx, "mail", "einstein@example.org", false)
-	if !reflect.DeepEqual(resUserByEmail, userEinstein) {
+	if !proto.Equal(resUserByEmail, userEinstein) {
 		t.Fatalf("user differs: expected=%v got=%v", userEinstein, resUserByEmail)
 	}
 
@@ -127,7 +128,7 @@ func TestUserManager(t *testing.T) {
 
 	// positive test GetUserByClaim by mail without groups
 	resUserByEmailWithoutGroups, _ := manager.GetUserByClaim(ctx, "mail", "einstein@example.org", true)
-	if !reflect.DeepEqual(resUserByEmailWithoutGroups, userEinsteinWithoutGroups) {
+	if !proto.Equal(resUserByEmailWithoutGroups, userEinsteinWithoutGroups) {
 		t.Fatalf("user differs: expected=%v got=%v", userEinsteinWithoutGroups, resUserByEmailWithoutGroups)
 	}
 

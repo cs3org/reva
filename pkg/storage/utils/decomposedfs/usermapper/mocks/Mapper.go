@@ -39,69 +39,6 @@ func (_m *Mapper) EXPECT() *Mapper_Expecter {
 	return &Mapper_Expecter{mock: &_m.Mock}
 }
 
-// MapUser provides a mock function with given fields: username
-func (_m *Mapper) MapUser(username string) (int, int, error) {
-	ret := _m.Called(username)
-
-	if len(ret) == 0 {
-		panic("no return value specified for MapUser")
-	}
-
-	var r0 int
-	var r1 int
-	var r2 error
-	if rf, ok := ret.Get(0).(func(string) (int, int, error)); ok {
-		return rf(username)
-	}
-	if rf, ok := ret.Get(0).(func(string) int); ok {
-		r0 = rf(username)
-	} else {
-		r0 = ret.Get(0).(int)
-	}
-
-	if rf, ok := ret.Get(1).(func(string) int); ok {
-		r1 = rf(username)
-	} else {
-		r1 = ret.Get(1).(int)
-	}
-
-	if rf, ok := ret.Get(2).(func(string) error); ok {
-		r2 = rf(username)
-	} else {
-		r2 = ret.Error(2)
-	}
-
-	return r0, r1, r2
-}
-
-// Mapper_MapUser_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'MapUser'
-type Mapper_MapUser_Call struct {
-	*mock.Call
-}
-
-// MapUser is a helper method to define mock.On call
-//   - username string
-func (_e *Mapper_Expecter) MapUser(username interface{}) *Mapper_MapUser_Call {
-	return &Mapper_MapUser_Call{Call: _e.mock.On("MapUser", username)}
-}
-
-func (_c *Mapper_MapUser_Call) Run(run func(username string)) *Mapper_MapUser_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
-	})
-	return _c
-}
-
-func (_c *Mapper_MapUser_Call) Return(_a0 int, _a1 int, _a2 error) *Mapper_MapUser_Call {
-	_c.Call.Return(_a0, _a1, _a2)
-	return _c
-}
-
-func (_c *Mapper_MapUser_Call) RunAndReturn(run func(string) (int, int, error)) *Mapper_MapUser_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // RunInBaseScope provides a mock function with given fields: f
 func (_m *Mapper) RunInBaseScope(f func() error) error {
 	ret := _m.Called(f)

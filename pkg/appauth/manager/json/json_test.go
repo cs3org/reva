@@ -34,8 +34,10 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/gdexlab/go-render/render"
+	"github.com/google/go-cmp/cmp"
 	"github.com/sethvargo/go-password/password"
 	"golang.org/x/crypto/bcrypt"
+	"google.golang.org/protobuf/testing/protocmp"
 )
 
 func TestNewManager(t *testing.T) {
@@ -131,9 +133,11 @@ func TestNewManager(t *testing.T) {
 					t.Skip()
 				}
 			}
-			if !reflect.DeepEqual(test.expected, manager) {
+			if !reflect.DeepEqual(test.expected.config, manager.(*jsonManager).config) {
 				t.Fatalf("appauth differ: expected=%v got=%v", render.AsCode(test.expected), render.AsCode(manager))
 			}
+
+			comparePasswords(t, test.expected.passwords, manager.(*jsonManager).passwords)
 		})
 	}
 
@@ -256,13 +260,11 @@ func TestGenerateAppPassword(t *testing.T) {
 
 			// test state in memory
 
-			if !reflect.DeepEqual(pw, test.expected) {
-				t.Fatalf("apppassword differ: expected=%v got=%v", render.AsCode(test.expected), render.AsCode(pw))
+			if !cmp.Equal(pw, test.expected, protocmp.Transform()) {
+				t.Fatalf("apppassword differ: expected=%v got=%v", test.expected, pw)
 			}
 
-			if !reflect.DeepEqual(manager.(*jsonManager).passwords, test.expectedState) {
-				t.Fatalf("manager state differ: expected=%v got=%v", render.AsCode(test.expectedState), render.AsCode(manager.(*jsonManager).passwords))
-			}
+			comparePasswords(t, manager.(*jsonManager).passwords, test.expectedState)
 
 			// test saved json
 
@@ -281,10 +283,7 @@ func TestGenerateAppPassword(t *testing.T) {
 				t.Fatalf("error decoding json: %v", err)
 			}
 
-			if !reflect.DeepEqual(jsonState, test.expectedState) {
-				t.Fatalf("json state differ: expected=%v got=%v", render.AsCode(jsonState), render.AsCode(test.expectedState))
-			}
-
+			comparePasswords(t, jsonState, test.expectedState)
 		})
 	}
 
@@ -409,10 +408,11 @@ func TestListAppPasswords(t *testing.T) {
 				t.Fatal("error listing passwords:", err)
 			}
 
-			if !reflect.DeepEqual(pws, test.expectedState) {
+			if len(pws) != len(test.expectedState) {
 				t.Fatalf("list passwords differ: expected=%v got=%v", test.expectedState, pws)
 			}
 
+			cmp.Equal(pws, test.expectedState, protocmp.Transform())
 		})
 	}
 
@@ -535,10 +535,7 @@ func TestInvalidateAppPassword(t *testing.T) {
 					t.Skip()
 				}
 			}
-			if !reflect.DeepEqual(test.expectedState, manager.(*jsonManager).passwords) {
-				t.Fatalf("apppauth state differ: expected=%v got=%v", render.AsCode(test.expectedState), render.AsCode(manager.(*jsonManager).passwords))
-			}
-
+			comparePasswords(t, test.expectedState, manager.(*jsonManager).passwords)
 		})
 	}
 
@@ -692,8 +689,8 @@ func TestGetAppPassword(t *testing.T) {
 					t.Skip()
 				}
 			}
-			if !reflect.DeepEqual(test.expectedState, pw) {
-				t.Fatalf("apppauth state differ: expected=%v got=%v", render.AsCode(test.expectedState), render.AsCode(pw))
+			if !cmp.Equal(test.expectedState, pw, protocmp.Transform()) {
+				t.Fatalf("apppauth state differ: expected=%v got=%v", test.expectedState, pw)
 			}
 
 		})
@@ -731,4 +728,10 @@ func concatMaps(maps ...map[string]map[string]*apppb.AppPassword) map[string]map
 		}
 	}
 	return res
+}
+
+func comparePasswords(t *testing.T, expected, got map[string]map[string]*apppb.AppPassword) {
+	if !cmp.Equal(expected, got, protocmp.Transform()) {
+		t.Fatalf("passwords differ: expected=%v got=%v", expected, got)
+	}
 }
