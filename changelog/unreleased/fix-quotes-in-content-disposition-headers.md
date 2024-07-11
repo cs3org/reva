@@ -4,3 +4,4 @@ We've fixed the the quotes in the dav `Content-Disposition` header. They caused 
 
 https://github.com/cs3org/reva/pull/4761
 https://github.com/owncloud/web/issues/11031
+https://github.com/owncloud/web/issues/11169
