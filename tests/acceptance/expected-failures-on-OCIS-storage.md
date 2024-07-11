@@ -285,6 +285,18 @@ _The below features have been added after I last categorized them. AFAICT they a
 
 - [coreApiVersions/fileVersions.feature:158](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L158)
 - [coreApiVersions/fileVersions.feature:176](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L176)
+- [coreApiWebdavOperations/downloadFile.feature:284](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavOperations/downloadFile.feature#L284)
+- [coreApiWebdavOperations/downloadFile.feature:285](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavOperations/downloadFile.feature#L285)
+- [coreApiWebdavOperations/downloadFile.feature:286](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavOperations/downloadFile.feature#L286)
+- [coreApiWebdavOperations/downloadFile.feature:287](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavOperations/downloadFile.feature#L287)
+- [coreApiWebdavOperations/downloadFile.feature:288](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavOperations/downloadFile.feature#L288)
+- [coreApiWebdavOperations/downloadFile.feature:289](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavOperations/downloadFile.feature#L289)
+- [coreApiWebdavOperations/downloadFile.feature:294](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavOperations/downloadFile.feature#L294)
+- [coreApiWebdavOperations/downloadFile.feature:295](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavOperations/downloadFile.feature#L295)
+- [coreApiWebdavOperations/downloadFile.feature:296](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavOperations/downloadFile.feature#L296)
+- [coreApiWebdavOperations/downloadFile.feature:317](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavOperations/downloadFile.feature#L317)
+- [coreApiWebdavOperations/downloadFile.feature:318](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavOperations/downloadFile.feature#L318)
+- [coreApiWebdavOperations/downloadFile.feature:323](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavOperations/downloadFile.feature#L323)
 
 - Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
