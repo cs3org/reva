@@ -200,7 +200,7 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool, recurse bool) e
 		})
 
 	case ActionDelete:
-		t.HandleFileDelete(path)
+		_ = t.HandleFileDelete(path)
 	}
 
 	return nil
@@ -328,14 +328,14 @@ func (t *Tree) assimilate(item scanItem) error {
 	// check for the id attribute again after grabbing the lock, maybe the file was assimilated/created by us in the meantime
 	id, err = t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.IDAttr)
 	if err == nil {
-		previousPath, ok := t.lookup.(*lookup.Lookup).GetCachedID(context.Background(), string(spaceID), string(id))
+		previousPath, ok := t.lookup.(*lookup.Lookup).GetCachedID(context.Background(), spaceID, string(id))
 
 		// This item had already been assimilated in the past. Update the path
-		_ = t.lookup.(*lookup.Lookup).CacheID(context.Background(), string(spaceID), string(id), item.Path)
+		_ = t.lookup.(*lookup.Lookup).CacheID(context.Background(), spaceID, string(id), item.Path)
 
 		previousParentID, _ := t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.ParentidAttr)
 
-		fi, err := t.updateFile(item.Path, string(id), string(spaceID))
+		fi, err := t.updateFile(item.Path, string(id), spaceID)
 		if err != nil {
 			return err
 		}
@@ -356,7 +356,7 @@ func (t *Tree) assimilate(item scanItem) error {
 				ref := &provider.Reference{
 					ResourceId: &provider.ResourceId{
 						StorageId: t.options.MountID,
-						SpaceId:   string(spaceID),
+						SpaceId:   spaceID,
 						OpaqueId:  string(parentID),
 					},
 					Path: filepath.Base(item.Path),
@@ -364,7 +364,7 @@ func (t *Tree) assimilate(item scanItem) error {
 				oldRef := &provider.Reference{
 					ResourceId: &provider.ResourceId{
 						StorageId: t.options.MountID,
-						SpaceId:   string(spaceID),
+						SpaceId:   spaceID,
 						OpaqueId:  string(previousParentID),
 					},
 					Path: filepath.Base(previousPath),
@@ -383,7 +383,7 @@ func (t *Tree) assimilate(item scanItem) error {
 	} else {
 		// assimilate new file
 		newId := uuid.New().String()
-		fi, err := t.updateFile(item.Path, newId, string(spaceID))
+		fi, err := t.updateFile(item.Path, newId, spaceID)
 		if err != nil {
 			return err
 		}
@@ -391,7 +391,7 @@ func (t *Tree) assimilate(item scanItem) error {
 		ref := &provider.Reference{
 			ResourceId: &provider.ResourceId{
 				StorageId: t.options.MountID,
-				SpaceId:   string(spaceID),
+				SpaceId:   spaceID,
 				OpaqueId:  newId,
 			},
 		}
