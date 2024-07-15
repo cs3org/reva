@@ -62,7 +62,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.15.0
 	github.com/onsi/gomega v1.31.1
 	github.com/owncloud/ocis/v2 v2.0.0
-	github.com/pablodz/inotifywaitgo v0.0.6
+	github.com/pablodz/inotifywaitgo v0.0.7
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/xattr v0.4.9
 	github.com/prometheus/alertmanager v0.26.0
@@ -236,9 +236,6 @@ require (
 )
 
 replace github.com/studio-b12/gowebdav => github.com/aduffeck/gowebdav v0.0.0-20231215102054-212d4a4374f6
-
-// This can be remove once https://github.com/pablodz/inotifywaitgo/pull/5 has been merged
-replace github.com/pablodz/inotifywaitgo => github.com/aduffeck/inotifywaitgo v0.0.0-20240711133150-36be402e6631
 
 // exclude the v2 line of go-sqlite3 which was released accidentally and prevents pulling in newer versions of go-sqlite3
 // see https://github.com/mattn/go-sqlite3/issues/965 for more details
