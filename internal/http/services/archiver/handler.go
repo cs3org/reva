@@ -258,7 +258,7 @@ func (s *svc) Handler() http.Handler {
 			archName += ".zip"
 		}
 
-		s.log.Debug().Msg("Requested the following resoucres to archive: " + render.Render(resources))
+		s.log.Debug().Msg("Requested the following resources to archive: " + render.Render(resources))
 
 		rw.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", archName))
 		rw.Header().Set("Content-Transfer-Encoding", "binary")
