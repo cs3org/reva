@@ -412,7 +412,7 @@ func (s *svc) handleSpacesPut(w http.ResponseWriter, r *http.Request, spaceID st
 		return
 	}
 
-	if ref.GetResourceId().GetOpaqueId() != "" && ref.GetResourceId().GetSpaceId() != ref.GetResourceId().OpaqueId && r.URL.Path == "/" {
+	if ref.GetResourceId().GetOpaqueId() != "" && ref.GetResourceId().GetSpaceId() != ref.GetResourceId().GetOpaqueId() && r.URL.Path == "/" {
 		s.handlePut(ctx, w, r, &ref, sublog)
 		return
 	}
