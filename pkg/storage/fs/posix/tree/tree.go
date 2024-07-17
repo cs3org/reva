@@ -394,6 +394,10 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	g.Go(func() error {
 		defer close(work)
 		for _, name := range names {
+			if isLockFile(name) {
+				continue
+			}
+
 			select {
 			case work <- name:
 			case <-ctx.Done():
@@ -877,4 +881,8 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	}
 
 	return
+}
+
+func isLockFile(path string) bool {
+	return strings.HasSuffix(path, ".lock") || strings.HasSuffix(path, ".flock") || strings.HasSuffix(path, ".mlock")
 }

@@ -552,7 +552,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate bool) error {
 		}
 
 		// skip lock files
-		if strings.HasSuffix(path, ".flock") || strings.HasSuffix(path, ".mlock") {
+		if isLockFile(path) {
 			return nil
 		}
 

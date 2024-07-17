@@ -41,7 +41,7 @@ func (w *GpfsWatchFolderWatcher) Watch(topic string) {
 			continue
 		}
 
-		if strings.HasSuffix(lwev.Path, ".flock") || strings.HasSuffix(lwev.Path, ".mlock") {
+		if isLockFile(lwev.Path) {
 			continue
 		}
 

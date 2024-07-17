@@ -2,7 +2,6 @@ package tree
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/pablodz/inotifywaitgo/inotifywaitgo"
 )
@@ -43,7 +42,7 @@ func (iw *InotifyWatcher) Watch(path string) {
 		select {
 		case event := <-events:
 			for _, e := range event.Events {
-				if strings.HasSuffix(event.Filename, ".flock") || strings.HasSuffix(event.Filename, ".mlock") {
+				if isLockFile(event.Filename) {
 					continue
 				}
 				switch e {
