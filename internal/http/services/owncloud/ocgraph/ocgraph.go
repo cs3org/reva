@@ -89,6 +89,22 @@ func (s *svc) Handler() http.Handler {
 					return
 				}
 			}
+		} else if head == "v1beta1" {
+			head, r.URL.Path = router.ShiftPath(r.URL.Path)
+			// https://demo.owncloud.com/graph/v1beta1/me/drive/sharedWithMe
+			switch head {
+			case "me":
+				head, r.URL.Path = router.ShiftPath(r.URL.Path)
+				switch head {
+				case "drive":
+					head, r.URL.Path = router.ShiftPath(r.URL.Path)
+					switch head {
+					case "sharedWithMe":
+						s.getSharedWithMe(w, r)
+						return
+					}
+				}
+			}
 		}
 
 		w.WriteHeader(http.StatusNotFound)

@@ -135,10 +135,14 @@ func getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClient) ([]*li
 	return spacesRes, nil
 }
 
+func libregraphShareID(shareID *collaborationv1beta1.ShareId) string {
+	return fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, shareID.OpaqueId)
+}
+
 func convertShareToSpace(share *gateway.SharedResourceInfo) *libregraph.Drive {
 	// the prefix of the remote_item.id and rootid
 	return &libregraph.Drive{
-		Id:         libregraph.PtrString(fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, share.Share.Share.Id.OpaqueId)),
+		Id:         libregraph.PtrString(libregraphShareID(share.Share.Share.Id)),
 		DriveType:  libregraph.PtrString("mountpoint"),
 		DriveAlias: libregraph.PtrString(share.Share.Share.Id.OpaqueId), // this is not used, but must not be the same alias as the drive item
 		Name:       filepath.Base(share.ResourceInfo.Path),
