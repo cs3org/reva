@@ -1,4 +1,4 @@
-Change: Ocis bumped.
+Change: Ocis bumped
 
 Ocis bumped. The expected failures removed.
 
