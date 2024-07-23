@@ -21,14 +21,20 @@
 package ocgraph
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
-	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/spaces"
+	"github.com/cs3org/reva/pkg/utils"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 )
 
@@ -51,8 +57,14 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	shares := make([]*libregraph.DriveItem, 0, len(resShares.Shares))
-	for _, s := range resShares.Shares {
-		shares = append(shares, cs3ReceivedShareToDriveItem(s))
+	for _, share := range resShares.Shares {
+		drive, err := s.cs3ReceivedShareToDriveItem(ctx, share)
+		if err != nil {
+			log.Error().Err(err).Msg("error getting received shares")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		shares = append(shares, drive)
 	}
 
 	if err := json.NewEncoder(w).Encode(map[string]any{
@@ -64,14 +76,26 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func cs3ReceivedShareToDriveItem(share *gateway.SharedResourceInfo) *libregraph.DriveItem {
+func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, share *gateway.SharedResourceInfo) (*libregraph.DriveItem, error) {
+	createdTime := utils.TSToTime(share.Share.Share.Ctime)
+
+	creator, err := s.getUserByID(ctx, share.Share.Share.Creator)
+	if err != nil {
+		return nil, err
+	}
+
+	grantee, err := s.cs3GranteeToSharePointIdentitySet(ctx, share.Share.Share.Grantee)
+	if err != nil {
+		return nil, err
+	}
+
 	return &libregraph.DriveItem{
 		UIHidden:          libregraph.PtrBool(share.Share.Hidden),
 		ClientSynchronize: libregraph.PtrBool(true),
 		CreatedBy: &libregraph.IdentitySet{
 			User: &libregraph.Identity{
-				DisplayName: "", // TODO: understand if needed, in case needs to be resolved
-				Id:          &share.Share.Share.Creator.OpaqueId,
+				DisplayName: creator.DisplayName,
+				Id:          libregraph.PtrString(creator.Id.OpaqueId),
 			},
 		},
 		ETag: &share.ResourceInfo.Etag,
@@ -79,29 +103,110 @@ func cs3ReceivedShareToDriveItem(share *gateway.SharedResourceInfo) *libregraph.
 			MimeType: &share.ResourceInfo.MimeType,
 		},
 		Id:                   libregraph.PtrString(libregraphShareID(share.Share.Share.Id)),
-		LastModifiedDateTime: libregraph.PtrTime(time.Unix(int64(share.ResourceInfo.Mtime.Seconds), int64(share.ResourceInfo.Mtime.Nanos))),
+		LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(share.ResourceInfo.Mtime)),
 		Name:                 libregraph.PtrString(share.ResourceInfo.Name),
-		ParentReference:      &libregraph.ItemReference{}, // TODO: do we have enough info?
+		ParentReference: &libregraph.ItemReference{
+			DriveId:   libregraph.PtrString(fmt.Sprintf("%s$%s", shareJailID, shareJailID)),
+			DriveType: libregraph.PtrString("virtual"),
+			Id:        libregraph.PtrString(fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, shareJailID)),
+		},
 		RemoteItem: &libregraph.RemoteItem{
 			CreatedBy: &libregraph.IdentitySet{
 				User: &libregraph.Identity{
-					DisplayName: "", // TODO: understand if needed, in case needs to be resolved
-					Id:          &share.Share.Share.Creator.OpaqueId,
+					DisplayName: creator.DisplayName,
+					Id:          libregraph.PtrString(creator.Id.OpaqueId),
 				},
 			},
 			ETag: &share.ResourceInfo.Etag,
 			File: &libregraph.OpenGraphFile{
 				MimeType: &share.ResourceInfo.MimeType,
 			},
-			Id:                   nil, // TODO: space id of the resource
-			LastModifiedDateTime: libregraph.PtrTime(time.Unix(int64(share.ResourceInfo.Mtime.Seconds), int64(share.ResourceInfo.Mtime.Nanos))),
+			Id:                   libregraph.PtrString(spaces.EncodeResourceID(share.ResourceInfo.Id)),
+			LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(share.ResourceInfo.Mtime)),
 			Name:                 libregraph.PtrString(share.ResourceInfo.Name),
-			ParentReference:      &libregraph.ItemReference{}, // TODO: space id of the resource
-			Permissions:          []libregraph.Permission{
-				// TODO
+			ParentReference: &libregraph.ItemReference{
+				DriveId:   libregraph.PtrString(spaces.EncodeResourceID(share.ResourceInfo.ParentId)),
+				DriveType: nil, // FIXME: no way to know it unless we hardcode it
+			},
+			Permissions: []libregraph.Permission{
+				{
+					CreatedDateTime: *libregraph.NewNullableTime(&createdTime),
+					GrantedToV2:     grantee,
+					Id:              nil, // TODO: what is this??
+					Invitation: &libregraph.SharingInvitation{
+						InvitedBy: &libregraph.IdentitySet{
+							User: &libregraph.Identity{
+								DisplayName: creator.DisplayName,
+								Id:          libregraph.PtrString(creator.Id.OpaqueId),
+							},
+						},
+					},
+					// TODO: roles are missing, but which is the id???
+					// "roles": [
+					//     "2d00ce52-1fc2-4dbc-8b95-a73b73395f5a"
+					// ]
+				},
 			},
 			Size: libregraph.PtrInt64(int64(share.ResourceInfo.Size)),
 		},
 		Size: libregraph.PtrInt64(int64(share.ResourceInfo.Size)),
+	}, nil
+}
+
+func (s *svc) getUserByID(ctx context.Context, u *userv1beta1.UserId) (*userv1beta1.User, error) {
+	client, err := s.getClient()
+	if err != nil {
+		return nil, err
 	}
+
+	res, err := client.GetUser(ctx, &userv1beta1.GetUserRequest{
+		UserId: u,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return res.User, nil
+}
+
+func (s *svc) getGroupByID(ctx context.Context, g *groupv1beta1.GroupId) (*groupv1beta1.Group, error) {
+	client, err := s.getClient()
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := client.GetGroup(ctx, &groupv1beta1.GetGroupRequest{
+		GroupId: g,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return res.Group, nil
+}
+
+func (s *svc) cs3GranteeToSharePointIdentitySet(ctx context.Context, grantee *provider.Grantee) (*libregraph.SharePointIdentitySet, error) {
+	p := &libregraph.SharePointIdentitySet{}
+
+	if u := grantee.GetUserId(); u != nil {
+		user, err := s.getUserByID(ctx, u)
+		if err != nil {
+			return nil, err
+		}
+		p.User = &libregraph.Identity{
+			DisplayName: user.DisplayName,
+			Id:          libregraph.PtrString(u.OpaqueId),
+		}
+	} else if g := grantee.GetGroupId(); g != nil {
+		group, err := s.getGroupByID(ctx, g)
+		if err != nil {
+			return nil, err
+		}
+		p.Group = &libregraph.Identity{
+			DisplayName: group.DisplayName,
+			Id:          libregraph.PtrString(g.OpaqueId),
+		}
+	}
+
+	return p, nil
 }
