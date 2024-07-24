@@ -104,6 +104,17 @@ func (s *svc) Handler() http.Handler {
 						return
 					}
 				}
+			case "roleManagement":
+				head, r.URL.Path = router.ShiftPath(r.URL.Path)
+				switch head {
+				case "permissions":
+					head, r.URL.Path = router.ShiftPath(r.URL.Path)
+					switch head {
+					case "roleDefinitions":
+						s.getRoleDefinitions(w, r)
+						return
+					}
+				}
 			}
 		}
 
