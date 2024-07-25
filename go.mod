@@ -18,7 +18,7 @@ require (
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc/v3 v3.4.0
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20240425114016-d2cb31692b4e
+	github.com/cs3org/go-cs3apis v0.0.0-20240724121416-062c4e3046cb
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/emvi/iso-639-1 v1.1.0
 	github.com/eventials/go-tus v0.0.0-20220610120217-05d0564bb571
