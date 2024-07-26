@@ -175,6 +175,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		Lookup:      lu,
 		Tree:        tree,
 		Permissions: permissions.NewPermissions(pmock, permissionsSelector),
+		Trashbin:    &decomposedfs.DecomposedfsTrashbin{},
 	}
 	fs, err := decomposedfs.New(o, aspects)
 	if err != nil {
