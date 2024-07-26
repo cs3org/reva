@@ -136,12 +136,17 @@ func (tb *Trashbin) ListRecycle(ctx context.Context, ref *provider.Reference, ke
 		base = filepath.Join(base, key+".trashitem", relativePath)
 	}
 
+	items := []*provider.RecycleItem{}
 	entries, err := os.ReadDir(filepath.Clean(base))
 	if err != nil {
-		return nil, err
+		switch err.(type) {
+		case *os.PathError:
+			return items, nil
+		default:
+			return nil, err
+		}
 	}
 
-	items := []*provider.RecycleItem{}
 	for _, entry := range entries {
 		key := strings.TrimSuffix(entry.Name(), ".trashitem")
 		originalPath, ts, err := tb.readInfoFile(trashRoot, key)
