@@ -27,6 +27,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/options"
@@ -132,8 +133,17 @@ func (tb *Trashbin) ListRecycle(ctx context.Context, ref *provider.Reference, ke
 
 	trashRoot := trashRootForNode(n)
 	base := filepath.Join(trashRoot, "files")
+
+	var originalPath string
+	var ts *typesv1beta1.Timestamp
 	if key != "" {
+		// this is listing a specific item/folder
 		base = filepath.Join(base, key+".trashitem", relativePath)
+		originalPath, ts, err = tb.readInfoFile(trashRoot, key)
+		originalPath = filepath.Join(originalPath, relativePath)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	items := []*provider.RecycleItem{}
@@ -148,29 +158,42 @@ func (tb *Trashbin) ListRecycle(ctx context.Context, ref *provider.Reference, ke
 	}
 
 	for _, entry := range entries {
-		key := strings.TrimSuffix(entry.Name(), ".trashitem")
-		originalPath, ts, err := tb.readInfoFile(trashRoot, key)
-		if err != nil {
-			continue
-		}
+		var fi os.FileInfo
+		var entryOriginalPath string
+		var entryKey string
+		if strings.HasSuffix(entry.Name(), ".trashitem") {
+			entryKey = strings.TrimSuffix(entry.Name(), ".trashitem")
+			entryOriginalPath, ts, err = tb.readInfoFile(trashRoot, entryKey)
+			if err != nil {
+				continue
+			}
 
-		fi, err := entry.Info()
-		if err != nil {
-			continue
+			fi, err = entry.Info()
+			if err != nil {
+				continue
+			}
+		} else {
+			fi, err = os.Stat(filepath.Join(base, entry.Name()))
+			entryKey = entry.Name()
+			entryOriginalPath = filepath.Join(originalPath, entry.Name())
+			if err != nil {
+				continue
+			}
 		}
 
 		item := &provider.RecycleItem{
-			Key:  key,
+			Key:  filepath.Join(originalPath, entryKey),
 			Size: uint64(fi.Size()),
 			Ref: &provider.Reference{
 				ResourceId: &provider.ResourceId{
 					SpaceId:  ref.GetResourceId().GetSpaceId(),
 					OpaqueId: ref.GetResourceId().GetSpaceId(),
 				},
-				Path: originalPath,
+				Path: entryOriginalPath,
 			},
 			DeletionTime: ts,
 		}
+		logger.New().Debug().Interface("item", item).Msg("recycle item")
 		if entry.IsDir() {
 			item.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
 		} else {
@@ -222,7 +245,7 @@ func (tb *Trashbin) PurgeRecycleItem(ctx context.Context, ref *provider.Referenc
 	}
 
 	trashRoot := trashRootForNode(n)
-	err = os.Remove(filepath.Clean(filepath.Join(trashRoot, "files", key+".trashitem", relativePath)))
+	err = os.RemoveAll(filepath.Clean(filepath.Join(trashRoot, "files", key+".trashitem", relativePath)))
 	if err != nil {
 		return err
 	}
