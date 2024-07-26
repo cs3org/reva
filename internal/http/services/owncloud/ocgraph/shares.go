@@ -77,7 +77,8 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 }
 
 func encodeSpaceIDForShareJail(res *provider.ResourceInfo) string {
-	return spaces.EncodeSpaceID(res.Id.StorageId, res.Path)
+	return spaces.EncodeResourceID(res.Id)
+	//return spaces.EncodeSpaceID(res.Id.StorageId, res.Path)
 }
 
 func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, share *gateway.SharedResourceInfo) (*libregraph.DriveItem, error) {
@@ -91,6 +92,12 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, share *gateway.Sh
 	grantee, err := s.cs3GranteeToSharePointIdentitySet(ctx, share.Share.Share.Grantee)
 	if err != nil {
 		return nil, err
+	}
+
+	roles := make([]string, 0, 1)
+	role := CS3ResourcePermissionsToUnifiedRole(share.ResourceInfo.PermissionSet)
+	if role != nil {
+		roles = append(roles, *role.Id)
 	}
 
 	d := &libregraph.DriveItem{
@@ -125,6 +132,7 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, share *gateway.Sh
 			Id:                   libregraph.PtrString(encodeSpaceIDForShareJail(share.ResourceInfo)),
 			LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(share.ResourceInfo.Mtime)),
 			Name:                 libregraph.PtrString(share.ResourceInfo.Name),
+			Path:                 libregraph.PtrString(relativePathToSpaceID(share.ResourceInfo)),
 			// ParentReference: &libregraph.ItemReference{
 			// 	DriveId:   libregraph.PtrString(spaces.EncodeResourceID(share.ResourceInfo.ParentId)),
 			// 	DriveType: nil, // FIXME: no way to know it unless we hardcode it
@@ -142,11 +150,7 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, share *gateway.Sh
 							},
 						},
 					},
-					Roles: []string{"2d00ce52-1fc2-4dbc-8b95-a73b73395f5a"}, // TODO: find a way to not hardcode it
-					// TODO: roles are missing, but which is the id???
-					// "roles": [
-					//     "2d00ce52-1fc2-4dbc-8b95-a73b73395f5a"
-					// ]
+					Roles: roles,
 				},
 			},
 			Size: libregraph.PtrInt64(int64(share.ResourceInfo.Size)),

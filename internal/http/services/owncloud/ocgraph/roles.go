@@ -25,7 +25,6 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
-	libregraph "github.com/owncloud/libre-graph-api-go"
 )
 
 func (s *svc) getRoleDefinitions(w http.ResponseWriter, r *http.Request) {
@@ -34,16 +33,5 @@ func (s *svc) getRoleDefinitions(w http.ResponseWriter, r *http.Request) {
 		log.Error().Err(err).Msg("error marshalling roles as json")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
-	}
-}
-
-func GetBuiltinRoleDefinitionList() []*libregraph.UnifiedRoleDefinition {
-	return []*libregraph.UnifiedRoleDefinition{
-		NewViewerUnifiedRole(),
-		NewSpaceViewerUnifiedRole(),
-		NewEditorUnifiedRole(),
-		NewSpaceEditorUnifiedRole(),
-		NewFileEditorUnifiedRole(),
-		NewManagerUnifiedRole(),
 	}
 }

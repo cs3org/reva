@@ -401,47 +401,10 @@ func GetLegacyName(role libregraph.UnifiedRoleDefinition) string {
 }
 
 // CS3ResourcePermissionsToUnifiedRole tries to find the UnifiedRoleDefinition that matches the supplied
-// CS3 ResourcePermissions and constraints.
-func CS3ResourcePermissionsToUnifiedRole(p *provider.ResourcePermissions, constraints string) *libregraph.UnifiedRoleDefinition {
-	actionSet := map[string]struct{}{}
-	for _, action := range CS3ResourcePermissionsToLibregraphActions(p) {
-		actionSet[action] = struct{}{}
-	}
-
-	var res *libregraph.UnifiedRoleDefinition
-	for _, uRole := range GetBuiltinRoleDefinitionList() {
-		matchFound := false
-		for _, uPerm := range uRole.GetRolePermissions() {
-			if uPerm.GetCondition() != constraints {
-				// the requested constraints don't match, this isn't our role
-				continue
-			}
-
-			// if the actions converted from the ResourcePermissions equal the action the defined for the role, we have match
-			if resourceActionsEqual(actionSet, uPerm.GetAllowedResourceActions()) {
-				matchFound = true
-				break
-			}
-		}
-		if matchFound {
-			res = uRole
-			break
-		}
-	}
-	return res
-}
-
-func resourceActionsEqual(targetActionSet map[string]struct{}, actions []string) bool {
-	if len(targetActionSet) != len(actions) {
-		return false
-	}
-
-	for _, action := range actions {
-		if _, ok := targetActionSet[action]; !ok {
-			return false
-		}
-	}
-	return true
+// CS3 ResourcePermissions.
+func CS3ResourcePermissionsToUnifiedRole(p *provider.ResourcePermissions) *libregraph.UnifiedRoleDefinition {
+	role := conversions.RoleFromResourcePermissions(p)
+	return ocsRoleUnifiedRole[role.Name]
 }
 
 func displayName(role *conversions.Role) *string {
@@ -483,4 +446,24 @@ func GetAllowedResourceActions(role *libregraph.UnifiedRoleDefinition, condition
 		}
 	}
 	return []string{}
+}
+
+func GetBuiltinRoleDefinitionList() []*libregraph.UnifiedRoleDefinition {
+	return []*libregraph.UnifiedRoleDefinition{
+		NewViewerUnifiedRole(),
+		NewEditorUnifiedRole(),
+		NewFileEditorUnifiedRole(),
+		NewManagerUnifiedRole(),
+	}
+}
+
+var ocsRoleUnifiedRole = map[string]*libregraph.UnifiedRoleDefinition{
+	conversions.RoleViewer:       NewViewerUnifiedRole(),
+	conversions.RoleReader:       NewViewerUnifiedRole(),
+	conversions.RoleEditor:       NewEditorUnifiedRole(),
+	conversions.RoleFileEditor:   NewFileEditorUnifiedRole(),
+	conversions.RoleCollaborator: NewManagerUnifiedRole(),
+	// FIXME: this is a wrong mapping, but it looks like in ocis has not been defined so far
+	conversions.RoleUploader: NewEditorUnifiedRole(),
+	conversions.RoleManager:  NewManagerUnifiedRole(),
 }
