@@ -49,6 +49,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/permissions"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/spaceidindex"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/trashbin"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/usermapper"
@@ -110,6 +111,7 @@ type SessionStore interface {
 type Decomposedfs struct {
 	lu           node.PathLookup
 	tp           node.Tree
+	trashbin     trashbin.Trashbin
 	o            *options.Options
 	p            permissions.Permissions
 	um           usermapper.Mapper
@@ -162,6 +164,7 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore, es events.Stream) (
 		Permissions:       permissions.NewPermissions(node.NewPermissions(lu), permissionsSelector),
 		EventStream:       es,
 		DisableVersioning: o.DisableVersioning,
+		Trashbin:          &DecomposedfsTrashbin{},
 	}
 
 	return New(o, aspects)
@@ -217,6 +220,7 @@ func New(o *options.Options, aspects aspects.Aspects) (storage.FS, error) {
 	fs := &Decomposedfs{
 		tp:              aspects.Tree,
 		lu:              aspects.Lookup,
+		trashbin:        aspects.Trashbin,
 		o:               o,
 		p:               aspects.Permissions,
 		um:              aspects.UserMapper,
@@ -228,6 +232,9 @@ func New(o *options.Options, aspects aspects.Aspects) (storage.FS, error) {
 		spaceTypeIndex:  spaceTypeIndex,
 	}
 	fs.sessionStore = upload.NewSessionStore(fs, aspects, o.Root, o.AsyncFileUploads, o.Tokens)
+	if err = fs.trashbin.Setup(fs); err != nil {
+		return nil, err
+	}
 
 	if o.AsyncFileUploads {
 		if fs.stream == nil {
@@ -1200,4 +1207,17 @@ func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference, loc
 	}
 
 	return node.Unlock(ctx, lock)
+}
+
+func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
+	return fs.trashbin.ListRecycle(ctx, ref, key, relativePath)
+}
+func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
+	return fs.trashbin.RestoreRecycleItem(ctx, ref, key, relativePath, restoreRef)
+}
+func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
+	return fs.trashbin.PurgeRecycleItem(ctx, ref, key, relativePath)
+}
+func (fs *Decomposedfs) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
+	return fs.trashbin.EmptyRecycle(ctx, ref)
 }
