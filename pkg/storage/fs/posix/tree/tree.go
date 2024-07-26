@@ -46,6 +46,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/options"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/trashbin"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
@@ -82,6 +83,7 @@ type scanItem struct {
 type Tree struct {
 	lookup     node.PathLookup
 	blobstore  Blobstore
+	trashbin   *trashbin.Trashbin
 	propagator propagator.Propagator
 
 	options *options.Options
@@ -100,13 +102,14 @@ type Tree struct {
 type PermissionCheckFunc func(rp *provider.ResourcePermissions) bool
 
 // New returns a new instance of Tree
-func New(lu node.PathLookup, bs Blobstore, um usermapper.Mapper, o *options.Options, es events.Stream, cache store.Store) (*Tree, error) {
+func New(lu node.PathLookup, bs Blobstore, um usermapper.Mapper, trashbin *trashbin.Trashbin, o *options.Options, es events.Stream, cache store.Store) (*Tree, error) {
 	log := logger.New()
 	scanQueue := make(chan scanItem)
 	t := &Tree{
 		lookup:     lu,
 		blobstore:  bs,
 		userMapper: um,
+		trashbin:   trashbin,
 		options:    o,
 		idCache:    cache,
 		propagator: propagator.New(lu, &o.Options),
@@ -394,7 +397,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	g.Go(func() error {
 		defer close(work)
 		for _, name := range names {
-			if isLockFile(name) {
+			if isLockFile(name) || isTrash(name) {
 				continue
 			}
 
@@ -469,7 +472,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 }
 
 // Delete deletes a node in the tree by moving it to the trash
-func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
+func (t *Tree) Delete(ctx context.Context, n *node.Node) error {
 	path := n.InternalPath()
 
 	if !strings.HasPrefix(path, t.options.Root) {
@@ -501,7 +504,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	_ = os.Remove(n.LockFilePath())
 
 	// purge metadata
-	err = filepath.WalkDir(path, func(path string, _ fs.DirEntry, err error) error {
+	err := filepath.WalkDir(path, func(path string, _ fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -518,8 +521,9 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		return err
 	}
 
-	if err = os.RemoveAll(path); err != nil {
-		return
+	err = t.trashbin.MoveToTrash(n, path)
+	if err != nil {
+		return err
 	}
 
 	return t.Propagate(ctx, n, sizeDiff)
@@ -885,4 +889,8 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 
 func isLockFile(path string) bool {
 	return strings.HasSuffix(path, ".lock") || strings.HasSuffix(path, ".flock") || strings.HasSuffix(path, ".mlock")
+}
+
+func isTrash(path string) bool {
+	return strings.HasSuffix(path, ".trashinfo") || strings.HasSuffix(path, ".trashitem")
 }

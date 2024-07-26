@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/options"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/trashbin"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/tree"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/aspects"
@@ -175,7 +176,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	)
 
 	bs := &treemocks.Blobstore{}
-	tree, err := tree.New(lu, bs, um, o, nil, store.Create())
+	tree, err := tree.New(lu, bs, um, &trashbin.Trashbin{}, o, nil, store.Create())
 	if err != nil {
 		return nil, err
 	}
