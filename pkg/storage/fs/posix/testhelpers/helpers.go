@@ -180,10 +180,15 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	if err != nil {
 		return nil, err
 	}
+	tb, err := trashbin.New(o, lu)
+	if err != nil {
+		return nil, err
+	}
 	aspects := aspects.Aspects{
 		Lookup:      lu,
 		Tree:        tree,
 		Permissions: permissions.NewPermissions(pmock, permissionsSelector),
+		Trashbin:    tb,
 	}
 	fs, err := decomposedfs.New(&o.Options, aspects)
 	if err != nil {

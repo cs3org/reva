@@ -141,6 +141,7 @@ var _ = Describe("File uploads", func() {
 			Lookup:      lu,
 			Tree:        tree,
 			Permissions: permissions.NewPermissions(pmock, permissionsSelector),
+			Trashbin:    &decomposedfs.DecomposedfsTrashbin{},
 		}
 		fs, err = decomposedfs.New(o, aspects)
 		Expect(err).ToNot(HaveOccurred())

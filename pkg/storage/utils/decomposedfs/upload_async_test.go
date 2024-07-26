@@ -177,6 +177,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			Tree:        tree,
 			Permissions: permissions.NewPermissions(pmock, permissionsSelector),
 			EventStream: stream.Chan{pub, con},
+			Trashbin:    &DecomposedfsTrashbin{},
 		}
 		fs, err = New(o, aspects)
 		Expect(err).ToNot(HaveOccurred())

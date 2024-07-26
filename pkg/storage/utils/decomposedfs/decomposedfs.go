@@ -212,6 +212,9 @@ func New(o *options.Options, aspects aspects.Aspects) (storage.FS, error) {
 		return nil, err
 	}
 
+	if aspects.Trashbin == nil {
+		return nil, errors.New("need trashbin")
+	}
 	// set a null usermapper if we don't have one
 	if aspects.UserMapper == nil {
 		aspects.UserMapper = &usermapper.NullMapper{}
