@@ -7,6 +7,9 @@ packages:
     github.com/cs3org/reva/v2/pkg/publicshare/manager/owncloudsql:
         interfaces:
             UserConverter:
+    github.com/cs3org/reva/v2/pkg/publicshare:
+        interfaces:
+            Manager:
     github.com/cs3org/reva/v2/pkg/share:
         interfaces:
             Manager:
