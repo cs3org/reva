@@ -27,7 +27,6 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/options"
@@ -182,7 +181,7 @@ func (tb *Trashbin) ListRecycle(ctx context.Context, ref *provider.Reference, ke
 		}
 
 		item := &provider.RecycleItem{
-			Key:  filepath.Join(originalPath, entryKey),
+			Key:  filepath.Join(key, relativePath, entryKey),
 			Size: uint64(fi.Size()),
 			Ref: &provider.Reference{
 				ResourceId: &provider.ResourceId{
@@ -193,7 +192,6 @@ func (tb *Trashbin) ListRecycle(ctx context.Context, ref *provider.Reference, ke
 			},
 			DeletionTime: ts,
 		}
-		logger.New().Debug().Interface("item", item).Msg("recycle item")
 		if entry.IsDir() {
 			item.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
 		} else {
