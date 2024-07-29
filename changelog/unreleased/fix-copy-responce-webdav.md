@@ -1,6 +1,6 @@
-Bugfix: Fixed the response code when copying the shared from to personal
+Bugfix: Fixed the response code when copying from a share to a personal space
 
-We fixed the response code when copying the file from shares to personal space with a secure view role.
+We fixed the response code when copying a file from a share to a personal space with a secure view role.
 
 https://github.com/cs3org/reva/pull/4782  
 https://github.com/owncloud/ocis/issues/9482
