@@ -63,12 +63,12 @@ func (session *Session) Initiate(host string, insecure bool) error {
 
 func (session *Session) getConnection(host string, ins bool) (*grpc.ClientConn, error) {
 	if ins {
-		return grpc.Dial(host, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		return grpc.NewClient(host, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
 	tlsconf := &tls.Config{InsecureSkipVerify: false}
 	creds := credentials.NewTLS(tlsconf)
-	return grpc.Dial(host, grpc.WithTransportCredentials(creds))
+	return grpc.NewClient(host, grpc.WithTransportCredentials(creds))
 }
 
 // GetLoginMethods returns a list of all available login methods supported by the Reva instance.
