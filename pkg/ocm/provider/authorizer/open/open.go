@@ -20,15 +20,17 @@ package open
 
 import (
 	"context"
-	"encoding/json"
-	"os"
+	"net/url"
+	"path/filepath"
 	"strings"
+	"time"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
+	client "github.com/cs3org/reva/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
 	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/pkg/errors"
 )
 
 func init() {
@@ -42,19 +44,7 @@ func New(ctx context.Context, m map[string]interface{}) (provider.Authorizer, er
 		return nil, err
 	}
 
-	f, err := os.ReadFile(c.Providers)
-	if err != nil {
-		return nil, err
-	}
-	providers := []*ocmprovider.ProviderInfo{}
-	err = json.Unmarshal(f, &providers)
-	if err != nil {
-		return nil, err
-	}
-
 	a := &authorizer{}
-	a.providers = a.getOCMProviders(providers)
-
 	return a, nil
 }
 
@@ -64,9 +54,6 @@ type config struct {
 }
 
 func (c *config) ApplyDefaults() {
-	if c.Providers == "" {
-		c.Providers = "/etc/revad/ocm-providers.json"
-	}
 }
 
 type authorizer struct {
@@ -79,7 +66,51 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 			return p, nil
 		}
 	}
-	return nil, errtypes.NotFound(domain)
+
+	// not yet known: try to discover the remote OCM endpoint
+	ocmClient := client.NewClient(time.Duration(10)*time.Second, true)
+	ocmCaps, err := ocmClient.Discover(ctx, domain)
+	if err != nil {
+		return nil, errors.Wrap(err, "error probing OCM services at remote server")
+	}
+	var path string
+	for _, t := range ocmCaps.ResourceTypes {
+		webdavRoot, ok := t.Protocols["webdav"]
+		if ok {
+			// assume the first resourceType that exposes a webdav root is OK to use: as a matter of fact,
+			// no implementation exists yet that exposes multiple resource types with different roots.
+			path = filepath.Join(ocmCaps.Endpoint, webdavRoot)
+		}
+	}
+	host, _ := url.Parse(ocmCaps.Endpoint)
+
+	// return a provider info record for this domain, including the OCM service
+	return &ocmprovider.ProviderInfo{
+		Name:         "ocm_" + domain,
+		FullName:     ocmCaps.Provider,
+		Description:  "OCM service at " + domain,
+		Organization: domain,
+		Domain:       domain,
+		Homepage:     "",
+		Email:        "",
+		Properties:   map[string]string{},
+		Services: []*ocmprovider.Service{
+			{
+				Endpoint: &ocmprovider.ServiceEndpoint{
+					Type: &ocmprovider.ServiceType{Name: "OCM"},
+					Path: ocmCaps.Endpoint,
+				},
+				Host: host.Hostname(),
+			},
+			{
+				Endpoint: &ocmprovider.ServiceEndpoint{
+					Type: &ocmprovider.ServiceType{Name: "Webdav"},
+					Path: path,
+				},
+				Host: host.Hostname(),
+			},
+		},
+	}, nil
 }
 
 func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovider.ProviderInfo) error {
@@ -88,23 +119,4 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 
 func (a *authorizer) ListAllProviders(ctx context.Context) ([]*ocmprovider.ProviderInfo, error) {
 	return a.providers, nil
-}
-
-func (a *authorizer) getOCMProviders(providers []*ocmprovider.ProviderInfo) (po []*ocmprovider.ProviderInfo) {
-	for _, p := range providers {
-		_, err := a.getOCMHost(p)
-		if err == nil {
-			po = append(po, p)
-		}
-	}
-	return
-}
-
-func (a *authorizer) getOCMHost(provider *ocmprovider.ProviderInfo) (string, error) {
-	for _, s := range provider.Services {
-		if s.Endpoint.Type.Name == "OCM" {
-			return s.Host, nil
-		}
-	}
-	return "", errtypes.NotFound("OCM Host")
 }

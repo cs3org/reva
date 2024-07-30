@@ -504,16 +504,6 @@ func (s *svc) newPropRaw(key, val string) *propertyXML {
 	}
 }
 
-func supportLegacyOCMAccess(ctx context.Context, md *provider.ResourceInfo) {
-	ocm10, _ := ctx.Value(ctxOCM10).(bool)
-	if ocm10 {
-		// the path is something like /<token>/...
-		// we need to strip the token part as this
-		// is passed as username in the basic auth
-		_, md.Path = router.ShiftPath(md.Path)
-	}
-}
-
 func appendSlash(path string) string {
 	if path == "" {
 		return "/"
@@ -540,11 +530,15 @@ func (s *svc) isOpenable(path string) bool {
 // prefixing it with the baseURI.
 func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string, usershares, linkshares map[string]struct{}) (*responseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
+
 	md.Path = strings.TrimPrefix(md.Path, ns)
+	ocm, _ := ctx.Value(ctxOCM).(bool)
+	if ocm {
+		// /<token>/ was injected in front of the OCM path for the routing to work, we now remove it (see internal/http/services/owncloud/ocdav/dav.go)
+		_, md.Path = router.ShiftPath(md.Path)
+	}
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
-
-	supportLegacyOCMAccess(ctx, md)
 	ref := path.Join(baseURI, md.Path)
 	if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ref += "/"
