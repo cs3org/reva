@@ -20,6 +20,7 @@ package trashbin
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -213,22 +214,37 @@ func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, ref *provider.Refere
 
 	trashRoot := trashRootForNode(n)
 	trashPath := filepath.Clean(filepath.Join(trashRoot, "files", key+".trashitem", relativePath))
-	originalPath, _, err := tb.readInfoFile(trashRoot, key)
+
+	restoreBaseNode, err := tb.lu.NodeFromID(ctx, restoreRef.GetResourceId())
 	if err != nil {
 		return err
 	}
-	restorePath := filepath.Join(n.SpaceRoot.InternalPath(), originalPath)
+	restorePath := filepath.Join(restoreBaseNode.InternalPath(), restoreRef.GetPath())
 
 	id, err := tb.lu.MetadataBackend().Get(ctx, trashPath, prefixes.IDAttr)
 	if err != nil {
 		return err
 	}
 
-	err = os.Rename(trashPath, restorePath)
+	// update parent id in case it was restored to a different location
+	parentID, err := tb.lu.MetadataBackend().Get(ctx, filepath.Dir(restorePath), prefixes.IDAttr)
+	if err != nil {
+		return err
+	}
+	if len(parentID) == 0 {
+		return fmt.Errorf("trashbin: parent id not found for %s", restorePath)
+	}
+
+	err = tb.lu.MetadataBackend().Set(ctx, trashPath, prefixes.ParentidAttr, parentID)
 	if err != nil {
 		return err
 	}
 
+	// restore the item
+	err = os.Rename(trashPath, restorePath)
+	if err != nil {
+		return err
+	}
 	tb.lu.CacheID(ctx, n.SpaceID, string(id), restorePath)
 
 	// cleanup trash info
