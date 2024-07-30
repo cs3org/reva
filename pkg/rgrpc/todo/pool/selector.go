@@ -102,24 +102,30 @@ func (s *Selector[T]) Next(opts ...Option) (T, error) {
 	}
 
 	target := s.id
+	// if the target is given as a recognized gRPC URI, skip registry lookup
+	// see https://github.com/grpc/grpc/blob/master/doc/naming.md#name-syntax
 	prefix := strings.SplitN(s.id, ":", 2)[0]
-	switch prefix {
-	case "dns", "unix", "kubernetes":
-		// use target as is
-	default:
+	switch {
+	case prefix == "dns":
+		fallthrough
+	case prefix == "unix":
+		fallthrough
+	case prefix == "kubernetes":
+		// use target as is and skip registry lookup
+	case options.registry != nil:
 		// use service registry to look up address
-		if options.registry != nil {
-			services, err := options.registry.GetService(s.id)
-			if err != nil {
-				return *new(T), fmt.Errorf("%s: %w", s.id, err)
-			}
-
-			nodeAddress, err := registry.GetNodeAddress(services)
-			if err != nil {
-				return *new(T), fmt.Errorf("%s: %w", s.id, err)
-			}
-			target = nodeAddress
+		services, err := options.registry.GetService(s.id)
+		if err != nil {
+			return *new(T), fmt.Errorf("%s: %w", s.id, err)
 		}
+
+		nodeAddress, err := registry.GetNodeAddress(services)
+		if err != nil {
+			return *new(T), fmt.Errorf("%s: %w", s.id, err)
+		}
+		target = nodeAddress
+	default:
+		// if no registry is available, use the target as is
 	}
 
 	existingClient, ok := s.clientMap.Load(target)
