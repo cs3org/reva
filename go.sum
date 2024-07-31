@@ -916,8 +916,6 @@ github.com/cpuguy83/go-md2man/v2 v2.0.2/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46t
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e h1:tqSPWQeueWTKnJVMJffz4pz0o1WuQxJ28+5x5JgaHD8=
 github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e/go.mod h1:XJEZ3/EQuI3BXTp/6DUzFr850vlxq11I6satRtz0YQ4=
-github.com/cs3org/go-cs3apis v0.0.0-20240425114016-d2cb31692b4e h1:Cm2l8m2riLa79eh7V2wHd1Ra7wR3TbngmeLZBJ9MxTU=
-github.com/cs3org/go-cs3apis v0.0.0-20240425114016-d2cb31692b4e/go.mod h1:yyP8PRo0EZou3nSH7H4qjlzQwaydPeIRNgX50npQHpE=
 github.com/cs3org/go-cs3apis v0.0.0-20240724121416-062c4e3046cb h1:KmYZDReplv/yfwc1LNYpDcVhVujC3Pasv6WjXx1haSU=
 github.com/cs3org/go-cs3apis v0.0.0-20240724121416-062c4e3046cb/go.mod h1:yyP8PRo0EZou3nSH7H4qjlzQwaydPeIRNgX50npQHpE=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
