@@ -27,9 +27,9 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/go-chi/chi/v5"
 )
 
 func init() {
@@ -47,7 +47,8 @@ func (c *config) ApplyDefaults() {
 }
 
 type svc struct {
-	c *config
+	c      *config
+	router *chi.Mux
 }
 
 func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
@@ -59,68 +60,37 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 	s := &svc{
 		c: &c,
 	}
+	s.initRouter()
 
 	return s, nil
+}
+
+func (s *svc) initRouter() {
+	s.router = chi.NewRouter()
+
+	s.router.Route("/v1.0", func(r chi.Router) {
+		r.Route("/me", func(r chi.Router) {
+			r.Get("/", s.getMe)
+			r.Route("/drives", func(r chi.Router) {
+				r.Get("/", s.listMySpaces)
+
+			})
+		})
+		r.Route("/drives", func(r chi.Router) {
+			r.Get("/{space-id}", s.getSpace)
+		})
+	})
+	s.router.Route("/v1beta1", func(r chi.Router) {
+		r.Get("/me/drive/sharedWithMe", s.getSharedWithMe)
+		r.Get("/roleManagement/permissions/roleDefinitions", s.getRoleDefinitions)
+	})
 }
 
 func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
 	return pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
 }
 
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var head string
-		head, r.URL.Path = router.ShiftPath(r.URL.Path)
-
-		if head == "v1.0" {
-			head, r.URL.Path = router.ShiftPath(r.URL.Path)
-			switch head {
-			case "drives":
-				s.getSpace(w, r)
-				return
-			case "me":
-				head, r.URL.Path = router.ShiftPath(r.URL.Path)
-				switch head {
-				case "":
-					s.getMe(w, r)
-					return
-				case "drives":
-					s.listMySpaces(w, r)
-					return
-				}
-			}
-		} else if head == "v1beta1" {
-			head, r.URL.Path = router.ShiftPath(r.URL.Path)
-			// https://demo.owncloud.com/graph/v1beta1/me/drive/sharedWithMe
-			switch head {
-			case "me":
-				head, r.URL.Path = router.ShiftPath(r.URL.Path)
-				switch head {
-				case "drive":
-					head, r.URL.Path = router.ShiftPath(r.URL.Path)
-					switch head {
-					case "sharedWithMe":
-						s.getSharedWithMe(w, r)
-						return
-					}
-				}
-			case "roleManagement":
-				head, r.URL.Path = router.ShiftPath(r.URL.Path)
-				switch head {
-				case "permissions":
-					head, r.URL.Path = router.ShiftPath(r.URL.Path)
-					switch head {
-					case "roleDefinitions":
-						s.getRoleDefinitions(w, r)
-						return
-					}
-				}
-			}
-		}
-
-		w.WriteHeader(http.StatusNotFound)
-	})
-}
+func (s *svc) Handler() http.Handler { return s.router }
 
 func (s *svc) Prefix() string { return "graph" }
 

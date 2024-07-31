@@ -226,3 +226,7 @@ func (s *svc) cs3GranteeToSharePointIdentitySet(ctx context.Context, grantee *pr
 
 	return p, nil
 }
+
+func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
+
+}
