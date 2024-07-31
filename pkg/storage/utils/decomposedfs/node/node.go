@@ -23,6 +23,7 @@ import (
 	"crypto/md5"
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"hash"
 	"hash/adler32"
@@ -170,6 +171,26 @@ func New(spaceID, id, parentID, name string, blobsize int64, blobID string, t pr
 		BlobID:   blobID,
 		nodeType: &t,
 	}
+}
+
+func (n *Node) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&struct {
+		Name     string `json:"name"`
+		ID       string `json:"id"`
+		SpaceID  string `json:"spaceID"`
+		ParentID string `json:"parentID"`
+		BlobID   string `json:"blobID"`
+		BlobSize int64  `json:"blobSize"`
+		Exists   bool   `json:"exists"`
+	}{
+		Name:     n.Name,
+		ID:       n.ID,
+		SpaceID:  n.SpaceID,
+		ParentID: n.ParentID,
+		BlobID:   n.BlobID,
+		BlobSize: n.Blobsize,
+		Exists:   n.Exists,
+	})
 }
 
 // Type returns the node's resource type
