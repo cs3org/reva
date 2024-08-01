@@ -114,7 +114,7 @@ func New(lu node.PathLookup, bs Blobstore, um usermapper.Mapper, trashbin *trash
 		idCache:    cache,
 		propagator: propagator.New(lu, &o.Options),
 		scanQueue:  scanQueue,
-		scanDebouncer: NewScanDebouncer(1000*time.Millisecond, func(item scanItem) {
+		scanDebouncer: NewScanDebouncer(time.Duration(o.ScanDebounceDelay)*time.Millisecond, func(item scanItem) {
 			scanQueue <- item
 		}),
 		es:  es,
