@@ -245,7 +245,7 @@ func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, ref *provider.Refere
 	if err != nil {
 		return err
 	}
-	tb.lu.CacheID(ctx, n.SpaceID, string(id), restorePath)
+	_ = tb.lu.CacheID(ctx, n.SpaceID, string(id), restorePath)
 
 	// cleanup trash info
 	if relativePath == "." || relativePath == "/" {
