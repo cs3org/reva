@@ -692,10 +692,13 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 		// we must not allow to override mountpoints - so we check if we have access to the parent. If not this is a mountpoint
 		if destInShareJail {
-			log.Error().Msg("must not overwrite mount points")
-			w.WriteHeader(http.StatusBadRequest)
-			_, _ = w.Write([]byte("must not overwrite mount points"))
-			return nil
+			dir, file := filepath.Split(dstRef.GetPath())
+			if dir == "/" || dir == "" || file == "" {
+				log.Error().Msg("must not overwrite mount points")
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte("must not overwrite mount points"))
+				return nil
+			}
 		}
 
 		// delete existing tree when overwriting a directory or replacing a file with a directory
