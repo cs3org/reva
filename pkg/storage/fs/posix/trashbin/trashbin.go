@@ -248,7 +248,11 @@ func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, ref *provider.Refere
 	tb.lu.CacheID(ctx, n.SpaceID, string(id), restorePath)
 
 	// cleanup trash info
-	return os.Remove(filepath.Join(trashRoot, "info", key+".trashinfo"))
+	if relativePath == "." || relativePath == "/" {
+		return os.Remove(filepath.Join(trashRoot, "info", key+".trashinfo"))
+	} else {
+		return nil
+	}
 }
 
 // PurgeRecycleItem purges the specified item, all its children and all their revisions
