@@ -78,6 +78,11 @@ func NewScanDebouncer(d time.Duration, f func(item scanItem)) *ScanDebouncer {
 
 // Debounce restarts the debounce timer for the given space
 func (d *ScanDebouncer) Debounce(item scanItem) {
+	if d.after == 0 {
+		d.f(item)
+		return
+	}
+
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 
