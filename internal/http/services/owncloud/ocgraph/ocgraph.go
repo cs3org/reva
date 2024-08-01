@@ -81,7 +81,10 @@ func (s *svc) initRouter() {
 		})
 	})
 	s.router.Route("/v1beta1", func(r chi.Router) {
-		r.Get("/me/drive/sharedWithMe", s.getSharedWithMe)
+		r.Route("/me/drive", func(r chi.Router) {
+			r.Get("/sharedWithMe", s.getSharedWithMe)
+			r.Get("/sharedByMe", s.getSharedByMe)
+		})
 		r.Get("/roleManagement/permissions/roleDefinitions", s.getRoleDefinitions)
 	})
 }

@@ -25,10 +25,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"path"
 
+	"github.com/alitto/pond"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -228,5 +231,153 @@ func (s *svc) cs3GranteeToSharePointIdentitySet(ctx context.Context, grantee *pr
 }
 
 func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 
+	list, err := s.listExistingShares(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("error getting shares")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	shares := make([]*libregraph.DriveItem, 0, len(list))
+	for _, share := range list {
+		drive, err := s.cs3ShareToDriveItem(ctx, share)
+		if err != nil {
+			log.Error().Err(err).Msg("error getting shares")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		shares = append(shares, drive)
+	}
+
+	if err := json.NewEncoder(w).Encode(map[string]any{
+		"value": shares,
+	}); err != nil {
+		log.Error().Err(err).Msg("error marshalling shares as json")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+}
+
+func (s *svc) cs3ShareToDriveItem(ctx context.Context, p *Pair[*collaborationv1beta1.Share, *provider.ResourceInfo]) (*libregraph.DriveItem, error) {
+	createdTime := utils.TSToTime(p.First.Ctime)
+
+	creator, err := s.getUserByID(ctx, p.First.Creator)
+	if err != nil {
+		return nil, err
+	}
+
+	grantee, err := s.cs3GranteeToSharePointIdentitySet(ctx, p.First.Grantee)
+	if err != nil {
+		return nil, err
+	}
+
+	roles := make([]string, 0, 1)
+	role := CS3ResourcePermissionsToUnifiedRole(p.Second.PermissionSet)
+	if role != nil {
+		roles = append(roles, *role.Id)
+	}
+
+	parentRelativePath := path.Dir(relativePathToSpaceID(p.Second))
+
+	d := &libregraph.DriveItem{
+		ETag:                 libregraph.PtrString(p.Second.Etag),
+		Id:                   libregraph.PtrString(spaces.EncodeResourceID(p.Second.Id)),
+		LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(p.First.Mtime)),
+		Name:                 libregraph.PtrString(p.Second.Name),
+		ParentReference: &libregraph.ItemReference{
+			DriveId: libregraph.PtrString(spaces.EncodeSpaceID(p.Second.Id.StorageId, p.Second.Id.SpaceId)),
+			// DriveType: libregraph.PtrString(p.Second.Space.SpaceType),
+			Id:   libregraph.PtrString(spaces.EncodeResourceID(p.Second.ParentId)),
+			Name: libregraph.PtrString(path.Base(parentRelativePath)),
+			Path: libregraph.PtrString(parentRelativePath),
+		},
+		Permissions: []libregraph.Permission{
+			{
+				CreatedDateTime: *libregraph.NewNullableTime(&createdTime),
+				GrantedToV2:     grantee,
+				Id:              nil, // TODO: what is this??
+				Invitation: &libregraph.SharingInvitation{
+					InvitedBy: &libregraph.IdentitySet{
+						User: &libregraph.Identity{
+							DisplayName: creator.DisplayName,
+							Id:          libregraph.PtrString(creator.Id.OpaqueId),
+						},
+					},
+				},
+				Roles: roles,
+			},
+		},
+		Size: libregraph.PtrInt64(int64(p.Second.Size)),
+	}
+
+	if p.Second.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		d.Folder = libregraph.NewFolder()
+	} else {
+		d.File = &libregraph.OpenGraphFile{
+			MimeType: &p.Second.MimeType,
+		}
+	}
+
+	return d, nil
+}
+
+type Pair[T, V any] struct {
+	First  T
+	Second V
+}
+
+func (s *svc) listExistingShares(ctx context.Context) ([]*Pair[*collaborationv1beta1.Share, *provider.ResourceInfo], error) {
+	gw, err := s.getClient()
+	if err != nil {
+		return nil, err
+	}
+
+	rshares, err := gw.ListShares(ctx, &collaborationv1beta1.ListSharesRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	sharesCh := make(chan *Pair[*collaborationv1beta1.Share, *provider.ResourceInfo], len(rshares.Shares))
+	pool := pond.New(50, len(rshares.Shares))
+	for _, share := range rshares.Shares {
+		share := share
+		// TODO (gdelmont): we should report any eventual error raised by the goroutines
+		pool.Submit(func() {
+			stat, err := gw.Stat(ctx, &provider.StatRequest{
+				Ref: &provider.Reference{
+					ResourceId: share.ResourceId,
+				},
+			})
+			if err != nil {
+				return
+			}
+			if stat.Status.Code != rpcv1beta1.Code_CODE_OK {
+				return
+			}
+
+			sharesCh <- &Pair[*collaborationv1beta1.Share, *provider.ResourceInfo]{
+				First:  share,
+				Second: stat.Info,
+			}
+		})
+	}
+
+	sris := make([]*Pair[*collaborationv1beta1.Share, *provider.ResourceInfo], 0, len(rshares.Shares))
+	done := make(chan struct{})
+	go func() {
+		for s := range sharesCh {
+			sris = append(sris, s)
+		}
+		done <- struct{}{}
+	}()
+	pool.StopAndWait()
+	close(sharesCh)
+	<-done
+	close(done)
+
+	return sris, nil
 }
