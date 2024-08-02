@@ -28,11 +28,9 @@ import (
 	"path"
 	"strings"
 
-	"github.com/alitto/pond"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	linkv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -249,24 +247,27 @@ func resourceIdFromString(s string) *provider.ResourceId {
 	}
 }
 
-func groupByResourceID(shares []*collaborationv1beta1.Share, publicShares []*linkv1beta1.PublicShare) map[string][]*share {
-	m := make(map[string][]*share, len(shares)+len(publicShares)) // at most we have the sum of both lists
+func groupByResourceID(shares []*gateway.ShareResourceInfo, publicShares []*gateway.PublicShareResourceInfo) (map[string][]*share, map[string]*provider.ResourceInfo) {
+	grouped := make(map[string][]*share, len(shares)+len(publicShares)) // at most we have the sum of both lists
+	infos := make(map[string]*provider.ResourceInfo, len(shares)+len(publicShares))
 
 	for _, s := range shares {
-		id := resourceIdToString(s.ResourceId)
-		m[id] = append(m[id], &share{
-			share: s,
+		id := resourceIdToString(s.Share.ResourceId)
+		grouped[id] = append(grouped[id], &share{
+			share: s.Share,
 		})
+		infos[id] = s.ResourceInfo // all shares of the same resource are assumed to have the same ResourceInfo payload, here we take the last
 	}
 
 	for _, s := range publicShares {
-		id := resourceIdToString(s.ResourceId)
-		m[id] = append(m[id], &share{
-			public: s,
+		id := resourceIdToString(s.PublicShare.ResourceId)
+		grouped[id] = append(grouped[id], &share{
+			public: s.PublicShare,
 		})
+		infos[id] = s.ResourceInfo
 	}
 
-	return m
+	return grouped, infos
 }
 
 type pair[T, V any] struct {
@@ -284,59 +285,19 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shares, err := gw.ListShares(ctx, &collaborationv1beta1.ListSharesRequest{})
+	shares, err := gw.ListExistingShares(ctx, &collaborationv1beta1.ListSharesRequest{})
 	if err != nil {
 		// TODO
 		return
 	}
 
-	publicShares, err := gw.ListPublicShares(ctx, &linkv1beta1.ListPublicSharesRequest{})
+	publicShares, err := gw.ListExistingPublicShares(ctx, &linkv1beta1.ListPublicSharesRequest{})
 	if err != nil {
 		// TODO
 		return
 	}
 
-	grouped := groupByResourceID(shares.Shares, publicShares.Share)
-
-	// resolve all the resource ids
-	res := make(chan *pair[string, *provider.ResourceInfo], len(grouped))
-	pool := pond.New(50, len(grouped))
-	for id := range grouped {
-		id := id
-
-		// TODO (gdelmont): we should report any eventual error raised by the goroutines
-		pool.Submit(func() {
-			stat, err := gw.Stat(ctx, &provider.StatRequest{
-				Ref: &provider.Reference{
-					ResourceId: resourceIdFromString(id),
-				},
-			})
-			if err != nil {
-				return
-			}
-			if stat.Status.Code != rpcv1beta1.Code_CODE_OK {
-				return
-			}
-
-			res <- &pair[string, *provider.ResourceInfo]{
-				First:  id,
-				Second: stat.Info,
-			}
-		})
-	}
-
-	infos := make(map[string]*provider.ResourceInfo)
-	done := make(chan struct{})
-	go func() {
-		for s := range res {
-			infos[s.First] = s.Second
-		}
-		done <- struct{}{}
-	}()
-	pool.StopAndWait()
-	close(res)
-	<-done
-	close(done)
+	grouped, infos := groupByResourceID(shares.ShareInfos, publicShares.ShareInfos)
 
 	// convert to libregraph share drives
 	shareDrives := make([]*libregraph.DriveItem, 0, len(grouped))
