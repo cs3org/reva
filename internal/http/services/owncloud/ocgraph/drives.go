@@ -128,8 +128,8 @@ func getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClient) ([]*li
 		return nil, errors.New(res.Status.Message)
 	}
 
-	spacesRes := make([]*libregraph.Drive, 0, len(res.Shares))
-	for _, s := range res.Shares {
+	spacesRes := make([]*libregraph.Drive, 0, len(res.ShareInfos))
+	for _, s := range res.ShareInfos {
 		spacesRes = append(spacesRes, convertShareToSpace(s))
 	}
 	return spacesRes, nil
@@ -139,34 +139,34 @@ func libregraphShareID(shareID *collaborationv1beta1.ShareId) string {
 	return fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, shareID.OpaqueId)
 }
 
-func convertShareToSpace(share *gateway.SharedResourceInfo) *libregraph.Drive {
+func convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libregraph.Drive {
 	// the prefix of the remote_item.id and rootid
 	return &libregraph.Drive{
-		Id:         libregraph.PtrString(libregraphShareID(share.Share.Share.Id)),
+		Id:         libregraph.PtrString(libregraphShareID(rsi.ReceivedShare.Share.Id)),
 		DriveType:  libregraph.PtrString("mountpoint"),
-		DriveAlias: libregraph.PtrString(share.Share.Share.Id.OpaqueId), // this is not used, but must not be the same alias as the drive item
-		Name:       filepath.Base(share.ResourceInfo.Path),
+		DriveAlias: libregraph.PtrString(rsi.ReceivedShare.Share.Id.OpaqueId), // this is not used, but must not be the same alias as the drive item
+		Name:       filepath.Base(rsi.ResourceInfo.Path),
 		Quota: &libregraph.Quota{
 			Total:     libregraph.PtrInt64(24154390300000),
 			Used:      libregraph.PtrInt64(3141592),
 			Remaining: libregraph.PtrInt64(24154387158408),
 		},
 		Root: &libregraph.DriveItem{
-			Id: libregraph.PtrString(fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, share.Share.Share.Id.OpaqueId)),
+			Id: libregraph.PtrString(fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, rsi.ReceivedShare.Share.Id.OpaqueId)),
 			RemoteItem: &libregraph.RemoteItem{
-				DriveAlias: libregraph.PtrString(strings.TrimSuffix(strings.TrimPrefix(share.ResourceInfo.Path, "/"), relativePathToSpaceID(share.ResourceInfo))), // the drive alias must not start with /
-				ETag:       libregraph.PtrString(share.ResourceInfo.Etag),
+				DriveAlias: libregraph.PtrString(strings.TrimSuffix(strings.TrimPrefix(rsi.ResourceInfo.Path, "/"), relativePathToSpaceID(rsi.ResourceInfo))), // the drive alias must not start with /
+				ETag:       libregraph.PtrString(rsi.ResourceInfo.Etag),
 				Folder:     &libregraph.Folder{},
 				// The Id must correspond to the id in the OCS response, for the time being
 				// It is in the form <something>!<something-else>
-				Id:                   libregraph.PtrString(spaces.EncodeResourceID(share.ResourceInfo.Id)),
-				LastModifiedDateTime: libregraph.PtrTime(time.Unix(int64(share.ResourceInfo.Mtime.Seconds), int64(share.ResourceInfo.Mtime.Nanos))),
-				Name:                 libregraph.PtrString(filepath.Base(share.ResourceInfo.Path)),
-				Path:                 libregraph.PtrString(relativePathToSpaceID(share.ResourceInfo)),
+				Id:                   libregraph.PtrString(spaces.EncodeResourceID(rsi.ResourceInfo.Id)),
+				LastModifiedDateTime: libregraph.PtrTime(time.Unix(int64(rsi.ResourceInfo.Mtime.Seconds), int64(rsi.ResourceInfo.Mtime.Nanos))),
+				Name:                 libregraph.PtrString(filepath.Base(rsi.ResourceInfo.Path)),
+				Path:                 libregraph.PtrString(relativePathToSpaceID(rsi.ResourceInfo)),
 				// RootId must have the same token before ! as Id
 				// the second part for the time being is not used
-				RootId: libregraph.PtrString(fmt.Sprintf("%s!unused_root_id", spaces.EncodeSpaceID(share.ResourceInfo.Id.StorageId, share.ResourceInfo.Id.SpaceId))),
-				Size:   libregraph.PtrInt64(int64(share.ResourceInfo.Size)),
+				RootId: libregraph.PtrString(fmt.Sprintf("%s!unused_root_id", spaces.EncodeSpaceID(rsi.ResourceInfo.Id.StorageId, rsi.ResourceInfo.Id.SpaceId))),
+				Size:   libregraph.PtrInt64(int64(rsi.ResourceInfo.Size)),
 			},
 		},
 	}
@@ -287,9 +287,9 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		space := convertShareToSpace(&gateway.SharedResourceInfo{
-			ResourceInfo: stat.Info,
-			Share:        shareRes.Share,
+		space := convertShareToSpace(&gateway.ReceivedShareResourceInfo{
+			ResourceInfo:  stat.Info,
+			ReceivedShare: shareRes.Share,
 		})
 		_ = json.NewEncoder(w).Encode(space)
 		return

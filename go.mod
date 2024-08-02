@@ -14,7 +14,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.9.0
 	github.com/creasty/defaults v1.7.0
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20231219091702-aa0d20fe6e00
+	github.com/cs3org/go-cs3apis v0.0.0-20240802083356-d617314e1795
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/dolthub/go-mysql-server v0.14.0
 	github.com/gdexlab/go-render v1.0.1
@@ -138,7 +138,6 @@ require (
 go 1.21
 
 replace (
-	github.com/cs3org/go-cs3apis => github.com/gmgigi96/go-cs3apis v0.0.0-20240424151533-8e7c31f06d27
 	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
 	github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
 )

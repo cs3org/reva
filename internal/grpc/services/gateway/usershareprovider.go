@@ -194,6 +194,60 @@ func (s *svc) ListShares(ctx context.Context, req *collaboration.ListSharesReque
 	return res, nil
 }
 
+func (s *svc) ListExistingShares(ctx context.Context, req *collaboration.ListSharesRequest) (*gateway.ListExistingSharesResponse, error) {
+	shares, err := s.ListShares(ctx, req)
+	if err != nil {
+		err := errors.Wrap(err, "gateway: error calling ListExistingReceivedShares")
+		return &gateway.ListExistingSharesResponse{
+			Status: status.NewInternal(ctx, err, "error listing received shares"),
+		}, nil
+	}
+
+	sharesCh := make(chan *gateway.ShareResourceInfo, len(shares.Shares))
+	pool := pond.New(50, len(shares.Shares))
+	for _, share := range shares.Shares {
+		share := share
+		// TODO (gdelmont): we should report any eventual error raised by the goroutines
+		pool.Submit(func() {
+			// TODO(lopresti) incorporate the cache layer from internal/http/services/owncloud/ocs/handlers/apps/sharing/shares/shares.go
+			stat, err := s.Stat(ctx, &provider.StatRequest{
+				Ref: &provider.Reference{
+					ResourceId: share.ResourceId,
+				},
+			})
+			if err != nil {
+				return
+			}
+			if stat.Status.Code != rpc.Code_CODE_OK {
+				return
+			}
+
+			sharesCh <- &gateway.ShareResourceInfo{
+				ResourceInfo: stat.Info,
+				Share:        share,
+			}
+		})
+	}
+
+	sris := make([]*gateway.ShareResourceInfo, 0, len(shares.Shares))
+	done := make(chan struct{})
+	go func() {
+		for s := range sharesCh {
+			sris = append(sris, s)
+		}
+		done <- struct{}{}
+	}()
+	pool.StopAndWait()
+	close(sharesCh)
+	<-done
+	close(done)
+
+	return &gateway.ListExistingSharesResponse{
+		ShareInfos: sris,
+		Status:     status.NewOK(ctx),
+	}, nil
+}
+
 func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareRequest) (*collaboration.UpdateShareResponse, error) {
 	c, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
 	if err != nil {
@@ -263,7 +317,7 @@ func (s *svc) ListExistingReceivedShares(ctx context.Context, req *collaboration
 		}, nil
 	}
 
-	sharesCh := make(chan *gateway.SharedResourceInfo, len(rshares.Shares))
+	sharesCh := make(chan *gateway.ReceivedShareResourceInfo, len(rshares.Shares))
 	pool := pond.New(50, len(rshares.Shares))
 	for _, rs := range rshares.Shares {
 		rs := rs
@@ -286,14 +340,14 @@ func (s *svc) ListExistingReceivedShares(ctx context.Context, req *collaboration
 				return
 			}
 
-			sharesCh <- &gateway.SharedResourceInfo{
-				ResourceInfo: stat.Info,
-				Share:        rs,
+			sharesCh <- &gateway.ReceivedShareResourceInfo{
+				ResourceInfo:  stat.Info,
+				ReceivedShare: rs,
 			}
 		})
 	}
 
-	sris := make([]*gateway.SharedResourceInfo, 0, len(rshares.Shares))
+	sris := make([]*gateway.ReceivedShareResourceInfo, 0, len(rshares.Shares))
 	done := make(chan struct{})
 	go func() {
 		for s := range sharesCh {
@@ -307,8 +361,8 @@ func (s *svc) ListExistingReceivedShares(ctx context.Context, req *collaboration
 	close(done)
 
 	return &gateway.ListExistingReceivedSharesResponse{
-		Shares: sris,
-		Status: status.NewOK(ctx),
+		ShareInfos: sris,
+		Status:     status.NewOK(ctx),
 	}, nil
 }
 

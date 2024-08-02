@@ -61,8 +61,8 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shares := make([]*libregraph.DriveItem, 0, len(resShares.Shares))
-	for _, share := range resShares.Shares {
+	shares := make([]*libregraph.DriveItem, 0, len(resShares.ShareInfos))
+	for _, share := range resShares.ShareInfos {
 		drive, err := s.cs3ReceivedShareToDriveItem(ctx, share)
 		if err != nil {
 			log.Error().Err(err).Msg("error getting received shares")
@@ -86,27 +86,27 @@ func encodeSpaceIDForShareJail(res *provider.ResourceInfo) string {
 	//return spaces.EncodeSpaceID(res.Id.StorageId, res.Path)
 }
 
-func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, share *gateway.SharedResourceInfo) (*libregraph.DriveItem, error) {
-	createdTime := utils.TSToTime(share.Share.Share.Ctime)
+func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.ReceivedShareResourceInfo) (*libregraph.DriveItem, error) {
+	createdTime := utils.TSToTime(rsi.ReceivedShare.Share.Ctime)
 
-	creator, err := s.getUserByID(ctx, share.Share.Share.Creator)
+	creator, err := s.getUserByID(ctx, rsi.ReceivedShare.Share.Creator)
 	if err != nil {
 		return nil, err
 	}
 
-	grantee, err := s.cs3GranteeToSharePointIdentitySet(ctx, share.Share.Share.Grantee)
+	grantee, err := s.cs3GranteeToSharePointIdentitySet(ctx, rsi.ReceivedShare.Share.Grantee)
 	if err != nil {
 		return nil, err
 	}
 
 	roles := make([]string, 0, 1)
-	role := CS3ResourcePermissionsToUnifiedRole(share.ResourceInfo.PermissionSet)
+	role := CS3ResourcePermissionsToUnifiedRole(rsi.ResourceInfo.PermissionSet)
 	if role != nil {
 		roles = append(roles, *role.Id)
 	}
 
 	d := &libregraph.DriveItem{
-		UIHidden:          libregraph.PtrBool(share.Share.Hidden),
+		UIHidden:          libregraph.PtrBool(rsi.ReceivedShare.Hidden),
 		ClientSynchronize: libregraph.PtrBool(true),
 		CreatedBy: &libregraph.IdentitySet{
 			User: &libregraph.Identity{
@@ -114,10 +114,10 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, share *gateway.Sh
 				Id:          libregraph.PtrString(creator.Id.OpaqueId),
 			},
 		},
-		ETag:                 &share.ResourceInfo.Etag,
-		Id:                   libregraph.PtrString(libregraphShareID(share.Share.Share.Id)),
-		LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(share.ResourceInfo.Mtime)),
-		Name:                 libregraph.PtrString(share.ResourceInfo.Name),
+		ETag:                 &rsi.ResourceInfo.Etag,
+		Id:                   libregraph.PtrString(libregraphShareID(rsi.ReceivedShare.Share.Id)),
+		LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(rsi.ResourceInfo.Mtime)),
+		Name:                 libregraph.PtrString(rsi.ResourceInfo.Name),
 		ParentReference: &libregraph.ItemReference{
 			DriveId:   libregraph.PtrString(fmt.Sprintf("%s$%s", shareJailID, shareJailID)),
 			DriveType: libregraph.PtrString("virtual"),
@@ -130,14 +130,14 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, share *gateway.Sh
 					Id:          libregraph.PtrString(creator.Id.OpaqueId),
 				},
 			},
-			ETag: &share.ResourceInfo.Etag,
+			ETag: &rsi.ResourceInfo.Etag,
 			File: &libregraph.OpenGraphFile{
-				MimeType: &share.ResourceInfo.MimeType,
+				MimeType: &rsi.ResourceInfo.MimeType,
 			},
-			Id:                   libregraph.PtrString(encodeSpaceIDForShareJail(share.ResourceInfo)),
-			LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(share.ResourceInfo.Mtime)),
-			Name:                 libregraph.PtrString(share.ResourceInfo.Name),
-			Path:                 libregraph.PtrString(relativePathToSpaceID(share.ResourceInfo)),
+			Id:                   libregraph.PtrString(encodeSpaceIDForShareJail(rsi.ResourceInfo)),
+			LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(rsi.ResourceInfo.Mtime)),
+			Name:                 libregraph.PtrString(rsi.ResourceInfo.Name),
+			Path:                 libregraph.PtrString(relativePathToSpaceID(rsi.ResourceInfo)),
 			// ParentReference: &libregraph.ItemReference{
 			// 	DriveId:   libregraph.PtrString(spaces.EncodeResourceID(share.ResourceInfo.ParentId)),
 			// 	DriveType: nil, // FIXME: no way to know it unless we hardcode it
@@ -158,16 +158,16 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, share *gateway.Sh
 					Roles: roles,
 				},
 			},
-			Size: libregraph.PtrInt64(int64(share.ResourceInfo.Size)),
+			Size: libregraph.PtrInt64(int64(rsi.ResourceInfo.Size)),
 		},
-		Size: libregraph.PtrInt64(int64(share.ResourceInfo.Size)),
+		Size: libregraph.PtrInt64(int64(rsi.ResourceInfo.Size)),
 	}
 
-	if share.ResourceInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+	if rsi.ResourceInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		d.Folder = libregraph.NewFolder()
 	} else {
 		d.File = &libregraph.OpenGraphFile{
-			MimeType: &share.ResourceInfo.MimeType,
+			MimeType: &rsi.ResourceInfo.MimeType,
 		}
 	}
 
