@@ -5,4 +5,4 @@ OCM services at the remote server due to the domain having an unsupported
 protocol scheme. in this case domain doesn't have a scheme and the changes in
 this PR add a scheme to the domain before doing the probe.
 
-https://github.com/cs3org/reva/pull/4788
+https://github.com/cs3org/reva/pull/4790
