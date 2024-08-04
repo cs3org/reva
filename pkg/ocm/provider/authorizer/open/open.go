@@ -67,6 +67,14 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 		}
 	}
 
+	// there is a possibility that domain doesn't contain a scheme
+	// for example resource={"domain":"reva.docker"} and the call
+	// to ocmClient.Discover would fail.
+	// add scheme to domain if it doesn't have one.
+	if !strings.HasPrefix(domain, "http://") && !strings.HasPrefix(domain, "https://") {
+		domain = "https://" + domain
+	}
+
 	// not yet known: try to discover the remote OCM endpoint
 	ocmClient := client.NewClient(time.Duration(10)*time.Second, true)
 	ocmCaps, err := ocmClient.Discover(ctx, domain)
