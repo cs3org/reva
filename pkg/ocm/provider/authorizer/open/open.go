@@ -70,7 +70,12 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 	// there is a possibility that domain doesn't contain a scheme
 	// for example resource={"domain":"reva.docker"} and the call
 	// to ocmClient.Discover would fail.
-	// add scheme to domain if it doesn't have one.
+
+	// convert domain into lowercase to avoid adding scheme if the domain
+	//looks like this: HtTpS://domain.docker
+	domain = strings.ToLower(domain)
+
+	// add a scheme to domain if it doesn't have one.
 	if !strings.HasPrefix(domain, "http://") && !strings.HasPrefix(domain, "https://") {
 		domain = "https://" + domain
 	}
