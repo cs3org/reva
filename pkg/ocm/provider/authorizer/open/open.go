@@ -72,7 +72,7 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 	// to ocmClient.Discover would fail.
 
 	// convert domain into lowercase to avoid adding scheme if the domain
-	//looks like this: HtTpS://domain.docker
+	// looks like this: HtTpS://domain.docker
 	domain = strings.ToLower(domain)
 
 	// add a scheme to domain if it doesn't have one.
