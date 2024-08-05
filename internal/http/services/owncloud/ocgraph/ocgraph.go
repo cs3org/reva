@@ -86,7 +86,7 @@ func (s *svc) initRouter() {
 			r.Get("/sharedByMe", s.getSharedByMe)
 		})
 		r.Get("/roleManagement/permissions/roleDefinitions", s.getRoleDefinitions)
-		r.Get("/drives/{space-id}/root/permissions", s.getDrivePermissions)
+		r.Get("/drives/{space-id}/root/permissions", s.getRootDrivePermissions)
 		r.Get("/drives/{space-id}/items/{item-id}/permissions", s.getDrivePermissions)
 	})
 	// /graph/v1beta1/drives/166d1210-cdb9-50ab-9f1e-ecb9ef12a304%244c510ada-c86b-4815-8820-42cdf82c3d51/items/166d1210-cdb9-50ab-9f1e-ecb9ef12a304%244c510ada-c86b-4815-8820-42cdf82c3d51!4c510ada-c86b-4815-8820-42cdf82c3d51/permissions

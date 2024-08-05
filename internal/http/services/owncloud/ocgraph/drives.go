@@ -40,6 +40,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/utils/list"
+	"github.com/go-chi/chi/v5"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"github.com/pkg/errors"
 )
@@ -369,4 +370,53 @@ func cs3PermissionsToLibreGraph(user *userpb.User, perms *providerpb.ResourcePer
 
 func (s *svc) getDrivePermissions(w http.ResponseWriter, r *http.Request) {
 
+}
+
+func (s *svc) getRootDrivePermissions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	spaceID := chi.URLParam(r, "space-id")
+
+	_, path, ok := spaces.DecodeSpaceID(spaceID)
+	if !ok {
+		log.Error().Msg("error getting space by id")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	gw, err := s.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	statRes, err := gw.Stat(ctx, &providerpb.StatRequest{
+		Ref: &providerpb.Reference{
+			Path: path,
+		},
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("error getting space by id")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+		log.Error().Str("path", path).Int("code", int(statRes.Status.Code)).Str("message", statRes.Status.Message).Msg("error statting resource")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	actions := CS3ResourcePermissionsToLibregraphActions(statRes.Info.PermissionSet)
+	role := CS3ResourcePermissionsToUnifiedRole(statRes.Info.PermissionSet)
+
+	if err := json.NewEncoder(w).Encode(map[string]any{
+		"@libre.graph.permissions.actions.allowedValues": actions,
+		"@libre.graph.permissions.roles.allowedValues":   []*libregraph.UnifiedRoleDefinition{role},
+	}); err != nil {
+		log.Error().Err(err).Msg("error marshalling spaces as json")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 }
