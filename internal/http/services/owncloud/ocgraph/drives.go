@@ -366,3 +366,7 @@ func cs3PermissionsToLibreGraph(user *userpb.User, perms *providerpb.ResourcePer
 	}
 	return []libregraph.Permission{p}
 }
+
+func (s *svc) getDrivePermissions(w http.ResponseWriter, r *http.Request) {
+
+}
