@@ -43,6 +43,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 )
 
 func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
@@ -369,7 +370,23 @@ func cs3PermissionsToLibreGraph(user *userpb.User, perms *providerpb.ResourcePer
 }
 
 func (s *svc) getDrivePermissions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 
+	resourceID := chi.URLParam(r, "resource-id")
+	resourceID, _ = url.QueryUnescape(resourceID)
+	storageID, _, itemID, ok := spaces.DecodeResourceID(resourceID)
+	if !ok {
+		log.Error().Str("resource-id", resourceID).Msg("resource id cannot be decoded")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	s.getPermissionsByCs3Reference(ctx, w, log, &providerpb.Reference{
+		ResourceId: &providerpb.ResourceId{
+			StorageId: storageID,
+			OpaqueId:  itemID,
+		},
+	})
 }
 
 func (s *svc) getRootDrivePermissions(w http.ResponseWriter, r *http.Request) {
@@ -377,14 +394,18 @@ func (s *svc) getRootDrivePermissions(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(ctx)
 
 	spaceID := chi.URLParam(r, "space-id")
-
+	spaceID, _ = url.QueryUnescape(spaceID)
 	_, path, ok := spaces.DecodeSpaceID(spaceID)
 	if !ok {
-		log.Error().Msg("error getting space by id")
+		log.Error().Str("space-id", spaceID).Msg("space id cannot be decoded")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
+	s.getPermissionsByCs3Reference(ctx, w, log, &providerpb.Reference{Path: path})
+}
+
+func (s *svc) getPermissionsByCs3Reference(ctx context.Context, w http.ResponseWriter, log *zerolog.Logger, ref *providerpb.Reference) {
 	gw, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
@@ -393,9 +414,7 @@ func (s *svc) getRootDrivePermissions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	statRes, err := gw.Stat(ctx, &providerpb.StatRequest{
-		Ref: &providerpb.Reference{
-			Path: path,
-		},
+		Ref: ref,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("error getting space by id")
@@ -403,7 +422,7 @@ func (s *svc) getRootDrivePermissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-		log.Error().Str("path", path).Int("code", int(statRes.Status.Code)).Str("message", statRes.Status.Message).Msg("error statting resource")
+		log.Error().Interface("ref", ref).Int("code", int(statRes.Status.Code)).Str("message", statRes.Status.Message).Msg("error statting resource")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
