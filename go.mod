@@ -55,7 +55,7 @@ require (
 	go.step.sm/crypto v0.43.1
 	golang.org/x/crypto v0.21.0
 	golang.org/x/oauth2 v0.18.0
-	golang.org/x/sync v0.6.0
+	golang.org/x/sync v0.8.0
 	golang.org/x/sys v0.18.0
 	golang.org/x/term v0.18.0
 	google.golang.org/genproto v0.0.0-20240314234333-6e1732d8331c
