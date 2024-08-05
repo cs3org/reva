@@ -21,7 +21,6 @@ package ocmd
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"mime"
 	"net/http"
 	"path/filepath"
@@ -37,13 +36,11 @@ import (
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
-	ocmproviderhttp "github.com/cs3org/reva/internal/http/services/opencloudmesh/ocmprovider"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/go-playground/validator/v10"
@@ -282,43 +279,21 @@ func discoverOcmWebdavRoot(r *http.Request) (string, error) {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("sender", r.Host).Msg("received OCM 1.0 share, attempting to discover sender endpoint")
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, r.Host+"/ocm-provider", nil)
+	ocmClient := NewClient(time.Duration(10)*time.Second, true)
+	ocmCaps, err := ocmClient.Discover(ctx, r.Host)
 	if err != nil {
+		log.Warn().Str("sender", r.Host).Err(err).Msg("failed to discover OCM sender")
 		return "", err
 	}
-	httpClient := httpclient.New(
-		httpclient.Timeout(time.Duration(10 * int64(time.Second))),
-	)
-	httpRes, err := httpClient.Do(httpReq)
-	if err != nil {
-		return "", errors.Wrap(err, "failed to contact OCM sender server")
-	}
-	defer httpRes.Body.Close()
-
-	if httpRes.StatusCode != http.StatusOK {
-		return "", errtypes.InternalError("Invalid HTTP response on OCM discovery")
-	}
-	body, err := io.ReadAll(httpRes.Body)
-	if err != nil {
-		return "", err
-	}
-
-	var result ocmproviderhttp.DiscoveryData
-	err = json.Unmarshal(body, &result)
-	if err != nil {
-		log.Warn().Str("sender", r.Host).Str("response", string(body)).Msg("malformed response")
-		return "", errtypes.InternalError("Invalid payload on OCM discovery")
-	}
-
-	for _, t := range result.ResourceTypes {
+	for _, t := range ocmCaps.ResourceTypes {
 		webdavRoot, ok := t.Protocols["webdav"]
 		if ok {
 			// assume the first resourceType that exposes a webdav root is OK to use: as a matter of fact,
 			// no implementation exists yet that exposes multiple resource types with different roots.
-			return filepath.Join(result.Endpoint, webdavRoot), nil
+			return filepath.Join(ocmCaps.Endpoint, webdavRoot), nil
 		}
 	}
 
-	log.Warn().Str("sender", r.Host).Str("response", string(body)).Msg("missing webdav root")
+	log.Warn().Str("sender", r.Host).Interface("response", ocmCaps).Msg("missing webdav root")
 	return "", errtypes.NotFound("WebDAV root not found on OCM discovery")
 }

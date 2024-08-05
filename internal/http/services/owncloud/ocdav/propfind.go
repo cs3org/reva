@@ -505,25 +505,17 @@ func (s *svc) newPropRaw(key, val string) *propertyXML {
 	}
 }
 
-func supportLegacyOCMAccess(ctx context.Context, md *provider.ResourceInfo) {
-	ocm10, _ := ctx.Value(ctxOCM10).(bool)
-	if ocm10 {
-		// the path is something like /<token>/...
-		// we need to strip the token part as this
-		// is passed as username in the basic auth
-		_, md.Path = router.ShiftPath(md.Path)
-	}
-}
-
 func spaceHref(ctx context.Context, baseURI, fullPath string) string {
 	// in the context of spaces, the final URL will be baseURI + /<space_id>/relative/path/to/space
 	spacePath, ok := ctx.Value(ctxSpacePath).(string)
 	if !ok {
+		// TODO fix panic
 		panic("space path expected to be in the context")
 	}
 	relativePath := strings.TrimPrefix(fullPath, spacePath)
 	spaceID, ok := ctx.Value(ctxSpaceID).(string)
 	if !ok {
+		// TODO fix panic
 		panic("space id expected to be in the context")
 	}
 	return path.Join(baseURI, spaceID, relativePath)
@@ -556,10 +548,14 @@ func (s *svc) isOpenable(path string) bool {
 func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string, usershares, linkshares map[string]struct{}) (*responseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
 
+	md.Path = strings.TrimPrefix(md.Path, ns)
+	ocm, _ := ctx.Value(ctxOCM).(bool)
+	if ocm {
+		// /<token>/ was injected in front of the OCM path for the routing to work, we now remove it (see internal/http/services/owncloud/ocdav/dav.go)
+		_, md.Path = router.ShiftPath(md.Path)
+	}
+
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
-
-	supportLegacyOCMAccess(ctx, md)
-
 	var ref string
 	if _, ok := ctx.Value(ctxSpaceID).(string); ok {
 		ref = spaceHref(ctx, baseURI, md.Path)
@@ -567,6 +563,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		md.Path = strings.TrimPrefix(md.Path, ns)
 		ref = path.Join(baseURI, md.Path)
 	}
+
 	if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ref += "/"
 	}

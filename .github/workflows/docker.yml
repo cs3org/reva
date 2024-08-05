@@ -27,7 +27,7 @@ jobs:
       image: ${{ steps.build.outputs.imageid }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3.1.0
+        uses: actions/checkout@v4
       - name: Set up QEMU
         if: inputs.platforms != ''
         uses: docker/setup-qemu-action@v2

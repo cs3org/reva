@@ -29,6 +29,9 @@ type Config struct {
 	// DefaultQuotaBytes sets the default maximum bytes available for a user
 	DefaultQuotaBytes uint64 `mapstructure:"default_quota_bytes"`
 
+	// DefaultSecondaryQuotaBytes sets the default maximum bytes available for a secondary user
+	DefaultSecondaryQuotaBytes uint64 `mapstructure:"default_secondary_quota_bytes"`
+
 	// DefaultQuotaFiles sets the default maximum files available for a user
 	DefaultQuotaFiles uint64 `mapstructure:"default_quota_files"`
 

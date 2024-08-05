@@ -38,6 +38,7 @@ providers = "{{file_providers}}"
 [grpc.services.ocmshareprovider]
 driver = "json"
 webdav_endpoint = "http://{{cesnethttp_address}}"
+webapp_template = "http://{{cesnethttp_address}}/external/sciencemesh/{{.Token}}{relative-path-to-shared-resource}"
 provider_domain = "cesnet.cz"
 
 [grpc.services.ocmshareprovider.drivers.json]

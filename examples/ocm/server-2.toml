@@ -166,7 +166,7 @@ driver = "ocmreceived"
 address = "0.0.0.0:80"
 expose_recipient_display_name = true
 
-[http.services.ocmprovider]
+[http.services.wellknown.ocmprovider]
 ocm_prefix = "ocm"
 provider = "reva@cesnet"
 endpoint = "http://localhost:{{ http.services.ocm.address.port }}"

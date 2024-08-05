@@ -16,27 +16,20 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocmprovider
+package wellknown
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
 	"path/filepath"
 
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
 const OCMAPIVersion = "1.1.0"
 
-func init() {
-	global.Register("ocmprovider", New)
-}
-
-type config struct {
+type OcmProviderConfig struct {
 	OCMPrefix    string `docs:"ocm;The prefix URL where the OCM API is served."                                   mapstructure:"ocm_prefix"`
 	Endpoint     string `docs:"This host's full URL. If it's not configured, it is assumed OCM is not available." mapstructure:"endpoint"`
 	Provider     string `docs:"reva;A friendly name that defines this service."                                   mapstructure:"provider"`
@@ -46,7 +39,7 @@ type config struct {
 	EnableDatatx bool   `docs:"false;Whether data transfers are enabled in OCM shares."                           mapstructure:"enable_datatx"`
 }
 
-type DiscoveryData struct {
+type OcmDiscoveryData struct {
 	Enabled       bool            `json:"enabled"       xml:"enabled"`
 	APIVersion    string          `json:"apiVersion"    xml:"apiVersion"`
 	Endpoint      string          `json:"endPoint"      xml:"endPoint"`
@@ -61,11 +54,11 @@ type resourceTypes struct {
 	Protocols  map[string]string `json:"protocols"`
 }
 
-type svc struct {
-	data *DiscoveryData
+type wkocmHandler struct {
+	data *OcmDiscoveryData
 }
 
-func (c *config) ApplyDefaults() {
+func (c *OcmProviderConfig) ApplyDefaults() {
 	if c.OCMPrefix == "" {
 		c.OCMPrefix = "ocm"
 	}
@@ -86,10 +79,11 @@ func (c *config) ApplyDefaults() {
 	}
 }
 
-func (c *config) prepare() *DiscoveryData {
-	// generates the (static) data structure to be exposed by /ocm-provider:
+func (h *wkocmHandler) init(c *OcmProviderConfig) {
+	// generates the (static) data structure to be exposed by /.well-known/ocm:
 	// first prepare an empty and disabled payload
-	d := &DiscoveryData{}
+	c.ApplyDefaults()
+	d := &OcmDiscoveryData{}
 	d.Enabled = false
 	d.Endpoint = ""
 	d.APIVersion = OCMAPIVersion
@@ -102,12 +96,14 @@ func (c *config) prepare() *DiscoveryData {
 	d.Capabilities = []string{}
 
 	if c.Endpoint == "" {
-		return d
+		h.data = d
+		return
 	}
 
 	endpointURL, err := url.Parse(c.Endpoint)
 	if err != nil {
-		return d
+		h.data = d
+		return
 	}
 
 	// now prepare the enabled one
@@ -129,49 +125,24 @@ func (c *config) prepare() *DiscoveryData {
 	}}
 	// for now we hardcode the capabilities, as this is currently only advisory
 	d.Capabilities = []string{"/invite-accepted"}
-	return d
+	h.data = d
 }
 
-// New returns a new ocmprovider object, that implements
-// the OCM discovery endpoint specified in
+// This handler implements the OCM discovery endpoint specified in
 // https://cs3org.github.io/OCM-API/docs.html?repo=OCM-API&user=cs3org#/paths/~1ocm-provider/get
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
-	var c config
-	if err := cfg.Decode(m, &c); err != nil {
-		return nil, err
+func (h *wkocmHandler) Ocm(w http.ResponseWriter, r *http.Request) {
+	log := appctx.GetLogger(r.Context())
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if r.UserAgent() == "Nextcloud Server Crawler" {
+		// Nextcloud decided to only support OCM 1.0 and 1.1, not any 1.x as per SemVer. See
+		// https://github.com/nextcloud/server/pull/39574#issuecomment-1679191188
+		h.data.APIVersion = "1.1"
+	} else {
+		h.data.APIVersion = OCMAPIVersion
 	}
-	return &svc{data: c.prepare()}, nil
-}
-
-// Close performs cleanup.
-func (s *svc) Close() error {
-	return nil
-}
-
-func (s *svc) Prefix() string {
-	// this is hardcoded as per OCM specifications
-	return "/ocm-provider"
-}
-
-func (s *svc) Unprotected() []string {
-	return []string{"/"}
-}
-
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		if r.UserAgent() == "Nextcloud Server Crawler" {
-			// Nextcloud decided to only support OCM 1.0 and 1.1, not any 1.x as per SemVer. See
-			// https://github.com/nextcloud/server/pull/39574#issuecomment-1679191188
-			s.data.APIVersion = "1.1"
-		} else {
-			s.data.APIVersion = OCMAPIVersion
-		}
-		indented, _ := json.MarshalIndent(s.data, "", "   ")
-		if _, err := w.Write(indented); err != nil {
-			log.Err(err).Msg("Error writing to ResponseWriter")
-		}
-	})
+	indented, _ := json.MarshalIndent(h.data, "", "   ")
+	if _, err := w.Write(indented); err != nil {
+		log.Err(err).Msg("Error writing to ResponseWriter")
+	}
 }
