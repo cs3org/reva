@@ -204,7 +204,7 @@ var _ = Describe("Nextcloud", func() {
 			users, err := um.FindUsers(ctx, "some-query", false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(users)).To(Equal(1))
-			Expect(*users[0]).To(Equal(userpb.User{
+			Expect(users[0]).To(Equal(&userpb.User{
 				Id: &userpb.UserId{
 					Idp:      "some-idp",
 					OpaqueId: "some-opaque-user-id",
