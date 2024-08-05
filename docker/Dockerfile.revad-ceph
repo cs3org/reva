@@ -20,10 +20,6 @@ FROM quay.io/ceph/ceph:v18
 
 RUN mkdir -p /etc/selinux/config
 
-# this is a workaround as the Ceph docker image is still based on CentOS 8 Stream, which is EOL
-RUN sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
-RUN sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
-
 RUN dnf update --exclude=ceph-iscsi,chrony -y && dnf install -y \
   git \
   gcc \
