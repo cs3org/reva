@@ -72,7 +72,7 @@ func lsCommand() *command {
 			}
 			if len(w) == 0 {
 				if *longFlag {
-					fmt.Printf("%s %d %d %v %s\n", info.Type, info.Mtime, info.Size, info.Id, p)
+					fmt.Printf("%s %s %d %v %s\n", info.Type, info.Mtime, info.Size, info.Id, p)
 				} else {
 					fmt.Println(p)
 				}
