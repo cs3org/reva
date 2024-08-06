@@ -49,6 +49,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/permissions"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/spaceidindex"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/timemanager"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/trashbin"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
@@ -135,9 +136,9 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore, es events.Stream) (
 	var lu *lookup.Lookup
 	switch o.MetadataBackend {
 	case "xattrs":
-		lu = lookup.New(metadata.NewXattrsBackend(o.Root, o.FileMetadataCache), o)
+		lu = lookup.New(metadata.NewXattrsBackend(o.Root, o.FileMetadataCache), o, &timemanager.Manager{})
 	case "messagepack":
-		lu = lookup.New(metadata.NewMessagePackBackend(o.Root, o.FileMetadataCache), o)
+		lu = lookup.New(metadata.NewMessagePackBackend(o.Root, o.FileMetadataCache), o, &timemanager.Manager{})
 	default:
 		return nil, fmt.Errorf("unknown metadata backend %s, only 'messagepack' or 'xattrs' (default) supported", o.MetadataBackend)
 	}

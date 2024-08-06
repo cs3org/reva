@@ -72,15 +72,17 @@ type Lookup struct {
 	IDCache         IDCache
 	metadataBackend metadata.Backend
 	userMapper      usermapper.Mapper
+	tm              node.TimeManager
 }
 
 // New returns a new Lookup instance
-func New(b metadata.Backend, um usermapper.Mapper, o *options.Options) *Lookup {
+func New(b metadata.Backend, um usermapper.Mapper, o *options.Options, tm node.TimeManager) *Lookup {
 	lu := &Lookup{
 		Options:         o,
 		metadataBackend: b,
 		IDCache:         NewStoreIDCache(&o.Options),
 		userMapper:      um,
+		tm:              tm,
 	}
 
 	return lu
@@ -420,4 +422,9 @@ func (lu *Lookup) GenerateSpaceID(spaceType string, owner *user.User) (string, e
 	default:
 		return "", fmt.Errorf("unsupported space type: %s", spaceType)
 	}
+}
+
+// TimeManager returns the time manager
+func (lu *Lookup) TimeManager() node.TimeManager {
+	return lu.tm
 }
