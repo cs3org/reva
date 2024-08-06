@@ -477,10 +477,6 @@ assimilate:
 		prefixes.IDAttr:   []byte(id),
 		prefixes.NameAttr: []byte(filepath.Base(path)),
 	}
-	prevMtime, err := previousAttribs.Time(prefixes.MTimeAttr)
-	if err != nil || prevMtime.Before(fi.ModTime()) {
-		attributes[prefixes.MTimeAttr] = []byte(fi.ModTime().Format(time.RFC3339Nano))
-	}
 	if len(parentID) > 0 {
 		attributes[prefixes.ParentidAttr] = []byte(parentID)
 	}
