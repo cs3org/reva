@@ -31,7 +31,11 @@ import (
 type Manager struct {
 }
 
-func (dtm *Manager) MTime(ctx context.Context, n *node.Node) (time.Time, error) {
+func (m *Manager) OverrideMtime(ctx context.Context, n *node.Node, _ *node.Attributes, mtime time.Time) error {
+	return os.Chtimes(n.InternalPath(), mtime, mtime)
+}
+
+func (m *Manager) MTime(ctx context.Context, n *node.Node) (time.Time, error) {
 	fi, err := os.Stat(n.InternalPath())
 	if err != nil {
 		return time.Time{}, err
@@ -39,28 +43,28 @@ func (dtm *Manager) MTime(ctx context.Context, n *node.Node) (time.Time, error) 
 	return fi.ModTime(), nil
 }
 
-func (dtm *Manager) SetMTime(ctx context.Context, n *node.Node, mtime *time.Time) error {
+func (m *Manager) SetMTime(ctx context.Context, n *node.Node, mtime *time.Time) error {
 	return os.Chtimes(n.InternalPath(), *mtime, *mtime)
 }
 
-func (dtm *Manager) TMTime(ctx context.Context, n *node.Node) (time.Time, error) {
+func (m *Manager) TMTime(ctx context.Context, n *node.Node) (time.Time, error) {
 	b, err := n.XattrString(ctx, prefixes.TreeMTimeAttr)
 	if err == nil {
 		return time.Parse(time.RFC3339Nano, b)
 	}
 
 	// no tmtime, use mtime
-	return dtm.MTime(ctx, n)
+	return m.MTime(ctx, n)
 }
 
-func (dtm *Manager) SetTMTime(ctx context.Context, n *node.Node, tmtime *time.Time) error {
+func (m *Manager) SetTMTime(ctx context.Context, n *node.Node, tmtime *time.Time) error {
 	if tmtime == nil {
 		return n.RemoveXattr(ctx, prefixes.TreeMTimeAttr, true)
 	}
 	return n.SetXattrString(ctx, prefixes.TreeMTimeAttr, tmtime.UTC().Format(time.RFC3339Nano))
 }
 
-func (dtm *Manager) CTime(ctx context.Context, n *node.Node) (time.Time, error) {
+func (m *Manager) CTime(ctx context.Context, n *node.Node) (time.Time, error) {
 	fi, err := os.Stat(n.InternalPath())
 	if err != nil {
 		return time.Time{}, err
@@ -70,18 +74,18 @@ func (dtm *Manager) CTime(ctx context.Context, n *node.Node) (time.Time, error) 
 	return time.Unix(int64(stat.Ctim.Sec), int64(stat.Ctim.Nsec)), nil
 }
 
-func (dtm *Manager) TCTime(ctx context.Context, n *node.Node) (time.Time, error) {
+func (m *Manager) TCTime(ctx context.Context, n *node.Node) (time.Time, error) {
 	// decomposedfs does not differentiate between ctime and mtime
-	return dtm.TMTime(ctx, n)
+	return m.TMTime(ctx, n)
 }
 
-func (dtm *Manager) SetTCTime(ctx context.Context, n *node.Node, tmtime *time.Time) error {
+func (m *Manager) SetTCTime(ctx context.Context, n *node.Node, tmtime *time.Time) error {
 	// decomposedfs does not differentiate between ctime and mtime
-	return dtm.SetTMTime(ctx, n, tmtime)
+	return m.SetTMTime(ctx, n, tmtime)
 }
 
 // GetDTime reads the dtime from the extended attributes
-func (dtm *Manager) DTime(ctx context.Context, n *node.Node) (tmTime time.Time, err error) {
+func (m *Manager) DTime(ctx context.Context, n *node.Node) (tmTime time.Time, err error) {
 	b, err := n.XattrString(ctx, prefixes.DTimeAttr)
 	if err != nil {
 		return time.Time{}, err
@@ -90,7 +94,7 @@ func (dtm *Manager) DTime(ctx context.Context, n *node.Node) (tmTime time.Time, 
 }
 
 // SetDTime writes the UTC dtime to the extended attributes or removes the attribute if nil is passed
-func (dtm *Manager) SetDTime(ctx context.Context, n *node.Node, t *time.Time) (err error) {
+func (m *Manager) SetDTime(ctx context.Context, n *node.Node, t *time.Time) (err error) {
 	if t == nil {
 		return n.RemoveXattr(ctx, prefixes.DTimeAttr, true)
 	}
