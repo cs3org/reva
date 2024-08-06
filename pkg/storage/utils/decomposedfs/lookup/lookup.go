@@ -55,13 +55,15 @@ type Lookup struct {
 	Options *options.Options
 
 	metadataBackend metadata.Backend
+	tm              node.TimeManager
 }
 
 // New returns a new Lookup instance
-func New(b metadata.Backend, o *options.Options) *Lookup {
+func New(b metadata.Backend, o *options.Options, tm node.TimeManager) *Lookup {
 	return &Lookup{
 		Options:         o,
 		metadataBackend: b,
+		tm:              tm,
 	}
 }
 
@@ -367,6 +369,11 @@ func (lu *Lookup) CopyMetadataWithSourceLock(ctx context.Context, sourcePath, ta
 	}
 
 	return lu.MetadataBackend().SetMultiple(ctx, targetPath, newAttrs, acquireTargetLock)
+}
+
+// TimeManager returns the time manager
+func (lu *Lookup) TimeManager() node.TimeManager {
+	return lu.tm
 }
 
 // DetectBackendOnDisk returns the name of the metadata backend being used on disk
