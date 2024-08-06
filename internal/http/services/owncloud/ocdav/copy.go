@@ -690,21 +690,22 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 			return nil
 		}
 
-		// we must not allow to override mountpoints - so we check if we have access to the parent. If not this is a mountpoint
-		if destInShareJail {
-			dir, file := filepath.Split(dstRef.GetPath())
-			if dir == "/" || dir == "" || file == "" {
-				log.Error().Msg("must not overwrite mount points")
-				w.WriteHeader(http.StatusBadRequest)
-				_, _ = w.Write([]byte("must not overwrite mount points"))
-				return nil
-			}
-		}
-
 		// delete existing tree when overwriting a directory or replacing a file with a directory
 		if dstStatRes.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER ||
 			(dstStatRes.Info.Type == provider.ResourceType_RESOURCE_TYPE_FILE &&
 				srcStatRes.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER) {
+
+			// we must not allow to override mountpoints - so we check if we have access to the parent. If not this is a mountpoint
+			if destInShareJail {
+				dir, file := filepath.Split(dstRef.GetPath())
+				if dir == "/" || dir == "" || file == "" {
+					log.Error().Msg("must not overwrite mount points")
+					w.WriteHeader(http.StatusBadRequest)
+					_, _ = w.Write([]byte("must not overwrite mount points"))
+					return nil
+				}
+			}
+
 			delReq := &provider.DeleteRequest{Ref: dstRef}
 			delRes, err := client.Delete(ctx, delReq)
 			if err != nil {
