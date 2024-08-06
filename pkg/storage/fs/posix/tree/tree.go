@@ -232,14 +232,17 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 	if markprocessing {
 		attributes[prefixes.StatusPrefix] = []byte(node.ProcessingStatus)
 	}
-	nodeMTime := time.Now()
 	if mtime != "" {
-		nodeMTime, err = utils.MTimeToTime(mtime)
+		nodeMTime, err := utils.MTimeToTime(mtime)
+		if err != nil {
+			return err
+		}
+		err = os.Chtimes(nodePath, nodeMTime, nodeMTime)
 		if err != nil {
 			return err
 		}
 	}
-	attributes[prefixes.MTimeAttr] = []byte(nodeMTime.UTC().Format(time.RFC3339Nano))
+
 	err = n.SetXattrsWithContext(ctx, attributes, false)
 	if err != nil {
 		return err
