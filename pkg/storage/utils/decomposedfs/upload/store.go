@@ -255,21 +255,22 @@ func (store OcisStore) CreateNodeForUpload(session *OcisSession, initAttrs node.
 		return nil, err
 	}
 
-	mtime := time.Now()
-	if !session.MTime().IsZero() {
-		// overwrite mtime if requested
-		mtime = session.MTime()
-	}
-
 	// overwrite technical information
 	initAttrs.SetString(prefixes.IDAttr, n.ID)
-	initAttrs.SetString(prefixes.MTimeAttr, mtime.UTC().Format(time.RFC3339Nano))
 	initAttrs.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_FILE))
 	initAttrs.SetString(prefixes.ParentidAttr, n.ParentID)
 	initAttrs.SetString(prefixes.NameAttr, n.Name)
 	initAttrs.SetString(prefixes.BlobIDAttr, n.BlobID)
 	initAttrs.SetInt64(prefixes.BlobsizeAttr, n.Blobsize)
 	initAttrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+session.ID())
+
+	// set mtime on the new node
+	mtime := time.Now()
+	if !session.MTime().IsZero() {
+		// overwrite mtime if requested
+		mtime = session.MTime()
+	}
+	store.lu.TimeManager().OverrideMtime(ctx, n, &initAttrs, mtime)
 
 	// update node metadata with new blobid etc
 	err = n.SetXattrsWithContext(ctx, initAttrs, false)

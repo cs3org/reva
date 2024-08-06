@@ -30,6 +30,11 @@ import (
 type Manager struct {
 }
 
+func (m *Manager) OverrideMtime(ctx context.Context, _ *node.Node, attrs *node.Attributes, mtime time.Time) error {
+	attrs.SetString(prefixes.MTimeAttr, mtime.UTC().Format(time.RFC3339Nano))
+	return nil
+}
+
 func (dtm *Manager) MTime(ctx context.Context, n *node.Node) (time.Time, error) {
 	b, err := n.XattrString(ctx, prefixes.MTimeAttr)
 	if err != nil {

@@ -86,6 +86,9 @@ const (
 )
 
 type TimeManager interface {
+	// OverrideMTime overrides the mtime of the node, either on the node itself or in the given attributes, depending on the implementation
+	OverrideMtime(ctx context.Context, n *Node, attrs *Attributes, mtime time.Time) error
+
 	// MTime returns the mtime of the node
 	MTime(ctx context.Context, n *Node) (time.Time, error)
 	// SetMTime sets the mtime of the node
