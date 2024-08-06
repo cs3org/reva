@@ -42,6 +42,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/permissions"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/permissions/mocks"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/timemanager"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree/mocks"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
@@ -104,7 +105,7 @@ var _ = Describe("File uploads", func() {
 			"root": tmpRoot,
 		})
 		Expect(err).ToNot(HaveOccurred())
-		lu = lookup.New(metadata.NewXattrsBackend(o.Root, cache.Config{}), o)
+		lu = lookup.New(metadata.NewXattrsBackend(o.Root, cache.Config{}), o, &timemanager.Manager{})
 		pmock = &mocks.PermissionsChecker{}
 		cs3permissionsclient = &mocks.CS3PermissionsClient{}
 		pool.RemoveSelector("PermissionsSelector" + "any")
