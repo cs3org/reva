@@ -97,7 +97,7 @@ func (s *svc) Handler() http.Handler {
 }
 
 func (s *svc) getClient() (proto.PingPongServiceClient, error) {
-	conn, err := grpc.Dial(
+	conn, err := grpc.NewClient(
 		s.conf.Endpoint,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)

@@ -8,7 +8,7 @@ on:
 
 jobs:
   integration:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,7 +36,7 @@ jobs:
           MYSQL_ROOT_PASSWORD: my-secret-pw
           MYSQL_DATABASE: reva
   go:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
