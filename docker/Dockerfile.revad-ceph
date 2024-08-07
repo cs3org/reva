@@ -18,9 +18,7 @@
 
 FROM quay.io/ceph/ceph:v18
 
-RUN mkdir -p /etc/selinux/config
-
-RUN dnf update --exclude=ceph-iscsi,chrony,selinux-policy-targeted -y && dnf install -y \
+RUN dnf update --exclude=ceph-iscsi -y  && dnf install -y \
   git \
   gcc \
   make \
