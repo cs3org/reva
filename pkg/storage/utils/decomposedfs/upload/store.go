@@ -270,7 +270,10 @@ func (store OcisStore) CreateNodeForUpload(session *OcisSession, initAttrs node.
 		// overwrite mtime if requested
 		mtime = session.MTime()
 	}
-	store.lu.TimeManager().OverrideMtime(ctx, n, &initAttrs, mtime)
+	err = store.lu.TimeManager().OverrideMtime(ctx, n, &initAttrs, mtime)
+	if err != nil {
+		return nil, errors.Wrap(err, "Decomposedfs: failed to set the mtime")
+	}
 
 	// update node metadata with new blobid etc
 	err = n.SetXattrsWithContext(ctx, initAttrs, false)
