@@ -176,8 +176,6 @@ services:
       LDAP_ORGANISATION: ownCloud
       LDAP_ADMIN_PASSWORD: admin
       LDAP_TLS_VERIFY_CLIENT: never
-      LDAP_TLS: "false"
-      HOSTNAME: ldap
     healthcheck:
       test: ldapsearch -x -h localhost -b dc=owncloud,dc=com -D "cn=admin,dc=owncloud,dc=com" -w admin
       interval: 5s
