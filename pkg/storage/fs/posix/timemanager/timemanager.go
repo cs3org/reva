@@ -80,6 +80,7 @@ func (m *Manager) CTime(ctx context.Context, n *node.Node) (time.Time, error) {
 	}
 
 	stat := fi.Sys().(*syscall.Stat_t)
+	//nolint:unconvert
 	return time.Unix(int64(stat.Ctim.Sec), int64(stat.Ctim.Nsec)), nil
 }
 
