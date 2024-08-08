@@ -548,13 +548,13 @@ func (t *Tree) WarmupIDCache(root string, assimilate bool) error {
 
 	sizes := make(map[string]int64)
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
 		// skip lock files
 		if isLockFile(path) {
 			return nil
+		}
+
+		if err != nil {
+			return err
 		}
 
 		// calculate tree sizes
@@ -601,12 +601,14 @@ func (t *Tree) WarmupIDCache(root string, assimilate bool) error {
 		}
 		return nil
 	})
-	if err != nil {
-		return err
-	}
 
 	for dir, size := range sizes {
 		_ = t.lookup.MetadataBackend().Set(context.Background(), dir, prefixes.TreesizeAttr, []byte(fmt.Sprintf("%d", size)))
 	}
+
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
