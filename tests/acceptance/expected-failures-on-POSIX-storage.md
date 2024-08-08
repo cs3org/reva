@@ -221,6 +221,7 @@ _The below features have been added after I last categorized them. AFAICT they a
 
 
 ### posixfs doesn't do versions at that point
+- [coreApiWebdavEtagPropagation2/restoreVersion.feature:13](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavEtagPropagation2/restoreVersion.feature#L13)
 - [coreApiWebdavUploadTUS/uploadFile.feature:146](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFile.feature#L146)
 - [coreApiWebdavUploadTUS/uploadFile.feature:147](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFile.feature#L147)
 - [coreApiWebdavUploadTUS/uploadFile.feature:122](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFile.feature#L122)
