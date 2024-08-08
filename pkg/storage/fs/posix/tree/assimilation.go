@@ -502,7 +502,7 @@ assimilate:
 		attributes.SetInt64(prefixes.BlobsizeAttr, fi.Size())
 
 		// propagate the size change
-		sizeDiff := fi.Size()
+		sizeDiff = fi.Size()
 		if previousAttribs != nil && previousAttribs[prefixes.BlobsizeAttr] != nil {
 			oldSize, err := attributes.Int64(prefixes.BlobsizeAttr)
 			if err == nil {
