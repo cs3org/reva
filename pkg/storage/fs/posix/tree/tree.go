@@ -302,18 +302,6 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		return errors.Wrap(err, "Decomposedfs: could not update old node attributes")
 	}
 
-	// the size diff is the current treesize or blobsize of the old/source node
-	var sizeDiff int64
-	if oldNode.IsDir(ctx) {
-		treeSize, err := oldNode.GetTreeSize(ctx)
-		if err != nil {
-			return err
-		}
-		sizeDiff = int64(treeSize)
-	} else {
-		sizeDiff = oldNode.Blobsize
-	}
-
 	// rename node
 	err = os.Rename(
 		filepath.Join(oldNode.ParentPath(), oldNode.Name),
@@ -339,7 +327,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		newNode.ID = oldNode.ID
 	}
 	_ = t.lookup.(*lookup.Lookup).CacheID(ctx, newNode.SpaceID, newNode.ID, filepath.Join(newNode.ParentPath(), newNode.Name))
-	// update id cache for the moved subtree
+	// update id cache for the moved subtree.
 	if oldNode.IsDir(ctx) {
 		err = t.WarmupIDCache(filepath.Join(newNode.ParentPath(), newNode.Name), false)
 		if err != nil {
@@ -347,15 +335,11 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		}
 	}
 
-	// TODO inefficient because we might update several nodes twice, only propagate unchanged nodes?
-	// collect in a list, then only stat each node once
-	// also do this in a go routine ... webdav should check the etag async
-
-	err = t.Propagate(ctx, oldNode, -sizeDiff)
+	err = t.Propagate(ctx, oldNode, 0)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: Move: could not propagate old node")
 	}
-	err = t.Propagate(ctx, newNode, sizeDiff)
+	err = t.Propagate(ctx, newNode, 0)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: Move: could not propagate new node")
 	}
@@ -713,8 +697,9 @@ func (t *Tree) removeNode(ctx context.Context, path string, n *node.Node) error 
 }
 
 // Propagate propagates changes to the root of the tree
-func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err error) {
-	return t.propagator.Propagate(ctx, n, sizeDiff)
+func (t *Tree) Propagate(ctx context.Context, n *node.Node, _ int64) (err error) {
+	// We do not propagate size diffs here but rely on the assimilation to take care of the tree sizes instead
+	return t.propagator.Propagate(ctx, n, 0)
 }
 
 // WriteBlob writes a blob to the blobstore
