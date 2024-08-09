@@ -22,12 +22,9 @@ _ocdav: double check the webdav property parsing when custom namespaces are used
 -   [coreApiWebdavProperties/setFileProperties.feature:130](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/setFileProperties.feature#L130)
 
 #### [Cannot set custom webDav properties](https://github.com/owncloud/product/issues/264)
--   [coreApiWebdavProperties/getFileProperties.feature:348](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/getFileProperties.feature#L348)
--   [coreApiWebdavProperties/getFileProperties.feature:349](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/getFileProperties.feature#L349)
 -   [coreApiWebdavProperties/getFileProperties.feature:277](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/getFileProperties.feature#L277)
 -   [coreApiWebdavProperties/getFileProperties.feature:278](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/getFileProperties.feature#L278)
 -   [coreApiWebdavProperties/getFileProperties.feature:279](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/getFileProperties.feature#L279)
--   [coreApiWebdavProperties/getFileProperties.feature:316](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/getFileProperties.feature#L316)
 
 ### Sync
 Synchronization features like etag propagation, setting mtime and locking files
@@ -67,11 +64,6 @@ Synchronization features like etag propagation, setting mtime and locking files
 -   [coreApiWebdavLocksUnlock/unlock.feature:74](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavLocksUnlock/unlock.feature#L74)
 -   [coreApiWebdavLocksUnlock/unlock.feature:75](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavLocksUnlock/unlock.feature#L75)
 
-
-#### [oc:privatelink property not returned in webdav responses](https://github.com/owncloud/product/issues/262)
--   [coreApiWebdavProperties/getFileProperties.feature:317](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/getFileProperties.feature#L317)
--   [coreApiWebdavProperties/getFileProperties.feature:318](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/getFileProperties.feature#L318)
--   [coreApiWebdavProperties/getFileProperties.feature:350](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/getFileProperties.feature#L350)
 
 ### User Management
 User and group management features
@@ -175,9 +167,9 @@ Not everything needs to be implemented for ocis. While the oc10 testsuite covers
 * _Blacklisted ignored files are no longer required because ocis can handle `.htaccess` files without security implications introduced by serving user provided files with apache._
 
 #### [Blacklist files extensions](https://github.com/owncloud/ocis/issues/2177)
--   [coreApiWebdavProperties/copyFile.feature:108](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L108)
 -   [coreApiWebdavProperties/copyFile.feature:109](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L109)
--   [coreApiWebdavProperties/copyFile.feature:107](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L107)
+-   [coreApiWebdavProperties/copyFile.feature:110](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L110)
+-   [coreApiWebdavProperties/copyFile.feature:111](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L111)
 -   [coreApiWebdavProperties/createFileFolder.feature:95](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/createFileFolder.feature#L95)
 -   [coreApiWebdavProperties/createFileFolder.feature:96](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/createFileFolder.feature#L96)
 -   [coreApiWebdavProperties/createFileFolder.feature:97](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/createFileFolder.feature#L97)
@@ -403,6 +395,12 @@ _The below features have been added after I last categorized them. AFAICT they a
 - [coreApiWebdavMove1/moveFolder.feature:235](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove1/moveFolder.feature#L235)
 - [coreApiWebdavMove1/moveFolder.feature:236](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove1/moveFolder.feature#L236)
 - [coreApiWebdavMove1/moveFolder.feature:237](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove1/moveFolder.feature#L237)
+
+### [COPY file/folder to same name is possible (but 500 code error for folder with spaces path)](https://github.com/owncloud/ocis/issues/8711)
+
+- [coreApiWebdavProperties/copyFile.feature:1064](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L1064)
+- [coreApiWebdavProperties/copyFile.feature:1065](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L1065)
+- [coreApiWebdavProperties/copyFile.feature:1066](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L1066)
 
 - Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
