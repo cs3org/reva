@@ -78,6 +78,11 @@ func NewScanDebouncer(d time.Duration, f func(item scanItem)) *ScanDebouncer {
 
 // Debounce restarts the debounce timer for the given space
 func (d *ScanDebouncer) Debounce(item scanItem) {
+	if d.after == 0 {
+		d.f(item)
+		return
+	}
+
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 
@@ -472,10 +477,6 @@ assimilate:
 		prefixes.IDAttr:   []byte(id),
 		prefixes.NameAttr: []byte(filepath.Base(path)),
 	}
-	prevMtime, err := previousAttribs.Time(prefixes.MTimeAttr)
-	if err != nil || prevMtime.Before(fi.ModTime()) {
-		attributes[prefixes.MTimeAttr] = []byte(fi.ModTime().Format(time.RFC3339Nano))
-	}
 	if len(parentID) > 0 {
 		attributes[prefixes.ParentidAttr] = []byte(parentID)
 	}
@@ -499,22 +500,15 @@ assimilate:
 		attributes.SetString(prefixes.BlobIDAttr, id)
 		attributes.SetInt64(prefixes.BlobsizeAttr, fi.Size())
 
-		// propagate the change
-		sizeDiff := fi.Size()
-		if previousAttribs != nil && previousAttribs[prefixes.BlobsizeAttr] != nil {
-			oldSize, err := attributes.Int64(prefixes.BlobsizeAttr)
-			if err == nil {
-				sizeDiff -= oldSize
-			}
-		}
-
-		n := node.New(spaceID, id, parentID, filepath.Base(path), fi.Size(), "", provider.ResourceType_RESOURCE_TYPE_FILE, nil, t.lookup)
-		n.SpaceRoot = &node.Node{SpaceID: spaceID, ID: spaceID}
-		err = t.Propagate(context.Background(), n, sizeDiff)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to propagate")
-		}
 	}
+
+	n := node.New(spaceID, id, parentID, filepath.Base(path), fi.Size(), "", provider.ResourceType_RESOURCE_TYPE_FILE, nil, t.lookup)
+	n.SpaceRoot = &node.Node{SpaceID: spaceID, ID: spaceID}
+	err = t.Propagate(context.Background(), n, 0)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to propagate")
+	}
+
 	err = t.lookup.MetadataBackend().SetMultiple(context.Background(), path, attributes, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to set attributes")
@@ -547,13 +541,13 @@ func (t *Tree) WarmupIDCache(root string, assimilate bool) error {
 
 	sizes := make(map[string]int64)
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
 		// skip lock files
 		if isLockFile(path) {
 			return nil
+		}
+
+		if err != nil {
+			return err
 		}
 
 		// calculate tree sizes
@@ -600,12 +594,14 @@ func (t *Tree) WarmupIDCache(root string, assimilate bool) error {
 		}
 		return nil
 	})
-	if err != nil {
-		return err
-	}
 
 	for dir, size := range sizes {
 		_ = t.lookup.MetadataBackend().Set(context.Background(), dir, prefixes.TreesizeAttr, []byte(fmt.Sprintf("%d", size)))
 	}
+
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

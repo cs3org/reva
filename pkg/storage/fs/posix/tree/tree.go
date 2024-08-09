@@ -28,7 +28,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -46,6 +45,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/options"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/trashbin"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
@@ -82,6 +82,7 @@ type scanItem struct {
 type Tree struct {
 	lookup     node.PathLookup
 	blobstore  Blobstore
+	trashbin   *trashbin.Trashbin
 	propagator propagator.Propagator
 
 	options *options.Options
@@ -100,18 +101,19 @@ type Tree struct {
 type PermissionCheckFunc func(rp *provider.ResourcePermissions) bool
 
 // New returns a new instance of Tree
-func New(lu node.PathLookup, bs Blobstore, um usermapper.Mapper, o *options.Options, es events.Stream, cache store.Store) (*Tree, error) {
+func New(lu node.PathLookup, bs Blobstore, um usermapper.Mapper, trashbin *trashbin.Trashbin, o *options.Options, es events.Stream, cache store.Store) (*Tree, error) {
 	log := logger.New()
 	scanQueue := make(chan scanItem)
 	t := &Tree{
 		lookup:     lu,
 		blobstore:  bs,
 		userMapper: um,
+		trashbin:   trashbin,
 		options:    o,
 		idCache:    cache,
 		propagator: propagator.New(lu, &o.Options),
 		scanQueue:  scanQueue,
-		scanDebouncer: NewScanDebouncer(1000*time.Millisecond, func(item scanItem) {
+		scanDebouncer: NewScanDebouncer(o.ScanDebounceDelay, func(item scanItem) {
 			scanQueue <- item
 		}),
 		es:  es,
@@ -229,14 +231,17 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 	if markprocessing {
 		attributes[prefixes.StatusPrefix] = []byte(node.ProcessingStatus)
 	}
-	nodeMTime := time.Now()
 	if mtime != "" {
-		nodeMTime, err = utils.MTimeToTime(mtime)
+		nodeMTime, err := utils.MTimeToTime(mtime)
+		if err != nil {
+			return err
+		}
+		err = os.Chtimes(nodePath, nodeMTime, nodeMTime)
 		if err != nil {
 			return err
 		}
 	}
-	attributes[prefixes.MTimeAttr] = []byte(nodeMTime.UTC().Format(time.RFC3339Nano))
+
 	err = n.SetXattrsWithContext(ctx, attributes, false)
 	if err != nil {
 		return err
@@ -297,18 +302,6 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		return errors.Wrap(err, "Decomposedfs: could not update old node attributes")
 	}
 
-	// the size diff is the current treesize or blobsize of the old/source node
-	var sizeDiff int64
-	if oldNode.IsDir(ctx) {
-		treeSize, err := oldNode.GetTreeSize(ctx)
-		if err != nil {
-			return err
-		}
-		sizeDiff = int64(treeSize)
-	} else {
-		sizeDiff = oldNode.Blobsize
-	}
-
 	// rename node
 	err = os.Rename(
 		filepath.Join(oldNode.ParentPath(), oldNode.Name),
@@ -334,7 +327,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		newNode.ID = oldNode.ID
 	}
 	_ = t.lookup.(*lookup.Lookup).CacheID(ctx, newNode.SpaceID, newNode.ID, filepath.Join(newNode.ParentPath(), newNode.Name))
-	// update id cache for the moved subtree
+	// update id cache for the moved subtree.
 	if oldNode.IsDir(ctx) {
 		err = t.WarmupIDCache(filepath.Join(newNode.ParentPath(), newNode.Name), false)
 		if err != nil {
@@ -342,15 +335,11 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		}
 	}
 
-	// TODO inefficient because we might update several nodes twice, only propagate unchanged nodes?
-	// collect in a list, then only stat each node once
-	// also do this in a go routine ... webdav should check the etag async
-
-	err = t.Propagate(ctx, oldNode, -sizeDiff)
+	err = t.Propagate(ctx, oldNode, 0)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: Move: could not propagate old node")
 	}
-	err = t.Propagate(ctx, newNode, sizeDiff)
+	err = t.Propagate(ctx, newNode, 0)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: Move: could not propagate new node")
 	}
@@ -394,7 +383,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	g.Go(func() error {
 		defer close(work)
 		for _, name := range names {
-			if isLockFile(name) {
+			if isLockFile(name) || isTrash(name) {
 				continue
 			}
 
@@ -469,7 +458,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 }
 
 // Delete deletes a node in the tree by moving it to the trash
-func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
+func (t *Tree) Delete(ctx context.Context, n *node.Node) error {
 	path := n.InternalPath()
 
 	if !strings.HasPrefix(path, t.options.Root) {
@@ -501,7 +490,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	_ = os.Remove(n.LockFilePath())
 
 	// purge metadata
-	err = filepath.WalkDir(path, func(path string, _ fs.DirEntry, err error) error {
+	err := filepath.WalkDir(path, func(path string, _ fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -518,8 +507,9 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		return err
 	}
 
-	if err = os.RemoveAll(path); err != nil {
-		return
+	err = t.trashbin.MoveToTrash(n, path)
+	if err != nil {
+		return err
 	}
 
 	return t.Propagate(ctx, n, sizeDiff)
@@ -707,8 +697,9 @@ func (t *Tree) removeNode(ctx context.Context, path string, n *node.Node) error 
 }
 
 // Propagate propagates changes to the root of the tree
-func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err error) {
-	return t.propagator.Propagate(ctx, n, sizeDiff)
+func (t *Tree) Propagate(ctx context.Context, n *node.Node, _ int64) (err error) {
+	// We do not propagate size diffs here but rely on the assimilation to take care of the tree sizes instead
+	return t.propagator.Propagate(ctx, n, 0)
 }
 
 // WriteBlob writes a blob to the blobstore
@@ -885,4 +876,8 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 
 func isLockFile(path string) bool {
 	return strings.HasSuffix(path, ".lock") || strings.HasSuffix(path, ".flock") || strings.HasSuffix(path, ".mlock")
+}
+
+func isTrash(path string) bool {
+	return strings.HasSuffix(path, ".trashinfo") || strings.HasSuffix(path, ".trashitem")
 }

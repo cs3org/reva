@@ -36,6 +36,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/options"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/timemanager"
+	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/trashbin"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/tree"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/aspects"
@@ -152,12 +154,13 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 			},
 		},
 	}
+
 	var lu *lookup.Lookup
 	switch o.MetadataBackend {
 	case "xattrs":
-		lu = lookup.New(metadata.NewXattrsBackend(o.Root, o.FileMetadataCache), um, o)
+		lu = lookup.New(metadata.NewXattrsBackend(o.Root, o.FileMetadataCache), um, o, &timemanager.Manager{})
 	case "messagepack":
-		lu = lookup.New(metadata.NewMessagePackBackend(o.Root, o.FileMetadataCache), um, o)
+		lu = lookup.New(metadata.NewMessagePackBackend(o.Root, o.FileMetadataCache), um, o, &timemanager.Manager{})
 	default:
 		return nil, fmt.Errorf("unknown metadata backend %s", o.MetadataBackend)
 	}
@@ -175,7 +178,11 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	)
 
 	bs := &treemocks.Blobstore{}
-	tree, err := tree.New(lu, bs, um, o, nil, store.Create())
+	tree, err := tree.New(lu, bs, um, &trashbin.Trashbin{}, o, nil, store.Create())
+	if err != nil {
+		return nil, err
+	}
+	tb, err := trashbin.New(o, lu)
 	if err != nil {
 		return nil, err
 	}
@@ -183,6 +190,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		Lookup:      lu,
 		Tree:        tree,
 		Permissions: permissions.NewPermissions(pmock, permissionsSelector),
+		Trashbin:    tb,
 	}
 	fs, err := decomposedfs.New(&o.Options, aspects)
 	if err != nil {
