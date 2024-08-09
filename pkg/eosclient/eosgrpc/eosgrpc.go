@@ -39,7 +39,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/eosclient"
-	erpc "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_grpc"
+	erpc "github.com/cern-eos/go-eosgrpc"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
 	"github.com/google/uuid"
