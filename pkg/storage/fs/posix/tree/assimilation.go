@@ -488,7 +488,6 @@ assimilate:
 		attributes[prefixes.ChecksumPrefix+"adler32"] = adler32h.Sum(nil)
 	}
 
-	sizeDiff := int64(0)
 	if fi.IsDir() {
 		attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_CONTAINER))
 		attributes.SetInt64(prefixes.TreesizeAttr, 0)
@@ -501,19 +500,11 @@ assimilate:
 		attributes.SetString(prefixes.BlobIDAttr, id)
 		attributes.SetInt64(prefixes.BlobsizeAttr, fi.Size())
 
-		// propagate the size change
-		sizeDiff = fi.Size()
-		if previousAttribs != nil && previousAttribs[prefixes.BlobsizeAttr] != nil {
-			oldSize, err := attributes.Int64(prefixes.BlobsizeAttr)
-			if err == nil {
-				sizeDiff -= oldSize
-			}
-		}
 	}
 
 	n := node.New(spaceID, id, parentID, filepath.Base(path), fi.Size(), "", provider.ResourceType_RESOURCE_TYPE_FILE, nil, t.lookup)
 	n.SpaceRoot = &node.Node{SpaceID: spaceID, ID: spaceID}
-	err = t.Propagate(context.Background(), n, sizeDiff)
+	err = t.Propagate(context.Background(), n, 0)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to propagate")
 	}
