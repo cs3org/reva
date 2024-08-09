@@ -19,6 +19,8 @@
 package options
 
 import (
+	"time"
+
 	decomposedoptions "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -29,7 +31,7 @@ type Options struct {
 
 	UseSpaceGroups bool `mapstructure:"use_space_groups"`
 
-	ScanDebounceDelay int `mapstructure:"scan_debounce_delay"`
+	ScanDebounceDelay time.Duration `mapstructure:"scan_debounce_delay"`
 
 	WatchFS                 bool   `mapstructure:"watch_fs"`
 	WatchType               string `mapstructure:"watch_type"`
