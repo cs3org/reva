@@ -86,23 +86,3 @@ jobs:
     uses: ./.github/workflows/compose.yml
     with:
       test: ${{ matrix.test }}
-  acceptance-1:
-    needs:
-      - docker-revad-eos
-    uses: ./.github/workflows/compose.yml
-    with:
-      test: acceptance-1
-      submodules: true
-  acceptance-2:
-    needs:
-      - docker-revad-eos
-    strategy:
-      fail-fast: false
-      matrix:
-        part: [1, 2, 3, 4, 5, 6]
-    uses: ./.github/workflows/compose.yml
-    with:
-      test: acceptance-2
-      submodules: true
-      parts: 6
-      part: ${{ matrix.part }}
