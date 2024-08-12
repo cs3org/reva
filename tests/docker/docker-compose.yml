@@ -127,7 +127,6 @@ services:
         condition: service_healthy
   frontend-global:
     extends: revad
-    hostname: frontend
     command: -c /etc/revad/frontend-global.toml
     volumes:
       - shared-volume:/var/tmp
