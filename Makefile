@@ -87,7 +87,7 @@ docker-eos-full-tests:
 # Test
 ################################################################################
 
-TEST				  = litmus-1 litmus-2
+TEST				  = litmus-1 litmus-2 acceptance-1 acceptance-2
 export REVAD_IMAGE	  ?= revad-eos
 export EOS_FULL_IMAGE ?= eos-full
 export PARTS		  ?= 1
