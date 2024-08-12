@@ -1,4 +1,3 @@
-version: "3.4"
 services:
   revad:
     # image: ${REVAD_IMAGE}
@@ -9,11 +8,11 @@ services:
     build: 
       context: ../../
       dockerfile: docker/Dockerfile.revad-eos
-    volumes:
-      - ../revad:/etc/revad
     working_dir: /etc/revad/
     healthcheck:
       test: sleep 5
+    volumes:
+      - ../revad:/etc/revad
   eos-storage:
     image: ${EOS_FULL_IMAGE}
     security_opt:
@@ -40,9 +39,6 @@ services:
       LITMUS_USERNAME: einstein
       LITMUS_PASSWORD: relativity
       TESTS: basic http copymove props
-    depends_on:
-      ldap:
-        condition: service_healthy
   gateway:
     extends: revad
     command: -c /etc/revad/gateway.toml
@@ -100,6 +96,8 @@ services:
       users:
         condition: service_healthy
       shares:
+        condition: service_healthy
+      ldap:
         condition: service_healthy
   litmus-2:
     extends: litmus
@@ -161,7 +159,6 @@ services:
       LDAP_TLS_VERIFY_CLIENT: never
     healthcheck:
       test: ldapsearch -x -h localhost -b dc=owncloud,dc=com -D "cn=admin,dc=owncloud,dc=com" -w admin
-      start_interval: 30s
       interval: 5s
       timeout: 5s
       retries: 5
