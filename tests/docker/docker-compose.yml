@@ -31,38 +31,59 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    depends_on:
+      ldap:
+        condition: service_healthy
   litmus:
     image: registry.cern.ch/docker.io/owncloud/litmus:latest
     environment:
       LITMUS_USERNAME: einstein
       LITMUS_PASSWORD: relativity
       TESTS: basic http copymove props
+    depends_on:
+      ldap:
+        condition: service_healthy
   gateway:
     extends: revad
     command: -c /etc/revad/gateway.toml
     volumes:
       - shared-volume:/var/tmp
+    depends_on:
+      ldap:
+        condition: service_healthy
   frontend:
     extends: revad
     command: -c /etc/revad/frontend.toml
     volumes:
       - shared-volume:/var/tmp
+    depends_on:
+      ldap:
+        condition: service_healthy
   storage-home:
     extends: revad
     hostname: storage-home
     command: -c /etc/revad/storage-home.toml
     volumes:
       - shared-volume:/var/tmp
+    depends_on:
+      ldap:
+        condition: service_healthy
   users:
     extends: revad
     command: -c /etc/revad/users.toml
     volumes:
       - shared-volume:/var/tmp
+    depends_on:
+      ldap:
+        condition: service_healthy
   shares:
     extends: revad
     command: -c /etc/revad/shares.toml
     volumes:
       - shared-volume:/var/tmp
+    depends_on:
+      ldap:
+        condition: service_healthy
   litmus-1:
     extends: litmus
     environment:
@@ -112,6 +133,9 @@ services:
     command: -c /etc/revad/frontend-global.toml
     volumes:
       - shared-volume:/var/tmp
+    depends_on:
+      eos-storage:
+        condition: service_healthy
   storage-local-1:
     extends: revad
     command: -c /etc/revad/storage-local-1.toml
@@ -137,6 +161,7 @@ services:
       LDAP_TLS_VERIFY_CLIENT: never
     healthcheck:
       test: ldapsearch -x -h localhost -b dc=owncloud,dc=com -D "cn=admin,dc=owncloud,dc=com" -w admin
+      start_interval: 30s
       interval: 5s
       timeout: 5s
       retries: 5
