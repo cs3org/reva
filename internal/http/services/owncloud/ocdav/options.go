@@ -42,7 +42,7 @@ func (s *svc) handleOptions(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(net.HeaderTusResumable, "1.0.0") // TODO(jfd): only for dirs?
 		w.Header().Set(net.HeaderTusVersion, "1.0.0")
 		w.Header().Set(net.HeaderTusExtension, "creation,creation-with-upload,checksum,expiration")
-		w.Header().Set(net.HeaderTusChecksumAlgorithm, "md5,sha1,crc32")
+		w.Header().Set(net.HeaderTusChecksumAlgorithm, "md5,sha1,adler32")
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
