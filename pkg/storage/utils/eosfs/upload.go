@@ -23,7 +23,6 @@ import (
 	"io"
 	"os"
 	"path"
-	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -81,8 +80,8 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 	if app == "" {
 		app = "reva_eosclient::write"
 	} else {
-		r := strings.NewReplacer(" ", "_")
-		app = "reva_" + strings.ToLower(r.Replace(app))
+		// if we have a lock context, the app for EOS must match the lock holder
+		app = fs.EncodeAppName(app)
 	}
 	return fs.c.Write(ctx, auth, fn, r, app)
 }

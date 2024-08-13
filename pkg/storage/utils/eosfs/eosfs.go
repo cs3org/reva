@@ -594,6 +594,14 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 	return nil
 }
 
+func (fs *eosfs) EncodeAppName(a string) string {
+	// this function returns the string to be used as EOS "app" tag, both in uploads and when handling locks;
+	// note that the GET (and PUT) operations in eosbinary.go and eoshttp.go use a `reva_eosclient::read`
+	// (resp. `write`) tag when no locks are involved.
+	r := strings.NewReplacer(" ", "_")
+	return "reva_eosclient::app_" + strings.ToLower(r.Replace(a))
+}
+
 func (fs *eosfs) getLockPayloads(ctx context.Context, path string) (string, string, error) {
 	// sys attributes want root auth, buddy
 	rootauth, err := fs.getRootAuth(ctx)
@@ -663,7 +671,7 @@ func (fs *eosfs) getLock(ctx context.Context, user *userpb.User, path string, re
 
 	if time.Unix(int64(l.Expiration.Seconds), 0).Before(time.Now()) {
 		// the lock expired
-		if err := fs.removeLockAttrs(ctx, path, encodeAppName(l.AppName)); err != nil {
+		if err := fs.removeLockAttrs(ctx, path, fs.EncodeAppName(l.AppName)); err != nil {
 			return nil, err
 		}
 		return nil, errtypes.NotFound("lock not found for ref")
@@ -704,7 +712,7 @@ func (fs *eosfs) setLock(ctx context.Context, lock *provider.Lock, path string) 
 		return err
 	}
 
-	encodedLock, eosLock, err := encodeLock(lock)
+	encodedLock, eosLock, err := fs.encodeLock(lock)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error encoding lock")
 	}
@@ -714,7 +722,7 @@ func (fs *eosfs) setLock(ctx context.Context, lock *provider.Lock, path string) 
 		Type: SystemAttr,
 		Key:  eosLockKey,
 		Val:  eosLock,
-	}, false, false, path, encodeAppName(lock.AppName))
+	}, false, false, path, fs.EncodeAppName(lock.AppName))
 	switch {
 	case errors.Is(err, eosclient.FileIsLockedError):
 		return errtypes.Conflict("resource already locked")
@@ -727,7 +735,7 @@ func (fs *eosfs) setLock(ctx context.Context, lock *provider.Lock, path string) 
 		Type: SystemAttr,
 		Key:  lockPayloadKey,
 		Val:  encodedLock,
-	}, false, false, path, encodeAppName(lock.AppName))
+	}, false, false, path, fs.EncodeAppName(lock.AppName))
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error setting lock payload")
 	}
@@ -822,12 +830,7 @@ func (fs *eosfs) userHasReadAccess(ctx context.Context, user *userpb.User, ref *
 	return resInfo.PermissionSet.InitiateFileDownload, nil
 }
 
-func encodeAppName(a string) string {
-	r := strings.NewReplacer(" ", "_")
-	return "reva_" + strings.ToLower(r.Replace(a))
-}
-
-func encodeLock(l *provider.Lock) (string, string, error) {
+func (fs *eosfs) encodeLock(l *provider.Lock) (string, string, error) {
 	data, err := json.Marshal(l)
 	if err != nil {
 		return "", "", err
@@ -835,7 +838,7 @@ func encodeLock(l *provider.Lock) (string, string, error) {
 	var a string
 	if l.AppName != "" {
 		// cf. upload implementation
-		a = encodeAppName(l.AppName)
+		a = fs.EncodeAppName(l.AppName)
 	} else {
 		a = "*"
 	}
@@ -976,7 +979,7 @@ func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 	}
 	path = fs.wrap(ctx, path)
 
-	return fs.removeLockAttrs(ctx, path, encodeAppName(lock.AppName))
+	return fs.removeLockAttrs(ctx, path, fs.EncodeAppName(lock.AppName))
 }
 
 func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {

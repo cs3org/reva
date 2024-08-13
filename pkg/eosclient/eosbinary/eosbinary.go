@@ -736,11 +736,11 @@ func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path s
 	if err != nil {
 		return err
 	}
-	return c.WriteFile(ctx, auth, path, fd.Name(), app)
+	return c.writeFile(ctx, auth, path, fd.Name(), app)
 }
 
 // WriteFile writes an existing file to the mgm.
-func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, path, source, app string) error {
+func (c *Client) writeFile(ctx context.Context, auth eosclient.Authorization, path, source, app string) error {
 	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
 	args := []string{"--nopbar", "--silent", "-f", source, xrdPath}
 

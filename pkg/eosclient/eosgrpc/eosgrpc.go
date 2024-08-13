@@ -36,10 +36,10 @@ import (
 	"syscall"
 	"time"
 
+	erpc "github.com/cern-eos/go-eosgrpc"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/eosclient"
-	erpc "github.com/cern-eos/go-eosgrpc"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
 	"github.com/google/uuid"
@@ -1361,20 +1361,6 @@ func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path s
 	}
 
 	return c.httpcl.PUTFile(ctx, u.Username, auth, path, stream, length, app)
-
-	// return c.httpcl.PUTFile(ctx, remoteuser, auth, urlpathng, stream)
-	// return c.WriteFile(ctx, uid, gid, path, fd.Name())
-}
-
-// WriteFile writes an existing file to the mgm. Old xrdcp utility.
-func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, path, source, app string) error {
-	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "WriteFile").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Str("source", source).Msg("")
-
-	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
-	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", source, xrdPath, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", auth.Role.UID, auth.Role.GID))
-	_, _, err := c.execute(ctx, cmd)
-	return err
 }
 
 // ListDeletedEntries returns a list of the deleted entries.

@@ -283,6 +283,8 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 		log.Error().Str("func", "GETFile").Str("url", finalurl).Str("err", err.Error()).Msg("can't create request")
 		return nil, err
 	}
+	// similar to eosbinary.go::Read()
+	req.Header.Set("app", "reva_eosclient::read")
 
 	ntries := 0
 	nredirs := 0
