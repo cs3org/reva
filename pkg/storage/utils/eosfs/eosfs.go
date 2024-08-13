@@ -2291,8 +2291,12 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		},
 	}
 	if eosFileInfo.Attrs[eosLockKey] != "" {
-		// populate the lock, fail silently if unable to decode
-		if l, _ := decodeLock(eosFileInfo.Attrs[lockPayloadKey], eosFileInfo.Attrs[eosLockKey]); l != nil {
+		// populate the lock if decodable, log failure (but move on) if not
+		l, err := decodeLock(eosFileInfo.Attrs[lockPayloadKey], eosFileInfo.Attrs[eosLockKey])
+		if err != nil {
+			sublog := appctx.GetLogger(ctx).With().Logger()
+			sublog.Warn().Interface("xattrs", eosFileInfo.Attrs).Msg("could not decode lock, leaving empty")
+		} else {
 			info.Lock = l
 		}
 	}
