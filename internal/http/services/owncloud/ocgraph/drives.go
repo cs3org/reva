@@ -428,11 +428,11 @@ func (s *svc) getPermissionsByCs3Reference(ctx context.Context, w http.ResponseW
 	}
 
 	actions := CS3ResourcePermissionsToLibregraphActions(statRes.Info.PermissionSet)
-	role := CS3ResourcePermissionsToUnifiedRole(statRes.Info.PermissionSet)
+	roles := GetApplicableRoleDefinitionsForActions(actions)
 
 	if err := json.NewEncoder(w).Encode(map[string]any{
 		"@libre.graph.permissions.actions.allowedValues": actions,
-		"@libre.graph.permissions.roles.allowedValues":   []*libregraph.UnifiedRoleDefinition{role},
+		"@libre.graph.permissions.roles.allowedValues":   roles,
 	}); err != nil {
 		log.Error().Err(err).Msg("error marshalling spaces as json")
 		w.WriteHeader(http.StatusInternalServerError)

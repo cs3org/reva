@@ -21,7 +21,6 @@
 package ocgraph
 
 import (
-	"cmp"
 	"errors"
 	"slices"
 
@@ -210,7 +209,7 @@ func NewUnifiedRoleFromID(id string) (*libregraph.UnifiedRoleDefinition, error) 
 
 // GetApplicableRoleDefinitionsForActions returns a list of role definitions
 // that match the provided actions and constraints
-func GetApplicableRoleDefinitionsForActions(actions []string, constraints string, descending bool) []*libregraph.UnifiedRoleDefinition {
+func GetApplicableRoleDefinitionsForActions(actions []string) []*libregraph.UnifiedRoleDefinition {
 	builtin := GetBuiltinRoleDefinitionList()
 	definitions := make([]*libregraph.UnifiedRoleDefinition, 0, len(builtin))
 
@@ -218,9 +217,6 @@ func GetApplicableRoleDefinitionsForActions(actions []string, constraints string
 		var definitionMatch bool
 
 		for _, permission := range definition.GetRolePermissions() {
-			if permission.GetCondition() != constraints {
-				continue
-			}
 
 			for i, action := range permission.GetAllowedResourceActions() {
 				if !slices.Contains(actions, action) {
@@ -242,43 +238,7 @@ func GetApplicableRoleDefinitionsForActions(actions []string, constraints string
 
 	}
 
-	return WeightRoleDefinitions(definitions, constraints, descending)
-}
-
-// WeightRoleDefinitions sorts the provided role definitions by the number of permissions[n].actions they grant,
-// the implementation is optimistic and assumes that the weight relies on the number of available actions.
-// descending - false - sorts the roles from least to most permissions
-// descending - true - sorts the roles from most to least permissions
-func WeightRoleDefinitions(roleDefinitions []*libregraph.UnifiedRoleDefinition, constraints string, descending bool) []*libregraph.UnifiedRoleDefinition {
-	slices.SortFunc(roleDefinitions, func(i, j *libregraph.UnifiedRoleDefinition) int {
-		var ia []string
-		for _, rp := range i.GetRolePermissions() {
-			if rp.GetCondition() == constraints {
-				ia = append(ia, rp.GetAllowedResourceActions()...)
-			}
-		}
-
-		var ja []string
-		for _, rp := range j.GetRolePermissions() {
-			if rp.GetCondition() == constraints {
-				ja = append(ja, rp.GetAllowedResourceActions()...)
-			}
-		}
-
-		switch descending {
-		case true:
-			return cmp.Compare(len(ja), len(ia))
-		default:
-			return cmp.Compare(len(ia), len(ja))
-		}
-	})
-
-	for i, definition := range roleDefinitions {
-		definition.LibreGraphWeight = libregraph.PtrInt32(int32(i) + 1)
-	}
-
-	// return for the sage of consistency, optional because the slice is modified in place
-	return roleDefinitions
+	return definitions
 }
 
 // PermissionsToCS3ResourcePermissions converts the provided libregraph UnifiedRolePermissions to a cs3 ResourcePermissions
