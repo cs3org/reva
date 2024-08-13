@@ -205,7 +205,7 @@ func (c *Client) executeXRDCopy(ctx context.Context, cmdArgs []string) (string, 
 
 	// check for lock mismatch error
 	if strings.Contains(errBuf.String(), "file has a valid extended attribute lock") {
-		err = errtypes.BadRequest("eosclient: lock mismatch")
+		err = errtypes.Conflict("eosclient: lock mismatch")
 	}
 
 	args := fmt.Sprintf("%s", cmd.Args)

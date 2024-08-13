@@ -94,6 +94,14 @@ func (e BadRequest) Error() string { return "error: bad request: " + string(e) }
 // IsBadRequest implements the IsBadRequest interface.
 func (e BadRequest) IsBadRequest() {}
 
+// Conflict is the error to use when the server found a conflict when processing the request (e.g. with an existing lock).
+type Conflict string
+
+func (e Conflict) Error() string { return "error: conflict: " + string(e) }
+
+// IsConflict implements the IsConflict interface.
+func (e Conflict) IsConflict() {}
+
 // ChecksumMismatch is the error to use when the sent hash does not match the calculated hash.
 type ChecksumMismatch string
 

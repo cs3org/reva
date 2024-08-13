@@ -229,7 +229,7 @@ func (c *EOSHTTPClient) getRespError(rsp *http.Response, err error) error {
 	case http.StatusNotFound:
 		return errtypes.NotFound(rspdesc(rsp))
 	case http.StatusConflict:
-		return errtypes.BadRequest(rspdesc(rsp))
+		return errtypes.Conflict(rspdesc(rsp))
 	}
 
 	return errtypes.InternalError("Err from EOS: " + rspdesc(rsp))
