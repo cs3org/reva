@@ -19,7 +19,6 @@
 package tree
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -663,35 +662,7 @@ func (t *Tree) removeNode(ctx context.Context, path string, n *node.Node) error 
 	}
 
 	// delete revisions
-	revs, err := filepath.Glob(n.InternalPath() + node.RevisionIDDelimiter + "*")
-	if err != nil {
-		log.Error().Err(err).Str("path", n.InternalPath()+node.RevisionIDDelimiter+"*").Msg("glob failed badly")
-		return err
-	}
-	for _, rev := range revs {
-		if t.lookup.MetadataBackend().IsMetaFile(rev) {
-			continue
-		}
-
-		bID, err := t.lookup.ReadBlobIDAttr(ctx, rev)
-		if err != nil {
-			log.Error().Err(err).Str("revision", rev).Msg("error reading blobid attribute")
-			return err
-		}
-
-		if err := utils.RemoveItem(rev); err != nil {
-			log.Error().Err(err).Str("revision", rev).Msg("error removing revision node")
-			return err
-		}
-
-		if bID != "" {
-			if err := t.DeleteBlob(&node.Node{SpaceID: n.SpaceID, BlobID: bID}); err != nil {
-				log.Error().Err(err).Str("revision", rev).Str("blobID", bID).Msg("error removing revision node blob")
-				return err
-			}
-		}
-
-	}
+	// posixfs doesn't do revisions yet
 
 	return nil
 }
