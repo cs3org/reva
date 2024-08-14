@@ -100,23 +100,6 @@ func (lu *Lookup) ReadBlobIDAndSizeAttr(ctx context.Context, path string, attrs 
 	return blobID, blobSize, nil
 }
 
-// ReadBlobSizeAttr reads the blobsize from the xattrs
-func (lu *Lookup) readBlobSizeAttr(ctx context.Context, path string) (int64, error) {
-	blobSize, err := lu.metadataBackend.GetInt64(ctx, path, prefixes.BlobsizeAttr)
-	if err != nil {
-		return 0, errors.Wrapf(err, "error reading blobsize xattr")
-	}
-	return blobSize, nil
-}
-
-// ReadBlobIDAttr reads the blobsize from the xattrs
-func (lu *Lookup) readBlobIDAttr(ctx context.Context, path string) (string, error) {
-	attr, err := lu.metadataBackend.Get(ctx, path, prefixes.BlobIDAttr)
-	if err != nil {
-		return "", errors.Wrapf(err, "error reading blobid xattr")
-	}
-	return string(attr), nil
-}
 func readChildNodeFromLink(path string) (string, error) {
 	link, err := os.Readlink(path)
 	if err != nil {
