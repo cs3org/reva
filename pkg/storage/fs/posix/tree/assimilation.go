@@ -497,9 +497,6 @@ assimilate:
 		attributes[prefixes.PropagationAttr] = []byte("1")
 	} else {
 		attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_FILE))
-		attributes.SetString(prefixes.BlobIDAttr, id)
-		attributes.SetInt64(prefixes.BlobsizeAttr, fi.Size())
-
 	}
 
 	n := node.New(spaceID, id, parentID, filepath.Base(path), fi.Size(), "", provider.ResourceType_RESOURCE_TYPE_FILE, nil, t.lookup)

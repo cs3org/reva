@@ -757,7 +757,7 @@ func (t *Tree) removeNode(ctx context.Context, path, timeSuffix string, n *node.
 			continue
 		}
 
-		bID, err := t.lookup.ReadBlobIDAttr(ctx, rev)
+		bID, _, err := t.lookup.ReadBlobIDAndSizeAttr(ctx, rev, nil)
 		if err != nil {
 			logger.Error().Err(err).Str("revision", rev).Msg("error reading blobid attribute")
 			return err

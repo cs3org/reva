@@ -182,7 +182,7 @@ func (tb *DecomposedfsTrashbin) ListRecycle(ctx context.Context, ref *provider.R
 		nodeType := tb.fs.lu.TypeFromPath(ctx, resolvedChildPath)
 		switch nodeType {
 		case provider.ResourceType_RESOURCE_TYPE_FILE:
-			size, err = tb.fs.lu.ReadBlobSizeAttr(ctx, resolvedChildPath)
+			_, size, err = tb.fs.lu.ReadBlobIDAndSizeAttr(ctx, resolvedChildPath, nil)
 			if err != nil {
 				sublog.Error().Err(err).Str("name", name).Msg("invalid blob size, skipping")
 				continue

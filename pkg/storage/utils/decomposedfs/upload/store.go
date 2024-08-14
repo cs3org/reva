@@ -371,7 +371,7 @@ func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSess
 			}
 
 			// delete old blob
-			bID, err := session.store.lu.ReadBlobIDAttr(ctx, versionPath)
+			bID, _, err := session.store.lu.ReadBlobIDAndSizeAttr(ctx, versionPath, nil)
 			if err != nil {
 				return unlock, err
 			}

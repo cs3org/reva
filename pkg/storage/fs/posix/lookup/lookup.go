@@ -124,22 +124,12 @@ func (lu *Lookup) MetadataBackend() metadata.Backend {
 	return lu.metadataBackend
 }
 
-// ReadBlobSizeAttr reads the blobsize from the xattrs
-func (lu *Lookup) ReadBlobSizeAttr(ctx context.Context, path string) (int64, error) {
-	blobSize, err := lu.metadataBackend.GetInt64(ctx, path, prefixes.BlobsizeAttr)
+func (lu *Lookup) ReadBlobIDAndSizeAttr(ctx context.Context, path string, _ node.Attributes) (string, int64, error) {
+	fi, err := os.Stat(path)
 	if err != nil {
-		return 0, errors.Wrapf(err, "error reading blobsize xattr")
+		return "", 0, errors.Wrap(err, "error stating file")
 	}
-	return blobSize, nil
-}
-
-// ReadBlobIDAttr reads the blobsize from the xattrs
-func (lu *Lookup) ReadBlobIDAttr(ctx context.Context, path string) (string, error) {
-	attr, err := lu.metadataBackend.Get(ctx, path, prefixes.BlobIDAttr)
-	if err != nil {
-		return "", errors.Wrapf(err, "error reading blobid xattr")
-	}
-	return string(attr), nil
+	return "", fi.Size(), nil
 }
 
 // TypeFromPath returns the type of the node at the given path

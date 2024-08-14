@@ -709,10 +709,6 @@ func (t *Tree) WriteBlob(node *node.Node, source string) error {
 
 // ReadBlob reads a blob from the blobstore
 func (t *Tree) ReadBlob(node *node.Node) (io.ReadCloser, error) {
-	if node.BlobID == "" {
-		// there is no blob yet - we are dealing with a 0 byte file
-		return io.NopCloser(bytes.NewReader([]byte{})), nil
-	}
 	return t.blobstore.Download(node)
 }
 
@@ -721,10 +717,6 @@ func (t *Tree) DeleteBlob(node *node.Node) error {
 	if node == nil {
 		return fmt.Errorf("could not delete blob, nil node was given")
 	}
-	if node.BlobID == "" {
-		return fmt.Errorf("could not delete blob, node with empty blob id was given")
-	}
-
 	return t.blobstore.Delete(node)
 }
 

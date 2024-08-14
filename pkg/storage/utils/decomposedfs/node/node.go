@@ -150,8 +150,7 @@ type PathLookup interface {
 	Path(ctx context.Context, n *Node, hasPermission PermissionFunc) (path string, err error)
 	MetadataBackend() metadata.Backend
 	TimeManager() TimeManager
-	ReadBlobSizeAttr(ctx context.Context, path string) (int64, error)
-	ReadBlobIDAttr(ctx context.Context, path string) (string, error)
+	ReadBlobIDAndSizeAttr(ctx context.Context, path string, attrs Attributes) (string, int64, error)
 	TypeFromPath(ctx context.Context, path string) provider.ResourceType
 	CopyMetadataWithSourceLock(ctx context.Context, sourcePath, targetPath string, filter func(attributeName string, value []byte) (newValue []byte, copy bool), lockedSource *lockedfile.File, acquireTargetLock bool) (err error)
 	CopyMetadata(ctx context.Context, src, target string, filter func(attributeName string, value []byte) (newValue []byte, copy bool), acquireTargetLock bool) (err error)
@@ -396,22 +395,12 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	}
 
 	if revisionSuffix == "" {
-		n.BlobID = attrs.String(prefixes.BlobIDAttr)
-		if n.BlobID != "" {
-			blobSize, err := attrs.Int64(prefixes.BlobsizeAttr)
-			if err != nil {
-				return nil, err
-			}
-			n.Blobsize = blobSize
-		}
-	} else {
-		n.BlobID, err = lu.ReadBlobIDAttr(ctx, nodePath+revisionSuffix)
+		n.BlobID, n.Blobsize, err = lu.ReadBlobIDAndSizeAttr(ctx, nodePath, attrs)
 		if err != nil {
 			return nil, err
 		}
-
-		// Lookup blobsize
-		n.Blobsize, err = lu.ReadBlobSizeAttr(ctx, nodePath+revisionSuffix)
+	} else {
+		n.BlobID, n.Blobsize, err = lu.ReadBlobIDAndSizeAttr(ctx, nodePath+revisionSuffix, nil)
 		if err != nil {
 			return nil, err
 		}
