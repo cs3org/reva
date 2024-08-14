@@ -76,6 +76,9 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 		return err
 	}
 
+	if metadata == nil {
+		metadata = map[string]string{}
+	}
 	app := metadata["lockholder"]
 	if app == "" {
 		app = "reva_eosclient::write"

@@ -402,6 +402,9 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, content io
 	if err != nil {
 		return err
 	}
+	if metadata == nil {
+		metadata = map[string]string{}
+	}
 
 	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
 		initRes, err := d.gateway.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
