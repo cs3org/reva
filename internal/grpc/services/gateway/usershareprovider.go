@@ -197,9 +197,9 @@ func (s *svc) ListShares(ctx context.Context, req *collaboration.ListSharesReque
 func (s *svc) ListExistingShares(ctx context.Context, req *collaboration.ListSharesRequest) (*gateway.ListExistingSharesResponse, error) {
 	shares, err := s.ListShares(ctx, req)
 	if err != nil {
-		err := errors.Wrap(err, "gateway: error calling ListExistingReceivedShares")
+		err := errors.Wrap(err, "gateway: error calling ListExistingShares")
 		return &gateway.ListExistingSharesResponse{
-			Status: status.NewInternal(ctx, err, "error listing received shares"),
+			Status: status.NewInternal(ctx, err, "error listing shares"),
 		}, nil
 	}
 
