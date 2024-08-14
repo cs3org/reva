@@ -19,7 +19,9 @@
 package upload
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"hash"
@@ -57,6 +59,22 @@ var defaultFilePerm = os.FileMode(0664)
 func (session *OcisSession) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
 	ctx, span := tracer.Start(session.Context(ctx), "WriteChunk")
 	defer span.End()
+
+	// calculate checksum here
+	if checksum, ok := ctxpkg.ContextGetChecksum(ctx); ok {
+		// we need to copy the contents into memory so we can write it to disk later
+		b := bytes.NewBuffer(nil)
+		sha1, md5, adler32, err := node.CalculateChecksumsFromReader(ctx, io.TeeReader(src, b))
+		if err != nil {
+			return 0, err
+		}
+
+		if err := verifyChecksum(checksum, sha1, md5, adler32, true); err != nil {
+			return 0, err
+		}
+		src = b
+	}
+
 	_, subspan := tracer.Start(ctx, "os.OpenFile")
 	file, err := os.OpenFile(session.binPath(), os.O_WRONLY|os.O_APPEND, defaultFilePerm)
 	subspan.End()
@@ -65,10 +83,6 @@ func (session *OcisSession) WriteChunk(ctx context.Context, offset int64, src io
 	}
 	defer file.Close()
 
-	// calculate cheksum here? needed for the TUS checksum extension. https://tus.io/protocols/resumable-upload.html#checksum
-	// TODO but how do we get the `Upload-Checksum`? WriteChunk() only has a context, offset and the reader ...
-	// It is sent with the PATCH request, well or in the POST when the creation-with-upload extension is used
-	// but the tus handler uses a context.Background() so we cannot really check the header and put it in the context ...
 	_, subspan = tracer.Start(ctx, "io.Copy")
 	n, err := io.Copy(file, src)
 	subspan.End()
@@ -116,21 +130,7 @@ func (session *OcisSession) FinishUpload(ctx context.Context) error {
 	// compare if they match the sent checksum
 	// TODO the tus checksum extension would do this on every chunk, but I currently don't see an easy way to pass in the requested checksum. for now we do it in FinishUpload which is also called for chunked uploads
 	if session.info.MetaData["checksum"] != "" {
-		var err error
-		parts := strings.SplitN(session.info.MetaData["checksum"], " ", 2)
-		if len(parts) != 2 {
-			return errtypes.BadRequest("invalid checksum format. must be '[algorithm] [checksum]'")
-		}
-		switch parts[0] {
-		case "sha1":
-			err = checkHash(parts[1], sha1h)
-		case "md5":
-			err = checkHash(parts[1], md5h)
-		case "adler32":
-			err = checkHash(parts[1], adler32h)
-		default:
-			err = errtypes.BadRequest("unsupported checksum algorithm: " + parts[0])
-		}
+		err := verifyChecksum(session.info.MetaData["checksum"], sha1h, md5h, adler32h, false)
 		if err != nil {
 			session.store.Cleanup(ctx, session, true, false, false)
 			return err
@@ -264,10 +264,18 @@ func (session *OcisSession) Finalize() (err error) {
 	return nil
 }
 
-func checkHash(expected string, h hash.Hash) error {
+func checkHash(expected string, h hash.Hash, isBase64 bool) error {
 	hash := hex.EncodeToString(h.Sum(nil))
+	if isBase64 {
+		raw, err := base64.StdEncoding.DecodeString(expected)
+		if err != nil {
+			return err
+		}
+
+		expected = string(raw)
+	}
 	if expected != hash {
-		return errtypes.ChecksumMismatch(fmt.Sprintf("invalid checksum: expected %s got %x", expected, hash))
+		return errtypes.ChecksumMismatch(fmt.Sprintf("invalid checksum: expected %s got %s", expected, hash))
 	}
 	return nil
 }
@@ -375,4 +383,21 @@ func joinurl(paths ...string) string {
 	}
 
 	return s.String()
+}
+
+func verifyChecksum(checksum string, sha1h hash.Hash, md5h hash.Hash, adler32h hash.Hash32, isBase64 bool) error {
+	parts := strings.SplitN(checksum, " ", 2)
+	if len(parts) != 2 {
+		return errtypes.BadRequest("invalid checksum format. must be '[algorithm] [checksum]'")
+	}
+	switch strings.ToLower(parts[0]) {
+	case "sha1":
+		return checkHash(parts[1], sha1h, isBase64)
+	case "md5":
+		return checkHash(parts[1], md5h, isBase64)
+	case "adler32":
+		return checkHash(parts[1], adler32h, isBase64)
+	default:
+		return errtypes.BadRequest("unsupported checksum algorithm: " + parts[0])
+	}
 }

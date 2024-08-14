@@ -31,6 +31,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx"
@@ -174,6 +175,10 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 			}()
 			// set etag, mtime and file id
 			setHeaders(fs, w, r)
+			// set checksum
+			if v := r.Header.Get("Upload-Checksum"); v != "" {
+				r = r.WithContext(ctxpkg.ContextSetChecksum(r.Context(), v))
+			}
 			handler.PatchFile(w, r)
 		case "DELETE":
 			handler.DelFile(w, r)
