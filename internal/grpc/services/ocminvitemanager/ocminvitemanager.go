@@ -234,7 +234,7 @@ func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
 func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRequest) (*invitepb.AcceptInviteResponse, error) {
 	token, err := s.repo.GetToken(ctx, req.InviteToken.Token)
 	if err != nil {
-		if errors.Is(err, ocmd.ErrTokenInvalid) {
+		if errors.Is(err, invite.ErrTokenNotFound) {
 			return &invitepb.AcceptInviteResponse{
 				Status: status.NewInvalid(ctx, "token invalid or not found"),
 			}, nil

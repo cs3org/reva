@@ -177,6 +177,8 @@ func (h *tokenHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	if forwardInviteResponse.Status.Code != rpc.Code_CODE_OK {
 		switch forwardInviteResponse.Status.Code {
+		case rpc.Code_CODE_NOT_FOUND:
+			fallthrough
 		case rpc.Code_CODE_INVALID_ARGUMENT:
 			reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "invalid or non existing token", nil)
 			return
