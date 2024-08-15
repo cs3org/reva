@@ -174,11 +174,7 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 		switch {
 		case errors.Is(err, ocmd.ErrTokenInvalid):
 			return &invitepb.ForwardInviteResponse{
-				Status: status.NewInvalid(ctx, "token not valid"),
-			}, nil
-		case errors.Is(err, ocmd.ErrTokenNotFound):
-			return &invitepb.ForwardInviteResponse{
-				Status: status.NewNotFound(ctx, "token not found"),
+				Status: status.NewInvalid(ctx, "token invalid or not found"),
 			}, nil
 		case errors.Is(err, ocmd.ErrUserAlreadyAccepted):
 			return &invitepb.ForwardInviteResponse{
@@ -238,9 +234,9 @@ func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
 func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRequest) (*invitepb.AcceptInviteResponse, error) {
 	token, err := s.repo.GetToken(ctx, req.InviteToken.Token)
 	if err != nil {
-		if errors.Is(err, invite.ErrTokenNotFound) {
+		if errors.Is(err, ocmd.ErrTokenInvalid) {
 			return &invitepb.AcceptInviteResponse{
-				Status: status.NewNotFound(ctx, "token not found"),
+				Status: status.NewInvalid(ctx, "token invalid or not found"),
 			}, nil
 		}
 		return &invitepb.AcceptInviteResponse{
@@ -250,7 +246,7 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 
 	if !isTokenValid(token) {
 		return &invitepb.AcceptInviteResponse{
-			Status: status.NewInvalid(ctx, "token is not valid"),
+			Status: status.NewInvalid(ctx, "token invalid or not found"),
 		}, nil
 	}
 

@@ -281,7 +281,7 @@ var _ = Describe("ocm invitation workflow", func() {
 					OriginSystemProvider: cernbox,
 				})
 				Expect(err).ToNot(HaveOccurred())
-				Expect(forwardRes.Status.Code).To(Equal(rpc.Code_CODE_NOT_FOUND))
+				Expect(forwardRes.Status.Code).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
 			})
 		})
 
