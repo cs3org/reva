@@ -1,108 +1,137 @@
-Changelog for reva 2.23.0 (2024-08-19)
+Changelog for reva 2.22.0 (2024-07-29)
 =======================================
 
-The following sections list the changes in reva 2.23.0 relevant to
+The following sections list the changes in reva 2.22.0 relevant to
 reva users. The changes are ordered by importance.
 
 Summary
 -------
 
-*   Fix #4802: Block overwriting mountpoints
-*   Fix #4782: Fixed the response code when copying from a share to a personal space
-*   Fix #4805: Fix creating spaces
-*   Fix #4651: Fix deleting space shares
-*   Fix #4808: Fixed bugs in the owncloudsql storage driver
-*   Enh #4772: Allow configuring grpc max connection age
-*   Enh #4784: Bump tusd to v2
-*   Enh #4478: Hellofs
-*   Enh #4744: Respect service transport
-*   Enh #4812: Concurrent stat requests when listing shares
-*   Enh #4798: Update go-ldap to v3.4.8
+*   Fix #4741: Always find unique providers
+*   Fix #4762: Blanks in dav Content-Disposition header
+*   Fix #4775: Fixed the response code when copying the shared from to personal
+*   Fix #4633: Allow all users to create internal links
+*   Fix #4771: Deleting resources via their id
+*   Fix #4768: Fixed the file name validation if nodeid is used
+*   Fix #4758: Fix moving locked files, enable handling locked files via ocdav
+*   Fix #4774: Fix micro ocdav service init and registration
+*   Fix #4776: Fix response code for DEL file that in postprocessing
+*   Fix #4746: Uploading the same file multiple times leads to orphaned blobs
+*   Fix #4778: Zero byte uploads
+*   Chg #4759: Updated to the latest version of the go-cs3apis
+*   Chg #4773: Ocis bumped
+*   Enh #4766: Set archiver output format via query parameter
+*   Enh #4763: Improve posixfs storage driver
 
 Details
 -------
 
-*   Bugfix #4802: Block overwriting mountpoints
+*   Bugfix #4741: Always find unique providers
 
-   This blocks overwriting mountpoints through the webdav COPY api. It is now returning a bad
-   request when attempting to overwrite a mountpoint.
+   The gateway will now always try to find a single unique provider. It has stopped aggregating
+   multiple ListContainer responses when we removed any business logic from it.
 
-   https://github.com/cs3org/reva/pull/4802
-   https://github.com/cs3org/reva/pull/4796
-   https://github.com/cs3org/reva/pull/4786
-   https://github.com/cs3org/reva/pull/4785
+   https://github.com/cs3org/reva/pull/4741
+   https://github.com/cs3org/reva/pull/4740
+   https://github.com/cs3org/reva/pull/2394
 
-*   Bugfix #4782: Fixed the response code when copying from a share to a personal space
+*   Bugfix #4762: Blanks in dav Content-Disposition header
 
-   We fixed the response code when copying a file from a share to a personal space with a secure view
+   We've fixed the encoding of blanks in the dav `Content-Disposition` header.
+
+   https://github.com/owncloud/web/issues/11169
+   https://github.com/cs3org/reva/pull/4762
+
+*   Bugfix #4775: Fixed the response code when copying the shared from to personal
+
+   We fixed the response code when copying the file from shares to personal space with a secure view
    role.
 
    https://github.com/owncloud/ocis/issues/9482
-   https://github.com/cs3org/reva/pull/4782
+   https://github.com/cs3org/reva/pull/4775
 
-*   Bugfix #4805: Fix creating spaces
+*   Bugfix #4633: Allow all users to create internal links
 
-   We fixed a problem where it wasn't possible to create new spaces when running on a non-writable
-   working directory.
+   Due to a bug, not all space members were allowed to create internal links. This has been fixed.
 
-   https://github.com/cs3org/reva/pull/4805
+   https://github.com/owncloud/ocis/issues/8960
+   https://github.com/cs3org/reva/pull/4633
 
-*   Bugfix #4651: Fix deleting space shares
+*   Bugfix #4771: Deleting resources via their id
 
-   We no longer check if a share is an ocm sharee if listng ocm shares has been disabled anyway. This
-   allows unsharing space shares.
+   We fixed a bug where deleting resources by using their id via the `/dav/spaces/` endpoint would
+   not work.
 
-   https://github.com/cs3org/reva/pull/4651
+   https://github.com/owncloud/ocis/issues/9619
+   https://github.com/cs3org/reva/pull/4771
 
-*   Bugfix #4808: Fixed bugs in the owncloudsql storage driver
+*   Bugfix #4768: Fixed the file name validation if nodeid is used
 
-   https://github.com/cs3org/reva/pull/4808
+   We have fixed the file name validation if nodeid is used
 
-*   Enhancement #4772: Allow configuring grpc max connection age
+   https://github.com/owncloud/ocis/issues/9568
+   https://github.com/cs3org/reva/pull/4768
 
-   We added a GRPC_MAX_CONNECTION_AGE env var that allows limiting the lifespan of connections.
-   A closed connection triggers grpc clients to do a new DNS lookup to pick up new IPs.
+*   Bugfix #4758: Fix moving locked files, enable handling locked files via ocdav
 
-   https://github.com/cs3org/reva/pull/4772
+   We fixed a problem when trying to move locked files. We also enabled the ocdav service to handle
+   locked files.
 
-*   Enhancement #4784: Bump tusd to v2
+   https://github.com/cs3org/reva/pull/4758
 
-   Bump tusd pkg to v2.4.0
+*   Bugfix #4774: Fix micro ocdav service init and registration
 
-   https://github.com/cs3org/reva/pull/4784
+   We no longer call Init to configure default options because it was replacing the existing
+   options.
 
-*   Enhancement #4478: Hellofs
+   https://github.com/cs3org/reva/pull/4774
 
-   We added a minimal hello world filesystem as an example for a read only storage driver.
+*   Bugfix #4776: Fix response code for DEL file that in postprocessing
 
-   https://github.com/cs3org/reva/pull/4478
+   We fixed the response code when DELETE and MOVE requests to the file that is still in
+   post-processing.
 
-*   Enhancement #4744: Respect service transport
+   https://github.com/owncloud/ocis/issues/9432
+   https://github.com/cs3org/reva/pull/4776
 
-   The service registry now takes into account the service transport when creating grpc clients.
-   This allows using `dns`, `unix` and `kubernetes` as the protocol in addition to `tcp`. `dns`
-   will turn the gRPC client into a [Thick
-   Client](https://grpc.io/blog/grpc-load-balancing/#thick-client) that can look up
-   multiple endpoints via DNS. `kubernetes` will use
-   [github.com/sercand/kuberesolver](https://github.com/sercand/kuberesolver) to
-   connect to the kubernetes API and pick up service changes. Furthermore, we enabled round robin
-   load balancing for the [default transparent retry configuration of
-   gRPC](https://grpc.io/docs/guides/retry/#retry-configuration).
+*   Bugfix #4746: Uploading the same file multiple times leads to orphaned blobs
 
-   https://github.com/cs3org/reva/pull/4744
+   Fixed a bug where multiple uploads of the same file would lead to orphaned blobs in the
+   blobstore. These orphaned blobs will now be deleted.
 
-*   Enhancement #4812: Concurrent stat requests when listing shares
+   https://github.com/cs3org/reva/pull/4746
 
-   The sharesstorageprovider now concurrently stats the accepted shares when listing the share
-   jail. The default number of 5 workers can be changed by setting the `max_concurrency` value in
-   the config map.
+*   Bugfix #4778: Zero byte uploads
 
-   https://github.com/cs3org/reva/pull/4812
+   Zero byte uploads would trigger postprocessing which lead to breaking pipelines.
 
-*   Enhancement #4798: Update go-ldap to v3.4.8
+   https://github.com/cs3org/reva/pull/4778
 
-   Update go-ldap/ldap/v3 to the latest upstream release to include the latest bugfixes and
-   enhancements.
+*   Change #4759: Updated to the latest version of the go-cs3apis
 
-   https://github.com/cs3org/reva/pull/4798
+   The go-cs3apis dependency was updated to the latest version
+
+   https://github.com/owncloud/ocis/issues/9554
+   https://github.com/cs3org/reva/pull/4759
+
+*   Change #4773: Ocis bumped
+
+   Ocis bumped. The expected failures removed.
+
+   https://github.com/cs3org/reva/pull/4773
+
+*   Enhancement #4766: Set archiver output format via query parameter
+
+   Sets the archive output format e.G "tar" via the url query parameter "output-format",
+   possible params are "zip" and "tar", falls back to "zip".
+
+   https://github.com/owncloud/ocis/issues/9399
+   https://github.com/owncloud/web/issues/11080
+   https://github.com/cs3org/reva/pull/4766
+
+*   Enhancement #4763: Improve posixfs storage driver
+
+   Improve the posixfs storage driver by fixing several issues and corner cases.
+
+   https://github.com/cs3org/reva/pull/4763
 
