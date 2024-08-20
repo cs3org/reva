@@ -346,7 +346,7 @@ func (t *Tree) assimilate(item scanItem) error {
 			if err == nil {
 				// this id clashes with an existing id -> clear metadata and re-assimilate
 
-				t.lookup.MetadataBackend().Purge(context.Background(), item.Path)
+				_ = t.lookup.MetadataBackend().Purge(context.Background(), item.Path)
 				go func() {
 					_ = t.assimilate(scanItem{Path: item.Path, ForceRescan: true})
 				}()
@@ -609,7 +609,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate bool) error {
 					// this id clashes with an existing id -> clear metadata and re-assimilate
 					_, err := os.Stat(previousPath)
 					if err == nil {
-						t.lookup.MetadataBackend().Purge(context.Background(), path)
+						_ = t.lookup.MetadataBackend().Purge(context.Background(), path)
 						_ = t.assimilate(scanItem{Path: path, ForceRescan: true})
 					}
 				}
