@@ -234,7 +234,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 			if err := os.Remove(newRevisionPath); err != nil {
 				log.Error().Err(err).Str("revision", filepath.Base(newRevisionPath)).Msg("could not clean up revision node")
 			}
-			if err := fs.lu.MetadataBackend().Purge(newRevisionPath); err != nil {
+			if err := fs.lu.MetadataBackend().Purge(ctx, newRevisionPath); err != nil {
 				log.Error().Err(err).Str("revision", filepath.Base(newRevisionPath)).Msg("could not clean up revision node")
 			}
 		}
@@ -295,7 +295,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	if err := os.Remove(fs.lu.MetadataBackend().LockfilePath(restoredRevisionPath)); err != nil {
 		log.Warn().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("could not delete old revision metadata lockfile, continuing")
 	}
-	if err := fs.lu.MetadataBackend().Purge(restoredRevisionPath); err != nil {
+	if err := fs.lu.MetadataBackend().Purge(ctx, restoredRevisionPath); err != nil {
 		log.Warn().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("could not purge old revision from cache, continuing")
 	}
 

@@ -218,7 +218,7 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool, recurse bool) e
 func (t *Tree) HandleFileDelete(path string) error {
 	// purge metadata
 	_ = t.lookup.(*lookup.Lookup).IDCache.DeleteByPath(context.Background(), path)
-	_ = t.lookup.MetadataBackend().Purge(path)
+	_ = t.lookup.MetadataBackend().Purge(context.Background(), path)
 
 	// send event
 	owner, spaceID, nodeID, parentID, err := t.getOwnerAndIDs(filepath.Dir(path))

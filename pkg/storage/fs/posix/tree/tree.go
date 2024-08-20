@@ -497,7 +497,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) error {
 		if err = t.lookup.(*lookup.Lookup).IDCache.DeleteByPath(ctx, path); err != nil {
 			return err
 		}
-		if err = t.lookup.MetadataBackend().Purge(path); err != nil {
+		if err = t.lookup.MetadataBackend().Purge(ctx, path); err != nil {
 			return err
 		}
 		return nil
@@ -648,7 +648,7 @@ func (t *Tree) removeNode(ctx context.Context, path string, n *node.Node) error 
 		return err
 	}
 
-	if err := t.lookup.MetadataBackend().Purge(path); err != nil {
+	if err := t.lookup.MetadataBackend().Purge(ctx, path); err != nil {
 		log.Error().Err(err).Str("path", t.lookup.MetadataBackend().MetadataPath(path)).Msg("error purging node metadata")
 		return err
 	}

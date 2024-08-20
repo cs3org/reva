@@ -733,7 +733,7 @@ func (t *Tree) removeNode(ctx context.Context, path, timeSuffix string, n *node.
 		return err
 	}
 
-	if err := t.lookup.MetadataBackend().Purge(path); err != nil {
+	if err := t.lookup.MetadataBackend().Purge(ctx, path); err != nil {
 		logger.Error().Err(err).Str("path", t.lookup.MetadataBackend().MetadataPath(path)).Msg("error purging node metadata")
 		return err
 	}
