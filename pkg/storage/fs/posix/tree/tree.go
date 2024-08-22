@@ -488,25 +488,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) error {
 	// Remove lock file if it exists
 	_ = os.Remove(n.LockFilePath())
 
-	// purge metadata
-	err := filepath.WalkDir(path, func(path string, _ fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if err = t.lookup.(*lookup.Lookup).IDCache.DeleteByPath(ctx, path); err != nil {
-			return err
-		}
-		if err = t.lookup.MetadataBackend().Purge(ctx, path); err != nil {
-			return err
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
-	err = t.trashbin.MoveToTrash(n, path)
+	err := t.trashbin.MoveToTrash(ctx, n, path)
 	if err != nil {
 		return err
 	}

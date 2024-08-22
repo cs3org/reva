@@ -100,7 +100,7 @@ func trashRootForNode(n *node.Node) string {
 	return filepath.Join(n.SpaceRoot.InternalPath(), ".Trash")
 }
 
-func (tb *Trashbin) MoveToTrash(n *node.Node, path string) error {
+func (tb *Trashbin) MoveToTrash(ctx context.Context, n *node.Node, path string) error {
 	key := uuid.New().String()
 	trashPath := trashRootForNode(n)
 
@@ -116,6 +116,18 @@ func (tb *Trashbin) MoveToTrash(n *node.Node, path string) error {
 	relPath := strings.TrimPrefix(path, n.SpaceRoot.InternalPath())
 	relPath = strings.TrimPrefix(relPath, "/")
 	err = tb.writeInfoFile(trashPath, key, relPath)
+	if err != nil {
+		return err
+	}
+
+	// purge metadata
+	if err = tb.lu.IDCache.DeleteByPath(ctx, path); err != nil {
+		return err
+	}
+	if err != nil {
+		return err
+	}
+	err = tb.lu.MetadataBackend().Rename(path, trashPath)
 	if err != nil {
 		return err
 	}
