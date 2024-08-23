@@ -6,4 +6,5 @@ We also fixed the `/dav/spaces` endpoint to not invent a `/` at the end of URLs 
 
 As a byproduct we now return the size of trashed items.
 
+https://github.com/cs3org/reva/pull/4822
 https://github.com/cs3org/reva/pull/4818

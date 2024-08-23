@@ -271,7 +271,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		for i := len(items) - 1; i >= 0; i-- {
 			// for i := range res.Infos {
 			if items[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-				stack = append(stack, items[i].Key)
+				stack = append(stack, items[i].Key+"/") // fetch children of the item
 			}
 		}
 
