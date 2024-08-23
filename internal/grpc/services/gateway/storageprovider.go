@@ -287,7 +287,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 	res, err := c.ListStorageProviders(ctx, listReq)
 	if err != nil {
 		return &provider.ListStorageSpacesResponse{
-			Status: status.NewStatusFromErrType(ctx, "gateway could not call ListStorageSpaces", err),
+			Status: status.NewStatusFromErrType(ctx, "gateway could not call ListStorageProviders", err),
 		}, nil
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
