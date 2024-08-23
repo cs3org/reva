@@ -73,7 +73,7 @@ var _ = Describe("Recycle", func() {
 			})
 
 			It("they are stored in the same trashbin", func() {
-				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(items)).To(Equal(2))
 			})
@@ -88,17 +88,17 @@ var _ = Describe("Recycle", func() {
 				// mock call to blobstore
 				env.Blobstore.On("Delete", mock.Anything).Return(nil).Times(2)
 
-				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(items)).To(Equal(2))
 
-				err = env.Fs.PurgeRecycleItem(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "/")
+				err = env.Fs.PurgeRecycleItem(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "")
 				Expect(err).ToNot(HaveOccurred())
 
-				err = env.Fs.PurgeRecycleItem(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[1].Key, "/")
+				err = env.Fs.PurgeRecycleItem(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[1].Key, "")
 				Expect(err).ToNot(HaveOccurred())
 
-				items, err = env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				items, err = env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(items)).To(Equal(0))
 			})
@@ -106,14 +106,14 @@ var _ = Describe("Recycle", func() {
 			It("they can be restored", func() {
 				env.Blobstore.On("Delete", mock.Anything).Return(nil).Times(2)
 
-				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(items)).To(Equal(2))
 
-				err = env.Fs.RestoreRecycleItem(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "/", nil)
+				err = env.Fs.RestoreRecycleItem(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "", nil)
 				Expect(err).ToNot(HaveOccurred())
 
-				items, err = env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				items, err = env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(items)).To(Equal(1))
 			})
@@ -167,10 +167,10 @@ var _ = Describe("Recycle", func() {
 			})
 
 			It("they are stored in the same trashbin (for both users)", func() {
-				itemsA, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				itemsA, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(itemsA)).To(Equal(2))
-				itemsB, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				itemsB, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(itemsB)).To(Equal(2))
 				Expect(itemsA).To(ConsistOf(itemsB))
@@ -179,7 +179,7 @@ var _ = Describe("Recycle", func() {
 			It("they can be permanently deleted by the other user", func() {
 				env.Blobstore.On("Delete", mock.Anything).Return(nil).Times(2)
 
-				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(items)).To(Equal(2))
 
@@ -194,13 +194,13 @@ var _ = Describe("Recycle", func() {
 					ctx2 = env.Ctx
 				}
 
-				err = env.Fs.PurgeRecycleItem(ctx1, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "/")
+				err = env.Fs.PurgeRecycleItem(ctx1, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "")
 				Expect(err).ToNot(HaveOccurred())
 
-				err = env.Fs.PurgeRecycleItem(ctx2, &provider.Reference{ResourceId: env.SpaceRootRes}, items[1].Key, "/")
+				err = env.Fs.PurgeRecycleItem(ctx2, &provider.Reference{ResourceId: env.SpaceRootRes}, items[1].Key, "")
 				Expect(err).ToNot(HaveOccurred())
 
-				items, err = env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				items, err = env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(items)).To(Equal(0))
 			})
@@ -208,7 +208,7 @@ var _ = Describe("Recycle", func() {
 			It("they can be restored by the other user", func() {
 				env.Blobstore.On("Delete", mock.Anything).Return(nil).Times(2)
 
-				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(items)).To(Equal(2))
 
@@ -223,13 +223,13 @@ var _ = Describe("Recycle", func() {
 					ctx2 = env.Ctx
 				}
 
-				err = env.Fs.RestoreRecycleItem(ctx1, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "/", nil)
+				err = env.Fs.RestoreRecycleItem(ctx1, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "", nil)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = env.Fs.RestoreRecycleItem(ctx2, &provider.Reference{ResourceId: env.SpaceRootRes}, items[1].Key, "/", nil)
+				err = env.Fs.RestoreRecycleItem(ctx2, &provider.Reference{ResourceId: env.SpaceRootRes}, items[1].Key, "", nil)
 				Expect(err).ToNot(HaveOccurred())
 
-				items, err = env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				items, err = env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(items)).To(Equal(0))
 			})
@@ -269,12 +269,12 @@ var _ = Describe("Recycle", func() {
 			})
 
 			It("they are stored in different trashbins", func() {
-				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(items)).To(Equal(1))
 				recycled1 := items[0]
 
-				items, err = env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: projectID}, "", "/")
+				items, err = env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: projectID}, "", "")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(items)).To(Equal(1))
 				recycled2 := items[0]
@@ -283,7 +283,7 @@ var _ = Describe("Recycle", func() {
 			})
 
 			It("they can excess the spaces quota if restored", func() {
-				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: projectID}, "", "/")
+				items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: projectID}, "", "")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(items)).To(Equal(1))
 
@@ -291,7 +291,7 @@ var _ = Describe("Recycle", func() {
 				_, err = env.CreateTestFile("largefile", "largefile-blobid", projectID.OpaqueId, projectID.SpaceId, 2000)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = env.Fs.RestoreRecycleItem(env.Ctx, &provider.Reference{ResourceId: projectID}, items[0].Key, "/", nil)
+				err = env.Fs.RestoreRecycleItem(env.Ctx, &provider.Reference{ResourceId: projectID}, items[0].Key, "", nil)
 				Expect(err).ToNot(HaveOccurred())
 
 				max, used, remaining, err := env.Fs.GetQuota(env.Ctx, &provider.Reference{ResourceId: projectID})
@@ -340,7 +340,7 @@ var _ = Describe("Recycle", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 
-				items, err := env.Fs.ListRecycle(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				items, err := env.Fs.ListRecycle(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(items)).To(Equal(1))
 			})
@@ -353,7 +353,7 @@ var _ = Describe("Recycle", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("permission denied"))
 
-				items, err := env.Fs.ListRecycle(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				items, err := env.Fs.ListRecycle(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(items)).To(Equal(0))
 			})
@@ -365,11 +365,11 @@ var _ = Describe("Recycle", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 
-				items, err := env.Fs.ListRecycle(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				items, err := env.Fs.ListRecycle(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(items)).To(Equal(1))
 
-				err = env.Fs.PurgeRecycleItem(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "/")
+				err = env.Fs.PurgeRecycleItem(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("permission denied"))
 			})
@@ -381,11 +381,11 @@ var _ = Describe("Recycle", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 
-				items, err := env.Fs.ListRecycle(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+				items, err := env.Fs.ListRecycle(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(items)).To(Equal(1))
 
-				err = env.Fs.RestoreRecycleItem(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "/", nil)
+				err = env.Fs.RestoreRecycleItem(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "", nil)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("permission denied"))
 			})
@@ -432,19 +432,19 @@ var _ = Describe("Recycle", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 
-			_, err = env.Fs.ListRecycle(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+			_, err = env.Fs.ListRecycle(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("not found"))
 
-			items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
+			items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(items)).To(Equal(1))
 
-			err = env.Fs.PurgeRecycleItem(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "/")
+			err = env.Fs.PurgeRecycleItem(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("not found"))
 
-			err = env.Fs.RestoreRecycleItem(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "/", nil)
+			err = env.Fs.RestoreRecycleItem(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "", nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("not found"))
 		})
