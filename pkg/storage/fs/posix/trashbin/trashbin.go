@@ -43,6 +43,11 @@ type Trashbin struct {
 	lu *lookup.Lookup
 }
 
+const (
+	trashHeader = `[Trash Info]`
+	timeFormat  = "2006-01-02T15:04:05"
+)
+
 // New returns a new Trashbin
 func New(o *options.Options, lu *lookup.Lookup) (*Trashbin, error) {
 	return &Trashbin{
@@ -52,9 +57,9 @@ func New(o *options.Options, lu *lookup.Lookup) (*Trashbin, error) {
 }
 
 func (tb *Trashbin) writeInfoFile(trashPath, id, path string) error {
-	c := "[Trash Info]"
+	c := trashHeader
 	c += "\nPath=" + path
-	c += "\nDeletionDate=" + time.Now().Format("2006-01-02T15:04:05")
+	c += "\nDeletionDate=" + time.Now().Format(timeFormat)
 
 	return os.WriteFile(filepath.Join(trashPath, "info", id+".trashinfo"), []byte(c), 0644)
 }
@@ -72,7 +77,7 @@ func (tb *Trashbin) readInfoFile(trashPath, id string) (string, *typesv1beta1.Ti
 
 	for _, line := range strings.Split(string(c), "\n") {
 		if strings.HasPrefix(line, "DeletionDate=") {
-			t, err := time.Parse("2006-01-02T15:04:05", strings.TrimPrefix(line, "DeletionDate="))
+			t, err := time.ParseInLocation(timeFormat, strings.TrimSpace(strings.TrimPrefix(line, "DeletionDate=")), time.Local)
 			if err != nil {
 				return "", nil, err
 			}
