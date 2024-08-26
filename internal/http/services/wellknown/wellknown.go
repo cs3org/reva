@@ -63,7 +63,8 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 func (s *svc) routerInit() error {
 	wkocmHandler := new(wkocmHandler)
 	wkocmHandler.init(&s.Conf.OCMProvider)
-	s.router.Get("/ocm", wkocmHandler.Ocm)
+	s.router.Get("/.well-known/ocm", wkocmHandler.Ocm)
+	s.router.Get("/ocm-provider", wkocmHandler.Ocm)
 	return nil
 }
 
@@ -72,11 +73,11 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Prefix() string {
-	return ".well-known"
+	return ""
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/", "/ocm"}
+	return []string{"/", "/.well-known/ocm", "/ocm-provider"}
 }
 
 func (s *svc) Handler() http.Handler {
