@@ -23,7 +23,10 @@ import (
 	"errors"
 	"net/http"
 	"path"
+	"slices"
+	"strings"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
@@ -79,6 +82,17 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 	client, err := s.gatewaySelector.Next()
 	if err != nil {
 		return http.StatusInternalServerError, errtypes.InternalError(err.Error())
+	}
+
+	sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
+	switch {
+	case err != nil:
+		span.RecordError(err)
+		return http.StatusInternalServerError, err
+	case sRes.GetStatus().GetCode() == rpc.Code_CODE_OK:
+		if sRes.GetInfo().GetSpace().GetSpaceType() == "project" && isPathInList(ctx, client, ref, ".space", ".space/readme.md") {
+			return http.StatusMethodNotAllowed, errors.New("deleting spaces meta file is not allowed")
+		}
 	}
 
 	res, err := client.Delete(ctx, req)
@@ -146,4 +160,18 @@ func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID
 	}
 
 	return s.handleDelete(ctx, w, r, &ref)
+}
+
+func isPathInList(ctx context.Context, client gateway.GatewayAPIClient, ref *provider.Reference, paths ...string) bool {
+	resPath := strings.TrimPrefix(ref.GetPath(), "./")
+	if ref.GetResourceId().GetOpaqueId() != "" && ref.Path == "." {
+		gpRes, err := client.GetPath(ctx, &provider.GetPathRequest{
+			ResourceId: ref.GetResourceId(),
+		})
+		if err != nil || gpRes.GetStatus().GetCode() != rpc.Code_CODE_OK {
+			return false
+		}
+		resPath = strings.TrimPrefix(gpRes.GetPath(), "/")
+	}
+	return slices.Contains(paths, resPath)
 }
