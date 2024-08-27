@@ -185,13 +185,17 @@ func (am *mgr) isIssuerAllowed(issuer string) bool {
 }
 
 func (am *mgr) doUserMapping(tkn *oidc.IDToken, claims jwt.MapClaims) (string, error) {
+	var sub = tkn.Subject
+	if am.c.IDClaim != "sub" && claims[am.c.IDClaim] != nil {
+		sub, _ = claims[am.c.IDClaim].(string)
+	}
 	if len(am.oidcUsersMapping) == 0 {
-		return tkn.Subject, nil
+		return sub, nil
 	}
 	// we need the custom claims for the mapping
 	if claims[am.c.GroupClaim] == nil {
 		// we are required to perform a user mapping but the group claim is not available
-		return tkn.Subject, nil
+		return sub, nil
 	}
 
 	mappings := make([]string, 0, len(am.oidcUsersMapping))
@@ -222,7 +226,7 @@ func (am *mgr) Authenticate(ctx context.Context, _, clientSecret string) (*user.
 
 	claims, err := extractClaims(clientSecret)
 	if err != nil {
-		return nil, nil, errtypes.PermissionDenied("oidc token not valid")
+		return nil, nil, errtypes.PermissionDenied(fmt.Sprintf("error extracting claims from oidc token: %+v", err))
 	}
 
 	issuer, ok := extractIssuer(claims)
@@ -248,7 +252,7 @@ func (am *mgr) Authenticate(ctx context.Context, _, clientSecret string) (*user.
 
 	tkn, err := provider.Verifier(config).Verify(ctx, clientSecret)
 	if err != nil {
-		return nil, nil, errtypes.PermissionDenied(fmt.Sprintf("oidc token not valid: %+v", err))
+		return nil, nil, errtypes.PermissionDenied(fmt.Sprintf("oidc token failed verification: %+v", err))
 	}
 
 	sub, err := am.doUserMapping(tkn, claims)

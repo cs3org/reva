@@ -58,3 +58,4 @@ toolchain/
 logs_test/
 
 tmp/
+public/

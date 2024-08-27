@@ -21,7 +21,7 @@ jobs:
     runs-on: self-hosted
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: ${{ inputs.submodules }}
       - name: Download image

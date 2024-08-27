@@ -260,12 +260,18 @@ func (c *Client) executeEOS(ctx context.Context, cmdArgs []string, auth eosclien
 			case 0:
 				err = nil
 			case int(syscall.ENOENT):
-				err = errtypes.NotFound(errBuf.String())
+				err = errtypes.NotFound("eosclient: " + errBuf.String())
 			case int(syscall.EPERM), int(syscall.E2BIG), int(syscall.EINVAL):
-				// eos reports back error code 1 (EPERM) when ?
+				// eos reports back error code 1 (EPERM) as a PermissionDenied error
 				// eos reports back error code 7 (E2BIG) when the user is not allowed to read the directory
 				// eos reports back error code 22 (EINVAL) when the user is not allowed to enter the instance
-				err = errtypes.PermissionDenied(errBuf.String())
+				errString := errBuf.String()
+				if errString == "" {
+					errString = fmt.Sprintf("rc = %d", exitStatus)
+				}
+				err = errtypes.PermissionDenied("eosclient: " + errString)
+			default:
+				err = errors.Wrap(err, fmt.Sprintf("eosclient: error while executing command: %s", errBuf.String()))
 			}
 		}
 	}
@@ -273,11 +279,6 @@ func (c *Client) executeEOS(ctx context.Context, cmdArgs []string, auth eosclien
 	args := fmt.Sprintf("%s", cmd.Args)
 	env := fmt.Sprintf("%s", cmd.Env)
 	log.Info().Str("args", args).Str("env", env).Int("exit", exitStatus).Str("err", errBuf.String()).Msg("eos cmd")
-
-	if err != nil && exitStatus != int(syscall.ENOENT) { // don't wrap the errtypes.NotFoundError
-		err = errors.Wrap(err, "eosclient: error while executing command")
-	}
-
 	return outBuf.String(), errBuf.String(), err
 }
 
@@ -442,21 +443,11 @@ func (c *Client) getRawFileInfoByPath(ctx context.Context, auth eosclient.Author
 
 func (c *Client) mergeACLsAndAttrsForFiles(ctx context.Context, auth eosclient.Authorization, info *eosclient.FileInfo) *eosclient.FileInfo {
 	// We need to inherit the ACLs for the parent directory as these are not available for files
-	// And the attributes from the version folders
 	if !info.IsDir {
 		parentInfo, err := c.getRawFileInfoByPath(ctx, auth, path.Dir(info.File))
 		// Even if this call fails, at least return the current file object
 		if err == nil {
 			info.SysACL.Entries = append(info.SysACL.Entries, parentInfo.SysACL.Entries...)
-		}
-
-		// We need to merge attrs set for the version folders, so get those resolved for the current user
-		versionFolderInfo, err := c.GetFileInfoByPath(ctx, auth, getVersionFolder(info.File))
-		if err == nil {
-			info.SysACL.Entries = append(info.SysACL.Entries, versionFolderInfo.SysACL.Entries...)
-			for k, v := range versionFolderInfo.Attrs {
-				info.Attrs[k] = v
-			}
 		}
 	}
 
@@ -469,23 +460,12 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
 	}
 
-	var info *eosclient.FileInfo
-	var err error
-	// We need to set the attrs on the version folder as they are not persisted across writes
-	// Except for the sys.eval.useracl attr as EOS uses that to determine if it needs to obey
-	// the user ACLs set on the file
-	if !(attr.Type == eosclient.SystemAttr && attr.Key == userACLEvalKey) {
-		info, err = c.getRawFileInfoByPath(ctx, auth, path)
+	// Favorites need to be stored per user so handle these separately
+	if attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
+		info, err := c.getRawFileInfoByPath(ctx, auth, path)
 		if err != nil {
 			return err
 		}
-		if !info.IsDir {
-			path = getVersionFolder(path)
-		}
-	}
-
-	// Favorites need to be stored per user so handle these separately
-	if attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
 		return c.handleFavAttr(ctx, auth, attr, recursive, path, info, true)
 	}
 	return c.setEOSAttr(ctx, auth, attr, errorIfExists, recursive, path)
@@ -545,23 +525,13 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
 	}
 
-	var info *eosclient.FileInfo
 	var err error
-	// We need to set the attrs on the version folder as they are not persisted across writes
-	// Except for the sys.eval.useracl attr as EOS uses that to determine if it needs to obey
-	// the user ACLs set on the file
-	if !(attr.Type == eosclient.SystemAttr && attr.Key == userACLEvalKey) {
-		info, err = c.getRawFileInfoByPath(ctx, auth, path)
+	// Favorites need to be stored per user so handle these separately
+	if attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
+		info, err := c.getRawFileInfoByPath(ctx, auth, path)
 		if err != nil {
 			return err
 		}
-		if !info.IsDir {
-			path = getVersionFolder(path)
-		}
-	}
-
-	// Favorites need to be stored per user so handle these separately
-	if attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
 		return c.handleFavAttr(ctx, auth, attr, recursive, path, info, false)
 	}
 
@@ -584,21 +554,12 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 
 // GetAttr returns the attribute specified by key.
 func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, key, path string) (*eosclient.Attribute, error) {
-	// As SetAttr set the attr on the version folder, we will read the attribute on it
-	// if the resource is not a folder
-	info, err := c.getRawFileInfoByPath(ctx, auth, path)
-	if err != nil {
-		return nil, err
-	}
-	if !info.IsDir {
-		path = getVersionFolder(path)
-	}
-
 	args := []string{"attr", "get", key, path}
 	attrOut, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		return nil, err
 	}
+
 	attr, err := deserializeAttribute(attrOut)
 	if err != nil {
 		return nil, err
@@ -608,14 +569,6 @@ func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, key,
 
 // GetAttrs returns all the attributes of a resource.
 func (c *Client) GetAttrs(ctx context.Context, auth eosclient.Authorization, path string) ([]*eosclient.Attribute, error) {
-	info, err := c.getRawFileInfoByPath(ctx, auth, path)
-	if err != nil {
-		return nil, err
-	}
-	if !info.IsDir {
-		path = getVersionFolder(path)
-	}
-
 	args := []string{"attr", "ls", path}
 	attrOut, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
@@ -794,7 +747,13 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 		args := []string{"recycle", "ls", "-m", d.Format("2006/01/02"), fmt.Sprintf("%d", maxentries+1)}
 		stdout, _, err := c.executeEOS(ctx, args, auth)
 		if err != nil {
-			return nil, err
+			switch err.(type) {
+			case errtypes.IsPermissionDenied:
+				// in this context, this is an E2BIG that gets converted to PermissionDenied by executeEOS()
+				return nil, errtypes.BadRequest("list too long")
+			default:
+				return nil, err
+			}
 		}
 
 		list, err := parseRecycleList(stdout)

@@ -188,24 +188,36 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				return
 			}
 
-			// OC10 and Nextcloud (OCM 1.0) are using basic auth for carrying the
-			// shared token.
-			var token string
-			username, _, ok := r.BasicAuth()
-			if ok {
-				// OCM 1.0
-				token = username
-				r.URL.Path = filepath.Join("/", token, r.URL.Path)
-				ctx = context.WithValue(ctx, ctxOCM10, true)
+			var token, ocmshare string
+			// OCM v1.1 (OCIS et al.).
+			bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+			if bearer != "" {
+				// Bearer token is the shared secret, path is /{shareId}/path/to/resource.
+				// Here we're keeping the simpler public-share model, where the internal routing is done via the token,
+				// therefore we strip the shareId and reinject the token.
+				// TODO(lopresti) We should instead perform a lookup via shareId and leave the token just for auth.
+				var relPath string
+				token = bearer
+				ocmshare, relPath = router.ShiftPath(r.URL.Path)
+				r.URL.Path = filepath.Join("/", token, relPath)
 			} else {
-				token, _ = router.ShiftPath(r.URL.Path)
-				ctx = context.WithValue(ctx, ctxOCM10, false)
+				username, _, ok := r.BasicAuth()
+				if ok {
+					// OCM v1.0 (OC10 and Nextcloud) uses basic auth for carrying the shared secret,
+					// and does not pass the shareId.
+					token = username
+					r.URL.Path = filepath.Join("/", token, r.URL.Path)
+				} else {
+					// compatibility for ScienceMesh: no auth, shared secret is the first element
+					// of the path, the shareId is not given. Leave the URL as is.
+					token = strings.Split(r.URL.Path, "/")[1]
+				}
 			}
 
-			authRes, err := handleOCMAuth(ctx, c, token)
+			authRes, err := handleOCMAuth(ctx, c, ocmshare, token)
 			switch {
 			case err != nil:
-				log.Error().Err(err).Msg("error during ocm authentication")
+				log.Error().Err(err).Msg("error during OCM authentication")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			case authRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
@@ -228,6 +240,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			ctx = appctx.ContextSetToken(ctx, authRes.Token)
 			ctx = appctx.ContextSetUser(ctx, authRes.User)
 			ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, authRes.Token)
+			ctx = context.WithValue(ctx, ctxOCM, true)
 
 			log.Debug().Str("token", token).Interface("user", authRes.User).Msg("OCM user authenticated")
 
@@ -347,9 +360,10 @@ func handleSignatureAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient,
 	return c.Authenticate(ctx, &authenticateRequest)
 }
 
-func handleOCMAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, token string) (*gatewayv1beta1.AuthenticateResponse, error) {
+func handleOCMAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, ocmshare, token string) (*gatewayv1beta1.AuthenticateResponse, error) {
 	return c.Authenticate(ctx, &gatewayv1beta1.AuthenticateRequest{
-		Type:     "ocmshares",
-		ClientId: token,
+		Type:         "ocmshares",
+		ClientId:     ocmshare,
+		ClientSecret: token,
 	})
 }

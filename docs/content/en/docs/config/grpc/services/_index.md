@@ -11,4 +11,4 @@ To configure a GRPC service you need to follow this convention in the config fil
 {{< highlight toml >}}
 [grpc.services.service_name]
 ... config ...
-
+{{</ highlight >}}
