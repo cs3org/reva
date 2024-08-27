@@ -344,7 +344,7 @@ func getSharedResource(ctx context.Context, client gateway.GatewayAPIClient, res
 			e := fmt.Errorf("not found")
 			return nil, arbitraryOcsResponse(response.MetaNotFound.StatusCode, e.Error())
 		}
-		e := fmt.Errorf(res.GetStatus().GetMessage())
+		e := fmt.Errorf("%s", res.GetStatus().GetMessage())
 		return nil, arbitraryOcsResponse(response.MetaServerError.StatusCode, e.Error())
 	}
 

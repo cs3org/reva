@@ -70,7 +70,7 @@ func (importer *BaseImporter) Process(connectors *connectors.Collection) (bool, 
 
 	var err error
 	if len(processErrs) != 0 {
-		err = fmt.Errorf(strings.Join(processErrs, "; "))
+		err = fmt.Errorf("%s", strings.Join(processErrs, "; "))
 	}
 	return true, err
 }
