@@ -45,7 +45,6 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
-	"go-micro.dev/v4/util/log"
 )
 
 const (
@@ -249,6 +248,7 @@ func (fs *cephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 		return nil, errors.New("error: ref is nil")
 	}
 
+	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("ref", ref)
 	fmt.Println("debugging: listing folder", ref)
 	user := fs.makeUser(ctx)
