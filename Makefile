@@ -30,7 +30,7 @@ toolchain-clean:
 
 $(GOLANGCI_LINT):
 	@mkdir -p $(@D)
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | BINDIR=$(@D) sh -s v1.55.2
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | BINDIR=$(@D) sh -s v1.61.0
 
 .PHONY: check-changelog
 lint: $(GOLANGCI_LINT)

@@ -63,6 +63,6 @@ func TestUserManager(t *testing.T) {
 	// positive tests for New
 	_, err = New(map[string]interface{}{})
 	if err != nil {
-		t.Fatalf(err.Error())
+		t.Fatal(err.Error())
 	}
 }
