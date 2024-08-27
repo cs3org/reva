@@ -210,6 +210,6 @@ func NewErrFromStatus(s *rpc.Status) error {
 	case rpc.Code_CODE_UNIMPLEMENTED:
 		return ErrNotImplemented
 	default:
-		return fmt.Errorf(s.GetMessage())
+		return fmt.Errorf("%s", s.GetMessage())
 	}
 }
