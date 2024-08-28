@@ -137,8 +137,6 @@ func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *goceph.Cep
 		}
 	}
 
-	//TODO(tmourati): Add entry id logic here
-
 	var etag string
 	if isDir(_type) {
 		rctime, _ := cv.mount.GetXattr(path, "ceph.dir.rctime")
@@ -160,6 +158,9 @@ func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *goceph.Cep
 		}
 	}
 
+	// cephfs does not provide checksums, so we cannot set it
+	// a 3rd party tool can add a checksum attribute and we can read it,
+	// if ever that is implemented.
 	var checksum provider.ResourceChecksum
 	checksum.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET
 

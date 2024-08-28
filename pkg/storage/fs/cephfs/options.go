@@ -22,8 +22,6 @@
 package cephfs
 
 import (
-	"path/filepath"
-
 	"github.com/cs3org/reva/pkg/sharedconf"
 )
 
@@ -35,8 +33,6 @@ type Options struct {
 	IndexPool      string `mapstructure:"index_pool"`
 	Keyring        string `mapstructure:"keyring"`
 	Root           string `mapstructure:"root"`
-	ShadowFolder   string `mapstructure:"shadow_folder"`
-	ShareFolder    string `mapstructure:"share_folder"`
 	UploadFolder   string `mapstructure:"uploads"`
 	UserLayout     string `mapstructure:"user_layout"`
 	DirPerms       uint32 `mapstructure:"dir_perms"`
@@ -77,7 +73,6 @@ func (c *Options) ApplyDefaults() {
 	if c.UploadFolder == "" {
 		c.UploadFolder = ".uploads"
 	}
-	c.UploadFolder = filepath.Join(c.ShadowFolder, c.UploadFolder)
 
 	if c.UserLayout == "" {
 		c.UserLayout = "{{.Username}}"
@@ -86,7 +81,7 @@ func (c *Options) ApplyDefaults() {
 	c.HiddenDirs = map[string]bool{
 		".":                                true,
 		"..":                               true,
-		removeLeadingSlash(c.ShadowFolder): true,
+		removeLeadingSlash(c.UploadFolder): true,
 	}
 
 	if c.DirPerms == 0 {
