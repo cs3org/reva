@@ -211,5 +211,5 @@ func (user *User) resolveRef(ref *provider.Reference) (string, error) {
 	if ref.GetPath() == "" {
 		return "", errtypes.NotSupported("cephfs: path not provided, id based refs are not supported")
 	}
-	return
+	return ref.GetPath(), nil
 }
