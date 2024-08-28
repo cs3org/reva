@@ -204,7 +204,7 @@ func newConn(user *User) *cacheVal {
 	}
 
 	if user != nil { //nil creates admin conn
-		fmt.Println("debugging new connection: ", user.UidNumber)
+		fmt.Println("creating admin connection: debugging new connection for user: ", user.UidNumber)
 		perm = goceph.NewUserPerm(int(user.UidNumber), int(user.GidNumber), []int{})
 		if err = mount.SetMountPerms(perm); err != nil {
 			return destroyCephConn(mount, perm)
@@ -215,11 +215,14 @@ func newConn(user *User) *cacheVal {
 		return destroyCephConn(mount, perm)
 	}
 
-	if user != nil && !user.fs.conf.DisableHome {
-		if err = mount.ChangeDir(user.fs.conf.Root); err != nil {
-			return destroyCephConn(mount, perm)
+	// TODO(labkode): we leave the mount on the fs root
+	/*
+		if user != nil && !user.fs.conf.DisableHome {
+			if err = mount.ChangeDir(user.fs.conf.Root); err != nil {
+				return destroyCephConn(mount, perm)
+			}
 		}
-	}
+	*/
 
 	return &cacheVal{
 		perm:  perm,

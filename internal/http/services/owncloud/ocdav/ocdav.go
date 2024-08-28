@@ -30,7 +30,6 @@ import (
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -42,7 +41,6 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/favorite"
 	"github.com/cs3org/reva/pkg/storage/favorite/registry"
-	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
@@ -297,14 +295,16 @@ func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, request
 	// is not the same as the logged in user. In that case, we'll treat fileOwner
 	// as the username whose files are to be accessed and use that in the
 	// namespace template.
-	u, ok := appctx.ContextGetUser(ctx)
-	if !ok || !useLoggedInUserNS {
-		requestUserID, _ := router.ShiftPath(requestPath)
-		u = &userpb.User{
-			Username: requestUserID,
+	/*
+		u, ok := appctx.ContextGetUser(ctx)
+		if !ok || !useLoggedInUserNS {
+			requestUserID, _ := router.ShiftPath(requestPath)
+			u = &userpb.User{
+				Username: requestUserID,
+			}
 		}
-	}
-	return templates.WithUser(u, ns)
+		return templates.WithUser(u, ns)
+	*/
 }
 
 func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
