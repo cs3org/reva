@@ -29,18 +29,16 @@ import (
 
 // Options for the cephfs module
 type Options struct {
-	ClientID     string `mapstructure:"client_id"`
-	Config       string `mapstructure:"config"`
-	GatewaySvc   string `mapstructure:"gatewaysvc"`
-	IndexPool    string `mapstructure:"index_pool"`
-	Keyring      string `mapstructure:"keyring"`
-	Root         string `mapstructure:"root"`
-	ShadowFolder string `mapstructure:"shadow_folder"`
-	ShareFolder  string `mapstructure:"share_folder"`
-	UploadFolder string `mapstructure:"uploads"`
-	UserLayout   string `mapstructure:"user_layout"`
-
-	DisableHome    bool   `mapstructure:"disable_home"`
+	ClientID       string `mapstructure:"client_id"`
+	Config         string `mapstructure:"config"`
+	GatewaySvc     string `mapstructure:"gatewaysvc"`
+	IndexPool      string `mapstructure:"index_pool"`
+	Keyring        string `mapstructure:"keyring"`
+	Root           string `mapstructure:"root"`
+	ShadowFolder   string `mapstructure:"shadow_folder"`
+	ShareFolder    string `mapstructure:"share_folder"`
+	UploadFolder   string `mapstructure:"uploads"`
+	UserLayout     string `mapstructure:"user_layout"`
 	DirPerms       uint32 `mapstructure:"dir_perms"`
 	FilePerms      uint32 `mapstructure:"file_perms"`
 	UserQuotaBytes uint64 `mapstructure:"user_quota_bytes"`
