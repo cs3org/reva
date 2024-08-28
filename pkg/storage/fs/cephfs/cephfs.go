@@ -89,22 +89,13 @@ func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err erro
 }
 
 func (fs *cephfs) GetHome(ctx context.Context) (string, error) {
-	if fs.conf.DisableHome {
-		return "", errtypes.NotSupported("cephfs: GetHome disabled by config")
-	}
-
 	log := appctx.GetLogger(ctx)
 	user := fs.makeUser(ctx)
-
 	log.Debug().Interface("user", user).Msg("GetHome for user")
 	return user.home, nil
 }
 
 func (fs *cephfs) CreateHome(ctx context.Context) (err error) {
-	if fs.conf.DisableHome {
-		return errtypes.NotSupported("cephfs: CreateHome disabled by config")
-	}
-
 	log := appctx.GetLogger(ctx)
 
 	user := fs.makeUser(ctx)
@@ -119,37 +110,27 @@ func (fs *cephfs) CreateHome(ctx context.Context) (err error) {
 
 	log.Debug().Interface("stat", stat).Msgf("home is %s")
 
-	// TODO: create home only on: no such file or directory error
-	return nil
+	// TODO(labkode): for now we always try to create the home directory even if it exists.
+	// One needs to check for "no such of file or directory" error to short-cut.
 
-	/*
-		err = walkPath(user.home, func(path string) error {
-			return fs.adminConn.adminMount.MakeDir(path, fs.conf.DirPerms)
-		}, false)
-		if err != nil {
-			return getRevaError(err)
-		}
-
-		err = fs.adminConn.adminMount.Chown(user.home, uint32(user.UidNumber), uint32(user.GidNumber))
-		if err != nil {
-			return getRevaError(err)
-		}
-
-		err = fs.adminConn.adminMount.SetXattr(user.home, "ceph.quota.max_bytes", []byte(fmt.Sprint(fs.conf.UserQuotaBytes)), 0)
-		if err != nil {
-			return getRevaError(err)
-		}
-
-		user.op(func(cv *cacheVal) {
-			err = cv.mount.MakeDir(removeLeadingSlash(fs.conf.ShareFolder), fs.conf.DirPerms)
-			if err != nil && err.Error() == errFileExists {
-				err = nil
-			}
-		})
-
+	err = walkPath(user.home, func(path string) error {
+		return fs.adminConn.adminMount.MakeDir(path, fs.conf.DirPerms)
+	}, false)
+	if err != nil {
 		return getRevaError(err)
-	*/
+	}
 
+	err = fs.adminConn.adminMount.Chown(user.home, uint32(user.UidNumber), uint32(user.GidNumber))
+	if err != nil {
+		return getRevaError(err)
+	}
+
+	err = fs.adminConn.adminMount.SetXattr(user.home, "ceph.quota.max_bytes", []byte(fmt.Sprint(fs.conf.UserQuotaBytes)), 0)
+	if err != nil {
+		return getRevaError(err)
+	}
+
+	return nil
 }
 
 func (fs *cephfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
