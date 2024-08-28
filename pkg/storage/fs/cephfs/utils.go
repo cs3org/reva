@@ -107,6 +107,7 @@ func pathGenerator(path string, reverse bool, str chan string) {
 
 func walkPath(path string, f func(string) error, reverse bool) (err error) {
 	paths := make(chan string)
+	// TODO(labkode): carefully review this, a race could happen if pathGenerator gorouting is slow
 	go pathGenerator(path, reverse, paths)
 	for path := range paths {
 		if path == "" {
