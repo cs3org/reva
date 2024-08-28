@@ -74,18 +74,6 @@ func (c *Options) ApplyDefaults() {
 		c.Root = addLeadingSlash(c.Root)
 	}
 
-	if c.ShadowFolder == "" {
-		c.ShadowFolder = "/.reva_hidden"
-	} else {
-		c.ShadowFolder = addLeadingSlash(c.ShadowFolder)
-	}
-
-	if c.ShareFolder == "" {
-		c.ShareFolder = "/Shares"
-	} else {
-		c.ShareFolder = addLeadingSlash(c.ShareFolder)
-	}
-
 	if c.UploadFolder == "" {
 		c.UploadFolder = ".uploads"
 	}

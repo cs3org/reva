@@ -242,16 +242,6 @@ func (fs *cephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 	}
 	fmt.Println("debugging: listing folder after user resolv ref", path)
 
-	// The user wants to access their home, create it if it doesn't exist
-	// TODO: do not need to call this, only on loging time
-	if path == fs.conf.Root {
-		if err = fs.CreateHome(ctx); err != nil {
-			return
-		}
-	}
-
-	fmt.Println("debugging: create home ok")
-
 	user.op(func(cv *cacheVal) {
 		var dir *goceph.Directory
 		if dir, err = cv.mount.OpenDir(path); err != nil {
@@ -297,10 +287,6 @@ func (fs *cephfs) Download(ctx context.Context, ref *provider.Reference) (rc io.
 	}
 
 	user.op(func(cv *cacheVal) {
-		if strings.HasPrefix(strings.TrimPrefix(path, user.home), fs.conf.ShareFolder) {
-			err = errtypes.PermissionDenied("cephfs: cannot download under the virtual share folder")
-			return
-		}
 		rc, err = cv.mount.Open(path, os.O_RDONLY, 0)
 	})
 
