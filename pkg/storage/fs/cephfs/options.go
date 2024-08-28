@@ -65,7 +65,7 @@ func (c *Options) ApplyDefaults() {
 	}
 
 	if c.Root == "" {
-		c.Root = "/home"
+		c.Root = "/cephfs"
 	} else {
 		c.Root = addLeadingSlash(c.Root)
 	}
