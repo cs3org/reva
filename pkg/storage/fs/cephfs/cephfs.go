@@ -144,8 +144,6 @@ func (fs *cephfs) CreateDir(ctx context.Context, ref *provider.Reference) error 
 		if err = cv.mount.MakeDir(path, fs.conf.DirPerms); err != nil {
 			return
 		}
-
-		//TODO(tmourati): Add entry id logic
 	})
 
 	return getRevaError(err)
@@ -163,8 +161,6 @@ func (fs *cephfs) Delete(ctx context.Context, ref *provider.Reference) (err erro
 		if err = cv.mount.Unlink(path); err != nil && err.Error() == errIsADirectory {
 			err = cv.mount.RemoveDir(path)
 		}
-
-		//TODO(tmourati): Add entry id logic
 	})
 
 	//has already been deleted by direct mount
@@ -189,8 +185,6 @@ func (fs *cephfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) 
 		if err = cv.mount.Rename(oldPath, newPath); err != nil {
 			return
 		}
-
-		//TODO(tmourati): Add entry id logic, handle already moved file error
 	})
 
 	// has already been moved by direct mount
@@ -306,7 +300,6 @@ func (fs *cephfs) RestoreRevision(ctx context.Context, ref *provider.Reference, 
 }
 
 func (fs *cephfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (str string, err error) {
-	//TODO(tmourati): Add entry id logic
 	return "", errtypes.NotSupported("cephfs: ids currently not supported")
 }
 
@@ -479,8 +472,6 @@ func (fs *cephfs) TouchFile(ctx context.Context, ref *provider.Reference) error 
 		if file, err = cv.mount.Open(path, os.O_CREATE|os.O_WRONLY, fs.conf.FilePerms); err != nil {
 			return
 		}
-
-		//TODO(tmourati): Add entry id logic
 	})
 
 	return getRevaError(err)
