@@ -40,46 +40,53 @@ func (fs *cephfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 	if err != nil {
 		return errors.Wrap(err, "cephfs: error checking if path is chunked")
 	}
-	if ok {
-		fmt.Println("debugging: chunked upload", p)
-		var assembledFile string
-		p, assembledFile, err = NewChunkHandler(ctx, fs).WriteChunk(p, r)
-		fmt.Println("debugging assembly", p, assembledFile, r)
-		if err != nil {
-			return errors.Wrapf(err, "error writing chunk %v %v %v", p, r, assembledFile)
-		}
-		if p == "" {
-			return errtypes.PartialContent(ref.String())
-		}
+
+	if !ok {
+		fmt.Println("debugging: upload is not chunked", p)
+		var file io.WriteCloser
 		user.op(func(cv *cacheVal) {
-			r, err = cv.mount.Open(assembledFile, os.O_RDONLY, 0)
+			file, err = cv.mount.Open(p, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, fs.conf.FilePerms)
+			if err != nil {
+				err = errors.Wrap(err, "cephfs: error opening binary file")
+				return
+			}
+			defer file.Close()
+
+			_, err = io.Copy(file, r)
+			if err != nil {
+				err = errors.Wrap(err, "cephfs: error writing to binary file")
+				return
+			}
 		})
-		if err != nil {
-			return errors.Wrap(err, "cephfs: error opening assembled file")
-		}
-		defer r.Close()
-		defer user.op(func(cv *cacheVal) {
-			_ = cv.mount.Unlink(assembledFile)
-		})
+
+		return nil
 	}
 
-	var file io.WriteCloser
+	// upload is chunked
+	fmt.Println("debugging: upload is chunked", p)
+
+	var assembledFile string
+
+	// iniate the chunk handler
+	originalFilename, assembledFile, err := NewChunkHandler(ctx, fs).WriteChunk(p, r)
+	fmt.Println("debugging: assembly file", originalFilename, assembledFile, r)
+	if err != nil {
+		return errors.Wrapf(err, "error writing chunk %v %v %v", p, r, assembledFile)
+	}
+	if originalFilename == "" { // means we wrote a chunk only
+		return errtypes.PartialContent(ref.String())
+	}
 	user.op(func(cv *cacheVal) {
-		file, err = cv.mount.Open(p, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, fs.conf.FilePerms)
-		if err != nil {
-			err = errors.Wrap(err, "cephfs: error opening binary file")
-			return
-		}
-		defer file.Close()
-
-		_, err = io.Copy(file, r)
-		if err != nil {
-			err = errors.Wrap(err, "cephfs: error writing to binary file")
-			return
-		}
+		err = cv.mount.Rename(assembledFile, originalFilename)
 	})
+	if err != nil {
+		return errors.Wrap(err, "cephfs: error renaming assembled file")
+	}
+	defer user.op(func(cv *cacheVal) {
+		_ = cv.mount.Unlink(assembledFile)
+	})
+	return nil
 
-	return err
 }
 
 func (fs *cephfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
