@@ -181,7 +181,6 @@ func NewViewerRole() *Role {
 		Name: RoleViewer,
 		cS3ResourcePermissions: &provider.ResourcePermissions{
 			GetPath:              true,
-			GetQuota:             true,
 			InitiateFileDownload: true,
 			ListGrants:           true,
 			ListContainer:        true,
@@ -200,7 +199,6 @@ func NewReaderRole() *Role {
 		cS3ResourcePermissions: &provider.ResourcePermissions{
 			// read
 			GetPath:              true,
-			GetQuota:             true,
 			InitiateFileDownload: true,
 			ListGrants:           true,
 			ListContainer:        true,
@@ -218,7 +216,6 @@ func NewEditorRole() *Role {
 		Name: RoleEditor,
 		cS3ResourcePermissions: &provider.ResourcePermissions{
 			GetPath:              true,
-			GetQuota:             true,
 			InitiateFileDownload: true,
 			ListGrants:           true,
 			ListContainer:        true,
@@ -243,7 +240,6 @@ func NewFileEditorRole() *Role {
 		Name: RoleEditor,
 		cS3ResourcePermissions: &provider.ResourcePermissions{
 			GetPath:              true,
-			GetQuota:             true,
 			InitiateFileDownload: true,
 			ListGrants:           true,
 			ListContainer:        true,
@@ -368,7 +364,6 @@ func NewLegacyRoleFromOCSPermissions(p Permissions) *Role {
 		r.cS3ResourcePermissions.ListRecycle = true
 		r.cS3ResourcePermissions.Stat = true
 		r.cS3ResourcePermissions.GetPath = true
-		r.cS3ResourcePermissions.GetQuota = true
 		r.cS3ResourcePermissions.InitiateFileDownload = true
 	}
 	if p.Contain(PermissionWrite) {
@@ -424,7 +419,6 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 		rp.ListRecycle &&
 		rp.Stat &&
 		rp.GetPath &&
-		rp.GetQuota &&
 		rp.InitiateFileDownload {
 		r.ocsPermissions |= PermissionRead
 	}

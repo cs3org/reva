@@ -18,9 +18,7 @@
 
 FROM quay.io/ceph/ceph:v18
 
-RUN mkdir -p /etc/selinux/config
-
-RUN dnf update --exclude=ceph-iscsi,chrony -y && dnf install -y \
+RUN dnf update --exclude=ceph-iscsi -y  && dnf install -y \
   git \
   gcc \
   make \
@@ -28,12 +26,12 @@ RUN dnf update --exclude=ceph-iscsi,chrony -y && dnf install -y \
   librbd-devel \
   librados-devel
 
-ADD https://go.dev/dl/go1.21.5.linux-amd64.tar.gz \
-  go1.21.5.linux-amd64.tar.gz
+ADD https://go.dev/dl/go1.22.2.linux-amd64.tar.gz \
+  go1.22.2.linux-amd64.tar.gz
 
 RUN rm -rf /usr/local/go && \
-  tar -C /usr/local -xzf go1.21.5.linux-amd64.tar.gz && \
-  rm go1.21.5.linux-amd64.tar.gz
+  tar -C /usr/local -xzf go1.22.2.linux-amd64.tar.gz && \
+  rm go1.22.2.linux-amd64.tar.gz
 
 ENV PATH /go/bin:/usr/local/go/bin:$PATH
 ENV GOPATH /go
@@ -48,8 +46,6 @@ ENV VERSION=$VERSION
 RUN mkdir -p /go/bin && \
   make revad-ceph && \
   cp /go/src/github/cs3org/reva/cmd/revad/revad /usr/bin/revad
-
-RUN cp -r examples/ceph /etc/
 
 RUN mkdir -p /etc/revad/ && touch /etc/revad/revad.toml
 

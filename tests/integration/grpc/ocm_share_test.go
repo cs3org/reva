@@ -219,6 +219,7 @@ var _ = Describe("ocm share", func() {
 				Expect(ok).To(BeTrue())
 
 				webdavClient := gowebdav.NewClient(webdav.WebdavOptions.Uri, "", "")
+				webdavClient.SetHeader("Authorization", "Bearer "+webdav.WebdavOptions.SharedSecret)
 				d, err := webdavClient.Read(".")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(d).To(Equal([]byte("test")))
@@ -299,6 +300,7 @@ var _ = Describe("ocm share", func() {
 				Expect(ok).To(BeTrue())
 
 				webdavClient := gowebdav.NewClient(webdav.WebdavOptions.Uri, "", "")
+				webdavClient.SetHeader("Authorization", "Bearer "+webdav.WebdavOptions.SharedSecret)
 				data := []byte("new-content")
 				webdavClient.SetHeader(ocdav.HeaderUploadLength, strconv.Itoa(len(data)))
 				err = webdavClient.Write(".", data, 0)
@@ -394,7 +396,7 @@ var _ = Describe("ocm share", func() {
 				Expect(ok).To(BeTrue())
 
 				webdavClient := gowebdav.NewClient(webdav.WebdavOptions.Uri, "", "")
-
+				webdavClient.SetHeader("Authorization", "Bearer "+webdav.WebdavOptions.SharedSecret)
 				ok, err = helpers.SameContentWebDAV(webdavClient, fileToShare.Path, structure)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ok).To(BeTrue())
@@ -499,6 +501,7 @@ var _ = Describe("ocm share", func() {
 				webdavClient := gowebdav.NewClient(webdav.WebdavOptions.Uri, "", "")
 				data := []byte("new-content")
 				webdavClient.SetHeader(ocdav.HeaderUploadLength, strconv.Itoa(len(data)))
+				webdavClient.SetHeader("Authorization", "Bearer "+webdav.WebdavOptions.SharedSecret)
 				err = webdavClient.Write("new-file", data, 0)
 				Expect(err).ToNot(HaveOccurred())
 

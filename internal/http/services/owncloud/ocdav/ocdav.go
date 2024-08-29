@@ -51,11 +51,11 @@ type ctxKey int
 
 const (
 	ctxKeyBaseURI ctxKey = iota
-	ctxOCM10
 	ctxSpaceID
 	ctxSpacePath
 	ctxSpaceFullPath
 	ctxSpaceRelativePath
+	ctxOCM
 )
 
 var (
@@ -202,7 +202,7 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/", "/s/", "/remote.php/dav/ocm/"}
+	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/", "/s/", "/remote.php/dav/ocm/", "/ocm-provider"}
 }
 
 func (s *svc) Handler() http.Handler {
@@ -259,6 +259,10 @@ func (s *svc) Handler() http.Handler {
 				http.Redirect(w, r, rURL, http.StatusMovedPermanently)
 				return
 			}
+		case "ocm-provider":
+			// this is to support the current/legacy discovery endpoint for OCM
+			http.Redirect(w, r, "/.well-known/ocm", http.StatusMovedPermanently)
+			return
 		}
 		switch head {
 		// the old `/webdav` endpoint uses remote.php/webdav/$path

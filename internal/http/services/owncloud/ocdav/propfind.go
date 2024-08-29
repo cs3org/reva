@@ -505,16 +505,6 @@ func (s *svc) newPropRaw(key, val string) *propertyXML {
 	}
 }
 
-func supportLegacyOCMAccess(ctx context.Context, md *provider.ResourceInfo) {
-	ocm10, _ := ctx.Value(ctxOCM10).(bool)
-	if ocm10 {
-		// the path is something like /<token>/...
-		// we need to strip the token part as this
-		// is passed as username in the basic auth
-		_, md.Path = router.ShiftPath(md.Path)
-	}
-}
-
 func spaceHref(ctx context.Context, baseURI, fullPath string) string {
 	// in the context of spaces, the final URL will be baseURI + /<space_id>/relative/path/to/space
 	spacePath, ok := ctx.Value(ctxSpacePath).(string)
@@ -557,14 +547,19 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
-
-	supportLegacyOCMAccess(ctx, md)
-
 	var ref string
 	if _, ok := ctx.Value(ctxSpaceID).(string); ok {
+		// spaces are enabled; for now we do not support the OCM case with spaces
 		ref = spaceHref(ctx, baseURI, md.Path)
 	} else {
+		// spaces are not enabled
 		md.Path = strings.TrimPrefix(md.Path, ns)
+
+		if ocm, _ := ctx.Value(ctxOCM).(bool); ocm {
+			// /<token>/ was injected in front of the OCM path for the routing to work, we now remove it (see internal/http/services/owncloud/ocdav/dav.go)
+			_, md.Path = router.ShiftPath(md.Path)
+		}
+
 		ref = path.Join(baseURI, md.Path)
 	}
 	if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {

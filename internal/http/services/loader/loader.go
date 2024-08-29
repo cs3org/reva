@@ -29,7 +29,6 @@ import (
 	_ "github.com/cs3org/reva/internal/http/services/helloworld"
 	_ "github.com/cs3org/reva/internal/http/services/metrics"
 	_ "github.com/cs3org/reva/internal/http/services/opencloudmesh/ocmd"
-	_ "github.com/cs3org/reva/internal/http/services/opencloudmesh/ocmprovider"
 	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocapi"
 	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocgraph"
@@ -39,5 +38,6 @@ import (
 	_ "github.com/cs3org/reva/internal/http/services/pprof"
 	_ "github.com/cs3org/reva/internal/http/services/preferences"
 	_ "github.com/cs3org/reva/internal/http/services/prometheus"
+	_ "github.com/cs3org/reva/internal/http/services/wellknown"
 	// Add your own service here.
 )
