@@ -287,7 +287,7 @@ func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*p
 			st = status.NewNotFound(ctx, "resource not found when setting lock")
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
-		case errtypes.BadRequest:
+		case errtypes.Conflict:
 			st = status.NewFailedPrecondition(ctx, err, "reference already locked")
 		default:
 			st = status.NewInternal(ctx, err, "error setting lock: "+req.Ref.String())
