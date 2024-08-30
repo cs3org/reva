@@ -210,8 +210,8 @@ func (c *EOSHTTPClient) doReq(req *http.Request, remoteuser string) (*http.Respo
 	return resp, err
 }
 
-// If the error is not nil, take that
-// If there is an error coming from EOS, erturn a descriptive error.
+// If the error is not nil, take that.
+// If there is an error coming from EOS, return a descriptive error.
 func (c *EOSHTTPClient) getRespError(rsp *http.Response, err error) error {
 	if err != nil {
 		return err
@@ -228,6 +228,8 @@ func (c *EOSHTTPClient) getRespError(rsp *http.Response, err error) error {
 		return errtypes.PermissionDenied(rspdesc(rsp))
 	case http.StatusNotFound:
 		return errtypes.NotFound(rspdesc(rsp))
+	case http.StatusConflict:
+		return errtypes.Conflict(rspdesc(rsp))
 	}
 
 	return errtypes.InternalError("Err from EOS: " + rspdesc(rsp))
@@ -281,6 +283,8 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 		log.Error().Str("func", "GETFile").Str("url", finalurl).Str("err", err.Error()).Msg("can't create request")
 		return nil, err
 	}
+	// similar to eosbinary.go::Read()
+	req.Header.Set("app", "reva_eosclient::read")
 
 	ntries := 0
 	nredirs := 0
@@ -360,9 +364,9 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 }
 
 // PUTFile does an entire PUT to upload a full file, taking the data from a stream.
-func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eosclient.Authorization, urlpath string, stream io.ReadCloser, length int64) error {
+func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eosclient.Authorization, urlpath string, stream io.ReadCloser, length int64, app string) error {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "PUTFile").Str("remoteuser", remoteuser).Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", urlpath).Int64("length", length).Msg("")
+	log.Info().Str("func", "PUTFile").Str("remoteuser", remoteuser).Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", urlpath).Int64("length", length).Str("app", app).Msg("")
 
 	// Now send the req and see what happens
 	finalurl, err := c.buildFullURL(urlpath, auth)
@@ -376,6 +380,9 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 		return err
 	}
 
+	if app != "" {
+		req.Header.Set("app", app)
+	}
 	req.Close = true
 
 	ntries := 0

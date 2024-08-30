@@ -30,7 +30,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
+func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, metadata map[string]string) error {
 	p, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "eos: error resolving reference")
@@ -75,7 +75,18 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 	if err != nil {
 		return err
 	}
-	return fs.c.Write(ctx, auth, fn, r)
+
+	if metadata == nil {
+		metadata = map[string]string{}
+	}
+	app := metadata["lockholder"]
+	if app == "" {
+		app = "reva_eosclient::write"
+	} else {
+		// if we have a lock context, the app for EOS must match the lock holder
+		app = fs.EncodeAppName(app)
+	}
+	return fs.c.Write(ctx, auth, fn, r, app)
 }
 
 func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {

@@ -271,6 +271,12 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return
 	}
 	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+	if lockid := r.Header.Get(HeaderLockID); lockid != "" {
+		httpReq.Header.Set(HeaderLockID, lockid)
+	}
+	if lockholder := r.Header.Get(HeaderLockHolder); lockholder != "" {
+		httpReq.Header.Set(HeaderLockHolder, lockholder)
+	}
 
 	httpRes, err := s.client.Do(httpReq)
 	if err != nil {

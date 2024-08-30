@@ -62,8 +62,10 @@ import (
 )
 
 const (
-	refTargetAttrKey = "reva.target"
-	lwShareAttrKey   = "reva.lwshare"
+	refTargetAttrKey = "reva.target"      // used as user attr to store a reference
+	lwShareAttrKey   = "reva.lwshare"     // used to store grants to lightweight accounts
+	lockPayloadKey   = "reva.lockpayload" // used to store lock payloads
+	eosLockKey       = "app.lock"         // this is the key known by EOS to enforce a lock.
 )
 
 const (
@@ -72,12 +74,6 @@ const (
 	// UserAttr is the user extended attribute.
 	UserAttr
 )
-
-// EosLockKey is the key in the xattrs known by EOS to enforce a lock.
-const EosLockKey = "app.lock"
-
-// LockPayloadKey is the key in the xattrs used to store the lock payload.
-const LockPayloadKey = "reva.lockpayload"
 
 var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
 
@@ -541,9 +537,9 @@ func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 			return errtypes.BadRequest(fmt.Sprintf("eosfs: key or value is empty: key:%s, value:%s", k, v))
 		}
 
-		// do not allow to set a lock key attr
-		if k == LockPayloadKey || k == EosLockKey {
-			return errtypes.BadRequest(fmt.Sprintf("eosfs: key %s not allowed", k))
+		// do not allow to override system-reserved keys
+		if k == lockPayloadKey || k == eosLockKey || k == lwShareAttrKey || k == refTargetAttrKey {
+			return errtypes.BadRequest(fmt.Sprintf("eosfs: key %s is reserved", k))
 		}
 
 		attr := &eosclient.Attribute{
@@ -554,7 +550,7 @@ func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 
 		// TODO(labkode): SetArbitraryMetadata does not have semantics for recursivity.
 		// We set it to false
-		err := fs.c.SetAttr(ctx, rootAuth, attr, false, false, fn)
+		err := fs.c.SetAttr(ctx, rootAuth, attr, false, false, fn, "")
 		if err != nil {
 			return errors.Wrap(err, "eosfs: error setting xattr in eos driver")
 		}
@@ -587,7 +583,7 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 			Key:  k,
 		}
 
-		err := fs.c.UnsetAttr(ctx, rootAuth, attr, false, fn)
+		err := fs.c.UnsetAttr(ctx, rootAuth, attr, false, fn, "")
 		if err != nil {
 			if errors.Is(err, eosclient.AttrNotExistsError) {
 				continue
@@ -598,18 +594,26 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 	return nil
 }
 
+func (fs *eosfs) EncodeAppName(a string) string {
+	// this function returns the string to be used as EOS "app" tag, both in uploads and when handling locks;
+	// note that the GET (and PUT) operations in eosbinary.go and eoshttp.go use a `reva_eosclient::read`
+	// (resp. `write`) tag when no locks are involved.
+	r := strings.NewReplacer(" ", "_")
+	return "reva_eosclient::app_" + strings.ToLower(r.Replace(a))
+}
+
 func (fs *eosfs) getLockPayloads(ctx context.Context, path string) (string, string, error) {
 	// sys attributes want root auth, buddy
 	rootauth, err := fs.getRootAuth(ctx)
 	if err != nil {
 		return "", "", err
 	}
-	data, err := fs.c.GetAttr(ctx, rootauth, "sys."+LockPayloadKey, path)
+	data, err := fs.c.GetAttr(ctx, rootauth, "sys."+lockPayloadKey, path)
 	if err != nil {
 		return "", "", err
 	}
 
-	eoslock, err := fs.c.GetAttr(ctx, rootauth, "sys."+EosLockKey, path)
+	eoslock, err := fs.c.GetAttr(ctx, rootauth, "sys."+eosLockKey, path)
 	if err != nil {
 		return "", "", err
 	}
@@ -617,7 +621,7 @@ func (fs *eosfs) getLockPayloads(ctx context.Context, path string) (string, stri
 	return data.Val, eoslock.Val, nil
 }
 
-func (fs *eosfs) removeLockAttrs(ctx context.Context, path string) error {
+func (fs *eosfs) removeLockAttrs(ctx context.Context, path, app string) error {
 	rootAuth, err := fs.getRootAuth(ctx)
 	if err != nil {
 		return err
@@ -625,16 +629,16 @@ func (fs *eosfs) removeLockAttrs(ctx context.Context, path string) error {
 
 	err = fs.c.UnsetAttr(ctx, rootAuth, &eosclient.Attribute{
 		Type: SystemAttr,
-		Key:  EosLockKey,
-	}, false, path)
+		Key:  eosLockKey,
+	}, false, path, app)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error unsetting the eos lock")
 	}
 
 	err = fs.c.UnsetAttr(ctx, rootAuth, &eosclient.Attribute{
 		Type: SystemAttr,
-		Key:  LockPayloadKey,
-	}, false, path)
+		Key:  lockPayloadKey,
+	}, false, path, app)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error unsetting the lock payload")
 	}
@@ -665,9 +669,9 @@ func (fs *eosfs) getLock(ctx context.Context, user *userpb.User, path string, re
 		return nil, errors.Wrap(err, "eosfs: malformed lock payload")
 	}
 
-	if time.Unix(int64(l.Expiration.Seconds), 0).After(time.Now()) {
+	if time.Unix(int64(l.Expiration.Seconds), 0).Before(time.Now()) {
 		// the lock expired
-		if err := fs.removeLockAttrs(ctx, path); err != nil {
+		if err := fs.removeLockAttrs(ctx, path, fs.EncodeAppName(l.AppName)); err != nil {
 			return nil, err
 		}
 		return nil, errtypes.NotFound("lock not found for ref")
@@ -708,7 +712,7 @@ func (fs *eosfs) setLock(ctx context.Context, lock *provider.Lock, path string) 
 		return err
 	}
 
-	encodedLock, eosLock, err := encodeLock(lock)
+	encodedLock, eosLock, err := fs.encodeLock(lock)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error encoding lock")
 	}
@@ -716,12 +720,12 @@ func (fs *eosfs) setLock(ctx context.Context, lock *provider.Lock, path string) 
 	// set eos lock
 	err = fs.c.SetAttr(ctx, auth, &eosclient.Attribute{
 		Type: SystemAttr,
-		Key:  EosLockKey,
+		Key:  eosLockKey,
 		Val:  eosLock,
-	}, false, false, path)
+	}, false, false, path, fs.EncodeAppName(lock.AppName))
 	switch {
-	case errors.Is(err, eosclient.AttrAlreadyExistsError):
-		return errtypes.BadRequest("resource already locked")
+	case errors.Is(err, eosclient.FileIsLockedError):
+		return errtypes.Conflict("resource already locked")
 	case err != nil:
 		return errors.Wrap(err, "eosfs: error setting eos lock")
 	}
@@ -729,9 +733,9 @@ func (fs *eosfs) setLock(ctx context.Context, lock *provider.Lock, path string) 
 	// set payload
 	err = fs.c.SetAttr(ctx, auth, &eosclient.Attribute{
 		Type: SystemAttr,
-		Key:  LockPayloadKey,
+		Key:  lockPayloadKey,
 		Val:  encodedLock,
-	}, false, false, path)
+	}, false, false, path, fs.EncodeAppName(lock.AppName))
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error setting lock payload")
 	}
@@ -826,14 +830,15 @@ func (fs *eosfs) userHasReadAccess(ctx context.Context, user *userpb.User, ref *
 	return resInfo.PermissionSet.InitiateFileDownload, nil
 }
 
-func encodeLock(l *provider.Lock) (string, string, error) {
+func (fs *eosfs) encodeLock(l *provider.Lock) (string, string, error) {
 	data, err := json.Marshal(l)
 	if err != nil {
 		return "", "", err
 	}
 	var a string
 	if l.AppName != "" {
-		a = l.AppName
+		// cf. upload implementation
+		a = fs.EncodeAppName(l.AppName)
 	} else {
 		a = "*"
 	}
@@ -974,7 +979,7 @@ func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 	}
 	path = fs.wrap(ctx, path)
 
-	return fs.removeLockAttrs(ctx, path)
+	return fs.removeLockAttrs(ctx, path, fs.EncodeAppName(lock.AppName))
 }
 
 func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
@@ -1003,7 +1008,7 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 			Key:  fmt.Sprintf("%s.%s", lwShareAttrKey, eosACL.Qualifier),
 			Val:  eosACL.Permissions,
 		}
-		if err := fs.c.SetAttr(ctx, rootAuth, attr, false, true, fn); err != nil {
+		if err := fs.c.SetAttr(ctx, rootAuth, attr, false, true, fn, ""); err != nil {
 			return errors.Wrap(err, "eosfs: error adding acl for lightweight account")
 		}
 		return nil
@@ -1106,7 +1111,7 @@ func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pr
 			Type: SystemAttr,
 			Key:  fmt.Sprintf("%s.%s", lwShareAttrKey, eosACL.Qualifier),
 		}
-		if err := fs.c.UnsetAttr(ctx, rootAuth, attr, true, fn); err != nil {
+		if err := fs.c.UnsetAttr(ctx, rootAuth, attr, true, fn, ""); err != nil {
 			return errors.Wrap(err, "eosfs: error removing acl for lightweight account")
 		}
 		return nil
@@ -1593,7 +1598,7 @@ func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string,
 	}
 
 	for _, attr := range attrs {
-		err = fs.c.SetAttr(ctx, rootAuth, attr, false, recursiveAttr, path)
+		err = fs.c.SetAttr(ctx, rootAuth, attr, false, recursiveAttr, path, "")
 		if err != nil {
 			return errors.Wrap(err, "eosfs: error setting attribute")
 		}
@@ -1676,7 +1681,7 @@ func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 		Val:  targetURI.String(),
 	}
 
-	if err := fs.c.SetAttr(ctx, rootAuth, attr, false, false, tmp); err != nil {
+	if err := fs.c.SetAttr(ctx, rootAuth, attr, false, false, tmp, ""); err != nil {
 		err = errors.Wrapf(err, "eosfs: error setting reva.ref attr on file: %q", tmp)
 		return err
 	}
@@ -2253,7 +2258,7 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		}
 	}
 
-	// filter 'sys' attrs and the reserved lock
+	// filter 'sys' attrs
 	filteredAttrs := make(map[string]string)
 	for k, v := range eosFileInfo.Attrs {
 		if !strings.HasPrefix(k, "sys") {
@@ -2276,6 +2281,9 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 			Seconds: eosFileInfo.MTimeSec,
 			Nanos:   eosFileInfo.MTimeNanos,
 		},
+		ArbitraryMetadata: &provider.ArbitraryMetadata{
+			Metadata: filteredAttrs,
+		},
 		Opaque: &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
 				"eos": {
@@ -2284,11 +2292,17 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 				},
 			},
 		},
-		ArbitraryMetadata: &provider.ArbitraryMetadata{
-			Metadata: filteredAttrs,
-		},
 	}
-
+	if eosFileInfo.Attrs[eosLockKey] != "" {
+		// populate the lock if decodable, log failure (but move on) if not
+		l, err := decodeLock(eosFileInfo.Attrs[lockPayloadKey], eosFileInfo.Attrs[eosLockKey])
+		if err != nil {
+			sublog := appctx.GetLogger(ctx).With().Logger()
+			sublog.Warn().Interface("xattrs", eosFileInfo.Attrs).Msg("could not decode lock, leaving empty")
+		} else {
+			info.Lock = l
+		}
+	}
 	if eosFileInfo.IsDir {
 		info.Opaque.Map["disable_tus"] = &types.OpaqueEntry{
 			Decoder: "plain",
