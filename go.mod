@@ -3,6 +3,7 @@ module github.com/cs3org/reva
 require (
 	bou.ke/monkey v1.0.2
 	github.com/BurntSushi/toml v1.3.2
+	github.com/CiscoM31/godata v1.0.8
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/ReneKroon/ttlcache/v2 v2.11.0
 	github.com/beevik/etree v1.3.0
@@ -13,12 +14,12 @@ require (
 	github.com/coreos/go-oidc/v3 v3.9.0
 	github.com/creasty/defaults v1.7.0
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20230727093620-0f4399be4543
+	github.com/cs3org/go-cs3apis v0.0.0-20240802083356-d617314e1795
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/dolthub/go-mysql-server v0.14.0
 	github.com/gdexlab/go-render v1.0.1
 	github.com/glpatcern/go-mime v0.0.0-20221026162842-2a8d71ad17a9
-	github.com/go-chi/chi/v5 v5.0.12
+	github.com/go-chi/chi/v5 v5.1.0
 	github.com/go-ldap/ldap/v3 v3.4.6
 	github.com/go-playground/locales v0.14.1
 	github.com/go-playground/universal-translator v0.18.1
@@ -28,7 +29,6 @@ require (
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/golang/protobuf v1.5.4
 	github.com/gomodule/redigo v1.9.2
-	github.com/google/go-cmp v0.6.0
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.0.0
@@ -41,6 +41,7 @@ require (
 	github.com/nats-io/nats.go v1.33.1
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.30.0
+	github.com/owncloud/libre-graph-api-go v1.0.5-0.20240425090020-dba6d1507c38
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.19.0
 	github.com/rs/cors v1.10.1
@@ -64,11 +65,14 @@ require (
 	gotest.tools v2.2.0+incompatible
 )
 
+require github.com/google/go-cmp v0.6.0 // indirect
+
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
+	github.com/alitto/pond v1.8.3
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bmizerany/pat v0.0.0-20210406213842-e4b6760bdd6f // indirect
@@ -133,3 +137,8 @@ require (
 )
 
 go 1.21
+
+replace (
+	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
+	github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
+)

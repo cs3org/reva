@@ -264,7 +264,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 			})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(*share).To(Equal(ocm.Share{
+			Expect(share).To(Equal(&ocm.Share{
 				Id: &ocm.ShareId{},
 				ResourceId: &provider.ResourceId{
 					OpaqueId:  "fileid-/some/path",
@@ -294,18 +294,12 @@ var _ = Describe("Nextcloud", func() {
 					ocmshare.NewTransferAccessMethod(),
 				},
 				Ctime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				Mtime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				ShareType: ocm.ShareType_SHARE_TYPE_USER,
 				Token:     "some-token",
@@ -406,7 +400,7 @@ var _ = Describe("Nextcloud", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(1))
-			Expect(*shares[0]).To(Equal(ocm.Share{
+			Expect(shares[0]).To(Equal(&ocm.Share{
 				Id: &ocm.ShareId{},
 				ResourceId: &provider.ResourceId{
 					OpaqueId:  "fileid-/some/path",
@@ -431,18 +425,12 @@ var _ = Describe("Nextcloud", func() {
 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
 				},
 				Ctime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				Mtime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				ShareType: ocm.ShareType_SHARE_TYPE_USER,
 				AccessMethods: []*ocm.AccessMethod{
@@ -465,7 +453,7 @@ var _ = Describe("Nextcloud", func() {
 			receivedShares, err := am.ListReceivedShares(ctx, user)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(receivedShares)).To(Equal(1))
-			Expect(*receivedShares[0]).To(Equal(ocm.ReceivedShare{
+			Expect(receivedShares[0]).To(Equal(&ocm.ReceivedShare{
 				Id:            &ocm.ShareId{},
 				Name:          "test share",
 				RemoteShareId: "",
@@ -487,18 +475,12 @@ var _ = Describe("Nextcloud", func() {
 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
 				},
 				Ctime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				Mtime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				ShareType:    ocm.ShareType_SHARE_TYPE_USER,
 				ResourceType: provider.ResourceType_RESOURCE_TYPE_FILE,
@@ -529,7 +511,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 			})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(*receivedShare).To(Equal(ocm.ReceivedShare{
+			Expect(receivedShare).To(Equal(&ocm.ReceivedShare{
 				Id:            &ocm.ShareId{},
 				Name:          "test share",
 				RemoteShareId: "",
@@ -551,18 +533,12 @@ var _ = Describe("Nextcloud", func() {
 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
 				},
 				Ctime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				Mtime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				ShareType:    ocm.ShareType_SHARE_TYPE_USER,
 				ResourceType: provider.ResourceType_RESOURCE_TYPE_FILE,
@@ -610,18 +586,12 @@ var _ = Describe("Nextcloud", func() {
 						Type:     userpb.UserType_USER_TYPE_PRIMARY,
 					},
 					Ctime: &types.Timestamp{
-						Seconds:              1234567890,
-						Nanos:                0,
-						XXX_NoUnkeyedLiteral: struct{}{},
-						XXX_unrecognized:     nil,
-						XXX_sizecache:        0,
+						Seconds: 1234567890,
+						Nanos:   0,
 					},
 					Mtime: &types.Timestamp{
-						Seconds:              1234567890,
-						Nanos:                0,
-						XXX_NoUnkeyedLiteral: struct{}{},
-						XXX_unrecognized:     nil,
-						XXX_sizecache:        0,
+						Seconds: 1234567890,
+						Nanos:   0,
 					},
 					ShareType: ocm.ShareType_SHARE_TYPE_USER,
 					State:     ocm.ShareState_SHARE_STATE_ACCEPTED,
@@ -630,7 +600,7 @@ var _ = Describe("Nextcloud", func() {
 					Paths: []string{"state"},
 				})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(*receivedShare).To(Equal(ocm.ReceivedShare{
+			Expect(receivedShare).To(Equal(&ocm.ReceivedShare{
 				Id:            &ocm.ShareId{},
 				Name:          "test share",
 				RemoteShareId: "",
@@ -652,18 +622,12 @@ var _ = Describe("Nextcloud", func() {
 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
 				},
 				Ctime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				Mtime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				ShareType:    ocm.ShareType_SHARE_TYPE_USER,
 				ResourceType: provider.ResourceType_RESOURCE_TYPE_FILE,

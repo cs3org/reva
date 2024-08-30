@@ -213,31 +213,22 @@ var _ = Describe("Nextcloud", func() {
 			mdKeys := []string{"val1", "val2", "val3"}
 			result, err := nc.GetMD(ctx, ref, mdKeys)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(*result).To(Equal(provider.ResourceInfo{
+			Expect(result).To(Equal(&provider.ResourceInfo{
 				Opaque: nil,
 				Type:   provider.ResourceType_RESOURCE_TYPE_FILE,
 				Id: &provider.ResourceId{
-					StorageId:            "",
-					OpaqueId:             "fileid-/some/path",
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					StorageId: "",
+					OpaqueId:  "fileid-/some/path",
 				},
 				Checksum: &provider.ResourceChecksum{
-					Type:                 0,
-					Sum:                  "",
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Type: 0,
+					Sum:  "",
 				},
 				Etag:     "deadbeef",
 				MimeType: "text/plain",
 				Mtime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				Path:          "/some/path",
 				PermissionSet: conversions.RoleFromOCSPermissions(conversions.Permissions(0)).CS3ResourcePermissions(),
@@ -247,12 +238,9 @@ var _ = Describe("Nextcloud", func() {
 					OpaqueId: "",
 					Type:     1,
 				},
-				Target:               "",
-				CanonicalMetadata:    nil,
-				ArbitraryMetadata:    nil,
-				XXX_NoUnkeyedLiteral: struct{}{},
-				XXX_unrecognized:     nil,
-				XXX_sizecache:        0,
+				Target:            "",
+				CanonicalMetadata: nil,
+				ArbitraryMetadata: nil,
 			}))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/GetMD {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"},"mdKeys":["val1","val2","val3"]}`)
 		})
@@ -275,31 +263,22 @@ var _ = Describe("Nextcloud", func() {
 			results, err := nc.ListFolder(ctx, ref, mdKeys)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(results)).To(Equal(1))
-			Expect(*results[0]).To(Equal(provider.ResourceInfo{
+			Expect(results[0]).To(Equal(&provider.ResourceInfo{
 				Opaque: nil,
 				Type:   provider.ResourceType_RESOURCE_TYPE_FILE,
 				Id: &provider.ResourceId{
-					StorageId:            "",
-					OpaqueId:             "fileid-/some/path",
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					StorageId: "",
+					OpaqueId:  "fileid-/some/path",
 				},
 				Checksum: &provider.ResourceChecksum{
-					Type:                 0,
-					Sum:                  "",
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Type: 0,
+					Sum:  "",
 				},
 				Etag:     "deadbeef",
 				MimeType: "text/plain",
 				Mtime: &types.Timestamp{
-					Seconds:              1234567890,
-					Nanos:                0,
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					Seconds: 1234567890,
+					Nanos:   0,
 				},
 				Path:          "/some/path",
 				PermissionSet: conversions.RoleFromOCSPermissions(conversions.Permissions(0)).CS3ResourcePermissions(),
@@ -309,12 +288,9 @@ var _ = Describe("Nextcloud", func() {
 					OpaqueId: "",
 					Type:     1,
 				},
-				Target:               "",
-				CanonicalMetadata:    nil,
-				ArbitraryMetadata:    nil,
-				XXX_NoUnkeyedLiteral: struct{}{},
-				XXX_unrecognized:     nil,
-				XXX_sizecache:        0,
+				Target:            "",
+				CanonicalMetadata: nil,
+				ArbitraryMetadata: nil,
 			}))
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/ListFolder {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some"},"mdKeys":["val1","val2","val3"]}`)
@@ -411,7 +387,7 @@ var _ = Describe("Nextcloud", func() {
 			Expect(err).ToNot(HaveOccurred())
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L1003-L1023
 			Expect(len(results)).To(Equal(2))
-			Expect(*results[0]).To(Equal(provider.FileVersion{
+			Expect(results[0]).To(Equal(&provider.FileVersion{
 				Opaque: &types.Opaque{
 					Map: map[string]*types.OpaqueEntry{
 						"some": {
@@ -419,15 +395,12 @@ var _ = Describe("Nextcloud", func() {
 						},
 					},
 				},
-				Key:                  "version-12",
-				Size:                 uint64(12345),
-				Mtime:                uint64(1234567890),
-				Etag:                 "deadb00f",
-				XXX_NoUnkeyedLiteral: struct{}{},
-				XXX_unrecognized:     nil,
-				XXX_sizecache:        0,
+				Key:   "version-12",
+				Size:  uint64(12345),
+				Mtime: uint64(1234567890),
+				Etag:  "deadb00f",
 			}))
-			Expect(*results[1]).To(Equal(provider.FileVersion{
+			Expect(results[1]).To(Equal(&provider.FileVersion{
 				Opaque: &types.Opaque{
 					Map: map[string]*types.OpaqueEntry{
 						"different": {
@@ -435,13 +408,10 @@ var _ = Describe("Nextcloud", func() {
 						},
 					},
 				},
-				Key:                  "asdf",
-				Size:                 uint64(12345),
-				Mtime:                uint64(1234567890),
-				Etag:                 "deadbeef",
-				XXX_NoUnkeyedLiteral: struct{}{},
-				XXX_unrecognized:     nil,
-				XXX_sizecache:        0,
+				Key:   "asdf",
+				Size:  uint64(12345),
+				Mtime: uint64(1234567890),
+				Etag:  "deadbeef",
 			}))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/ListRevisions {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"}`)
 		})
@@ -501,21 +471,15 @@ var _ = Describe("Nextcloud", func() {
 			Expect(err).ToNot(HaveOccurred())
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L1085-L1110
 			Expect(len(results)).To(Equal(1))
-			Expect(*results[0]).To(Equal(provider.RecycleItem{
+			Expect(results[0]).To(Equal(&provider.RecycleItem{
 				Opaque: &types.Opaque{},
 				Key:    "some-deleted-version",
 				Ref: &provider.Reference{
-					ResourceId:           &provider.ResourceId{},
-					Path:                 "/some/file.txt",
-					XXX_NoUnkeyedLiteral: struct{}{},
-					XXX_unrecognized:     nil,
-					XXX_sizecache:        0,
+					ResourceId: &provider.ResourceId{},
+					Path:       "/some/file.txt",
 				},
-				Size:                 uint64(12345),
-				DeletionTime:         &types.Timestamp{Seconds: uint64(1234567890)},
-				XXX_NoUnkeyedLiteral: struct{}{},
-				XXX_unrecognized:     nil,
-				XXX_sizecache:        0,
+				Size:         uint64(12345),
+				DeletionTime: &types.Timestamp{Seconds: uint64(1234567890)},
 			}))
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/ListRecycle {"key":"asdf","path":"/some/file.txt"}`)
 		})
