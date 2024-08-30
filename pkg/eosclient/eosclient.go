@@ -37,8 +37,8 @@ type EOSClient interface {
 	GetFileInfoByInode(ctx context.Context, auth Authorization, inode uint64) (*FileInfo, error)
 	GetFileInfoByFXID(ctx context.Context, auth Authorization, fxid string) (*FileInfo, error)
 	GetFileInfoByPath(ctx context.Context, auth Authorization, path string) (*FileInfo, error)
-	SetAttr(ctx context.Context, auth Authorization, attr *Attribute, errorIfExists, recursive bool, path string) error
-	UnsetAttr(ctx context.Context, auth Authorization, attr *Attribute, recursive bool, path string) error
+	SetAttr(ctx context.Context, auth Authorization, attr *Attribute, errorIfExists, recursive bool, path, app string) error
+	UnsetAttr(ctx context.Context, auth Authorization, attr *Attribute, recursive bool, path, app string) error
 	GetAttr(ctx context.Context, auth Authorization, key, path string) (*Attribute, error)
 	GetAttrs(ctx context.Context, auth Authorization, path string) ([]*Attribute, error)
 	GetQuota(ctx context.Context, username string, rootAuth Authorization, path string) (*QuotaInfo, error)
@@ -51,8 +51,7 @@ type EOSClient interface {
 	Rename(ctx context.Context, auth Authorization, oldPath, newPath string) error
 	List(ctx context.Context, auth Authorization, path string) ([]*FileInfo, error)
 	Read(ctx context.Context, auth Authorization, path string) (io.ReadCloser, error)
-	Write(ctx context.Context, auth Authorization, path string, stream io.ReadCloser) error
-	WriteFile(ctx context.Context, auth Authorization, path, source string) error
+	Write(ctx context.Context, auth Authorization, path string, stream io.ReadCloser, app string) error
 	ListDeletedEntries(ctx context.Context, auth Authorization, maxentries int, from, to time.Time) ([]*DeletedEntry, error)
 	RestoreDeletedEntry(ctx context.Context, auth Authorization, key string) error
 	PurgeDeletedEntries(ctx context.Context, auth Authorization) error
@@ -154,3 +153,7 @@ const AttrAlreadyExistsError = errtypes.BadRequest("attr already exists")
 // AttrNotExistsError is the error raised when removing
 // an attribute that does not exist.
 const AttrNotExistsError = errtypes.BadRequest("attr not exists")
+
+// FileIsLockedError is the error raised when attempting to set a lock
+// attribute to an already locked file with a mismatched lock.
+const FileIsLockedError = errtypes.BadRequest("file is locked")
