@@ -47,8 +47,8 @@ import (
 )
 
 const (
-	versionPrefix  = ".sys.v#."
-	favoritesKey   = "http://owncloud.org/ns/favorite"
+	versionPrefix = ".sys.v#."
+	favoritesKey  = "http://owncloud.org/ns/favorite"
 )
 
 const (
