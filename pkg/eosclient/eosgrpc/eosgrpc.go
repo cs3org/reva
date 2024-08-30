@@ -23,17 +23,14 @@
 package eosgrpc
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	erpc "github.com/cern-eos/go-eosgrpc"
@@ -1664,52 +1661,4 @@ func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDRespon
 		}
 	}
 	return fi, nil
-}
-
-// exec executes the command and returns the stdout, stderr and return code.
-func (c *Client) execute(ctx context.Context, cmd *exec.Cmd) (string, string, error) {
-	log := appctx.GetLogger(ctx)
-
-	outBuf := &bytes.Buffer{}
-	errBuf := &bytes.Buffer{}
-	cmd.Stdout = outBuf
-	cmd.Stderr = errBuf
-	cmd.Env = []string{
-		"EOS_MGM_URL=" + c.opt.URL,
-	}
-
-	if c.opt.UseKeytab {
-		cmd.Env = append(cmd.Env, "XrdSecPROTOCOL="+c.opt.SecProtocol)
-		cmd.Env = append(cmd.Env, "XrdSecSSSKT="+c.opt.Keytab)
-	}
-
-	err := cmd.Run()
-
-	var exitStatus int
-	if exiterr, ok := err.(*exec.ExitError); ok {
-		// The program has exited with an exit code != 0
-		// This works on both Unix and Windows. Although package
-		// syscall is generally platform dependent, WaitStatus is
-		// defined for both Unix and Windows and in both cases has
-		// an ExitStatus() method with the same signature.
-		if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
-			exitStatus = status.ExitStatus()
-			switch exitStatus {
-			case 0:
-				err = nil
-			case 2:
-				err = errtypes.NotFound(errBuf.String())
-			}
-		}
-	}
-
-	args := fmt.Sprintf("%s", cmd.Args)
-	env := fmt.Sprintf("%s", cmd.Env)
-	log.Info().Str("args", args).Str("env", env).Int("exit", exitStatus).Msg("eos cmd")
-
-	if err != nil && exitStatus != 2 { // don't wrap the errtypes.NotFoundError
-		err = errors.Wrap(err, "eosclient: error while executing command")
-	}
-
-	return outBuf.String(), errBuf.String(), err
 }
