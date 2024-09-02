@@ -21,6 +21,7 @@ package grpc_test
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -106,8 +107,18 @@ var _ = Describe("ocm invitation workflow", func() {
 		einstein        = &userpb.User{
 			Id: &userpb.UserId{
 				OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
-				Idp:      "cernbox.cern.ch",
+				Idp:      "https://cernbox.cern.ch",
 				Type:     userpb.UserType_USER_TYPE_PRIMARY,
+			},
+			Username:    "einstein",
+			Mail:        "einstein@cern.ch",
+			DisplayName: "Albert Einstein",
+		}
+		federatedEinstein = &userpb.User{
+			Id: &userpb.UserId{
+				Type:     userpb.UserType_USER_TYPE_FEDERATED,
+				Idp:      "cernbox.cern.ch",
+				OpaqueId: base64.URLEncoding.EncodeToString([]byte("4c510ada-c86b-4815-8820-42cdf82c3d51@cernbox.cern.ch")),
 			},
 			Username:    "einstein",
 			Mail:        "einstein@cern.ch",
@@ -116,8 +127,18 @@ var _ = Describe("ocm invitation workflow", func() {
 		marie = &userpb.User{
 			Id: &userpb.UserId{
 				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-				Idp:      "cesnet.cz",
+				Idp:      "https://cesnet.cz",
 				Type:     userpb.UserType_USER_TYPE_PRIMARY,
+			},
+			Username:    "marie",
+			Mail:        "marie@cesnet.cz",
+			DisplayName: "Marie Curie",
+		}
+		federatedMarie = &userpb.User{
+			Id: &userpb.UserId{
+				Type:     userpb.UserType_USER_TYPE_FEDERATED,
+				Idp:      "cesnet.cz",
+				OpaqueId: base64.URLEncoding.EncodeToString([]byte("f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c@cesnet.cz")),
 			},
 			Username:    "marie",
 			Mail:        "marie@cesnet.cz",
@@ -198,21 +219,21 @@ var _ = Describe("ocm invitation workflow", func() {
 
 					Expect(forwardRes.DisplayName).To(Equal(einstein.DisplayName))
 					Expect(forwardRes.Email).To(Equal(einstein.Mail))
-					Expect(utils.UserEqual(forwardRes.UserId, einstein.Id)).To(BeTrue())
+					Expect(utils.UserEqual(forwardRes.UserId, federatedEinstein.Id)).To(BeTrue())
 
 					usersRes1, err := cernboxgw.FindAcceptedUsers(ctxEinstein, &invitepb.FindAcceptedUsersRequest{})
 					Expect(err).ToNot(HaveOccurred())
 					Expect(usersRes1.Status.Code).To(Equal(rpc.Code_CODE_OK))
 					Expect(usersRes1.AcceptedUsers).To(HaveLen(1))
 					info1 := usersRes1.AcceptedUsers[0]
-					Expect(ocmUserEqual(info1, marie)).To(BeTrue())
+					Expect(ocmUserEqual(info1, federatedMarie)).To(BeTrue())
 
 					usersRes2, err := cesnetgw.FindAcceptedUsers(ctxMarie, &invitepb.FindAcceptedUsersRequest{})
 					Expect(err).ToNot(HaveOccurred())
 					Expect(usersRes2.Status.Code).To(Equal(rpc.Code_CODE_OK))
 					Expect(usersRes2.AcceptedUsers).To(HaveLen(1))
 					info2 := usersRes2.AcceptedUsers[0]
-					Expect(ocmUserEqual(info2, einstein)).To(BeTrue())
+					Expect(ocmUserEqual(info2, federatedEinstein)).To(BeTrue())
 				})
 
 			})
@@ -222,8 +243,8 @@ var _ = Describe("ocm invitation workflow", func() {
 			var cleanup func()
 			BeforeEach(func() {
 				variables, cleanup, err = initData(driver, nil, map[string][]*userpb.User{
-					einstein.Id.OpaqueId: {marie},
-					marie.Id.OpaqueId:    {einstein},
+					einstein.Id.OpaqueId: {federatedMarie},
+					marie.Id.OpaqueId:    {federatedEinstein},
 				})
 				Expect(err).ToNot(HaveOccurred())
 			})
@@ -417,7 +438,7 @@ var _ = Describe("ocm invitation workflow", func() {
 
 					users, code = findAccepted(tknEinstein, cernboxURL)
 					Expect(code).To(Equal(http.StatusOK))
-					Expect(ocmUsersEqual(list.Map(users, remoteToCs3User), []*userpb.User{marie})).To(BeTrue())
+					Expect(ocmUsersEqual(list.Map(users, remoteToCs3User), []*userpb.User{federatedMarie})).To(BeTrue())
 				})
 			})
 
@@ -425,8 +446,8 @@ var _ = Describe("ocm invitation workflow", func() {
 				var cleanup func()
 				BeforeEach(func() {
 					variables, cleanup, err = initData(driver, nil, map[string][]*userpb.User{
-						einstein.Id.OpaqueId: {marie},
-						marie.Id.OpaqueId:    {einstein},
+						einstein.Id.OpaqueId: {federatedMarie},
+						marie.Id.OpaqueId:    {federatedEinstein},
 					})
 					Expect(err).ToNot(HaveOccurred())
 				})
@@ -438,14 +459,14 @@ var _ = Describe("ocm invitation workflow", func() {
 				It("fails the invitation workflow", func() {
 					users, code := findAccepted(tknEinstein, cernboxURL)
 					Expect(code).To(Equal(http.StatusOK))
-					Expect(ocmUsersEqual(list.Map(users, remoteToCs3User), []*userpb.User{marie})).To(BeTrue())
+					Expect(ocmUsersEqual(list.Map(users, remoteToCs3User), []*userpb.User{federatedMarie})).To(BeTrue())
 
 					code = acceptInvite(tknMarie, cesnetURL, "cernbox.cern.ch", token)
 					Expect(code).To(Equal(http.StatusConflict))
 
 					users, code = findAccepted(tknEinstein, cernboxURL)
 					Expect(code).To(Equal(http.StatusOK))
-					Expect(ocmUsersEqual(list.Map(users, remoteToCs3User), []*userpb.User{marie})).To(BeTrue())
+					Expect(ocmUsersEqual(list.Map(users, remoteToCs3User), []*userpb.User{federatedMarie})).To(BeTrue())
 				})
 			})
 
@@ -507,7 +528,7 @@ var _ = Describe("ocm invitation workflow", func() {
 
 					users, code = findAccepted(tknEinstein, cernboxURL)
 					Expect(code).To(Equal(http.StatusOK))
-					Expect(ocmUsersEqual(list.Map(users, remoteToCs3User), []*userpb.User{marie})).To(BeTrue())
+					Expect(ocmUsersEqual(list.Map(users, remoteToCs3User), []*userpb.User{federatedMarie})).To(BeTrue())
 				})
 			})
 

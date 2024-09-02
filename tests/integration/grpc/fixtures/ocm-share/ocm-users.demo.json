@@ -2,7 +2,7 @@
 	{
 		"id": {
 			"opaque_id": "4c510ada-c86b-4815-8820-42cdf82c3d51",
-			"idp": "cernbox.cern.ch",
+			"idp": "https://cernbox.cern.ch",
 			"type": 1
 		},
 		"username": "einstein",
@@ -32,7 +32,7 @@
 	{
 		"id": {
 			"opaque_id": "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-			"idp": "cesnet.cz",
+			"idp": "https://cesnet.cz",
 			"type": 1
 		},
 		"username": "marie",

@@ -21,6 +21,7 @@ package grpc_test
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"io"
 	"net/http"
 	"path/filepath"
@@ -116,17 +117,22 @@ var _ = Describe("ocm share", func() {
 		einstein = &userpb.User{
 			Id: &userpb.UserId{
 				OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
-				Idp:      "cernbox.cern.ch",
+				Idp:      "https://cernbox.cern.ch",
 				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username:    "einstein",
 			Mail:        "einstein@cern.ch",
 			DisplayName: "Albert Einstein",
 		}
+		federatedEinsteinID = &userpb.UserId{
+			Type:     userpb.UserType_USER_TYPE_FEDERATED,
+			Idp:      "cernbox.cern.ch",
+			OpaqueId: base64.URLEncoding.EncodeToString([]byte("4c510ada-c86b-4815-8820-42cdf82c3d51@cernbox.cern.ch")),
+		}
 		marie = &userpb.User{
 			Id: &userpb.UserId{
 				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-				Idp:      "cesnet.cz",
+				Idp:      "https://cesnet.cz",
 				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username:    "marie",
@@ -134,9 +140,9 @@ var _ = Describe("ocm share", func() {
 			DisplayName: "Marie Curie",
 		}
 		federatedMarieID = &userpb.UserId{
-			OpaqueId: marie.Id.OpaqueId,
-			Idp:      marie.Id.Idp,
 			Type:     userpb.UserType_USER_TYPE_FEDERATED,
+			Idp:      "cesnet.cz",
+			OpaqueId: base64.URLEncoding.EncodeToString([]byte("f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c@cesnet.cz")),
 		}
 	)
 
@@ -192,16 +198,25 @@ var _ = Describe("ocm share", func() {
 
 	Describe("marie has already accepted the invitation workflow", func() {
 		JustBeforeEach(func() {
+			// einstein generates an invite token
 			tknRes, err := cernboxgw.GenerateInviteToken(ctxEinstein, &invitev1beta1.GenerateInviteTokenRequest{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(tknRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
+			// marie accepts it and her provider forwards the invite back to the instance of einstein
 			invRes, err := cesnetgw.ForwardInvite(ctxMarie, &invitev1beta1.ForwardInviteRequest{
 				InviteToken:          tknRes.InviteToken,
 				OriginSystemProvider: cernbox,
 			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(invRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			// Make sure the user is a federated user
+			// The user type must be a federated user
+			Expect(invRes.UserId.Type).To(Equal(userpb.UserType_USER_TYPE_FEDERATED))
+			// Federated users use the OCM provider id which MUST NOT contain the protocol
+			Expect(invRes.UserId.Idp).To(Equal("cernbox.cern.ch"))
+			// The OpaqueId is the base64 encoded user id and the provider id to provent collisions with other users on the graph API
+			Expect(invRes.UserId.OpaqueId).To(Equal(federatedEinsteinID.OpaqueId))
 		})
 
 		Context("einstein shares a file with view permissions", func() {
