@@ -30,11 +30,15 @@ import (
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+
 	"github.com/cs3org/reva/v2/internal/http/services/reqres"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/events"
+	"github.com/cs3org/reva/v2/pkg/events/stream"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/smtpclient"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/pkg/utils/list"
 )
 
@@ -45,6 +49,7 @@ type tokenHandler struct {
 	providerDomain   string
 	tplSubj          *template.Template
 	tplBody          *template.Template
+	eventStream      events.Stream
 }
 
 func (h *tokenHandler) init(c *config) error {
@@ -54,19 +59,15 @@ func (h *tokenHandler) init(c *config) error {
 		return err
 	}
 
-	if c.SMTPCredentials != nil {
-		h.smtpCredentials = smtpclient.NewSMTPCredentials(c.SMTPCredentials)
-	}
-
 	h.meshDirectoryURL = c.MeshDirectoryURL
 	h.providerDomain = c.ProviderDomain
 
-	if err := h.initSubjectTemplate(c.SubjectTemplate); err != nil {
-		return err
-	}
-
-	if err := h.initBodyTemplate(c.BodyTemplatePath); err != nil {
-		return err
+	if c.Events.Endpoint != "" {
+		es, err := stream.NatsFromConfig("sciencemesh-token-handler", false, stream.NatsConfig(c.Events))
+		if err != nil {
+			return err
+		}
+		h.eventStream = es
 	}
 
 	return nil
@@ -96,16 +97,16 @@ func (h *tokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 
 	user := ctxpkg.ContextMustGetUser(ctx)
 	recipient := query.Get("recipient")
-	if recipient != "" && h.smtpCredentials != nil {
-		templObj := &emailParams{
-			User:             user,
-			Token:            token.InviteToken.Token,
-			MeshDirectoryURL: h.meshDirectoryURL,
-		}
-		if err := h.sendEmail(recipient, templObj); err != nil {
-			reqres.WriteError(w, r, reqres.APIErrorServerError, "error sending token by mail", err)
-			return
-		}
+	if err := events.Publish(ctx, h.eventStream, events.ScienceMeshInviteTokenGenerated{
+		Sharer:           user.Id,
+		Token:            token.InviteToken.Token,
+		MeshDirectoryURL: h.meshDirectoryURL,
+		Recipient:        recipient,
+		Timestamp:        utils.TSNow(),
+	}); err != nil {
+		log := appctx.GetLogger(ctx)
+		log.Error().Err(err).
+			Msg("failed to publish the science-mesh invite token generated event")
 	}
 
 	tknRes := h.prepareGenerateTokenResponse(token.InviteToken)
