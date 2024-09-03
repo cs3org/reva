@@ -9,6 +9,7 @@ require (
 	github.com/bluele/gcache v0.0.2
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/ceph/go-ceph v0.26.0
+	github.com/cern-eos/go-eosgrpc v0.0.0-20240812132646-f105d2304f38
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc/v3 v3.9.0
 	github.com/creasty/defaults v1.7.0
@@ -33,6 +34,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.0.0
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
+	github.com/jt-nti/gproto v0.0.0-20210304092907-23e645af1351
 	github.com/juliangruber/go-intersect v1.1.0
 	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/maxymania/go-system v0.0.0-20170110133659-647cc364bf0b
@@ -72,7 +74,6 @@ require (
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bmizerany/pat v0.0.0-20210406213842-e4b6760bdd6f // indirect
-	github.com/cern-eos/go-eosgrpc v0.0.0-20240812132646-f105d2304f38 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
