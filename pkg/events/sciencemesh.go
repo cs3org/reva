@@ -9,11 +9,13 @@ import (
 
 // ScienceMeshInviteTokenGenerated is emitted when a sciencemesh token is generated
 type ScienceMeshInviteTokenGenerated struct {
-	Sharer           *user.UserId
-	Token            string
-	MeshDirectoryURL string // fixMe: we can get the value from the config too, lets keep it for now
-	Recipient        string
-	Timestamp        *types.Timestamp
+	Sharer        *user.UserId
+	RecipientMail string
+	Token         string
+	Description   string
+	Expiration    uint64
+	InviteLink    string
+	Timestamp     *types.Timestamp
 }
 
 // Unmarshal to fulfill unmarshaller interface

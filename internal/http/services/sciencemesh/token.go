@@ -21,7 +21,6 @@ package sciencemesh
 import (
 	"encoding/json"
 	"errors"
-	"html/template"
 	"mime"
 	"net/http"
 
@@ -33,22 +32,17 @@ import (
 
 	"github.com/cs3org/reva/v2/internal/http/services/reqres"
 	"github.com/cs3org/reva/v2/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/events/stream"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/v2/pkg/smtpclient"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/pkg/utils/list"
 )
 
 type tokenHandler struct {
 	gatewayClient    gateway.GatewayAPIClient
-	smtpCredentials  *smtpclient.SMTPCredentials
 	meshDirectoryURL string
 	providerDomain   string
-	tplSubj          *template.Template
-	tplBody          *template.Template
 	eventStream      events.Stream
 }
 
@@ -84,39 +78,75 @@ type token struct {
 // will send an email containing the link the user will use to accept the
 // invitation.
 func (h *tokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	query := r.URL.Query()
-	token, err := h.gatewayClient.GenerateInviteToken(ctx, &invitepb.GenerateInviteTokenRequest{
-		Description: query.Get("description"),
-	})
+	req, err := getGenerateRequest(r)
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "error generating token", err)
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "missing parameters in request", err)
 		return
 	}
 
-	user := ctxpkg.ContextMustGetUser(ctx)
-	recipient := query.Get("recipient")
+	ctx := r.Context()
+	genTokenRes, err := h.gatewayClient.GenerateInviteToken(ctx, &invitepb.GenerateInviteTokenRequest{
+		Description: req.Description,
+	})
+	switch {
+	case err != nil:
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error generating token", err)
+		return
+	case genTokenRes.GetStatus().GetCode() == rpc.Code_CODE_NOT_FOUND:
+		reqres.WriteError(w, r, reqres.APIErrorNotFound, genTokenRes.GetStatus().GetMessage(), nil)
+		return
+	case genTokenRes.GetStatus().GetCode() != rpc.Code_CODE_OK:
+		reqres.WriteError(w, r, reqres.APIErrorServerError, genTokenRes.GetStatus().GetMessage(), errors.New(genTokenRes.GetStatus().GetMessage()))
+		return
+	}
+
+	tknRes := h.prepareGenerateTokenResponse(genTokenRes.GetInviteToken())
+	if err := json.NewEncoder(w).Encode(tknRes); err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error marshalling token data", err)
+		return
+	}
+
 	if err := events.Publish(ctx, h.eventStream, events.ScienceMeshInviteTokenGenerated{
-		Sharer:           user.Id,
-		Token:            token.InviteToken.Token,
-		MeshDirectoryURL: h.meshDirectoryURL,
-		Recipient:        recipient,
-		Timestamp:        utils.TSNow(),
+		Sharer:        genTokenRes.GetInviteToken().GetUserId(),
+		RecipientMail: req.Recipient,
+		Token:         tknRes.Token,
+		Description:   tknRes.Description,
+		Expiration:    tknRes.Expiration,
+		InviteLink:    tknRes.InviteLink,
+		Timestamp:     utils.TSNow(),
 	}); err != nil {
 		log := appctx.GetLogger(ctx)
 		log.Error().Err(err).
 			Msg("failed to publish the science-mesh invite token generated event")
 	}
 
-	tknRes := h.prepareGenerateTokenResponse(token.InviteToken)
-	if err := json.NewEncoder(w).Encode(tknRes); err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "error marshalling token data", err)
-		return
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+}
+
+// generateRequest is the request body for the Generate endpoint.
+type generateRequest struct {
+	Description string `json:"description"`
+	Recipient   string `json:"recipient" validate:"omitempty,email"`
+}
+
+func getGenerateRequest(r *http.Request) (*generateRequest, error) {
+	var req generateRequest
+	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err == nil && contentType == "application/json" {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, errors.New("body request not recognised")
+	}
+
+	// validate the request
+	if err := validate.Struct(req); err != nil {
+		return nil, err
+	}
+
+	return &req, nil
 }
 
 func (h *tokenHandler) prepareGenerateTokenResponse(tkn *invitepb.InviteToken) *token {
