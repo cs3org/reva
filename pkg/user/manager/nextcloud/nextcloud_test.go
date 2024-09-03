@@ -23,12 +23,12 @@ import (
 	"os"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/pkg/user/manager/nextcloud"
 	"github.com/cs3org/reva/tests/helpers"
+	"github.com/jt-nti/gproto"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"google.golang.org/grpc/metadata"
@@ -204,7 +204,8 @@ var _ = Describe("Nextcloud", func() {
 			users, err := um.FindUsers(ctx, "some-query", false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(users)).To(Equal(1))
-			Expect(*users[0]).To(Equal(userpb.User{
+
+			Expect(users[0]).To(gproto.Equal(&userpb.User{
 				Id: &userpb.UserId{
 					Idp:      "some-idp",
 					OpaqueId: "some-opaque-user-id",
