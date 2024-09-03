@@ -26,6 +26,7 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"google.golang.org/protobuf/proto"
 )
 
 var ctx = context.Background()
@@ -108,26 +109,26 @@ func TestUserManager(t *testing.T) {
 	// negative test GetUserGroups
 	expectedErr := errtypes.NotFound(userFake.OpaqueId)
 	_, err = manager.GetUserGroups(ctx, userFake)
-	if !reflect.DeepEqual(err, expectedErr) {
+	if err != expectedErr {
 		t.Fatalf("user not found error differ: expected='%v' got='%v'", expectedErr, err)
 	}
 
 	// positive test GetUserByClaim by mail
 	resUserByEmail, _ := manager.GetUserByClaim(ctx, "mail", "einstein@example.org", false)
-	if !reflect.DeepEqual(resUserByEmail, userEinstein) {
+	if !proto.Equal(resUserByEmail, userEinstein) {
 		t.Fatalf("user differs: expected=%v got=%v", userEinstein, resUserByEmail)
 	}
 
 	// negative test GetUserByClaim by mail
 	expectedErr = errtypes.NotFound("abc@example.com")
 	_, err = manager.GetUserByClaim(ctx, "mail", "abc@example.com", false)
-	if !reflect.DeepEqual(err, expectedErr) {
+	if err != expectedErr {
 		t.Fatalf("user not found error differs: expected='%v' got='%v'", expectedErr, err)
 	}
 
 	// positive test GetUserByClaim by mail without groups
 	resUserByEmailWithoutGroups, _ := manager.GetUserByClaim(ctx, "mail", "einstein@example.org", true)
-	if !reflect.DeepEqual(resUserByEmailWithoutGroups, userEinsteinWithoutGroups) {
+	if !proto.Equal(resUserByEmailWithoutGroups, userEinsteinWithoutGroups) {
 		t.Fatalf("user differs: expected=%v got=%v", userEinsteinWithoutGroups, resUserByEmailWithoutGroups)
 	}
 
@@ -142,7 +143,8 @@ func TestUserManager(t *testing.T) {
 	if len(resUser) != 1 {
 		t.Fatalf("too many users found: expected=%d got=%d", 1, len(resUser))
 	}
-	if !reflect.DeepEqual(resUser[0].Username, "einstein") {
+
+	if resUser[0].Username != "einstein" {
 		t.Fatalf("user differ: expected=%v got=%v", "einstein", resUser[0].Username)
 	}
 }
