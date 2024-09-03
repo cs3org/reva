@@ -32,11 +32,21 @@ for letter in {a..z}; do
   eos mkdir -p "/eos/user/$letter"
 done
 
+# create cbox sudoer user
+adduser cbox -u 58679 -g 0 -m -s /bin/sh
 eos vid set membership 0 +sudo
-eos vid set membership 99 +sudo
-eos vid set map -tident "*@storage-home" vuid:0 vgid:0
-eos vid set map -tident "*@storage-users" vuid:0 vgid:0
-eos vid set map -tident "*@storage-local-1" vuid:0 vgid:0
-eos vid set map -tident "*@storage-local-2" vuid:0 vgid:0
+eos vid set membership cbox +sudo
+
+eos vid set map -tident "*@storage-home" vuid:58679 vgid:0
+eos vid set map -tident "*@storage-users" vuid:58679 vgid:0
+eos vid set map -tident "*@storage-local-1" vuid:58679 vgid:0
+eos vid set map -tident "*@storage-local-2" vuid:58679 vgid:0
+eos vid set map -tident "*@docker-storage-home-1.docker_default" vuid:58679 vgid:0
+
+eos vid set map -tident "unix@storage-home" vuid:58679 vgid:0
+eos vid set map -tident "unix@storage-users" vuid:58679 vgid:0
+eos vid set map -tident "unix@storage-local-1" vuid:58679 vgid:0
+eos vid set map -tident "unix@storage-local-2" vuid:58679 vgid:0
+eos vid set map -tident "unix@docker-storage-home-1.docker_default" vuid:58679 vgid:0
 
 tail -f /dev/null
