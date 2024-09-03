@@ -327,7 +327,7 @@ var _ = Describe("Nextcloud", func() {
 		})
 	})
 
-	// Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error
+	// Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, metadata map[string]string) error
 	Describe("Upload", func() {
 		It("calls the Upload endpoint", func() {
 			nc, called, teardown := setUpNextcloudServer()
@@ -342,7 +342,7 @@ var _ = Describe("Nextcloud", func() {
 			}
 			stringReader := strings.NewReader("shiny!")
 			stringReadCloser := io.NopCloser(stringReader)
-			err := nc.Upload(ctx, ref, stringReadCloser)
+			err := nc.Upload(ctx, ref, stringReadCloser, map[string]string{})
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `PUT /apps/sciencemesh/~tester/api/storage/Upload/home/some/file/path.txt shiny!`)
 		})

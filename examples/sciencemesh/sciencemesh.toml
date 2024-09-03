@@ -253,8 +253,10 @@ sender_mail = "sciencemesh@{{ vars.provider_domain }}"
 smtp_server = "smtp.{{ vars.provider_domain }}"
 smtp_port = 25
 
-[http.services.ocmprovider]
+[http.services.wellknown]
 address = ":443"
+
+[http.services.wellknown.ocmprovider]
 ocm_prefix = "ocm"
 provider = "Reva for ownCloud/Nextcloud"
 endpoint = "{{ vars.external_reva_endpoint }}"
@@ -283,8 +285,6 @@ address = ":443"
 metrics_data_driver_type = "json"
 metrics_data_location = "/etc/revad/metrics.json"
 metrics_record_interval = 5000
-
-[http.services.sysinfo]
 
 [http.middlewares.cors]
 [http.middlewares.log]

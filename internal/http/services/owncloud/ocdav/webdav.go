@@ -76,6 +76,8 @@ const (
 	HeaderOCMtime              = "X-OC-Mtime"
 	HeaderExpectedEntityLength = "X-Expected-Entity-Length"
 	HeaderTransferAuth         = "TransferHeaderAuthorization"
+	HeaderLockID               = "X-Lock-Id"
+	HeaderLockHolder           = "X-Lock-Holder"
 )
 
 // WebDavHandler implements a dav endpoint.

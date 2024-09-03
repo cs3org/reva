@@ -33,6 +33,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typepb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -62,6 +63,7 @@ func (c *config) ApplyDefaults() {
 }
 
 // New creates an OCM storage driver.
+// This driver exposes remote OCM resources to local users.
 func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
@@ -153,11 +155,12 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 		return nil, nil, "", err
 	}
 
-	// FIXME: it's still not clear from the OCM APIs how to use the shared secret
-	// will use as a token in the bearer authentication as this is the reva implementation
+	// use the secret as bearer authentication according to OCM v1.1+
 	c := gowebdav.NewClient(endpoint, "", "")
 	c.SetHeader("Authorization", "Bearer "+secret)
 
+	log := appctx.GetLogger(ctx)
+	log.Info().Str("endpoint", endpoint).Interface("share", share).Str("rel", rel).Str("secret", secret).Msg("Accessing OCM share")
 	return c, share, rel, nil
 }
 
@@ -282,7 +285,7 @@ func (d *driver) InitiateUpload(ctx context.Context, ref *provider.Reference, _ 
 	}, nil
 }
 
-func (d *driver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
+func (d *driver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, _ map[string]string) error {
 	client, _, rel, err := d.webdavClient(ctx, ref)
 	if err != nil {
 		return err

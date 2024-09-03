@@ -23,23 +23,20 @@
 package eosgrpc
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
+	erpc "github.com/cern-eos/go-eosgrpc"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/eosclient"
-	erpc "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_grpc"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
 	"github.com/google/uuid"
@@ -204,7 +201,7 @@ func (c *Client) getRespError(rsp *erpc.NSResponse, err error) error {
 }
 
 // Common code to create and initialize a NSRequest.
-func (c *Client) initNSRequest(ctx context.Context, auth eosclient.Authorization) (*erpc.NSRequest, error) {
+func (c *Client) initNSRequest(ctx context.Context, auth eosclient.Authorization, app string) (*erpc.NSRequest, error) {
 	// Stuff filename, uid, gid into the MDRequest type
 
 	log := appctx.GetLogger(ctx)
@@ -223,12 +220,15 @@ func (c *Client) initNSRequest(ctx context.Context, auth eosclient.Authorization
 	}
 	rq.Role.Uid = uidInt
 	rq.Role.Gid = gidInt
+	if app != "" {
+		rq.Role.App = app
+	}
 	rq.Authkey = c.opt.Authkey
 
 	return rq, nil
 }
 
-// Common code to create and initialize a NSRequest.
+// Common code to create and initialize a MDRequest.
 func (c *Client) initMDRequest(ctx context.Context, auth eosclient.Authorization) (*erpc.MDRequest, error) {
 	// Stuff filename, uid, gid into the MDRequest type
 
@@ -260,7 +260,7 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 	log.Info().Str("func", "AddACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Init a new NSRequest
-	rq, err := c.initNSRequest(ctx, rootAuth)
+	rq, err := c.initNSRequest(ctx, rootAuth, "")
 	if err != nil {
 		return err
 	}
@@ -311,7 +311,7 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 	sysACL := acls.Serialize()
 
 	// Init a new NSRequest
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -388,7 +388,7 @@ func (c *Client) getACLForPath(ctx context.Context, auth eosclient.Authorization
 	log.Info().Str("func", "GetACLForPath").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return nil, err
 	}
@@ -507,12 +507,12 @@ func (c *Client) fixupACLs(ctx context.Context, auth eosclient.Authorization, in
 }
 
 // SetAttr sets an extended attributes on a path.
-func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path string) error {
+func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path, app string) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "SetAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, app)
 	if err != nil {
 		return err
 	}
@@ -557,12 +557,12 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 }
 
 // UnsetAttr unsets an extended attribute on a path.
-func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path string) error {
+func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path, app string) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "UnsetAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, app)
 	if err != nil {
 		return err
 	}
@@ -572,7 +572,6 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 	var ktd = []string{attr.GetKey()}
 	msg.Keystodelete = ktd
 	msg.Recursive = recursive
-
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
 
@@ -725,7 +724,7 @@ func (c *Client) GetQuota(ctx context.Context, username string, rootAuth eosclie
 	log.Info().Str("func", "GetQuota").Str("rootuid,rootgid", rootAuth.Role.UID+","+rootAuth.Role.GID).Str("username", username).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, rootAuth)
+	rq, err := c.initNSRequest(ctx, rootAuth, "")
 	if err != nil {
 		return nil, err
 	}
@@ -801,7 +800,7 @@ func (c *Client) SetQuota(ctx context.Context, rootAuth eosclient.Authorization,
 	// return errtypes.NotSupported("eosgrpc: SetQuota not implemented")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, rootAuth)
+	rq, err := c.initNSRequest(ctx, rootAuth, "")
 	if err != nil {
 		return err
 	}
@@ -859,7 +858,7 @@ func (c *Client) Touch(ctx context.Context, auth eosclient.Authorization, path s
 	log.Info().Str("func", "Touch").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -894,7 +893,7 @@ func (c *Client) Chown(ctx context.Context, auth, chownAuth eosclient.Authorizat
 	log.Info().Str("func", "Chown").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("chownuid,chowngid", chownAuth.Role.UID+","+chownAuth.Role.GID).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -938,7 +937,7 @@ func (c *Client) Chmod(ctx context.Context, auth eosclient.Authorization, mode, 
 	log.Info().Str("func", "Chmod").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("mode", mode).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -979,7 +978,7 @@ func (c *Client) CreateDir(ctx context.Context, auth eosclient.Authorization, pa
 	log.Info().Str("func", "Createdir").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -1020,7 +1019,7 @@ func (c *Client) rm(ctx context.Context, auth eosclient.Authorization, path stri
 	log.Info().Str("func", "rm").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -1055,7 +1054,7 @@ func (c *Client) rmdir(ctx context.Context, auth eosclient.Authorization, path s
 	log.Info().Str("func", "rmdir").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -1110,7 +1109,7 @@ func (c *Client) Rename(ctx context.Context, auth eosclient.Authorization, oldPa
 	log.Info().Str("func", "Rename").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("oldPath", oldPath).Str("newPath", newPath).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -1322,7 +1321,7 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 
 // Write writes a file to the mgm
 // Somehow the same considerations as Read apply.
-func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser) error {
+func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser, app string) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "Write").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 	var length int64
@@ -1355,24 +1354,10 @@ func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path s
 		defer wfd.Close()
 		defer os.RemoveAll(fd.Name())
 
-		return c.httpcl.PUTFile(ctx, u.Username, auth, path, wfd, length)
+		return c.httpcl.PUTFile(ctx, u.Username, auth, path, wfd, length, app)
 	}
 
-	return c.httpcl.PUTFile(ctx, u.Username, auth, path, stream, length)
-
-	// return c.httpcl.PUTFile(ctx, remoteuser, auth, urlpathng, stream)
-	// return c.WriteFile(ctx, uid, gid, path, fd.Name())
-}
-
-// WriteFile writes an existing file to the mgm. Old xrdcp utility.
-func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, path, source string) error {
-	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "WriteFile").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Str("source", source).Msg("")
-
-	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
-	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", source, xrdPath, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", auth.Role.UID, auth.Role.GID))
-	_, _, err := c.execute(ctx, cmd)
-	return err
+	return c.httpcl.PUTFile(ctx, u.Username, auth, path, stream, length, app)
 }
 
 // ListDeletedEntries returns a list of the deleted entries.
@@ -1381,7 +1366,7 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 	log.Info().Str("func", "ListDeletedEntries").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return nil, err
 	}
@@ -1449,7 +1434,7 @@ func (c *Client) RestoreDeletedEntry(ctx context.Context, auth eosclient.Authori
 	log.Info().Str("func", "RestoreDeletedEntries").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("key", key).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -1487,7 +1472,7 @@ func (c *Client) PurgeDeletedEntries(ctx context.Context, auth eosclient.Authori
 	log.Info().Str("func", "PurgeDeletedEntries").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -1534,7 +1519,7 @@ func (c *Client) RollbackToVersion(ctx context.Context, auth eosclient.Authoriza
 	log.Info().Str("func", "RollbackToVersion").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Str("version", version).Msg("")
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -1676,52 +1661,4 @@ func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDRespon
 		}
 	}
 	return fi, nil
-}
-
-// exec executes the command and returns the stdout, stderr and return code.
-func (c *Client) execute(ctx context.Context, cmd *exec.Cmd) (string, string, error) {
-	log := appctx.GetLogger(ctx)
-
-	outBuf := &bytes.Buffer{}
-	errBuf := &bytes.Buffer{}
-	cmd.Stdout = outBuf
-	cmd.Stderr = errBuf
-	cmd.Env = []string{
-		"EOS_MGM_URL=" + c.opt.URL,
-	}
-
-	if c.opt.UseKeytab {
-		cmd.Env = append(cmd.Env, "XrdSecPROTOCOL="+c.opt.SecProtocol)
-		cmd.Env = append(cmd.Env, "XrdSecSSSKT="+c.opt.Keytab)
-	}
-
-	err := cmd.Run()
-
-	var exitStatus int
-	if exiterr, ok := err.(*exec.ExitError); ok {
-		// The program has exited with an exit code != 0
-		// This works on both Unix and Windows. Although package
-		// syscall is generally platform dependent, WaitStatus is
-		// defined for both Unix and Windows and in both cases has
-		// an ExitStatus() method with the same signature.
-		if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
-			exitStatus = status.ExitStatus()
-			switch exitStatus {
-			case 0:
-				err = nil
-			case 2:
-				err = errtypes.NotFound(errBuf.String())
-			}
-		}
-	}
-
-	args := fmt.Sprintf("%s", cmd.Args)
-	env := fmt.Sprintf("%s", cmd.Env)
-	log.Info().Str("args", args).Str("env", env).Int("exit", exitStatus).Msg("eos cmd")
-
-	if err != nil && exitStatus != 2 { // don't wrap the errtypes.NotFoundError
-		err = errors.Wrap(err, "eosclient: error while executing command")
-	}
-
-	return outBuf.String(), errBuf.String(), err
 }

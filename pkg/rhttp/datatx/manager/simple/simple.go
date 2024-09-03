@@ -23,6 +23,7 @@ import (
 	"net/http"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp/datatx"
@@ -75,8 +76,15 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 			defer r.Body.Close()
 
 			ref := &provider.Reference{Path: fn}
+			metadata := map[string]string{}
+			if lockid := r.Header.Get(ocdav.HeaderLockID); lockid != "" {
+				metadata["lockid"] = lockid
+			}
+			if lockholder := r.Header.Get(ocdav.HeaderLockHolder); lockholder != "" {
+				metadata["lockholder"] = lockholder
+			}
 
-			err := fs.Upload(ctx, ref, r.Body)
+			err := fs.Upload(ctx, ref, r.Body, metadata)
 			switch v := err.(type) {
 			case nil:
 				w.WriteHeader(http.StatusOK)
@@ -92,6 +100,8 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				w.WriteHeader(http.StatusUnauthorized)
 			case errtypes.InsufficientStorage:
 				w.WriteHeader(http.StatusInsufficientStorage)
+			case errtypes.Conflict:
+				w.WriteHeader(http.StatusConflict)
 			default:
 				sublog.Error().Err(v).Msg("error uploading file")
 				w.WriteHeader(http.StatusInternalServerError)

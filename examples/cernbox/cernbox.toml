@@ -199,7 +199,8 @@ webapp_template = "{{ vars.external_reva_endpoint }}/external/sciencemesh/{{.Tok
 file = "{{ vars.ocmshares_json_file }}"
 
 [grpc.services.ocmproviderauthorizer]
-driver = "json"
+driver = "open"    # pure OCM, all remote shares are accepted
+#driver = "json"   # to enable sciencemesh
 
 [grpc.services.ocmproviderauthorizer.drivers.json]
 # this is used by the docker-based test deployment, not in production
@@ -279,8 +280,10 @@ sender_mail = "sciencemesh@{{ vars.provider_domain }}"
 smtp_server = "smtp.{{ vars.provider_domain }}"
 smtp_port = 25
 
-[http.services.ocmprovider]
+[http.services.wellknown]
 address = ":443"
+
+[http.services.wellknown.ocmprovider]
 ocm_prefix = "ocm"
 provider = "Reva for CERNBox"
 endpoint = "{{ vars.external_reva_endpoint }}"
@@ -391,8 +394,6 @@ insecure = true
 
 [http.services.prometheus]
 address = ":443"
-
-[http.services.sysinfo]
 
 #[http.services.ui]
 #address = ":443"

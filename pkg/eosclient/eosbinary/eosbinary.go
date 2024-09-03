@@ -203,6 +203,11 @@ func (c *Client) executeXRDCopy(ctx context.Context, cmdArgs []string) (string, 
 		err = errtypes.InvalidCredentials("eosclient: no sufficient permissions for the operation")
 	}
 
+	// check for lock mismatch error
+	if strings.Contains(errBuf.String(), "file has a valid extended attribute lock") {
+		err = errtypes.Conflict("eosclient: lock mismatch")
+	}
+
 	args := fmt.Sprintf("%s", cmd.Args)
 	env := fmt.Sprintf("%s", cmd.Env)
 	log.Info().Str("args", args).Str("env", env).Int("exit", exitStatus).Msg("eos cmd")
@@ -455,7 +460,7 @@ func (c *Client) mergeACLsAndAttrsForFiles(ctx context.Context, auth eosclient.A
 }
 
 // SetAttr sets an extended attributes on a path.
-func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path string) error {
+func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path, app string) error {
 	if !isValidAttribute(attr) {
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
 	}
@@ -468,11 +473,15 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 		}
 		return c.handleFavAttr(ctx, auth, attr, recursive, path, info, true)
 	}
-	return c.setEOSAttr(ctx, auth, attr, errorIfExists, recursive, path)
+	return c.setEOSAttr(ctx, auth, attr, errorIfExists, recursive, path, app)
 }
 
-func (c *Client) setEOSAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path string) error {
-	args := []string{"attr"}
+func (c *Client) setEOSAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path, app string) error {
+	args := []string{}
+	if app != "" {
+		args = append(args, "-a", app)
+	}
+	args = append(args, "attr")
 	if recursive {
 		args = append(args, "-r")
 	}
@@ -485,8 +494,11 @@ func (c *Client) setEOSAttr(ctx context.Context, auth eosclient.Authorization, a
 	_, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		var exErr *exec.ExitError
-		if errors.As(err, &exErr) && exErr.ExitCode() == 17 {
+		if errors.As(err, &exErr) && exErr.ExitCode() == 17 { // EEXIST
 			return eosclient.AttrAlreadyExistsError
+		}
+		if errors.As(err, &exErr) && exErr.ExitCode() == 16 { // EBUSY -> Locked
+			return eosclient.FileIsLockedError
 		}
 		return err
 	}
@@ -516,11 +528,11 @@ func (c *Client) handleFavAttr(ctx context.Context, auth eosclient.Authorization
 		favs.DeleteEntry(acl.TypeUser, u.Id.OpaqueId)
 	}
 	attr.Val = favs.Serialize()
-	return c.setEOSAttr(ctx, auth, attr, false, recursive, path)
+	return c.setEOSAttr(ctx, auth, attr, false, recursive, path, "")
 }
 
 // UnsetAttr unsets an extended attribute on a path.
-func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path string) error {
+func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path, app string) error {
 	if !isValidAttribute(attr) {
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
 	}
@@ -536,11 +548,15 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 	}
 
 	var args []string
-	if recursive {
-		args = []string{"attr", "-r", "rm", fmt.Sprintf("%s.%s", attrTypeToString(attr.Type), attr.Key), path}
-	} else {
-		args = []string{"attr", "rm", fmt.Sprintf("%s.%s", attrTypeToString(attr.Type), attr.Key), path}
+	if app != "" {
+		args = append(args, "-a", app)
 	}
+	args = append(args, "attr")
+	if recursive {
+		args = append(args, "-r")
+	}
+	args = append(args, "rm", fmt.Sprintf("%s.%s", attrTypeToString(attr.Type), attr.Key), path)
+
 	_, _, err = c.executeEOS(ctx, args, auth)
 	if err != nil {
 		var exErr *exec.ExitError
@@ -707,7 +723,7 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 }
 
 // Write writes a stream to the mgm.
-func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser) error {
+func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser, app string) error {
 	fd, err := os.CreateTemp(c.opt.CacheDirectory, "eoswrite-")
 	if err != nil {
 		return err
@@ -720,19 +736,18 @@ func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path s
 	if err != nil {
 		return err
 	}
-
-	return c.WriteFile(ctx, auth, path, fd.Name())
+	return c.writeFile(ctx, auth, path, fd.Name(), app)
 }
 
 // WriteFile writes an existing file to the mgm.
-func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, path, source string) error {
+func (c *Client) writeFile(ctx context.Context, auth eosclient.Authorization, path, source, app string) error {
 	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
 	args := []string{"--nopbar", "--silent", "-f", source, xrdPath}
 
 	if auth.Token != "" {
 		args[4] += "?authz=" + auth.Token
 	} else if auth.Role.UID != "" && auth.Role.GID != "" {
-		args = append(args, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s&eos.app=reva_eosclient::write", auth.Role.UID, auth.Role.GID))
+		args = append(args, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s&eos.app=%s", auth.Role.UID, auth.Role.GID, app))
 	}
 
 	_, _, err := c.executeXRDCopy(ctx, args)
