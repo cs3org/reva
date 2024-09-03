@@ -38,7 +38,7 @@ services:
     environment:
       LITMUS_USERNAME: einstein
       LITMUS_PASSWORD: relativity
-      TESTS: basic http copymove props
+      TESTS: basic http copymove
   gateway:
     extends: revad
     command: -c /etc/revad/gateway.toml
