@@ -130,7 +130,7 @@ func (um *Manager) do(ctx context.Context, a Action, username string) (int, []by
 	body, err := io.ReadAll(resp.Body)
 	log.Info().Msgf("um.do res %s %s", url, string(body))
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return 0, nil, fmt.Errorf("Unexpected response code from EFSS API: " + strconv.Itoa(resp.StatusCode))
+		return 0, nil, fmt.Errorf("Unexpected response code from EFSS API: %s", strconv.Itoa(resp.StatusCode))
 	}
 	return resp.StatusCode, body, err
 }

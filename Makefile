@@ -18,7 +18,7 @@ toolchain: $(GOLANGCI_LINT) $(CALENS)
 
 $(GOLANGCI_LINT):
 	@mkdir -p $(@D)
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | BINDIR=$(@D) sh -s v1.54.2
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | BINDIR=$(@D) sh -s v1.60.3
 
 CALENS_DIR := $(shell mktemp -d)
 $(CALENS):
