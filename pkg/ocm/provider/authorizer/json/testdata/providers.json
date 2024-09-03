@@ -1,0 +1,29 @@
+[
+  {
+    "domain": "server-one",
+    "services": [
+      {
+        "endpoint": {
+          "type": {
+            "name": "OCM"
+          },
+          "path": "https://server-one:9200/ocm/"
+        },
+        "host": "server-one:9200"
+      }
+    ]
+  },
+  {
+    "domain": "server-two:9200",
+    "services": [
+      {
+        "endpoint": {
+          "type": {
+            "name": "OCM"
+          },
+          "path": "https://server-two:9200/ocm/"
+        }
+      }
+    ]
+  }
+]
