@@ -106,18 +106,20 @@ func (h *tokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := events.Publish(ctx, h.eventStream, events.ScienceMeshInviteTokenGenerated{
-		Sharer:        genTokenRes.GetInviteToken().GetUserId(),
-		RecipientMail: req.Recipient,
-		Token:         tknRes.Token,
-		Description:   tknRes.Description,
-		Expiration:    tknRes.Expiration,
-		InviteLink:    tknRes.InviteLink,
-		Timestamp:     utils.TSNow(),
-	}); err != nil {
-		log := appctx.GetLogger(ctx)
-		log.Error().Err(err).
-			Msg("failed to publish the science-mesh invite token generated event")
+	if h.eventStream != nil {
+		if err := events.Publish(ctx, h.eventStream, events.ScienceMeshInviteTokenGenerated{
+			Sharer:        genTokenRes.GetInviteToken().GetUserId(),
+			RecipientMail: req.Recipient,
+			Token:         tknRes.Token,
+			Description:   tknRes.Description,
+			Expiration:    tknRes.Expiration,
+			InviteLink:    tknRes.InviteLink,
+			Timestamp:     utils.TSNow(),
+		}); err != nil {
+			log := appctx.GetLogger(ctx)
+			log.Error().Err(err).
+				Msg("failed to publish the science-mesh invite token generated event")
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -137,8 +139,6 @@ func getGenerateRequest(r *http.Request) (*generateRequest, error) {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			return nil, err
 		}
-	} else {
-		return nil, errors.New("body request not recognised")
 	}
 
 	// validate the request
