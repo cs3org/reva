@@ -24,9 +24,10 @@ func TestAuthorizer_GetInfoByDomain(t *testing.T) {
 			expectedDomain string
 			expectedError  error
 		}{
-			"domain only":      {givenDomain: "server-one:9200", expectedDomain: "server-one"},
-			"domain with port": {givenDomain: "server-two:9200", expectedDomain: "server-two:9200"},
-			"unknown domain":   {givenDomain: "unknown-domain", expectedError: errtypes.NotFound("unknown-domain")},
+			"domain only":                     {givenDomain: "server-one", expectedDomain: "server-one"},
+			"domain with port":                {givenDomain: "server-two:9200", expectedDomain: "server-two:9200"},
+			"domain only with port in result": {givenDomain: "server-two", expectedDomain: "server-two:9200"},
+			"unknown domain":                  {givenDomain: "unknown-domain", expectedError: errtypes.NotFound("unknown-domain")},
 		} {
 			t.Run(name, func(t *testing.T) {
 				info, err := authorizer.GetInfoByDomain(context.Background(), env.givenDomain)
