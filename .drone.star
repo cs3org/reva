@@ -255,7 +255,7 @@ def virtualViews():
                 "image": OC_CI_PHP,
                 "commands": [
                     "cd /drone/src/tmp/testrunner",
-                    "make test-acceptance-from-core-api",
+                    "make test-acceptance-api",
                 ],
                 "environment": {
                     "TEST_SERVER_URL": "http://revad-services:20180",
@@ -267,6 +267,7 @@ def virtualViews():
                     "REGULAR_USER_PASSWORD": "relativity",
                     "SEND_SCENARIO_LINE_REFERENCES": "true",
                     "BEHAT_SUITE": "apiVirtualViews",
+                    "ACCEPTANCE_TEST_TYPE": "core-api",
                 },
             },
         ],
@@ -600,7 +601,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                         "image": OC_CI_PHP,
                         "commands": [
                             "cd /drone/src/tmp/testrunner",
-                            "make test-acceptance-from-core-api",
+                            "make test-acceptance-api",
                         ],
                         "environment": {
                             "TEST_SERVER_URL": "http://revad-services:20080",
@@ -616,6 +617,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                             "DIVIDE_INTO_NUM_PARTS": parallelRuns,
                             "RUN_PART": runPart,
                             "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.md",
+                            "ACCEPTANCE_TEST_TYPE": "core-api",
                         },
                     },
                 ],
@@ -676,7 +678,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                         "image": OC_CI_PHP,
                         "commands": [
                             "cd /drone/src/tmp/testrunner",
-                            "make test-acceptance-from-core-api",
+                            "make test-acceptance-api",
                         ],
                         "environment": {
                             "TEST_SERVER_URL": "http://revad-services:20080",
@@ -692,6 +694,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                             "DIVIDE_INTO_NUM_PARTS": parallelRuns,
                             "RUN_PART": runPart,
                             "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-S3NG-storage.md",
+                            "ACCEPTANCE_TEST_TYPE": "core-api",
                         },
                     },
                 ],
@@ -753,7 +756,7 @@ def posixfsIntegrationTests(parallelRuns, skipExceptParts = []):
                         "image": OC_CI_PHP,
                         "commands": [
                             "cd /drone/src/tmp/testrunner",
-                            "make test-acceptance-from-core-api",
+                            "make test-acceptance-api",
                         ],
                         "environment": {
                             "TEST_SERVER_URL": "http://revad-services:20080",
@@ -769,6 +772,7 @@ def posixfsIntegrationTests(parallelRuns, skipExceptParts = []):
                             "DIVIDE_INTO_NUM_PARTS": parallelRuns,
                             "RUN_PART": runPart,
                             "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-POSIX-storage.md",
+                            "ACCEPTANCE_TEST_TYPE": "core-api",
                         },
                     },
                 ],
