@@ -34,6 +34,7 @@ import (
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"google.golang.org/genproto/protobuf/field_mask"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	"github.com/cs3org/reva/pkg/ocm/share"
@@ -632,7 +633,7 @@ func TestGetShare(t *testing.T) {
 			}
 
 			if tt.err == nil {
-				if !reflect.DeepEqual(got, tt.expected) {
+				if !proto.Equal(got, tt.expected) {
 					t.Fatalf("shares do not match. got=%+v expected=%+v", render.AsCode(got), render.AsCode(tt.expected))
 				}
 			}

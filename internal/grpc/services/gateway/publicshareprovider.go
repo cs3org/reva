@@ -21,7 +21,9 @@ package gateway
 import (
 	"context"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -97,6 +99,16 @@ func (s *svc) GetPublicShare(ctx context.Context, req *link.GetPublicShareReques
 	}
 
 	return pClient.GetPublicShare(ctx, req)
+}
+
+func (s *svc) ListExistingPublicShares(ctx context.Context, req *link.ListPublicSharesRequest) (*gateway.ListExistingPublicSharesResponse, error) {
+	return nil, nil
+}
+func (s *svc) ListExistingReceivedShares(ctx context.Context, req *collaboration.ListReceivedSharesRequest) (*gateway.ListExistingReceivedSharesResponse, error) {
+	return nil, nil
+}
+func (s *svc) ListExistingShares(ctx context.Context, req *collaboration.ListSharesRequest) (*gateway.ListExistingSharesResponse, error) {
+	return nil, nil
 }
 
 func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRequest) (*link.ListPublicSharesResponse, error) {

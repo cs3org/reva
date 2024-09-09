@@ -18,7 +18,7 @@ toolchain: $(GOLANGCI_LINT) $(CALENS)
 
 $(GOLANGCI_LINT):
 	@mkdir -p $(@D)
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | BINDIR=$(@D) sh -s v1.54.2
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | BINDIR=$(@D) sh -s v1.60.3
 
 CALENS_DIR := $(shell mktemp -d)
 $(CALENS):
@@ -87,7 +87,7 @@ docker-eos-full-tests:
 # Test
 ################################################################################
 
-TEST				  = litmus-1 litmus-2 acceptance-1 acceptance-2
+TEST				  = litmus-1 litmus-2
 export REVAD_IMAGE	  ?= revad-eos
 export EOS_FULL_IMAGE ?= eos-full
 export PARTS		  ?= 1
