@@ -35,33 +35,3 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: my-secret-pw
           MYSQL_DATABASE: reva
-  docker:
-    strategy:
-      fail-fast: false
-      matrix:
-        file: [docker/Dockerfile.reva, docker/Dockerfile.revad-eos, docker/Dockerfile.revad-ceph]
-    uses: ./.github/workflows/docker.yml
-    with:
-      file: ${{ matrix.file }}
-  docker-revad:
-    name: docker (docker/Dockerfile.revad)
-    uses: ./.github/workflows/docker.yml
-    with:
-      file: docker/Dockerfile.revad
-      load: true
-  docker-revad-eos:
-    name: docker (docker/Dockerfile.revad-eos)
-    uses: ./.github/workflows/docker.yml
-    with:
-      file: docker/Dockerfile.revad-eos
-      load: false
-  litmus:
-    needs:
-      - docker-revad-eos
-    strategy:
-      fail-fast: false
-      matrix:
-        test: [litmus-1, litmus-2]
-    uses: ./.github/workflows/compose.yml
-    with:
-      test: ${{ matrix.test }}

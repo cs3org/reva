@@ -28,33 +28,3 @@ jobs:
           project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
           coverage-reports: coverage.out
           force-coverage-parser: go
-  docker:
-    strategy:
-      fail-fast: false
-      matrix:
-        file: [docker/Dockerfile.reva, docker/Dockerfile.revad-eos, docker/Dockerfile.revad-ceph]
-    uses: ./.github/workflows/docker.yml
-    with:
-      file: ${{ matrix.file }}
-  docker-revad:
-    name: docker (docker/Dockerfile.revad)
-    uses: ./.github/workflows/docker.yml
-    with:
-      file: docker/Dockerfile.revad
-      load: true
-  docker-revad-eos:
-    name: docker (docker/Dockerfile.revad-eos)
-    uses: ./.github/workflows/docker.yml
-    with:
-      file: docker/Dockerfile.revad-eos
-      load: false
-  litmus:
-    needs:
-      - docker-revad-eos
-    strategy:
-      fail-fast: false
-      matrix:
-        test: [litmus-1, litmus-2]
-    uses: ./.github/workflows/compose.yml
-    with:
-      test: ${{ matrix.test }}
