@@ -1,0 +1,29 @@
+name: Test
+on:
+  pull_request:
+  push:
+    branches:
+      - "*"
+  workflow_dispatch:
+
+jobs:
+  docker:
+    strategy:
+      fail-fast: false
+      matrix:
+        file: [docker/Dockerfile.reva, docker/Dockerfile.revad-eos, docker/Dockerfile.revad-ceph]
+    uses: ./.github/workflows/docker.yml
+    with:
+      file: ${{ matrix.file }}
+  docker-revad:
+    name: docker (docker/Dockerfile.revad)
+    uses: ./.github/workflows/docker.yml
+    with:
+      file: docker/Dockerfile.revad
+      load: true
+  docker-revad-eos:
+    name: docker (docker/Dockerfile.revad-eos)
+    uses: ./.github/workflows/docker.yml
+    with:
+      file: docker/Dockerfile.revad-eos
+      load: false
