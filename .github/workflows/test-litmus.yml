@@ -1,0 +1,19 @@
+name: Test
+on:
+  pull_request:
+  push:
+    branches:
+      - "*"
+  workflow_dispatch:
+
+jobs:
+  litmus:
+    needs:
+      - docker-revad-eos
+    strategy:
+      fail-fast: false
+      matrix:
+        test: [litmus-1, litmus-2]
+    uses: ./.github/workflows/compose.yml
+    with:
+      test: ${{ matrix.test }}

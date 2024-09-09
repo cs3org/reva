@@ -631,7 +631,7 @@ func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*d
 
 	_, endStatusFound := txEndStatuses[job.TransferStatus.String()]
 	if endStatusFound {
-		err := errors.Wrapf(errors.New("rclone driver: job already in end state"), transferRemovedMessage)
+		err := errors.Wrap(errors.New("rclone driver: job already in end state"), transferRemovedMessage)
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: transferID},
 			Status: datatx.Status_STATUS_INVALID,
@@ -649,7 +649,7 @@ func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*d
 
 	data, err := json.Marshal(rcloneCancelTransferReq)
 	if err != nil {
-		err := errors.Wrapf(errors.New("rclone driver: error marshalling rclone job/stop req data"), transferRemovedMessage)
+		err := errors.Wrap(errors.New("rclone driver: error marshalling rclone job/stop req data"), transferRemovedMessage)
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: transferID},
 			Status: datatx.Status_STATUS_INVALID,
@@ -661,7 +661,7 @@ func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*d
 
 	u, err := url.Parse(driver.config.Endpoint)
 	if err != nil {
-		err := errors.Wrapf(errors.New("rclone driver: error parsing driver endpoint"), transferRemovedMessage)
+		err := errors.Wrap(errors.New("rclone driver: error parsing driver endpoint"), transferRemovedMessage)
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: transferID},
 			Status: datatx.Status_STATUS_INVALID,
@@ -673,7 +673,7 @@ func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*d
 
 	req, err := http.NewRequest(http.MethodPost, requestURL, bytes.NewReader(data))
 	if err != nil {
-		err := errors.Wrapf(errors.New("rclone driver: error framing post request"), transferRemovedMessage)
+		err := errors.Wrap(errors.New("rclone driver: error framing post request"), transferRemovedMessage)
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: transferID},
 			Status: datatx.Status_STATUS_INVALID,
@@ -686,7 +686,7 @@ func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*d
 
 	res, err := driver.client.Do(req)
 	if err != nil {
-		err := errors.Wrapf(errors.New("rclone driver: error sending post request"), transferRemovedMessage)
+		err := errors.Wrap(errors.New("rclone driver: error sending post request"), transferRemovedMessage)
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: transferID},
 			Status: datatx.Status_STATUS_INVALID,
@@ -699,7 +699,7 @@ func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*d
 	if res.StatusCode != http.StatusOK {
 		var errorResData rcloneHTTPErrorRes
 		if err = json.NewDecoder(res.Body).Decode(&errorResData); err != nil {
-			err := errors.Wrapf(errors.New("rclone driver: error decoding response data"), transferRemovedMessage)
+			err := errors.Wrap(errors.New("rclone driver: error decoding response data"), transferRemovedMessage)
 			return &datatx.TxInfo{
 				Id:     &datatx.TxId{OpaqueId: transferID},
 				Status: datatx.Status_STATUS_INVALID,
@@ -728,7 +728,7 @@ func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*d
 	}
 	var resData rcloneCancelTransferResJSON
 	if err = json.NewDecoder(res.Body).Decode(&resData); err != nil {
-		err := errors.Wrapf(errors.New("rclone driver: error decoding response data"), transferRemovedMessage)
+		err := errors.Wrap(errors.New("rclone driver: error decoding response data"), transferRemovedMessage)
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: transferID},
 			Status: datatx.Status_STATUS_INVALID,

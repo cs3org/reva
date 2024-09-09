@@ -25,6 +25,7 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"google.golang.org/protobuf/proto"
 )
 
 var ctx = context.Background()
@@ -58,7 +59,7 @@ func TestUserManager(t *testing.T) {
 
 	// positive test GetUserByClaim by uid
 	resUserByUID, _ := manager.GetUserByClaim(ctx, "uid", "123", false)
-	if !reflect.DeepEqual(resUserByUID, userEinstein) {
+	if !proto.Equal(resUserByUID, userEinstein) {
 		t.Fatalf("user differs: expected=%v got=%v", userEinstein, resUserByUID)
 	}
 
@@ -71,13 +72,13 @@ func TestUserManager(t *testing.T) {
 
 	// positive test GetUserByClaim by mail
 	resUserByEmail, _ := manager.GetUserByClaim(ctx, "mail", "einstein@example.org", false)
-	if !reflect.DeepEqual(resUserByEmail, userEinstein) {
+	if !proto.Equal(resUserByEmail, userEinstein) {
 		t.Fatalf("user differs: expected=%v got=%v", userEinstein, resUserByEmail)
 	}
 
 	// positive test GetUserByClaim by uid without groups
 	resUserByUIDWithoutGroups, _ := manager.GetUserByClaim(ctx, "uid", "123", true)
-	if !reflect.DeepEqual(resUserByUIDWithoutGroups, userEinsteinWithoutGroups) {
+	if !proto.Equal(resUserByUIDWithoutGroups, userEinsteinWithoutGroups) {
 		t.Fatalf("user differs: expected=%v got=%v", userEinsteinWithoutGroups, resUserByUIDWithoutGroups)
 	}
 
@@ -96,7 +97,7 @@ func TestUserManager(t *testing.T) {
 
 	// test FindUsers
 	resUser, _ := manager.FindUsers(ctx, "einstein", false)
-	if !reflect.DeepEqual(resUser, []*userpb.User{userEinstein}) {
+	if !proto.Equal(resUser[0], userEinstein) {
 		t.Fatalf("user differs: expected=%v got=%v", []*userpb.User{userEinstein}, resUser)
 	}
 

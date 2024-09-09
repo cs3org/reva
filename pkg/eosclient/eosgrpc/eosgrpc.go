@@ -138,7 +138,7 @@ type Client struct {
 func newgrpc(ctx context.Context, log *zerolog.Logger, opt *Options) (erpc.EosClient, error) {
 	log.Debug().Msgf("Setting up GRPC towards '%s'", opt.GrpcURI)
 
-	conn, err := grpc.Dial(opt.GrpcURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(opt.GrpcURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Warn().Err(err).Msgf("Error connecting to '%s'", opt.GrpcURI)
 	}

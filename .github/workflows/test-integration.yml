@@ -1,0 +1,37 @@
+name: Test
+on:
+  pull_request:
+  push:
+    branches:
+      - "*"
+  workflow_dispatch:
+
+jobs:
+  integration:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go environment
+        uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Test integration
+        run: make test-integration
+        env:
+          REDIS_ADDRESS: redis:6379
+          SQL_USERNAME: root
+          SQL_PASSWORD: my-secret-pw
+          SQL_ADDRESS: localhost:3306
+          SQL_DBNAME: reva
+    services:
+      redis:
+        image: registry.cern.ch/docker.io/webhippie/redis
+      mysql:
+        image: mysql
+        ports:
+          - 3306:3306
+        env:
+          MYSQL_ROOT_PASSWORD: my-secret-pw
+          MYSQL_DATABASE: reva
