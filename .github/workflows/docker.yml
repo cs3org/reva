@@ -22,7 +22,7 @@ on:
 
 jobs:
   docker:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     outputs:
       image: ${{ steps.build.outputs.imageid }}
     steps:
