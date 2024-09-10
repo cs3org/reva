@@ -262,7 +262,7 @@ var _ = Describe("ocm invitation workflow", func() {
 			})
 		})
 
-		Describe("marie accept a not existing token", func() {
+		Describe("marie accept a non existing token", func() {
 			var cleanup func()
 			BeforeEach(func() {
 				variables, cleanup, err = initData(driver, nil, nil)
@@ -276,12 +276,12 @@ var _ = Describe("ocm invitation workflow", func() {
 			It("will not complete the invitation workflow", func() {
 				forwardRes, err := cesnetgw.ForwardInvite(ctxMarie, &invitepb.ForwardInviteRequest{
 					InviteToken: &invitepb.InviteToken{
-						Token: "not-existing-token",
+						Token: "non-existing-token",
 					},
 					OriginSystemProvider: cernbox,
 				})
 				Expect(err).ToNot(HaveOccurred())
-				Expect(forwardRes.Status.Code).To(Equal(rpc.Code_CODE_NOT_FOUND))
+				Expect(forwardRes.Status.Code).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
 			})
 		})
 
