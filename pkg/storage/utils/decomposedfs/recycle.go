@@ -135,7 +135,7 @@ func (tb *DecomposedfsTrashbin) ListRecycle(ctx context.Context, ref *provider.R
 		nodeType := tb.fs.lu.TypeFromPath(ctx, originalPath)
 		switch nodeType {
 		case provider.ResourceType_RESOURCE_TYPE_FILE:
-			size, err = tb.fs.lu.ReadBlobSizeAttr(ctx, originalPath)
+			_, size, err = tb.fs.lu.ReadBlobIDAndSizeAttr(ctx, originalPath, nil)
 			if err != nil {
 				return items, err
 			}
