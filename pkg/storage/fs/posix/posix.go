@@ -97,6 +97,11 @@ func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 		return nil, err
 	}
 
+	switch o.IDCache.Store {
+	case "", "memory", "noop":
+		return nil, fmt.Errorf("the posix driver requires a shared id cache, e.g. nats-js-kv or redis")
+	}
+
 	tp, err := tree.New(lu, bs, um, trashbin, o, stream, store.Create(
 		store.Store(o.IDCache.Store),
 		store.TTL(o.IDCache.TTL),
