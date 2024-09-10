@@ -129,15 +129,14 @@ func (tb *Trashbin) MoveToTrash(ctx context.Context, n *node.Node, path string) 
 	if err = tb.lu.IDCache.DeleteByPath(ctx, path); err != nil {
 		return err
 	}
-	if err != nil {
-		return err
-	}
-	err = tb.lu.MetadataBackend().Rename(path, trashPath)
+
+	itemTrashPath := filepath.Join(trashPath, "files", key+".trashitem")
+	err = tb.lu.MetadataBackend().Rename(path, itemTrashPath)
 	if err != nil {
 		return err
 	}
 
-	return os.Rename(path, filepath.Join(trashPath, "files", key+".trashitem"))
+	return os.Rename(path, itemTrashPath)
 }
 
 // ListRecycle returns the list of available recycle items
