@@ -35,20 +35,16 @@ import (
 )
 
 // ErrTokenInvalid is the error returned by the invite-accepted
-// endpoint when the token is not valid.
-var ErrTokenInvalid = errors.New("the invitation token is invalid")
+// endpoint when the token is not valid or not existing.
+var ErrTokenInvalid = errors.New("the invitation token is invalid or not found")
 
 // ErrServiceNotTrusted is the error returned by the invite-accepted
 // endpoint when the service is not trusted to accept invitations.
 var ErrServiceNotTrusted = errors.New("service is not trusted to accept invitations")
 
 // ErrUserAlreadyAccepted is the error returned by the invite-accepted
-// endpoint when a user is already know by the remote cloud.
-var ErrUserAlreadyAccepted = errors.New("user already accepted an invitation token")
-
-// ErrTokenNotFound is the error returned by the invite-accepted
-// endpoint when the request is done using a not existing token.
-var ErrTokenNotFound = errors.New("token not found")
+// endpoint when a token was already used by a user in the remote cloud.
+var ErrUserAlreadyAccepted = errors.New("invitation already accepted")
 
 // ErrInvalidParameters is the error returned by the shares endpoint
 // when the request does not contain required properties.
@@ -250,8 +246,6 @@ func (c *OCMClient) parseInviteAcceptedResponse(r *http.Response) (*User, error)
 		return &u, nil
 	case http.StatusBadRequest:
 		return nil, ErrTokenInvalid
-	case http.StatusNotFound:
-		return nil, ErrTokenNotFound
 	case http.StatusConflict:
 		return nil, ErrUserAlreadyAccepted
 	case http.StatusForbidden:
