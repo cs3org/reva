@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/favorite"
 	"github.com/rs/zerolog"
 	"go-micro.dev/v4/broker"
+	"go-micro.dev/v4/registry"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/credentials"
 )
@@ -74,6 +75,7 @@ type Options struct {
 
 	RegisterTTL      time.Duration
 	RegisterInterval time.Duration
+	Registry         registry.Registry
 }
 
 // newOptions initializes the available default options.
@@ -399,5 +401,12 @@ func RegisterTTL(ttl time.Duration) Option {
 func RegisterInterval(interval time.Duration) Option {
 	return func(o *Options) {
 		o.RegisterInterval = interval
+	}
+}
+
+// Registry provides a function to set the Registry option.
+func Registry(registry registry.Registry) Option {
+	return func(o *Options) {
+		o.Registry = registry
 	}
 }

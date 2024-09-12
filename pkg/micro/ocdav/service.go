@@ -80,6 +80,7 @@ func Service(opts ...Option) (micro.Service, error) {
 		server.Version(sopts.config.VersionString),
 		server.RegisterTTL(sopts.RegisterTTL),
 		server.RegisterInterval(sopts.RegisterInterval),
+		server.Registry(sopts.Registry),
 	)
 
 	revaService, err := ocdav.NewWith(&sopts.config, sopts.FavoriteManager, sopts.lockSystem, &sopts.Logger, sopts.GatewaySelector)
