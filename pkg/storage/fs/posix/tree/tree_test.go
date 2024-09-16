@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"log"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -219,6 +220,45 @@ var _ = Describe("Tree", func() {
 					g.Expect(n).ToNot(BeNil())
 					g.Expect(n.Type(env.Ctx)).To(Equal(provider.ResourceType_RESOURCE_TYPE_FILE))
 					g.Expect(n.ID).To(Equal(fileID))
+					g.Expect(n.Blobsize).To(Equal(int64(0)))
+				}).Should(Succeed())
+			})
+
+			It("handles id clashes", func() {
+				// Create empty file
+				_, err := os.Create(root + "/original.txt")
+				Expect(err).ToNot(HaveOccurred())
+
+				fileID := ""
+				// Wait for the file to be indexed
+				Eventually(func(g Gomega) {
+					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+						ResourceId: env.SpaceRootRes,
+						Path:       subtree + "/original.txt",
+					})
+					g.Expect(err).ToNot(HaveOccurred())
+					g.Expect(n).ToNot(BeNil())
+					g.Expect(n.Type(env.Ctx)).To(Equal(provider.ResourceType_RESOURCE_TYPE_FILE))
+					g.Expect(n.ID).ToNot(BeEmpty())
+					fileID = n.ID
+					g.Expect(n.Blobsize).To(Equal(int64(0)))
+				}).Should(Succeed())
+
+				// cp file
+				cmd := exec.Command("cp", "-a", root+"/original.txt", root+"/moved.txt")
+				err = cmd.Run()
+				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(func(g Gomega) {
+					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+						ResourceId: env.SpaceRootRes,
+						Path:       subtree + "/moved.txt",
+					})
+					g.Expect(err).ToNot(HaveOccurred())
+					g.Expect(n).ToNot(BeNil())
+					g.Expect(n.Type(env.Ctx)).To(Equal(provider.ResourceType_RESOURCE_TYPE_FILE))
+					g.Expect(n.ID).ToNot(BeEmpty())
+					g.Expect(n.ID).ToNot(Equal(fileID))
 					g.Expect(n.Blobsize).To(Equal(int64(0)))
 				}).Should(Succeed())
 			})

@@ -42,6 +42,9 @@ var _ = Describe("Posix", func() {
 			"root":           tmpRoot,
 			"share_folder":   "/Shares",
 			"permissionssvc": "any",
+			"idcache": map[string]interface{}{
+				"cache_store": "nats-js-kv",
+			},
 		}
 	})
 
