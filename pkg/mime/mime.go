@@ -88,7 +88,7 @@ var mimeTypes = map[string]string{
 	"bdoc":                     "application/x-bdoc",
 	"bed":                      "application/vnd.realvnc.bed",
 	"bh2":                      "application/vnd.fujitsu.oasysprs",
-	"bin":                      "application/octet-stream",
+	"bin":                      "application/x-binary",
 	"blb":                      "application/x-blorb",
 	"blorb":                    "application/x-blorb",
 	"bmi":                      "application/vnd.bmi",
