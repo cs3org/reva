@@ -80,8 +80,9 @@ func (m *Manager) CTime(ctx context.Context, n *node.Node) (time.Time, error) {
 	}
 
 	stat := fi.Sys().(*syscall.Stat_t)
+	statCTime := StatCTime(stat)
 	//nolint:unconvert
-	return time.Unix(int64(stat.Ctim.Sec), int64(stat.Ctim.Nsec)), nil
+	return time.Unix(int64(statCTime.Sec), int64(statCTime.Nsec)), nil
 }
 
 // TCTime returns the tree creation time (tctime) of a node.
