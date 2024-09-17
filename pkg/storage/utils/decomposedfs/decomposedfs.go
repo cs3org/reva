@@ -358,6 +358,14 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 
 			fs.sessionStore.Cleanup(ctx, session, revertNodeMetadata, keepUpload, unmarkPostprocessing)
 
+			var isVersion bool
+			if session.NodeExists() {
+				info, err := session.GetInfo(ctx)
+				if err == nil && info.MetaData["versionsPath"] != "" {
+					isVersion = true
+				}
+			}
+
 			if err := events.Publish(
 				ctx,
 				fs.stream,
@@ -376,6 +384,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 					},
 					Timestamp:  utils.TimeToTS(now),
 					SpaceOwner: n.SpaceOwnerOrManager(ctx),
+					IsVersion:  isVersion,
 				},
 			); err != nil {
 				sublog.Error().Err(err).Msg("Failed to publish UploadReady event")
