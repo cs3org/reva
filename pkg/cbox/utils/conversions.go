@@ -20,6 +20,7 @@ package utils
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 	"time"
 
@@ -165,6 +166,14 @@ func IntToShareState(g int) collaboration.ShareState {
 
 // FormatUserID formats a CS3API user ID to a string.
 func FormatUserID(u *userpb.UserId) string {
+	if (u.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT || u.Type == userpb.UserType_USER_TYPE_FEDERATED) &&
+		!strings.Contains(u.OpaqueId, "guest:") && !strings.Contains(u.OpaqueId, "@") {
+		// in this case we have an external user, but its username does not contain an Idp identifier:
+		// this may happen for a SSO (e.g. the CERN SSO) that allows to register external accounts via email
+		// and generates regular usernames for such accounts. Here we decorate those usernames
+		// so that ExtractUserID below can do the reverse identification:
+		return fmt.Sprintf("%s@localidp", u.OpaqueId)
+	}
 	return u.OpaqueId
 }
 
