@@ -1,3 +1,33 @@
+Changelog for reva 2.19.9 (2024-09-23)
+=======================================
+
+The following sections list the changes in reva 2.19.9 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #4842: Fix micro ocdav service init and registration
+*   Fix #4862: Fix nats encoding
+
+Details
+-------
+
+*   Bugfix #4842: Fix micro ocdav service init and registration
+
+   We no longer call Init to configure default options because it was replacing the existing
+   options.
+
+   https://github.com/cs3org/reva/pull/4842
+   https://github.com/cs3org/reva/pull/4774
+
+*   Bugfix #4862: Fix nats encoding
+
+   Encode nats-js-kv keys. This got lost by a dependency bump.
+
+   https://github.com/cs3org/reva/pull/4862
+   https://github.com/cs3org/reva/pull/4678
+
 Changelog for reva 2.19.8 (2024-09-23)
 =======================================
 
@@ -4526,27 +4556,6 @@ Details
 
    https://github.com/cs3org/reva/pull/2922
 
-Changelog for reva 2.4.1 (2022-05-24)
-=======================================
-
-The following sections list the changes in reva 2.4.1 relevant to
-reva users. The changes are ordered by importance.
-
-Summary
--------
-
-*   Fix #2891: Add missing http status code
-
-Details
--------
-
-*   Bugfix #2891: Add missing http status code
-
-   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
-   pass it through.
-
-   https://github.com/cs3org/reva/pull/2891
-
 Changelog for reva 2.4.0 (2022-05-24)
 =======================================
 
@@ -4689,6 +4698,27 @@ Details
    correct storageprovider
 
    https://github.com/cs3org/reva/pull/2792
+
+Changelog for reva 2.4.1 (2022-05-24)
+=======================================
+
+The following sections list the changes in reva 2.4.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #2891: Add missing http status code
+
+Details
+-------
+
+*   Bugfix #2891: Add missing http status code
+
+   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
+   pass it through.
+
+   https://github.com/cs3org/reva/pull/2891
 
 Changelog for reva 2.3.1 (2022-05-08)
 =======================================
