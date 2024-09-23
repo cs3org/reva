@@ -47,7 +47,9 @@ import (
 )
 
 const (
-	versionPrefix = ".sys.v#."
+	versionPrefix  = ".sys.v#."
+	userACLEvalKey = "eval.useracl"
+	favoritesKey   = "http://owncloud.org/ns/favorite"
 )
 
 const (
@@ -56,6 +58,29 @@ const (
 	// UserAttr is the user extended attribute.
 	UserAttr
 )
+
+func serializeAttribute(a *eosclient.Attribute) string {
+	return fmt.Sprintf("%s.%s=%s", attrTypeToString(a.Type), a.Key, a.Val)
+}
+
+func attrTypeToString(at eosclient.AttrType) string {
+	switch at {
+	case eosclient.SystemAttr:
+		return "sys"
+	case eosclient.UserAttr:
+		return "user"
+	default:
+		return "invalid"
+	}
+}
+
+func isValidAttribute(a *eosclient.Attribute) bool {
+	// validate that an attribute is correct.
+	if (a.Type != eosclient.SystemAttr && a.Type != eosclient.UserAttr) || a.Key == "" {
+		return false
+	}
+	return true
+}
 
 // Options to configure the Client.
 type Options struct {
@@ -508,6 +533,22 @@ func (c *Client) fixupACLs(ctx context.Context, auth eosclient.Authorization, in
 
 // SetAttr sets an extended attributes on a path.
 func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path, app string) error {
+	if !isValidAttribute(attr) {
+		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
+	}
+
+	// Favorites need to be stored per user so handle these separately
+	if attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
+		info, err := c.GetFileInfoByPath(ctx, auth, path)
+		if err != nil {
+			return err
+		}
+		return c.handleFavAttr(ctx, auth, attr, recursive, path, info, true)
+	}
+	return c.setEOSAttr(ctx, auth, attr, errorIfExists, recursive, path, app)
+}
+
+func (c *Client) setEOSAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path, app string) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "SetAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
@@ -554,6 +595,32 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 	}
 
 	return err
+}
+
+func (c *Client) handleFavAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path string, info *eosclient.FileInfo, set bool) error {
+	var err error
+	u := appctx.ContextMustGetUser(ctx)
+	if info == nil {
+		info, err = c.GetFileInfoByPath(ctx, auth, path)
+		if err != nil {
+			return err
+		}
+	}
+	favStr := info.Attrs[favoritesKey]
+	favs, err := acl.Parse(favStr, acl.ShortTextForm)
+	if err != nil {
+		return err
+	}
+	if set {
+		err = favs.SetEntry(acl.TypeUser, u.Id.OpaqueId, "1")
+		if err != nil {
+			return err
+		}
+	} else {
+		favs.DeleteEntry(acl.TypeUser, u.Id.OpaqueId)
+	}
+	attr.Val = favs.Serialize()
+	return c.setEOSAttr(ctx, auth, attr, false, recursive, path, "")
 }
 
 // UnsetAttr unsets an extended attribute on a path.
