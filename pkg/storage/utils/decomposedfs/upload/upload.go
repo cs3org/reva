@@ -182,7 +182,7 @@ func (session *OcisSession) FinishUpload(ctx context.Context) error {
 
 		var iu *userpb.User
 		if utils.ExistsInOpaque(u.Opaque, "impersonating-user") {
-			iu := &userpb.User{}
+			iu = &userpb.User{}
 			if err := utils.ReadJSONFromOpaque(u.Opaque, "impersonating-user", iu); err != nil {
 				return err
 			}
