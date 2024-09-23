@@ -1,3 +1,44 @@
+Changelog for reva 2.19.8 (2024-09-23)
+=======================================
+
+The following sections list the changes in reva 2.19.8 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #4761: Quotes in dav Content-Disposition header
+*   Fix #4853: Write upload session info atomically
+*   Enh #4701: Extend service account permissions
+
+Details
+-------
+
+*   Bugfix #4761: Quotes in dav Content-Disposition header
+
+   We've fixed the the quotes in the dav `Content-Disposition` header. They caused an issue where
+   certain browsers would decode the quotes and falsely prepend them to the filename.
+
+   https://github.com/owncloud/web/issues/11031
+   https://github.com/owncloud/web/issues/11169
+   https://github.com/cs3org/reva/pull/4761
+
+*   Bugfix #4853: Write upload session info atomically
+
+   We now use a lock and atomic write on upload session metadata to prevent empty reads. A virus scan
+   event might cause the file to be truncated and then a finished event might try to read the file,
+   just getting an empty string.
+
+   Backport of https://github.com/cs3org/reva/pull/4850
+
+   https://github.com/cs3org/reva/pull/4853
+
+*   Enhancement #4701: Extend service account permissions
+
+   Adds AddGrant permisson
+
+   https://github.com/cs3org/reva/pull/4701
+
 Changelog for reva 2.19.7 (2024-05-13)
 =======================================
 
@@ -3958,6 +3999,34 @@ Details
 
    https://github.com/cs3org/reva/pull/3083
 
+Changelog for reva 2.7.1 (2022-07-15)
+=======================================
+
+The following sections list the changes in reva 2.7.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #3080: Make dataproviders return more headers
+*   Enh #3046: Add user filter
+
+Details
+-------
+
+*   Bugfix #3080: Make dataproviders return more headers
+
+   Instead of ocdav doing an additional Stat request we now rely on the dataprovider to return the
+   necessary metadata information as headers.
+
+   https://github.com/owncloud/reva/issues/3080
+
+*   Enhancement #3046: Add user filter
+
+   This PR adds the ability to filter spaces by user-id
+
+   https://github.com/cs3org/reva/pull/3046
+
 Changelog for reva 2.7.0 (2022-07-15)
 =======================================
 
@@ -4089,34 +4158,6 @@ Details
    https://github.com/owncloud/ocis/issues/2144
    https://github.com/owncloud/ocis/issues/3073
    https://github.com/cs3org/reva/pull/2977
-
-Changelog for reva 2.7.1 (2022-07-15)
-=======================================
-
-The following sections list the changes in reva 2.7.1 relevant to
-reva users. The changes are ordered by importance.
-
-Summary
--------
-
-*   Fix #3080: Make dataproviders return more headers
-*   Enh #3046: Add user filter
-
-Details
--------
-
-*   Bugfix #3080: Make dataproviders return more headers
-
-   Instead of ocdav doing an additional Stat request we now rely on the dataprovider to return the
-   necessary metadata information as headers.
-
-   https://github.com/owncloud/reva/issues/3080
-
-*   Enhancement #3046: Add user filter
-
-   This PR adds the ability to filter spaces by user-id
-
-   https://github.com/cs3org/reva/pull/3046
 
 Changelog for reva 2.6.1 (2022-06-27)
 =======================================
