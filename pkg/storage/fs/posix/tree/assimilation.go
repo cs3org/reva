@@ -568,8 +568,11 @@ func (t *Tree) WarmupIDCache(root string, assimilate bool) error {
 
 		// calculate tree sizes
 		if !info.IsDir() {
-			dir := filepath.Dir(path)
-			sizes[dir] += info.Size()
+			dir := path
+			for dir != filepath.Clean(root) {
+				dir = filepath.Clean(filepath.Dir(dir))
+				sizes[dir] += info.Size()
+			}
 		}
 
 		attribs, err := t.lookup.MetadataBackend().All(context.Background(), path)
