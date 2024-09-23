@@ -1,3 +1,3 @@
-Enhancement: Implement favourites for eos/grpc, following the logic of the eosbinary plugin 
+Enhancement: Favourites for eos/grpc 
 
 https://github.com/cs3org/reva/pull/4863
