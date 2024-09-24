@@ -254,6 +254,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		switch createRes.Status.Code {
 		case rpc.Code_CODE_PERMISSION_DENIED:
 			writeError(w, r, appErrorPermissionDenied, "permission denied to create the file", nil)
+			return
 		case rpc.Code_CODE_NOT_FOUND:
 			writeError(w, r, appErrorNotFound, "parent container does not exist", nil)
 			return
