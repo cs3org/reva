@@ -650,9 +650,9 @@ func (t *Tree) removeNode(ctx context.Context, path string, n *node.Node) error 
 }
 
 // Propagate propagates changes to the root of the tree
-func (t *Tree) Propagate(ctx context.Context, n *node.Node, _ int64) (err error) {
+func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err error) {
 	// We do not propagate size diffs here but rely on the assimilation to take care of the tree sizes instead
-	return t.propagator.Propagate(ctx, n, 0)
+	return t.propagator.Propagate(ctx, n, sizeDiff)
 }
 
 // WriteBlob writes a blob to the blobstore

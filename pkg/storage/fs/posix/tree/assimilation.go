@@ -537,6 +537,7 @@ assimilate:
 
 // WarmupIDCache warms up the id cache
 func (t *Tree) WarmupIDCache(root string, assimilate bool) error {
+	root = filepath.Clean(root)
 	spaceID := []byte("")
 
 	scopeSpace := func(spaceCandidate string) error {
@@ -569,7 +570,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate bool) error {
 		// calculate tree sizes
 		if !info.IsDir() {
 			dir := path
-			for dir != filepath.Clean(root) {
+			for dir != root {
 				dir = filepath.Clean(filepath.Dir(dir))
 				sizes[dir] += info.Size()
 			}
@@ -625,6 +626,10 @@ func (t *Tree) WarmupIDCache(root string, assimilate bool) error {
 	})
 
 	for dir, size := range sizes {
+		if dir == root {
+			// Propagate the size diff further up the tree
+			_ = t.propagateSizeDiff(dir, size)
+		}
 		_ = t.lookup.MetadataBackend().Set(context.Background(), dir, prefixes.TreesizeAttr, []byte(fmt.Sprintf("%d", size)))
 	}
 
@@ -633,4 +638,29 @@ func (t *Tree) WarmupIDCache(root string, assimilate bool) error {
 	}
 
 	return nil
+}
+
+func (t *Tree) propagateSizeDiff(dir string, size int64) error {
+	// First find the space id
+	spaceID, _, err := t.findSpaceId(dir)
+	if err != nil {
+		return err
+	}
+	attrs, err := t.lookup.MetadataBackend().All(context.Background(), dir)
+	if err != nil {
+		return err
+	}
+	n, err := t.lookup.NodeFromID(context.Background(), &provider.ResourceId{
+		StorageId: t.options.MountID,
+		SpaceId:   spaceID,
+		OpaqueId:  string(attrs[prefixes.IDAttr]),
+	})
+	if err != nil {
+		return err
+	}
+	oldSize, err := node.Attributes(attrs).Int64(prefixes.TreesizeAttr)
+	if err != nil {
+		return err
+	}
+	return t.Propagate(context.Background(), n, size-oldSize)
 }

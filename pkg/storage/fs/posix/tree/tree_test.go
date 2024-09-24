@@ -404,5 +404,67 @@ var _ = Describe("Tree", func() {
 				g.Expect(n.GetTreeSize(env.Ctx)).To(Equal(uint64(22)))
 			}).Should(Succeed())
 		})
+
+		It("propagates new files in a directory to the parent", func() {
+			_ = env.Tree.WarmupIDCache(env.Root, false, true)
+			Expect(os.Mkdir(root+"/assimilated", 0700)).To(Succeed())
+			time.Sleep(100 * time.Millisecond) // Give it some time to settle down
+			Expect(os.WriteFile(root+"/assimilated/file.txt", []byte("hello world"), 0600)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+
+					Path: subtree + "/assimilated",
+				})
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(n).ToNot(BeNil())
+				g.Expect(n.Type(env.Ctx)).To(Equal(provider.ResourceType_RESOURCE_TYPE_CONTAINER))
+				g.Expect(n.ID).ToNot(BeEmpty())
+				g.Expect(n.GetTreeSize(env.Ctx)).To(Equal(uint64(11)))
+			}).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+
+					Path: subtree,
+				})
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(n).ToNot(BeNil())
+				g.Expect(n.Type(env.Ctx)).To(Equal(provider.ResourceType_RESOURCE_TYPE_CONTAINER))
+				g.Expect(n.ID).ToNot(BeEmpty())
+				g.Expect(n.GetTreeSize(env.Ctx)).To(Equal(uint64(11)))
+			}).Should(Succeed())
+
+			Expect(os.WriteFile(root+"/assimilated/file2.txt", []byte("hello world"), 0600)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+
+					Path: subtree + "/assimilated",
+				})
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(n).ToNot(BeNil())
+				g.Expect(n.Type(env.Ctx)).To(Equal(provider.ResourceType_RESOURCE_TYPE_CONTAINER))
+				g.Expect(n.ID).ToNot(BeEmpty())
+				g.Expect(n.GetTreeSize(env.Ctx)).To(Equal(uint64(22)))
+			}).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+
+					Path: subtree,
+				})
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(n).ToNot(BeNil())
+				g.Expect(n.Type(env.Ctx)).To(Equal(provider.ResourceType_RESOURCE_TYPE_CONTAINER))
+				g.Expect(n.ID).ToNot(BeEmpty())
+				g.Expect(n.GetTreeSize(env.Ctx)).To(Equal(uint64(22)))
+			}).Should(Succeed())
+		})
+
 	})
 })
