@@ -37,7 +37,6 @@ var skipTests = []struct {
 
 func TestSkip(t *testing.T) {
 	for _, tt := range skipTests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			r := Skip(tt.url, tt.base)
 			if r != tt.out {
