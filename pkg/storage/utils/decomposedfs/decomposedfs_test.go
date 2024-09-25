@@ -58,6 +58,7 @@ var _ = Describe("Decomposed", func() {
 	Describe("NewDefault", func() {
 		It("works", func() {
 			bs := &treemocks.Blobstore{}
+			bs.On("GetAvailableSize", mock.Anything).Return(uint64(1000000000), nil)
 			_, err := decomposedfs.NewDefault(map[string]interface{}{
 				"root":           env.Root,
 				"permissionssvc": "any",

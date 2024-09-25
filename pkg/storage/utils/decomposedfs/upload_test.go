@@ -136,11 +136,13 @@ var _ = Describe("File uploads", func() {
 			AddGrant: true,
 		}, nil).Times(1)
 		var err error
+		bs.On("GetAvailableSize", mock.Anything).Return(uint64(1000000000), nil).Times(1)
 		tree := tree.New(lu, bs, o, store.Create())
 
 		aspects := aspects.Aspects{
 			Lookup:      lu,
 			Tree:        tree,
+			Blobstore:   bs,
 			Permissions: permissions.NewPermissions(pmock, permissionsSelector),
 			Trashbin:    &decomposedfs.DecomposedfsTrashbin{},
 		}
