@@ -175,6 +175,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	aspects := aspects.Aspects{
 		Lookup:      lu,
 		Tree:        tree,
+		Blobstore:   bs,
 		Permissions: permissions.NewPermissions(pmock, permissionsSelector),
 		Trashbin:    &decomposedfs.DecomposedfsTrashbin{},
 	}
@@ -290,6 +291,7 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	if typ == "personal" {
 		owner = t.Owner
 	}
+	t.Blobstore.On("GetAvailableSize", mock.Anything).Return(uint64(1000000000), nil)
 	space, err := t.Fs.CreateStorageSpace(t.Ctx, &providerv1beta1.CreateStorageSpaceRequest{
 		Owner: owner,
 		Type:  typ,
