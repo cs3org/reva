@@ -66,6 +66,8 @@ type queueItem struct {
 	timer *time.Timer
 }
 
+const dirtyFlag = "user.ocis.dirty"
+
 // NewScanDebouncer returns a new SpaceDebouncer instance
 func NewScanDebouncer(d time.Duration, f func(item scanItem)) *ScanDebouncer {
 	return &ScanDebouncer{
@@ -147,7 +149,7 @@ func (t *Tree) workScanQueue() {
 				}
 
 				if item.Recurse {
-					err = t.WarmupIDCache(item.Path, true)
+					err = t.WarmupIDCache(item.Path, true, false)
 					if err != nil {
 						log.Error().Err(err).Str("path", item.Path).Msg("failed to warmup id cache")
 					}
@@ -172,6 +174,9 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool, recurse bool) e
 					ForceRescan: false,
 				})
 			}
+			if err := t.setDirty(filepath.Dir(path), true); err != nil {
+				return err
+			}
 			t.scanDebouncer.Debounce(scanItem{
 				Path:        filepath.Dir(path),
 				ForceRescan: true,
@@ -180,6 +185,9 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool, recurse bool) e
 		} else {
 			// 2. New directory
 			//  -> scan directory
+			if err := t.setDirty(path, true); err != nil {
+				return err
+			}
 			t.scanDebouncer.Debounce(scanItem{
 				Path:        path,
 				ForceRescan: true,
@@ -368,7 +376,7 @@ func (t *Tree) assimilate(item scanItem) error {
 				}
 				if fi.IsDir() {
 					// if it was moved and it is a directory we need to propagate the move
-					go func() { _ = t.WarmupIDCache(item.Path, false) }()
+					go func() { _ = t.WarmupIDCache(item.Path, false, true) }()
 				}
 
 				parentID, err := t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.ParentidAttr)
@@ -536,7 +544,7 @@ assimilate:
 }
 
 // WarmupIDCache warms up the id cache
-func (t *Tree) WarmupIDCache(root string, assimilate bool) error {
+func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 	root = filepath.Clean(root)
 	spaceID := []byte("")
 
@@ -573,6 +581,14 @@ func (t *Tree) WarmupIDCache(root string, assimilate bool) error {
 			for dir != root {
 				dir = filepath.Clean(filepath.Dir(dir))
 				sizes[dir] += info.Size()
+			}
+		} else if onlyDirty {
+			dirty, err := t.isDirty(path)
+			if err != nil {
+				return err
+			}
+			if !dirty {
+				return filepath.SkipDir
 			}
 		}
 
@@ -622,7 +638,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate bool) error {
 		} else if assimilate {
 			_ = t.assimilate(scanItem{Path: path, ForceRescan: true})
 		}
-		return nil
+		return t.setDirty(path, false)
 	})
 
 	for dir, size := range sizes {
@@ -663,4 +679,16 @@ func (t *Tree) propagateSizeDiff(dir string, size int64) error {
 		return err
 	}
 	return t.Propagate(context.Background(), n, size-oldSize)
+}
+
+func (t *Tree) setDirty(path string, dirty bool) error {
+	return t.lookup.MetadataBackend().Set(context.Background(), path, dirtyFlag, []byte(fmt.Sprintf("%t", dirty)))
+}
+
+func (t *Tree) isDirty(path string) (bool, error) {
+	dirtyAttr, err := t.lookup.MetadataBackend().Get(context.Background(), path, dirtyFlag)
+	if err != nil {
+		return false, err
+	}
+	return string(dirtyAttr) == "true", nil
 }

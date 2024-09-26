@@ -405,8 +405,8 @@ var _ = Describe("Tree", func() {
 			}).Should(Succeed())
 		})
 
-		It("propagates new files in a directory to the parent", func() {
-			_ = env.Tree.WarmupIDCache(env.Root, false, true)
+		FIt("propagates new files in a directory to the parent", func() {
+			env.Tree.WarmupIDCache(env.Root, false, true)
 			Expect(os.Mkdir(root+"/assimilated", 0700)).To(Succeed())
 			time.Sleep(100 * time.Millisecond) // Give it some time to settle down
 			Expect(os.WriteFile(root+"/assimilated/file.txt", []byte("hello world"), 0600)).To(Succeed())

@@ -73,7 +73,7 @@ start:
 			case "RENAME":
 				go func() {
 					_ = w.tree.Scan(ev.Path, ActionMove, false, true)
-					_ = w.tree.WarmupIDCache(ev.Path, false)
+					_ = w.tree.WarmupIDCache(ev.Path, false, false)
 				}()
 			}
 		case io.EOF:

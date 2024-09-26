@@ -142,7 +142,7 @@ func New(lu node.PathLookup, bs Blobstore, um usermapper.Mapper, trashbin *trash
 		go t.watcher.Watch(watchPath)
 		go t.workScanQueue()
 		go func() {
-			_ = t.WarmupIDCache(o.Root, true)
+			_ = t.WarmupIDCache(o.Root, true, false)
 		}()
 	}
 
@@ -328,7 +328,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	_ = t.lookup.(*lookup.Lookup).CacheID(ctx, newNode.SpaceID, newNode.ID, filepath.Join(newNode.ParentPath(), newNode.Name))
 	// update id cache for the moved subtree.
 	if oldNode.IsDir(ctx) {
-		err = t.WarmupIDCache(filepath.Join(newNode.ParentPath(), newNode.Name), false)
+		err = t.WarmupIDCache(filepath.Join(newNode.ParentPath(), newNode.Name), false, false)
 		if err != nil {
 			return err
 		}
