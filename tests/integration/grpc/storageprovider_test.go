@@ -264,8 +264,9 @@ var _ = Describe("storage providers", func() {
 
 			targetRef := &storagep.Reference{ResourceId: subdirRef.ResourceId, Path: "/new_subdir"}
 			res, err := providerClient.Move(ctx, &storagep.MoveRequest{Source: subdirRef, Destination: targetRef})
-			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
 			Expect(err).ToNot(HaveOccurred())
+			Expect(res.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_OK))
 
 			statRes, err = providerClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
 			Expect(err).ToNot(HaveOccurred())
