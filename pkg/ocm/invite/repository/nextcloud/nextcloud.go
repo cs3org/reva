@@ -107,7 +107,7 @@ func timestampToTime(ctx context.Context, t *types.Timestamp) time.Time {
 }
 
 func (c *Client) convertToInviteToken(ctx context.Context, tkn *apiToken) (*invitepb.InviteToken, error) {
-	usr := conversions.ExtractUserID(tkn.Initiator)
+	usr := conversions.MakeUserID(tkn.Initiator)
 	return &invitepb.InviteToken{
 		Token:  tkn.Token,
 		UserId: usr,

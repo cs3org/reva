@@ -121,7 +121,7 @@ func (m *mgr) GetToken(ctx context.Context, token string) (*invitepb.InviteToken
 func convertToInviteToken(tkn dbToken) *invitepb.InviteToken {
 	return &invitepb.InviteToken{
 		Token:  tkn.Token,
-		UserId: conversions.ExtractUserID(tkn.Initiator),
+		UserId: conversions.MakeUserID(tkn.Initiator),
 		Expiration: &types.Timestamp{
 			Seconds: uint64(tkn.Expiration.Unix()),
 		},
