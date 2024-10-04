@@ -84,6 +84,10 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				metadata["lockholder"] = lockholder
 			}
 
+			if disableVersioning := r.Header.Get(ocdav.HeaderDisableVersioning); disableVersioning != "" {
+				metadata["disableVersioning"] = disableVersioning
+			}
+
 			err := fs.Upload(ctx, ref, r.Body, metadata)
 			switch v := err.(type) {
 			case nil:
