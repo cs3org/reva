@@ -98,6 +98,13 @@ func NewConn(options Options) (*grpc.ClientConn, error) {
 	return conn, nil
 }
 
+func RegisterGatewayServiceClient(client gateway.GatewayAPIClient, endpoint string) {
+	gatewayProviders.m.Lock()
+	defer gatewayProviders.m.Unlock()
+
+	gatewayProviders.conn[endpoint] = client
+}
+
 // GetGatewayServiceClient returns a GatewayServiceClient.
 func GetGatewayServiceClient(opts ...Option) (gateway.GatewayAPIClient, error) {
 	gatewayProviders.m.Lock()
