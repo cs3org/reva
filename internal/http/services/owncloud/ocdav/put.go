@@ -280,6 +280,14 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		httpReq.Header.Set(HeaderLockHolder, lockholder)
 	}
 
+	// Propagate X-Disable-Versioning header
+	// Used to disable versioning for applications that do not expect this behaviour
+	// See reva#4855 for more info
+	disableVersioning, err := strconv.ParseBool(r.Header.Get(HeaderDisableVersioning))
+	if err == nil && disableVersioning {
+		httpReq.Header.Set(HeaderDisableVersioning, strconv.FormatBool(true))
+	}
+
 	httpRes, err := s.client.Do(httpReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error doing PUT request to data service")
