@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"strconv"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -83,7 +84,13 @@ func (fs *Eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 		// if we have a lock context, the app for EOS must match the lock holder
 		app = fs.EncodeAppName(app)
 	}
-	return fs.c.Write(ctx, auth, fn, r, app)
+
+	disableVersioning, err := strconv.ParseBool(metadata["disableVersioning"])
+	if err != nil {
+		disableVersioning = false
+	}
+
+	return fs.c.Write(ctx, auth, fn, r, app, disableVersioning)
 }
 
 func (fs *Eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {

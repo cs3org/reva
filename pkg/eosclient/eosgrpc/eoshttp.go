@@ -364,12 +364,27 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 }
 
 // PUTFile does an entire PUT to upload a full file, taking the data from a stream.
-func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eosclient.Authorization, urlpath string, stream io.ReadCloser, length int64, app string) error {
+func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eosclient.Authorization, urlpath string, stream io.ReadCloser, length int64, app string, disableVersioning bool) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "PUTFile").Str("remoteuser", remoteuser).Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", urlpath).Int64("length", length).Str("app", app).Msg("")
 
 	// Now send the req and see what happens
-	finalurl, err := c.buildFullURL(urlpath, auth)
+	tempUrl, err := c.buildFullURL(urlpath, auth)
+	if err != nil {
+		return err
+	}
+	base, err := url.Parse(tempUrl)
+	if err != nil {
+		return errtypes.PermissionDenied("Could not parse url " + urlpath)
+	}
+	queryValues := base.Query()
+
+	if disableVersioning {
+		queryValues.Add("eos.versioning", strconv.Itoa(0))
+	}
+	base.RawQuery = queryValues.Encode()
+	finalurl := base.String()
+
 	if err != nil {
 		log.Error().Str("func", "PUTFile").Str("url", finalurl).Str("err", err.Error()).Msg("can't create request")
 		return err

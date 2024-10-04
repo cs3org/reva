@@ -78,6 +78,7 @@ const (
 	HeaderTransferAuth         = "TransferHeaderAuthorization"
 	HeaderLockID               = "X-Lock-Id"
 	HeaderLockHolder           = "X-Lock-Holder"
+	HeaderDisableVersioning    = "X-Disable-Versioning"
 )
 
 // WebDavHandler implements a dav endpoint.

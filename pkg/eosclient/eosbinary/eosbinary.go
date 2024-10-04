@@ -747,7 +747,7 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 }
 
 // Write writes a stream to the mgm.
-func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser, app string) error {
+func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser, app string, disableVersioning bool) error {
 	fd, err := os.CreateTemp(c.opt.CacheDirectory, "eoswrite-")
 	if err != nil {
 		return err
@@ -760,19 +760,27 @@ func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path s
 	if err != nil {
 		return err
 	}
-	return c.writeFile(ctx, auth, path, fd.Name(), app)
+	return c.writeFile(ctx, auth, path, fd.Name(), app, disableVersioning)
 }
 
 // WriteFile writes an existing file to the mgm.
-func (c *Client) writeFile(ctx context.Context, auth eosclient.Authorization, path, source, app string) error {
+func (c *Client) writeFile(ctx context.Context, auth eosclient.Authorization, path, source, app string, disableVersioning bool) error {
 	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
 	args := []string{"--nopbar", "--silent", "-f", source, xrdPath}
+
+	options := fmt.Sprintf("-ODeos.app=%s", app)
+	if disableVersioning {
+		options += "&eos.versioning=0"
+	}
 
 	if auth.Token != "" {
 		args[4] += "?authz=" + auth.Token
 	} else if auth.Role.UID != "" && auth.Role.GID != "" {
-		args = append(args, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s&eos.app=%s", auth.Role.UID, auth.Role.GID, app))
+		options += fmt.Sprintf("&eos.ruid=%s&eos.rgid=%s", auth.Role.UID, auth.Role.GID)
+	} else {
+		return errors.New("No authentication provided")
 	}
+	args = append(args, options)
 
 	_, _, err := c.executeXRDCopy(ctx, args)
 	return err
