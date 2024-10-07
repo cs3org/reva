@@ -250,8 +250,6 @@ func (lu *Lookup) Path(ctx context.Context, n *node.Node, hasPermission node.Per
 			appctx.GetLogger(ctx).
 				Error().Err(err).
 				Str("path", p).
-				Str("spaceid", n.SpaceID).
-				Str("nodeid", n.ID).
 				Msg("Path()")
 			return
 		}
