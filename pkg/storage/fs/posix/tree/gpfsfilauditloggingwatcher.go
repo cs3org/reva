@@ -59,7 +59,7 @@ start:
 			if err != nil {
 				continue
 			}
-			if isLockFile(ev.Path) || isTrash(ev.Path) {
+			if isLockFile(ev.Path) || isTrash(ev.Path) || w.tree.isUpload(ev.Path) {
 				continue
 			}
 			switch ev.Event {

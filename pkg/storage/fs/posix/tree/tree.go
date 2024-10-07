@@ -826,3 +826,7 @@ func isLockFile(path string) bool {
 func isTrash(path string) bool {
 	return strings.HasSuffix(path, ".trashinfo") || strings.HasSuffix(path, ".trashitem")
 }
+
+func (t *Tree) isUpload(path string) bool {
+	return strings.HasPrefix(path, t.options.UploadDirectory)
+}
