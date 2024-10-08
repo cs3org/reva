@@ -722,7 +722,7 @@ func (c *Client) ListWithRegex(ctx context.Context, auth eosclient.Authorization
 
 // List the contents of the directory given by path.
 func (c *Client) List(ctx context.Context, auth eosclient.Authorization, path string) ([]*eosclient.FileInfo, error) {
-	args := []string{"oldfind", "--fileinfo", "--maxdepth", "1", path}
+	args := []string{"newfind", "--fileinfo", "--skip-version-dirs", "--maxdepth", "1", path}
 	stdout, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		return nil, errors.Wrapf(err, "eosclient: error listing fn=%s", path)
