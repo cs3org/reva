@@ -48,7 +48,6 @@ import (
 
 const (
 	versionPrefix  = ".sys.v#."
-	userACLEvalKey = "eval.useracl"
 	favoritesKey   = "http://owncloud.org/ns/favorite"
 )
 
