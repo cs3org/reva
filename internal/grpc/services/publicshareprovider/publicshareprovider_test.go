@@ -763,6 +763,9 @@ var _ = Describe("PublicShareProvider", func() {
 				Once().
 				Return(
 					createdLink, nil)
+
+			gatewayClient.EXPECT().Stat(mock.Anything, mock.Anything).Return(statResourceResponse, nil)
+
 			manager.
 				EXPECT().
 				RevokePublicShare(
