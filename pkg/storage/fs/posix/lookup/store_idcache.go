@@ -63,8 +63,23 @@ func (c *StoreIDCache) Delete(_ context.Context, spaceID, nodeID string) error {
 
 // DeleteByPath removes an entry from the cache
 func (c *StoreIDCache) DeleteByPath(ctx context.Context, path string) error {
+	spaceID, nodeID, ok := c.GetByPath(ctx, path)
+	if !ok {
+		appctx.GetLogger(ctx).Error().Str("record", path).Msg("could not get spaceID and nodeID from cache")
+	} else {
+		err := c.cache.Delete(reverseCacheKey(path))
+		if err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("record", path).Str("spaceID", spaceID).Str("nodeID", nodeID).Msg("could not get spaceID and nodeID from cache")
+		}
+
+		err = c.cache.Delete(cacheKey(spaceID, nodeID))
+		if err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("record", path).Str("spaceID", spaceID).Str("nodeID", nodeID).Msg("could not get spaceID and nodeID from cache")
+		}
+	}
+
 	list, err := c.cache.List(
-		microstore.ListPrefix(reverseCacheKey(path)),
+		microstore.ListPrefix(reverseCacheKey(path) + "/"),
 	)
 	if err != nil {
 		return err
