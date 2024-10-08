@@ -96,7 +96,7 @@ func writeToken(token string) {
 }
 
 func read(r *bufio.Reader) (string, error) {
-	text, err := r.ReadString('\n')
+	text, err := r.ReadString('\r')
 	if err != nil {
 		return "", err
 	}
