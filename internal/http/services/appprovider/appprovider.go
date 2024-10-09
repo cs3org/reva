@@ -71,6 +71,73 @@ type Web struct {
 	StaticURLParams  map[string]string `mapstructure:"staticurlparams"`
 }
 
+type TemplateList struct {
+	Templates map[string][]Template `json:"templates"`
+}
+
+type Template struct {
+	Extension       string `json:"extension"`
+	MimeType        string `json:"mime_type"`
+	TargetExtension string `json:"target_extension"`
+}
+
+var tl = TemplateList{
+	Templates: map[string][]Template{
+		"collabora": {
+			{
+				MimeType:        "application/vnd.oasis.opendocument.spreadsheet-template",
+				TargetExtension: "ods",
+			},
+			{
+				MimeType:        "application/vnd.oasis.opendocument.text-template",
+				TargetExtension: "odt",
+			},
+			{
+				MimeType:        "application/vnd.oasis.opendocument.presentation-template",
+				TargetExtension: "odp",
+			},
+		},
+		"onlyoffice": {
+			{
+				MimeType:        "application/vnd.ms-word.template.macroenabled.12",
+				TargetExtension: "docx",
+			},
+			{
+				MimeType:        "application/vnd.oasis.opendocument.text-template",
+				TargetExtension: "docx",
+			},
+			{
+				MimeType:        "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
+				TargetExtension: "docx",
+			},
+			{
+				MimeType:        "application/vnd.oasis.opendocument.spreadsheet-template",
+				TargetExtension: "xlsx",
+			},
+			{
+				MimeType:        "application/vnd.ms-excel.template.macroenabled.12",
+				TargetExtension: "xlsx",
+			},
+			{
+				MimeType:        "application/vnd.openxmlformats-officedocument.spreadsheetml.template",
+				TargetExtension: "xlsx",
+			},
+			{
+				MimeType:        "application/vnd.oasis.opendocument.presentation-template",
+				TargetExtension: "pptx",
+			},
+			{
+				MimeType:        "application/vnd.ms-powerpoint.template.macroenabled.12",
+				TargetExtension: "pptx",
+			},
+			{
+				MimeType:        "application/vnd.openxmlformats-officedocument.presentationml.template",
+				TargetExtension: "pptx",
+			},
+		},
+	},
+}
+
 func (c *Config) init() {
 	if c.Prefix == "" {
 		c.Prefix = "app"
@@ -461,6 +528,11 @@ func (s *svc) handleOpen(openMode int) http.HandlerFunc {
 			App:      r.Form.Get("app_name"),
 			Opaque:   utils.AppendPlainToOpaque(nil, "lang", lang),
 		}
+
+		templateID := r.Form.Get("template_id")
+		if templateID != "" {
+			openReq.Opaque = utils.AppendPlainToOpaque(openReq.Opaque, "template", templateID)
+		}
 		openRes, err := client.OpenInApp(ctx, &openReq)
 		if err != nil {
 			writeError(w, r, appErrorServerError,
@@ -481,6 +553,7 @@ func (s *svc) handleOpen(openMode int) http.HandlerFunc {
 
 		switch openMode {
 		case openModeNormal:
+
 			payload = openRes.AppUrl
 
 		case openModeWeb:
@@ -567,7 +640,9 @@ type MimeTypeInfo struct {
 type ProviderInfo struct {
 	appregistry.ProviderInfo
 	// TODO make this part of the CS3 provider info
-	SecureView bool `json:"secure_view"`
+	SecureView bool   `json:"secure_view"`
+	Template   bool   `json:"template"`
+	TargetExt  string `json:"target_ext,omitempty"`
 }
 
 // buildApps rewrites the mime type info to only include apps that
@@ -598,12 +673,31 @@ func buildApps(mimeTypes []*appregistry.MimeTypeInfo, userAgent, secureViewAppAd
 		}
 		if len(apps) > 0 {
 			mt := &MimeTypeInfo{}
+			addTemplateInfo(m, apps)
 			proto.Merge(&mt.MimeTypeInfo, m)
 			mt.AppProviders = apps
 			res = append(res, mt)
 		}
 	}
 	return res
+}
+
+func addTemplateInfo(mt *appregistry.MimeTypeInfo, apps []*ProviderInfo) {
+	for _, app := range apps {
+		if tls, ok := tl.Templates[strings.ToLower(app.Name)]; ok {
+			for _, tmpl := range tls {
+				if tmpl.Extension != "" && tmpl.Extension == mt.Ext {
+					app.Template = true
+					app.TargetExt = tmpl.TargetExtension
+					continue
+				}
+				if tmpl.MimeType == mt.MimeType {
+					app.Template = true
+					app.TargetExt = tmpl.TargetExtension
+				}
+			}
+		}
+	}
 }
 
 func getViewMode(res *provider.ResourceInfo, vm string) gateway.OpenInAppRequest_ViewMode {
