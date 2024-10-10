@@ -1250,10 +1250,7 @@ func (fs *Decomposedfs) EmptyRecycle(ctx context.Context, ref *provider.Referenc
 
 func (fs *Decomposedfs) getNodePath(ctx context.Context, n *node.Node, perms *provider.ResourcePermissions) (string, error) {
 	hp := func(n *node.Node) bool {
-		if perms == nil {
-			return false
-		}
-		return perms.GetPath
+		return perms.GetGetPath()
 	}
 	return fs.lu.Path(ctx, n, hp)
 }
