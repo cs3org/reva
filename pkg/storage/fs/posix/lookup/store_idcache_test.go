@@ -26,7 +26,7 @@ var _ = Describe("StoreIdcache", func() {
 			},
 		})
 
-		storeIdcache.Set(context.TODO(), "spaceID", "nodeID", "path")
+		Expect(storeIdcache.Set(context.TODO(), "spaceID", "nodeID", "path")).To(Succeed())
 	})
 
 	Describe("StoreIdcache", func() {
