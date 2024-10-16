@@ -699,6 +699,9 @@ func (t *Tree) InitNewNode(ctx context.Context, n *node.Node, fsize uint64) (met
 	// we also need to touch the actual node file here it stores the mtime of the resource
 	h, err := os.OpenFile(n.InternalPath(), os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
+		if os.IsExist(err) {
+			return unlock, errtypes.AlreadyExists(n.InternalPath())
+		}
 		return unlock, err
 	}
 	h.Close()
