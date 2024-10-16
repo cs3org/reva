@@ -535,16 +535,21 @@ func (s *service) UpdateReceivedShare(ctx context.Context, req *collaboration.Up
 	var uid userpb.UserId
 	_ = utils.ReadJSONFromOpaque(req.Opaque, "userid", &uid)
 	updatedShare, err := s.sm.UpdateReceivedShare(ctx, req.Share, req.UpdateMask, &uid)
-	if err != nil {
+	switch err.(type) {
+	case nil:
 		return &collaboration.UpdateReceivedShareResponse{
-			Status: status.NewInternal(ctx, "error updating received share"),
+			Status: status.NewOK(ctx),
+			Share:  updatedShare,
+		}, nil
+	case errtypes.NotFound:
+		return &collaboration.UpdateReceivedShareResponse{
+			Status: status.NewNotFound(ctx, "error getting received share"),
+		}, nil
+	default:
+		return &collaboration.UpdateReceivedShareResponse{
+			Status: status.NewInternal(ctx, "error getting received share"),
 		}, nil
 	}
-
-	return &collaboration.UpdateReceivedShareResponse{
-		Status: status.NewOK(ctx),
-		Share:  updatedShare,
-	}, nil
 }
 
 func setReceivedShareMountPoint(ctx context.Context, gwc gateway.GatewayAPIClient, req *collaboration.UpdateReceivedShareRequest) (*rpc.Status, error) {
