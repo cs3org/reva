@@ -374,6 +374,9 @@ func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroup
 }
 
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
+	if m.c.GroupFilter == "" {
+		return []string{}, nil
+	}
 	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
 	if err != nil {
 		return []string{}, err

@@ -22,29 +22,35 @@
 package cephfs
 
 import (
-	"path/filepath"
-
 	"github.com/cs3org/reva/pkg/sharedconf"
 )
 
 // Options for the cephfs module
 type Options struct {
-	ClientID     string `mapstructure:"client_id"`
-	Config       string `mapstructure:"config"`
-	GatewaySvc   string `mapstructure:"gatewaysvc"`
-	IndexPool    string `mapstructure:"index_pool"`
-	Keyring      string `mapstructure:"keyring"`
-	Root         string `mapstructure:"root"`
-	ShadowFolder string `mapstructure:"shadow_folder"`
-	ShareFolder  string `mapstructure:"share_folder"`
-	UploadFolder string `mapstructure:"uploads"`
-	UserLayout   string `mapstructure:"user_layout"`
-
-	DisableHome    bool   `mapstructure:"disable_home"`
+	ClientID       string `mapstructure:"client_id"`
+	Config         string `mapstructure:"config"`
+	GatewaySvc     string `mapstructure:"gatewaysvc"`
+	IndexPool      string `mapstructure:"index_pool"`
+	Keyring        string `mapstructure:"keyring"`
+	Root           string `mapstructure:"root"`
+	UploadFolder   string `mapstructure:"uploads"`
+	UserLayout     string `mapstructure:"user_layout"`
 	DirPerms       uint32 `mapstructure:"dir_perms"`
 	FilePerms      uint32 `mapstructure:"file_perms"`
 	UserQuotaBytes uint64 `mapstructure:"user_quota_bytes"`
-	HiddenDirs     map[string]bool
+	// Path of the recycle bin. If empty, recycling is disabled.
+	RecyclePath string `mapstructure:"recycle_path"`
+	// Depth of the Recycle bin location, that is after how many path components
+	// the recycle path is located: this allows supporting recycles such as
+	// /top-level/s/space/.recycle with a depth = 3. Defaults to 0.
+	RecyclePathDepth int `mapstructure:"recycle_path_depth"`
+	// Maximum entries count a ListRecycle call may return: if exceeded, ListRecycle
+	// will return a BadRequest error
+	MaxRecycleEntries int `mapstructure:"max_recycle_entries"`
+	// Maximum time span in days a ListRecycle call may return: if exceeded, ListRecycle
+	// will override the "to" date with "from" + this value
+	MaxDaysInRecycleList int `mapstructure:"max_days_in_recycle_list"`
+	HiddenDirs           map[string]bool
 }
 
 func (c *Options) ApplyDefaults() {
@@ -71,27 +77,14 @@ func (c *Options) ApplyDefaults() {
 	}
 
 	if c.Root == "" {
-		c.Root = "/home"
+		c.Root = "/cephfs"
 	} else {
 		c.Root = addLeadingSlash(c.Root)
-	}
-
-	if c.ShadowFolder == "" {
-		c.ShadowFolder = "/.reva_hidden"
-	} else {
-		c.ShadowFolder = addLeadingSlash(c.ShadowFolder)
-	}
-
-	if c.ShareFolder == "" {
-		c.ShareFolder = "/Shares"
-	} else {
-		c.ShareFolder = addLeadingSlash(c.ShareFolder)
 	}
 
 	if c.UploadFolder == "" {
 		c.UploadFolder = ".uploads"
 	}
-	c.UploadFolder = filepath.Join(c.ShadowFolder, c.UploadFolder)
 
 	if c.UserLayout == "" {
 		c.UserLayout = "{{.Username}}"
@@ -100,7 +93,10 @@ func (c *Options) ApplyDefaults() {
 	c.HiddenDirs = map[string]bool{
 		".":                                true,
 		"..":                               true,
-		removeLeadingSlash(c.ShadowFolder): true,
+		removeLeadingSlash(c.UploadFolder): true,
+	}
+	if c.RecyclePath != "" {
+		c.HiddenDirs[c.RecyclePath] = true
 	}
 
 	if c.DirPerms == 0 {
@@ -113,5 +109,13 @@ func (c *Options) ApplyDefaults() {
 
 	if c.UserQuotaBytes == 0 {
 		c.UserQuotaBytes = 50000000000
+	}
+
+	if c.MaxDaysInRecycleList == 0 {
+		c.MaxDaysInRecycleList = 14
+	}
+
+	if c.MaxRecycleEntries == 0 {
+		c.MaxRecycleEntries = 2000
 	}
 }
