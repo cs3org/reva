@@ -9,7 +9,7 @@ description: >
 # _struct: Config_
 
 {{% dir name="insecure" type="bool" default=false %}}
-Whether to skip certificate checks when sending requests. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/owncloud/ocdav/ocdav.go#L110)
+Whether to skip certificate checks when sending requests. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/owncloud/ocdav/ocdav.go#L114)
 {{< highlight toml >}}
 [http.services.owncloud.ocdav]
 insecure = false
@@ -17,7 +17,7 @@ insecure = false
 {{% /dir %}}
 
 {{% dir name="notifications" type="map[string]interface{}" default=nil %}}
- settings for the notification helper [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/owncloud/ocdav/ocdav.go#L123)
+ settings for the notification helper [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/owncloud/ocdav/ocdav.go#L127)
 {{< highlight toml >}}
 [http.services.owncloud.ocdav]
 notifications = nil

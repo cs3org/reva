@@ -301,7 +301,7 @@ func (s *svc) handleProppatchResponse(ctx context.Context, w http.ResponseWriter
 	}
 	w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
 	w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
-	w.WriteHeader(http.StatusMultiStatus)
+	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte(propRes)); err != nil {
 		log.Err(err).Msg("error writing response")
 	}

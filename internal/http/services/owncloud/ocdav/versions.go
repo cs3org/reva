@@ -154,6 +154,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 			Id: &provider.ResourceId{
 				StorageId: "versions",
 				OpaqueId:  info.Id.OpaqueId + "@" + versions[i].GetKey(),
+				SpaceId:   rid.SpaceId,
 			},
 			// Checksum
 			Etag: versions[i].Etag,

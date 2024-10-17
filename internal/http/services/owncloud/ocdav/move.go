@@ -29,6 +29,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 )
@@ -40,6 +41,11 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
+	}
+
+	head, rel := router.ShiftPath(dstPath)
+	if _, base, ok := spaces.DecodeSpaceID(head); ok {
+		dstPath = path.Join(base, rel)
 	}
 
 	for _, r := range nameRules {

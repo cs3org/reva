@@ -75,6 +75,20 @@ func (h *Handler) GetSelf(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type SigningKey struct {
+	User       string `json:"user"        xml:"user"`
+	SigningKey string `json:"signing-key" xml:"signing-key"`
+}
+
+func (h *Handler) SigningKey(w http.ResponseWriter, r *http.Request) {
+	u := appctx.ContextMustGetUser(r.Context())
+
+	response.WriteOCSSuccess(w, r, &SigningKey{
+		User:       u.Username,
+		SigningKey: "UGFyY2UgbWVybywgY29lbmF0byBwYXJ1bTogbm9uIHNpdCB0aWJpIHZhbnVtClN1cmdlcmUgcG9zdCBlcHVsYXM6IHNvbW51bSBmdWdlIG1lcmlkaWFudW06Ck5vbiBtaWN0dW0gcmV0aW5lLCBuZWMgY29tcHJpbWUgZm9ydGl0ZXIgYW51bS4KSGFlYyBiZW5lIHNpIHNlcnZlcywgdHUgbG9uZ28gdGVtcG9yZSB2aXZlcw==",
+	})
+}
+
 func (h *Handler) getLanguage(ctx context.Context) string {
 	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
