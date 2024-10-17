@@ -1462,6 +1462,9 @@ func (fs *eosfs) createShadowHome(ctx context.Context) error {
 		}
 	}
 
+	log := appctx.GetLogger(ctx)
+	log.Info().Str("home", home).Interface("user", u.Id).Msg("created shadow home")
+
 	return nil
 }
 
@@ -1522,6 +1525,9 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 			return errors.Wrap(err, "eosfs: error running post create home hook")
 		}
 	}
+
+	log := appctx.GetLogger(ctx)
+	log.Info().Interface("quotaInfo", quotaInfo).Interface("user", u.Id).Msg("created nominal home")
 
 	return nil
 }

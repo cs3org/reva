@@ -410,7 +410,7 @@ var _ = Describe("Dynamic storage provider", func() {
 					Path: "/non/existent",
 				})
 				Expect(err).To(HaveOccurred())
-				Expect(err).To(MatchError(errtypes.NotFound("storage provider not found for ref path:\"/non/existent\" ")))
+				Expect(err.Error()).To(Equal("error: not found: storage provider not found for ref path:\"/non/existent\""))
 			})
 		})
 	})

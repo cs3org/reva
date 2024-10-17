@@ -107,7 +107,7 @@ func timestampToTime(ctx context.Context, t *types.Timestamp) time.Time {
 }
 
 func (c *Client) convertToInviteToken(ctx context.Context, tkn *apiToken) (*invitepb.InviteToken, error) {
-	usr := conversions.ExtractUserID(tkn.Initiator)
+	usr := conversions.MakeUserID(tkn.Initiator)
 	return &invitepb.InviteToken{
 		Token:  tkn.Token,
 		UserId: usr,
@@ -159,7 +159,7 @@ func (c *Client) doPostToken(token string, initiator string, description string,
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return false, fmt.Errorf("Unexpected response code from EFSS API: " + strconv.Itoa(resp.StatusCode))
+		return false, fmt.Errorf("Unexpected response code from EFSS API: %s", strconv.Itoa(resp.StatusCode))
 	}
 	return true, nil
 }
@@ -185,7 +185,7 @@ func (c *Client) doGetToken(token string) (*apiToken, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Unexpected response code from API: " + strconv.Itoa(resp.StatusCode))
+		return nil, fmt.Errorf("Unexpected response code from API: %s", strconv.Itoa(resp.StatusCode))
 	}
 
 	result := &apiToken{}
@@ -218,7 +218,7 @@ func (c *Client) doGetAllTokens(initiator string) ([]*apiToken, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Unexpected response code from API: " + strconv.Itoa(resp.StatusCode))
+		return nil, fmt.Errorf("Unexpected response code from API: %s", strconv.Itoa(resp.StatusCode))
 	}
 
 	result := []*apiToken{}
@@ -257,7 +257,7 @@ func (c *Client) doPostRemoteUser(initiator string, opaqueUserID string, idp str
 
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return false, fmt.Errorf("Unexpected response code from EFSS API: " + strconv.Itoa(resp.StatusCode))
+		return false, fmt.Errorf("Unexpected response code from EFSS API: %s", strconv.Itoa(resp.StatusCode))
 	}
 	return true, nil
 }
@@ -282,7 +282,7 @@ func (c *Client) doGetRemoteUser(initiator string, opaqueUserID string, idp stri
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Unexpected response code from API: " + strconv.Itoa(resp.StatusCode))
+		return nil, fmt.Errorf("Unexpected response code from API: %s", strconv.Itoa(resp.StatusCode))
 	}
 
 	result := &apiOCMUser{}
@@ -315,7 +315,7 @@ func (c *Client) doGetAllRemoteUsers(initiator string, search string) ([]*apiOCM
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Unexpected response code from API: " + strconv.Itoa(resp.StatusCode))
+		return nil, fmt.Errorf("Unexpected response code from API: %s", strconv.Itoa(resp.StatusCode))
 	}
 
 	result := []*apiOCMUser{}

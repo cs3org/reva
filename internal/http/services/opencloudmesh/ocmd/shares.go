@@ -249,10 +249,15 @@ func getResourceTypeFromOCMRequest(t string) providerpb.ResourceType {
 }
 
 func getOCMShareType(t string) ocm.ShareType {
-	if t == "user" {
+	switch t {
+	case "user":
+		return ocm.ShareType_SHARE_TYPE_USER
+	case "group":
+		return ocm.ShareType_SHARE_TYPE_GROUP
+	default:
+		// for now assume user share if not provided
 		return ocm.ShareType_SHARE_TYPE_USER
 	}
-	return ocm.ShareType_SHARE_TYPE_GROUP
 }
 
 func getAndResolveProtocols(p Protocols, r *http.Request) ([]*ocm.Protocol, error) {

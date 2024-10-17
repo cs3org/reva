@@ -84,7 +84,7 @@ var (
 // NewConn creates a new connection to a grpc server
 // TODO(labkode): make grpc tls configurable.
 func NewConn(options Options) (*grpc.ClientConn, error) {
-	conn, err := grpc.Dial(
+	conn, err := grpc.NewClient(
 		options.Endpoint,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(

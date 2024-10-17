@@ -132,7 +132,7 @@ func (am *Manager) do(ctx context.Context, a Action) (int, []byte, error) {
 
 	log.Info().Msgf("am.do response %d %s", resp.StatusCode, body)
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return 0, nil, fmt.Errorf("Unexpected response code from EFSS API: " + strconv.Itoa(resp.StatusCode))
+		return 0, nil, fmt.Errorf("Unexpected response code from EFSS API: %s", strconv.Itoa(resp.StatusCode))
 	}
 	return resp.StatusCode, body, nil
 }
