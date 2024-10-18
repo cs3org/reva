@@ -671,7 +671,6 @@ var _ = Describe("The ocs API", func() {
 
 			Context("when change the permission", func() {
 				for _, perm := range []string{"4", "5", "15"} {
-					perm := perm
 					It("the password exists. update succeed", func() {
 						form := url.Values{}
 						form.Add("permissions", perm)
