@@ -334,11 +334,23 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		}
 	}
 
-	err = t.Propagate(ctx, oldNode, 0)
+	// the size diff is the current treesize or blobsize of the old/source node
+	var sizeDiff int64
+	if oldNode.IsDir(ctx) {
+		treeSize, err := oldNode.GetTreeSize(ctx)
+		if err != nil {
+			return err
+		}
+		sizeDiff = int64(treeSize)
+	} else {
+		sizeDiff = oldNode.Blobsize
+	}
+
+	err = t.Propagate(ctx, oldNode, -sizeDiff)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: Move: could not propagate old node")
 	}
-	err = t.Propagate(ctx, newNode, 0)
+	err = t.Propagate(ctx, newNode, sizeDiff)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: Move: could not propagate new node")
 	}
