@@ -21,8 +21,6 @@ package eosgrpc
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -148,10 +146,6 @@ func NewEOSHTTPClient(opt *HTTPOptions) (*EOSHTTPClient, error) {
 	}
 
 	opt.init()
-	baseUrl, err := url.Parse(opt.BaseURL)
-	if err != nil {
-		return nil, errors.New("Failed to parse BaseURL")
-	}
 
 	t := &http.Transport{
 		MaxIdleConns:        opt.MaxIdleConns,
@@ -160,21 +154,6 @@ func NewEOSHTTPClient(opt *HTTPOptions) (*EOSHTTPClient, error) {
 		IdleConnTimeout:     time.Duration(opt.IdleConnTimeout) * time.Second,
 		DisableCompression:  true,
 	}
-
-	if baseUrl.Scheme == "https" {
-		cert, err := tls.LoadX509KeyPair(opt.ClientCertFile, opt.ClientKeyFile)
-		if err != nil {
-			return nil, err
-		}
-		t.TLSClientConfig = &tls.Config{
-			Certificates: []tls.Certificate{cert},
-		}
-	}
-
-	// TODO: the error reporting of http.transport is insufficient
-	// we may want to check manually at least the existence of the certfiles
-	// The point is that also the error reporting of the context that calls this function
-	// is weak
 
 	cl := &http.Client{
 		Transport: t,
