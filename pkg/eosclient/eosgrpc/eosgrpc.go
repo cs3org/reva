@@ -1544,8 +1544,9 @@ func (c *Client) RollbackToVersion(ctx context.Context, auth eosclient.Authoriza
 		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' ", auth.Role.UID))
 	}
 
-	log.Info().Str("func", "RollbackToVersion").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
-
+	if resp.GetError() != nil {
+		log.Info().Str("func", "RollbackToVersion").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+	}
 	return err
 }
 
