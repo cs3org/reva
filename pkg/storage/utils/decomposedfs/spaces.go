@@ -46,7 +46,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/permissions"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -1030,14 +1029,7 @@ func (fs *Decomposedfs) StorageSpaceFromNode(ctx context.Context, n *node.Node, 
 		quotaStr = quotaInOpaque
 	}
 
-	remaining, err := fs.bs.GetAvailableSize(n)
-	switch {
-	case errors.Is(err, tree.ErrSizeUnlimited):
-		remaining = math.MaxUint64
-	case err != nil:
-		return nil, err
-	}
-	total, used, remaining, err := fs.calculateTotalUsedRemaining(quotaStr, space.GetRootInfo().GetSize(), remaining)
+	total, used, remaining, err := fs.calculateTotalUsedRemaining(quotaStr, space.GetRootInfo().GetSize())
 	if err != nil {
 		return nil, err
 	}
