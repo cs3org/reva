@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -113,7 +112,6 @@ type SessionStore interface {
 type Decomposedfs struct {
 	lu           node.PathLookup
 	tp           node.Tree
-	bs           tree.Blobstore
 	trashbin     trashbin.Trashbin
 	o            *options.Options
 	p            permissions.Permissions
@@ -164,7 +162,6 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore, es events.Stream) (
 	aspects := aspects.Aspects{
 		Lookup:            lu,
 		Tree:              tp,
-		Blobstore:         bs,
 		Permissions:       permissions.NewPermissions(node.NewPermissions(lu), permissionsSelector),
 		EventStream:       es,
 		DisableVersioning: o.DisableVersioning,
@@ -226,7 +223,6 @@ func New(o *options.Options, aspects aspects.Aspects) (storage.FS, error) {
 
 	fs := &Decomposedfs{
 		tp:              aspects.Tree,
-		bs:              aspects.Blobstore,
 		lu:              aspects.Lookup,
 		trashbin:        aspects.Trashbin,
 		o:               o,
@@ -602,20 +598,12 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context, ref *provider.Reference) (
 		quotaStr = string(ri.Opaque.Map["quota"].Value)
 	}
 
-	remaining, err = fs.bs.GetAvailableSize(n)
-	switch {
-	case errors.Is(err, tree.ErrSizeUnlimited):
-		remaining = math.MaxUint64
-	case err != nil:
-		return 0, 0, 0, err
-	}
-
-	return fs.calculateTotalUsedRemaining(quotaStr, ri.Size, remaining)
+	return fs.calculateTotalUsedRemaining(quotaStr, ri.Size)
 }
 
-func (fs *Decomposedfs) calculateTotalUsedRemaining(quotaStr string, inUse, remaining uint64) (uint64, uint64, uint64, error) {
+func (fs *Decomposedfs) calculateTotalUsedRemaining(quotaStr string, inUse uint64) (uint64, uint64, uint64, error) {
 	var err error
-	var total uint64
+	var total, remaining uint64
 	switch quotaStr {
 	case node.QuotaUncalculated, node.QuotaUnknown:
 		// best we can do is return current total
@@ -628,14 +616,10 @@ func (fs *Decomposedfs) calculateTotalUsedRemaining(quotaStr string, inUse, rema
 			return 0, 0, 0, err
 		}
 
-		if total <= remaining {
-			// Prevent overflowing
-			if inUse >= total {
-				remaining = 0
-			} else {
-				remaining = total - inUse
-			}
+		if total > inUse {
+			remaining = total - inUse
 		}
+
 	}
 	return total, inUse, remaining, nil
 }

@@ -178,7 +178,6 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	)
 
 	bs := &treemocks.Blobstore{}
-	bs.On("GetAvailableSize", mock.Anything).Return(uint64(1000000000), nil)
 	tree, err := tree.New(lu, bs, um, &trashbin.Trashbin{}, o, nil, store.Create())
 	if err != nil {
 		return nil, err
@@ -190,7 +189,6 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	aspects := aspects.Aspects{
 		Lookup:      lu,
 		Tree:        tree,
-		Blobstore:   bs,
 		Permissions: permissions.NewPermissions(pmock, permissionsSelector),
 		Trashbin:    tb,
 	}

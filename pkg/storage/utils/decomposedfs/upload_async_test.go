@@ -153,7 +153,6 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			},
 		)
 		bs = &treemocks.Blobstore{}
-		bs.On("GetAvailableSize", mock.Anything).Return(uint64(1000000000), nil)
 
 		// create space uses CheckPermission endpoint
 		cs3permissionsclient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&cs3permissions.CheckPermissionResponse{
@@ -177,7 +176,6 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		aspects := aspects.Aspects{
 			Lookup:      lu,
 			Tree:        tree,
-			Blobstore:   bs,
 			Permissions: permissions.NewPermissions(pmock, permissionsSelector),
 			EventStream: stream.Chan{pub, con},
 			Trashbin:    &DecomposedfsTrashbin{},
