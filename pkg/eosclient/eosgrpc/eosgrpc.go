@@ -259,6 +259,13 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "AddACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
+	// First, we need to figure out if the path is a directory
+	// to know whether our request should be recursive
+	fileInfo, err := c.GetFileInfoByPath(ctx, auth, path)
+	if err != nil {
+		return err
+	}
+
 	// Init a new NSRequest
 	rq, err := c.initNSRequest(ctx, rootAuth, "")
 	if err != nil {
@@ -272,7 +279,7 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 	msg := new(erpc.NSRequest_AclRequest)
 	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["MODIFY"])
 	msg.Type = erpc.NSRequest_AclRequest_ACL_TYPE(erpc.NSRequest_AclRequest_ACL_TYPE_value["SYS_ACL"])
-	msg.Recursive = true
+	msg.Recursive = fileInfo.IsDir
 	msg.Rule = a.CitrineSerialize()
 
 	msg.Id = new(erpc.MDId)
@@ -300,48 +307,11 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 // RemoveACL removes the acl from EOS.
 func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, a *acl.Entry) error {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "RemoveACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
+	log.Info().Str("func", "RemoveACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Str("ACL", a.CitrineSerialize()).Msg("")
 
-	acls, err := c.getACLForPath(ctx, auth, path)
-	if err != nil {
-		return err
-	}
-
-	acls.DeleteEntry(a.Type, a.Qualifier)
-	sysACL := acls.Serialize()
-
-	// Init a new NSRequest
-	rq, err := c.initNSRequest(ctx, auth, "")
-	if err != nil {
-		return err
-	}
-
-	msg := new(erpc.NSRequest_AclRequest)
-	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["MODIFY"])
-	msg.Type = erpc.NSRequest_AclRequest_ACL_TYPE(erpc.NSRequest_AclRequest_ACL_TYPE_value["SYS_ACL"])
-	msg.Recursive = true
-	msg.Rule = sysACL
-
-	msg.Id = new(erpc.MDId)
-	msg.Id.Path = []byte(path)
-
-	rq.Command = &erpc.NSRequest_Acl{Acl: msg}
-
-	// Now send the req and see what happens
-	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
-	e := c.getRespError(resp, err)
-	if e != nil {
-		log.Error().Str("func", "RemoveACL").Str("path", path).Str("err", e.Error()).Msg("")
-		return e
-	}
-
-	if resp == nil {
-		return errtypes.NotFound(fmt.Sprintf("Path: %s", path))
-	}
-
-	log.Debug().Str("func", "RemoveACL").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
-
-	return err
+	// We set permissions to "", so the ACL will serialize to `u:123456=`, which will make EOS delete the entry
+	a.Permissions = ""
+	return c.AddACL(ctx, auth, rootAuth, path, eosclient.StartPosition, a)
 }
 
 // UpdateACL updates the EOS acl.
@@ -387,6 +357,11 @@ func (c *Client) getACLForPath(ctx context.Context, auth eosclient.Authorization
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "GetACLForPath").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
+	fileInfo, err := c.GetFileInfoByPath(ctx, auth, path)
+	if err != nil {
+		return nil, err
+	}
+
 	// Initialize the common fields of the NSReq
 	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
@@ -396,7 +371,7 @@ func (c *Client) getACLForPath(ctx context.Context, auth eosclient.Authorization
 	msg := new(erpc.NSRequest_AclRequest)
 	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["LIST"])
 	msg.Type = erpc.NSRequest_AclRequest_ACL_TYPE(erpc.NSRequest_AclRequest_ACL_TYPE_value["SYS_ACL"])
-	msg.Recursive = true
+	msg.Recursive = fileInfo.IsDir
 
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
