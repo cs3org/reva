@@ -144,62 +144,6 @@ func (_c *Blobstore_Download_Call) RunAndReturn(run func(*node.Node) (io.ReadClo
 	return _c
 }
 
-// GetAvailableSize provides a mock function with given fields: _a0
-func (_m *Blobstore) GetAvailableSize(_a0 *node.Node) (uint64, error) {
-	ret := _m.Called(_a0)
-
-	if len(ret) == 0 {
-		panic("no return value specified for GetAvailableSize")
-	}
-
-	var r0 uint64
-	var r1 error
-	if rf, ok := ret.Get(0).(func(*node.Node) (uint64, error)); ok {
-		return rf(_a0)
-	}
-	if rf, ok := ret.Get(0).(func(*node.Node) uint64); ok {
-		r0 = rf(_a0)
-	} else {
-		r0 = ret.Get(0).(uint64)
-	}
-
-	if rf, ok := ret.Get(1).(func(*node.Node) error); ok {
-		r1 = rf(_a0)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// Blobstore_GetAvailableSize_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAvailableSize'
-type Blobstore_GetAvailableSize_Call struct {
-	*mock.Call
-}
-
-// GetAvailableSize is a helper method to define mock.On call
-//   - _a0 *node.Node
-func (_e *Blobstore_Expecter) GetAvailableSize(_a0 interface{}) *Blobstore_GetAvailableSize_Call {
-	return &Blobstore_GetAvailableSize_Call{Call: _e.mock.On("GetAvailableSize", _a0)}
-}
-
-func (_c *Blobstore_GetAvailableSize_Call) Run(run func(_a0 *node.Node)) *Blobstore_GetAvailableSize_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(*node.Node))
-	})
-	return _c
-}
-
-func (_c *Blobstore_GetAvailableSize_Call) Return(_a0 uint64, _a1 error) *Blobstore_GetAvailableSize_Call {
-	_c.Call.Return(_a0, _a1)
-	return _c
-}
-
-func (_c *Blobstore_GetAvailableSize_Call) RunAndReturn(run func(*node.Node) (uint64, error)) *Blobstore_GetAvailableSize_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // Upload provides a mock function with given fields: _a0, source
 func (_m *Blobstore) Upload(_a0 *node.Node, source string) error {
 	ret := _m.Called(_a0, source)

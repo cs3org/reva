@@ -1035,9 +1035,7 @@ func (fs *Decomposedfs) StorageSpaceFromNode(ctx context.Context, n *node.Node, 
 	}
 	space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "quota.total", strconv.FormatUint(total, 10))
 	space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "quota.used", strconv.FormatUint(used, 10))
-	if remaining != math.MaxUint64 {
-		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "quota.remaining", strconv.FormatUint(remaining, 10))
-	}
+	space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "quota.remaining", strconv.FormatUint(remaining, 10))
 
 	return space, nil
 }

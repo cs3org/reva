@@ -112,7 +112,6 @@ type SessionStore interface {
 type Decomposedfs struct {
 	lu           node.PathLookup
 	tp           node.Tree
-	bs           tree.Blobstore
 	trashbin     trashbin.Trashbin
 	o            *options.Options
 	p            permissions.Permissions
@@ -163,7 +162,6 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore, es events.Stream) (
 	aspects := aspects.Aspects{
 		Lookup:            lu,
 		Tree:              tp,
-		Blobstore:         bs,
 		Permissions:       permissions.NewPermissions(node.NewPermissions(lu), permissionsSelector),
 		EventStream:       es,
 		DisableVersioning: o.DisableVersioning,
@@ -225,7 +223,6 @@ func New(o *options.Options, aspects aspects.Aspects) (storage.FS, error) {
 
 	fs := &Decomposedfs{
 		tp:              aspects.Tree,
-		bs:              aspects.Blobstore,
 		lu:              aspects.Lookup,
 		trashbin:        aspects.Trashbin,
 		o:               o,
