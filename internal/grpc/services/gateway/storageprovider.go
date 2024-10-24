@@ -20,7 +20,6 @@ package gateway
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 	"path"
 	"strings"
@@ -220,8 +219,6 @@ func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFile
 			Status: storageRes.Status,
 		}, nil
 	}
-
-	fmt.Println("debugging initiatefileupload response", storageRes)
 
 	protocols := make([]*gateway.FileUploadProtocol, len(storageRes.Protocols))
 	for p := range storageRes.Protocols {

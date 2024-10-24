@@ -928,7 +928,6 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
-	fmt.Println("debugging: storageprovider: ", req, newRef)
 	mds, err := s.storage.ListFolder(ctx, newRef, req.ArbitraryMetadataKeys)
 	if err != nil {
 		var st *rpc.Status
@@ -1538,17 +1537,14 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provide
 	// TODO move mount path trimming to the gateway
 	fn, err := s.trimMountPrefix(ref.GetPath())
 	if err != nil {
-		fmt.Println("debugging: problem found", fn, err)
 		return nil, err
 	}
 	return &provider.Reference{Path: fn}, nil
 }
 
 func (s *service) trimMountPrefix(fn string) (string, error) {
-	fmt.Println("debugging trimMountPrefix", fn, s.mountPath, len(fn), len(s.mountPath))
 	if strings.HasPrefix(fn, s.mountPath) {
 		p := path.Join("/", strings.TrimPrefix(fn, s.mountPath))
-		fmt.Println("debugging we are here", p)
 		return p, nil
 	}
 	return "", errtypes.BadRequest(fmt.Sprintf("path=%q does not belong to this storage provider mount path=%q", fn, s.mountPath))
