@@ -23,7 +23,6 @@ package cephfs
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 
@@ -44,7 +43,6 @@ func (fs *cephfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 	}
 
 	if !ok {
-		fmt.Println("debugging: upload is not chunked", p)
 		var file io.WriteCloser
 		user.op(func(cv *cacheVal) {
 			file, err = cv.mount.Open(p, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, fs.conf.FilePerms)
@@ -65,13 +63,11 @@ func (fs *cephfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 	}
 
 	// upload is chunked
-	fmt.Println("debugging: upload is chunked", p)
 
 	var assembledFile string
 
 	// iniate the chunk handler
 	originalFilename, assembledFile, err := NewChunkHandler(ctx, fs).WriteChunk(p, r)
-	fmt.Println("debugging: assembly file", originalFilename, assembledFile, r)
 	if err != nil {
 		return errors.Wrapf(err, "error writing chunk %v %v %v", p, r, assembledFile)
 	}

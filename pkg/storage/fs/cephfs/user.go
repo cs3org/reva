@@ -55,7 +55,6 @@ func (fs *cephfs) makeUser(ctx context.Context) *User {
 	u := appctx.ContextMustGetUser(ctx)
 	// home := fs.conf.Root
 	home := filepath.Join(fs.conf.Root, templates.WithUser(u, fs.conf.UserLayout))
-	fmt.Println("debugging makeUser", home)
 	return &User{u, fs, ctx, home}
 }
 
@@ -90,7 +89,7 @@ func (user *User) op(cb callBack) {
 	cb(val.(*cacheVal))
 }
 
-func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *goceph.CephStatx, mdKeys []string) (ri *provider.ResourceInfo, err error) {
+func (fs *cephfs) fileAsResourceInfo(mount *mount, path string, stat *goceph.CephStatx, mdKeys []string) (ri *provider.ResourceInfo, err error) {
 	var (
 		_type  provider.ResourceType
 		target string
@@ -101,7 +100,7 @@ func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *goceph.Cep
 	switch int(stat.Mode) & syscall.S_IFMT {
 	case syscall.S_IFDIR:
 		_type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-		if buf, err = cv.mount.GetXattr(path, "ceph.dir.rbytes"); err == nil {
+		if buf, err = mount.GetXattr(path, "ceph.dir.rbytes"); err == nil {
 			size, err = strconv.ParseUint(string(buf), 10, 64)
 		} else if err.Error() == errPermissionDenied {
 			// Ignore permission denied errors so ListFolder does not fail because of them.
@@ -109,7 +108,7 @@ func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *goceph.Cep
 		}
 	case syscall.S_IFLNK:
 		_type = provider.ResourceType_RESOURCE_TYPE_SYMLINK
-		target, err = cv.mount.Readlink(path)
+		target, err = mount.Readlink(path)
 	case syscall.S_IFREG:
 		_type = provider.ResourceType_RESOURCE_TYPE_FILE
 		size = stat.Size
@@ -127,10 +126,10 @@ func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *goceph.Cep
 		keys = map[string]bool{}
 	}
 	mx := make(map[string]string)
-	if xattrs, err = cv.mount.ListXattr(path); err == nil {
+	if xattrs, err = mount.ListXattr(path); err == nil {
 		for _, xattr := range xattrs {
 			if len(mdKeys) == 0 || keys[xattr] {
-				if buf, err := cv.mount.GetXattr(path, xattr); err == nil {
+				if buf, err := mount.GetXattr(path, xattr); err == nil {
 					mx[xattr] = string(buf)
 				}
 			}
@@ -139,7 +138,7 @@ func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *goceph.Cep
 
 	var etag string
 	if isDir(_type) {
-		rctime, _ := cv.mount.GetXattr(path, "ceph.dir.rctime")
+		rctime, _ := mount.GetXattr(path, "ceph.dir.rctime")
 		etag = fmt.Sprint(stat.Inode) + ":" + string(rctime)
 	} else {
 		etag = fmt.Sprint(stat.Inode) + ":" + strconv.FormatInt(stat.Ctime.Sec, 10)
@@ -150,7 +149,7 @@ func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *goceph.Cep
 		Nanos:   uint32(stat.Mtime.Nsec),
 	}
 
-	perms := getPermissionSet(user, stat, cv.mount, path)
+	perms := getPermissionSet(user, stat, mount, path)
 
 	for key := range mx {
 		if !strings.HasPrefix(key, xattrUserNs) {
@@ -200,7 +199,7 @@ func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *goceph.Cep
 	return
 }
 
-func (user *User) resolveRef(ref *provider.Reference) (string, error) {
+func (fs *cephfs) resolveRef(ref *provider.Reference) (string, error) {
 	if ref == nil {
 		return "", fmt.Errorf("cephfs: nil reference provided")
 	}

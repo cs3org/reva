@@ -93,7 +93,6 @@ type ChunkHandler struct {
 
 // NewChunkHandler creates a handler for chunked uploads.
 func NewChunkHandler(ctx context.Context, fs *cephfs) *ChunkHandler {
-	fmt.Println("debugging NewChunkHandler", fs.makeUser(ctx), fs.conf.UploadFolder)
 	u := fs.makeUser(ctx)
 	return &ChunkHandler{u, path.Join(u.home, fs.conf.UploadFolder)}
 }
@@ -125,7 +124,6 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (finish bool, chu
 		// err = fmt.Errorf("error getting transfer folder anme", err)
 		return
 	}
-	fmt.Println("debugging: transferfoldername", transferFolderName)
 
 	// here we write a temporary file that will be renamed to the transfer folder
 	// with the correct sequence number filename.
@@ -135,7 +133,6 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (finish bool, chu
 	c.user.op(func(cv *cacheVal) {
 		var tmpFile *goceph.File
 		target := filepath.Join(c.uploadFolder, tmpFilename)
-		fmt.Println("debugging savechunk, target: ", target)
 		tmpFile, err = cv.mount.Open(target, os.O_CREATE|os.O_WRONLY, c.user.fs.conf.FilePerms)
 		defer closeFile(tmpFile)
 		if err != nil {

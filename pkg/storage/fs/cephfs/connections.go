@@ -24,6 +24,7 @@ package cephfs
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/ceph/go-ceph/cephfs/admin"
@@ -31,7 +32,9 @@ import (
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/pkg/errors"
 
 	goceph "github.com/ceph/go-ceph/cephfs"
@@ -185,7 +188,6 @@ func newAdminConn(conf *Options) (*adminConn, error) {
 }
 
 func newConn(user *User) *cacheVal {
-	fmt.Printf("debugging user: %+v\n", user)
 	var perm *goceph.UserPerm
 	mount, err := goceph.CreateMountWithId(user.fs.conf.ClientID)
 	if err != nil {
@@ -204,7 +206,6 @@ func newConn(user *User) *cacheVal {
 	}
 
 	if user != nil { //nil creates admin conn
-		fmt.Println("creating admin connection: debugging new connection for user: ", user.UidNumber)
 		perm = goceph.NewUserPerm(int(user.UidNumber), int(user.GidNumber), []int{})
 		if err = mount.SetMountPerms(perm); err != nil {
 			return destroyCephConn(mount, perm)
@@ -331,4 +332,22 @@ func (fs *cephfs) getGroupByOpaqueID(ctx context.Context, oid string) (*grouppb.
 	fs.conn.userCache.SetWithTTL(oid, getGroupResp.Group, 1, 24*time.Hour)
 
 	return getGroupResp.Group, nil
+}
+
+type mount struct {
+	*goceph.MountInfo
+	userHomePath string
+}
+
+func (m *mount) GetHome() string {
+	return m.userHomePath
+}
+
+func (fs *cephfs) getMount(ctx context.Context) *mount {
+	u := appctx.ContextMustGetUser(ctx)
+	userHomePath := filepath.Join(fs.conf.Root, templates.WithUser(u, fs.conf.UserLayout))
+	m := &mount{
+		userHomePath: userHomePath,
+	}
+	return m
 }
