@@ -124,7 +124,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	log := appctx.GetLogger(ctx)
 	l, err := utils.GetLDAPConnection(&am.c.LDAPConn)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errors.Wrap(err, "error creating ldap connection")
 	}
 	defer l.Close()
 
@@ -139,10 +139,10 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 
 	sr, err := l.Search(searchRequest)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errors.Wrapf(err, "error searching. seachrequest = %+v", searchRequest)
 	}
 
-	log.Trace().Interface("entries", sr.Entries).Send()
+	log.Debug().Interface("entries", sr.Entries).Send()
 	if len(sr.Entries) != 1 {
 		return nil, nil, errtypes.NotFound(clientID)
 	}
@@ -153,7 +153,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	err = l.Bind(userdn, clientSecret)
 	if err != nil {
 		log.Debug().Err(err).Interface("userdn", userdn).Msg("bind with user credentials failed")
-		return nil, nil, err
+		return nil, nil, errors.Wrapf(err, "error binding with user credentials for user %s", userdn)
 	}
 
 	userID := &user.UserId{
@@ -193,7 +193,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	u := &user.User{
 		Id: userID,
 		// TODO add more claims from the StandardClaims, eg EmailVerified
-		Username: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.CN),
+		Username: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UID),
 		// TODO groups
 		Groups:      getGroupsResp.Groups,
 		Mail:        sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.Mail),

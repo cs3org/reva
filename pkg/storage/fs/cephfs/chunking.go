@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -43,11 +44,12 @@ func IsChunked(fn string) (bool, error) {
 }
 
 // ChunkBLOBInfo stores info about a particular chunk
+// example: given /users/peter/myfile.txt-chunking-1234-10-2
 type ChunkBLOBInfo struct {
-	Path         string
-	TransferID   string
-	TotalChunks  int
-	CurrentChunk int
+	Path         string // example: /users/peter/myfile.txt
+	TransferID   string // example: 1234
+	TotalChunks  int    // example: 10
+	CurrentChunk int    // example: 2
 }
 
 // Not using the resource path in the chunk folder name allows uploading to
@@ -85,21 +87,22 @@ func GetChunkBLOBInfo(path string) (*ChunkBLOBInfo, error) {
 // ChunkHandler manages chunked uploads, storing the chunks in a temporary directory
 // until it gets the final chunk which is then returned.
 type ChunkHandler struct {
-	user        *User
-	chunkFolder string
+	user         *User
+	uploadFolder string // example: /users/peter/.uploads
 }
 
 // NewChunkHandler creates a handler for chunked uploads.
 func NewChunkHandler(ctx context.Context, fs *cephfs) *ChunkHandler {
-	return &ChunkHandler{fs.makeUser(ctx), fs.conf.UploadFolder}
+	u := fs.makeUser(ctx)
+	return &ChunkHandler{u, path.Join(u.home, fs.conf.UploadFolder)}
 }
 
-func (c *ChunkHandler) getChunkTempFileName() string {
+func (c *ChunkHandler) getTempFileName() string {
 	return fmt.Sprintf("__%d_%s", time.Now().Unix(), uuid.New().String())
 }
 
-func (c *ChunkHandler) getChunkFolderName(i *ChunkBLOBInfo) (path string, err error) {
-	path = filepath.Join(c.chunkFolder, i.uploadID())
+func (c *ChunkHandler) getAndCreateTransferFolderName(i *ChunkBLOBInfo) (path string, err error) {
+	path = filepath.Join(c.uploadFolder, i.uploadID())
 	c.user.op(func(cv *cacheVal) {
 		err = cv.mount.MakeDir(path, 0777)
 	})
@@ -107,6 +110,7 @@ func (c *ChunkHandler) getChunkFolderName(i *ChunkBLOBInfo) (path string, err er
 	return
 }
 
+// TODO(labkode): I don't like how this function looks like, better to refactor
 func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (finish bool, chunk string, err error) {
 	chunkInfo, err := GetChunkBLOBInfo(path)
 	if err != nil {
@@ -114,10 +118,21 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (finish bool, chu
 		return
 	}
 
-	chunkTempFilename := c.getChunkTempFileName()
+	transferFolderName, err := c.getAndCreateTransferFolderName(chunkInfo)
+	if err != nil {
+		// TODO(labkode): skip error for now
+		// err = fmt.Errorf("error getting transfer folder anme", err)
+		return
+	}
+
+	// here we write a temporary file that will be renamed to the transfer folder
+	// with the correct sequence number filename.
+	// we do not store this before-rename temporary files inside the transfer folder
+	// to avoid errors when counting the number of chunks for finalizing the transfer.
+	tmpFilename := c.getTempFileName()
 	c.user.op(func(cv *cacheVal) {
 		var tmpFile *goceph.File
-		target := filepath.Join(c.chunkFolder, chunkTempFilename)
+		target := filepath.Join(c.uploadFolder, tmpFilename)
 		tmpFile, err = cv.mount.Open(target, os.O_CREATE|os.O_WRONLY, c.user.fs.conf.FilePerms)
 		defer closeFile(tmpFile)
 		if err != nil {
@@ -129,15 +144,9 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (finish bool, chu
 		return
 	}
 
-	chunksFolderName, err := c.getChunkFolderName(chunkInfo)
-	if err != nil {
-		return
-	}
-	// c.logger.Info().Log("chunkfolder", chunksFolderName)
-
-	chunkTarget := filepath.Join(chunksFolderName, strconv.Itoa(chunkInfo.CurrentChunk))
+	chunkTarget := filepath.Join(transferFolderName, strconv.Itoa(chunkInfo.CurrentChunk))
 	c.user.op(func(cv *cacheVal) {
-		err = cv.mount.Rename(chunkTempFilename, chunkTarget)
+		err = cv.mount.Rename(tmpFilename, chunkTarget)
 	})
 	if err != nil {
 		return
@@ -154,7 +163,7 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (finish bool, chu
 		var entry *goceph.DirEntry
 		var chunkFile, assembledFile *goceph.File
 
-		dir, err = cv.mount.OpenDir(chunksFolderName)
+		dir, err = cv.mount.OpenDir(transferFolderName)
 		defer closeDir(dir)
 
 		for entry, err = dir.ReadDir(); entry != nil && err == nil; entry, err = dir.ReadDir() {
@@ -167,16 +176,20 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (finish bool, chu
 			return
 		}
 
-		chunk = filepath.Join(c.chunkFolder, c.getChunkTempFileName())
-		assembledFile, err = cv.mount.Open(chunk, os.O_CREATE|os.O_WRONLY, c.user.fs.conf.FilePerms)
+		// from now on we do have all the necessary chunks,
+		// so we create a temporary file where all the chunks will be written
+		// before being renamed to the requested location, from the example: /users/peter/myfile.txt
+
+		assemblyFilename := filepath.Join(c.uploadFolder, c.getTempFileName())
+		assembledFile, err = cv.mount.Open(assemblyFilename, os.O_CREATE|os.O_WRONLY, c.user.fs.conf.FilePerms)
 		defer closeFile(assembledFile)
-		defer deleteFile(cv.mount, chunk)
+		defer deleteFile(cv.mount, assemblyFilename)
 		if err != nil {
 			return
 		}
 
 		for i := 0; i < numEntries; i++ {
-			target := filepath.Join(chunksFolderName, strconv.Itoa(i))
+			target := filepath.Join(transferFolderName, strconv.Itoa(i))
 
 			chunkFile, err = cv.mount.Open(target, os.O_RDONLY, 0)
 			if err != nil {
@@ -189,22 +202,22 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (finish bool, chu
 			}
 		}
 
-		// necessary approach in case assembly fails
+		// clean all the chunks that made the assembly file
 		for i := 0; i < numEntries; i++ {
-			target := filepath.Join(chunksFolderName, strconv.Itoa(i))
+			target := filepath.Join(transferFolderName, strconv.Itoa(i))
 			err = cv.mount.Unlink(target)
 			if err != nil {
 				return
 			}
 		}
-		_ = cv.mount.Unlink(chunksFolderName)
 	})
-
-	return true, chunk, nil
+	return
 }
 
 // WriteChunk saves an intermediate chunk temporarily and assembles all chunks
 // once the final one is received.
+// this function will return the original filename (myfile.txt) and the assemblyPath when
+// the upload is completed
 func (c *ChunkHandler) WriteChunk(fn string, r io.ReadCloser) (string, string, error) {
 	finish, chunk, err := c.saveChunk(fn, r)
 	if err != nil {

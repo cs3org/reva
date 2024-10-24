@@ -24,6 +24,7 @@ package cephfs
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/ceph/go-ceph/cephfs/admin"
@@ -31,7 +32,9 @@ import (
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/pkg/errors"
 
 	goceph "github.com/ceph/go-ceph/cephfs"
@@ -116,21 +119,21 @@ type adminConn struct {
 	// radosIO       *rados2.IOContext
 }
 
-func newAdminConn(conf *Options) *adminConn {
+func newAdminConn(conf *Options) (*adminConn, error) {
 	rados, err := rados2.NewConnWithUser(conf.ClientID)
 	if err != nil {
-		return nil
+		return nil, errors.Wrap(err, "error creating connection with user for client id: "+conf.ClientID)
 	}
 	if err = rados.ReadConfigFile(conf.Config); err != nil {
-		return nil
+		return nil, errors.Wrapf(err, "error reading config file %s", conf.Config)
 	}
 
 	if err = rados.SetConfigOption("keyring", conf.Keyring); err != nil {
-		return nil
+		return nil, errors.Wrapf(err, "error setting keyring conf: %s", conf.Keyring)
 	}
 
 	if err = rados.Connect(); err != nil {
-		return nil
+		return nil, errors.Wrap(err, "error connecting to rados")
 	}
 
 	// TODO: May use later for file ids
@@ -166,13 +169,13 @@ func newAdminConn(conf *Options) *adminConn {
 	mount, err := goceph.CreateFromRados(rados)
 	if err != nil {
 		rados.Shutdown()
-		return nil
+		return nil, errors.Wrap(err, "error calling CreateFromRados")
 	}
 
 	if err = mount.MountWithRoot(conf.Root); err != nil {
 		rados.Shutdown()
 		destroyCephConn(mount, nil)
-		return nil
+		return nil, errors.Wrapf(err, "error mounting with root %s", conf.Root)
 	}
 
 	return &adminConn{
@@ -181,7 +184,7 @@ func newAdminConn(conf *Options) *adminConn {
 		mount,
 		rados,
 		// radosIO,
-	}
+	}, nil
 }
 
 func newConn(user *User) *cacheVal {
@@ -213,11 +216,14 @@ func newConn(user *User) *cacheVal {
 		return destroyCephConn(mount, perm)
 	}
 
-	if user != nil && !user.fs.conf.DisableHome {
-		if err = mount.ChangeDir(user.fs.conf.Root); err != nil {
-			return destroyCephConn(mount, perm)
+	// TODO(labkode): we leave the mount on the fs root
+	/*
+		if user != nil && !user.fs.conf.DisableHome {
+			if err = mount.ChangeDir(user.fs.conf.Root); err != nil {
+				return destroyCephConn(mount, perm)
+			}
 		}
-	}
+	*/
 
 	return &cacheVal{
 		perm:  perm,
@@ -326,4 +332,22 @@ func (fs *cephfs) getGroupByOpaqueID(ctx context.Context, oid string) (*grouppb.
 	fs.conn.userCache.SetWithTTL(oid, getGroupResp.Group, 1, 24*time.Hour)
 
 	return getGroupResp.Group, nil
+}
+
+type mount struct {
+	*goceph.MountInfo
+	userHomePath string
+}
+
+func (m *mount) GetHome() string {
+	return m.userHomePath
+}
+
+func (fs *cephfs) getMount(ctx context.Context) *mount {
+	u := appctx.ContextMustGetUser(ctx)
+	userHomePath := filepath.Join(fs.conf.Root, templates.WithUser(u, fs.conf.UserLayout))
+	m := &mount{
+		userHomePath: userHomePath,
+	}
+	return m
 }

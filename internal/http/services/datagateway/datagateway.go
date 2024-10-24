@@ -21,6 +21,7 @@ package datagateway
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -322,7 +323,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpReq.Header = r.Header
-
+	fmt.Println("debugging PUT", httpReq, claims, target)
 	httpRes, err := httpClient.Do(httpReq)
 	if err != nil {
 		log.Err(err).Msg("error doing PUT request to data service")
