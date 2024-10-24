@@ -185,7 +185,6 @@ func newAdminConn(conf *Options) (*adminConn, error) {
 }
 
 func newConn(user *User) *cacheVal {
-	fmt.Printf("debugging user: %+v\n", user)
 	var perm *goceph.UserPerm
 	mount, err := goceph.CreateMountWithId(user.fs.conf.ClientID)
 	if err != nil {
@@ -204,7 +203,6 @@ func newConn(user *User) *cacheVal {
 	}
 
 	if user != nil { //nil creates admin conn
-		fmt.Println("creating admin connection: debugging new connection for user: ", user.UidNumber)
 		perm = goceph.NewUserPerm(int(user.UidNumber), int(user.GidNumber), []int{})
 		if err = mount.SetMountPerms(perm); err != nil {
 			return destroyCephConn(mount, perm)

@@ -55,7 +55,6 @@ func (fs *cephfs) makeUser(ctx context.Context) *User {
 	u := appctx.ContextMustGetUser(ctx)
 	// home := fs.conf.Root
 	home := filepath.Join(fs.conf.Root, templates.WithUser(u, fs.conf.UserLayout))
-	fmt.Println("debugging makeUser", home)
 	return &User{u, fs, ctx, home}
 }
 

@@ -225,26 +225,19 @@ func (fs *cephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("ref", ref)
-	fmt.Println("debugging: listing folder", ref)
 	user := fs.makeUser(ctx)
-	fmt.Println("debugging:  user", user)
 
-	fmt.Println("debugging: ceph got", ref)
 	var path string
 	if path, err = user.resolveRef(ref); err != nil {
 		return nil, err
 	}
-	fmt.Println("debugging: listing folder after user resolv ref", path)
 
 	user.op(func(cv *cacheVal) {
 		var dir *goceph.Directory
 		if dir, err = cv.mount.OpenDir(path); err != nil {
-			fmt.Println(err)
 			return
 		}
 		defer closeDir(dir)
-
-		fmt.Println("debugging: dir obtained ", dir)
 
 		var entry *goceph.DirEntryPlus
 		var ri *provider.ResourceInfo
@@ -254,9 +247,7 @@ func (fs *cephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 				continue
 			}
 
-			fmt.Println("debugging: inside ReadDirPlus, before user.fileAsResourceInfo", cv, filepath.Join(path, entry.Name()), entry.Statx(), mdKeys)
 			ri, err = user.fileAsResourceInfo(cv, filepath.Join(path, entry.Name()), entry.Statx(), mdKeys)
-			fmt.Println("debugging: inside ReadDirPlus, after user.fileAsResourceInfo", cv, filepath.Join(path, entry.Name()), entry.Statx(), mdKeys)
 			if ri == nil || err != nil {
 				if err != nil {
 					log := appctx.GetLogger(ctx)
