@@ -747,7 +747,7 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 }
 
 // Write writes a stream to the mgm.
-func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser, app string, disableVersioning bool) error {
+func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser, length int64, app string, disableVersioning bool) error {
 	fd, err := os.CreateTemp(c.opt.CacheDirectory, "eoswrite-")
 	if err != nil {
 		return err

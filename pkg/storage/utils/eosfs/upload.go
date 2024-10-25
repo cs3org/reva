@@ -26,6 +26,7 @@ import (
 	"strconv"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/utils"
@@ -90,7 +91,13 @@ func (fs *Eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 		disableVersioning = false
 	}
 
-	return fs.c.Write(ctx, auth, fn, r, app, disableVersioning)
+	contentLength := metadata[ocdav.HeaderContentLength]
+	len, err := strconv.ParseInt(contentLength, 10, 64)
+	if err != nil {
+		return errors.New("No content length specified in EOS upload, got: " + contentLength)
+	}
+
+	return fs.c.Write(ctx, auth, fn, r, len, app, disableVersioning)
 }
 
 func (fs *Eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {

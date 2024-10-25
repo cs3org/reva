@@ -21,6 +21,7 @@ package simple
 import (
 	"context"
 	"net/http"
+	"strconv"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
@@ -86,6 +87,12 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 
 			if disableVersioning := r.Header.Get(ocdav.HeaderDisableVersioning); disableVersioning != "" {
 				metadata["disableVersioning"] = disableVersioning
+			}
+
+			contentLength := r.Header.Get(ocdav.HeaderUploadLength)
+
+			if _, err := strconv.ParseInt(contentLength, 10, 64); err == nil {
+				metadata[ocdav.HeaderContentLength] = contentLength
 			}
 
 			err := fs.Upload(ctx, ref, r.Body, metadata)

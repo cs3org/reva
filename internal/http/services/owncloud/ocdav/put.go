@@ -280,6 +280,14 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		httpReq.Header.Set(HeaderLockHolder, lockholder)
 	}
 
+	// We need to pass Content-Length to the storage backend (e.g. EOS).
+	// However, the Go HTTP Client library may arbitrarily modify or drop
+	// the Content-Length header, for example when it compresses the data
+	// See: https://pkg.go.dev/net/http#Request
+	// Therefore, we use another header to pass it through the internal
+	// data server
+	httpReq.Header.Set(HeaderUploadLength, strconv.FormatInt(length, 10))
+
 	// Propagate X-Disable-Versioning header
 	// Used to disable versioning for applications that do not expect this behaviour
 	// See reva#4855 for more info

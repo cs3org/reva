@@ -27,6 +27,7 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"strconv"
 
 	apppb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
@@ -35,6 +36,7 @@ import (
 	storagepb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -251,6 +253,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+	httpReq.Header.Set(ocdav.HeaderContentLength, strconv.Itoa(0))
 
 	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: s.conf.Insecure}}
 	httpRes, err := httpclient.New(httpclient.RoundTripper(tr)).Do(httpReq)
