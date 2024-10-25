@@ -385,10 +385,6 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 	base.RawQuery = queryValues.Encode()
 	finalurl := base.String()
 
-	if err != nil {
-		log.Error().Str("func", "PUTFile").Str("url", finalurl).Str("err", err.Error()).Msg("can't create request")
-		return err
-	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, finalurl, nil)
 	if err != nil {
 		log.Error().Str("func", "PUTFile").Str("url", finalurl).Str("err", err.Error()).Msg("can't create request")
@@ -444,7 +440,8 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 			}
 			if length >= 0 {
 				log.Debug().Str("func", "PUTFile").Int64("Content-Length", length).Msg("setting header")
-				req.Header.Set("Content-Length", strconv.FormatInt(length, 10))
+				req.ContentLength = length
+				req.Header.Set("Content-Length", fmt.Sprintf("%d", length))
 			}
 
 			log.Debug().Str("func", "PUTFile").Str("location", loc.String()).Msg("redirection")

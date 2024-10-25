@@ -284,11 +284,9 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 
 // Write writes a file to the mgm
 // Somehow the same considerations as Read apply.
-func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser, app string, disableVersioning bool) error {
+func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser, length int64, app string, disableVersioning bool) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "Write").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
-	var length int64
-	length = -1
 
 	u, err := utils.GetUser(ctx)
 	if err != nil {

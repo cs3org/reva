@@ -52,7 +52,7 @@ type EOSClient interface {
 	List(ctx context.Context, auth Authorization, path string) ([]*FileInfo, error)
 	ListWithRegex(ctx context.Context, auth Authorization, path string, depth uint, regex string) ([]*FileInfo, error)
 	Read(ctx context.Context, auth Authorization, path string) (io.ReadCloser, error)
-	Write(ctx context.Context, auth Authorization, path string, stream io.ReadCloser, app string, disableVersioning bool) error
+	Write(ctx context.Context, auth Authorization, path string, stream io.ReadCloser, length int64, app string, disableVersioning bool) error
 	ListDeletedEntries(ctx context.Context, auth Authorization, maxentries int, from, to time.Time) ([]*DeletedEntry, error)
 	RestoreDeletedEntry(ctx context.Context, auth Authorization, key string) error
 	PurgeDeletedEntries(ctx context.Context, auth Authorization) error
