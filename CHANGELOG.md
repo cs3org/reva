@@ -1,3 +1,23 @@
+Changelog for reva 2.26.2 (2024-10-28)
+=======================================
+
+The following sections list the changes in reva 2.26.2 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #4902: Fix quota calculation
+
+Details
+-------
+
+*   Bugfix #4902: Fix quota calculation
+
+   Quota would show "exceeded" when remaining quota was 0 because total was 0.
+
+   https://github.com/cs3org/reva/pull/4902
+
 Changelog for reva 2.26.1 (2024-10-25)
 =======================================
 
@@ -4934,34 +4954,6 @@ Details
 
    https://github.com/cs3org/reva/pull/3083
 
-Changelog for reva 2.7.1 (2022-07-15)
-=======================================
-
-The following sections list the changes in reva 2.7.1 relevant to
-reva users. The changes are ordered by importance.
-
-Summary
--------
-
-*   Fix #3080: Make dataproviders return more headers
-*   Enh #3046: Add user filter
-
-Details
--------
-
-*   Bugfix #3080: Make dataproviders return more headers
-
-   Instead of ocdav doing an additional Stat request we now rely on the dataprovider to return the
-   necessary metadata information as headers.
-
-   https://github.com/owncloud/reva/issues/3080
-
-*   Enhancement #3046: Add user filter
-
-   This PR adds the ability to filter spaces by user-id
-
-   https://github.com/cs3org/reva/pull/3046
-
 Changelog for reva 2.7.0 (2022-07-15)
 =======================================
 
@@ -5093,6 +5085,34 @@ Details
    https://github.com/owncloud/ocis/issues/2144
    https://github.com/owncloud/ocis/issues/3073
    https://github.com/cs3org/reva/pull/2977
+
+Changelog for reva 2.7.1 (2022-07-15)
+=======================================
+
+The following sections list the changes in reva 2.7.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #3080: Make dataproviders return more headers
+*   Enh #3046: Add user filter
+
+Details
+-------
+
+*   Bugfix #3080: Make dataproviders return more headers
+
+   Instead of ocdav doing an additional Stat request we now rely on the dataprovider to return the
+   necessary metadata information as headers.
+
+   https://github.com/owncloud/reva/issues/3080
+
+*   Enhancement #3046: Add user filter
+
+   This PR adds the ability to filter spaces by user-id
+
+   https://github.com/cs3org/reva/pull/3046
 
 Changelog for reva 2.6.1 (2022-06-27)
 =======================================
@@ -5461,27 +5481,6 @@ Details
 
    https://github.com/cs3org/reva/pull/2922
 
-Changelog for reva 2.4.1 (2022-05-24)
-=======================================
-
-The following sections list the changes in reva 2.4.1 relevant to
-reva users. The changes are ordered by importance.
-
-Summary
--------
-
-*   Fix #2891: Add missing http status code
-
-Details
--------
-
-*   Bugfix #2891: Add missing http status code
-
-   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
-   pass it through.
-
-   https://github.com/cs3org/reva/pull/2891
-
 Changelog for reva 2.4.0 (2022-05-24)
 =======================================
 
@@ -5624,6 +5623,27 @@ Details
    correct storageprovider
 
    https://github.com/cs3org/reva/pull/2792
+
+Changelog for reva 2.4.1 (2022-05-24)
+=======================================
+
+The following sections list the changes in reva 2.4.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #2891: Add missing http status code
+
+Details
+-------
+
+*   Bugfix #2891: Add missing http status code
+
+   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
+   pass it through.
+
+   https://github.com/cs3org/reva/pull/2891
 
 Changelog for reva 2.3.1 (2022-05-08)
 =======================================
