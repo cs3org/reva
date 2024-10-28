@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -603,7 +604,9 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context, ref *provider.Reference) (
 
 func (fs *Decomposedfs) calculateTotalUsedRemaining(quotaStr string, inUse uint64) (uint64, uint64, uint64, error) {
 	var err error
-	var total, remaining uint64
+	var total uint64
+
+	remaining := uint64(math.MaxUint64)
 	switch quotaStr {
 	case node.QuotaUncalculated, node.QuotaUnknown:
 		// best we can do is return current total
@@ -616,8 +619,11 @@ func (fs *Decomposedfs) calculateTotalUsedRemaining(quotaStr string, inUse uint6
 			return 0, 0, 0, err
 		}
 
-		if total > inUse {
+		switch {
+		case total > inUse:
 			remaining = total - inUse
+		case total <= inUse:
+			remaining = 0
 		}
 
 	}
