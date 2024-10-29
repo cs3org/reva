@@ -43,9 +43,8 @@ import (
 )
 
 const (
-	versionPrefix  = ".sys.v#."
-	userACLEvalKey = "eval.useracl"
-	favoritesKey   = "http://owncloud.org/ns/favorite"
+	versionPrefix = ".sys.v#."
+	favoritesKey  = "http://owncloud.org/ns/favorite"
 )
 
 func serializeAttribute(a *eosclient.Attribute) string {
@@ -1224,23 +1223,6 @@ func (c *Client) mapToFileInfo(ctx context.Context, kv, attrs map[string]string,
 	sysACL, err := acl.Parse(attrs["sys.acl"], acl.ShortTextForm)
 	if err != nil {
 		return nil, err
-	}
-
-	// Temporary until we migrate the user ACLs to sys ACLs on our MGMs
-	// Read user ACLs if sys.eval.useracl is set
-	if userACLEval, ok := attrs["sys."+userACLEvalKey]; ok && userACLEval == "1" {
-		if userACL, ok := attrs["user.acl"]; ok {
-			userAcls, err := acl.Parse(userACL, acl.ShortTextForm)
-			if err != nil {
-				return nil, err
-			}
-			for _, e := range userAcls.Entries {
-				err = sysACL.SetEntry(e.Type, e.Qualifier, e.Permissions)
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
 	}
 
 	// Read the favorite attr
