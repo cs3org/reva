@@ -1217,7 +1217,9 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 			if parent != nil && parent.SysACL != nil {
 				if fi.SysACL == nil {
 					log.Warn().Str("func", "List").Str("path", dpath).Str("SysACL is nil, taking parent", "").Msg("grpc response")
-					fi.SysACL.Entries = parent.SysACL.Entries
+					fi.SysACL = &acl.ACLs{
+						Entries: parent.SysACL.Entries,
+					}
 				} else {
 					fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
 				}
@@ -1604,6 +1606,10 @@ func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDRespon
 			fi.Attrs[strings.TrimPrefix(k, "user.")] = string(v)
 		}
 
+		if fi.Attrs["sys.acl"] != "" {
+			fi.SysACL = aclAttrToAclStruct(fi.Attrs["sys.acl"])
+		}
+
 		fi.TreeSize = uint64(st.Cmd.TreeSize)
 		fi.Size = fi.TreeSize
 		// TODO(lopresti) this info is missing in the EOS Protobuf, cf. EOS-5974
@@ -1624,6 +1630,10 @@ func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDRespon
 			fi.Attrs[strings.TrimPrefix(k, "user.")] = string(v)
 		}
 
+		if fi.Attrs["sys.acl"] != "" {
+			fi.SysACL = aclAttrToAclStruct(fi.Attrs["sys.acl"])
+		}
+
 		fi.Size = st.Fmd.Size
 
 		if st.Fmd.Checksum != nil {
@@ -1637,4 +1647,24 @@ func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDRespon
 		}
 	}
 	return fi, nil
+}
+
+func aclAttrToAclStruct(aclAttr string) *acl.ACLs {
+	entries := strings.Split(aclAttr, ",")
+
+	acl := &acl.ACLs{}
+
+	for _, entry := range entries {
+		parts := strings.Split(entry, ":")
+		if len(parts) != 3 {
+			continue
+		}
+		aclType := parts[0]
+		qualifier := parts[1]
+		permissions := parts[2]
+
+		acl.SetEntry(aclType, qualifier, permissions)
+	}
+
+	return acl
 }
