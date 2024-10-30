@@ -47,8 +47,8 @@ import (
 )
 
 const (
-	versionPrefix  = ".sys.v#."
-	favoritesKey   = "http://owncloud.org/ns/favorite"
+	versionPrefix = ".sys.v#."
+	favoritesKey  = "http://owncloud.org/ns/favorite"
 )
 
 const (
@@ -1416,14 +1416,13 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 
 	ret := make([]*eosclient.DeletedEntry, 0)
 	count := 0
-	for d := to; !d.Before(to); d = d.AddDate(0, 0, -1) {
+	for d := to; !d.Before(from); d = d.AddDate(0, 0, -1) {
 		msg := new(erpc.NSRequest_RecycleRequest)
 		msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(erpc.NSRequest_RecycleRequest_RECYCLE_CMD_value["LIST"])
-		msg.Purgedate = new(erpc.NSRequest_RecycleRequest_PurgeDate)
-		msg.Purgedate.Day = int32(d.Day())
-		msg.Purgedate.Month = int32(d.Month())
-		msg.Purgedate.Year = int32(d.Year())
 		msg.Listflag = new(erpc.NSRequest_RecycleRequest_ListFlags)
+		msg.Listflag.Day = int32(d.Day())
+		msg.Listflag.Month = int32(d.Month())
+		msg.Listflag.Year = int32(d.Year())
 		msg.Listflag.Maxentries = int32(maxentries + 1)
 		rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
 
