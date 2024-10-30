@@ -117,17 +117,17 @@ func (fs *cephfs) CreateHome(ctx context.Context) (err error) {
 		return fs.adminConn.adminMount.MakeDir(path, fs.conf.DirPerms)
 	}, false)
 	if err != nil {
-		return getRevaError(err)
+		return getRevaError(ctx, err)
 	}
 
 	err = fs.adminConn.adminMount.Chown(user.home, uint32(user.UidNumber), uint32(user.GidNumber))
 	if err != nil {
-		return getRevaError(err)
+		return getRevaError(ctx, err)
 	}
 
 	err = fs.adminConn.adminMount.SetXattr(user.home, "ceph.quota.max_bytes", []byte(fmt.Sprint(fs.conf.UserQuotaBytes)), 0)
 	if err != nil {
-		return getRevaError(err)
+		return getRevaError(ctx, err)
 	}
 
 	return nil
@@ -137,7 +137,7 @@ func (fs *cephfs) CreateDir(ctx context.Context, ref *provider.Reference) error 
 	user := fs.makeUser(ctx)
 	path, err := user.resolveRef(ref)
 	if err != nil {
-		return getRevaError(err)
+		return getRevaError(ctx, err)
 	}
 
 	user.op(func(cv *cacheVal) {
@@ -146,7 +146,7 @@ func (fs *cephfs) CreateDir(ctx context.Context, ref *provider.Reference) error 
 		}
 	})
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
@@ -168,7 +168,7 @@ func (fs *cephfs) Delete(ctx context.Context, ref *provider.Reference) (err erro
 		return nil
 	}
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
@@ -192,7 +192,7 @@ func (fs *cephfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) 
 		return nil
 	}
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (ri *provider.ResourceInfo, err error) {
@@ -215,7 +215,7 @@ func (fs *cephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 		ri, err = user.fileAsResourceInfo(cv, path, stat, mdKeys)
 	})
 
-	return ri, getRevaError(err)
+	return ri, getRevaError(ctx, err)
 }
 
 func (fs *cephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (files []*provider.ResourceInfo, err error) {
@@ -261,7 +261,7 @@ func (fs *cephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 		}
 	})
 
-	return files, getRevaError(err)
+	return files, getRevaError(ctx, err)
 }
 
 func (fs *cephfs) Download(ctx context.Context, ref *provider.Reference) (rc io.ReadCloser, err error) {
@@ -275,7 +275,7 @@ func (fs *cephfs) Download(ctx context.Context, ref *provider.Reference) (rc io.
 		rc, err = cv.mount.Open(path, os.O_RDONLY, 0)
 	})
 
-	return rc, getRevaError(err)
+	return rc, getRevaError(ctx, err)
 }
 
 func (fs *cephfs) ListRevisions(ctx context.Context, ref *provider.Reference) (fvs []*provider.FileVersion, err error) {
@@ -305,7 +305,7 @@ func (fs *cephfs) AddGrant(ctx context.Context, ref *provider.Reference, g *prov
 		err = fs.changePerms(ctx, cv.mount, g, path, updateGrant)
 	})
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
@@ -319,7 +319,7 @@ func (fs *cephfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *p
 		err = fs.changePerms(ctx, cv.mount, g, path, removeGrant)
 	})
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
@@ -333,7 +333,7 @@ func (fs *cephfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *p
 		err = fs.changePerms(ctx, cv.mount, g, path, updateGrant)
 	})
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) (err error) {
@@ -348,7 +348,7 @@ func (fs *cephfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *pro
 		err = fs.changePerms(ctx, cv.mount, grant, path, removeGrant)
 	})
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) ListGrants(ctx context.Context, ref *provider.Reference) (glist []*provider.Grant, err error) {
@@ -366,7 +366,7 @@ func (fs *cephfs) ListGrants(ctx context.Context, ref *provider.Reference) (glis
 		}
 	})
 
-	return glist, getRevaError(err)
+	return glist, getRevaError(ctx, err)
 }
 
 func (fs *cephfs) GetQuota(ctx context.Context, ref *provider.Reference) (total uint64, used uint64, err error) {
@@ -389,7 +389,7 @@ func (fs *cephfs) GetQuota(ctx context.Context, ref *provider.Reference) (total 
 		}
 	})
 
-	return total, used, getRevaError(err)
+	return total, used, getRevaError(ctx, err)
 }
 
 func (fs *cephfs) CreateReference(ctx context.Context, path string, targetURI *url.URL) (err error) {
@@ -425,7 +425,7 @@ func (fs *cephfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 		}
 	})
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) (err error) {
@@ -447,14 +447,14 @@ func (fs *cephfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refe
 		}
 	})
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
 	user := fs.makeUser(ctx)
 	path, err := user.resolveRef(ref)
 	if err != nil {
-		return getRevaError(err)
+		return getRevaError(ctx, err)
 	}
 
 	user.op(func(cv *cacheVal) {
@@ -465,7 +465,7 @@ func (fs *cephfs) TouchFile(ctx context.Context, ref *provider.Reference) error 
 		}
 	})
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) EmptyRecycle(ctx context.Context) error {
@@ -527,7 +527,7 @@ func (fs *cephfs) SetLock(ctx context.Context, ref *provider.Reference, lock *pr
 	user := fs.makeUser(ctx)
 	path, err := user.resolveRef(ref)
 	if err != nil {
-		return getRevaError(err)
+		return getRevaError(ctx, err)
 	}
 
 	op := goceph.LockEX
@@ -555,14 +555,14 @@ func (fs *cephfs) SetLock(ctx context.Context, ref *provider.Reference, lock *pr
 		return fs.SetArbitraryMetadata(ctx, ref, md)
 	}
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
 	user := fs.makeUser(ctx)
 	path, err := user.resolveRef(ref)
 	if err != nil {
-		return nil, getRevaError(err)
+		return nil, getRevaError(ctx, err)
 	}
 
 	var l *provider.Lock
@@ -615,7 +615,7 @@ func (fs *cephfs) GetLock(ctx context.Context, ref *provider.Reference) (*provid
 		return
 	})
 
-	return l, getRevaError(err)
+	return l, getRevaError(ctx, err)
 }
 
 // TODO(lopresti) part of this logic is duplicated from eosfs.go, should be factored out
@@ -658,7 +658,7 @@ func (fs *cephfs) Unlock(ctx context.Context, ref *provider.Reference, lock *pro
 	user := fs.makeUser(ctx)
 	path, err := user.resolveRef(ref)
 	if err != nil {
-		return getRevaError(err)
+		return getRevaError(ctx, err)
 	}
 
 	oldLock, err := fs.GetLock(ctx, ref)
@@ -695,5 +695,5 @@ func (fs *cephfs) Unlock(ctx context.Context, ref *provider.Reference, lock *pro
 		return fs.UnsetArbitraryMetadata(ctx, ref, []string{xattrLock})
 	}
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }

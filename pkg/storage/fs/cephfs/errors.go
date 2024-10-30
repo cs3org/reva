@@ -29,7 +29,8 @@ package cephfs
 import "C"
 import (
 	"fmt"
-
+	"context"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 )
 
@@ -45,10 +46,12 @@ var (
 	errPermissionDenied = wrapErrorMsg(C.EACCES)
 )
 
-func getRevaError(err error) error {
+func getRevaError(ctx context.Context, err error) error {
 	if err == nil {
 		return nil
 	}
+	log := appctx.GetLogger(ctx)
+	log.Warn().Err(err).Msg("cephfs error")
 	switch err.Error() {
 	case errNotFound:
 		return errtypes.NotFound("cephfs: entry not found")
