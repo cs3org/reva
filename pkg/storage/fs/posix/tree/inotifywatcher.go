@@ -45,18 +45,19 @@ func (iw *InotifyWatcher) Watch(path string) {
 				if isLockFile(event.Filename) || isTrash(event.Filename) || iw.tree.isUpload(event.Filename) {
 					continue
 				}
-				switch e {
-				case inotifywaitgo.DELETE:
-					go func() { _ = iw.tree.HandleFileDelete(event.Filename) }()
-				case inotifywaitgo.CREATE:
-					go func() { _ = iw.tree.Scan(event.Filename, ActionCreate, event.IsDir, false) }()
-				case inotifywaitgo.MOVED_TO:
-					go func() {
-						_ = iw.tree.Scan(event.Filename, ActionMove, event.IsDir, true)
-					}()
-				case inotifywaitgo.CLOSE_WRITE:
-					go func() { _ = iw.tree.Scan(event.Filename, ActionUpdate, event.IsDir, true) }()
-				}
+				e := e // copy loop variable for use in goroutine
+				go func() {
+					switch e {
+					case inotifywaitgo.DELETE:
+					case inotifywaitgo.MOVED_FROM:
+						_ = iw.tree.Scan(event.Filename, ActionDelete, event.IsDir)
+					case inotifywaitgo.CREATE:
+					case inotifywaitgo.MOVED_TO:
+						_ = iw.tree.Scan(event.Filename, ActionCreate, event.IsDir)
+					case inotifywaitgo.CLOSE_WRITE:
+						_ = iw.tree.Scan(event.Filename, ActionUpdate, event.IsDir)
+					}
+				}()
 			}
 
 		case err := <-errors:

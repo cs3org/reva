@@ -160,14 +160,14 @@ func (t *Tree) workScanQueue() {
 }
 
 // Scan scans the given path and updates the id chache
-func (t *Tree) Scan(path string, action EventAction, isDir bool, recurse bool) error {
+func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 	// cases:
 	switch action {
 	case ActionCreate:
 		if !isDir {
 			// 1. New file (could be emitted as part of a new directory)
 			//	 -> assimilate file
-			//   -> scan parent directory recursively
+			//   -> scan parent directory recursively to update tree size and catch nodes that weren't covered by an event
 			if !t.scanDebouncer.InProgress(filepath.Dir(path)) {
 				t.scanDebouncer.Debounce(scanItem{
 					Path:        path,

@@ -64,15 +64,15 @@ start:
 			}
 			switch ev.Event {
 			case "CREATE":
-				go func() { _ = w.tree.Scan(ev.Path, ActionCreate, false, false) }()
+				go func() { _ = w.tree.Scan(ev.Path, ActionCreate, false) }()
 			case "CLOSE":
 				bytesWritten, err := strconv.Atoi(ev.BytesWritten)
 				if err == nil && bytesWritten > 0 {
-					go func() { _ = w.tree.Scan(ev.Path, ActionUpdate, false, true) }()
+					go func() { _ = w.tree.Scan(ev.Path, ActionUpdate, false) }()
 				}
 			case "RENAME":
 				go func() {
-					_ = w.tree.Scan(ev.Path, ActionMove, false, true)
+					_ = w.tree.Scan(ev.Path, ActionMove, false)
 					_ = w.tree.WarmupIDCache(ev.Path, false, false)
 				}()
 			}
