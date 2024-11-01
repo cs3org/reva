@@ -48,6 +48,7 @@ import (
 
 const (
 	versionPrefix = ".sys.v#."
+	favoritesKey  = "http://owncloud.org/ns/favorite"
 )
 
 const (
@@ -56,6 +57,29 @@ const (
 	// UserAttr is the user extended attribute.
 	UserAttr
 )
+
+func serializeAttribute(a *eosclient.Attribute) string {
+	return fmt.Sprintf("%s.%s=%s", attrTypeToString(a.Type), a.Key, a.Val)
+}
+
+func attrTypeToString(at eosclient.AttrType) string {
+	switch at {
+	case eosclient.SystemAttr:
+		return "sys"
+	case eosclient.UserAttr:
+		return "user"
+	default:
+		return "invalid"
+	}
+}
+
+func isValidAttribute(a *eosclient.Attribute) bool {
+	// validate that an attribute is correct.
+	if (a.Type != eosclient.SystemAttr && a.Type != eosclient.UserAttr) || a.Key == "" {
+		return false
+	}
+	return true
+}
 
 // Options to configure the Client.
 type Options struct {
@@ -259,6 +283,13 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "AddACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
+	// First, we need to figure out if the path is a directory
+	// to know whether our request should be recursive
+	fileInfo, err := c.GetFileInfoByPath(ctx, auth, path)
+	if err != nil {
+		return err
+	}
+
 	// Init a new NSRequest
 	rq, err := c.initNSRequest(ctx, rootAuth, "")
 	if err != nil {
@@ -272,7 +303,7 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 	msg := new(erpc.NSRequest_AclRequest)
 	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["MODIFY"])
 	msg.Type = erpc.NSRequest_AclRequest_ACL_TYPE(erpc.NSRequest_AclRequest_ACL_TYPE_value["SYS_ACL"])
-	msg.Recursive = true
+	msg.Recursive = fileInfo.IsDir
 	msg.Rule = a.CitrineSerialize()
 
 	msg.Id = new(erpc.MDId)
@@ -300,48 +331,11 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 // RemoveACL removes the acl from EOS.
 func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, a *acl.Entry) error {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "RemoveACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
+	log.Info().Str("func", "RemoveACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Str("ACL", a.CitrineSerialize()).Msg("")
 
-	acls, err := c.getACLForPath(ctx, auth, path)
-	if err != nil {
-		return err
-	}
-
-	acls.DeleteEntry(a.Type, a.Qualifier)
-	sysACL := acls.Serialize()
-
-	// Init a new NSRequest
-	rq, err := c.initNSRequest(ctx, auth, "")
-	if err != nil {
-		return err
-	}
-
-	msg := new(erpc.NSRequest_AclRequest)
-	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["MODIFY"])
-	msg.Type = erpc.NSRequest_AclRequest_ACL_TYPE(erpc.NSRequest_AclRequest_ACL_TYPE_value["SYS_ACL"])
-	msg.Recursive = true
-	msg.Rule = sysACL
-
-	msg.Id = new(erpc.MDId)
-	msg.Id.Path = []byte(path)
-
-	rq.Command = &erpc.NSRequest_Acl{Acl: msg}
-
-	// Now send the req and see what happens
-	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
-	e := c.getRespError(resp, err)
-	if e != nil {
-		log.Error().Str("func", "RemoveACL").Str("path", path).Str("err", e.Error()).Msg("")
-		return e
-	}
-
-	if resp == nil {
-		return errtypes.NotFound(fmt.Sprintf("Path: %s", path))
-	}
-
-	log.Debug().Str("func", "RemoveACL").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
-
-	return err
+	// We set permissions to "", so the ACL will serialize to `u:123456=`, which will make EOS delete the entry
+	a.Permissions = ""
+	return c.AddACL(ctx, auth, rootAuth, path, eosclient.StartPosition, a)
 }
 
 // UpdateACL updates the EOS acl.
@@ -387,6 +381,11 @@ func (c *Client) getACLForPath(ctx context.Context, auth eosclient.Authorization
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "GetACLForPath").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
+	fileInfo, err := c.GetFileInfoByPath(ctx, auth, path)
+	if err != nil {
+		return nil, err
+	}
+
 	// Initialize the common fields of the NSReq
 	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
@@ -396,7 +395,7 @@ func (c *Client) getACLForPath(ctx context.Context, auth eosclient.Authorization
 	msg := new(erpc.NSRequest_AclRequest)
 	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["LIST"])
 	msg.Type = erpc.NSRequest_AclRequest_ACL_TYPE(erpc.NSRequest_AclRequest_ACL_TYPE_value["SYS_ACL"])
-	msg.Recursive = true
+	msg.Recursive = fileInfo.IsDir
 
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
@@ -508,6 +507,22 @@ func (c *Client) fixupACLs(ctx context.Context, auth eosclient.Authorization, in
 
 // SetAttr sets an extended attributes on a path.
 func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path, app string) error {
+	if !isValidAttribute(attr) {
+		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
+	}
+
+	// Favorites need to be stored per user so handle these separately
+	if attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
+		info, err := c.GetFileInfoByPath(ctx, auth, path)
+		if err != nil {
+			return err
+		}
+		return c.handleFavAttr(ctx, auth, attr, recursive, path, info, true)
+	}
+	return c.setEOSAttr(ctx, auth, attr, errorIfExists, recursive, path, app)
+}
+
+func (c *Client) setEOSAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path, app string) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "SetAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
@@ -554,6 +569,32 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 	}
 
 	return err
+}
+
+func (c *Client) handleFavAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path string, info *eosclient.FileInfo, set bool) error {
+	var err error
+	u := appctx.ContextMustGetUser(ctx)
+	if info == nil {
+		info, err = c.GetFileInfoByPath(ctx, auth, path)
+		if err != nil {
+			return err
+		}
+	}
+	favStr := info.Attrs[favoritesKey]
+	favs, err := acl.Parse(favStr, acl.ShortTextForm)
+	if err != nil {
+		return err
+	}
+	if set {
+		err = favs.SetEntry(acl.TypeUser, u.Id.OpaqueId, "1")
+		if err != nil {
+			return err
+		}
+	} else {
+		favs.DeleteEntry(acl.TypeUser, u.Id.OpaqueId)
+	}
+	attr.Val = favs.Serialize()
+	return c.setEOSAttr(ctx, auth, attr, false, recursive, path, "")
 }
 
 // UnsetAttr unsets an extended attribute on a path.
@@ -1242,7 +1283,9 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 			if parent != nil && parent.SysACL != nil {
 				if fi.SysACL == nil {
 					log.Warn().Str("func", "List").Str("path", dpath).Str("SysACL is nil, taking parent", "").Msg("grpc response")
-					fi.SysACL.Entries = parent.SysACL.Entries
+					fi.SysACL = &acl.ACLs{
+						Entries: parent.SysACL.Entries,
+					}
 				} else {
 					fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
 				}
@@ -1373,14 +1416,13 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 
 	ret := make([]*eosclient.DeletedEntry, 0)
 	count := 0
-	for d := to; !d.Before(to); d = d.AddDate(0, 0, -1) {
+	for d := to; !d.Before(from); d = d.AddDate(0, 0, -1) {
 		msg := new(erpc.NSRequest_RecycleRequest)
 		msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(erpc.NSRequest_RecycleRequest_RECYCLE_CMD_value["LIST"])
-		msg.Purgedate = new(erpc.NSRequest_RecycleRequest_PurgeDate)
-		msg.Purgedate.Day = int32(d.Day())
-		msg.Purgedate.Month = int32(d.Month())
-		msg.Purgedate.Year = int32(d.Year())
 		msg.Listflag = new(erpc.NSRequest_RecycleRequest_ListFlags)
+		msg.Listflag.Day = int32(d.Day())
+		msg.Listflag.Month = int32(d.Month())
+		msg.Listflag.Year = int32(d.Year())
 		msg.Listflag.Maxentries = int32(maxentries + 1)
 		rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
 
@@ -1544,8 +1586,9 @@ func (c *Client) RollbackToVersion(ctx context.Context, auth eosclient.Authoriza
 		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' ", auth.Role.UID))
 	}
 
-	log.Info().Str("func", "RollbackToVersion").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
-
+	if resp.GetError() != nil {
+		log.Info().Str("func", "RollbackToVersion").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+	}
 	return err
 }
 
@@ -1628,6 +1671,10 @@ func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDRespon
 			fi.Attrs[strings.TrimPrefix(k, "user.")] = string(v)
 		}
 
+		if fi.Attrs["sys.acl"] != "" {
+			fi.SysACL = aclAttrToAclStruct(fi.Attrs["sys.acl"])
+		}
+
 		fi.TreeSize = uint64(st.Cmd.TreeSize)
 		fi.Size = fi.TreeSize
 		// TODO(lopresti) this info is missing in the EOS Protobuf, cf. EOS-5974
@@ -1648,6 +1695,10 @@ func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDRespon
 			fi.Attrs[strings.TrimPrefix(k, "user.")] = string(v)
 		}
 
+		if fi.Attrs["sys.acl"] != "" {
+			fi.SysACL = aclAttrToAclStruct(fi.Attrs["sys.acl"])
+		}
+
 		fi.Size = st.Fmd.Size
 
 		if st.Fmd.Checksum != nil {
@@ -1661,4 +1712,24 @@ func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDRespon
 		}
 	}
 	return fi, nil
+}
+
+func aclAttrToAclStruct(aclAttr string) *acl.ACLs {
+	entries := strings.Split(aclAttr, ",")
+
+	acl := &acl.ACLs{}
+
+	for _, entry := range entries {
+		parts := strings.Split(entry, ":")
+		if len(parts) != 3 {
+			continue
+		}
+		aclType := parts[0]
+		qualifier := parts[1]
+		permissions := parts[2]
+
+		acl.SetEntry(aclType, qualifier, permissions)
+	}
+
+	return acl
 }
