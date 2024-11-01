@@ -203,6 +203,7 @@ func newConn(user *User) *cacheVal {
 	}
 
 	if user != nil { //nil creates admin conn
+		// TODO(lopresti) here we may need to impersonate a different user in order to support ACLs!
 		perm = goceph.NewUserPerm(int(user.UidNumber), int(user.GidNumber), []int{})
 		if err = mount.SetMountPerms(perm); err != nil {
 			return destroyCephConn(mount, perm)
