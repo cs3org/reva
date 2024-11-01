@@ -202,6 +202,7 @@ func (fs *cephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 
 	var path string
 	user := fs.makeUser(ctx)
+	log := appctx.GetLogger(ctx)
 
 	if path, err = user.resolveRef(ref); err != nil {
 		return nil, err
@@ -213,6 +214,7 @@ func (fs *cephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 			return
 		}
 		ri, err = user.fileAsResourceInfo(cv, path, stat, mdKeys)
+		log.Debug().Any("resourceInfo", ri).Err(err).Msg("fileAsResourceInfo returned")
 	})
 
 	return ri, getRevaError(ctx, err)
@@ -235,6 +237,7 @@ func (fs *cephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 	user.op(func(cv *cacheVal) {
 		var dir *goceph.Directory
 		if dir, err = cv.mount.OpenDir(path); err != nil {
+			log.Debug().Str("path", path).Err(err).Msg("cv.mount.OpenDir returned")
 			return
 		}
 		defer closeDir(dir)
@@ -250,8 +253,7 @@ func (fs *cephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 			ri, err = user.fileAsResourceInfo(cv, filepath.Join(path, entry.Name()), entry.Statx(), mdKeys)
 			if ri == nil || err != nil {
 				if err != nil {
-					log := appctx.GetLogger(ctx)
-					log.Err(err).Msg("cephfs: error in file as resource info")
+					log.Debug().Any("resourceInfo", ri).Err(err).Msg("fileAsResourceInfo returned")
 				}
 				err = nil
 				continue
