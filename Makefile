@@ -53,11 +53,12 @@ gaia:
 
 .PHONY: cernbox-revad
 cernbox-revad: gaia
-	gaia build --with github.com/cernbox/reva-plugins --with github.com/cs3org/reva=$(shell pwd) -o ./cmd/revad/revad
+	gaia build --with github.com/cernbox/reva-plugins --with github.com/cs3org/reva=$(shell pwd) --debug -o ./cmd/revad/revad
+	gaia build --tags ceph --with github.com/cernbox/reva-plugins --with github.com/cs3org/reva=$(shell pwd) --debug -o ./cmd/revad/revad-ceph
 
 .PHONY: revad-ceph
 revad-ceph:
-	go build -ldflags "$(BUILD_FLAGS)" -tags ceph -o ./cmd/revad/revad ./cmd/revad/main
+	go build -ldflags "$(BUILD_FLAGS)" -tags ceph --debug -o ./cmd/revad/revad ./cmd/revad/main
 
 .PHONY: reva
 reva:
