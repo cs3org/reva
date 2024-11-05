@@ -63,8 +63,8 @@ func init() {
 	registry.Register("cephfs", New)
 }
 
-// New returns an implementation to of the storage.FS interface that talks to
-// a ceph filesystem.
+// New returns an implementation of the storage.FS interface that talks to
+// a CephFS storage via libcephfs.
 func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err error) {
 	var o Options
 	if err := cfg.Decode(m, &o); err != nil {
@@ -140,8 +140,10 @@ func (fs *cephfs) CreateDir(ctx context.Context, ref *provider.Reference) error 
 		return getRevaError(ctx, err)
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
 		if err = cv.mount.MakeDir(path, fs.conf.DirPerms); err != nil {
+			log.Debug().Str("path", path).Err(err).Msg("cv.mount.CreateDir returned")
 			return
 		}
 	})
@@ -157,15 +159,19 @@ func (fs *cephfs) Delete(ctx context.Context, ref *provider.Reference) (err erro
 		return err
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
 		if err = cv.mount.Unlink(path); err != nil && err.Error() == errIsADirectory {
 			err = cv.mount.RemoveDir(path)
 		}
 	})
 
-	//has already been deleted by direct mount
-	if err != nil && err.Error() == errNotFound {
-		return nil
+	if err != nil {
+		log.Debug().Any("ref", ref).Err(err).Msg("Delete returned")
+		if err.Error() == errNotFound {
+			//has already been deleted by direct mount
+			return nil
+		}
 	}
 
 	return getRevaError(ctx, err)
@@ -181,8 +187,10 @@ func (fs *cephfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) 
 		return
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
 		if err = cv.mount.Rename(oldPath, newPath); err != nil {
+			log.Debug().Any("oldRef", oldRef).Any("newRef", newRef).Err(err).Msg("cv.mount.Rename returned")
 			return
 		}
 	})
@@ -200,10 +208,9 @@ func (fs *cephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 		return nil, errors.New("error: ref is nil")
 	}
 
+	log := appctx.GetLogger(ctx)
 	var path string
 	user := fs.makeUser(ctx)
-	log := appctx.GetLogger(ctx)
-
 	if path, err = user.resolveRef(ref); err != nil {
 		return nil, err
 	}
@@ -211,10 +218,13 @@ func (fs *cephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 	user.op(func(cv *cacheVal) {
 		var stat Statx
 		if stat, err = cv.mount.Statx(path, goceph.StatxBasicStats, 0); err != nil {
+			log.Debug().Str("path", path).Err(err).Msg("cv.mount.Statx returned")
 			return
 		}
 		ri, err = user.fileAsResourceInfo(cv, path, stat, mdKeys)
-		log.Debug().Any("resourceInfo", ri).Err(err).Msg("fileAsResourceInfo returned")
+		if err != nil {
+			log.Debug().Any("resourceInfo", ri).Err(err).Msg("fileAsResourceInfo returned")
+		}
 	})
 
 	return ri, getRevaError(ctx, err)
@@ -273,8 +283,12 @@ func (fs *cephfs) Download(ctx context.Context, ref *provider.Reference) (rc io.
 		return nil, errors.Wrap(err, "cephfs: error resolving ref")
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
-		rc, err = cv.mount.Open(path, os.O_RDONLY, 0)
+		if rc, err = cv.mount.Open(path, os.O_RDONLY, 0); err != nil {
+			log.Debug().Any("ref", ref).Err(err).Msg("cv.mount.Open returned")
+			return
+		}
 	})
 
 	return rc, getRevaError(ctx, err)
@@ -303,8 +317,11 @@ func (fs *cephfs) AddGrant(ctx context.Context, ref *provider.Reference, g *prov
 		return
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
-		err = fs.changePerms(ctx, cv.mount, g, path, updateGrant)
+		if err = fs.changePerms(ctx, cv.mount, g, path, updateGrant); err != nil {
+			log.Debug().Any("ref", ref).Any("grant", g).Err(err).Msg("AddGrant returned")
+		}
 	})
 
 	return getRevaError(ctx, err)
@@ -317,8 +334,11 @@ func (fs *cephfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *p
 		return
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
-		err = fs.changePerms(ctx, cv.mount, g, path, removeGrant)
+		if err = fs.changePerms(ctx, cv.mount, g, path, removeGrant); err != nil {
+			log.Debug().Any("ref", ref).Any("grant", g).Err(err).Msg("RemoveGrant returned")
+		}
 	})
 
 	return getRevaError(ctx, err)
@@ -331,8 +351,11 @@ func (fs *cephfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *p
 		return
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
-		err = fs.changePerms(ctx, cv.mount, g, path, updateGrant)
+		if err = fs.changePerms(ctx, cv.mount, g, path, updateGrant); err != nil {
+			log.Debug().Any("ref", ref).Any("grant", g).Err(err).Msg("UpdateGrant returned")
+		}
 	})
 
 	return getRevaError(ctx, err)
@@ -345,9 +368,12 @@ func (fs *cephfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *pro
 		return
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
 		grant := &provider.Grant{Grantee: g} //nil perms will remove the whole grant
-		err = fs.changePerms(ctx, cv.mount, grant, path, removeGrant)
+		if err = fs.changePerms(ctx, cv.mount, grant, path, removeGrant); err != nil {
+			log.Debug().Any("ref", ref).Any("grant", grant).Err(err).Msg("DenyGrant returned")
+		}
 	})
 
 	return getRevaError(ctx, err)
@@ -415,6 +441,7 @@ func (fs *cephfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 		return err
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
 		for k, v := range md.Metadata {
 			if !strings.HasPrefix(k, xattrUserNs) {
@@ -422,6 +449,7 @@ func (fs *cephfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 			}
 			if e := cv.mount.SetXattr(path, k, []byte(v), 0); e != nil {
 				err = errors.Wrap(err, e.Error())
+				log.Debug().Any("ref", ref).Str("key", k).Any("v", v).Err(err).Msg("SetXattr returned")
 				return
 			}
 		}
@@ -437,6 +465,7 @@ func (fs *cephfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refe
 		return err
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
 		for _, key := range keys {
 			if !strings.HasPrefix(key, xattrUserNs) {
@@ -444,6 +473,7 @@ func (fs *cephfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refe
 			}
 			if e := cv.mount.RemoveXattr(path, key); e != nil {
 				err = errors.Wrap(err, e.Error())
+				log.Debug().Any("ref", ref).Str("key", key).Err(err).Msg("RemoveXattr returned")
 				return
 			}
 		}
@@ -459,10 +489,12 @@ func (fs *cephfs) TouchFile(ctx context.Context, ref *provider.Reference) error 
 		return getRevaError(ctx, err)
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
 		var file *goceph.File
 		defer closeFile(file)
 		if file, err = cv.mount.Open(path, os.O_CREATE|os.O_WRONLY, fs.conf.FilePerms); err != nil {
+			log.Debug().Any("ref", ref).Err(err).Msg("Touch: Open returned")
 			return
 		}
 	})
