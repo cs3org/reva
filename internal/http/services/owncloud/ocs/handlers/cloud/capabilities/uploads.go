@@ -49,32 +49,41 @@ func (h *Handler) getCapabilitiesForUserAgent(_ context.Context, userAgent strin
 }
 
 func setCapabilitiesForChunkProtocol(cp chunkProtocol, c *data.Capabilities) {
-	switch cp {
-	case chunkV1:
-		// 2.7+ will use Chunking V1 if "capabilities > files > bigfilechunking" is "true" AND "capabilities > dav > chunking" is not there
-		c.Files.BigFileChunking = true
-		c.Dav = nil
-		c.Files.TusSupport = nil
+	// 2.7+ will use Chunking V1 if "capabilities > files > bigfilechunking" is "true" AND "capabilities > dav > chunking" is not there
+	c.Files.BigFileChunking = true
+	c.Dav = nil
+	c.Files.TusSupport = nil
+	/*
+	   switch cp {
+	   case chunkV1:
 
-	case chunkNG:
-		// 2.7+ will use Chunking NG if "capabilities > files > bigfilechunking" is "true" AND "capabilities > dav > chunking" = 1.0
-		c.Files.BigFileChunking = true
-		c.Dav.Chunking = "1.0"
-		c.Files.TusSupport = nil
+	   	// 2.7+ will use Chunking V1 if "capabilities > files > bigfilechunking" is "true" AND "capabilities > dav > chunking" is not there
+	   	c.Files.BigFileChunking = true
+	   	c.Dav = nil
+	   	c.Files.TusSupport = nil
 
-	case chunkTUS:
-		// 2.7+ will use TUS if "capabilities > files > bigfilechunking" is "false" AND "capabilities > dav > chunking" = "" AND "capabilities > files > tus_support" has proper entries.
-		c.Files.BigFileChunking = false
-		c.Dav.Chunking = ""
+	   case chunkNG:
 
-		// TODO: infer from various TUS handlers from all known storages
-		// until now we take the manually configured tus options
-		// c.Capabilities.Files.TusSupport = &data.CapabilitiesFilesTusSupport{
-		// 	Version:            "1.0.0",
-		// 	Resumable:          "1.0.0",
-		// 	Extension:          "creation,creation-with-upload",
-		// 	MaxChunkSize:       0,
-		// 	HTTPMethodOverride: "",
-		// }
-	}
+	   	// 2.7+ will use Chunking NG if "capabilities > files > bigfilechunking" is "true" AND "capabilities > dav > chunking" = 1.0
+	   	c.Files.BigFileChunking = true
+	   	c.Dav.Chunking = "1.0"
+	   	c.Files.TusSupport = nil
+
+	   case chunkTUS:
+
+	   		// 2.7+ will use TUS if "capabilities > files > bigfilechunking" is "false" AND "capabilities > dav > chunking" = "" AND "capabilities > files > tus_support" has proper entries.
+	   		c.Files.BigFileChunking = false
+	   		c.Dav.Chunking = ""
+
+	   		// TODO: infer from various TUS handlers from all known storages
+	   		// until now we take the manually configured tus options
+	   		// c.Capabilities.Files.TusSupport = &data.CapabilitiesFilesTusSupport{
+	   		// 	Version:            "1.0.0",
+	   		// 	Resumable:          "1.0.0",
+	   		// 	Extension:          "creation,creation-with-upload",
+	   		// 	MaxChunkSize:       0,
+	   		// 	HTTPMethodOverride: "",
+	   		// }
+	   	}
+	*/
 }

@@ -260,6 +260,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		Ref:                   ref,
 		ArbitraryMetadataKeys: metadataKeys,
 	}
+
 	res, err := client.Stat(ctx, req)
 	if err != nil {
 		log.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")

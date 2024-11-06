@@ -175,6 +175,10 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	if fs == nil {
+		return nil, errors.New("error creating fs driver")
+	}
+
 	// parse data server url
 	u, err := url.Parse(c.DataServerURL)
 	if err != nil {
@@ -924,17 +928,6 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
-	if err != nil {
-		// The path might be a virtual view; handle that case
-		if utils.IsAbsolutePathReference(req.Ref) && strings.HasPrefix(s.mountPath, req.Ref.Path) {
-			return s.listVirtualView(ctx, req.Ref)
-		}
-
-		return &provider.ListContainerResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
-		}, nil
-	}
-
 	mds, err := s.storage.ListFolder(ctx, newRef, req.ArbitraryMetadataKeys)
 	if err != nil {
 		var st *rpc.Status
@@ -1551,7 +1544,8 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provide
 
 func (s *service) trimMountPrefix(fn string) (string, error) {
 	if strings.HasPrefix(fn, s.mountPath) {
-		return path.Join("/", strings.TrimPrefix(fn, s.mountPath)), nil
+		p := path.Join("/", strings.TrimPrefix(fn, s.mountPath))
+		return p, nil
 	}
 	return "", errtypes.BadRequest(fmt.Sprintf("path=%q does not belong to this storage provider mount path=%q", fn, s.mountPath))
 }

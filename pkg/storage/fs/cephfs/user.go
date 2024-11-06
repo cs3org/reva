@@ -53,11 +53,8 @@ type User struct {
 
 func (fs *cephfs) makeUser(ctx context.Context) *User {
 	u := appctx.ContextMustGetUser(ctx)
-	home := fs.conf.Root
-	if !fs.conf.DisableHome {
-		home = filepath.Join(fs.conf.Root, templates.WithUser(u, fs.conf.UserLayout))
-	}
-
+	// home := fs.conf.Root
+	home := filepath.Join(fs.conf.Root, templates.WithUser(u, fs.conf.UserLayout))
 	return &User{u, fs, ctx, home}
 }
 
@@ -139,8 +136,6 @@ func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *goceph.Cep
 		}
 	}
 
-	//TODO(tmourati): Add entry id logic here
-
 	var etag string
 	if isDir(_type) {
 		rctime, _ := cv.mount.GetXattr(path, "ceph.dir.rctime")
@@ -162,37 +157,11 @@ func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *goceph.Cep
 		}
 	}
 
+	// cephfs does not provide checksums, so we cannot set it
+	// a 3rd party tool can add a checksum attribute and we can read it,
+	// if ever that is implemented.
 	var checksum provider.ResourceChecksum
-	var md5 string
-	if _type == provider.ResourceType_RESOURCE_TYPE_FILE {
-		md5tsBA, err := cv.mount.GetXattr(path, xattrMd5ts) //local error inside if scope
-		if err == nil {
-			md5ts, _ := strconv.ParseInt(string(md5tsBA), 10, 64)
-			if stat.Mtime.Sec == md5ts {
-				md5BA, err := cv.mount.GetXattr(path, xattrMd5)
-				if err != nil {
-					md5, err = calcChecksum(path, cv.mount, stat)
-				} else {
-					md5 = string(md5BA)
-				}
-			} else {
-				md5, err = calcChecksum(path, cv.mount, stat)
-			}
-		} else {
-			md5, err = calcChecksum(path, cv.mount, stat)
-		}
-
-		if err != nil && err.Error() == errPermissionDenied {
-			checksum.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET
-		} else if err != nil {
-			return nil, errors.New("cephfs: error calculating checksum of file")
-		} else {
-			checksum.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_MD5
-			checksum.Sum = md5
-		}
-	} else {
-		checksum.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET
-	}
+	checksum.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET
 
 	var ownerID *userv1beta1.UserId
 	if stat.Uid != 0 {
@@ -230,13 +199,13 @@ func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *goceph.Cep
 	return
 }
 
-func (user *User) resolveRef(ref *provider.Reference) (str string, err error) {
+func (user *User) resolveRef(ref *provider.Reference) (string, error) {
 	if ref == nil {
-		return "", fmt.Errorf("cephfs: nil reference")
+		return "", fmt.Errorf("cephfs: nil reference provided")
 	}
 
-	if str = ref.GetPath(); str == "" {
-		return "", errtypes.NotSupported("cephfs: entry IDs not currently supported")
+	if ref.GetPath() == "" {
+		return "", errtypes.NotSupported("cephfs: path not provided, id based refs are not supported")
 	}
-	return
+	return ref.GetPath(), nil
 }
