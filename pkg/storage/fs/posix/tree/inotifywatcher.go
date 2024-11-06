@@ -49,7 +49,6 @@ func (iw *InotifyWatcher) Watch(path string) {
 				go func() {
 					switch e {
 					case inotifywaitgo.DELETE:
-					case inotifywaitgo.MOVED_FROM:
 						_ = iw.tree.Scan(event.Filename, ActionDelete, event.IsDir)
 					case inotifywaitgo.CREATE:
 					case inotifywaitgo.MOVED_TO:

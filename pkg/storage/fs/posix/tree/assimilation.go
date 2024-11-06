@@ -218,6 +218,13 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 
 	case ActionDelete:
 		_ = t.HandleFileDelete(path)
+		// 6. Deleted file or directory
+		//   -> update parent and all children
+		t.scanDebouncer.Debounce(scanItem{
+			Path:        filepath.Dir(path),
+			ForceRescan: true,
+			Recurse:     true,
+		})
 	}
 
 	return nil
