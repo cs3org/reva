@@ -600,6 +600,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 			if !dirty {
 				return filepath.SkipDir
 			}
+			sizes[path] += 0 // Make sure to set the size to 0 for empty directories
 		}
 
 		attribs, err := t.lookup.MetadataBackend().All(context.Background(), path)
