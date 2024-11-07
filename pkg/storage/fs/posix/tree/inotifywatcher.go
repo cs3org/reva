@@ -64,7 +64,6 @@ func (iw *InotifyWatcher) Watch(path string) {
 				if isLockFile(event.Filename) || isTrash(event.Filename) || iw.tree.isUpload(event.Filename) {
 					continue
 				}
-				e := e // copy loop variable for use in goroutine
 				go func() {
 					switch e {
 					case inotifywaitgo.DELETE:
