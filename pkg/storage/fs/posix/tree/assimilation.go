@@ -59,6 +59,7 @@ const (
 	ActionUpdate
 	ActionMove
 	ActionDelete
+	ActionMoveFrom
 )
 
 type queueItem struct {
@@ -216,9 +217,18 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 			Recurse:     isDir,
 		})
 
+	case ActionMoveFrom:
+		// 6. file/directory moved out of the watched directory
+		//   -> update directory
+		if err := t.setDirty(filepath.Dir(path), true); err != nil {
+			return err
+		}
+
+		go func() { _ = t.WarmupIDCache(filepath.Dir(path), false, true) }()
+
 	case ActionDelete:
 		_ = t.HandleFileDelete(path)
-		// 6. Deleted file or directory
+		// 7. Deleted file or directory
 		//   -> update parent and all children
 		t.scanDebouncer.Debounce(scanItem{
 			Path:        filepath.Dir(path),
