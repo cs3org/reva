@@ -220,9 +220,9 @@ _The below features have been added after I last categorized them. AFAICT they a
 
 ### [COPY file/folder to same name is possible (but 500 code error for folder with spaces path)](https://github.com/owncloud/ocis/issues/8711)
 
-- [coreApiWebdavProperties/copyFile.feature:1067](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L1067)
-- [coreApiWebdavProperties/copyFile.feature:1068](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L1068)
-- [coreApiWebdavProperties/copyFile.feature:1069](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L1069)
+- [coreApiWebdavProperties/copyFile.feature:1070](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L1070)
+- [coreApiWebdavProperties/copyFile.feature:1071](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L1071)
+- [coreApiWebdavProperties/copyFile.feature:1072](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L1072)
 
 - Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
