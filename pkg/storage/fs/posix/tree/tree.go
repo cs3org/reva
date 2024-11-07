@@ -310,6 +310,12 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		return errors.Wrap(err, "Decomposedfs: could not move child")
 	}
 
+	// update the id cache
+	if newNode.ID == "" {
+		newNode.ID = oldNode.ID
+	}
+	_ = t.lookup.(*lookup.Lookup).CacheID(ctx, newNode.SpaceID, newNode.ID, filepath.Join(newNode.ParentPath(), newNode.Name))
+
 	// rename the lock (if it exists)
 	if _, err := os.Stat(oldNode.LockFilePath()); err == nil {
 		err = os.Rename(
@@ -321,11 +327,6 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		}
 	}
 
-	// update the id cache
-	if newNode.ID == "" {
-		newNode.ID = oldNode.ID
-	}
-	_ = t.lookup.(*lookup.Lookup).CacheID(ctx, newNode.SpaceID, newNode.ID, filepath.Join(newNode.ParentPath(), newNode.Name))
 	// update id cache for the moved subtree.
 	if oldNode.IsDir(ctx) {
 		err = t.WarmupIDCache(filepath.Join(newNode.ParentPath(), newNode.Name), false, false)
