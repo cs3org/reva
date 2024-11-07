@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -29,14 +30,16 @@ import (
 )
 
 type GpfsWatchFolderWatcher struct {
-	tree    *Tree
-	brokers []string
+	tree              *Tree
+	brokers           []string
+	watch_mount_point string
 }
 
 func NewGpfsWatchFolderWatcher(tree *Tree, kafkaBrokers []string) (*GpfsWatchFolderWatcher, error) {
 	return &GpfsWatchFolderWatcher{
-		tree:    tree,
-		brokers: kafkaBrokers,
+		tree:              tree,
+		watch_mount_point: tree.options.WatchMountPoint,
+		brokers:           kafkaBrokers,
 	}, nil
 }
 
@@ -63,26 +66,28 @@ func (w *GpfsWatchFolderWatcher) Watch(topic string) {
 			continue
 		}
 
+		path := filepath.Join(w.watch_mount_point, lwev.Path)
+
 		go func() {
 			isDir := strings.Contains(lwev.Event, "IN_ISDIR")
 
 			switch {
 			case strings.Contains(lwev.Event, "IN_DELETE"):
-				_ = w.tree.Scan(lwev.Path, ActionDelete, isDir)
+				_ = w.tree.Scan(path, ActionDelete, isDir)
 
 			case strings.Contains(lwev.Event, "IN_MOVE_FROM"):
-				_ = w.tree.Scan(lwev.Path, ActionMoveFrom, isDir)
+				_ = w.tree.Scan(path, ActionMoveFrom, isDir)
 
 			case strings.Contains(lwev.Event, "IN_CREATE"):
-				_ = w.tree.Scan(lwev.Path, ActionCreate, isDir)
+				_ = w.tree.Scan(path, ActionCreate, isDir)
 
 			case strings.Contains(lwev.Event, "IN_CLOSE_WRITE"):
 				bytesWritten, err := strconv.Atoi(lwev.BytesWritten)
 				if err == nil && bytesWritten > 0 {
-					_ = w.tree.Scan(lwev.Path, ActionUpdate, isDir)
+					_ = w.tree.Scan(path, ActionUpdate, isDir)
 				}
 			case strings.Contains(lwev.Event, "IN_MOVED_TO"):
-				_ = w.tree.Scan(lwev.Path, ActionMove, isDir)
+				_ = w.tree.Scan(path, ActionMove, isDir)
 			}
 		}()
 	}
