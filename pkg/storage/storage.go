@@ -23,10 +23,9 @@ import (
 	"io"
 	"net/url"
 
-	tusd "github.com/tus/tusd/v2/pkg/handler"
-
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	tusd "github.com/tus/tusd/v2/pkg/handler"
 )
 
 // FS is the interface to implement access to the storage.
@@ -168,4 +167,9 @@ type Registry interface {
 type PathWrapper interface {
 	Unwrap(ctx context.Context, rp string) (string, error)
 	Wrap(ctx context.Context, rp string) (string, error)
+}
+
+type ConsistentDownloader interface {
+	// ConsistentDownload returns the metadata for a resource and a callback to get the content stream matching the etag
+	ConsistentDownload(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, func(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error), error)
 }

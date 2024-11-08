@@ -30,6 +30,8 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/rs/zerolog"
+
 	"github.com/cs3org/reva/v2/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/pkg/appctx"
@@ -37,7 +39,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/rs/zerolog"
 )
 
 type contextKey struct{}
@@ -91,13 +92,26 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 	// TODO check preconditions like If-Range, If-Match ...
 
 	var md *provider.ResourceInfo
+	var getContent func(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
 	var err error
 
-	// do a stat to set a Content-Length header
+	// do a stat to set Content-Length and etag headers
 
-	if md, err = fs.GetMD(ctx, ref, nil, []string{"size", "mimetype", "etag"}); err != nil {
-		handleError(w, &sublog, err, "stat")
-		return
+	if fscd, ok := fs.(storage.ConsistentDownloader); ok {
+		md, getContent, err = fscd.ConsistentDownload(ctx, ref)
+		if err != nil {
+			handleError(w, &sublog, err, "download")
+			return
+		}
+	} else {
+		// There is a race condition here: between the stat and the download the file could have been updated again
+		// this is ok if the HeaderIfNoneMatch header is set but we should then also update the etag
+		// maybe we can read the etag from the download response headers?
+		if md, err = fs.GetMD(ctx, ref, nil, []string{"size", "mimetype", "etag"}); err != nil {
+			handleError(w, &sublog, err, "stat")
+			return
+		}
+		getContent = fs.Download
 	}
 
 	// check etag, see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-None-Match
@@ -141,8 +155,11 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 		}
 	}
 
+	// There is a race condition here: between the stat and the download the file could have been updated again
+	// this is ok if the HeaderIfNoneMatch header is set but we should then also update the etag
+	// maybe we can read the etag from the download response headers?
 	ctx = ContextWithEtag(ctx, md.Etag)
-	content, err := fs.Download(ctx, ref)
+	content, err := getContent(ctx, ref)
 	if err != nil {
 		handleError(w, &sublog, err, "download")
 		return
@@ -259,6 +276,9 @@ func handleError(w http.ResponseWriter, log *zerolog.Logger, err error, action s
 	case errtypes.IsPermissionDenied:
 		log.Debug().Err(err).Str("action", action).Msg("permission denied")
 		w.WriteHeader(http.StatusForbidden)
+	case errtypes.Aborted:
+		log.Debug().Err(err).Str("action", action).Msg("etags do not match")
+		w.WriteHeader(http.StatusPreconditionFailed)
 	default:
 		log.Error().Err(err).Str("action", action).Msg("unexpected error")
 		w.WriteHeader(http.StatusInternalServerError)
