@@ -54,6 +54,9 @@ gaia:
 .PHONY: cernbox-revad
 cernbox-revad: gaia
 	gaia build --with github.com/cernbox/reva-plugins --with github.com/cs3org/reva=$(shell pwd) --debug -o ./cmd/revad/revad
+
+.PHONY: cernbox-revad-ceph
+cernbox-revad-ceph: cernbox-revad
 	gaia build --tags ceph --with github.com/cernbox/reva-plugins --with github.com/cs3org/reva=$(shell pwd) --debug -o ./cmd/revad/revad-ceph
 
 .PHONY: revad-ceph
