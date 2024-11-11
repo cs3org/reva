@@ -38,6 +38,8 @@ import (
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typepb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/studio-b12/gowebdav"
+
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/mime"
@@ -49,7 +51,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/pkg/utils/cfg"
-	"github.com/studio-b12/gowebdav"
 )
 
 func init() {
@@ -378,6 +379,9 @@ func (d *driver) Download(ctx context.Context, ref *provider.Reference, openRead
 		return nil, nil, err
 	}
 	md, err := convertStatToResourceInfo(ref, info, share)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	if !openReaderfunc(md) {
 		return md, nil, nil
