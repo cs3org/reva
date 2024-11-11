@@ -410,8 +410,8 @@ func (d *driver) ListRevisions(ctx context.Context, ref *provider.Reference) ([]
 	return nil, errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error) {
-	return nil, errtypes.NotSupported("operation not supported")
+func (d *driver) DownloadRevision(ctx context.Context, ref *provider.Reference, key string, openReaderFunc func(md *provider.ResourceInfo) bool) (*provider.ResourceInfo, io.ReadCloser, error) {
+	return nil, nil, errtypes.NotSupported("operation not supported")
 }
 
 func (d *driver) RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error {
