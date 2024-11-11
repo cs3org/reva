@@ -1099,7 +1099,7 @@ func (fs *Decomposedfs) ConsistentDownload(ctx context.Context, ref *provider.Re
 	if currentEtag != expectedEtag {
 		return nil, nil, errtypes.Aborted(fmt.Sprintf("file changed from etag %s to %s", expectedEtag, currentEtag))
 	}
-	md, err := n.AsResourceInfo(ctx, rp, []string{}, []string{}, true)
+	md, err := n.AsResourceInfo(ctx, rp, nil, []string{"id", "name", "size", "mtime", "mimetype", "etag", "checksum"}, true)
 
 	return md, func(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
 		reader, err := fs.tp.ReadBlob(n)
@@ -1111,54 +1111,49 @@ func (fs *Decomposedfs) ConsistentDownload(ctx context.Context, ref *provider.Re
 }
 
 // Download returns a reader to the specified resource
-func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
+func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference, openReaderFunc func(md *provider.ResourceInfo) bool) (*provider.ResourceInfo, io.ReadCloser, error) {
 	ctx, span := tracer.Start(ctx, "Download")
 	defer span.End()
 	// check if we are trying to download a revision
 	// TODO the CS3 api should allow initiating a revision download
 	if ref.ResourceId != nil && strings.Contains(ref.ResourceId.OpaqueId, node.RevisionIDDelimiter) {
-		return fs.DownloadRevision(ctx, ref, ref.ResourceId.OpaqueId)
+		return fs.DownloadRevision(ctx, ref, ref.ResourceId.OpaqueId, openReaderFunc)
 	}
 
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: error resolving ref")
+		return nil, nil, errors.Wrap(err, "Decomposedfs: error resolving ref")
 	}
 
 	if !n.Exists {
 		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
-		return nil, err
+		return nil, nil, err
 	}
 
 	rp, err := fs.p.AssemblePermissions(ctx, n)
 	switch {
 	case err != nil:
-		return nil, err
+		return nil, nil, err
 	case !rp.InitiateFileDownload:
 		f, _ := storagespace.FormatReference(ref)
 		if rp.Stat {
-			return nil, errtypes.PermissionDenied(f)
+			return nil, nil, errtypes.PermissionDenied(f)
 		}
-		return nil, errtypes.NotFound(f)
+		return nil, nil, errtypes.NotFound(f)
 	}
 
-	mtime, err := n.GetMTime(ctx)
+	ri, err := n.AsResourceInfo(ctx, rp, nil, []string{"size", "mimetype", "etag"}, true)
 	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: error getting mtime for '"+n.ID+"'")
+		return nil, nil, err
 	}
-	currentEtag, err := node.CalculateEtag(n.ID, mtime)
-	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: error calculating etag for '"+n.ID+"'")
+	var reader io.ReadCloser
+	if openReaderFunc(ri) {
+		reader, err = fs.tp.ReadBlob(n)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "Decomposedfs: error download blob '"+n.ID+"'")
+		}
 	}
-	expectedEtag := download.EtagFromContext(ctx)
-	if currentEtag != expectedEtag {
-		return nil, errtypes.Aborted(fmt.Sprintf("file changed from etag %s to %s", expectedEtag, currentEtag))
-	}
-	reader, err := fs.tp.ReadBlob(n)
-	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: error download blob '"+n.ID+"'")
-	}
-	return reader, nil
+	return ri, reader, nil
 }
 
 // GetLock returns an existing lock on the given reference

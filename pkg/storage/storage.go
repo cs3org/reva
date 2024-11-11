@@ -47,7 +47,7 @@ type FS interface {
 	// ListFolder returns the resource infos for all children of the referenced resource
 	ListFolder(ctx context.Context, ref *provider.Reference, mdKeys, fieldMask []string) ([]*provider.ResourceInfo, error)
 	// Download returns a ReadCloser for the content of the referenced resource
-	Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
+	Download(ctx context.Context, ref *provider.Reference, openReaderfunc func(*provider.ResourceInfo) bool) (*provider.ResourceInfo, io.ReadCloser, error)
 
 	// GetPathByID returns the path for the given resource id relative to the space root
 	// It should only reveal the path visible to the current user to not leak the names uf unshared parent resources
@@ -79,7 +79,7 @@ type FS interface {
 	// ListRevisions lists all revisions for the referenced resource
 	ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
 	// DownloadRevision downloads a revision
-	DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error)
+	DownloadRevision(ctx context.Context, ref *provider.Reference, key string, openReaderFunc func(md *provider.ResourceInfo) bool) (*provider.ResourceInfo, io.ReadCloser, error)
 	// RestoreRevision restores a revision
 	RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error
 
@@ -167,9 +167,4 @@ type Registry interface {
 type PathWrapper interface {
 	Unwrap(ctx context.Context, rp string) (string, error)
 	Wrap(ctx context.Context, rp string) (string, error)
-}
-
-type ConsistentDownloader interface {
-	// ConsistentDownload returns the metadata for a resource and a callback to get the content stream matching the etag
-	ConsistentDownload(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, func(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error), error)
 }

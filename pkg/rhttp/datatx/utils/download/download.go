@@ -92,40 +92,47 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 	// TODO check preconditions like If-Range, If-Match ...
 
 	var md *provider.ResourceInfo
-	var getContent func(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
+	var reader io.ReadCloser
 	var err error
+	var notModified bool
 
 	// do a stat to set Content-Length and etag headers
 
-	if fscd, ok := fs.(storage.ConsistentDownloader); ok {
-		md, getContent, err = fscd.ConsistentDownload(ctx, ref)
-		if err != nil {
-			handleError(w, &sublog, err, "download")
-			return
+	md, reader, err = fs.Download(ctx, ref, func(md *provider.ResourceInfo) bool {
+		// range requests always need to open the reader to check if it is seekable
+		if r.Header.Get("Range") != "" {
+			return true
 		}
-	} else {
-		// There is a race condition here: between the stat and the download the file could have been updated again
-		// this is ok if the HeaderIfNoneMatch header is set but we should then also update the etag
-		// maybe we can read the etag from the download response headers?
-		if md, err = fs.GetMD(ctx, ref, nil, []string{"size", "mimetype", "etag"}); err != nil {
-			handleError(w, &sublog, err, "stat")
-			return
+		// otherwise, HEAD requests do not need to open a reader
+		if r.Method == "HEAD" {
+			return false
 		}
-		getContent = fs.Download
-	}
 
-	// check etag, see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-None-Match
-	for _, etag := range r.Header.Values(net.HeaderIfNoneMatch) {
-		if md.Etag == etag {
-			// When the condition fails for GET and HEAD methods, then the server must return
-			// HTTP status code 304 (Not Modified). [...] Note that the server generating a
-			// 304 response MUST generate any of the following header fields that would have
-			// been sent in a 200 (OK) response to the same request:
-			// Cache-Control, Content-Location, Date, ETag, Expires, and Vary.
-			w.Header().Set(net.HeaderETag, md.Etag)
-			w.WriteHeader(http.StatusNotModified)
-			return
+		// check etag, see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-None-Match
+		for _, etag := range r.Header.Values(net.HeaderIfNoneMatch) {
+			if md.Etag == etag {
+				// When the condition fails for GET and HEAD methods, then the server must return
+				// HTTP status code 304 (Not Modified). [...] Note that the server generating a
+				// 304 response MUST generate any of the following header fields that would have
+				// been sent in a 200 (OK) response to the same request:
+				// Cache-Control, Content-Location, Date, ETag, Expires, and Vary.
+				notModified = true
+				return false
+			}
 		}
+		return true
+	})
+	if err != nil {
+		handleError(w, &sublog, err, "download")
+		return
+	}
+	if reader != nil {
+		defer reader.Close()
+	}
+	if notModified {
+		w.Header().Set(net.HeaderETag, md.Etag)
+		w.WriteHeader(http.StatusNotModified)
+		return
 	}
 
 	// fill in storage provider id if it is missing
@@ -155,23 +162,10 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 		}
 	}
 
-	// There is a race condition here: between the stat and the download the file could have been updated again
-	// this is ok if the HeaderIfNoneMatch header is set but we should then also update the etag
-	// maybe we can read the etag from the download response headers?
-	ctx = ContextWithEtag(ctx, md.Etag)
-	content, err := getContent(ctx, ref)
-	if err != nil {
-		handleError(w, &sublog, err, "download")
-		return
-	}
-	defer content.Close()
-
 	code := http.StatusOK
 	sendSize := int64(md.Size)
-	var sendContent io.Reader = content
-
 	var s io.Seeker
-	if s, ok = content.(io.Seeker); ok {
+	if s, ok = reader.(io.Seeker); ok {
 		// tell clients they can send range requests
 		w.Header().Set("Accept-Ranges", "bytes")
 	}
@@ -215,7 +209,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 			pr, pw := io.Pipe()
 			mw := multipart.NewWriter(pw)
 			w.Header().Set("Content-Type", "multipart/byteranges; boundary="+mw.Boundary())
-			sendContent = pr
+			reader = pr
 			defer pr.Close() // cause writing goroutine to fail and exit if CopyN doesn't finish.
 			go func() {
 				for _, ra := range ranges {
@@ -228,7 +222,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 						_ = pw.CloseWithError(err) // CloseWithError always returns nil
 						return
 					}
-					if _, err := io.CopyN(part, content, ra.Length); err != nil {
+					if _, err := io.CopyN(part, reader, ra.Length); err != nil {
 						_ = pw.CloseWithError(err) // CloseWithError always returns nil
 						return
 					}
@@ -243,7 +237,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 		w.Header().Set(net.HeaderContentLength, strconv.FormatInt(sendSize, 10))
 	}
 
-	w.Header().Set(net.HeaderContentDisposistion, net.ContentDispositionAttachment(path.Base(md.Path)))
+	w.Header().Set(net.HeaderContentDisposistion, net.ContentDispositionAttachment(md.Name))
 	w.Header().Set(net.HeaderETag, md.Etag)
 	w.Header().Set(net.HeaderOCFileID, storagespace.FormatResourceID(md.Id))
 	w.Header().Set(net.HeaderOCETag, md.Etag)
@@ -257,7 +251,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 
 	if r.Method != "HEAD" {
 		var c int64
-		c, err = io.CopyN(w, sendContent, sendSize)
+		c, err = io.CopyN(w, reader, sendSize)
 		if err != nil {
 			sublog.Error().Err(err).Interface("resourceid", md.Id).Msg("error copying data to response")
 			return
