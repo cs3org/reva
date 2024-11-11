@@ -37,12 +37,6 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/google/uuid"
-	"github.com/pkg/errors"
-	"github.com/rogpeppe/go-internal/lockedfile"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
-
 	"github.com/cs3org/reva/v2/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
@@ -54,6 +48,11 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
+	"github.com/rogpeppe/go-internal/lockedfile"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var tracer trace.Tracer
@@ -810,12 +809,9 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		}
 	}
 
-	if _, ok := mdKeysMap[ChecksumsKey]; ok {
-		sublog.Debug().Msg("checksums should be requested in the fieldmask, please use the trace id to update your code")
-		fieldMaskKeysMap["checksum"] = struct{}{}
-	}
 	// checksums
-	if _, ok := fieldMaskKeysMap[ChecksumsKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_FILE) && (returnAllMetadata || ok) {
+	// FIXME move to fieldmask
+	if _, ok := mdKeysMap[ChecksumsKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_FILE) && (returnAllMetadata || ok) {
 		// TODO which checksum was requested? sha1 adler32 or md5? for now hardcode sha1?
 		// TODO make ResourceInfo carry multiple checksums
 		n.readChecksumIntoResourceChecksum(ctx, storageprovider.XSSHA1, ri)
@@ -823,7 +819,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		n.readChecksumIntoOpaque(ctx, storageprovider.XSAdler32, ri)
 	}
 	// quota
-	// FIXME move to fieldmask, but requires quota to be part of the ResourceInfo
+	// FIXME move to fieldmask
 	if _, ok := mdKeysMap[QuotaKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER) && returnAllMetadata || ok {
 		if n.SpaceRoot != nil && n.SpaceRoot.InternalPath() != "" {
 			n.SpaceRoot.readQuotaIntoOpaque(ctx, ri)
