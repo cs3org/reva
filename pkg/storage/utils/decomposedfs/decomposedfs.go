@@ -1065,7 +1065,7 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference, o
 
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "Decomposedfs: error resolving ref")
+		return nil, nil, err
 	}
 
 	if !n.Exists {
