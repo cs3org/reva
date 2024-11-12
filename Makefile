@@ -61,7 +61,7 @@ cernbox-revad-ceph: cernbox-revad
 
 .PHONY: revad-ceph
 revad-ceph:
-	go build -ldflags "$(BUILD_FLAGS)" -tags ceph --debug -o ./cmd/revad/revad ./cmd/revad/main
+	go build -ldflags "$(BUILD_FLAGS)" -tags ceph -debug -o ./cmd/revad/revad ./cmd/revad/main
 
 .PHONY: reva
 reva:
