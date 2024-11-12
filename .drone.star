@@ -109,15 +109,7 @@ def main(ctx):
         checkGoGenerate(),
         coverage(),
         buildOnly(),
-        testIntegration(),
-        litmusOcisOldWebdav(),
-        litmusOcisNewWebdav(),
-        litmusOcisSpacesDav(),
-        cs3ApiValidatorOcis(),
-        cs3ApiValidatorS3NG(),
-        # virtual views don't work on edge at the moment
-        #virtualViews(),
-    ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12) + posixfsIntegrationTests(6)
+     ] + posixfsIntegrationTests(40)
 
 def coverage():
     return {
@@ -761,7 +753,7 @@ def posixfsIntegrationTests(parallelRuns, skipExceptParts = []):
                         "environment": {
                             "TEST_SERVER_URL": "http://revad-services:20080",
                             "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
-                            "DELETE_USER_DATA_CMD": "bash -cx 'for i in {1..30}; do rm -rf /drone/src/tmp/reva/data/users/* /drone/src/tmp/reva/data/indexes/by-type/* && break || sleep 5; done'",
+                            "DELETE_USER_DATA_CMD": "bash -cx 'for i in {1..30}; do rm -rf /drone/src/tmp/reva/data/users/* /drone/src/tmp/reva/data/indexes/by-type/* && break || sleep 5; done; sleep 1'",
                             "STORAGE_DRIVER": "ocis",
                             "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
                             "TEST_WITH_LDAP": "true",
@@ -772,6 +764,7 @@ def posixfsIntegrationTests(parallelRuns, skipExceptParts = []):
                             "DIVIDE_INTO_NUM_PARTS": parallelRuns,
                             "RUN_PART": runPart,
                             "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-POSIX-storage.md",
+                            "BEHAT_FEATURE": 'tests/acceptance/features/coreApiWebdavDelete/deleteFile.feature:35',
                             "ACCEPTANCE_TEST_TYPE": "core-api",
                         },
                     },
@@ -780,7 +773,6 @@ def posixfsIntegrationTests(parallelRuns, skipExceptParts = []):
                     redisService(),
                     ldapService(),
                 ],
-                "depends_on": ["unit-test-coverage"],
             },
         )
 

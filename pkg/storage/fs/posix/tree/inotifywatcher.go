@@ -64,18 +64,18 @@ func (iw *InotifyWatcher) Watch(path string) {
 				if isLockFile(event.Filename) || isTrash(event.Filename) || iw.tree.isUpload(event.Filename) {
 					continue
 				}
-				go func() {
-					switch e {
-					case inotifywaitgo.DELETE:
-						_ = iw.tree.Scan(event.Filename, ActionDelete, event.IsDir)
-					case inotifywaitgo.MOVED_FROM:
-						_ = iw.tree.Scan(event.Filename, ActionMoveFrom, event.IsDir)
-					case inotifywaitgo.CREATE, inotifywaitgo.MOVED_TO:
-						_ = iw.tree.Scan(event.Filename, ActionCreate, event.IsDir)
-					case inotifywaitgo.CLOSE_WRITE:
-						_ = iw.tree.Scan(event.Filename, ActionUpdate, event.IsDir)
-					}
-				}()
+				// go func() {
+				switch e {
+				case inotifywaitgo.DELETE:
+					_ = iw.tree.Scan(event.Filename, ActionDelete, event.IsDir)
+				case inotifywaitgo.MOVED_FROM:
+					_ = iw.tree.Scan(event.Filename, ActionMoveFrom, event.IsDir)
+				case inotifywaitgo.CREATE, inotifywaitgo.MOVED_TO:
+					_ = iw.tree.Scan(event.Filename, ActionCreate, event.IsDir)
+				case inotifywaitgo.CLOSE_WRITE:
+					_ = iw.tree.Scan(event.Filename, ActionUpdate, event.IsDir)
+				}
+				// }()
 			}
 
 		case err := <-errors:
