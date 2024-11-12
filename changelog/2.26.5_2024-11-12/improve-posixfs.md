@@ -1,4 +1,4 @@
-Enhancement: Improve posixfs stability and performance
+Bugfix: Improve posixfs stability and performance
 
 The posixfs storage driver saw a number of bugfixes and optimizations.
 
