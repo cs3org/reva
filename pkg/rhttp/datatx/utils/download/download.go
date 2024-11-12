@@ -92,13 +92,13 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 	// TODO check preconditions like If-Range, If-Match ...
 
 	var md *provider.ResourceInfo
-	var sendContent io.ReadCloser
+	var content io.ReadCloser
 	var err error
 	var notModified bool
 
 	// do a stat to set Content-Length and etag headers
 
-	md, sendContent, err = fs.Download(ctx, ref, func(md *provider.ResourceInfo) bool {
+	md, content, err = fs.Download(ctx, ref, func(md *provider.ResourceInfo) bool {
 		// range requests always need to open the reader to check if it is seekable
 		if r.Header.Get("Range") != "" {
 			return true
@@ -126,8 +126,8 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 		handleError(w, &sublog, err, "download")
 		return
 	}
-	if sendContent != nil {
-		defer sendContent.Close()
+	if content != nil {
+		defer content.Close()
 	}
 	if notModified {
 		w.Header().Set(net.HeaderETag, md.Etag)
@@ -164,8 +164,10 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 
 	code := http.StatusOK
 	sendSize := int64(md.Size)
+	var sendContent io.Reader = content
+
 	var s io.Seeker
-	if s, ok = sendContent.(io.Seeker); ok {
+	if s, ok = content.(io.Seeker); ok {
 		// tell clients they can send range requests
 		w.Header().Set("Accept-Ranges", "bytes")
 	}
@@ -222,7 +224,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 						_ = pw.CloseWithError(err) // CloseWithError always returns nil
 						return
 					}
-					if _, err := io.CopyN(part, sendContent, ra.Length); err != nil {
+					if _, err := io.CopyN(part, content, ra.Length); err != nil {
 						_ = pw.CloseWithError(err) // CloseWithError always returns nil
 						return
 					}
