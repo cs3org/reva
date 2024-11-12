@@ -20,27 +20,25 @@ package nextcloud_test
 
 import (
 	"context"
-
 	// "fmt"
 	"io"
 	"net/url"
 	"os"
 	"strings"
 
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/protobuf/testing/protocmp"
-
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/testing/protocmp"
+
 	"github.com/cs3org/reva/v2/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/nextcloud"
 	jwt "github.com/cs3org/reva/v2/pkg/token/manager/jwt"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 )
 
 func setUpNextcloudServer() (*nextcloud.StorageDriver, *[]string, func()) {
@@ -71,7 +69,7 @@ func checkCalled(called *[]string, expected string) {
 	if called == nil {
 		return
 	}
-	Expect(len(*called)).To(Equal(1))
+	Expect(len(*called)).To(BeElementOf([]int{1, 2}))
 	Expect((*called)[0]).To(Equal(expected))
 }
 
@@ -408,7 +406,7 @@ var _ = Describe("Nextcloud", func() {
 			Expect((*called)[1]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/GetMD {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"mdKeys":[]}`))
 		})
 	})
-	// Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
+	// Download(ctx context.Context, ref *provider.Reference, openReaderfunc func(*provider.ResourceInfo) bool) (*provider.ResourceInfo, io.ReadCloser, error)
 	Describe("Download", func() {
 		It("calls the Download endpoint with GET", func() {
 			nc, called, teardown := setUpNextcloudServer()
@@ -421,9 +419,13 @@ var _ = Describe("Nextcloud", func() {
 				},
 				Path: "some/file/path.txt",
 			}
-			reader, err := nc.Download(ctx, ref)
+			_, reader, err := nc.Download(ctx, ref, func(ri *provider.ResourceInfo) bool { return true })
 			Expect(err).ToNot(HaveOccurred())
-			checkCalled(called, `GET /apps/sciencemesh/~tester/api/storage/Download/some/file/path.txt `)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(*called)).To(Equal(2))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/GetMD {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"mdKeys":[]}`))
+			Expect((*called)[1]).To(Equal(`GET /apps/sciencemesh/~tester/api/storage/Download/some/file/path.txt `))
+
 			defer reader.Close()
 			body, err := io.ReadAll(reader)
 			Expect(err).ToNot(HaveOccurred())
@@ -492,9 +494,12 @@ var _ = Describe("Nextcloud", func() {
 				Path: "some/file/path.txt",
 			}
 			key := "some/revision"
-			reader, err := nc.DownloadRevision(ctx, ref, key)
+			_, reader, err := nc.DownloadRevision(ctx, ref, key, func(ri *provider.ResourceInfo) bool { return true })
 			Expect(err).ToNot(HaveOccurred())
-			checkCalled(called, `GET /apps/sciencemesh/~tester/api/storage/DownloadRevision/some%2Frevision/some/file/path.txt `)
+			Expect(len(*called)).To(Equal(3))
+			Expect((*called)[0]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/GetMD {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"mdKeys":[]}`))
+			Expect((*called)[1]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/ListRevisions {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"}`))
+			Expect((*called)[2]).To(Equal(`GET /apps/sciencemesh/~tester/api/storage/DownloadRevision/some%2Frevision/some/file/path.txt `))
 			defer reader.Close()
 			body, err := io.ReadAll(reader)
 			Expect(err).ToNot(HaveOccurred())
