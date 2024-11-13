@@ -339,16 +339,12 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 				return
 			}
 
-			if sRes.Status.Code != rpc.Code_CODE_OK && sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-				if sRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
-					// the token expired during upload, so the stat failed
-					// and we can't do anything about it.
-					// the clients will handle this gracefully by doing a propfind on the file
-					w.WriteHeader(http.StatusOK)
-					return
-				}
-
-				errors.HandleErrorStatus(&log, w, sRes.Status)
+			if sRes.GetStatus().GetCode() != rpc.Code_CODE_OK {
+				// Something went wrong, but the upload has been successful.
+				// To be more robust in difficult storage situations, we prefer to continue without error.
+				// The clients will handle this gracefully by doing a propfind on the file.
+				log.Error().Interface("status", sRes.Status).Msg("error during stat after upload")
+				w.WriteHeader(http.StatusOK)
 				return
 			}
 
