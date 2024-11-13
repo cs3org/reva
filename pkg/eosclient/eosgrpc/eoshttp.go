@@ -241,7 +241,9 @@ func (c *EOSHTTPClient) buildFullURL(urlpath string, auth eosclient.Authorizatio
 		fullurl += "?"
 	}
 
-	if auth.Role.UID != "" {
+	if auth.Token != "" {
+		fullurl += "authz=" + auth.Token
+	} else if auth.Role.UID != "" {
 		fullurl += fmt.Sprintf("eos.ruid=%s&eos.rgid=%s", auth.Role.UID, auth.Role.GID)
 	}
 
@@ -291,7 +293,15 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 		// Execute the request. I don't like that there is no explicit timeout or buffer control on the input stream
 		log.Debug().Str("func", "GETFile").Str("finalurl", finalurl).Msg("sending req")
 
-		resp, err := c.doReq(req, remoteuser)
+		// c.doReq sets headers such as remoteuser and x-gateway-authorization
+		// we don't want those when using a token (i.e. ?authz=), so in this case
+		// we skip this and call the HTTP client directly
+		var resp *http.Response
+		if auth.Token != "" {
+			resp, err = c.cl.Do(req)
+		} else {
+			resp, err = c.doReq(req, remoteuser)
+		}
 
 		// Let's support redirections... and if we retry we have to retry at the same FST, avoid going back to the MGM
 		if resp != nil && (resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusTemporaryRedirect) {
@@ -390,7 +400,15 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 		// Execute the request. I don't like that there is no explicit timeout or buffer control on the input stream
 		log.Debug().Str("func", "PUTFile").Msg("sending req")
 
-		resp, err := c.doReq(req, remoteuser)
+		// c.doReq sets headers such as remoteuser and x-gateway-authorization
+		// we don't want those when using a token (i.e. ?authz=), so in this case
+		// we skip this and call the HTTP client directly
+		var resp *http.Response
+		if auth.Token != "" {
+			resp, err = c.cl.Do(req)
+		} else {
+			resp, err = c.doReq(req, remoteuser)
+		}
 
 		// Let's support redirections... and if we retry we retry at the same FST
 		if resp != nil && resp.StatusCode == 307 {
