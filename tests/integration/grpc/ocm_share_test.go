@@ -127,7 +127,7 @@ var _ = Describe("ocm share", func() {
 		federatedEinsteinID = &userpb.UserId{
 			Type:     userpb.UserType_USER_TYPE_FEDERATED,
 			Idp:      "cernbox.cern.ch",
-			OpaqueId: base64.URLEncoding.EncodeToString([]byte("4c510ada-c86b-4815-8820-42cdf82c3d51@cernbox.cern.ch")),
+			OpaqueId: base64.URLEncoding.EncodeToString([]byte("4c510ada-c86b-4815-8820-42cdf82c3d51@https://cernbox.cern.ch")),
 		}
 		marie = &userpb.User{
 			Id: &userpb.UserId{
@@ -142,7 +142,7 @@ var _ = Describe("ocm share", func() {
 		federatedMarieID = &userpb.UserId{
 			Type:     userpb.UserType_USER_TYPE_FEDERATED,
 			Idp:      "cesnet.cz",
-			OpaqueId: base64.URLEncoding.EncodeToString([]byte("f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c@cesnet.cz")),
+			OpaqueId: base64.URLEncoding.EncodeToString([]byte("f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c@https://cesnet.cz")),
 		}
 	)
 
