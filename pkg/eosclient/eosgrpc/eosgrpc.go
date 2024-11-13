@@ -1686,8 +1686,7 @@ func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDRespon
 
 		fi.TreeSize = uint64(st.Cmd.TreeSize)
 		fi.Size = fi.TreeSize
-		// TODO(lopresti) this info is missing in the EOS Protobuf, cf. EOS-5974
-		// fi.TreeCount = uint64(st.Cmd.TreeCount)
+		fi.TreeCount = st.Cmd.Files + st.Cmd.Containers
 
 		log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Msg("grpc response")
 	} else {
