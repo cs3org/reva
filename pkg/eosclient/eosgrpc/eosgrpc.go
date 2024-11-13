@@ -602,6 +602,15 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "UnsetAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
+	// Favorites need to be stored per user so handle these separately
+	if attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
+		info, err := c.GetFileInfoByPath(ctx, auth, path)
+		if err != nil {
+			return err
+		}
+		return c.handleFavAttr(ctx, auth, attr, recursive, path, info, false)
+	}
+
 	// Initialize the common fields of the NSReq
 	rq, err := c.initNSRequest(ctx, auth, app)
 	if err != nil {
