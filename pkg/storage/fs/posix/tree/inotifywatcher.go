@@ -63,10 +63,10 @@ func (iw *InotifyWatcher) Watch(path string) {
 	for {
 		select {
 		case event := <-events:
+			if isLockFile(event.Filename) || isTrash(event.Filename) || iw.tree.isUpload(event.Filename) {
+				continue
+			}
 			for _, e := range event.Events {
-				if isLockFile(event.Filename) || isTrash(event.Filename) || iw.tree.isUpload(event.Filename) {
-					continue
-				}
 				go func() {
 					var err error
 					switch e {

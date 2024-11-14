@@ -165,6 +165,7 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 	// cases:
 	switch action {
 	case ActionCreate:
+		t.log.Debug().Str("path", path).Bool("isDir", isDir).Msg("scanning path (ActionCreate)")
 		if !isDir {
 			// 1. New file (could be emitted as part of a new directory)
 			//	 -> assimilate file
@@ -197,6 +198,7 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 		}
 
 	case ActionUpdate:
+		t.log.Debug().Str("path", path).Bool("isDir", isDir).Msg("scanning path (ActionUpdate)")
 		// 3. Updated file
 		//   -> update file unless parent directory is being rescanned
 		if !t.scanDebouncer.InProgress(filepath.Dir(path)) {
@@ -207,6 +209,7 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 		}
 
 	case ActionMove:
+		t.log.Debug().Str("path", path).Bool("isDir", isDir).Msg("scanning path (ActionMove)")
 		// 4. Moved file
 		//   -> update file
 		// 5. Moved directory
@@ -218,6 +221,7 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 		})
 
 	case ActionMoveFrom:
+		t.log.Debug().Str("path", path).Bool("isDir", isDir).Msg("scanning path (ActionMoveFrom)")
 		// 6. file/directory moved out of the watched directory
 		//   -> update directory
 		if err := t.setDirty(filepath.Dir(path), true); err != nil {
@@ -227,13 +231,16 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 		go func() { _ = t.WarmupIDCache(filepath.Dir(path), false, true) }()
 
 	case ActionDelete:
+		t.log.Debug().Str("path", path).Bool("isDir", isDir).Msg("handling deleted item")
+
+		// 7. Deleted file or directory
+		//   -> update parent and all children
+
 		err := t.HandleFileDelete(path)
 		if err != nil {
 			return err
 		}
 
-		// 7. Deleted file or directory
-		//   -> update parent and all children
 		t.scanDebouncer.Debounce(scanItem{
 			Path:        filepath.Dir(path),
 			ForceRescan: true,
@@ -377,16 +384,21 @@ func (t *Tree) assimilate(item scanItem) error {
 		if ok && len(previousParentID) > 0 && previousPath != item.Path {
 			_, err := os.Stat(previousPath)
 			if err == nil {
-				// this id clashes with an existing id -> clear metadata and re-assimilate
+				// this id clashes with an existing item -> clear metadata and re-assimilate
+				t.log.Debug().Str("path", item.Path).Msg("ID clash detected, purging metadata and re-assimilating")
 
 				if err := t.lookup.MetadataBackend().Purge(context.Background(), item.Path); err != nil {
 					t.log.Error().Err(err).Str("path", item.Path).Msg("could not purge metadata")
 				}
 				go func() {
-					_ = t.assimilate(scanItem{Path: item.Path, ForceRescan: true})
+					if err := t.assimilate(scanItem{Path: item.Path, ForceRescan: true}); err != nil {
+						t.log.Error().Err(err).Str("path", item.Path).Msg("could not re-assimilate")
+					}
 				}()
 			} else {
 				// this is a move
+				t.log.Debug().Str("path", item.Path).Msg("move detected")
+
 				if err := t.lookup.(*lookup.Lookup).CacheID(context.Background(), spaceID, string(id), item.Path); err != nil {
 					t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", string(id)).Str("path", item.Path).Msg("could not cache id")
 				}
@@ -446,6 +458,7 @@ func (t *Tree) assimilate(item scanItem) error {
 			}
 		} else {
 			// This item had already been assimilated in the past. Update the path
+			t.log.Debug().Str("path", item.Path).Msg("updating cached path")
 			if err := t.lookup.(*lookup.Lookup).CacheID(context.Background(), spaceID, string(id), item.Path); err != nil {
 				t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", string(id)).Str("path", item.Path).Msg("could not cache id")
 			}
@@ -456,6 +469,7 @@ func (t *Tree) assimilate(item scanItem) error {
 			}
 		}
 	} else {
+		t.log.Debug().Str("path", item.Path).Msg("new item detected")
 		// assimilate new file
 		newId := uuid.New().String()
 		fi, err := t.updateFile(item.Path, newId, spaceID)
@@ -572,6 +586,7 @@ assimilate:
 		return nil, errors.Wrap(err, "failed to propagate")
 	}
 
+	t.log.Debug().Str("path", path).Interface("attributes", attributes).Msg("setting attributes")
 	err = t.lookup.MetadataBackend().SetMultiple(context.Background(), path, attributes, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to set attributes")

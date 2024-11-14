@@ -79,6 +79,7 @@ start:
 		case nil:
 			err := json.Unmarshal([]byte(line), ev)
 			if err != nil {
+				w.log.Error().Err(err).Str("line", line).Msg("error unmarshalling line")
 				continue
 			}
 			if isLockFile(ev.Path) || isTrash(ev.Path) || w.tree.isUpload(ev.Path) {
@@ -89,7 +90,8 @@ start:
 				case "CREATE":
 					err = w.tree.Scan(ev.Path, ActionCreate, false)
 				case "CLOSE":
-					bytesWritten, err := strconv.Atoi(ev.BytesWritten)
+					var bytesWritten int
+					bytesWritten, err = strconv.Atoi(ev.BytesWritten)
 					if err == nil && bytesWritten > 0 {
 						err = w.tree.Scan(ev.Path, ActionUpdate, false)
 					}
@@ -99,8 +101,10 @@ start:
 						w.log.Error().Err(warmupErr).Str("path", ev.Path).Msg("error warming up id cache")
 					}
 				}
+				if err != nil {
+					w.log.Error().Err(err).Str("line", line).Msg("error unmarshalling line")
+				}
 			}()
-			w.log.Error().Err(err).Str("path", ev.Path).Msg("error scanning file")
 
 		case io.EOF:
 			time.Sleep(1 * time.Second)
