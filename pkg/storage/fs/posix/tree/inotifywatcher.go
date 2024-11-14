@@ -22,15 +22,18 @@ import (
 	"fmt"
 
 	"github.com/pablodz/inotifywaitgo/inotifywaitgo"
+	"github.com/rs/zerolog"
 )
 
 type InotifyWatcher struct {
 	tree *Tree
+	log  *zerolog.Logger
 }
 
-func NewInotifyWatcher(tree *Tree) *InotifyWatcher {
+func NewInotifyWatcher(tree *Tree, log *zerolog.Logger) *InotifyWatcher {
 	return &InotifyWatcher{
 		tree: tree,
+		log:  log,
 	}
 }
 
@@ -65,15 +68,19 @@ func (iw *InotifyWatcher) Watch(path string) {
 					continue
 				}
 				go func() {
+					var err error
 					switch e {
 					case inotifywaitgo.DELETE:
-						_ = iw.tree.Scan(event.Filename, ActionDelete, event.IsDir)
+						err = iw.tree.Scan(event.Filename, ActionDelete, event.IsDir)
 					case inotifywaitgo.MOVED_FROM:
-						_ = iw.tree.Scan(event.Filename, ActionMoveFrom, event.IsDir)
+						err = iw.tree.Scan(event.Filename, ActionMoveFrom, event.IsDir)
 					case inotifywaitgo.CREATE, inotifywaitgo.MOVED_TO:
-						_ = iw.tree.Scan(event.Filename, ActionCreate, event.IsDir)
+						err = iw.tree.Scan(event.Filename, ActionCreate, event.IsDir)
 					case inotifywaitgo.CLOSE_WRITE:
-						_ = iw.tree.Scan(event.Filename, ActionUpdate, event.IsDir)
+						err = iw.tree.Scan(event.Filename, ActionUpdate, event.IsDir)
+					}
+					if err != nil {
+						iw.log.Error().Err(err).Str("path", event.Filename).Msg("error scanning file")
 					}
 				}()
 			}
