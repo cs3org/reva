@@ -35,6 +35,7 @@ type Options struct {
 
 	WatchFS                 bool   `mapstructure:"watch_fs"`
 	WatchType               string `mapstructure:"watch_type"`
+	WatchMountPoint         string `mapstructure:"watch_mount_point"`
 	WatchPath               string `mapstructure:"watch_path"`
 	WatchFolderKafkaBrokers string `mapstructure:"watch_folder_kafka_brokers"`
 }

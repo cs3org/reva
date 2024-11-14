@@ -132,6 +132,11 @@ func New(lu node.PathLookup, bs Blobstore, um usermapper.Mapper, trashbin *trash
 		if err != nil {
 			return nil, err
 		}
+	case "cephfs":
+		t.watcher, err = NewCephfsWatcher(t, strings.Split(o.WatchFolderKafkaBrokers, ","))
+		if err != nil {
+			return nil, err
+		}
 	default:
 		t.watcher = NewInotifyWatcher(t)
 		watchPath = o.Root
