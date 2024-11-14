@@ -78,6 +78,9 @@ func (iw *InotifyWatcher) Watch(path string) {
 						err = iw.tree.Scan(event.Filename, ActionCreate, event.IsDir)
 					case inotifywaitgo.CLOSE_WRITE:
 						err = iw.tree.Scan(event.Filename, ActionUpdate, event.IsDir)
+					default:
+						iw.log.Warn().Interface("event", event).Msg("unhandled event")
+						return
 					}
 					if err != nil {
 						iw.log.Error().Err(err).Str("path", event.Filename).Msg("error scanning file")
