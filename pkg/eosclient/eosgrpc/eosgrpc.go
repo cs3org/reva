@@ -1373,11 +1373,9 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 
 // Write writes a file to the mgm
 // Somehow the same considerations as Read apply.
-func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser, app string) error {
+func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser, length int64, app string, disableVersioning bool) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "Write").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
-	var length int64
-	length = -1
 
 	u, err := getUser(ctx)
 	if err != nil {
@@ -1406,10 +1404,10 @@ func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path s
 		defer wfd.Close()
 		defer os.RemoveAll(fd.Name())
 
-		return c.httpcl.PUTFile(ctx, u.Username, auth, path, wfd, length, app)
+		return c.httpcl.PUTFile(ctx, u.Username, auth, path, wfd, length, app, disableVersioning)
 	}
 
-	return c.httpcl.PUTFile(ctx, u.Username, auth, path, stream, length, app)
+	return c.httpcl.PUTFile(ctx, u.Username, auth, path, stream, length, app, disableVersioning)
 }
 
 // ListDeletedEntries returns a list of the deleted entries.

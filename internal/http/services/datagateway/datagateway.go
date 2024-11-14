@@ -332,6 +332,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 
 	copyHeader(w.Header(), httpRes.Header)
 	if httpRes.StatusCode != http.StatusOK {
+		log.Warn().Int("StatusCode", httpRes.StatusCode).Msg("Non-OK Status Code when sending request to internal data server")
 		// swallow the body and set content-length to 0 to prevent reverse proxies from trying to read from it
 		w.Header().Set("Content-Length", "0")
 		w.WriteHeader(httpRes.StatusCode)

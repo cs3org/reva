@@ -14,7 +14,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.9.0
 	github.com/creasty/defaults v1.7.0
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20240802083356-d617314e1795
+	github.com/cs3org/go-cs3apis v0.0.0-20240927085705-d50e291cbf4c
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/dolthub/go-mysql-server v0.14.0
 	github.com/gdexlab/go-render v1.0.1
@@ -95,6 +95,7 @@ require (
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/huandu/xstrings v1.4.0 // indirect
 	github.com/imdario/mergo v0.3.16 // indirect
+	github.com/jarcoal/httpmock v1.3.1 // indirect
 	github.com/klauspost/compress v1.17.7 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/lestrrat-go/strftime v1.0.4 // indirect

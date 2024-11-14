@@ -28,6 +28,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 
 	"github.com/pkg/errors"
 
@@ -35,6 +36,7 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/studio-b12/gowebdav"
@@ -105,7 +107,9 @@ func Upload(ctx context.Context, fs storage.FS, ref *provider.Reference, content
 		return errors.New("simple upload method not available")
 	}
 	uploadRef := &provider.Reference{Path: "/" + uploadID}
-	err = fs.Upload(ctx, uploadRef, io.NopCloser(bytes.NewReader(content)), map[string]string{})
+	err = fs.Upload(ctx, uploadRef, io.NopCloser(bytes.NewReader(content)), map[string]string{
+		ocdav.HeaderUploadLength: strconv.FormatInt(int64(len(content)), 10),
+	})
 	return err
 }
 
