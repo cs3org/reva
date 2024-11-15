@@ -83,4 +83,9 @@ Reva is distributed under [Apache 2.0 license](https://github.com/cs3org/reva/bl
 
 ## Logo
 
-Reva logo's have been designed and contributed to the project by Eamon Maguire.
+Reva logo's have been designed and contributed to the project by Eamonn Maguire.
+
+## History
+This project was initially conceived and brought to life by Hugo Gonzalez Labrador (@labkode) in 2017.
+Since its roots, Reva has evolved and expanded thanks to the passion and commitment of 
+dozens of remarkable individual contributors. [Learn more](https://reva.link/about/).
