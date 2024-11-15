@@ -38,6 +38,7 @@ import (
 	goceph "github.com/ceph/go-ceph/cephfs"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typepb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
@@ -151,6 +152,21 @@ func (fs *cephfs) CreateDir(ctx context.Context, ref *provider.Reference) error 
 	return getRevaError(ctx, err)
 }
 
+func getRecycleTargetFromPath(path string, recyclePath string, recyclePathDepth int) (string, error) {
+	// Tokenize the given (absolute) path
+	components := strings.Split(filepath.Clean(string(filepath.Separator)+path), string(filepath.Separator))
+	if recyclePathDepth > len(components)-1 {
+		return "", errors.New("path is too short")
+	}
+
+	// And construct the target by injecting the recyclePath at the required depth
+	var target []string = []string{string(filepath.Separator)}
+	target = append(target, components[:recyclePathDepth+1]...)
+	target = append(target, recyclePath, time.Now().Format("2006/01/02"))
+	target = append(target, components[recyclePathDepth+1:]...)
+	return filepath.Join(target...), nil
+}
+
 func (fs *cephfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
 	var path string
 	user := fs.makeUser(ctx)
@@ -161,8 +177,16 @@ func (fs *cephfs) Delete(ctx context.Context, ref *provider.Reference) (err erro
 
 	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
-		if err = cv.mount.Unlink(path); err != nil && err.Error() == errIsADirectory {
-			err = cv.mount.RemoveDir(path)
+		if fs.conf.RecyclePath != "" {
+			// Recycle bin is configured, move to recycle as opposed to unlink
+			targetPath, err := getRecycleTargetFromPath(path, fs.conf.RecyclePath, fs.conf.RecyclePathDepth)
+			if err == nil {
+				err = cv.mount.Rename(path, targetPath)
+			}
+		} else {
+			if err = cv.mount.Unlink(path); err != nil && err.Error() == errIsADirectory {
+				err = cv.mount.RemoveDir(path)
+			}
 		}
 	})
 
@@ -502,24 +526,113 @@ func (fs *cephfs) TouchFile(ctx context.Context, ref *provider.Reference) error 
 	return getRevaError(ctx, err)
 }
 
+func (fs *cephfs) listDeletedEntries(ctx context.Context, maxentries int, basePath string, from, to time.Time) (res []*provider.RecycleItem, err error) {
+	res = []*provider.RecycleItem{}
+	user := fs.makeUser(ctx)
+	count := 0
+	rootRecyclePath := filepath.Join(basePath, fs.conf.RecyclePath)
+	for d := to; !d.Before(from); d = d.AddDate(0, 0, -1) {
+
+		user.op(func(cv *cacheVal) {
+			var dir *goceph.Directory
+			if dir, err = cv.mount.OpenDir(filepath.Join(rootRecyclePath, d.Format("2006/01/02"))); err != nil {
+				return
+			}
+			defer closeDir(dir)
+
+			var entry *goceph.DirEntryPlus
+			for entry, err = dir.ReadDirPlus(goceph.StatxBasicStats, 0); entry != nil && err == nil; entry, err = dir.ReadDirPlus(goceph.StatxBasicStats, 0) {
+				//TODO(lopresti) validate content of entry.Name() here.
+				targetPath := filepath.Join(basePath, entry.Name())
+				stat := entry.Statx()
+				res = append(res, &provider.RecycleItem{
+					Ref:  &provider.Reference{Path: targetPath},
+					Key:  filepath.Join(rootRecyclePath, targetPath),
+					Size: stat.Size,
+					DeletionTime: &typesv1beta1.Timestamp{
+						Seconds: uint64(stat.Mtime.Sec),
+						Nanos:   uint32(stat.Mtime.Nsec),
+					},
+				})
+
+				count += 1
+				if count > maxentries {
+					err = errtypes.BadRequest("list too long")
+					return
+				}
+			}
+		})
+	}
+	return res, err
+}
+
+func (fs *cephfs) ListRecycle(ctx context.Context, basePath, key, relativePath string, from, to *typepb.Timestamp) ([]*provider.RecycleItem, error) {
+	md, err := fs.GetMD(ctx, &provider.Reference{Path: basePath}, nil)
+	if err != nil {
+		return nil, err
+	}
+	if !md.PermissionSet.ListRecycle {
+		return nil, errtypes.PermissionDenied("cephfs: user doesn't have permissions to restore recycled items")
+	}
+
+	var dateFrom, dateTo time.Time
+	if from != nil && to != nil {
+		dateFrom = time.Unix(int64(from.Seconds), 0)
+		dateTo = time.Unix(int64(to.Seconds), 0)
+		if dateFrom.AddDate(0, 0, fs.conf.MaxDaysInRecycleList).Before(dateTo) {
+			return nil, errtypes.BadRequest("cephfs: too many days requested in listing the recycle bin")
+		}
+	} else {
+		// if no date range was given, list up to two days ago
+		dateTo = time.Now()
+		dateFrom = dateTo.AddDate(0, 0, -2)
+	}
+
+	sublog := appctx.GetLogger(ctx).With().Logger()
+	sublog.Debug().Time("from", dateFrom).Time("to", dateTo).Msg("executing ListDeletedEntries")
+	recycleEntries, err := fs.listDeletedEntries(ctx, fs.conf.MaxRecycleEntries, basePath, dateFrom, dateTo)
+	if err != nil {
+		switch err.(type) {
+		case errtypes.IsBadRequest:
+			return nil, errtypes.BadRequest("cephfs: too many entries found in listing the recycle bin")
+		default:
+			return nil, errors.Wrap(err, "cephfs: error listing deleted entries")
+		}
+	}
+	return recycleEntries, nil
+}
+
+func (fs *cephfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+	user := fs.makeUser(ctx)
+	md, err := fs.GetMD(ctx, &provider.Reference{Path: basePath}, nil)
+	if err != nil {
+		return err
+	}
+	if !md.PermissionSet.RestoreRecycleItem {
+		return errtypes.PermissionDenied("cephfs: user doesn't have permissions to restore recycled items")
+	}
+
+	user.op(func(cv *cacheVal) {
+		//TODO(lopresti) validate content of basePath and relativePath. Key is expected to contain the recycled path
+		if err = cv.mount.Rename(key, filepath.Join(basePath, relativePath)); err != nil {
+			return
+		}
+		//TODO(tmourati): Add entry id logic, handle already moved file error
+	})
+
+	return getRevaError(err)
+}
+
+func (fs *cephfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
+	return errtypes.NotSupported("cephfs: operation not supported")
+}
+
 func (fs *cephfs) EmptyRecycle(ctx context.Context) error {
-	return errtypes.NotSupported("unimplemented")
+	return errtypes.NotSupported("cephfs: operation not supported")
 }
 
 func (fs *cephfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (r *provider.CreateStorageSpaceResponse, err error) {
 	return nil, errtypes.NotSupported("unimplemented")
-}
-
-func (fs *cephfs) ListRecycle(ctx context.Context, basePath, key, relativePath string, from, to *typepb.Timestamp) ([]*provider.RecycleItem, error) {
-	return nil, errtypes.NotSupported("unimplemented")
-}
-
-func (fs *cephfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
-	return errtypes.NotSupported("unimplemented")
-}
-
-func (fs *cephfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
-	return errtypes.NotSupported("unimplemented")
 }
 
 func (fs *cephfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
