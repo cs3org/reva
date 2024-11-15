@@ -172,6 +172,10 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	if fs == nil {
+		return nil, errors.New("error creating fs driver")
+	}
+
 	// parse data server url
 	u, err := url.Parse(c.DataServerURL)
 	if err != nil {
@@ -1607,7 +1611,8 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provide
 
 func (s *service) trimMountPrefix(fn string) (string, error) {
 	if strings.HasPrefix(fn, s.mountPath) {
-		return path.Join("/", strings.TrimPrefix(fn, s.mountPath)), nil
+		p := path.Join("/", strings.TrimPrefix(fn, s.mountPath))
+		return p, nil
 	}
 	return "", errtypes.BadRequest(fmt.Sprintf("path=%q does not belong to this storage provider mount path=%q", fn, s.mountPath))
 }
