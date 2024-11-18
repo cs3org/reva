@@ -118,7 +118,7 @@ var _ = Describe("Nextcloud", func() {
 
 	Describe("New", func() {
 		It("returns a new instance", func() {
-			_, err := nextcloud.New(options, nil)
+			_, err := nextcloud.New(options, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})

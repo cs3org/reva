@@ -175,7 +175,7 @@ func New(m map[string]interface{}, ss *grpc.Server, log *zerolog.Logger) (rgrpc.
 
 	c.init()
 
-	fs, err := getFS(c)
+	fs, err := getFS(c, log)
 	if err != nil {
 		return nil, err
 	}
@@ -1277,7 +1277,7 @@ func (s *Service) addMissingStorageProviderID(resourceID *provider.ResourceId, s
 	}
 }
 
-func getFS(c *config) (storage.FS, error) {
+func getFS(c *config, log *zerolog.Logger) (storage.FS, error) {
 	evstream, err := estreamFromConfig(c.Events)
 	if err != nil {
 		return nil, err
@@ -1287,7 +1287,7 @@ func getFS(c *config) (storage.FS, error) {
 		driverConf := c.Drivers[c.Driver]
 		driverConf["mount_id"] = c.MountID // pass the mount id to the driver
 
-		return f(driverConf, evstream)
+		return f(driverConf, evstream, log)
 	}
 
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)

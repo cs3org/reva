@@ -178,7 +178,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	)
 
 	bs := &treemocks.Blobstore{}
-	tree, err := tree.New(lu, bs, um, &trashbin.Trashbin{}, o, nil, store.Create())
+	tree, err := tree.New(lu, bs, um, &trashbin.Trashbin{}, o, nil, store.Create(), nil)
 	if err != nil {
 		return nil, err
 	}
