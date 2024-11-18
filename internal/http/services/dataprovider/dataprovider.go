@@ -98,7 +98,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		evstream = s
 	}
 
-	fs, err := getFS(conf, evstream)
+	fs, err := getFS(conf, evstream, log)
 	if err != nil {
 		return nil, err
 	}
@@ -118,9 +118,9 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	return s, err
 }
 
-func getFS(c *config, stream events.Stream) (storage.FS, error) {
+func getFS(c *config, stream events.Stream, log *zerolog.Logger) (storage.FS, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver], stream)
+		return f(c.Drivers[c.Driver], stream, log)
 	}
 	return nil, fmt.Errorf("driver not found: %s", c.Driver)
 }
