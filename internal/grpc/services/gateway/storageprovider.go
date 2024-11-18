@@ -48,7 +48,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/pkg/errors"
 	gstatus "google.golang.org/grpc/status"
 )
@@ -78,7 +78,7 @@ import (
 
 // transferClaims are custom claims for a JWT token to be used between the metadata and data gateways.
 type transferClaims struct {
-	jwt.StandardClaims
+	jwt.RegisteredClaims
 	Target string `json:"target"`
 }
 
@@ -86,10 +86,10 @@ func (s *svc) sign(_ context.Context, target string, expiresAt int64) (string, e
 	// Tus sends a separate request to the datagateway service for every chunk.
 	// For large files, this can take a long time, so we extend the expiration
 	claims := transferClaims{
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: expiresAt,
-			Audience:  "reva",
-			IssuedAt:  time.Now().Unix(),
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Unix(expiresAt, 0)),
+			Audience:  jwt.ClaimStrings{"reva"},
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 		Target: target,
 	}
