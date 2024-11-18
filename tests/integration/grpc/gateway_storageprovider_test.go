@@ -191,7 +191,7 @@ var _ = Describe("gateway", func() {
 				"permissionssvc":      revads["permissions"].GrpcAddress,
 				"treesize_accounting": true,
 				"treetime_accounting": true,
-			}, nil)
+			}, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
 			res, err := shard1Fs.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
 				Type:  "project",
@@ -217,7 +217,7 @@ var _ = Describe("gateway", func() {
 				"permissionssvc":      revads["permissions"].GrpcAddress,
 				"treesize_accounting": true,
 				"treetime_accounting": true,
-			}, nil)
+			}, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
 			res, err = shard2Fs.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
 				Type:  "project",
@@ -380,7 +380,7 @@ var _ = Describe("gateway", func() {
 				"permissionssvc":      revads["permissions"].GrpcAddress,
 				"treesize_accounting": true,
 				"treetime_accounting": true,
-			}, nil)
+			}, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
 
 			r, err := serviceClient.CreateHome(ctx, &storagep.CreateHomeRequest{})
@@ -405,7 +405,7 @@ var _ = Describe("gateway", func() {
 				"permissionssvc":      revads["permissions"].GrpcAddress,
 				"treesize_accounting": true,
 				"treetime_accounting": true,
-			}, nil)
+			}, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
 			res, err := serviceClient.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
 				Type:  "project",

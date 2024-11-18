@@ -224,7 +224,7 @@ var _ = Describe("ocm share", func() {
 				fs, err := ocis.New(map[string]interface{}{
 					"root":           revads["cernboxgw"].StorageRoot,
 					"permissionssvc": revads["permissions"].GrpcAddress,
-				}, nil)
+				}, nil, nil)
 				Expect(err).ToNot(HaveOccurred())
 				ref := &provider.Reference{
 					ResourceId: &provider.ResourceId{

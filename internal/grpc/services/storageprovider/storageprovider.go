@@ -49,6 +49,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc"
 )
@@ -165,7 +166,7 @@ func registerMimeTypes(mappingFile string) error {
 }
 
 // New creates a new storage provider svc
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+func New(m map[string]interface{}, ss *grpc.Server, log *zerolog.Logger) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)
 	if err != nil {
