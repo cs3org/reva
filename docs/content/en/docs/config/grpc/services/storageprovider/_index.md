@@ -6,10 +6,68 @@ description: >
   Configuration for the storageprovider service
 ---
 
+# _struct: eventconfig_
+
+{{% dir name="nats_address" type="string" default="address of the nats server" %}}
+ [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L77)
+{{< highlight toml >}}
+[grpc.services.storageprovider]
+nats_address = "address of the nats server"
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="nats_clusterid" type="string" default="clusterid of the nats server" %}}
+ [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L78)
+{{< highlight toml >}}
+[grpc.services.storageprovider]
+nats_clusterid = "clusterid of the nats server"
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="tls_insecure" type="bool" default=Whether to verify the server TLS certificates. %}}
+ [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L79)
+{{< highlight toml >}}
+[grpc.services.storageprovider]
+tls_insecure = Whether to verify the server TLS certificates.
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="tls_root_ca_cert" type="string" default="The root CA certificate used to validate the server's TLS certificate." %}}
+ [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L80)
+{{< highlight toml >}}
+[grpc.services.storageprovider]
+tls_root_ca_cert = "The root CA certificate used to validate the server's TLS certificate."
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="nats_enable_tls" type="bool" default=events tls switch %}}
+ [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L81)
+{{< highlight toml >}}
+[grpc.services.storageprovider]
+nats_enable_tls = events tls switch
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="nats_username" type="string" default="event stream username" %}}
+ [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L82)
+{{< highlight toml >}}
+[grpc.services.storageprovider]
+nats_username = "event stream username"
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="nats_password" type="string" default="event stream password" %}}
+ [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L83)
+{{< highlight toml >}}
+[grpc.services.storageprovider]
+nats_password = "event stream password"
+{{< /highlight >}}
+{{% /dir %}}
+
 # _struct: config_
 
 {{% dir name="driver" type="string" default="localhome" %}}
-The storage driver to be used. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L64)
+The storage driver to be used. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L65)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 driver = "localhome"
@@ -17,7 +75,7 @@ driver = "localhome"
 {{% /dir %}}
 
 {{% dir name="drivers" type="map[string]map[string]interface{}" default="localhome" %}}
- [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L65)
+ [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L66)
 {{< highlight toml >}}
 [grpc.services.storageprovider.drivers.localhome]
 root = "/var/tmp/reva/"
@@ -28,7 +86,7 @@ user_layout = "{{.Username}}"
 {{% /dir %}}
 
 {{% dir name="data_server_url" type="string" default="http://localhost/data" %}}
-The URL for the data server. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L66)
+The URL for the data server. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L67)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 data_server_url = "http://localhost/data"
@@ -36,7 +94,7 @@ data_server_url = "http://localhost/data"
 {{% /dir %}}
 
 {{% dir name="expose_data_server" type="bool" default=false %}}
-Whether to expose data server. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L67)
+Whether to expose data server. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L68)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 expose_data_server = false
@@ -44,7 +102,7 @@ expose_data_server = false
 {{% /dir %}}
 
 {{% dir name="available_checksums" type="map[string]uint32" default=nil %}}
-List of available checksums. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L68)
+List of available checksums. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L69)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 available_checksums = nil
@@ -52,7 +110,7 @@ available_checksums = nil
 {{% /dir %}}
 
 {{% dir name="custom_mimetypes_json" type="string" default="nil" %}}
-An optional mapping file with the list of supported custom file extensions and corresponding mime types. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L69)
+An optional mapping file with the list of supported custom file extensions and corresponding mime types. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L70)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 custom_mimetypes_json = "nil"
@@ -60,7 +118,7 @@ custom_mimetypes_json = "nil"
 {{% /dir %}}
 
 {{% dir name="upload_expiration" type="int64" default=0 %}}
-Duration for how long uploads will be valid. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L71)
+Duration for how long uploads will be valid. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L72)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 upload_expiration = 0
@@ -68,68 +126,10 @@ upload_expiration = 0
 {{% /dir %}}
 
 {{% dir name="events" type="eventconfig" default=0 %}}
-Event stream configuration [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L72)
+Event stream configuration [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L73)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 events = 0
-{{< /highlight >}}
-{{% /dir %}}
-
-# _struct: eventconfig_
-
-{{% dir name="nats_address" type="string" default="address of the nats server" %}}
- [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L76)
-{{< highlight toml >}}
-[grpc.services.storageprovider]
-nats_address = "address of the nats server"
-{{< /highlight >}}
-{{% /dir %}}
-
-{{% dir name="nats_clusterid" type="string" default="clusterid of the nats server" %}}
- [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L77)
-{{< highlight toml >}}
-[grpc.services.storageprovider]
-nats_clusterid = "clusterid of the nats server"
-{{< /highlight >}}
-{{% /dir %}}
-
-{{% dir name="tls_insecure" type="bool" default=Whether to verify the server TLS certificates. %}}
- [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L78)
-{{< highlight toml >}}
-[grpc.services.storageprovider]
-tls_insecure = Whether to verify the server TLS certificates.
-{{< /highlight >}}
-{{% /dir %}}
-
-{{% dir name="tls_root_ca_cert" type="string" default="The root CA certificate used to validate the server's TLS certificate." %}}
- [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L79)
-{{< highlight toml >}}
-[grpc.services.storageprovider]
-tls_root_ca_cert = "The root CA certificate used to validate the server's TLS certificate."
-{{< /highlight >}}
-{{% /dir %}}
-
-{{% dir name="nats_enable_tls" type="bool" default=events tls switch %}}
- [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L80)
-{{< highlight toml >}}
-[grpc.services.storageprovider]
-nats_enable_tls = events tls switch
-{{< /highlight >}}
-{{% /dir %}}
-
-{{% dir name="nats_username" type="string" default="event stream username" %}}
- [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L81)
-{{< highlight toml >}}
-[grpc.services.storageprovider]
-nats_username = "event stream username"
-{{< /highlight >}}
-{{% /dir %}}
-
-{{% dir name="nats_password" type="string" default="event stream password" %}}
- [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L82)
-{{< highlight toml >}}
-[grpc.services.storageprovider]
-nats_password = "event stream password"
 {{< /highlight >}}
 {{% /dir %}}
 

@@ -1,4 +1,4 @@
-Enhancement: Improve posixfs error handling and logging
+Bugfix: Improve posixfs error handling and logging
 
 We improved error handling and logging in the posixfs storage driver.
 
