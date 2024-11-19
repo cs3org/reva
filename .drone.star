@@ -761,7 +761,7 @@ def posixfsIntegrationTests(parallelRuns, skipExceptParts = []):
                         "environment": {
                             "TEST_SERVER_URL": "http://revad-services:20080",
                             "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
-                            "DELETE_USER_DATA_CMD": "bash -cx 'for i in {1..30}; do rm -rf /drone/src/tmp/reva/data/users/* /drone/src/tmp/reva/data/indexes/by-type/* && break || sleep 5; done'",
+                            "DELETE_USER_DATA_CMD": "bash -cx 'for i in {1..30}; do rm -rf /drone/src/tmp/reva/data/users/* /drone/src/tmp/reva/data/indexes/by-type/* && break || sleep 5; done; sleep 1'",
                             "STORAGE_DRIVER": "ocis",
                             "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
                             "TEST_WITH_LDAP": "true",

@@ -379,7 +379,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					"mount_id": "shareprovidermountid",
 				},
 			}
-			s, err := provider.NewDefault(config, nil)
+			s, err := provider.NewDefault(config, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(s).ToNot(BeNil())
 		})

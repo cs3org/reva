@@ -56,7 +56,7 @@ var _ = Describe("Posix", func() {
 
 	Describe("New", func() {
 		It("returns a new instance", func() {
-			_, err := posix.New(options, nil)
+			_, err := posix.New(options, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})

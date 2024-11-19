@@ -49,6 +49,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/pkg/utils/cfg"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 )
 
@@ -102,7 +103,7 @@ func getShareRepository(c *config) (share.Repository, error) {
 }
 
 // New creates a new ocm share provider svc.
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+func New(m map[string]interface{}, ss *grpc.Server, _ *zerolog.Logger) (rgrpc.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -326,8 +327,8 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	shareWith := ocmuser.FormatOCMUser(ocmuser.RemoteID(req.GetGrantee().GetUserId()))
 
 	// wrap the local user id in a federated user id
-	owner := ocmuser.FormatOCMUser(ocmuser.FederatedID(info.Owner))
-	sender := ocmuser.FormatOCMUser(ocmuser.FederatedID(user.Id))
+	owner := ocmuser.FormatOCMUser(ocmuser.FederatedID(info.Owner, s.conf.ProviderDomain))
+	sender := ocmuser.FormatOCMUser(ocmuser.FederatedID(user.Id, s.conf.ProviderDomain))
 
 	newShareReq := &client.NewShareRequest{
 		ShareWith:         shareWith,
