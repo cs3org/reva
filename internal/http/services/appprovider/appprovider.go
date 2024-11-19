@@ -230,6 +230,16 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	touchFileReq := &provider.TouchFileRequest{
+		Ref: fileRef,
+	}
+
+	_, err = client.TouchFile(ctx, touchFileReq)
+	if err != nil {
+		writeError(w, r, appErrorServerError, "error sending a grpc touchfile request", err)
+		return
+	}
+
 	// Create empty file via storageprovider
 	createReq := &provider.InitiateFileUploadRequest{
 		Ref: fileRef,
