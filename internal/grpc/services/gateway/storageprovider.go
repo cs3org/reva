@@ -428,7 +428,10 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 }
 
 func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
-	currentUser := ctxpkg.ContextMustGetUser(ctx)
+	currentUser, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		return nil, errors.New("user not found in context")
+	}
 
 	srClient, err := s.getStorageRegistryClient(ctx, s.c.StorageRegistryEndpoint)
 	if err != nil {
