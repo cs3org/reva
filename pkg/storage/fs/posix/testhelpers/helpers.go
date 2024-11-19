@@ -182,7 +182,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	if err != nil {
 		return nil, err
 	}
-	tb, err := trashbin.New(o, lu)
+	tb, err := trashbin.New(o, lu, nil)
 	if err != nil {
 		return nil, err
 	}
