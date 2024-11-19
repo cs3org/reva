@@ -358,13 +358,20 @@ func cs3PermissionsToLibreGraph(user *userpb.User, perms *providerpb.ResourcePer
 	case perms.Stat:
 		p.SetRoles([]string{"viewer"})
 	}
+
+	identity := &libregraph.Identity{
+		DisplayName: user.DisplayName,
+		Id:          &user.Id.OpaqueId,
+	}
+
 	p.GrantedToIdentities = []libregraph.IdentitySet{
 		{
-			User: &libregraph.Identity{
-				DisplayName: user.DisplayName,
-				Id:          &user.Id.OpaqueId,
-			},
+			User: identity,
 		},
+	}
+
+	p.GrantedToV2 = &libregraph.SharePointIdentitySet{
+		User: identity,
 	}
 	return []libregraph.Permission{p}
 }

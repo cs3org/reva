@@ -71,16 +71,18 @@ func (s *svc) initRouter() {
 	s.router.Route("/v1.0", func(r chi.Router) {
 		r.Route("/me", func(r chi.Router) {
 			r.Get("/", s.getMe)
-			r.Route("/drives", func(r chi.Router) {
-				r.Get("/", s.listMySpaces)
-
-			})
 		})
 		r.Route("/drives", func(r chi.Router) {
 			r.Get("/{space-id}", s.getSpace)
 		})
 	})
 	s.router.Route("/v1beta1", func(r chi.Router) {
+		r.Route("/me", func(r chi.Router) {
+			r.Route("/drives", func(r chi.Router) {
+				r.Get("/", s.listMySpaces)
+
+			})
+		})
 		r.Route("/me/drive", func(r chi.Router) {
 			r.Get("/sharedWithMe", s.getSharedWithMe)
 			r.Get("/sharedByMe", s.getSharedByMe)
