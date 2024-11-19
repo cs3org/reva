@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 
@@ -177,12 +178,14 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		},
 	)
 
+	logger := zerolog.New(os.Stderr).With().Logger()
+
 	bs := &treemocks.Blobstore{}
-	tree, err := tree.New(lu, bs, um, &trashbin.Trashbin{}, o, nil, store.Create(), nil)
+	tree, err := tree.New(lu, bs, um, &trashbin.Trashbin{}, o, nil, store.Create(), &logger)
 	if err != nil {
 		return nil, err
 	}
-	tb, err := trashbin.New(o, lu)
+	tb, err := trashbin.New(o, lu, &logger)
 	if err != nil {
 		return nil, err
 	}
