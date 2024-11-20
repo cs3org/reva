@@ -104,6 +104,13 @@ type CapabilitiesFilesTusSupport struct {
 	HTTPMethodOverride string `json:"http_method_override" mapstructure:"http_method_override" xml:"http_method_override"`
 }
 
+// CapabilitiesFilesThumbnail used to enable thumbnails on specific files on web
+type CapabilitiesFilesThumbnail struct {
+	Enabled            bool     `json:"enabled"            mapstructure:"enabled"              xml:"enabled"`
+	Version            string   `json:"version"            mapstructure:"version"              xml:"version"`
+	SupportedMimeTypes []string `json:"supportedMimeTypes" mapstructure:"supported_mime_types" xml:"supportedMimeTypes"`
+}
+
 // CapabilitiesArchiver holds available archivers information.
 type CapabilitiesArchiver struct {
 	Enabled     bool     `json:"enabled"       mapstructure:"enabled"       xml:"enabled"`
@@ -133,6 +140,7 @@ type CapabilitiesFiles struct {
 	PermanentDeletion ocsBool                      `json:"permanent_deletion" xml:"permanent_deletion"`
 	BlacklistedFiles  []string                     `json:"blacklisted_files"  mapstructure:"blacklisted_files" xml:"blacklisted_files>element"`
 	TusSupport        *CapabilitiesFilesTusSupport `json:"tus_support"        mapstructure:"tus_support"       xml:"tus_support"`
+	Thumbnail         *CapabilitiesFilesThumbnail  `json:"thumbnail"          mapstructure:"thumbnail"         xml:"thumbnail"`
 	Archivers         []*CapabilitiesArchiver      `json:"archivers"          mapstructure:"archivers"         xml:"archivers"`
 	AppProviders      []*CapabilitiesAppProvider   `json:"app_providers"      mapstructure:"app_providers"     xml:"app_providers"`
 }
