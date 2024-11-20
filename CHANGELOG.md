@@ -1,3 +1,24 @@
+Changelog for reva 2.26.7 (2024-11-20)
+=======================================
+
+The following sections list the changes in reva 2.26.7 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #4964: Fix a wrong error code when approvider creates a new file
+
+Details
+-------
+
+*   Bugfix #4964: Fix a wrong error code when approvider creates a new file
+
+   We fixed a problem where the approvider would return a 500 error instead of 403 when trying to
+   create a new file in a read-only share.
+
+   https://github.com/cs3org/reva/pull/4964
+
 Changelog for reva 2.26.6 (2024-11-19)
 =======================================
 
@@ -12,11 +33,11 @@ Summary
 *   Fix #4953: Avoid gateway panics
 *   Fix #4959: Fix missing file touched event
 *   Fix #4933: Fix federated sharing when using an external identity provider
+*   Fix #4956: Improve posixfs error handling and logging
 *   Fix #4935: Enable datatx log
 *   Fix #4936: Do not delete mlock files
-*   Fix #4954: Prevent a panic when logging an error
-*   Fix #4956: Improve posixfs error handling and logging
 *   Fix #4951: Pass the initialized logger down the stack
+*   Fix #4954: Prevent a panic when logging an error
 
 Details
 -------
@@ -57,6 +78,12 @@ Details
 
    https://github.com/cs3org/reva/pull/4933
 
+*   Bugfix #4956: Improve posixfs error handling and logging
+
+   We improved error handling and logging in the posixfs storage driver.
+
+   https://github.com/cs3org/reva/pull/4956
+
 *   Bugfix #4935: Enable datatx log
 
    We now pass a properly initialized logger to the datatx implementations, allowing the tus
@@ -72,24 +99,18 @@ Details
    https://github.com/cs3org/reva/pull/4936
    https://github.com/cs3org/reva/pull/4924
 
-*   Bugfix #4954: Prevent a panic when logging an error
-
-   We fixed a panic when constructing a path failed to get the parent for a node.
-
-   https://github.com/cs3org/reva/pull/4954
-
-*   Bugfix #4956: Improve posixfs error handling and logging
-
-   We improved error handling and logging in the posixfs storage driver.
-
-   https://github.com/cs3org/reva/pull/4956
-
 *   Bugfix #4951: Pass the initialized logger down the stack
 
    We now make the initialized logger available to grpc services and storage drivers, which
    allows for easier and more uniform logging.
 
    https://github.com/cs3org/reva/pull/4951
+
+*   Bugfix #4954: Prevent a panic when logging an error
+
+   We fixed a panic when constructing a path failed to get the parent for a node.
+
+   https://github.com/cs3org/reva/pull/4954
 
 Changelog for reva 2.26.5 (2024-11-12)
 =======================================
@@ -5159,6 +5180,34 @@ Details
 
    https://github.com/cs3org/reva/pull/3083
 
+Changelog for reva 2.7.1 (2022-07-15)
+=======================================
+
+The following sections list the changes in reva 2.7.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #3080: Make dataproviders return more headers
+*   Enh #3046: Add user filter
+
+Details
+-------
+
+*   Bugfix #3080: Make dataproviders return more headers
+
+   Instead of ocdav doing an additional Stat request we now rely on the dataprovider to return the
+   necessary metadata information as headers.
+
+   https://github.com/owncloud/reva/issues/3080
+
+*   Enhancement #3046: Add user filter
+
+   This PR adds the ability to filter spaces by user-id
+
+   https://github.com/cs3org/reva/pull/3046
+
 Changelog for reva 2.7.0 (2022-07-15)
 =======================================
 
@@ -5290,34 +5339,6 @@ Details
    https://github.com/owncloud/ocis/issues/2144
    https://github.com/owncloud/ocis/issues/3073
    https://github.com/cs3org/reva/pull/2977
-
-Changelog for reva 2.7.1 (2022-07-15)
-=======================================
-
-The following sections list the changes in reva 2.7.1 relevant to
-reva users. The changes are ordered by importance.
-
-Summary
--------
-
-*   Fix #3080: Make dataproviders return more headers
-*   Enh #3046: Add user filter
-
-Details
--------
-
-*   Bugfix #3080: Make dataproviders return more headers
-
-   Instead of ocdav doing an additional Stat request we now rely on the dataprovider to return the
-   necessary metadata information as headers.
-
-   https://github.com/owncloud/reva/issues/3080
-
-*   Enhancement #3046: Add user filter
-
-   This PR adds the ability to filter spaces by user-id
-
-   https://github.com/cs3org/reva/pull/3046
 
 Changelog for reva 2.6.1 (2022-06-27)
 =======================================
@@ -11571,3 +11592,4 @@ Details
    from Drone into Github pages.
 
    https://github.com/cs3org/reva/pull/334
+
