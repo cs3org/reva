@@ -238,7 +238,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 
 	if touchRes.Status.Code != rpc.Code_CODE_OK {
 		if touchRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
-			writeError(w, r, appErrorPermissionDenied, "touching the file failed", nil)
+			writeError(w, r, appErrorPermissionDenied, "permission denied to create the file", nil)
 			return
 		}
 		writeError(w, r, appErrorServerError, "touching the file failed", nil)
