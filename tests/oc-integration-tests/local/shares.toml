@@ -27,5 +27,5 @@ auth_manager = "publicshares"
 gateway_addr = "0.0.0.0:19000"
 
 [grpc.services.publicshareprovider.drivers.json]
-file = "/var/tmp/reva/publicshares.json"
+file = "/tmp/reva/publicshares.json"
 gateway_addr = "0.0.0.0:19000"

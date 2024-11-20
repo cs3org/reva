@@ -1,6 +1,18 @@
 [
 	{
 		"id": {
+			"opaque_id": "ddc2004c-0977-11eb-9d3f-a793888cd0f8",
+			"idp": "http://localhost:20080",
+			"type": 1
+		},
+		"username": "admin",
+		"secret": "admin",
+		"mail": "admin@example.org",
+		"display_name": "Admin",
+		"groups": ["sailing-lovers", "radium-lovers", "polonium-lovers", "physics-lovers", "quantum-lovers"]
+	},
+	{
+		"id": {
 			"opaque_id": "4c510ada-c86b-4815-8820-42cdf82c3d51",
 			"idp": "http://localhost:20080",
 			"type": 1

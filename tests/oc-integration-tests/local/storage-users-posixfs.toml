@@ -1,5 +1,5 @@
 # This config file will start a reva service that:
-# - uses the ocis driver to serve users (/users)
+# - uses the posix driver to serve users (/users)
 # - serves the storage provider on grpc port 11000
 # - serves http dataprovider for this storage on port 11001
 #   - /data - dataprovider: file up and download
@@ -22,31 +22,48 @@ address = "0.0.0.0:11000"
 enabled = true
 
 # This is a storage provider that grants direct access to the wrapped storage
-# we have a locally running dataprovider
 [grpc.services.storageprovider]
-driver = "ocis"
+driver = "posix"
 expose_data_server = true
 data_server_url = "http://localhost:11001/data"
+#gateway_addr = "0.0.0.0:19000"
 mount_id = "1284d238-aa92-42ce-bdc4-0b0000009157"
 
-[grpc.services.storageprovider.drivers.ocis]
+[grpc.services.storageprovider.drivers.posix]
 root = "/tmp/reva/data"
 treetime_accounting = true
 treesize_accounting = true
 permissionssvc = "localhost:10000"
-personalspacealias_template = "{{.SpaceType}}/{{.User.Username}}"
-generalspacealias_template = "{{.SpaceType}}/{{.SpaceName | replace \" \" \"-\" | lower}}"
+personalspacepath_template = "users/{{.User.Id.OpaqueId}}"
+generalspacepath_template = "projects/{{.SpaceId}}"
+watch_fs = true
+
+[grpc.services.storageprovider.drivers.posix.filemetadatacache]
+cache_store = "noop"
+
+[grpc.services.storageprovider.drivers.posix.idcache]
+cache_store = "redis"
+cache_nodes = [ "redis://localhost:6379" ]
+
 
 # we have a locally running dataprovider
 [http]
 address = "0.0.0.0:11001"
 
 [http.services.dataprovider]
-driver = "ocis"
+driver = "posix"
 temp_folder = "/tmp/reva/tmp"
 
-[http.services.dataprovider.drivers.ocis]
+[http.services.dataprovider.drivers.posix]
 root = "/tmp/reva/data"
 treetime_accounting = true
 treesize_accounting = true
 permissionssvc = "localhost:10000"
+scan_debounce_delay = 0
+
+[http.services.dataprovider.drivers.posix.idcache]
+cache_store = "redis"
+cache_nodes = [ "redis://localhost:6379" ]
+
+[http.services.dataprovider.drivers.posix.filemetadatacache]
+cache_store = "noop"
