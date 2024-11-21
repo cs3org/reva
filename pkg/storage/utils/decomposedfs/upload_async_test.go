@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/store"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/tests/helpers"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 
@@ -180,7 +181,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			EventStream: stream.Chan{pub, con},
 			Trashbin:    &DecomposedfsTrashbin{},
 		}
-		fs, err = New(o, aspects)
+		fs, err = New(o, aspects, &zerolog.Logger{})
 		Expect(err).ToNot(HaveOccurred())
 
 		resp, err := fs.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{Owner: user, Type: "personal"})

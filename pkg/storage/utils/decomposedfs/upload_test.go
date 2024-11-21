@@ -48,6 +48,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/store"
 	"github.com/cs3org/reva/v2/tests/helpers"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 
@@ -144,7 +145,7 @@ var _ = Describe("File uploads", func() {
 			Permissions: permissions.NewPermissions(pmock, permissionsSelector),
 			Trashbin:    &decomposedfs.DecomposedfsTrashbin{},
 		}
-		fs, err = decomposedfs.New(o, aspects)
+		fs, err = decomposedfs.New(o, aspects, &zerolog.Logger{})
 		Expect(err).ToNot(HaveOccurred())
 
 		resp, err := fs.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{Owner: user, Type: "personal"})

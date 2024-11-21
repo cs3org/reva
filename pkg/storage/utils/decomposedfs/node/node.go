@@ -1261,8 +1261,7 @@ func (n *Node) ProcessingID(ctx context.Context) (string, error) {
 
 // IsSpaceRoot checks if the node is a space root
 func (n *Node) IsSpaceRoot(ctx context.Context) bool {
-	_, err := n.Xattr(ctx, prefixes.SpaceNameAttr)
-	return err == nil
+	return n.ID == n.SpaceID
 }
 
 // SetScanData sets the virus scan info to the node

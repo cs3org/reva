@@ -23,6 +23,7 @@ import (
 
 	"github.com/cs3org/reva/v2/pkg/storage/fs/s3ng"
 	"github.com/cs3org/reva/v2/tests/helpers"
+	"github.com/rs/zerolog"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -58,12 +59,12 @@ var _ = Describe("S3ng", func() {
 
 	Describe("New", func() {
 		It("fails on missing s3 configuration", func() {
-			_, err := s3ng.New(map[string]interface{}{}, nil, nil)
+			_, err := s3ng.New(map[string]interface{}{}, nil, &zerolog.Logger{})
 			Expect(err).To(MatchError("S3 configuration incomplete"))
 		})
 
 		It("works with complete configuration", func() {
-			_, err := s3ng.New(options, nil, nil)
+			_, err := s3ng.New(options, nil, &zerolog.Logger{})
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})
