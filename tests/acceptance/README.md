@@ -49,7 +49,7 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
    DELETE_USER_DATA_CMD="rm -rf /tmp/reva/data/nodes/root/* /tmp/reva/data/nodes/*-*-*-* /tmp/reva/data/blobs/*" \
    SKELETON_DIR='./apps/testing/data/apiSkeleton' \
    REVA_LDAP_HOSTNAME='localhost' \
-   BEHAT_FILTER_TAGS='~@skip&&~@skipOnReva' \
+   BEHAT_FILTER_TAGS='~@skip&&~@skipOnReva&&~@env-config' \
    EXPECTED_FAILURES_FILE=<path-to-reva>/tests/acceptance/expected-failures-on-OCIS-storage.md \
    DIVIDE_INTO_NUM_PARTS=1 \
    RUN_PART=1 \

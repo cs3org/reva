@@ -229,5 +229,15 @@ _The below features have been added after I last categorized them. AFAICT they a
 - [coreApiWebdavProperties/copyFile.feature:1095](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L1095)
 - [coreApiWebdavProperties/copyFile.feature:1096](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L1096)
 
+#### [Uploading with the same mtime and filename causes "internal server errors"](https://github.com/owncloud/ocis/issues/10496)
+
+- [coreApiWebdavUpload/uploadFile.feature:400](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUpload/uploadFile.feature#L400)
+- [coreApiWebdavUpload/uploadFile.feature:401](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUpload/uploadFile.feature#L401)
+- [coreApiWebdavUpload/uploadFile.feature:402](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUpload/uploadFile.feature#L402)
+- [coreApiWebdavUploadTUS/uploadFileMtime.feature:79](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L79)
+- [coreApiWebdavUploadTUS/uploadFileMtime.feature:80](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L80)
+- [coreApiWebdavUploadTUS/uploadFileMtime.feature:81](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L81)
+
+
 Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.

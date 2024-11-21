@@ -251,15 +251,18 @@ _The below features have been added after I last categorized them. AFAICT they a
 - [coreApiVersions/fileVersions.feature:286](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L286)
 - [coreApiVersions/fileVersions.feature:287](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L287)
 - [coreApiVersions/fileVersions.feature:288](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L288)
-- [coreApiVersions/fileVersions.feature:300](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L300)
 - [coreApiVersions/fileVersions.feature:301](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L301)
 - [coreApiVersions/fileVersions.feature:302](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L302)
-- [coreApiVersions/fileVersions.feature:305](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L305)
-- [coreApiVersions/fileVersions.feature:528](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L528)
-- [coreApiVersions/fileVersions.feature:542](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L542)
+- [coreApiVersions/fileVersions.feature:303](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L303)
+- [coreApiVersions/fileVersions.feature:306](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L306)
+- [coreApiVersions/fileVersions.feature:529](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L529)
+- [coreApiVersions/fileVersions.feature:543](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L543)
 - [coreApiWebdavMove2/moveFile.feature:41](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L41)
 - [coreApiWebdavMove2/moveFile.feature:42](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L42)
 - [coreApiWebdavMove2/moveFile.feature:43](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L43)
+- [coreApiWebdavUploadTUS/uploadFileMtime.feature:65](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L65)
+- [coreApiWebdavUploadTUS/uploadFileMtime.feature:66](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L66)
+- [coreApiWebdavUploadTUS/uploadFileMtime.feature:67](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L67)
 
 
 ### [COPY file/folder to same name is possible (but 500 code error for folder with spaces path)](https://github.com/owncloud/ocis/issues/8711)
@@ -267,6 +270,15 @@ _The below features have been added after I last categorized them. AFAICT they a
 - [coreApiWebdavProperties/copyFile.feature:1094](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L1094)
 - [coreApiWebdavProperties/copyFile.feature:1095](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L1095)
 - [coreApiWebdavProperties/copyFile.feature:1096](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties/copyFile.feature#L1096)
+
+#### [Uploading with the same mtime and filename causes "internal server errors"](https://github.com/owncloud/ocis/issues/10496)
+
+- [coreApiWebdavUpload/uploadFile.feature:400](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUpload/uploadFile.feature#L400)
+- [coreApiWebdavUpload/uploadFile.feature:401](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUpload/uploadFile.feature#L401)
+- [coreApiWebdavUpload/uploadFile.feature:402](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUpload/uploadFile.feature#L402)
+- [coreApiWebdavUploadTUS/uploadFileMtime.feature:79](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L79)
+- [coreApiWebdavUploadTUS/uploadFileMtime.feature:80](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L80)
+- [coreApiWebdavUploadTUS/uploadFileMtime.feature:81](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L81)
 
 - Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
