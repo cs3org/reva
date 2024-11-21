@@ -23,6 +23,7 @@ import (
 
 	"github.com/cs3org/reva/v2/pkg/storage/fs/posix"
 	"github.com/cs3org/reva/v2/tests/helpers"
+	"github.com/rs/zerolog"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -56,7 +57,7 @@ var _ = Describe("Posix", func() {
 
 	Describe("New", func() {
 		It("returns a new instance", func() {
-			_, err := posix.New(options, nil, nil)
+			_, err := posix.New(options, nil, &zerolog.Logger{})
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})

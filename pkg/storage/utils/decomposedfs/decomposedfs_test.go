@@ -61,7 +61,7 @@ var _ = Describe("Decomposed", func() {
 			_, err := decomposedfs.NewDefault(map[string]interface{}{
 				"root":           env.Root,
 				"permissionssvc": "any",
-			}, bs, nil)
+			}, bs, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})

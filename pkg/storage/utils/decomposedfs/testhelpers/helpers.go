@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/store"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 
@@ -178,7 +179,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		Permissions: permissions.NewPermissions(pmock, permissionsSelector),
 		Trashbin:    &decomposedfs.DecomposedfsTrashbin{},
 	}
-	fs, err := decomposedfs.New(o, aspects)
+	fs, err := decomposedfs.New(o, aspects, &zerolog.Logger{})
 	if err != nil {
 		return nil, err
 	}
