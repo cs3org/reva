@@ -23,6 +23,7 @@ import (
 
 	"github.com/cs3org/reva/v2/pkg/storage/fs/ocis"
 	"github.com/cs3org/reva/v2/tests/helpers"
+	"github.com/rs/zerolog"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -53,7 +54,7 @@ var _ = Describe("Ocis", func() {
 
 	Describe("New", func() {
 		It("returns a new instance", func() {
-			_, err := ocis.New(options, nil, nil)
+			_, err := ocis.New(options, nil, &zerolog.Logger{})
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})
