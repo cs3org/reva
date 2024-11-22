@@ -12,7 +12,7 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
 
    > **INFO:**
    >
-   > You can run the reva with other storage drivers.
+   > You can run reva with other storage drivers.
    >
    > To run reva with `posix` storage driver:
    >
