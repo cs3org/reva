@@ -73,7 +73,7 @@ users = "users.demo.json"
 #expose_data_server = true
 
 #[grpc.services.storageprovider.drivers.ocis]
-#root = "/var/tmp/reva/data"
+#root = "/tmp/reva/data"
 #enable_home = false
 #treetime_accounting = true
 #treesize_accounting = true
@@ -186,9 +186,9 @@ max_chunk_size = 0
 
 [http.services.dataprovider]
 driver = "ocis"
-temp_folder = "/var/tmp/reva/tmp"
+temp_folder = "/tmp/reva/tmp"
 
 [http.services.dataprovider.drivers.ocis]
-root = "/var/tmp/reva/data"
+root = "/tmp/reva/data"
 treetime_accounting = true
 treesize_accounting = true
