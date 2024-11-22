@@ -47,7 +47,6 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
    TEST_WITH_LDAP='true' \
    OCIS_REVA_DATA_ROOT='/tmp/reva/' \
    DELETE_USER_DATA_CMD="rm -rf /tmp/reva/data/nodes/root/* /tmp/reva/data/nodes/*-*-*-* /tmp/reva/data/blobs/*" \
-   SKELETON_DIR='./apps/testing/data/apiSkeleton' \
    REVA_LDAP_HOSTNAME='localhost' \
    BEHAT_FILTER_TAGS='~@skip&&~@skipOnReva&&~@env-config' \
    EXPECTED_FAILURES_FILE=<path-to-reva>/tests/acceptance/expected-failures-on-OCIS-storage.md \
