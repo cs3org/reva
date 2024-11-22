@@ -1232,12 +1232,14 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("eosfs: get md for ref:" + ref.String())
 
-	_, err := getUser(ctx)
+	u, err := getUser(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	auth, err := fs.getRootAuth(ctx)
+	p := ref.Path
+	fn := fs.wrap(ctx, p)
+	auth, err := fs.getUserAuth(ctx, u, fn)
 	if err != nil {
 		return nil, err
 	}
@@ -1262,8 +1264,6 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		return fs.convertToResourceInfo(ctx, eosFileInfo)
 	}
 
-	p := ref.Path
-
 	// if path is home we need to add in the response any shadow folder in the shadow homedirectory.
 	if fs.conf.EnableHome {
 		if fs.isShareFolder(ctx, p) {
@@ -1271,7 +1271,6 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		}
 	}
 
-	fn := fs.wrap(ctx, p)
 	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, fn)
 	if err != nil {
 		return nil, err
