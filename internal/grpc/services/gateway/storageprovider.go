@@ -84,6 +84,7 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 	home := s.getHome(ctx)
 	c, err := s.findByPath(ctx, home)
 	if err != nil {
+		log.Err(err).Str("home", home).Msg("gateway: error finding home on storage provider")
 		return &provider.CreateHomeResponse{
 			Status: status.NewStatusFromErrType(ctx, "error finding home", err),
 		}, nil
@@ -91,7 +92,7 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 
 	res, err := c.CreateHome(ctx, req)
 	if err != nil {
-		log.Err(err).Msg("gateway: error creating home on storage provider")
+		log.Err(err).Str("home", home).Msg("gateway: error creating home on storage provider")
 		return &provider.CreateHomeResponse{
 			Status: status.NewInternal(ctx, err, "error calling CreateHome"),
 		}, nil
