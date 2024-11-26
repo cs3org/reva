@@ -257,12 +257,11 @@ func (fs *eosfs) userIDcacheWarmup() {
 		time.Sleep(2 * time.Second)
 		ctx := context.Background()
 		paths := []string{fs.wrap(ctx, "/")}
-		auth, _ := fs.getRootAuth(ctx)
 
 		for i := 0; i < fs.conf.UserIDCacheWarmupDepth; i++ {
 			var newPaths []string
 			for _, fn := range paths {
-				if eosFileInfos, err := fs.c.List(ctx, auth, fn); err == nil {
+				if eosFileInfos, err := fs.c.List(ctx, utils.GetEmptyAuth(), fn); err == nil {
 					for _, f := range eosFileInfos {
 						_, _ = fs.getUserIDGateway(ctx, strconv.FormatUint(f.UID, 10))
 						newPaths = append(newPaths, f.File)
@@ -454,10 +453,7 @@ func (fs *eosfs) getPath(ctx context.Context, id *provider.ResourceId) (string, 
 		return "", fmt.Errorf("error converting string to int for eos fileid: %s", id.OpaqueId)
 	}
 
-	auth, err := fs.getRootAuth(ctx)
-	if err != nil {
-		return "", err
-	}
+	auth := utils.GetDaemonAuth()
 
 	eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
 	if err != nil {
@@ -491,29 +487,24 @@ func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 	if err != nil {
 		return "", errors.Wrap(err, "eosfs: no user in ctx")
 	}
-	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT || u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
-		auth, err := fs.getRootAuth(ctx)
+
+	var auth eosclient.Authorization
+	if utils.IsLightweightUser(u) {
+		auth = utils.GetDaemonAuth()
+	} else {
+		auth, err = fs.getUserAuth(ctx, u, "")
 		if err != nil {
 			return "", err
 		}
-		eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
-		if err != nil {
-			return "", errors.Wrap(err, "eosfs: error getting file info by inode")
-		}
-		if perm := fs.permissionSet(ctx, eosFileInfo, nil); perm.GetPath {
-			return fs.unwrap(ctx, eosFileInfo.File)
-		}
-		return "", errtypes.PermissionDenied("eosfs: getting path for id not allowed")
-	}
-
-	auth, err := fs.getUserAuth(ctx, u, "")
-	if err != nil {
-		return "", err
 	}
 
 	eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
 	if err != nil {
 		return "", errors.Wrap(err, "eosfs: error getting file info by inode")
+	}
+
+	if perm := fs.permissionSet(ctx, eosFileInfo, nil); !perm.GetPath {
+		return "", errtypes.PermissionDenied("eosfs: getting path for id not allowed")
 	}
 
 	return fs.unwrap(ctx, eosFileInfo.File)
@@ -529,10 +520,7 @@ func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 		return err
 	}
 
-	rootAuth, err := fs.getRootAuth(ctx)
-	if err != nil {
-		return err
-	}
+	cboxAuth := utils.GetEmptyAuth()
 
 	for k, v := range md.Metadata {
 		if k == "" || v == "" {
@@ -552,7 +540,7 @@ func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 
 		// TODO(labkode): SetArbitraryMetadata does not have semantics for recursivity.
 		// We set it to false
-		err := fs.c.SetAttr(ctx, rootAuth, attr, false, false, fn, "")
+		err := fs.c.SetAttr(ctx, cboxAuth, attr, false, false, fn, "")
 		if err != nil {
 			return errors.Wrap(err, "eosfs: error setting xattr in eos driver")
 		}
@@ -570,10 +558,7 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 		return err
 	}
 
-	rootAuth, err := fs.getRootAuth(ctx)
-	if err != nil {
-		return err
-	}
+	cboxAuth := utils.GetEmptyAuth()
 
 	for _, k := range keys {
 		if k == "" {
@@ -585,7 +570,7 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 			Key:  k,
 		}
 
-		err := fs.c.UnsetAttr(ctx, rootAuth, attr, false, fn, "")
+		err := fs.c.UnsetAttr(ctx, cboxAuth, attr, false, fn, "")
 		if err != nil {
 			if errors.Is(err, eosclient.AttrNotExistsError) {
 				continue
@@ -606,16 +591,14 @@ func (fs *eosfs) EncodeAppName(a string) string {
 
 func (fs *eosfs) getLockPayloads(ctx context.Context, path string) (string, string, error) {
 	// sys attributes want root auth, buddy
-	rootauth, err := fs.getRootAuth(ctx)
-	if err != nil {
-		return "", "", err
-	}
-	data, err := fs.c.GetAttr(ctx, rootauth, "sys."+lockPayloadKey, path)
+	cboxAuth := utils.GetEmptyAuth()
+
+	data, err := fs.c.GetAttr(ctx, cboxAuth, "sys."+lockPayloadKey, path)
 	if err != nil {
 		return "", "", err
 	}
 
-	eoslock, err := fs.c.GetAttr(ctx, rootauth, "sys."+eosLockKey, path)
+	eoslock, err := fs.c.GetAttr(ctx, cboxAuth, "sys."+eosLockKey, path)
 	if err != nil {
 		return "", "", err
 	}
@@ -624,12 +607,9 @@ func (fs *eosfs) getLockPayloads(ctx context.Context, path string) (string, stri
 }
 
 func (fs *eosfs) removeLockAttrs(ctx context.Context, path, app string) error {
-	rootAuth, err := fs.getRootAuth(ctx)
-	if err != nil {
-		return err
-	}
+	cboxAuth := utils.GetEmptyAuth()
 
-	err = fs.c.UnsetAttr(ctx, rootAuth, &eosclient.Attribute{
+	err := fs.c.UnsetAttr(ctx, cboxAuth, &eosclient.Attribute{
 		Type: SystemAttr,
 		Key:  eosLockKey,
 	}, false, path, app)
@@ -637,7 +617,7 @@ func (fs *eosfs) removeLockAttrs(ctx context.Context, path, app string) error {
 		return errors.Wrap(err, "eosfs: error unsetting the eos lock")
 	}
 
-	err = fs.c.UnsetAttr(ctx, rootAuth, &eosclient.Attribute{
+	err = fs.c.UnsetAttr(ctx, cboxAuth, &eosclient.Attribute{
 		Type: SystemAttr,
 		Key:  lockPayloadKey,
 	}, false, path, app)
@@ -709,10 +689,7 @@ func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 }
 
 func (fs *eosfs) setLock(ctx context.Context, lock *provider.Lock, path string) error {
-	auth, err := fs.getRootAuth(ctx)
-	if err != nil {
-		return err
-	}
+	cboxAuth := utils.GetEmptyAuth()
 
 	encodedLock, eosLock, err := fs.encodeLock(lock)
 	if err != nil {
@@ -720,7 +697,7 @@ func (fs *eosfs) setLock(ctx context.Context, lock *provider.Lock, path string) 
 	}
 
 	// set eos lock
-	err = fs.c.SetAttr(ctx, auth, &eosclient.Attribute{
+	err = fs.c.SetAttr(ctx, cboxAuth, &eosclient.Attribute{
 		Type: SystemAttr,
 		Key:  eosLockKey,
 		Val:  eosLock,
@@ -733,7 +710,7 @@ func (fs *eosfs) setLock(ctx context.Context, lock *provider.Lock, path string) 
 	}
 
 	// set payload
-	err = fs.c.SetAttr(ctx, auth, &eosclient.Attribute{
+	err = fs.c.SetAttr(ctx, cboxAuth, &eosclient.Attribute{
 		Type: SystemAttr,
 		Key:  lockPayloadKey,
 		Val:  encodedLock,
@@ -990,10 +967,7 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 		return err
 	}
 
-	rootAuth, err := fs.getRootAuth(ctx)
-	if err != nil {
-		return err
-	}
+	cboxAuth := utils.GetEmptyAuth()
 
 	eosACL, err := fs.getEosACL(ctx, g)
 	if err != nil {
@@ -1010,13 +984,13 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 			Key:  fmt.Sprintf("%s.%s", lwShareAttrKey, eosACL.Qualifier),
 			Val:  eosACL.Permissions,
 		}
-		if err := fs.c.SetAttr(ctx, rootAuth, attr, false, true, fn, ""); err != nil {
+		if err := fs.c.SetAttr(ctx, cboxAuth, attr, false, true, fn, ""); err != nil {
 			return errors.Wrap(err, "eosfs: error adding acl for lightweight account")
 		}
 		return nil
 	}
 
-	err = fs.c.AddACL(ctx, auth, rootAuth, fn, eosclient.StartPosition, eosACL)
+	err = fs.c.AddACL(ctx, auth, cboxAuth, fn, eosclient.StartPosition, eosACL)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error adding acl")
 	}
@@ -1031,10 +1005,7 @@ func (fs *eosfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *prov
 
 	position := eosclient.EndPosition
 
-	rootAuth, err := fs.getRootAuth(ctx)
-	if err != nil {
-		return err
-	}
+	cboxAuth := utils.GetEmptyAuth()
 
 	// empty permissions => deny
 	grant := &provider.Grant{
@@ -1047,7 +1018,7 @@ func (fs *eosfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *prov
 		return err
 	}
 
-	err = fs.c.AddACL(ctx, auth, rootAuth, fn, position, eosACL)
+	err = fs.c.AddACL(ctx, auth, cboxAuth, fn, position, eosACL)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error adding acl")
 	}
@@ -1098,10 +1069,7 @@ func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pr
 		return err
 	}
 
-	rootAuth, err := fs.getRootAuth(ctx)
-	if err != nil {
-		return err
-	}
+	cboxAuth := utils.GetEmptyAuth()
 
 	eosACL, err := fs.getEosACL(ctx, g)
 	if err != nil {
@@ -1113,13 +1081,13 @@ func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pr
 			Type: SystemAttr,
 			Key:  fmt.Sprintf("%s.%s", lwShareAttrKey, eosACL.Qualifier),
 		}
-		if err := fs.c.UnsetAttr(ctx, rootAuth, attr, true, fn, ""); err != nil {
+		if err := fs.c.UnsetAttr(ctx, cboxAuth, attr, true, fn, ""); err != nil {
 			return errors.Wrap(err, "eosfs: error removing acl for lightweight account")
 		}
 		return nil
 	}
 
-	err = fs.c.RemoveACL(ctx, auth, rootAuth, fn, eosACL)
+	err = fs.c.RemoveACL(ctx, auth, cboxAuth, fn, eosACL)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error removing acl")
 	}
@@ -1198,11 +1166,9 @@ func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*pr
 	}
 
 	// Now we get the real info, I know, it's ugly
-	auth, err = fs.getRootAuth(ctx)
-	if err != nil {
-		return nil, err
-	}
-	attrs, err := fs.c.GetAttrs(ctx, auth, fn)
+	cboxAuth := utils.GetEmptyAuth()
+
+	attrs, err := fs.c.GetAttrs(ctx, cboxAuth, fn)
 	if err != nil {
 		return nil, err
 	}
@@ -1233,15 +1199,13 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("eosfs: get md for ref:" + ref.String())
 
-	_, err := getUser(ctx)
-	if err != nil {
-		return nil, err
-	}
+	p := ref.Path
+	fn := fs.wrap(ctx, p)
 
-	auth, err := fs.getRootAuth(ctx)
-	if err != nil {
-		return nil, err
-	}
+	// We use daemon for auth because we need access to the file in order to stat it
+	// We cannot use the current user, because the file may be a shared file
+	// and lightweight accounts don't have a uid
+	auth := utils.GetDaemonAuth()
 
 	if ref.ResourceId != nil {
 		fid, err := strconv.ParseUint(ref.ResourceId.OpaqueId, 10, 64)
@@ -1263,8 +1227,6 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		return fs.convertToResourceInfo(ctx, eosFileInfo)
 	}
 
-	p := ref.Path
-
 	// if path is home we need to add in the response any shadow folder in the shadow homedirectory.
 	if fs.conf.EnableHome {
 		if fs.isShareFolder(ctx, p) {
@@ -1272,7 +1234,6 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		}
 	}
 
-	fn := fs.wrap(ctx, p)
 	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, fn)
 	if err != nil {
 		return nil, err
@@ -1284,10 +1245,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string) (*provider.ResourceInfo, error) {
 	fn := fs.wrapShadow(ctx, p)
 
-	auth, err := fs.getRootAuth(ctx)
-	if err != nil {
-		return nil, err
-	}
+	auth := utils.GetDaemonAuth()
 
 	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, fn)
 	if err != nil {
@@ -1415,12 +1373,9 @@ func (fs *eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64,
 		return 0, 0, err
 	}
 
-	rootAuth, err := fs.getRootAuth(ctx)
-	if err != nil {
-		return 0, 0, err
-	}
+	cboxAuth := utils.GetEmptyAuth()
 
-	qi, err := fs.c.GetQuota(ctx, auth.Role.UID, rootAuth, fs.conf.QuotaNode)
+	qi, err := fs.c.GetQuota(ctx, auth.Role.UID, cboxAuth, fs.conf.QuotaNode)
 	if err != nil {
 		err := errors.Wrap(err, "eosfs: error getting quota")
 		return 0, 0, err
@@ -1443,16 +1398,15 @@ func (fs *eosfs) createShadowHome(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
-	rootAuth, err := fs.getRootAuth(ctx)
-	if err != nil {
-		return nil
-	}
+
+	daemonAuth := utils.GetDaemonAuth()
+
 	home := fs.wrapShadow(ctx, "/")
 	shadowFolders := []string{fs.conf.ShareFolder}
 
 	for _, sf := range shadowFolders {
 		fn := path.Join(home, sf)
-		_, err = fs.c.GetFileInfoByPath(ctx, rootAuth, fn)
+		_, err = fs.c.GetFileInfoByPath(ctx, daemonAuth, fn)
 		if err != nil {
 			if _, ok := err.(errtypes.IsNotFound); !ok {
 				return errors.Wrap(err, "eosfs: error verifying if shadow directory exists")
@@ -1672,10 +1626,7 @@ func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 	// Current mechanism is: touch to hidden dir, set xattr, rename.
 	dir, base := path.Split(fn)
 	tmp := path.Join(dir, fmt.Sprintf(".sys.reva#.%s", base))
-	rootAuth, err := fs.getRootAuth(ctx)
-	if err != nil {
-		return nil
-	}
+	cboxAuth := utils.GetEmptyAuth()
 
 	if err := fs.createUserDir(ctx, u, tmp, false); err != nil {
 		err = errors.Wrapf(err, "eosfs: error creating temporary ref file")
@@ -1689,13 +1640,13 @@ func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 		Val:  targetURI.String(),
 	}
 
-	if err := fs.c.SetAttr(ctx, rootAuth, attr, false, false, tmp, ""); err != nil {
+	if err := fs.c.SetAttr(ctx, cboxAuth, attr, false, false, tmp, ""); err != nil {
 		err = errors.Wrapf(err, "eosfs: error setting reva.ref attr on file: %q", tmp)
 		return err
 	}
 
 	// rename to have the file visible in user space.
-	if err := fs.c.Rename(ctx, rootAuth, tmp, fn); err != nil {
+	if err := fs.c.Rename(ctx, cboxAuth, tmp, fn); err != nil {
 		err = errors.Wrapf(err, "eosfs: error renaming from: %q to %q", tmp, fn)
 		return err
 	}
@@ -2174,7 +2125,7 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 	// from the parent folder, as these, when creating a new
 	// file are not inherited
 
-	if utils.UserIsLightweight(u) && !eosFileInfo.IsDir {
+	if utils.IsLightweightUser(u) && !eosFileInfo.IsDir {
 		if parentPath, err := fs.unwrap(ctx, filepath.Dir(eosFileInfo.File)); err == nil {
 			if parent, err := fs.GetMD(ctx, &provider.Reference{Path: parentPath}, nil); err == nil {
 				mergePermissions(&perm, parent.PermissionSet)
@@ -2417,8 +2368,7 @@ func (fs *eosfs) getUserAuth(ctx context.Context, u *userpb.User, fn string) (eo
 		return fs.singleUserAuth, err
 	}
 
-	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT ||
-		u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
+	if utils.IsLightweightUser(u) {
 		return fs.getEOSToken(ctx, u, fn)
 	}
 
@@ -2430,11 +2380,8 @@ func (fs *eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eo
 		return eosclient.Authorization{}, errtypes.BadRequest("eosfs: path cannot be empty")
 	}
 
-	rootAuth, err := fs.getRootAuth(ctx)
-	if err != nil {
-		return eosclient.Authorization{}, err
-	}
-	info, err := fs.c.GetFileInfoByPath(ctx, rootAuth, fn)
+	daemonAuth := utils.GetDaemonAuth()
+	info, err := fs.c.GetFileInfoByPath(ctx, daemonAuth, fn)
 	if err != nil {
 		return eosclient.Authorization{}, err
 	}
@@ -2489,6 +2436,18 @@ func (fs *eosfs) getRootAuth(ctx context.Context) (eosclient.Authorization, erro
 	return eosclient.Authorization{Role: eosclient.Role{UID: "0", GID: "0"}}, nil
 }
 
+func (fs *eosfs) getDaemonAuth(ctx context.Context) (eosclient.Authorization, error) {
+	if fs.conf.ForceSingleUserMode {
+		if fs.singleUserAuth.Role.UID != "" && fs.singleUserAuth.Role.GID != "" {
+			return fs.singleUserAuth, nil
+		}
+		var err error
+		fs.singleUserAuth, err = fs.getUIDGateway(ctx, &userpb.UserId{OpaqueId: fs.conf.SingleUsername})
+		return fs.singleUserAuth, err
+	}
+	return utils.GetDaemonAuth(), nil
+}
+
 type eosSysMetadata struct {
 	TreeSize  uint64 `json:"tree_size"`
 	TreeCount uint64 `json:"tree_count"`
@@ -2533,96 +2492,3 @@ func parseAndSetFavoriteAttr(ctx context.Context, attrs map[string]string) {
 	// Delete the favorite attr from the response
 	delete(attrs, FavoritesKey)
 }
-
-/*
-	Merge shadow on requests for /home ?
-
-	No - GetHome(ctx context.Context) (string, error)
-	No -CreateHome(ctx context.Context) error
-	No - CreateDir(ctx context.Context, fn string) error
-	No -Delete(ctx context.Context, ref *provider.Reference) error
-	No -Move(ctx context.Context, oldRef, newRef *provider.Reference) error
-	No -GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error)
-	Yes -ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error)
-	No -Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error
-	No -Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
-	No -ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
-	No -DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error)
-	No -RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error
-	No ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error)
-	No RestoreRecycleItem(ctx context.Context, key string) error
-	No PurgeRecycleItem(ctx context.Context, key string) error
-	No EmptyRecycle(ctx context.Context) error
-	? GetPathByID(ctx context.Context, id *provider.Reference) (string, error)
-	No AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
-	No RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
-	No UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
-	No ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error)
-	No GetQuota(ctx context.Context) (int, int, error)
-	No CreateReference(ctx context.Context, path string, targetURI *url.URL) error
-	No Shutdown(ctx context.Context) error
-	No SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error
-	No UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
-*/
-
-/*
-	Merge shadow on requests for /home/MyShares ?
-
-	No - GetHome(ctx context.Context) (string, error)
-	No -CreateHome(ctx context.Context) error
-	No - CreateDir(ctx context.Context, fn string) error
-	Maybe -Delete(ctx context.Context, ref *provider.Reference) error
-	No -Move(ctx context.Context, oldRef, newRef *provider.Reference) error
-	Yes -GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error)
-	Yes -ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error)
-	No -Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error
-	No -Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
-	No -ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
-	No -DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error)
-	No -RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error
-	No ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error)
-	No RestoreRecycleItem(ctx context.Context, key string) error
-	No PurgeRecycleItem(ctx context.Context, key string) error
-	No EmptyRecycle(ctx context.Context) error
-	?  GetPathByID(ctx context.Context, id *provider.Reference) (string, error)
-	No AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
-	No RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
-	No UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
-	No ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error)
-	No GetQuota(ctx context.Context) (int, int, error)
-	No CreateReference(ctx context.Context, path string, targetURI *url.URL) error
-	No Shutdown(ctx context.Context) error
-	No SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error
-	No UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
-*/
-
-/*
-	Merge shadow on requests for /home/MyShares/file-reference ?
-
-	No - GetHome(ctx context.Context) (string, error)
-	No -CreateHome(ctx context.Context) error
-	No - CreateDir(ctx context.Context, fn string) error
-	Maybe -Delete(ctx context.Context, ref *provider.Reference) error
-	Yes -Move(ctx context.Context, oldRef, newRef *provider.Reference) error
-	Yes -GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error)
-	No -ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error)
-	No -Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error
-	No -Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
-	No -ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
-	No -DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error)
-	No -RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error
-	No ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error)
-	No RestoreRecycleItem(ctx context.Context, key string) error
-	No PurgeRecycleItem(ctx context.Context, key string) error
-	No EmptyRecycle(ctx context.Context) error
-	?  GetPathByID(ctx context.Context, id *provider.Reference) (string, error)
-	No AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
-	No RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
-	No UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
-	No ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error)
-	No GetQuota(ctx context.Context) (int, int, error)
-	No CreateReference(ctx context.Context, path string, targetURI *url.URL) error
-	No Shutdown(ctx context.Context) error
-	Maybe SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error
-	Maybe UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
-*/
