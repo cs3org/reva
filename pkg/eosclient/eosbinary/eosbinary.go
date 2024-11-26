@@ -379,7 +379,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 	if err != nil {
 		return nil, err
 	}
-	info, err := c.parseFileInfo(ctx, stdout, true)
+	info, err := c.parseFileInfo(ctx, stdout)
 	if err != nil {
 		return nil, err
 	}
@@ -403,7 +403,7 @@ func (c *Client) GetFileInfoByFXID(ctx context.Context, auth eosclient.Authoriza
 		return nil, err
 	}
 
-	info, err := c.parseFileInfo(ctx, stdout, true)
+	info, err := c.parseFileInfo(ctx, stdout)
 	if err != nil {
 		return nil, err
 	}
@@ -418,7 +418,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 	if err != nil {
 		return nil, err
 	}
-	info, err := c.parseFileInfo(ctx, stdout, true)
+	info, err := c.parseFileInfo(ctx, stdout)
 	if err != nil {
 		return nil, err
 	}
@@ -442,7 +442,7 @@ func (c *Client) getRawFileInfoByPath(ctx context.Context, auth eosclient.Author
 	if err != nil {
 		return nil, err
 	}
-	return c.parseFileInfo(ctx, stdout, false)
+	return c.parseFileInfo(ctx, stdout)
 }
 
 func (c *Client) mergeACLsAndAttrsForFiles(ctx context.Context, auth eosclient.Authorization, info *eosclient.FileInfo) *eosclient.FileInfo {
@@ -970,7 +970,7 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 		if rl == "" {
 			continue
 		}
-		fi, err := c.parseFileInfo(ctx, rl, true)
+		fi, err := c.parseFileInfo(ctx, rl)
 		if err != nil {
 			return nil, err
 		}
@@ -1071,7 +1071,7 @@ func (c *Client) parseQuota(path, raw string) (*eosclient.QuotaInfo, error) {
 }
 
 // TODO(labkode): better API to access extended attributes.
-func (c *Client) parseFileInfo(ctx context.Context, raw string, parseFavoriteKey bool) (*eosclient.FileInfo, error) {
+func (c *Client) parseFileInfo(ctx context.Context, raw string) (*eosclient.FileInfo, error) {
 	line := raw[15:]
 	index := strings.Index(line, " file=/")
 	lengthString := line[0:index]
@@ -1111,7 +1111,7 @@ func (c *Client) parseFileInfo(ctx context.Context, raw string, parseFavoriteKey
 			}
 		}
 	}
-	fi, err := c.mapToFileInfo(ctx, kv, attrs, parseFavoriteKey)
+	fi, err := c.mapToFileInfo(ctx, kv, attrs)
 	if err != nil {
 		return nil, err
 	}
@@ -1121,7 +1121,7 @@ func (c *Client) parseFileInfo(ctx context.Context, raw string, parseFavoriteKey
 // mapToFileInfo converts the dictionary to an usable structure.
 // The kv has format:
 // map[sys.forced.space:default files:0 mode:42555 ino:5 sys.forced.blocksize:4k sys.forced.layout:replica uid:0 fid:5 sys.forced.blockchecksum:crc32c sys.recycle:/eos/backup/proc/recycle/ fxid:00000005 pid:1 etag:5:0.000 keylength.file:4 file:/eos treesize:1931593933849913 container:3 gid:0 mtime:1498571294.108614409 ctime:1460121992.294326762 pxid:00000001 sys.forced.checksum:adler sys.forced.nstripes:2].
-func (c *Client) mapToFileInfo(ctx context.Context, kv, attrs map[string]string, parseFavoriteKey bool) (*eosclient.FileInfo, error) {
+func (c *Client) mapToFileInfo(ctx context.Context, kv, attrs map[string]string) (*eosclient.FileInfo, error) {
 	inode, err := strconv.ParseUint(kv["ino"], 10, 64)
 	if err != nil {
 		return nil, err
@@ -1225,11 +1225,6 @@ func (c *Client) mapToFileInfo(ctx context.Context, kv, attrs map[string]string,
 		return nil, err
 	}
 
-	// Read the favorite attr
-	if parseFavoriteKey {
-		parseAndSetFavoriteAttr(ctx, attrs)
-	}
-
 	fi := &eosclient.FileInfo{
 		File:       kv["file"],
 		Inode:      inode,
@@ -1254,27 +1249,4 @@ func (c *Client) mapToFileInfo(ctx context.Context, kv, attrs map[string]string,
 	}
 
 	return fi, nil
-}
-
-func parseAndSetFavoriteAttr(ctx context.Context, attrs map[string]string) {
-	// Read and correctly set the favorite attr
-	if user, ok := appctx.ContextGetUser(ctx); ok {
-		if favAttrStr, ok := attrs[favoritesKey]; ok {
-			favUsers, err := acl.Parse(favAttrStr, acl.ShortTextForm)
-			if err != nil {
-				return
-			}
-			for _, u := range favUsers.Entries {
-				// Check if the current user has favorited this resource
-				if u.Qualifier == user.Id.OpaqueId {
-					// Set attr val to 1
-					attrs[favoritesKey] = "1"
-					return
-				}
-			}
-		}
-	}
-
-	// Delete the favorite attr from the response
-	delete(attrs, favoritesKey)
 }
