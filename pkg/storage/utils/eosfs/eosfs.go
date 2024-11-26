@@ -1238,7 +1238,12 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		return nil, err
 	}
 
-	auth, err := fs.getRootAuth(ctx)
+	p := ref.Path
+	fn := fs.wrap(ctx, p)
+	// We use daemon for auth because we need access to the file in order to stat it
+	// We cannot use the current user, because the file may be a shared file
+	// and lightweight accounts don't have a uid
+	auth, err := fs.getDaemonAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -2487,6 +2492,18 @@ func (fs *eosfs) getRootAuth(ctx context.Context) (eosclient.Authorization, erro
 		return fs.singleUserAuth, err
 	}
 	return eosclient.Authorization{Role: eosclient.Role{UID: "0", GID: "0"}}, nil
+}
+
+func (fs *eosfs) getDaemonAuth(ctx context.Context) (eosclient.Authorization, error) {
+	if fs.conf.ForceSingleUserMode {
+		if fs.singleUserAuth.Role.UID != "" && fs.singleUserAuth.Role.GID != "" {
+			return fs.singleUserAuth, nil
+		}
+		var err error
+		fs.singleUserAuth, err = fs.getUIDGateway(ctx, &userpb.UserId{OpaqueId: fs.conf.SingleUsername})
+		return fs.singleUserAuth, err
+	}
+	return eosclient.Authorization{Role: eosclient.Role{UID: "2", GID: "2"}}, nil
 }
 
 type eosSysMetadata struct {
