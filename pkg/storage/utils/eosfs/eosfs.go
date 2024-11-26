@@ -1233,20 +1233,28 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("eosfs: get md for ref:" + ref.String())
 
-	_, err := getUser(ctx)
+	u, err := getUser(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	p := ref.Path
 	fn := fs.wrap(ctx, p)
+
+	userAuth, err := fs.getUserAuth(ctx, u, fn)
+
 	// We use daemon for auth because we need access to the file in order to stat it
 	// We cannot use the current user, because the file may be a shared file
 	// and lightweight accounts don't have a uid
-	auth, err := fs.getDaemonAuth(ctx)
-	if err != nil {
-		return nil, err
-	}
+	// var auth eosclient.Authorization
+	// if u.Id.Type == userpb.UserType_USER_TYPE_GUEST || u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
+	// 	auth, err = fs.getDaemonAuth(ctx)
+	// } else {
+	// 	auth, err = fs.getUserAuth(ctx, u, fn)
+	// }
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	if ref.ResourceId != nil {
 		fid, err := strconv.ParseUint(ref.ResourceId.OpaqueId, 10, 64)
@@ -1254,21 +1262,19 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 			return nil, fmt.Errorf("error converting string to int for eos fileid: %s", ref.ResourceId.OpaqueId)
 		}
 
-		eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
+		eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, userAuth, fid)
 		if err != nil {
 			return nil, err
 		}
 
 		if ref.Path != "" {
-			eosFileInfo, err = fs.c.GetFileInfoByPath(ctx, auth, filepath.Join(eosFileInfo.File, ref.Path))
+			eosFileInfo, err = fs.c.GetFileInfoByPath(ctx, userAuth, filepath.Join(eosFileInfo.File, ref.Path))
 			if err != nil {
 				return nil, err
 			}
 		}
 		return fs.convertToResourceInfo(ctx, eosFileInfo)
 	}
-
-	p := ref.Path
 
 	// if path is home we need to add in the response any shadow folder in the shadow homedirectory.
 	if fs.conf.EnableHome {
@@ -1277,8 +1283,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		}
 	}
 
-	fn := fs.wrap(ctx, p)
-	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, fn)
+	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, userAuth, fn)
 	if err != nil {
 		return nil, err
 	}

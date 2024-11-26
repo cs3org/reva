@@ -711,12 +711,16 @@ func getAttribute(key, val string) (*eosclient.Attribute, error) {
 }
 
 // GetFileInfoByPath returns the FilInfo at the given path.
-func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authorization, path string) (*eosclient.FileInfo, error) {
+func (c *Client) GetFileInfoByPath(ctx context.Context, userAuth eosclient.Authorization, path string) (*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
-	log.Debug().Str("func", "GetFileInfoByPath").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("entering")
+	log.Debug().Str("func", "GetFileInfoByPath").Str("uid,gid", userAuth.Role.UID+","+userAuth.Role.GID).Str("path", path).Msg("entering")
+
+	daemonAuth := eosclient.Authorization{Role: eosclient.Role{UID: "2", GID: "2"}}
 
 	// Initialize the common fields of the MDReq
-	mdrq, err := c.initMDRequest(ctx, auth)
+	// We do this as the daemon account, because the user may not have access to the file
+	// e.g. in the case of a guest account
+	mdrq, err := c.initMDRequest(ctx, daemonAuth)
 	if err != nil {
 		return nil, err
 	}
@@ -756,7 +760,26 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 	}
 
 	if c.opt.VersionInvariant && !isVersionFolder(path) && !info.IsDir {
-		inode, err := c.getVersionFolderInode(ctx, auth, path)
+
+		u, err := getUser(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		// In case the user is a lightweight / ... account, aka he has no UID, we impersonate the owner of the file
+		var userOrImpersonated eosclient.Authorization
+		if u.Id.Type == userpb.UserType_USER_TYPE_GUEST || u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
+			userOrImpersonated = eosclient.Authorization{
+				Role: eosclient.Role{
+					UID: strconv.FormatUint(info.UID, 10),
+					GID: strconv.FormatUint(info.GID, 10),
+				},
+			}
+		} else {
+			userOrImpersonated = userAuth
+		}
+
+		inode, err := c.getOrCreateVersionFolderInode(ctx, userOrImpersonated, path)
 		if err != nil {
 			return nil, err
 		}
@@ -764,7 +787,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 	}
 
 	log.Info().Str("func", "GetFileInfoByPath").Str("path", path).Uint64("info.Inode", info.Inode).Uint64("size", info.Size).Str("etag", info.ETag).Msg("result")
-	return c.fixupACLs(ctx, auth, info), nil
+	return c.fixupACLs(ctx, daemonAuth, info), nil
 }
 
 // GetFileInfoByFXID returns the FileInfo by the given file id in hexadecimal.
@@ -1661,9 +1684,9 @@ func (c *Client) GenerateToken(ctx context.Context, auth eosclient.Authorization
 	return "", err
 }
 
-func (c *Client) getVersionFolderInode(ctx context.Context, auth eosclient.Authorization, p string) (uint64, error) {
+func (c *Client) getOrCreateVersionFolderInode(ctx context.Context, auth eosclient.Authorization, p string) (uint64, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "getVersionFolderInode").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("p", p).Msg("")
+	log.Info().Str("func", "getOrCreateVersionFolderInode").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("p", p).Msg("")
 
 	versionFolder := getVersionFolder(p)
 	md, err := c.GetFileInfoByPath(ctx, auth, versionFolder)
