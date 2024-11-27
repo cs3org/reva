@@ -276,8 +276,7 @@ func (m *Manager) ProcessEvents(ch <-chan events.Event) {
 			log.Error().Err(err).Msg("error initializing manager")
 		}
 
-		switch ev := event.Event.(type) {
-		case events.SpaceDeleted:
+		if ev, ok := event.Event.(events.SpaceDeleted); ok {
 			log.Debug().Msgf("space deleted event: %v", ev)
 			go func() { m.purgeSpace(ctx, ev.ID) }()
 		}
