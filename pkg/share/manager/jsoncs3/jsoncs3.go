@@ -284,24 +284,6 @@ func (m *Manager) ProcessEvents(ch <-chan events.Event) {
 	}
 }
 
-func (m *Manager) purgeSpace(ctx context.Context, id *provider.StorageSpaceId) {
-	m.Lock()
-	defer m.Unlock()
-
-	log := appctx.GetLogger(ctx)
-	storageID, spaceID := storagespace.SplitStorageID(id.OpaqueId)
-
-	// remove all shares in the space
-	err := m.Cache.PurgeSpace(ctx, storageID, spaceID)
-	if err != nil {
-		log.Error().Err(err).Msg("error purging space")
-	}
-
-	// delete from received cache
-	// delete from received group cache
-	// delete from created cache
-}
-
 // Share creates a new share
 func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Share")
@@ -474,7 +456,7 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 		return nil, err
 	}
 	if share.IsExpired(s) {
-		if err := m.removeShare(ctx, s); err != nil {
+		if err := m.removeShare(ctx, s, false); err != nil {
 			sublog.Error().Err(err).
 				Msg("failed to unshare expired share")
 		}
@@ -539,7 +521,7 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 		return errtypes.NotFound(ref.String())
 	}
 
-	return m.removeShare(ctx, s)
+	return m.removeShare(ctx, s, false)
 }
 
 // UpdateShare updates the mode of the given share.
@@ -676,7 +658,7 @@ func (m *Manager) listSharesByIDs(ctx context.Context, user *userv1beta1.User, f
 				resourceID := s.GetResourceId()
 				sublog = sublog.With().Str("storageid", resourceID.GetStorageId()).Str("spaceid", resourceID.GetSpaceId()).Str("opaqueid", resourceID.GetOpaqueId()).Logger()
 				if share.IsExpired(s) {
-					if err := m.removeShare(ctx, s); err != nil {
+					if err := m.removeShare(ctx, s, false); err != nil {
 						sublog.Error().Err(err).
 							Msg("failed to unshare expired share")
 					}
@@ -794,7 +776,7 @@ func (m *Manager) listCreatedShares(ctx context.Context, user *userv1beta1.User,
 						continue
 					}
 					if share.IsExpired(s) {
-						if err := m.removeShare(ctx, s); err != nil {
+						if err := m.removeShare(ctx, s, false); err != nil {
 							sublog.Error().Err(err).
 								Msg("failed to unshare expired share")
 						}
@@ -960,7 +942,7 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 					}
 					sublogr = sublogr.With().Str("shareid", shareID).Logger()
 					if share.IsExpired(s) {
-						if err := m.removeShare(ctx, s); err != nil {
+						if err := m.removeShare(ctx, s, false); err != nil {
 							sublogr.Error().Err(err).
 								Msg("failed to unshare expired share")
 						}
@@ -1063,7 +1045,7 @@ func (m *Manager) getReceived(ctx context.Context, ref *collaboration.ShareRefer
 		return nil, errtypes.NotFound(ref.String())
 	}
 	if share.IsExpired(s) {
-		if err := m.removeShare(ctx, s); err != nil {
+		if err := m.removeShare(ctx, s, false); err != nil {
 			sublog.Error().Err(err).
 				Msg("failed to unshare expired share")
 		}
@@ -1190,17 +1172,44 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 	return nil
 }
 
-func (m *Manager) removeShare(ctx context.Context, s *collaboration.Share) error {
+func (m *Manager) purgeSpace(ctx context.Context, id *provider.StorageSpaceId) {
+	log := appctx.GetLogger(ctx)
+	storageID, spaceID := storagespace.SplitStorageID(id.OpaqueId)
+
+	shares, err := m.Cache.ListSpace(ctx, storageID, spaceID)
+	if err != nil {
+		log.Error().Err(err).Msg("error listing shares in space")
+		return
+	}
+
+	// iterate over all shares in the space and remove them
+	for _, share := range shares.Shares {
+		err := m.removeShare(ctx, share, true)
+		if err != nil {
+			log.Error().Err(err).Msg("error removing share")
+		}
+	}
+
+	// remove all shares in the space
+	err = m.Cache.PurgeSpace(ctx, storageID, spaceID)
+	if err != nil {
+		log.Error().Err(err).Msg("error purging space")
+	}
+}
+
+func (m *Manager) removeShare(ctx context.Context, s *collaboration.Share, skipSpaceCache bool) error {
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "removeShare")
 	defer span.End()
 
 	eg, ctx := errgroup.WithContext(ctx)
-	eg.Go(func() error {
-		storageID, spaceID, _ := shareid.Decode(s.Id.OpaqueId)
-		err := m.Cache.Remove(ctx, storageID, spaceID, s.Id.OpaqueId)
+	if !skipSpaceCache {
+		eg.Go(func() error {
+			storageID, spaceID, _ := shareid.Decode(s.Id.OpaqueId)
+			err := m.Cache.Remove(ctx, storageID, spaceID, s.Id.OpaqueId)
 
-		return err
-	})
+			return err
+		})
+	}
 
 	eg.Go(func() error {
 		// remove from created cache
