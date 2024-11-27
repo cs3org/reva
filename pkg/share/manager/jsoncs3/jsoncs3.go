@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/events/stream"
+	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/providercache"
@@ -114,6 +115,12 @@ func init() {
 	registry.Register("jsoncs3", NewDefault)
 }
 
+var (
+	_registeredEvents = []events.Unmarshaller{
+		events.SpaceDeleted{},
+	}
+)
+
 type config struct {
 	GatewayAddr       string       `mapstructure:"gateway_addr"`
 	MaxConcurrency    int          `mapstructure:"max_concurrency"`
@@ -188,7 +195,8 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 // New returns a new manager instance.
 func New(s metadata.Storage, gatewaySelector pool.Selectable[gatewayv1beta1.GatewayAPIClient], ttlSeconds int, es events.Stream, maxconcurrency int) (*Manager, error) {
 	ttl := time.Duration(ttlSeconds) * time.Second
-	return &Manager{
+
+	m := &Manager{
 		Cache:              providercache.New(s, ttl),
 		CreatedCache:       sharecache.New(s, "users", "created.json", ttl),
 		UserReceivedStates: receivedsharecache.New(s, ttl),
@@ -197,7 +205,18 @@ func New(s metadata.Storage, gatewaySelector pool.Selectable[gatewayv1beta1.Gate
 		gatewaySelector:    gatewaySelector,
 		eventStream:        es,
 		MaxConcurrency:     maxconcurrency,
-	}, nil
+	}
+
+	// listen for events
+	if m.eventStream != nil {
+		ch, err := events.Consume(m.eventStream, "jsoncs3sharemanager", _registeredEvents...)
+		if err != nil {
+			appctx.GetLogger(context.Background()).Error().Err(err).Msg("error consuming events")
+		}
+		go m.ProcessEvents(ch)
+	}
+
+	return m, nil
 }
 
 func (m *Manager) initialize(ctx context.Context) error {
@@ -246,6 +265,41 @@ func (m *Manager) initialize(ctx context.Context) error {
 	m.initialized = true
 	span.SetStatus(codes.Ok, "initialized")
 	return nil
+}
+
+func (m *Manager) ProcessEvents(ch <-chan events.Event) {
+	log := logger.New()
+	for event := range ch {
+		ctx := context.Background()
+
+		if err := m.initialize(ctx); err != nil {
+			log.Error().Err(err).Msg("error initializing manager")
+		}
+
+		switch ev := event.Event.(type) {
+		case events.SpaceDeleted:
+			log.Debug().Msgf("space deleted event: %v", ev)
+			go func() { m.purgeSpace(ctx, ev.ID) }()
+		}
+	}
+}
+
+func (m *Manager) purgeSpace(ctx context.Context, id *provider.StorageSpaceId) {
+	m.Lock()
+	defer m.Unlock()
+
+	log := appctx.GetLogger(ctx)
+	storageID, spaceID := storagespace.SplitStorageID(id.OpaqueId)
+
+	// remove all shares in the space
+	err := m.Cache.PurgeSpace(ctx, storageID, spaceID)
+	if err != nil {
+		log.Error().Err(err).Msg("error purging space")
+	}
+
+	// delete from received cache
+	// delete from received group cache
+	// delete from created cache
 }
 
 // Share creates a new share
