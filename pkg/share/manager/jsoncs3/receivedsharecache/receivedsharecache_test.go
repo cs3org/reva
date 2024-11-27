@@ -134,5 +134,26 @@ var _ = Describe("Cache", func() {
 				Expect(s).ToNot(BeNil())
 			})
 		})
+
+		Describe("Remove", func() {
+			It("removes the entry", func() {
+				err := c.Remove(ctx, userID, spaceID, shareID)
+				Expect(err).ToNot(HaveOccurred())
+
+				s, err := c.Get(ctx, userID, spaceID, shareID)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(s).To(BeNil())
+			})
+
+			It("persists the removal", func() {
+				err := c.Remove(ctx, userID, spaceID, shareID)
+				Expect(err).ToNot(HaveOccurred())
+
+				c = receivedsharecache.New(storage, 0*time.Second)
+				s, err := c.Get(ctx, userID, spaceID, shareID)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(s).To(BeNil())
+			})
+		})
 	})
 })
