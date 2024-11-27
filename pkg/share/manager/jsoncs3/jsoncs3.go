@@ -1207,7 +1207,15 @@ func (m *Manager) removeShare(ctx context.Context, s *collaboration.Share) error
 		return m.CreatedCache.Remove(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
 	})
 
-	// TODO remove from grantee cache
+	eg.Go(func() error {
+		// remove from user received states
+		if s.GetGrantee().Type == provider.GranteeType_GRANTEE_TYPE_USER {
+			return m.UserReceivedStates.Remove(ctx, s.GetGrantee().GetUserId().GetOpaqueId(), s.GetResourceId().GetStorageId()+shareid.IDDelimiter+s.GetResourceId().GetSpaceId(), s.Id.OpaqueId)
+		} else if s.GetGrantee().Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+			return m.GroupReceivedCache.Remove(ctx, s.GetGrantee().GetGroupId().GetOpaqueId(), s.Id.OpaqueId)
+		}
+		return nil
+	})
 
 	return eg.Wait()
 }
