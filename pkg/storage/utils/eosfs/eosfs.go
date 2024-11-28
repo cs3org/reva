@@ -257,12 +257,11 @@ func (fs *eosfs) userIDcacheWarmup() {
 		time.Sleep(2 * time.Second)
 		ctx := context.Background()
 		paths := []string{fs.wrap(ctx, "/")}
-		auth, _ := fs.getRootAuth(ctx)
 
 		for i := 0; i < fs.conf.UserIDCacheWarmupDepth; i++ {
 			var newPaths []string
 			for _, fn := range paths {
-				if eosFileInfos, err := fs.c.List(ctx, auth, fn); err == nil {
+				if eosFileInfos, err := fs.c.List(ctx, eosclient.Authorization{}, fn); err == nil {
 					for _, f := range eosFileInfos {
 						_, _ = fs.getUserIDGateway(ctx, strconv.FormatUint(f.UID, 10))
 						newPaths = append(newPaths, f.File)
@@ -492,6 +491,7 @@ func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 		return "", errors.Wrap(err, "eosfs: no user in ctx")
 	}
 	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT || u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
+		// TODO switch to daemon
 		auth, err := fs.getRootAuth(ctx)
 		if err != nil {
 			return "", err
@@ -1425,6 +1425,7 @@ func (fs *eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64,
 		return 0, 0, err
 	}
 
+	// TODO(jgeens): empty auth
 	rootAuth, err := fs.getRootAuth(ctx)
 	if err != nil {
 		return 0, 0, err
@@ -1462,6 +1463,7 @@ func (fs *eosfs) createShadowHome(ctx context.Context) error {
 
 	for _, sf := range shadowFolders {
 		fn := path.Join(home, sf)
+		// TODO(jgeens): daemon auth
 		_, err = fs.c.GetFileInfoByPath(ctx, rootAuth, fn)
 		if err != nil {
 			if _, ok := err.(errtypes.IsNotFound); !ok {
@@ -2440,6 +2442,7 @@ func (fs *eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eo
 		return eosclient.Authorization{}, errtypes.BadRequest("eosfs: path cannot be empty")
 	}
 
+	// TODO(jgeens): daemon auth
 	rootAuth, err := fs.getRootAuth(ctx)
 	if err != nil {
 		return eosclient.Authorization{}, err

@@ -238,20 +238,32 @@ func (c *Client) initNSRequest(ctx context.Context, auth eosclient.Authorization
 	rq := new(erpc.NSRequest)
 	rq.Role = new(erpc.RoleId)
 
-	uidInt, err := strconv.ParseUint(auth.Role.UID, 10, 64)
-	if err != nil {
-		return nil, err
+	if auth.Token != "" {
+		// Map to owner using EOSAUTHZ token
+		// We do not become cbox
+		rq.Authkey = auth.Token
+	} else {
+		// We take the secret key from the config, which maps on EOS to cbox
+		// cbox is a sudo'er, so we become the user specified in UID/GID, if it is set
+		rq.Authkey = c.opt.Authkey
+
+		if auth.Role.UID != "" && auth.Role.GID != "" {
+			uidInt, err := strconv.ParseUint(auth.Role.UID, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			gidInt, err := strconv.ParseUint(auth.Role.GID, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			rq.Role.Uid = uidInt
+			rq.Role.Gid = gidInt
+		}
 	}
-	gidInt, err := strconv.ParseUint(auth.Role.GID, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	rq.Role.Uid = uidInt
-	rq.Role.Gid = gidInt
+
 	if app != "" {
 		rq.Role.App = app
 	}
-	rq.Authkey = c.opt.Authkey
 
 	return rq, nil
 }
@@ -263,23 +275,33 @@ func (c *Client) initMDRequest(ctx context.Context, auth eosclient.Authorization
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("(uid,gid)", "("+auth.Role.UID+","+auth.Role.GID+")").Msg("New grpcMD req")
 
-	mdrq := new(erpc.MDRequest)
-	mdrq.Role = new(erpc.RoleId)
+	rq := new(erpc.MDRequest)
+	rq.Role = new(erpc.RoleId)
 
-	uidInt, err := strconv.ParseUint(auth.Role.UID, 10, 64)
-	if err != nil {
-		return nil, err
+	if auth.Token != "" {
+		// Map to owner using EOSAUTHZ token
+		// We do not become cbox
+		rq.Authkey = auth.Token
+	} else {
+		// We take the secret key from the config, which maps on EOS to cbox
+		// cbox is a sudo'er, so we become the user specified in UID/GID, if it is set
+		rq.Authkey = c.opt.Authkey
+
+		if auth.Role.UID != "" && auth.Role.GID != "" {
+			uidInt, err := strconv.ParseUint(auth.Role.UID, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			gidInt, err := strconv.ParseUint(auth.Role.GID, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			rq.Role.Uid = uidInt
+			rq.Role.Gid = gidInt
+		}
 	}
-	gidInt, err := strconv.ParseUint(auth.Role.GID, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	mdrq.Role.Uid = uidInt
-	mdrq.Role.Gid = gidInt
 
-	mdrq.Authkey = c.opt.Authkey
-
-	return mdrq, nil
+	return rq, nil
 }
 
 // AddACL adds an new acl to EOS with the given aclType.
@@ -715,7 +737,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, userAuth eosclient.Autho
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("func", "GetFileInfoByPath").Str("uid,gid", userAuth.Role.UID+","+userAuth.Role.GID).Str("path", path).Msg("entering")
 
-	daemonAuth := eosclient.Authorization{Role: eosclient.Role{UID: "2", GID: "2"}}
+	daemonAuth := getDaemonAuth()
 
 	// Initialize the common fields of the MDReq
 	// We do this as the daemon account, because the user may not have access to the file
@@ -1216,9 +1238,9 @@ func (c *Client) Rename(ctx context.Context, auth eosclient.Authorization, oldPa
 }
 
 // List the contents of the directory given by path.
-func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath string) ([]*eosclient.FileInfo, error) {
+func (c *Client) List(ctx context.Context, userAuth eosclient.Authorization, dpath string) ([]*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "List").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("dpath", dpath).Msg("")
+	log.Info().Str("func", "List").Str("uid,gid", userAuth.Role.UID+","+userAuth.Role.GID).Str("dpath", dpath).Msg("")
 
 	// Stuff filename, uid, gid into the FindRequest type
 	fdrq := new(erpc.FindRequest)
@@ -1228,6 +1250,13 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 	fdrq.Id.Path = []byte(dpath)
 
 	fdrq.Role = new(erpc.RoleId)
+
+	var auth eosclient.Authorization
+	if userAuth.Role.UID == "" || userAuth.Role.GID == "" {
+		auth = getDaemonAuth()
+	} else {
+		auth = userAuth
+	}
 
 	uidInt, err := strconv.ParseUint(auth.Role.UID, 10, 64)
 	if err != nil {
@@ -1809,4 +1838,8 @@ func aclAttrToAclStruct(aclAttr string) *acl.ACLs {
 	}
 
 	return acl
+}
+
+func getDaemonAuth() eosclient.Authorization {
+	return eosclient.Authorization{Role: eosclient.Role{UID: "2", GID: "2"}}
 }
