@@ -418,6 +418,31 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 	return nil
 }
 
+// PurgeSpace removes a space from the cache
+func (c *Cache) PurgeSpace(ctx context.Context, storageID, spaceID string) error {
+	ctx, span := tracer.Start(ctx, "PurgeSpace")
+	defer span.End()
+
+	unlock := c.LockSpace(spaceID)
+	defer unlock()
+	span.AddEvent("got lock")
+
+	if !c.isSpaceCached(storageID, spaceID) {
+		err := c.syncWithLock(ctx, storageID, spaceID)
+		if err != nil {
+			return err
+		}
+	}
+
+	spaces, ok := c.Providers.Load(storageID)
+	if !ok {
+		return nil
+	}
+	spaces.Spaces.Store(spaceID, &Shares{})
+
+	return c.Persist(ctx, storageID, spaceID)
+}
+
 func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) error {
 	ctx, span := tracer.Start(ctx, "syncWithLock")
 	defer span.End()

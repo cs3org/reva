@@ -181,5 +181,15 @@ var _ = Describe("Cache", func() {
 				Expect(c.Persist(ctx, storageID, spaceID)).ToNot(Succeed())
 			})
 		})
+
+		Describe("PurgeSpace", func() {
+			It("removes the entry", func() {
+				Expect(c.PurgeSpace(ctx, storageID, spaceID)).To(Succeed())
+
+				s, err := c.Get(ctx, storageID, spaceID, shareID, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(s).To(BeNil())
+			})
+		})
 	})
 })

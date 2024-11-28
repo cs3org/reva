@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/events/stream"
+	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/providercache"
@@ -114,6 +115,12 @@ func init() {
 	registry.Register("jsoncs3", NewDefault)
 }
 
+var (
+	_registeredEvents = []events.Unmarshaller{
+		events.SpaceDeleted{},
+	}
+)
+
 type config struct {
 	GatewayAddr       string       `mapstructure:"gateway_addr"`
 	MaxConcurrency    int          `mapstructure:"max_concurrency"`
@@ -188,7 +195,8 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 // New returns a new manager instance.
 func New(s metadata.Storage, gatewaySelector pool.Selectable[gatewayv1beta1.GatewayAPIClient], ttlSeconds int, es events.Stream, maxconcurrency int) (*Manager, error) {
 	ttl := time.Duration(ttlSeconds) * time.Second
-	return &Manager{
+
+	m := &Manager{
 		Cache:              providercache.New(s, ttl),
 		CreatedCache:       sharecache.New(s, "users", "created.json", ttl),
 		UserReceivedStates: receivedsharecache.New(s, ttl),
@@ -197,7 +205,18 @@ func New(s metadata.Storage, gatewaySelector pool.Selectable[gatewayv1beta1.Gate
 		gatewaySelector:    gatewaySelector,
 		eventStream:        es,
 		MaxConcurrency:     maxconcurrency,
-	}, nil
+	}
+
+	// listen for events
+	if m.eventStream != nil {
+		ch, err := events.Consume(m.eventStream, "jsoncs3sharemanager", _registeredEvents...)
+		if err != nil {
+			appctx.GetLogger(context.Background()).Error().Err(err).Msg("error consuming events")
+		}
+		go m.ProcessEvents(ch)
+	}
+
+	return m, nil
 }
 
 func (m *Manager) initialize(ctx context.Context) error {
@@ -246,6 +265,22 @@ func (m *Manager) initialize(ctx context.Context) error {
 	m.initialized = true
 	span.SetStatus(codes.Ok, "initialized")
 	return nil
+}
+
+func (m *Manager) ProcessEvents(ch <-chan events.Event) {
+	log := logger.New()
+	for event := range ch {
+		ctx := context.Background()
+
+		if err := m.initialize(ctx); err != nil {
+			log.Error().Err(err).Msg("error initializing manager")
+		}
+
+		if ev, ok := event.Event.(events.SpaceDeleted); ok {
+			log.Debug().Msgf("space deleted event: %v", ev)
+			go func() { m.purgeSpace(ctx, ev.ID) }()
+		}
+	}
 }
 
 // Share creates a new share
@@ -420,7 +455,7 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 		return nil, err
 	}
 	if share.IsExpired(s) {
-		if err := m.removeShare(ctx, s); err != nil {
+		if err := m.removeShare(ctx, s, false); err != nil {
 			sublog.Error().Err(err).
 				Msg("failed to unshare expired share")
 		}
@@ -485,7 +520,7 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 		return errtypes.NotFound(ref.String())
 	}
 
-	return m.removeShare(ctx, s)
+	return m.removeShare(ctx, s, false)
 }
 
 // UpdateShare updates the mode of the given share.
@@ -622,7 +657,7 @@ func (m *Manager) listSharesByIDs(ctx context.Context, user *userv1beta1.User, f
 				resourceID := s.GetResourceId()
 				sublog = sublog.With().Str("storageid", resourceID.GetStorageId()).Str("spaceid", resourceID.GetSpaceId()).Str("opaqueid", resourceID.GetOpaqueId()).Logger()
 				if share.IsExpired(s) {
-					if err := m.removeShare(ctx, s); err != nil {
+					if err := m.removeShare(ctx, s, false); err != nil {
 						sublog.Error().Err(err).
 							Msg("failed to unshare expired share")
 					}
@@ -740,7 +775,7 @@ func (m *Manager) listCreatedShares(ctx context.Context, user *userv1beta1.User,
 						continue
 					}
 					if share.IsExpired(s) {
-						if err := m.removeShare(ctx, s); err != nil {
+						if err := m.removeShare(ctx, s, false); err != nil {
 							sublog.Error().Err(err).
 								Msg("failed to unshare expired share")
 						}
@@ -906,7 +941,7 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 					}
 					sublogr = sublogr.With().Str("shareid", shareID).Logger()
 					if share.IsExpired(s) {
-						if err := m.removeShare(ctx, s); err != nil {
+						if err := m.removeShare(ctx, s, false); err != nil {
 							sublogr.Error().Err(err).
 								Msg("failed to unshare expired share")
 						}
@@ -1009,7 +1044,7 @@ func (m *Manager) getReceived(ctx context.Context, ref *collaboration.ShareRefer
 		return nil, errtypes.NotFound(ref.String())
 	}
 	if share.IsExpired(s) {
-		if err := m.removeShare(ctx, s); err != nil {
+		if err := m.removeShare(ctx, s, false); err != nil {
 			sublog.Error().Err(err).
 				Msg("failed to unshare expired share")
 		}
@@ -1136,24 +1171,59 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 	return nil
 }
 
-func (m *Manager) removeShare(ctx context.Context, s *collaboration.Share) error {
+func (m *Manager) purgeSpace(ctx context.Context, id *provider.StorageSpaceId) {
+	log := appctx.GetLogger(ctx)
+	storageID, spaceID := storagespace.SplitStorageID(id.OpaqueId)
+
+	shares, err := m.Cache.ListSpace(ctx, storageID, spaceID)
+	if err != nil {
+		log.Error().Err(err).Msg("error listing shares in space")
+		return
+	}
+
+	// iterate over all shares in the space and remove them
+	for _, share := range shares.Shares {
+		err := m.removeShare(ctx, share, true)
+		if err != nil {
+			log.Error().Err(err).Msg("error removing share")
+		}
+	}
+
+	// remove all shares in the space
+	err = m.Cache.PurgeSpace(ctx, storageID, spaceID)
+	if err != nil {
+		log.Error().Err(err).Msg("error purging space")
+	}
+}
+
+func (m *Manager) removeShare(ctx context.Context, s *collaboration.Share, skipSpaceCache bool) error {
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "removeShare")
 	defer span.End()
 
 	eg, ctx := errgroup.WithContext(ctx)
-	eg.Go(func() error {
-		storageID, spaceID, _ := shareid.Decode(s.Id.OpaqueId)
-		err := m.Cache.Remove(ctx, storageID, spaceID, s.Id.OpaqueId)
+	if !skipSpaceCache {
+		eg.Go(func() error {
+			storageID, spaceID, _ := shareid.Decode(s.Id.OpaqueId)
+			err := m.Cache.Remove(ctx, storageID, spaceID, s.Id.OpaqueId)
 
-		return err
-	})
+			return err
+		})
+	}
 
 	eg.Go(func() error {
 		// remove from created cache
 		return m.CreatedCache.Remove(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
 	})
 
-	// TODO remove from grantee cache
+	eg.Go(func() error {
+		// remove from user received states
+		if s.GetGrantee().Type == provider.GranteeType_GRANTEE_TYPE_USER {
+			return m.UserReceivedStates.Remove(ctx, s.GetGrantee().GetUserId().GetOpaqueId(), s.GetResourceId().GetStorageId()+shareid.IDDelimiter+s.GetResourceId().GetSpaceId(), s.Id.OpaqueId)
+		} else if s.GetGrantee().Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+			return m.GroupReceivedCache.Remove(ctx, s.GetGrantee().GetGroupId().GetOpaqueId(), s.Id.OpaqueId)
+		}
+		return nil
+	})
 
 	return eg.Wait()
 }
