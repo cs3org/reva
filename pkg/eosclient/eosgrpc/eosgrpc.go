@@ -39,6 +39,7 @@ import (
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -230,14 +231,13 @@ func (c *Client) getRespError(rsp *erpc.NSResponse, err error) error {
 
 // Common code to create and initialize a NSRequest.
 func (c *Client) initNSRequest(ctx context.Context, auth eosclient.Authorization, app string) (*erpc.NSRequest, error) {
-	// Stuff filename, uid, gid into the MDRequest type
-
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("(uid,gid)", "("+auth.Role.UID+","+auth.Role.GID+")").Msg("New grpcNS req")
 
 	rq := new(erpc.NSRequest)
 	rq.Role = new(erpc.RoleId)
 
+	// Let's put in the authentication info
 	if auth.Token != "" {
 		// Map to owner using EOSAUTHZ token
 		// We do not become cbox
@@ -261,6 +261,7 @@ func (c *Client) initNSRequest(ctx context.Context, auth eosclient.Authorization
 		}
 	}
 
+	// For NS operations, specifically for locking, we also need to provide the app
 	if app != "" {
 		rq.Role.App = app
 	}
@@ -737,7 +738,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, userAuth eosclient.Autho
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("func", "GetFileInfoByPath").Str("uid,gid", userAuth.Role.UID+","+userAuth.Role.GID).Str("path", path).Msg("entering")
 
-	daemonAuth := getDaemonAuth()
+	daemonAuth := utils.GetDaemonAuth()
 
 	// Initialize the common fields of the MDReq
 	// We do this as the daemon account, because the user may not have access to the file
@@ -790,7 +791,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, userAuth eosclient.Autho
 
 		// In case the user is a lightweight / ... account, aka he has no UID, we impersonate the owner of the file
 		var userOrImpersonated eosclient.Authorization
-		if u.Id.Type == userpb.UserType_USER_TYPE_GUEST || u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
+		if utils.IsLightweightUser(u) {
 			userOrImpersonated = eosclient.Authorization{
 				Role: eosclient.Role{
 					UID: strconv.FormatUint(info.UID, 10),
@@ -1253,7 +1254,7 @@ func (c *Client) List(ctx context.Context, userAuth eosclient.Authorization, dpa
 
 	var auth eosclient.Authorization
 	if userAuth.Role.UID == "" || userAuth.Role.GID == "" {
-		auth = getDaemonAuth()
+		auth = utils.GetDaemonAuth()
 	} else {
 		auth = userAuth
 	}
@@ -1838,8 +1839,4 @@ func aclAttrToAclStruct(aclAttr string) *acl.ACLs {
 	}
 
 	return acl
-}
-
-func getDaemonAuth() eosclient.Authorization {
-	return eosclient.Authorization{Role: eosclient.Role{UID: "2", GID: "2"}}
 }

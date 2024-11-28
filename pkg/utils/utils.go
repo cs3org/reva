@@ -37,6 +37,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/registry"
 	"github.com/cs3org/reva/pkg/registry/memory"
 	"go.step.sm/crypto/randutil"
@@ -423,9 +424,9 @@ func HasPermissions(target, toCheck *provider.ResourcePermissions) bool {
 	return true
 }
 
-// UserIsLightweight returns true if the user is a lightweight
+// IsLightweightUser returns true if the user is a lightweight
 // or federated account.
-func UserIsLightweight(u *userpb.User) bool {
+func IsLightweightUser(u *userpb.User) bool {
 	return u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED ||
 		u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT
 }
@@ -442,4 +443,16 @@ func Cast(v any, to any) {
 	}
 	toVal = toVal.Elem()
 	toVal.Set(reflect.ValueOf(v))
+}
+
+func GetDaemonAuth() eosclient.Authorization {
+	return eosclient.Authorization{Role: eosclient.Role{UID: "2", GID: "2"}}
+}
+
+// This function is used when we don't want to pass any additional auth info.
+// Because we later populate the secret key for gRPC, we will be automatically
+// mapped to cbox.
+// So, in other words, use this function if you want to use the cbox account.
+func GetEmptyAuth() eosclient.Authorization {
+	return eosclient.Authorization{}
 }
