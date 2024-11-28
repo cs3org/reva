@@ -649,5 +649,9 @@ func (s *svc) unlockReference(ctx context.Context, _ http.ResponseWriter, r *htt
 }
 
 func requestLockToken(r *http.Request) string {
-	return strings.TrimSuffix(strings.TrimPrefix(r.Header.Get(net.HeaderLockToken), "<"), ">")
+	h := r.Header.Get(net.HeaderLockToken)
+	if len(h) == 0 {
+		h = strings.TrimSuffix(strings.TrimPrefix(r.Header.Get(net.HeaderIf), "("), ")")
+	}
+	return strings.TrimSuffix(strings.TrimPrefix(h, "<"), ">")
 }
