@@ -487,26 +487,24 @@ func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 	if err != nil {
 		return "", errors.Wrap(err, "eosfs: no user in ctx")
 	}
+
+	var auth eosclient.Authorization
 	if utils.IsLightweightUser(u) {
-		daemonAuth := utils.GetDaemonAuth()
-		eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, daemonAuth, fid)
+		auth = utils.GetDaemonAuth()
+	} else {
+		auth, err = fs.getUserAuth(ctx, u, "")
 		if err != nil {
-			return "", errors.Wrap(err, "eosfs: error getting file info by inode")
+			return "", err
 		}
-		if perm := fs.permissionSet(ctx, eosFileInfo, nil); perm.GetPath {
-			return fs.unwrap(ctx, eosFileInfo.File)
-		}
-		return "", errtypes.PermissionDenied("eosfs: getting path for id not allowed")
 	}
 
-	userAuth, err := fs.getUserAuth(ctx, u, "")
-	if err != nil {
-		return "", err
-	}
-
-	eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, userAuth, fid)
+	eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
 	if err != nil {
 		return "", errors.Wrap(err, "eosfs: error getting file info by inode")
+	}
+
+	if perm := fs.permissionSet(ctx, eosFileInfo, nil); !perm.GetPath {
+		return "", errtypes.PermissionDenied("eosfs: getting path for id not allowed")
 	}
 
 	return fs.unwrap(ctx, eosFileInfo.File)
@@ -1168,7 +1166,6 @@ func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*pr
 	}
 
 	// Now we get the real info, I know, it's ugly
-	// TODO(jgeens): use cbox here, or can daemon also read attrs?
 	cboxAuth := utils.GetEmptyAuth()
 
 	attrs, err := fs.c.GetAttrs(ctx, cboxAuth, fn)
@@ -1389,7 +1386,6 @@ func (fs *eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64,
 		return 0, 0, err
 	}
 
-	// TODO(jgeens): empty auth
 	cboxAuth := utils.GetEmptyAuth()
 
 	qi, err := fs.c.GetQuota(ctx, auth.Role.UID, cboxAuth, fs.conf.QuotaNode)
@@ -1423,7 +1419,6 @@ func (fs *eosfs) createShadowHome(ctx context.Context) error {
 
 	for _, sf := range shadowFolders {
 		fn := path.Join(home, sf)
-		// TODO(jgeens): daemon auth
 		_, err = fs.c.GetFileInfoByPath(ctx, daemonAuth, fn)
 		if err != nil {
 			if _, ok := err.(errtypes.IsNotFound); !ok {
