@@ -21,12 +21,14 @@ package gateway
 import (
 	"context"
 
+	"github.com/alitto/pond"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
@@ -101,16 +103,6 @@ func (s *svc) GetPublicShare(ctx context.Context, req *link.GetPublicShareReques
 	return pClient.GetPublicShare(ctx, req)
 }
 
-func (s *svc) ListExistingPublicShares(ctx context.Context, req *link.ListPublicSharesRequest) (*gateway.ListExistingPublicSharesResponse, error) {
-	return nil, nil
-}
-func (s *svc) ListExistingReceivedShares(ctx context.Context, req *collaboration.ListReceivedSharesRequest) (*gateway.ListExistingReceivedSharesResponse, error) {
-	return nil, nil
-}
-func (s *svc) ListExistingShares(ctx context.Context, req *collaboration.ListSharesRequest) (*gateway.ListExistingSharesResponse, error) {
-	return nil, nil
-}
-
 func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRequest) (*link.ListPublicSharesResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("listing public shares")
@@ -131,6 +123,60 @@ func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRe
 	}
 
 	return res, nil
+}
+
+func (s *svc) ListExistingPublicShares(ctx context.Context, req *link.ListPublicSharesRequest) (*gateway.ListExistingPublicSharesResponse, error) {
+	shares, err := s.ListPublicShares(ctx, req)
+	if err != nil {
+		err := errors.Wrap(err, "gateway: error calling ListExistingPublicShares")
+		return &gateway.ListExistingPublicSharesResponse{
+			Status: status.NewInternal(ctx, err, "error listing public shares"),
+		}, nil
+	}
+
+	sharesCh := make(chan *gateway.PublicShareResourceInfo, len(shares.Share))
+	pool := pond.New(50, len(shares.Share))
+	for _, share := range shares.Share {
+		share := share
+		// TODO (gdelmont): we should report any eventual error raised by the goroutines
+		pool.Submit(func() {
+			// TODO(lopresti) incorporate the cache layer from internal/http/services/owncloud/ocs/handlers/apps/sharing/shares/shares.go
+			stat, err := s.Stat(ctx, &provider.StatRequest{
+				Ref: &provider.Reference{
+					ResourceId: share.ResourceId,
+				},
+			})
+			if err != nil {
+				return
+			}
+			if stat.Status.Code != rpc.Code_CODE_OK {
+				return
+			}
+
+			sharesCh <- &gateway.PublicShareResourceInfo{
+				ResourceInfo: stat.Info,
+				PublicShare:  share,
+			}
+		})
+	}
+
+	sris := make([]*gateway.PublicShareResourceInfo, 0, len(shares.Share))
+	done := make(chan struct{})
+	go func() {
+		for s := range sharesCh {
+			sris = append(sris, s)
+		}
+		done <- struct{}{}
+	}()
+	pool.StopAndWait()
+	close(sharesCh)
+	<-done
+	close(done)
+
+	return &gateway.ListExistingPublicSharesResponse{
+		ShareInfos: sris,
+		Status:     status.NewOK(ctx),
+	}, nil
 }
 
 func (s *svc) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShareRequest) (*link.UpdatePublicShareResponse, error) {

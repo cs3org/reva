@@ -51,6 +51,10 @@ type ctxKey int
 
 const (
 	ctxKeyBaseURI ctxKey = iota
+	ctxSpaceID
+	ctxSpacePath
+	ctxSpaceFullPath
+	ctxSpaceRelativePath
 	ctxOCM
 )
 
@@ -343,12 +347,7 @@ func extractDestination(r *http.Request) (string, error) {
 	baseURI := r.Context().Value(ctxKeyBaseURI).(string)
 	// TODO check if path is on same storage, return 502 on problems, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 	// Strip the base URI from the destination. The destination might contain redirection prefixes which need to be handled
-	urlSplit := strings.Split(dstURL.Path, baseURI)
-	if len(urlSplit) != 2 {
-		return "", errors.Wrap(errInvalidValue, "destination path does not contain base URI")
-	}
-
-	return urlSplit[1], nil
+	return strings.TrimPrefix(dstURL.Path, baseURI), nil
 }
 
 // replaceAllStringSubmatchFunc is taken from 'Go: Replace String with Regular Expression Callback'

@@ -48,6 +48,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/spaces"
 
 	"github.com/cs3org/reva/pkg/notification"
 	"github.com/cs3org/reva/pkg/notification/notificationhelper"
@@ -149,18 +150,24 @@ func (h *Handler) startCacheWarmup(c cache.Warmup) {
 	}
 }
 
-func (h *Handler) extractReference(r *http.Request) (provider.Reference, error) {
+func (h *Handler) extractReference(r *http.Request) (*provider.Reference, error) {
 	var ref provider.Reference
+	if spaceID := r.FormValue("space_ref"); spaceID != "" {
+		_, base, _, ok := spaces.DecodeResourceID(spaceID)
+		if !ok {
+			return nil, errors.New("bad space id format")
+		}
+
+		ref.Path = base
+	}
 	if p := r.FormValue("path"); p != "" {
-		ref = provider.Reference{Path: path.Join(h.homeNamespace, p)}
-	} else if spaceRef := r.FormValue("space_ref"); spaceRef != "" {
-		var err error
-		ref, err = utils.ParseStorageSpaceReference(spaceRef)
-		if err != nil {
-			return provider.Reference{}, err
+		if ref.Path == "" {
+			ref.Path = path.Join(h.homeNamespace, p)
+		} else {
+			ref.Path = path.Join(ref.Path, p)
 		}
 	}
-	return ref, nil
+	return &ref, nil
 }
 
 // CreateShare handles POST requests on /apps/files_sharing/api/v1/shares.
@@ -186,7 +193,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	statReq := provider.StatRequest{
-		Ref: &ref,
+		Ref: ref,
 	}
 
 	log := appctx.GetLogger(ctx).With().Interface("ref", ref).Logger()
@@ -1110,8 +1117,12 @@ func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix stri
 		return nil, nil, err
 	}
 
-	target := path.Join(prefix, r.FormValue("path"))
-	info, status, err := h.getResourceInfoByPath(ctx, client, target)
+	target, err := h.extractReference(r)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error extracting reference from request", err)
+		return nil, nil, err
+	}
+	info, status, err := h.getResourceInfoByPath(ctx, client, target.Path)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc stat request", err)
 		return nil, nil, err
@@ -1134,6 +1145,10 @@ func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix stri
 	return collaborationFilters, linkFilters, nil
 }
 
+func relativePathToSpaceID(info *provider.ResourceInfo) string {
+	return strings.TrimPrefix(info.Path, info.Id.SpaceId)
+}
+
 func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, info *provider.ResourceInfo) error {
 	log := appctx.GetLogger(ctx)
 	if info != nil {
@@ -1146,12 +1161,14 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		s.MimeType = parsedMt
 		// TODO STime:     &types.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
 		// TODO Storage: int
-		s.ItemSource = resourceid.OwnCloudResourceIDWrap(info.Id)
+		itemID := spaces.EncodeResourceID(info.Id)
+
+		s.ItemSource = itemID
 		s.FileSource = s.ItemSource
 		switch {
 		case h.sharePrefix == "/":
-			s.FileTarget = info.Path
-			s.Path = info.Path
+			s.FileTarget = relativePathToSpaceID(info)
+			s.Path = relativePathToSpaceID(info)
 		case s.ShareType == conversions.ShareTypePublicLink:
 			s.FileTarget = path.Join("/", path.Base(info.Path))
 			s.Path = path.Join("/", path.Base(info.Path))
@@ -1387,7 +1404,8 @@ func mapState(state collaboration.ShareState) int {
 	var mapped int
 	switch state {
 	case collaboration.ShareState_SHARE_STATE_PENDING:
-		mapped = ocsStatePending
+		mapped = ocsStateAccepted
+		// mapped = ocsStatePending
 	case collaboration.ShareState_SHARE_STATE_ACCEPTED:
 		mapped = ocsStateAccepted
 	case collaboration.ShareState_SHARE_STATE_REJECTED:
