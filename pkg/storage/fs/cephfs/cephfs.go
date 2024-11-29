@@ -48,14 +48,8 @@ import (
 )
 
 const (
-	xattrTrustedNs = "trusted."
-	xattrEID       = xattrTrustedNs + "eid"
-	xattrMd5       = xattrTrustedNs + "checksum"
-	xattrMd5ts     = xattrTrustedNs + "checksumTS"
-	xattrRef       = xattrTrustedNs + "ref"
-	xattrUserNs    = "user."
-	snap           = ".snap"
-	xattrLock      = xattrUserNs + "reva.lockpayload"
+	xattrUserNs = "user."
+	xattrLock   = xattrUserNs + "reva.lockpayload"
 )
 
 type cephfs struct {
@@ -69,8 +63,8 @@ func init() {
 	registry.Register("cephfs", New)
 }
 
-// New returns an implementation to of the storage.FS interface that talks to
-// a ceph filesystem.
+// New returns an implementation of the storage.FS interface that talks to
+// a CephFS storage via libcephfs.
 func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err error) {
 	var o Options
 	if err := cfg.Decode(m, &o); err != nil {
@@ -82,19 +76,9 @@ func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err erro
 		return nil, errors.New("cephfs: can't create caches")
 	}
 
-	adminConn := newAdminConn(&o)
-	if adminConn == nil {
-		return nil, errors.Wrap(err, "cephfs: Couldn't create admin connections")
-	}
-
-	for _, dir := range []string{o.ShadowFolder, o.UploadFolder} {
-		_, err := adminConn.adminMount.Statx(dir, goceph.StatxMask(goceph.StatxIno), 0)
-		if err != nil {
-			err = adminConn.adminMount.MakeDir(dir, dirPermFull)
-			if err != nil && err.Error() != errFileExists {
-				return nil, errors.New("cephfs: can't initialise system dir " + dir + ":" + err.Error())
-			}
-		}
+	adminConn, err := newAdminConn(&o)
+	if err != nil {
+		return nil, errors.Wrap(err, "cephfs: couldn't create admin connections")
 	}
 
 	return &cephfs{
@@ -105,70 +89,66 @@ func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err erro
 }
 
 func (fs *cephfs) GetHome(ctx context.Context) (string, error) {
-	if fs.conf.DisableHome {
-		return "", errtypes.NotSupported("cephfs: GetHome() home supported disabled")
-	}
-
+	log := appctx.GetLogger(ctx)
 	user := fs.makeUser(ctx)
-
+	log.Debug().Interface("user", user).Msg("GetHome for user")
 	return user.home, nil
 }
 
 func (fs *cephfs) CreateHome(ctx context.Context) (err error) {
-	if fs.conf.DisableHome {
-		return errtypes.NotSupported("cephfs: GetHome() home supported disabled")
-	}
+	log := appctx.GetLogger(ctx)
 
 	user := fs.makeUser(ctx)
+	log.Debug().Interface("user", user).Msg("CreateHome for user")
 
-	// Stop createhome from running the whole thing because it is called multiple times
-	if _, err = fs.adminConn.adminMount.Statx(user.home, goceph.StatxMode, 0); err == nil {
-		return
+	// Skip home creation if the directory already exists.
+	// We do not check for all necessary attributes, only for the existence of the directory.
+	stat, err := fs.adminConn.adminMount.Statx(user.home, goceph.StatxMode, 0)
+	if err != nil {
+		return errors.Wrap(err, "error stating user home when trying to create it")
 	}
+
+	log.Debug().Interface("stat", stat).Msgf("home is %s")
+
+	// TODO(labkode): for now we always try to create the home directory even if it exists.
+	// One needs to check for "no such of file or directory" error to short-cut.
 
 	err = walkPath(user.home, func(path string) error {
 		return fs.adminConn.adminMount.MakeDir(path, fs.conf.DirPerms)
 	}, false)
 	if err != nil {
-		return getRevaError(err)
+		return getRevaError(ctx, err)
 	}
 
 	err = fs.adminConn.adminMount.Chown(user.home, uint32(user.UidNumber), uint32(user.GidNumber))
 	if err != nil {
-		return getRevaError(err)
+		return getRevaError(ctx, err)
 	}
 
 	err = fs.adminConn.adminMount.SetXattr(user.home, "ceph.quota.max_bytes", []byte(fmt.Sprint(fs.conf.UserQuotaBytes)), 0)
 	if err != nil {
-		return getRevaError(err)
+		return getRevaError(ctx, err)
 	}
 
-	user.op(func(cv *cacheVal) {
-		err = cv.mount.MakeDir(removeLeadingSlash(fs.conf.ShareFolder), fs.conf.DirPerms)
-		if err != nil && err.Error() == errFileExists {
-			err = nil
-		}
-	})
-
-	return getRevaError(err)
+	return nil
 }
 
 func (fs *cephfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	user := fs.makeUser(ctx)
 	path, err := user.resolveRef(ref)
 	if err != nil {
-		return getRevaError(err)
+		return getRevaError(ctx, err)
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
 		if err = cv.mount.MakeDir(path, fs.conf.DirPerms); err != nil {
+			log.Debug().Str("path", path).Err(err).Msg("cv.mount.CreateDir returned")
 			return
 		}
-
-		//TODO(tmourati): Add entry id logic
 	})
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
@@ -179,20 +159,22 @@ func (fs *cephfs) Delete(ctx context.Context, ref *provider.Reference) (err erro
 		return err
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
 		if err = cv.mount.Unlink(path); err != nil && err.Error() == errIsADirectory {
 			err = cv.mount.RemoveDir(path)
 		}
-
-		//TODO(tmourati): Add entry id logic
 	})
 
-	//has already been deleted by direct mount
-	if err != nil && err.Error() == errNotFound {
-		return nil
+	if err != nil {
+		log.Debug().Any("ref", ref).Err(err).Msg("Delete returned")
+		if err.Error() == errNotFound {
+			//has already been deleted by direct mount
+			return nil
+		}
 	}
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
@@ -205,12 +187,12 @@ func (fs *cephfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) 
 		return
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
 		if err = cv.mount.Rename(oldPath, newPath); err != nil {
+			log.Debug().Any("oldRef", oldRef).Any("newRef", newRef).Err(err).Msg("cv.mount.Rename returned")
 			return
 		}
-
-		//TODO(tmourati): Add entry id logic, handle already moved file error
 	})
 
 	// has already been moved by direct mount
@@ -218,13 +200,17 @@ func (fs *cephfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) 
 		return nil
 	}
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (ri *provider.ResourceInfo, err error) {
+	if ref == nil {
+		return nil, errors.New("error: ref is nil")
+	}
+
+	log := appctx.GetLogger(ctx)
 	var path string
 	user := fs.makeUser(ctx)
-
 	if path, err = user.resolveRef(ref); err != nil {
 		return nil, err
 	}
@@ -232,37 +218,43 @@ func (fs *cephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 	user.op(func(cv *cacheVal) {
 		var stat Statx
 		if stat, err = cv.mount.Statx(path, goceph.StatxBasicStats, 0); err != nil {
+			log.Debug().Str("path", path).Err(err).Msg("cv.mount.Statx returned")
 			return
 		}
 		ri, err = user.fileAsResourceInfo(cv, path, stat, mdKeys)
+		if err != nil {
+			log.Debug().Any("resourceInfo", ri).Err(err).Msg("fileAsResourceInfo returned")
+		}
 	})
 
-	return ri, getRevaError(err)
+	return ri, getRevaError(ctx, err)
 }
 
 func (fs *cephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (files []*provider.ResourceInfo, err error) {
-	var path string
-	user := fs.makeUser(ctx)
-	if path, err = user.resolveRef(ref); err != nil {
-		return
+	if ref == nil {
+		return nil, errors.New("error: ref is nil")
 	}
 
-	// The user wants to access their home, create it if it doesn't exist
-	if path == fs.conf.Root {
-		if err = fs.CreateHome(ctx); err != nil {
-			return
-		}
+	log := appctx.GetLogger(ctx)
+	log.Debug().Interface("ref", ref)
+	user := fs.makeUser(ctx)
+
+	var path string
+	if path, err = user.resolveRef(ref); err != nil {
+		return nil, err
 	}
 
 	user.op(func(cv *cacheVal) {
 		var dir *goceph.Directory
 		if dir, err = cv.mount.OpenDir(path); err != nil {
+			log.Debug().Str("path", path).Err(err).Msg("cv.mount.OpenDir returned")
 			return
 		}
 		defer closeDir(dir)
 
 		var entry *goceph.DirEntryPlus
 		var ri *provider.ResourceInfo
+
 		for entry, err = dir.ReadDirPlus(goceph.StatxBasicStats, 0); entry != nil && err == nil; entry, err = dir.ReadDirPlus(goceph.StatxBasicStats, 0) {
 			if fs.conf.HiddenDirs[entry.Name()] {
 				continue
@@ -271,8 +263,7 @@ func (fs *cephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 			ri, err = user.fileAsResourceInfo(cv, filepath.Join(path, entry.Name()), entry.Statx(), mdKeys)
 			if ri == nil || err != nil {
 				if err != nil {
-					log := appctx.GetLogger(ctx)
-					log.Err(err).Msg("cephfs: error in file as resource info")
+					log.Debug().Any("resourceInfo", ri).Err(err).Msg("fileAsResourceInfo returned")
 				}
 				err = nil
 				continue
@@ -282,7 +273,7 @@ func (fs *cephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 		}
 	})
 
-	return files, getRevaError(err)
+	return files, getRevaError(ctx, err)
 }
 
 func (fs *cephfs) Download(ctx context.Context, ref *provider.Reference) (rc io.ReadCloser, err error) {
@@ -292,116 +283,31 @@ func (fs *cephfs) Download(ctx context.Context, ref *provider.Reference) (rc io.
 		return nil, errors.Wrap(err, "cephfs: error resolving ref")
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
-		if strings.HasPrefix(strings.TrimPrefix(path, user.home), fs.conf.ShareFolder) {
-			err = errtypes.PermissionDenied("cephfs: cannot download under the virtual share folder")
+		if rc, err = cv.mount.Open(path, os.O_RDONLY, 0); err != nil {
+			log.Debug().Any("ref", ref).Err(err).Msg("cv.mount.Open returned")
 			return
 		}
-		rc, err = cv.mount.Open(path, os.O_RDONLY, 0)
 	})
 
-	return rc, getRevaError(err)
+	return rc, getRevaError(ctx, err)
 }
 
 func (fs *cephfs) ListRevisions(ctx context.Context, ref *provider.Reference) (fvs []*provider.FileVersion, err error) {
-	//TODO(tmourati): Fix entry id logic
-	var path string
-	user := fs.makeUser(ctx)
-	if path, err = user.resolveRef(ref); err != nil {
-		return nil, errors.Wrap(err, "cephfs: error resolving ref")
-	}
-
-	user.op(func(cv *cacheVal) {
-		if strings.HasPrefix(path, removeLeadingSlash(fs.conf.ShareFolder)) {
-			err = errtypes.PermissionDenied("cephfs: cannot download under the virtual share folder")
-			return
-		}
-		var dir *goceph.Directory
-		if dir, err = cv.mount.OpenDir(".snap"); err != nil {
-			return
-		}
-		defer closeDir(dir)
-
-		for d, _ := dir.ReadDir(); d != nil; d, _ = dir.ReadDir() {
-			var revPath string
-			var stat Statx
-			var e error
-
-			if strings.HasPrefix(d.Name(), ".") {
-				continue
-			}
-
-			revPath, e = resolveRevRef(cv.mount, ref, d.Name())
-			if e != nil {
-				continue
-			}
-			stat, e = cv.mount.Statx(revPath, goceph.StatxMtime|goceph.StatxSize, 0)
-			if e != nil {
-				continue
-			}
-			fvs = append(fvs, &provider.FileVersion{
-				Key:   d.Name(),
-				Size:  stat.Size,
-				Mtime: uint64(stat.Mtime.Sec),
-			})
-		}
-	})
-
-	return fvs, getRevaError(err)
+	return nil, errtypes.NotSupported("cephfs:  RestoreRevision not supported")
 }
 
 func (fs *cephfs) DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (file io.ReadCloser, err error) {
-	//TODO(tmourati): Fix entry id logic
-	user := fs.makeUser(ctx)
-
-	user.op(func(cv *cacheVal) {
-		var revPath string
-		revPath, err = resolveRevRef(cv.mount, ref, key)
-		if err != nil {
-			return
-		}
-
-		file, err = cv.mount.Open(revPath, os.O_RDONLY, 0)
-	})
-
-	return file, getRevaError(err)
+	return nil, errtypes.NotSupported("cephfs:  RestoreRevision not supported")
 }
 
 func (fs *cephfs) RestoreRevision(ctx context.Context, ref *provider.Reference, key string) (err error) {
-	//TODO(tmourati): Fix entry id logic
-	var path string
-	user := fs.makeUser(ctx)
-	if path, err = user.resolveRef(ref); err != nil {
-		return errors.Wrap(err, "cephfs: error resolving ref")
-	}
-
-	user.op(func(cv *cacheVal) {
-		var revPath string
-		if revPath, err = resolveRevRef(cv.mount, ref, key); err != nil {
-			err = errors.Wrap(err, "cephfs: error resolving revision ref "+ref.String())
-			return
-		}
-
-		var src, dst *goceph.File
-		if src, err = cv.mount.Open(revPath, os.O_RDONLY, 0); err != nil {
-			return
-		}
-		defer closeFile(src)
-
-		if dst, err = cv.mount.Open(path, os.O_WRONLY|os.O_TRUNC, 0); err != nil {
-			return
-		}
-		defer closeFile(dst)
-
-		_, err = io.Copy(dst, src)
-	})
-
-	return getRevaError(err)
+	return errtypes.NotSupported("cephfs:  RestoreRevision not supported")
 }
 
 func (fs *cephfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (str string, err error) {
-	//TODO(tmourati): Add entry id logic
-	return "", errtypes.NotSupported("cephfs: entry IDs currently not supported")
+	return "", errtypes.NotSupported("cephfs: ids currently not supported")
 }
 
 func (fs *cephfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
@@ -411,11 +317,14 @@ func (fs *cephfs) AddGrant(ctx context.Context, ref *provider.Reference, g *prov
 		return
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
-		err = fs.changePerms(ctx, cv.mount, g, path, updateGrant)
+		if err = fs.changePerms(ctx, cv.mount, g, path, updateGrant); err != nil {
+			log.Debug().Any("ref", ref).Any("grant", g).Err(err).Msg("AddGrant returned")
+		}
 	})
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
@@ -425,11 +334,14 @@ func (fs *cephfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *p
 		return
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
-		err = fs.changePerms(ctx, cv.mount, g, path, removeGrant)
+		if err = fs.changePerms(ctx, cv.mount, g, path, removeGrant); err != nil {
+			log.Debug().Any("ref", ref).Any("grant", g).Err(err).Msg("RemoveGrant returned")
+		}
 	})
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
@@ -439,11 +351,14 @@ func (fs *cephfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *p
 		return
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
-		err = fs.changePerms(ctx, cv.mount, g, path, updateGrant)
+		if err = fs.changePerms(ctx, cv.mount, g, path, updateGrant); err != nil {
+			log.Debug().Any("ref", ref).Any("grant", g).Err(err).Msg("UpdateGrant returned")
+		}
 	})
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) (err error) {
@@ -453,12 +368,15 @@ func (fs *cephfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *pro
 		return
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
 		grant := &provider.Grant{Grantee: g} //nil perms will remove the whole grant
-		err = fs.changePerms(ctx, cv.mount, grant, path, removeGrant)
+		if err = fs.changePerms(ctx, cv.mount, grant, path, removeGrant); err != nil {
+			log.Debug().Any("ref", ref).Any("grant", grant).Err(err).Msg("DenyGrant returned")
+		}
 	})
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) ListGrants(ctx context.Context, ref *provider.Reference) (glist []*provider.Grant, err error) {
@@ -476,7 +394,7 @@ func (fs *cephfs) ListGrants(ctx context.Context, ref *provider.Reference) (glis
 		}
 	})
 
-	return glist, getRevaError(err)
+	return glist, getRevaError(ctx, err)
 }
 
 func (fs *cephfs) GetQuota(ctx context.Context, ref *provider.Reference) (total uint64, used uint64, err error) {
@@ -499,28 +417,11 @@ func (fs *cephfs) GetQuota(ctx context.Context, ref *provider.Reference) (total 
 		}
 	})
 
-	return total, used, getRevaError(err)
+	return total, used, getRevaError(ctx, err)
 }
 
 func (fs *cephfs) CreateReference(ctx context.Context, path string, targetURI *url.URL) (err error) {
-	user := fs.makeUser(ctx)
-
-	user.op(func(cv *cacheVal) {
-		if !strings.HasPrefix(strings.TrimPrefix(path, user.home), fs.conf.ShareFolder) {
-			err = errors.New("cephfs: can't create reference outside a share folder")
-		} else {
-			err = cv.mount.MakeDir(path, fs.conf.DirPerms)
-		}
-	})
-	if err != nil {
-		return getRevaError(err)
-	}
-
-	user.op(func(cv *cacheVal) {
-		err = cv.mount.SetXattr(path, xattrRef, []byte(targetURI.String()), 0)
-	})
-
-	return getRevaError(err)
+	return errors.New("error: CreateReference not implemented")
 }
 
 func (fs *cephfs) Shutdown(ctx context.Context) (err error) {
@@ -540,6 +441,7 @@ func (fs *cephfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 		return err
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
 		for k, v := range md.Metadata {
 			if !strings.HasPrefix(k, xattrUserNs) {
@@ -547,12 +449,13 @@ func (fs *cephfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 			}
 			if e := cv.mount.SetXattr(path, k, []byte(v), 0); e != nil {
 				err = errors.Wrap(err, e.Error())
+				log.Debug().Any("ref", ref).Str("key", k).Any("v", v).Err(err).Msg("SetXattr returned")
 				return
 			}
 		}
 	})
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) (err error) {
@@ -562,6 +465,7 @@ func (fs *cephfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refe
 		return err
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
 		for _, key := range keys {
 			if !strings.HasPrefix(key, xattrUserNs) {
@@ -569,32 +473,33 @@ func (fs *cephfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refe
 			}
 			if e := cv.mount.RemoveXattr(path, key); e != nil {
 				err = errors.Wrap(err, e.Error())
+				log.Debug().Any("ref", ref).Str("key", key).Err(err).Msg("RemoveXattr returned")
 				return
 			}
 		}
 	})
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
 	user := fs.makeUser(ctx)
 	path, err := user.resolveRef(ref)
 	if err != nil {
-		return getRevaError(err)
+		return getRevaError(ctx, err)
 	}
 
+	log := appctx.GetLogger(ctx)
 	user.op(func(cv *cacheVal) {
 		var file *goceph.File
 		defer closeFile(file)
 		if file, err = cv.mount.Open(path, os.O_CREATE|os.O_WRONLY, fs.conf.FilePerms); err != nil {
+			log.Debug().Any("ref", ref).Err(err).Msg("Touch: Open returned")
 			return
 		}
-
-		//TODO(tmourati): Add entry id logic
 	})
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) EmptyRecycle(ctx context.Context) error {
@@ -656,7 +561,7 @@ func (fs *cephfs) SetLock(ctx context.Context, ref *provider.Reference, lock *pr
 	user := fs.makeUser(ctx)
 	path, err := user.resolveRef(ref)
 	if err != nil {
-		return getRevaError(err)
+		return getRevaError(ctx, err)
 	}
 
 	op := goceph.LockEX
@@ -684,14 +589,14 @@ func (fs *cephfs) SetLock(ctx context.Context, ref *provider.Reference, lock *pr
 		return fs.SetArbitraryMetadata(ctx, ref, md)
 	}
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }
 
 func (fs *cephfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
 	user := fs.makeUser(ctx)
 	path, err := user.resolveRef(ref)
 	if err != nil {
-		return nil, getRevaError(err)
+		return nil, getRevaError(ctx, err)
 	}
 
 	var l *provider.Lock
@@ -744,7 +649,7 @@ func (fs *cephfs) GetLock(ctx context.Context, ref *provider.Reference) (*provid
 		return
 	})
 
-	return l, getRevaError(err)
+	return l, getRevaError(ctx, err)
 }
 
 // TODO(lopresti) part of this logic is duplicated from eosfs.go, should be factored out
@@ -787,7 +692,7 @@ func (fs *cephfs) Unlock(ctx context.Context, ref *provider.Reference, lock *pro
 	user := fs.makeUser(ctx)
 	path, err := user.resolveRef(ref)
 	if err != nil {
-		return getRevaError(err)
+		return getRevaError(ctx, err)
 	}
 
 	oldLock, err := fs.GetLock(ctx, ref)
@@ -824,5 +729,5 @@ func (fs *cephfs) Unlock(ctx context.Context, ref *provider.Reference, lock *pro
 		return fs.UnsetArbitraryMetadata(ctx, ref, []string{xattrLock})
 	}
 
-	return getRevaError(err)
+	return getRevaError(ctx, err)
 }

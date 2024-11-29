@@ -322,7 +322,6 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpReq.Header = r.Header
-
 	httpRes, err := httpClient.Do(httpReq)
 	if err != nil {
 		log.Err(err).Msg("error doing PUT request to data service")

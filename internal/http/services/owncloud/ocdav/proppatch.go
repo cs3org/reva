@@ -228,7 +228,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 					HandleErrorStatus(&log, w, res.Status)
 					return nil, nil, false
 				}
-				if key == "http://owncloud.org/ns/favorite" {
+				if key == _propOcFavorite {
 					statRes, err := c.Stat(ctx, &provider.StatRequest{Ref: ref})
 					if err != nil {
 						w.WriteHeader(http.StatusInternalServerError)
@@ -269,7 +269,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 				acceptedProps = append(acceptedProps, propNameXML)
 				delete(sreq.ArbitraryMetadata.Metadata, key)
 
-				if key == "http://owncloud.org/ns/favorite" {
+				if key == _propOcFavorite {
 					statRes, err := c.Stat(ctx, &provider.StatRequest{Ref: ref})
 					if err != nil {
 						w.WriteHeader(http.StatusInternalServerError)

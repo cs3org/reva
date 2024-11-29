@@ -128,6 +128,9 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 	if err != nil {
 		return nil, nil, err
 	}
+	if getUserResponse.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return nil, nil, errtypes.NotFound(getUserResponse.Status.Message)
+	}
 
 	share := publicShareResponse.GetShare()
 	role := authpb.Role_ROLE_VIEWER

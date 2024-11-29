@@ -66,6 +66,7 @@ const (
 	lwShareAttrKey   = "reva.lwshare"     // used to store grants to lightweight accounts
 	lockPayloadKey   = "reva.lockpayload" // used to store lock payloads
 	eosLockKey       = "app.lock"         // this is the key known by EOS to enforce a lock.
+	FavoritesKey     = "http://owncloud.org/ns/favorite"
 )
 
 const (
@@ -193,6 +194,7 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 			VersionInvariant:   c.VersionInvariant,
 			ReadUsesLocalTemp:  c.ReadUsesLocalTemp,
 			WriteUsesLocalTemp: c.WriteUsesLocalTemp,
+			TokenExpiry:        c.TokenExpiry,
 		}
 		eosHTTPOpts := &eosgrpc.HTTPOptions{
 			BaseURL:             c.MasterURL,
@@ -2272,6 +2274,8 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		}
 	}
 
+	parseAndSetFavoriteAttr(ctx, filteredAttrs)
+
 	info := &provider.ResourceInfo{
 		Id:            &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.Inode)},
 		Path:          p,
@@ -2506,6 +2510,29 @@ func (fs *eosfs) getEosMetadata(finfo *eosclient.FileInfo) []byte {
 
 	v, _ := json.Marshal(sys)
 	return v
+}
+
+func parseAndSetFavoriteAttr(ctx context.Context, attrs map[string]string) {
+	// Read and correctly set the favorite attr
+	if user, ok := appctx.ContextGetUser(ctx); ok {
+		if favAttrStr, ok := attrs[FavoritesKey]; ok {
+			favUsers, err := acl.Parse(favAttrStr, acl.ShortTextForm)
+			if err != nil {
+				return
+			}
+			for _, u := range favUsers.Entries {
+				// Check if the current user has favorited this resource
+				if u.Qualifier == user.Id.OpaqueId {
+					// Set attr val to 1
+					attrs[FavoritesKey] = "1"
+					return
+				}
+			}
+		}
+	}
+
+	// Delete the favorite attr from the response
+	delete(attrs, FavoritesKey)
 }
 
 /*

@@ -125,6 +125,10 @@ type Options struct {
 	// SecProtocol is the comma separated list of security protocols used by xrootd.
 	// For example: "sss, unix"
 	SecProtocol string
+
+	// TokenExpiry stores in seconds the time after which generated tokens will expire
+	// Default is 3600
+	TokenExpiry int
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {
@@ -601,6 +605,15 @@ func (c *Client) handleFavAttr(ctx context.Context, auth eosclient.Authorization
 func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path, app string) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "UnsetAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
+
+	// Favorites need to be stored per user so handle these separately
+	if attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
+		info, err := c.GetFileInfoByPath(ctx, auth, path)
+		if err != nil {
+			return err
+		}
+		return c.handleFavAttr(ctx, auth, attr, recursive, path, info, false)
+	}
 
 	// Initialize the common fields of the NSReq
 	rq, err := c.initNSRequest(ctx, auth, app)
@@ -1603,7 +1616,49 @@ func (c *Client) ReadVersion(ctx context.Context, auth eosclient.Authorization, 
 
 // GenerateToken returns a token on behalf of the resource owner to be used by lightweight accounts.
 func (c *Client) GenerateToken(ctx context.Context, auth eosclient.Authorization, path string, a *acl.Entry) (string, error) {
-	return "", errtypes.NotSupported("TODO")
+	log := appctx.GetLogger(ctx)
+	log.Info().Str("func", "GenerateToken").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
+
+	// Initialize the common fields of the NSReq
+	rq, err := c.initNSRequest(ctx, auth, "")
+	if err != nil {
+		log.Error().Str("func", "GenerateToken").Str("err", err.Error()).Msg("Error on initNSRequest")
+		return "", err
+	}
+
+	msg := new(erpc.NSRequest_TokenRequest)
+	msg.Token = &erpc.ShareToken{}
+	msg.Token.Token = &erpc.ShareProto{}
+	msg.Token.Token.Permission = a.Permissions
+	msg.Token.Token.Expires = uint64(time.Now().Add(time.Duration(c.opt.TokenExpiry) * time.Second).Unix())
+	msg.Token.Token.Allowtree = true
+	msg.Token.Token.Path = path
+
+	rq.Command = &erpc.NSRequest_Token{
+		Token: msg,
+	}
+
+	// Now send the req and see what happens
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
+	e := c.getRespError(resp, err)
+	if e != nil {
+		log.Error().Str("func", "GenerateToken").Str("err", e.Error()).Msg("")
+		return "", e
+	}
+
+	if resp == nil {
+		log.Error().Str("func", "GenerateToken").Msg("nil grpc response")
+		return "", errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' ", auth.Role.UID))
+	}
+
+	// For some reason, the token is embedded in the error, with error code 0
+	if resp.GetError() != nil {
+		if resp.GetError().Code == 0 {
+			return resp.GetError().Msg, nil
+		}
+	}
+	log.Error().Str("func", "GenerateToken").Msg("GenerateToken over gRPC expected an error but did not receive one")
+	return "", err
 }
 
 func (c *Client) getVersionFolderInode(ctx context.Context, auth eosclient.Authorization, p string) (uint64, error) {
@@ -1677,8 +1732,7 @@ func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDRespon
 
 		fi.TreeSize = uint64(st.Cmd.TreeSize)
 		fi.Size = fi.TreeSize
-		// TODO(lopresti) this info is missing in the EOS Protobuf, cf. EOS-5974
-		// fi.TreeCount = uint64(st.Cmd.TreeCount)
+		fi.TreeCount = st.Cmd.Files + st.Cmd.Containers
 
 		log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Msg("grpc response")
 	} else {
