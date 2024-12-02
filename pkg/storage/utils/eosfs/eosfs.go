@@ -1199,26 +1199,13 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("eosfs: get md for ref:" + ref.String())
 
-	u, err := getUser(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	p := ref.Path
 	fn := fs.wrap(ctx, p)
 
 	// We use daemon for auth because we need access to the file in order to stat it
 	// We cannot use the current user, because the file may be a shared file
 	// and lightweight accounts don't have a uid
-	var auth eosclient.Authorization
-	if utils.IsLightweightUser(u) {
-		auth = utils.GetDaemonAuth()
-	} else {
-		auth, err = fs.getUserAuth(ctx, u, fn)
-	}
-	if err != nil {
-		return nil, err
-	}
+	auth := utils.GetDaemonAuth()
 
 	if ref.ResourceId != nil {
 		fid, err := strconv.ParseUint(ref.ResourceId.OpaqueId, 10, 64)
