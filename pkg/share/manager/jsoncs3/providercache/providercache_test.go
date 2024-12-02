@@ -191,5 +191,13 @@ var _ = Describe("Cache", func() {
 				Expect(s).To(BeNil())
 			})
 		})
+
+		Describe("All", func() {
+			It("returns all entries", func() {
+				entries, err := c.All(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(entries.Count()).To(Equal(1))
+			})
+		})
 	})
 })
