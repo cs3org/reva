@@ -35,15 +35,8 @@ type Config struct {
 	// DefaultQuotaFiles sets the default maximum files available for a user
 	DefaultQuotaFiles uint64 `mapstructure:"default_quota_files"`
 
-	// ShadowNamespace for storing shadow data
-	ShadowNamespace string `mapstructure:"shadow_namespace"`
-
 	// UploadsNamespace for storing upload data
 	UploadsNamespace string `mapstructure:"uploads_namespace"`
-
-	// ShareFolder defines the name of the folder in the
-	// shadowed namespace. Ex: /eos/user/.shadow/h/hugo/MyShares
-	ShareFolder string `mapstructure:"share_folder"`
 
 	// Location of the eos binary.
 	// Default is /usr/bin/eos.
@@ -149,9 +142,6 @@ type Config struct {
 	// revisions-related operations.
 	ImpersonateOwnerforRevisions bool `mapstructure:"impersonate_owner_for_revisions"`
 
-	// Whether to enable the post create home hook
-	EnablePostCreateHomeHook bool `mapstructure:"enable_post_create_home_hook"`
-
 	// HTTP connections to EOS: max number of idle conns
 	MaxIdleConns int `mapstructure:"max_idle_conns"`
 
@@ -177,8 +167,9 @@ type Config struct {
 	// Default is 3600
 	TokenExpiry int
 
-	// Path of the script to run after an user home folder has been created
-	OnPostCreateHomeHook string `mapstructure:"on_post_create_home_hook"`
+	// Path of the script to run in order to create a user home folder
+	// TODO(lopresti): to be replaced by a call to the Resource Lifecycle API being developed
+	CreateHomeHook string `mapstructure:"create_home_hook"`
 
 	// Maximum entries count a ListRecycle call may return: if exceeded, ListRecycle
 	// will return a BadRequest error
