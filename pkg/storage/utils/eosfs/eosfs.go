@@ -86,10 +86,6 @@ func (c *Config) ApplyDefaults() {
 		c.Namespace = "/"
 	}
 
-	if c.ShadowNamespace == "" {
-		c.ShadowNamespace = path.Join(c.Namespace, ".shadow")
-	}
-
 	// Quota node defaults to namespace if empty
 	if c.QuotaNode == "" {
 		c.QuotaNode = c.Namespace
@@ -104,12 +100,6 @@ func (c *Config) ApplyDefaults() {
 	if c.DefaultQuotaFiles == 0 {
 		c.DefaultQuotaFiles = 1000000 // 1 Million
 	}
-
-	if c.ShareFolder == "" {
-		c.ShareFolder = "/MyShares"
-	}
-	// ensure share folder always starts with slash
-	c.ShareFolder = path.Join("/", c.ShareFolder)
 
 	if c.EosBinary == "" {
 		c.EosBinary = "/usr/bin/eos"
@@ -289,20 +279,20 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 
 func (fs *eosfs) getLayout(ctx context.Context) (layout string) {
 	if fs.conf.EnableHome {
-		u := ctx.ContextMustGetUser(ctx)
+		u := appctx.ContextMustGetUser(ctx)
 		layout = templates.WithUser(u, fs.conf.UserLayout)
 	}
 	return
 }
 
-func (fs *eosfs) getInternalHome(ctx context.Context) (string) {
+func (fs *eosfs) getInternalHome(ctx context.Context) string {
 	if !fs.conf.EnableHome {
 		// TODO(lopresti): this is to be removed as we always want to support home,
 		// cf. https://github.com/cs3org/reva/pull/4940
 		return "/"
 	}
 
-	u := ctx.ContextMustGetUser(ctx)
+	u := appctx.ContextMustGetUser(ctx)
 	relativeHome := templates.WithUser(u, fs.conf.UserLayout)
 	return relativeHome
 }
@@ -321,7 +311,7 @@ func (fs *eosfs) wrap(ctx context.Context, fn string) (internal string) {
 func (fs *eosfs) unwrap(ctx context.Context, internal string) (string, error) {
 	log := appctx.GetLogger(ctx)
 	layout := fs.getLayout(ctx)
-	ns, err := fs.getNsMatch(internal, []string{fs.conf.Namespace, fs.conf.ShadowNamespace})
+	ns, err := fs.getNsMatch(internal, []string{fs.conf.Namespace})
 	if err != nil {
 		return "", err
 	}
@@ -375,11 +365,11 @@ func (fs *eosfs) resolveRefAndGetAuth(ctx context.Context, ref *provider.Referen
 	if err != nil {
 		return "", eosclient.Authorization{}, errors.Wrap(err, "eosfs: no user in ctx")
 	}
+	fn := fs.wrap(ctx, p)
 	auth, err := fs.getUserAuth(ctx, u, fn)
 	if err != nil {
 		return "", eosclient.Authorization{}, err
 	}
-	fn := fs.wrap(ctx, p)
 
 	return fn, auth, nil
 }
@@ -1265,17 +1255,13 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
+
 	auth, err := fs.getUserAuth(ctx, u, "")
 	if err != nil {
 		return err
 	}
 
-	rootAuth, err := fs.getRootAuth(ctx)
-	if err != nil {
-		return nil
-	}
-
-	_, err = fs.c.GetFileInfoByPath(ctx, rootAuth, home)
+	_, err = fs.c.GetFileInfoByPath(ctx, auth, home)
 	if err == nil { // home already exists
 		return nil
 	}
@@ -1284,40 +1270,23 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 		return errors.Wrap(err, "eosfs: error verifying if user home directory exists")
 	}
 
-	err = fs.createUserDir(ctx, u, home, false)
-	if err != nil {
-		err := errors.Wrap(err, "eosfs: error creating user dir")
-		return err
-	}
-
 	// set quota for user, depending on its type
 	quotaBytes := fs.conf.DefaultQuotaBytes
 	if u.Id.Type != userpb.UserType_USER_TYPE_PRIMARY {
 		quotaBytes = fs.conf.DefaultSecondaryQuotaBytes
 	}
-	quotaInfo := &eosclient.SetQuotaInfo{
-		Username:  u.Username,
-		UID:       auth.Role.UID,
-		GID:       auth.Role.GID,
-		MaxBytes:  quotaBytes,
-		MaxFiles:  fs.conf.DefaultQuotaFiles,
-		QuotaNode: fs.conf.QuotaNode,
-	}
 
-	err = fs.c.SetQuota(ctx, rootAuth, quotaInfo)
-	if err != nil {
-		err := errors.Wrap(err, "eosfs: error setting quota")
-		return err
-	}
-
-	if fs.conf.EnablePostCreateHomeHook {
-		if err := fs.runPostCreateHomeHook(ctx); err != nil {
+	if fs.conf.CreateHomeHook != "" {
+		err = exec.Command(fs.conf.CreateHomeHook, u.Username, strconv.FormatUint(quotaBytes, 10), strconv.FormatUint(fs.conf.DefaultQuotaFiles, 10)).Run()
+		if err != nil {
 			return errors.Wrap(err, "eosfs: error running post create home hook")
 		}
+	} else {
+		return errtypes.NotFound("eosfs: create home hook not configured")
 	}
 
 	log := appctx.GetLogger(ctx)
-	log.Info().Interface("quotaInfo", quotaInfo).Interface("user", u.Id).Msg("created nominal home")
+	log.Info().Uint64("quotaBytes", quotaBytes).Interface("user", u.Id).Msg("created nominal home")
 
 	return nil
 }
@@ -1331,16 +1300,7 @@ func (fs *eosfs) CreateHome(ctx context.Context) error {
 		return errors.Wrap(err, "eosfs: error creating nominal home")
 	}
 
-	if err := fs.createShadowHome(ctx); err != nil {
-		return errors.Wrap(err, "eosfs: error creating shadow home")
-	}
-
 	return nil
-}
-
-func (fs *eosfs) runPostCreateHomeHook(ctx context.Context) error {
-	user := appctx.ContextMustGetUser(ctx)
-	return exec.Command(fs.conf.OnPostCreateHomeHook, user.Username).Run()
 }
 
 func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string, recursiveAttr bool) error {
@@ -1441,18 +1401,19 @@ func (fs *eosfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
 }
 
 func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) error {
-	u, err := getUser(ctx)
+	_, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
 
 	// TODO(labkode): with the grpc plugin we can create a file touching with xattrs.
 	// Current mechanism is: touch to hidden location, set xattr, rename.
+	fn := fs.wrap(ctx, p)
 	dir, base := path.Split(fn)
 	tmp := path.Join(dir, fmt.Sprintf(".sys.reva#.%s", base))
 	cboxAuth := utils.GetEmptyAuth()
 
-	if err := fs.c.CreateDir(ctx, auth, tmp); err != nil {
+	if err := fs.c.CreateDir(ctx, cboxAuth, tmp); err != nil {
 		err = errors.Wrapf(err, "eosfs: error creating temporary ref file")
 		return err
 	}
@@ -1523,7 +1484,7 @@ func (fs *eosfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) e
 }
 
 func (fs *eosfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
-	fn, auth, err := fs.resolveRefForbidShareFolder(ctx, ref)
+	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
@@ -1555,7 +1516,7 @@ func (fs *eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]
 			return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to list revisions")
 		}
 	} else {
-		fn, auth, err = fs.resolveRefForbidShareFolder(ctx, ref)
+		fn, auth, err = fs.resolveRefAndGetAuth(ctx, ref)
 		if err != nil {
 			return nil, err
 		}
@@ -1598,7 +1559,7 @@ func (fs *eosfs) DownloadRevision(ctx context.Context, ref *provider.Reference, 
 			return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to download revisions")
 		}
 	} else {
-		fn, auth, err = fs.resolveRefForbidShareFolder(ctx, ref)
+		fn, auth, err = fs.resolveRefAndGetAuth(ctx, ref)
 		if err != nil {
 			return nil, err
 		}
@@ -1631,7 +1592,7 @@ func (fs *eosfs) RestoreRevision(ctx context.Context, ref *provider.Reference, r
 			return errtypes.PermissionDenied("eosfs: user doesn't have permissions to restore revisions")
 		}
 	} else {
-		fn, auth, err = fs.resolveRefForbidShareFolder(ctx, ref)
+		fn, auth, err = fs.resolveRefAndGetAuth(ctx, ref)
 		if err != nil {
 			return err
 		}
