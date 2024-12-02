@@ -313,7 +313,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 				keepUpload = true
 				metrics.UploadSessionsAborted.Inc()
 			case events.PPOutcomeContinue:
-				if err := session.Finalize(); err != nil {
+				if err := session.Finalize(ctx); err != nil {
 					sublog.Error().Err(err).Msg("could not finalize upload")
 					failed = true
 					revertNodeMetadata = false

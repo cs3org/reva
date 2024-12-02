@@ -218,6 +218,8 @@ func (n *Node) MarshalJSON() ([]byte, error) {
 
 // Type returns the node's resource type
 func (n *Node) Type(ctx context.Context) provider.ResourceType {
+	_, span := tracer.Start(ctx, "Type")
+	defer span.End()
 	if n.nodeType != nil {
 		return *n.nodeType
 	}
@@ -446,6 +448,8 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 
 // ParentWithReader returns the parent node
 func (n *Node) ParentWithReader(ctx context.Context, r io.Reader) (*Node, error) {
+	_, span := tracer.Start(ctx, "ParentWithReader")
+	defer span.End()
 	if n.ParentID == "" {
 		return nil, fmt.Errorf("decomposedfs: root has no parent")
 	}
