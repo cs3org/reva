@@ -783,26 +783,16 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, userAuth eosclient.Autho
 	}
 
 	if c.opt.VersionInvariant && !isVersionFolder(path) && !info.IsDir {
-
-		u, err := getUser(ctx)
-		if err != nil {
-			return nil, err
+		// Here we have to create a missing version folder, irrespective from the user (that could be a sharee, or a lw account, or...)
+		// Therefore, we impersonate the owner of the file
+		ownerAuth := eosclient.Authorization{
+			Role: eosclient.Role{
+				UID: strconv.FormatUint(info.UID, 10),
+				GID: strconv.FormatUint(info.GID, 10),
+			},
 		}
 
-		// In case the user is a lightweight / ... account, aka he has no UID, we impersonate the owner of the file
-		var userOrImpersonated eosclient.Authorization
-		if utils.IsLightweightUser(u) {
-			userOrImpersonated = eosclient.Authorization{
-				Role: eosclient.Role{
-					UID: strconv.FormatUint(info.UID, 10),
-					GID: strconv.FormatUint(info.GID, 10),
-				},
-			}
-		} else {
-			userOrImpersonated = userAuth
-		}
-
-		inode, err := c.getOrCreateVersionFolderInode(ctx, userOrImpersonated, path)
+		inode, err := c.getOrCreateVersionFolderInode(ctx, ownerAuth, path)
 		if err != nil {
 			return nil, err
 		}
@@ -1714,17 +1704,17 @@ func (c *Client) GenerateToken(ctx context.Context, auth eosclient.Authorization
 	return "", err
 }
 
-func (c *Client) getOrCreateVersionFolderInode(ctx context.Context, auth eosclient.Authorization, p string) (uint64, error) {
+func (c *Client) getOrCreateVersionFolderInode(ctx context.Context, ownerAuth eosclient.Authorization, p string) (uint64, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "getOrCreateVersionFolderInode").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("p", p).Msg("")
+	log.Info().Str("func", "getOrCreateVersionFolderInode").Str("uid,gid", ownerAuth.Role.UID+","+ownerAuth.Role.GID).Str("p", p).Msg("")
 
 	versionFolder := getVersionFolder(p)
-	md, err := c.GetFileInfoByPath(ctx, auth, versionFolder)
+	md, err := c.GetFileInfoByPath(ctx, ownerAuth, versionFolder)
 	if err != nil {
-		if err = c.CreateDir(ctx, auth, versionFolder); err != nil {
+		if err = c.CreateDir(ctx, ownerAuth, versionFolder); err != nil {
 			return 0, err
 		}
-		md, err = c.GetFileInfoByPath(ctx, auth, versionFolder)
+		md, err = c.GetFileInfoByPath(ctx, ownerAuth, versionFolder)
 		if err != nil {
 			return 0, err
 		}
