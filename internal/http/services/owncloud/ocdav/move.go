@@ -224,6 +224,11 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	if srcStatRes.GetInfo().GetSpace().GetSpaceType() == "project" && isPathInList(ctx, client, src, ".space", ".space/readme.md") {
+		log.Error().Msg("moving spaces meta file is not allowed")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
 
 	// check dst exists
 	dstStatReq := &provider.StatRequest{Ref: dst}
