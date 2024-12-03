@@ -26,9 +26,6 @@ type Config struct {
 	// QuotaNode for storing quota information
 	QuotaNode string `mapstructure:"quota_node"`
 
-	// UploadsNamespace for storing upload data
-	UploadsNamespace string `mapstructure:"uploads_namespace"`
-
 	// Location of the eos binary.
 	// Default is /usr/bin/eos.
 	EosBinary string `mapstructure:"eos_binary"`
