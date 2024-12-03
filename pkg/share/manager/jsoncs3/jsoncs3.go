@@ -936,7 +936,13 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 				}
 				for shareID, state := range w.rspace.States {
 					s, err := m.Cache.Get(ctx, storageID, spaceID, shareID, true)
-					if err != nil || s == nil {
+					if err != nil {
+						sublogr.Error().Err(err).Msg("could not retrieve share")
+						continue
+					}
+					if s == nil {
+						sublogr.Warn().Str("shareid", shareID).Msg("share not found. cleaning up")
+						_ = m.UserReceivedStates.Remove(ctx, user.Id.OpaqueId, w.ssid, shareID)
 						continue
 					}
 					sublogr = sublogr.With().Str("shareid", shareID).Logger()
