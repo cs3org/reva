@@ -936,7 +936,13 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 				}
 				for shareID, state := range w.rspace.States {
 					s, err := m.Cache.Get(ctx, storageID, spaceID, shareID, true)
-					if err != nil || s == nil {
+					if err != nil {
+						sublogr.Error().Err(err).Msg("could not retrieve share")
+						continue
+					}
+					if s == nil {
+						sublogr.Warn().Str("shareid", shareID).Msg("share not found. cleaning up")
+						_ = m.UserReceivedStates.Remove(ctx, user.Id.OpaqueId, w.ssid, shareID)
 						continue
 					}
 					sublogr = sublogr.With().Str("shareid", shareID).Logger()
@@ -1226,4 +1232,52 @@ func (m *Manager) removeShare(ctx context.Context, s *collaboration.Share, skipS
 	})
 
 	return eg.Wait()
+}
+
+func (m *Manager) CleanupStaleShares(ctx context.Context) {
+	log := appctx.GetLogger(ctx)
+
+	if err := m.initialize(ctx); err != nil {
+		return
+	}
+
+	// list all shares
+	providers, err := m.Cache.All(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("error listing all shares")
+		return
+	}
+
+	client, err := m.gatewaySelector.Next()
+	if err != nil {
+		log.Error().Err(err).Msg("could not get gateway client")
+	}
+
+	providers.Range(func(storage string, spaces *providercache.Spaces) bool {
+		log.Info().Str("storage", storage).Interface("spaceCount", spaces.Spaces.Count()).Msg("checking storage")
+
+		spaces.Spaces.Range(func(space string, shares *providercache.Shares) bool {
+			log.Info().Str("storage", storage).Str("space", space).Interface("shareCount", len(shares.Shares)).Msg("checking space")
+
+			for _, s := range shares.Shares {
+				req := &provider.StatRequest{
+					Ref: &provider.Reference{ResourceId: s.ResourceId, Path: "."},
+				}
+				res, err := client.Stat(ctx, req)
+				if err != nil {
+					log.Error().Err(err).Str("storage", storage).Str("space", space).Msg("could not stat shared resource")
+				}
+				if res.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND {
+					log.Info().Str("storage", storage).Str("space", space).Msg("shared resource does not exist anymore. cleaning up shares")
+					if err := m.removeShare(ctx, s, false); err != nil {
+						log.Error().Err(err).Str("storage", storage).Str("space", space).Msg("could not remove share")
+					}
+				}
+			}
+
+			return true
+		})
+
+		return true
+	})
 }
