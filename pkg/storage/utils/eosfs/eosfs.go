@@ -91,16 +91,6 @@ func (c *Config) ApplyDefaults() {
 		c.QuotaNode = c.Namespace
 	}
 
-	if c.DefaultQuotaBytes == 0 {
-		c.DefaultQuotaBytes = 2000000000000 // 1 TB logical
-	}
-	if c.DefaultSecondaryQuotaBytes == 0 {
-		c.DefaultSecondaryQuotaBytes = c.DefaultQuotaBytes
-	}
-	if c.DefaultQuotaFiles == 0 {
-		c.DefaultQuotaFiles = 1000000 // 1 Million
-	}
-
 	if c.EosBinary == "" {
 		c.EosBinary = "/usr/bin/eos"
 	}
@@ -1270,23 +1260,20 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 		return errors.Wrap(err, "eosfs: error verifying if user home directory exists")
 	}
 
-	// set quota for user, depending on its type
-	quotaBytes := fs.conf.DefaultQuotaBytes
-	if u.Id.Type != userpb.UserType_USER_TYPE_PRIMARY {
-		quotaBytes = fs.conf.DefaultSecondaryQuotaBytes
-	}
+	log := appctx.GetLogger(ctx)
+	log.Info().Interface("user", u.Id).Msg("creating user home")
 
 	if fs.conf.CreateHomeHook != "" {
-		err = exec.Command(fs.conf.CreateHomeHook, u.Username, strconv.FormatUint(quotaBytes, 10), strconv.FormatUint(fs.conf.DefaultQuotaFiles, 10)).Run()
+		hook := exec.Command(fs.conf.CreateHomeHook, u.Username, utils.UserTypeToString(u.Id.Type))
+		err = hook.Run()
+		log.Info().Interface("output", hook.Stdout).Err(err).Msg("create_home_hook output")
 		if err != nil {
-			return errors.Wrap(err, "eosfs: error running post create home hook")
+			return errors.Wrap(err, "eosfs: error running create home hook")
 		}
 	} else {
+		log.Fatal().Msg("create_home_hook not configured")
 		return errtypes.NotFound("eosfs: create home hook not configured")
 	}
-
-	log := appctx.GetLogger(ctx)
-	log.Info().Uint64("quotaBytes", quotaBytes).Interface("user", u.Id).Msg("created nominal home")
 
 	return nil
 }
