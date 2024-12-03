@@ -469,7 +469,11 @@ func (c *Cache) PurgeSpace(ctx context.Context, storageID, spaceID string) error
 	if !ok {
 		return nil
 	}
-	spaces.Spaces.Store(spaceID, &Shares{})
+	newShares := &Shares{}
+	if space, ok := spaces.Spaces.Load(spaceID); ok {
+		newShares.Etag = space.Etag // keep the etag to allow overwriting the state on the server
+	}
+	spaces.Spaces.Store(spaceID, newShares)
 
 	return c.Persist(ctx, storageID, spaceID)
 }
