@@ -39,6 +39,7 @@ import (
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -230,28 +231,40 @@ func (c *Client) getRespError(rsp *erpc.NSResponse, err error) error {
 
 // Common code to create and initialize a NSRequest.
 func (c *Client) initNSRequest(ctx context.Context, auth eosclient.Authorization, app string) (*erpc.NSRequest, error) {
-	// Stuff filename, uid, gid into the MDRequest type
-
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("(uid,gid)", "("+auth.Role.UID+","+auth.Role.GID+")").Msg("New grpcNS req")
 
 	rq := new(erpc.NSRequest)
 	rq.Role = new(erpc.RoleId)
 
-	uidInt, err := strconv.ParseUint(auth.Role.UID, 10, 64)
-	if err != nil {
-		return nil, err
+	// Let's put in the authentication info
+	if auth.Token != "" {
+		// Map to owner using EOSAUTHZ token
+		// We do not become cbox
+		rq.Authkey = auth.Token
+	} else {
+		// We take the secret key from the config, which maps on EOS to cbox
+		// cbox is a sudo'er, so we become the user specified in UID/GID, if it is set
+		rq.Authkey = c.opt.Authkey
+
+		if auth.Role.UID != "" && auth.Role.GID != "" {
+			uidInt, err := strconv.ParseUint(auth.Role.UID, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			gidInt, err := strconv.ParseUint(auth.Role.GID, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			rq.Role.Uid = uidInt
+			rq.Role.Gid = gidInt
+		}
 	}
-	gidInt, err := strconv.ParseUint(auth.Role.GID, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	rq.Role.Uid = uidInt
-	rq.Role.Gid = gidInt
+
+	// For NS operations, specifically for locking, we also need to provide the app
 	if app != "" {
 		rq.Role.App = app
 	}
-	rq.Authkey = c.opt.Authkey
 
 	return rq, nil
 }
@@ -263,23 +276,33 @@ func (c *Client) initMDRequest(ctx context.Context, auth eosclient.Authorization
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("(uid,gid)", "("+auth.Role.UID+","+auth.Role.GID+")").Msg("New grpcMD req")
 
-	mdrq := new(erpc.MDRequest)
-	mdrq.Role = new(erpc.RoleId)
+	rq := new(erpc.MDRequest)
+	rq.Role = new(erpc.RoleId)
 
-	uidInt, err := strconv.ParseUint(auth.Role.UID, 10, 64)
-	if err != nil {
-		return nil, err
+	if auth.Token != "" {
+		// Map to owner using EOSAUTHZ token
+		// We do not become cbox
+		rq.Authkey = auth.Token
+	} else {
+		// We take the secret key from the config, which maps on EOS to cbox
+		// cbox is a sudo'er, so we become the user specified in UID/GID, if it is set
+		rq.Authkey = c.opt.Authkey
+
+		if auth.Role.UID != "" && auth.Role.GID != "" {
+			uidInt, err := strconv.ParseUint(auth.Role.UID, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			gidInt, err := strconv.ParseUint(auth.Role.GID, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			rq.Role.Uid = uidInt
+			rq.Role.Gid = gidInt
+		}
 	}
-	gidInt, err := strconv.ParseUint(auth.Role.GID, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	mdrq.Role.Uid = uidInt
-	mdrq.Role.Gid = gidInt
 
-	mdrq.Authkey = c.opt.Authkey
-
-	return mdrq, nil
+	return rq, nil
 }
 
 // AddACL adds an new acl to EOS with the given aclType.
@@ -711,12 +734,16 @@ func getAttribute(key, val string) (*eosclient.Attribute, error) {
 }
 
 // GetFileInfoByPath returns the FilInfo at the given path.
-func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authorization, path string) (*eosclient.FileInfo, error) {
+func (c *Client) GetFileInfoByPath(ctx context.Context, userAuth eosclient.Authorization, path string) (*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
-	log.Debug().Str("func", "GetFileInfoByPath").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("entering")
+	log.Debug().Str("func", "GetFileInfoByPath").Str("uid,gid", userAuth.Role.UID+","+userAuth.Role.GID).Str("path", path).Msg("entering")
+
+	daemonAuth := utils.GetDaemonAuth()
 
 	// Initialize the common fields of the MDReq
-	mdrq, err := c.initMDRequest(ctx, auth)
+	// We do this as the daemon account, because the user may not have access to the file
+	// e.g. in the case of a guest account
+	mdrq, err := c.initMDRequest(ctx, daemonAuth)
 	if err != nil {
 		return nil, err
 	}
@@ -756,7 +783,16 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 	}
 
 	if c.opt.VersionInvariant && !isVersionFolder(path) && !info.IsDir {
-		inode, err := c.getVersionFolderInode(ctx, auth, path)
+		// Here we have to create a missing version folder, irrespective from the user (that could be a sharee, or a lw account, or...)
+		// Therefore, we impersonate the owner of the file
+		ownerAuth := eosclient.Authorization{
+			Role: eosclient.Role{
+				UID: strconv.FormatUint(info.UID, 10),
+				GID: strconv.FormatUint(info.GID, 10),
+			},
+		}
+
+		inode, err := c.getOrCreateVersionFolderInode(ctx, ownerAuth, path)
 		if err != nil {
 			return nil, err
 		}
@@ -764,7 +800,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 	}
 
 	log.Info().Str("func", "GetFileInfoByPath").Str("path", path).Uint64("info.Inode", info.Inode).Uint64("size", info.Size).Str("etag", info.ETag).Msg("result")
-	return c.fixupACLs(ctx, auth, info), nil
+	return c.fixupACLs(ctx, daemonAuth, info), nil
 }
 
 // GetFileInfoByFXID returns the FileInfo by the given file id in hexadecimal.
@@ -817,13 +853,9 @@ func (c *Client) GetQuota(ctx context.Context, username string, rootAuth eosclie
 		return nil, errtypes.InternalError(fmt.Sprintf("Quota error from eos. info: '%#v'", resp.Quota))
 	}
 
-	qi := new(eosclient.QuotaInfo)
-	if resp == nil {
-		return nil, errtypes.InternalError("Out of memory")
-	}
-
 	// Let's loop on all the quotas that match this uid (apparently there can be many)
 	// If there are many for this node, we sum them up
+	qi := new(eosclient.QuotaInfo)
 	for i := 0; i < len(resp.Quota.Quotanode); i++ {
 		log.Debug().Str("func", "GetQuota").Str("quotanode:", fmt.Sprintf("%d: %#v", i, resp.Quota.Quotanode[i])).Msg("")
 
@@ -1193,9 +1225,9 @@ func (c *Client) Rename(ctx context.Context, auth eosclient.Authorization, oldPa
 }
 
 // List the contents of the directory given by path.
-func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath string) ([]*eosclient.FileInfo, error) {
+func (c *Client) List(ctx context.Context, userAuth eosclient.Authorization, dpath string) ([]*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "List").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("dpath", dpath).Msg("")
+	log.Info().Str("func", "List").Str("uid,gid", userAuth.Role.UID+","+userAuth.Role.GID).Str("dpath", dpath).Msg("")
 
 	// Stuff filename, uid, gid into the FindRequest type
 	fdrq := new(erpc.FindRequest)
@@ -1205,6 +1237,13 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 	fdrq.Id.Path = []byte(dpath)
 
 	fdrq.Role = new(erpc.RoleId)
+
+	var auth eosclient.Authorization
+	if userAuth.Role.UID == "" || userAuth.Role.GID == "" {
+		auth = utils.GetDaemonAuth()
+	} else {
+		auth = userAuth
+	}
 
 	uidInt, err := strconv.ParseUint(auth.Role.UID, 10, 64)
 	if err != nil {
@@ -1661,17 +1700,17 @@ func (c *Client) GenerateToken(ctx context.Context, auth eosclient.Authorization
 	return "", err
 }
 
-func (c *Client) getVersionFolderInode(ctx context.Context, auth eosclient.Authorization, p string) (uint64, error) {
+func (c *Client) getOrCreateVersionFolderInode(ctx context.Context, ownerAuth eosclient.Authorization, p string) (uint64, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "getVersionFolderInode").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("p", p).Msg("")
+	log.Info().Str("func", "getOrCreateVersionFolderInode").Str("uid,gid", ownerAuth.Role.UID+","+ownerAuth.Role.GID).Str("p", p).Msg("")
 
 	versionFolder := getVersionFolder(p)
-	md, err := c.GetFileInfoByPath(ctx, auth, versionFolder)
+	md, err := c.GetFileInfoByPath(ctx, ownerAuth, versionFolder)
 	if err != nil {
-		if err = c.CreateDir(ctx, auth, versionFolder); err != nil {
+		if err = c.CreateDir(ctx, ownerAuth, versionFolder); err != nil {
 			return 0, err
 		}
-		md, err = c.GetFileInfoByPath(ctx, auth, versionFolder)
+		md, err = c.GetFileInfoByPath(ctx, ownerAuth, versionFolder)
 		if err != nil {
 			return 0, err
 		}
