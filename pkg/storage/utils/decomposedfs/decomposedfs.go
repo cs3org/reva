@@ -238,7 +238,7 @@ func New(o *options.Options, aspects aspects.Aspects, log *zerolog.Logger) (stor
 		spaceTypeIndex:  spaceTypeIndex,
 		log:             log,
 	}
-	fs.sessionStore = upload.NewSessionStore(fs, aspects, o.Root, o.AsyncFileUploads, o.Tokens)
+	fs.sessionStore = upload.NewSessionStore(fs, aspects, o.Root, o.AsyncFileUploads, o.Tokens, log)
 	if err = fs.trashbin.Setup(fs); err != nil {
 		return nil, err
 	}
