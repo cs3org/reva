@@ -54,7 +54,7 @@ func main() {
 	}
 
 	// also the build is okay
-	cmd := exec.Command("make", "all")
+	cmd := exec.Command("make", "gen-doc")
 	run(cmd)
 
 	fmt.Printf("Generating new release: version=%s\n", *version)
