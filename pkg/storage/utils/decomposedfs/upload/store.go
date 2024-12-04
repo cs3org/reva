@@ -28,6 +28,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -129,24 +130,19 @@ func (store OcisStore) Get(ctx context.Context, id string) (*OcisSession, error)
 		store: store,
 		info:  tusd.FileInfo{},
 	}
-	lock, err := lockedfile.Open(sessionPath + ".lock")
-	if err != nil {
-		if errors.Is(err, iofs.ErrNotExist) {
-			// Interpret os.ErrNotExist as 404 Not Found
-			err = tusd.ErrNotFound
-		}
-		return nil, err
-	}
-	defer lock.Close()
 	data, err := os.ReadFile(sessionPath)
 	if err != nil {
+		// handle stale NFS file handles that can occur when the file is deleted betwenn the ATTR and FOPEN call of os.ReadFile
+		if pathErr, ok := err.(*os.PathError); ok && pathErr.Err == syscall.ESTALE {
+			appctx.GetLogger(ctx).Info().Str("session", id).Err(err).Msg("treating stale file handle as not found")
+			err = tusd.ErrNotFound
+		}
 		if errors.Is(err, iofs.ErrNotExist) {
 			// Interpret os.ErrNotExist as 404 Not Found
 			err = tusd.ErrNotFound
 		}
 		return nil, err
 	}
-	lock.Close() // release lock asap
 
 	if err := json.Unmarshal(data, &session.info); err != nil {
 		return nil, err
