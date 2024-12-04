@@ -853,13 +853,9 @@ func (c *Client) GetQuota(ctx context.Context, username string, rootAuth eosclie
 		return nil, errtypes.InternalError(fmt.Sprintf("Quota error from eos. info: '%#v'", resp.Quota))
 	}
 
-	qi := new(eosclient.QuotaInfo)
-	if resp == nil {
-		return nil, errtypes.InternalError("Out of memory")
-	}
-
 	// Let's loop on all the quotas that match this uid (apparently there can be many)
 	// If there are many for this node, we sum them up
+	qi := new(eosclient.QuotaInfo)
 	for i := 0; i < len(resp.Quota.Quotanode); i++ {
 		log.Debug().Str("func", "GetQuota").Str("quotanode:", fmt.Sprintf("%d: %#v", i, resp.Quota.Quotanode[i])).Msg("")
 
