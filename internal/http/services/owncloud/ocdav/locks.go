@@ -84,6 +84,7 @@ type lockInfo struct {
 	Shared    *struct{} `xml:"lockscope>shared"`
 	Write     *struct{} `xml:"locktype>write"`
 	Owner     owner     `xml:"owner"`
+	LockID    string    `xml:"locktoken>href"`
 }
 
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_owner
@@ -184,13 +185,6 @@ func (cls *cs3LS) Create(ctx context.Context, now time.Time, details LockDetails
 		}
 	*/
 
-	// Having a lock token provides no special access rights. Anyone can find out anyone
-	// else's lock token by performing lock discovery. Locks must be enforced based upon
-	// whatever authentication mechanism is used by the server, not based on the secrecy
-	// of the token values.
-	// see: http://www.webdav.org/specs/rfc2518.html#n-lock-tokens
-	token := uuid.New()
-
 	u := ctxpkg.ContextMustGetUser(ctx)
 
 	// add metadata via opaque
@@ -198,6 +192,17 @@ func (cls *cs3LS) Create(ctx context.Context, now time.Time, details LockDetails
 	o := utils.AppendPlainToOpaque(nil, "lockownername", u.GetDisplayName())
 	o = utils.AppendPlainToOpaque(o, "locktime", now.Format(time.RFC3339))
 
+	lockid := details.LockID
+	if lockid == "" {
+		// Having a lock token provides no special access rights. Anyone can find out anyone
+		// else's lock token by performing lock discovery. Locks must be enforced based upon
+		// whatever authentication mechanism is used by the server, not based on the secrecy
+		// of the token values.
+		// see: http://www.webdav.org/specs/rfc2518.html#n-lock-tokens
+		token := uuid.New()
+
+		lockid = lockTokenPrefix + token.String()
+	}
 	r := &provider.SetLockRequest{
 		Ref: details.Root,
 		Lock: &provider.Lock{
@@ -205,7 +210,7 @@ func (cls *cs3LS) Create(ctx context.Context, now time.Time, details LockDetails
 			Type:   provider.LockType_LOCK_TYPE_EXCL,
 			User:   details.UserID, // no way to set an app lock? TODO maybe via the ownerxml
 			//AppName: , // TODO use a urn scheme?
-			LockId: lockTokenPrefix + token.String(), // can be a token or a Coded-URL
+			LockId: lockid,
 		},
 	}
 	if details.Duration > 0 {
@@ -227,7 +232,7 @@ func (cls *cs3LS) Create(ctx context.Context, now time.Time, details LockDetails
 	}
 	switch res.GetStatus().GetCode() {
 	case rpc.Code_CODE_OK:
-		return lockTokenPrefix + token.String(), nil
+		return lockid, nil
 	default:
 		return "", ocdavErrors.NewErrFromStatus(res.GetStatus())
 	}
@@ -287,6 +292,8 @@ type LockDetails struct {
 	OwnerName string
 	// Locktime is the time the lock was created
 	Locktime time.Time
+	// LockID is the lock token
+	LockID string
 }
 
 func readLockInfo(r io.Reader) (li lockInfo, status int, err error) {
@@ -450,7 +457,7 @@ func (s *svc) lockReference(ctx context.Context, w http.ResponseWriter, r *http.
 
 	u := ctxpkg.ContextMustGetUser(ctx)
 	token, now, created := "", time.Now(), false
-	ld := LockDetails{UserID: u.Id, Root: ref, Duration: duration, OwnerName: u.GetDisplayName(), Locktime: now}
+	ld := LockDetails{UserID: u.Id, Root: ref, Duration: duration, OwnerName: u.GetDisplayName(), Locktime: now, LockID: li.LockID}
 	if li == (lockInfo{}) {
 		// An empty lockInfo means to refresh the lock.
 		ih, ok := parseIfHeader(r.Header.Get(net.HeaderIf))
