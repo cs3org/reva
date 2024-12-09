@@ -132,6 +132,10 @@ type Decomposedfs struct {
 
 // NewDefault returns an instance with default components
 func NewDefault(m map[string]interface{}, bs tree.Blobstore, es events.Stream, log *zerolog.Logger) (storage.FS, error) {
+	if log == nil {
+		log = &zerolog.Logger{}
+	}
+
 	o, err := options.New(m)
 	if err != nil {
 		return nil, err
@@ -178,6 +182,10 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore, es events.Stream, l
 // New returns an implementation of the storage.FS interface that talks to
 // a local filesystem.
 func New(o *options.Options, aspects aspects.Aspects, log *zerolog.Logger) (storage.FS, error) {
+	if log == nil {
+		log = &zerolog.Logger{}
+	}
+
 	err := aspects.Tree.Setup()
 	if err != nil {
 		log.Error().Err(err).Msg("could not setup tree")
