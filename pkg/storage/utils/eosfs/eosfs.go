@@ -258,15 +258,6 @@ func (fs *eosfs) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func getUser(ctx context.Context) (*userpb.User, error) {
-	u, ok := appctx.ContextGetUser(ctx)
-	if !ok {
-		err := errors.Wrap(errtypes.UserRequired(""), "eosfs: error getting user from ctx")
-		return nil, err
-	}
-	return u, nil
-}
-
 func (fs *eosfs) getLayout(ctx context.Context) (layout string) {
 	if fs.conf.EnableHome {
 		u := appctx.ContextMustGetUser(ctx)
@@ -351,7 +342,7 @@ func (fs *eosfs) resolveRefAndGetAuth(ctx context.Context, ref *provider.Referen
 		return "", eosclient.Authorization{}, errors.Wrap(err, "eosfs: error resolving reference")
 	}
 
-	u, err := getUser(ctx)
+	u, err := utils.GetUser(ctx)
 	if err != nil {
 		return "", eosclient.Authorization{}, errors.Wrap(err, "eosfs: no user in ctx")
 	}
@@ -388,7 +379,10 @@ func (fs *eosfs) getPath(ctx context.Context, id *provider.ResourceId) (string, 
 		return "", fmt.Errorf("error converting string to int for eos fileid: %s", id.OpaqueId)
 	}
 
-	auth := utils.GetDaemonAuth()
+	auth, err := fs.getDaemonAuth(ctx)
+	if err != nil {
+		return "", err
+	}
 
 	eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
 	if err != nil {
@@ -404,19 +398,19 @@ func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 		return "", errors.Wrap(err, "eosfs: error parsing fileid string")
 	}
 
-	u, err := getUser(ctx)
+	u, err := utils.GetUser(ctx)
 	if err != nil {
 		return "", errors.Wrap(err, "eosfs: no user in ctx")
 	}
 
 	var auth eosclient.Authorization
 	if utils.IsLightweightUser(u) {
-		auth = utils.GetDaemonAuth()
+		auth, err = fs.getDaemonAuth(ctx)
 	} else {
 		auth, err = fs.getUserAuth(ctx, u, "")
-		if err != nil {
-			return "", err
-		}
+	}
+	if err != nil {
+		return "", err
 	}
 
 	eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
@@ -589,7 +583,7 @@ func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: error resolving reference")
 	}
-	user, err := getUser(ctx)
+	user, err := utils.GetUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: no user in ctx")
 	}
@@ -652,7 +646,7 @@ func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provid
 		return errors.Wrap(err, "eosfs: error resolving reference")
 	}
 
-	user, err := getUser(ctx)
+	user, err := utils.GetUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
@@ -791,7 +785,7 @@ func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLo
 		}
 	}
 
-	user, err := getUser(ctx)
+	user, err := utils.GetUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error getting user")
 	}
@@ -857,7 +851,7 @@ func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 		return errtypes.BadRequest("caller does not hold the lock")
 	}
 
-	user, err := getUser(ctx)
+	user, err := utils.GetUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error getting user")
 	}
@@ -1125,7 +1119,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	// We use daemon for auth because we need access to the file in order to stat it
 	// We cannot use the current user, because the file may be a shared file
 	// and lightweight accounts don't have a uid
-	auth := utils.GetDaemonAuth()
+	auth, err := fs.getDaemonAuth(ctx)
 
 	if ref.ResourceId != nil {
 		fid, err := strconv.ParseUint(ref.ResourceId.OpaqueId, 10, 64)
@@ -1168,14 +1162,15 @@ func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 	log := appctx.GetLogger(ctx)
 	fn := fs.wrap(ctx, p)
 
-	u, err := getUser(ctx)
+	u, err := utils.GetUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: no user in ctx")
 	}
-	auth, err := fs.getUserAuth(ctx, u, fn)
+	userAuth, err := fs.getUserAuth(ctx, u, fn)
 	if err != nil {
 		return nil, err
 	}
+	auth := utils.GetUserOrDaemonAuth(userAuth)
 
 	eosFileInfos, err := fs.c.List(ctx, auth, fn)
 	if err != nil {
@@ -1208,7 +1203,7 @@ func (fs *eosfs) CreateStorageSpace(ctx context.Context, req *provider.CreateSto
 }
 
 func (fs *eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, error) {
-	u, err := getUser(ctx)
+	u, err := utils.GetUser(ctx)
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "eosfs: no user in ctx")
 	}
@@ -1241,7 +1236,7 @@ func (fs *eosfs) GetHome(ctx context.Context) (string, error) {
 func (fs *eosfs) createNominalHome(ctx context.Context) error {
 	home := fs.wrap(ctx, "/")
 
-	u, err := getUser(ctx)
+	u, err := utils.GetUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
@@ -1357,7 +1352,7 @@ func (fs *eosfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
 	}
-	u, err := getUser(ctx)
+	u, err := utils.GetUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
@@ -1388,7 +1383,7 @@ func (fs *eosfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
 }
 
 func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) error {
-	_, err := getUser(ctx)
+	_, err := utils.GetUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
@@ -1431,7 +1426,7 @@ func (fs *eosfs) Delete(ctx context.Context, ref *provider.Reference) error {
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
 	}
-	u, err := getUser(ctx)
+	u, err := utils.GetUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
@@ -1446,7 +1441,7 @@ func (fs *eosfs) Delete(ctx context.Context, ref *provider.Reference) error {
 }
 
 func (fs *eosfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
-	u, err := getUser(ctx)
+	u, err := utils.GetUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
@@ -1503,10 +1498,12 @@ func (fs *eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]
 			return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to list revisions")
 		}
 	} else {
-		fn, auth, err = fs.resolveRefForbidShareFolder(ctx, ref)
+		var userAuth eosclient.Authorization
+		fn, userAuth, err = fs.resolveRefAndGetAuth(ctx, ref)
 		if err != nil {
 			return nil, err
 		}
+		auth = utils.GetUserOrDaemonAuth(userAuth)
 	}
 
 	eosRevisions, err := fs.c.ListVersions(ctx, auth, fn)
@@ -1593,7 +1590,7 @@ func (fs *eosfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePa
 }
 
 func (fs *eosfs) EmptyRecycle(ctx context.Context) error {
-	u, err := getUser(ctx)
+	u, err := utils.GetUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
@@ -1626,7 +1623,7 @@ func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 		}
 	} else {
 		// We just act on the logged-in user's recycle bin
-		u, err := getUser(ctx)
+		u, err := utils.GetUser(ctx)
 		if err != nil {
 			return nil, errors.Wrap(err, "eosfs: no user in ctx")
 		}
@@ -1696,7 +1693,7 @@ func (fs *eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relative
 		}
 	} else {
 		// We just act on the logged-in user's recycle bin
-		u, err := getUser(ctx)
+		u, err := utils.GetUser(ctx)
 		if err != nil {
 			return errors.Wrap(err, "eosfs: no user in ctx")
 		}
@@ -2092,7 +2089,7 @@ func (fs *eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eo
 		return eosclient.Authorization{}, errtypes.BadRequest("eosfs: path cannot be empty")
 	}
 
-	daemonAuth := utils.GetDaemonAuth()
+	daemonAuth, err := fs.getDaemonAuth(ctx)
 	info, err := fs.c.GetFileInfoByPath(ctx, daemonAuth, fn)
 	if err != nil {
 		return eosclient.Authorization{}, err
@@ -2148,6 +2145,10 @@ func (fs *eosfs) getRootAuth(ctx context.Context) (eosclient.Authorization, erro
 	return eosclient.Authorization{Role: eosclient.Role{UID: "0", GID: "0"}}, nil
 }
 
+// Returns an eosclient.Authorization object with the uid/gid of the daemon user
+// This is a system user with read-only access to files.
+// We use it e.g. when retrieving metadata from a file when accessing through a guest account,
+// so we can look up which user to impersonate (i.e. the owner)
 func (fs *eosfs) getDaemonAuth(ctx context.Context) (eosclient.Authorization, error) {
 	if fs.conf.ForceSingleUserMode {
 		if fs.singleUserAuth.Role.UID != "" && fs.singleUserAuth.Role.GID != "" {
