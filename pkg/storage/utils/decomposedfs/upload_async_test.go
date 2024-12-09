@@ -172,7 +172,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 		// setup fs
 		pub, con = make(chan interface{}), make(chan interface{})
-		tree := tree.New(lu, bs, o, store.Create())
+		tree := tree.New(lu, bs, o, store.Create(), &zerolog.Logger{})
 
 		aspects := aspects.Aspects{
 			Lookup:      lu,

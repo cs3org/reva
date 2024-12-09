@@ -35,7 +35,6 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
@@ -49,12 +48,7 @@ type OcisSession struct {
 
 // Context returns a context with the user, logger and lockid used when initiating the upload session
 func (s *OcisSession) Context(ctx context.Context) context.Context { // restore logger from file info
-	log, _ := logger.FromConfig(&logger.LogConf{
-		Output: "stderr", // TODO use config from decomposedfs
-		Mode:   "json",   // TODO use config from decomposedfs
-		Level:  s.info.Storage["LogLevel"],
-	})
-	sub := log.With().Int("pid", os.Getpid()).Logger()
+	sub := s.store.log.With().Int("pid", os.Getpid()).Logger()
 	ctx = appctx.WithLogger(ctx, &sub)
 	ctx = ctxpkg.ContextSetLockID(ctx, s.lockID())
 	ctx = ctxpkg.ContextSetUser(ctx, s.executantUser())
