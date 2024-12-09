@@ -247,17 +247,10 @@ func (c *Client) initNSRequest(ctx context.Context, auth eosclient.Authorization
 		// cbox is a sudo'er, so we become the user specified in UID/GID, if it is set
 		rq.Authkey = c.opt.Authkey
 
-		if auth.Role.UID != "" && auth.Role.GID != "" {
-			uidInt, err := strconv.ParseUint(auth.Role.UID, 10, 64)
-			if err != nil {
-				return nil, err
-			}
-			gidInt, err := strconv.ParseUint(auth.Role.GID, 10, 64)
-			if err != nil {
-				return nil, err
-			}
-			rq.Role.Uid = uidInt
-			rq.Role.Gid = gidInt
+		uid, gid, err := utils.ExtractUidGid(auth)
+		if err == nil {
+			rq.Role.Uid = uid
+			rq.Role.Gid = gid
 		}
 	}
 
@@ -288,17 +281,10 @@ func (c *Client) initMDRequest(ctx context.Context, auth eosclient.Authorization
 		// cbox is a sudo'er, so we become the user specified in UID/GID, if it is set
 		rq.Authkey = c.opt.Authkey
 
-		if auth.Role.UID != "" && auth.Role.GID != "" {
-			uidInt, err := strconv.ParseUint(auth.Role.UID, 10, 64)
-			if err != nil {
-				return nil, err
-			}
-			gidInt, err := strconv.ParseUint(auth.Role.GID, 10, 64)
-			if err != nil {
-				return nil, err
-			}
-			rq.Role.Uid = uidInt
-			rq.Role.Gid = gidInt
+		uid, gid, err := utils.ExtractUidGid(auth)
+		if err == nil {
+			rq.Role.Uid = uid
+			rq.Role.Gid = gid
 		}
 	}
 
@@ -738,12 +724,13 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, userAuth eosclient.Autho
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("func", "GetFileInfoByPath").Str("uid,gid", userAuth.Role.UID+","+userAuth.Role.GID).Str("path", path).Msg("entering")
 
-	daemonAuth := utils.GetDaemonAuth()
+	// UserAuth may not be sufficient, because the user may not have access to the file
+	// e.g. in the case of a guest account. So we check if a uid/gid is set, and if not,
+	// revert to the daemon account
+	auth := utils.GetUserOrDaemonAuth(userAuth)
 
 	// Initialize the common fields of the MDReq
-	// We do this as the daemon account, because the user may not have access to the file
-	// e.g. in the case of a guest account
-	mdrq, err := c.initMDRequest(ctx, daemonAuth)
+	mdrq, err := c.initMDRequest(ctx, auth)
 	if err != nil {
 		return nil, err
 	}
@@ -800,7 +787,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, userAuth eosclient.Autho
 	}
 
 	log.Info().Str("func", "GetFileInfoByPath").Str("path", path).Uint64("info.Inode", info.Inode).Uint64("size", info.Size).Str("etag", info.ETag).Msg("result")
-	return c.fixupACLs(ctx, daemonAuth, info), nil
+	return c.fixupACLs(ctx, auth, info), nil
 }
 
 // GetFileInfoByFXID returns the FileInfo by the given file id in hexadecimal.
@@ -990,13 +977,11 @@ func (c *Client) Chown(ctx context.Context, auth, chownAuth eosclient.Authorizat
 
 	msg := new(erpc.NSRequest_ChownRequest)
 	msg.Owner = new(erpc.RoleId)
-	msg.Owner.Uid, err = strconv.ParseUint(chownAuth.Role.UID, 10, 64)
-	if err != nil {
-		return err
-	}
-	msg.Owner.Gid, err = strconv.ParseUint(chownAuth.Role.GID, 10, 64)
-	if err != nil {
-		return err
+
+	uid, gid, err := utils.ExtractUidGid(chownAuth)
+	if err == nil {
+		msg.Owner.Uid = uid
+		msg.Owner.Gid = gid
 	}
 
 	msg.Id = new(erpc.MDId)
@@ -1229,9 +1214,8 @@ func (c *Client) Rename(ctx context.Context, auth eosclient.Authorization, oldPa
 }
 
 // List the contents of the directory given by path.
-func (c *Client) List(ctx context.Context, userAuth eosclient.Authorization, dpath string) ([]*eosclient.FileInfo, error) {
+func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath string) ([]*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "List").Str("uid,gid", userAuth.Role.UID+","+userAuth.Role.GID).Str("dpath", dpath).Msg("")
 
 	// Stuff filename, uid, gid into the FindRequest type
 	fdrq := new(erpc.FindRequest)
@@ -1242,23 +1226,12 @@ func (c *Client) List(ctx context.Context, userAuth eosclient.Authorization, dpa
 
 	fdrq.Role = new(erpc.RoleId)
 
-	var auth eosclient.Authorization
-	if userAuth.Role.UID == "" || userAuth.Role.GID == "" {
-		auth = utils.GetDaemonAuth()
-	} else {
-		auth = userAuth
-	}
-
-	uidInt, err := strconv.ParseUint(auth.Role.UID, 10, 64)
+	uid, gid, err := utils.ExtractUidGid(auth)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Failed to extract uid/gid from auth")
 	}
-	gidInt, err := strconv.ParseUint(auth.Role.GID, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	fdrq.Role.Uid = uidInt
-	fdrq.Role.Gid = gidInt
+	fdrq.Role.Uid = uid
+	fdrq.Role.Gid = gid
 
 	fdrq.Authkey = c.opt.Authkey
 

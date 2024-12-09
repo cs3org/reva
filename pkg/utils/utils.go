@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -455,4 +456,32 @@ func GetDaemonAuth() eosclient.Authorization {
 // So, in other words, use this function if you want to use the cbox account.
 func GetEmptyAuth() eosclient.Authorization {
 	return eosclient.Authorization{}
+}
+
+// Returns the userAuth if this is a valid auth object,
+// otherwise returns daemonAuth
+func GetUserOrDaemonAuth(userAuth eosclient.Authorization) eosclient.Authorization {
+	if userAuth.Role.UID == "" || userAuth.Role.GID == "" {
+		return GetDaemonAuth()
+	} else {
+		return userAuth
+	}
+}
+
+// Extract uid and gid from auth object
+func ExtractUidGid(auth eosclient.Authorization) (uid, gid uint64, err error) {
+	// $ id nobody
+	// uid=65534(nobody) gid=65534(nobody) groups=65534(nobody)
+	nobody := uint64(65534)
+
+	uid, err = strconv.ParseUint(auth.Role.UID, 10, 64)
+	if err != nil {
+		return nobody, nobody, err
+	}
+	gid, err = strconv.ParseUint(auth.Role.GID, 10, 64)
+	if err != nil {
+		return nobody, nobody, err
+	}
+
+	return uid, gid, nil
 }

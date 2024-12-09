@@ -453,7 +453,10 @@ func (fs *eosfs) getPath(ctx context.Context, id *provider.ResourceId) (string, 
 		return "", fmt.Errorf("error converting string to int for eos fileid: %s", id.OpaqueId)
 	}
 
-	auth := utils.GetDaemonAuth()
+	auth, err := fs.getDaemonAuth(ctx)
+	if err != nil {
+		return "", err
+	}
 
 	eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
 	if err != nil {
@@ -490,12 +493,12 @@ func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 
 	var auth eosclient.Authorization
 	if utils.IsLightweightUser(u) {
-		auth = utils.GetDaemonAuth()
+		auth, err = fs.getDaemonAuth(ctx)
 	} else {
 		auth, err = fs.getUserAuth(ctx, u, "")
-		if err != nil {
-			return "", err
-		}
+	}
+	if err != nil {
+		return "", err
 	}
 
 	eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
@@ -1205,7 +1208,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	// We use daemon for auth because we need access to the file in order to stat it
 	// We cannot use the current user, because the file may be a shared file
 	// and lightweight accounts don't have a uid
-	auth := utils.GetDaemonAuth()
+	auth, err := fs.getDaemonAuth(ctx)
 
 	if ref.ResourceId != nil {
 		fid, err := strconv.ParseUint(ref.ResourceId.OpaqueId, 10, 64)
@@ -1292,10 +1295,11 @@ func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: no user in ctx")
 	}
-	auth, err := fs.getUserAuth(ctx, u, fn)
+	userAuth, err := fs.getUserAuth(ctx, u, fn)
 	if err != nil {
 		return nil, err
 	}
+	auth := utils.GetUserOrDaemonAuth(userAuth)
 
 	eosFileInfos, err := fs.c.List(ctx, auth, fn)
 	if err != nil {
@@ -1791,10 +1795,12 @@ func (fs *eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]
 			return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to list revisions")
 		}
 	} else {
-		fn, auth, err = fs.resolveRefForbidShareFolder(ctx, ref)
+		var userAuth eosclient.Authorization
+		fn, userAuth, err = fs.resolveRefAndGetAuth(ctx, ref)
 		if err != nil {
 			return nil, err
 		}
+		auth = utils.GetUserOrDaemonAuth(userAuth)
 	}
 
 	eosRevisions, err := fs.c.ListVersions(ctx, auth, fn)
@@ -2380,7 +2386,7 @@ func (fs *eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eo
 		return eosclient.Authorization{}, errtypes.BadRequest("eosfs: path cannot be empty")
 	}
 
-	daemonAuth := utils.GetDaemonAuth()
+	daemonAuth, err := fs.getDaemonAuth(ctx)
 	info, err := fs.c.GetFileInfoByPath(ctx, daemonAuth, fn)
 	if err != nil {
 		return eosclient.Authorization{}, err
@@ -2436,6 +2442,10 @@ func (fs *eosfs) getRootAuth(ctx context.Context) (eosclient.Authorization, erro
 	return eosclient.Authorization{Role: eosclient.Role{UID: "0", GID: "0"}}, nil
 }
 
+// Returns an eosclient.Authorization object with the uid/gid of the daemon user
+// This is a system user with read-only access to files.
+// We use it e.g. when retrieving metadata from a file when accessing through a guest account,
+// so we can look up which user to impersonate (i.e. the owner)
 func (fs *eosfs) getDaemonAuth(ctx context.Context) (eosclient.Authorization, error) {
 	if fs.conf.ForceSingleUserMode {
 		if fs.singleUserAuth.Role.UID != "" && fs.singleUserAuth.Role.GID != "" {
