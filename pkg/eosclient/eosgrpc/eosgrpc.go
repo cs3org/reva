@@ -34,11 +34,11 @@ import (
 	"time"
 
 	erpc "github.com/cern-eos/go-eosgrpc"
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -58,27 +58,12 @@ const (
 	UserAttr
 )
 
-func serializeAttribute(a *eosclient.Attribute) string {
-	return fmt.Sprintf("%s.%s=%s", attrTypeToString(a.Type), a.Key, a.Val)
-}
-
-func attrTypeToString(at eosclient.AttrType) string {
-	switch at {
-	case eosclient.SystemAttr:
-		return "sys"
-	case eosclient.UserAttr:
-		return "user"
-	default:
-		return "invalid"
-	}
-}
-
-func isValidAttribute(a *eosclient.Attribute) bool {
-	// validate that an attribute is correct.
-	if (a.Type != eosclient.SystemAttr && a.Type != eosclient.UserAttr) || a.Key == "" {
-		return false
-	}
-	return true
+// Client performs actions against a EOS management node (MGM)
+// using the EOS GRPC interface.
+type Client struct {
+	opt    *Options
+	httpcl *EOSHTTPClient
+	cl     erpc.EosClient
 }
 
 // Options to configure the Client.
@@ -131,15 +116,6 @@ type Options struct {
 	TokenExpiry int
 }
 
-func getUser(ctx context.Context) (*userpb.User, error) {
-	u, ok := appctx.ContextGetUser(ctx)
-	if !ok {
-		err := errors.Wrap(errtypes.UserRequired(""), "eosfs: error getting user from ctx")
-		return nil, err
-	}
-	return u, nil
-}
-
 func (opt *Options) init() {
 	if opt.XrdcopyBinary == "" {
 		opt.XrdcopyBinary = "/opt/eos/xrootd/bin/xrdcopy"
@@ -154,12 +130,27 @@ func (opt *Options) init() {
 	}
 }
 
-// Client performs actions against a EOS management node (MGM)
-// using the EOS GRPC interface.
-type Client struct {
-	opt    *Options
-	httpcl *EOSHTTPClient
-	cl     erpc.EosClient
+func serializeAttribute(a *eosclient.Attribute) string {
+	return fmt.Sprintf("%s.%s=%s", attrTypeToString(a.Type), a.Key, a.Val)
+}
+
+func attrTypeToString(at eosclient.AttrType) string {
+	switch at {
+	case eosclient.SystemAttr:
+		return "sys"
+	case eosclient.UserAttr:
+		return "user"
+	default:
+		return "invalid"
+	}
+}
+
+func isValidAttribute(a *eosclient.Attribute) bool {
+	// validate that an attribute is correct.
+	if (a.Type != eosclient.SystemAttr && a.Type != eosclient.UserAttr) || a.Key == "" {
+		return false
+	}
+	return true
 }
 
 // Create and connect a grpc eos Client.
@@ -230,28 +221,33 @@ func (c *Client) getRespError(rsp *erpc.NSResponse, err error) error {
 
 // Common code to create and initialize a NSRequest.
 func (c *Client) initNSRequest(ctx context.Context, auth eosclient.Authorization, app string) (*erpc.NSRequest, error) {
-	// Stuff filename, uid, gid into the MDRequest type
-
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("(uid,gid)", "("+auth.Role.UID+","+auth.Role.GID+")").Msg("New grpcNS req")
 
 	rq := new(erpc.NSRequest)
 	rq.Role = new(erpc.RoleId)
 
-	uidInt, err := strconv.ParseUint(auth.Role.UID, 10, 64)
-	if err != nil {
-		return nil, err
+	// Let's put in the authentication info
+	if auth.Token != "" {
+		// Map to owner using EOSAUTHZ token
+		// We do not become cbox
+		rq.Authkey = auth.Token
+	} else {
+		// We take the secret key from the config, which maps on EOS to cbox
+		// cbox is a sudo'er, so we become the user specified in UID/GID, if it is set
+		rq.Authkey = c.opt.Authkey
+
+		uid, gid, err := utils.ExtractUidGid(auth)
+		if err == nil {
+			rq.Role.Uid = uid
+			rq.Role.Gid = gid
+		}
 	}
-	gidInt, err := strconv.ParseUint(auth.Role.GID, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	rq.Role.Uid = uidInt
-	rq.Role.Gid = gidInt
+
+	// For NS operations, specifically for locking, we also need to provide the app
 	if app != "" {
 		rq.Role.App = app
 	}
-	rq.Authkey = c.opt.Authkey
 
 	return rq, nil
 }
@@ -263,23 +259,26 @@ func (c *Client) initMDRequest(ctx context.Context, auth eosclient.Authorization
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("(uid,gid)", "("+auth.Role.UID+","+auth.Role.GID+")").Msg("New grpcMD req")
 
-	mdrq := new(erpc.MDRequest)
-	mdrq.Role = new(erpc.RoleId)
+	rq := new(erpc.MDRequest)
+	rq.Role = new(erpc.RoleId)
 
-	uidInt, err := strconv.ParseUint(auth.Role.UID, 10, 64)
-	if err != nil {
-		return nil, err
+	if auth.Token != "" {
+		// Map to owner using EOSAUTHZ token
+		// We do not become cbox
+		rq.Authkey = auth.Token
+	} else {
+		// We take the secret key from the config, which maps on EOS to cbox
+		// cbox is a sudo'er, so we become the user specified in UID/GID, if it is set
+		rq.Authkey = c.opt.Authkey
+
+		uid, gid, err := utils.ExtractUidGid(auth)
+		if err == nil {
+			rq.Role.Uid = uid
+			rq.Role.Gid = gid
+		}
 	}
-	gidInt, err := strconv.ParseUint(auth.Role.GID, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	mdrq.Role.Uid = uidInt
-	mdrq.Role.Gid = gidInt
 
-	mdrq.Authkey = c.opt.Authkey
-
-	return mdrq, nil
+	return rq, nil
 }
 
 // AddACL adds an new acl to EOS with the given aclType.
@@ -711,9 +710,14 @@ func getAttribute(key, val string) (*eosclient.Attribute, error) {
 }
 
 // GetFileInfoByPath returns the FilInfo at the given path.
-func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authorization, path string) (*eosclient.FileInfo, error) {
+func (c *Client) GetFileInfoByPath(ctx context.Context, userAuth eosclient.Authorization, path string) (*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
-	log.Debug().Str("func", "GetFileInfoByPath").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("entering")
+	log.Debug().Str("func", "GetFileInfoByPath").Str("uid,gid", userAuth.Role.UID+","+userAuth.Role.GID).Str("path", path).Msg("entering")
+
+	// UserAuth may not be sufficient, because the user may not have access to the file
+	// e.g. in the case of a guest account. So we check if a uid/gid is set, and if not,
+	// revert to the daemon account
+	auth := utils.GetUserOrDaemonAuth(userAuth)
 
 	// Initialize the common fields of the MDReq
 	mdrq, err := c.initMDRequest(ctx, auth)
@@ -756,7 +760,16 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 	}
 
 	if c.opt.VersionInvariant && !isVersionFolder(path) && !info.IsDir {
-		inode, err := c.getVersionFolderInode(ctx, auth, path)
+		// Here we have to create a missing version folder, irrespective from the user (that could be a sharee, or a lw account, or...)
+		// Therefore, we impersonate the owner of the file
+		ownerAuth := eosclient.Authorization{
+			Role: eosclient.Role{
+				UID: strconv.FormatUint(info.UID, 10),
+				GID: strconv.FormatUint(info.GID, 10),
+			},
+		}
+
+		inode, err := c.getOrCreateVersionFolderInode(ctx, ownerAuth, path)
 		if err != nil {
 			return nil, err
 		}
@@ -817,13 +830,9 @@ func (c *Client) GetQuota(ctx context.Context, username string, rootAuth eosclie
 		return nil, errtypes.InternalError(fmt.Sprintf("Quota error from eos. info: '%#v'", resp.Quota))
 	}
 
-	qi := new(eosclient.QuotaInfo)
-	if resp == nil {
-		return nil, errtypes.InternalError("Out of memory")
-	}
-
 	// Let's loop on all the quotas that match this uid (apparently there can be many)
 	// If there are many for this node, we sum them up
+	qi := new(eosclient.QuotaInfo)
 	for i := 0; i < len(resp.Quota.Quotanode); i++ {
 		log.Debug().Str("func", "GetQuota").Str("quotanode:", fmt.Sprintf("%d: %#v", i, resp.Quota.Quotanode[i])).Msg("")
 
@@ -954,13 +963,11 @@ func (c *Client) Chown(ctx context.Context, auth, chownAuth eosclient.Authorizat
 
 	msg := new(erpc.NSRequest_ChownRequest)
 	msg.Owner = new(erpc.RoleId)
-	msg.Owner.Uid, err = strconv.ParseUint(chownAuth.Role.UID, 10, 64)
-	if err != nil {
-		return err
-	}
-	msg.Owner.Gid, err = strconv.ParseUint(chownAuth.Role.GID, 10, 64)
-	if err != nil {
-		return err
+
+	uid, gid, err := utils.ExtractUidGid(chownAuth)
+	if err == nil {
+		msg.Owner.Uid = uid
+		msg.Owner.Gid = gid
 	}
 
 	msg.Id = new(erpc.MDId)
@@ -1195,7 +1202,6 @@ func (c *Client) Rename(ctx context.Context, auth eosclient.Authorization, oldPa
 // List the contents of the directory given by path.
 func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath string) ([]*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "List").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("dpath", dpath).Msg("")
 
 	// Stuff filename, uid, gid into the FindRequest type
 	fdrq := new(erpc.FindRequest)
@@ -1206,16 +1212,12 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 
 	fdrq.Role = new(erpc.RoleId)
 
-	uidInt, err := strconv.ParseUint(auth.Role.UID, 10, 64)
+	uid, gid, err := utils.ExtractUidGid(auth)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Failed to extract uid/gid from auth")
 	}
-	gidInt, err := strconv.ParseUint(auth.Role.GID, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	fdrq.Role.Uid = uidInt
-	fdrq.Role.Gid = gidInt
+	fdrq.Role.Uid = uid
+	fdrq.Role.Gid = gid
 
 	fdrq.Authkey = c.opt.Authkey
 
@@ -1347,7 +1349,7 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 	var localfile io.WriteCloser
 	localfile = nil
 
-	u, err := getUser(ctx)
+	u, err := utils.GetUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: no user in ctx")
 	}
@@ -1383,7 +1385,7 @@ func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path s
 	var length int64
 	length = -1
 
-	u, err := getUser(ctx)
+	u, err := utils.GetUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
@@ -1661,17 +1663,17 @@ func (c *Client) GenerateToken(ctx context.Context, auth eosclient.Authorization
 	return "", err
 }
 
-func (c *Client) getVersionFolderInode(ctx context.Context, auth eosclient.Authorization, p string) (uint64, error) {
+func (c *Client) getOrCreateVersionFolderInode(ctx context.Context, ownerAuth eosclient.Authorization, p string) (uint64, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "getVersionFolderInode").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("p", p).Msg("")
+	log.Info().Str("func", "getOrCreateVersionFolderInode").Str("uid,gid", ownerAuth.Role.UID+","+ownerAuth.Role.GID).Str("p", p).Msg("")
 
 	versionFolder := getVersionFolder(p)
-	md, err := c.GetFileInfoByPath(ctx, auth, versionFolder)
+	md, err := c.GetFileInfoByPath(ctx, ownerAuth, versionFolder)
 	if err != nil {
-		if err = c.CreateDir(ctx, auth, versionFolder); err != nil {
+		if err = c.CreateDir(ctx, ownerAuth, versionFolder); err != nil {
 			return 0, err
 		}
-		md, err = c.GetFileInfoByPath(ctx, auth, versionFolder)
+		md, err = c.GetFileInfoByPath(ctx, ownerAuth, versionFolder)
 		if err != nil {
 			return 0, err
 		}
