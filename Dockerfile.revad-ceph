@@ -31,7 +31,7 @@ FROM quay.io/ceph/ceph:v18
 #   librbd-devel \
 #   librados-devel
 
-RUN dnf update --exclude=ceph-iscsi -y && dnf install -y \
+RUN dnf upgrade --nobest -y && dnf install -y \
   git \
   gcc \
   make \
