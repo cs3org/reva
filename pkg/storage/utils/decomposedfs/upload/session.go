@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/google/renameio/v2"
-	"github.com/rogpeppe/go-internal/lockedfile"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -78,14 +77,6 @@ func (s *OcisSession) Purge(ctx context.Context) error {
 	_, span := tracer.Start(ctx, "Purge")
 	defer span.End()
 	sessionPath := sessionPath(s.store.root, s.info.ID)
-	f, err := lockedfile.OpenFile(sessionPath+".lock", os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0600)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		f.Close()
-		os.Remove(sessionPath + ".lock")
-	}()
 	if err := os.Remove(sessionPath); err != nil {
 		return err
 	}
@@ -121,11 +112,6 @@ func (s *OcisSession) Persist(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	f, err := lockedfile.OpenFile(sessionPath+".lock", os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0600)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
 	return renameio.WriteFile(sessionPath, d, 0600)
 }
 
