@@ -16,21 +16,22 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/timemanager"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
+	"github.com/rs/zerolog"
 )
 
 // TestInitNewNode calls greetings.initNewNode
 func TestInitNewNode(t *testing.T) {
-
+	log := &zerolog.Logger{}
 	root := t.TempDir()
 
 	lookup := lookup.New(metadata.NewMessagePackBackend(root, cache.Config{}), &options.Options{Root: root}, &timemanager.Manager{})
-	tp := tree.New(lookup, nil, &options.Options{}, nil)
+	tp := tree.New(lookup, nil, &options.Options{}, nil, log)
 
 	aspects := aspects.Aspects{
 		Lookup: lookup,
 		Tree:   tp,
 	}
-	store := NewSessionStore(nil, aspects, root, false, options.TokenOptions{})
+	store := NewSessionStore(nil, aspects, root, false, options.TokenOptions{}, log)
 
 	rootNode := node.New("e48c4e7a-beac-4b82-b991-a5cff7b8c39c", "e48c4e7a-beac-4b82-b991-a5cff7b8c39c", "", "", 0, "", providerv1beta1.ResourceType_RESOURCE_TYPE_CONTAINER, &userv1beta1.UserId{}, lookup)
 	rootNode.Exists = true

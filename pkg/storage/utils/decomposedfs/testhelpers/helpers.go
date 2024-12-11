@@ -171,15 +171,16 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		},
 	)
 
+	log := &zerolog.Logger{}
 	bs := &treemocks.Blobstore{}
-	tree := tree.New(lu, bs, o, store.Create())
+	tree := tree.New(lu, bs, o, store.Create(), log)
 	aspects := aspects.Aspects{
 		Lookup:      lu,
 		Tree:        tree,
 		Permissions: permissions.NewPermissions(pmock, permissionsSelector),
 		Trashbin:    &decomposedfs.DecomposedfsTrashbin{},
 	}
-	fs, err := decomposedfs.New(o, aspects, &zerolog.Logger{})
+	fs, err := decomposedfs.New(o, aspects, log)
 	if err != nil {
 		return nil, err
 	}

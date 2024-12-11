@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc/metadata"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -191,7 +192,7 @@ var _ = Describe("gateway", func() {
 				"permissionssvc":      revads["permissions"].GrpcAddress,
 				"treesize_accounting": true,
 				"treetime_accounting": true,
-			}, nil, nil)
+			}, nil, &zerolog.Logger{})
 			Expect(err).ToNot(HaveOccurred())
 			res, err := shard1Fs.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
 				Type:  "project",
@@ -217,7 +218,7 @@ var _ = Describe("gateway", func() {
 				"permissionssvc":      revads["permissions"].GrpcAddress,
 				"treesize_accounting": true,
 				"treetime_accounting": true,
-			}, nil, nil)
+			}, nil, &zerolog.Logger{})
 			Expect(err).ToNot(HaveOccurred())
 			res, err = shard2Fs.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
 				Type:  "project",
@@ -380,7 +381,7 @@ var _ = Describe("gateway", func() {
 				"permissionssvc":      revads["permissions"].GrpcAddress,
 				"treesize_accounting": true,
 				"treetime_accounting": true,
-			}, nil, nil)
+			}, nil, &zerolog.Logger{})
 			Expect(err).ToNot(HaveOccurred())
 
 			r, err := serviceClient.CreateHome(ctx, &storagep.CreateHomeRequest{})
@@ -405,7 +406,7 @@ var _ = Describe("gateway", func() {
 				"permissionssvc":      revads["permissions"].GrpcAddress,
 				"treesize_accounting": true,
 				"treetime_accounting": true,
-			}, nil, nil)
+			}, nil, &zerolog.Logger{})
 			Expect(err).ToNot(HaveOccurred())
 			res, err := serviceClient.CreateStorageSpace(ctx, &storagep.CreateStorageSpaceRequest{
 				Type:  "project",

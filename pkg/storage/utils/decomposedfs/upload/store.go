@@ -44,6 +44,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rogpeppe/go-internal/lockedfile"
+	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 )
 
@@ -65,10 +66,11 @@ type OcisStore struct {
 	async             bool
 	tknopts           options.TokenOptions
 	disableVersioning bool
+	log               *zerolog.Logger
 }
 
 // NewSessionStore returns a new OcisStore
-func NewSessionStore(fs storage.FS, aspects aspects.Aspects, root string, async bool, tknopts options.TokenOptions) *OcisStore {
+func NewSessionStore(fs storage.FS, aspects aspects.Aspects, root string, async bool, tknopts options.TokenOptions, log *zerolog.Logger) *OcisStore {
 	return &OcisStore{
 		fs:                fs,
 		lu:                aspects.Lookup,
@@ -79,6 +81,7 @@ func NewSessionStore(fs storage.FS, aspects aspects.Aspects, root string, async 
 		tknopts:           tknopts,
 		disableVersioning: aspects.DisableVersioning,
 		um:                aspects.UserMapper,
+		log:               log,
 	}
 }
 
