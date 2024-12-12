@@ -71,6 +71,7 @@ type config struct {
 	EtagCacheTTL        int                               `mapstructure:"etag_cache_ttl"`
 	AllowedUserAgents   map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
 	CreateHomeCacheTTL  int                               `mapstructure:"create_home_cache_ttl"`
+	HomeLayout          string                            `mapstructure:"home_layout"`
 }
 
 // sets defaults.
@@ -110,6 +111,11 @@ func (c *config) ApplyDefaults() {
 	// lifetime for the transfer token (TUS upload)
 	if c.TransferExpires == 0 {
 		c.TransferExpires = 100 * 60 // seconds
+	}
+
+	// default to /home
+	if c.HomeLayout == "" {
+		c.HomeLayout = "/home"
 	}
 }
 
