@@ -60,7 +60,7 @@ require (
 	golang.org/x/term v0.27.0
 	google.golang.org/genproto v0.0.0-20240314234333-6e1732d8331c
 	google.golang.org/grpc v1.65.0
-	google.golang.org/protobuf v1.34.1
+	google.golang.org/protobuf v1.35.2
 	gotest.tools v2.2.0+incompatible
 )
 
