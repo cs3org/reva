@@ -216,7 +216,14 @@ func (c *Client) getRespError(rsp *erpc.NSResponse, err error) error {
 		return nil
 	}
 
-	return errtypes.InternalError("Err from EOS: " + fmt.Sprintf("%#v", rsp.Error))
+	switch rsp.Error.Code {
+	case 16: // EBUSY
+		return eosclient.FileIsLockedError
+	case 17: // EEXIST
+		return eosclient.AttrAlreadyExistsError
+	default:
+		return errtypes.InternalError(fmt.Sprintf("%s (code: %d)", rsp.Error.Msg, rsp.Error.Code))
+	}
 }
 
 // Common code to create and initialize a NSRequest.
