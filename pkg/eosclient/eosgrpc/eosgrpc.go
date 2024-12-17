@@ -222,7 +222,7 @@ func (c *Client) getRespError(rsp *erpc.NSResponse, err error) error {
 // Common code to create and initialize a NSRequest.
 func (c *Client) initNSRequest(ctx context.Context, auth eosclient.Authorization, app string) (*erpc.NSRequest, error) {
 	log := appctx.GetLogger(ctx)
-	log.Debug().Str("(uid,gid)", "("+auth.Role.UID+","+auth.Role.GID+")").Msg("New grpcNS req")
+	log.Debug().Str("(uid,gid)", "("+auth.Role.UID+","+auth.Role.GID+")").Str("app", app).Msg("New grpcNS req")
 
 	rq := new(erpc.NSRequest)
 	rq.Role = new(erpc.RoleId)
