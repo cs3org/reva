@@ -271,7 +271,7 @@ func checkUploadWebdavRef(protocols []*gateway.FileUploadProtocol, md os.FileInf
 	c.SetHeader(ctxpkg.TokenHeader, token)
 	c.SetHeader("Upload-Length", strconv.FormatInt(md.Size(), 10))
 
-	if err = c.WriteStream(filePath, fd, 0700); err != nil {
+	if err = c.WriteStream(filePath, fd, 0700, ""); err != nil {
 		return err
 	}
 
