@@ -597,16 +597,25 @@ func (c *Client) handleFavAttr(ctx context.Context, auth eosclient.Authorization
 		favs.DeleteEntry(acl.TypeUser, u.Id.OpaqueId)
 	}
 	attr.Val = favs.Serialize()
-	return c.setEOSAttr(ctx, auth, attr, false, recursive, path, "")
+	if attr.Val == "" {
+		return c.unsetEOSAttr(ctx, auth, attr, recursive, path, "", true)
+	} else {
+		return c.setEOSAttr(ctx, auth, attr, false, recursive, path, "")
+	}
 }
 
 // UnsetAttr unsets an extended attribute on a path.
 func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path, app string) error {
+	// In the case of handleFavs, we call unsetEOSAttr with deleteFavs = true, which is why this simply calls a subroutine
+	return c.unsetEOSAttr(ctx, auth, attr, recursive, path, app, false)
+}
+
+func (c *Client) unsetEOSAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path, app string, deleteFavs bool) error {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "UnsetAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
+	log.Info().Str("func", "unsetEOSAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Favorites need to be stored per user so handle these separately
-	if attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
+	if !deleteFavs && attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
 		info, err := c.GetFileInfoByPath(ctx, auth, path)
 		if err != nil {
 			return err
