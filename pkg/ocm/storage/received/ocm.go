@@ -504,8 +504,7 @@ func (d *driver) RefreshLock(ctx context.Context, ref *provider.Reference, lock 
 		return err
 	}
 
-	err = client.RefreshLock(rel, lock.GetLockId())
-	return err
+	return client.RefreshLock(rel, lock.GetLockId())
 }
 
 // Unlock removes a lock from a file
