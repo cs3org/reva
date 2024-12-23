@@ -145,7 +145,7 @@ type LockSystem interface {
 	//
 	// See http://www.webdav.org/specs/rfc4918.html#rfc.section.9.10.6 for
 	// when to use each error.
-	Refresh(ctx context.Context, now time.Time, token string, duration time.Duration) (LockDetails, error)
+	Refresh(ctx context.Context, now time.Time, ref *provider.Reference, token string) error
 
 	// Unlock unlocks the lock with the given token.
 	//
@@ -239,8 +239,45 @@ func (cls *cs3LS) Create(ctx context.Context, now time.Time, details LockDetails
 
 }
 
-func (cls *cs3LS) Refresh(ctx context.Context, now time.Time, token string, duration time.Duration) (LockDetails, error) {
-	return LockDetails{}, ocdavErrors.ErrNotImplemented
+func (cls *cs3LS) Refresh(ctx context.Context, now time.Time, ref *provider.Reference, token string) error {
+	u := ctxpkg.ContextMustGetUser(ctx)
+
+	// add metadata via opaque
+	// TODO: upate cs3api: https://github.com/cs3org/cs3apis/issues/213
+	o := utils.AppendPlainToOpaque(nil, "lockownername", u.GetDisplayName())
+	o = utils.AppendPlainToOpaque(o, "locktime", now.Format(time.RFC3339))
+
+	if token == "" {
+		return errors.New("token is empty")
+	}
+
+	r := &provider.RefreshLockRequest{
+		Ref: ref,
+		Lock: &provider.Lock{
+			Opaque: o,
+			Type:   provider.LockType_LOCK_TYPE_EXCL,
+			//AppName: , // TODO use a urn scheme?
+			LockId: token,
+			User:   u.GetId(),
+		},
+	}
+
+	client, err := cls.selector.Next()
+	if err != nil {
+		return err
+	}
+
+	res, err := client.RefreshLock(ctx, r)
+	if err != nil {
+		return err
+	}
+	switch res.GetStatus().GetCode() {
+	case rpc.Code_CODE_OK:
+		return nil
+
+	default:
+		return ocdavErrors.NewErrFromStatus(res.GetStatus())
+	}
 }
 
 func (cls *cs3LS) Unlock(ctx context.Context, now time.Time, ref *provider.Reference, token string) error {
@@ -470,13 +507,15 @@ func (s *svc) lockReference(ctx context.Context, w http.ResponseWriter, r *http.
 		if token == "" {
 			return http.StatusBadRequest, ocdavErrors.ErrInvalidLockToken
 		}
-		ld, err = s.LockSystem.Refresh(ctx, now, token, duration)
+		err = s.LockSystem.Refresh(ctx, now, ref, token)
 		if err != nil {
 			if err == ocdavErrors.ErrNoSuchLock {
 				return http.StatusPreconditionFailed, err
 			}
 			return http.StatusInternalServerError, err
 		}
+
+		ld.LockID = token
 
 	} else {
 		// Section 9.10.3 says that "If no Depth header is submitted on a LOCK request,
