@@ -71,7 +71,7 @@ func (webdav *WebDAVClient) Read(file string) ([]byte, error) {
 func (webdav *WebDAVClient) Write(file string, data io.Reader, size int64) error {
 	webdav.client.SetHeader("Upload-Length", strconv.FormatInt(size, 10))
 
-	if err := webdav.client.WriteStream(file, data, 0700); err != nil {
+	if err := webdav.client.WriteStream(file, data, 0700, ""); err != nil {
 		return fmt.Errorf("unable to write the data: %v", err)
 	}
 
