@@ -485,11 +485,27 @@ func (d *driver) SetLock(ctx context.Context, ref *provider.Reference, lock *pro
 }
 
 func (d *driver) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
-	return nil, errtypes.NotSupported("operation not supported")
+	client, _, rel, err := d.webdavClient(ctx, nil, ref)
+	if err != nil {
+		return nil, err
+	}
+
+	token, err := client.GetLock(rel)
+	if err != nil {
+		return nil, err
+	}
+
+	return &provider.Lock{LockId: token, Type: provider.LockType_LOCK_TYPE_EXCL}, nil
 }
 
 func (d *driver) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
-	return errtypes.NotSupported("operation not supported")
+	client, _, rel, err := d.webdavClient(ctx, nil, ref)
+	if err != nil {
+		return err
+	}
+
+	err = client.RefreshLock(rel, lock.GetLockId())
+	return err
 }
 
 // Unlock removes a lock from a file
