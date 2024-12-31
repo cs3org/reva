@@ -117,7 +117,7 @@ def main(ctx):
         cs3ApiValidatorS3NG(),
         # virtual views don't work on edge at the moment
         #virtualViews(),
-    ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12) + posixfsIntegrationTests(6)
+    ] + ocisIntegrationTests(4) + s3ngIntegrationTests(6) + posixfsIntegrationTests(4)
 
 def coverage():
     return {
