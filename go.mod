@@ -59,7 +59,7 @@ require (
 	golang.org/x/sys v0.28.0
 	golang.org/x/term v0.27.0
 	google.golang.org/genproto v0.0.0-20241209162323-e6fa225c2576
-	google.golang.org/grpc v1.69.0
+	google.golang.org/grpc v1.69.2
 	google.golang.org/protobuf v1.35.2
 	gotest.tools v2.2.0+incompatible
 )
