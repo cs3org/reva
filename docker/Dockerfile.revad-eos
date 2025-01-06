@@ -27,6 +27,7 @@ ENV GIT_COMMIT=$GIT_COMMIT
 ENV VERSION=$VERSION
 ENV CGO_ENABLED 0
 
+RUN apk add --no-cache make bash
 RUN make revad
 
 FROM gitlab-registry.cern.ch/dss/eos/eos-all:5.2.14
