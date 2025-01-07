@@ -779,7 +779,8 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 				return err
 			}
 
-			return nil
+			// remove .mpk file so subsequent attempts will not try to delete the blob again
+			return os.Remove(path)
 		}
 
 		// This is deletes all blobs of the space
