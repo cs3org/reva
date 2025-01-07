@@ -229,7 +229,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/studio-b12/gowebdav => github.com/aduffeck/gowebdav v0.0.0-20241122070217-29b328c136b1
+replace github.com/studio-b12/gowebdav => github.com/kobergj/gowebdav v0.0.0-20250102091030-aa65266db202
 
 // exclude the v2 line of go-sqlite3 which was released accidentally and prevents pulling in newer versions of go-sqlite3
 // see https://github.com/mattn/go-sqlite3/issues/965 for more details
