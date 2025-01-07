@@ -247,7 +247,10 @@ func (c *Client) executeEOS(ctx context.Context, cmdArgs []string, auth eosclien
 
 	cmd.Args = append(cmd.Args, cmdArgs...)
 
-	cmd.Args = append(cmd.Args, "--comment", trace.Get(ctx))
+	t := trace.Get(ctx)
+	if t != "" {
+		cmd.Args = append(cmd.Args, "--comment", t)
+	}
 
 	err := cmd.Run()
 
