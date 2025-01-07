@@ -254,8 +254,8 @@ func (s *service) decorateProjects(ctx context.Context, projects []*provider.Sto
 }
 
 func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.StorageSpace, error) {
-	if utils.UserIsLightweight(user) {
-		return nil, nil // lightweight accounts and federated do not have a user space
+	if user.Id.Type == userpb.UserType_USER_TYPE_FEDERATED || user.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+		return nil, nil // lightweight and federated accounts are not eligible for a user space
 	}
 
 	home := templates.WithUser(user, s.c.UserSpace) // TODO: we can use gw.GetHome() call
