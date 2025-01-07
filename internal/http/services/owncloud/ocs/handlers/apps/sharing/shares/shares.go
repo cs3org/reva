@@ -900,6 +900,8 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	workers := 50
 	input := make(chan *collaboration.ReceivedShare, len(lrsRes.GetShares()))
 	output := make(chan *conversions.ShareData, len(lrsRes.GetShares()))
+	timeoutContext, cancel := context.WithTimeout(ctx, time.Duration(time.Millisecond*20000))
+	defer cancel()
 
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
@@ -924,6 +926,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 					info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
 					if err != nil || status.Code != rpc.Code_CODE_OK {
 						h.logProblems(status, err, "could not stat, skipping", log)
+						output <- nil
 						return
 					}
 				}
@@ -931,6 +934,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 				data, err := conversions.CS3Share2ShareData(r.Context(), rs.Share)
 				if err != nil {
 					log.Debug().Interface("share", rs.Share.Id).Err(err).Msg("CS3Share2ShareData call failes, skipping")
+					output <- nil
 					return
 				}
 
@@ -938,6 +942,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 				if err := h.addFileInfo(ctx, data, info); err != nil {
 					log.Debug().Interface("received_share", rs.Share.Id).Err(err).Msg("could not add file info, skipping")
+					output <- nil
 					return
 				}
 				h.mapUserIds(r.Context(), client, data)
@@ -984,7 +989,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 				log.Debug().Msgf("share: %+v", data)
 				output <- data
 			}
-		}(ctx, client, input, output, &wg)
+		}(timeoutContext, client, input, output, &wg)
 	}
 
 	for _, share := range lrsRes.GetShares() {
@@ -995,7 +1000,9 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	close(output)
 
 	for s := range output {
-		shares = append(shares, s)
+		if s != nil {
+			shares = append(shares, s)
+		}
 	}
 
 	if h.listOCMShares {

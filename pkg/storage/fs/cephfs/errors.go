@@ -28,8 +28,8 @@ package cephfs
 */
 import "C"
 import (
-	"fmt"
 	"context"
+	"fmt"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 )

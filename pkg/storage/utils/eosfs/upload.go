@@ -27,6 +27,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -34,10 +35,6 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 	p, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "eos: error resolving reference")
-	}
-
-	if fs.isShareFolder(ctx, p) {
-		return errtypes.PermissionDenied("eos: cannot upload under the virtual share folder")
 	}
 
 	ok, err := chunking.IsChunked(p)
@@ -64,7 +61,7 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 
 	fn := fs.wrap(ctx, p)
 
-	u, err := getUser(ctx)
+	u, err := utils.GetUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
 	}

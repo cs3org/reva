@@ -19,6 +19,7 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -28,6 +29,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,8 +39,12 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/eosclient"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/registry"
 	"github.com/cs3org/reva/pkg/registry/memory"
+	"github.com/pkg/errors"
 	"go.step.sm/crypto/randutil"
 
 	// gocritic is disabled because google.golang.org/protobuf/proto does not provide a method to convert MessageV1 to MessageV2.
@@ -423,9 +429,9 @@ func HasPermissions(target, toCheck *provider.ResourcePermissions) bool {
 	return true
 }
 
-// UserIsLightweight returns true if the user is a lightweight
+// IsLightweightUser returns true if the user is a lightweight
 // or federated account.
-func UserIsLightweight(u *userpb.User) bool {
+func IsLightweightUser(u *userpb.User) bool {
 	return u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED ||
 		u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT
 }
@@ -442,4 +448,54 @@ func Cast(v any, to any) {
 	}
 	toVal = toVal.Elem()
 	toVal.Set(reflect.ValueOf(v))
+}
+
+func GetDaemonAuth() eosclient.Authorization {
+	return eosclient.Authorization{Role: eosclient.Role{UID: "2", GID: "2"}}
+}
+
+// This function is used when we don't want to pass any additional auth info.
+// Because we later populate the secret key for gRPC, we will be automatically
+// mapped to cbox.
+// So, in other words, use this function if you want to use the cbox account.
+func GetEmptyAuth() eosclient.Authorization {
+	return eosclient.Authorization{}
+}
+
+// Returns the userAuth if this is a valid auth object,
+// otherwise returns daemonAuth
+func GetUserOrDaemonAuth(userAuth eosclient.Authorization) eosclient.Authorization {
+	if userAuth.Role.UID == "" || userAuth.Role.GID == "" {
+		return GetDaemonAuth()
+	} else {
+		return userAuth
+	}
+}
+
+// Extract uid and gid from auth object
+func ExtractUidGid(auth eosclient.Authorization) (uid, gid uint64, err error) {
+	// $ id nobody
+	// uid=65534(nobody) gid=65534(nobody) groups=65534(nobody)
+	nobody := uint64(65534)
+
+	uid, err = strconv.ParseUint(auth.Role.UID, 10, 64)
+	if err != nil {
+		return nobody, nobody, err
+	}
+	gid, err = strconv.ParseUint(auth.Role.GID, 10, 64)
+	if err != nil {
+		return nobody, nobody, err
+	}
+
+	return uid, gid, nil
+}
+
+// Retrieve current user fromt he context
+func GetUser(ctx context.Context) (*userpb.User, error) {
+	u, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		err := errors.Wrap(errtypes.UserRequired(""), "eosfs: error getting user from ctx")
+		return nil, err
+	}
+	return u, nil
 }
