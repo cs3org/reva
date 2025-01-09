@@ -66,7 +66,7 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 
 	var spaces []*libregraph.Drive
 	if isMountpointRequest(odataReq) {
-		spaces, err = getDrivesForShares(ctx, gw)
+		spaces, err = s.getDrivesForShares(ctx, gw)
 		if err != nil {
 			log.Error().Err(err).Msg("error getting share spaces")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -121,7 +121,7 @@ func isMountpointRequest(request *godata.GoDataRequest) bool {
 
 const shareJailID = "a0ca6a90-a365-4782-871e-d44447bbc668"
 
-func getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClient) ([]*libregraph.Drive, error) {
+func (s *svc) getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClient) ([]*libregraph.Drive, error) {
 	res, err := gw.ListExistingReceivedShares(ctx, &collaborationv1beta1.ListReceivedSharesRequest{})
 	if err != nil {
 		return nil, err
@@ -131,8 +131,8 @@ func getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClient) ([]*li
 	}
 
 	spacesRes := make([]*libregraph.Drive, 0, len(res.ShareInfos))
-	for _, s := range res.ShareInfos {
-		spacesRes = append(spacesRes, convertShareToSpace(s))
+	for _, share := range res.ShareInfos {
+		spacesRes = append(spacesRes, s.convertShareToSpace(share))
 	}
 	return spacesRes, nil
 }
@@ -141,20 +141,22 @@ func libregraphShareID(shareID *collaborationv1beta1.ShareId) string {
 	return fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, shareID.OpaqueId)
 }
 
-func convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libregraph.Drive {
+func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libregraph.Drive {
 	// the prefix of the remote_item.id and rootid
 	return &libregraph.Drive{
 		Id:         libregraph.PtrString(libregraphShareID(rsi.ReceivedShare.Share.Id)),
 		DriveType:  libregraph.PtrString("mountpoint"),
 		DriveAlias: libregraph.PtrString(rsi.ReceivedShare.Share.Id.OpaqueId), // this is not used, but must not be the same alias as the drive item
 		Name:       filepath.Base(rsi.ResourceInfo.Path),
+		WebUrl:     libregraph.PtrString(fullURL(s.c.WebBase, rsi.ResourceInfo.Path)),
 		Quota: &libregraph.Quota{
 			Total:     libregraph.PtrInt64(24154390300000),
 			Used:      libregraph.PtrInt64(3141592),
 			Remaining: libregraph.PtrInt64(24154387158408),
 		},
 		Root: &libregraph.DriveItem{
-			Id: libregraph.PtrString(fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, rsi.ReceivedShare.Share.Id.OpaqueId)),
+			Id:        libregraph.PtrString(fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, rsi.ReceivedShare.Share.Id.OpaqueId)),
+			WebDavUrl: libregraph.PtrString(fullURL(s.c.WebDavBase, rsi.ResourceInfo.Path)),
 			RemoteItem: &libregraph.RemoteItem{
 				DriveAlias: libregraph.PtrString(strings.TrimSuffix(strings.TrimPrefix(rsi.ResourceInfo.Path, "/"), relativePathToSpaceID(rsi.ResourceInfo))), // the drive alias must not start with /
 				ETag:       libregraph.PtrString(rsi.ResourceInfo.Etag),
@@ -289,7 +291,7 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		space := convertShareToSpace(&gateway.ReceivedShareResourceInfo{
+		space := s.convertShareToSpace(&gateway.ReceivedShareResourceInfo{
 			ResourceInfo:  stat.Info,
 			ReceivedShare: shareRes.Share,
 		})
