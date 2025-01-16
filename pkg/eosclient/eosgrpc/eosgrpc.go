@@ -1259,12 +1259,12 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 				break
 			}
 
-			// We got an error while reading items. We log this as an error and we return
-			// the items we have
+			// We got an error while reading items. We return the error to the user and break off the List operation
+			// We do not want to return a partial list, because then a sync client may delete local files that are missing on the server
 			log.Error().Err(err).Str("func", "List").Int("nitems", i).Str("path", dpath).Str("got err from EOS", err.Error()).Msg("")
 			if i > 0 {
 				log.Error().Str("path", dpath).Int("nitems", i).Msg("No more items, dirty exit")
-				return mylst, nil
+				return nil, errors.Wrap(err, "Error listing files")
 			}
 		}
 
