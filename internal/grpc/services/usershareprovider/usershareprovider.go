@@ -172,7 +172,7 @@ func (s *service) GetShare(ctx context.Context, req *collaboration.GetShareReque
 	if err != nil {
 		return &collaboration.GetShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting share"),
-		}, nil
+		}, err
 	}
 
 	return &collaboration.GetShareResponse{
