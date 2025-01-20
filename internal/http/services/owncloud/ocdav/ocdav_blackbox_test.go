@@ -371,10 +371,21 @@ var _ = Describe("ocdav", func() {
 						Status: status.NewOK(ctx),
 					}, nil)
 
+					resourceId := &cs3storageprovider.ResourceId{StorageId: "storage", SpaceId: "provider", OpaqueId: "opaque"}
+					resourceETag := "some-etag"
+					client.On("Stat", mock.Anything, mock.Anything).Return(&cs3storageprovider.StatResponse{
+						Status: status.NewOK(ctx),
+						Info: &cs3storageprovider.ResourceInfo{
+							Id:   resourceId,
+							Etag: resourceETag,
+						},
+					}, nil)
+
 					handler.Handler().ServeHTTP(rr, req)
 					Expect(rr).To(HaveHTTPStatus(http.StatusCreated))
 					Expect(rr).To(HaveHTTPBody(BeEmpty()), "Body must be empty")
-					// TODO expect fileid and etag header?
+					Expect(rr).To(HaveHTTPHeaderWithValue(net.HeaderOCFileID, storagespace.FormatResourceID(resourceId)))
+					Expect(rr).To(HaveHTTPHeaderWithValue(net.HeaderOCETag, resourceETag))
 				})
 
 			})
@@ -1254,6 +1265,15 @@ var _ = Describe("ocdav", func() {
 					Status: status.NewOK(ctx),
 				}, nil)
 
+				if expectedStatus == http.StatusCreated {
+					client.On("Stat", mock.Anything, mock.Anything).Return(&cs3storageprovider.StatResponse{
+						Status: status.NewOK(ctx),
+						Info: &cs3storageprovider.ResourceInfo{
+							Id: mReq.Source.ResourceId,
+						},
+					}, nil)
+				}
+
 				rr := httptest.NewRecorder()
 				req, err := http.NewRequest("MKCOL", endpoint+"/foo", strings.NewReader(""))
 				Expect(err).ToNot(HaveOccurred())
@@ -1341,6 +1361,15 @@ var _ = Describe("ocdav", func() {
 				client.On("CreateContainer", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.CreateContainerRequest) bool {
 					return utils.ResourceEqual(req.Ref, &ref)
 				})).Return(nil, fmt.Errorf("unexpected io error"))
+
+				if expectedStatus == http.StatusCreated {
+					client.On("Stat", mock.Anything, mock.Anything).Return(&cs3storageprovider.StatResponse{
+						Status: status.NewOK(ctx),
+						Info: &cs3storageprovider.ResourceInfo{
+							Id: mReq.Source.ResourceId,
+						},
+					}, nil)
+				}
 
 				rr := httptest.NewRecorder()
 				req, err := http.NewRequest("MKCOL", endpoint+"/foo", strings.NewReader(""))
@@ -1431,6 +1460,15 @@ var _ = Describe("ocdav", func() {
 					Status: status.NewOK(ctx),
 				}, nil)
 
+				if expectedStatus == http.StatusCreated {
+					client.On("Stat", mock.Anything, mock.Anything).Return(&cs3storageprovider.StatResponse{
+						Status: status.NewOK(ctx),
+						Info: &cs3storageprovider.ResourceInfo{
+							Id: mReq.Source.ResourceId,
+						},
+					}, nil)
+				}
+
 				rr := httptest.NewRecorder()
 				req, err := http.NewRequest("MKCOL", endpoint+"/foo", strings.NewReader(""))
 				Expect(err).ToNot(HaveOccurred())
@@ -1518,6 +1556,15 @@ var _ = Describe("ocdav", func() {
 				})).Return(&cs3storageprovider.CreateContainerResponse{
 					Status: status.NewNotFound(ctx, "not found"),
 				}, nil)
+
+				if expectedStatus == http.StatusCreated {
+					client.On("Stat", mock.Anything, mock.Anything).Return(&cs3storageprovider.StatResponse{
+						Status: status.NewOK(ctx),
+						Info: &cs3storageprovider.ResourceInfo{
+							Id: mReq.Source.ResourceId,
+						},
+					}, nil)
+				}
 
 				rr := httptest.NewRecorder()
 				req, err := http.NewRequest("MKCOL", endpoint+"/foo", strings.NewReader(""))
@@ -1672,6 +1719,15 @@ var _ = Describe("ocdav", func() {
 					}, nil)
 				}
 
+				if expectedStatus == http.StatusCreated {
+					client.On("Stat", mock.Anything, mock.Anything).Return(&cs3storageprovider.StatResponse{
+						Status: status.NewOK(ctx),
+						Info: &cs3storageprovider.ResourceInfo{
+							Id: mReq.Source.ResourceId,
+						},
+					}, nil)
+				}
+
 				parentRef := cs3storageprovider.Reference{
 					ResourceId: userspace.Root,
 					Path:       utils.MakeRelativePath(path.Dir(expectedPath)),
@@ -1807,6 +1863,15 @@ var _ = Describe("ocdav", func() {
 				})).Return(&cs3storageprovider.CreateContainerResponse{
 					Status: status.NewOK(ctx),
 				}, nil)
+
+				if expectedStatus == http.StatusCreated {
+					client.On("Stat", mock.Anything, mock.Anything).Return(&cs3storageprovider.StatResponse{
+						Status: status.NewOK(ctx),
+						Info: &cs3storageprovider.ResourceInfo{
+							Id: mReq.Source.ResourceId,
+						},
+					}, nil)
+				}
 
 				rr := httptest.NewRecorder()
 				req, err := http.NewRequest("MKCOL", endpoint+"/foo", strings.NewReader(""))
