@@ -85,6 +85,7 @@ type Handler struct {
 	listOCMShares          bool
 	notificationHelper     *notificationhelper.NotificationHelper
 	Log                    *zerolog.Logger
+	EnableSpaces           bool
 }
 
 // we only cache the minimal set of data instead of the full user metadata.
@@ -117,6 +118,7 @@ func (h *Handler) Init(c *config.Config, l *zerolog.Logger) {
 	h.homeNamespace = c.HomeNamespace
 	h.ocmMountPoint = c.OCMMountPoint
 	h.listOCMShares = c.ListOCMShares
+	h.EnableSpaces = c.EnableSpaces
 	h.Log = l
 	h.notificationHelper = notificationhelper.New("ocs", c.Notifications, l)
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
@@ -152,21 +154,34 @@ func (h *Handler) startCacheWarmup(c cache.Warmup) {
 
 func (h *Handler) extractReference(r *http.Request) (*provider.Reference, error) {
 	var ref provider.Reference
-	if spaceID := r.FormValue("space_ref"); spaceID != "" {
-		_, base, _, ok := spaces.DecodeResourceID(spaceID)
-		if !ok {
-			return nil, errors.New("bad space id format")
-		}
+	if h.EnableSpaces {
+		if spaceID := r.FormValue("space_ref"); spaceID != "" {
+			_, base, _, ok := spaces.DecodeResourceID(spaceID)
+			if !ok {
+				return nil, errors.New("bad space id format")
+			}
 
-		ref.Path = base
-	}
-	if p := r.FormValue("path"); p != "" {
-		if ref.Path == "" {
-			ref.Path = path.Join(h.homeNamespace, p)
-		} else {
-			ref.Path = path.Join(ref.Path, p)
+			ref.Path = base
+		}
+		if p := r.FormValue("path"); p != "" {
+			if ref.Path == "" {
+				ref.Path = path.Join(h.homeNamespace, p)
+			} else {
+				ref.Path = path.Join(ref.Path, p)
+			}
+		}
+	} else {
+		if p := r.FormValue("path"); p != "" {
+			ref = provider.Reference{Path: path.Join(h.homeNamespace, p)}
+		} else if spaceRef := r.FormValue("space_ref"); spaceRef != "" {
+			var err error
+			ref, err = utils.ParseStorageSpaceReference(spaceRef)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
+
 	return &ref, nil
 }
 
