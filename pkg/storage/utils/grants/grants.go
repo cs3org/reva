@@ -27,6 +27,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+var noPermissions = &provider.ResourcePermissions{}
+
 // GetACLPerm generates a string representation of CS3APIs' ResourcePermissions,
 // modeled after the EOS ACLs.
 // TODO(labkode): fine grained permission controls.

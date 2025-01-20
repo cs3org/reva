@@ -213,7 +213,7 @@ var _ = Describe("Nextcloud", func() {
 			mdKeys := []string{"val1", "val2", "val3"}
 			result, err := nc.GetMD(ctx, ref, mdKeys)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(*result).To(Equal(provider.ResourceInfo{
+			Expect(result).To(Equal(&provider.ResourceInfo{
 				Opaque: nil,
 				Type:   provider.ResourceType_RESOURCE_TYPE_FILE,
 				Id: &provider.ResourceId{
@@ -263,7 +263,7 @@ var _ = Describe("Nextcloud", func() {
 			results, err := nc.ListFolder(ctx, ref, mdKeys)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(results)).To(Equal(1))
-			Expect(*results[0]).To(Equal(provider.ResourceInfo{
+			Expect(results[0]).To(Equal(&provider.ResourceInfo{
 				Opaque: nil,
 				Type:   provider.ResourceType_RESOURCE_TYPE_FILE,
 				Id: &provider.ResourceId{
@@ -387,7 +387,7 @@ var _ = Describe("Nextcloud", func() {
 			Expect(err).ToNot(HaveOccurred())
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L1003-L1023
 			Expect(len(results)).To(Equal(2))
-			Expect(*results[0]).To(Equal(provider.FileVersion{
+			Expect(results[0]).To(Equal(&provider.FileVersion{
 				Opaque: &types.Opaque{
 					Map: map[string]*types.OpaqueEntry{
 						"some": {
@@ -400,7 +400,7 @@ var _ = Describe("Nextcloud", func() {
 				Mtime: uint64(1234567890),
 				Etag:  "deadb00f",
 			}))
-			Expect(*results[1]).To(Equal(provider.FileVersion{
+			Expect(results[1]).To(Equal(&provider.FileVersion{
 				Opaque: &types.Opaque{
 					Map: map[string]*types.OpaqueEntry{
 						"different": {
@@ -471,7 +471,7 @@ var _ = Describe("Nextcloud", func() {
 			Expect(err).ToNot(HaveOccurred())
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L1085-L1110
 			Expect(len(results)).To(Equal(1))
-			Expect(*results[0]).To(Equal(provider.RecycleItem{
+			Expect(results[0]).To(Equal(&provider.RecycleItem{
 				Opaque: &types.Opaque{},
 				Key:    "some-deleted-version",
 				Ref: &provider.Reference{
