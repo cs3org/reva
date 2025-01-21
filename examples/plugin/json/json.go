@@ -26,10 +26,10 @@ import (
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/user"
 	"github.com/hashicorp/go-plugin"
 	"github.com/mitchellh/mapstructure"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/user"
 )
 
 // Manager is a real implementation of Manager interface.

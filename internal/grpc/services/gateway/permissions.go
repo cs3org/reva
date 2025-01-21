@@ -22,8 +22,8 @@ import (
 	"context"
 
 	permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/status"
+	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 )
 
 func (s *svc) CheckPermission(ctx context.Context, req *permissions.CheckPermissionRequest) (*permissions.CheckPermissionResponse, error) {

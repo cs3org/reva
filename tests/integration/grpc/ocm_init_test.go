@@ -29,8 +29,8 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
-	conversions "github.com/cs3org/reva/v2/pkg/cbox/utils"
-	"github.com/cs3org/reva/v2/tests/helpers"
+	conversions "github.com/opencloud-eu/reva/v2/pkg/cbox/utils"
+	"github.com/opencloud-eu/reva/v2/tests/helpers"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

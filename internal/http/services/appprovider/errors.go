@@ -22,7 +22,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 )
 
 // appErrorCode stores the type of error encountered

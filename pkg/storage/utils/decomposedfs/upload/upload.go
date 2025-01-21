@@ -39,14 +39,14 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/metrics"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v2/pkg/appctx"
+	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/events"
+	"github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx/metrics"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
 var (

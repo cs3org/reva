@@ -18,7 +18,7 @@
 
 package registry
 
-import "github.com/cs3org/reva/v2/pkg/permission"
+import "github.com/opencloud-eu/reva/v2/pkg/permission"
 
 // NewFunc is the function that permission managers
 // should register at init time.

@@ -21,7 +21,7 @@ package cfg_test
 import (
 	"testing"
 
-	"github.com/cs3org/reva/v2/pkg/utils/cfg"
+	"github.com/opencloud-eu/reva/v2/pkg/utils/cfg"
 	"github.com/stretchr/testify/assert"
 )
 

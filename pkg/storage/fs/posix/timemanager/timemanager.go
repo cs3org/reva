@@ -24,8 +24,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/node"
 )
 
 // Manager is responsible for managing time-related operations on files and directories.

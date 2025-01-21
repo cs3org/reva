@@ -18,7 +18,7 @@
 
 package registry
 
-import "github.com/cs3org/reva/v2/pkg/token"
+import "github.com/opencloud-eu/reva/v2/pkg/token"
 
 // NewFunc is the function that token managers
 // should register at init time.

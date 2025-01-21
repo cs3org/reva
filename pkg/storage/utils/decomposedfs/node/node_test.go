@@ -23,13 +23,13 @@ import (
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	ocsconv "github.com/cs3org/reva/v2/pkg/conversions"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	ocsconv "github.com/opencloud-eu/reva/v2/pkg/conversions"
+	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/node"
+	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/grants"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/protobuf/testing/protocmp"
 )

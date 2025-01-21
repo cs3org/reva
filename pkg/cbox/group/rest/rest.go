@@ -30,12 +30,12 @@ import (
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	utils "github.com/cs3org/reva/v2/pkg/cbox/utils"
-	"github.com/cs3org/reva/v2/pkg/group"
-	"github.com/cs3org/reva/v2/pkg/group/manager/registry"
 	"github.com/gomodule/redigo/redis"
 	"github.com/mitchellh/mapstructure"
+	"github.com/opencloud-eu/reva/v2/pkg/appctx"
+	utils "github.com/opencloud-eu/reva/v2/pkg/cbox/utils"
+	"github.com/opencloud-eu/reva/v2/pkg/group"
+	"github.com/opencloud-eu/reva/v2/pkg/group/manager/registry"
 	"github.com/rs/zerolog/log"
 )
 

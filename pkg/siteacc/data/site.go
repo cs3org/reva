@@ -19,7 +19,7 @@
 package data
 
 import (
-	"github.com/cs3org/reva/v2/pkg/siteacc/credentials"
+	"github.com/opencloud-eu/reva/v2/pkg/siteacc/credentials"
 	"github.com/pkg/errors"
 )
 

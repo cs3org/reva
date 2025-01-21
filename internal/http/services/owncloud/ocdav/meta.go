@@ -27,14 +27,14 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/config"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/prop"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/rhttp/router"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/config"
+	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/errors"
+	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/net"
+	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/prop"
+	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/propfind"
+	"github.com/opencloud-eu/reva/v2/pkg/appctx"
+	"github.com/opencloud-eu/reva/v2/pkg/rhttp/router"
+	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 )
 
 // MetaHandler handles meta requests

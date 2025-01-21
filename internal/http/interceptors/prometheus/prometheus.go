@@ -21,7 +21,7 @@ package prometheus
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/v2/pkg/rhttp/global"
+	"github.com/opencloud-eu/reva/v2/pkg/rhttp/global"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )

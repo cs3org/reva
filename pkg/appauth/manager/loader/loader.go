@@ -20,6 +20,6 @@ package loader
 
 import (
 	// Load core application auth manager drivers.
-	_ "github.com/cs3org/reva/v2/pkg/appauth/manager/json"
+	_ "github.com/opencloud-eu/reva/v2/pkg/appauth/manager/json"
 	// Add your own here
 )

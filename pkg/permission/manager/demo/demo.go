@@ -20,8 +20,8 @@ package demo
 
 import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/permission"
-	"github.com/cs3org/reva/v2/pkg/permission/manager/registry"
+	"github.com/opencloud-eu/reva/v2/pkg/permission"
+	"github.com/opencloud-eu/reva/v2/pkg/permission/manager/registry"
 )
 
 func init() {

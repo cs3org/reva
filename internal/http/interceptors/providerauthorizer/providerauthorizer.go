@@ -25,14 +25,14 @@ import (
 	"strings"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/ocm/provider"
-	"github.com/cs3org/reva/v2/pkg/ocm/provider/authorizer/registry"
-	"github.com/cs3org/reva/v2/pkg/rhttp/global"
-	"github.com/cs3org/reva/v2/pkg/rhttp/router"
-	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
+	"github.com/opencloud-eu/reva/v2/pkg/appctx"
+	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/pkg/ocm/provider"
+	"github.com/opencloud-eu/reva/v2/pkg/ocm/provider/authorizer/registry"
+	"github.com/opencloud-eu/reva/v2/pkg/rhttp/global"
+	"github.com/opencloud-eu/reva/v2/pkg/rhttp/router"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
 type config struct {

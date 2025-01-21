@@ -19,8 +19,8 @@
 package indexer
 
 import (
-	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/index"
 	"github.com/iancoleman/strcase"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/indexer/index"
 )
 
 // typeMap stores the indexer layout at runtime.

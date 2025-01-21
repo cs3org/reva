@@ -22,9 +22,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/response"
-	"github.com/cs3org/reva/v2/pkg/conversions"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocs/response"
+	"github.com/opencloud-eu/reva/v2/pkg/conversions"
+	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 )
 
 // The Handler renders the user endpoint

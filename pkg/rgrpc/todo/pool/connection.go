@@ -23,7 +23,7 @@ import (
 	"os"
 	"strconv"
 
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
+	rtrace "github.com/opencloud-eu/reva/v2/pkg/trace"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
@@ -76,7 +76,7 @@ func NewConn(target string, opts ...Option) (*grpc.ClientConn, error) {
 	// To avoid inconsistencies and race conditions we get the configuration here.
 	// Please do NOT follow the pattern of calling `os.Getenv` in the wild without consulting docu team first.
 	maxRcvMsgSize := _defaultMaxCallRecvMsgSize
-	if e := os.Getenv("OCIS_GRPC_MAX_RECEIVED_MESSAGE_SIZE"); e != "" {
+	if e := os.Getenv("OC_GRPC_MAX_RECEIVED_MESSAGE_SIZE"); e != "" {
 		s, err := strconv.Atoi(e)
 		if err != nil || s <= 0 {
 			return nil, errors.Wrap(err, "grpc max message size is not a valid int")

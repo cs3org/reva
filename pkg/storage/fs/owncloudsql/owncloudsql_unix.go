@@ -31,7 +31,7 @@ import (
 	"syscall"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 )
 
 // TODO(jfd) get rid of the differences between unix and windows. the inode and dev should never be used for the etag because it interferes with backups

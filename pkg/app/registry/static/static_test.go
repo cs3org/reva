@@ -25,7 +25,7 @@ import (
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 )
 
 func TestFindProviders(t *testing.T) {

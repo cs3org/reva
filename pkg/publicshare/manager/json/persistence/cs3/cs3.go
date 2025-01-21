@@ -24,10 +24,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/publicshare/manager/json/persistence"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/publicshare/manager/json/persistence"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
 type db struct {

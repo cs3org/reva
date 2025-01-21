@@ -24,12 +24,12 @@ import (
 	"google.golang.org/grpc"
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/app"
-	"github.com/cs3org/reva/v2/pkg/app/registry/registry"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/rgrpc"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/mitchellh/mapstructure"
+	"github.com/opencloud-eu/reva/v2/pkg/app"
+	"github.com/opencloud-eu/reva/v2/pkg/app/registry/registry"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/rgrpc"
+	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/status"
 	"github.com/rs/zerolog"
 )
 

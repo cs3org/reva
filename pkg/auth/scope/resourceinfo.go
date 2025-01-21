@@ -31,8 +31,8 @@ import (
 	"github.com/rs/zerolog"
 
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
 func resourceinfoScope(_ context.Context, scope *authpb.Scope, resource interface{}, logger *zerolog.Logger) (bool, error) {

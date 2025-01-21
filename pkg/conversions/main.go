@@ -28,12 +28,12 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/mime"
-	"github.com/cs3org/reva/v2/pkg/publicshare"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
-	"github.com/cs3org/reva/v2/pkg/user"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/mime"
+	"github.com/opencloud-eu/reva/v2/pkg/publicshare"
+	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
+	"github.com/opencloud-eu/reva/v2/pkg/user"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -42,8 +42,8 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	publicsharemgr "github.com/cs3org/reva/v2/pkg/publicshare/manager/registry"
-	usermgr "github.com/cs3org/reva/v2/pkg/user/manager/registry"
+	publicsharemgr "github.com/opencloud-eu/reva/v2/pkg/publicshare/manager/registry"
+	usermgr "github.com/opencloud-eu/reva/v2/pkg/user/manager/registry"
 )
 
 const (

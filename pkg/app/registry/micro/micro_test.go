@@ -26,7 +26,7 @@ import (
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/google/uuid"
-	oreg "github.com/owncloud/ocis/v2/ocis-pkg/registry"
+	oreg "github.com/opencloud-eu/opencloud/pkg/registry"
 	"go-micro.dev/v4/registry"
 	mreg "go-micro.dev/v4/registry"
 )

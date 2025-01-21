@@ -30,7 +30,7 @@ import (
 	"runtime"
 	"strconv"
 
-	"github.com/owncloud/ocis/v2/services/webdav/pkg/net"
+	"github.com/opencloud-eu/opencloud/services/webdav/pkg/net"
 	"github.com/pkg/errors"
 	"github.com/studio-b12/gowebdav"
 
@@ -38,11 +38,11 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v2/internal/http/services/datagateway"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/rhttp"
-	"github.com/cs3org/reva/v2/pkg/storage"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v2/internal/http/services/datagateway"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/rhttp"
+	"github.com/opencloud-eu/reva/v2/pkg/storage"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
 // TempDir creates a temporary directory in tmp/ and returns its path

@@ -24,7 +24,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/cs3org/reva/v2/pkg/storage/utils/downloader"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/downloader"
 
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )

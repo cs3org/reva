@@ -25,7 +25,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/cs3org/reva/v2/pkg/user/manager/owncloudsql/accounts"
+	"github.com/opencloud-eu/reva/v2/pkg/user/manager/owncloudsql/accounts"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

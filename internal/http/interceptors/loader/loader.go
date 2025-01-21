@@ -20,9 +20,9 @@ package loader
 
 import (
 	// Load core HTTP middlewares.
-	_ "github.com/cs3org/reva/v2/internal/http/interceptors/cors"
-	_ "github.com/cs3org/reva/v2/internal/http/interceptors/prometheus"
-	_ "github.com/cs3org/reva/v2/internal/http/interceptors/providerauthorizer"
-	_ "github.com/cs3org/reva/v2/internal/http/interceptors/requestid"
+	_ "github.com/opencloud-eu/reva/v2/internal/http/interceptors/cors"
+	_ "github.com/opencloud-eu/reva/v2/internal/http/interceptors/prometheus"
+	_ "github.com/opencloud-eu/reva/v2/internal/http/interceptors/providerauthorizer"
+	_ "github.com/opencloud-eu/reva/v2/internal/http/interceptors/requestid"
 	// Add your own middleware.
 )

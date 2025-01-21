@@ -24,12 +24,12 @@ import (
 	"google.golang.org/grpc"
 
 	preferencespb "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/preferences"
-	"github.com/cs3org/reva/v2/pkg/preferences/registry"
-	"github.com/cs3org/reva/v2/pkg/rgrpc"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/mitchellh/mapstructure"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/preferences"
+	"github.com/opencloud-eu/reva/v2/pkg/preferences/registry"
+	"github.com/opencloud-eu/reva/v2/pkg/rgrpc"
+	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/status"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )

@@ -38,11 +38,11 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/net"
+	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
 var tracer trace.Tracer

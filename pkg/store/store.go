@@ -23,13 +23,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cs3org/reva/v2/pkg/store/etcd"
-	"github.com/cs3org/reva/v2/pkg/store/memory"
 	natsjs "github.com/go-micro/plugins/v4/store/nats-js"
 	natsjskv "github.com/go-micro/plugins/v4/store/nats-js-kv"
 	"github.com/go-micro/plugins/v4/store/redis"
 	redisopts "github.com/go-redis/redis/v8"
 	"github.com/nats-io/nats.go"
+	"github.com/opencloud-eu/reva/v2/pkg/store/etcd"
+	"github.com/opencloud-eu/reva/v2/pkg/store/memory"
 	"go-micro.dev/v4/logger"
 	microstore "go-micro.dev/v4/store"
 )

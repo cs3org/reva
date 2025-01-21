@@ -25,13 +25,13 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/mitchellh/mapstructure"
+	"github.com/opencloud-eu/reva/v2/pkg/logger"
 	"github.com/rs/zerolog"
 
-	"github.com/cs3org/reva/v2/pkg/metrics"
-	"github.com/cs3org/reva/v2/pkg/metrics/config"
-	"github.com/cs3org/reva/v2/pkg/rhttp/global"
+	"github.com/opencloud-eu/reva/v2/pkg/metrics"
+	"github.com/opencloud-eu/reva/v2/pkg/metrics/config"
+	"github.com/opencloud-eu/reva/v2/pkg/rhttp/global"
 )
 
 func init() {

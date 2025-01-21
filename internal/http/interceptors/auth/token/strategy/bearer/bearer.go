@@ -23,8 +23,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cs3org/reva/v2/internal/http/interceptors/auth/token/registry"
-	"github.com/cs3org/reva/v2/pkg/auth"
+	"github.com/opencloud-eu/reva/v2/internal/http/interceptors/auth/token/registry"
+	"github.com/opencloud-eu/reva/v2/pkg/auth"
 )
 
 func init() {

@@ -36,17 +36,17 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
-	"github.com/cs3org/reva/v2/internal/grpc/services/usershareprovider"
-	"github.com/cs3org/reva/v2/pkg/conversions"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/v2/pkg/share"
-	_ "github.com/cs3org/reva/v2/pkg/share/manager/loader"
-	"github.com/cs3org/reva/v2/pkg/share/manager/registry"
-	"github.com/cs3org/reva/v2/pkg/share/mocks"
-	"github.com/cs3org/reva/v2/pkg/utils"
-	cs3mocks "github.com/cs3org/reva/v2/tests/cs3mocks/mocks"
+	"github.com/opencloud-eu/reva/v2/internal/grpc/services/usershareprovider"
+	"github.com/opencloud-eu/reva/v2/pkg/conversions"
+	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/status"
+	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/opencloud-eu/reva/v2/pkg/share"
+	_ "github.com/opencloud-eu/reva/v2/pkg/share/manager/loader"
+	"github.com/opencloud-eu/reva/v2/pkg/share/manager/registry"
+	"github.com/opencloud-eu/reva/v2/pkg/share/mocks"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
+	cs3mocks "github.com/opencloud-eu/reva/v2/tests/cs3mocks/mocks"
 )
 
 var _ = Describe("user share provider service", func() {

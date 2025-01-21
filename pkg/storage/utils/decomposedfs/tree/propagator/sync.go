@@ -25,10 +25,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v2/pkg/appctx"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/rogpeppe/go-internal/lockedfile"
 	"github.com/rs/zerolog"
 )

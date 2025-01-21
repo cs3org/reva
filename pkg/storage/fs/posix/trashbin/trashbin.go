@@ -31,12 +31,12 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/storage"
-	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
-	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/options"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v2/pkg/storage"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
 type Trashbin struct {

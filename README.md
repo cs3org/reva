@@ -64,7 +64,7 @@ To run a single one of them you can do:
 
 ```sh
 $ go test `go list ./pkg/utils/...`
-ok  	github.com/cs3org/reva/v2/pkg/utils	0.374s
+ok  	github.com/opencloud-eu/reva/v2/pkg/utils	0.374s
 ```
 
 ### Integration tests (GRPC)

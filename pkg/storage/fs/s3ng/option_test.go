@@ -21,7 +21,7 @@ package s3ng_test
 import (
 	"github.com/mitchellh/mapstructure"
 
-	"github.com/cs3org/reva/v2/pkg/storage/fs/s3ng"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/s3ng"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

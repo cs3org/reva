@@ -22,10 +22,10 @@ import (
 	"context"
 	"sync"
 
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/preferences"
-	"github.com/cs3org/reva/v2/pkg/preferences/registry"
+	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/preferences"
+	"github.com/opencloud-eu/reva/v2/pkg/preferences/registry"
 )
 
 func init() {

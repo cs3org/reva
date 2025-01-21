@@ -20,6 +20,6 @@ package loader
 
 import (
 	// Load core storage broker drivers.
-	_ "github.com/cs3org/reva/v2/pkg/auth/registry/static"
+	_ "github.com/opencloud-eu/reva/v2/pkg/auth/registry/static"
 	// Add your own here
 )

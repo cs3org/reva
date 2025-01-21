@@ -20,19 +20,19 @@ package loader
 
 import (
 	// Load core storage filesystem backends.
-	_ "github.com/cs3org/reva/v2/pkg/ocm/storage/received"
-	_ "github.com/cs3org/reva/v2/pkg/storage/fs/cephfs"
-	_ "github.com/cs3org/reva/v2/pkg/storage/fs/eos"
-	_ "github.com/cs3org/reva/v2/pkg/storage/fs/eosgrpc"
-	_ "github.com/cs3org/reva/v2/pkg/storage/fs/eosgrpchome"
-	_ "github.com/cs3org/reva/v2/pkg/storage/fs/eoshome"
-	_ "github.com/cs3org/reva/v2/pkg/storage/fs/hello"
-	_ "github.com/cs3org/reva/v2/pkg/storage/fs/local"
-	_ "github.com/cs3org/reva/v2/pkg/storage/fs/localhome"
-	_ "github.com/cs3org/reva/v2/pkg/storage/fs/nextcloud"
-	_ "github.com/cs3org/reva/v2/pkg/storage/fs/ocis"
-	_ "github.com/cs3org/reva/v2/pkg/storage/fs/owncloudsql"
-	_ "github.com/cs3org/reva/v2/pkg/storage/fs/s3"
-	_ "github.com/cs3org/reva/v2/pkg/storage/fs/s3ng"
+	_ "github.com/opencloud-eu/reva/v2/pkg/ocm/storage/received"
+	_ "github.com/opencloud-eu/reva/v2/pkg/storage/fs/cephfs"
+	_ "github.com/opencloud-eu/reva/v2/pkg/storage/fs/eos"
+	_ "github.com/opencloud-eu/reva/v2/pkg/storage/fs/eosgrpc"
+	_ "github.com/opencloud-eu/reva/v2/pkg/storage/fs/eosgrpchome"
+	_ "github.com/opencloud-eu/reva/v2/pkg/storage/fs/eoshome"
+	_ "github.com/opencloud-eu/reva/v2/pkg/storage/fs/hello"
+	_ "github.com/opencloud-eu/reva/v2/pkg/storage/fs/local"
+	_ "github.com/opencloud-eu/reva/v2/pkg/storage/fs/localhome"
+	_ "github.com/opencloud-eu/reva/v2/pkg/storage/fs/nextcloud"
+	_ "github.com/opencloud-eu/reva/v2/pkg/storage/fs/ocis"
+	_ "github.com/opencloud-eu/reva/v2/pkg/storage/fs/owncloudsql"
+	_ "github.com/opencloud-eu/reva/v2/pkg/storage/fs/s3"
+	_ "github.com/opencloud-eu/reva/v2/pkg/storage/fs/s3ng"
 	// Add your own here
 )

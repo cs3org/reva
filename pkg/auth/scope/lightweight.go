@@ -26,7 +26,7 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 )
 

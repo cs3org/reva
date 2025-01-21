@@ -25,10 +25,10 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/user"
-	"github.com/cs3org/reva/v2/pkg/user/manager/registry"
 	"github.com/mitchellh/mapstructure"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/user"
+	"github.com/opencloud-eu/reva/v2/pkg/user/manager/registry"
 	"github.com/pkg/errors"
 )
 

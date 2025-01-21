@@ -31,16 +31,16 @@ import (
 	"github.com/pkg/errors"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/metrics"
-	"github.com/cs3org/reva/v2/pkg/storage"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v2/pkg/appctx"
+	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/rhttp/datatx/metrics"
+	"github.com/opencloud-eu/reva/v2/pkg/storage"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/chunking"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/upload"
+	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
 // Upload uploads data to the given resource

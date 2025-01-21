@@ -18,7 +18,7 @@
 
 package registration
 
-import "github.com/cs3org/reva/v2/pkg/siteacc/html"
+import "github.com/opencloud-eu/reva/v2/pkg/siteacc/html"
 
 // PanelTemplate is the content provider for the registration form.
 type PanelTemplate struct {

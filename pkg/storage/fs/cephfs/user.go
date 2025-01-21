@@ -29,15 +29,15 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 
 	cephfs2 "github.com/ceph/go-ceph/cephfs"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ctx2 "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/mime"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
+	ctx2 "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	"github.com/opencloud-eu/reva/v2/pkg/mime"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/templates"
 	"github.com/pkg/errors"
 )
 

@@ -27,7 +27,7 @@ import (
 	"net/http"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

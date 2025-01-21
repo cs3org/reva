@@ -24,7 +24,7 @@ Any metrics data driver must implement this interface.
 Each metric function should return the current/latest available metrics figure relevant to that function.
 */
 
-import "github.com/cs3org/reva/v2/pkg/metrics/config"
+import "github.com/opencloud-eu/reva/v2/pkg/metrics/config"
 
 // Reader the Reader interface
 type Reader interface {

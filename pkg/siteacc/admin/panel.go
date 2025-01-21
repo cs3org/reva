@@ -21,9 +21,9 @@ package admin
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/v2/pkg/siteacc/config"
-	"github.com/cs3org/reva/v2/pkg/siteacc/data"
-	"github.com/cs3org/reva/v2/pkg/siteacc/html"
+	"github.com/opencloud-eu/reva/v2/pkg/siteacc/config"
+	"github.com/opencloud-eu/reva/v2/pkg/siteacc/data"
+	"github.com/opencloud-eu/reva/v2/pkg/siteacc/html"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
