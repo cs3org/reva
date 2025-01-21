@@ -21,8 +21,8 @@ package exporters
 import (
 	"github.com/rs/zerolog"
 
-	"github.com/cs3org/reva/v2/pkg/mentix/config"
-	"github.com/cs3org/reva/v2/pkg/mentix/exchangers/exporters/cs3api"
+	"github.com/opencloud-eu/reva/v2/pkg/mentix/config"
+	"github.com/opencloud-eu/reva/v2/pkg/mentix/exchangers/exporters/cs3api"
 )
 
 // CS3APIExporter implements the CS3API exporter.

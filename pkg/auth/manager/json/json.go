@@ -26,11 +26,11 @@ import (
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/auth"
-	"github.com/cs3org/reva/v2/pkg/auth/manager/registry"
-	"github.com/cs3org/reva/v2/pkg/auth/scope"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/mitchellh/mapstructure"
+	"github.com/opencloud-eu/reva/v2/pkg/auth"
+	"github.com/opencloud-eu/reva/v2/pkg/auth/manager/registry"
+	"github.com/opencloud-eu/reva/v2/pkg/auth/scope"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/pkg/errors"
 )
 

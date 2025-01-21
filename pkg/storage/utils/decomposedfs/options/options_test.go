@@ -19,7 +19,7 @@
 package options_test
 
 import (
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/options"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

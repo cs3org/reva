@@ -25,15 +25,15 @@ import (
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/group"
-	"github.com/cs3org/reva/v2/pkg/group/manager/registry"
-	"github.com/cs3org/reva/v2/pkg/utils"
-	ldapIdentity "github.com/cs3org/reva/v2/pkg/utils/ldap"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
+	"github.com/opencloud-eu/reva/v2/pkg/appctx"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/group"
+	"github.com/opencloud-eu/reva/v2/pkg/group/manager/registry"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
+	ldapIdentity "github.com/opencloud-eu/reva/v2/pkg/utils/ldap"
 	"github.com/pkg/errors"
 )
 

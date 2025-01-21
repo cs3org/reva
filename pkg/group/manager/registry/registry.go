@@ -18,7 +18,7 @@
 
 package registry
 
-import "github.com/cs3org/reva/v2/pkg/group"
+import "github.com/opencloud-eu/reva/v2/pkg/group"
 
 // NewFunc is the function that group managers
 // should register at init time.

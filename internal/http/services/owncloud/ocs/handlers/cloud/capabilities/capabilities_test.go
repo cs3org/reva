@@ -23,7 +23,7 @@ import (
 	"encoding/xml"
 	"testing"
 
-	"github.com/cs3org/reva/v2/pkg/owncloud/ocs"
+	"github.com/opencloud-eu/reva/v2/pkg/owncloud/ocs"
 )
 
 func TestMarshal(t *testing.T) {

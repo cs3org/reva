@@ -23,9 +23,9 @@ import (
 	"strings"
 
 	identityUser "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/google/uuid"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )

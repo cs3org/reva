@@ -19,7 +19,7 @@
 package option
 
 import (
-	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata"
 )
 
 // Option defines a single option function.

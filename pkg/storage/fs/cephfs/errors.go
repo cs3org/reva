@@ -30,7 +30,7 @@ import "C"
 import (
 	"fmt"
 
-	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 )
 
 func wrapErrorMsg(code C.int) string {

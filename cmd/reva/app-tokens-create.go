@@ -31,8 +31,8 @@ import (
 	share "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/auth/scope"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/auth/scope"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 )
 
 type appTokenCreateOpts struct {

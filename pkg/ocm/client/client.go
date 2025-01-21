@@ -27,10 +27,10 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/cs3org/reva/v2/internal/http/services/ocmd"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/rhttp"
+	"github.com/opencloud-eu/reva/v2/internal/http/services/ocmd"
+	"github.com/opencloud-eu/reva/v2/pkg/appctx"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/rhttp"
 	"github.com/pkg/errors"
 )
 

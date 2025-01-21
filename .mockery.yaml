@@ -4,44 +4,44 @@ dir: "{{.InterfaceDir}}/mocks"
 mockname: "{{.InterfaceName}}"
 outpkg: "mocks"
 packages:
-    github.com/cs3org/reva/v2/pkg/publicshare/manager/owncloudsql:
+    github.com/opencloud-eu/reva/v2/pkg/publicshare/manager/owncloudsql:
         interfaces:
             UserConverter:
-    github.com/cs3org/reva/v2/pkg/publicshare:
+    github.com/opencloud-eu/reva/v2/pkg/publicshare:
         interfaces:
             Manager:
-    github.com/cs3org/reva/v2/pkg/share:
+    github.com/opencloud-eu/reva/v2/pkg/share:
         interfaces:
             Manager:
-    github.com/cs3org/reva/v2/pkg/share/manager/owncloudsql:
+    github.com/opencloud-eu/reva/v2/pkg/share/manager/owncloudsql:
         interfaces:
             UserConverter:
-    github.com/cs3org/reva/v2/pkg/storage/fs/posix/tree:
+    github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/tree:
         interfaces:
             Blobstore:
-    github.com/cs3org/reva/v2/pkg/storage/registry/spaces:
+    github.com/opencloud-eu/reva/v2/pkg/storage/registry/spaces:
         interfaces:
             StorageProviderClient:
-    github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node:
+    github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/node:
         interfaces:
             Tree:
-    github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/permissions:
+    github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/permissions:
         interfaces:
             PermissionsChecker:
             CS3PermissionsClient:
-    github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree:
+    github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/tree:
         interfaces:
             Blobstore:
-    github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/usermapper:
+    github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/usermapper:
         interfaces:
             Mapper:
-    github.com/cs3org/reva/v2/pkg/storage/utils/indexer:
+    github.com/opencloud-eu/reva/v2/pkg/storage/utils/indexer:
         interfaces:
             Indexer:
-    github.com/cs3org/reva/v2/pkg/storage/utils/metadata:
+    github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata:
         interfaces:
             Storage:
-    github.com/cs3org/reva/v2/tests/cs3mocks:
+    github.com/opencloud-eu/reva/v2/tests/cs3mocks:
         interfaces:
             GatewayAPIClient:
             CollaborationAPIClient:

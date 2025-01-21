@@ -21,7 +21,7 @@ package index
 import (
 	"context"
 
-	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/option"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/indexer/option"
 )
 
 // Index can be implemented to create new indexer-strategies. See Unique for example.

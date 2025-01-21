@@ -21,8 +21,8 @@ package ocdav
 import (
 	// initialize reva registries by importing the relevant loader packages
 	// see cmd/revad/runtime/loader.go for other loaders if a service is not found
-	_ "github.com/cs3org/reva/v2/internal/http/interceptors/auth/credential/loader"
-	_ "github.com/cs3org/reva/v2/internal/http/interceptors/auth/token/loader"
-	_ "github.com/cs3org/reva/v2/internal/http/interceptors/auth/tokenwriter/loader"
-	_ "github.com/cs3org/reva/v2/pkg/token/manager/loader"
+	_ "github.com/opencloud-eu/reva/v2/internal/http/interceptors/auth/credential/loader"
+	_ "github.com/opencloud-eu/reva/v2/internal/http/interceptors/auth/token/loader"
+	_ "github.com/opencloud-eu/reva/v2/internal/http/interceptors/auth/tokenwriter/loader"
+	_ "github.com/opencloud-eu/reva/v2/pkg/token/manager/loader"
 )

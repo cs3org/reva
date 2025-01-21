@@ -26,8 +26,8 @@ import (
 
 	auth "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/token"
-	"github.com/cs3org/reva/v2/pkg/token/manager/registry"
+	"github.com/opencloud-eu/reva/v2/pkg/token"
+	"github.com/opencloud-eu/reva/v2/pkg/token/manager/registry"
 	"github.com/pkg/errors"
 )
 

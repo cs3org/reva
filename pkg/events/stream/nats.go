@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
-	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/go-micro/plugins/v4/events/natsjs"
+	"github.com/opencloud-eu/reva/v2/pkg/events"
+	"github.com/opencloud-eu/reva/v2/pkg/logger"
 )
 
 // NatsConfig is the configuration needed for a NATS event stream

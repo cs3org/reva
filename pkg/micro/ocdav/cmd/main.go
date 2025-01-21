@@ -21,7 +21,7 @@ package main
 import (
 	"os"
 
-	"github.com/cs3org/reva/v2/pkg/micro/ocdav"
+	"github.com/opencloud-eu/reva/v2/pkg/micro/ocdav"
 	"github.com/rs/zerolog"
 )
 

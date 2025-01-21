@@ -30,7 +30,7 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 	"golang.org/x/sys/windows"
 )
 

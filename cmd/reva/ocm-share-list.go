@@ -29,8 +29,8 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/ocm/share"
 	"github.com/jedib0t/go-pretty/table"
+	"github.com/opencloud-eu/reva/v2/pkg/ocm/share"
 )
 
 func ocmShareListCommand() *command {

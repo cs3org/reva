@@ -19,7 +19,7 @@
 package registry
 
 import (
-	"github.com/cs3org/reva/v2/pkg/ocm/share"
+	"github.com/opencloud-eu/reva/v2/pkg/ocm/share"
 )
 
 // NewFunc is the function that share repositories

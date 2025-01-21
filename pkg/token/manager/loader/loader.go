@@ -20,7 +20,7 @@ package loader
 
 import (
 	// Load core token managers.
-	_ "github.com/cs3org/reva/v2/pkg/token/manager/demo"
-	_ "github.com/cs3org/reva/v2/pkg/token/manager/jwt"
+	_ "github.com/opencloud-eu/reva/v2/pkg/token/manager/demo"
+	_ "github.com/opencloud-eu/reva/v2/pkg/token/manager/jwt"
 	// Add your own here.
 )

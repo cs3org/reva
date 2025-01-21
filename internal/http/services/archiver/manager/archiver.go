@@ -27,9 +27,9 @@ import (
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/downloader"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/walker"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/downloader"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/walker"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
 // Config is the config for the Archiver

@@ -24,8 +24,8 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/cs3org/reva/v2/pkg/mentix/utils/network"
-	"github.com/cs3org/reva/v2/pkg/siteacc/data"
+	"github.com/opencloud-eu/reva/v2/pkg/mentix/utils/network"
+	"github.com/opencloud-eu/reva/v2/pkg/siteacc/data"
 	"github.com/pkg/errors"
 )
 

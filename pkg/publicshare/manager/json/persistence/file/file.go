@@ -26,7 +26,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/cs3org/reva/v2/pkg/publicshare/manager/json/persistence"
+	"github.com/opencloud-eu/reva/v2/pkg/publicshare/manager/json/persistence"
 )
 
 type file struct {

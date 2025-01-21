@@ -20,7 +20,7 @@ package loader
 
 import (
 	// Load core application providers.
-	_ "github.com/cs3org/reva/v2/pkg/app/provider/demo"
-	_ "github.com/cs3org/reva/v2/pkg/app/provider/wopi"
+	_ "github.com/opencloud-eu/reva/v2/pkg/app/provider/demo"
+	_ "github.com/opencloud-eu/reva/v2/pkg/app/provider/wopi"
 	// Add your own here
 )

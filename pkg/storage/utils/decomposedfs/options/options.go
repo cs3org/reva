@@ -23,10 +23,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/v2/pkg/sharedconf"
-	"github.com/cs3org/reva/v2/pkg/storage/cache"
 	"github.com/mitchellh/mapstructure"
+	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/opencloud-eu/reva/v2/pkg/sharedconf"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
 	"github.com/pkg/errors"
 )
 

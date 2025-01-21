@@ -1,4 +1,4 @@
-module github.com/cs3org/reva/v2
+module github.com/opencloud-eu/reva/v2
 
 go 1.22.0
 

@@ -22,9 +22,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cs3org/reva/v2/internal/grpc/services/helloworld/proto"
-	"github.com/cs3org/reva/v2/pkg/rgrpc"
 	"github.com/mitchellh/mapstructure"
+	"github.com/opencloud-eu/reva/v2/internal/grpc/services/helloworld/proto"
+	"github.com/opencloud-eu/reva/v2/pkg/rgrpc"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"

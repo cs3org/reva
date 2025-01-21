@@ -27,7 +27,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.opencensus.io/stats/view"
 
-	"github.com/cs3org/reva/v2/pkg/rhttp/global"
+	"github.com/opencloud-eu/reva/v2/pkg/rhttp/global"
 )
 
 func init() {

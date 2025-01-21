@@ -20,9 +20,9 @@ package loader
 
 import (
 	// Load core share manager drivers.
-	_ "github.com/cs3org/reva/v2/pkg/publicshare/manager/cs3"
-	_ "github.com/cs3org/reva/v2/pkg/publicshare/manager/json"
-	_ "github.com/cs3org/reva/v2/pkg/publicshare/manager/memory"
-	_ "github.com/cs3org/reva/v2/pkg/publicshare/manager/owncloudsql"
+	_ "github.com/opencloud-eu/reva/v2/pkg/publicshare/manager/cs3"
+	_ "github.com/opencloud-eu/reva/v2/pkg/publicshare/manager/json"
+	_ "github.com/opencloud-eu/reva/v2/pkg/publicshare/manager/memory"
+	_ "github.com/opencloud-eu/reva/v2/pkg/publicshare/manager/owncloudsql"
 	// Add your own here
 )

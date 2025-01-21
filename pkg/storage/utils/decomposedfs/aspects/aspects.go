@@ -19,11 +19,11 @@
 package aspects
 
 import (
-	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/permissions"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/trashbin"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/usermapper"
+	"github.com/opencloud-eu/reva/v2/pkg/events"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/permissions"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/trashbin"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/usermapper"
 )
 
 // Aspects holds dependencies for handling aspects of the decomposedfs

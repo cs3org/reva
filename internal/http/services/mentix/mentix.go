@@ -21,15 +21,15 @@ package mentix
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/v2/pkg/mentix/meshdata"
 	"github.com/mitchellh/mapstructure"
+	"github.com/opencloud-eu/reva/v2/pkg/mentix/meshdata"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
-	"github.com/cs3org/reva/v2/pkg/mentix"
-	"github.com/cs3org/reva/v2/pkg/mentix/config"
-	"github.com/cs3org/reva/v2/pkg/mentix/exchangers"
-	"github.com/cs3org/reva/v2/pkg/rhttp/global"
+	"github.com/opencloud-eu/reva/v2/pkg/mentix"
+	"github.com/opencloud-eu/reva/v2/pkg/mentix/config"
+	"github.com/opencloud-eu/reva/v2/pkg/mentix/exchangers"
+	"github.com/opencloud-eu/reva/v2/pkg/rhttp/global"
 )
 
 func init() {

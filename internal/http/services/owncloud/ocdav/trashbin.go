@@ -31,22 +31,22 @@ import (
 
 	"go.opentelemetry.io/otel/codes"
 
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/config"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/prop"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/config"
+	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/errors"
+	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/net"
+	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/prop"
+	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/propfind"
+	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
+	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	semconv "go.opentelemetry.io/otel/semconv/v1.20.0"
 
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	rstatus "github.com/cs3org/reva/v2/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v2/pkg/appctx"
+	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
+	rstatus "github.com/opencloud-eu/reva/v2/pkg/rgrpc/status"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
 // TrashbinHandler handles trashbin requests

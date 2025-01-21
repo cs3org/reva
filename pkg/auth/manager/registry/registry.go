@@ -19,7 +19,7 @@
 package registry
 
 import (
-	"github.com/cs3org/reva/v2/pkg/auth"
+	"github.com/opencloud-eu/reva/v2/pkg/auth"
 )
 
 // NewFunc is the function that auth implementations

@@ -18,7 +18,7 @@
 
 package registry
 
-import "github.com/cs3org/reva/v2/pkg/appauth"
+import "github.com/opencloud-eu/reva/v2/pkg/appauth"
 
 // NewFunc is the function that application auth implementations
 // should register at init time.

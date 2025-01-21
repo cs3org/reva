@@ -22,10 +22,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cs3org/reva/v2/pkg/siteacc/credentials"
+	"github.com/opencloud-eu/reva/v2/pkg/siteacc/credentials"
 	"github.com/pkg/errors"
 
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
 // Account represents a single site account.

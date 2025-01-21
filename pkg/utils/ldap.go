@@ -23,9 +23,9 @@ import (
 	"crypto/x509"
 	"os"
 
-	"github.com/cs3org/reva/v2/pkg/logger"
-	ldapReconnect "github.com/cs3org/reva/v2/pkg/utils/ldap"
 	"github.com/go-ldap/ldap/v3"
+	"github.com/opencloud-eu/reva/v2/pkg/logger"
+	ldapReconnect "github.com/opencloud-eu/reva/v2/pkg/utils/ldap"
 	"github.com/pkg/errors"
 )
 

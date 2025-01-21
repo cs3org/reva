@@ -28,8 +28,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cs3org/reva/v2/pkg/storage/cache"
 	"github.com/google/renameio/v2"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
 	"github.com/pkg/xattr"
 	"github.com/rogpeppe/go-internal/lockedfile"
 	"github.com/shamaton/msgpack/v2"

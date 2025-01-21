@@ -1,6 +1,6 @@
 package config
 
-import "github.com/cs3org/reva/v2/pkg/sharedconf"
+import "github.com/opencloud-eu/reva/v2/pkg/sharedconf"
 
 // Config holds the config options that need to be passed down to all ocdav handlers
 type Config struct {

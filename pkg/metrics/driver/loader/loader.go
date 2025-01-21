@@ -20,8 +20,8 @@ package loader
 
 import (
 	// Load metrics drivers.
-	_ "github.com/cs3org/reva/v2/pkg/metrics/driver/dummy"
-	_ "github.com/cs3org/reva/v2/pkg/metrics/driver/json"
-	_ "github.com/cs3org/reva/v2/pkg/metrics/driver/xcloud"
+	_ "github.com/opencloud-eu/reva/v2/pkg/metrics/driver/dummy"
+	_ "github.com/opencloud-eu/reva/v2/pkg/metrics/driver/json"
+	_ "github.com/opencloud-eu/reva/v2/pkg/metrics/driver/xcloud"
 	// Add your own here
 )

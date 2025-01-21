@@ -26,7 +26,7 @@ import (
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/app/registry/static"
+	"github.com/opencloud-eu/reva/v2/pkg/app/registry/static"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -23,9 +23,9 @@ import (
 	"net/http"
 	"path"
 
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
-	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/errors"
+	"github.com/opencloud-eu/reva/v2/internal/http/services/owncloud/ocdav/propfind"
+	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 )
 
 // Common Webdav methods.

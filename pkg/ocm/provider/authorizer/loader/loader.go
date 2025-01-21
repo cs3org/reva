@@ -20,8 +20,8 @@ package loader
 
 import (
 	// Load core share manager drivers.
-	_ "github.com/cs3org/reva/v2/pkg/ocm/provider/authorizer/json"
-	_ "github.com/cs3org/reva/v2/pkg/ocm/provider/authorizer/mentix"
-	_ "github.com/cs3org/reva/v2/pkg/ocm/provider/authorizer/open"
+	_ "github.com/opencloud-eu/reva/v2/pkg/ocm/provider/authorizer/json"
+	_ "github.com/opencloud-eu/reva/v2/pkg/ocm/provider/authorizer/mentix"
+	_ "github.com/opencloud-eu/reva/v2/pkg/ocm/provider/authorizer/open"
 	// Add your own here.
 )

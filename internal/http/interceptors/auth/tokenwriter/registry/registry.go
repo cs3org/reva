@@ -18,7 +18,7 @@
 
 package registry
 
-import "github.com/cs3org/reva/v2/pkg/auth"
+import "github.com/opencloud-eu/reva/v2/pkg/auth"
 
 // NewTokenFunc is the function that token writers
 // should register at init time.

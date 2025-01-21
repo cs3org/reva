@@ -26,9 +26,9 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 )
 
 // RevaPlugin represents the runtime plugin

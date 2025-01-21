@@ -24,9 +24,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/cs3org/reva/v2/pkg/mentix/connectors"
-	"github.com/cs3org/reva/v2/pkg/mentix/exchangers"
-	"github.com/cs3org/reva/v2/pkg/mentix/meshdata"
+	"github.com/opencloud-eu/reva/v2/pkg/mentix/connectors"
+	"github.com/opencloud-eu/reva/v2/pkg/mentix/exchangers"
+	"github.com/opencloud-eu/reva/v2/pkg/mentix/meshdata"
 )
 
 // Importer is the interface that all importers must implement.

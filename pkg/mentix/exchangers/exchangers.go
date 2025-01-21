@@ -21,7 +21,7 @@ package exchangers
 import (
 	"fmt"
 
-	"github.com/cs3org/reva/v2/pkg/mentix/entity"
+	"github.com/opencloud-eu/reva/v2/pkg/mentix/entity"
 )
 
 // Collection is an interface for exchanger collections.

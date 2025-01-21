@@ -21,8 +21,8 @@ package ocis_test
 import (
 	"os"
 
-	"github.com/cs3org/reva/v2/pkg/storage/fs/ocis"
-	"github.com/cs3org/reva/v2/tests/helpers"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/ocis"
+	"github.com/opencloud-eu/reva/v2/tests/helpers"
 	"github.com/rs/zerolog"
 
 	. "github.com/onsi/ginkgo/v2"
