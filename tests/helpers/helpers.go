@@ -30,7 +30,7 @@ import (
 	"runtime"
 	"strconv"
 
-	"github.com/owncloud/ocis/v2/services/webdav/pkg/net"
+	"github.com/opencloud-eu/opencloud/services/webdav/pkg/net"
 	"github.com/pkg/errors"
 	"github.com/studio-b12/gowebdav"
 
