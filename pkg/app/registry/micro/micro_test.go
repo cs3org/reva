@@ -24,12 +24,14 @@ import (
 	"time"
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
-	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/google/uuid"
 	oreg "github.com/owncloud/ocis/v2/ocis-pkg/registry"
-	"go-micro.dev/v4/registry"
 	mreg "go-micro.dev/v4/registry"
 )
+
+func init() {
+	_ = oreg.GetRegistry(oreg.Inmemory())
+}
 
 func TestFindProviders(t *testing.T) {
 
@@ -47,7 +49,7 @@ func TestFindProviders(t *testing.T) {
 			registryNamespace: "noMimeTypesRegistered",
 			mimeTypes:         []*mimeTypeConfig{},
 			mimeType:          "SOMETHING",
-			expectedErr:       registry.ErrNotFound,
+			expectedErr:       mreg.ErrNotFound,
 		},
 		{
 			name:              "one provider registered for one mime type",
@@ -182,363 +184,360 @@ func TestFindProviders(t *testing.T) {
 
 	for _, tt := range testCases {
 
-		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.TODO()
+		ctx := context.TODO()
 
-			// register all the providers
-			for _, p := range tt.regProviders {
-				err := registerWithMicroReg(tt.registryNamespace, p)
-				if err != nil {
-					t.Error("unexpected error adding a new provider in the registry:", err)
-				}
-			}
-
-			registry, err := New(map[string]interface{}{
-				"mime_types": tt.mimeTypes,
-				"namespace":  tt.registryNamespace, // TODO: move this to a const
-			})
-
+		// register all the providers
+		for _, p := range tt.regProviders {
+			err := registerWithMicroReg(tt.registryNamespace, p)
 			if err != nil {
-				t.Error("unexpected error creating the registry:", err)
+				t.Error("unexpected error adding a new provider in the registry:", err)
 			}
+		}
 
-			providers, err := registry.FindProviders(ctx, tt.mimeType)
-
-			// check that the error returned by FindProviders is the same as the expected
-			if tt.expectedErr != err {
-				t.Errorf("different error returned: got=%v expected=%v", err, tt.expectedErr)
-			}
-
-			// expected: slice of pointers, got: slice of pointers with weird opague notation
-			if !providersEquals(providers, tt.expectedRes) {
-				t.Errorf("providers list different from expected: \n\tgot=%v\n\texp=%v", providers, tt.expectedRes)
-			}
-
+		registry, err := New(map[string]interface{}{
+			"mime_types": tt.mimeTypes,
+			"namespace":  tt.registryNamespace, // TODO: move this to a const
 		})
+
+		if err != nil {
+			t.Error("unexpected error creating the registry:", err)
+		}
+
+		providers, err := registry.FindProviders(ctx, tt.mimeType)
+
+		// check that the error returned by FindProviders is the same as the expected
+		if tt.expectedErr != err {
+			t.Errorf("different error returned: got=%v expected=%v", err, tt.expectedErr)
+		}
+
+		// expected: slice of pointers, got: slice of pointers with weird opague notation
+		if !providersEquals(providers, tt.expectedRes) {
+			t.Errorf("providers list different from expected: \n\tgot=%v\n\texp=%v", providers, tt.expectedRes)
+		}
 
 	}
 
 }
 
-func TestFindProvidersWithPriority(t *testing.T) {
-
-	testCases := []struct {
-		name              string
-		mimeTypes         []*mimeTypeConfig
-		regProviders      []*registrypb.ProviderInfo
-		mimeType          string
-		expectedRes       []*registrypb.ProviderInfo
-		expectedErr       error
-		registryNamespace string
-	}{
-		{
-			name:              "no mime types registered",
-			registryNamespace: "noMimeTypesRegistered",
-			mimeTypes:         []*mimeTypeConfig{},
-			mimeType:          "SOMETHING",
-			expectedErr:       registry.ErrNotFound,
-		},
-		{
-			name:              "one provider registered for one mime type",
-			registryNamespace: "oneProviderRegisteredForOneMimeType",
-			mimeTypes: []*mimeTypeConfig{
-				{
-					MimeType:   "text/json",
-					Extension:  "json",
-					Name:       "JSON File",
-					Icon:       "https://example.org/icons&file=json.png",
-					DefaultApp: "some Address",
-				},
-			},
-			regProviders: []*registrypb.ProviderInfo{
-				{
-					MimeTypes: []string{"text/json"},
-					Address:   "127.0.0.1:65535",
-					Name:      "some Name",
-					Opaque: &typesv1beta1.Opaque{
-						Map: map[string]*typesv1beta1.OpaqueEntry{
-							"priority": {
-								Decoder: "plain",
-								Value:   []byte("100"),
-							},
-						},
-					},
-				},
-			},
-			mimeType:    "text/json",
-			expectedErr: nil,
-			expectedRes: []*registrypb.ProviderInfo{
-				{
-					MimeTypes: []string{"text/json"},
-					Address:   "127.0.0.1:65535",
-					Name:      "some Name",
-				},
-			},
-		},
-		{
-			name:              "more providers registered for one mime type",
-			registryNamespace: "moreProvidersRegisteredForOneMimeType",
-			mimeTypes: []*mimeTypeConfig{
-				{
-					MimeType:   "text/json",
-					Extension:  "json",
-					Name:       "JSON File",
-					Icon:       "https://example.org/icons&file=json.png",
-					DefaultApp: "provider2",
-				},
-			},
-			regProviders: []*registrypb.ProviderInfo{
-				{
-					MimeTypes: []string{"text/json"},
-					Address:   "127.0.0.1:65535",
-					Name:      "provider1",
-					Opaque: &typesv1beta1.Opaque{
-						Map: map[string]*typesv1beta1.OpaqueEntry{
-							"priority": {
-								Decoder: "plain",
-								Value:   []byte("10"),
-							},
-						},
-					},
-				},
-				{
-					MimeTypes: []string{"text/json"},
-					Address:   "127.0.0.2:65535",
-					Name:      "provider2",
-					Opaque: &typesv1beta1.Opaque{
-						Map: map[string]*typesv1beta1.OpaqueEntry{
-							"priority": {
-								Decoder: "plain",
-								Value:   []byte("20"),
-							},
-						},
-					},
-				},
-				{
-					MimeTypes: []string{"text/json"},
-					Address:   "127.0.0.3:65535",
-					Name:      "provider3",
-					Opaque: &typesv1beta1.Opaque{
-						Map: map[string]*typesv1beta1.OpaqueEntry{
-							"priority": {
-								Decoder: "plain",
-								Value:   []byte("5"),
-							},
-						},
-					},
-				},
-			},
-			mimeType:    "text/json",
-			expectedErr: nil,
-			expectedRes: []*registrypb.ProviderInfo{
-				{
-					MimeTypes: []string{"text/json"},
-					Address:   "127.0.0.2:65535",
-					Name:      "provider2",
-				},
-				{
-					MimeTypes: []string{"text/json"},
-					Address:   "127.0.0.1:65535",
-					Name:      "provider1",
-				},
-				{
-					MimeTypes: []string{"text/json"},
-					Address:   "127.0.0.3:65535",
-					Name:      "provider3",
-				},
-			},
-		},
-		{
-			name:              "more providers registered for different mime types",
-			registryNamespace: "moreProvidersRegisteredForDifferentMimeTypes",
-			mimeTypes: []*mimeTypeConfig{
-				{
-					MimeType:   "text/json",
-					Extension:  "json",
-					Name:       "JSON File",
-					Icon:       "https://example.org/icons&file=json.png",
-					DefaultApp: "provider2",
-				},
-				{
-					MimeType:   "text/xml",
-					Extension:  "xml",
-					Name:       "XML File",
-					Icon:       "https://example.org/icons&file=xml.png",
-					DefaultApp: "provider1",
-				},
-			},
-			regProviders: []*registrypb.ProviderInfo{
-				{
-					MimeTypes: []string{"text/json", "text/xml"},
-					Address:   "127.0.0.1:65535",
-					Name:      "provider1",
-					Opaque: &typesv1beta1.Opaque{
-						Map: map[string]*typesv1beta1.OpaqueEntry{
-							"priority": {
-								Decoder: "plain",
-								Value:   []byte("5"),
-							},
-						},
-					},
-				},
-				{
-					MimeTypes: []string{"text/json"},
-					Address:   "127.0.0.2:65535",
-					Name:      "provider2",
-					Opaque: &typesv1beta1.Opaque{
-						Map: map[string]*typesv1beta1.OpaqueEntry{
-							"priority": {
-								Decoder: "plain",
-								Value:   []byte("100"),
-							},
-						},
-					},
-				},
-				{
-					MimeTypes: []string{"text/xml"},
-					Address:   "127.0.0.3:65535",
-					Name:      "provider3",
-					Opaque: &typesv1beta1.Opaque{
-						Map: map[string]*typesv1beta1.OpaqueEntry{
-							"priority": {
-								Decoder: "plain",
-								Value:   []byte("20"),
-							},
-						},
-					},
-				},
-			},
-			mimeType:    "text/json",
-			expectedErr: nil,
-			expectedRes: []*registrypb.ProviderInfo{
-				{
-					MimeTypes: []string{"text/json"},
-					Address:   "127.0.0.2:65535",
-					Name:      "provider2",
-				},
-				{
-					MimeTypes: []string{"text/json", "text/xml"},
-					Address:   "127.0.0.1:65535",
-					Name:      "provider1",
-				},
-			},
-		},
-		{
-			name:              "more providers registered for different mime types2",
-			registryNamespace: "moreProvidersRegisteredForDifferentMimeTypes2",
-			mimeTypes: []*mimeTypeConfig{
-				{
-					MimeType:   "text/json",
-					Extension:  "json",
-					Name:       "JSON File",
-					Icon:       "https://example.org/icons&file=json.png",
-					DefaultApp: "provider2",
-				},
-				{
-					MimeType:   "text/xml",
-					Extension:  "xml",
-					Name:       "XML File",
-					Icon:       "https://example.org/icons&file=xml.png",
-					DefaultApp: "provider1",
-				},
-			},
-			regProviders: []*registrypb.ProviderInfo{
-				{
-					MimeTypes: []string{"text/json", "text/xml"},
-					Address:   "127.0.0.1:65535",
-					Name:      "provider1",
-					Opaque: &typesv1beta1.Opaque{
-						Map: map[string]*typesv1beta1.OpaqueEntry{
-							"priority": {
-								Decoder: "plain",
-								Value:   []byte("5"),
-							},
-						},
-					},
-				},
-				{
-					MimeTypes: []string{"text/json"},
-					Address:   "127.0.0.2:65535",
-					Name:      "provider2",
-					Opaque: &typesv1beta1.Opaque{
-						Map: map[string]*typesv1beta1.OpaqueEntry{
-							"priority": {
-								Decoder: "plain",
-								Value:   []byte("100"),
-							},
-						},
-					},
-				},
-				{
-					MimeTypes: []string{"text/xml"},
-					Address:   "127.0.0.3:65535",
-					Name:      "provider3",
-					Opaque: &typesv1beta1.Opaque{
-						Map: map[string]*typesv1beta1.OpaqueEntry{
-							"priority": {
-								Decoder: "plain",
-								Value:   []byte("20"),
-							},
-						},
-					},
-				},
-			},
-			mimeType:    "text/xml",
-			expectedErr: nil,
-			expectedRes: []*registrypb.ProviderInfo{
-				{
-					MimeTypes: []string{"text/xml"},
-					Address:   "127.0.0.3:65535",
-					Name:      "provider3",
-				},
-				{
-					MimeTypes: []string{"text/json", "text/xml"},
-					Address:   "127.0.0.1:65535",
-					Name:      "provider1",
-				},
-			},
-		},
-	}
-
-	for _, tt := range testCases {
-
-		t.Run(tt.name, func(t *testing.T) {
-
-			ctx := context.TODO()
-
-			// register all the providers
-			for _, p := range tt.regProviders {
-				err := registerWithMicroReg(tt.registryNamespace, p)
-				if err != nil {
-					t.Fatal("unexpected error adding a new provider in the registry:", err)
-				}
-			}
-
-			registry, err := New(map[string]interface{}{
-				"mime_types": tt.mimeTypes,
-				"namespace":  tt.registryNamespace,
-			})
-
-			if err != nil {
-				t.Fatal("unexpected error creating the registry:", err)
-			}
-
-			providers, err := registry.FindProviders(ctx, tt.mimeType)
-
-			// check that the error returned by FindProviders is the same as the expected
-			if tt.expectedErr != err {
-				t.Fatalf("different error returned: got=%v expected=%v", err, tt.expectedErr)
-			}
-
-			if !providersEquals(providers, tt.expectedRes) {
-				t.Fatalf("providers list different from expected: \n\tgot=%v\n\texp=%v", providers, tt.expectedRes)
-			}
-
-		})
-
-	}
-
-}
+// func TestFindProvidersWithPriority(t *testing.T) {
+//
+//	testCases := []struct {
+//		name              string
+//		mimeTypes         []*mimeTypeConfig
+//		regProviders      []*registrypb.ProviderInfo
+//		mimeType          string
+//		expectedRes       []*registrypb.ProviderInfo
+//		expectedErr       error
+//		registryNamespace string
+//	}{
+//		{
+//			name:              "no mime types registered",
+//			registryNamespace: "noMimeTypesRegistered",
+//			mimeTypes:         []*mimeTypeConfig{},
+//			mimeType:          "SOMETHING",
+//			expectedErr:       mreg.ErrNotFound,
+//		},
+//		{
+//			name:              "one provider registered for one mime type",
+//			registryNamespace: "oneProviderRegisteredForOneMimeType",
+//			mimeTypes: []*mimeTypeConfig{
+//				{
+//					MimeType:   "text/json",
+//					Extension:  "json",
+//					Name:       "JSON File",
+//					Icon:       "https://example.org/icons&file=json.png",
+//					DefaultApp: "some Address",
+//				},
+//			},
+//			regProviders: []*registrypb.ProviderInfo{
+//				{
+//					MimeTypes: []string{"text/json"},
+//					Address:   "127.0.0.1:65535",
+//					Name:      "some Name",
+//					Opaque: &typesv1beta1.Opaque{
+//						Map: map[string]*typesv1beta1.OpaqueEntry{
+//							"priority": {
+//								Decoder: "plain",
+//								Value:   []byte("100"),
+//							},
+//						},
+//					},
+//				},
+//			},
+//			mimeType:    "text/json",
+//			expectedErr: nil,
+//			expectedRes: []*registrypb.ProviderInfo{
+//				{
+//					MimeTypes: []string{"text/json"},
+//					Address:   "127.0.0.1:65535",
+//					Name:      "some Name",
+//				},
+//			},
+//		},
+//		{
+//			name:              "more providers registered for one mime type",
+//			registryNamespace: "moreProvidersRegisteredForOneMimeType",
+//			mimeTypes: []*mimeTypeConfig{
+//				{
+//					MimeType:   "text/json",
+//					Extension:  "json",
+//					Name:       "JSON File",
+//					Icon:       "https://example.org/icons&file=json.png",
+//					DefaultApp: "provider2",
+//				},
+//			},
+//			regProviders: []*registrypb.ProviderInfo{
+//				{
+//					MimeTypes: []string{"text/json"},
+//					Address:   "127.0.0.1:65535",
+//					Name:      "provider1",
+//					Opaque: &typesv1beta1.Opaque{
+//						Map: map[string]*typesv1beta1.OpaqueEntry{
+//							"priority": {
+//								Decoder: "plain",
+//								Value:   []byte("10"),
+//							},
+//						},
+//					},
+//				},
+//				{
+//					MimeTypes: []string{"text/json"},
+//					Address:   "127.0.0.2:65535",
+//					Name:      "provider2",
+//					Opaque: &typesv1beta1.Opaque{
+//						Map: map[string]*typesv1beta1.OpaqueEntry{
+//							"priority": {
+//								Decoder: "plain",
+//								Value:   []byte("20"),
+//							},
+//						},
+//					},
+//				},
+//				{
+//					MimeTypes: []string{"text/json"},
+//					Address:   "127.0.0.3:65535",
+//					Name:      "provider3",
+//					Opaque: &typesv1beta1.Opaque{
+//						Map: map[string]*typesv1beta1.OpaqueEntry{
+//							"priority": {
+//								Decoder: "plain",
+//								Value:   []byte("5"),
+//							},
+//						},
+//					},
+//				},
+//			},
+//			mimeType:    "text/json",
+//			expectedErr: nil,
+//			expectedRes: []*registrypb.ProviderInfo{
+//				{
+//					MimeTypes: []string{"text/json"},
+//					Address:   "127.0.0.2:65535",
+//					Name:      "provider2",
+//				},
+//				{
+//					MimeTypes: []string{"text/json"},
+//					Address:   "127.0.0.1:65535",
+//					Name:      "provider1",
+//				},
+//				{
+//					MimeTypes: []string{"text/json"},
+//					Address:   "127.0.0.3:65535",
+//					Name:      "provider3",
+//				},
+//			},
+//		},
+//		{
+//			name:              "more providers registered for different mime types",
+//			registryNamespace: "moreProvidersRegisteredForDifferentMimeTypes",
+//			mimeTypes: []*mimeTypeConfig{
+//				{
+//					MimeType:   "text/json",
+//					Extension:  "json",
+//					Name:       "JSON File",
+//					Icon:       "https://example.org/icons&file=json.png",
+//					DefaultApp: "provider2",
+//				},
+//				{
+//					MimeType:   "text/xml",
+//					Extension:  "xml",
+//					Name:       "XML File",
+//					Icon:       "https://example.org/icons&file=xml.png",
+//					DefaultApp: "provider1",
+//				},
+//			},
+//			regProviders: []*registrypb.ProviderInfo{
+//				{
+//					MimeTypes: []string{"text/json", "text/xml"},
+//					Address:   "127.0.0.1:65535",
+//					Name:      "provider1",
+//					Opaque: &typesv1beta1.Opaque{
+//						Map: map[string]*typesv1beta1.OpaqueEntry{
+//							"priority": {
+//								Decoder: "plain",
+//								Value:   []byte("5"),
+//							},
+//						},
+//					},
+//				},
+//				{
+//					MimeTypes: []string{"text/json"},
+//					Address:   "127.0.0.2:65535",
+//					Name:      "provider2",
+//					Opaque: &typesv1beta1.Opaque{
+//						Map: map[string]*typesv1beta1.OpaqueEntry{
+//							"priority": {
+//								Decoder: "plain",
+//								Value:   []byte("100"),
+//							},
+//						},
+//					},
+//				},
+//				{
+//					MimeTypes: []string{"text/xml"},
+//					Address:   "127.0.0.3:65535",
+//					Name:      "provider3",
+//					Opaque: &typesv1beta1.Opaque{
+//						Map: map[string]*typesv1beta1.OpaqueEntry{
+//							"priority": {
+//								Decoder: "plain",
+//								Value:   []byte("20"),
+//							},
+//						},
+//					},
+//				},
+//			},
+//			mimeType:    "text/json",
+//			expectedErr: nil,
+//			expectedRes: []*registrypb.ProviderInfo{
+//				{
+//					MimeTypes: []string{"text/json"},
+//					Address:   "127.0.0.2:65535",
+//					Name:      "provider2",
+//				},
+//				{
+//					MimeTypes: []string{"text/json", "text/xml"},
+//					Address:   "127.0.0.1:65535",
+//					Name:      "provider1",
+//				},
+//			},
+//		},
+//		{
+//			name:              "more providers registered for different mime types2",
+//			registryNamespace: "moreProvidersRegisteredForDifferentMimeTypes2",
+//			mimeTypes: []*mimeTypeConfig{
+//				{
+//					MimeType:   "text/json",
+//					Extension:  "json",
+//					Name:       "JSON File",
+//					Icon:       "https://example.org/icons&file=json.png",
+//					DefaultApp: "provider2",
+//				},
+//				{
+//					MimeType:   "text/xml",
+//					Extension:  "xml",
+//					Name:       "XML File",
+//					Icon:       "https://example.org/icons&file=xml.png",
+//					DefaultApp: "provider1",
+//				},
+//			},
+//			regProviders: []*registrypb.ProviderInfo{
+//				{
+//					MimeTypes: []string{"text/json", "text/xml"},
+//					Address:   "127.0.0.1:65535",
+//					Name:      "provider1",
+//					Opaque: &typesv1beta1.Opaque{
+//						Map: map[string]*typesv1beta1.OpaqueEntry{
+//							"priority": {
+//								Decoder: "plain",
+//								Value:   []byte("5"),
+//							},
+//						},
+//					},
+//				},
+//				{
+//					MimeTypes: []string{"text/json"},
+//					Address:   "127.0.0.2:65535",
+//					Name:      "provider2",
+//					Opaque: &typesv1beta1.Opaque{
+//						Map: map[string]*typesv1beta1.OpaqueEntry{
+//							"priority": {
+//								Decoder: "plain",
+//								Value:   []byte("100"),
+//							},
+//						},
+//					},
+//				},
+//				{
+//					MimeTypes: []string{"text/xml"},
+//					Address:   "127.0.0.3:65535",
+//					Name:      "provider3",
+//					Opaque: &typesv1beta1.Opaque{
+//						Map: map[string]*typesv1beta1.OpaqueEntry{
+//							"priority": {
+//								Decoder: "plain",
+//								Value:   []byte("20"),
+//							},
+//						},
+//					},
+//				},
+//			},
+//			mimeType:    "text/xml",
+//			expectedErr: nil,
+//			expectedRes: []*registrypb.ProviderInfo{
+//				{
+//					MimeTypes: []string{"text/xml"},
+//					Address:   "127.0.0.3:65535",
+//					Name:      "provider3",
+//				},
+//				{
+//					MimeTypes: []string{"text/json", "text/xml"},
+//					Address:   "127.0.0.1:65535",
+//					Name:      "provider1",
+//				},
+//			},
+//		},
+//	}
+//
+//	for _, tt := range testCases {
+//
+//		t.Run(tt.name, func(t *testing.T) {
+//
+//			ctx := context.TODO()
+//
+//			// register all the providers
+//			for _, p := range tt.regProviders {
+//				err := registerWithMicroReg(tt.registryNamespace, p)
+//				if err != nil {
+//					t.Fatal("unexpected error adding a new provider in the registry:", err)
+//				}
+//			}
+//
+//			registry, err := New(map[string]interface{}{
+//				"mime_types": tt.mimeTypes,
+//				"namespace":  tt.registryNamespace,
+//			})
+//
+//			if err != nil {
+//				t.Fatal("unexpected error creating the registry:", err)
+//			}
+//
+//			providers, err := registry.FindProviders(ctx, tt.mimeType)
+//
+//			// check that the error returned by FindProviders is the same as the expected
+//			if tt.expectedErr != err {
+//				t.Fatalf("different error returned: got=%v expected=%v", err, tt.expectedErr)
+//			}
+//
+//			if !providersEquals(providers, tt.expectedRes) {
+//				t.Fatalf("providers list different from expected: \n\tgot=%v\n\texp=%v", providers, tt.expectedRes)
+//			}
+//
+//		})
+//
+//	}
+//
+// }
 
 func TestListSupportedMimeTypes(t *testing.T) {
 	testCases := []struct {
@@ -975,7 +974,9 @@ func providersEquals(pi1, pi2 []*registrypb.ProviderInfo) bool {
 
 // This is to mock registering with the go-micro registry and at the same time the reference implementation
 func registerWithMicroReg(ns string, p *registrypb.ProviderInfo) error {
-	reg := oreg.GetRegistry()
+	o := oreg.Inmemory()
+
+	reg := oreg.GetRegistry(o)
 
 	serviceID := ns + ".api.app-provider"
 

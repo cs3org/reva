@@ -520,7 +520,6 @@ github.com/onsi/gomega v1.10.1/go.mod h1:iN09h71vgCQne3DLsj+A5owkum+a2tYe+TOCB1y
 github.com/onsi/gomega v1.36.0 h1:Pb12RlruUtj4XUuPUqeEWc6j5DkVVVA49Uf6YLfC95Y=
 github.com/onsi/gomega v1.36.0/go.mod h1:PvZbdDc8J6XJEpDK4HCuRBm8a6Fzp9/DmhC9C7yFlog=
 github.com/opentracing/opentracing-go v1.1.0/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
-github.com/owncloud/ocis/v2 v2.0.0/go.mod h1:qH016gkfh/PNOv+xfiwD2weWY99nZTTghKhgajshYYk=
 github.com/owncloud/ocis/v2 v2.0.1-0.20250122072425-665072d86d1a h1:Lyt39PE4ZWG3JRa7S9fXY3dCk1FLykziY2CTNC2NQcY=
 github.com/owncloud/ocis/v2 v2.0.1-0.20250122072425-665072d86d1a/go.mod h1:P2yaGD4odV9kD6Xf6xC6yzcIyb5ETtjs4b62fZCap6s=
 github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c h1:rp5dCmg/yLR3mgFuSOe4oEnDDmGLROTvMragMUXpTQw=
