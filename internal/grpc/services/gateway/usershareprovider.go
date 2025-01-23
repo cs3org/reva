@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"path"
 
-	"github.com/alitto/pond"
+	"github.com/alitto/pond/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -204,28 +204,29 @@ func (s *svc) ListExistingShares(ctx context.Context, req *collaboration.ListSha
 	}
 
 	sharesCh := make(chan *gateway.ShareResourceInfo, len(shares.Shares))
-	pool := pond.New(50, len(shares.Shares))
+	pool := pond.NewPool(50)
+	// TODO(lopresti) incorporate the cache layer from internal/http/services/owncloud/ocs/handlers/apps/sharing/shares/shares.go
+
 	for _, share := range shares.Shares {
 		share := share
-		// TODO (gdelmont): we should report any eventual error raised by the goroutines
-		pool.Submit(func() {
-			// TODO(lopresti) incorporate the cache layer from internal/http/services/owncloud/ocs/handlers/apps/sharing/shares/shares.go
+		pool.SubmitErr(func() error {
 			stat, err := s.Stat(ctx, &provider.StatRequest{
 				Ref: &provider.Reference{
 					ResourceId: share.ResourceId,
 				},
 			})
 			if err != nil {
-				return
+				return err
 			}
 			if stat.Status.Code != rpc.Code_CODE_OK {
-				return
+				return errors.New("An error occurred: " + stat.Status.Message)
 			}
 
 			sharesCh <- &gateway.ShareResourceInfo{
 				ResourceInfo: stat.Info,
 				Share:        share,
 			}
+			return nil
 		})
 	}
 
@@ -237,10 +238,17 @@ func (s *svc) ListExistingShares(ctx context.Context, req *collaboration.ListSha
 		}
 		done <- struct{}{}
 	}()
-	pool.StopAndWait()
+	err = pool.Stop().Wait()
 	close(sharesCh)
 	<-done
 	close(done)
+
+	if err != nil {
+		return &gateway.ListExistingSharesResponse{
+			ShareInfos: sris,
+			Status:     status.NewInternal(ctx, err, "An error occured listing existing shares"),
+		}, err
+	}
 
 	return &gateway.ListExistingSharesResponse{
 		ShareInfos: sris,
@@ -318,13 +326,12 @@ func (s *svc) ListExistingReceivedShares(ctx context.Context, req *collaboration
 	}
 
 	sharesCh := make(chan *gateway.ReceivedShareResourceInfo, len(rshares.Shares))
-	pool := pond.New(50, len(rshares.Shares))
+	pool := pond.NewPool(50)
 	for _, rs := range rshares.Shares {
 		rs := rs
-		// TODO (gdelmont): we should report any eventual error raised by the goroutines
-		pool.Submit(func() {
+		pool.SubmitErr(func() error {
 			if rs.State == collaboration.ShareState_SHARE_STATE_REJECTED || rs.State == collaboration.ShareState_SHARE_STATE_INVALID {
-				return
+				return errors.New("Invalid Share State")
 			}
 
 			// TODO(lopresti) incorporate the cache layer from internal/http/services/owncloud/ocs/handlers/apps/sharing/shares/shares.go
@@ -334,16 +341,17 @@ func (s *svc) ListExistingReceivedShares(ctx context.Context, req *collaboration
 				},
 			})
 			if err != nil {
-				return
+				return err
 			}
 			if stat.Status.Code != rpc.Code_CODE_OK {
-				return
+				return errors.New("An error occurred: " + stat.Status.Message)
 			}
 
 			sharesCh <- &gateway.ReceivedShareResourceInfo{
 				ResourceInfo:  stat.Info,
 				ReceivedShare: rs,
 			}
+			return nil
 		})
 	}
 
@@ -355,10 +363,17 @@ func (s *svc) ListExistingReceivedShares(ctx context.Context, req *collaboration
 		}
 		done <- struct{}{}
 	}()
-	pool.StopAndWait()
+	err = pool.Stop().Wait()
 	close(sharesCh)
 	<-done
 	close(done)
+
+	if err != nil {
+		return &gateway.ListExistingReceivedSharesResponse{
+			ShareInfos: sris,
+			Status:     status.NewInternal(ctx, err, "An error occured listing received shares"),
+		}, err
+	}
 
 	return &gateway.ListExistingReceivedSharesResponse{
 		ShareInfos: sris,

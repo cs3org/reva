@@ -5,6 +5,7 @@ require (
 	github.com/CiscoM31/godata v1.0.8
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/ReneKroon/ttlcache/v2 v2.11.0
+	github.com/alitto/pond v1.9.2
 	github.com/beevik/etree v1.4.1
 	github.com/bluele/gcache v0.0.2
 	github.com/c-bata/go-prompt v0.2.6
@@ -41,8 +42,8 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/nats-io/nats.go v1.37.0
 	github.com/onsi/ginkgo v1.16.5
-	github.com/owncloud/libre-graph-api-go v1.0.5-0.20240425090020-dba6d1507c38
 	github.com/onsi/gomega v1.36.2
+	github.com/owncloud/libre-graph-api-go v1.0.5-0.20240425090020-dba6d1507c38
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.20.5
 	github.com/rs/cors v1.11.1
@@ -73,7 +74,7 @@ require (
 	github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
-	github.com/alitto/pond v1.8.3
+	github.com/alitto/pond/v2 v2.1.6
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bmizerany/pat v0.0.0-20210406213842-e4b6760bdd6f // indirect
