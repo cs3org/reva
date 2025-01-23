@@ -23,8 +23,8 @@ import (
 	"os"
 	"path"
 
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/ocis/blobstore"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/decomposed/blobstore"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/tests/helpers"
 
 	. "github.com/onsi/ginkgo/v2"

@@ -26,12 +26,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/timemanager"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/aspects"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/permissions"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/timemanager"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v2/pkg/store"
 	"github.com/rs/zerolog"
