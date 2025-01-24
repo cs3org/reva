@@ -25,7 +25,7 @@ import (
 	microstore "go-micro.dev/v4/store"
 
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
 	"github.com/opencloud-eu/reva/v2/pkg/store"
 )
 

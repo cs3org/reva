@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/mitchellh/mapstructure"
-	decomposedoptions "github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/options"
+	decomposedoptions "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
 	"github.com/pkg/errors"
 )
 

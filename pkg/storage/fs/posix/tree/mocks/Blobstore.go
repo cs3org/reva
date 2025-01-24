@@ -23,7 +23,7 @@ package mocks
 import (
 	io "io"
 
-	node "github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/node"
+	node "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	mock "github.com/stretchr/testify/mock"
 )
 

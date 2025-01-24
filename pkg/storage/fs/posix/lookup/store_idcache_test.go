@@ -5,7 +5,7 @@ import (
 
 	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

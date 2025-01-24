@@ -44,19 +44,19 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/trashbin"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/tree/propagator"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/usermapper"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree/propagator"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/usermapper"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
 var tracer trace.Tracer
 
 func init() {
-	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree")
+	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/pkg/decomposedfs/tree")
 }
 
 // Blobstore defines an interface for storing blobs in a blobstore
