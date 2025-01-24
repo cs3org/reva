@@ -27,76 +27,76 @@ package prefixes
 // collisions with other apps We are going to introduce a sub namespace
 // "user.ocis." in the xattrs_prefix*.go files.
 const (
-	TypeAttr      string = OcisPrefix + "type"
-	IDAttr        string = OcisPrefix + "id"
-	ParentidAttr  string = OcisPrefix + "parentid"
-	OwnerIDAttr   string = OcisPrefix + "owner.id"
-	OwnerIDPAttr  string = OcisPrefix + "owner.idp"
-	OwnerTypeAttr string = OcisPrefix + "owner.type"
+	TypeAttr      string = OcPrefix + "type"
+	IDAttr        string = OcPrefix + "id"
+	ParentidAttr  string = OcPrefix + "parentid"
+	OwnerIDAttr   string = OcPrefix + "owner.id"
+	OwnerIDPAttr  string = OcPrefix + "owner.idp"
+	OwnerTypeAttr string = OcPrefix + "owner.type"
 	// the base name of the node
 	// updated when the file is renamed or moved
-	NameAttr string = OcisPrefix + "name"
+	NameAttr string = OcPrefix + "name"
 
-	BlobIDAttr   string = OcisPrefix + "blobid"
-	BlobsizeAttr string = OcisPrefix + "blobsize"
+	BlobIDAttr   string = OcPrefix + "blobid"
+	BlobsizeAttr string = OcPrefix + "blobsize"
 
 	// statusPrefix is the prefix for the node status
-	StatusPrefix string = OcisPrefix + "nodestatus"
+	StatusPrefix string = OcPrefix + "nodestatus"
 
 	// scanPrefix is the prefix for the virus scan status and date
-	ScanStatusPrefix string = OcisPrefix + "scanstatus"
-	ScanDatePrefix   string = OcisPrefix + "scandate"
+	ScanStatusPrefix string = OcPrefix + "scanstatus"
+	ScanDatePrefix   string = OcPrefix + "scandate"
 
 	// grantPrefix is the prefix for sharing related extended attributes
-	GrantPrefix         string = OcisPrefix + "grant."
-	GrantUserAcePrefix  string = OcisPrefix + "grant." + UserAcePrefix
-	GrantGroupAcePrefix string = OcisPrefix + "grant." + GroupAcePrefix
-	MetadataPrefix      string = OcisPrefix + "md."
+	GrantPrefix         string = OcPrefix + "grant."
+	GrantUserAcePrefix  string = OcPrefix + "grant." + UserAcePrefix
+	GrantGroupAcePrefix string = OcPrefix + "grant." + GroupAcePrefix
+	MetadataPrefix      string = OcPrefix + "md."
 
 	// favorite flag, per user
-	FavPrefix string = OcisPrefix + "fav."
+	FavPrefix string = OcPrefix + "fav."
 
 	// a temporary etag for a folder that is removed when the mtime propagation happens
-	TmpEtagAttr     string = OcisPrefix + "tmp.etag"
-	ReferenceAttr   string = OcisPrefix + "cs3.ref"      // arbitrary metadata
-	ChecksumPrefix  string = OcisPrefix + "cs."          // followed by the algorithm, eg. ocis.cs.sha1
-	TrashOriginAttr string = OcisPrefix + "trash.origin" // trash origin
+	TmpEtagAttr     string = OcPrefix + "tmp.etag"
+	ReferenceAttr   string = OcPrefix + "cs3.ref"      // arbitrary metadata
+	ChecksumPrefix  string = OcPrefix + "cs."          // followed by the algorithm, eg. ocis.cs.sha1
+	TrashOriginAttr string = OcPrefix + "trash.origin" // trash origin
 
 	// we use a single attribute to enable or disable propagation of both: synctime and treesize
 	// The propagation attribute is set to '1' at the top of the (sub)tree. Propagation will stop at
 	// that node.
-	PropagationAttr string = OcisPrefix + "propagation"
+	PropagationAttr string = OcPrefix + "propagation"
 
 	// we need mtime to keep mtime in sync with the metadata
-	MTimeAttr string = OcisPrefix + "mtime"
+	MTimeAttr string = OcPrefix + "mtime"
 	// the tree modification time of the tree below this node,
 	// propagated when synctime_accounting is true and
 	// user.ocis.propagation=1 is set
 	// stored as a readable time.RFC3339Nano
-	TreeMTimeAttr string = OcisPrefix + "tmtime"
+	TreeMTimeAttr string = OcPrefix + "tmtime"
 
 	// the deletion/disabled time of a space or node
 	// used to mark space roots as disabled
 	// stored as a readable time.RFC3339Nano
-	DTimeAttr string = OcisPrefix + "dtime"
+	DTimeAttr string = OcPrefix + "dtime"
 
 	// the size of the tree below this node,
 	// propagated when treesize_accounting is true and
 	// user.ocis.propagation=1 is set
 	// stored as uint64, little endian
-	TreesizeAttr string = OcisPrefix + "treesize"
+	TreesizeAttr string = OcPrefix + "treesize"
 
 	// the quota for the storage space / tree, regardless who accesses it
-	QuotaAttr string = OcisPrefix + "quota"
+	QuotaAttr string = OcPrefix + "quota"
 
 	// the name given to a storage space. It should not contain any semantics as its only purpose is to be read.
-	SpaceIDAttr          string = OcisPrefix + "space.id"
-	SpaceNameAttr        string = OcisPrefix + "space.name"
-	SpaceTypeAttr        string = OcisPrefix + "space.type"
-	SpaceDescriptionAttr string = OcisPrefix + "space.description"
-	SpaceReadmeAttr      string = OcisPrefix + "space.readme"
-	SpaceImageAttr       string = OcisPrefix + "space.image"
-	SpaceAliasAttr       string = OcisPrefix + "space.alias"
+	SpaceIDAttr          string = OcPrefix + "space.id"
+	SpaceNameAttr        string = OcPrefix + "space.name"
+	SpaceTypeAttr        string = OcPrefix + "space.type"
+	SpaceDescriptionAttr string = OcPrefix + "space.description"
+	SpaceReadmeAttr      string = OcPrefix + "space.readme"
+	SpaceImageAttr       string = OcPrefix + "space.image"
+	SpaceAliasAttr       string = OcPrefix + "space.alias"
 
 	UserAcePrefix  string = "u:"
 	GroupAcePrefix string = "g:"

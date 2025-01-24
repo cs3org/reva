@@ -229,7 +229,7 @@ func (b XattrsBackend) Purge(ctx context.Context, path string) error {
 		}
 
 		for attr := range attribs {
-			if strings.HasPrefix(attr, prefixes.OcisPrefix) {
+			if strings.HasPrefix(attr, prefixes.OcPrefix) {
 				err := xattr.Remove(path, attr)
 				if err != nil {
 					return err

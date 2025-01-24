@@ -25,5 +25,5 @@ package prefixes
 // metadata. To prevent name collisions with other apps, we are going to
 // introduce a sub namespace "user.ocis."
 const (
-	OcisPrefix string = "user.oc."
+	OcPrefix string = "user.oc."
 )
