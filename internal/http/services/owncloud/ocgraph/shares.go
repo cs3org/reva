@@ -144,7 +144,6 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.Rece
 				{
 					CreatedDateTime: *libregraph.NewNullableTime(&createdTime),
 					GrantedToV2:     grantee,
-					Id:              nil, // TODO: what is this??
 					Invitation: &libregraph.SharingInvitation{
 						InvitedBy: &libregraph.IdentitySet{
 							User: &libregraph.Identity{
@@ -281,19 +280,19 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 
 	gw, err := s.getClient()
 	if err != nil {
-		// TODO
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	shares, err := gw.ListExistingShares(ctx, &collaborationv1beta1.ListSharesRequest{})
 	if err != nil {
-		// TODO
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	publicShares, err := gw.ListExistingPublicShares(ctx, &linkv1beta1.ListPublicSharesRequest{})
 	if err != nil {
-		// TODO
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
@@ -383,7 +382,6 @@ func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*share) ([]li
 			permissions = append(permissions, libregraph.Permission{
 				CreatedDateTime: *libregraph.NewNullableTime(&createdTime),
 				GrantedToV2:     grantee,
-				Id:              nil, // TODO: what is this??
 				Invitation: &libregraph.SharingInvitation{
 					InvitedBy: &libregraph.IdentitySet{
 						User: &libregraph.Identity{

@@ -76,17 +76,6 @@ func ParseResourceID(raw string) (*provider.ResourceId, bool) {
 // EncodeResourceID encodes the provided resource ID as a string,
 // in the format <storage_id>$<space_id>!<item_id>.
 func EncodeResourceID(r *provider.ResourceId) string {
-	// TODO (gdelmont): these guards are disabled because current testes are failing
-	// enable them to help debug future programming error
-	// if r.OpaqueId == "" {
-	// 	panic("opaque id cannot be empty")
-	// }
-	// if r.SpaceId == "" {
-	// 	panic("space id cannot be empty")
-	// }
-	// if r.StorageId == "" {
-	// 	panic("storage id cannot be empty")
-	// }
 	spaceID := EncodeSpaceID(r.StorageId, r.SpaceId)
 	return fmt.Sprintf("%s!%s", spaceID, r.OpaqueId)
 }
@@ -94,14 +83,6 @@ func EncodeResourceID(r *provider.ResourceId) string {
 // EncodeSpaceID encodes storage ID and path to create a space ID,
 // in the format <storage_id>$<base32(<path>).
 func EncodeSpaceID(storageID, path string) string {
-	// TODO (gdelmont): these guards are disabled because current testes are failing
-	// enable them to help debug future programming error
-	// if storageID == "" {
-	// 	panic("storage id cannot be empty")
-	// }
-	// if path == "" {
-	// 	panic("path cannot be empty")
-	// }
 	encodedPath := base32.StdEncoding.EncodeToString([]byte(path))
 	return fmt.Sprintf("%s$%s", storageID, encodedPath)
 }

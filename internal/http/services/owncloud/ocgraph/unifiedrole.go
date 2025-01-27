@@ -194,6 +194,23 @@ func NewManagerUnifiedRole() *libregraph.UnifiedRoleDefinition {
 	}
 }
 
+// NewUploaderUnifiedRole creates an uploader role
+func NewUploaderUnifiedRole() *libregraph.UnifiedRoleDefinition {
+	r := conversions.NewUploaderRole()
+	return &libregraph.UnifiedRoleDefinition{
+		Id:          proto.String(UnifiedRoleManagerID),
+		Description: proto.String("Upload only."),
+		DisplayName: displayName(r),
+		RolePermissions: []libregraph.UnifiedRolePermission{
+			{
+				AllowedResourceActions: convert(r),
+				Condition:              proto.String(UnifiedRoleConditionDrive),
+			},
+		},
+		LibreGraphWeight: proto.Int32(0),
+	}
+}
+
 // NewUnifiedRoleFromID returns a unified role definition from the provided id
 func NewUnifiedRoleFromID(id string) (*libregraph.UnifiedRoleDefinition, error) {
 	for _, definition := range GetBuiltinRoleDefinitionList() {
@@ -423,7 +440,6 @@ var ocsRoleUnifiedRole = map[string]*libregraph.UnifiedRoleDefinition{
 	conversions.RoleEditor:       NewEditorUnifiedRole(),
 	conversions.RoleFileEditor:   NewFileEditorUnifiedRole(),
 	conversions.RoleCollaborator: NewManagerUnifiedRole(),
-	// FIXME: this is a wrong mapping, but it looks like in ocis has not been defined so far
-	conversions.RoleUploader: NewEditorUnifiedRole(),
-	conversions.RoleManager:  NewManagerUnifiedRole(),
+	conversions.RoleUploader:     NewUploaderUnifiedRole(),
+	conversions.RoleManager:      NewManagerUnifiedRole(),
 }

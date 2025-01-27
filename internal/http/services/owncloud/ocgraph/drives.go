@@ -254,6 +254,8 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	spaceID, _ := router.ShiftPath(r.URL.Path)
+	// For the moment, not implemented
+	// (code will be only for sync clients, which do not yet go through Reva)
 	if isShareJail(spaceID) {
 		shareRes, err := gw.GetReceivedShare(ctx, &collaborationv1beta1.GetReceivedShareRequest{
 			Ref: &collaborationv1beta1.ShareReference{
@@ -333,6 +335,7 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 }
 
+// For the moment, not supported
 func isShareJail(spaceID string) bool {
 	return false // TODO
 }
