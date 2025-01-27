@@ -31,6 +31,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -184,6 +185,7 @@ func (s *svc) ListShares(ctx context.Context, req *collaboration.ListSharesReque
 		return &collaboration.ListSharesResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil
+
 	}
 
 	res, err := c.ListShares(ctx, req)
@@ -205,27 +207,37 @@ func (s *svc) ListExistingShares(ctx context.Context, req *collaboration.ListSha
 
 	sharesCh := make(chan *gateway.ShareResourceInfo, len(shares.Shares))
 	pool := pond.NewPool(50)
-	// TODO(lopresti) incorporate the cache layer from internal/http/services/owncloud/ocs/handlers/apps/sharing/shares/shares.go
 
 	for _, share := range shares.Shares {
 		share := share
 		pool.SubmitErr(func() error {
-			stat, err := s.Stat(ctx, &provider.StatRequest{
-				Ref: &provider.Reference{
-					ResourceId: share.ResourceId,
-				},
-			})
-			if err != nil {
-				return err
-			}
-			if stat.Status.Code != rpc.Code_CODE_OK {
-				return errors.New("An error occurred: " + stat.Status.Message)
+			key := resourceid.OwnCloudResourceIDWrap(share.ResourceId)
+			var resourceInfo *provider.ResourceInfo
+			if res, err := s.resourceInfoCache.Get(key); err == nil && res != nil {
+				resourceInfo = res
+			} else {
+				stat, err := s.Stat(ctx, &provider.StatRequest{
+					Ref: &provider.Reference{
+						ResourceId: share.ResourceId,
+					},
+				})
+				if err != nil {
+					return err
+				}
+				if stat.Status.Code != rpc.Code_CODE_OK {
+					return errors.New("An error occurred: " + stat.Status.Message)
+				}
+				resourceInfo = stat.Info
+				if s.resourceInfoCacheTTL > 0 {
+					_ = s.resourceInfoCache.SetWithExpire(key, resourceInfo, s.resourceInfoCacheTTL)
+				}
 			}
 
 			sharesCh <- &gateway.ShareResourceInfo{
-				ResourceInfo: stat.Info,
+				ResourceInfo: resourceInfo,
 				Share:        share,
 			}
+
 			return nil
 		})
 	}
@@ -330,25 +342,33 @@ func (s *svc) ListExistingReceivedShares(ctx context.Context, req *collaboration
 	for _, rs := range rshares.Shares {
 		rs := rs
 		pool.SubmitErr(func() error {
-			if rs.State == collaboration.ShareState_SHARE_STATE_REJECTED || rs.State == collaboration.ShareState_SHARE_STATE_INVALID {
+			if rs.State == collaboration.ShareState_SHARE_STATE_INVALID {
 				return errors.New("Invalid Share State")
 			}
 
-			// TODO(lopresti) incorporate the cache layer from internal/http/services/owncloud/ocs/handlers/apps/sharing/shares/shares.go
-			stat, err := s.Stat(ctx, &provider.StatRequest{
-				Ref: &provider.Reference{
-					ResourceId: rs.Share.ResourceId,
-				},
-			})
-			if err != nil {
-				return err
+			key := resourceid.OwnCloudResourceIDWrap(rs.Share.ResourceId)
+			var resourceInfo *provider.ResourceInfo
+			if res, err := s.resourceInfoCache.Get(key); err == nil && res != nil {
+				resourceInfo = res
+			} else {
+				stat, err := s.Stat(ctx, &provider.StatRequest{
+					Ref: &provider.Reference{
+						ResourceId: rs.Share.ResourceId,
+					},
+				})
+				if err != nil {
+					return err
+				}
+				if stat.Status.Code != rpc.Code_CODE_OK {
+					return errors.New("An error occurred: " + stat.Status.Message)
+				}
+				resourceInfo = stat.Info
+				if s.resourceInfoCacheTTL > 0 {
+					_ = s.resourceInfoCache.SetWithExpire(key, resourceInfo, s.resourceInfoCacheTTL)
+				}
 			}
-			if stat.Status.Code != rpc.Code_CODE_OK {
-				return errors.New("An error occurred: " + stat.Status.Message)
-			}
-
 			sharesCh <- &gateway.ReceivedShareResourceInfo{
-				ResourceInfo:  stat.Info,
+				ResourceInfo:  resourceInfo,
 				ReceivedShare: rs,
 			}
 			return nil

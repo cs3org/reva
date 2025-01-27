@@ -21,7 +21,7 @@ package gateway
 import (
 	"context"
 
-	"github.com/alitto/pond"
+	"github.com/alitto/pond/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/pkg/errors"
 )
 
@@ -135,28 +136,39 @@ func (s *svc) ListExistingPublicShares(ctx context.Context, req *link.ListPublic
 	}
 
 	sharesCh := make(chan *gateway.PublicShareResourceInfo, len(shares.Share))
-	pool := pond.New(50, len(shares.Share))
+	pool := pond.NewPool(50)
 	for _, share := range shares.Share {
 		share := share
-		// TODO (gdelmont): we should report any eventual error raised by the goroutines
-		pool.Submit(func() {
-			// TODO(lopresti) incorporate the cache layer from internal/http/services/owncloud/ocs/handlers/apps/sharing/shares/shares.go
-			stat, err := s.Stat(ctx, &provider.StatRequest{
-				Ref: &provider.Reference{
-					ResourceId: share.ResourceId,
-				},
-			})
-			if err != nil {
-				return
-			}
-			if stat.Status.Code != rpc.Code_CODE_OK {
-				return
+
+		pool.SubmitErr(func() error {
+			key := resourceid.OwnCloudResourceIDWrap(share.ResourceId)
+			var resourceInfo *provider.ResourceInfo
+			if res, err := s.resourceInfoCache.Get(key); err == nil && res != nil {
+				resourceInfo = res
+			} else {
+				stat, err := s.Stat(ctx, &provider.StatRequest{
+					Ref: &provider.Reference{
+						ResourceId: share.ResourceId,
+					},
+				})
+				if err != nil {
+					return err
+				}
+				if stat.Status.Code != rpc.Code_CODE_OK {
+					return errors.New("An error occurred: " + stat.Status.Message)
+				}
+				resourceInfo = stat.Info
+				if s.resourceInfoCacheTTL > 0 {
+					_ = s.resourceInfoCache.SetWithExpire(key, resourceInfo, s.resourceInfoCacheTTL)
+				}
 			}
 
 			sharesCh <- &gateway.PublicShareResourceInfo{
-				ResourceInfo: stat.Info,
+				ResourceInfo: resourceInfo,
 				PublicShare:  share,
 			}
+
+			return nil
 		})
 	}
 
