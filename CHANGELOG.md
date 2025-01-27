@@ -1,3 +1,32 @@
+Changelog for reva 2.27.3 (2025-01-27)
+=======================================
+
+The following sections list the changes in reva 2.27.3 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #5042: Fix ocis dependency
+*   Enh #5051: Emit SpaceMembershipExpired event
+
+Details
+-------
+
+*   Bugfix #5042: Fix ocis dependency
+
+   Fix the ocm gateway connection pool. Fix ocis dependency in the reva go.mod file. Bump the ocis
+   version accordingly to the major version.
+
+   https://github.com/owncloud/ocis/issues/10846
+   https://github.com/owncloud/ocis/issues/10878
+   https://github.com/cs3org/reva/pull/5042
+
+*   Enhancement #5051: Emit SpaceMembershipExpired event
+
+   https://github.com/owncloud/ocis/issues/10919
+   https://github.com/cs3org/reva/pull/5051
+
 Changelog for reva 2.27.2 (2025-01-17)
 =======================================
 
@@ -5378,6 +5407,34 @@ Details
 
    https://github.com/cs3org/reva/pull/3083
 
+Changelog for reva 2.7.1 (2022-07-15)
+=======================================
+
+The following sections list the changes in reva 2.7.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #3080: Make dataproviders return more headers
+*   Enh #3046: Add user filter
+
+Details
+-------
+
+*   Bugfix #3080: Make dataproviders return more headers
+
+   Instead of ocdav doing an additional Stat request we now rely on the dataprovider to return the
+   necessary metadata information as headers.
+
+   https://github.com/owncloud/reva/issues/3080
+
+*   Enhancement #3046: Add user filter
+
+   This PR adds the ability to filter spaces by user-id
+
+   https://github.com/cs3org/reva/pull/3046
+
 Changelog for reva 2.7.0 (2022-07-15)
 =======================================
 
@@ -5509,34 +5566,6 @@ Details
    https://github.com/owncloud/ocis/issues/2144
    https://github.com/owncloud/ocis/issues/3073
    https://github.com/cs3org/reva/pull/2977
-
-Changelog for reva 2.7.1 (2022-07-15)
-=======================================
-
-The following sections list the changes in reva 2.7.1 relevant to
-reva users. The changes are ordered by importance.
-
-Summary
--------
-
-*   Fix #3080: Make dataproviders return more headers
-*   Enh #3046: Add user filter
-
-Details
--------
-
-*   Bugfix #3080: Make dataproviders return more headers
-
-   Instead of ocdav doing an additional Stat request we now rely on the dataprovider to return the
-   necessary metadata information as headers.
-
-   https://github.com/owncloud/reva/issues/3080
-
-*   Enhancement #3046: Add user filter
-
-   This PR adds the ability to filter spaces by user-id
-
-   https://github.com/cs3org/reva/pull/3046
 
 Changelog for reva 2.6.1 (2022-06-27)
 =======================================
@@ -5905,27 +5934,6 @@ Details
 
    https://github.com/cs3org/reva/pull/2922
 
-Changelog for reva 2.4.1 (2022-05-24)
-=======================================
-
-The following sections list the changes in reva 2.4.1 relevant to
-reva users. The changes are ordered by importance.
-
-Summary
--------
-
-*   Fix #2891: Add missing http status code
-
-Details
--------
-
-*   Bugfix #2891: Add missing http status code
-
-   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
-   pass it through.
-
-   https://github.com/cs3org/reva/pull/2891
-
 Changelog for reva 2.4.0 (2022-05-24)
 =======================================
 
@@ -6068,6 +6076,27 @@ Details
    correct storageprovider
 
    https://github.com/cs3org/reva/pull/2792
+
+Changelog for reva 2.4.1 (2022-05-24)
+=======================================
+
+The following sections list the changes in reva 2.4.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #2891: Add missing http status code
+
+Details
+-------
+
+*   Bugfix #2891: Add missing http status code
+
+   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
+   pass it through.
+
+   https://github.com/cs3org/reva/pull/2891
 
 Changelog for reva 2.3.1 (2022-05-08)
 =======================================
