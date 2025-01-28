@@ -36,8 +36,8 @@ func Test_getTypeFQN(t *testing.T) {
 		args args
 		want string
 	}{
-		{name: "ByValue", args: args{&someT{}}, want: "github.com.cs3org.reva.v2.pkg.storage.utils.indexer.someT"},
-		{name: "ByRef", args: args{someT{}}, want: "github.com.cs3org.reva.v2.pkg.storage.utils.indexer.someT"},
+		{name: "ByValue", args: args{&someT{}}, want: "github.com.opencloud-eu.reva.v2.pkg.storage.utils.indexer.someT"},
+		{name: "ByRef", args: args{someT{}}, want: "github.com.opencloud-eu.reva.v2.pkg.storage.utils.indexer.someT"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
