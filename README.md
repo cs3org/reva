@@ -1,6 +1,5 @@
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![GoDoc](https://godoc.org/github.com/cs3org/reva?status.svg)](https://godoc.org/github.com/cs3org/reva)
-[![Gitter chat](https://badges.gitter.im/cs3org/reva.svg)](https://gitter.im/cs3org/reva) [![Build Status](https://drone.cernbox.cern.ch/api/badges/cs3org/reva/status.svg)](https://drone.cernbox.cern.ch/cs3org/reva)
-[![Go Report Card](https://goreportcard.com/badge/github.com/cs3org/reva)](https://goreportcard.com/report/github.com/cs3org/reva) [![codecov](https://codecov.io/gh/cs3org/reva/branch/master/graph/badge.svg)](https://codecov.io/gh/cs3org/reva) [![FOSSA Status](https://app.fossa.com/api/projects/custom%2B11650%2Fcs3org%2Freva.svg?type=shield)](https://app.fossa.com/projects/custom%2B11650%2Fcs3org%2Freva?ref=badge_shield)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![GoDoc](https://godoc.org/github.com/opencloud-eu/reva?status.svg)](https://godoc.org/github.com/opencloud-eu/reva)
+[![Go Report Card](https://goreportcard.com/badge/github.com/opencloud-eu/reva)](https://goreportcard.com/report/github.com/opencloud-eu/reva) 
 ================
 
 ![REVA Logo](https://raw.githubusercontent.com/cs3org/logos/efd3d2649478193e74f3de5a41247445941026b6/reva/logo.jpg)
@@ -9,7 +8,7 @@ REVA is an interoperability platform. It connects storage, sync and share platfo
 
 ## Installation
 
-Head to [Documentation](https://reva.link) for documentation or [download](https://github.com/cs3org/reva/releases) to get the latest available release.
+Head to [Documentation](https://reva.link) for documentation or [download](https://github.com/opencloud-eu/reva/releases) to get the latest available release.
 
 ## Documentation & Support
 
@@ -22,7 +21,7 @@ You need to have [Go](https://golang.org/doc/install) (version 1.16 or higher), 
 #### Build
 
 ```
-$ git clone -b edge https://github.com/cs3org/reva
+$ git clone -b edge https://github.com/opencloud-eu/reva
 $ cd reva
 $ make build
 ```
@@ -38,17 +37,17 @@ $ cmd/revad/revad -dev-dir examples/storage-references
 
 ```
 
-You can also read the [build from sources guide](https://reva.link/docs/getting-started/build-reva/) and the [setup tutorial](https://github.com/cs3org/reva/blob/master/docs/content/en/docs/tutorials/setup-tutorial.md).
+You can also read the [build from sources guide](https://reva.link/docs/getting-started/build-reva/) and the [setup tutorial](https://github.com/opencloud-eu/reva/blob/main/docs/content/en/docs/tutorials/setup-tutorial.md).
 
 ## Run tests
 
 Reva's codebase continuously undergoes testing at various levels.
 
-To understand which tests exist, you can have a look at the [Makefile](https://github.com/cs3org/reva/blob/master/Makefile) and the [Drone run logs](https://drone.cernbox.cern.ch/cs3org/reva/).
+To understand which tests exist, you can have a look at the [Makefile](https://github.com/opencloud-eu/reva/blob/main/Makefile).
 
-The tests run by CERN's instance of [Drone CI/CD](https://docs.drone.io/) are defined in the [.drone.star](https://github.com/cs3org/reva/blob/master/.drone.star) file.
+The tests run by CERN's instance of [Drone CI/CD](https://docs.drone.io/) are defined in the [.drone.star](https://github.com/opencloud-eu/reva/blob/main/.drone.star) file.
 
-NB: The [tests/oc-integration-tests/drone](https://github.com/cs3org/reva/tree/master/tests/oc-integration-tests/drone) and [tests/oc-integration-tests/local](https://github.com/cs3org/reva/tree/master/tests/oc-integration-tests/local) folders contain the configuration fixtures that are used to start up the Reva instance to test (on drone CI/CD or on your local system, respectively), for both these acceptance tests ("ownCloud legacy integration tests") and the Litmus tests.
+NB: The [tests/oc-integration-tests/drone](https://github.com/opencloud-eu/reva/tree/main/tests/oc-integration-tests/drone) and [tests/oc-integration-tests/local](https://github.com/opencloud-eu/reva/tree/main/tests/oc-integration-tests/local) folders contain the configuration fixtures that are used to start up the Reva instance to test (on drone CI/CD or on your local system, respectively), for both these acceptance tests ("ownCloud legacy integration tests") and the Litmus tests.
 
 ### Unit tests
 
@@ -69,7 +68,7 @@ ok  	github.com/opencloud-eu/reva/v2/pkg/utils	0.374s
 
 ### Integration tests (GRPC)
 
-See [tests/integration](https://github.com/cs3org/reva/tree/master/tests/integration).
+See [tests/integration](https://github.com/opencloud-eu/reva/tree/main/tests/integration).
 This requires Redis.
 
 ```sh
@@ -113,11 +112,11 @@ NB: This will work better on Linux than on MacOS because of issues with static l
 
 ### Acceptance tests (ownCloud legacy)
 
-See [Running Acceptance Tests](https://github.com/cs3org/reva/tree/edge/tests/acceptance).
+See [Running Acceptance Tests](https://github.com/opencloud-eu/reva/tree/edge/tests/acceptance).
 
 ## Daily releases
 
-On every commit on the master branch (including merged Pull Requests) a new release will be created and
+On every commit on the main branch (including merged Pull Requests) a new release will be created and
 available at [daily releases](https://reva-releases.web.cern.ch/reva-releases).
 
 ## Major versions
@@ -126,15 +125,11 @@ There are currently two major versions in active development.
 
 ### 1.x versions
 
-The `master` branch is the stable development branch. Releases from master are tagged as 1.x.x versions following [semver](https://semver.org/).
+The 1.x versions are developed in the [https://github.com/cs3org/reva](https://github.com/cs3org/reva) repository.
 
 ### 2.x versions
 
-The `edge` branch is used to develop the next version of this project. The edge branch is based on a new concept named "Spaces" and a new set of the CS3APIs are being implemented, making it **not compatible** with `master` branch. Releases from `edge` are tagged as _2.x.x_ versions following [semver](https://semver.org/).
-
-## Run it using Docker
-
-See [https://hub.docker.com/r/cs3org/reva](https://hub.docker.com/r/cs3org/reva).
+The `main` branch of this repository is used to develop the next version of this project. The edge branch is based on a new concept named "Spaces" and a new set of the CS3APIs are being implemented, making it **not compatible** with `main` branch. Releases from `main` are tagged as _2.x.x_ versions following [semver](https://semver.org/).
 
 ## Plugin development
 
@@ -151,7 +146,7 @@ Further evolution of the CS3 APIs will be driven by the needs of the
 Educational and Research community with the goal of maximizing the
 portability of the applications and service extensions.
 
-REVA is distributed under [Apache 2.0 license](https://github.com/cs3org/reva/blob/master/LICENSE).
+REVA is distributed under [Apache 2.0 license](https://github.com/opencloud-eu/reva/blob/main/LICENSE).
 
 ## Logo
 
