@@ -25,7 +25,7 @@ package prefixes
 // A non root user can only manipulate the user. namespace, which is what
 // we will use to store ownCloud specific metadata. To prevent name
 // collisions with other apps We are going to introduce a sub namespace
-// "user.ocis." in the xattrs_prefix*.go files.
+// "user.oc." in the xattrs_prefix*.go files.
 const (
 	TypeAttr      string = OcPrefix + "type"
 	IDAttr        string = OcPrefix + "id"
@@ -71,7 +71,7 @@ const (
 	MTimeAttr string = OcPrefix + "mtime"
 	// the tree modification time of the tree below this node,
 	// propagated when synctime_accounting is true and
-	// user.ocis.propagation=1 is set
+	// user.oc.propagation=1 is set
 	// stored as a readable time.RFC3339Nano
 	TreeMTimeAttr string = OcPrefix + "tmtime"
 
@@ -82,7 +82,7 @@ const (
 
 	// the size of the tree below this node,
 	// propagated when treesize_accounting is true and
-	// user.ocis.propagation=1 is set
+	// user.oc.propagation=1 is set
 	// stored as uint64, little endian
 	TreesizeAttr string = OcPrefix + "treesize"
 

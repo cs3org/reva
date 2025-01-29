@@ -67,7 +67,7 @@ type queueItem struct {
 	timer *time.Timer
 }
 
-const dirtyFlag = "user.ocis.dirty"
+const dirtyFlag = "user.oc.dirty"
 
 // NewScanDebouncer returns a new SpaceDebouncer instance
 func NewScanDebouncer(d time.Duration, f func(item scanItem)) *ScanDebouncer {

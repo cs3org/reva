@@ -767,7 +767,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 				return err
 			}
 
-			bid := m["user.ocis.blobid"]
+			bid := m["user.oc.blobid"]
 			if string(bid) == "" {
 				return nil
 			}
