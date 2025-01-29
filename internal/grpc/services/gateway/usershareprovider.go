@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -37,33 +38,41 @@ import (
 	"github.com/pkg/errors"
 )
 
-// TODO(labkode): add multi-phase commit logic when commit share or commit ref is enabled.
 func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
 	if s.isSharedFolder(ctx, req.ResourceInfo.GetPath()) {
 		return nil, errtypes.AlreadyExists("gateway: can't share the share folder itself")
 	}
 
-	c, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
+	log := appctx.GetLogger(ctx)
+
+	shareClient, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
 	if err != nil {
 		return &collaboration.CreateShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil
 	}
 
-	// TODO the user share manager needs to be able to decide if the current user is allowed to create that share (and not eg. incerase permissions)
-	// jfd: AFAICT this can only be determined by a storage driver - either the storage provider is queried first or the share manager needs to access the storage using a storage driver
-	res, err := c.CreateShare(ctx, req)
-	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling CreateShare")
-	}
-	if res.Status.Code != rpc.Code_CODE_OK {
-		return res, nil
+	// First we ping the db
+	// --------------------
+	// See ADR-REVA-003
+	_, err = shareClient.GetShare(ctx, &collaboration.GetShareRequest{
+		Ref: &collaboration.ShareReference{
+			Spec: &collaboration.ShareReference_Id{
+				Id: &collaboration.ShareId{
+					OpaqueId: "0",
+				},
+			},
+		},
+	})
+
+	// We expect a "not found" error when querying ID 0
+	// error checking is kind of ugly, because we lose the original error object over grpc
+	if !strings.HasSuffix(err.Error(), errtypes.NotFound("0").Error()) {
+		return nil, errtypes.InternalError("ShareManager is not online")
 	}
 
-	// if we don't need to commit we return earlier
-	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
-		return res, nil
-	}
+	// Then we set ACLs on the storage layer
+	// -------------------------------------
 
 	// TODO(labkode): if both commits are enabled they could be done concurrently.
 	if s.c.CommitShareToStorageGrant {
@@ -76,20 +85,32 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 			if denyGrantStatus.Code != rpc.Code_CODE_OK {
 				return &collaboration.CreateShareResponse{
 					Status: denyGrantStatus,
-				}, err
+				}, nil
 			}
-			return res, nil
+		} else {
+			addGrantStatus, err := s.addGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions)
+			if err != nil {
+				log.Error().Err(err).Str("ResourceInfo", req.ResourceInfo.String()).Str("Grantee", req.Grant.Grantee.String()).Str("Message", addGrantStatus.Message).Msg("Failed to Create Share: error during addGrant")
+				return nil, errors.Wrap(err, "gateway: error adding grant to storage")
+			}
+			if addGrantStatus.Code != rpc.Code_CODE_OK {
+				return &collaboration.CreateShareResponse{
+					Status: addGrantStatus,
+				}, nil
+			}
 		}
+	}
 
-		addGrantStatus, err := s.addGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions)
-		if err != nil {
-			return nil, errors.Wrap(err, "gateway: error adding grant to storage")
-		}
-		if addGrantStatus.Code != rpc.Code_CODE_OK {
-			return &collaboration.CreateShareResponse{
-				Status: addGrantStatus,
-			}, err
-		}
+	// Then we commit to the db
+	// ------------------------
+	res, err := shareClient.CreateShare(ctx, req)
+
+	if err != nil {
+		log.Error().Str("ResourceInfo", req.ResourceInfo.String()).Str("Grantee", req.Grant.Grantee.String()).Msg("Failed to Create Share but ACLs are already set")
+		return nil, errors.Wrap(err, "gateway: error calling CreateShare")
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return nil, errors.New("ShareClient returned error: " + res.Status.Code.String() + ": " + res.Status.Message)
 	}
 
 	return res, nil
