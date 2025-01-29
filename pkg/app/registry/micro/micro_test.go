@@ -20,6 +20,7 @@ package micro
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -30,6 +31,10 @@ import (
 	"go-micro.dev/v4/registry"
 	mreg "go-micro.dev/v4/registry"
 )
+
+func init() {
+	os.Setenv("MICRO_REGISTRY", "memory")
+}
 
 func TestFindProviders(t *testing.T) {
 
@@ -240,7 +245,7 @@ func TestFindProvidersWithPriority(t *testing.T) {
 		},
 		{
 			name:              "one provider registered for one mime type",
-			registryNamespace: "oneProviderRegisteredForOneMimeType",
+			registryNamespace: "oneProviderRegisteredForOneMimeTypeWithPrio",
 			mimeTypes: []*mimeTypeConfig{
 				{
 					MimeType:   "text/json",
@@ -277,7 +282,7 @@ func TestFindProvidersWithPriority(t *testing.T) {
 		},
 		{
 			name:              "more providers registered for one mime type",
-			registryNamespace: "moreProvidersRegisteredForOneMimeType",
+			registryNamespace: "moreProvidersRegisteredForOneMimeTypeWithPrio",
 			mimeTypes: []*mimeTypeConfig{
 				{
 					MimeType:   "text/json",
@@ -350,7 +355,7 @@ func TestFindProvidersWithPriority(t *testing.T) {
 		},
 		{
 			name:              "more providers registered for different mime types",
-			registryNamespace: "moreProvidersRegisteredForDifferentMimeTypes",
+			registryNamespace: "moreProvidersRegisteredForDifferentMimeTypesWithPrio",
 			mimeTypes: []*mimeTypeConfig{
 				{
 					MimeType:   "text/json",
@@ -425,7 +430,7 @@ func TestFindProvidersWithPriority(t *testing.T) {
 		},
 		{
 			name:              "more providers registered for different mime types2",
-			registryNamespace: "moreProvidersRegisteredForDifferentMimeTypes2",
+			registryNamespace: "moreProvidersRegisteredForDifferentMimeTypes2WithPrio",
 			mimeTypes: []*mimeTypeConfig{
 				{
 					MimeType:   "text/json",
