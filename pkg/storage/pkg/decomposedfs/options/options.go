@@ -59,7 +59,7 @@ type Options struct {
 	// ProjectLayout describes the relative path from the storage's root node to the project spaces root directory.
 	ProjectLayout string `mapstructure:"project_layout"`
 
-	// propagate mtime changes as tmtime (tree modification time) to the parent directory when user.ocis.propagation=1 is set on a node
+	// propagate mtime changes as tmtime (tree modification time) to the parent directory when user.oc.propagation=1 is set on a node
 	TreeTimeAccounting bool `mapstructure:"treetime_accounting"`
 
 	// propagate size changes as treesize
