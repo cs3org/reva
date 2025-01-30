@@ -10,18 +10,18 @@ driver = "ldap"
 [grpc.services.userprovider.drivers.ldap]
 uri="ldaps://openldap:636"
 insecure=true
-user_base_dn="ou=users,dc=owncloud,dc=com"
-group_base_dn="ou=groups,dc=owncloud,dc=com"
+user_base_dn="ou=users,dc=example,dc=org"
+group_base_dn="ou=groups,dc=example,dc=org"
 user_filter=""
 user_objectclass="posixAccount"
 group_filter=""
 group_objectclass="groupOfNames"
-bind_username="cn=admin,dc=owncloud,dc=com"
+bind_username="cn=admin,dc=example,dc=org"
 bind_password="admin"
 idp="http://localhost:20080"
 
 [grpc.services.userprovider.drivers.ldap.user_schema]
-id="ownclouduuid"
+id="openclouduuid"
 displayName="displayName"
 userName="cn"
 

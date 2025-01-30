@@ -15,8 +15,8 @@ ldap:
 	@docker run --rm -d \
 		--name docker-slapd \
 		-e LDAP_TLS_VERIFY_CLIENT=never \
-		-e LDAP_DOMAIN=owncloud.com \
-		-e LDAP_ORGANISATION=ownCloud \
+		-e LDAP_DOMAIN=example.org \
+		-e LDAP_ORGANISATION="Example Organization" \
 		-e LDAP_ADMIN_PASSWORD=admin \
 		-p 389:389 \
 		-p 636:636 \

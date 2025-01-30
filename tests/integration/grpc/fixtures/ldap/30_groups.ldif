@@ -1,68 +1,68 @@
-dn: ou=groups,dc=owncloud,dc=com
+dn: ou=groups,dc=example,dc=org
 objectClass: organizationalUnit
 ou: groups
 
-dn: cn=Sailing Lovers,ou=groups,dc=owncloud,dc=com
+dn: cn=Sailing Lovers,ou=groups,dc=example,dc=org
 objectClass: groupOfNames
-objectClass: ownCloud
+objectClass: openCloudObject
 objectClass: top
 cn: sailing-lovers
 description: Sailing Lovers
-ownCloudUUID:: NjA0MGFhMTctOWM2NC00ZmVmLTliZDAtNzcyMzRkNzFiYWQw
-member: uid=einstein,ou=users,dc=owncloud,dc=com
+openCloudUUID:: NjA0MGFhMTctOWM2NC00ZmVmLTliZDAtNzcyMzRkNzFiYWQw
+member: uid=einstein,ou=users,dc=example,dc=org
 
-dn: cn=violin-haters,ou=groups,dc=owncloud,dc=com
+dn: cn=violin-haters,ou=groups,dc=example,dc=org
 objectClass: groupOfNames
-objectClass: ownCloud
+objectClass: openCloudObject
 objectClass: top
 cn: violin-haters
 description: Violin Haters
-ownCloudUUID:: ZGQ1OGU1ZWMtODQyZS00OThiLTg4MDAtNjFmMmVjNmY5MTFm
-member: uid=einstein,ou=users,dc=owncloud,dc=com
+openCloudUUID:: ZGQ1OGU1ZWMtODQyZS00OThiLTg4MDAtNjFmMmVjNmY5MTFm
+member: uid=einstein,ou=users,dc=example,dc=org
 
-dn: cn=radium-lovers,ou=groups,dc=owncloud,dc=com
+dn: cn=radium-lovers,ou=groups,dc=example,dc=org
 objectClass: groupOfNames
-objectClass: ownCloud
+objectClass: openCloudObject
 objectClass: top
 cn: radium-lovers
 description: Radium Lovers
-ownCloudUUID:: N2I4N2ZkNDktMjg2ZS00YTVmLWJhZmQtYzUzNWQ1ZGQ5OTdh
-member: uid=marie,ou=users,dc=owncloud,dc=com
+openCloudUUID:: N2I4N2ZkNDktMjg2ZS00YTVmLWJhZmQtYzUzNWQ1ZGQ5OTdh
+member: uid=marie,ou=users,dc=example,dc=org
 
-dn: cn=polonium-lovers,ou=groups,dc=owncloud,dc=com
+dn: cn=polonium-lovers,ou=groups,dc=example,dc=org
 objectClass: groupOfNames
-objectClass: ownCloud
+objectClass: openCloudObject
 objectClass: top
 cn: polonium-lovers
 description: Polonium Lovers
-ownCloudUUID:: Y2VkYzIxYWEtNDA3Mi00NjE0LTg2NzYtZmE5MTY1ZjU5OGZm
-member: uid=marie,ou=users,dc=owncloud,dc=com
+openCloudUUID:: Y2VkYzIxYWEtNDA3Mi00NjE0LTg2NzYtZmE5MTY1ZjU5OGZm
+member: uid=marie,ou=users,dc=example,dc=org
 
-dn: cn=quantum-lovers,ou=groups,dc=owncloud,dc=com
+dn: cn=quantum-lovers,ou=groups,dc=example,dc=org
 objectClass: groupOfNames
-objectClass: ownCloud
+objectClass: openCloudObject
 objectClass: top
 cn: quantum-lovers
 description: Quantum Lovers
-ownCloudUUID:: YTE3MjYxMDgtMDFmOC00YzMwLTg4ZGYtMmIxYTlkMWNiYTFh
-member: uid=richard,ou=users,dc=owncloud,dc=com
+openCloudUUID:: YTE3MjYxMDgtMDFmOC00YzMwLTg4ZGYtMmIxYTlkMWNiYTFh
+member: uid=richard,ou=users,dc=example,dc=org
 
-dn: cn=philosophy-haters,ou=groups,dc=owncloud,dc=com
+dn: cn=philosophy-haters,ou=groups,dc=example,dc=org
 objectClass: groupOfNames
-objectClass: ownCloud
+objectClass: openCloudObject
 objectClass: top
 cn: philosophy-haters
 description: Philosophy Haters
-ownCloudUUID:: MTY3Y2JlZTItMDUxOC00NTVhLWJmYjItMDMxZmUwNjIxZTVk
-member: uid=richard,ou=users,dc=owncloud,dc=com
+openCloudUUID:: MTY3Y2JlZTItMDUxOC00NTVhLWJmYjItMDMxZmUwNjIxZTVk
+member: uid=richard,ou=users,dc=example,dc=org
 
-dn: cn=physics-lovers,ou=groups,dc=owncloud,dc=com
+dn: cn=physics-lovers,ou=groups,dc=example,dc=org
 objectClass: groupOfNames
-objectClass: ownCloud
+objectClass: openCloudObject
 objectClass: top
 cn: physics-lovers
 description: Physics Lovers
-ownCloudUUID:: MjYyOTgyYzEtMjM2Mi00YWZhLWJmZGYtOGNiZmVmNjRhMDZl
-member: uid=einstein,ou=users,dc=owncloud,dc=com
-member: uid=marie,ou=users,dc=owncloud,dc=com
-member: uid=richard,ou=users,dc=owncloud,dc=com
+openCloudUUID:: MjYyOTgyYzEtMjM2Mi00YWZhLWJmZGYtOGNiZmVmNjRhMDZl
+member: uid=einstein,ou=users,dc=example,dc=org
+member: uid=marie,ou=users,dc=example,dc=org
+member: uid=richard,ou=users,dc=example,dc=org
