@@ -1,7 +1,7 @@
 [
 	{
 		"name": "local",
-		"full_name": "ownCloud@Example",
+		"full_name": "OpenCloud@Example",
 		"organization": "Example",
 		"domain": "example.org",
 		"homepage": "http://example.org",
@@ -50,7 +50,7 @@
 	},
 	{
 		"name": "local-mesh",
-		"full_name": "ownCloud@Example2",
+		"full_name": "OpenCloud@Example2",
 		"organization": "Example 2",
 		"domain": "example.org",
 		"homepage": "http://example.org",
