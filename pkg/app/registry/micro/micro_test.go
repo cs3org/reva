@@ -20,7 +20,6 @@ package micro
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -33,7 +32,7 @@ import (
 )
 
 func init() {
-	os.Setenv("MICRO_REGISTRY", "memory")
+	_ = oreg.GetRegistry(oreg.Inmemory())
 }
 
 func TestFindProviders(t *testing.T) {
