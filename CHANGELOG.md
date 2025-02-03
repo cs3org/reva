@@ -1,3 +1,31 @@
+Changelog for reva 2.27.4 (2025-02-03)
+=======================================
+
+The following sections list the changes in reva 2.27.4 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #5061: OCM Wildcards
+*   Fix #5055: Fix view&download permission issue
+
+Details
+-------
+
+*   Bugfix #5061: OCM Wildcards
+
+   Fix using ocm wildcards. Do not overwrite cached provider with actual value
+
+   https://github.com/cs3org/reva/pull/5061
+
+*   Bugfix #5055: Fix view&download permission issue
+
+   When opening files with view&download permission (aka read), the appprovider would falsely
+   issue a secureview token. This is fixed now.
+
+   https://github.com/cs3org/reva/pull/5055
+
 Changelog for reva 2.27.3 (2025-01-27)
 =======================================
 
@@ -5407,34 +5435,6 @@ Details
 
    https://github.com/cs3org/reva/pull/3083
 
-Changelog for reva 2.7.1 (2022-07-15)
-=======================================
-
-The following sections list the changes in reva 2.7.1 relevant to
-reva users. The changes are ordered by importance.
-
-Summary
--------
-
-*   Fix #3080: Make dataproviders return more headers
-*   Enh #3046: Add user filter
-
-Details
--------
-
-*   Bugfix #3080: Make dataproviders return more headers
-
-   Instead of ocdav doing an additional Stat request we now rely on the dataprovider to return the
-   necessary metadata information as headers.
-
-   https://github.com/owncloud/reva/issues/3080
-
-*   Enhancement #3046: Add user filter
-
-   This PR adds the ability to filter spaces by user-id
-
-   https://github.com/cs3org/reva/pull/3046
-
 Changelog for reva 2.7.0 (2022-07-15)
 =======================================
 
@@ -5566,6 +5566,34 @@ Details
    https://github.com/owncloud/ocis/issues/2144
    https://github.com/owncloud/ocis/issues/3073
    https://github.com/cs3org/reva/pull/2977
+
+Changelog for reva 2.7.1 (2022-07-15)
+=======================================
+
+The following sections list the changes in reva 2.7.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #3080: Make dataproviders return more headers
+*   Enh #3046: Add user filter
+
+Details
+-------
+
+*   Bugfix #3080: Make dataproviders return more headers
+
+   Instead of ocdav doing an additional Stat request we now rely on the dataprovider to return the
+   necessary metadata information as headers.
+
+   https://github.com/owncloud/reva/issues/3080
+
+*   Enhancement #3046: Add user filter
+
+   This PR adds the ability to filter spaces by user-id
+
+   https://github.com/cs3org/reva/pull/3046
 
 Changelog for reva 2.6.1 (2022-06-27)
 =======================================
