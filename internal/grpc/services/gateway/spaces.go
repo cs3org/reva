@@ -69,7 +69,7 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 
 	res, err := c.UpdateStorageSpace(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling ListStorageSpaces")
+		return nil, errors.Wrap(err, "gateway: error calling UpdateStorageSpace")
 	}
 
 	return res, nil
@@ -85,7 +85,7 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 
 	res, err := c.DeleteStorageSpace(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling ListStorageSpaces")
+		return nil, errors.Wrap(err, "gateway: error calling DeleteStorageSpace")
 	}
 
 	return res, nil

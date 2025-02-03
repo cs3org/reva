@@ -78,7 +78,7 @@ const (
 
 var legacyNames map[string]string = map[string]string{
 	UnifiedRoleViewerID: conversions.RoleViewer,
-	// one V1 api the "spaceviewer" role was call "viewer" and the "spaceeditor" was "editor",
+	// in the V1 api the "spaceviewer" role was call "viewer" and the "spaceeditor" was "editor",
 	// we need to stay compatible with that
 	UnifiedRoleSpaceViewerID: "viewer",
 	UnifiedRoleSpaceEditorID: "editor",

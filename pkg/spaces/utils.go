@@ -27,7 +27,7 @@ import (
 )
 
 // DecodeSpaceID returns the components of the space ID.
-// The space ID is expected to be in the format <storage_id>$<base32(<path>).
+// The space ID is expected to be in the format <storage_id>$base32(<path>).
 func DecodeSpaceID(raw string) (storageID, path string, ok bool) {
 	// The input is expected to be in the form of <storage_id>$<base32(<path>)
 	s := strings.SplitN(raw, "$", 2)
@@ -50,7 +50,7 @@ func DecodeSpaceID(raw string) (storageID, path string, ok bool) {
 // Decode resourceID returns the components of the space ID.
 // The resource ID is expected to be in the form of <storage_id>$<base32(<path>)!<item_id>.
 func DecodeResourceID(raw string) (storageID, path, itemID string, ok bool) {
-	// The input is expected to be in the form of <storage_id>$<base32(<path>)!<item_id>
+	// The input is expected to be in the form of <storage_id>$base32(<path>)!<item_id>
 	s := strings.SplitN(raw, "!", 2)
 	if len(s) != 2 {
 		return
@@ -81,7 +81,7 @@ func EncodeResourceID(r *provider.ResourceId) string {
 }
 
 // EncodeSpaceID encodes storage ID and path to create a space ID,
-// in the format <storage_id>$<base32(<path>).
+// in the format <storage_id>$base32(<path>).
 func EncodeSpaceID(storageID, path string) string {
 	encodedPath := base32.StdEncoding.EncodeToString([]byte(path))
 	return fmt.Sprintf("%s$%s", storageID, encodedPath)

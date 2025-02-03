@@ -67,7 +67,7 @@ type config struct {
 	AvailableXS                     map[string]uint32                 `docs:"nil;List of available checksums."                                                                             mapstructure:"available_checksums"`
 	CustomMimeTypesJSON             string                            `docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types." mapstructure:"custom_mime_types_json"`
 	MinimunAllowedPathLevelForShare int                               `mapstructure:"minimum_allowed_path_level_for_share"`
-	SpaceLevel                      int                               `mapstructure:"space_level"`
+	SpaceLevel                      int                               `mapstructure:"space_level;The number of path components that identify the path of a Space out of an absolute path"`
 }
 
 func (c *config) ApplyDefaults() {

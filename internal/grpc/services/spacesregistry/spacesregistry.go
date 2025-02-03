@@ -104,7 +104,8 @@ func getSpacesDriver(ctx context.Context, driver string, cfg map[string]map[stri
 }
 
 func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	return nil, errors.New("not yet implemented")
+	// The creation of a space requires a provisioning and approval workflow, which for now is implemented externally
+	return nil, errors.New("not supportedd")
 }
 
 func countTypeFilters(filters []*provider.ListStorageSpacesRequest_Filter) (count int) {
@@ -300,7 +301,8 @@ func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateSt
 }
 
 func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
-	return nil, errors.New("not yet implemented")
+	// As for the creation, the deletion of a space is implemented externally for now
+	return nil, errors.New("not supported")
 }
 
 func (s *service) Register(ss *grpc.Server) {
