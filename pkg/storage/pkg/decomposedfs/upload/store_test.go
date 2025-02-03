@@ -14,6 +14,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/timemanager"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree"
 	"github.com/rs/zerolog"
@@ -25,7 +26,7 @@ func TestInitNewNode(t *testing.T) {
 	root := t.TempDir()
 
 	lookup := lookup.New(metadata.NewMessagePackBackend(root, cache.Config{}), &options.Options{Root: root}, &timemanager.Manager{})
-	tp := tree.New(lookup, nil, &options.Options{}, nil, log)
+	tp := tree.New(lookup, nil, &options.Options{}, permissions.Permissions{}, nil, log)
 
 	aspects := aspects.Aspects{
 		Lookup: lookup,

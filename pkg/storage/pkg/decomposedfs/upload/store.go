@@ -364,7 +364,7 @@ func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSess
 	}
 
 	if !store.disableVersioning {
-		versionPath := session.store.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+oldNodeMtime.UTC().Format(time.RFC3339Nano))
+		versionPath := session.store.lu.VersionPath(spaceID, n.ID, oldNodeMtime.UTC().Format(time.RFC3339Nano))
 
 		// create version node
 		_, err := os.OpenFile(versionPath, os.O_CREATE|os.O_EXCL, 0600)

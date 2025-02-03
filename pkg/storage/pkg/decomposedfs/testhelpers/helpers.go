@@ -173,7 +173,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 
 	log := &zerolog.Logger{}
 	bs := &treemocks.Blobstore{}
-	tree := tree.New(lu, bs, o, store.Create(), log)
+	tree := tree.New(lu, bs, o, permissions.Permissions{}, store.Create(), log)
 	aspects := aspects.Aspects{
 		Lookup:      lu,
 		Tree:        tree,

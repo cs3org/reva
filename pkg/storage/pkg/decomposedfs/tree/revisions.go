@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package decomposedfs
+package tree
 
 import (
 	"context"
@@ -46,14 +46,76 @@ import (
 // We can add a background process to move old revisions to a slower storage
 // and replace the revision file with a symbolic link in the future, if necessary.
 
-func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Reference) (revisions []*provider.FileVersion, err error) {
-	return fs.tp.ListRevisions(ctx, ref)
+func (tp *Tree) ListRevisions(ctx context.Context, ref *provider.Reference) (revisions []*provider.FileVersion, err error) {
+	_, span := tracer.Start(ctx, "ListRevisions")
+	defer span.End()
+	var n *node.Node
+	if n, err = tp.lookup.NodeFromResource(ctx, ref); err != nil {
+		return
+	}
+	if !n.Exists {
+		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
+		return
+	}
+
+	rp, err := tp.permissions.AssemblePermissions(ctx, n)
+	switch {
+	case err != nil:
+		return nil, err
+	case !rp.ListFileVersions:
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return nil, errtypes.PermissionDenied(f)
+		}
+		return nil, errtypes.NotFound(f)
+	}
+
+	revisions = []*provider.FileVersion{}
+	np := n.InternalPath()
+	if items, err := filepath.Glob(np + node.RevisionIDDelimiter + "*"); err == nil {
+		for i := range items {
+			if tp.lookup.MetadataBackend().IsMetaFile(items[i]) || strings.HasSuffix(items[i], ".mlock") {
+				continue
+			}
+
+			if fi, err := os.Stat(items[i]); err == nil {
+				parts := strings.SplitN(fi.Name(), node.RevisionIDDelimiter, 2)
+				if len(parts) != 2 {
+					appctx.GetLogger(ctx).Error().Err(err).Str("name", fi.Name()).Msg("invalid revision name, skipping")
+					continue
+				}
+				mtime := fi.ModTime()
+				rev := &provider.FileVersion{
+					Key:   n.ID + node.RevisionIDDelimiter + parts[1],
+					Mtime: uint64(mtime.Unix()),
+				}
+				_, blobSize, err := tp.lookup.ReadBlobIDAndSizeAttr(ctx, items[i], nil)
+				if err != nil {
+					appctx.GetLogger(ctx).Error().Err(err).Str("name", fi.Name()).Msg("error reading blobsize xattr, using 0")
+				}
+				rev.Size = uint64(blobSize)
+				etag, err := node.CalculateEtag(n.ID, mtime)
+				if err != nil {
+					return nil, errors.Wrapf(err, "error calculating etag")
+				}
+				rev.Etag = etag
+				revisions = append(revisions, rev)
+			}
+		}
+	}
+	// maybe we need to sort the list by key
+	/*
+		sort.Slice(revisions, func(i, j int) bool {
+			return revisions[i].Key > revisions[j].Key
+		})
+	*/
+
+	return
 }
 
 // DownloadRevision returns a reader for the specified revision
 // FIXME the CS3 api should explicitly allow initiating revision and trash download, a related issue is https://github.com/cs3org/reva/issues/1813
-func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string, openReaderFunc func(md *provider.ResourceInfo) bool) (*provider.ResourceInfo, io.ReadCloser, error) {
-	fs.tp.DownloadRevision(ctx, ref, revisionKey, openReaderFunc)
+func (tp *Tree) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string, openReaderFunc func(md *provider.ResourceInfo) bool) (*provider.ResourceInfo, io.ReadCloser, error) {
 	_, span := tracer.Start(ctx, "DownloadRevision")
 	defer span.End()
 	log := appctx.GetLogger(ctx)
@@ -68,7 +130,7 @@ func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Refe
 
 	spaceID := ref.ResourceId.SpaceId
 	// check if the node is available and has not been deleted
-	n, err := node.ReadNode(ctx, fs.lu, spaceID, kp[0], false, nil, false)
+	n, err := node.ReadNode(ctx, tp.lookup, spaceID, kp[0], false, nil, false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -77,7 +139,7 @@ func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Refe
 		return nil, nil, err
 	}
 
-	rp, err := fs.p.AssemblePermissions(ctx, n)
+	rp, err := tp.permissions.AssemblePermissions(ctx, n)
 	switch {
 	case err != nil:
 		return nil, nil, err
@@ -89,9 +151,9 @@ func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Refe
 		return nil, nil, errtypes.NotFound(f)
 	}
 
-	contentPath := fs.lu.InternalPath(spaceID, revisionKey)
+	contentPath := tp.lookup.InternalPath(spaceID, revisionKey)
 
-	blobid, blobsize, err := fs.lu.ReadBlobIDAndSizeAttr(ctx, contentPath, nil)
+	blobid, blobsize, err := tp.lookup.ReadBlobIDAndSizeAttr(ctx, contentPath, nil)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "Decomposedfs: could not read blob id and size for revision '%s' of node '%s'", kp[1], n.ID)
 	}
@@ -117,7 +179,7 @@ func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Refe
 
 	var reader io.ReadCloser
 	if openReaderFunc(ri) {
-		reader, err = fs.tp.ReadBlob(&revisionNode)
+		reader, err = tp.ReadBlob(&revisionNode)
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "Decomposedfs: could not download blob of revision '%s' for node '%s'", n.ID, revisionKey)
 		}
@@ -126,7 +188,7 @@ func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Refe
 }
 
 // RestoreRevision restores the specified revision of the resource
-func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (returnErr error) {
+func (tp *Tree) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (returnErr error) {
 	_, span := tracer.Start(ctx, "RestoreRevision")
 	defer span.End()
 	log := appctx.GetLogger(ctx)
@@ -140,7 +202,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 
 	spaceID := ref.ResourceId.SpaceId
 	// check if the node is available and has not been deleted
-	n, err := node.ReadNode(ctx, fs.lu, spaceID, kp[0], false, nil, false)
+	n, err := node.ReadNode(ctx, tp.lookup, spaceID, kp[0], false, nil, false)
 	if err != nil {
 		return err
 	}
@@ -149,7 +211,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		return err
 	}
 
-	rp, err := fs.p.AssemblePermissions(ctx, n)
+	rp, err := tp.permissions.AssemblePermissions(ctx, n)
 	switch {
 	case err != nil:
 		return err
@@ -170,17 +232,17 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	}
 
 	// write lock node before copying metadata
-	f, err := lockedfile.OpenFile(fs.lu.MetadataBackend().LockfilePath(n.InternalPath()), os.O_RDWR|os.O_CREATE, 0600)
+	f, err := lockedfile.OpenFile(tp.lookup.MetadataBackend().LockfilePath(n.InternalPath()), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return err
 	}
 	defer func() {
 		_ = f.Close()
-		_ = os.Remove(fs.lu.MetadataBackend().LockfilePath(n.InternalPath()))
+		_ = os.Remove(tp.lookup.MetadataBackend().LockfilePath(n.InternalPath()))
 	}()
 
 	// move current version to new revision
-	nodePath := fs.lu.InternalPath(spaceID, kp[0])
+	nodePath := tp.lookup.InternalPath(spaceID, kp[0])
 	mtime, err := n.GetMTime(ctx)
 	if err != nil {
 		log.Error().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("cannot read mtime")
@@ -188,7 +250,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	}
 
 	// revisions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
-	newRevisionPath := fs.lu.InternalPath(spaceID, kp[0]+node.RevisionIDDelimiter+mtime.UTC().Format(time.RFC3339Nano))
+	newRevisionPath := tp.lookup.InternalPath(spaceID, kp[0]+node.RevisionIDDelimiter+mtime.UTC().Format(time.RFC3339Nano))
 
 	// touch new revision
 	if _, err := os.Create(newRevisionPath); err != nil {
@@ -199,14 +261,14 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 			if err := os.Remove(newRevisionPath); err != nil {
 				log.Error().Err(err).Str("revision", filepath.Base(newRevisionPath)).Msg("could not clean up revision node")
 			}
-			if err := fs.lu.MetadataBackend().Purge(ctx, newRevisionPath); err != nil {
+			if err := tp.lookup.MetadataBackend().Purge(ctx, newRevisionPath); err != nil {
 				log.Error().Err(err).Str("revision", filepath.Base(newRevisionPath)).Msg("could not clean up revision node")
 			}
 		}
 	}()
 
 	// copy blob metadata from node to new revision node
-	err = fs.lu.CopyMetadataWithSourceLock(ctx, nodePath, newRevisionPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
+	err = tp.lookup.CopyMetadataWithSourceLock(ctx, nodePath, newRevisionPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
 		return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) || // for checksums
 			attributeName == prefixes.TypeAttr ||
 			attributeName == prefixes.BlobIDAttr ||
@@ -225,8 +287,8 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	// update blob id in node
 
 	// copy blob metadata from restored revision to node
-	restoredRevisionPath := fs.lu.InternalPath(spaceID, revisionKey)
-	err = fs.lu.CopyMetadata(ctx, restoredRevisionPath, nodePath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
+	restoredRevisionPath := tp.lookup.InternalPath(spaceID, revisionKey)
+	err = tp.lookup.CopyMetadata(ctx, restoredRevisionPath, nodePath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
 		return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
 			attributeName == prefixes.TypeAttr ||
 			attributeName == prefixes.BlobIDAttr ||
@@ -236,7 +298,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		return errtypes.InternalError("failed to copy blob xattrs to old revision to node: " + err.Error())
 	}
 	// always set the node mtime to the current time
-	err = fs.lu.MetadataBackend().SetMultiple(ctx, nodePath,
+	err = tp.lookup.MetadataBackend().SetMultiple(ctx, nodePath,
 		map[string][]byte{
 			prefixes.MTimeAttr: []byte(time.Now().UTC().Format(time.RFC3339Nano)),
 		},
@@ -245,7 +307,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		return errtypes.InternalError("failed to set mtime attribute on node: " + err.Error())
 	}
 
-	revisionSize, err := fs.lu.MetadataBackend().GetInt64(ctx, restoredRevisionPath, prefixes.BlobsizeAttr)
+	revisionSize, err := tp.lookup.MetadataBackend().GetInt64(ctx, restoredRevisionPath, prefixes.BlobsizeAttr)
 	if err != nil {
 		return errtypes.InternalError("failed to read blob size xattr from old revision")
 	}
@@ -254,13 +316,13 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	if err := os.Remove(restoredRevisionPath); err != nil {
 		log.Warn().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("could not delete old revision, continuing")
 	}
-	if err := os.Remove(fs.lu.MetadataBackend().MetadataPath(restoredRevisionPath)); err != nil {
+	if err := os.Remove(tp.lookup.MetadataBackend().MetadataPath(restoredRevisionPath)); err != nil {
 		log.Warn().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("could not delete old revision metadata, continuing")
 	}
-	if err := os.Remove(fs.lu.MetadataBackend().LockfilePath(restoredRevisionPath)); err != nil {
+	if err := os.Remove(tp.lookup.MetadataBackend().LockfilePath(restoredRevisionPath)); err != nil {
 		log.Warn().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("could not delete old revision metadata lockfile, continuing")
 	}
-	if err := fs.lu.MetadataBackend().Purge(ctx, restoredRevisionPath); err != nil {
+	if err := tp.lookup.MetadataBackend().Purge(ctx, restoredRevisionPath); err != nil {
 		log.Warn().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("could not purge old revision from cache, continuing")
 	}
 
@@ -268,28 +330,28 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	// revision 10, current 5 (restore a bigger blob) -> 10-5 = +5
 	sizeDiff := revisionSize - n.Blobsize
 
-	return fs.tp.Propagate(ctx, n, sizeDiff)
+	return tp.Propagate(ctx, n, sizeDiff)
 }
 
 // DeleteRevision deletes the specified revision of the resource
-func (fs *Decomposedfs) DeleteRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
+func (tp *Tree) DeleteRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
 	_, span := tracer.Start(ctx, "DeleteRevision")
 	defer span.End()
-	n, err := fs.getRevisionNode(ctx, ref, revisionKey, func(rp *provider.ResourcePermissions) bool {
+	n, err := tp.getRevisionNode(ctx, ref, revisionKey, func(rp *provider.ResourcePermissions) bool {
 		return rp.RestoreFileVersion
 	})
 	if err != nil {
 		return err
 	}
 
-	if err := os.RemoveAll(fs.lu.InternalPath(n.SpaceID, revisionKey)); err != nil {
+	if err := os.RemoveAll(tp.lookup.InternalPath(n.SpaceID, revisionKey)); err != nil {
 		return err
 	}
 
-	return fs.tp.DeleteBlob(n)
+	return tp.DeleteBlob(n)
 }
 
-func (fs *Decomposedfs) getRevisionNode(ctx context.Context, ref *provider.Reference, revisionKey string, hasPermission func(*provider.ResourcePermissions) bool) (*node.Node, error) {
+func (tp *Tree) getRevisionNode(ctx context.Context, ref *provider.Reference, revisionKey string, hasPermission func(*provider.ResourcePermissions) bool) (*node.Node, error) {
 	_, span := tracer.Start(ctx, "getRevisionNode")
 	defer span.End()
 	log := appctx.GetLogger(ctx)
@@ -304,7 +366,7 @@ func (fs *Decomposedfs) getRevisionNode(ctx context.Context, ref *provider.Refer
 
 	spaceID := ref.ResourceId.SpaceId
 	// check if the node is available and has not been deleted
-	n, err := node.ReadNode(ctx, fs.lu, spaceID, kp[0], false, nil, false)
+	n, err := node.ReadNode(ctx, tp.lookup, spaceID, kp[0], false, nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +375,7 @@ func (fs *Decomposedfs) getRevisionNode(ctx context.Context, ref *provider.Refer
 		return nil, err
 	}
 
-	p, err := fs.p.AssemblePermissions(ctx, n)
+	p, err := tp.permissions.AssemblePermissions(ctx, n)
 	switch {
 	case err != nil:
 		return nil, err

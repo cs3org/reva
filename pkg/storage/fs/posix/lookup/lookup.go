@@ -315,6 +315,16 @@ func (lu *Lookup) InternalPath(spaceID, nodeID string) string {
 	return path
 }
 
+// VersionPath returns the path to the version of the node
+func (lu *Lookup) VersionPath(spaceID, nodeID, version string) string {
+	path, _ := lu.IDCache.Get(context.Background(), spaceID, nodeID)
+	if len(path) == 0 {
+		return ""
+	}
+
+	return path + node.RevisionIDDelimiter + version
+}
+
 // // ReferenceFromAttr returns a CS3 reference from xattr of a node.
 // // Supported formats are: "cs3:storageid/nodeid"
 // func ReferenceFromAttr(b []byte) (*provider.Reference, error) {

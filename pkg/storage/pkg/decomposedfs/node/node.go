@@ -132,6 +132,9 @@ type Tree interface {
 	BuildSpaceIDIndexEntry(spaceID, nodeID string) string
 	ResolveSpaceIDIndexEntry(spaceID, entry string) (string, string, error)
 
+	ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
+	DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string, openReaderFunc func(md *provider.ResourceInfo) bool) (*provider.ResourceInfo, io.ReadCloser, error)
+
 	Propagate(ctx context.Context, node *Node, sizeDiff int64) (err error)
 }
 
@@ -147,6 +150,7 @@ type PathLookup interface {
 
 	InternalRoot() string
 	InternalPath(spaceID, nodeID string) string
+	VersionPath(spaceID, nodeID, version string) string
 	Path(ctx context.Context, n *Node, hasPermission PermissionFunc) (path string, err error)
 	MetadataBackend() metadata.Backend
 	TimeManager() TimeManager

@@ -48,6 +48,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree/propagator"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/usermapper"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
@@ -78,10 +79,11 @@ type scanItem struct {
 
 // Tree manages a hierarchical tree
 type Tree struct {
-	lookup     node.PathLookup
-	blobstore  Blobstore
-	trashbin   *trashbin.Trashbin
-	propagator propagator.Propagator
+	lookup      node.PathLookup
+	blobstore   Blobstore
+	trashbin    *trashbin.Trashbin
+	propagator  propagator.Propagator
+	permissions permissions.Permissions
 
 	options *options.Options
 
@@ -99,17 +101,18 @@ type Tree struct {
 type PermissionCheckFunc func(rp *provider.ResourcePermissions) bool
 
 // New returns a new instance of Tree
-func New(lu node.PathLookup, bs Blobstore, um usermapper.Mapper, trashbin *trashbin.Trashbin, o *options.Options, es events.Stream, cache store.Store, log *zerolog.Logger) (*Tree, error) {
+func New(lu node.PathLookup, bs Blobstore, um usermapper.Mapper, trashbin *trashbin.Trashbin, permissions permissions.Permissions, o *options.Options, es events.Stream, cache store.Store, log *zerolog.Logger) (*Tree, error) {
 	scanQueue := make(chan scanItem)
 	t := &Tree{
-		lookup:     lu,
-		blobstore:  bs,
-		userMapper: um,
-		trashbin:   trashbin,
-		options:    o,
-		idCache:    cache,
-		propagator: propagator.New(lu, &o.Options, log),
-		scanQueue:  scanQueue,
+		lookup:      lu,
+		blobstore:   bs,
+		userMapper:  um,
+		trashbin:    trashbin,
+		permissions: permissions,
+		options:     o,
+		idCache:     cache,
+		propagator:  propagator.New(lu, &o.Options, log),
+		scanQueue:   scanQueue,
 		scanDebouncer: NewScanDebouncer(o.ScanDebounceDelay, func(item scanItem) {
 			scanQueue <- item
 		}),
