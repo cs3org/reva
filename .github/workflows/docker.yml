@@ -50,7 +50,7 @@ jobs:
           push: ${{ inputs.push }}
           platforms: ${{ inputs.platforms }}
       - name: Upload ${{ steps.build.outputs.imageid }} Docker image to artifacts
-        uses: ishworkh/docker-image-artifact-upload@v1
+        uses: ishworkh/container-image-artifact-upload@v2.0.0
         if: inputs.load
         with:
           image: ${{ steps.build.outputs.imageid }}
