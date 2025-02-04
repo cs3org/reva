@@ -1285,66 +1285,6 @@ func (fs *eosfs) CreateHome(ctx context.Context) error {
 	return nil
 }
 
-func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string, recursiveAttr bool) error {
-	rootAuth, err := fs.getRootAuth(ctx)
-	if err != nil {
-		return nil
-	}
-
-	chownAuth, err := fs.getUserAuth(ctx, u, "")
-	if err != nil {
-		return err
-	}
-
-	err = fs.c.CreateDir(ctx, rootAuth, path)
-	if err != nil {
-		// EOS will return success on mkdir over an existing directory.
-		return errors.Wrap(err, "eosfs: error creating dir")
-	}
-
-	err = fs.c.Chown(ctx, rootAuth, chownAuth, path)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: error chowning directory")
-	}
-
-	err = fs.c.Chmod(ctx, rootAuth, "2700", path)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: error chmoding directory")
-	}
-
-	attrs := []*eosclient.Attribute{
-		{
-			Type: SystemAttr,
-			Key:  "mask",
-			Val:  "700",
-		},
-		{
-			Type: SystemAttr,
-			Key:  "allow.oc.sync",
-			Val:  "1",
-		},
-		{
-			Type: SystemAttr,
-			Key:  "mtime.propagation",
-			Val:  "1",
-		},
-		{
-			Type: SystemAttr,
-			Key:  "forced.atomic",
-			Val:  "1",
-		},
-	}
-
-	for _, attr := range attrs {
-		err = fs.c.SetAttr(ctx, rootAuth, attr, false, recursiveAttr, path, "")
-		if err != nil {
-			return errors.Wrap(err, "eosfs: error setting attribute")
-		}
-	}
-
-	return nil
-}
-
 func (fs *eosfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	log := appctx.GetLogger(ctx)
 
@@ -1478,8 +1418,7 @@ func (fs *eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]
 	var auth eosclient.Authorization
 	var fn string
 	var err error
-
-	if !fs.conf.EnableHome && fs.conf.ImpersonateOwnerforRevisions {
+	if !fs.conf.EnableHome {
 		// We need to access the revisions for a non-home reference.
 		// We'll get the owner of the particular resource and impersonate them
 		// if we have access to it.
@@ -1490,7 +1429,8 @@ func (fs *eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]
 		fn = fs.wrap(ctx, md.Path)
 
 		if md.PermissionSet.ListFileVersions {
-			auth, err = fs.getUIDGateway(ctx, md.Owner)
+			user := appctx.ContextMustGetUser(ctx)
+			auth, err = fs.getEOSToken(ctx, user, fn)
 			if err != nil {
 				return nil, err
 			}
@@ -2084,6 +2024,7 @@ func (fs *eosfs) getUserAuth(ctx context.Context, u *userpb.User, fn string) (eo
 	return fs.extractUIDAndGID(u)
 }
 
+// Generate an EOS token that acts on behalf of the owner of the file `fn`
 func (fs *eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eosclient.Authorization, error) {
 	if fn == "" {
 		return eosclient.Authorization{}, errtypes.BadRequest("eosfs: path cannot be empty")
@@ -2131,18 +2072,6 @@ func (fs *eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eo
 	_ = fs.tokenCache.SetWithExpire(key, tkn, time.Second*time.Duration(fs.conf.TokenExpiry))
 
 	return eosclient.Authorization{Token: tkn}, nil
-}
-
-func (fs *eosfs) getRootAuth(ctx context.Context) (eosclient.Authorization, error) {
-	if fs.conf.ForceSingleUserMode {
-		if fs.singleUserAuth.Role.UID != "" && fs.singleUserAuth.Role.GID != "" {
-			return fs.singleUserAuth, nil
-		}
-		var err error
-		fs.singleUserAuth, err = fs.getUIDGateway(ctx, &userpb.UserId{OpaqueId: fs.conf.SingleUsername})
-		return fs.singleUserAuth, err
-	}
-	return eosclient.Authorization{Role: eosclient.Role{UID: "0", GID: "0"}}, nil
 }
 
 // Returns an eosclient.Authorization object with the uid/gid of the daemon user
