@@ -46,6 +46,43 @@ import (
 // We can add a background process to move old revisions to a slower storage
 // and replace the revision file with a symbolic link in the future, if necessary.
 
+// CreateVersion creates a new version of the node
+func (tp *Tree) CreateVersion(ctx context.Context, n *node.Node, version string, f *lockedfile.File) (string, error) {
+	versionPath := tp.lookup.VersionPath(n.SpaceID, n.ID, version)
+
+	err := os.MkdirAll(filepath.Dir(versionPath), 0700)
+	if err != nil {
+		return "", err
+	}
+
+	// copy file content to version node
+	sf, err := os.OpenFile(n.InternalPath(), os.O_RDONLY, 0)
+	if err != nil {
+		return "", err
+	}
+	vf, err := os.OpenFile(versionPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0600)
+	if err != nil {
+		return "", err
+	}
+	if _, err := io.Copy(vf, sf); err != nil {
+		return "", err
+	}
+	defer vf.Close()
+
+	// copy blob metadata to version node
+	if err := tp.lookup.CopyMetadataWithSourceLock(ctx, n.InternalPath(), versionPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
+		return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
+			attributeName == prefixes.TypeAttr ||
+			attributeName == prefixes.BlobIDAttr ||
+			attributeName == prefixes.BlobsizeAttr ||
+			attributeName == prefixes.MTimeAttr
+	}, f, true); err != nil {
+		return "", err
+	}
+
+	return versionPath, nil
+}
+
 func (tp *Tree) ListRevisions(ctx context.Context, ref *provider.Reference) (revisions []*provider.FileVersion, err error) {
 	_, span := tracer.Start(ctx, "ListRevisions")
 	defer span.End()
@@ -71,8 +108,8 @@ func (tp *Tree) ListRevisions(ctx context.Context, ref *provider.Reference) (rev
 	}
 
 	revisions = []*provider.FileVersion{}
-	np := n.InternalPath()
-	if items, err := filepath.Glob(np + node.RevisionIDDelimiter + "*"); err == nil {
+	versionGlob := tp.lookup.VersionPath(n.SpaceID, n.ID, "*")
+	if items, err := filepath.Glob(versionGlob); err == nil {
 		for i := range items {
 			if tp.lookup.MetadataBackend().IsMetaFile(items[i]) || strings.HasSuffix(items[i], ".mlock") {
 				continue
@@ -153,12 +190,13 @@ func (tp *Tree) DownloadRevision(ctx context.Context, ref *provider.Reference, r
 
 	contentPath := tp.lookup.InternalPath(spaceID, revisionKey)
 
-	blobid, blobsize, err := tp.lookup.ReadBlobIDAndSizeAttr(ctx, contentPath, nil)
+	_, blobsize, err := tp.lookup.ReadBlobIDAndSizeAttr(ctx, contentPath, nil)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "Decomposedfs: could not read blob id and size for revision '%s' of node '%s'", kp[1], n.ID)
 	}
 
-	revisionNode := node.Node{SpaceID: spaceID, BlobID: blobid, Blobsize: blobsize} // blobsize is needed for the s3ng blobstore
+	revisionNode := node.New(spaceID, revisionKey, n.ParentID, n.Name, blobsize, "", provider.ResourceType_RESOURCE_TYPE_FILE, n.Owner(), tp.lookup)
+	// revisionNode := node.Node{SpaceID: spaceID, ID: revisionKey, Blobsize: blobsize} // blobsize is needed for the s3ng blobstore
 
 	ri, err := n.AsResourceInfo(ctx, rp, nil, []string{"size", "mimetype", "etag"}, true)
 	if err != nil {
@@ -179,7 +217,7 @@ func (tp *Tree) DownloadRevision(ctx context.Context, ref *provider.Reference, r
 
 	var reader io.ReadCloser
 	if openReaderFunc(ri) {
-		reader, err = tp.ReadBlob(&revisionNode)
+		reader, err = tp.ReadBlob(revisionNode)
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "Decomposedfs: could not download blob of revision '%s' for node '%s'", n.ID, revisionKey)
 		}

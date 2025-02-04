@@ -46,6 +46,35 @@ import (
 // We can add a background process to move old revisions to a slower storage
 // and replace the revision file with a symbolic link in the future, if necessary.
 
+// CreateVersion creates a new version of the node
+func (tp *Tree) CreateVersion(ctx context.Context, n *node.Node, version string, f *lockedfile.File) (string, error) {
+	versionPath := tp.lookup.VersionPath(n.SpaceID, n.ID, version)
+
+	err := os.MkdirAll(filepath.Dir(versionPath), 0700)
+	if err != nil {
+		return "", err
+	}
+
+	// create version node
+	_, err = os.OpenFile(versionPath, os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return "", err
+	}
+
+	// copy blob metadata to version node
+	if err := tp.lookup.CopyMetadataWithSourceLock(ctx, n.InternalPath(), versionPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
+		return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
+			attributeName == prefixes.TypeAttr ||
+			attributeName == prefixes.BlobIDAttr ||
+			attributeName == prefixes.BlobsizeAttr ||
+			attributeName == prefixes.MTimeAttr
+	}, f, true); err != nil {
+		return "", err
+	}
+
+	return versionPath, nil
+}
+
 func (tp *Tree) ListRevisions(ctx context.Context, ref *provider.Reference) (revisions []*provider.FileVersion, err error) {
 	_, span := tracer.Start(ctx, "ListRevisions")
 	defer span.End()

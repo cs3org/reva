@@ -27,7 +27,6 @@ import (
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/pkg/errors"
 	"github.com/rogpeppe/go-internal/lockedfile"
 
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
@@ -35,7 +34,6 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
-	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
 // Revision entries are stored inside the node folder and start with the same uuid as the current version.
@@ -53,76 +51,7 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 // DownloadRevision returns a reader for the specified revision
 // FIXME the CS3 api should explicitly allow initiating revision and trash download, a related issue is https://github.com/cs3org/reva/issues/1813
 func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string, openReaderFunc func(md *provider.ResourceInfo) bool) (*provider.ResourceInfo, io.ReadCloser, error) {
-	fs.tp.DownloadRevision(ctx, ref, revisionKey, openReaderFunc)
-	_, span := tracer.Start(ctx, "DownloadRevision")
-	defer span.End()
-	log := appctx.GetLogger(ctx)
-
-	// verify revision key format
-	kp := strings.SplitN(revisionKey, node.RevisionIDDelimiter, 2)
-	if len(kp) != 2 {
-		log.Error().Str("revisionKey", revisionKey).Msg("malformed revisionKey")
-		return nil, nil, errtypes.NotFound(revisionKey)
-	}
-	log.Debug().Str("revisionKey", revisionKey).Msg("DownloadRevision")
-
-	spaceID := ref.ResourceId.SpaceId
-	// check if the node is available and has not been deleted
-	n, err := node.ReadNode(ctx, fs.lu, spaceID, kp[0], false, nil, false)
-	if err != nil {
-		return nil, nil, err
-	}
-	if !n.Exists {
-		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
-		return nil, nil, err
-	}
-
-	rp, err := fs.p.AssemblePermissions(ctx, n)
-	switch {
-	case err != nil:
-		return nil, nil, err
-	case !rp.ListFileVersions || !rp.InitiateFileDownload: // TODO add explicit permission in the CS3 api?
-		f, _ := storagespace.FormatReference(ref)
-		if rp.Stat {
-			return nil, nil, errtypes.PermissionDenied(f)
-		}
-		return nil, nil, errtypes.NotFound(f)
-	}
-
-	contentPath := fs.lu.InternalPath(spaceID, revisionKey)
-
-	blobid, blobsize, err := fs.lu.ReadBlobIDAndSizeAttr(ctx, contentPath, nil)
-	if err != nil {
-		return nil, nil, errors.Wrapf(err, "Decomposedfs: could not read blob id and size for revision '%s' of node '%s'", kp[1], n.ID)
-	}
-
-	revisionNode := node.Node{SpaceID: spaceID, BlobID: blobid, Blobsize: blobsize} // blobsize is needed for the s3ng blobstore
-
-	ri, err := n.AsResourceInfo(ctx, rp, nil, []string{"size", "mimetype", "etag"}, true)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// update resource info with revision data
-	mtime, err := time.Parse(time.RFC3339Nano, kp[1])
-	if err != nil {
-		return nil, nil, errors.Wrapf(err, "Decomposedfs: could not parse mtime for revision '%s' of node '%s'", kp[1], n.ID)
-	}
-	ri.Size = uint64(blobsize)
-	ri.Mtime = utils.TimeToTS(mtime)
-	ri.Etag, err = node.CalculateEtag(n.ID, mtime)
-	if err != nil {
-		return nil, nil, errors.Wrapf(err, "error calculating etag for revision '%s' of node '%s'", kp[1], n.ID)
-	}
-
-	var reader io.ReadCloser
-	if openReaderFunc(ri) {
-		reader, err = fs.tp.ReadBlob(&revisionNode)
-		if err != nil {
-			return nil, nil, errors.Wrapf(err, "Decomposedfs: could not download blob of revision '%s' for node '%s'", n.ID, revisionKey)
-		}
-	}
-	return ri, reader, nil
+	return fs.tp.DownloadRevision(ctx, ref, revisionKey, openReaderFunc)
 }
 
 // RestoreRevision restores the specified revision of the resource

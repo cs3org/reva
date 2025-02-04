@@ -364,10 +364,8 @@ func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSess
 	}
 
 	if !store.disableVersioning {
-		versionPath := session.store.lu.VersionPath(spaceID, n.ID, oldNodeMtime.UTC().Format(time.RFC3339Nano))
-
-		// create version node
-		_, err := os.OpenFile(versionPath, os.O_CREATE|os.O_EXCL, 0600)
+		span.AddEvent("CreateVersion")
+		versionPath, err := session.store.tp.CreateVersion(ctx, n, oldNodeMtime.UTC().Format(time.RFC3339Nano), f)
 		if err != nil {
 			if !errors.Is(err, os.ErrExist) {
 				return unlock, err
@@ -389,22 +387,11 @@ func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSess
 			}
 
 			// clean revision file
-			span.AddEvent("os.Create")
-			if _, err := os.Create(versionPath); err != nil {
+			if versionPath, err = session.store.tp.CreateVersion(ctx, n, oldNodeMtime.UTC().Format(time.RFC3339Nano), f); err != nil {
 				return unlock, err
 			}
 		}
 
-		// copy blob metadata to version node
-		if err := store.lu.CopyMetadataWithSourceLock(ctx, targetPath, versionPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
-			return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
-				attributeName == prefixes.TypeAttr ||
-				attributeName == prefixes.BlobIDAttr ||
-				attributeName == prefixes.BlobsizeAttr ||
-				attributeName == prefixes.MTimeAttr
-		}, f, true); err != nil {
-			return unlock, err
-		}
 		session.info.MetaData["versionsPath"] = versionPath
 		// keep mtime from previous version
 		span.AddEvent("os.Chtimes")

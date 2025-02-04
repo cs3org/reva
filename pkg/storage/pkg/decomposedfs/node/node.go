@@ -134,6 +134,7 @@ type Tree interface {
 
 	ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
 	DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string, openReaderFunc func(md *provider.ResourceInfo) bool) (*provider.ResourceInfo, io.ReadCloser, error)
+	CreateVersion(ctx context.Context, n *Node, version string, f *lockedfile.File) (string, error)
 
 	Propagate(ctx context.Context, node *Node, sizeDiff int64) (err error)
 }
@@ -360,7 +361,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 			// use the actual node for the metadata lookup
 			nodeID = kp[0]
 			// remember revision for blob metadata
-			revisionSuffix = RevisionIDDelimiter + kp[1]
+			revisionSuffix = kp[1]
 		}
 	}
 
@@ -376,8 +377,8 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	// append back revision to nodeid, even when returning a not existing node
 	defer func() {
 		// when returning errors n is nil
-		if n != nil {
-			n.ID += revisionSuffix
+		if n != nil && revisionSuffix != "" {
+			n.ID += RevisionIDDelimiter + revisionSuffix
 		}
 	}()
 
@@ -406,7 +407,8 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 			return nil, err
 		}
 	} else {
-		n.BlobID, n.Blobsize, err = lu.ReadBlobIDAndSizeAttr(ctx, nodePath+revisionSuffix, nil)
+		versionPath := lu.VersionPath(spaceID, nodeID, revisionSuffix)
+		n.BlobID, n.Blobsize, err = lu.ReadBlobIDAndSizeAttr(ctx, versionPath, nil)
 		if err != nil {
 			return nil, err
 		}
