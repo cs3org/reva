@@ -1229,13 +1229,17 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 	fdrq.Role = new(erpc.RoleId)
 
 	uid, gid, err := utils.ExtractUidGid(auth)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to extract uid/gid from auth")
-	}
-	fdrq.Role.Uid = uid
-	fdrq.Role.Gid = gid
+	if err == nil {
+		fdrq.Role.Uid = uid
+		fdrq.Role.Gid = gid
 
-	fdrq.Authkey = c.opt.Authkey
+		fdrq.Authkey = c.opt.Authkey
+	} else {
+		if auth.Token == "" {
+			return nil, errors.Wrap(err, "Failed to extract uid/gid from auth")
+		}
+		fdrq.Authkey = auth.Token
+	}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Find(appctx.ContextGetClean(ctx), fdrq)
@@ -1580,8 +1584,7 @@ func (c *Client) ListVersions(ctx context.Context, auth eosclient.Authorization,
 	versionFolder := getVersionFolder(p)
 	finfos, err := c.List(ctx, auth, versionFolder)
 	if err != nil {
-		// we send back an empty list
-		return []*eosclient.FileInfo{}, nil
+		return []*eosclient.FileInfo{}, err
 	}
 	return finfos, nil
 }
