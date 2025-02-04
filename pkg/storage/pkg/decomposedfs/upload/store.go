@@ -365,7 +365,7 @@ func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSess
 
 	if !store.disableVersioning {
 		span.AddEvent("CreateVersion")
-		versionPath, err := session.store.tp.CreateVersion(ctx, n, oldNodeMtime.UTC().Format(time.RFC3339Nano), f)
+		versionPath, err := session.store.tp.CreateRevision(ctx, n, oldNodeMtime.UTC().Format(time.RFC3339Nano), f)
 		if err != nil {
 			if !errors.Is(err, os.ErrExist) {
 				return unlock, err
@@ -387,7 +387,7 @@ func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSess
 			}
 
 			// clean revision file
-			if versionPath, err = session.store.tp.CreateVersion(ctx, n, oldNodeMtime.UTC().Format(time.RFC3339Nano), f); err != nil {
+			if versionPath, err = session.store.tp.CreateRevision(ctx, n, oldNodeMtime.UTC().Format(time.RFC3339Nano), f); err != nil {
 				return unlock, err
 			}
 		}

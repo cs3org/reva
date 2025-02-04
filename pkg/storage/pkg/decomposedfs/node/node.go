@@ -132,9 +132,9 @@ type Tree interface {
 	BuildSpaceIDIndexEntry(spaceID, nodeID string) string
 	ResolveSpaceIDIndexEntry(spaceID, entry string) (string, string, error)
 
+	CreateRevision(ctx context.Context, n *Node, version string, f *lockedfile.File) (string, error)
 	ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
 	DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string, openReaderFunc func(md *provider.ResourceInfo) bool) (*provider.ResourceInfo, io.ReadCloser, error)
-	CreateVersion(ctx context.Context, n *Node, version string, f *lockedfile.File) (string, error)
 
 	Propagate(ctx context.Context, node *Node, sizeDiff int64) (err error)
 }

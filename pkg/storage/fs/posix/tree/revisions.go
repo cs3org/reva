@@ -47,7 +47,7 @@ import (
 // and replace the revision file with a symbolic link in the future, if necessary.
 
 // CreateVersion creates a new version of the node
-func (tp *Tree) CreateVersion(ctx context.Context, n *node.Node, version string, f *lockedfile.File) (string, error) {
+func (tp *Tree) CreateRevision(ctx context.Context, n *node.Node, version string, f *lockedfile.File) (string, error) {
 	versionPath := tp.lookup.VersionPath(n.SpaceID, n.ID, version)
 
 	err := os.MkdirAll(filepath.Dir(versionPath), 0700)
