@@ -16,13 +16,14 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-//go:build freebsd
+//go:build !freebsd
 
 package prefixes
 
-// On FreeBSD the `user` namespace is implied through a separate syscall argument
-// and will fail with invalid argument when you try to start an xattr name with user. or system.
-// For that reason we drop the superfluous user. prefix for FreeBSD specifically.
+// The default namespace for decomposedfs. As non root users can only
+// manipulate the user. namespace, which is what is used to store decomposedfs
+// specific metadata. To prevent name collisions with other apps, we are going
+// to introduce a sub namespace "user.oc."
 const (
-	OcisPrefix string = "ocis."
+	OcPrefix string = "user.oc."
 )
