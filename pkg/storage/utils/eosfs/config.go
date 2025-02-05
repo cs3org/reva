@@ -126,10 +126,6 @@ type Config struct {
 	// Only considered when EnableHome is false.
 	AllowPathRecycleOperations bool `mapstructure:"allow_path_recycle_operations"`
 
-	// Whether we should impersonate the owner of a resource when trying to perform
-	// revisions-related operations.
-	ImpersonateOwnerforRevisions bool `mapstructure:"impersonate_owner_for_revisions"`
-
 	// HTTP connections to EOS: max number of idle conns
 	MaxIdleConns int `mapstructure:"max_idle_conns"`
 
