@@ -35,7 +35,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/templates"
 )
 
-// Handler implements the ownCloud sharing API
+// Handler implements the open collaboration service sharing API
 type Handler struct {
 	gatewayAddr             string
 	additionalInfoAttribute string

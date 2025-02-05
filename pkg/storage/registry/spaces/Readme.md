@@ -41,7 +41,7 @@ It also carries filters that are sent with a ListStorageSpaces call to a storage
 *   a display name, that is assigned by the owner or managers, eg. project names or 'Phils Home' for personal spaces. They are not unique
 *   an alias that is human readable and unique per user. It is used when listing paths on the CS3 global names as well as oc10 `/webdav` and `/dav/files/{username}` endpoints
 
-5.  on the ocis `/dav/spaces/{spaceid}/` endpoint the alias is actually not used because navigation happens by `{spaceid}`
+5.  on the OpenCloud `/dav/spaces/{spaceid}/` endpoint the alias is actually not used because navigation happens by `{spaceid}`
 6.  Every user has their own list of path to spaceid mappings, like one config file per user.
 
 ## consequences for storage providers

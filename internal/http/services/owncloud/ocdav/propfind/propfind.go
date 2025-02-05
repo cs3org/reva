@@ -1638,7 +1638,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 						// always returns the current usage,
 						// in oc10 there seems to be a bug that makes the size in webdav differ from the one in the user properties, not taking shares into account
-						// in ocis we plan to always mak the quota a property of the storage space
+						// in OpenCloud we plan to always mak the quota a property of the storage space
 						appendToOK(prop.Escaped("d:quota-used-bytes", size))
 					} else {
 						appendToNotFound(prop.NotFound("d:quota-used-bytes"))

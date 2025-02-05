@@ -59,7 +59,7 @@ type CloudDriver struct {
 }
 
 func (d *CloudDriver) refresh() error {
-	// endpoint example: https://mybox.com or https://mybox.com/owncloud
+	// endpoint example: https://mybox.com
 	endpoint := fmt.Sprintf("%s/index.php/apps/sciencemesh/internal_metrics", d.instance)
 
 	req, err := http.NewRequest("GET", endpoint, nil)
