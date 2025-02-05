@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestOcis(t *testing.T) {
+func TestDecomposed(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Decomposed Suite")
 }

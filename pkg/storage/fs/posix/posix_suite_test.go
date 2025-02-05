@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestOcis(t *testing.T) {
+func TestPosix(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Ocis Suite")
+	RunSpecs(t, "Posix Suite")
 }
