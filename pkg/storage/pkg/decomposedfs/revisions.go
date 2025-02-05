@@ -116,67 +116,15 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		return err
 	}
 
-	// revisions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
-	newRevisionPath := fs.lu.InternalPath(spaceID, kp[0]+node.RevisionIDDelimiter+mtime.UTC().Format(time.RFC3339Nano))
-
-	// touch new revision
-	if _, err := os.Create(newRevisionPath); err != nil {
+	// create a revision of the current node
+	if _, err := fs.tp.CreateRevision(ctx, n, mtime.UTC().Format(time.RFC3339Nano), f); err != nil {
 		return err
 	}
-	defer func() {
-		if returnErr != nil {
-			if err := os.Remove(newRevisionPath); err != nil {
-				log.Error().Err(err).Str("revision", filepath.Base(newRevisionPath)).Msg("could not clean up revision node")
-			}
-			if err := fs.lu.MetadataBackend().Purge(ctx, newRevisionPath); err != nil {
-				log.Error().Err(err).Str("revision", filepath.Base(newRevisionPath)).Msg("could not clean up revision node")
-			}
-		}
-	}()
 
-	// copy blob metadata from node to new revision node
-	err = fs.lu.CopyMetadataWithSourceLock(ctx, nodePath, newRevisionPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
-		return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) || // for checksums
-			attributeName == prefixes.TypeAttr ||
-			attributeName == prefixes.BlobIDAttr ||
-			attributeName == prefixes.BlobsizeAttr ||
-			attributeName == prefixes.MTimeAttr // FIXME somewhere I mix up the revision time and the mtime, causing the restore to overwrite the other existing revisien
-	}, f, true)
-	if err != nil {
-		return errtypes.InternalError("failed to copy blob xattrs to version node: " + err.Error())
-	}
-
-	// remember mtime from node as new revision mtime
-	if err = os.Chtimes(newRevisionPath, mtime, mtime); err != nil {
-		return errtypes.InternalError("failed to change mtime of version node")
-	}
-
-	// update blob id in node
-
-	// copy blob metadata from restored revision to node
+	// restore revision
 	restoredRevisionPath := fs.lu.InternalPath(spaceID, revisionKey)
-	err = fs.lu.CopyMetadata(ctx, restoredRevisionPath, nodePath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
-		return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
-			attributeName == prefixes.TypeAttr ||
-			attributeName == prefixes.BlobIDAttr ||
-			attributeName == prefixes.BlobsizeAttr
-	}, false)
-	if err != nil {
-		return errtypes.InternalError("failed to copy blob xattrs to old revision to node: " + err.Error())
-	}
-	// always set the node mtime to the current time
-	err = fs.lu.MetadataBackend().SetMultiple(ctx, nodePath,
-		map[string][]byte{
-			prefixes.MTimeAttr: []byte(time.Now().UTC().Format(time.RFC3339Nano)),
-		},
-		false)
-	if err != nil {
-		return errtypes.InternalError("failed to set mtime attribute on node: " + err.Error())
-	}
-
-	revisionSize, err := fs.lu.MetadataBackend().GetInt64(ctx, restoredRevisionPath, prefixes.BlobsizeAttr)
-	if err != nil {
-		return errtypes.InternalError("failed to read blob size xattr from old revision")
+	if err := fs.tp.Copy(ctx, restoredRevisionPath, nodePath); err != nil {
+		return err
 	}
 
 	// drop old revision
@@ -195,6 +143,10 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 
 	// revision 5, current 10 (restore a smaller blob) -> 5-10 = -5
 	// revision 10, current 5 (restore a bigger blob) -> 10-5 = +5
+	revisionSize, err := fs.lu.MetadataBackend().GetInt64(ctx, restoredRevisionPath, prefixes.BlobsizeAttr)
+	if err != nil {
+		return errtypes.InternalError("failed to read blob size xattr from old revision")
+	}
 	sizeDiff := revisionSize - n.Blobsize
 
 	return fs.tp.Propagate(ctx, n, sizeDiff)

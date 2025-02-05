@@ -426,3 +426,43 @@ func (tp *Tree) getRevisionNode(ctx context.Context, ref *provider.Reference, re
 
 	return n, nil
 }
+
+func (tp *Tree) Copy(ctx context.Context, source, target string) error {
+	rf, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer rf.Close()
+
+	wf, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer wf.Close()
+	wf.Truncate(0)
+
+	if _, err := io.Copy(wf, rf); err != nil {
+		return err
+	}
+
+	err = tp.lookup.CopyMetadata(ctx, source, target, func(attributeName string, value []byte) (newValue []byte, copy bool) {
+		return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
+			attributeName == prefixes.TypeAttr ||
+			attributeName == prefixes.BlobIDAttr ||
+			attributeName == prefixes.BlobsizeAttr
+	}, false)
+	if err != nil {
+		return errtypes.InternalError("failed to copy blob xattrs to old revision to node: " + err.Error())
+	}
+	// always set the node mtime to the current time
+	err = tp.lookup.MetadataBackend().SetMultiple(ctx, target,
+		map[string][]byte{
+			prefixes.MTimeAttr: []byte(time.Now().UTC().Format(time.RFC3339Nano)),
+		},
+		false)
+	if err != nil {
+		return errtypes.InternalError("failed to set mtime attribute on node: " + err.Error())
+	}
+
+	return nil
+}
