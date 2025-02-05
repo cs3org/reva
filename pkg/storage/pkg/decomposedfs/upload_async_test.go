@@ -160,6 +160,8 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_OK},
 		}, nil).Times(1)
 
+		p := permissions.NewPermissions(pmock, permissionsSelector)
+
 		// for this test we don't care about permissions
 		pmock.On("AssemblePermissions", mock.Anything, mock.Anything).
 			Return(&provider.ResourcePermissions{
@@ -172,12 +174,12 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 		// setup fs
 		pub, con = make(chan interface{}), make(chan interface{})
-		tree := tree.New(lu, bs, o, permissions.Permissions{}, store.Create(), &zerolog.Logger{})
+		tree := tree.New(lu, bs, o, p, store.Create(), &zerolog.Logger{})
 
 		aspects := aspects.Aspects{
 			Lookup:      lu,
 			Tree:        tree,
-			Permissions: permissions.NewPermissions(pmock, permissionsSelector),
+			Permissions: p,
 			EventStream: stream.Chan{pub, con},
 			Trashbin:    &DecomposedfsTrashbin{},
 		}
