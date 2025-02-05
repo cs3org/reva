@@ -1,5 +1,5 @@
-Bugfix: impersonate owner on Revisions
+Bugfix: impersonate owner on ListRevisions
 
-List / Download / Restore Revisions is currently broken for projects, because this happens on behalf of the user, instead of the owner of the file. This behaviour is changed to do the call on behalf of the owner (if we are in a non-home space).
+ListRevisions is currently broken for projects, because this happens on behalf of the user, instead of the owner of the file. This behaviour is changed to do the call on behalf of the owner (if we are in a non-home space).
 
 https://github.com/cs3org/reva/pull/5064
