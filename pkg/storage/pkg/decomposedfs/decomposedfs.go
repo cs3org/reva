@@ -90,7 +90,7 @@ func init() {
 	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/utils/decomposedfs")
 }
 
-// Session is the interface that OcisSession implements. By combining tus.Upload,
+// Session is the interface that DecomposedfsSession implements. By combining tus.Upload,
 // storage.UploadSession and custom functions we can reuse the same struct throughout
 // the whole upload lifecycle.
 //
@@ -104,9 +104,9 @@ type Session interface {
 }
 
 type SessionStore interface {
-	New(ctx context.Context) *upload.OcisSession
-	List(ctx context.Context) ([]*upload.OcisSession, error)
-	Get(ctx context.Context, id string) (*upload.OcisSession, error)
+	New(ctx context.Context) *upload.DecomposedFsSession
+	List(ctx context.Context) ([]*upload.DecomposedFsSession, error)
+	Get(ctx context.Context, id string) (*upload.DecomposedFsSession, error)
 	Cleanup(ctx context.Context, session upload.Session, revertNodeMetadata, keepUpload, unmarkPostprocessing bool)
 }
 

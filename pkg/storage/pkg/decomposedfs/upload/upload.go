@@ -60,7 +60,7 @@ func init() {
 }
 
 // WriteChunk writes the stream from the reader to the given offset of the upload
-func (session *OcisSession) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
+func (session *DecomposedFsSession) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
 	ctx, span := tracer.Start(session.Context(ctx), "WriteChunk")
 	defer span.End()
 	_, subspan := tracer.Start(ctx, "os.OpenFile")
@@ -95,12 +95,12 @@ func (session *OcisSession) WriteChunk(ctx context.Context, offset int64, src io
 }
 
 // GetInfo returns the FileInfo
-func (session *OcisSession) GetInfo(_ context.Context) (tusd.FileInfo, error) {
+func (session *DecomposedFsSession) GetInfo(_ context.Context) (tusd.FileInfo, error) {
 	return session.ToFileInfo(), nil
 }
 
 // GetReader returns an io.Reader for the upload
-func (session *OcisSession) GetReader(ctx context.Context) (io.ReadCloser, error) {
+func (session *DecomposedFsSession) GetReader(ctx context.Context) (io.ReadCloser, error) {
 	_, span := tracer.Start(session.Context(ctx), "GetReader")
 	defer span.End()
 	return os.Open(session.binPath())
@@ -109,7 +109,7 @@ func (session *OcisSession) GetReader(ctx context.Context) (io.ReadCloser, error
 // FinishUpload finishes an upload and moves the file to the internal destination
 // implements tusd.DataStore interface
 // returns tusd errors
-func (session *OcisSession) FinishUpload(ctx context.Context) error {
+func (session *DecomposedFsSession) FinishUpload(ctx context.Context) error {
 	err := session.FinishUploadDecomposed(ctx)
 
 	//  we need to return a tusd error here to make the tusd handler return the correct status code
@@ -125,7 +125,7 @@ func (session *OcisSession) FinishUpload(ctx context.Context) error {
 
 // FinishUploadDecomposed finishes an upload and moves the file to the internal destination
 // retures errtypes errors
-func (session *OcisSession) FinishUploadDecomposed(ctx context.Context) error {
+func (session *DecomposedFsSession) FinishUploadDecomposed(ctx context.Context) error {
 	ctx, span := tracer.Start(session.Context(ctx), "FinishUpload")
 	defer span.End()
 	log := appctx.GetLogger(ctx)
@@ -239,13 +239,13 @@ func (session *OcisSession) FinishUploadDecomposed(ctx context.Context) error {
 }
 
 // Terminate terminates the upload
-func (session *OcisSession) Terminate(_ context.Context) error {
+func (session *DecomposedFsSession) Terminate(_ context.Context) error {
 	session.Cleanup(true, true, true)
 	return nil
 }
 
 // DeclareLength updates the upload length information
-func (session *OcisSession) DeclareLength(ctx context.Context, length int64) error {
+func (session *DecomposedFsSession) DeclareLength(ctx context.Context, length int64) error {
 	session.info.Size = length
 	session.info.SizeIsDeferred = false
 	return session.store.um.RunInBaseScope(func() error {
@@ -254,7 +254,7 @@ func (session *OcisSession) DeclareLength(ctx context.Context, length int64) err
 }
 
 // ConcatUploads concatenates multiple uploads
-func (session *OcisSession) ConcatUploads(_ context.Context, uploads []tusd.Upload) (err error) {
+func (session *DecomposedFsSession) ConcatUploads(_ context.Context, uploads []tusd.Upload) (err error) {
 	file, err := os.OpenFile(session.binPath(), os.O_WRONLY|os.O_APPEND, defaultFilePerm)
 	if err != nil {
 		return err
@@ -262,7 +262,7 @@ func (session *OcisSession) ConcatUploads(_ context.Context, uploads []tusd.Uplo
 	defer file.Close()
 
 	for _, partialUpload := range uploads {
-		fileUpload := partialUpload.(*OcisSession)
+		fileUpload := partialUpload.(*DecomposedFsSession)
 
 		src, err := os.Open(fileUpload.binPath())
 		if err != nil {
@@ -279,7 +279,7 @@ func (session *OcisSession) ConcatUploads(_ context.Context, uploads []tusd.Uplo
 }
 
 // Finalize finalizes the upload (eg moves the file to the internal destination)
-func (session *OcisSession) Finalize(ctx context.Context) (err error) {
+func (session *DecomposedFsSession) Finalize(ctx context.Context) (err error) {
 	ctx, span := tracer.Start(session.Context(ctx), "Finalize")
 	defer span.End()
 
@@ -305,7 +305,7 @@ func checkHash(expected string, h hash.Hash) error {
 	return nil
 }
 
-func (session *OcisSession) removeNode(ctx context.Context) {
+func (session *DecomposedFsSession) removeNode(ctx context.Context) {
 	n, err := session.Node(ctx)
 	if err != nil {
 		appctx.GetLogger(ctx).Error().Str("session", session.ID()).Err(err).Msg("getting node from session failed")
@@ -317,7 +317,7 @@ func (session *OcisSession) removeNode(ctx context.Context) {
 }
 
 // cleanup cleans up after the upload is finished
-func (session *OcisSession) Cleanup(revertNodeMetadata, cleanBin, cleanInfo bool) {
+func (session *DecomposedFsSession) Cleanup(revertNodeMetadata, cleanBin, cleanInfo bool) {
 	ctx := session.Context(context.Background())
 
 	if revertNodeMetadata {
@@ -370,7 +370,7 @@ func (session *OcisSession) Cleanup(revertNodeMetadata, cleanBin, cleanInfo bool
 }
 
 // URL returns a url to download an upload
-func (session *OcisSession) URL(_ context.Context) (string, error) {
+func (session *DecomposedFsSession) URL(_ context.Context) (string, error) {
 	type transferClaims struct {
 		jwt.RegisteredClaims
 		Target string `json:"target"`
