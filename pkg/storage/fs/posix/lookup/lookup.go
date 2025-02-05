@@ -45,8 +45,7 @@ import (
 
 var tracer trace.Tracer
 
-var _openCloudDir = ".opencloud"
-var _revisionsDir = filepath.Join(_openCloudDir, "revisions")
+var _revisionsDir = filepath.Join(".OC-Revisions")
 var _spaceTypePersonal = "personal"
 var _spaceTypeProject = "project"
 
