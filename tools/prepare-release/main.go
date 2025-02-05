@@ -111,43 +111,11 @@ func main() {
 	cmd = exec.Command("toolchain/calens", "-o", "changelog/NOTE.md", "-i", path.Join(tmp, "changelog"))
 	run(cmd)
 
-	// Generate changelog also in the documentation
-	if err := os.MkdirAll(fmt.Sprintf("docs/content/en/docs/changelog/%s", *version), 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "error creating docs/content/en/docs/changelog/%s: %s", *version, err)
-		os.RemoveAll(tmp)
-		os.Exit(1)
-	}
-	os.RemoveAll(tmp)
-
-	data, err := os.ReadFile("changelog/NOTE.md")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error reading NOTE.md: %s", err)
-		os.Exit(1)
-	}
-
-	releaseDocs := fmt.Sprintf(`
----
-title: "v%s"
-linkTitle: "v%s"
-weight: 40
-description: >
-  Changelog for Reva v%s (%s)
----
-
-`, *version, *version, *version, date)
-
-	releaseDocs += string(data)
-	if err := os.WriteFile(fmt.Sprintf("docs/content/en/docs/changelog/%s/_index.md", *version), []byte(releaseDocs), 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "error writing docs release file _index.md: %s", err)
-		os.Exit(1)
-	}
-
 	add(fmt.Sprintf("v%s", *version),
 		"changelog",
 		"CHANGELOG.md",
 		"VERSION",
 		"RELEASE_DATE",
-		"docs/content/en/docs/changelog",
 	)
 
 	if *commit {
