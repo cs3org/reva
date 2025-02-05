@@ -143,7 +143,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 
 	// revision 5, current 10 (restore a smaller blob) -> 5-10 = -5
 	// revision 10, current 5 (restore a bigger blob) -> 10-5 = +5
-	revisionSize, err := fs.lu.MetadataBackend().GetInt64(ctx, restoredRevisionPath, prefixes.BlobsizeAttr)
+	revisionSize, err := fs.lu.MetadataBackend().GetInt64(ctx, nodePath, prefixes.BlobsizeAttr)
 	if err != nil {
 		return errtypes.InternalError("failed to read blob size xattr from old revision")
 	}
