@@ -617,7 +617,7 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions, islink bool) 
 			if rp.ListGrants {
 				r.Name = RoleEditorListGrants
 			}
-			if rp.RemoveGrant && rp.ListFileVersions {
+			if rp.ListGrants && rp.ListFileVersions {
 				r.Name = RoleEditorListGrantsWithVersions
 			}
 			if rp.RemoveGrant {
