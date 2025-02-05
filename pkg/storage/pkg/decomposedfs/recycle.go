@@ -58,7 +58,7 @@ func (tb *DecomposedfsTrashbin) Setup(fs storage.FS) error {
 // The deleted file is kept in the same location/dir as the original node. This prevents deletes
 // from triggering cross storage moves when the trash is accidentally stored on another partition,
 // because the admin mounted a different partition there.
-// For an efficient listing of deleted nodes the ocis storage driver maintains a 'trash' folder
+// For an efficient listing of deleted nodes the decomposedfs storage driver maintains a 'trash' folder
 // with symlinks to trash files for every storagespace.
 
 // ListRecycle returns the list of available recycle items

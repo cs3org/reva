@@ -70,7 +70,7 @@ type DecomposedFsStore struct {
 	log               *zerolog.Logger
 }
 
-// NewSessionStore returns a new OcisStore
+// NewSessionStore returns a new DecomposedFsStore
 func NewSessionStore(fs storage.FS, aspects aspects.Aspects, root string, async bool, tknopts options.TokenOptions, log *zerolog.Logger) *DecomposedFsStore {
 	return &DecomposedFsStore{
 		fs:                fs,
@@ -93,7 +93,7 @@ func (store DecomposedFsStore) New(ctx context.Context) *DecomposedFsSession {
 		info: tusd.FileInfo{
 			ID: uuid.New().String(),
 			Storage: map[string]string{
-				"Type": "OCISStore",
+				"Type": "DecomposedFsStore",
 			},
 			MetaData: tusd.MetaData{},
 		},

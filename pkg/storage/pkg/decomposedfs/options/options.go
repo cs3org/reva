@@ -47,7 +47,7 @@ type Options struct {
 	// Options specific to the async propagator
 	AsyncPropagatorOptions AsyncPropagatorOptions `mapstructure:"async_propagator_options"`
 
-	// ocis fs works on top of a dir of uuid nodes
+	// decomposedfs fs works on top of a dir of uuid nodes
 	Root string `mapstructure:"root"`
 
 	// the upload directory where uploads in progress are stored
