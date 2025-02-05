@@ -46,6 +46,7 @@ import (
 var tracer trace.Tracer
 
 var _openCloudDir = ".opencloud"
+var _revisionsDir = filepath.Join(_openCloudDir, "revisions")
 var _spaceTypePersonal = "personal"
 var _spaceTypeProject = "project"
 
@@ -316,7 +317,7 @@ func (lu *Lookup) InternalPath(spaceID, nodeID string) string {
 		if len(spaceRoot) == 0 {
 			return ""
 		}
-		return filepath.Join(spaceRoot, _openCloudDir, Pathify(nodeID, 4, 2))
+		return filepath.Join(spaceRoot, _revisionsDir, Pathify(nodeID, 4, 2))
 	}
 
 	path, _ := lu.IDCache.Get(context.Background(), spaceID, nodeID)
@@ -331,7 +332,7 @@ func (lu *Lookup) VersionPath(spaceID, nodeID, version string) string {
 		return ""
 	}
 
-	return filepath.Join(spaceRoot, _openCloudDir, Pathify(nodeID, 4, 2)+node.RevisionIDDelimiter+version)
+	return filepath.Join(spaceRoot, _revisionsDir, Pathify(nodeID, 4, 2)+node.RevisionIDDelimiter+version)
 }
 
 // // ReferenceFromAttr returns a CS3 reference from xattr of a node.
