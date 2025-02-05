@@ -136,7 +136,7 @@ var _ = Describe("PublicShareProvider", func() {
 			"driver": "mockManager",
 			"drivers": map[string]map[string]interface{}{
 				"jsoncs3": {
-					"provider_addr":                 "com.owncloud.api.storage-system",
+					"provider_addr":                 "eu.opencloud.api.storage-system",
 					"service_user_idp":              "internal",
 					"enable_expired_shares_cleanup": true,
 					"gateway_addr":                  "https://localhost:9200",
