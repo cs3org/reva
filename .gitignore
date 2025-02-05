@@ -31,11 +31,7 @@ tools/release/release
 .DS_Store
 
 # ignore build docs
-docs/public/
-docs/resources/
-docs/node_modules/
-docs/tech-doc-hugo
-docs/themes/
+docs/
 
 dist/
 bin/
