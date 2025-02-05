@@ -400,7 +400,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	g.Go(func() error {
 		defer close(work)
 		for _, name := range names {
-			if isLockFile(name) || isTrash(name) {
+			if isInternal(name) || isLockFile(name) || isTrash(name) {
 				continue
 			}
 
@@ -848,14 +848,22 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	return
 }
 
+func (t *Tree) isIgnored(path string) bool {
+	return isLockFile(path) || isTrash(path) || t.isUpload(path)
+}
+
+func (t *Tree) isUpload(path string) bool {
+	return strings.HasPrefix(path, t.options.UploadDirectory)
+}
+
+func isInternal(path string) bool {
+	return strings.Contains(path, ".OC-Nodes")
+}
+
 func isLockFile(path string) bool {
 	return strings.HasSuffix(path, ".lock") || strings.HasSuffix(path, ".flock") || strings.HasSuffix(path, ".mlock")
 }
 
 func isTrash(path string) bool {
 	return strings.HasSuffix(path, ".trashinfo") || strings.HasSuffix(path, ".trashitem")
-}
-
-func (t *Tree) isUpload(path string) bool {
-	return strings.HasPrefix(path, t.options.UploadDirectory)
 }

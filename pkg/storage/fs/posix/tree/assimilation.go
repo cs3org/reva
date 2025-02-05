@@ -623,7 +623,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 	sizes := make(map[string]int64)
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		// skip lock and upload files
-		if isLockFile(path) {
+		if isInternal(path) || isLockFile(path) {
 			return nil
 		}
 		if isTrash(path) || t.isUpload(path) {

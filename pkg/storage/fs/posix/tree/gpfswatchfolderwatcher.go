@@ -62,7 +62,7 @@ func (w *GpfsWatchFolderWatcher) Watch(topic string) {
 			continue
 		}
 
-		if isLockFile(lwev.Path) || isTrash(lwev.Path) || w.tree.isUpload(lwev.Path) {
+		if w.tree.isIgnored(lwev.Path) {
 			continue
 		}
 

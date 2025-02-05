@@ -45,7 +45,7 @@ import (
 
 var tracer trace.Tracer
 
-var _revisionsDir = filepath.Join(".OC-Revisions")
+var _revisionsDir = ".OC-Nodes"
 var _spaceTypePersonal = "personal"
 var _spaceTypeProject = "project"
 
