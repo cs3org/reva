@@ -160,7 +160,7 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (bool, string, er
 	// there are still some chunks to be uploaded.
 	// we return CodeUploadIsPartial to notify upper layers that the upload is still
 	// not complete and requires more actions.
-	// This code is needed to notify the owncloud webservice that the upload has not yet been
+	// This code is needed to notify the OpenCloud webservice that the upload has not yet been
 	// completed and needs to continue uploading chunks.
 	if len(chunks) < chunkInfo.TotalChunks {
 		return false, "", nil

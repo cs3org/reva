@@ -111,7 +111,7 @@ var ocPermToRole = map[int]string{
 	31: "editor",
 }
 
-// Create resource permission-set from ownCloud permissions int
+// Create resource permission-set from OpenCloud permissions int
 func convertPermissions(ocPermissions int) *provider.ResourcePermissions {
 	perms := &provider.ResourcePermissions{}
 	switch ocPermToRole[ocPermissions] {

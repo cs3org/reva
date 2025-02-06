@@ -257,7 +257,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		// Then try owncloud header
+		// Then try OpenCloud header
 	} else if checksum := r.Header.Get(net.HeaderOCChecksum); checksum != "" {
 		cparts = strings.SplitN(checksum, ":", 2)
 		if len(cparts) != 2 {

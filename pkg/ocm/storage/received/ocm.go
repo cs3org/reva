@@ -294,7 +294,7 @@ func convertStatToResourceInfo(ref *provider.Reference, f fs.FileInfo, share *oc
 	}
 
 	if t == provider.ResourceType_RESOURCE_TYPE_FILE {
-		// get SHA1 checksum from owncloud specific properties if available
+		// get SHA1 checksum from OpenCloud specific properties if available
 		propstat := webdavFile.Sys().(gowebdav.Props)
 		ri.Checksum = extractChecksum(propstat)
 	}
