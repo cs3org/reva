@@ -291,7 +291,6 @@ func (s *Service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	// TODO(labkode): maybe add short-lived token?
 	// We now simply point the client to the data server.
 	// For example, https://data-server.example.org/home/docs/myfile.txt
-	// or ownclouds://data-server.example.org/home/docs/myfile.txt
 	log := appctx.GetLogger(ctx)
 	u := *s.dataServerURL
 	log.Info().Str("data-server", u.String()).Interface("ref", req.Ref).Msg("file download")

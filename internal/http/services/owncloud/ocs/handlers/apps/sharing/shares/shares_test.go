@@ -490,7 +490,7 @@ var _ = Describe("The ocs API", func() {
 				c := &config.Config{}
 				c.GatewaySvc = "gatewaysvc"
 				c.StatCacheConfig.Database = strconv.FormatInt(rand.Int63(), 10) // Use a fresh database for each test
-				// this is the equivalent of the ocis OCIS_SHARING_PUBLIC_WRITEABLE_SHARE_MUST_HAVE_PASSWORD=true
+				// this is the equivalent of the OpenCloud OC_SHARING_PUBLIC_WRITEABLE_SHARE_MUST_HAVE_PASSWORD=true
 				c.Capabilities = ocs.CapabilitiesData{
 					Capabilities: &ocs.Capabilities{FilesSharing: &ocs.CapabilitiesFilesSharing{Public: &ocs.CapabilitiesFilesSharingPublic{
 						Password: &ocs.CapabilitiesFilesSharingPublicPassword{
@@ -631,7 +631,7 @@ var _ = Describe("The ocs API", func() {
 				c := &config.Config{}
 				c.GatewaySvc = "gatewaysvc"
 				c.StatCacheConfig.Database = strconv.FormatInt(rand.Int63(), 10) // Use a fresh database for each test
-				// this is the equivalent of the ocis OCIS_SHARING_PUBLIC_WRITEABLE_SHARE_MUST_HAVE_PASSWORD=true
+				// this is the equivalent of the OpenCloud OC_SHARING_PUBLIC_WRITEABLE_SHARE_MUST_HAVE_PASSWORD=true
 				c.Capabilities = ocs.CapabilitiesData{
 					Capabilities: &ocs.Capabilities{FilesSharing: &ocs.CapabilitiesFilesSharing{Public: &ocs.CapabilitiesFilesSharingPublic{
 						Password: &ocs.CapabilitiesFilesSharingPublicPassword{

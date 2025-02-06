@@ -75,7 +75,7 @@ var (
 	errParsingSpaceReference = errors.New("could not parse space reference")
 )
 
-// Handler implements the shares part of the ownCloud sharing API
+// Handler implements the shares part of the open collaboration service sharing API
 type Handler struct {
 	gatewayAddr                           string
 	machineAuthAPIKey                     string

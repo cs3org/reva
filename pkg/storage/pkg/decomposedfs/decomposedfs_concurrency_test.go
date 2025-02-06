@@ -160,7 +160,7 @@ var _ = Describe("Decomposed", func() {
 					wg.Done()
 				}(wg)
 
-				// this test, by the way the oCIS storage is implemented, is non-deterministic, and the contents
+				// this test, by the way the decomposed storage is implemented, is non-deterministic, and the contents
 				// of uploaded.txt will change on each run depending on which of the 2 routines above makes it
 				// first into the scheduler. In order to make it deterministic, we have to consider the Upload impl-
 				// ementation and we can leverage concurrency and add locks only when the destination path are the

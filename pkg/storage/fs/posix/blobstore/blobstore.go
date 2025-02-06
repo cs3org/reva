@@ -48,7 +48,7 @@ func (bs *Blobstore) Upload(node *node.Node, source string) error {
 
 	file, err := os.Open(source)
 	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: oCIS blobstore: Can not open source file to upload")
+		return errors.Wrap(err, "Decomposedfs: posix blobstore: Can not open source file to upload")
 	}
 	defer file.Close()
 

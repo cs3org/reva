@@ -157,11 +157,11 @@ var _ = Describe("Jsoncs3", func() {
 		storage, err = metadata.NewDiskStorage(tmpdir)
 		Expect(err).ToNot(HaveOccurred())
 
-		pool.RemoveSelector("GatewaySelector" + "com.owncloud.api.gateway")
+		pool.RemoveSelector("GatewaySelector" + "eu.opencloud.api.gateway")
 		client = &mocks.GatewayAPIClient{}
 		gatewaySelector := pool.GetSelector[gatewayv1beta1.GatewayAPIClient](
 			"GatewaySelector",
-			"com.owncloud.api.gateway",
+			"eu.opencloud.api.gateway",
 			func(cc grpc.ClientConnInterface) gatewayv1beta1.GatewayAPIClient {
 				return client
 			},

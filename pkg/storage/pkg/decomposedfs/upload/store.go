@@ -56,8 +56,8 @@ type PermissionsChecker interface {
 	AssemblePermissions(ctx context.Context, n *node.Node) (ap provider.ResourcePermissions, err error)
 }
 
-// OcisStore manages upload sessions
-type OcisStore struct {
+// DecomposedFsStore manages upload sessions
+type DecomposedFsStore struct {
 	fs                storage.FS
 	lu                node.PathLookup
 	tp                node.Tree
@@ -70,9 +70,9 @@ type OcisStore struct {
 	log               *zerolog.Logger
 }
 
-// NewSessionStore returns a new OcisStore
-func NewSessionStore(fs storage.FS, aspects aspects.Aspects, root string, async bool, tknopts options.TokenOptions, log *zerolog.Logger) *OcisStore {
-	return &OcisStore{
+// NewSessionStore returns a new DecomposedFsStore
+func NewSessionStore(fs storage.FS, aspects aspects.Aspects, root string, async bool, tknopts options.TokenOptions, log *zerolog.Logger) *DecomposedFsStore {
+	return &DecomposedFsStore{
 		fs:                fs,
 		lu:                aspects.Lookup,
 		tp:                aspects.Tree,
@@ -87,13 +87,13 @@ func NewSessionStore(fs storage.FS, aspects aspects.Aspects, root string, async 
 }
 
 // New returns a new upload session
-func (store OcisStore) New(ctx context.Context) *OcisSession {
-	return &OcisSession{
+func (store DecomposedFsStore) New(ctx context.Context) *DecomposedFsSession {
+	return &DecomposedFsSession{
 		store: store,
 		info: tusd.FileInfo{
 			ID: uuid.New().String(),
 			Storage: map[string]string{
-				"Type": "OCISStore",
+				"Type": "DecomposedFsStore",
 			},
 			MetaData: tusd.MetaData{},
 		},
@@ -101,8 +101,8 @@ func (store OcisStore) New(ctx context.Context) *OcisSession {
 }
 
 // List lists all upload sessions
-func (store OcisStore) List(ctx context.Context) ([]*OcisSession, error) {
-	uploads := []*OcisSession{}
+func (store DecomposedFsStore) List(ctx context.Context) ([]*DecomposedFsSession, error) {
+	uploads := []*DecomposedFsSession{}
 	infoFiles, err := filepath.Glob(filepath.Join(store.root, "uploads", "*.info"))
 	if err != nil {
 		return nil, err
@@ -122,14 +122,14 @@ func (store OcisStore) List(ctx context.Context) ([]*OcisSession, error) {
 }
 
 // Get returns the upload session for the given upload id
-func (store OcisStore) Get(ctx context.Context, id string) (*OcisSession, error) {
+func (store DecomposedFsStore) Get(ctx context.Context, id string) (*DecomposedFsSession, error) {
 	sessionPath := sessionPath(store.root, id)
 	match := _idRegexp.FindStringSubmatch(sessionPath)
 	if match == nil || len(match) < 2 {
 		return nil, fmt.Errorf("invalid upload path")
 	}
 
-	session := OcisSession{
+	session := DecomposedFsSession{
 		store: store,
 		info:  tusd.FileInfo{},
 	}
@@ -174,7 +174,7 @@ type Session interface {
 }
 
 // Cleanup cleans upload metadata, binary data and processing status as necessary
-func (store OcisStore) Cleanup(ctx context.Context, session Session, revertNodeMetadata, keepUpload, unmarkPostprocessing bool) {
+func (store DecomposedFsStore) Cleanup(ctx context.Context, session Session, revertNodeMetadata, keepUpload, unmarkPostprocessing bool) {
 	ctx, span := tracer.Start(session.Context(ctx), "Cleanup")
 	defer span.End()
 	session.Cleanup(revertNodeMetadata, !keepUpload, !keepUpload)
@@ -198,7 +198,7 @@ func (store OcisStore) Cleanup(ctx context.Context, session Session, revertNodeM
 // CreateNodeForUpload will create the target node for the Upload
 // TODO move this to the node package as NodeFromUpload?
 // should we in InitiateUpload create the node first? and then the upload?
-func (store OcisStore) CreateNodeForUpload(ctx context.Context, session *OcisSession, initAttrs node.Attributes) (*node.Node, error) {
+func (store DecomposedFsStore) CreateNodeForUpload(ctx context.Context, session *DecomposedFsSession, initAttrs node.Attributes) (*node.Node, error) {
 	ctx, span := tracer.Start(session.Context(ctx), "CreateNodeForUpload")
 	defer span.End()
 	n := node.New(
@@ -301,7 +301,7 @@ func (store OcisStore) CreateNodeForUpload(ctx context.Context, session *OcisSes
 	return n, nil
 }
 
-func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSession, n *node.Node, spaceID string, fsize uint64) (metadata.UnlockFunc, error) {
+func (store DecomposedFsStore) updateExistingNode(ctx context.Context, session *DecomposedFsSession, n *node.Node, spaceID string, fsize uint64) (metadata.UnlockFunc, error) {
 	_, span := tracer.Start(ctx, "updateExistingNode")
 	defer span.End()
 	targetPath := n.InternalPath()
@@ -418,7 +418,7 @@ func (store OcisStore) updateExistingNode(ctx context.Context, session *OcisSess
 	return unlock, nil
 }
 
-func validateChecksums(ctx context.Context, n *node.Node, session *OcisSession, versionPath string) error {
+func validateChecksums(ctx context.Context, n *node.Node, session *DecomposedFsSession, versionPath string) error {
 	for _, t := range []string{"md5", "sha1", "adler32"} {
 		key := prefixes.ChecksumPrefix + t
 
