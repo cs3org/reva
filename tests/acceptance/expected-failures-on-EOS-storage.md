@@ -1,6 +1,6 @@
-## Scenarios from OCIS API tests that are expected to fail with EOS storage
+## Scenarios from OpenCLoud API tests that are expected to fail with EOS storage
 
-The expected failures in this file are from features in the owncloud/ocis repo.
+The expected failures in this file are from features in the opencloud-eu/opencloud repo.
 
 ### [Checksum feature](https://github.com/owncloud/ocis/issues/1291)
 -   [coreApiMain/checksums.feature:24](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiMain/checksums.feature#L24)
@@ -778,10 +778,10 @@ The expected failures in this file are from features in the owncloud/ocis repo.
 
 
 ### Won't fix
-Not everything needs to be implemented for ocis. While the oc10 testsuite covers these things we are not looking at them right now.
+Not everything needs to be implemented for OpenCloud. While the oc10 testsuite covers these things we are not looking at them right now.
 
 * _The `OC-LazyOps` header is [no longer supported by the client](https://github.com/owncloud/client/pull/8398), implmenting this is not necessary for a first production release. We plan to have an uploed state machine to visualize the state of a file, see https://github.com/owncloud/ocis/issues/214_
-* _Blacklisted ignored files are no longer required because ocis can handle `.htaccess` files without security implications introduced by serving user provided files with apache._
+* _Blacklisted ignored files are no longer required because OpenCloud can handle `.htaccess` files without security implications introduced by serving user provided files with apache._
 
 ### [remote.php/dav/uploads endpoint does not exist](https://github.com/owncloud/ocis/issues/1321)
 -   [coreApiWebdavUpload1/uploadFileAsyncUsingNewChunking.feature:14](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavUpload1/uploadFileAsyncUsingNewChunking.feature#L14)

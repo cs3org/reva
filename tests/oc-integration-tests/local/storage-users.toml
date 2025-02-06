@@ -1,5 +1,5 @@
 # This config file will start a reva service that:
-# - uses the ocis driver to serve users (/users)
+# - uses the decomposed driver to serve users (/users)
 # - serves the storage provider on grpc port 11000
 # - serves http dataprovider for this storage on port 11001
 #   - /data - dataprovider: file up and download
@@ -24,12 +24,12 @@ enabled = true
 # This is a storage provider that grants direct access to the wrapped storage
 # we have a locally running dataprovider
 [grpc.services.storageprovider]
-driver = "ocis"
+driver = "decomposed"
 expose_data_server = true
 data_server_url = "http://localhost:11001/data"
 mount_id = "1284d238-aa92-42ce-bdc4-0b0000009157"
 
-[grpc.services.storageprovider.drivers.ocis]
+[grpc.services.storageprovider.drivers.decomposed]
 root = "/tmp/reva/data"
 treetime_accounting = true
 treesize_accounting = true
@@ -42,10 +42,10 @@ generalspacealias_template = "{{.SpaceType}}/{{.SpaceName | replace \" \" \"-\" 
 address = "0.0.0.0:11001"
 
 [http.services.dataprovider]
-driver = "ocis"
+driver = "decomposed"
 temp_folder = "/tmp/reva/tmp"
 
-[http.services.dataprovider.drivers.ocis]
+[http.services.dataprovider.drivers.decomposed]
 root = "/tmp/reva/data"
 treetime_accounting = true
 treesize_accounting = true

@@ -36,7 +36,7 @@ import (
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/ocis"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/decomposed"
 	jwt "github.com/opencloud-eu/reva/v2/pkg/token/manager/jwt"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/opencloud-eu/reva/v2/tests/helpers"
@@ -101,13 +101,13 @@ var _ = Describe("gateway", func() {
 				Config: "userprovider-json.toml"},
 			{
 				Name:   "storage",
-				Config: "storageprovider-ocis.toml"},
+				Config: "storageprovider-decomposed.toml"},
 			{
 				Name:   "storage2",
-				Config: "storageprovider-ocis.toml"},
+				Config: "storageprovider-decomposed.toml"},
 			{
 				Name:   "permissions",
-				Config: "permissions-ocis-ci.toml"},
+				Config: "permissions-opencloud-ci.toml"},
 		}
 	})
 
@@ -177,16 +177,16 @@ var _ = Describe("gateway", func() {
 			dependencies = []RevadConfig{
 				{Name: "gateway", Config: "gateway-sharded.toml"},
 				{Name: "users", Config: "userprovider-json.toml"},
-				{Name: "homestorage", Config: "storageprovider-ocis.toml"},
-				{Name: "storage", Config: "storageprovider-ocis.toml"},
-				{Name: "storage2", Config: "storageprovider-ocis.toml"},
-				{Name: "permissions", Config: "permissions-ocis-ci.toml"},
+				{Name: "homestorage", Config: "storageprovider-decomposed.toml"},
+				{Name: "storage", Config: "storageprovider-decomposed.toml"},
+				{Name: "storage2", Config: "storageprovider-decomposed.toml"},
+				{Name: "permissions", Config: "permissions-opencloud-ci.toml"},
 			}
 		})
 
 		JustBeforeEach(func() {
 			var err error
-			shard1Fs, err = ocis.New(map[string]interface{}{
+			shard1Fs, err = decomposed.New(map[string]interface{}{
 				"root":                revads["storage"].StorageRoot,
 				"userprovidersvc":     revads["users"].GrpcAddress,
 				"permissionssvc":      revads["permissions"].GrpcAddress,
@@ -212,7 +212,7 @@ var _ = Describe("gateway", func() {
 			)
 			Expect(err).ToNot(HaveOccurred())
 
-			shard2Fs, err = ocis.New(map[string]interface{}{
+			shard2Fs, err = decomposed.New(map[string]interface{}{
 				"root":                revads["storage"].StorageRoot,
 				"userprovidersvc":     revads["users"].GrpcAddress,
 				"permissionssvc":      revads["permissions"].GrpcAddress,
@@ -368,15 +368,15 @@ var _ = Describe("gateway", func() {
 			dependencies = []RevadConfig{
 				{Name: "gateway", Config: "gateway.toml"},
 				{Name: "users", Config: "userprovider-json.toml"},
-				{Name: "storage", Config: "storageprovider-ocis.toml"},
-				{Name: "storage2", Config: "storageprovider-ocis.toml"},
-				{Name: "permissions", Config: "permissions-ocis-ci.toml"},
+				{Name: "storage", Config: "storageprovider-decomposed.toml"},
+				{Name: "storage2", Config: "storageprovider-decomposed.toml"},
+				{Name: "permissions", Config: "permissions-opencloud-ci.toml"},
 			}
 		})
 
 		JustBeforeEach(func() {
 			var err error
-			fs, err = ocis.New(map[string]interface{}{
+			fs, err = decomposed.New(map[string]interface{}{
 				"root":                revads["storage"].StorageRoot,
 				"permissionssvc":      revads["permissions"].GrpcAddress,
 				"treesize_accounting": true,
@@ -400,7 +400,7 @@ var _ = Describe("gateway", func() {
 			)
 			Expect(err).ToNot(HaveOccurred())
 
-			embeddedFs, err = ocis.New(map[string]interface{}{
+			embeddedFs, err = decomposed.New(map[string]interface{}{
 				"root":                revads["storage2"].StorageRoot,
 				"userprovidersvc":     revads["users"].GrpcAddress,
 				"permissionssvc":      revads["permissions"].GrpcAddress,

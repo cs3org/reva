@@ -24,11 +24,11 @@
 	},
 	{
 		"name": "oc-cesnet",
-		"full_name": "ownCloud@CESNET",
+		"full_name": "OpenCloud@CESNET",
 		"organization": "CESNET",
 		"domain": "cesnet.cz",
-		"homepage": "https://owncloud.cesnet.cz",
-		"description": "OwnCloud has been designed for individual users.",
+		"homepage": "https://opencloud.cesnet.cz",
+		"description": "OpenCloud has been designed for individual users.",
 		"services": [
 			{
 				"endpoint": {

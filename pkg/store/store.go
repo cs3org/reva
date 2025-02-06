@@ -135,7 +135,7 @@ func Create(opts ...microstore.Option) microstore.Store {
 			append(opts,
 				natsjs.NatsOptions(natsOptions), // always pass in properly initialized default nats options
 				natsjs.DefaultTTL(ttl))...,
-		) // TODO test with ocis nats
+		) // TODO test with OpenCloud nats
 	case TypeNatsJSKV:
 		// NOTE: nats needs a DefaultTTL option as it does not support per Write TTL ...
 		ttl, _ := options.Context.Value(ttlContextKey{}).(time.Duration)

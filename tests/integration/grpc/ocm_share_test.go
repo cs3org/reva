@@ -44,7 +44,7 @@ import (
 	ocm "github.com/opencloud-eu/reva/v2/pkg/ocm/storage/received"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v2/pkg/rhttp"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/ocis"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/decomposed"
 	jwt "github.com/opencloud-eu/reva/v2/pkg/token/manager/jwt"
 	"github.com/opencloud-eu/reva/v2/tests/helpers"
 	"github.com/pkg/errors"
@@ -161,7 +161,7 @@ var _ = Describe("ocm share", func() {
 					"invite_token_file":      File{Content: "{}"},
 				},
 			},
-			{Name: "permissions", Config: "permissions-ocis-ci.toml"},
+			{Name: "permissions", Config: "permissions-opencloud-ci.toml"},
 			{Name: "cernboxpublicstorage", Config: "ocm-share/cernbox-storageprovider-public.toml"},
 			{Name: "cernboxwebdav", Config: "ocm-share/cernbox-webdav-server.toml"},
 			{Name: "cernboxhttp", Config: "ocm-share/ocm-server-cernbox-http.toml"},
@@ -221,7 +221,7 @@ var _ = Describe("ocm share", func() {
 
 		Context("einstein shares a file with view permissions", func() {
 			It("marie is able to see the content of the file", func() {
-				fs, err := ocis.New(map[string]interface{}{
+				fs, err := decomposed.New(map[string]interface{}{
 					"root":           revads["cernboxgw"].StorageRoot,
 					"permissionssvc": revads["permissions"].GrpcAddress,
 				}, nil, nil)

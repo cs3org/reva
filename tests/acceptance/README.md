@@ -1,10 +1,10 @@
-## Acceptance Tests (ownCloud Legacy)
+## Acceptance Tests (based on OpenCloud acceptance tests)
 
 This will require some PHP-related tools to run, for instance on Ubuntu you will need `apt install -y php-xml php-curl composer`.
 
 1. [Build reva](https://github.com/cs3org/reva/tree/edge?tab=readme-ov-file#build)
 
-2. Start the reva server (with ocis storage driver)
+2. Start the reva server (with decomposed storage driver)
 
    ```bash
    make reva
@@ -26,10 +26,10 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
    > make reva-s3ng
    > ```
 
-3. Get ownCloud Infinite Scale `OCIS`
+3. Get OpenCloud
 
    ```bash
-   git clone https://github.com/owncloud/ocis.git ./testrunner
+   git clone https://github.com/opencloud-eu/opencloud.git ./testrunner
    ```
 
 4. To run the correct version of the testsuite check out the commit id from the `.drone.env` file
@@ -45,11 +45,11 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
    TEST_SERVER_URL='http://localhost:20080' \
    TEST_REVA='true' \
    TEST_WITH_LDAP='true' \
-   OCIS_REVA_DATA_ROOT='/tmp/reva/' \
+   OC_REVA_DATA_ROOT='/tmp/reva/' \
    DELETE_USER_DATA_CMD="rm -rf /tmp/reva/data/nodes/root/* /tmp/reva/data/nodes/*-*-*-* /tmp/reva/data/blobs/*" \
    REVA_LDAP_HOSTNAME='localhost' \
    BEHAT_FILTER_TAGS='~@skip&&~@skipOnReva&&~@env-config' \
-   EXPECTED_FAILURES_FILE=<path-to-reva>/tests/acceptance/expected-failures-on-OCIS-storage.md \
+   EXPECTED_FAILURES_FILE=<path-to-reva>/tests/acceptance/expected-failures-on-decomposed-storage.md \
    DIVIDE_INTO_NUM_PARTS=1 \
    RUN_PART=1 \
    ACCEPTANCE_TEST_TYPE=core-api \
@@ -68,7 +68,7 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
    ```
 
    **NOTE:**
-   Make sure to double check the paths if you are changing the `OCIS_REVA_DATA_ROOT`. The `DELETE_USER_DATA_CMD` needs to clean up the correct folders.
+   Make sure to double check the paths if you are changing the `OC_REVA_DATA_ROOT`. The `DELETE_USER_DATA_CMD` needs to clean up the correct folders.
 
    > **INFO:**
    >
