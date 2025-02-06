@@ -123,7 +123,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 
 	// restore revision
 	restoredRevisionPath := fs.lu.InternalPath(spaceID, revisionKey)
-	if err := fs.tp.Copy(ctx, restoredRevisionPath, nodePath); err != nil {
+	if err := fs.tp.RestoreRevision(ctx, spaceID, kp[0], restoredRevisionPath); err != nil {
 		return err
 	}
 

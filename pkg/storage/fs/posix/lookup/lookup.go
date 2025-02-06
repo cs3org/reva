@@ -48,6 +48,7 @@ var tracer trace.Tracer
 var _revisionsDir = ".OC-Nodes"
 var _spaceTypePersonal = "personal"
 var _spaceTypeProject = "project"
+var _currentSuffix = ".current"
 
 func init() {
 	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/pkg/decomposedfs/lookup")
@@ -332,6 +333,16 @@ func (lu *Lookup) VersionPath(spaceID, nodeID, version string) string {
 	}
 
 	return filepath.Join(spaceRoot, _revisionsDir, Pathify(nodeID, 4, 2)+node.RevisionIDDelimiter+version)
+}
+
+// VersionPath returns the "current" path of the node
+func (lu *Lookup) CurrentPath(spaceID, nodeID string) string {
+	spaceRoot, _ := lu.IDCache.Get(context.Background(), spaceID, spaceID)
+	if len(spaceRoot) == 0 {
+		return ""
+	}
+
+	return filepath.Join(spaceRoot, _revisionsDir, Pathify(nodeID, 4, 2)+_currentSuffix)
 }
 
 // // ReferenceFromAttr returns a CS3 reference from xattr of a node.

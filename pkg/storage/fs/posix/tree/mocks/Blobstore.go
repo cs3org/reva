@@ -144,17 +144,17 @@ func (_c *Blobstore_Download_Call) RunAndReturn(run func(*node.Node) (io.ReadClo
 	return _c
 }
 
-// Upload provides a mock function with given fields: _a0, source
-func (_m *Blobstore) Upload(_a0 *node.Node, source string) error {
-	ret := _m.Called(_a0, source)
+// Upload provides a mock function with given fields: _a0, source, copyTarget
+func (_m *Blobstore) Upload(_a0 *node.Node, source string, copyTarget string) error {
+	ret := _m.Called(_a0, source, copyTarget)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Upload")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(*node.Node, string) error); ok {
-		r0 = rf(_a0, source)
+	if rf, ok := ret.Get(0).(func(*node.Node, string, string) error); ok {
+		r0 = rf(_a0, source, copyTarget)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -170,13 +170,14 @@ type Blobstore_Upload_Call struct {
 // Upload is a helper method to define mock.On call
 //   - _a0 *node.Node
 //   - source string
-func (_e *Blobstore_Expecter) Upload(_a0 interface{}, source interface{}) *Blobstore_Upload_Call {
-	return &Blobstore_Upload_Call{Call: _e.mock.On("Upload", _a0, source)}
+//   - copyTarget string
+func (_e *Blobstore_Expecter) Upload(_a0 interface{}, source interface{}, copyTarget interface{}) *Blobstore_Upload_Call {
+	return &Blobstore_Upload_Call{Call: _e.mock.On("Upload", _a0, source, copyTarget)}
 }
 
-func (_c *Blobstore_Upload_Call) Run(run func(_a0 *node.Node, source string)) *Blobstore_Upload_Call {
+func (_c *Blobstore_Upload_Call) Run(run func(_a0 *node.Node, source string, copyTarget string)) *Blobstore_Upload_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(*node.Node), args[1].(string))
+		run(args[0].(*node.Node), args[1].(string), args[2].(string))
 	})
 	return _c
 }
@@ -186,7 +187,7 @@ func (_c *Blobstore_Upload_Call) Return(_a0 error) *Blobstore_Upload_Call {
 	return _c
 }
 
-func (_c *Blobstore_Upload_Call) RunAndReturn(run func(*node.Node, string) error) *Blobstore_Upload_Call {
+func (_c *Blobstore_Upload_Call) RunAndReturn(run func(*node.Node, string, string) error) *Blobstore_Upload_Call {
 	_c.Call.Return(run)
 	return _c
 }

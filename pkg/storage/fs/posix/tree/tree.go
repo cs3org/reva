@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -62,7 +63,7 @@ func init() {
 
 // Blobstore defines an interface for storing blobs in a blobstore
 type Blobstore interface {
-	Upload(node *node.Node, source string) error
+	Upload(node *node.Node, source, copyTarget string) error
 	Download(node *node.Node) (io.ReadCloser, error)
 	Delete(node *node.Node) error
 }
@@ -223,7 +224,7 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 	if err := os.MkdirAll(filepath.Dir(nodePath), 0700); err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
-	_, err = os.Create(nodePath)
+	f, err := os.Create(nodePath)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
@@ -238,10 +239,14 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 		if err != nil {
 			return err
 		}
-		err = os.Chtimes(nodePath, nodeMTime, nodeMTime)
+		t.lookup.TimeManager().OverrideMtime(ctx, n, &attributes, nodeMTime)
+	} else {
+		fi, err := f.Stat()
 		if err != nil {
 			return err
 		}
+		mtime := fi.ModTime()
+		attributes[prefixes.MTimeAttr] = []byte(mtime.UTC().Format(time.RFC3339Nano))
 	}
 
 	err = n.SetXattrsWithContext(ctx, attributes, false)
@@ -679,7 +684,12 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 
 // WriteBlob writes a blob to the blobstore
 func (t *Tree) WriteBlob(node *node.Node, source string) error {
-	return t.blobstore.Upload(node, source)
+	var currentPath string
+	if t.options.KeepCurrentVersion {
+		currentPath = t.lookup.(*lookup.Lookup).CurrentPath(node.SpaceID, node.ID)
+	}
+
+	return t.blobstore.Upload(node, source, currentPath)
 }
 
 // ReadBlob reads a blob from the blobstore

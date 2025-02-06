@@ -33,6 +33,8 @@ type Options struct {
 
 	ScanDebounceDelay time.Duration `mapstructure:"scan_debounce_delay"`
 
+	KeepCurrentVersion bool `mapstructure:"keep_current_version"`
+
 	WatchFS                 bool   `mapstructure:"watch_fs"`
 	WatchType               string `mapstructure:"watch_type"`
 	WatchPath               string `mapstructure:"watch_path"`

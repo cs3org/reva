@@ -124,7 +124,7 @@ type Tree interface {
 	PurgeRecycleItemFunc(ctx context.Context, spaceid, key, purgePath string) (*Node, func() error, error)
 
 	InitNewNode(ctx context.Context, n *Node, fsize uint64) (metadata.UnlockFunc, error)
-	Copy(ctx context.Context, sourcePath, targetPath string) (err error)
+	RestoreRevision(ctx context.Context, spaceID, nodeID, sourcePath string) (err error)
 
 	WriteBlob(node *Node, source string) error
 	ReadBlob(node *Node) (io.ReadCloser, error)

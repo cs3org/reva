@@ -33,7 +33,8 @@ type Manager struct {
 }
 
 // OverrideMtime overrides the modification time (mtime) of a node with the specified time.
-func (m *Manager) OverrideMtime(ctx context.Context, n *node.Node, _ *node.Attributes, mtime time.Time) error {
+func (m *Manager) OverrideMtime(ctx context.Context, n *node.Node, attrs *node.Attributes, mtime time.Time) error {
+	attrs.SetTime(prefixes.MTimeAttr, mtime)
 	return os.Chtimes(n.InternalPath(), mtime, mtime)
 }
 

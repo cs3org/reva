@@ -21,6 +21,7 @@ package tree
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -375,7 +376,24 @@ func (t *Tree) assimilate(item scanItem) error {
 	}
 
 	// check for the id attribute again after grabbing the lock, maybe the file was assimilated/created by us in the meantime
-	id, err = t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.IDAttr)
+	md, err := t.lookup.MetadataBackend().All(context.Background(), item.Path)
+	if err != nil {
+		return err
+	}
+	attrs := node.Attributes(md)
+
+	// compare metadata mtime with actual mtime. if it matches we can skip the assimilation because the file was handled by us
+	mtime, err := attrs.Time(prefixes.MTimeAttr)
+	if err == nil {
+		fi, err := os.Stat(item.Path)
+		if err == nil {
+			if mtime.Equal(fi.ModTime()) {
+				return nil
+			}
+		}
+	}
+
+	id = attrs[prefixes.IDAttr]
 	if err == nil {
 		previousPath, ok := t.lookup.(*lookup.Lookup).GetCachedID(context.Background(), spaceID, string(id))
 		previousParentID, _ := t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.ParentidAttr)
@@ -581,6 +599,41 @@ assimilate:
 
 	n := node.New(spaceID, id, parentID, filepath.Base(path), fi.Size(), "", provider.ResourceType_RESOURCE_TYPE_FILE, nil, t.lookup)
 	n.SpaceRoot = &node.Node{SpaceID: spaceID, ID: spaceID}
+
+	go func() {
+		// Copy the previous current version to a revision
+		currentPath := t.lookup.(*lookup.Lookup).CurrentPath(n.SpaceID, n.ID)
+		stat, err := os.Stat(currentPath)
+		if err != nil {
+			t.log.Error().Err(err).Str("path", path).Str("currentPath", currentPath).Msg("could not stat current path")
+			return
+		}
+		revisionPath := t.lookup.VersionPath(n.SpaceID, n.ID, stat.ModTime().UTC().Format(time.RFC3339Nano))
+
+		err = os.Rename(currentPath, revisionPath)
+		if err != nil {
+			t.log.Error().Err(err).Str("path", path).Str("revisionPath", revisionPath).Msg("could not create revision")
+			return
+		}
+
+		// Copy the new version to the current version
+		w, err := os.OpenFile(currentPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0700)
+		if err != nil {
+			t.log.Error().Err(err).Str("path", path).Str("currentPath", currentPath).Msg("could not open current path for writing")
+			return
+		}
+		r, err := os.OpenFile(n.InternalPath(), os.O_RDONLY, 0700)
+		if err != nil {
+			t.log.Error().Err(err).Str("path", path).Msg("could not open file for reading")
+			return
+		}
+		_, err = io.Copy(w, r)
+		if err != nil {
+			t.log.Error().Err(err).Str("currentPath", currentPath).Str("path", path).Msg("could not copy new version to current version")
+			return
+		}
+	}()
+
 	err = t.Propagate(context.Background(), n, 0)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to propagate")
