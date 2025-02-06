@@ -35,9 +35,6 @@ packages:
     github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/usermapper:
         interfaces:
             Mapper:
-    github.com/opencloud-eu/reva/v2/pkg/storage/utils/indexer:
-        interfaces:
-            Indexer:
     github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata:
         interfaces:
             Storage:
