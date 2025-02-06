@@ -46,7 +46,7 @@ func NewGpfsWatchFolderWatcher(tree *Tree, kafkaBrokers []string, log *zerolog.L
 func (w *GpfsWatchFolderWatcher) Watch(topic string) {
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: w.brokers,
-		GroupID: "ocis-posixfs",
+		GroupID: "opencloud-posixfs",
 		Topic:   topic,
 	})
 
