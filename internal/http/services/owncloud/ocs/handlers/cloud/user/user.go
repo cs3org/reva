@@ -39,15 +39,21 @@ import (
 type Handler struct {
 	gatewayAddr      string
 	allowedLanguages []string
+	signingKey       string
 }
 
 // Init initializes this and any contained handlers.
-func (h *Handler) Init(c *config.Config) {
+func (h *Handler) Init(c *config.Config) error {
+	if len(c.SigningKey) < 32 {
+		return errors.New("Please set a signing key with an appropriate length")
+	}
 	h.gatewayAddr = c.GatewaySvc
 	h.allowedLanguages = c.AllowedLanguages
+	h.signingKey = c.SigningKey
 	if len(h.allowedLanguages) == 0 {
 		h.allowedLanguages = []string{"cs", "de", "en", "es", "fr", "it", "gl"}
 	}
+	return nil
 }
 
 const (
@@ -85,7 +91,7 @@ func (h *Handler) SigningKey(w http.ResponseWriter, r *http.Request) {
 
 	response.WriteOCSSuccess(w, r, &SigningKey{
 		User:       u.Username,
-		SigningKey: "UGFyY2UgbWVybywgY29lbmF0byBwYXJ1bTogbm9uIHNpdCB0aWJpIHZhbnVtClN1cmdlcmUgcG9zdCBlcHVsYXM6IHNvbW51bSBmdWdlIG1lcmlkaWFudW06Ck5vbiBtaWN0dW0gcmV0aW5lLCBuZWMgY29tcHJpbWUgZm9ydGl0ZXIgYW51bS4KSGFlYyBiZW5lIHNpIHNlcnZlcywgdHUgbG9uZ28gdGVtcG9yZSB2aXZlcw==",
+		SigningKey: h.signingKey,
 	})
 }
 

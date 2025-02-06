@@ -77,11 +77,6 @@ func (h *TrashbinHandler) handleTrashbinSpaces(s *svc, w http.ResponseWriter, r 
 	key, r.URL.Path = router.ShiftPath(r.URL.Path)
 	if key != "" && r.Method == MethodMove {
 		// find path in url relative to trash base
-		// trashBase := ctx.Value(ctxKeyBaseURI).(string)
-		// baseURI := path.Join(path.Dir(trashBase), "files", username)
-		// ctx = context.WithValue(ctx, ctxKeyBaseURI, baseURI)
-		// r = r.WithContext(ctx)
-
 		// TODO make request.php optional in destination header
 		dst, err := extractDestination(r)
 		if err != nil {
