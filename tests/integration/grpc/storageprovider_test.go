@@ -31,8 +31,8 @@ import (
 	ctxpkg "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/decomposed"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/nextcloud"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/ocis"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/registry"
 	jwt "github.com/opencloud-eu/reva/v2/pkg/token/manager/jwt"
 	"github.com/opencloud-eu/reva/v2/tests/helpers"
@@ -45,7 +45,7 @@ func ref(provider string, path string) *storagep.Reference {
 	r := &storagep.Reference{
 		Path: path,
 	}
-	if provider == "ocis" {
+	if provider == "decomposed" {
 		r.ResourceId = &storagep.ResourceId{
 			SpaceId:  "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
 			OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
@@ -58,10 +58,10 @@ func createFS(provider string, revads map[string]*Revad) (storage.FS, error) {
 	conf := make(map[string]interface{})
 	var f registry.NewFunc
 	switch provider {
-	case "ocis":
+	case "decomposed":
 		conf["root"] = revads["storage"].StorageRoot
 		conf["permissionssvc"] = revads["permissions"].GrpcAddress
-		f = ocis.New
+		f = decomposed.New
 	case "nextcloud":
 		conf["endpoint"] = "http://localhost:8080/apps/sciencemesh/"
 		conf["mock_http"] = true
@@ -181,7 +181,7 @@ var _ = Describe("storage providers", func() {
 			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
 			switch provider {
-			case "ocis":
+			case "decomposed":
 				Expect(len(listRes.Infos)).To(Equal(1)) // subdir
 			case "nextcloud":
 				Expect(len(listRes.Infos)).To(Equal(1)) // subdir
@@ -491,8 +491,8 @@ var _ = Describe("storage providers", func() {
 
 	assertReferences := func(provider string) {
 		It("creates references", func() {
-			if provider == "ocis" {
-				// ocis can't create references like this
+			if provider == "decomposed" {
+				// decomposed can't create references like this
 				return
 			}
 
@@ -703,7 +703,7 @@ var _ = Describe("storage providers", func() {
 				assertRecycle(provider)
 				assertReferences(provider)
 				assertMetadata(provider)
-				if provider == "ocis" {
+				if provider == "decomposed" {
 					assertLocking(provider)
 				} else {
 					PIt("Locking implementation still pending for provider " + provider)
@@ -747,12 +747,12 @@ var _ = Describe("storage providers", func() {
 		},
 	})
 
-	suite("ocis", []RevadConfig{
+	suite("decomposed", []RevadConfig{
 		{
-			Name: "storage", Config: "storageprovider-ocis.toml",
+			Name: "storage", Config: "storageprovider-decomposed.toml",
 		},
 		{
-			Name: "permissions", Config: "permissions-ocis-ci.toml",
+			Name: "permissions", Config: "permissions-opencloud-ci.toml",
 		},
 	})
 

@@ -1,6 +1,6 @@
-## Scenarios from OCIS API tests that are expected to fail with OCIS storage
+## Scenarios from OpenCloud API tests that are expected to fail with decompose-s3 storage
 
-The expected failures in this file are from features in the owncloud/ocis repo.
+The expected failures in this file are from features in the opencloud-eu/opencloud repo.
 
 ### File
 Basic file management like up and download, move, copy, properties, quota, trash, versions and chunking.
@@ -149,10 +149,10 @@ _ocdav: api compatibility, return correct status code_
 
 
 ### Won't fix
-Not everything needs to be implemented for ocis. While the oc10 testsuite covers these things we are not looking at them right now.
+Not everything needs to be implemented for OpenCloud. While the oc10 testsuite covers these things we are not looking at them right now.
 
 * _The `OC-LazyOps` header is [no longer supported by the client](https://github.com/owncloud/client/pull/8398), implmenting this is not necessary for a first production release. We plan to have an uploed state machine to visualize the state of a file, see https://github.com/owncloud/ocis/issues/214_
-* _Blacklisted ignored files are no longer required because ocis can handle `.htaccess` files without security implications introduced by serving user provided files with apache._
+* _Blacklisted ignored files are no longer required because OpenCloud can handle `.htaccess` files without security implications introduced by serving user provided files with apache._
 
 ### To triage
 _The below features have been added after I last categorized them. AFAICT they are bugs. @jfd_

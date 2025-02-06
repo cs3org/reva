@@ -1604,7 +1604,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					// see everts stance on this https://stackoverflow.com/a/31621912, he points to http://tools.ietf.org/html/rfc4918#section-15.3
 					// > Purpose: Contains the Content-Length header returned by a GET without accept headers.
 					// which only would make sense when eg. rendering a plain HTML filelisting when GETing a collection,
-					// which is not the case ... so we don't return it on collections. owncloud has oc:size for that
+					// which is not the case ... so we don't return it on collections. OpenCloud has oc:size for that
 					// TODO we cannot find out if md.Size is set or not because ints in go default to 0
 					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 						appendToNotFound(prop.NotFound("d:getcontentlength"))

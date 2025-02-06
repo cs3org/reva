@@ -1,12 +1,12 @@
- ## Scenarios from OCIS API tests that are expected to fail with OCIS storage
+ ## Scenarios from OpenCloud API tests that are expected to fail with decomposed storage
 
- The expected failures in this file are from features in the owncloud/ocis repo.
+ The expected failures in this file are from features in the opencloud-eu/opencloud repo.
 
 ### File
 Basic file management like up and download, move, copy, properties, quota, trash, versions and chunking.
 
 #### [invalid webdav responses for unauthorized requests.](https://github.com/owncloud/product/issues/273)
-These tests succeed when running against ocis because there we handle the relevant authentication in the proxy.
+These tests succeed when running against OpenCloud because there we handle the relevant authentication in the proxy.
 -   [coreApiTrashbin/trashbinFilesFolders.feature:240](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L240)
 -   [coreApiTrashbin/trashbinFilesFolders.feature:241](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L241)
 -   [coreApiTrashbin/trashbinFilesFolders.feature:255](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L255)
@@ -150,10 +150,10 @@ _ocdav: api compatibility, return correct status code_
 
 
 ### Won't fix
-Not everything needs to be implemented for ocis. While the oc10 testsuite covers these things we are not looking at them right now.
+Not everything needs to be implemented for OpenCloud. While the oc10 testsuite covers these things we are not looking at them right now.
 
 * _The `OC-LazyOps` header is [no longer supported by the client](https://github.com/owncloud/client/pull/8398), implmenting this is not necessary for a first production release. We plan to have an uploed state machine to visualize the state of a file, see https://github.com/owncloud/ocis/issues/214_
-* _Blacklisted ignored files are no longer required because ocis can handle `.htaccess` files without security implications introduced by serving user provided files with apache._
+* _Blacklisted ignored files are no longer required because OpenCloud can handle `.htaccess` files without security implications introduced by serving user provided files with apache._
 
 #### [Blacklist files extensions](https://github.com/owncloud/ocis/issues/2177)
 -   [coreApiWebdavMove2/moveFile.feature:100](https://github.com/opencloud-eu/opencloud/blob/main/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L100)

@@ -2,7 +2,7 @@
 help:
 	@echo "Usage: make [target]"
 	@echo "Available targets:"
-	@echo "  reva            Start reva with ocis storage"
+	@echo "  reva            Start reva with decomposed storage"
 	@echo "  reva-posix      Start reva with posixfs storage"
 	@echo "  reva-s3ng       Start reva with s3ng storage"
 
@@ -56,12 +56,12 @@ reva-services:
 	@$(REVA_CMD) -c $(CONFIG_DIR)/storage-shares.toml &
 	@$(REVA_CMD) -c $(CONFIG_DIR)/storage-publiclink.toml &
 	@$(REVA_CMD) -c $(CONFIG_DIR)/machine-auth.toml &
-	@$(REVA_CMD) -c $(CONFIG_DIR)/permissions-ocis-ci.toml &
+	@$(REVA_CMD) -c $(CONFIG_DIR)/permissions-opencloud-ci.toml &
 	@$(REVA_CMD) -c $(CONFIG_DIR)/ldap-users.toml &
 
 .PHONY: reva
 reva: ldap reva-services
-	@echo "Running reva with ocis storage"
+	@echo "Running reva with decomposed storage"
 	@$(REVA_CMD) -c $(CONFIG_DIR)/storage-users.toml
 
 .PHONY: reva-posix

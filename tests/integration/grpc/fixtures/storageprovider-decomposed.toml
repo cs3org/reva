@@ -2,13 +2,13 @@
 address = "{{grpc_address}}"
 
 [grpc.services.storageprovider]
-driver = "ocis"
+driver = "decomposed"
 
-[grpc.services.storageprovider.drivers.ocis]
+[grpc.services.storageprovider.drivers.decomposed]
 root = "{{root}}/storage"
 treetime_accounting = true
 treesize_accounting = true
 permissionssvc = "{{permissions_address}}"
 
-[grpc.services.storageprovider.drivers.ocis.filemetadatacache]
+[grpc.services.storageprovider.drivers.decomposed.filemetadatacache]
 cache_store = "noop"

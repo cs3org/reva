@@ -1,5 +1,5 @@
 # This config file will start a reva service that:
-# - serves the ocis ci permissions service
+# - serves the permissions service using the demo driver
 [shared]
 jwt_secret = "changemeplease"
 
@@ -9,4 +9,4 @@ address = "{{grpc_address}}"
 [grpc.services.permissions]
 driver = "demo"
 
-[grpc.services.permissions.drivers.ocisci]
+[grpc.services.permissions.drivers.ci]

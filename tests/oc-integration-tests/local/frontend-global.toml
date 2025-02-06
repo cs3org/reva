@@ -1,5 +1,5 @@
 # This config file will start a reva service that:
-# - serves as the entrypoint for owncloud APIs but with a globally accessible namespace.
+# - serves as the entrypoint for OpenCloud APIs but with a globally accessible namespace.
 # - serves http endpoints on port 20180
 #   - / --------------- ocdav
 #   - /ocs ------------ ocs
@@ -27,10 +27,10 @@ allow_credentials = true
 prefix = ""
 # for user lookups
 # prefix the path of requests to /dav/files with this namespace
-# While owncloud has only listed usernames at this endpoint CERN has
-# been exposing more than just usernames. For owncloud deployments we
+# While OpenCloud has only listed usernames at this endpoint CERN has
+# been exposing more than just usernames. For OpenCloud deployments we
 # can prefix the path to jail the requests to the correct CS3 namespace.
-# In this deployment we mounted the owncloud storage provider at /users. It
+# In this deployment we mounted the OpenCloud storage provider at /users. It
 # expects a username as the first path segment.
 # currently, only the desktop client will use this endpoint, but only if
 # the dav.chunking capability is available

@@ -25,15 +25,15 @@ providers = "fixtures/ocm-providers.demo.json"
 [http.services.datagateway]
 
 [http.services.dataprovider]
-driver = "ocis"
+driver = "decomposed"
 
-[http.services.dataprovider.drivers.ocis]
+[http.services.dataprovider.drivers.decomposed]
 root = "{{cernboxgw_root}}/storage"
 treetime_accounting = true
 treesize_accounting = true
 permissionssvc = "{{permissions_address}}"
 
-[http.services.dataprovider.drivers.ocis.filemetadatacache]
+[http.services.dataprovider.drivers.decomposed.filemetadatacache]
 cache_store = "noop"
 
 

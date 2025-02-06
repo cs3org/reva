@@ -32,18 +32,18 @@ home_template = "/users/{{.Id.OpaqueId}}"
 "grant" = { "mount_point" = "." }
 
 [grpc.services.storageprovider]
-driver = "ocis"
+driver = "decomposed"
 mount_path = "/home"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 data_server_url = "http://{{cernboxhttp_address}}/data"
 
-[grpc.services.storageprovider.drivers.ocis]
+[grpc.services.storageprovider.drivers.decomposed]
 root = "{{root}}/storage"
 treetime_accounting = true
 treesize_accounting = true
 permissionssvc = "{{permissions_address}}"
 
-[grpc.services.storageprovider.drivers.ocis.filemetadatacache]
+[grpc.services.storageprovider.drivers.decomposed.filemetadatacache]
 cache_store = "noop"
 
 [grpc.services.authregistry]

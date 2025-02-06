@@ -323,7 +323,7 @@ func (upload *fileUpload) WriteChunk(ctx context.Context, offset int64, src io.R
 
 	// If the HTTP PATCH request gets interrupted in the middle (e.g. because
 	// the user wants to pause the upload), Go's net/http returns an io.ErrUnexpectedEOF.
-	// However, for OwnCloudStore it's not important whether the stream has ended
+	// However, for the driver it's not important whether the stream has ended
 	// on purpose or accidentally.
 	if err != nil {
 		if err != io.ErrUnexpectedEOF {
