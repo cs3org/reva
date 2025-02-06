@@ -43,6 +43,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/spaces"
+	"github.com/pkg/errors"
 
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rhttp/router"
@@ -506,18 +507,18 @@ func (s *svc) newPropRaw(key, val string) *propertyXML {
 	}
 }
 
-func spaceHref(ctx context.Context, baseURI, fullPath string) string {
+func spaceHref(ctx context.Context, baseURI, fullPath string) (string, error) {
 	// in the context of spaces, the final URL will be baseURI + /<space_id>/relative/path/to/space
 	spacePath, ok := ctx.Value(ctxSpacePath).(string)
 	if !ok {
-		panic("space path expected to be in the context")
+		return "", errors.New("space path expected to be in the context")
 	}
 	relativePath := strings.TrimPrefix(fullPath, spacePath)
 	spaceID, ok := ctx.Value(ctxSpaceID).(string)
 	if !ok {
-		panic("space id expected to be in the context")
+		return "", errors.New("space id expected to be in the context")
 	}
-	return path.Join(baseURI, spaceID, relativePath)
+	return path.Join(baseURI, spaceID, relativePath), nil
 }
 
 func appendSlash(path string) string {
@@ -549,9 +550,22 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 	var ref string
+	var err error
 	if _, ok := ctx.Value(ctxSpaceID).(string); ok {
 		// spaces are enabled; for now we do not support the OCM case with spaces
-		ref = spaceHref(ctx, baseURI, md.Path)
+		ref, err = spaceHref(ctx, baseURI, md.Path)
+		if err != nil {
+			pxml := propstatXML{
+				Status: "HTTP/1.1 400 Bad Request",
+				Prop:   []*propertyXML{},
+			}
+
+			return &responseXML{
+				Href:     encodePath(ref),
+				Propstat: []propstatXML{pxml},
+			}, err
+
+		}
 	} else {
 		// spaces are not enabled
 		md.Path = strings.TrimPrefix(md.Path, ns)
