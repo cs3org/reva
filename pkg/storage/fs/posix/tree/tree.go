@@ -849,7 +849,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 }
 
 func (t *Tree) isIgnored(path string) bool {
-	return isLockFile(path) || isTrash(path) || t.isUpload(path)
+	return isLockFile(path) || isTrash(path) || t.isUpload(path) || isInternal(path)
 }
 
 func (t *Tree) isUpload(path string) bool {
