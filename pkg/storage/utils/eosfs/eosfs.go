@@ -1464,7 +1464,7 @@ func (fs *eosfs) DownloadRevision(ctx context.Context, ref *provider.Reference, 
 	var fn string
 	var err error
 
-	if !fs.conf.EnableHome && fs.conf.ImpersonateOwnerforRevisions {
+	if !fs.conf.EnableHome {
 		// We need to access the revisions for a non-home reference.
 		// We'll get the owner of the particular resource and impersonate them
 		// if we have access to it.
@@ -1475,7 +1475,8 @@ func (fs *eosfs) DownloadRevision(ctx context.Context, ref *provider.Reference, 
 		fn = fs.wrap(ctx, md.Path)
 
 		if md.PermissionSet.InitiateFileDownload {
-			auth, err = fs.getUIDGateway(ctx, md.Owner)
+			user := appctx.ContextMustGetUser(ctx)
+			auth, err = fs.getEOSToken(ctx, user, fn)
 			if err != nil {
 				return nil, err
 			}
@@ -1497,7 +1498,7 @@ func (fs *eosfs) RestoreRevision(ctx context.Context, ref *provider.Reference, r
 	var fn string
 	var err error
 
-	if !fs.conf.EnableHome && fs.conf.ImpersonateOwnerforRevisions {
+	if !fs.conf.EnableHome {
 		// We need to access the revisions for a non-home reference.
 		// We'll get the owner of the particular resource and impersonate them
 		// if we have access to it.
@@ -1508,7 +1509,8 @@ func (fs *eosfs) RestoreRevision(ctx context.Context, ref *provider.Reference, r
 		fn = fs.wrap(ctx, md.Path)
 
 		if md.PermissionSet.RestoreFileVersion {
-			auth, err = fs.getUIDGateway(ctx, md.Owner)
+			user := appctx.ContextMustGetUser(ctx)
+			auth, err = fs.getEOSToken(ctx, user, fn)
 			if err != nil {
 				return err
 			}
