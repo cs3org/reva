@@ -1,0 +1,5 @@
+Bugfix: impersonate owner on Revisions
+
+The current implementation of Download / Restore Revisions is not consistent with ListRevisions, where we impersonate the owner in projects. We now also impersonate in the case of Download and Restore.
+
+https://github.com/cs3org/reva/pull/5072
