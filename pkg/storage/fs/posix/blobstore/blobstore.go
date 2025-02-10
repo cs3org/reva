@@ -20,7 +20,6 @@ package blobstore
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -69,8 +68,13 @@ func (bs *Blobstore) Upload(node *node.Node, source, copyTarget string) error {
 	if err != nil {
 		return err
 	}
+	err = os.Chtimes(path, fi.ModTime(), fi.ModTime())
+	if err != nil {
+		return err
+	}
 
 	if copyTarget != "" {
+		// also "upload" the file to a local path, e.g. for keeping the "current" version of the file
 		err := os.MkdirAll(filepath.Dir(copyTarget), 0700)
 		if err != nil {
 			return err
@@ -82,16 +86,13 @@ func (bs *Blobstore) Upload(node *node.Node, source, copyTarget string) error {
 			return errors.Wrapf(err, "could not open copy target '%s' for writing", copyTarget)
 		}
 		defer copyFile.Close()
-		bw, err := copyFile.ReadFrom(file)
+
+		_, err = copyFile.ReadFrom(file)
 		if err != nil {
-			return errors.Wrapf(err, "could not write blob '%s'", node.InternalPath())
+			return errors.Wrapf(err, "could not write blob copy of '%s' to '%s'", node.InternalPath(), copyTarget)
 		}
-		fmt.Println("Bytes written: ", bw)
 	}
 
-	if fi != nil {
-		return os.Chtimes(path, fi.ModTime(), fi.ModTime())
-	}
 	return nil
 }
 

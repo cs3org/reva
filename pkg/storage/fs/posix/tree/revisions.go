@@ -323,6 +323,15 @@ func (tp *Tree) RestoreRevision(ctx context.Context, spaceID, nodeID, source str
 			tp.log.Error().Err(err).Str("currentPath", currentPath).Str("source", source).Msg("could not copy new version to current version")
 			return err
 		}
+		err = tp.lookup.CopyMetadata(ctx, source, currentPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
+			return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
+				attributeName == prefixes.TypeAttr ||
+				attributeName == prefixes.BlobIDAttr ||
+				attributeName == prefixes.BlobsizeAttr
+		}, false)
+		if err != nil {
+			return errtypes.InternalError("failed to copy xattrs to 'current' file: " + err.Error())
+		}
 	}
 
 	return nil

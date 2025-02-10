@@ -685,11 +685,23 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 // WriteBlob writes a blob to the blobstore
 func (t *Tree) WriteBlob(node *node.Node, source string) error {
 	var currentPath string
+	var err error
+
 	if t.options.KeepCurrentVersion {
 		currentPath = t.lookup.(*lookup.Lookup).CurrentPath(node.SpaceID, node.ID)
+
+		defer func() {
+			_ = t.lookup.CopyMetadata(context.Background(), node.InternalPath(), currentPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
+				return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
+					attributeName == prefixes.TypeAttr ||
+					attributeName == prefixes.BlobIDAttr ||
+					attributeName == prefixes.BlobsizeAttr
+			}, false)
+		}()
 	}
 
-	return t.blobstore.Upload(node, source, currentPath)
+	err = t.blobstore.Upload(node, source, currentPath)
+	return err
 }
 
 // ReadBlob reads a blob from the blobstore

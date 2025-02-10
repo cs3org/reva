@@ -634,6 +634,17 @@ assimilate:
 			t.log.Error().Err(err).Str("currentPath", currentPath).Str("path", path).Msg("could not copy new version to current version")
 			return
 		}
+
+		err = t.lookup.CopyMetadata(context.Background(), n.InternalPath(), currentPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
+			return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
+				attributeName == prefixes.TypeAttr ||
+				attributeName == prefixes.BlobIDAttr ||
+				attributeName == prefixes.BlobsizeAttr
+		}, false)
+		if err != nil {
+			t.log.Error().Err(err).Str("currentPath", currentPath).Str("path", path).Msg("failed to copy xattrs to 'current' file")
+			return
+		}
 	}()
 
 	err = t.Propagate(context.Background(), n, 0)
