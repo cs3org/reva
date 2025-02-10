@@ -594,6 +594,8 @@ assimilate:
 		}
 		attributes[prefixes.PropagationAttr] = []byte("1")
 	} else {
+		attributes.SetString(prefixes.BlobIDAttr, uuid.NewString())
+		attributes.SetInt64(prefixes.BlobsizeAttr, fi.Size())
 		attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_FILE))
 	}
 
