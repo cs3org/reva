@@ -158,12 +158,6 @@ func (c *Completer) completeOptionArguments(d prompt.Document) ([]prompt.Suggest
 	var suggests []prompt.Suggest
 	var match bool
 	switch option {
-	case "-cs":
-		suggests = []prompt.Suggest{{Text: "basic"}, {Text: "oidc"}}
-		match = true
-	case "-dd":
-		suggests = []prompt.Suggest{{Text: "local"}, {Text: "owncloud"}}
-		match = true
 	case "-type":
 		suggests = []prompt.Suggest{{Text: "user"}, {Text: "group"}}
 		match = true
@@ -176,7 +170,7 @@ func (c *Completer) completeOptionArguments(d prompt.Document) ([]prompt.Suggest
 	case "-viewmode":
 		suggests = []prompt.Suggest{{Text: "view"}, {Text: "read"}, {Text: "write"}}
 		match = true
-	case "-c", "-grantee", "-idp", "-by-resource-id", "-xs", "-token":
+	case "-grantee", "-idp", "-by-resource-id", "-xs", "-token":
 		match = true
 	}
 	return prompt.FilterHasPrefix(suggests, d.GetWordBeforeCursor(), true), match
@@ -209,8 +203,8 @@ func excludeOptions(args []string) ([]string, bool) {
 		}
 
 		for _, s := range []string{
-			"-c", "-cs", "-dd", "-dp", "-type", "-grantee", "-idp", "-rol",
-			"-by-resource-id", "-state", "-viewmode", "-xs", "-token",
+			"-type", "-grantee", "-idp", "-rol", "-by-resource-id", "-state",
+			"-viewmode", "-xs", "-token",
 		} {
 			if strings.HasPrefix(args[i], s) {
 				if strings.Contains(args[i], "=") {
