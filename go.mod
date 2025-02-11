@@ -24,6 +24,7 @@ require (
 	github.com/eventials/go-tus v0.0.0-20220610120217-05d0564bb571
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-chi/chi/v5 v5.1.0
+	github.com/go-chi/render v1.0.3
 	github.com/go-ldap/ldap/v3 v3.4.8
 	github.com/go-micro/plugins/v4/events/natsjs v1.2.2
 	github.com/go-micro/plugins/v4/server/http v1.2.2
@@ -109,6 +110,7 @@ require (
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v0.0.0-20230828082145-3c4c8a2d2371 // indirect
+	github.com/ajg/form v1.5.1 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bitly/go-simplejson v0.5.0 // indirect
