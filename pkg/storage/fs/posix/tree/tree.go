@@ -144,6 +144,8 @@ func New(lu node.PathLookup, bs Blobstore, um usermapper.Mapper, trashbin *trash
 	if o.WatchFS {
 		go t.watcher.Watch(watchPath)
 		go t.workScanQueue()
+	}
+	if o.ScanFS {
 		go func() {
 			_ = t.WarmupIDCache(o.Root, true, false)
 		}()

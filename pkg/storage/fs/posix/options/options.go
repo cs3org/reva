@@ -39,6 +39,7 @@ type Options struct {
 	// a revision when the file is changed.
 	EnableFSRevisions bool `mapstructure:"enable_fs_revisions"`
 
+	ScanFS                  bool   `mapstructure:"scan_fs"`
 	WatchFS                 bool   `mapstructure:"watch_fs"`
 	WatchType               string `mapstructure:"watch_type"`
 	WatchPath               string `mapstructure:"watch_path"`
