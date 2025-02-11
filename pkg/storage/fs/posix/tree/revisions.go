@@ -306,7 +306,7 @@ func (tp *Tree) RestoreRevision(ctx context.Context, spaceID, nodeID, source str
 	}
 
 	// update "current" revision
-	if tp.options.KeepCurrentVersion {
+	if tp.options.EnableFSRevisions {
 		currentPath := tp.lookup.(*lookup.Lookup).CurrentPath(spaceID, nodeID)
 		w, err := os.OpenFile(currentPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0700)
 		if err != nil {

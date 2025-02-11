@@ -687,7 +687,7 @@ func (t *Tree) WriteBlob(node *node.Node, source string) error {
 	var currentPath string
 	var err error
 
-	if t.options.KeepCurrentVersion {
+	if t.options.EnableFSRevisions {
 		currentPath = t.lookup.(*lookup.Lookup).CurrentPath(node.SpaceID, node.ID)
 
 		defer func() {

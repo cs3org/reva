@@ -33,7 +33,11 @@ type Options struct {
 
 	ScanDebounceDelay time.Duration `mapstructure:"scan_debounce_delay"`
 
-	KeepCurrentVersion bool `mapstructure:"keep_current_version"`
+	// Allows generating revisions from changes done to the local storage.
+	// Note: This basically doubles the number of bytes stored on disk because
+	// a copy of the current version of a file is kept available for generating
+	// a revision when the file is changed.
+	EnableFSRevisions bool `mapstructure:"enable_fs_revisions"`
 
 	WatchFS                 bool   `mapstructure:"watch_fs"`
 	WatchType               string `mapstructure:"watch_type"`
