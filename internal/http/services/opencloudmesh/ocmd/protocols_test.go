@@ -54,7 +54,7 @@ func TestUnmarshalProtocol(t *testing.T) {
 				&WebDAV{
 					SharedSecret: "secret",
 					Permissions:  []string{"read", "write", "share"},
-					URL:          "",
+					URI:          "",
 				},
 			},
 		},
@@ -64,7 +64,7 @@ func TestUnmarshalProtocol(t *testing.T) {
 				&WebDAV{
 					SharedSecret: "secret",
 					Permissions:  []string{"read", "write"},
-					URL:          "http://example.org",
+					URI:          "http://example.org",
 				},
 			},
 		},
@@ -72,7 +72,7 @@ func TestUnmarshalProtocol(t *testing.T) {
 			raw: `{"name":"multi","options":{},"webapp":{"uriTemplate":"http://example.org/{test}"}}`,
 			expected: []Protocol{
 				&Webapp{
-					URITemplate: "http://example.org/{test}",
+					URI: "http://example.org/{test}",
 				},
 			},
 		},
@@ -92,10 +92,10 @@ func TestUnmarshalProtocol(t *testing.T) {
 				&WebDAV{
 					SharedSecret: "secret",
 					Permissions:  []string{"read", "write"},
-					URL:          "http://example.org",
+					URI:          "http://example.org",
 				},
 				&Webapp{
-					URITemplate: "http://example.org/{test}",
+					URI: "http://example.org/{test}",
 				},
 				&Datatx{
 					SharedSecret: "secret",
@@ -155,7 +155,7 @@ func TestMarshalProtocol(t *testing.T) {
 				&WebDAV{
 					SharedSecret: "secret",
 					Permissions:  []string{"read"},
-					URL:          "http://example.org",
+					URI:          "http://example.org",
 				},
 			},
 			expected: map[string]any{
@@ -164,23 +164,23 @@ func TestMarshalProtocol(t *testing.T) {
 				"webdav": map[string]any{
 					"sharedSecret": "secret",
 					"permissions":  []any{"read"},
-					"url":          "http://example.org",
+					"uri":          "http://example.org",
 				},
 			},
 		},
 		{
 			in: []Protocol{
 				&Webapp{
-					URITemplate: "http://example.org",
-					ViewMode:    "read",
+					URI:      "http://example.org",
+					ViewMode: "read",
 				},
 			},
 			expected: map[string]any{
 				"name":    "multi",
 				"options": map[string]any{},
 				"webapp": map[string]any{
-					"uriTemplate": "http://example.org",
-					"viewMode":    "read",
+					"uri":      "http://example.org",
+					"viewMode": "read",
 				},
 			},
 		},
@@ -207,11 +207,11 @@ func TestMarshalProtocol(t *testing.T) {
 				&WebDAV{
 					SharedSecret: "secret",
 					Permissions:  []string{"read"},
-					URL:          "http://example.org",
+					URI:          "http://example.org",
 				},
 				&Webapp{
-					URITemplate: "http://example.org",
-					ViewMode:    "read",
+					URI:      "http://example.org",
+					ViewMode: "read",
 				},
 				&Datatx{
 					SharedSecret: "secret",
@@ -225,11 +225,11 @@ func TestMarshalProtocol(t *testing.T) {
 				"webdav": map[string]any{
 					"sharedSecret": "secret",
 					"permissions":  []any{"read"},
-					"url":          "http://example.org",
+					"uri":          "http://example.org",
 				},
 				"webapp": map[string]any{
-					"uriTemplate": "http://example.org",
-					"viewMode":    "read",
+					"uri":      "http://example.org",
+					"viewMode": "read",
 				},
 				"datatx": map[string]any{
 					"sharedSecret": "secret",

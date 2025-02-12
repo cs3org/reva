@@ -169,7 +169,7 @@ type dbProtocol struct {
 	WebDAVURI            *string
 	WebDAVSharedSecret   *string
 	WebDavPermissions    *int
-	WebappURITemplate    *string
+	WebappURI            *string
 	WebappViewMode       *int
 	TransferSourceURI    *string
 	TransferSharedSecret *string
@@ -283,7 +283,7 @@ func convertToCS3Protocol(p *dbProtocol) *ocm.Protocol {
 			Permissions: conversions.RoleFromOCSPermissions(conversions.Permissions(*p.WebDavPermissions)).CS3ResourcePermissions(),
 		})
 	case WebappProtocol:
-		return share.NewWebappProtocol(*p.WebappURITemplate, appprovider.ViewMode(*p.WebappViewMode))
+		return share.NewWebappProtocol(*p.WebappURI, appprovider.ViewMode(*p.WebappViewMode))
 	case TransferProtocol:
 		return share.NewTransferProtocol(*p.TransferSourceURI, *p.TransferSharedSecret, uint64(*p.TransferSize))
 	}

@@ -707,7 +707,7 @@ func (m *mgr) getProtocolsIds(ctx context.Context, ids []any) (map[string][]*ocm
 
 	var p dbProtocol
 	for rows.Next() {
-		if err := rows.Scan(&p.ShareID, &p.Type, &p.WebDAVURI, &p.WebDAVSharedSecret, &p.WebDavPermissions, &p.WebappURITemplate, &p.WebappViewMode, &p.TransferSourceURI, &p.TransferSharedSecret, &p.TransferSize); err != nil {
+		if err := rows.Scan(&p.ShareID, &p.Type, &p.WebDAVURI, &p.WebDAVSharedSecret, &p.WebDavPermissions, &p.WebappURI, &p.WebappViewMode, &p.TransferSourceURI, &p.TransferSharedSecret, &p.TransferSize); err != nil {
 			continue
 		}
 		protocols[p.ShareID] = append(protocols[p.ShareID], convertToCS3Protocol(&p))
@@ -763,7 +763,7 @@ func (m *mgr) getProtocols(ctx context.Context, id int) ([]*ocm.Protocol, error)
 
 	var p dbProtocol
 	for rows.Next() {
-		if err := rows.Scan(&p.Type, &p.WebDAVURI, &p.WebDAVSharedSecret, &p.WebDavPermissions, &p.WebappURITemplate, &p.WebappViewMode, &p.TransferSourceURI, &p.TransferSharedSecret, &p.TransferSize); err != nil {
+		if err := rows.Scan(&p.Type, &p.WebDAVURI, &p.WebDAVSharedSecret, &p.WebDavPermissions, &p.WebappURI, &p.WebappViewMode, &p.TransferSourceURI, &p.TransferSharedSecret, &p.TransferSize); err != nil {
 			continue
 		}
 		protocols = append(protocols, convertToCS3Protocol(&p))

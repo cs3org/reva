@@ -97,8 +97,8 @@ type EfssShare struct {
 			Permissions int    `json:"permissions" validate:"required"`
 		} `json:"webdav" validate:"required"`
 		WebApp struct {
-			URITemplate string `json:"uri_template"`
-			ViewMode    string `json:"view_mode"`
+			URI      string `json:"uri_template"`
+			ViewMode string `json:"view_mode"`
 		} `json:"webapp" validate:"omitempty"`
 		DataTx struct {
 			SourceURI string `json:"source_uri"`
@@ -328,7 +328,7 @@ func efssReceivedShareToOcm(resp *ReceivedEfssShare) *ocm.ReceivedShare {
 		Permissions: conversions.RoleFromOCSPermissions(conversions.Permissions(resp.Share.Protocols.WebDAV.Permissions)).CS3ResourcePermissions(),
 	}))
 	if resp.Share.Protocols.WebApp.ViewMode != "" {
-		proto = append(proto, share.NewWebappProtocol(resp.Share.Protocols.WebApp.URITemplate, utils.GetAppViewMode(resp.Share.Protocols.WebApp.ViewMode)))
+		proto = append(proto, share.NewWebappProtocol(resp.Share.Protocols.WebApp.URI, utils.GetAppViewMode(resp.Share.Protocols.WebApp.ViewMode)))
 	}
 	if resp.Share.Protocols.DataTx.SourceURI != "" {
 		proto = append(proto, share.NewTransferProtocol(resp.Share.Protocols.DataTx.SourceURI, resp.Share.Token, uint64(resp.Share.Protocols.DataTx.Size)))
