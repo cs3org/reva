@@ -1,14 +1,13 @@
 module github.com/opencloud-eu/reva/v2
 
-go 1.22.7
+go 1.23.1
 
-toolchain go1.23.4
+toolchain go1.23.6
 
 require (
 	bou.ke/monkey v1.0.2
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
 	github.com/BurntSushi/toml v1.4.0
-	github.com/CiscoM31/godata v1.0.10
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/armon/go-radix v1.0.0
 	github.com/aws/aws-sdk-go v1.55.5
@@ -64,7 +63,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
 	github.com/opencloud-eu/opencloud v0.0.0-20250128123102-82fa07c003f4
-	github.com/pablodz/inotifywaitgo v0.0.7
+	github.com/pablodz/inotifywaitgo v0.0.9
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/xattr v0.4.10
 	github.com/prometheus/alertmanager v0.27.0
