@@ -189,7 +189,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			}
 
 			var token, ocmshare string
-			// OCM v1.1 (OCIS et al.).
+			// OCM v1.1+ (OCIS et al.).
 			bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 			if bearer != "" {
 				// Bearer token is the shared secret, path is /{shareId}/path/to/resource.
