@@ -47,7 +47,7 @@ type Protocol interface {
 type WebDAV struct {
 	SharedSecret string   `json:"sharedSecret" validate:"required"`
 	Permissions  []string `json:"permissions"  validate:"required,dive,required,oneof=read write share"`
-	URL          string   `json:"url"          validate:"required"`
+	URI          string   `json:"uri"          validate:"required"`
 }
 
 // ToOCMProtocol convert the protocol to a ocm Protocol struct.
@@ -69,18 +69,19 @@ func (w *WebDAV) ToOCMProtocol() *ocm.Protocol {
 		}
 	}
 
-	return ocmshare.NewWebDAVProtocol(w.URL, w.SharedSecret, perms)
+	return ocmshare.NewWebDAVProtocol(w.URI, w.SharedSecret, perms)
 }
 
 // Webapp contains the parameters for the Webapp protocol.
 type Webapp struct {
-	URITemplate string `json:"uriTemplate" validate:"required"`
-	ViewMode    string `json:"viewMode"    validate:"required,dive,required,oneof=view read write"`
+	URI          string `json:"uri" validate:"required"`
+	ViewMode     string `json:"viewMode"    validate:"required,dive,required,oneof=view read write"`
+	SharedSecret string `json:"sharedSecret"`
 }
 
 // ToOCMProtocol convert the protocol to a ocm Protocol struct.
 func (w *Webapp) ToOCMProtocol() *ocm.Protocol {
-	return ocmshare.NewWebappProtocol(w.URITemplate, utils.GetAppViewMode(w.ViewMode))
+	return ocmshare.NewWebappProtocol(w.URI, utils.GetAppViewMode(w.ViewMode))
 }
 
 // Datatx contains the parameters for the Datatx protocol.
@@ -134,7 +135,7 @@ func (p *Protocols) UnmarshalJSON(data []byte) error {
 				res = &WebDAV{
 					SharedSecret: ss,
 					Permissions:  []string{"read", "write", "share"},
-					URL:          "",
+					URI:          "",
 				}
 				*p = append(*p, res)
 			}
