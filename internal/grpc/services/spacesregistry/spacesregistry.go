@@ -21,6 +21,7 @@ package spacesregistry
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -268,6 +269,9 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 	if err != nil {
 		return nil, err
 	}
+	if stat.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return nil, fmt.Errorf("Failed to stat %s: got status %s with message: %s", home, stat.Status.GetCode().String(), stat.Status.GetMessage())
+	}
 
 	quota, err := s.gw.GetQuota(ctx, &gateway.GetQuotaRequest{
 		Ref: &provider.Reference{
@@ -276,6 +280,10 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	if stat.Info == nil || stat.Info.Id == nil || stat.Info.Id.StorageId == "" {
+		return nil, errors.New("Received an invalid storageID")
 	}
 
 	return &provider.StorageSpace{
