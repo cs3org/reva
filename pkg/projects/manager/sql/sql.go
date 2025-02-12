@@ -20,7 +20,6 @@ package sql
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"slices"
 
@@ -32,6 +31,9 @@ import (
 	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 func init() {
@@ -41,15 +43,29 @@ func init() {
 // Config is the configuration to use for the mysql driver
 // implementing the projects.Catalogue interface.
 type Config struct {
+	Engine     string `mapstructure:"engine"` // mysql | sqlite
 	DBUsername string `mapstructure:"db_username"`
 	DBPassword string `mapstructure:"db_password"`
-	DBAddress  string `mapstructure:"db_address"`
+	DBHost     string `mapstructure:"db_host"`
+	DBPort     int    `mapstructure:"db_port"`
 	DBName     string `mapstructure:"db_name"`
 }
 
 type mgr struct {
 	c  *Config
-	db *sql.DB
+	db *gorm.DB
+}
+
+// Project represents a project in the DB.
+type Project struct {
+	gorm.Model
+	StorageID string `gorm:"size:255"`
+	Path      string
+	Name      string `gorm:"size:255;uniqueIndex:i_name"`
+	Owner     string `gorm:"size:255"`
+	Readers   string
+	Writers   string
+	Admins    string
 }
 
 func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
@@ -57,50 +73,45 @@ func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	return NewFromConfig(ctx, &c)
-}
-
-// Project represents a project in the DB.
-type Project struct {
-	StorageID string
-	Path      string
-	Name      string
-	Owner     string
-	Readers   string
-	Writers   string
-	Admins    string
-}
-
-// NewFromConfig creates a Repository with a SQL driver using the given config.
-func NewFromConfig(ctx context.Context, conf *Config) (projects.Catalogue, error) {
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s", conf.DBUsername, conf.DBPassword, conf.DBAddress, conf.DBName))
+	var db *gorm.DB
+	var err error
+	switch c.Engine {
+	case "sqlite":
+		db, err = gorm.Open(sqlite.Open(c.DBName), &gorm.Config{})
+	case "mysql":
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true", c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName)
+		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	default: // default is mysql
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true", c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName)
+		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	}
 	if err != nil {
-		return nil, errors.Wrap(err, "sql: error opening connection to mysql database")
+		return nil, errors.Wrap(err, "Failed to connect to Projects database")
 	}
 
-	m := &mgr{
-		c:  conf,
+	// Migrate schemas
+	err = db.AutoMigrate(&Project{})
+
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to mgirate Project schema")
+	}
+
+	mgr := &mgr{
+		c:  &c,
 		db: db,
 	}
-	return m, nil
+	return mgr, nil
 }
 
 func (m *mgr) ListProjects(ctx context.Context, user *userpb.User) ([]*provider.StorageSpace, error) {
-	// TODO: for the time being we load everything in memory. We may find a better
-	// solution in future when the number of projects will grow.
-	query := "SELECT storage_id, path, name, owner, readers, writers, admins FROM projects"
-	results, err := m.db.QueryContext(ctx, query)
-	if err != nil {
-		return nil, errors.Wrap(err, "error getting projects from db")
-	}
+	// TODO: we reallyyy should not be loading everything into memory here...
 
 	var dbProjects []*Project
-	for results.Next() {
-		var p Project
-		if err := results.Scan(&p.StorageID, &p.Path, &p.Name, &p.Owner, &p.Readers, &p.Writers, &p.Admins); err != nil {
-			return nil, errors.Wrap(err, "error scanning rows from db")
-		}
-		dbProjects = append(dbProjects, &p)
+
+	query := m.db.Model(&Project{})
+	res := query.Find(&dbProjects)
+	if res.Error != nil {
+		return nil, res.Error
 	}
 
 	projects := []*provider.StorageSpace{}

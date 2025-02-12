@@ -16,115 +16,60 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package sql_test
+package sql
 
 import (
 	"context"
-	"fmt"
+	"log"
+	"os"
 	"reflect"
-	"sync"
 	"testing"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
-	projects "github.com/cs3org/reva/pkg/projects/manager/sql"
+	projects_catalogue "github.com/cs3org/reva/pkg/projects"
 	"github.com/cs3org/reva/pkg/spaces"
-	sqle "github.com/dolthub/go-mysql-server"
-	"github.com/dolthub/go-mysql-server/memory"
-	"github.com/dolthub/go-mysql-server/server"
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/gdexlab/go-render/render"
 )
 
-var (
-	dbName        = "reva_tests"
-	address       = "localhost"
-	port          = 33059
-	m             sync.Mutex // for increasing the port
-	projectsTable = "projects"
-)
-
-func startDatabase(ctx *sql.Context, tables map[string]*memory.Table) (engine *sqle.Engine, p int, cleanup func()) {
-	m.Lock()
-	defer m.Unlock()
-
-	db := memory.NewDatabase(dbName)
-	db.EnablePrimaryKeyIndexes()
-	for name, table := range tables {
-		db.AddTable(name, table)
+// You can use testing.T, if you want to test the code without benchmarking
+func setupSuite(tb testing.TB) (projects_catalogue.Catalogue, error, func(tb testing.TB) error) {
+	ctx := context.Background()
+	dbName := "test_db.sqlite"
+	cfg := map[string]interface{}{
+		"engine":  "sqlite",
+		"db_name": dbName,
 	}
-
-	p = port
-	config := server.Config{
-		Protocol: "tcp",
-		Address:  fmt.Sprintf("%s:%d", address, p),
-	}
-	port++
-	engine = sqle.NewDefault(memory.NewMemoryDBProvider(db))
-	s, err := server.NewDefaultServer(config, engine)
+	mgr, err := New(ctx, cfg)
 	if err != nil {
-		panic(err)
+		return nil, err, nil
 	}
 
-	go func() {
-		if err := s.Start(); err != nil {
-			panic(err)
-		}
-	}()
-	cleanup = func() {
-		if err := s.Close(); err != nil {
-			panic(err)
-		}
+	// Return a function to teardown the test
+	return mgr, nil, func(tb testing.TB) error {
+		log.Println("teardown suite")
+		return os.Remove(dbName)
 	}
-	return
-}
-
-func must(err error) {
-	if err != nil {
-		panic(err)
-	}
-}
-
-func createProjectsTable(ctx *sql.Context, initData []*projects.Project) map[string]*memory.Table {
-	tables := make(map[string]*memory.Table)
-
-	// projects table
-	tableProjects := memory.NewTable(projectsTable, sql.NewPrimaryKeySchema(sql.Schema{
-		{Name: "storage_id", Type: sql.Text, Nullable: false, Source: projectsTable},
-		{Name: "path", Type: sql.Text, Nullable: false, Source: projectsTable},
-		{Name: "name", Type: sql.Text, Nullable: false, Source: projectsTable, PrimaryKey: true},
-		{Name: "owner", Type: sql.Text, Nullable: false, Source: projectsTable},
-		{Name: "readers", Type: sql.Text, Nullable: false, Source: projectsTable},
-		{Name: "writers", Type: sql.Text, Nullable: false, Source: projectsTable},
-		{Name: "admins", Type: sql.Text, Nullable: false, Source: projectsTable},
-	}), &memory.ForeignKeyCollection{})
-
-	tables[projectsTable] = tableProjects
-
-	for _, p := range initData {
-		must(tableProjects.Insert(ctx, sql.NewRow(p.StorageID, p.Path, p.Name, p.Owner, p.Readers, p.Writers, p.Admins)))
-	}
-
-	return tables
 }
 
 func TestListProjects(t *testing.T) {
+
 	tests := []struct {
 		description string
-		projects    []*projects.Project
+		projects    []*Project
 		user        *userpb.User
 		expected    []*provider.StorageSpace
 	}{
 		{
 			description: "empty list",
-			projects:    []*projects.Project{},
+			projects:    []*Project{},
 			user:        &userpb.User{Id: &userpb.UserId{OpaqueId: "opaque", Idp: "idp"}},
 			expected:    []*provider.StorageSpace{},
 		},
 		{
 			description: "user is owner of the projects",
-			projects: []*projects.Project{
+			projects: []*Project{
 				{
 					StorageID: "storage_id",
 					Path:      "/path/to/project",
@@ -157,7 +102,7 @@ func TestListProjects(t *testing.T) {
 		},
 		{
 			description: "user part of the readers group",
-			projects: []*projects.Project{
+			projects: []*Project{
 				{
 					StorageID: "storage_id",
 					Path:      "/path/to/project",
@@ -190,7 +135,7 @@ func TestListProjects(t *testing.T) {
 		},
 		{
 			description: "user part of the writers group",
-			projects: []*projects.Project{
+			projects: []*Project{
 				{
 					StorageID: "storage_id",
 					Path:      "/path/to/project",
@@ -223,7 +168,7 @@ func TestListProjects(t *testing.T) {
 		},
 		{
 			description: "user part of the admins group",
-			projects: []*projects.Project{
+			projects: []*Project{
 				{
 					StorageID: "storage_id",
 					Path:      "/path/to/project",
@@ -256,7 +201,7 @@ func TestListProjects(t *testing.T) {
 		},
 		{
 			description: "user part of the admins and readers group",
-			projects: []*projects.Project{
+			projects: []*Project{
 				{
 					StorageID: "storage_id",
 					Path:      "/path/to/project",
@@ -289,7 +234,7 @@ func TestListProjects(t *testing.T) {
 		},
 		{
 			description: "user is neither the owner nor part of the projects' groups",
-			projects: []*projects.Project{
+			projects: []*Project{
 				{
 					StorageID: "storage_id",
 					Path:      "/path/to/project",
@@ -307,28 +252,34 @@ func TestListProjects(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.description, func(t *testing.T) {
-			ctx := sql.NewEmptyContext()
-			tables := createProjectsTable(ctx, tt.projects)
-			_, port, cleanup := startDatabase(ctx, tables)
-			t.Cleanup(cleanup)
+			ctx := context.Background()
+			catalogue, err, teardown := setupSuite(t)
 
-			r, err := projects.NewFromConfig(ctx, &projects.Config{
-				DBUsername: "root",
-				DBPassword: "",
-				DBAddress:  fmt.Sprintf("%s:%d", address, port),
-				DBName:     dbName,
-			})
+			if err != nil {
+				t.Error(err)
+			}
+
 			if err != nil {
 				t.Fatalf("not expected error while creating projects driver: %+v", err)
 			}
 
-			got, err := r.ListProjects(context.TODO(), tt.user)
+			catmgr := catalogue.(*mgr)
+			for _, proj := range tt.projects {
+				catmgr.db.Create(&proj)
+			}
+
+			got, err := catalogue.ListProjects(ctx, tt.user)
 			if err != nil {
 				t.Fatalf("not expected error while listing projects: %+v", err)
 			}
 
 			if !reflect.DeepEqual(got, tt.expected) {
 				t.Fatalf("projects' list do not match. got=%+v expected=%+v", render.AsCode(got), render.AsCode(tt.expected))
+			}
+
+			err = teardown(t)
+			if err != nil {
+				t.Fatalf("failed to teardown test suite: %+v", err)
 			}
 		})
 	}
