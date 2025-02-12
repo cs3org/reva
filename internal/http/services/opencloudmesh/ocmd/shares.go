@@ -228,7 +228,7 @@ func getCreateShareRequest(r *http.Request) (*createShareRequest, error) {
 			return nil, err
 		}
 	} else {
-		return nil, errors.New("body request not recognised")
+		return nil, errors.New("OCM /share request payload not recognised")
 	}
 	// validate the request
 	if err := validate.Struct(req); err != nil {
@@ -264,25 +264,27 @@ func getAndResolveProtocols(p Protocols, r *http.Request) ([]*ocm.Protocol, erro
 	protos := make([]*ocm.Protocol, 0, len(p))
 	for _, data := range p {
 		ocmProto := data.ToOCMProtocol()
-		if GetProtocolName(data) == "webdav" && ocmProto.GetWebdavOptions().Uri == "" {
-			// This is an OCM 1.0 payload with only webdav: we need to resolve the remote URL
-			remoteRoot, err := discoverOcmWebdavRoot(r)
-			if err != nil {
-				return nil, err
-			}
+		// Irrespective from the presence of a full `uri` in the payload (deprecated), resolve the remote root
+		remoteRoot, err := discoverOcmRoot(r, GetProtocolName(data))
+		if err != nil {
+			return nil, err
+		}
+		if GetProtocolName(data) == "webdav" {
 			ocmProto.GetWebdavOptions().Uri = filepath.Join(remoteRoot, ocmProto.GetWebdavOptions().SharedSecret)
+		} else if GetProtocolName(data) == "webapp" {
+			// ocmProto.GetWebappOptions().Uri = filepath.Join(remoteRoot, ocmProto.GetWebappOptions().SharedSecret) -> this is OCM 1.2
 		}
 		protos = append(protos, ocmProto)
 	}
 	return protos, nil
 }
 
-func discoverOcmWebdavRoot(r *http.Request) (string, error) {
-	// implements the OCM discovery logic to fetch the WebDAV root at the remote host that sent the share, see
+func discoverOcmRoot(r *http.Request, proto string) (string, error) {
+	// implements the OCM discovery logic to fetch the root at the remote host that sent the share for the given proto, see
 	// https://cs3org.github.io/OCM-API/docs.html?branch=v1.1.0&repo=OCM-API&user=cs3org#/paths/~1ocm-provider/get
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-	log.Debug().Str("sender", r.Host).Msg("received OCM 1.0 share, attempting to discover sender endpoint")
+	log.Debug().Str("sender", r.Host).Msg("received OCM share, attempting to discover sender endpoint")
 
 	ocmClient := NewClient(time.Duration(10)*time.Second, true)
 	ocmCaps, err := ocmClient.Discover(ctx, r.Host)
@@ -291,14 +293,14 @@ func discoverOcmWebdavRoot(r *http.Request) (string, error) {
 		return "", err
 	}
 	for _, t := range ocmCaps.ResourceTypes {
-		webdavRoot, ok := t.Protocols["webdav"]
+		protoRoot, ok := t.Protocols[proto]
 		if ok {
-			// assume the first resourceType that exposes a webdav root is OK to use: as a matter of fact,
+			// assume the first resourceType that exposes a root is OK to use: as a matter of fact,
 			// no implementation exists yet that exposes multiple resource types with different roots.
-			return filepath.Join(ocmCaps.Endpoint, webdavRoot), nil
+			return filepath.Join(ocmCaps.Endpoint, protoRoot), nil
 		}
 	}
 
-	log.Warn().Str("sender", r.Host).Interface("response", ocmCaps).Msg("missing webdav root")
-	return "", errtypes.NotFound("WebDAV root not found on OCM discovery")
+	log.Warn().Str("sender", r.Host).Interface("response", ocmCaps).Msg("missing root")
+	return "", errtypes.NotFound(fmt.Sprintf("root not found on OCM discovery for protocol %s", proto))
 }

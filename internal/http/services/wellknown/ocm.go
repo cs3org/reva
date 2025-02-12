@@ -40,12 +40,13 @@ type OcmProviderConfig struct {
 }
 
 type OcmDiscoveryData struct {
-	Enabled       bool            `json:"enabled"       xml:"enabled"`
-	APIVersion    string          `json:"apiVersion"    xml:"apiVersion"`
-	Endpoint      string          `json:"endPoint"      xml:"endPoint"`
-	Provider      string          `json:"provider"      xml:"provider"`
-	ResourceTypes []resourceTypes `json:"resourceTypes" xml:"resourceTypes"`
-	Capabilities  []string        `json:"capabilities"  xml:"capabilities"`
+	Enabled            bool            `json:"enabled"       xml:"enabled"`
+	APIVersion         string          `json:"apiVersion"    xml:"apiVersion"`
+	Endpoint           string          `json:"endPoint"      xml:"endPoint"`
+	Provider           string          `json:"provider"      xml:"provider"`
+	ResourceTypes      []resourceTypes `json:"resourceTypes" xml:"resourceTypes"`
+	Capabilities       []string        `json:"capabilities"  xml:"capabilities"`
+	InviteAcceptDialog string          `json:"inviteAcceptDialog" xml:"inviteAcceptDialog"`
 }
 
 type resourceTypes struct {
@@ -124,7 +125,8 @@ func (h *wkocmHandler) init(c *OcmProviderConfig) {
 		Protocols:  rtProtos,         // expose the protocols as per configuration
 	}}
 	// for now we hardcode the capabilities, as this is currently only advisory
-	d.Capabilities = []string{"/invite-accepted"}
+	d.Capabilities = []string{"invites", "webdav-uri", "protocol-object"}
+	d.InviteAcceptDialog = "/sciencemesh-app/invitations"
 	h.data = d
 }
 
