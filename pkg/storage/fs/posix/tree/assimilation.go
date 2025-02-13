@@ -599,6 +599,7 @@ assimilate:
 		attributes.SetInt64(prefixes.BlobsizeAttr, fi.Size())
 		attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_FILE))
 	}
+	attributes.SetTime(prefixes.MTimeAttr, fi.ModTime())
 
 	n := node.New(spaceID, id, parentID, filepath.Base(path), fi.Size(), "", provider.ResourceType_RESOURCE_TYPE_FILE, nil, t.lookup)
 	n.SpaceRoot = &node.Node{SpaceID: spaceID, ID: spaceID}
