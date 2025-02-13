@@ -35,3 +35,11 @@ driver = "localhome"
 root = "{{localhome_root}}"
 
 [http.services.ocdav]
+
+[http.services.wellknown]
+[http.services.wellknown.ocmprovider]
+ocm_prefix = "ocm"
+provider = "Reva for CERNBox"
+endpoint = "http://{{cernboxhttp_address}}"
+enable_webapp = true
+enable_datatx = true
