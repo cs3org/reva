@@ -57,10 +57,11 @@ func (tp *Tree) CreateRevision(ctx context.Context, n *node.Node, version string
 	}
 
 	// create version node
-	_, err = os.OpenFile(versionPath, os.O_CREATE|os.O_EXCL, 0600)
+	vf, err := os.OpenFile(versionPath, os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return "", err
 	}
+	defer vf.Close()
 
 	// copy blob metadata to version node
 	if err := tp.lookup.CopyMetadataWithSourceLock(ctx, n.InternalPath(), versionPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {

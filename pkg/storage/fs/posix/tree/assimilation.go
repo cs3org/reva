@@ -625,11 +625,14 @@ assimilate:
 			t.log.Error().Err(err).Str("path", path).Str("currentPath", currentPath).Msg("could not open current path for writing")
 			return
 		}
+		defer w.Close()
 		r, err := os.OpenFile(n.InternalPath(), os.O_RDONLY, 0600)
 		if err != nil {
 			t.log.Error().Err(err).Str("path", path).Msg("could not open file for reading")
 			return
 		}
+		defer r.Close()
+
 		_, err = io.Copy(w, r)
 		if err != nil {
 			t.log.Error().Err(err).Str("currentPath", currentPath).Str("path", path).Msg("could not copy new version to current version")

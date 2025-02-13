@@ -58,14 +58,15 @@ func (tp *Tree) CreateRevision(ctx context.Context, n *node.Node, version string
 	if err != nil {
 		return "", err
 	}
+	defer sf.Close()
 	vf, err := os.OpenFile(versionPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0600)
 	if err != nil {
 		return "", err
 	}
+	defer vf.Close()
 	if _, err := io.Copy(vf, sf); err != nil {
 		return "", err
 	}
-	defer vf.Close()
 
 	// copy blob metadata to version node
 	if err := tp.lookup.CopyMetadataWithSourceLock(ctx, n.InternalPath(), versionPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
@@ -309,11 +310,14 @@ func (tp *Tree) RestoreRevision(ctx context.Context, spaceID, nodeID, source str
 			tp.log.Error().Err(err).Str("currentPath", currentPath).Str("source", source).Msg("could not open current path for writing")
 			return err
 		}
+		defer w.Close()
 		r, err := os.OpenFile(source, os.O_RDONLY, 0600)
 		if err != nil {
 			tp.log.Error().Err(err).Str("currentPath", currentPath).Str("source", source).Msg("could not open file for reading")
 			return err
 		}
+		defer r.Close()
+
 		_, err = io.Copy(w, r)
 		if err != nil {
 			tp.log.Error().Err(err).Str("currentPath", currentPath).Str("source", source).Msg("could not copy new version to current version")
