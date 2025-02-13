@@ -53,19 +53,19 @@ func (XattrsBackend) Name() string { return "xattrs" }
 // Get an extended attribute value for the given key
 // No file locking is involved here as reading a single xattr is
 // considered to be atomic.
-func (b XattrsBackend) Get(ctx context.Context, path, key string) ([]byte, error) {
+func (b XattrsBackend) Get(ctx context.Context, n MetadataNode, key string) ([]byte, error) {
 	attribs := map[string][]byte{}
-	err := b.metaCache.PullFromCache(b.cacheKey(path), &attribs)
+	err := b.metaCache.PullFromCache(b.cacheKey(n), &attribs)
 	if err == nil && len(attribs[key]) > 0 {
 		return attribs[key], err
 	}
 
-	return xattr.Get(path, key)
+	return xattr.Get(n.InternalPath(), key)
 }
 
 // GetInt64 reads a string as int64 from the xattrs
-func (b XattrsBackend) GetInt64(ctx context.Context, filePath, key string) (int64, error) {
-	attr, err := b.Get(ctx, filePath, key)
+func (b XattrsBackend) GetInt64(ctx context.Context, n MetadataNode, key string) (int64, error) {
+	attr, err := b.Get(ctx, n, key)
 	if err != nil {
 		return 0, err
 	}
@@ -78,11 +78,12 @@ func (b XattrsBackend) GetInt64(ctx context.Context, filePath, key string) (int6
 
 // List retrieves a list of names of extended attributes associated with the
 // given path in the file system.
-func (b XattrsBackend) List(ctx context.Context, filePath string) (attribs []string, err error) {
-	return b.list(ctx, filePath, true)
+func (b XattrsBackend) List(ctx context.Context, n MetadataNode) (attribs []string, err error) {
+	return b.list(ctx, n, true)
 }
 
-func (b XattrsBackend) list(ctx context.Context, filePath string, acquireLock bool) (attribs []string, err error) {
+func (b XattrsBackend) list(ctx context.Context, n MetadataNode, acquireLock bool) (attribs []string, err error) {
+	filePath := n.InternalPath()
 	attrs, err := xattr.List(filePath)
 	if err == nil {
 		return attrs, nil
@@ -102,21 +103,21 @@ func (b XattrsBackend) list(ctx context.Context, filePath string, acquireLock bo
 
 // All reads all extended attributes for a node, protected by a
 // shared file lock
-func (b XattrsBackend) All(ctx context.Context, path string) (map[string][]byte, error) {
-	return b.getAll(ctx, path, false, true)
+func (b XattrsBackend) All(ctx context.Context, n MetadataNode) (map[string][]byte, error) {
+	return b.getAll(ctx, n, false, true)
 }
 
-func (b XattrsBackend) getAll(ctx context.Context, path string, skipCache, acquireLock bool) (map[string][]byte, error) {
+func (b XattrsBackend) getAll(ctx context.Context, n MetadataNode, skipCache, acquireLock bool) (map[string][]byte, error) {
 	attribs := map[string][]byte{}
 
 	if !skipCache {
-		err := b.metaCache.PullFromCache(b.cacheKey(path), &attribs)
+		err := b.metaCache.PullFromCache(b.cacheKey(n), &attribs)
 		if err == nil {
 			return attribs, err
 		}
 	}
 
-	attrNames, err := b.list(ctx, path, acquireLock)
+	attrNames, err := b.list(ctx, n, acquireLock)
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +133,7 @@ func (b XattrsBackend) getAll(ctx context.Context, path string, skipCache, acqui
 	// error handling: Count if there are errors while reading all attribs.
 	// if there were any, return an error.
 	attribs = make(map[string][]byte, len(attrNames))
+	path := n.InternalPath()
 	for _, name := range attrNames {
 		var val []byte
 		if val, xerr = xattr.Get(path, name); xerr != nil && !IsAttrUnset(xerr) {
@@ -145,7 +147,7 @@ func (b XattrsBackend) getAll(ctx context.Context, path string, skipCache, acqui
 		return nil, errors.Wrap(xerr, "Failed to read all xattrs")
 	}
 
-	err = b.metaCache.PushToCache(b.cacheKey(path), attribs)
+	err = b.metaCache.PushToCache(b.cacheKey(n), attribs)
 	if err != nil {
 		return nil, err
 	}
@@ -154,18 +156,19 @@ func (b XattrsBackend) getAll(ctx context.Context, path string, skipCache, acqui
 }
 
 // Set sets one attribute for the given path
-func (b XattrsBackend) Set(ctx context.Context, path string, key string, val []byte) (err error) {
-	return b.SetMultiple(ctx, path, map[string][]byte{key: val}, true)
+func (b XattrsBackend) Set(ctx context.Context, n MetadataNode, key string, val []byte) (err error) {
+	return b.SetMultiple(ctx, n, map[string][]byte{key: val}, true)
 }
 
 // SetMultiple sets a set of attribute for the given path
-func (b XattrsBackend) SetMultiple(ctx context.Context, path string, attribs map[string][]byte, acquireLock bool) (err error) {
+func (b XattrsBackend) SetMultiple(ctx context.Context, n MetadataNode, attribs map[string][]byte, acquireLock bool) (err error) {
+	path := n.InternalPath()
 	if acquireLock {
 		err := os.MkdirAll(filepath.Dir(path), 0600)
 		if err != nil {
 			return err
 		}
-		lockedFile, err := lockedfile.OpenFile(b.LockfilePath(path), os.O_CREATE|os.O_WRONLY, 0600)
+		lockedFile, err := lockedfile.OpenFile(b.LockfilePath(n), os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {
 			return err
 		}
@@ -188,15 +191,16 @@ func (b XattrsBackend) SetMultiple(ctx context.Context, path string, attribs map
 		return errors.Wrap(xerr, "Failed to set all xattrs")
 	}
 
-	attribs, err = b.getAll(ctx, path, true, false)
+	attribs, err = b.getAll(ctx, n, true, false)
 	if err != nil {
 		return err
 	}
-	return b.metaCache.PushToCache(b.cacheKey(path), attribs)
+	return b.metaCache.PushToCache(b.cacheKey(n), attribs)
 }
 
 // Remove an extended attribute key
-func (b XattrsBackend) Remove(ctx context.Context, path string, key string, acquireLock bool) error {
+func (b XattrsBackend) Remove(ctx context.Context, n MetadataNode, key string, acquireLock bool) error {
+	path := n.InternalPath()
 	if acquireLock {
 		lockedFile, err := lockedfile.OpenFile(path+filelocks.LockFileSuffix, os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {
@@ -209,21 +213,22 @@ func (b XattrsBackend) Remove(ctx context.Context, path string, key string, acqu
 	if err != nil {
 		return err
 	}
-	attribs, err := b.getAll(ctx, path, true, false)
+	attribs, err := b.getAll(ctx, n, true, false)
 	if err != nil {
 		return err
 	}
-	return b.metaCache.PushToCache(b.cacheKey(path), attribs)
+	return b.metaCache.PushToCache(b.cacheKey(n), attribs)
 }
 
 // IsMetaFile returns whether the given path represents a meta file
 func (XattrsBackend) IsMetaFile(path string) bool { return strings.HasSuffix(path, ".meta.lock") }
 
 // Purge purges the data of a given path
-func (b XattrsBackend) Purge(ctx context.Context, path string) error {
+func (b XattrsBackend) Purge(ctx context.Context, n MetadataNode) error {
+	path := n.InternalPath()
 	_, err := os.Stat(path)
 	if err == nil {
-		attribs, err := b.getAll(ctx, path, true, true)
+		attribs, err := b.getAll(ctx, n, true, true)
 		if err != nil {
 			return err
 		}
@@ -238,31 +243,31 @@ func (b XattrsBackend) Purge(ctx context.Context, path string) error {
 		}
 	}
 
-	return b.metaCache.RemoveMetadata(b.cacheKey(path))
+	return b.metaCache.RemoveMetadata(b.cacheKey(n))
 }
 
 // Rename moves the data for a given path to a new path
-func (b XattrsBackend) Rename(oldPath, newPath string) error {
+func (b XattrsBackend) Rename(oldNode, newNode MetadataNode) error {
 	data := map[string][]byte{}
-	err := b.metaCache.PullFromCache(b.cacheKey(oldPath), &data)
+	err := b.metaCache.PullFromCache(b.cacheKey(oldNode), &data)
 	if err == nil {
-		err = b.metaCache.PushToCache(b.cacheKey(newPath), data)
+		err = b.metaCache.PushToCache(b.cacheKey(newNode), data)
 		if err != nil {
 			return err
 		}
 	}
-	return b.metaCache.RemoveMetadata(b.cacheKey(oldPath))
+	return b.metaCache.RemoveMetadata(b.cacheKey(oldNode))
 }
 
 // MetadataPath returns the path of the file holding the metadata for the given path
-func (XattrsBackend) MetadataPath(path string) string { return path }
+func (XattrsBackend) MetadataPath(n MetadataNode) string { return n.InternalPath() }
 
 // LockfilePath returns the path of the lock file
-func (XattrsBackend) LockfilePath(path string) string { return path + ".mlock" }
+func (XattrsBackend) LockfilePath(n MetadataNode) string { return n.InternalPath() + ".mlock" }
 
 // Lock locks the metadata for the given path
-func (b XattrsBackend) Lock(path string) (UnlockFunc, error) {
-	metaLockPath := b.LockfilePath(path)
+func (b XattrsBackend) Lock(n MetadataNode) (UnlockFunc, error) {
+	metaLockPath := b.LockfilePath(n)
 	mlock, err := lockedfile.OpenFile(metaLockPath, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return nil, err
@@ -276,20 +281,20 @@ func (b XattrsBackend) Lock(path string) (UnlockFunc, error) {
 	}, nil
 }
 
-func cleanupLockfile(ctx context.Context, f *lockedfile.File) {
+func cleanupLockfile(_ context.Context, f *lockedfile.File) {
 	_ = f.Close()
 	_ = os.Remove(f.Name())
 }
 
 // AllWithLockedSource reads all extended attributes from the given reader.
 // The path argument is used for storing the data in the cache
-func (b XattrsBackend) AllWithLockedSource(ctx context.Context, path string, _ io.Reader) (map[string][]byte, error) {
-	return b.All(ctx, path)
+func (b XattrsBackend) AllWithLockedSource(ctx context.Context, n MetadataNode, _ io.Reader) (map[string][]byte, error) {
+	return b.All(ctx, n)
 }
 
-func (b XattrsBackend) cacheKey(path string) string {
+func (b XattrsBackend) cacheKey(n MetadataNode) string {
 	// rootPath is guaranteed to have no trailing slash
 	// the cache key shouldn't begin with a slash as some stores drop it which can cause
 	// confusion
-	return strings.TrimPrefix(path, b.rootPath+"/")
+	return n.GetSpaceID() + "/" + n.GetID()
 }

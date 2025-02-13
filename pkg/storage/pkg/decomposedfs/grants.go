@@ -293,7 +293,7 @@ func (fs *Decomposedfs) loadGrant(ctx context.Context, ref *provider.Reference, 
 	}
 
 	// lock the metadata file
-	unlockFunc, err := fs.lu.MetadataBackend().Lock(n.InternalPath())
+	unlockFunc, err := fs.lu.MetadataBackend().Lock(n)
 	if err != nil {
 		return nil, nil, nil, err
 	}

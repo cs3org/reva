@@ -124,7 +124,7 @@ type Tree interface {
 	PurgeRecycleItemFunc(ctx context.Context, spaceid, key, purgePath string) (*Node, func() error, error)
 
 	InitNewNode(ctx context.Context, n *Node, fsize uint64) (metadata.UnlockFunc, error)
-	RestoreRevision(ctx context.Context, spaceID, nodeID, sourcePath string) (err error)
+	RestoreRevision(ctx context.Context, source, target metadata.MetadataNode) (err error)
 
 	WriteBlob(node *Node, source string) error
 	ReadBlob(node *Node) (io.ReadCloser, error)
@@ -156,10 +156,9 @@ type PathLookup interface {
 	Path(ctx context.Context, n *Node, hasPermission PermissionFunc) (path string, err error)
 	MetadataBackend() metadata.Backend
 	TimeManager() TimeManager
-	ReadBlobIDAndSizeAttr(ctx context.Context, path string, attrs Attributes) (string, int64, error)
-	TypeFromPath(ctx context.Context, path string) provider.ResourceType
-	CopyMetadataWithSourceLock(ctx context.Context, sourcePath, targetPath string, filter func(attributeName string, value []byte) (newValue []byte, copy bool), lockedSource *lockedfile.File, acquireTargetLock bool) (err error)
-	CopyMetadata(ctx context.Context, src, target string, filter func(attributeName string, value []byte) (newValue []byte, copy bool), acquireTargetLock bool) (err error)
+	ReadBlobIDAndSizeAttr(ctx context.Context, n metadata.MetadataNode, attrs Attributes) (string, int64, error)
+	CopyMetadataWithSourceLock(ctx context.Context, sourceNode, targetNode metadata.MetadataNode, filter func(attributeName string, value []byte) (newValue []byte, copy bool), lockedSource *lockedfile.File, acquireTargetLock bool) (err error)
+	CopyMetadata(ctx context.Context, sourceNode, targetNode metadata.MetadataNode, filter func(attributeName string, value []byte) (newValue []byte, copy bool), acquireTargetLock bool) (err error)
 }
 
 type IDCacher interface {
@@ -167,11 +166,33 @@ type IDCacher interface {
 	GetCachedID(ctx context.Context, spaceID, nodeID string) (string, bool)
 }
 
+type BaseNode struct {
+	SpaceID string
+	ID      string
+
+	lu PathLookup
+}
+
+func NewBaseNode(spaceID, nodeID string, lu PathLookup) *BaseNode {
+	return &BaseNode{
+		SpaceID: spaceID,
+		ID:      nodeID,
+		lu:      lu,
+	}
+}
+
+func (n *BaseNode) GetSpaceID() string { return n.SpaceID }
+func (n *BaseNode) GetID() string      { return n.ID }
+
+// InternalPath returns the internal path of the Node
+func (n *BaseNode) InternalPath() string {
+	return n.lu.InternalPath(n.SpaceID, n.ID)
+}
+
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
 type Node struct {
-	SpaceID   string
+	BaseNode
 	ParentID  string
-	ID        string
 	Name      string
 	Blobsize  int64
 	BlobID    string
@@ -179,7 +200,6 @@ type Node struct {
 	Exists    bool
 	SpaceRoot *Node
 
-	lu          PathLookup
 	xattrsCache map[string][]byte
 	nodeType    *provider.ResourceType
 }
@@ -190,13 +210,15 @@ func New(spaceID, id, parentID, name string, blobsize int64, blobID string, t pr
 		blobID = uuid.New().String()
 	}
 	return &Node{
-		SpaceID:  spaceID,
-		ID:       id,
+		BaseNode: BaseNode{
+			SpaceID: spaceID,
+			ID:      id,
+			lu:      lu,
+		},
 		ParentID: parentID,
 		Name:     name,
 		Blobsize: blobsize,
 		owner:    owner,
-		lu:       lu,
 		BlobID:   blobID,
 		nodeType: &t,
 	}
@@ -318,9 +340,11 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	if spaceRoot == nil {
 		// read space root
 		spaceRoot = &Node{
-			SpaceID: spaceID,
-			lu:      lu,
-			ID:      spaceID,
+			BaseNode: BaseNode{
+				SpaceID: spaceID,
+				lu:      lu,
+				ID:      spaceID,
+			},
 		}
 		spaceRoot.SpaceRoot = spaceRoot
 		spaceRoot.owner, err = spaceRoot.readOwner(ctx)
@@ -368,12 +392,13 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 
 	// read node
 	n := &Node{
-		SpaceID:   spaceID,
-		lu:        lu,
-		ID:        nodeID,
+		BaseNode: BaseNode{
+			SpaceID: spaceID,
+			lu:      lu,
+			ID:      nodeID,
+		},
 		SpaceRoot: spaceRoot,
 	}
-	nodePath := n.InternalPath()
 
 	// append back revision to nodeid, even when returning a not existing node
 	defer func() {
@@ -395,7 +420,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	n.Name = attrs.String(prefixes.NameAttr)
 	n.ParentID = attrs.String(prefixes.ParentidAttr)
 	if n.ParentID == "" {
-		d, _ := os.ReadFile(lu.MetadataBackend().MetadataPath(n.InternalPath()))
+		d, _ := os.ReadFile(lu.MetadataBackend().MetadataPath(n))
 		if _, ok := lu.MetadataBackend().(metadata.MessagePackBackend); ok {
 			appctx.GetLogger(ctx).Error().Str("path", n.InternalPath()).Str("nodeid", n.ID).Interface("attrs", attrs).Bytes("messagepack", d).Msg("missing parent id")
 		}
@@ -403,13 +428,13 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	}
 
 	if revisionSuffix == "" {
-		n.BlobID, n.Blobsize, err = lu.ReadBlobIDAndSizeAttr(ctx, nodePath, attrs)
+		n.BlobID, n.Blobsize, err = lu.ReadBlobIDAndSizeAttr(ctx, n, attrs)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		versionPath := lu.VersionPath(spaceID, nodeID, revisionSuffix)
-		n.BlobID, n.Blobsize, err = lu.ReadBlobIDAndSizeAttr(ctx, versionPath, nil)
+		versionNode := NewBaseNode(spaceID, nodeID+RevisionIDDelimiter+revisionSuffix, lu)
+		n.BlobID, n.Blobsize, err = lu.ReadBlobIDAndSizeAttr(ctx, versionNode, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -430,8 +455,10 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 		spaceID = n.SpaceRoot.ID
 	}
 	c := &Node{
-		SpaceID:   spaceID,
-		lu:        n.lu,
+		BaseNode: BaseNode{
+			SpaceID: spaceID,
+			lu:      n.lu,
+		},
 		ParentID:  n.ID,
 		Name:      name,
 		SpaceRoot: n.SpaceRoot,
@@ -461,9 +488,11 @@ func (n *Node) ParentWithReader(ctx context.Context, r io.Reader) (*Node, error)
 		return nil, fmt.Errorf("decomposedfs: root has no parent")
 	}
 	p := &Node{
-		SpaceID:   n.SpaceID,
-		lu:        n.lu,
-		ID:        n.ParentID,
+		BaseNode: BaseNode{
+			SpaceID: n.SpaceID,
+			lu:      n.lu,
+			ID:      n.ParentID,
+		},
 		SpaceRoot: n.SpaceRoot,
 	}
 
@@ -561,11 +590,6 @@ func (n *Node) PermissionSet(ctx context.Context) (*provider.ResourcePermissions
 	}
 	// be defensive, we could have access via another grant
 	return NoPermissions(), true
-}
-
-// InternalPath returns the internal path of the Node
-func (n *Node) InternalPath() string {
-	return n.lu.InternalPath(n.SpaceID, n.ID)
 }
 
 // ParentPath returns the internal path of the parent of the current node
@@ -1397,4 +1421,17 @@ func (n *Node) GetDTime(ctx context.Context) (time.Time, error) {
 // SetDTime writes the UTC dmtime to the extended attributes or removes the attribute if nil is passed
 func (n *Node) SetDTime(ctx context.Context, t *time.Time) (err error) {
 	return n.lu.TimeManager().SetDTime(ctx, n, t)
+}
+
+// ReadChildNodeFromLink reads the child node id from a link
+func ReadChildNodeFromLink(ctx context.Context, path string) (string, error) {
+	_, span := tracer.Start(ctx, "readChildNodeFromLink")
+	defer span.End()
+	link, err := os.Readlink(path)
+	if err != nil {
+		return "", err
+	}
+	nodeID := strings.TrimLeft(link, "/.")
+	nodeID = strings.ReplaceAll(nodeID, "/", "")
+	return nodeID, nil
 }

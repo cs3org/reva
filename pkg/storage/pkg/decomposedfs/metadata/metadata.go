@@ -37,27 +37,33 @@ var errUnconfiguredError = errors.New("no metadata backend configured. Bailing o
 
 type UnlockFunc func() error
 
+type MetadataNode interface {
+	GetSpaceID() string
+	GetID() string
+	InternalPath() string
+}
+
 // Backend defines the interface for file attribute backends
 type Backend interface {
 	Name() string
 
-	All(ctx context.Context, path string) (map[string][]byte, error)
-	Get(ctx context.Context, path, key string) ([]byte, error)
+	All(ctx context.Context, n MetadataNode) (map[string][]byte, error)
+	AllWithLockedSource(ctx context.Context, n MetadataNode, source io.Reader) (map[string][]byte, error)
 
-	GetInt64(ctx context.Context, path, key string) (int64, error)
-	List(ctx context.Context, path string) (attribs []string, err error)
-	Set(ctx context.Context, path, key string, val []byte) error
-	SetMultiple(ctx context.Context, path string, attribs map[string][]byte, acquireLock bool) error
-	Remove(ctx context.Context, path, key string, acquireLock bool) error
+	Get(ctx context.Context, n MetadataNode, key string) ([]byte, error)
+	GetInt64(ctx context.Context, n MetadataNode, key string) (int64, error)
+	List(ctx context.Context, n MetadataNode) (attribs []string, err error)
+	Set(ctx context.Context, n MetadataNode, key string, val []byte) error
+	SetMultiple(ctx context.Context, n MetadataNode, attribs map[string][]byte, acquireLock bool) error
+	Remove(ctx context.Context, n MetadataNode, key string, acquireLock bool) error
 
-	Lock(path string) (UnlockFunc, error)
-	Purge(ctx context.Context, path string) error
-	Rename(oldPath, newPath string) error
+	Lock(n MetadataNode) (UnlockFunc, error)
+	Purge(ctx context.Context, n MetadataNode) error
+	Rename(oldNode, newNode MetadataNode) error
+	MetadataPath(n MetadataNode) string
+	LockfilePath(n MetadataNode) string
+
 	IsMetaFile(path string) bool
-	MetadataPath(path string) string
-	LockfilePath(path string) string
-
-	AllWithLockedSource(ctx context.Context, path string, source io.Reader) (map[string][]byte, error)
 }
 
 // NullBackend is the default stub backend, used to enforce the configuration of a proper backend

@@ -101,20 +101,21 @@ func (tb *DecomposedfsTrashbin) ListRecycle(ctx context.Context, ref *provider.R
 
 	trashRootPath := filepath.Join(tb.getRecycleRoot(spaceID), lookup.Pathify(key, 4, 2))
 	originalPath, _, timeSuffix, err := readTrashLink(trashRootPath)
+	originalNode := node.NewBaseNode(spaceID, key, tb.fs.lu)
 	if err != nil {
 		sublog.Error().Err(err).Str("trashRoot", trashRootPath).Msg("error reading trash link")
 		return nil, err
 	}
 
 	origin := ""
-	attrs, err := tb.fs.lu.MetadataBackend().All(ctx, originalPath)
+	raw, err := tb.fs.lu.MetadataBackend().All(ctx, originalNode)
+	attrs := node.Attributes(raw)
 	if err != nil {
 		return items, err
 	}
 	// lookup origin path in extended attributes
-	if attrBytes, ok := attrs[prefixes.TrashOriginAttr]; ok {
-		origin = string(attrBytes)
-	} else {
+	origin = attrs.String(prefixes.TrashOriginAttr)
+	if origin == "" {
 		sublog.Error().Err(err).Str("spaceid", spaceID).Msg("could not read origin path, skipping")
 		return nil, err
 	}
@@ -130,24 +131,27 @@ func (tb *DecomposedfsTrashbin) ListRecycle(ctx context.Context, ref *provider.R
 		sublog.Error().Err(err).Msg("could not parse time format, ignoring")
 	}
 
-	var size int64
+	var size uint64
 	if relativePath == "" {
 		// this is the case when we want to directly list a file in the trashbin
-		nodeType := tb.fs.lu.TypeFromPath(ctx, originalPath)
-		switch nodeType {
+		typeInt, err := attrs.Int64(prefixes.TypeAttr)
+		if err != nil {
+			return items, err
+		}
+		switch provider.ResourceType(typeInt) {
 		case provider.ResourceType_RESOURCE_TYPE_FILE:
-			_, size, err = tb.fs.lu.ReadBlobIDAndSizeAttr(ctx, originalPath, nil)
+			size, err = attrs.UInt64(prefixes.BlobsizeAttr)
 			if err != nil {
 				return items, err
 			}
 		case provider.ResourceType_RESOURCE_TYPE_CONTAINER:
-			size, err = tb.fs.lu.MetadataBackend().GetInt64(ctx, originalPath, prefixes.TreesizeAttr)
+			size, err = attrs.UInt64(prefixes.TreesizeAttr)
 			if err != nil {
 				return items, err
 			}
 		}
 		item := &provider.RecycleItem{
-			Type:         tb.fs.lu.TypeFromPath(ctx, originalPath),
+			Type:         provider.ResourceType(typeInt),
 			Size:         uint64(size),
 			Key:          filepath.Join(key, relativePath),
 			DeletionTime: deletionTime,
@@ -171,37 +175,44 @@ func (tb *DecomposedfsTrashbin) ListRecycle(ctx context.Context, ref *provider.R
 		return nil, err
 	}
 	for _, name := range names {
-		resolvedChildPath, err := filepath.EvalSymlinks(filepath.Join(childrenPath, name))
+		nodeID, err := node.ReadChildNodeFromLink(ctx, filepath.Join(childrenPath, name))
 		if err != nil {
-			sublog.Error().Err(err).Str("name", name).Msg("could not resolve symlink, skipping")
-			continue
+			sublog.Error().Err(err).Str("name", name).Msg("could not read child node")
+			provider.ResourceType_RESOURCE_TYPE_CONTAINER.Number()
 		}
+		childNode := node.NewBaseNode(spaceID, nodeID, tb.fs.lu)
 
 		// reset size
 		size = 0
 
-		nodeType := tb.fs.lu.TypeFromPath(ctx, resolvedChildPath)
-		switch nodeType {
+		raw, err := tb.fs.lu.MetadataBackend().All(ctx, childNode)
+		attrs := node.Attributes(raw)
+		typeInt, err := attrs.Int64(prefixes.TypeAttr)
+		if err != nil {
+			sublog.Error().Err(err).Str("name", name).Msg("could not read node type, skipping")
+			continue
+		}
+		switch provider.ResourceType(typeInt) {
 		case provider.ResourceType_RESOURCE_TYPE_FILE:
-			_, size, err = tb.fs.lu.ReadBlobIDAndSizeAttr(ctx, resolvedChildPath, nil)
+			size, err = attrs.UInt64(prefixes.BlobsizeAttr)
 			if err != nil {
 				sublog.Error().Err(err).Str("name", name).Msg("invalid blob size, skipping")
 				continue
 			}
 		case provider.ResourceType_RESOURCE_TYPE_CONTAINER:
-			size, err = tb.fs.lu.MetadataBackend().GetInt64(ctx, resolvedChildPath, prefixes.TreesizeAttr)
+			size, err = attrs.UInt64(prefixes.TreesizeAttr)
 			if err != nil {
 				sublog.Error().Err(err).Str("name", name).Msg("invalid tree size, skipping")
 				continue
 			}
 		case provider.ResourceType_RESOURCE_TYPE_INVALID:
-			sublog.Error().Err(err).Str("name", name).Str("resolvedChildPath", resolvedChildPath).Msg("invalid node type, skipping")
+			sublog.Error().Err(err).Str("name", name).Str("resolvedChildPath", filepath.Join(childrenPath, name)).Msg("invalid node type, skipping")
 			continue
 		}
 
 		item := &provider.RecycleItem{
-			Type:         nodeType,
-			Size:         uint64(size),
+			Type:         provider.ResourceType(typeInt),
+			Size:         size,
 			Key:          filepath.Join(key, relativePath, name),
 			DeletionTime: deletionTime,
 			Ref: &provider.Reference{
@@ -282,26 +293,33 @@ func (tb *DecomposedfsTrashbin) listTrashRoot(ctx context.Context, spaceID strin
 						continue
 					}
 
+					baseNode := node.NewBaseNode(spaceID, nodeID+node.TrashIDDelimiter+timeSuffix, tb.fs.lu)
+
 					md, err := os.Stat(nodePath)
 					if err != nil {
 						log.Error().Err(err).Str("trashRoot", trashRoot).Str("item", itemPath).Str("node_path", nodePath).Msg("could not stat trash item, skipping")
 						continue
 					}
 
-					attrs, err := tb.fs.lu.MetadataBackend().All(ctx, nodePath)
+					raw, err := tb.fs.lu.MetadataBackend().All(ctx, baseNode)
 					if err != nil {
 						log.Error().Err(err).Str("trashRoot", trashRoot).Str("item", itemPath).Str("node_path", nodePath).Msg("could not get extended attributes, skipping")
 						continue
 					}
+					attrs := node.Attributes(raw)
 
-					nodeType := tb.fs.lu.TypeFromPath(ctx, nodePath)
-					if nodeType == provider.ResourceType_RESOURCE_TYPE_INVALID {
+					typeInt, err := attrs.Int64(prefixes.TypeAttr)
+					if err != nil {
+						log.Error().Err(err).Str("trashRoot", trashRoot).Str("item", itemPath).Str("node_path", nodePath).Msg("could not get node type, skipping")
+						continue
+					}
+					if provider.ResourceType(typeInt) == provider.ResourceType_RESOURCE_TYPE_INVALID {
 						log.Error().Err(err).Str("trashRoot", trashRoot).Str("item", itemPath).Str("node_path", nodePath).Msg("invalid node type, skipping")
 						continue
 					}
 
 					item := &provider.RecycleItem{
-						Type: nodeType,
+						Type: provider.ResourceType(typeInt),
 						Size: uint64(md.Size()),
 						Key:  nodeID,
 					}

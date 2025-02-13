@@ -326,18 +326,6 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	return nil
 }
 
-func readChildNodeFromLink(ctx context.Context, path string) (string, error) {
-	_, span := tracer.Start(ctx, "readChildNodeFromLink")
-	defer span.End()
-	link, err := os.Readlink(path)
-	if err != nil {
-		return "", err
-	}
-	nodeID := strings.TrimLeft(link, "/.")
-	nodeID = strings.ReplaceAll(nodeID, "/", "")
-	return nodeID, nil
-}
-
 // ListFolder lists the content of a folder node
 func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, error) {
 	ctx, span := tracer.Start(ctx, "ListFolder")
@@ -392,7 +380,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 				path := filepath.Join(dir, name)
 				nodeID := getNodeIDFromCache(ctx, path, t.idCache)
 				if nodeID == "" {
-					nodeID, err = readChildNodeFromLink(ctx, path)
+					nodeID, err = node.ReadChildNodeFromLink(ctx, path)
 					if err != nil {
 						return err
 					}
@@ -502,7 +490,8 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	// at this point we have a symlink pointing to a non existing destination, which is fine
 
 	// rename the trashed node so it is not picked up when traversing up the tree and matches the symlink
-	trashPath := nodePath + node.TrashIDDelimiter + deletionTime
+	trashNode := node.NewBaseNode(n.SpaceID, n.ID+node.TrashIDDelimiter+deletionTime, t.lookup)
+	trashPath := trashNode.InternalPath()
 	err = os.Rename(nodePath, trashPath)
 	if err != nil {
 		// To roll back changes
@@ -511,7 +500,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		_ = n.RemoveXattr(ctx, prefixes.TrashOriginAttr, true)
 		return
 	}
-	err = t.lookup.MetadataBackend().Rename(nodePath, trashPath)
+	err = t.lookup.MetadataBackend().Rename(n, trashNode)
 	if err != nil {
 		_ = n.RemoveXattr(ctx, prefixes.TrashOriginAttr, true)
 		_ = os.Rename(trashPath, nodePath)
@@ -540,7 +529,7 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 	defer span.End()
 	logger := appctx.GetLogger(ctx)
 
-	recycleNode, trashItem, deletedNodePath, origin, err := t.readRecycleItem(ctx, spaceid, key, trashPath)
+	recycleNode, trashItem, origin, err := t.readRecycleItem(ctx, spaceid, key, trashPath)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -571,22 +560,23 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 			return errtypes.AlreadyExists("origin already exists")
 		}
 
+		parts := strings.SplitN(recycleNode.ID, node.TrashIDDelimiter, 2)
+		originalId := parts[0]
+		restoreNode := node.NewBaseNode(targetNode.SpaceID, originalId, t.lookup)
+
 		// add the entry for the parent dir
-		err = os.Symlink("../../../../../"+lookup.Pathify(recycleNode.ID, 4, 2), filepath.Join(targetNode.ParentPath(), targetNode.Name))
+		err = os.Symlink("../../../../../"+lookup.Pathify(originalId, 4, 2), filepath.Join(targetNode.ParentPath(), targetNode.Name))
 		if err != nil {
 			return err
 		}
 
-		// rename to node only name, so it is picked up by id
-		nodePath := recycleNode.InternalPath()
-
 		// attempt to rename only if we're not in a subfolder
-		if deletedNodePath != nodePath {
-			err = os.Rename(deletedNodePath, nodePath)
+		if recycleNode.ID != restoreNode.ID {
+			err = os.Rename(recycleNode.InternalPath(), restoreNode.InternalPath())
 			if err != nil {
 				return err
 			}
-			err = t.lookup.MetadataBackend().Rename(deletedNodePath, nodePath)
+			err = t.lookup.MetadataBackend().Rename(recycleNode, restoreNode)
 			if err != nil {
 				return err
 			}
@@ -599,7 +589,7 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 		// set ParentidAttr to restorePath's node parent id
 		attrs.SetString(prefixes.ParentidAttr, targetNode.ParentID)
 
-		if err = recycleNode.SetXattrsWithContext(ctx, attrs, true); err != nil {
+		if err = t.lookup.MetadataBackend().SetMultiple(ctx, restoreNode, map[string][]byte(attrs), true); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not update recycle node")
 		}
 
@@ -641,41 +631,30 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, pa
 	defer span.End()
 	logger := appctx.GetLogger(ctx)
 
-	rn, trashItem, deletedNodePath, _, err := t.readRecycleItem(ctx, spaceid, key, path)
+	recycleNode, trashItem, _, err := t.readRecycleItem(ctx, spaceid, key, path)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	ts := ""
-	timeSuffix := strings.SplitN(filepath.Base(deletedNodePath), node.TrashIDDelimiter, 2)
-	if len(timeSuffix) == 2 {
-		ts = timeSuffix[1]
-	}
-
 	fn := func() error {
 
-		if err := t.removeNode(ctx, deletedNodePath, ts, rn); err != nil {
+		if err := t.removeNode(ctx, recycleNode); err != nil {
 			return err
 		}
 
 		// delete item link in trash
-		deletePath := trashItem
 		if path != "" && path != "/" {
-			resolvedTrashRoot, err := filepath.EvalSymlinks(trashItem)
-			if err != nil {
-				return errors.Wrap(err, "Decomposedfs: could not resolve trash root")
-			}
-			deletePath = filepath.Join(resolvedTrashRoot, path)
+			return nil
 		}
-		if err = utils.RemoveItem(deletePath); err != nil {
-			logger.Error().Err(err).Str("deletePath", deletePath).Msg("error deleting trash item")
+		if err = utils.RemoveItem(trashItem); err != nil {
+			logger.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trash item")
 			return err
 		}
 
 		return nil
 	}
 
-	return rn, fn, nil
+	return recycleNode, fn, nil
 }
 
 // InitNewNode initializes a new node
@@ -693,7 +672,7 @@ func (t *Tree) InitNewNode(ctx context.Context, n *node.Node, fsize uint64) (met
 
 	// create and write lock new node metadata
 	_, subspan = tracer.Start(ctx, "metadata.Lock")
-	unlock, err := t.lookup.MetadataBackend().Lock(n.InternalPath())
+	unlock, err := t.lookup.MetadataBackend().Lock(n)
 	subspan.End()
 	if err != nil {
 		return nil, err
@@ -737,12 +716,9 @@ func (t *Tree) InitNewNode(ctx context.Context, n *node.Node, fsize uint64) (met
 	return unlock, nil
 }
 
-func (t *Tree) removeNode(ctx context.Context, path, timeSuffix string, n *node.Node) error {
+func (t *Tree) removeNode(ctx context.Context, n *node.Node) error {
+	path := n.InternalPath()
 	logger := appctx.GetLogger(ctx)
-
-	if timeSuffix != "" {
-		n.ID = n.ID + node.TrashIDDelimiter + timeSuffix
-	}
 
 	if n.IsDir(ctx) {
 		item, err := t.ListFolder(ctx, n)
@@ -750,7 +726,7 @@ func (t *Tree) removeNode(ctx context.Context, path, timeSuffix string, n *node.
 			logger.Error().Err(err).Str("path", path).Msg("error listing folder")
 		} else {
 			for _, child := range item {
-				if err := t.removeNode(ctx, child.InternalPath(), "", child); err != nil {
+				if err := t.removeNode(ctx, child); err != nil {
 					return err
 				}
 			}
@@ -763,8 +739,8 @@ func (t *Tree) removeNode(ctx context.Context, path, timeSuffix string, n *node.
 		return err
 	}
 
-	if err := t.lookup.MetadataBackend().Purge(ctx, path); err != nil {
-		logger.Error().Err(err).Str("path", t.lookup.MetadataBackend().MetadataPath(path)).Msg("error purging node metadata")
+	if err := t.lookup.MetadataBackend().Purge(ctx, n); err != nil {
+		logger.Error().Err(err).Str("path", t.lookup.MetadataBackend().MetadataPath(n)).Msg("error purging node metadata")
 		return err
 	}
 
@@ -777,7 +753,8 @@ func (t *Tree) removeNode(ctx context.Context, path, timeSuffix string, n *node.
 	}
 
 	// delete revisions
-	revs, err := filepath.Glob(n.InternalPath() + node.RevisionIDDelimiter + "*")
+	originalNodeID := nodeIDRegep.ReplaceAllString(n.InternalPath(), "$1")
+	revs, err := filepath.Glob(originalNodeID + node.RevisionIDDelimiter + "*")
 	if err != nil {
 		logger.Error().Err(err).Str("path", n.InternalPath()+node.RevisionIDDelimiter+"*").Msg("glob failed badly")
 		return err
@@ -787,7 +764,11 @@ func (t *Tree) removeNode(ctx context.Context, path, timeSuffix string, n *node.
 			continue
 		}
 
-		bID, _, err := t.lookup.ReadBlobIDAndSizeAttr(ctx, rev, nil)
+		revID := nodeFullIDRegep.ReplaceAllString(rev, "$1")
+		revID = strings.ReplaceAll(revID, "/", "")
+		revNode := node.NewBaseNode(n.SpaceID, revID, t.lookup)
+
+		bID, _, err := t.lookup.ReadBlobIDAndSizeAttr(ctx, revNode, nil)
 		if err != nil {
 			logger.Error().Err(err).Str("revision", rev).Msg("error reading blobid attribute")
 			return err
@@ -799,7 +780,10 @@ func (t *Tree) removeNode(ctx context.Context, path, timeSuffix string, n *node.
 		}
 
 		if bID != "" {
-			if err := t.DeleteBlob(&node.Node{SpaceID: n.SpaceID, BlobID: bID}); err != nil {
+			if err := t.DeleteBlob(&node.Node{
+				BaseNode: node.BaseNode{
+					SpaceID: n.SpaceID,
+				}, BlobID: bID}); err != nil {
 				logger.Error().Err(err).Str("revision", rev).Str("blobID", bID).Msg("error removing revision node blob")
 				return err
 			}
@@ -883,30 +867,31 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 }
 
 var nodeIDRegep = regexp.MustCompile(`.*/nodes/([^.]*).*`)
+var nodeFullIDRegep = regexp.MustCompile(`.*/nodes/(.*)`)
 
 // TODO refactor the returned params into Node properties? would make all the path transformations go away...
-func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (recycleNode *node.Node, trashItem string, deletedNodePath string, origin string, err error) {
+func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (recycleNode *node.Node, trashItem string, origin string, err error) {
 	_, span := tracer.Start(ctx, "readRecycleItem")
 	defer span.End()
 	logger := appctx.GetLogger(ctx)
 
 	if key == "" {
-		return nil, "", "", "", errtypes.InternalError("key is empty")
+		return nil, "", "", errtypes.InternalError("key is empty")
 	}
 
 	backend := t.lookup.MetadataBackend()
 	var nodeID string
 
 	trashItem = filepath.Join(t.lookup.InternalRoot(), "spaces", lookup.Pathify(spaceID, 1, 2), "trash", lookup.Pathify(key, 4, 2))
-	resolvedTrashItem, err := filepath.EvalSymlinks(trashItem)
+	resolvedTrashRootNodePath, err := filepath.EvalSymlinks(trashItem)
 	if err != nil {
 		return
 	}
-	deletedNodePath, err = filepath.EvalSymlinks(filepath.Join(resolvedTrashItem, path))
+	recycleNodePath, err := filepath.EvalSymlinks(filepath.Join(resolvedTrashRootNodePath, path))
 	if err != nil {
 		return
 	}
-	nodeID = nodeIDRegep.ReplaceAllString(deletedNodePath, "$1")
+	nodeID = nodeFullIDRegep.ReplaceAllString(recycleNodePath, "$1")
 	nodeID = strings.ReplaceAll(nodeID, "/", "")
 
 	recycleNode = node.New(spaceID, nodeID, "", "", 0, "", provider.ResourceType_RESOURCE_TYPE_INVALID, nil, t.lookup)
@@ -914,34 +899,36 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	if err != nil {
 		return
 	}
-	recycleNode.SetType(t.lookup.TypeFromPath(ctx, deletedNodePath))
+	raw, err := t.lookup.MetadataBackend().All(ctx, recycleNode)
+	if err != nil {
+		return
+	}
+	attrs := node.Attributes(raw)
 
 	var attrBytes []byte
-	if recycleNode.Type(ctx) == provider.ResourceType_RESOURCE_TYPE_FILE {
+	typeInt, err := attrs.Int64(prefixes.TypeAttr)
+	if provider.ResourceType(typeInt) == provider.ResourceType_RESOURCE_TYPE_FILE {
 		// lookup blobID in extended attributes
-		if attrBytes, err = backend.Get(ctx, deletedNodePath, prefixes.BlobIDAttr); err == nil {
-			recycleNode.BlobID = string(attrBytes)
-		} else {
+		recycleNode.BlobID = attrs.String(prefixes.BlobIDAttr)
+		if recycleNode.BlobID == "" {
 			return
 		}
 
 		// lookup blobSize in extended attributes
-		if recycleNode.Blobsize, err = backend.GetInt64(ctx, deletedNodePath, prefixes.BlobsizeAttr); err != nil {
+		if recycleNode.Blobsize, err = attrs.Int64(prefixes.BlobsizeAttr); err != nil {
 			return
 		}
 	}
 
 	// lookup parent id in extended attributes
-	if attrBytes, err = backend.Get(ctx, deletedNodePath, prefixes.ParentidAttr); err == nil {
-		recycleNode.ParentID = string(attrBytes)
-	} else {
+	recycleNode.ParentID = attrs.String(prefixes.ParentidAttr)
+	if recycleNode.ParentID == "" {
 		return
 	}
 
 	// lookup name in extended attributes
-	if attrBytes, err = backend.Get(ctx, deletedNodePath, prefixes.NameAttr); err == nil {
-		recycleNode.Name = string(attrBytes)
-	} else {
+	recycleNode.Name = attrs.String(prefixes.NameAttr)
+	if recycleNode.Name == "" {
 		return
 	}
 
@@ -949,10 +936,11 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	origin = "/"
 
 	// lookup origin path in extended attributes
-	if attrBytes, err = backend.Get(ctx, resolvedTrashItem, prefixes.TrashOriginAttr); err == nil {
+	rootNode := node.NewBaseNode(spaceID, nodeID, t.lookup)
+	if attrBytes, err = backend.Get(ctx, rootNode, prefixes.TrashOriginAttr); err == nil {
 		origin = filepath.Join(string(attrBytes), path)
 	} else {
-		logger.Error().Err(err).Str("trashItem", trashItem).Str("deletedNodePath", deletedNodePath).Msg("could not read origin path, restoring to /")
+		logger.Error().Err(err).Str("trashItem", trashItem).Str("deletedNodePath", recycleNodePath).Msg("could not read origin path, restoring to /")
 	}
 
 	return

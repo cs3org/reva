@@ -98,6 +98,9 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		"treetime_accounting": true,
 		"treesize_accounting": true,
 		"share_folder":        "/Shares",
+		"filemetadatacache": map[string]interface{}{
+			"cache_database": tmpRoot,
+		},
 	}
 	// make it possible to override single config values
 	for k, v := range config {

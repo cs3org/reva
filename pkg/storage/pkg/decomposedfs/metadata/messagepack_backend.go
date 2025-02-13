@@ -60,32 +60,32 @@ func NewMessagePackBackend(rootPath string, o cache.Config) MessagePackBackend {
 func (MessagePackBackend) Name() string { return "messagepack" }
 
 // All reads all extended attributes for a node
-func (b MessagePackBackend) All(ctx context.Context, path string) (map[string][]byte, error) {
-	return b.loadAttributes(ctx, path, nil)
+func (b MessagePackBackend) All(ctx context.Context, n MetadataNode) (map[string][]byte, error) {
+	return b.loadAttributes(ctx, n, nil)
 }
 
 // Get an extended attribute value for the given key
-func (b MessagePackBackend) Get(ctx context.Context, path, key string) ([]byte, error) {
-	attribs, err := b.loadAttributes(ctx, path, nil)
+func (b MessagePackBackend) Get(ctx context.Context, n MetadataNode, key string) ([]byte, error) {
+	attribs, err := b.loadAttributes(ctx, n, nil)
 	if err != nil {
 		return []byte{}, err
 	}
 	val, ok := attribs[key]
 	if !ok {
-		return []byte{}, &xattr.Error{Op: "mpk.get", Path: path, Name: key, Err: xattr.ENOATTR}
+		return []byte{}, &xattr.Error{Op: "mpk.get", Path: n.InternalPath(), Name: key, Err: xattr.ENOATTR}
 	}
 	return val, nil
 }
 
 // GetInt64 reads a string as int64 from the xattrs
-func (b MessagePackBackend) GetInt64(ctx context.Context, path, key string) (int64, error) {
-	attribs, err := b.loadAttributes(ctx, path, nil)
+func (b MessagePackBackend) GetInt64(ctx context.Context, n MetadataNode, key string) (int64, error) {
+	attribs, err := b.loadAttributes(ctx, n, nil)
 	if err != nil {
 		return 0, err
 	}
 	val, ok := attribs[key]
 	if !ok {
-		return 0, &xattr.Error{Op: "mpk.get", Path: path, Name: key, Err: xattr.ENOATTR}
+		return 0, &xattr.Error{Op: "mpk.get", Path: n.InternalPath(), Name: key, Err: xattr.ENOATTR}
 	}
 	i, err := strconv.ParseInt(string(val), 10, 64)
 	if err != nil {
@@ -96,8 +96,8 @@ func (b MessagePackBackend) GetInt64(ctx context.Context, path, key string) (int
 
 // List retrieves a list of names of extended attributes associated with the
 // given path in the file system.
-func (b MessagePackBackend) List(ctx context.Context, path string) ([]string, error) {
-	attribs, err := b.loadAttributes(ctx, path, nil)
+func (b MessagePackBackend) List(ctx context.Context, n MetadataNode) ([]string, error) {
+	attribs, err := b.loadAttributes(ctx, n, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -109,27 +109,27 @@ func (b MessagePackBackend) List(ctx context.Context, path string) ([]string, er
 }
 
 // Set sets one attribute for the given path
-func (b MessagePackBackend) Set(ctx context.Context, path, key string, val []byte) error {
-	return b.SetMultiple(ctx, path, map[string][]byte{key: val}, true)
+func (b MessagePackBackend) Set(ctx context.Context, n MetadataNode, key string, val []byte) error {
+	return b.SetMultiple(ctx, n, map[string][]byte{key: val}, true)
 }
 
 // SetMultiple sets a set of attribute for the given path
-func (b MessagePackBackend) SetMultiple(ctx context.Context, path string, attribs map[string][]byte, acquireLock bool) error {
-	return b.saveAttributes(ctx, path, attribs, nil, acquireLock)
+func (b MessagePackBackend) SetMultiple(ctx context.Context, n MetadataNode, attribs map[string][]byte, acquireLock bool) error {
+	return b.saveAttributes(ctx, n, attribs, nil, acquireLock)
 }
 
 // Remove an extended attribute key
-func (b MessagePackBackend) Remove(ctx context.Context, path, key string, acquireLock bool) error {
-	return b.saveAttributes(ctx, path, nil, []string{key}, acquireLock)
+func (b MessagePackBackend) Remove(ctx context.Context, n MetadataNode, key string, acquireLock bool) error {
+	return b.saveAttributes(ctx, n, nil, []string{key}, acquireLock)
 }
 
 // AllWithLockedSource reads all extended attributes from the given reader (if possible).
 // The path argument is used for storing the data in the cache
-func (b MessagePackBackend) AllWithLockedSource(ctx context.Context, path string, source io.Reader) (map[string][]byte, error) {
-	return b.loadAttributes(ctx, path, source)
+func (b MessagePackBackend) AllWithLockedSource(ctx context.Context, n MetadataNode, source io.Reader) (map[string][]byte, error) {
+	return b.loadAttributes(ctx, n, source)
 }
 
-func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, setAttribs map[string][]byte, deleteAttribs []string, acquireLock bool) error {
+func (b MessagePackBackend) saveAttributes(ctx context.Context, n MetadataNode, setAttribs map[string][]byte, deleteAttribs []string, acquireLock bool) error {
 	var (
 		err error
 		f   readWriteCloseSeekTruncater
@@ -144,8 +144,8 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 		span.End()
 	}()
 
-	lockPath := b.LockfilePath(path)
-	metaPath := b.MetadataPath(path)
+	lockPath := b.LockfilePath(n)
+	metaPath := b.MetadataPath(n)
 	if acquireLock {
 		_, subspan := tracer.Start(ctx, "lockedfile.OpenFile")
 		f, err = lockedfile.OpenFile(lockPath, os.O_RDWR|os.O_CREATE, 0600)
@@ -199,21 +199,21 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 	subspan.End()
 
 	_, subspan = tracer.Start(ctx, "metaCache.PushToCache")
-	err = b.metaCache.PushToCache(b.cacheKey(path), attribs)
+	err = b.metaCache.PushToCache(b.cacheKey(n), attribs)
 	subspan.End()
 	return err
 }
 
-func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, source io.Reader) (map[string][]byte, error) {
+func (b MessagePackBackend) loadAttributes(ctx context.Context, n MetadataNode, source io.Reader) (map[string][]byte, error) {
 	ctx, span := tracer.Start(ctx, "loadAttributes")
 	defer span.End()
 	attribs := map[string][]byte{}
-	err := b.metaCache.PullFromCache(b.cacheKey(path), &attribs)
+	err := b.metaCache.PullFromCache(b.cacheKey(n), &attribs)
 	if err == nil {
 		return attribs, err
 	}
 
-	metaPath := b.MetadataPath(path)
+	metaPath := b.MetadataPath(n)
 	var msgBytes []byte
 
 	if source == nil {
@@ -229,7 +229,7 @@ func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, sou
 				// actual file (not the metafile) does not exist in order to
 				// determine whether a node exists or not -> stat the actual node
 				_, subspan := tracer.Start(ctx, "os.Stat")
-				_, err := os.Stat(path)
+				_, err := os.Stat(n.InternalPath())
 				subspan.End()
 				if err != nil {
 					return nil, err
@@ -258,7 +258,7 @@ func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, sou
 	}
 
 	_, subspan := tracer.Start(ctx, "metaCache.PushToCache")
-	err = b.metaCache.PushToCache(b.cacheKey(path), attribs)
+	err = b.metaCache.PushToCache(b.cacheKey(n), attribs)
 	subspan.End()
 	if err != nil {
 		return nil, err
@@ -273,40 +273,40 @@ func (MessagePackBackend) IsMetaFile(path string) bool {
 }
 
 // Purge purges the data of a given path
-func (b MessagePackBackend) Purge(_ context.Context, path string) error {
-	if err := b.metaCache.RemoveMetadata(b.cacheKey(path)); err != nil {
+func (b MessagePackBackend) Purge(_ context.Context, n MetadataNode) error {
+	if err := b.metaCache.RemoveMetadata(b.cacheKey(n)); err != nil {
 		return err
 	}
-	return os.Remove(b.MetadataPath(path))
+	return os.Remove(b.MetadataPath(n))
 }
 
 // Rename moves the data for a given path to a new path
-func (b MessagePackBackend) Rename(oldPath, newPath string) error {
+func (b MessagePackBackend) Rename(oldNode, newNode MetadataNode) error {
 	data := map[string][]byte{}
-	err := b.metaCache.PullFromCache(b.cacheKey(oldPath), &data)
+	err := b.metaCache.PullFromCache(b.cacheKey(oldNode), &data)
 	if err == nil {
-		err = b.metaCache.PushToCache(b.cacheKey(newPath), data)
+		err = b.metaCache.PushToCache(b.cacheKey(newNode), data)
 		if err != nil {
 			return err
 		}
 	}
-	err = b.metaCache.RemoveMetadata(b.cacheKey(oldPath))
+	err = b.metaCache.RemoveMetadata(b.cacheKey(oldNode))
 	if err != nil {
 		return err
 	}
 
-	return os.Rename(b.MetadataPath(oldPath), b.MetadataPath(newPath))
+	return os.Rename(b.MetadataPath(oldNode), b.MetadataPath(newNode))
 }
 
 // MetadataPath returns the path of the file holding the metadata for the given path
-func (MessagePackBackend) MetadataPath(path string) string { return path + ".mpk" }
+func (MessagePackBackend) MetadataPath(n MetadataNode) string { return n.InternalPath() + ".mpk" }
 
 // LockfilePath returns the path of the lock file
-func (MessagePackBackend) LockfilePath(path string) string { return path + ".mlock" }
+func (MessagePackBackend) LockfilePath(n MetadataNode) string { return n.InternalPath() + ".mlock" }
 
 // Lock locks the metadata for the given path
-func (b MessagePackBackend) Lock(path string) (UnlockFunc, error) {
-	metaLockPath := b.LockfilePath(path)
+func (b MessagePackBackend) Lock(n MetadataNode) (UnlockFunc, error) {
+	metaLockPath := b.LockfilePath(n)
 	mlock, err := lockedfile.OpenFile(metaLockPath, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return nil, err
@@ -320,9 +320,6 @@ func (b MessagePackBackend) Lock(path string) (UnlockFunc, error) {
 	}, nil
 }
 
-func (b MessagePackBackend) cacheKey(path string) string {
-	// rootPath is guaranteed to have no trailing slash
-	// the cache key shouldn't begin with a slash as some stores drop it which can cause
-	// confusion
-	return strings.TrimPrefix(path, b.rootPath+"/")
+func (b MessagePackBackend) cacheKey(n MetadataNode) string {
+	return n.GetSpaceID() + "/" + n.GetID()
 }
