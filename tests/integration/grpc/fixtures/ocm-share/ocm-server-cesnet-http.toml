@@ -28,3 +28,11 @@ providers = "fixtures/ocm-providers.demo.json"
 driver = "ocmreceived"
 
 [http.services.dataprovider.drivers.ocmreceived]
+
+[http.services.wellknown]
+[http.services.wellknown.ocmprovider]
+ocm_prefix = "ocm"
+provider = "Reva for CESNET"
+endpoint = "http://{{cesnethttp_address}}"
+enable_webapp = true
+enable_datatx = true
