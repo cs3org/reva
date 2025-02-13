@@ -137,7 +137,7 @@ var _ = Describe("File uploads", func() {
 			AddGrant: true,
 		}, nil).Times(1)
 		var err error
-		tree := tree.New(lu, bs, o, store.Create(), &zerolog.Logger{})
+		tree := tree.New(lu, bs, o, permissions.Permissions{}, store.Create(), &zerolog.Logger{})
 
 		aspects := aspects.Aspects{
 			Lookup:      lu,

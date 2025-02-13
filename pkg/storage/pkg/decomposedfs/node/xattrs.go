@@ -66,6 +66,11 @@ func (md Attributes) Time(key string) (time.Time, error) {
 	return time.Parse(time.RFC3339Nano, string(md[key]))
 }
 
+// SetTime sets a time value
+func (md Attributes) SetTime(key string, t time.Time) {
+	md[key] = []byte(t.UTC().Format(time.RFC3339Nano))
+}
+
 // SetXattrs sets multiple extended attributes on the write-through cache/node
 func (n *Node) SetXattrsWithContext(ctx context.Context, attribs map[string][]byte, acquireLock bool) (err error) {
 	_, span := tracer.Start(ctx, "SetXattrsWithContext")

@@ -1,4 +1,5 @@
 // Copyright 2018-2021 CERN
+// Copyright 2025 OpenCloud GmbH <mail@opencloud.eu>
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +28,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -48,6 +50,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree/propagator"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/usermapper"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
@@ -61,7 +64,7 @@ func init() {
 
 // Blobstore defines an interface for storing blobs in a blobstore
 type Blobstore interface {
-	Upload(node *node.Node, source string) error
+	Upload(node *node.Node, source, copyTarget string) error
 	Download(node *node.Node) (io.ReadCloser, error)
 	Delete(node *node.Node) error
 }
@@ -78,10 +81,11 @@ type scanItem struct {
 
 // Tree manages a hierarchical tree
 type Tree struct {
-	lookup     node.PathLookup
-	blobstore  Blobstore
-	trashbin   *trashbin.Trashbin
-	propagator propagator.Propagator
+	lookup      node.PathLookup
+	blobstore   Blobstore
+	trashbin    *trashbin.Trashbin
+	propagator  propagator.Propagator
+	permissions permissions.Permissions
 
 	options *options.Options
 
@@ -99,17 +103,18 @@ type Tree struct {
 type PermissionCheckFunc func(rp *provider.ResourcePermissions) bool
 
 // New returns a new instance of Tree
-func New(lu node.PathLookup, bs Blobstore, um usermapper.Mapper, trashbin *trashbin.Trashbin, o *options.Options, es events.Stream, cache store.Store, log *zerolog.Logger) (*Tree, error) {
+func New(lu node.PathLookup, bs Blobstore, um usermapper.Mapper, trashbin *trashbin.Trashbin, permissions permissions.Permissions, o *options.Options, es events.Stream, cache store.Store, log *zerolog.Logger) (*Tree, error) {
 	scanQueue := make(chan scanItem)
 	t := &Tree{
-		lookup:     lu,
-		blobstore:  bs,
-		userMapper: um,
-		trashbin:   trashbin,
-		options:    o,
-		idCache:    cache,
-		propagator: propagator.New(lu, &o.Options, log),
-		scanQueue:  scanQueue,
+		lookup:      lu,
+		blobstore:   bs,
+		userMapper:  um,
+		trashbin:    trashbin,
+		permissions: permissions,
+		options:     o,
+		idCache:     cache,
+		propagator:  propagator.New(lu, &o.Options, log),
+		scanQueue:   scanQueue,
 		scanDebouncer: NewScanDebouncer(o.ScanDebounceDelay, func(item scanItem) {
 			scanQueue <- item
 		}),
@@ -220,7 +225,7 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 	if err := os.MkdirAll(filepath.Dir(nodePath), 0700); err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
-	_, err = os.Create(nodePath)
+	f, err := os.Create(nodePath)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
@@ -235,10 +240,14 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 		if err != nil {
 			return err
 		}
-		err = os.Chtimes(nodePath, nodeMTime, nodeMTime)
+		t.lookup.TimeManager().OverrideMtime(ctx, n, &attributes, nodeMTime)
+	} else {
+		fi, err := f.Stat()
 		if err != nil {
 			return err
 		}
+		mtime := fi.ModTime()
+		attributes[prefixes.MTimeAttr] = []byte(mtime.UTC().Format(time.RFC3339Nano))
 	}
 
 	err = n.SetXattrsWithContext(ctx, attributes, false)
@@ -397,7 +406,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	g.Go(func() error {
 		defer close(work)
 		for _, name := range names {
-			if isLockFile(name) || isTrash(name) {
+			if isInternal(name) || isLockFile(name) || isTrash(name) {
 				continue
 			}
 
@@ -676,7 +685,24 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 
 // WriteBlob writes a blob to the blobstore
 func (t *Tree) WriteBlob(node *node.Node, source string) error {
-	return t.blobstore.Upload(node, source)
+	var currentPath string
+	var err error
+
+	if t.options.EnableFSRevisions {
+		currentPath = t.lookup.(*lookup.Lookup).CurrentPath(node.SpaceID, node.ID)
+
+		defer func() {
+			_ = t.lookup.CopyMetadata(context.Background(), node.InternalPath(), currentPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
+				return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
+					attributeName == prefixes.TypeAttr ||
+					attributeName == prefixes.BlobIDAttr ||
+					attributeName == prefixes.BlobsizeAttr
+			}, false)
+		}()
+	}
+
+	err = t.blobstore.Upload(node, source, currentPath)
+	return err
 }
 
 // ReadBlob reads a blob from the blobstore
@@ -845,14 +871,22 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	return
 }
 
+func (t *Tree) isIgnored(path string) bool {
+	return isLockFile(path) || isTrash(path) || t.isUpload(path) || isInternal(path)
+}
+
+func (t *Tree) isUpload(path string) bool {
+	return strings.HasPrefix(path, t.options.UploadDirectory)
+}
+
+func isInternal(path string) bool {
+	return strings.Contains(path, lookup.RevisionsDir)
+}
+
 func isLockFile(path string) bool {
 	return strings.HasSuffix(path, ".lock") || strings.HasSuffix(path, ".flock") || strings.HasSuffix(path, ".mlock")
 }
 
 func isTrash(path string) bool {
-	return strings.HasSuffix(path, ".trashinfo") || strings.HasSuffix(path, ".trashitem")
-}
-
-func (t *Tree) isUpload(path string) bool {
-	return strings.HasPrefix(path, t.options.UploadDirectory)
+	return strings.HasSuffix(path, ".trashinfo") || strings.HasSuffix(path, ".trashitem") || strings.Contains(path, ".Trash")
 }

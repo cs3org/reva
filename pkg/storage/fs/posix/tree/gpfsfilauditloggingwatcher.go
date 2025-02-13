@@ -82,7 +82,7 @@ start:
 				w.log.Error().Err(err).Str("line", line).Msg("error unmarshalling line")
 				continue
 			}
-			if isLockFile(ev.Path) || isTrash(ev.Path) || w.tree.isUpload(ev.Path) {
+			if w.tree.isIgnored(ev.Path) {
 				continue
 			}
 			go func() {

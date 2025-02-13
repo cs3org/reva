@@ -1,4 +1,5 @@
 // Copyright 2018-2021 CERN
+// Copyright 2025 OpenCloud GmbH <mail@opencloud.eu>
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +22,7 @@ package tree
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -375,7 +377,24 @@ func (t *Tree) assimilate(item scanItem) error {
 	}
 
 	// check for the id attribute again after grabbing the lock, maybe the file was assimilated/created by us in the meantime
-	id, err = t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.IDAttr)
+	md, err := t.lookup.MetadataBackend().All(context.Background(), item.Path)
+	if err != nil {
+		return err
+	}
+	attrs := node.Attributes(md)
+
+	// compare metadata mtime with actual mtime. if it matches we can skip the assimilation because the file was handled by us
+	mtime, err := attrs.Time(prefixes.MTimeAttr)
+	if err == nil {
+		fi, err := os.Stat(item.Path)
+		if err == nil {
+			if mtime.Equal(fi.ModTime()) {
+				return nil
+			}
+		}
+	}
+
+	id = attrs[prefixes.IDAttr]
 	if err == nil {
 		previousPath, ok := t.lookup.(*lookup.Lookup).GetCachedID(context.Background(), spaceID, string(id))
 		previousParentID, _ := t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.ParentidAttr)
@@ -576,11 +595,62 @@ assimilate:
 		}
 		attributes[prefixes.PropagationAttr] = []byte("1")
 	} else {
+		attributes.SetString(prefixes.BlobIDAttr, uuid.NewString())
+		attributes.SetInt64(prefixes.BlobsizeAttr, fi.Size())
 		attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_FILE))
 	}
 
 	n := node.New(spaceID, id, parentID, filepath.Base(path), fi.Size(), "", provider.ResourceType_RESOURCE_TYPE_FILE, nil, t.lookup)
 	n.SpaceRoot = &node.Node{SpaceID: spaceID, ID: spaceID}
+
+	go func() {
+		// Copy the previous current version to a revision
+		currentPath := t.lookup.(*lookup.Lookup).CurrentPath(n.SpaceID, n.ID)
+		stat, err := os.Stat(currentPath)
+		if err != nil {
+			t.log.Error().Err(err).Str("path", path).Str("currentPath", currentPath).Msg("could not stat current path")
+			return
+		}
+		revisionPath := t.lookup.VersionPath(n.SpaceID, n.ID, stat.ModTime().UTC().Format(time.RFC3339Nano))
+
+		err = os.Rename(currentPath, revisionPath)
+		if err != nil {
+			t.log.Error().Err(err).Str("path", path).Str("revisionPath", revisionPath).Msg("could not create revision")
+			return
+		}
+
+		// Copy the new version to the current version
+		w, err := os.OpenFile(currentPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+		if err != nil {
+			t.log.Error().Err(err).Str("path", path).Str("currentPath", currentPath).Msg("could not open current path for writing")
+			return
+		}
+		defer w.Close()
+		r, err := os.OpenFile(n.InternalPath(), os.O_RDONLY, 0600)
+		if err != nil {
+			t.log.Error().Err(err).Str("path", path).Msg("could not open file for reading")
+			return
+		}
+		defer r.Close()
+
+		_, err = io.Copy(w, r)
+		if err != nil {
+			t.log.Error().Err(err).Str("currentPath", currentPath).Str("path", path).Msg("could not copy new version to current version")
+			return
+		}
+
+		err = t.lookup.CopyMetadata(context.Background(), n.InternalPath(), currentPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
+			return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
+				attributeName == prefixes.TypeAttr ||
+				attributeName == prefixes.BlobIDAttr ||
+				attributeName == prefixes.BlobsizeAttr
+		}, false)
+		if err != nil {
+			t.log.Error().Err(err).Str("currentPath", currentPath).Str("path", path).Msg("failed to copy xattrs to 'current' file")
+			return
+		}
+	}()
+
 	err = t.Propagate(context.Background(), n, 0)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to propagate")
@@ -623,7 +693,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 	sizes := make(map[string]int64)
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		// skip lock and upload files
-		if isLockFile(path) {
+		if isInternal(path) || isLockFile(path) {
 			return nil
 		}
 		if isTrash(path) || t.isUpload(path) {

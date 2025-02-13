@@ -1,4 +1,5 @@
 // Copyright 2018-2021 CERN
+// Copyright 2025 OpenCloud GmbH <mail@opencloud.eu>
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,8 +46,11 @@ import (
 
 var tracer trace.Tracer
 
+const RevisionsDir = ".oc-nodes"
+
 var _spaceTypePersonal = "personal"
 var _spaceTypeProject = "project"
+var _currentSuffix = ".current"
 
 func init() {
 	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/pkg/decomposedfs/lookup")
@@ -310,9 +314,37 @@ func (lu *Lookup) InternalRoot() string {
 
 // InternalPath returns the internal path for a given ID
 func (lu *Lookup) InternalPath(spaceID, nodeID string) string {
+	if strings.Contains(nodeID, node.RevisionIDDelimiter) {
+		spaceRoot, _ := lu.IDCache.Get(context.Background(), spaceID, spaceID)
+		if len(spaceRoot) == 0 {
+			return ""
+		}
+		return filepath.Join(spaceRoot, RevisionsDir, Pathify(nodeID, 4, 2))
+	}
+
 	path, _ := lu.IDCache.Get(context.Background(), spaceID, nodeID)
 
 	return path
+}
+
+// VersionPath returns the path to the version of the node
+func (lu *Lookup) VersionPath(spaceID, nodeID, version string) string {
+	spaceRoot, _ := lu.IDCache.Get(context.Background(), spaceID, spaceID)
+	if len(spaceRoot) == 0 {
+		return ""
+	}
+
+	return filepath.Join(spaceRoot, RevisionsDir, Pathify(nodeID, 4, 2)+node.RevisionIDDelimiter+version)
+}
+
+// VersionPath returns the "current" path of the node
+func (lu *Lookup) CurrentPath(spaceID, nodeID string) string {
+	spaceRoot, _ := lu.IDCache.Get(context.Background(), spaceID, spaceID)
+	if len(spaceRoot) == 0 {
+		return ""
+	}
+
+	return filepath.Join(spaceRoot, RevisionsDir, Pathify(nodeID, 4, 2)+_currentSuffix)
 }
 
 // // ReferenceFromAttr returns a CS3 reference from xattr of a node.

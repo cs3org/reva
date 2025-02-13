@@ -1,4 +1,5 @@
 // Copyright 2018-2021 CERN
+// Copyright 2025 OpenCloud GmbH <mail@opencloud.eu>
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +23,7 @@ import (
 	"bufio"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/pkg/errors"
@@ -40,7 +42,7 @@ func New(root string) (*Blobstore, error) {
 }
 
 // Upload stores some data in the blobstore under the given key
-func (bs *Blobstore) Upload(node *node.Node, source string) error {
+func (bs *Blobstore) Upload(node *node.Node, source, copyTarget string) error {
 	path := node.InternalPath()
 
 	// preserve the mtime of the file
@@ -63,15 +65,35 @@ func (bs *Blobstore) Upload(node *node.Node, source string) error {
 	if err != nil {
 		return errors.Wrapf(err, "could not write blob '%s'", node.InternalPath())
 	}
-
 	err = w.Flush()
 	if err != nil {
 		return err
 	}
-
-	if fi != nil {
-		return os.Chtimes(path, fi.ModTime(), fi.ModTime())
+	err = os.Chtimes(path, fi.ModTime(), fi.ModTime())
+	if err != nil {
+		return err
 	}
+
+	if copyTarget != "" {
+		// also "upload" the file to a local path, e.g. for keeping the "current" version of the file
+		err := os.MkdirAll(filepath.Dir(copyTarget), 0700)
+		if err != nil {
+			return err
+		}
+
+		file.Seek(0, 0)
+		copyFile, err := os.OpenFile(copyTarget, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+		if err != nil {
+			return errors.Wrapf(err, "could not open copy target '%s' for writing", copyTarget)
+		}
+		defer copyFile.Close()
+
+		_, err = copyFile.ReadFrom(file)
+		if err != nil {
+			return errors.Wrapf(err, "could not write blob copy of '%s' to '%s'", node.InternalPath(), copyTarget)
+		}
+	}
+
 	return nil
 }
 

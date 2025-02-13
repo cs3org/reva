@@ -39,6 +39,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree/propagator"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
@@ -64,9 +65,10 @@ type Blobstore interface {
 
 // Tree manages a hierarchical tree
 type Tree struct {
-	lookup     node.PathLookup
-	blobstore  Blobstore
-	propagator propagator.Propagator
+	lookup      node.PathLookup
+	blobstore   Blobstore
+	propagator  propagator.Propagator
+	permissions permissions.Permissions
 
 	options *options.Options
 
@@ -77,13 +79,14 @@ type Tree struct {
 type PermissionCheckFunc func(rp *provider.ResourcePermissions) bool
 
 // New returns a new instance of Tree
-func New(lu node.PathLookup, bs Blobstore, o *options.Options, cache store.Store, log *zerolog.Logger) *Tree {
+func New(lu node.PathLookup, bs Blobstore, o *options.Options, p permissions.Permissions, cache store.Store, log *zerolog.Logger) *Tree {
 	return &Tree{
-		lookup:     lu,
-		blobstore:  bs,
-		options:    o,
-		idCache:    cache,
-		propagator: propagator.New(lu, o, log),
+		lookup:      lu,
+		blobstore:   bs,
+		options:     o,
+		permissions: p,
+		idCache:     cache,
+		propagator:  propagator.New(lu, o, log),
 	}
 }
 

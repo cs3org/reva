@@ -40,6 +40,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/timemanager"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/trashbin"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/tree"
+	treemocks "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/tree/mocks"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/aspects"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
@@ -47,7 +48,6 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions/mocks"
-	treemocks "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree/mocks"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/usermapper"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v2/pkg/store"
@@ -181,7 +181,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	logger := zerolog.New(os.Stderr).With().Logger()
 
 	bs := &treemocks.Blobstore{}
-	tree, err := tree.New(lu, bs, um, &trashbin.Trashbin{}, o, nil, store.Create(), &logger)
+	tree, err := tree.New(lu, bs, um, &trashbin.Trashbin{}, permissions.Permissions{}, o, nil, store.Create(), &logger)
 	if err != nil {
 		return nil, err
 	}

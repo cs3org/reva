@@ -124,6 +124,7 @@ type Tree interface {
 	PurgeRecycleItemFunc(ctx context.Context, spaceid, key, purgePath string) (*Node, func() error, error)
 
 	InitNewNode(ctx context.Context, n *Node, fsize uint64) (metadata.UnlockFunc, error)
+	RestoreRevision(ctx context.Context, spaceID, nodeID, sourcePath string) (err error)
 
 	WriteBlob(node *Node, source string) error
 	ReadBlob(node *Node) (io.ReadCloser, error)
@@ -131,6 +132,10 @@ type Tree interface {
 
 	BuildSpaceIDIndexEntry(spaceID, nodeID string) string
 	ResolveSpaceIDIndexEntry(spaceID, entry string) (string, string, error)
+
+	CreateRevision(ctx context.Context, n *Node, version string, f *lockedfile.File) (string, error)
+	ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
+	DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string, openReaderFunc func(md *provider.ResourceInfo) bool) (*provider.ResourceInfo, io.ReadCloser, error)
 
 	Propagate(ctx context.Context, node *Node, sizeDiff int64) (err error)
 }
@@ -147,6 +152,7 @@ type PathLookup interface {
 
 	InternalRoot() string
 	InternalPath(spaceID, nodeID string) string
+	VersionPath(spaceID, nodeID, version string) string
 	Path(ctx context.Context, n *Node, hasPermission PermissionFunc) (path string, err error)
 	MetadataBackend() metadata.Backend
 	TimeManager() TimeManager
@@ -356,7 +362,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 			// use the actual node for the metadata lookup
 			nodeID = kp[0]
 			// remember revision for blob metadata
-			revisionSuffix = RevisionIDDelimiter + kp[1]
+			revisionSuffix = kp[1]
 		}
 	}
 
@@ -372,8 +378,8 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	// append back revision to nodeid, even when returning a not existing node
 	defer func() {
 		// when returning errors n is nil
-		if n != nil {
-			n.ID += revisionSuffix
+		if n != nil && revisionSuffix != "" {
+			n.ID += RevisionIDDelimiter + revisionSuffix
 		}
 	}()
 
@@ -402,7 +408,8 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 			return nil, err
 		}
 	} else {
-		n.BlobID, n.Blobsize, err = lu.ReadBlobIDAndSizeAttr(ctx, nodePath+revisionSuffix, nil)
+		versionPath := lu.VersionPath(spaceID, nodeID, revisionSuffix)
+		n.BlobID, n.Blobsize, err = lu.ReadBlobIDAndSizeAttr(ctx, versionPath, nil)
 		if err != nil {
 			return nil, err
 		}

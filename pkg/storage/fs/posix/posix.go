@@ -103,7 +103,13 @@ func New(m map[string]interface{}, stream events.Stream, log *zerolog.Logger) (s
 		return nil, fmt.Errorf("the posix driver requires a shared id cache, e.g. nats-js-kv or redis")
 	}
 
-	tp, err := tree.New(lu, bs, um, trashbin, o, stream, store.Create(
+	permissionsSelector, err := pool.PermissionsSelector(o.PermissionsSVC, pool.WithTLSMode(o.PermTLSMode))
+	if err != nil {
+		return nil, err
+	}
+	p := permissions.NewPermissions(node.NewPermissions(lu), permissionsSelector)
+
+	tp, err := tree.New(lu, bs, um, trashbin, p, o, stream, store.Create(
 		store.Store(o.IDCache.Store),
 		store.TTL(o.IDCache.TTL),
 		store.Size(o.IDCache.Size),
@@ -117,20 +123,13 @@ func New(m map[string]interface{}, stream events.Stream, log *zerolog.Logger) (s
 		return nil, err
 	}
 
-	permissionsSelector, err := pool.PermissionsSelector(o.PermissionsSVC, pool.WithTLSMode(o.PermTLSMode))
-	if err != nil {
-		return nil, err
-	}
-
-	p := permissions.NewPermissions(node.NewPermissions(lu), permissionsSelector)
-
 	aspects := aspects.Aspects{
 		Lookup:            lu,
 		Tree:              tp,
 		Permissions:       p,
 		EventStream:       stream,
 		UserMapper:        um,
-		DisableVersioning: true,
+		DisableVersioning: false,
 		Trashbin:          trashbin,
 	}
 
