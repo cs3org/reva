@@ -880,7 +880,7 @@ func (t *Tree) isUpload(path string) bool {
 }
 
 func isInternal(path string) bool {
-	return strings.Contains(path, ".OC-Nodes")
+	return strings.Contains(path, lookup.RevisionsDir)
 }
 
 func isLockFile(path string) bool {
