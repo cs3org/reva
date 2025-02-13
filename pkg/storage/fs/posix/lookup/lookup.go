@@ -46,7 +46,7 @@ import (
 
 var tracer trace.Tracer
 
-var _revisionsDir = ".OC-Nodes"
+var _revisionsDir = ".oc-nodes"
 var _spaceTypePersonal = "personal"
 var _spaceTypeProject = "project"
 var _currentSuffix = ".current"

@@ -82,7 +82,7 @@ func (bs *Blobstore) Upload(node *node.Node, source, copyTarget string) error {
 		}
 
 		file.Seek(0, 0)
-		copyFile, err := os.OpenFile(copyTarget, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0700)
+		copyFile, err := os.OpenFile(copyTarget, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 		if err != nil {
 			return errors.Wrapf(err, "could not open copy target '%s' for writing", copyTarget)
 		}

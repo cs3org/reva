@@ -40,15 +40,11 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
-// Revision entries are stored inside the node folder and start with the same uuid as the current version.
+// Revision entries are stored inside the revisions directory in .oc-nodes, sharded by the node ids.
 // The `.REV.` indicates it is a revision and what follows is a timestamp, so multiple versions
-// can be kept in the same location as the current file content. This prevents new fileuploads
-// to trigger cross storage moves when revisions accidentally are stored on another partition,
-// because the admin mounted a different partition there.
-// We can add a background process to move old revisions to a slower storage
-// and replace the revision file with a symbolic link in the future, if necessary.
+// can be kept in the same location.
 
-// CreateVersion creates a new version of the node
+// CreateRevision creates a new version of the node
 func (tp *Tree) CreateRevision(ctx context.Context, n *node.Node, version string, f *lockedfile.File) (string, error) {
 	versionPath := tp.lookup.VersionPath(n.SpaceID, n.ID, version)
 
@@ -198,7 +194,6 @@ func (tp *Tree) DownloadRevision(ctx context.Context, ref *provider.Reference, r
 	}
 
 	revisionNode := node.New(spaceID, revisionKey, n.ParentID, n.Name, blobsize, "", provider.ResourceType_RESOURCE_TYPE_FILE, n.Owner(), tp.lookup)
-	// revisionNode := node.Node{SpaceID: spaceID, ID: revisionKey, Blobsize: blobsize} // blobsize is needed for the s3ng blobstore
 
 	ri, err := n.AsResourceInfo(ctx, rp, nil, []string{"size", "mimetype", "etag"}, true)
 	if err != nil {
@@ -309,12 +304,12 @@ func (tp *Tree) RestoreRevision(ctx context.Context, spaceID, nodeID, source str
 	// update "current" revision
 	if tp.options.EnableFSRevisions {
 		currentPath := tp.lookup.(*lookup.Lookup).CurrentPath(spaceID, nodeID)
-		w, err := os.OpenFile(currentPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0700)
+		w, err := os.OpenFile(currentPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 		if err != nil {
 			tp.log.Error().Err(err).Str("currentPath", currentPath).Str("source", source).Msg("could not open current path for writing")
 			return err
 		}
-		r, err := os.OpenFile(source, os.O_RDONLY, 0700)
+		r, err := os.OpenFile(source, os.O_RDONLY, 0600)
 		if err != nil {
 			tp.log.Error().Err(err).Str("currentPath", currentPath).Str("source", source).Msg("could not open file for reading")
 			return err

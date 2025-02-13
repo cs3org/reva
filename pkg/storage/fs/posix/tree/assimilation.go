@@ -620,12 +620,12 @@ assimilate:
 		}
 
 		// Copy the new version to the current version
-		w, err := os.OpenFile(currentPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0700)
+		w, err := os.OpenFile(currentPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 		if err != nil {
 			t.log.Error().Err(err).Str("path", path).Str("currentPath", currentPath).Msg("could not open current path for writing")
 			return
 		}
-		r, err := os.OpenFile(n.InternalPath(), os.O_RDONLY, 0700)
+		r, err := os.OpenFile(n.InternalPath(), os.O_RDONLY, 0600)
 		if err != nil {
 			t.log.Error().Err(err).Str("path", path).Msg("could not open file for reading")
 			return
