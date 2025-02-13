@@ -108,6 +108,7 @@ type Protocol interface {
 type WebDAV struct {
 	SharedSecret string   `json:"sharedSecret" validate:"required"`
 	Permissions  []string `json:"permissions"  validate:"required,dive,required,oneof=read write share"`
+	Requirements []string `json:"requirements"`
 	URI          string   `json:"uri"          validate:"required"`
 }
 
@@ -135,8 +136,9 @@ func (w *WebDAV) ToOCMProtocol() *ocm.Protocol {
 
 // Webapp contains the parameters for the Webapp protocol.
 type Webapp struct {
-	URI      string `json:"uri" validate:"required"`
-	ViewMode string `json:"viewMode"    validate:"required,dive,required,oneof=view read write"`
+	URI          string `json:"uri" validate:"required"`
+	ViewMode     string `json:"viewMode"    validate:"required,dive,required,oneof=view read write"`
+	SharedSecret string `json:"sharedSecret"`
 }
 
 // ToOCMProtocol convert the protocol to a ocm Protocol struct.
