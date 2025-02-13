@@ -27,7 +27,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
-const OCMAPIVersion = "1.1.0"
+const OCMAPIVersion = "1.2.0"
 
 type OcmProviderConfig struct {
 	OCMPrefix    string `docs:"ocm;The prefix URL where the OCM API is served."                                   mapstructure:"ocm_prefix"`
@@ -126,7 +126,7 @@ func (h *wkocmHandler) init(c *OcmProviderConfig) {
 	}}
 	// for now we hardcode the capabilities, as this is currently only advisory
 	d.Capabilities = []string{"invites", "webdav-uri", "protocol-object"}
-	d.InviteAcceptDialog = "/sciencemesh-app/invitations"
+	d.InviteAcceptDialog, _ = url.JoinPath(c.Endpoint, "/sciencemesh-app/invitations")
 	h.data = d
 }
 
