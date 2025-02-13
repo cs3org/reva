@@ -184,6 +184,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 			c, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
 			if err != nil {
+				log.Error().Err(err).Msg("error getting gateway during OCM authentication")
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
