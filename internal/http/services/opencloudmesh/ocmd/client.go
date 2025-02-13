@@ -70,37 +70,56 @@ func NewClient(timeout time.Duration, insecure bool) *OCMClient {
 // Discover returns a number of properties used to discover the capabilities offered by a remote cloud storage.
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1ocm-provider/get
 func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*wellknown.OcmDiscoveryData, error) {
-	url, err := url.JoinPath(endpoint, "/ocm-provider")
-	if err != nil {
-		return nil, err
-	}
+	log := appctx.GetLogger(ctx)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, errors.Wrap(err, "error creating request")
-	}
-	req.Header.Set("Content-Type", "application/json")
+	remoteurl, _ := url.JoinPath(endpoint, "/.well-known/ocm")
+	body, err := c.discover(ctx, remoteurl)
+	if err != nil || len(body) == 0 {
+		log.Debug().Err(err).Str("sender", remoteurl).Str("response", string(body)).Msg("invalid or empty response, falling back to legacy discovery")
+		remoteurl, _ := url.JoinPath(endpoint, "/ocm-provider") // legacy discovery endpoint
 
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return nil, errors.Wrap(err, "error doing request")
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
+		body, err = c.discover(ctx, remoteurl)
+		if err != nil || len(body) == 0 {
+			log.Warn().Err(err).Str("sender", remoteurl).Str("response", string(body)).Msg("invalid or empty response")
+			return nil, errtypes.BadRequest("Invalid response on OCM discovery")
+		}
 	}
 
 	var disco wellknown.OcmDiscoveryData
 	err = json.Unmarshal(body, &disco)
 	if err != nil {
-		log := appctx.GetLogger(ctx)
-		log.Warn().Str("sender", endpoint).Str("response", string(body)).Msg("malformed response")
-		return nil, errtypes.InternalError("Invalid payload on OCM discovery")
+		log.Warn().Err(err).Str("sender", remoteurl).Str("response", string(body)).Msg("malformed response")
+		return nil, errtypes.BadRequest("Invalid payload on OCM discovery")
 	}
 
+	log.Debug().Str("sender", remoteurl).Any("response", disco).Msg("discovery response")
 	return &disco, nil
+}
+
+func (c *OCMClient) discover(ctx context.Context, url string) ([]byte, error) {
+	log := appctx.GetLogger(ctx)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "error creating OCM discovery request")
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, errors.Wrap(err, "error doing OCM discovery request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		log.Warn().Str("sender", url).Any("response", resp).Int("status", resp.StatusCode).Msg("discovery returned")
+		return nil, errtypes.BadRequest("Remote does not offer a valid OCM discovery endpoint")
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "malformed remote OCM discovery")
+	}
+	return body, nil
 }
 
 // NewShare sends a new OCM share to the remote system.

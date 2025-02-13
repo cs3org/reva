@@ -60,6 +60,7 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "missing parameters in request", err)
 		return
 	}
+	log.Info().Any("req", req).Msg("OCM /invite-accepted request received")
 
 	if req.Token == "" || req.UserID == "" || req.RecipientProvider == "" {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "token, userID and recipiendProvider must not be null", nil)
