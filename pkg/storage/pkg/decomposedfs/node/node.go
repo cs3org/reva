@@ -77,6 +77,7 @@ const (
 	// TrashIDDelimiter represents the characters used to separate the nodeid and the deletion time.
 	TrashIDDelimiter    = ".T."
 	RevisionIDDelimiter = ".REV."
+	CurrentIDDelimiter  = ".CURRENT"
 
 	// RootID defines the root node's ID
 	RootID = "root"
@@ -120,8 +121,6 @@ type Tree interface {
 	// CreateReference(ctx context.Context, node *Node, targetURI *url.URL) error
 	Move(ctx context.Context, oldNode *Node, newNode *Node) (err error)
 	Delete(ctx context.Context, node *Node) (err error)
-	RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPath string, target *Node) (*Node, *Node, func() error, error)
-	PurgeRecycleItemFunc(ctx context.Context, spaceid, key, purgePath string) (*Node, func() error, error)
 
 	InitNewNode(ctx context.Context, n *Node, fsize uint64) (metadata.UnlockFunc, error)
 	RestoreRevision(ctx context.Context, source, target metadata.MetadataNode) (err error)

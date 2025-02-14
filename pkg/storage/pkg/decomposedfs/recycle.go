@@ -37,6 +37,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 )
 
@@ -381,7 +382,7 @@ func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, ref *pro
 		targetNode = tn
 	}
 
-	rn, parent, restoreFunc, err := tb.fs.tp.RestoreRecycleItemFunc(ctx, ref.ResourceId.SpaceId, key, relativePath, targetNode)
+	rn, parent, restoreFunc, err := tb.fs.tp.(*tree.Tree).RestoreRecycleItemFunc(ctx, ref.ResourceId.SpaceId, key, relativePath, targetNode)
 	if err != nil {
 		return err
 	}
@@ -426,7 +427,7 @@ func (tb *DecomposedfsTrashbin) PurgeRecycleItem(ctx context.Context, ref *provi
 		return errtypes.BadRequest("missing reference, needs a space id")
 	}
 
-	rn, purgeFunc, err := tb.fs.tp.PurgeRecycleItemFunc(ctx, ref.ResourceId.OpaqueId, key, relativePath)
+	rn, purgeFunc, err := tb.fs.tp.(*tree.Tree).PurgeRecycleItemFunc(ctx, ref.ResourceId.OpaqueId, key, relativePath)
 	if err != nil {
 		if errors.Is(err, iofs.ErrNotExist) {
 			return errtypes.NotFound(key)

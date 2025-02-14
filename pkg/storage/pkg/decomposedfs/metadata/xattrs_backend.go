@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
@@ -49,6 +50,19 @@ func NewXattrsBackend(rootPath string, o cache.Config) XattrsBackend {
 
 // Name returns the name of the backend
 func (XattrsBackend) Name() string { return "xattrs" }
+
+// IdentifyPath returns the id and mtime of a file
+func (b XattrsBackend) IdentifyPath(_ context.Context, path string) (string, string, time.Time, error) {
+	spaceID, _ := xattr.Get(path, prefixes.IDAttr)
+	id, _ := xattr.Get(path, prefixes.IDAttr)
+
+	mtimeAttr, _ := xattr.Get(path, prefixes.MTimeAttr)
+	mtime, err := time.Parse(time.RFC3339Nano, string(mtimeAttr))
+	if err != nil {
+		return "", "", time.Time{}, err
+	}
+	return string(spaceID), string(id), mtime, nil
+}
 
 // Get an extended attribute value for the given key
 // No file locking is involved here as reading a single xattr is

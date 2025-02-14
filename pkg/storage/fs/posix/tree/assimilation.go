@@ -33,6 +33,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/pkg/xattr"
 	"github.com/rs/zerolog/log"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -70,6 +71,23 @@ type queueItem struct {
 }
 
 const dirtyFlag = "user.oc.dirty"
+
+type assimilationNode struct {
+	path    string
+	spaceID string
+}
+
+func (d *assimilationNode) GetID() string {
+	panic("dummyNode has no ID")
+}
+
+func (d *assimilationNode) GetSpaceID() string {
+	return d.spaceID
+}
+
+func (d *assimilationNode) InternalPath() string {
+	return d.path
+}
 
 // NewScanDebouncer returns a new SpaceDebouncer instance
 func NewScanDebouncer(d time.Duration, f func(item scanItem)) *ScanDebouncer {
@@ -254,35 +272,34 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 }
 
 func (t *Tree) HandleFileDelete(path string) error {
-	// purge metadata
-	if err := t.lookup.(*lookup.Lookup).IDCache.DeleteByPath(context.Background(), path); err != nil {
-		t.log.Error().Err(err).Str("path", path).Msg("could not delete id cache entry by path")
-	}
-	if err := t.lookup.MetadataBackend().Purge(context.Background(), path); err != nil {
-		t.log.Error().Err(err).Str("path", path).Msg("could not purge metadata")
-	}
-
-	// send event
-	owner, spaceID, nodeID, parentID, err := t.getOwnerAndIDs(filepath.Dir(path))
+	n, err := t.getNodeForPath(filepath.Dir(path))
 	if err != nil {
 		return err
 	}
 
+	// purge metadata
+	if err := t.lookup.(*lookup.Lookup).IDCache.DeleteByPath(context.Background(), path); err != nil {
+		t.log.Error().Err(err).Str("path", path).Msg("could not delete id cache entry by path")
+	}
+	if err := t.lookup.MetadataBackend().Purge(context.Background(), n); err != nil {
+		t.log.Error().Err(err).Str("path", path).Msg("could not purge metadata")
+	}
+
 	t.PublishEvent(events.ItemTrashed{
-		Owner:     owner,
-		Executant: owner,
+		Owner:     n.Owner(),
+		Executant: n.Owner(),
 		Ref: &provider.Reference{
 			ResourceId: &provider.ResourceId{
 				StorageId: t.options.MountID,
-				SpaceId:   spaceID,
-				OpaqueId:  parentID,
+				SpaceId:   n.SpaceID,
+				OpaqueId:  n.ParentID,
 			},
 			Path: filepath.Base(path),
 		},
 		ID: &provider.ResourceId{
 			StorageId: t.options.MountID,
-			SpaceId:   spaceID,
-			OpaqueId:  nodeID,
+			SpaceId:   n.SpaceID,
+			OpaqueId:  n.ID,
 		},
 		Timestamp: utils.TSNow(),
 	})
@@ -290,37 +307,15 @@ func (t *Tree) HandleFileDelete(path string) error {
 	return nil
 }
 
-func (t *Tree) getOwnerAndIDs(path string) (*userv1beta1.UserId, string, string, string, error) {
+func (t *Tree) getNodeForPath(path string) (*node.Node, error) {
 	lu := t.lookup.(*lookup.Lookup)
 
 	spaceID, nodeID, err := lu.IDsForPath(context.Background(), path)
 	if err != nil {
-		return nil, "", "", "", err
+		return nil, err
 	}
 
-	attrs, err := t.lookup.MetadataBackend().All(context.Background(), path)
-	if err != nil {
-		return nil, "", "", "", err
-	}
-
-	parentID := string(attrs[prefixes.ParentidAttr])
-
-	spacePath, ok := lu.GetCachedID(context.Background(), spaceID, spaceID)
-	if !ok {
-		return nil, "", "", "", fmt.Errorf("could not find space root for path %s", path)
-	}
-
-	spaceAttrs, err := t.lookup.MetadataBackend().All(context.Background(), spacePath)
-	if err != nil {
-		return nil, "", "", "", err
-	}
-
-	owner := &userv1beta1.UserId{
-		Idp:      string(spaceAttrs[prefixes.OwnerIDPAttr]),
-		OpaqueId: string(spaceAttrs[prefixes.OwnerIDAttr]),
-	}
-
-	return owner, nodeID, spaceID, parentID, nil
+	return node.ReadNode(context.Background(), lu, spaceID, nodeID, false, nil, false)
 }
 
 func (t *Tree) findSpaceId(path string) (string, node.Attributes, error) {
@@ -328,8 +323,7 @@ func (t *Tree) findSpaceId(path string) (string, node.Attributes, error) {
 	spaceCandidate := path
 	spaceAttrs := node.Attributes{}
 	for strings.HasPrefix(spaceCandidate, t.options.Root) {
-		spaceAttrs, err := t.lookup.MetadataBackend().All(context.Background(), spaceCandidate)
-		spaceID := spaceAttrs[prefixes.SpaceIDAttr]
+		spaceID, _, err := t.lookup.(*lookup.Lookup).IDsForPath(context.Background(), spaceCandidate)
 		if err == nil && len(spaceID) > 0 {
 			if t.options.UseSpaceGroups {
 				// set the uid and gid for the space
@@ -353,7 +347,6 @@ func (t *Tree) findSpaceId(path string) (string, node.Attributes, error) {
 }
 
 func (t *Tree) assimilate(item scanItem) error {
-	var id []byte
 	var err error
 
 	// First find the space id
@@ -362,8 +355,13 @@ func (t *Tree) assimilate(item scanItem) error {
 		return err
 	}
 
+	assimilationNode := &assimilationNode{
+		spaceID: spaceID,
+		path:    item.Path,
+	}
+
 	// lock the file for assimilation
-	unlock, err := t.lookup.MetadataBackend().Lock(item.Path)
+	unlock, err := t.lookup.MetadataBackend().Lock(assimilationNode)
 	if err != nil {
 		return errors.Wrap(err, "failed to lock item for assimilation")
 	}
@@ -377,27 +375,25 @@ func (t *Tree) assimilate(item scanItem) error {
 	}
 
 	// check for the id attribute again after grabbing the lock, maybe the file was assimilated/created by us in the meantime
-	md, err := t.lookup.MetadataBackend().All(context.Background(), item.Path)
+	id, _, mtime, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), item.Path)
 	if err != nil {
 		return err
 	}
-	attrs := node.Attributes(md)
 
 	// compare metadata mtime with actual mtime. if it matches we can skip the assimilation because the file was handled by us
-	mtime, err := attrs.Time(prefixes.MTimeAttr)
+	fi, err := os.Stat(item.Path)
 	if err == nil {
-		fi, err := os.Stat(item.Path)
-		if err == nil {
-			if mtime.Equal(fi.ModTime()) {
-				return nil
-			}
+		if mtime.Equal(fi.ModTime()) {
+			return nil
 		}
 	}
 
-	id = attrs[prefixes.IDAttr]
-	if err == nil {
+	if id != "" {
+		// the file has an id set, we already know it from the past
+		n := node.NewBaseNode(spaceID, id, t.lookup)
+
 		previousPath, ok := t.lookup.(*lookup.Lookup).GetCachedID(context.Background(), spaceID, string(id))
-		previousParentID, _ := t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.ParentidAttr)
+		previousParentID, _ := t.lookup.MetadataBackend().Get(context.Background(), n, prefixes.ParentidAttr)
 
 		// was it moved or copied/restored with a clashing id?
 		if ok && len(previousParentID) > 0 && previousPath != item.Path {
@@ -406,7 +402,7 @@ func (t *Tree) assimilate(item scanItem) error {
 				// this id clashes with an existing item -> clear metadata and re-assimilate
 				t.log.Debug().Str("path", item.Path).Msg("ID clash detected, purging metadata and re-assimilating")
 
-				if err := t.lookup.MetadataBackend().Purge(context.Background(), item.Path); err != nil {
+				if err := t.lookup.MetadataBackend().Purge(context.Background(), n); err != nil {
 					t.log.Error().Err(err).Str("path", item.Path).Msg("could not purge metadata")
 				}
 				go func() {
@@ -421,17 +417,14 @@ func (t *Tree) assimilate(item scanItem) error {
 				if err := t.lookup.(*lookup.Lookup).CacheID(context.Background(), spaceID, string(id), item.Path); err != nil {
 					t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", string(id)).Str("path", item.Path).Msg("could not cache id")
 				}
-				_, err := t.updateFile(item.Path, string(id), spaceID)
+				_, attrs, err := t.updateFile(item.Path, string(id), spaceID)
 				if err != nil {
 					return err
 				}
 
-				// purge original metadata. Only delete the path entry using DeletePath(reverse lookup), not the whole entry pair.
+				// Delete the path entry using DeletePath(reverse lookup), not the whole entry pair.
 				if err := t.lookup.(*lookup.Lookup).IDCache.DeletePath(context.Background(), previousPath); err != nil {
 					t.log.Error().Err(err).Str("path", previousPath).Msg("could not delete id cache entry by path")
-				}
-				if err := t.lookup.MetadataBackend().Purge(context.Background(), previousPath); err != nil {
-					t.log.Error().Err(err).Str("path", previousPath).Msg("could not purge metadata")
 				}
 
 				fi, err := os.Stat(item.Path)
@@ -447,13 +440,13 @@ func (t *Tree) assimilate(item scanItem) error {
 					}()
 				}
 
-				parentID, err := t.lookup.MetadataBackend().Get(context.Background(), item.Path, prefixes.ParentidAttr)
+				parentID := attrs.String(prefixes.ParentidAttr)
 				if err == nil && len(parentID) > 0 {
 					ref := &provider.Reference{
 						ResourceId: &provider.ResourceId{
 							StorageId: t.options.MountID,
 							SpaceId:   spaceID,
-							OpaqueId:  string(parentID),
+							OpaqueId:  parentID,
 						},
 						Path: filepath.Base(item.Path),
 					}
@@ -482,7 +475,7 @@ func (t *Tree) assimilate(item scanItem) error {
 				t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", string(id)).Str("path", item.Path).Msg("could not cache id")
 			}
 
-			_, err := t.updateFile(item.Path, string(id), spaceID)
+			_, _, err := t.updateFile(item.Path, string(id), spaceID)
 			if err != nil {
 				return err
 			}
@@ -491,7 +484,7 @@ func (t *Tree) assimilate(item scanItem) error {
 		t.log.Debug().Str("path", item.Path).Msg("new item detected")
 		// assimilate new file
 		newId := uuid.New().String()
-		fi, err := t.updateFile(item.Path, newId, spaceID)
+		fi, _, err := t.updateFile(item.Path, newId, spaceID)
 		if err != nil {
 			return err
 		}
@@ -531,26 +524,31 @@ func (t *Tree) assimilate(item scanItem) error {
 	return nil
 }
 
-func (t *Tree) updateFile(path, id, spaceID string) (fs.FileInfo, error) {
+func (t *Tree) updateFile(path, id, spaceID string) (fs.FileInfo, node.Attributes, error) {
 	retries := 1
 	parentID := ""
+	bn := node.NewBaseNode(spaceID, id, t.lookup)
 assimilate:
 	if id != spaceID {
 		// read parent
-		parentAttribs, err := t.lookup.MetadataBackend().All(context.Background(), filepath.Dir(path))
+		_, parentID, err := t.lookup.(*lookup.Lookup).IDsForPath(context.Background(), filepath.Dir(path))
 		if err != nil {
-			return nil, fmt.Errorf("failed to read parent item attributes")
+			return nil, nil, fmt.Errorf("failed to read parent id")
+		}
+		parentAttribs, err := t.lookup.MetadataBackend().All(context.Background(), node.NewBaseNode(spaceID, parentID, t.lookup))
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to read parent item attributes")
 		}
 
 		if len(parentAttribs) == 0 || len(parentAttribs[prefixes.IDAttr]) == 0 {
 			if retries == 0 {
-				return nil, fmt.Errorf("got empty parent attribs even after assimilating")
+				return nil, nil, fmt.Errorf("got empty parent attribs even after assimilating")
 			}
 
 			// assimilate parent first
 			err = t.assimilate(scanItem{Path: filepath.Dir(path), ForceRescan: false})
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 
 			// retry
@@ -563,12 +561,12 @@ assimilate:
 	// assimilate file
 	fi, err := os.Stat(path)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to stat item")
+		return nil, nil, errors.Wrap(err, "failed to stat item")
 	}
 
-	attrs, err := t.lookup.MetadataBackend().All(context.Background(), path)
+	attrs, err := t.lookup.MetadataBackend().All(context.Background(), bn)
 	if err != nil && !metadata.IsAttrUnset(err) {
-		return nil, errors.Wrap(err, "failed to get item attribs")
+		return nil, nil, errors.Wrap(err, "failed to get item attribs")
 	}
 	previousAttribs := node.Attributes(attrs)
 
@@ -602,11 +600,12 @@ assimilate:
 	attributes.SetTime(prefixes.MTimeAttr, fi.ModTime())
 
 	n := node.New(spaceID, id, parentID, filepath.Base(path), fi.Size(), "", provider.ResourceType_RESOURCE_TYPE_FILE, nil, t.lookup)
-	n.SpaceRoot = &node.Node{SpaceID: spaceID, ID: spaceID}
+	n.SpaceRoot = &node.Node{BaseNode: node.BaseNode{SpaceID: spaceID, ID: spaceID}}
 
 	go func() {
 		// Copy the previous current version to a revision
-		currentPath := t.lookup.(*lookup.Lookup).CurrentPath(n.SpaceID, n.ID)
+		currentNode := node.NewBaseNode(n.SpaceID, n.ID+node.CurrentIDDelimiter, t.lookup)
+		currentPath := currentNode.InternalPath()
 		stat, err := os.Stat(currentPath)
 		if err != nil {
 			t.log.Error().Err(err).Str("path", path).Str("currentPath", currentPath).Msg("could not stat current path")
@@ -640,7 +639,7 @@ assimilate:
 			return
 		}
 
-		err = t.lookup.CopyMetadata(context.Background(), n.InternalPath(), currentPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
+		err = t.lookup.CopyMetadata(context.Background(), n, currentNode, func(attributeName string, value []byte) (newValue []byte, copy bool) {
 			return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
 				attributeName == prefixes.TypeAttr ||
 				attributeName == prefixes.BlobIDAttr ||
@@ -654,26 +653,26 @@ assimilate:
 
 	err = t.Propagate(context.Background(), n, 0)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to propagate")
+		return nil, nil, errors.Wrap(err, "failed to propagate")
 	}
 
 	t.log.Debug().Str("path", path).Interface("attributes", attributes).Msg("setting attributes")
-	err = t.lookup.MetadataBackend().SetMultiple(context.Background(), path, attributes, false)
+	err = t.lookup.MetadataBackend().SetMultiple(context.Background(), bn, attributes, false)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to set attributes")
+		return nil, nil, errors.Wrap(err, "failed to set attributes")
 	}
 
 	if err := t.lookup.(*lookup.Lookup).CacheID(context.Background(), spaceID, id, path); err != nil {
 		t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", id).Str("path", path).Msg("could not cache id")
 	}
 
-	return fi, nil
+	return fi, attributes, nil
 }
 
 // WarmupIDCache warms up the id cache
 func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 	root = filepath.Clean(root)
-	spaceID := []byte("")
+	spaceID := ""
 
 	scopeSpace := func(spaceCandidate string) error {
 		if !t.options.UseSpaceGroups {
@@ -723,9 +722,8 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 			sizes[path] += 0 // Make sure to set the size to 0 for empty directories
 		}
 
-		attribs, err := t.lookup.MetadataBackend().All(context.Background(), path)
-		if err == nil && len(attribs[prefixes.IDAttr]) > 0 {
-			nodeSpaceID := attribs[prefixes.SpaceIDAttr]
+		nodeSpaceID, id, _, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), path)
+		if err == nil && len(id) > 0 {
 			if len(nodeSpaceID) > 0 {
 				spaceID = nodeSpaceID
 
@@ -737,7 +735,16 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 				// try to find space
 				spaceCandidate := path
 				for strings.HasPrefix(spaceCandidate, t.options.Root) {
-					spaceID, err = t.lookup.MetadataBackend().Get(context.Background(), spaceCandidate, prefixes.SpaceIDAttr)
+					spaceID, _, err = t.lookup.(*lookup.Lookup).IDsForPath(context.Background(), spaceCandidate)
+					if err == nil && len(spaceID) > 0 {
+						err = scopeSpace(path)
+						if err != nil {
+							return err
+						}
+						break
+					}
+
+					spaceID, _, _, err = t.lookup.MetadataBackend().IdentifyPath(context.Background(), spaceCandidate)
 					if err == nil {
 						err = scopeSpace(path)
 						if err != nil {
@@ -752,20 +759,18 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 				return nil // no space found
 			}
 
-			id, ok := attribs[prefixes.IDAttr]
-			if ok {
+			if id != "" {
 				// Check if the item on the previous still exists. In this case it might have been a copy with extended attributes -> set new ID
-				previousPath, ok := t.lookup.(*lookup.Lookup).GetCachedID(context.Background(), string(spaceID), string(id))
+				previousPath, ok := t.lookup.(*lookup.Lookup).GetCachedID(context.Background(), spaceID, id)
 				if ok && previousPath != path {
-					// this id clashes with an existing id -> clear metadata and re-assimilate
+					// this id clashes with an existing id -> re-assimilate
 					_, err := os.Stat(previousPath)
 					if err == nil {
-						_ = t.lookup.MetadataBackend().Purge(context.Background(), path)
 						_ = t.assimilate(scanItem{Path: path, ForceRescan: true})
 					}
 				}
-				if err := t.lookup.(*lookup.Lookup).CacheID(context.Background(), string(spaceID), string(id), path); err != nil {
-					t.log.Error().Err(err).Str("spaceID", string(spaceID)).Str("id", string(id)).Str("path", path).Msg("could not cache id")
+				if err := t.lookup.(*lookup.Lookup).CacheID(context.Background(), spaceID, id, path); err != nil {
+					t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", id).Str("path", path).Msg("could not cache id")
 				}
 			}
 		} else if assimilate {
@@ -777,13 +782,23 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 	})
 
 	for dir, size := range sizes {
+		spaceID, id, err := t.lookup.(*lookup.Lookup).IDsForPath(context.Background(), dir)
+		if err != nil {
+			t.log.Error().Err(err).Str("path", dir).Msg("could not get ids for path")
+			continue
+		}
+		n, err := node.ReadNode(context.Background(), t.lookup, spaceID, id, true, nil, false)
+		if err != nil {
+			t.log.Error().Err(err).Str("path", dir).Msg("could not read directory node")
+			continue
+		}
 		if dir == root {
 			// Propagate the size diff further up the tree
-			if err := t.propagateSizeDiff(dir, size); err != nil {
+			if err := t.propagateSizeDiff(n, size); err != nil {
 				t.log.Error().Err(err).Str("path", dir).Msg("could not propagate size diff")
 			}
 		}
-		if err := t.lookup.MetadataBackend().Set(context.Background(), dir, prefixes.TreesizeAttr, []byte(fmt.Sprintf("%d", size))); err != nil {
+		if err := t.lookup.MetadataBackend().Set(context.Background(), n, prefixes.TreesizeAttr, []byte(fmt.Sprintf("%d", size))); err != nil {
 			t.log.Error().Err(err).Str("path", dir).Int64("size", size).Msg("could not set tree size")
 		}
 	}
@@ -795,24 +810,12 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 	return nil
 }
 
-func (t *Tree) propagateSizeDiff(dir string, size int64) error {
-	// First find the space id
-	spaceID, _, err := t.findSpaceId(dir)
+func (t *Tree) propagateSizeDiff(n *node.Node, size int64) error {
+	attrs, err := t.lookup.MetadataBackend().All(context.Background(), n)
 	if err != nil {
 		return err
 	}
-	attrs, err := t.lookup.MetadataBackend().All(context.Background(), dir)
-	if err != nil {
-		return err
-	}
-	n, err := t.lookup.NodeFromID(context.Background(), &provider.ResourceId{
-		StorageId: t.options.MountID,
-		SpaceId:   spaceID,
-		OpaqueId:  string(attrs[prefixes.IDAttr]),
-	})
-	if err != nil {
-		return err
-	}
+
 	oldSize, err := node.Attributes(attrs).Int64(prefixes.TreesizeAttr)
 	if err != nil {
 		return err
@@ -821,11 +824,11 @@ func (t *Tree) propagateSizeDiff(dir string, size int64) error {
 }
 
 func (t *Tree) setDirty(path string, dirty bool) error {
-	return t.lookup.MetadataBackend().Set(context.Background(), path, dirtyFlag, []byte(fmt.Sprintf("%t", dirty)))
+	return xattr.Set(path, dirtyFlag, []byte(fmt.Sprintf("%t", dirty)))
 }
 
 func (t *Tree) isDirty(path string) (bool, error) {
-	dirtyAttr, err := t.lookup.MetadataBackend().Get(context.Background(), path, dirtyFlag)
+	dirtyAttr, err := xattr.Get(path, dirtyFlag)
 	if err != nil {
 		return false, err
 	}
