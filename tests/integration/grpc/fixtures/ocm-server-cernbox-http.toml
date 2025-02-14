@@ -1,5 +1,4 @@
 [log]
-mode = "json"
 
 [shared]
 gatewaysvc = "{{cernboxgw_address}}"
