@@ -1,5 +1,4 @@
 [log]
-mode = "json"
 
 [shared]
 gatewaysvc = "{{grpc_address}}"
