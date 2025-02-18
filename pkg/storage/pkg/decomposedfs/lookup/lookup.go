@@ -72,7 +72,7 @@ func (lu *Lookup) MetadataBackend() metadata.Backend {
 	return lu.metadataBackend
 }
 
-func (lu *Lookup) ReadBlobIDAndSizeAttr(ctx context.Context, path string, attrs node.Attributes) (string, int64, error) {
+func (lu *Lookup) ReadBlobIDAndSizeAttr(ctx context.Context, n metadata.MetadataNode, attrs node.Attributes) (string, int64, error) {
 	blobID := ""
 	blobSize := int64(0)
 	var err error
@@ -86,7 +86,7 @@ func (lu *Lookup) ReadBlobIDAndSizeAttr(ctx context.Context, path string, attrs 
 			}
 		}
 	} else {
-		attrs, err := lu.metadataBackend.All(ctx, path)
+		attrs, err := lu.metadataBackend.All(ctx, n)
 		if err != nil {
 			return "", 0, errors.Wrapf(err, "error reading blobid xattr")
 		}
@@ -100,54 +100,12 @@ func (lu *Lookup) ReadBlobIDAndSizeAttr(ctx context.Context, path string, attrs 
 	return blobID, blobSize, nil
 }
 
-func readChildNodeFromLink(path string) (string, error) {
-	link, err := os.Readlink(path)
-	if err != nil {
-		return "", err
-	}
-	nodeID := strings.TrimLeft(link, "/.")
-	nodeID = strings.ReplaceAll(nodeID, "/", "")
-	return nodeID, nil
-}
-
 func (lu *Lookup) NodeIDFromParentAndName(ctx context.Context, parent *node.Node, name string) (string, error) {
-	nodeID, err := readChildNodeFromLink(filepath.Join(parent.InternalPath(), name))
+	nodeID, err := node.ReadChildNodeFromLink(ctx, filepath.Join(parent.InternalPath(), name))
 	if err != nil {
 		return "", errors.Wrap(err, "decomposedfs: Wrap: readlink error")
 	}
 	return nodeID, nil
-}
-
-// TypeFromPath returns the type of the node at the given path
-func (lu *Lookup) TypeFromPath(ctx context.Context, path string) provider.ResourceType {
-	// Try to read from xattrs
-	typeAttr, err := lu.metadataBackend.GetInt64(ctx, path, prefixes.TypeAttr)
-	if err == nil {
-		return provider.ResourceType(int32(typeAttr))
-	}
-
-	t := provider.ResourceType_RESOURCE_TYPE_INVALID
-	// Fall back to checking on disk
-	fi, err := os.Lstat(path)
-	if err != nil {
-		return t
-	}
-
-	switch {
-	case fi.IsDir():
-		if _, err = lu.metadataBackend.Get(ctx, path, prefixes.ReferenceAttr); err == nil {
-			t = provider.ResourceType_RESOURCE_TYPE_REFERENCE
-		} else {
-			t = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-		}
-	case fi.Mode().IsRegular():
-		t = provider.ResourceType_RESOURCE_TYPE_FILE
-	case fi.Mode()&os.ModeSymlink != 0:
-		t = provider.ResourceType_RESOURCE_TYPE_SYMLINK
-		// TODO reference using ext attr on a symlink
-		// nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
-	}
-	return t
 }
 
 // NodeFromResource takes in a request path or request id and converts it to a Node
@@ -310,6 +268,7 @@ func (lu *Lookup) InternalPath(spaceID, nodeID string) string {
 }
 
 // VersionPath returns the internal path for a version of a node
+// Deprecated: use InternalPath instead
 func (lu *Lookup) VersionPath(spaceID, nodeID, version string) string {
 	return lu.InternalPath(spaceID, nodeID) + node.RevisionIDDelimiter + version
 }
@@ -336,10 +295,10 @@ func refFromCS3(b []byte) (*provider.Reference, error) {
 // The optional filter function can be used to filter by attribute name, e.g. by checking a prefix
 // For the source file, a shared lock is acquired.
 // NOTE: target resource will be write locked!
-func (lu *Lookup) CopyMetadata(ctx context.Context, src, target string, filter func(attributeName string, value []byte) (newValue []byte, copy bool), acquireTargetLock bool) (err error) {
+func (lu *Lookup) CopyMetadata(ctx context.Context, sourceNode, targetNode metadata.MetadataNode, filter func(attributeName string, value []byte) (newValue []byte, copy bool), acquireTargetLock bool) (err error) {
 	// Acquire a read log on the source node
 	// write lock existing node before reading treesize or tree time
-	lock, err := lockedfile.OpenFile(lu.MetadataBackend().LockfilePath(src), os.O_RDONLY|os.O_CREATE, 0600)
+	lock, err := lockedfile.OpenFile(lu.MetadataBackend().LockfilePath(sourceNode), os.O_RDONLY|os.O_CREATE, 0600)
 	if err != nil {
 		return err
 	}
@@ -356,22 +315,22 @@ func (lu *Lookup) CopyMetadata(ctx context.Context, src, target string, filter f
 		}
 	}()
 
-	return lu.CopyMetadataWithSourceLock(ctx, src, target, filter, lock, acquireTargetLock)
+	return lu.CopyMetadataWithSourceLock(ctx, sourceNode, targetNode, filter, lock, acquireTargetLock)
 }
 
 // CopyMetadataWithSourceLock copies all extended attributes from source to target.
 // The optional filter function can be used to filter by attribute name, e.g. by checking a prefix
 // For the source file, a matching lockedfile is required.
 // NOTE: target resource will be write locked!
-func (lu *Lookup) CopyMetadataWithSourceLock(ctx context.Context, sourcePath, targetPath string, filter func(attributeName string, value []byte) (newValue []byte, copy bool), lockedSource *lockedfile.File, acquireTargetLock bool) (err error) {
+func (lu *Lookup) CopyMetadataWithSourceLock(ctx context.Context, sourceNode, targetNode metadata.MetadataNode, filter func(attributeName string, value []byte) (newValue []byte, copy bool), lockedSource *lockedfile.File, acquireTargetLock bool) (err error) {
 	switch {
 	case lockedSource == nil:
 		return errors.New("no lock provided")
-	case lockedSource.File.Name() != lu.MetadataBackend().LockfilePath(sourcePath):
+	case lockedSource.File.Name() != lu.MetadataBackend().LockfilePath(sourceNode):
 		return errors.New("lockpath does not match filepath")
 	}
 
-	attrs, err := lu.metadataBackend.All(ctx, sourcePath)
+	attrs, err := lu.metadataBackend.All(ctx, sourceNode)
 	if err != nil {
 		return err
 	}
@@ -387,7 +346,7 @@ func (lu *Lookup) CopyMetadataWithSourceLock(ctx context.Context, sourcePath, ta
 		newAttrs[attrName] = val
 	}
 
-	return lu.MetadataBackend().SetMultiple(ctx, targetPath, newAttrs, acquireTargetLock)
+	return lu.MetadataBackend().SetMultiple(ctx, targetNode, newAttrs, acquireTargetLock)
 }
 
 // TimeManager returns the time manager

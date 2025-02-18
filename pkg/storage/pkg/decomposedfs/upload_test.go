@@ -32,7 +32,6 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/aspects"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
@@ -104,9 +103,12 @@ var _ = Describe("File uploads", func() {
 
 		o, err = options.New(map[string]interface{}{
 			"root": tmpRoot,
+			"filemetadatacache": map[string]interface{}{
+				"cache_database": tmpRoot,
+			},
 		})
 		Expect(err).ToNot(HaveOccurred())
-		lu = lookup.New(metadata.NewXattrsBackend(o.Root, cache.Config{}), o, &timemanager.Manager{})
+		lu = lookup.New(metadata.NewXattrsBackend(o.Root, o.FileMetadataCache), o, &timemanager.Manager{})
 		pmock = &mocks.PermissionsChecker{}
 		cs3permissionsclient = &mocks.CS3PermissionsClient{}
 		pool.RemoveSelector("PermissionsSelector" + "any")

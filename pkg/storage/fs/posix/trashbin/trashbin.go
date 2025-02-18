@@ -133,13 +133,12 @@ func (tb *Trashbin) MoveToTrash(ctx context.Context, n *node.Node, path string) 
 	if err = tb.lu.IDCache.DeleteByPath(ctx, path); err != nil {
 		return err
 	}
-
-	itemTrashPath := filepath.Join(trashPath, "files", key+".trashitem")
-	err = tb.lu.MetadataBackend().Rename(path, itemTrashPath)
+	err = tb.lu.MetadataBackend().Purge(ctx, n)
 	if err != nil {
 		return err
 	}
 
+	itemTrashPath := filepath.Join(trashPath, "files", key+".trashitem")
 	return os.Rename(path, itemTrashPath)
 }
 
@@ -241,13 +240,13 @@ func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, ref *provider.Refere
 	}
 	restorePath := filepath.Join(restoreBaseNode.InternalPath(), restoreRef.GetPath())
 
-	id, err := tb.lu.MetadataBackend().Get(ctx, trashPath, prefixes.IDAttr)
+	spaceID, id, _, err := tb.lu.MetadataBackend().IdentifyPath(ctx, trashPath)
 	if err != nil {
 		return err
 	}
 
 	// update parent id in case it was restored to a different location
-	parentID, err := tb.lu.MetadataBackend().Get(ctx, filepath.Dir(restorePath), prefixes.IDAttr)
+	_, parentID, _, err := tb.lu.MetadataBackend().IdentifyPath(ctx, filepath.Dir(restorePath))
 	if err != nil {
 		return err
 	}
@@ -255,7 +254,8 @@ func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, ref *provider.Refere
 		return fmt.Errorf("trashbin: parent id not found for %s", restorePath)
 	}
 
-	err = tb.lu.MetadataBackend().Set(ctx, trashPath, prefixes.ParentidAttr, parentID)
+	trashNode := node.NewBaseNode(spaceID, id, tb.lu)
+	err = tb.lu.MetadataBackend().Set(ctx, trashNode, prefixes.ParentidAttr, []byte(parentID))
 	if err != nil {
 		return err
 	}

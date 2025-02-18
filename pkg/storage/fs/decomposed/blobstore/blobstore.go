@@ -127,8 +127,10 @@ func (bs *Blobstore) List() ([]*node.Node, error) {
 		_, s, _ := strings.Cut(d, "spaces")
 		spaceraw, blobraw, _ := strings.Cut(s, "blobs")
 		blobids = append(blobids, &node.Node{
-			SpaceID: strings.ReplaceAll(spaceraw, "/", ""),
-			BlobID:  strings.ReplaceAll(blobraw, "/", ""),
+			BaseNode: node.BaseNode{
+				SpaceID: strings.ReplaceAll(spaceraw, "/", ""),
+			},
+			BlobID: strings.ReplaceAll(blobraw, "/", ""),
 		})
 	}
 	return blobids, nil

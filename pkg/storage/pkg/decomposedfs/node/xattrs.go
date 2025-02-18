@@ -81,7 +81,7 @@ func (n *Node) SetXattrsWithContext(ctx context.Context, attribs map[string][]by
 		}
 	}
 
-	return n.lu.MetadataBackend().SetMultiple(ctx, n.InternalPath(), attribs, acquireLock)
+	return n.lu.MetadataBackend().SetMultiple(ctx, n, attribs, acquireLock)
 }
 
 // SetXattrs sets multiple extended attributes on the write-through cache/node
@@ -95,7 +95,7 @@ func (n *Node) SetXattr(ctx context.Context, key string, val []byte) (err error)
 		n.xattrsCache[key] = val
 	}
 
-	return n.lu.MetadataBackend().Set(ctx, n.InternalPath(), key, val)
+	return n.lu.MetadataBackend().Set(ctx, n, key, val)
 }
 
 // SetXattrString sets a string extended attribute on the write-through cache/node
@@ -104,7 +104,7 @@ func (n *Node) SetXattrString(ctx context.Context, key, val string) (err error) 
 		n.xattrsCache[key] = []byte(val)
 	}
 
-	return n.lu.MetadataBackend().Set(ctx, n.InternalPath(), key, []byte(val))
+	return n.lu.MetadataBackend().Set(ctx, n, key, []byte(val))
 }
 
 // RemoveXattr removes an extended attribute from the write-through cache/node
@@ -112,7 +112,7 @@ func (n *Node) RemoveXattr(ctx context.Context, key string, acquireLock bool) er
 	if n.xattrsCache != nil {
 		delete(n.xattrsCache, key)
 	}
-	return n.lu.MetadataBackend().Remove(ctx, n.InternalPath(), key, acquireLock)
+	return n.lu.MetadataBackend().Remove(ctx, n, key, acquireLock)
 }
 
 // XattrsWithReader returns the extended attributes of the node. If the attributes have already
@@ -131,9 +131,9 @@ func (n *Node) XattrsWithReader(ctx context.Context, r io.Reader) (Attributes, e
 	var attrs Attributes
 	var err error
 	if r != nil {
-		attrs, err = n.lu.MetadataBackend().AllWithLockedSource(ctx, n.InternalPath(), r)
+		attrs, err = n.lu.MetadataBackend().AllWithLockedSource(ctx, n, r)
 	} else {
-		attrs, err = n.lu.MetadataBackend().All(ctx, n.InternalPath())
+		attrs, err = n.lu.MetadataBackend().All(ctx, n)
 	}
 	if err != nil {
 		return nil, err
@@ -166,7 +166,7 @@ func (n *Node) Xattr(ctx context.Context, key string) ([]byte, error) {
 	}
 
 	if n.xattrsCache == nil {
-		attrs, err := n.lu.MetadataBackend().All(ctx, path)
+		attrs, err := n.lu.MetadataBackend().All(ctx, n)
 		if err != nil {
 			return []byte{}, err
 		}

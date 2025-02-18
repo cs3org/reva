@@ -29,10 +29,28 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 )
 
+type testNode struct {
+	spaceID string
+	id      string
+	path    string
+}
+
+func (t testNode) GetSpaceID() string {
+	return t.spaceID
+}
+
+func (t testNode) GetID() string {
+	return t.id
+}
+
+func (t testNode) InternalPath() string {
+	return t.path
+}
+
 var _ = Describe("Backend", func() {
 	var (
 		tmpdir string
-		file   string
+		n      testNode
 
 		backend metadata.Backend
 	)
@@ -44,7 +62,11 @@ var _ = Describe("Backend", func() {
 	})
 
 	JustBeforeEach(func() {
-		file = path.Join(tmpdir, "file")
+		n = testNode{
+			spaceID: "123",
+			id:      "456",
+			path:    path.Join(tmpdir, "file"),
+		}
 	})
 
 	AfterEach(func() {
@@ -63,43 +85,43 @@ var _ = Describe("Backend", func() {
 		Describe("Set", func() {
 			It("sets an attribute", func() {
 				data := []byte(`bar\`)
-				err := backend.Set(context.Background(), file, "foo", data)
+				err := backend.Set(context.Background(), n, "foo", data)
 				Expect(err).ToNot(HaveOccurred())
 
-				readData, err := backend.Get(context.Background(), file, "foo")
+				readData, err := backend.Get(context.Background(), n, "foo")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(readData).To(Equal(data))
 			})
 
 			It("handles funny strings", func() {
 				data := []byte(`bar\`)
-				err := backend.Set(context.Background(), file, "foo", data)
+				err := backend.Set(context.Background(), n, "foo", data)
 				Expect(err).ToNot(HaveOccurred())
 
-				readData, err := backend.Get(context.Background(), file, "foo")
+				readData, err := backend.Get(context.Background(), n, "foo")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(readData).To(Equal(data))
 			})
 
 			It("updates an attribute", func() {
-				err := backend.Set(context.Background(), file, "foo", []byte("bar"))
+				err := backend.Set(context.Background(), n, "foo", []byte("bar"))
 				Expect(err).ToNot(HaveOccurred())
-				err = backend.Set(context.Background(), file, "foo", []byte("baz"))
+				err = backend.Set(context.Background(), n, "foo", []byte("baz"))
 				Expect(err).ToNot(HaveOccurred())
 
-				readData, err := backend.Get(context.Background(), file, "foo")
+				readData, err := backend.Get(context.Background(), n, "foo")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(readData).To(Equal([]byte("baz")))
 			})
 
 			It("sets an empty attribute", func() {
-				_, err := backend.Get(context.Background(), file, "foo")
+				_, err := backend.Get(context.Background(), n, "foo")
 				Expect(err).To(HaveOccurred())
 
-				err = backend.Set(context.Background(), file, "foo", []byte{})
+				err = backend.Set(context.Background(), n, "foo", []byte{})
 				Expect(err).ToNot(HaveOccurred())
 
-				v, err := backend.Get(context.Background(), file, "foo")
+				v, err := backend.Get(context.Background(), n, "foo")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(v).To(Equal([]byte{}))
 			})
@@ -108,23 +130,23 @@ var _ = Describe("Backend", func() {
 		Describe("SetMultiple", func() {
 			It("sets attributes", func() {
 				data := map[string][]byte{"foo": []byte("bar"), "baz": []byte("qux")}
-				err := backend.SetMultiple(context.Background(), file, data, true)
+				err := backend.SetMultiple(context.Background(), n, data, true)
 				Expect(err).ToNot(HaveOccurred())
 
-				readData, err := backend.All(context.Background(), file)
+				readData, err := backend.All(context.Background(), n)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(readData).To(Equal(data))
 			})
 
 			It("updates an attribute", func() {
-				err := backend.Set(context.Background(), file, "foo", []byte("something"))
+				err := backend.Set(context.Background(), n, "foo", []byte("something"))
 
 				data := map[string][]byte{"foo": []byte("bar"), "baz": []byte("qux")}
 				Expect(err).ToNot(HaveOccurred())
-				err = backend.SetMultiple(context.Background(), file, data, true)
+				err = backend.SetMultiple(context.Background(), n, data, true)
 				Expect(err).ToNot(HaveOccurred())
 
-				readData, err := backend.All(context.Background(), file)
+				readData, err := backend.All(context.Background(), n)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(readData).To(Equal(data))
 			})
@@ -133,10 +155,10 @@ var _ = Describe("Backend", func() {
 		Describe("All", func() {
 			It("returns the entries", func() {
 				data := map[string][]byte{"foo": []byte("123"), "bar": []byte("baz")}
-				err := backend.SetMultiple(context.Background(), file, data, true)
+				err := backend.SetMultiple(context.Background(), n, data, true)
 				Expect(err).ToNot(HaveOccurred())
 
-				v, err := backend.All(context.Background(), file)
+				v, err := backend.All(context.Background(), n)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(v)).To(Equal(2))
 				Expect(v["foo"]).To(Equal([]byte("123")))
@@ -144,7 +166,7 @@ var _ = Describe("Backend", func() {
 			})
 
 			It("fails when the metafile does not exist", func() {
-				_, err := backend.All(context.Background(), file)
+				_, err := backend.All(context.Background(), n)
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -152,16 +174,16 @@ var _ = Describe("Backend", func() {
 		Describe("List", func() {
 			It("returns the entries", func() {
 				data := map[string][]byte{"foo": []byte("123"), "bar": []byte("baz")}
-				err := backend.SetMultiple(context.Background(), file, data, true)
+				err := backend.SetMultiple(context.Background(), n, data, true)
 				Expect(err).ToNot(HaveOccurred())
 
-				v, err := backend.List(context.Background(), file)
+				v, err := backend.List(context.Background(), n)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(v).To(ConsistOf("foo", "bar"))
 			})
 
 			It("fails when the metafile does not exist", func() {
-				_, err := backend.List(context.Background(), file)
+				_, err := backend.List(context.Background(), n)
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -169,16 +191,16 @@ var _ = Describe("Backend", func() {
 		Describe("Get", func() {
 			It("returns the attribute", func() {
 				data := map[string][]byte{"foo": []byte("bar")}
-				err := backend.SetMultiple(context.Background(), file, data, true)
+				err := backend.SetMultiple(context.Background(), n, data, true)
 				Expect(err).ToNot(HaveOccurred())
 
-				v, err := backend.Get(context.Background(), file, "foo")
+				v, err := backend.Get(context.Background(), n, "foo")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(v).To(Equal([]byte("bar")))
 			})
 
 			It("returns an error on unknown attributes", func() {
-				_, err := backend.Get(context.Background(), file, "foo")
+				_, err := backend.Get(context.Background(), n, "foo")
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -186,16 +208,16 @@ var _ = Describe("Backend", func() {
 		Describe("GetInt64", func() {
 			It("returns the attribute", func() {
 				data := map[string][]byte{"foo": []byte("123")}
-				err := backend.SetMultiple(context.Background(), file, data, true)
+				err := backend.SetMultiple(context.Background(), n, data, true)
 				Expect(err).ToNot(HaveOccurred())
 
-				v, err := backend.GetInt64(context.Background(), file, "foo")
+				v, err := backend.GetInt64(context.Background(), n, "foo")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(v).To(Equal(int64(123)))
 			})
 
 			It("returns an error on unknown attributes", func() {
-				_, err := backend.GetInt64(context.Background(), file, "foo")
+				_, err := backend.GetInt64(context.Background(), n, "foo")
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -203,17 +225,17 @@ var _ = Describe("Backend", func() {
 		Describe("Remove", func() {
 			It("deletes an attribute", func() {
 				data := map[string][]byte{"foo": []byte("bar")}
-				err := backend.SetMultiple(context.Background(), file, data, true)
+				err := backend.SetMultiple(context.Background(), n, data, true)
 				Expect(err).ToNot(HaveOccurred())
 
-				v, err := backend.Get(context.Background(), file, "foo")
+				v, err := backend.Get(context.Background(), n, "foo")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(v).To(Equal([]byte("bar")))
 
-				err = backend.Remove(context.Background(), file, "foo", true)
+				err = backend.Remove(context.Background(), n, "foo", true)
 				Expect(err).ToNot(HaveOccurred())
 
-				_, err = backend.Get(context.Background(), file, "foo")
+				_, err = backend.Get(context.Background(), n, "foo")
 				Expect(err).To(HaveOccurred())
 			})
 		})

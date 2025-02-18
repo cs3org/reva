@@ -29,7 +29,6 @@ import (
 	"github.com/google/renameio/v2"
 	"github.com/google/uuid"
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
@@ -41,6 +40,12 @@ import (
 )
 
 var _propagationGracePeriod = 3 * time.Minute
+
+type PropagationNode interface {
+	GetSpaceID() string
+	GetID() string
+	InternalPath() string
+}
 
 // AsyncPropagator implements asynchronous treetime & treesize propagation
 type AsyncPropagator struct {
@@ -122,7 +127,9 @@ func NewAsyncPropagator(treeSizeAccounting, treeTimeAccounting bool, o options.A
 
 					now := time.Now()
 					_ = os.Chtimes(changesDirPath, now, now)
-					p.propagate(context.Background(), parts[0], strings.TrimSuffix(parts[1], ".processing"), true, *log)
+
+					n := node.NewBaseNode(parts[0], strings.TrimSuffix(parts[1], ".processing"), lookup)
+					p.propagate(context.Background(), n, true, *log)
 				}()
 			}
 		}
@@ -155,14 +162,14 @@ func (p AsyncPropagator) Propagate(ctx context.Context, n *node.Node, sizeDiff i
 		SyncTime: time.Now().UTC(),
 		SizeDiff: sizeDiff,
 	}
-	go p.queuePropagation(ctx, n.SpaceID, n.ParentID, c, log)
+	go p.queuePropagation(ctx, n, c, log)
 
 	return nil
 }
 
-func (p AsyncPropagator) queuePropagation(ctx context.Context, spaceID, nodeID string, change Change, log zerolog.Logger) {
+func (p AsyncPropagator) queuePropagation(ctx context.Context, n *node.Node, change Change, log zerolog.Logger) {
 	// add a change to the parent node
-	changePath := p.changesPath(spaceID, nodeID, uuid.New().String()+".mpk")
+	changePath := p.changesPath(n.SpaceID, n.ID, uuid.New().String()+".mpk")
 
 	data, err := msgpack.Marshal(change)
 	if err != nil {
@@ -203,7 +210,7 @@ func (p AsyncPropagator) queuePropagation(ctx context.Context, spaceID, nodeID s
 
 	log.Debug().Msg("propagating")
 	// add a change to the parent node
-	changeDirPath := p.changesPath(spaceID, nodeID, "")
+	changeDirPath := p.changesPath(n.SpaceID, n.ID, "")
 
 	// first rename the existing node dir
 	err = os.Rename(changeDirPath, changeDirPath+".processing")
@@ -215,11 +222,11 @@ func (p AsyncPropagator) queuePropagation(ctx context.Context, spaceID, nodeID s
 		//    -> ignore, the previous propagation will pick the new changes up
 		return
 	}
-	p.propagate(ctx, spaceID, nodeID, false, log)
+	p.propagate(ctx, n, false, log)
 }
 
-func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, recalculateTreeSize bool, log zerolog.Logger) {
-	changeDirPath := p.changesPath(spaceID, nodeID, "")
+func (p AsyncPropagator) propagate(ctx context.Context, pn PropagationNode, recalculateTreeSize bool, log zerolog.Logger) {
+	changeDirPath := p.changesPath(pn.GetSpaceID(), pn.GetID(), "")
 	processingPath := changeDirPath + ".processing"
 
 	cleanup := func() {
@@ -278,10 +285,9 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 
 	var f *lockedfile.File
 	// lock parent before reading treesize or tree time
-	nodePath := filepath.Join(p.lookup.InternalRoot(), "spaces", lookup.Pathify(spaceID, 1, 2), "nodes", lookup.Pathify(nodeID, 4, 2))
 
 	_, subspan = tracer.Start(ctx, "lockedfile.OpenFile")
-	lockFilepath := p.lookup.MetadataBackend().LockfilePath(nodePath)
+	lockFilepath := p.lookup.MetadataBackend().LockfilePath(pn)
 	f, err = lockedfile.OpenFile(lockFilepath, os.O_RDWR|os.O_CREATE, 0600)
 	subspan.End()
 	if err != nil {
@@ -301,8 +307,8 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 	}()
 
 	_, subspan = tracer.Start(ctx, "node.ReadNode")
-	var n *node.Node
-	if n, err = node.ReadNode(ctx, p.lookup, spaceID, nodeID, false, nil, false); err != nil {
+	n, err := node.ReadNode(ctx, p.lookup, pn.GetSpaceID(), pn.GetID(), false, nil, false)
+	if err != nil {
 		log.Error().Err(err).
 			Msg("Propagation failed. Could not read node.")
 		cleanup()
@@ -366,7 +372,7 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 		case recalculateTreeSize || metadata.IsAttrUnset(err):
 			// fallback to calculating the treesize
 			log.Warn().Msg("treesize attribute unset, falling back to calculating the treesize")
-			newSize, err = calculateTreeSize(ctx, p.lookup, n.InternalPath())
+			newSize, err = calculateTreeSize(ctx, p.lookup, n)
 			if err != nil {
 				log.Error().Err(err).
 					Msg("Error when calculating treesize of node.") // FIXME wat?
@@ -414,7 +420,7 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 	cleanup()
 
 	if !n.IsSpaceRoot(ctx) {
-		p.queuePropagation(ctx, n.SpaceID, n.ParentID, pc, log)
+		p.queuePropagation(ctx, n, pc, log)
 	}
 
 	// Check for a changes dir that might have been added meanwhile and pick it up
@@ -430,7 +436,7 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 			//    -> ignore, the previous propagation will pick the new changes up
 			return
 		}
-		p.propagate(ctx, spaceID, nodeID, false, log)
+		p.propagate(ctx, n, false, log)
 	}
 }
 

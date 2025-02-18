@@ -22,6 +22,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/google/uuid"
@@ -122,7 +123,11 @@ var _ = Describe("Tree", func() {
 					resolveTrashPath, err := filepath.EvalSymlinks(trashPath)
 					Expect(err).ToNot(HaveOccurred())
 
-					attr, err := env.Lookup.MetadataBackend().Get(env.Ctx, resolveTrashPath, prefixes.TrashOriginAttr)
+					parts := strings.SplitN(resolveTrashPath, "/nodes/", 2)
+					trashID := strings.ReplaceAll(parts[1], "/", "")
+					trashNode := node.NewBaseNode(n.SpaceID, trashID, env.Lookup)
+
+					attr, err := env.Lookup.MetadataBackend().Get(env.Ctx, trashNode, prefixes.TrashOriginAttr)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(string(attr)).To(Equal("/dir1/file1"))
 				})

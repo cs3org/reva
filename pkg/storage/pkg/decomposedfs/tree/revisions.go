@@ -33,6 +33,7 @@ import (
 
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
@@ -49,7 +50,8 @@ import (
 
 // CreateVersion creates a new version of the node
 func (tp *Tree) CreateRevision(ctx context.Context, n *node.Node, version string, f *lockedfile.File) (string, error) {
-	versionPath := tp.lookup.VersionPath(n.SpaceID, n.ID, version)
+	versionNode := node.NewBaseNode(n.SpaceID, n.ID+node.RevisionIDDelimiter+version, tp.lookup)
+	versionPath := versionNode.InternalPath()
 
 	err := os.MkdirAll(filepath.Dir(versionPath), 0700)
 	if err != nil {
@@ -64,7 +66,7 @@ func (tp *Tree) CreateRevision(ctx context.Context, n *node.Node, version string
 	defer vf.Close()
 
 	// copy blob metadata to version node
-	if err := tp.lookup.CopyMetadataWithSourceLock(ctx, n.InternalPath(), versionPath, func(attributeName string, value []byte) (newValue []byte, copy bool) {
+	if err := tp.lookup.CopyMetadataWithSourceLock(ctx, n, versionNode, func(attributeName string, value []byte) (newValue []byte, copy bool) {
 		return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
 			attributeName == prefixes.TypeAttr ||
 			attributeName == prefixes.BlobIDAttr ||
@@ -120,7 +122,8 @@ func (tp *Tree) ListRevisions(ctx context.Context, ref *provider.Reference) (rev
 					Key:   n.ID + node.RevisionIDDelimiter + parts[1],
 					Mtime: uint64(mtime.Unix()),
 				}
-				_, blobSize, err := tp.lookup.ReadBlobIDAndSizeAttr(ctx, items[i], nil)
+				baseNode := node.NewBaseNode(n.SpaceID, n.ID+node.RevisionIDDelimiter+parts[1], tp.lookup)
+				_, blobSize, err := tp.lookup.ReadBlobIDAndSizeAttr(ctx, baseNode, nil)
 				if err != nil {
 					appctx.GetLogger(ctx).Error().Err(err).Str("name", fi.Name()).Msg("error reading blobsize xattr, using 0")
 				}
@@ -182,14 +185,17 @@ func (tp *Tree) DownloadRevision(ctx context.Context, ref *provider.Reference, r
 		return nil, nil, errtypes.NotFound(f)
 	}
 
-	contentPath := tp.lookup.InternalPath(spaceID, revisionKey)
-
-	blobid, blobsize, err := tp.lookup.ReadBlobIDAndSizeAttr(ctx, contentPath, nil)
+	baseNode := node.NewBaseNode(spaceID, revisionKey, tp.lookup)
+	blobid, blobsize, err := tp.lookup.ReadBlobIDAndSizeAttr(ctx, baseNode, nil)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "Decomposedfs: could not read blob id and size for revision '%s' of node '%s'", kp[1], n.ID)
 	}
 
-	revisionNode := node.Node{SpaceID: spaceID, BlobID: blobid, Blobsize: blobsize} // blobsize is needed for the s3ng blobstore
+	revisionNode := node.Node{
+		BaseNode: node.BaseNode{SpaceID: spaceID},
+		BlobID:   blobid,
+		Blobsize: blobsize,
+	} // blobsize is needed for the s3ng blobstore
 
 	ri, err := n.AsResourceInfo(ctx, rp, nil, []string{"size", "mimetype", "etag"}, true)
 	if err != nil {
@@ -274,9 +280,8 @@ func (tp *Tree) getRevisionNode(ctx context.Context, ref *provider.Reference, re
 	return n, nil
 }
 
-func (tp *Tree) RestoreRevision(ctx context.Context, spaceID, nodeID, source string) error {
-	target := tp.lookup.InternalPath(spaceID, nodeID)
-	err := tp.lookup.CopyMetadata(ctx, source, target, func(attributeName string, value []byte) (newValue []byte, copy bool) {
+func (tp *Tree) RestoreRevision(ctx context.Context, sourceNode, targetNode metadata.MetadataNode) error {
+	err := tp.lookup.CopyMetadata(ctx, sourceNode, targetNode, func(attributeName string, value []byte) (newValue []byte, copy bool) {
 		return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
 			attributeName == prefixes.TypeAttr ||
 			attributeName == prefixes.BlobIDAttr ||
@@ -286,7 +291,7 @@ func (tp *Tree) RestoreRevision(ctx context.Context, spaceID, nodeID, source str
 		return errtypes.InternalError("failed to copy blob xattrs to old revision to node: " + err.Error())
 	}
 	// always set the node mtime to the current time
-	err = tp.lookup.MetadataBackend().SetMultiple(ctx, target,
+	err = tp.lookup.MetadataBackend().SetMultiple(ctx, targetNode,
 		map[string][]byte{
 			prefixes.MTimeAttr: []byte(time.Now().UTC().Format(time.RFC3339Nano)),
 		},

@@ -37,7 +37,6 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/usermapper"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/templates"
-	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/pkg/errors"
 	"github.com/rogpeppe/go-internal/lockedfile"
 	"go.opentelemetry.io/otel"
@@ -102,30 +101,28 @@ func (lu *Lookup) GetCachedID(ctx context.Context, spaceID, nodeID string) (stri
 	return lu.IDCache.Get(ctx, spaceID, nodeID)
 }
 
-// IDsForPath returns the space and opaque id for the given path
 func (lu *Lookup) IDsForPath(ctx context.Context, path string) (string, string, error) {
+	// IDsForPath returns the space and opaque id for the given path
 	spaceID, nodeID, ok := lu.IDCache.GetByPath(ctx, path)
 	if !ok {
-		return "", "", fmt.Errorf("path %s not found in cache", path)
+		return "", "", errtypes.NotFound("path not found in cache:" + path)
 	}
 	return spaceID, nodeID, nil
 }
 
 // NodeFromPath returns the node for the given path
 func (lu *Lookup) NodeIDFromParentAndName(ctx context.Context, parent *node.Node, name string) (string, error) {
-	id, err := lu.metadataBackend.Get(ctx, filepath.Join(parent.InternalPath(), name), prefixes.IDAttr)
-	if err != nil {
-		if metadata.IsNotExist(err) {
-			return "", errtypes.NotFound(name)
-		}
-		return "", err
-	}
-	_, err = os.Stat(filepath.Join(parent.InternalPath(), name))
-	if err != nil {
-		return "", err
+	parentPath, ok := lu.GetCachedID(ctx, parent.SpaceID, parent.ID)
+	if !ok {
+		return "", errtypes.NotFound(parent.ID)
 	}
 
-	return string(id), nil
+	childPath := filepath.Join(parentPath, name)
+	_, childID, err := lu.IDsForPath(ctx, childPath)
+	if err != nil {
+		return "", err
+	}
+	return childID, nil
 }
 
 // MetadataBackend returns the metadata backend
@@ -133,44 +130,12 @@ func (lu *Lookup) MetadataBackend() metadata.Backend {
 	return lu.metadataBackend
 }
 
-func (lu *Lookup) ReadBlobIDAndSizeAttr(ctx context.Context, path string, _ node.Attributes) (string, int64, error) {
-	fi, err := os.Stat(path)
+func (lu *Lookup) ReadBlobIDAndSizeAttr(ctx context.Context, n metadata.MetadataNode, _ node.Attributes) (string, int64, error) {
+	fi, err := os.Stat(n.InternalPath())
 	if err != nil {
 		return "", 0, errors.Wrap(err, "error stating file")
 	}
 	return "", fi.Size(), nil
-}
-
-// TypeFromPath returns the type of the node at the given path
-func (lu *Lookup) TypeFromPath(ctx context.Context, path string) provider.ResourceType {
-	// Try to read from xattrs
-	typeAttr, err := lu.metadataBackend.GetInt64(ctx, path, prefixes.TypeAttr)
-	if err == nil {
-		return provider.ResourceType(int32(typeAttr))
-	}
-
-	t := provider.ResourceType_RESOURCE_TYPE_INVALID
-	// Fall back to checking on disk
-	fi, err := os.Lstat(path)
-	if err != nil {
-		return t
-	}
-
-	switch {
-	case fi.IsDir():
-		if _, err = lu.metadataBackend.Get(ctx, path, prefixes.ReferenceAttr); err == nil {
-			t = provider.ResourceType_RESOURCE_TYPE_REFERENCE
-		} else {
-			t = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-		}
-	case fi.Mode().IsRegular():
-		t = provider.ResourceType_RESOURCE_TYPE_FILE
-	case fi.Mode()&os.ModeSymlink != 0:
-		t = provider.ResourceType_RESOURCE_TYPE_SYMLINK
-		// TODO reference using ext attr on a symlink
-		// nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
-	}
-	return t
 }
 
 // NodeFromResource takes in a request path or request id and converts it to a Node
@@ -320,6 +285,12 @@ func (lu *Lookup) InternalPath(spaceID, nodeID string) string {
 			return ""
 		}
 		return filepath.Join(spaceRoot, RevisionsDir, Pathify(nodeID, 4, 2))
+	} else if strings.HasSuffix(nodeID, node.CurrentIDDelimiter) {
+		spaceRoot, _ := lu.IDCache.Get(context.Background(), spaceID, spaceID)
+		if len(spaceRoot) == 0 {
+			return ""
+		}
+		filepath.Join(spaceRoot, RevisionsDir, Pathify(nodeID, 4, 2)+_currentSuffix)
 	}
 
 	path, _ := lu.IDCache.Get(context.Background(), spaceID, nodeID)
@@ -347,12 +318,6 @@ func (lu *Lookup) CurrentPath(spaceID, nodeID string) string {
 	return filepath.Join(spaceRoot, RevisionsDir, Pathify(nodeID, 4, 2)+_currentSuffix)
 }
 
-// // ReferenceFromAttr returns a CS3 reference from xattr of a node.
-// // Supported formats are: "cs3:storageid/nodeid"
-// func ReferenceFromAttr(b []byte) (*provider.Reference, error) {
-// 	return refFromCS3(b)
-// }
-
 // refFromCS3 creates a CS3 reference from a set of bytes. This method should remain private
 // and only be called after validation because it can potentially panic.
 func refFromCS3(b []byte) (*provider.Reference, error) {
@@ -369,7 +334,7 @@ func refFromCS3(b []byte) (*provider.Reference, error) {
 // The optional filter function can be used to filter by attribute name, e.g. by checking a prefix
 // For the source file, a shared lock is acquired.
 // NOTE: target resource will be write locked!
-func (lu *Lookup) CopyMetadata(ctx context.Context, src, target string, filter func(attributeName string, value []byte) (newValue []byte, copy bool), acquireTargetLock bool) (err error) {
+func (lu *Lookup) CopyMetadata(ctx context.Context, src, target metadata.MetadataNode, filter func(attributeName string, value []byte) (newValue []byte, copy bool), acquireTargetLock bool) (err error) {
 	// Acquire a read log on the source node
 	// write lock existing node before reading treesize or tree time
 	lock, err := lockedfile.OpenFile(lu.MetadataBackend().LockfilePath(src), os.O_RDONLY|os.O_CREATE, 0600)
@@ -396,15 +361,15 @@ func (lu *Lookup) CopyMetadata(ctx context.Context, src, target string, filter f
 // The optional filter function can be used to filter by attribute name, e.g. by checking a prefix
 // For the source file, a matching lockedfile is required.
 // NOTE: target resource will be write locked!
-func (lu *Lookup) CopyMetadataWithSourceLock(ctx context.Context, sourcePath, targetPath string, filter func(attributeName string, value []byte) (newValue []byte, copy bool), lockedSource *lockedfile.File, acquireTargetLock bool) (err error) {
+func (lu *Lookup) CopyMetadataWithSourceLock(ctx context.Context, src, target metadata.MetadataNode, filter func(attributeName string, value []byte) (newValue []byte, copy bool), lockedSource *lockedfile.File, acquireTargetLock bool) (err error) {
 	switch {
 	case lockedSource == nil:
 		return errors.New("no lock provided")
-	case lockedSource.File.Name() != lu.MetadataBackend().LockfilePath(sourcePath):
+	case lockedSource.File.Name() != lu.MetadataBackend().LockfilePath(src):
 		return errors.New("lockpath does not match filepath")
 	}
 
-	attrs, err := lu.metadataBackend.All(ctx, sourcePath)
+	attrs, err := lu.metadataBackend.All(ctx, src)
 	if err != nil {
 		return err
 	}
@@ -420,7 +385,7 @@ func (lu *Lookup) CopyMetadataWithSourceLock(ctx context.Context, sourcePath, ta
 		newAttrs[attrName] = val
 	}
 
-	return lu.MetadataBackend().SetMultiple(ctx, targetPath, newAttrs, acquireTargetLock)
+	return lu.MetadataBackend().SetMultiple(ctx, target, newAttrs, acquireTargetLock)
 }
 
 // GenerateSpaceID generates a space id for the given space type and owner
@@ -429,21 +394,20 @@ func (lu *Lookup) GenerateSpaceID(spaceType string, owner *user.User) (string, e
 	case _spaceTypeProject:
 		return uuid.New().String(), nil
 	case _spaceTypePersonal:
-		path := templates.WithUser(owner, lu.Options.UserLayout)
+		path := templates.WithUser(owner, lu.Options.PersonalSpacePathTemplate)
 
-		spaceID, err := lu.metadataBackend.Get(context.Background(), filepath.Join(lu.Options.Root, path), prefixes.IDAttr)
+		spaceID, _, err := lu.IDsForPath(context.TODO(), filepath.Join(lu.Options.Root, path))
 		if err != nil {
-			if metadata.IsNotExist(err) || metadata.IsAttrUnset(err) {
-				return uuid.New().String(), nil
-			} else {
-				return "", err
+			_, err := os.Stat(filepath.Join(lu.Options.Root, path))
+			if err != nil {
+				if metadata.IsNotExist(err) || metadata.IsAttrUnset(err) {
+					return uuid.New().String(), nil
+				} else {
+					return "", err
+				}
 			}
 		}
-		resID, err := storagespace.ParseID(string(spaceID))
-		if err != nil {
-			return "", err
-		}
-		return resID.SpaceId, nil
+		return spaceID, nil
 	default:
 		return "", fmt.Errorf("unsupported space type: %s", spaceType)
 	}

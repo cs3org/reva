@@ -49,8 +49,10 @@ var _ = Describe("Blobstore", func() {
 
 		data = []byte("1234567890")
 		blobNode = &node.Node{
-			SpaceID: "wonderfullspace",
-			BlobID:  "huuuuugeblob",
+			BaseNode: node.BaseNode{
+				SpaceID: "wonderfullspace",
+			},
+			BlobID: "huuuuugeblob",
 		}
 		blobPath = path.Join(tmpRoot, "spaces", "wo", "nderfullspace", "blobs", "hu", "uu", "uu", "ge", "blob")
 

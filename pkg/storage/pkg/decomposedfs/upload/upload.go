@@ -325,20 +325,22 @@ func (session *DecomposedFsSession) Cleanup(revertNodeMetadata, cleanBin, cleanI
 		if err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Str("sessionid", session.ID()).Msg("reading node for session failed")
 		} else {
-			if session.NodeExists() && session.info.MetaData["versionsPath"] != "" {
-				p := session.info.MetaData["versionsPath"]
-				if err := session.store.lu.CopyMetadata(ctx, p, n.InternalPath(), func(attributeName string, value []byte) (newValue []byte, copy bool) {
+			if session.NodeExists() && session.info.MetaData["versionID"] != "" {
+				versionID := session.info.MetaData["versionID"]
+				revisionNode := node.NewBaseNode(n.SpaceID, versionID, session.store.lu)
+
+				if err := session.store.lu.CopyMetadata(ctx, revisionNode, n, func(attributeName string, value []byte) (newValue []byte, copy bool) {
 					return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
 						attributeName == prefixes.TypeAttr ||
 						attributeName == prefixes.BlobIDAttr ||
 						attributeName == prefixes.BlobsizeAttr ||
 						attributeName == prefixes.MTimeAttr
 				}, true); err != nil {
-					appctx.GetLogger(ctx).Info().Str("versionpath", p).Str("nodepath", n.InternalPath()).Err(err).Msg("renaming version node failed")
+					appctx.GetLogger(ctx).Info().Str("version", versionID).Str("nodepath", n.InternalPath()).Err(err).Msg("renaming version node failed")
 				}
 
-				if err := os.RemoveAll(p); err != nil {
-					appctx.GetLogger(ctx).Info().Str("versionpath", p).Str("nodepath", n.InternalPath()).Err(err).Msg("error removing version")
+				if err := os.RemoveAll(revisionNode.InternalPath()); err != nil {
+					appctx.GetLogger(ctx).Info().Str("version", versionID).Str("nodepath", n.InternalPath()).Err(err).Msg("error removing version")
 				}
 
 			} else {

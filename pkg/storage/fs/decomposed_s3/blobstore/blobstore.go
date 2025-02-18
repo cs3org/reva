@@ -141,8 +141,10 @@ func (bs *Blobstore) List() ([]*node.Node, error) {
 		}
 		spaceid, blobid, _ := strings.Cut(oi.Key, "/")
 		ids = append(ids, &node.Node{
-			SpaceID: strings.ReplaceAll(spaceid, "/", ""),
-			BlobID:  strings.ReplaceAll(blobid, "/", ""),
+			BaseNode: node.BaseNode{
+				SpaceID: strings.ReplaceAll(spaceid, "/", ""),
+			},
+			BlobID: strings.ReplaceAll(blobid, "/", ""),
 		})
 	}
 	return ids, err

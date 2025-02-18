@@ -304,10 +304,9 @@ func (store DecomposedFsStore) CreateNodeForUpload(ctx context.Context, session 
 func (store DecomposedFsStore) updateExistingNode(ctx context.Context, session *DecomposedFsSession, n *node.Node, spaceID string, fsize uint64) (metadata.UnlockFunc, error) {
 	_, span := tracer.Start(ctx, "updateExistingNode")
 	defer span.End()
-	targetPath := n.InternalPath()
 
 	// write lock existing node before reading any metadata
-	f, err := lockedfile.OpenFile(store.lu.MetadataBackend().LockfilePath(targetPath), os.O_RDWR|os.O_CREATE, 0600)
+	f, err := lockedfile.OpenFile(store.lu.MetadataBackend().LockfilePath(n), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return nil, err
 	}
@@ -365,7 +364,9 @@ func (store DecomposedFsStore) updateExistingNode(ctx context.Context, session *
 
 	if !store.disableVersioning {
 		span.AddEvent("CreateVersion")
-		versionPath, err := session.store.tp.CreateRevision(ctx, n, oldNodeMtime.UTC().Format(time.RFC3339Nano), f)
+		timestamp := oldNodeMtime.UTC().Format(time.RFC3339Nano)
+		versionID := n.ID + node.RevisionIDDelimiter + timestamp
+		versionPath, err := session.store.tp.CreateRevision(ctx, n, timestamp, f)
 		if err != nil {
 			if !errors.Is(err, os.ErrExist) {
 				return unlock, err
@@ -373,29 +374,30 @@ func (store DecomposedFsStore) updateExistingNode(ctx context.Context, session *
 
 			// a revision with this mtime does already exist.
 			// If the blobs are the same we can just delete the old one
-			if err := validateChecksums(ctx, old, session, versionPath); err != nil {
+			versionNode := node.NewBaseNode(n.SpaceID, versionID, session.store.lu)
+			if err := validateChecksums(ctx, old, session, versionNode); err != nil {
 				return unlock, err
 			}
 
 			// delete old blob
-			bID, _, err := session.store.lu.ReadBlobIDAndSizeAttr(ctx, versionPath, nil)
+			bID, _, err := session.store.lu.ReadBlobIDAndSizeAttr(ctx, versionNode, nil)
 			if err != nil {
 				return unlock, err
 			}
-			if err := session.store.tp.DeleteBlob(&node.Node{BlobID: bID, SpaceID: n.SpaceID}); err != nil {
+			if err := session.store.tp.DeleteBlob(&node.Node{BaseNode: node.BaseNode{SpaceID: n.SpaceID}, BlobID: bID}); err != nil {
 				return unlock, err
 			}
 
 			// clean revision file
-			if versionPath, err = session.store.tp.CreateRevision(ctx, n, oldNodeMtime.UTC().Format(time.RFC3339Nano), f); err != nil {
+			if versionPath, err = session.store.tp.CreateRevision(ctx, n, timestamp, f); err != nil {
 				return unlock, err
 			}
 		}
 
-		session.info.MetaData["versionsPath"] = versionPath
+		session.info.MetaData["versionID"] = versionID
 		// keep mtime from previous version
 		span.AddEvent("os.Chtimes")
-		if err := os.Chtimes(session.info.MetaData["versionsPath"], oldNodeMtime, oldNodeMtime); err != nil {
+		if err := os.Chtimes(versionPath, oldNodeMtime, oldNodeMtime); err != nil {
 			return unlock, errtypes.InternalError(fmt.Sprintf("failed to change mtime of version node: %s", err))
 		}
 	}
@@ -405,7 +407,7 @@ func (store DecomposedFsStore) updateExistingNode(ctx context.Context, session *
 	return unlock, nil
 }
 
-func validateChecksums(ctx context.Context, n *node.Node, session *DecomposedFsSession, versionPath string) error {
+func validateChecksums(ctx context.Context, n *node.Node, session *DecomposedFsSession, versionNode metadata.MetadataNode) error {
 	for _, t := range []string{"md5", "sha1", "adler32"} {
 		key := prefixes.ChecksumPrefix + t
 
@@ -414,7 +416,7 @@ func validateChecksums(ctx context.Context, n *node.Node, session *DecomposedFsS
 			return err
 		}
 
-		revisionChecksum, err := session.store.lu.MetadataBackend().Get(ctx, versionPath, key)
+		revisionChecksum, err := session.store.lu.MetadataBackend().Get(ctx, versionNode, key)
 		if err != nil {
 			return err
 		}

@@ -52,7 +52,6 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/aspects"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/migrator"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
@@ -191,14 +190,6 @@ func New(o *options.Options, aspects aspects.Aspects, log *zerolog.Logger) (stor
 	if err != nil {
 		log.Error().Err(err).Msg("could not setup tree")
 		return nil, errors.Wrap(err, "could not setup tree")
-	}
-
-	// Run migrations & return
-	m := migrator.New(aspects.Lookup, log)
-	err = m.RunMigrations()
-	if err != nil {
-		log.Error().Err(err).Msg("could not migrate tree")
-		return nil, errors.Wrap(err, "could not migrate tree")
 	}
 
 	if o.MaxAcquireLockCycles != 0 {
@@ -373,7 +364,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 			var isVersion bool
 			if session.NodeExists() {
 				info, err := session.GetInfo(ctx)
-				if err == nil && info.MetaData["versionsPath"] != "" {
+				if err == nil && info.MetaData["versionID"] != "" {
 					isVersion = true
 				}
 			}

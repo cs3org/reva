@@ -98,7 +98,8 @@ func (p SyncPropagator) propagateItem(ctx context.Context, n *node.Node, sTime t
 	// lock parent before reading treesize or tree time
 
 	_, subspan := tracer.Start(ctx, "lockedfile.OpenFile")
-	parentFilename := p.lookup.MetadataBackend().LockfilePath(n.ParentPath())
+	parentNode := node.NewBaseNode(n.SpaceID, n.ParentID, p.lookup)
+	parentFilename := p.lookup.MetadataBackend().LockfilePath(parentNode)
 	f, err := lockedfile.OpenFile(parentFilename, os.O_RDWR|os.O_CREATE, 0600)
 	subspan.End()
 	if err != nil {
@@ -174,7 +175,7 @@ func (p SyncPropagator) propagateItem(ctx context.Context, n *node.Node, sTime t
 		case metadata.IsAttrUnset(err):
 			// fallback to calculating the treesize
 			log.Warn().Msg("treesize attribute unset, falling back to calculating the treesize")
-			newSize, err = calculateTreeSize(ctx, p.lookup, n.InternalPath())
+			newSize, err = calculateTreeSize(ctx, p.lookup, n)
 			if err != nil {
 				return n, true, err
 			}

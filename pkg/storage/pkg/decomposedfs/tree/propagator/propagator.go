@@ -54,7 +54,9 @@ func New(lookup node.PathLookup, o *options.Options, log *zerolog.Logger) Propag
 	}
 }
 
-func calculateTreeSize(ctx context.Context, lookup node.PathLookup, childrenPath string) (uint64, error) {
+func calculateTreeSize(ctx context.Context, lookup node.PathLookup, n *node.Node) (uint64, error) {
+	childrenPath := n.InternalPath()
+
 	ctx, span := tracer.Start(ctx, "calculateTreeSize")
 	defer span.End()
 	var size uint64
@@ -73,14 +75,15 @@ func calculateTreeSize(ctx context.Context, lookup node.PathLookup, childrenPath
 	}
 	for i := range names {
 		cPath := filepath.Join(childrenPath, names[i])
-		resolvedPath, err := filepath.EvalSymlinks(cPath)
-		if err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not resolve child entry symlink")
-			continue // continue after an error
-		}
 
 		// raw read of the attributes for performance reasons
-		attribs, err := lookup.MetadataBackend().All(ctx, resolvedPath)
+		nodeID, err := node.ReadChildNodeFromLink(ctx, cPath)
+		if err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not read child node")
+			continue // continue after an error
+		}
+		n := node.NewBaseNode(n.SpaceID, nodeID, lookup)
+		attribs, err := lookup.MetadataBackend().All(ctx, n)
 		if err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not read attributes of child entry")
 			continue // continue after an error

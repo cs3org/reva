@@ -99,17 +99,16 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	}
 
 	// write lock node before copying metadata
-	f, err := lockedfile.OpenFile(fs.lu.MetadataBackend().LockfilePath(n.InternalPath()), os.O_RDWR|os.O_CREATE, 0600)
+	f, err := lockedfile.OpenFile(fs.lu.MetadataBackend().LockfilePath(n), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return err
 	}
 	defer func() {
 		_ = f.Close()
-		_ = os.Remove(fs.lu.MetadataBackend().LockfilePath(n.InternalPath()))
+		_ = os.Remove(fs.lu.MetadataBackend().LockfilePath(n))
 	}()
 
 	// move current version to new revision
-	nodePath := fs.lu.InternalPath(spaceID, kp[0])
 	mtime, err := n.GetMTime(ctx)
 	if err != nil {
 		log.Error().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("cannot read mtime")
@@ -123,7 +122,8 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 
 	// restore revision
 	restoredRevisionPath := fs.lu.InternalPath(spaceID, revisionKey)
-	if err := fs.tp.RestoreRevision(ctx, spaceID, kp[0], restoredRevisionPath); err != nil {
+	revisionNode := node.NewBaseNode(spaceID, revisionKey, fs.lu)
+	if err := fs.tp.RestoreRevision(ctx, revisionNode, n); err != nil {
 		return err
 	}
 
@@ -131,19 +131,19 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	if err := os.Remove(restoredRevisionPath); err != nil {
 		log.Warn().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("could not delete old revision, continuing")
 	}
-	if err := os.Remove(fs.lu.MetadataBackend().MetadataPath(restoredRevisionPath)); err != nil {
+	if err := os.Remove(fs.lu.MetadataBackend().MetadataPath(revisionNode)); err != nil {
 		log.Warn().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("could not delete old revision metadata, continuing")
 	}
-	if err := os.Remove(fs.lu.MetadataBackend().LockfilePath(restoredRevisionPath)); err != nil {
+	if err := os.Remove(fs.lu.MetadataBackend().LockfilePath(revisionNode)); err != nil {
 		log.Warn().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("could not delete old revision metadata lockfile, continuing")
 	}
-	if err := fs.lu.MetadataBackend().Purge(ctx, restoredRevisionPath); err != nil {
+	if err := fs.lu.MetadataBackend().Purge(ctx, revisionNode); err != nil {
 		log.Warn().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("could not purge old revision from cache, continuing")
 	}
 
 	// revision 5, current 10 (restore a smaller blob) -> 5-10 = -5
 	// revision 10, current 5 (restore a bigger blob) -> 10-5 = +5
-	revisionSize, err := fs.lu.MetadataBackend().GetInt64(ctx, nodePath, prefixes.BlobsizeAttr)
+	revisionSize, err := fs.lu.MetadataBackend().GetInt64(ctx, revisionNode, prefixes.BlobsizeAttr)
 	if err != nil {
 		return errtypes.InternalError("failed to read blob size xattr from old revision")
 	}
