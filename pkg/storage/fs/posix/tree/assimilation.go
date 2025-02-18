@@ -587,6 +587,7 @@ assimilate:
 		attributes[prefixes.ChecksumPrefix+"adler32"] = adler32h.Sum(nil)
 	}
 
+	var n *node.Node
 	if fi.IsDir() {
 		attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_CONTAINER))
 		attributes.SetInt64(prefixes.TreesizeAttr, 0)
@@ -594,14 +595,20 @@ assimilate:
 			attributes[prefixes.TreesizeAttr] = previousAttribs[prefixes.TreesizeAttr]
 		}
 		attributes[prefixes.PropagationAttr] = []byte("1")
+		treeSize, err := attributes.Int64(prefixes.TreesizeAttr)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to parse treesize")
+		}
+		n = node.New(spaceID, id, parentID, filepath.Base(path), treeSize, "", provider.ResourceType_RESOURCE_TYPE_CONTAINER, nil, t.lookup)
 	} else {
-		attributes.SetString(prefixes.BlobIDAttr, uuid.NewString())
+		blobID := uuid.NewString()
+		attributes.SetString(prefixes.BlobIDAttr, blobID)
 		attributes.SetInt64(prefixes.BlobsizeAttr, fi.Size())
 		attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_FILE))
+		n = node.New(spaceID, id, parentID, filepath.Base(path), fi.Size(), blobID, provider.ResourceType_RESOURCE_TYPE_FILE, nil, t.lookup)
 	}
 	attributes.SetTime(prefixes.MTimeAttr, fi.ModTime())
 
-	n := node.New(spaceID, id, parentID, filepath.Base(path), fi.Size(), "", provider.ResourceType_RESOURCE_TYPE_FILE, nil, t.lookup)
 	n.SpaceRoot = &node.Node{BaseNode: node.BaseNode{SpaceID: spaceID, ID: spaceID}}
 
 	go func() {
