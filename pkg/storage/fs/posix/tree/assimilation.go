@@ -431,10 +431,6 @@ func (t *Tree) assimilate(item scanItem) error {
 					t.log.Error().Err(err).Str("path", previousPath).Msg("could not delete id cache entry by path")
 				}
 
-				fi, err := os.Stat(item.Path)
-				if err != nil {
-					return err
-				}
 				if fi.IsDir() {
 					// if it was moved and it is a directory we need to propagate the move
 					go func() {
