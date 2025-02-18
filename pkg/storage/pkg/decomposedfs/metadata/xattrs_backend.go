@@ -57,10 +57,7 @@ func (b XattrsBackend) IdentifyPath(_ context.Context, path string) (string, str
 	id, _ := xattr.Get(path, prefixes.IDAttr)
 
 	mtimeAttr, _ := xattr.Get(path, prefixes.MTimeAttr)
-	mtime, err := time.Parse(time.RFC3339Nano, string(mtimeAttr))
-	if err != nil {
-		return "", "", time.Time{}, err
-	}
+	mtime, _ := time.Parse(time.RFC3339Nano, string(mtimeAttr))
 	return string(spaceID), string(id), mtime, nil
 }
 
