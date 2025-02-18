@@ -406,7 +406,7 @@ func (t *Tree) assimilate(item scanItem) error {
 				// this id clashes with an existing item -> clear metadata and re-assimilate
 				t.log.Debug().Str("path", item.Path).Msg("ID clash detected, purging metadata and re-assimilating")
 
-				if err := t.lookup.MetadataBackend().Purge(context.Background(), n); err != nil {
+				if err := t.lookup.MetadataBackend().Purge(context.Background(), assimilationNode); err != nil {
 					t.log.Error().Err(err).Str("path", item.Path).Msg("could not purge metadata")
 				}
 				go func() {
