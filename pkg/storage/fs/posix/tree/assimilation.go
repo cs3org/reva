@@ -384,7 +384,10 @@ func (t *Tree) assimilate(item scanItem) error {
 	// compare metadata mtime with actual mtime. if it matches we can skip the assimilation because the file was handled by us
 	fi, err := os.Stat(item.Path)
 	if err == nil {
-		if mtime.Equal(fi.ModTime()) {
+		// FIXME the mtime does not change on a move, so we have to compare ctime
+		stat := fi.Sys().(*syscall.Stat_t)
+		ctime := time.Unix(int64(stat.Ctim.Sec), int64(stat.Ctim.Nsec))
+		if mtime.Equal(ctime) && !item.ForceRescan {
 			return nil
 		}
 	}
