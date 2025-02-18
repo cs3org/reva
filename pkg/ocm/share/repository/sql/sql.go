@@ -572,7 +572,7 @@ func storeWebappProtocol(tx *sql.Tx, shareID int64, o *ocm.Protocol_WebappOption
 	}
 
 	query := "INSERT INTO ocm_protocol_webapp SET ocm_protocol_id=?, uri_template=?, view_mode=?"
-	params := []any{pID, o.WebappOptions.UriTemplate, o.WebappOptions.ViewMode}
+	params := []any{pID, o.WebappOptions.Uri, o.WebappOptions.ViewMode}
 
 	_, err = tx.Exec(query, params...)
 	return err
