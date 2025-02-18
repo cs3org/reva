@@ -98,7 +98,7 @@ type Protocols []Protocol
 // Protocol represents the way of access the resource
 // in the OCM share.
 type Protocol interface {
-	// ToOCMProtocol converts the protocol to a OCM `Protocol` struct
+	// ToOCMProtocol converts the protocol to a CS3API OCM `Protocol` struct
 	ToOCMProtocol() *ocm.Protocol
 }
 
@@ -131,7 +131,7 @@ func (w *WebDAV) ToOCMProtocol() *ocm.Protocol {
 		}
 	}
 
-	return ocmshare.NewWebDAVProtocol(w.URI, w.SharedSecret, perms)
+	return ocmshare.NewWebDAVProtocol(w.URI, w.SharedSecret, perms, w.Requirements)
 }
 
 // Webapp contains the parameters for the Webapp protocol.
@@ -226,7 +226,7 @@ func (p Protocols) MarshalJSON() ([]byte, error) {
 	for _, prot := range p {
 		d[GetProtocolName(prot)] = prot
 	}
-	// fill in the OCM v1.0 properties: for now we only create OCM 1.1 payloads,
+	// fill in the OCM v1.0 properties: we only create OCM 1.1+ payloads,
 	// irrespective from the capabilities of the remote server.
 	d["name"] = "multi"
 	d["options"] = map[string]any{}

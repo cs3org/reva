@@ -197,7 +197,7 @@ func getAccessMethods(webdav, webapp, datatx bool, rol string) ([]*ocm.AccessMet
 		if err != nil {
 			return nil, err
 		}
-		m = append(m, ocmshare.NewWebDavAccessMethod(perm))
+		m = append(m, ocmshare.NewWebDavAccessMethod(perm, []string{}))
 	}
 	if webapp {
 		v, err := getOCMViewMode(rol)
