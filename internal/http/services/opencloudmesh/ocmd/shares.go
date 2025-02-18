@@ -68,11 +68,11 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	req, err := getCreateShareRequest(r)
+	log.Info().Any("req", req).Msg("OCM /shares request received")
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
 		return
 	}
-	log.Info().Any("req", req).Msg("OCM /shares request received")
 
 	_, meshProvider, err := getIDAndMeshProvider(req.Sender)
 	log.Debug().Msgf("Determined Mesh Provider '%s' from req.Sender '%s'", meshProvider, req.Sender)
@@ -99,7 +99,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		Provider: &providerInfo,
 	})
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "error sending a grpc is provider allowed request", err)
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error sending a grpc isProviderAllowed request", err)
 		return
 	}
 	if providerAllowedResp.Status.Code != rpc.Code_CODE_OK {
@@ -109,7 +109,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 
 	shareWith, _, err := getIDAndMeshProvider(req.ShareWith)
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with mesh provider", err)
 		return
 	}
 
@@ -127,19 +127,19 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 
 	owner, err := getUserIDFromOCMUser(req.Owner)
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with remote owner", err)
 		return
 	}
 
 	sender, err := getUserIDFromOCMUser(req.Sender)
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with remote sender", err)
 		return
 	}
 
 	protocols, err := getAndResolveProtocols(req.Protocols, r)
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with protocols payload", err)
 		return
 	}
 
@@ -249,23 +249,25 @@ func getOCMShareType(t string) ocm.ShareType {
 func getAndResolveProtocols(p Protocols, r *http.Request) ([]*ocm.Protocol, error) {
 	protos := make([]*ocm.Protocol, 0, len(p))
 	for _, data := range p {
+		var uri string
 		ocmProto := data.ToOCMProtocol()
 		protocolName := GetProtocolName(data)
-		var uri string
-		var isLocalhost bool
-
 		switch protocolName {
 		case "webdav":
 			uri = ocmProto.GetWebdavOptions().Uri
-			isLocalhost = strings.Contains(uri, "localhost")
+			reqs := ocmProto.GetWebdavOptions().Requirements
+			if len(reqs) > 0 {
+				// we currently do not support any kind of requirement
+				return nil, errtypes.BadRequest(fmt.Sprintf("incoming OCM share with requirements %+v not supported at this endpoint", reqs))
+			}
 		case "webapp":
-			uri = ocmProto.GetWebappOptions().UriTemplate
-			isLocalhost = strings.Contains(uri, "localhost")
+			uri = ocmProto.GetWebappOptions().Uri
 		}
 
-		// Irrespective from the presence of a full `uri` in the payload (deprecated), resolve the remote root
+		// Irrespective from the presence of a full `uri` in the payload (deprecated), validate the
+		// remote is an OCM server and resolve the remote root
 		// yet skip this if the remote is localhost (for integration tests)
-		if isLocalhost {
+		if strings.Contains(uri, "localhost") {
 			protos = append(protos, ocmProto)
 			continue
 		}
@@ -273,20 +275,19 @@ func getAndResolveProtocols(p Protocols, r *http.Request) ([]*ocm.Protocol, erro
 		if err != nil {
 			return nil, err
 		}
-		uri, _ = url.JoinPath(remoteRoot, uri[strings.LastIndex(uri, "/")+1:])
 
+		uri, _ = url.JoinPath(remoteRoot, uri[strings.LastIndex(uri, "/")+1:])
 		switch protocolName {
 		case "webdav":
 			ocmProto.GetWebdavOptions().Uri = uri
 		case "webapp":
-			ocmProto.GetWebappOptions().UriTemplate = uri
+			ocmProto.GetWebappOptions().Uri = uri
 		}
 		protos = append(protos, ocmProto)
 	}
 
 	return protos, nil
 }
-
 
 func discoverOcmRoot(r *http.Request, proto string) (string, error) {
 	// implements the OCM discovery logic to fetch the root at the remote host that sent the share for the given proto, see

@@ -197,7 +197,7 @@ var _ = Describe("ocm share", func() {
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(conversions.NewViewerRole().CS3ResourcePermissions()),
+						share.NewWebDavAccessMethod(conversions.NewViewerRole().CS3ResourcePermissions(), []string{}),
 					},
 					RecipientMeshProvider: cesnet.ProviderInfo,
 				})
@@ -278,7 +278,7 @@ var _ = Describe("ocm share", func() {
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
+						share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions(), []string{}),
 					},
 					RecipientMeshProvider: cesnet.ProviderInfo,
 				})
@@ -374,7 +374,7 @@ var _ = Describe("ocm share", func() {
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(conversions.NewViewerRole().CS3ResourcePermissions()),
+						share.NewWebDavAccessMethod(conversions.NewViewerRole().CS3ResourcePermissions(), []string{}),
 					},
 					RecipientMeshProvider: cesnet.ProviderInfo,
 				})
@@ -477,7 +477,7 @@ var _ = Describe("ocm share", func() {
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
+						share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions(), []string{}),
 					},
 					RecipientMeshProvider: cesnet.ProviderInfo,
 				})
@@ -626,7 +626,7 @@ var _ = Describe("ocm share", func() {
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
+						share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions(), []string{}),
 					},
 					RecipientMeshProvider: cesnet.ProviderInfo,
 				})
@@ -643,7 +643,7 @@ var _ = Describe("ocm share", func() {
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
+						share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions(), []string{}),
 					},
 					RecipientMeshProvider: cesnet.ProviderInfo,
 				})
@@ -668,7 +668,7 @@ var _ = Describe("ocm share", func() {
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
+						share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions(), []string{}),
 					},
 					RecipientMeshProvider: cesnet.ProviderInfo,
 				})
@@ -677,6 +677,40 @@ var _ = Describe("ocm share", func() {
 			})
 		})
 
+		Context("einstein creates a share with a requirement that cannot be met", func() {
+			It("fail with bad request error", func() {
+				fileToShare := &provider.Reference{
+					Path: "/home/file-with-req",
+				}
+				By("creating a file")
+				Expect(helpers.CreateFile(ctxEinstein, cernboxgw, fileToShare.Path, []byte("test"))).To(Succeed())
+
+				By("share the file with marie")
+				info, err := stat(ctxEinstein, cernboxgw, fileToShare)
+				Expect(err).ToNot(HaveOccurred())
+
+				cesnet, err := cernboxgw.GetInfoByDomain(ctxEinstein, &ocmproviderpb.GetInfoByDomainRequest{
+					Domain: "cesnet.cz",
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(cesnet.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
+					ResourceId: info.Id,
+					Grantee: &provider.Grantee{
+						Id: &provider.Grantee_UserId{
+							UserId: marie.Id,
+						},
+					},
+					AccessMethods: []*ocmv1beta1.AccessMethod{
+						share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions(), []string{"unsupported-requirement"}),
+					},
+					RecipientMeshProvider: cesnet.ProviderInfo,
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(createShareRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_INVALID_ARGUMENT))
+			})
+		})
 	})
 })
 
