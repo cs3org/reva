@@ -376,7 +376,7 @@ func (t *Tree) assimilate(item scanItem) error {
 	}
 
 	// check for the id attribute again after grabbing the lock, maybe the file was assimilated/created by us in the meantime
-	id, _, mtime, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), item.Path)
+	_, id, mtime, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), item.Path)
 	if err != nil {
 		return err
 	}
