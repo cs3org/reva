@@ -394,7 +394,7 @@ func (lu *Lookup) GenerateSpaceID(spaceType string, owner *user.User) (string, e
 	case _spaceTypeProject:
 		return uuid.New().String(), nil
 	case _spaceTypePersonal:
-		path := templates.WithUser(owner, lu.Options.UserLayout)
+		path := templates.WithUser(owner, lu.Options.PersonalSpacePathTemplate)
 
 		spaceID, _, err := lu.IDsForPath(context.TODO(), filepath.Join(lu.Options.Root, path))
 		if err != nil {
