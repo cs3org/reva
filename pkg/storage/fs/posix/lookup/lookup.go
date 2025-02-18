@@ -105,7 +105,7 @@ func (lu *Lookup) IDsForPath(ctx context.Context, path string) (string, string, 
 	// IDsForPath returns the space and opaque id for the given path
 	spaceID, nodeID, ok := lu.IDCache.GetByPath(ctx, path)
 	if !ok {
-		return "", "", fmt.Errorf("path %s not found in cache", path)
+		return "", "", errtypes.NotFound("path not found in cache:" + path)
 	}
 	return spaceID, nodeID, nil
 }
