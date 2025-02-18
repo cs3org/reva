@@ -532,7 +532,8 @@ func (t *Tree) updateFile(path, id, spaceID string) (fs.FileInfo, node.Attribute
 assimilate:
 	if id != spaceID {
 		// read parent
-		_, parentID, err := t.lookup.(*lookup.Lookup).IDsForPath(context.Background(), filepath.Dir(path))
+		var err error
+		_, parentID, err = t.lookup.(*lookup.Lookup).IDsForPath(context.Background(), filepath.Dir(path))
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to read parent id")
 		}
