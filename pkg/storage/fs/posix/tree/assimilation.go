@@ -441,7 +441,7 @@ func (t *Tree) assimilate(item scanItem) error {
 				}
 
 				parentID := attrs.String(prefixes.ParentidAttr)
-				if err == nil && len(parentID) > 0 {
+				if len(parentID) > 0 {
 					ref := &provider.Reference{
 						ResourceId: &provider.ResourceId{
 							StorageId: t.options.MountID,
