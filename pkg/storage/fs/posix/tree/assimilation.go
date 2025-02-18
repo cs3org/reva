@@ -74,18 +74,19 @@ const dirtyFlag = "user.oc.dirty"
 
 type assimilationNode struct {
 	path    string
+	nodeId  string
 	spaceID string
 }
 
-func (d *assimilationNode) GetID() string {
-	panic("dummyNode has no ID")
+func (d assimilationNode) GetID() string {
+	return d.nodeId
 }
 
-func (d *assimilationNode) GetSpaceID() string {
+func (d assimilationNode) GetSpaceID() string {
 	return d.spaceID
 }
 
-func (d *assimilationNode) InternalPath() string {
+func (d assimilationNode) InternalPath() string {
 	return d.path
 }
 
@@ -527,7 +528,7 @@ func (t *Tree) assimilate(item scanItem) error {
 func (t *Tree) updateFile(path, id, spaceID string) (fs.FileInfo, node.Attributes, error) {
 	retries := 1
 	parentID := ""
-	bn := node.NewBaseNode(spaceID, id, t.lookup)
+	bn := assimilationNode{spaceID: spaceID, nodeId: id, path: path}
 assimilate:
 	if id != spaceID {
 		// read parent
