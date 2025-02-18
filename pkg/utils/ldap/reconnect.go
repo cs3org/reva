@@ -344,3 +344,7 @@ func (c *ConnWithReconnect) Syncrepl(ctx context.Context, searchRequest *ldap.Se
 	// unimplemented
 	return nil
 }
+
+func (c *ConnWithReconnect) Extended(_ *ldap.ExtendedRequest) (*ldap.ExtendedResponse, error) {
+	return nil, ldap.NewError(ldap.LDAPResultNotSupported, fmt.Errorf("not implemented"))
+}
