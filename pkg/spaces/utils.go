@@ -32,19 +32,18 @@ func DecodeSpaceID(raw string) (storageID, path string, ok bool) {
 	// The input is expected to be in the form of <storage_id>$<base32(<path>)
 	s := strings.SplitN(raw, "$", 2)
 	if len(s) != 2 {
-		return
+		return "", "", false
 	}
 
 	storageID = s[0]
 	encodedPath := s[1]
 	p, err := base32.StdEncoding.DecodeString(encodedPath)
 	if err != nil {
-		return
+		return "", "", false
 	}
 
 	path = string(p)
-	ok = true
-	return
+	return storageID, path, true
 }
 
 // Decode resourceID returns the components of the space ID.
@@ -53,11 +52,11 @@ func DecodeResourceID(raw string) (storageID, path, itemID string, ok bool) {
 	// The input is expected to be in the form of <storage_id>$base32(<path>)!<item_id>
 	s := strings.SplitN(raw, "!", 2)
 	if len(s) != 2 {
-		return
+		return "", "", "", false
 	}
 	itemID = s[1]
 	storageID, path, ok = DecodeSpaceID(s[0])
-	return
+	return storageID, path, itemID, ok
 }
 
 // ParseResourceID converts the encoded resource id in a CS3API ResourceId.
