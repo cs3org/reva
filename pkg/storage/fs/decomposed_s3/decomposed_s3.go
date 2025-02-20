@@ -30,7 +30,7 @@ import (
 )
 
 func init() {
-	registry.Register("decomposed-s3", New)
+	registry.Register("decomposed_s3", New)
 }
 
 // New returns an implementation to of the storage.FS interface that talk to
