@@ -120,9 +120,17 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		return err
 	}
 
+	// revision 5, current 10 (restore a smaller blob) -> 5-10 = -5
+	// revision 10, current 5 (restore a bigger blob) -> 10-5 = +5
+	revisionNode := node.NewBaseNode(spaceID, revisionKey, fs.lu)
+	revisionSize, err := fs.lu.MetadataBackend().GetInt64(ctx, revisionNode, prefixes.BlobsizeAttr)
+	if err != nil {
+		return errtypes.InternalError("failed to read blob size xattr from old revision")
+	}
+	sizeDiff := revisionSize - n.Blobsize
+
 	// restore revision
 	restoredRevisionPath := fs.lu.InternalPath(spaceID, revisionKey)
-	revisionNode := node.NewBaseNode(spaceID, revisionKey, fs.lu)
 	if err := fs.tp.RestoreRevision(ctx, revisionNode, n); err != nil {
 		return err
 	}
@@ -140,14 +148,6 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	if err := fs.lu.MetadataBackend().Purge(ctx, revisionNode); err != nil {
 		log.Warn().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("could not purge old revision from cache, continuing")
 	}
-
-	// revision 5, current 10 (restore a smaller blob) -> 5-10 = -5
-	// revision 10, current 5 (restore a bigger blob) -> 10-5 = +5
-	revisionSize, err := fs.lu.MetadataBackend().GetInt64(ctx, revisionNode, prefixes.BlobsizeAttr)
-	if err != nil {
-		return errtypes.InternalError("failed to read blob size xattr from old revision")
-	}
-	sizeDiff := revisionSize - n.Blobsize
 
 	return fs.tp.Propagate(ctx, n, sizeDiff)
 }
