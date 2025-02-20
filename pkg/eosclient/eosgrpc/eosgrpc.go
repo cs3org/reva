@@ -852,18 +852,10 @@ func (c *Client) GetQuota(ctx context.Context, username string, rootAuth eosclie
 	for i := 0; i < len(resp.Quota.Quotanode); i++ {
 		log.Debug().Str("func", "GetQuota").Str("quotanode:", fmt.Sprintf("%d: %#v", i, resp.Quota.Quotanode[i])).Msg("")
 
-		mx := int64(resp.Quota.Quotanode[i].Maxlogicalbytes) - int64(resp.Quota.Quotanode[i].Usedbytes)
-		if mx < 0 {
-			mx = 0
-		}
-		qi.AvailableBytes += uint64(mx)
+		qi.TotalBytes += max(uint64(resp.Quota.Quotanode[i].Maxlogicalbytes), 0)
 		qi.UsedBytes += resp.Quota.Quotanode[i].Usedbytes
 
-		mx = int64(resp.Quota.Quotanode[i].Maxfiles) - int64(resp.Quota.Quotanode[i].Usedfiles)
-		if mx < 0 {
-			mx = 0
-		}
-		qi.AvailableInodes += uint64(mx)
+		qi.TotalInodes += max(uint64(resp.Quota.Quotanode[i].Maxfiles), 0)
 		qi.UsedInodes += resp.Quota.Quotanode[i].Usedfiles
 	}
 
