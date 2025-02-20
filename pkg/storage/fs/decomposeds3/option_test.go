@@ -16,12 +16,12 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package decomposed_s3_test
+package decomposeds3_test
 
 import (
 	"github.com/mitchellh/mapstructure"
 
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/s3ng"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/decomposeds3"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -29,7 +29,7 @@ import (
 
 var _ = Describe("Options", func() {
 	var (
-		o   *s3ng.Options
+		o   *decomposeds3.Options
 		raw map[string]interface{}
 	)
 
@@ -41,7 +41,7 @@ var _ = Describe("Options", func() {
 			"s3.access_key": "foo",
 			"s3.secret_key": "bar",
 		}
-		o = &s3ng.Options{}
+		o = &decomposeds3.Options{}
 		err := mapstructure.Decode(raw, o)
 		Expect(err).ToNot(HaveOccurred())
 	})
@@ -62,7 +62,7 @@ var _ = Describe("Options", func() {
 			fields := []string{"s3.endpoint", "s3.region", "s3.bucket", "s3.access_key", "s3.secret_key"}
 			for _, f := range fields {
 				delete(raw, f)
-				o = &s3ng.Options{}
+				o = &decomposeds3.Options{}
 				err := mapstructure.Decode(raw, o)
 				Expect(err).ToNot(HaveOccurred())
 

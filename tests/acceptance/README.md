@@ -20,10 +20,10 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
    > make reva-posix
    > ```
    >
-   > To run reva with `s3ng` storage driver:
+   > To run reva with `decomposeds3` storage driver:
    >
    > ```bash
-   > make reva-s3ng
+   > make reva-decomposeds3
    > ```
 
 3. Get OpenCloud
@@ -74,12 +74,12 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
    >
    > Use these proper environment variables to run tests with different storage drivers:
    >
-   > 1. Run tests with `s3ng` storage driver:
+   > 1. Run tests with `decomposeds3` storage driver:
    >
    >    ```bash
    >    ...
    >    DELETE_USER_DATA_CMD="rm -rf /tmp/reva/data/spaces/* /tmp/reva/data/blobs/* /tmp/reva/data/indexes/by-type/*" \
-   >    EXPECTED_FAILURES_FILE=<path-to-reva>/tests/acceptance/expected-failures-on-S3NG-storage.md \
+   >    EXPECTED_FAILURES_FILE=<path-to-reva>/tests/acceptance/expected-failures-on-DECOMPOSEDS3-storage.md \
    >    make test-acceptance-api
    >    ```
    >

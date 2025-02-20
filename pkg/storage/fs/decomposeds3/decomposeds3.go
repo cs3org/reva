@@ -16,21 +16,21 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package decomposed_s3
+package decomposeds3
 
 import (
 	"fmt"
 
 	"github.com/opencloud-eu/reva/v2/pkg/events"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/decomposed_s3/blobstore"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/decomposeds3/blobstore"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/registry"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs"
 	"github.com/rs/zerolog"
 )
 
 func init() {
-	registry.Register("decomposed_s3", New)
+	registry.Register("decomposeds3", New)
 }
 
 // New returns an implementation to of the storage.FS interface that talk to

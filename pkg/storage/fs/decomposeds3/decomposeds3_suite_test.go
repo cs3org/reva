@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package decomposed_s3_test
+package decomposeds3_test
 
 import (
 	"testing"
@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestS3ng(t *testing.T) {
+func TestDecomposedS3(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "S3ng Suite")
+	RunSpecs(t, "decomposeds3 Suite")
 }

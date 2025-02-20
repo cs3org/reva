@@ -807,7 +807,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 }
 
 // the value of `target` depends on the implementation:
-// - for decomposedfs/s3ng it is the relative link to the space root
+// - for decomposedfs/decomposeds3 it is the relative link to the space root
 // - for the posixfs it is the node id
 func (fs *Decomposedfs) updateIndexes(ctx context.Context, grantee *provider.Grantee, spaceType, spaceID, nodeID string) error {
 	target := fs.tp.BuildSpaceIDIndexEntry(spaceID, nodeID)
