@@ -49,7 +49,6 @@ const RevisionsDir = ".oc-nodes"
 
 var _spaceTypePersonal = "personal"
 var _spaceTypeProject = "project"
-var _currentSuffix = ".current"
 
 func init() {
 	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/pkg/decomposedfs/lookup")
@@ -279,18 +278,12 @@ func (lu *Lookup) InternalRoot() string {
 
 // InternalPath returns the internal path for a given ID
 func (lu *Lookup) InternalPath(spaceID, nodeID string) string {
-	if strings.Contains(nodeID, node.RevisionIDDelimiter) {
+	if strings.Contains(nodeID, node.RevisionIDDelimiter) || strings.HasSuffix(nodeID, node.CurrentIDDelimiter) {
 		spaceRoot, _ := lu.IDCache.Get(context.Background(), spaceID, spaceID)
 		if len(spaceRoot) == 0 {
 			return ""
 		}
 		return filepath.Join(spaceRoot, RevisionsDir, Pathify(nodeID, 4, 2))
-	} else if strings.HasSuffix(nodeID, node.CurrentIDDelimiter) {
-		spaceRoot, _ := lu.IDCache.Get(context.Background(), spaceID, spaceID)
-		if len(spaceRoot) == 0 {
-			return ""
-		}
-		filepath.Join(spaceRoot, RevisionsDir, Pathify(nodeID, 4, 2)+_currentSuffix)
 	}
 
 	path, _ := lu.IDCache.Get(context.Background(), spaceID, nodeID)
@@ -315,7 +308,7 @@ func (lu *Lookup) CurrentPath(spaceID, nodeID string) string {
 		return ""
 	}
 
-	return filepath.Join(spaceRoot, RevisionsDir, Pathify(nodeID, 4, 2)+_currentSuffix)
+	return filepath.Join(spaceRoot, RevisionsDir, Pathify(nodeID, 4, 2)+node.CurrentIDDelimiter)
 }
 
 // refFromCS3 creates a CS3 reference from a set of bytes. This method should remain private
