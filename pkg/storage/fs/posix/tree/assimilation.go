@@ -381,23 +381,21 @@ func (t *Tree) assimilate(item scanItem) error {
 		return err
 	}
 
-	// compare metadata mtime with actual mtime. if it matches we can skip the assimilation because the file was handled by us
-	fi, err := os.Stat(item.Path)
-	if err == nil {
-		// FIXME the mtime does not change on a move, so we have to compare ctime
-		stat := fi.Sys().(*syscall.Stat_t)
-		ctime := time.Unix(int64(stat.Ctim.Sec), int64(stat.Ctim.Nsec))
-		if mtime.Equal(ctime) && !item.ForceRescan {
-			return nil
-		}
-	}
-
 	if id != "" {
 		// the file has an id set, we already know it from the past
 		n := node.NewBaseNode(spaceID, id, t.lookup)
 
 		previousPath, ok := t.lookup.(*lookup.Lookup).GetCachedID(context.Background(), spaceID, string(id))
 		previousParentID, _ := t.lookup.MetadataBackend().Get(context.Background(), n, prefixes.ParentidAttr)
+
+		// compare metadata mtime with actual mtime. if it matches AND the path hasn't changed (move operation)
+		// we can skip the assimilation because the file was handled by us
+		fi, err := os.Stat(item.Path)
+		if err == nil && previousPath == item.Path {
+			if mtime.Equal(fi.ModTime()) {
+				return nil
+			}
+		}
 
 		// was it moved or copied/restored with a clashing id?
 		if ok && len(previousParentID) > 0 && previousPath != item.Path {
