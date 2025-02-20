@@ -61,6 +61,7 @@ func createFS(provider string, revads map[string]*Revad) (storage.FS, error) {
 	case "decomposed":
 		conf["root"] = revads["storage"].StorageRoot
 		conf["permissionssvc"] = revads["permissions"].GrpcAddress
+		conf["filemetadatacache"] = map[string]string{"cache_store": "noop"}
 		f = decomposed.New
 	case "nextcloud":
 		conf["endpoint"] = "http://localhost:8080/apps/sciencemesh/"
