@@ -1073,10 +1073,10 @@ func (c *Client) parseQuota(path, raw string) (*eosclient.QuotaInfo, error) {
 			usedInodes, _ := strconv.ParseUint(usedInodesString, 10, 64)
 
 			qi := &eosclient.QuotaInfo{
-				AvailableBytes:  maxBytes,
-				UsedBytes:       usedBytes,
-				AvailableInodes: maxInodes,
-				UsedInodes:      usedInodes,
+				TotalBytes:  maxBytes,
+				UsedBytes:   usedBytes,
+				TotalInodes: maxInodes,
+				UsedInodes:  usedInodes,
 			}
 			return qi, nil
 		}
