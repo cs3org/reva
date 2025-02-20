@@ -89,3 +89,18 @@ func EncodeSpaceID(storageID, path string) string {
 func RelativePathToSpaceID(info *provider.ResourceInfo) string {
 	return strings.TrimPrefix(info.Path, info.Id.SpaceId)
 }
+
+func ResourceIdToString(id *provider.ResourceId) string {
+	return fmt.Sprintf("%s!%s", id.StorageId, id.OpaqueId)
+}
+
+func ResourceIdFromString(s string) (*provider.ResourceId, error) {
+	parts := strings.Split(s, "!")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("string does not have right format: should be storageid!opaqueid, got %s", s)
+	}
+	return &provider.ResourceId{
+		StorageId: parts[0],
+		OpaqueId:  parts[1],
+	}, nil
+}

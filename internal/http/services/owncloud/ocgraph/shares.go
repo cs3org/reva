@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"net/http"
 	"path"
-	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -234,24 +233,12 @@ type share struct {
 	public *linkv1beta1.PublicShare
 }
 
-func resourceIdToString(id *provider.ResourceId) string {
-	return fmt.Sprintf("%s!%s", id.StorageId, id.OpaqueId)
-}
-
-func resourceIdFromString(s string) *provider.ResourceId {
-	parts := strings.Split(s, "!")
-	return &provider.ResourceId{
-		StorageId: parts[0],
-		OpaqueId:  parts[1],
-	}
-}
-
 func groupByResourceID(shares []*gateway.ShareResourceInfo, publicShares []*gateway.PublicShareResourceInfo) (map[string][]*share, map[string]*provider.ResourceInfo) {
 	grouped := make(map[string][]*share, len(shares)+len(publicShares)) // at most we have the sum of both lists
 	infos := make(map[string]*provider.ResourceInfo, len(shares)+len(publicShares))
 
 	for _, s := range shares {
-		id := resourceIdToString(s.Share.ResourceId)
+		id := spaces.ResourceIdToString(s.Share.ResourceId)
 		grouped[id] = append(grouped[id], &share{
 			share: s.Share,
 		})
@@ -259,7 +246,7 @@ func groupByResourceID(shares []*gateway.ShareResourceInfo, publicShares []*gate
 	}
 
 	for _, s := range publicShares {
-		id := resourceIdToString(s.PublicShare.ResourceId)
+		id := spaces.ResourceIdToString(s.PublicShare.ResourceId)
 		grouped[id] = append(grouped[id], &share{
 			public: s.PublicShare,
 		})
@@ -401,7 +388,7 @@ func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*share) ([]li
 				HasPassword:     libregraph.PtrBool(e.public.PasswordProtected),
 				Id:              libregraph.PtrString(e.public.Token),
 				Link: &libregraph.SharingLink{
-					LibreGraphDisplayName: libregraph.PtrString("Link"),
+					LibreGraphDisplayName: libregraph.PtrString(e.public.DisplayName),
 					LibreGraphQuickLink:   libregraph.PtrBool(e.public.Quicklink),
 					PreventsDownload:      libregraph.PtrBool(false),
 					Type:                  linktype,
