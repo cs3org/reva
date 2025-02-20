@@ -158,7 +158,7 @@ func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libre
 			Id:        libregraph.PtrString(fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, rsi.ReceivedShare.Share.Id.OpaqueId)),
 			WebDavUrl: libregraph.PtrString(fullURL(s.c.WebDavBase, rsi.ResourceInfo.Path)),
 			RemoteItem: &libregraph.RemoteItem{
-				DriveAlias: libregraph.PtrString(strings.TrimSuffix(strings.TrimPrefix(rsi.ResourceInfo.Path, "/"), relativePathToSpaceID(rsi.ResourceInfo))), // the drive alias must not start with /
+				DriveAlias: libregraph.PtrString(strings.TrimSuffix(strings.TrimPrefix(rsi.ResourceInfo.Path, "/"), spaces.RelativePathToSpaceID(rsi.ResourceInfo))), // the drive alias must not start with /
 				ETag:       libregraph.PtrString(rsi.ResourceInfo.Etag),
 				Folder:     &libregraph.Folder{},
 				// The Id must correspond to the id in the OCS response, for the time being
@@ -166,7 +166,7 @@ func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libre
 				Id:                   libregraph.PtrString(spaces.EncodeResourceID(rsi.ResourceInfo.Id)),
 				LastModifiedDateTime: libregraph.PtrTime(time.Unix(int64(rsi.ResourceInfo.Mtime.Seconds), int64(rsi.ResourceInfo.Mtime.Nanos))),
 				Name:                 libregraph.PtrString(filepath.Base(rsi.ResourceInfo.Path)),
-				Path:                 libregraph.PtrString(relativePathToSpaceID(rsi.ResourceInfo)),
+				Path:                 libregraph.PtrString(spaces.RelativePathToSpaceID(rsi.ResourceInfo)),
 				// RootId must have the same token before ! as Id
 				// the second part for the time being is not used
 				RootId: libregraph.PtrString(fmt.Sprintf("%s!unused_root_id", spaces.EncodeSpaceID(rsi.ResourceInfo.Id.StorageId, rsi.ResourceInfo.Id.SpaceId))),
@@ -174,10 +174,6 @@ func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libre
 			},
 		},
 	}
-}
-
-func relativePathToSpaceID(info *providerpb.ResourceInfo) string {
-	return strings.TrimPrefix(info.Path, info.Id.SpaceId)
 }
 
 func generateCs3Filters(request *godata.GoDataRequest) ([]*providerpb.ListStorageSpacesRequest_Filter, error) {

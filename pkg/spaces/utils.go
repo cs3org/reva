@@ -85,3 +85,7 @@ func EncodeSpaceID(storageID, path string) string {
 	encodedPath := base32.StdEncoding.EncodeToString([]byte(path))
 	return fmt.Sprintf("%s$%s", storageID, encodedPath)
 }
+
+func RelativePathToSpaceID(info *provider.ResourceInfo) string {
+	return strings.TrimPrefix(info.Path, info.Id.SpaceId)
+}

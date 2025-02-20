@@ -135,7 +135,7 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.Rece
 			Id:                   libregraph.PtrString(encodeSpaceIDForShareJail(rsi.ResourceInfo)),
 			LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(rsi.ResourceInfo.Mtime)),
 			Name:                 libregraph.PtrString(rsi.ResourceInfo.Name),
-			Path:                 libregraph.PtrString(relativePathToSpaceID(rsi.ResourceInfo)),
+			Path:                 libregraph.PtrString(spaces.RelativePathToSpaceID(rsi.ResourceInfo)),
 			// ParentReference: &libregraph.ItemReference{
 			// 	DriveId:   libregraph.PtrString(spaces.EncodeResourceID(share.ResourceInfo.ParentId)),
 			// 	DriveType: nil, // FIXME: no way to know it unless we hardcode it
@@ -322,7 +322,7 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 
 func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceInfo, shares []*share) (*libregraph.DriveItem, error) {
 
-	parentRelativePath := path.Dir(relativePathToSpaceID(info))
+	parentRelativePath := path.Dir(spaces.RelativePathToSpaceID(info))
 
 	permissions, err := s.cs3sharesToPermissions(ctx, shares)
 	if err != nil {
