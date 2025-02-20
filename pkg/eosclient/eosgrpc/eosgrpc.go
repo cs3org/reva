@@ -853,7 +853,7 @@ func (c *Client) GetQuota(ctx context.Context, username string, rootAuth eosclie
 		log.Debug().Str("func", "GetQuota").Str("quotanode:", fmt.Sprintf("%d: %#v", i, resp.Quota.Quotanode[i])).Msg("")
 
 		qi.TotalBytes += max(uint64(resp.Quota.Quotanode[i].Maxlogicalbytes), 0)
-		qi.UsedBytes += resp.Quota.Quotanode[i].Usedbytes
+		qi.UsedBytes += resp.Quota.Quotanode[i].Usedlogicalbytes
 
 		qi.TotalInodes += max(uint64(resp.Quota.Quotanode[i].Maxfiles), 0)
 		qi.UsedInodes += resp.Quota.Quotanode[i].Usedfiles
