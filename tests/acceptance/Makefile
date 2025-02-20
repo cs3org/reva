@@ -4,7 +4,7 @@ help:
 	@echo "Available targets:"
 	@echo "  reva            Start reva with decomposed storage"
 	@echo "  reva-posix      Start reva with posixfs storage"
-	@echo "  reva-s3ng       Start reva with s3ng storage"
+	@echo "  reva-decomposeds3       Start reva with decomposeds3 storage"
 
 CURR_DIR:=$(dir $(abspath $(firstword $(MAKEFILE_LIST))))
 REVA_CMD:=$(abspath $(CURR_DIR)/../../cmd/revad/revad)
@@ -69,10 +69,10 @@ reva-posix: ldap redis reva-services
 	@echo "Running reva with posixfs storage"
 	@$(REVA_CMD) -c $(CONFIG_DIR)/storage-users-posixfs.toml
 
-.PHONY: reva-s3ng
-reva-s3ng: ldap ceph reva-services
+.PHONY: reva-decomposeds3
+reva-decomposeds3: ldap ceph reva-services
 	@echo "Running reva with posixfs storage"
-	@$(REVA_CMD) -c $(CONFIG_DIR)/storage-users-s3ng.toml
+	@$(REVA_CMD) -c $(CONFIG_DIR)/storage-users-decomposeds3.toml
 
 .PHONY: clean
 clean:

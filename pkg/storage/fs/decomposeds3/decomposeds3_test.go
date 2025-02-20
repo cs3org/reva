@@ -16,12 +16,12 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package decomposed_s3_test
+package decomposeds3_test
 
 import (
 	"os"
 
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/s3ng"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/decomposeds3"
 	"github.com/opencloud-eu/reva/v2/tests/helpers"
 	"github.com/rs/zerolog"
 
@@ -29,7 +29,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("S3ng", func() {
+var _ = Describe("decomposeds3", func() {
 	var (
 		options map[string]interface{}
 		tmpRoot string
@@ -59,12 +59,12 @@ var _ = Describe("S3ng", func() {
 
 	Describe("New", func() {
 		It("fails on missing s3 configuration", func() {
-			_, err := s3ng.New(map[string]interface{}{}, nil, &zerolog.Logger{})
+			_, err := decomposeds3.New(map[string]interface{}{}, nil, &zerolog.Logger{})
 			Expect(err).To(MatchError("S3 configuration incomplete"))
 		})
 
 		It("works with complete configuration", func() {
-			_, err := s3ng.New(options, nil, &zerolog.Logger{})
+			_, err := decomposeds3.New(options, nil, &zerolog.Logger{})
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})

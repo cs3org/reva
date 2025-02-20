@@ -23,7 +23,7 @@ enabled = true
 
 # This is a storage provider that grants direct access to the wrapped storage
 [grpc.services.storageprovider]
-driver = "decomposed-s3"
+driver = "decomposeds3"
 expose_data_server = true
 data_server_url = "http://localhost:11001/data"
 mount_id = "1284d238-aa92-42ce-bdc4-0b0000009157"
@@ -45,7 +45,7 @@ permissionssvc = "localhost:10000"
 address = "0.0.0.0:11001"
 
 [http.services.dataprovider]
-driver = "decomposed-s3"
+driver = "decomposeds3"
 temp_folder = "/tmp/reva/tmp"
 
 [http.services.dataprovider.drivers.s3ng]

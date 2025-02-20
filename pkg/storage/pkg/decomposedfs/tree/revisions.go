@@ -195,7 +195,7 @@ func (tp *Tree) DownloadRevision(ctx context.Context, ref *provider.Reference, r
 		BaseNode: node.BaseNode{SpaceID: spaceID},
 		BlobID:   blobid,
 		Blobsize: blobsize,
-	} // blobsize is needed for the s3ng blobstore
+	} // blobsize is needed for the decomposeds3 blobstore
 
 	ri, err := n.AsResourceInfo(ctx, rp, nil, []string{"size", "mimetype", "etag"}, true)
 	if err != nil {
