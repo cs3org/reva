@@ -283,7 +283,7 @@ var _ = Describe("Nextcloud", func() {
 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
 				},
 				AccessMethods: []*ocm.AccessMethod{
-					ocmshare.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
+					ocmshare.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions(), []string{}),
 					ocmshare.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 					ocmshare.NewTransferAccessMethod(),
 				},
@@ -422,7 +422,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 				ShareType: ocm.ShareType_SHARE_TYPE_USER,
 				AccessMethods: []*ocm.AccessMethod{
-					ocmshare.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
+					ocmshare.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions(), []string{}),
 					ocmshare.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 					ocmshare.NewTransferAccessMethod(),
 				},
@@ -475,7 +475,7 @@ var _ = Describe("Nextcloud", func() {
 				Protocols: []*ocm.Protocol{
 					ocmshare.NewWebDAVProtocol("webdav-uri", "some-token", &ocm.SharePermissions{
 						Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
-					}),
+					}, []string{}),
 					ocmshare.NewWebappProtocol("app-uri-template", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 					ocmshare.NewTransferProtocol("source-uri", "some-token", 1),
 				},
@@ -533,7 +533,7 @@ var _ = Describe("Nextcloud", func() {
 				Protocols: []*ocm.Protocol{
 					ocmshare.NewWebDAVProtocol("webdav-uri", "some-token", &ocm.SharePermissions{
 						Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
-					}),
+					}, []string{}),
 					ocmshare.NewWebappProtocol("app-uri-template", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 					ocmshare.NewTransferProtocol("source-uri", "some-token", 1),
 				},
@@ -622,7 +622,7 @@ var _ = Describe("Nextcloud", func() {
 				Protocols: []*ocm.Protocol{
 					ocmshare.NewWebDAVProtocol("webdav-uri", "some-token", &ocm.SharePermissions{
 						Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
-					}),
+					}, []string{}),
 					ocmshare.NewWebappProtocol("app-uri-template", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 					ocmshare.NewTransferProtocol("source-uri", "some-token", 1),
 				},

@@ -19,9 +19,11 @@
 package ocmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"reflect"
 	"strings"
 
@@ -31,13 +33,72 @@ import (
 	utils "github.com/cs3org/reva/pkg/utils"
 )
 
-// Protocols is the list of protocols.
+// In this file we group the definitions of the OCM payloads according to the official specs
+// at https://github.com/cs3org/OCM-API/blob/develop/spec.yaml
+
+// InviteAcceptedRequest contains the payload of an OCM /invite-accepted request.
+// https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1invite-accepted/post
+type InviteAcceptedRequest struct {
+	UserID            string `json:"userID" validate:"required"`
+	Email             string `json:"email"`
+	Name              string `json:"name"`
+	RecipientProvider string `json:"recipientProvider"`
+	Token             string `json:"token"`
+}
+
+// RemoteUser contains the remote user's information both when sending an /invite-accepted call and when sending back a response to /invite-accepted
+type RemoteUser struct {
+	UserID string `json:"userID"`
+	Email  string `json:"email"`
+	Name   string `json:"name"`
+}
+
+func (r *InviteAcceptedRequest) toJSON() (io.Reader, error) {
+	var b bytes.Buffer
+	if err := json.NewEncoder(&b).Encode(r); err != nil {
+		return nil, err
+	}
+	return &b, nil
+}
+
+// NewShareRequest contains the payload of an OCM /share request.
+// https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1shares/post
+type NewShareRequest struct {
+	ShareWith         string    `json:"shareWith"         validate:"required"`                  // identifier of the recipient of the share
+	Name              string    `json:"name"              validate:"required"`                  // name of the resource
+	Description       string    `json:"description"`                                            // (optional) description of the resource
+	ProviderID        string    `json:"providerId"        validate:"required"`                  // unique identifier of the resource at provider side
+	Owner             string    `json:"owner"             validate:"required"`                  // unique identifier of the owner at provider side
+	Sender            string    `json:"sender"            validate:"required"`                  // unique indentifier of the user who wants to share the resource at provider side
+	OwnerDisplayName  string    `json:"ownerDisplayName"`                                       // display name of the owner of the resource
+	SenderDisplayName string    `json:"senderDisplayName"`                                      // dispay name of the user who wants to share the resource
+	Code              string    `json:"code"`                                                   // nonce to be exchanged for a bearer token (not implemented for now)
+	ShareType         string    `json:"shareType"         validate:"required,oneof=user group"` // recipient share type (user or group)
+	ResourceType      string    `json:"resourceType"      validate:"required,oneof=file folder"`
+	Expiration        uint64    `json:"expiration"`
+	Protocols         Protocols `json:"protocol"          validate:"required"`
+}
+
+func (r *NewShareRequest) toJSON() (io.Reader, error) {
+	var b bytes.Buffer
+	if err := json.NewEncoder(&b).Encode(r); err != nil {
+		return nil, err
+	}
+	return &b, nil
+}
+
+// NewShareResponse is the response returned when creating a new share.
+type NewShareResponse struct {
+	RecipientDisplayName string `json:"recipientDisplayName"`
+}
+
+// Protocols is the list of OCM protocols.
 type Protocols []Protocol
 
 // Protocol represents the way of access the resource
 // in the OCM share.
 type Protocol interface {
-	// ToOCMProtocol convert the protocol to a ocm Protocol struct
+	// ToOCMProtocol converts the protocol to a CS3API OCM `Protocol` struct
 	ToOCMProtocol() *ocm.Protocol
 }
 
@@ -47,7 +108,8 @@ type Protocol interface {
 type WebDAV struct {
 	SharedSecret string   `json:"sharedSecret" validate:"required"`
 	Permissions  []string `json:"permissions"  validate:"required,dive,required,oneof=read write share"`
-	URL          string   `json:"url"          validate:"required"`
+	Requirements []string `json:"requirements"`
+	URI          string   `json:"uri"          validate:"required"`
 }
 
 // ToOCMProtocol convert the protocol to a ocm Protocol struct.
@@ -69,18 +131,19 @@ func (w *WebDAV) ToOCMProtocol() *ocm.Protocol {
 		}
 	}
 
-	return ocmshare.NewWebDAVProtocol(w.URL, w.SharedSecret, perms)
+	return ocmshare.NewWebDAVProtocol(w.URI, w.SharedSecret, perms, w.Requirements)
 }
 
 // Webapp contains the parameters for the Webapp protocol.
 type Webapp struct {
-	URITemplate string `json:"uriTemplate" validate:"required"`
-	ViewMode    string `json:"viewMode"    validate:"required,dive,required,oneof=view read write"`
+	URI          string `json:"uri" validate:"required"`
+	ViewMode     string `json:"viewMode"    validate:"required,dive,required,oneof=view read write"`
+	SharedSecret string `json:"sharedSecret"`
 }
 
 // ToOCMProtocol convert the protocol to a ocm Protocol struct.
 func (w *Webapp) ToOCMProtocol() *ocm.Protocol {
-	return ocmshare.NewWebappProtocol(w.URITemplate, utils.GetAppViewMode(w.ViewMode))
+	return ocmshare.NewWebappProtocol(w.URI, utils.GetAppViewMode(w.ViewMode))
 }
 
 // Datatx contains the parameters for the Datatx protocol.
@@ -134,7 +197,7 @@ func (p *Protocols) UnmarshalJSON(data []byte) error {
 				res = &WebDAV{
 					SharedSecret: ss,
 					Permissions:  []string{"read", "write", "share"},
-					URL:          "",
+					URI:          "",
 				}
 				*p = append(*p, res)
 			}
@@ -163,7 +226,7 @@ func (p Protocols) MarshalJSON() ([]byte, error) {
 	for _, prot := range p {
 		d[GetProtocolName(prot)] = prot
 	}
-	// fill in the OCM v1.0 properties: for now we only create OCM 1.1 payloads,
+	// fill in the OCM v1.0 properties: we only create OCM 1.1+ payloads,
 	// irrespective from the capabilities of the remote server.
 	d["name"] = "multi"
 	d["options"] = map[string]any{}

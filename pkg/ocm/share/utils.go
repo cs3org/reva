@@ -25,25 +25,26 @@ import (
 )
 
 // NewWebDAVProtocol is an abstraction for creating a WebDAV protocol.
-func NewWebDAVProtocol(uri, sharedSecret string, perms *ocm.SharePermissions) *ocm.Protocol {
+func NewWebDAVProtocol(uri, sharedSecret string, perms *ocm.SharePermissions, reqs []string) *ocm.Protocol {
 	return &ocm.Protocol{
 		Term: &ocm.Protocol_WebdavOptions{
 			WebdavOptions: &ocm.WebDAVProtocol{
 				Uri:          uri,
 				SharedSecret: sharedSecret,
 				Permissions:  perms,
+				Requirements: reqs,
 			},
 		},
 	}
 }
 
 // NewWebappProtocol is an abstraction for creating a Webapp protocol.
-func NewWebappProtocol(uriTemplate string, viewMode appprovider.ViewMode) *ocm.Protocol {
+func NewWebappProtocol(uri string, viewMode appprovider.ViewMode) *ocm.Protocol {
 	return &ocm.Protocol{
 		Term: &ocm.Protocol_WebappOptions{
 			WebappOptions: &ocm.WebappProtocol{
-				UriTemplate: uriTemplate,
-				ViewMode:    viewMode,
+				Uri:      uri,
+				ViewMode: viewMode,
 			},
 		},
 	}
@@ -63,11 +64,12 @@ func NewTransferProtocol(sourceURI, sharedSecret string, size uint64) *ocm.Proto
 }
 
 // NewWebDavAccessMethod is an abstraction for creating a WebDAV access method.
-func NewWebDavAccessMethod(perms *provider.ResourcePermissions) *ocm.AccessMethod {
+func NewWebDavAccessMethod(perms *provider.ResourcePermissions, reqs []string) *ocm.AccessMethod {
 	return &ocm.AccessMethod{
 		Term: &ocm.AccessMethod_WebdavOptions{
 			WebdavOptions: &ocm.WebDAVAccessMethod{
-				Permissions: perms,
+				Permissions:  perms,
+				Requirements: reqs,
 			},
 		},
 	}

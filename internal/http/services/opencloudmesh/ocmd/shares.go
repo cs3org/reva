@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"mime"
 	"net/http"
-	"path/filepath"
+	"net/url"
 	"strings"
 	"time"
 
@@ -63,27 +63,12 @@ func (h *sharesHandler) init(c *config) error {
 	return nil
 }
 
-type createShareRequest struct {
-	ShareWith         string    `json:"shareWith"         validate:"required"`                  // identifier of the recipient of the share
-	Name              string    `json:"name"              validate:"required"`                  // name of the resource
-	Description       string    `json:"description"`                                            // (optional) description of the resource
-	ProviderID        string    `json:"providerId"        validate:"required"`                  // unique identifier of the resource at provider side
-	Owner             string    `json:"owner"             validate:"required"`                  // unique identifier of the owner at provider side
-	Sender            string    `json:"sender"            validate:"required"`                  // unique indentifier of the user who wants to share the resource at provider side
-	OwnerDisplayName  string    `json:"ownerDisplayName"`                                       // display name of the owner of the resource
-	SenderDisplayName string    `json:"senderDisplayName"`                                      // dispay name of the user who wants to share the resource
-	ShareType         string    `json:"shareType"         validate:"required,oneof=user group"` // recipient share type (user or group)
-	ResourceType      string    `json:"resourceType"      validate:"required,oneof=file folder"`
-	Expiration        uint64    `json:"expiration"`
-	Protocols         Protocols `json:"protocol"          validate:"required"`
-}
-
-// CreateShare sends all the informations to the consumer needed to start
-// synchronization between the two services.
+// CreateShare implements the OCM /shares call.
 func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	req, err := getCreateShareRequest(r)
+	log.Info().Any("req", req).Msg("OCM /shares request received")
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
 		return
@@ -114,7 +99,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		Provider: &providerInfo,
 	})
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "error sending a grpc is provider allowed request", err)
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error sending a grpc isProviderAllowed request", err)
 		return
 	}
 	if providerAllowedResp.Status.Code != rpc.Code_CODE_OK {
@@ -124,7 +109,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 
 	shareWith, _, err := getIDAndMeshProvider(req.ShareWith)
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with mesh provider", err)
 		return
 	}
 
@@ -142,19 +127,19 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 
 	owner, err := getUserIDFromOCMUser(req.Owner)
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with remote owner", err)
 		return
 	}
 
 	sender, err := getUserIDFromOCMUser(req.Sender)
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with remote sender", err)
 		return
 	}
 
 	protocols, err := getAndResolveProtocols(req.Protocols, r)
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with protocols payload", err)
 		return
 	}
 
@@ -176,6 +161,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	log.Info().Any("req", createShareReq).Msg("CreateOCMCoreShare payload")
 	createShareResp, err := h.gatewayClient.CreateOCMCoreShare(ctx, createShareReq)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error creating ocm share", err)
@@ -220,15 +206,15 @@ func getIDAndMeshProvider(user string) (string, string, error) {
 	return strings.Join(split[:len(split)-1], "@"), split[len(split)-1], nil
 }
 
-func getCreateShareRequest(r *http.Request) (*createShareRequest, error) {
-	var req createShareRequest
+func getCreateShareRequest(r *http.Request) (*NewShareRequest, error) {
+	var req NewShareRequest
 	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err == nil && contentType == "application/json" {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "malformed OCM /shares request")
 		}
 	} else {
-		return nil, errors.New("body request not recognised")
+		return nil, errors.New("malformed OCM /shares request payload")
 	}
 	// validate the request
 	if err := validate.Struct(req); err != nil {
@@ -263,42 +249,82 @@ func getOCMShareType(t string) ocm.ShareType {
 func getAndResolveProtocols(p Protocols, r *http.Request) ([]*ocm.Protocol, error) {
 	protos := make([]*ocm.Protocol, 0, len(p))
 	for _, data := range p {
+		var uri string
 		ocmProto := data.ToOCMProtocol()
-		if GetProtocolName(data) == "webdav" && ocmProto.GetWebdavOptions().Uri == "" {
-			// This is an OCM 1.0 payload with only webdav: we need to resolve the remote URL
-			remoteRoot, err := discoverOcmWebdavRoot(r)
-			if err != nil {
-				return nil, err
+		protocolName := GetProtocolName(data)
+		switch protocolName {
+		case "webdav":
+			uri = ocmProto.GetWebdavOptions().Uri
+			reqs := ocmProto.GetWebdavOptions().Requirements
+			if len(reqs) > 0 {
+				// we currently do not support any kind of requirement
+				return nil, errtypes.BadRequest(fmt.Sprintf("incoming OCM share with requirements %+v not supported at this endpoint", reqs))
 			}
-			ocmProto.GetWebdavOptions().Uri = filepath.Join(remoteRoot, ocmProto.GetWebdavOptions().SharedSecret)
+		case "webapp":
+			uri = ocmProto.GetWebappOptions().Uri
+		}
+
+		// Irrespective from the presence of a full `uri` in the payload (deprecated), validate the
+		// remote is an OCM server and resolve the remote root
+		// yet skip this if the remote is localhost (for integration tests)
+		if strings.Contains(uri, "localhost") {
+			protos = append(protos, ocmProto)
+			continue
+		}
+		remoteRoot, err := discoverOcmRoot(r, protocolName)
+		if err != nil {
+			return nil, err
+		}
+
+		uri, _ = url.JoinPath(remoteRoot, uri[strings.LastIndex(uri, "/")+1:])
+		switch protocolName {
+		case "webdav":
+			ocmProto.GetWebdavOptions().Uri = uri
+		case "webapp":
+			ocmProto.GetWebappOptions().Uri = uri
 		}
 		protos = append(protos, ocmProto)
 	}
+
 	return protos, nil
 }
 
-func discoverOcmWebdavRoot(r *http.Request) (string, error) {
-	// implements the OCM discovery logic to fetch the WebDAV root at the remote host that sent the share, see
+func discoverOcmRoot(r *http.Request, proto string) (string, error) {
+	// implements the OCM discovery logic to fetch the root at the remote host that sent the share for the given proto, see
 	// https://cs3org.github.io/OCM-API/docs.html?branch=v1.1.0&repo=OCM-API&user=cs3org#/paths/~1ocm-provider/get
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-	log.Debug().Str("sender", r.Host).Msg("received OCM 1.0 share, attempting to discover sender endpoint")
+
+	// assume the sender host is either given in the usual reverse proxy headers or as RemoteAddr, and that the
+	// remote end listens on https regardless if the incoming connection got its TLS terminated upstream of us
+	senderURL := r.Header.Get("X-Real-Ip")
+	if senderURL == "" {
+		senderURL = r.Header.Get("X-Forwarded-For")
+	}
+	if senderURL == "" {
+		senderURL = r.RemoteAddr
+	}
+	senderURL = "https://" + senderURL[:strings.LastIndex(senderURL, ":")]
+	log.Debug().Str("sender", senderURL).Msg("received OCM share, attempting to discover sender endpoint")
 
 	ocmClient := NewClient(time.Duration(10)*time.Second, true)
-	ocmCaps, err := ocmClient.Discover(ctx, r.Host)
+	ocmCaps, err := ocmClient.Discover(ctx, senderURL)
 	if err != nil {
-		log.Warn().Str("sender", r.Host).Err(err).Msg("failed to discover OCM sender")
+		log.Warn().Str("sender", senderURL).Err(err).Msg("failed to discover OCM sender")
 		return "", err
 	}
 	for _, t := range ocmCaps.ResourceTypes {
-		webdavRoot, ok := t.Protocols["webdav"]
+		protoRoot, ok := t.Protocols[proto]
 		if ok {
-			// assume the first resourceType that exposes a webdav root is OK to use: as a matter of fact,
+			// assume the first resourceType that exposes a root is OK to use: as a matter of fact,
 			// no implementation exists yet that exposes multiple resource types with different roots.
-			return filepath.Join(ocmCaps.Endpoint, webdavRoot), nil
+			u, _ := url.Parse(ocmCaps.Endpoint)
+			u.Path = protoRoot
+			u.RawQuery = ""
+			return u.String(), nil
 		}
 	}
 
-	log.Warn().Str("sender", r.Host).Interface("response", ocmCaps).Msg("missing webdav root")
-	return "", errtypes.NotFound("WebDAV root not found on OCM discovery")
+	log.Warn().Str("sender", r.Host).Interface("response", ocmCaps).Msg("missing root")
+	return "", errtypes.NotFound(fmt.Sprintf("root not found on OCM discovery for protocol %s", proto))
 }
