@@ -22,7 +22,9 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"time"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
@@ -49,12 +51,18 @@ type Config struct {
 	DBHost     string `mapstructure:"db_host"`
 	DBPort     int    `mapstructure:"db_port"`
 	DBName     string `mapstructure:"db_name"`
+	// CacheTTL (seconds) determines how long the list of projects will be stored in a cache
+	// before a new database query is executed. The default, 0, corresponds to 60 seconds.
+	CacheTTL int `mapstructure:"cache_ttl"`
 }
 
 type mgr struct {
-	c  *Config
-	db *gorm.DB
+	c     *Config
+	db    *gorm.DB
+	cache *ttlcache.Cache
 }
+
+const cacheKey = "projects/projectsListCache"
 
 // Project represents a project in the DB.
 type Project struct {
@@ -96,26 +104,37 @@ func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
 		return nil, errors.Wrap(err, "Failed to mgirate Project schema")
 	}
 
+	cache := ttlcache.NewCache()
+	if c.CacheTTL == 0 {
+		c.CacheTTL = 60
+	}
+	cache.SetTTL(time.Duration(c.CacheTTL))
+	// Even if we get a hit, of course we just want to refresh every 60 seconds
+	cache.SkipTTLExtensionOnHit(true)
 	mgr := &mgr{
-		c:  &c,
-		db: db,
+		c:     &c,
+		db:    db,
+		cache: cache,
 	}
 	return mgr, nil
 }
 
 func (m *mgr) ListProjects(ctx context.Context, user *userpb.User) ([]*provider.StorageSpace, error) {
-	// TODO: we reallyyy should not be loading everything into memory here...
+	var fetchedProjects []*Project
 
-	var dbProjects []*Project
-
-	query := m.db.Model(&Project{})
-	res := query.Find(&dbProjects)
-	if res.Error != nil {
-		return nil, res.Error
+	if res, err := m.cache.Get(cacheKey); err == nil && res != nil {
+		fetchedProjects = res.([]*Project)
+	} else {
+		query := m.db.Model(&Project{})
+		res := query.Find(&fetchedProjects)
+		if res.Error != nil {
+			return nil, res.Error
+		}
+		m.cache.Set(cacheKey, fetchedProjects)
 	}
 
 	projects := []*provider.StorageSpace{}
-	for _, p := range dbProjects {
+	for _, p := range fetchedProjects {
 		if perms, ok := projectBelongToUser(user, p); ok {
 			projects = append(projects, &provider.StorageSpace{
 				Id: &provider.StorageSpaceId{
