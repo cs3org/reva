@@ -1,3 +1,62 @@
+Changelog for reva 2.27.5 (2025-02-24)
+=======================================
+
+The following sections list the changes in reva 2.27.5 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #5093: Fix OCM create share
+*   Fix #5077: Deny Users invite themselves to their own federated connection
+*   Fix #5071: Role conversion
+*   Enh #5075: Add the ocm notification handler
+*   Enh #5083: Add the ocm notification ShareChangePermission
+*   Enh #5063: Add roles
+
+Details
+-------
+
+*   Bugfix #5093: Fix OCM create share
+
+   We fixed the OCM share fails on share creating if the federated instance is not reachable.
+
+   https://github.com/owncloud/ocis/issues/11046
+   https://github.com/cs3org/reva/pull/5093
+
+*   Bugfix #5077: Deny Users invite themselves to their own federated connection
+
+   Deny Users invite themselves to their own federated connection
+
+   https://github.com/cs3org/reva/pull/5077
+
+*   Bugfix #5071: Role conversion
+
+   Fix role from resource permission conversion
+
+   https://github.com/cs3org/reva/pull/5071
+
+*   Enhancement #5075: Add the ocm notification handler
+
+   Added the ocm notification handler that allows receiving a notification from a remote party
+   about changes to a previously known entity.
+
+   https://github.com/cs3org/reva/pull/5075
+
+*   Enhancement #5083: Add the ocm notification ShareChangePermission
+
+   Added the ocm notification ShareChangePermission that allows to synchronize the
+   permissions of a share between the federated instances.
+
+   https://github.com/cs3org/reva/pull/5083
+
+*   Enhancement #5063: Add roles
+
+   Add EditorListGrantsWithVersions and FileEditorListGrantsWithVersions roles.
+
+   https://github.com/owncloud/ocis/issues/10747
+   https://github.com/cs3org/reva/pull/5063
+
 Changelog for reva 2.27.4 (2025-02-03)
 =======================================
 
@@ -5435,6 +5494,34 @@ Details
 
    https://github.com/cs3org/reva/pull/3083
 
+Changelog for reva 2.7.1 (2022-07-15)
+=======================================
+
+The following sections list the changes in reva 2.7.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #3080: Make dataproviders return more headers
+*   Enh #3046: Add user filter
+
+Details
+-------
+
+*   Bugfix #3080: Make dataproviders return more headers
+
+   Instead of ocdav doing an additional Stat request we now rely on the dataprovider to return the
+   necessary metadata information as headers.
+
+   https://github.com/owncloud/reva/issues/3080
+
+*   Enhancement #3046: Add user filter
+
+   This PR adds the ability to filter spaces by user-id
+
+   https://github.com/cs3org/reva/pull/3046
+
 Changelog for reva 2.7.0 (2022-07-15)
 =======================================
 
@@ -5566,34 +5653,6 @@ Details
    https://github.com/owncloud/ocis/issues/2144
    https://github.com/owncloud/ocis/issues/3073
    https://github.com/cs3org/reva/pull/2977
-
-Changelog for reva 2.7.1 (2022-07-15)
-=======================================
-
-The following sections list the changes in reva 2.7.1 relevant to
-reva users. The changes are ordered by importance.
-
-Summary
--------
-
-*   Fix #3080: Make dataproviders return more headers
-*   Enh #3046: Add user filter
-
-Details
--------
-
-*   Bugfix #3080: Make dataproviders return more headers
-
-   Instead of ocdav doing an additional Stat request we now rely on the dataprovider to return the
-   necessary metadata information as headers.
-
-   https://github.com/owncloud/reva/issues/3080
-
-*   Enhancement #3046: Add user filter
-
-   This PR adds the ability to filter spaces by user-id
-
-   https://github.com/cs3org/reva/pull/3046
 
 Changelog for reva 2.6.1 (2022-06-27)
 =======================================
@@ -5962,6 +6021,27 @@ Details
 
    https://github.com/cs3org/reva/pull/2922
 
+Changelog for reva 2.4.1 (2022-05-24)
+=======================================
+
+The following sections list the changes in reva 2.4.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #2891: Add missing http status code
+
+Details
+-------
+
+*   Bugfix #2891: Add missing http status code
+
+   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
+   pass it through.
+
+   https://github.com/cs3org/reva/pull/2891
+
 Changelog for reva 2.4.0 (2022-05-24)
 =======================================
 
@@ -6104,27 +6184,6 @@ Details
    correct storageprovider
 
    https://github.com/cs3org/reva/pull/2792
-
-Changelog for reva 2.4.1 (2022-05-24)
-=======================================
-
-The following sections list the changes in reva 2.4.1 relevant to
-reva users. The changes are ordered by importance.
-
-Summary
--------
-
-*   Fix #2891: Add missing http status code
-
-Details
--------
-
-*   Bugfix #2891: Add missing http status code
-
-   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
-   pass it through.
-
-   https://github.com/cs3org/reva/pull/2891
 
 Changelog for reva 2.3.1 (2022-05-08)
 =======================================
