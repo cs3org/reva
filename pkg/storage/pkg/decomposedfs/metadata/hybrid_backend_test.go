@@ -21,12 +21,14 @@ var _ = Describe("HybridBackend", func() {
 
 		backend metadata.Backend
 
-		keySmall   = prefixes.GrantUserAcePrefix + "1"
-		dataSmall  = []byte("1")
-		keySmall2  = prefixes.GrantUserAcePrefix + "2"
-		dataSmall2 = []byte("2")
-		keyBig     = prefixes.GrantUserAcePrefix + "100"
-		dataBig    = []byte("fooooooothosearetoomanybytes")
+		keySmall          = prefixes.GrantUserAcePrefix + "1"
+		dataSmall         = []byte("1")
+		keySmall2         = prefixes.MetadataPrefix + "2"
+		dataSmall2        = []byte("2")
+		keyBig            = prefixes.GrantUserAcePrefix + "100"
+		dataBig           = []byte("fooooooothosearetoomanybytes")
+		nonOffloadingKey  = "user.foo"
+		nonOffloadingData = []byte("bar")
 	)
 
 	BeforeEach(func() {
@@ -71,7 +73,7 @@ var _ = Describe("HybridBackend", func() {
 			Expect(readData).To(Equal(data))
 		})
 
-		It("doesn't offload grants if size is not exceeded", func() {
+		It("doesn't offload metadata if size is not exceeded", func() {
 			err := backend.Set(context.Background(), n, keySmall, dataSmall)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -84,15 +86,15 @@ var _ = Describe("HybridBackend", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
-		It("offloads grants if size is exceeded", func() {
+		It("offloads metadata if size is exceeded", func() {
 			err := backend.Set(context.Background(), n, keyBig, dataBig)
 			Expect(err).ToNot(HaveOccurred())
 
-			By("not adding the grant to the xattrs")
+			By("not adding the metadata to the xattrs")
 			_, err = xattr.Get(n.InternalPath(), keyBig)
 			Expect(err).To(HaveOccurred())
 
-			By("adding the grant to the messagepack file")
+			By("adding the metadata to the messagepack file")
 			messagepackPath := backend.MetadataPath(n)
 			_, err = os.Stat(messagepackPath)
 			Expect(err).ToNot(HaveOccurred())
@@ -112,13 +114,13 @@ var _ = Describe("HybridBackend", func() {
 			err = backend.Set(context.Background(), n, keySmall2, dataSmall2)
 			Expect(err).ToNot(HaveOccurred())
 
-			By("not adding the grant to the xattrs")
+			By("not adding the metadata to the xattrs")
 			_, err = xattr.Get(n.InternalPath(), keySmall)
 			Expect(err).To(HaveOccurred())
 			_, err = xattr.Get(n.InternalPath(), keySmall2)
 			Expect(err).To(HaveOccurred())
 
-			By("adding the grant to the messagepack file")
+			By("adding the metadata to the messagepack file")
 			messagepackPath := backend.MetadataPath(n)
 			_, err = os.Stat(messagepackPath)
 			Expect(err).ToNot(HaveOccurred())
@@ -133,7 +135,7 @@ var _ = Describe("HybridBackend", func() {
 			Expect(attribs[keySmall2]).To(Equal(dataSmall2))
 		})
 
-		It("offloads existing grants when offloading", func() {
+		It("offloads existing metadata as well when offloading", func() {
 			// The first grant will not trigger offloading
 			err := backend.Set(context.Background(), n, keySmall, dataSmall)
 			Expect(err).ToNot(HaveOccurred())
@@ -164,6 +166,37 @@ var _ = Describe("HybridBackend", func() {
 			Expect(attribs[keySmall]).To(Equal(dataSmall))
 			Expect(attribs[keyBig]).To(Equal(dataBig))
 		})
+
+		It("still writes non-offloading metadata to the xattrs, even when offloading", func() {
+			err := backend.Set(context.Background(), n, keyBig, dataBig)
+			Expect(err).ToNot(HaveOccurred())
+			err = backend.Set(context.Background(), n, nonOffloadingKey, nonOffloadingData)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("not adding the offloading key to the xattrs")
+			_, err = xattr.Get(n.InternalPath(), keyBig)
+			Expect(err).To(HaveOccurred())
+			By("adding the non-offloading key to the xattrs")
+			b, err := xattr.Get(n.InternalPath(), nonOffloadingKey)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(b).To(Equal(nonOffloadingData))
+
+			By("adding the metadata to the messagepack file")
+			messagepackPath := backend.MetadataPath(n)
+			_, err = os.Stat(messagepackPath)
+			Expect(err).ToNot(HaveOccurred())
+
+			msgBytes, err := os.ReadFile(messagepackPath)
+			Expect(err).ToNot(HaveOccurred())
+
+			attribs := map[string][]byte{}
+			err = msgpack.Unmarshal(msgBytes, &attribs)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(attribs[keyBig]).To(Equal(dataBig))
+
+			By("not adding the non-offloading metadata to the messagepack file")
+			Expect(attribs[nonOffloadingKey]).To(BeEmpty())
+		})
 	})
 
 	Describe("Get", func() {
@@ -180,16 +213,17 @@ var _ = Describe("HybridBackend", func() {
 			})
 		})
 
-		Context("with offloaded grants", func() {
+		Context("with offloaded metadata", func() {
 			JustBeforeEach(func() {
 				err := backend.SetMultiple(context.Background(), n, map[string][]byte{
-					keySmall: dataSmall,
-					keyBig:   dataBig,
+					keySmall:         dataSmall,
+					keyBig:           dataBig,
+					nonOffloadingKey: nonOffloadingData,
 				}, false)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
-			It("reads the grants", func() {
+			It("reads offloaded metadata", func() {
 				readData, err := backend.Get(context.Background(), n, keySmall)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(readData).To(Equal(dataSmall))
@@ -197,6 +231,12 @@ var _ = Describe("HybridBackend", func() {
 				readData, err = backend.Get(context.Background(), n, keyBig)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(readData).To(Equal(dataBig))
+			})
+
+			It("reads non-offloaded metadata", func() {
+				readData, err := backend.Get(context.Background(), n, nonOffloadingKey)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(readData).To(Equal(nonOffloadingData))
 			})
 		})
 	})

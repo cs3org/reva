@@ -21,7 +21,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/utils/filelocks"
 )
 
-var _grantsOffloadedAttr = prefixes.OcPrefix + "grants_offloaded"
+var _metadataOffloadedAttr = prefixes.OcPrefix + "metadata_offloaded"
 
 type MetadataPathFunc func(MetadataNode) string
 
@@ -64,9 +64,9 @@ func (b HybridBackend) Get(ctx context.Context, n MetadataNode, key string) ([]b
 		return attribs[key], err
 	}
 
-	if isGrantAttribute(key) {
+	if isOffloadingAttribute(key) {
 		// check if grants are offloaded
-		offloaded, err := xattr.Get(n.InternalPath(), _grantsOffloadedAttr)
+		offloaded, err := xattr.Get(n.InternalPath(), _metadataOffloadedAttr)
 		if err == nil && string(offloaded) == "1" {
 			msgpackAttribs := map[string][]byte{}
 			msgBytes, err := os.ReadFile(b.MetadataPath(n))
@@ -168,8 +168,8 @@ func (b HybridBackend) getAll(ctx context.Context, n MetadataNode, skipCache, sk
 	}
 
 	// merge the attributes from the offload file
-	offloaded, err := xattr.Get(path, _grantsOffloadedAttr)
-	if skipOffloaded == false && err == nil && string(offloaded) == "1" {
+	offloaded, err := xattr.Get(path, _metadataOffloadedAttr)
+	if !skipOffloaded && err == nil && string(offloaded) == "1" {
 		msgpackAttribs := map[string][]byte{}
 		msgBytes, err := os.ReadFile(b.MetadataPath(n))
 		if err != nil {
@@ -212,32 +212,70 @@ func (b HybridBackend) SetMultiple(ctx context.Context, n MetadataNode, attribs 
 		defer cleanupLockfile(ctx, lockedFile)
 	}
 
-	offloaded, err := xattr.Get(path, _grantsOffloadedAttr)
-	if err == nil && string(offloaded) == "1" {
-		// already offloaded -> write to messagepack
+	offloadAttr, err := xattr.Get(path, _metadataOffloadedAttr)
+	offloaded := err == nil && string(offloadAttr) == "1"
+
+	// offload if the offloading metadata size exceeds the limit
+	hasOffloadingAttrs := false
+	for key := range attribs {
+		if isOffloadingAttribute(key) {
+			hasOffloadingAttrs = true
+			break
+		}
+	}
+	if hasOffloadingAttrs && !offloaded {
+		mdSize := 0
+		for key := range attribs {
+			if isOffloadingAttribute(key) {
+				mdSize += len(attribs[key]) + len(key)
+			}
+		}
+		existingAttribs, err := b.getAll(ctx, n, true, true, false)
+		if err != nil {
+			return err
+		}
+		for key := range existingAttribs {
+			if isOffloadingAttribute(key) {
+				mdSize += len(attribs[key]) + len(key)
+			}
+		}
+
+		if mdSize > b.offloadLimit {
+			err = b.offloadMetadata(ctx, n)
+			if err != nil {
+				return err
+			}
+			offloaded = true
+		}
+	}
+
+	if offloaded {
 		metaPath := b.MetadataPath(n)
 		var msgBytes []byte
 		msgBytes, err = os.ReadFile(metaPath)
 
-		attribs := map[string][]byte{}
+		mpkAttribs := map[string][]byte{}
 		switch {
 		case err != nil:
 			if !errors.Is(err, fs.ErrNotExist) {
 				return err
 			}
 		default:
-			err = msgpack.Unmarshal(msgBytes, &attribs)
+			err = msgpack.Unmarshal(msgBytes, &mpkAttribs)
 			if err != nil {
 				return err
 			}
 		}
 
-		// prepare metadata
+		// prepare offloaded metadata
 		for key, val := range attribs {
-			attribs[key] = val
+			if isOffloadingAttribute(key) {
+				mpkAttribs[key] = val
+				delete(attribs, key)
+			}
 		}
 		var d []byte
-		d, err = msgpack.Marshal(attribs)
+		d, err = msgpack.Marshal(mpkAttribs)
 		if err != nil {
 			return err
 		}
@@ -247,20 +285,19 @@ func (b HybridBackend) SetMultiple(ctx context.Context, n MetadataNode, attribs 
 		if err != nil {
 			return err
 		}
-	} else {
-		xerrs := 0
-		var xerr error
-		// error handling: Count if there are errors while setting the attribs.
-		// if there were any, return an error.
-		for key, val := range attribs {
-			if xerr = xattr.Set(path, key, val); xerr != nil {
-				// log
-				xerrs++
-			}
+	}
+	xerrs := 0
+	var xerr error
+	// error handling: Count if there are errors while setting the attribs.
+	// if there were any, return an error.
+	for key, val := range attribs {
+		if xerr = xattr.Set(path, key, val); xerr != nil {
+			// log
+			xerrs++
 		}
-		if xerrs > 0 {
-			return errors.Wrap(xerr, "Failed to set all xattrs")
-		}
+	}
+	if xerrs > 0 {
+		return errors.Wrap(xerr, "Failed to set all xattrs")
 	}
 
 	attribs, err = b.getAll(ctx, n, true, false, false)
@@ -270,17 +307,6 @@ func (b HybridBackend) SetMultiple(ctx context.Context, n MetadataNode, attribs 
 	err = b.metaCache.PushToCache(b.cacheKey(n), attribs)
 	if err != nil {
 		return err
-	}
-
-	// offload if the grant size exceeds the limit
-	grantSize := 0
-	for key := range attribs {
-		if isGrantAttribute(key) {
-			grantSize += len(attribs[key]) + len(key)
-		}
-	}
-	if grantSize > b.offloadLimit && string(offloaded) != "1" {
-		return b.offloadMetadata(ctx, n)
 	}
 
 	return nil
@@ -298,10 +324,10 @@ func (b HybridBackend) offloadMetadata(ctx context.Context, n MetadataNode) erro
 		return err
 	}
 	for key, val := range existingAttribs {
-		if isGrantAttribute(key) {
+		if isOffloadingAttribute(key) {
 			msgpackAttribs[key] = val
 			xerr = xattr.Remove(path, key)
-			if err != nil {
+			if xerr != nil {
 				xerrs++
 			}
 		}
@@ -318,13 +344,13 @@ func (b HybridBackend) offloadMetadata(ctx context.Context, n MetadataNode) erro
 	}
 
 	// set the grants offloaded attribute
-	err = xattr.Set(path, _grantsOffloadedAttr, []byte("1"))
+	err = xattr.Set(path, _metadataOffloadedAttr, []byte("1"))
 	if err != nil {
 		return err
 	}
 	// remove grants from xattrs
 	for key, val := range existingAttribs {
-		if isGrantAttribute(key) {
+		if isOffloadingAttribute(key) {
 			msgpackAttribs[key] = val
 			xerr = xattr.Remove(path, key)
 			if err != nil {
@@ -435,6 +461,6 @@ func (b HybridBackend) cacheKey(n MetadataNode) string {
 	return n.GetSpaceID() + "/" + n.GetID()
 }
 
-func isGrantAttribute(key string) bool {
-	return strings.HasPrefix(key, prefixes.GrantPrefix)
+func isOffloadingAttribute(key string) bool {
+	return strings.HasPrefix(key, prefixes.GrantPrefix) || strings.HasPrefix(key, prefixes.MetadataPrefix)
 }
