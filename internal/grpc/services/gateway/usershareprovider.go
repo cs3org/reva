@@ -24,12 +24,15 @@ import (
 	"path"
 	"strings"
 
+	"github.com/alitto/pond/v2"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -203,6 +206,7 @@ func (s *svc) ListShares(ctx context.Context, req *collaboration.ListSharesReque
 		return &collaboration.ListSharesResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil
+
 	}
 
 	res, err := c.ListShares(ctx, req)
@@ -211,6 +215,78 @@ func (s *svc) ListShares(ctx context.Context, req *collaboration.ListSharesReque
 	}
 
 	return res, nil
+}
+
+func (s *svc) ListExistingShares(ctx context.Context, req *collaboration.ListSharesRequest) (*gateway.ListExistingSharesResponse, error) {
+	shares, err := s.ListShares(ctx, req)
+	if err != nil {
+		err := errors.Wrap(err, "gateway: error calling ListExistingShares")
+		return &gateway.ListExistingSharesResponse{
+			Status: status.NewInternal(ctx, err, "error listing shares"),
+		}, nil
+	}
+
+	sharesCh := make(chan *gateway.ShareResourceInfo, len(shares.Shares))
+	pool := pond.NewPool(50)
+
+	for _, share := range shares.Shares {
+		share := share
+		pool.SubmitErr(func() error {
+			key := resourceid.OwnCloudResourceIDWrap(share.ResourceId)
+			var resourceInfo *provider.ResourceInfo
+			if res, err := s.resourceInfoCache.Get(key); err == nil && res != nil {
+				resourceInfo = res
+			} else {
+				stat, err := s.Stat(ctx, &provider.StatRequest{
+					Ref: &provider.Reference{
+						ResourceId: share.ResourceId,
+					},
+				})
+				if err != nil {
+					return err
+				}
+				if stat.Status.Code != rpc.Code_CODE_OK {
+					return errors.New("An error occurred: " + stat.Status.Message)
+				}
+				resourceInfo = stat.Info
+				if s.resourceInfoCacheTTL > 0 {
+					_ = s.resourceInfoCache.SetWithExpire(key, resourceInfo, s.resourceInfoCacheTTL)
+				}
+			}
+
+			sharesCh <- &gateway.ShareResourceInfo{
+				ResourceInfo: resourceInfo,
+				Share:        share,
+			}
+
+			return nil
+		})
+	}
+
+	sris := make([]*gateway.ShareResourceInfo, 0, len(shares.Shares))
+	done := make(chan struct{})
+	go func() {
+		for s := range sharesCh {
+			sris = append(sris, s)
+		}
+		done <- struct{}{}
+	}()
+	err = pool.Stop().Wait()
+	close(sharesCh)
+	<-done
+	close(done)
+
+	if err != nil {
+		return &gateway.ListExistingSharesResponse{
+			ShareInfos: sris,
+			Status:     status.NewInternal(ctx, err, "An error occured listing existing shares"),
+		}, err
+	}
+
+	return &gateway.ListExistingSharesResponse{
+		ShareInfos: sris,
+		Status:     status.NewOK(ctx),
+	}, nil
 }
 
 func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareRequest) (*collaboration.UpdateShareResponse, error) {
@@ -271,6 +347,79 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *collaboration.ListRec
 		return nil, errors.Wrap(err, "gateway: error calling ListReceivedShares")
 	}
 	return res, nil
+}
+
+func (s *svc) ListExistingReceivedShares(ctx context.Context, req *collaboration.ListReceivedSharesRequest) (*gateway.ListExistingReceivedSharesResponse, error) {
+	rshares, err := s.ListReceivedShares(ctx, req)
+	if err != nil {
+		err := errors.Wrap(err, "gateway: error calling ListExistingReceivedShares")
+		return &gateway.ListExistingReceivedSharesResponse{
+			Status: status.NewInternal(ctx, err, "error listing received shares"),
+		}, nil
+	}
+
+	sharesCh := make(chan *gateway.ReceivedShareResourceInfo, len(rshares.Shares))
+	pool := pond.NewPool(50)
+	for _, rs := range rshares.Shares {
+		rs := rs
+		pool.SubmitErr(func() error {
+			if rs.State == collaboration.ShareState_SHARE_STATE_INVALID {
+				return errors.New("Invalid Share State")
+			}
+
+			key := resourceid.OwnCloudResourceIDWrap(rs.Share.ResourceId)
+			var resourceInfo *provider.ResourceInfo
+			if res, err := s.resourceInfoCache.Get(key); err == nil && res != nil {
+				resourceInfo = res
+			} else {
+				stat, err := s.Stat(ctx, &provider.StatRequest{
+					Ref: &provider.Reference{
+						ResourceId: rs.Share.ResourceId,
+					},
+				})
+				if err != nil {
+					return err
+				}
+				if stat.Status.Code != rpc.Code_CODE_OK {
+					return errors.New("An error occurred: " + stat.Status.Message)
+				}
+				resourceInfo = stat.Info
+				if s.resourceInfoCacheTTL > 0 {
+					_ = s.resourceInfoCache.SetWithExpire(key, resourceInfo, s.resourceInfoCacheTTL)
+				}
+			}
+			sharesCh <- &gateway.ReceivedShareResourceInfo{
+				ResourceInfo:  resourceInfo,
+				ReceivedShare: rs,
+			}
+			return nil
+		})
+	}
+
+	sris := make([]*gateway.ReceivedShareResourceInfo, 0, len(rshares.Shares))
+	done := make(chan struct{})
+	go func() {
+		for s := range sharesCh {
+			sris = append(sris, s)
+		}
+		done <- struct{}{}
+	}()
+	err = pool.Stop().Wait()
+	close(sharesCh)
+	<-done
+	close(done)
+
+	if err != nil {
+		return &gateway.ListExistingReceivedSharesResponse{
+			ShareInfos: sris,
+			Status:     status.NewInternal(ctx, err, "An error occured listing received shares"),
+		}, err
+	}
+
+	return &gateway.ListExistingReceivedSharesResponse{
+		ShareInfos: sris,
+		Status:     status.NewOK(ctx),
+	}, nil
 }
 
 func (s *svc) GetReceivedShare(ctx context.Context, req *collaboration.GetReceivedShareRequest) (*collaboration.GetReceivedShareResponse, error) {

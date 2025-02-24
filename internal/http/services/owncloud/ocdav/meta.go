@@ -22,7 +22,7 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	"github.com/cs3org/reva/pkg/utils/resourceid"
+	"github.com/cs3org/reva/pkg/spaces"
 )
 
 // MetaHandler handles meta requests.
@@ -45,13 +45,17 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
-		did := resourceid.OwnCloudResourceIDUnwrap(id)
+		rid, ok := spaces.ParseResourceID(id)
+		if !ok {
+			http.Error(w, "400 Bad Request", http.StatusBadRequest)
+			return
+		}
 
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 		switch head {
 		case "v":
-			h.VersionsHandler.Handler(s, did).ServeHTTP(w, r)
+			h.VersionsHandler.Handler(s, rid).ServeHTTP(w, r)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

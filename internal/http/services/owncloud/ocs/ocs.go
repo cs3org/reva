@@ -129,8 +129,11 @@ func (s *svc) routerInit(l *zerolog.Logger) error {
 
 		r.Route("/cloud", func(r chi.Router) {
 			r.Get("/capabilities", capabilitiesHandler.GetCapabilities)
-			r.Get("/user", userHandler.GetSelf)
-			r.Patch("/user", userHandler.UpdateSelf)
+			r.Route("/user", func(r chi.Router) {
+				r.Get("/", userHandler.GetSelf)
+				r.Patch("/", userHandler.UpdateSelf)
+				r.Get("/signing-key", userHandler.SigningKey)
+			})
 			r.Route("/users", func(r chi.Router) {
 				r.Get("/{userid}", usersHandler.GetUsers)
 				r.Get("/{userid}/groups", usersHandler.GetGroups)
