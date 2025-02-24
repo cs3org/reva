@@ -1202,7 +1202,7 @@ func (fs *eosfs) CreateStorageSpace(ctx context.Context, req *provider.CreateSto
 	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
 }
 
-func (fs *eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, error) {
+func (fs *eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (totalbytes, usedbytes uint64, err error) {
 	u, err := utils.GetUser(ctx)
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "eosfs: no user in ctx")
@@ -1221,7 +1221,7 @@ func (fs *eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64,
 		return 0, 0, err
 	}
 
-	return qi.AvailableBytes, qi.UsedBytes, nil
+	return qi.TotalBytes, qi.UsedBytes, nil
 }
 
 func (fs *eosfs) GetHome(ctx context.Context) (string, error) {

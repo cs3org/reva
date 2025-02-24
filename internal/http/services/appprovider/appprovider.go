@@ -22,6 +22,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"io"
 	"net/http"
 	"path"
 
@@ -468,10 +469,17 @@ func (s *svc) handleNotify(w http.ResponseWriter, r *http.Request) {
 		fileRef.ResourceId = resourceID
 	}
 
+	// the body of the request may contain any error the client got when attempting to open the app
+	failure, _ := io.ReadAll(r.Body)
+
 	// log the fileid for later correlation / monitoring
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-	log.Info().Interface("resource", &fileRef).Msg("file successfully opened in app")
+	if len(failure) == 0 {
+		log.Info().Interface("resource", fileRef).Msg("file successfully opened in app")
+	} else {
+		log.Info().Interface("resource", fileRef).Str("failure", string(failure)).Msg("failed to open file in app")
+	}
 
 	w.WriteHeader(http.StatusOK)
 }
