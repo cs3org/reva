@@ -25,6 +25,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"syscall"
 
 	"github.com/rs/zerolog"
@@ -78,10 +79,19 @@ func New(m map[string]interface{}, stream events.Stream, log *zerolog.Logger) (s
 	switch o.MetadataBackend {
 	case "xattrs":
 		lu = lookup.New(metadata.NewXattrsBackend(o.Root, o.FileMetadataCache), um, o, &timemanager.Manager{})
-	case "messagepack":
-		lu = lookup.New(metadata.NewMessagePackBackend(o.Root, o.FileMetadataCache), um, o, &timemanager.Manager{})
+	case "hybrid":
+		lu = lookup.New(metadata.NewHybridBackend(1024, // start offloading grants after 1KB
+			func(n metadata.MetadataNode) string {
+				spaceRoot, _ := lu.IDCache.Get(context.Background(), n.GetSpaceID(), n.GetSpaceID())
+				if len(spaceRoot) == 0 {
+					return ""
+				}
+
+				return filepath.Join(spaceRoot, lookup.RevisionsDir, lookup.Pathify(n.GetID(), 4, 2)+".mpk")
+			},
+			o.FileMetadataCache), um, o, &timemanager.Manager{})
 	default:
-		return nil, fmt.Errorf("unknown metadata backend %s, only 'messagepack' or 'xattrs' (default) supported", o.MetadataBackend)
+		return nil, fmt.Errorf("unknown metadata backend %s, only 'xattrs' or 'hybrid' (default) supported", o.MetadataBackend)
 	}
 
 	trashbin, err := trashbin.New(o, lu, log)
