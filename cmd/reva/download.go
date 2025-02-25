@@ -24,7 +24,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/cheggaaa/pb"
+	"github.com/cheggaaa/pb/v3"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -119,7 +119,7 @@ func downloadCommand() *command {
 			return err
 		}
 
-		bar := pb.New(int(info.Size)).SetUnits(pb.U_BYTES)
+		bar := pb.StartNew(int(info.Size)).Set(pb.Bytes, true)
 		bar.Start()
 		reader := bar.NewProxyReader(content)
 
