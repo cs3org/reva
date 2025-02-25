@@ -39,7 +39,6 @@ import (
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/events"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
@@ -309,14 +308,12 @@ func (t *Tree) HandleFileDelete(path string) error {
 }
 
 func (t *Tree) getNodeForPath(path string) (*node.Node, error) {
-	lu := t.lookup.(*lookup.Lookup)
-
-	spaceID, nodeID, err := lu.IDsForPath(context.Background(), path)
+	spaceID, nodeID, err := t.lookup.IDsForPath(context.Background(), path)
 	if err != nil {
 		return nil, err
 	}
 
-	return node.ReadNode(context.Background(), lu, spaceID, nodeID, false, nil, false)
+	return node.ReadNode(context.Background(), t.lookup, spaceID, nodeID, false, nil, false)
 }
 
 func (t *Tree) findSpaceId(path string) (string, node.Attributes, error) {
@@ -324,7 +321,7 @@ func (t *Tree) findSpaceId(path string) (string, node.Attributes, error) {
 	spaceCandidate := path
 	spaceAttrs := node.Attributes{}
 	for strings.HasPrefix(spaceCandidate, t.options.Root) {
-		spaceID, _, err := t.lookup.(*lookup.Lookup).IDsForPath(context.Background(), spaceCandidate)
+		spaceID, _, err := t.lookup.IDsForPath(context.Background(), spaceCandidate)
 		if err == nil && len(spaceID) > 0 {
 			if t.options.UseSpaceGroups {
 				// set the uid and gid for the space
@@ -385,7 +382,7 @@ func (t *Tree) assimilate(item scanItem) error {
 		// the file has an id set, we already know it from the past
 		n := node.NewBaseNode(spaceID, id, t.lookup)
 
-		previousPath, ok := t.lookup.(*lookup.Lookup).GetCachedID(context.Background(), spaceID, string(id))
+		previousPath, ok := t.lookup.GetCachedID(context.Background(), spaceID, string(id))
 		previousParentID, _ := t.lookup.MetadataBackend().Get(context.Background(), n, prefixes.ParentidAttr)
 
 		// compare metadata mtime with actual mtime. if it matches AND the path hasn't changed (move operation)
@@ -416,7 +413,7 @@ func (t *Tree) assimilate(item scanItem) error {
 				// this is a move
 				t.log.Debug().Str("path", item.Path).Msg("move detected")
 
-				if err := t.lookup.(*lookup.Lookup).CacheID(context.Background(), spaceID, string(id), item.Path); err != nil {
+				if err := t.lookup.CacheID(context.Background(), spaceID, string(id), item.Path); err != nil {
 					t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", string(id)).Str("path", item.Path).Msg("could not cache id")
 				}
 				_, attrs, err := t.updateFile(item.Path, string(id), spaceID)
@@ -425,7 +422,7 @@ func (t *Tree) assimilate(item scanItem) error {
 				}
 
 				// Delete the path entry using DeletePath(reverse lookup), not the whole entry pair.
-				if err := t.lookup.(*lookup.Lookup).IDCache.DeletePath(context.Background(), previousPath); err != nil {
+				if err := t.lookup.IDCache.DeletePath(context.Background(), previousPath); err != nil {
 					t.log.Error().Err(err).Str("path", previousPath).Msg("could not delete id cache entry by path")
 				}
 
@@ -469,7 +466,7 @@ func (t *Tree) assimilate(item scanItem) error {
 		} else {
 			// This item had already been assimilated in the past. Update the path
 			t.log.Debug().Str("path", item.Path).Msg("updating cached path")
-			if err := t.lookup.(*lookup.Lookup).CacheID(context.Background(), spaceID, string(id), item.Path); err != nil {
+			if err := t.lookup.CacheID(context.Background(), spaceID, string(id), item.Path); err != nil {
 				t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", string(id)).Str("path", item.Path).Msg("could not cache id")
 			}
 
@@ -530,7 +527,7 @@ assimilate:
 	if id != spaceID {
 		// read parent
 		var err error
-		_, parentID, err = t.lookup.(*lookup.Lookup).IDsForPath(context.Background(), filepath.Dir(path))
+		_, parentID, err = t.lookup.IDsForPath(context.Background(), filepath.Dir(path))
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to read parent id")
 		}
@@ -668,7 +665,7 @@ assimilate:
 		return nil, nil, errors.Wrap(err, "failed to set attributes")
 	}
 
-	if err := t.lookup.(*lookup.Lookup).CacheID(context.Background(), spaceID, id, path); err != nil {
+	if err := t.lookup.CacheID(context.Background(), spaceID, id, path); err != nil {
 		t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", id).Str("path", path).Msg("could not cache id")
 	}
 
@@ -741,7 +738,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 				// try to find space
 				spaceCandidate := path
 				for strings.HasPrefix(spaceCandidate, t.options.Root) {
-					spaceID, _, err = t.lookup.(*lookup.Lookup).IDsForPath(context.Background(), spaceCandidate)
+					spaceID, _, err = t.lookup.IDsForPath(context.Background(), spaceCandidate)
 					if err == nil && len(spaceID) > 0 {
 						err = scopeSpace(path)
 						if err != nil {
@@ -767,7 +764,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 
 			if id != "" {
 				// Check if the item on the previous still exists. In this case it might have been a copy with extended attributes -> set new ID
-				previousPath, ok := t.lookup.(*lookup.Lookup).GetCachedID(context.Background(), spaceID, id)
+				previousPath, ok := t.lookup.GetCachedID(context.Background(), spaceID, id)
 				if ok && previousPath != path {
 					// this id clashes with an existing id -> re-assimilate
 					_, err := os.Stat(previousPath)
@@ -775,7 +772,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 						_ = t.assimilate(scanItem{Path: path, ForceRescan: true})
 					}
 				}
-				if err := t.lookup.(*lookup.Lookup).CacheID(context.Background(), spaceID, id, path); err != nil {
+				if err := t.lookup.CacheID(context.Background(), spaceID, id, path); err != nil {
 					t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", id).Str("path", path).Msg("could not cache id")
 				}
 			}
@@ -788,7 +785,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 	})
 
 	for dir, size := range sizes {
-		spaceID, id, err := t.lookup.(*lookup.Lookup).IDsForPath(context.Background(), dir)
+		spaceID, id, err := t.lookup.IDsForPath(context.Background(), dir)
 		if err != nil {
 			t.log.Error().Err(err).Str("path", dir).Msg("could not get ids for path")
 			continue

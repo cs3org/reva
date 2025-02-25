@@ -81,7 +81,7 @@ type scanItem struct {
 
 // Tree manages a hierarchical tree
 type Tree struct {
-	lookup      node.PathLookup
+	lookup      *lookup.Lookup
 	blobstore   Blobstore
 	trashbin    *trashbin.Trashbin
 	propagator  propagator.Propagator
@@ -106,7 +106,7 @@ type PermissionCheckFunc func(rp *provider.ResourcePermissions) bool
 func New(lu node.PathLookup, bs Blobstore, um usermapper.Mapper, trashbin *trashbin.Trashbin, permissions permissions.Permissions, o *options.Options, es events.Stream, cache store.Store, log *zerolog.Logger) (*Tree, error) {
 	scanQueue := make(chan scanItem)
 	t := &Tree{
-		lookup:      lu,
+		lookup:      lu.(*lookup.Lookup),
 		blobstore:   bs,
 		userMapper:  um,
 		trashbin:    trashbin,
@@ -220,7 +220,7 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 	n.SetType(provider.ResourceType_RESOURCE_TYPE_FILE)
 
 	// Set id in cache
-	if err := t.lookup.(*lookup.Lookup).CacheID(context.Background(), n.SpaceID, n.ID, nodePath); err != nil {
+	if err := t.lookup.CacheID(context.Background(), n.SpaceID, n.ID, nodePath); err != nil {
 		t.log.Error().Err(err).Str("spaceID", n.SpaceID).Str("id", n.ID).Str("path", nodePath).Msg("could not cache id")
 	}
 
@@ -325,7 +325,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	if newNode.ID == "" {
 		newNode.ID = oldNode.ID
 	}
-	if err := t.lookup.(*lookup.Lookup).CacheID(ctx, newNode.SpaceID, newNode.ID, filepath.Join(newNode.ParentPath(), newNode.Name)); err != nil {
+	if err := t.lookup.CacheID(ctx, newNode.SpaceID, newNode.ID, filepath.Join(newNode.ParentPath(), newNode.Name)); err != nil {
 		t.log.Error().Err(err).Str("spaceID", newNode.SpaceID).Str("id", newNode.ID).Str("path", filepath.Join(newNode.ParentPath(), newNode.Name)).Msg("could not cache id")
 	}
 
@@ -437,7 +437,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 			for name := range work {
 				path := filepath.Join(dir, name)
 
-				_, nodeID, err := t.lookup.(*lookup.Lookup).IDsForPath(ctx, path)
+				_, nodeID, err := t.lookup.IDsForPath(ctx, path)
 				if err != nil {
 					return err
 				}
@@ -536,7 +536,7 @@ func (t *Tree) WriteBlob(n *node.Node, source string) error {
 	var err error
 
 	if t.options.EnableFSRevisions {
-		currentPath = t.lookup.(*lookup.Lookup).CurrentPath(n.SpaceID, n.ID)
+		currentPath = t.lookup.CurrentPath(n.SpaceID, n.ID)
 
 		defer func() {
 			_ = t.lookup.CopyMetadata(context.Background(), n, node.NewBaseNode(n.SpaceID, n.ID+node.CurrentIDDelimiter, t.lookup), func(attributeName string, value []byte) (newValue []byte, copy bool) {
@@ -612,7 +612,7 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 	ctx, span := tracer.Start(ctx, "createDirNode")
 	defer span.End()
 
-	idcache := t.lookup.(*lookup.Lookup).IDCache
+	idcache := t.lookup.IDCache
 	// create a directory node
 	parentPath, ok := idcache.Get(ctx, n.SpaceID, n.ParentID)
 	if !ok {
