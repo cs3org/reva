@@ -884,6 +884,9 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 
 	trashItem = filepath.Join(t.lookup.InternalRoot(), "spaces", lookup.Pathify(spaceID, 1, 2), "trash", lookup.Pathify(key, 4, 2))
 	resolvedTrashRootNodePath, err := filepath.EvalSymlinks(trashItem)
+	trashedNodeId := nodeFullIDRegep.ReplaceAllString(resolvedTrashRootNodePath, "$1")
+	trashedNodeId = strings.ReplaceAll(trashedNodeId, "/", "")
+
 	if err != nil {
 		return
 	}
@@ -936,7 +939,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	origin = "/"
 
 	// lookup origin path in extended attributes
-	rootNode := node.NewBaseNode(spaceID, nodeID, t.lookup)
+	rootNode := node.NewBaseNode(spaceID, trashedNodeId, t.lookup)
 	if attrBytes, err = backend.Get(ctx, rootNode, prefixes.TrashOriginAttr); err == nil {
 		origin = filepath.Join(string(attrBytes), path)
 	} else {
