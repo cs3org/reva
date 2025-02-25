@@ -54,6 +54,11 @@ func New(m map[string]interface{}) (*Options, error) {
 		return nil, err
 	}
 
+	// default to hybrid metadatabackend for posixfs
+	if _, ok := m["metadata_backend"]; !ok {
+		m["metadata_backend"] = "hybrid"
+	}
+
 	do, err := decomposedoptions.New(m)
 	if err != nil {
 		return nil, err
