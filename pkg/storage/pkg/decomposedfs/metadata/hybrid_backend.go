@@ -65,7 +65,7 @@ func (b HybridBackend) Get(ctx context.Context, n MetadataNode, key string) ([]b
 	}
 
 	if isOffloadingAttribute(key) {
-		// check if grants are offloaded
+		// check if key is offloaded
 		offloaded, err := xattr.Get(n.InternalPath(), _metadataOffloadedAttr)
 		if err == nil && string(offloaded) == "1" {
 			msgpackAttribs := map[string][]byte{}
@@ -77,7 +77,11 @@ func (b HybridBackend) Get(ctx context.Context, n MetadataNode, key string) ([]b
 			if err != nil {
 				return nil, err
 			}
-			return msgpackAttribs[key], nil
+			if val, ok := msgpackAttribs[key]; ok {
+				return val, nil
+			} else {
+				return nil, xattr.ENOATTR // attribute not found
+			}
 		}
 	}
 	return xattr.Get(n.InternalPath(), key)
@@ -369,9 +373,54 @@ func (b HybridBackend) Remove(ctx context.Context, n MetadataNode, key string, a
 		defer cleanupLockfile(ctx, lockedFile)
 	}
 
-	err := xattr.Remove(path, key)
-	if err != nil {
-		return err
+	if isOffloadingAttribute(key) {
+		offloadAttr, err := xattr.Get(path, _metadataOffloadedAttr)
+		offloaded := err == nil && string(offloadAttr) == "1"
+		if offloaded {
+			// remove from offloaded metadata
+
+			// 1. read offloaded metadata
+			metaPath := b.MetadataPath(n)
+			var msgBytes []byte
+			msgBytes, err = os.ReadFile(metaPath)
+
+			mpkAttribs := map[string][]byte{}
+			switch {
+			case err != nil:
+				if !errors.Is(err, fs.ErrNotExist) {
+					return err
+				}
+			default:
+				err = msgpack.Unmarshal(msgBytes, &mpkAttribs)
+				if err != nil {
+					return err
+				}
+			}
+			if _, ok := mpkAttribs[key]; !ok {
+				return xattr.ENOATTR // attribute not found
+			}
+
+			// 2. remove attribute
+			delete(mpkAttribs, key)
+
+			// 3. write back to file
+			var d []byte
+			d, err = msgpack.Marshal(mpkAttribs)
+			if err != nil {
+				return err
+			}
+
+			err = renameio.WriteFile(b.MetadataPath(n), d, 0600)
+			if err != nil {
+				return err
+			}
+		} else {
+			// remove from xattrs
+			err := xattr.Remove(path, key)
+			if err != nil {
+				return err
+			}
+		}
 	}
 	attribs, err := b.getAll(ctx, n, true, false, false)
 	if err != nil {
