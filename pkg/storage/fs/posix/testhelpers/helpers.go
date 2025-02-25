@@ -35,6 +35,7 @@ import (
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ruser "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/timemanager"
@@ -161,6 +162,14 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	switch o.MetadataBackend {
 	case "xattrs":
 		lu = lookup.New(metadata.NewXattrsBackend(o.Root, o.FileMetadataCache), um, o, &timemanager.Manager{})
+	case "hybrid":
+		lu = lookup.New(metadata.NewHybridBackend(1024,
+			func(n metadata.MetadataNode) string {
+				return n.InternalPath() + ".mpk"
+			},
+			cache.Config{
+				Database: o.Root,
+			}), um, o, &timemanager.Manager{})
 	case "messagepack":
 		lu = lookup.New(metadata.NewMessagePackBackend(o.Root, o.FileMetadataCache), um, o, &timemanager.Manager{})
 	default:
