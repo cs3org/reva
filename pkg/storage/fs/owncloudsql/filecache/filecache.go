@@ -38,6 +38,8 @@ import (
 
 	// Provides mysql drivers
 	_ "github.com/go-sql-driver/mysql"
+
+	_ "github.com/lib/pq"
 )
 
 // Cache represents a oc10-style file cache
@@ -86,11 +88,11 @@ type Scannable interface {
 	Scan(...interface{}) error
 }
 
-// NewMysql returns a new Cache instance connecting to a MySQL database
-func NewMysql(dsn string) (*Cache, error) {
-	sqldb, err := sql.Open("mysql", dsn)
+// NewSqlConnect returns a new Cache instance connecting to a database specified by the driver
+func NewSqlConnect(driver, dsn string) (*Cache, error) {
+	sqldb, err := sql.Open(driver, dsn)
 	if err != nil {
-		return nil, errors.Wrap(err, "error connecting to the database")
+		return nil, errors.Wrap(err, "error connecting to database")
 	}
 
 	// FIXME make configurable
@@ -104,7 +106,7 @@ func NewMysql(dsn string) (*Cache, error) {
 		return nil, errors.Wrap(err, "error connecting to the database")
 	}
 
-	return New("mysql", sqldb)
+	return New(driver, sqldb)
 }
 
 // New returns a new Cache instance connecting to the given sql.DB
@@ -123,8 +125,12 @@ func (c *Cache) ListStorages(ctx context.Context, onlyHome bool) ([]*Storage, er
 		mountPointConcat := ""
 		if c.driver == "mysql" {
 			mountPointConcat = "m.mount_point = CONCAT('/', m.user_id, '/')"
-		} else { // sqlite3
+		} else if c.driver == "sqlite3" { // sqlite3
 			mountPointConcat = "m.mount_point = '/' || m.user_id || '/'"
+		} else if c.driver == "postgres" {
+			mountPointConcat = "m.mount_point = '/' + m.user_id + '/'"
+		} else {
+			return nil, errors.New("Unsupported driver")
 		}
 
 		query = "SELECT s.id, s.numeric_id FROM oc_storages s JOIN oc_mounts m ON s.numeric_id = m.storage_id WHERE " + mountPointConcat
@@ -477,8 +483,12 @@ func (c *Cache) doInsertOrUpdate(ctx context.Context, tx *sql.Tx, storage interf
 	}
 	if c.driver == "mysql" { // mysql upsert
 		query += " ON DUPLICATE KEY UPDATE "
-	} else { // sqlite3 upsert
+	} else if c.driver == "postgres" {
+		query += " ON CONFLICT (id) DO UPDATE SET "
+	} else if c.driver == "sqlite3" { // sqlite3 upsert
 		query += " ON CONFLICT(storage,path_hash) DO UPDATE SET "
+	} else {
+		return -1, errors.New("unsupported database driver")
 	}
 	query += strings.Join(updates, ",")
 

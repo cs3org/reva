@@ -178,8 +178,16 @@ func New(m map[string]interface{}, _ events.Stream, _ *zerolog.Logger) (storage.
 			Msg("could not create uploadinfo dir")
 	}
 
-	dbSource := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DbUsername, c.DbPassword, c.DbHost, c.DbPort, c.DbName)
-	filecache, err := filecache.NewMysql(dbSource)
+	// use MySQL
+	// driver := "mysql"
+	// dbSource := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DbUsername, c.DbPassword, c.DbHost, c.DbPort, c.DbName)
+
+	// Use PSql
+	driver := "postgres"
+	dbSource := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		c.DbHost, c.DbPort, c.DbUsername, c.DbPassword, c.DbName)
+
+	filecache, err := filecache.NewSqlConnect(driver, dbSource)
 	if err != nil {
 		return nil, err
 	}
