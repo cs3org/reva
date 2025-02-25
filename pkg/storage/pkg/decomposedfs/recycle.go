@@ -101,8 +101,8 @@ func (tb *DecomposedfsTrashbin) ListRecycle(ctx context.Context, ref *provider.R
 	items := make([]*provider.RecycleItem, 0)
 
 	trashRootPath := filepath.Join(tb.getRecycleRoot(spaceID), lookup.Pathify(key, 4, 2))
-	originalPath, _, timeSuffix, err := readTrashLink(trashRootPath)
-	originalNode := node.NewBaseNode(spaceID, key, tb.fs.lu)
+	originalPath, id, timeSuffix, err := readTrashLink(trashRootPath)
+	originalNode := node.NewBaseNode(spaceID, id+node.TrashIDDelimiter+timeSuffix, tb.fs.lu)
 	if err != nil {
 		sublog.Error().Err(err).Str("trashRoot", trashRootPath).Msg("error reading trash link")
 		return nil, err
