@@ -87,12 +87,6 @@ func (b XattrsBackend) GetInt64(ctx context.Context, n MetadataNode, key string)
 	return v, nil
 }
 
-// List retrieves a list of names of extended attributes associated with the
-// given path in the file system.
-func (b XattrsBackend) List(ctx context.Context, n MetadataNode) (attribs []string, err error) {
-	return b.list(ctx, n, true)
-}
-
 func (b XattrsBackend) list(ctx context.Context, n MetadataNode, acquireLock bool) (attribs []string, err error) {
 	filePath := n.InternalPath()
 	attrs, err := xattr.List(filePath)

@@ -171,23 +171,6 @@ var _ = Describe("Backend", func() {
 			})
 		})
 
-		Describe("List", func() {
-			It("returns the entries", func() {
-				data := map[string][]byte{"foo": []byte("123"), "bar": []byte("baz")}
-				err := backend.SetMultiple(context.Background(), n, data, true)
-				Expect(err).ToNot(HaveOccurred())
-
-				v, err := backend.List(context.Background(), n)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(v).To(ConsistOf("foo", "bar"))
-			})
-
-			It("fails when the metafile does not exist", func() {
-				_, err := backend.List(context.Background(), n)
-				Expect(err).To(HaveOccurred())
-			})
-		})
-
 		Describe("Get", func() {
 			It("returns the attribute", func() {
 				data := map[string][]byte{"foo": []byte("bar")}

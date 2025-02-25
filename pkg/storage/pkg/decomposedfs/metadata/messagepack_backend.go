@@ -126,20 +126,6 @@ func (b MessagePackBackend) GetInt64(ctx context.Context, n MetadataNode, key st
 	return i, nil
 }
 
-// List retrieves a list of names of extended attributes associated with the
-// given path in the file system.
-func (b MessagePackBackend) List(ctx context.Context, n MetadataNode) ([]string, error) {
-	attribs, err := b.loadAttributes(ctx, n, nil)
-	if err != nil {
-		return nil, err
-	}
-	keys := []string{}
-	for k := range attribs {
-		keys = append(keys, k)
-	}
-	return keys, nil
-}
-
 // Set sets one attribute for the given path
 func (b MessagePackBackend) Set(ctx context.Context, n MetadataNode, key string, val []byte) error {
 	return b.SetMultiple(ctx, n, map[string][]byte{key: val}, true)
