@@ -80,7 +80,7 @@ func (b HybridBackend) Get(ctx context.Context, n MetadataNode, key string) ([]b
 			if val, ok := msgpackAttribs[key]; ok {
 				return val, nil
 			} else {
-				return nil, xattr.ENOATTR // attribute not found
+				return nil, &xattr.Error{Op: "HybridBackend.Get", Path: n.InternalPath(), Err: xattr.ENOATTR} // attribute not found
 			}
 		}
 	}

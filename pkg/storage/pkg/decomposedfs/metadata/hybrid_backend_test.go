@@ -206,6 +206,12 @@ var _ = Describe("HybridBackend", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 
+			It("returns ENOATTR if the requested non-offloading attribute does not exist", func() {
+				_, err := backend.Get(context.Background(), n, "user.oc.idonotexist")
+				Expect(err).To(HaveOccurred())
+				Expect(err.(*xattr.Error).Err).To(Equal(xattr.ENOATTR))
+			})
+
 			It("reads the grants", func() {
 				readData, err := backend.Get(context.Background(), n, keySmall)
 				Expect(err).ToNot(HaveOccurred())
@@ -221,6 +227,12 @@ var _ = Describe("HybridBackend", func() {
 					nonOffloadingKey: nonOffloadingData,
 				}, false)
 				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("returns ENOATTR if the requested offloading attribute does not exist", func() {
+				_, err := backend.Get(context.Background(), n, "user.oc.md.idonotexist")
+				Expect(err).To(HaveOccurred())
+				Expect(err.(*xattr.Error).Err).To(Equal(xattr.ENOATTR))
 			})
 
 			It("reads offloaded metadata", func() {
