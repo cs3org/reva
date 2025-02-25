@@ -272,27 +272,32 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 }
 
 func (t *Tree) HandleFileDelete(path string) error {
-	n, err := t.getNodeForPath(filepath.Dir(path))
+	spaceID, id, err := t.lookup.IDsForPath(context.Background(), path)
 	if err != nil {
 		return err
 	}
+	n := node.NewBaseNode(spaceID, id, t.lookup)
 
 	// purge metadata
-	if err := t.lookup.(*lookup.Lookup).IDCache.DeleteByPath(context.Background(), path); err != nil {
+	if err := t.lookup.IDCache.DeleteByPath(context.Background(), path); err != nil {
 		t.log.Error().Err(err).Str("path", path).Msg("could not delete id cache entry by path")
 	}
 	if err := t.lookup.MetadataBackend().Purge(context.Background(), n); err != nil {
 		t.log.Error().Err(err).Str("path", path).Msg("could not purge metadata")
 	}
 
+	parentNode, err := t.getNodeForPath(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
 	t.PublishEvent(events.ItemTrashed{
-		Owner:     n.Owner(),
-		Executant: n.Owner(),
+		Owner:     parentNode.Owner(),
+		Executant: parentNode.Owner(),
 		Ref: &provider.Reference{
 			ResourceId: &provider.ResourceId{
 				StorageId: t.options.MountID,
 				SpaceId:   n.SpaceID,
-				OpaqueId:  n.ParentID,
+				OpaqueId:  parentNode.ID,
 			},
 			Path: filepath.Base(path),
 		},
