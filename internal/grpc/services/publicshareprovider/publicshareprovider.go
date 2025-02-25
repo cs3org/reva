@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -315,7 +316,7 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 	}
 
 	// validate password policy
-	if len(setPassword) > 0 {
+	if len(setPassword) > 0 && !strings.Contains(sRes.GetInfo().GetPath(), ".PasswordProtectedFolders") {
 		if err := s.passwordValidator.Validate(setPassword); err != nil {
 			return &link.CreatePublicShareResponse{
 				Status: status.NewInvalidArg(ctx, err.Error()),
