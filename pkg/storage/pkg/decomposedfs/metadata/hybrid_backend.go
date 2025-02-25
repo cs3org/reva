@@ -397,7 +397,7 @@ func (b HybridBackend) Remove(ctx context.Context, n MetadataNode, key string, a
 				}
 			}
 			if _, ok := mpkAttribs[key]; !ok {
-				return xattr.ENOATTR // attribute not found
+				return &xattr.Error{Op: "HybridBackend.Remove", Path: n.InternalPath(), Err: xattr.ENOATTR} // attribute not found
 			}
 
 			// 2. remove attribute
