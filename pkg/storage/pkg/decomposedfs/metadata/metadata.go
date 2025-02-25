@@ -54,7 +54,6 @@ type Backend interface {
 
 	Get(ctx context.Context, n MetadataNode, key string) ([]byte, error)
 	GetInt64(ctx context.Context, n MetadataNode, key string) (int64, error)
-	List(ctx context.Context, n MetadataNode) (attribs []string, err error)
 	Set(ctx context.Context, n MetadataNode, key string, val []byte) error
 	SetMultiple(ctx context.Context, n MetadataNode, attribs map[string][]byte, acquireLock bool) error
 	Remove(ctx context.Context, n MetadataNode, key string, acquireLock bool) error
@@ -92,12 +91,6 @@ func (NullBackend) Get(ctx context.Context, n MetadataNode, key string) ([]byte,
 // GetInt64 reads a string as int64 from the xattrs
 func (NullBackend) GetInt64(ctx context.Context, n MetadataNode, key string) (int64, error) {
 	return 0, errUnconfiguredError
-}
-
-// List retrieves a list of names of extended attributes associated with the
-// given path in the file system.
-func (NullBackend) List(ctx context.Context, n MetadataNode) ([]string, error) {
-	return nil, errUnconfiguredError
 }
 
 // Set sets one attribute for the given path
