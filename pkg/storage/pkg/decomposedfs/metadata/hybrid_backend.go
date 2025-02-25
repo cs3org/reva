@@ -236,7 +236,7 @@ func (b HybridBackend) SetMultiple(ctx context.Context, n MetadataNode, attribs 
 		}
 		for key := range existingAttribs {
 			if isOffloadingAttribute(key) {
-				mdSize += len(attribs[key]) + len(key)
+				mdSize += len(existingAttribs[key]) + len(key)
 			}
 		}
 
@@ -326,10 +326,6 @@ func (b HybridBackend) offloadMetadata(ctx context.Context, n MetadataNode) erro
 	for key, val := range existingAttribs {
 		if isOffloadingAttribute(key) {
 			msgpackAttribs[key] = val
-			xerr = xattr.Remove(path, key)
-			if xerr != nil {
-				xerrs++
-			}
 		}
 	}
 
@@ -338,24 +334,27 @@ func (b HybridBackend) offloadMetadata(ctx context.Context, n MetadataNode) erro
 	if err != nil {
 		return err
 	}
+
+	err = os.MkdirAll(filepath.Dir(b.MetadataPath(n)), 0700)
+	if err != nil {
+		return err
+	}
+
 	err = renameio.WriteFile(b.MetadataPath(n), d, 0600)
 	if err != nil {
 		return err
 	}
 
-	// set the grants offloaded attribute
+	// set the metadata offloaded attribute
 	err = xattr.Set(path, _metadataOffloadedAttr, []byte("1"))
 	if err != nil {
 		return err
 	}
-	// remove grants from xattrs
-	for key, val := range existingAttribs {
-		if isOffloadingAttribute(key) {
-			msgpackAttribs[key] = val
-			xerr = xattr.Remove(path, key)
-			if err != nil {
-				xerrs++
-			}
+	// remove offloaded attributes from xattrs
+	for key := range msgpackAttribs {
+		xerr = xattr.Remove(path, key)
+		if xerr != nil {
+			xerrs++
 		}
 	}
 	if xerrs > 0 {
