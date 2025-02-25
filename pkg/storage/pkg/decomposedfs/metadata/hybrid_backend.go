@@ -421,7 +421,14 @@ func (b HybridBackend) Remove(ctx context.Context, n MetadataNode, key string, a
 				return err
 			}
 		}
+	} else {
+		// remove from xattrs
+		err := xattr.Remove(path, key)
+		if err != nil {
+			return err
+		}
 	}
+
 	attribs, err := b.getAll(ctx, n, true, false, false)
 	if err != nil {
 		return err

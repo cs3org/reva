@@ -240,4 +240,55 @@ var _ = Describe("HybridBackend", func() {
 			})
 		})
 	})
+
+	Describe("Remove", func() {
+		It("removes non-offloaded metadata", func() {
+			err := backend.Set(context.Background(), n, nonOffloadingKey, nonOffloadingData)
+			Expect(err).ToNot(HaveOccurred())
+			readData, err := backend.Get(context.Background(), n, nonOffloadingKey)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(readData).To(Equal(nonOffloadingData))
+
+			err = backend.Remove(context.Background(), n, nonOffloadingKey, true)
+			Expect(err).ToNot(HaveOccurred())
+
+			_, err = backend.Get(context.Background(), n, nonOffloadingKey)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("removes offloaded metadata", func() {
+			err := backend.Set(context.Background(), n, keyBig, dataBig)
+			Expect(err).ToNot(HaveOccurred())
+			readData, err := backend.Get(context.Background(), n, keyBig)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(readData).To(Equal(dataBig))
+
+			err = backend.Remove(context.Background(), n, keyBig, true)
+			Expect(err).ToNot(HaveOccurred())
+
+			_, err = backend.Get(context.Background(), n, keyBig)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("removes non-offloaded metadata in the offloading case", func() {
+			err := backend.SetMultiple(context.Background(), n, map[string][]byte{
+				keySmall:         dataSmall,
+				keyBig:           dataBig,
+				nonOffloadingKey: nonOffloadingData,
+			}, false)
+			Expect(err).ToNot(HaveOccurred())
+			readData, err := backend.Get(context.Background(), n, keyBig)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(readData).To(Equal(dataBig))
+			readData, err = backend.Get(context.Background(), n, nonOffloadingKey)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(readData).To(Equal(nonOffloadingData))
+
+			err = backend.Remove(context.Background(), n, nonOffloadingKey, true)
+			Expect(err).ToNot(HaveOccurred())
+
+			_, err = backend.Get(context.Background(), n, nonOffloadingKey)
+			Expect(err).To(HaveOccurred())
+		})
+	})
 })
