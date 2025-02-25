@@ -183,12 +183,12 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 	ok, err := utils.CheckPermission(ctx, permission.WriteShare, gatewayClient)
 	if err != nil {
 		return &collaboration.CreateShareResponse{
-			Status: status.NewInternal(ctx, "failed check user permission to write public link"),
+			Status: status.NewInternal(ctx, "failed check user permission to write collaborative share"),
 		}, err
 	}
 	if !ok {
 		return &collaboration.CreateShareResponse{
-			Status: status.NewPermissionDenied(ctx, nil, "no permission to create public links"),
+			Status: status.NewPermissionDenied(ctx, nil, "no permission to create collaborative shares"),
 		}, nil
 	}
 
