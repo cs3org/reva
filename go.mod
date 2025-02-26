@@ -68,7 +68,7 @@ require (
 	github.com/pkg/xattr v0.4.10
 	github.com/prometheus/alertmanager v0.27.0
 	github.com/prometheus/client_golang v1.21.0
-	github.com/rogpeppe/go-internal v1.13.1
+	github.com/rogpeppe/go-internal v1.14.1
 	github.com/rs/cors v1.11.1
 	github.com/rs/zerolog v1.33.0
 	github.com/segmentio/kafka-go v0.4.47
