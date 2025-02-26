@@ -475,5 +475,6 @@ func (tb *DecomposedfsTrashbin) EmptyRecycle(ctx context.Context, ref *provider.
 }
 
 func (tb *DecomposedfsTrashbin) getRecycleRoot(spaceID string) string {
-	return filepath.Join(tb.fs.getSpaceRoot(spaceID), "trash")
+	rootNode := node.NewBaseNode(spaceID, spaceID, tb.fs.lu)
+	return filepath.Join(rootNode.InternalPath(), "trash")
 }

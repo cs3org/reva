@@ -42,7 +42,6 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/status"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	sdk "github.com/opencloud-eu/reva/v2/pkg/sdk/common"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
@@ -745,7 +744,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 			return err
 		}
 
-		root := fs.getSpaceRoot(spaceID)
+		root := n.InternalPath()
 
 		// walkfn will delete the blob if the node has one
 		walkfn := func(path string, info os.FileInfo, err error) error {
@@ -1101,10 +1100,6 @@ func isGrantExpired(g *provider.Grant) bool {
 		return false
 	}
 	return time.Now().After(time.Unix(int64(g.Expiration.Seconds), int64(g.Expiration.Nanos)))
-}
-
-func (fs *Decomposedfs) getSpaceRoot(spaceID string) string {
-	return filepath.Join(fs.o.Root, "spaces", lookup.Pathify(spaceID, 1, 2))
 }
 
 // Space deletion can be tricky as there are lots of different cases:
