@@ -42,6 +42,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/status"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
 	sdk "github.com/opencloud-eu/reva/v2/pkg/sdk/common"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
@@ -791,6 +792,13 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		// remove space metadata
 		if err := os.RemoveAll(root); err != nil {
 			return err
+		}
+
+		// invalidate id in cache
+		if l, ok := fs.lu.(*lookup.Lookup); ok {
+			if err := l.IDCache.DeleteByPath(ctx, root); err != nil {
+				return err
+			}
 		}
 
 		// try removing the space root node
