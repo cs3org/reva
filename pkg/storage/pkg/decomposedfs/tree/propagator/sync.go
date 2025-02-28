@@ -20,8 +20,6 @@ package propagator
 
 import (
 	"context"
-	"errors"
-	"os"
 	"strconv"
 	"time"
 
@@ -29,7 +27,6 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
-	"github.com/rogpeppe/go-internal/lockedfile"
 	"github.com/rs/zerolog"
 )
 
@@ -94,28 +91,19 @@ func (p SyncPropagator) propagateItem(ctx context.Context, n *node.Node, sTime t
 
 	attrs := node.Attributes{}
 
-	var f *lockedfile.File
 	// lock parent before reading treesize or tree time
 
 	_, subspan := tracer.Start(ctx, "lockedfile.OpenFile")
 	parentNode := node.NewBaseNode(n.SpaceID, n.ParentID, p.lookup)
-	parentFilename := p.lookup.MetadataBackend().LockfilePath(parentNode)
-	f, err := lockedfile.OpenFile(parentFilename, os.O_RDWR|os.O_CREATE, 0600)
+	unlock, err := p.lookup.MetadataBackend().Lock(parentNode)
 	subspan.End()
 	if err != nil {
 		log.Error().Err(err).
-			Str("parent filename", parentFilename).
+			Str("parent filename", parentNode.InternalPath()).
 			Msg("Propagation failed. Could not open metadata for parent with lock.")
 		return nil, true, err
 	}
-	// always log error if closing node fails
-	defer func() {
-		// ignore already closed error
-		cerr := f.Close()
-		if err == nil && cerr != nil && !errors.Is(cerr, os.ErrClosed) {
-			err = cerr // only overwrite err with en error from close if the former was nil
-		}
-	}()
+	defer func() { _ = unlock() }()
 
 	if n, err = n.Parent(ctx); err != nil {
 		log.Error().Err(err).
