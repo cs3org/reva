@@ -46,6 +46,25 @@ type Trashbin struct {
 	log *zerolog.Logger
 }
 
+// trashNode is a helper struct to make trash items available for manipulation in the metadata backend
+type trashNode struct {
+	spaceID string
+	id      string
+	path    string
+}
+
+func (tn *trashNode) GetSpaceID() string {
+	return tn.spaceID
+}
+
+func (tn *trashNode) GetID() string {
+	return tn.id
+}
+
+func (tn *trashNode) InternalPath() string {
+	return tn.path
+}
+
 const (
 	trashHeader = `[Trash Info]`
 	timeFormat  = "2006-01-02T15:04:05"
@@ -254,7 +273,7 @@ func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, ref *provider.Refere
 		return fmt.Errorf("trashbin: parent id not found for %s", restorePath)
 	}
 
-	trashNode := node.NewBaseNode(spaceID, id, tb.lu)
+	trashNode := &trashNode{spaceID: spaceID, id: id, path: trashPath}
 	err = tb.lu.MetadataBackend().Set(ctx, trashNode, prefixes.ParentidAttr, []byte(parentID))
 	if err != nil {
 		return err
