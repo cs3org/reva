@@ -31,6 +31,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
@@ -42,6 +43,7 @@ import (
 type Trashbin struct {
 	fs  storage.FS
 	o   *options.Options
+	p   Permissions
 	lu  *lookup.Lookup
 	log *zerolog.Logger
 }
@@ -70,10 +72,15 @@ const (
 	timeFormat  = "2006-01-02T15:04:05"
 )
 
+type Permissions interface {
+	AssembleTrashPermissions(ctx context.Context, n *node.Node) (*provider.ResourcePermissions, error)
+}
+
 // New returns a new Trashbin
-func New(o *options.Options, lu *lookup.Lookup, log *zerolog.Logger) (*Trashbin, error) {
+func New(o *options.Options, p Permissions, lu *lookup.Lookup, log *zerolog.Logger) (*Trashbin, error) {
 	return &Trashbin{
 		o:   o,
+		p:   p,
 		lu:  lu,
 		log: log,
 	}, nil
@@ -169,6 +176,17 @@ func (tb *Trashbin) ListRecycle(ctx context.Context, ref *provider.Reference, ke
 		return nil, err
 	}
 
+	rp, err := tb.p.AssembleTrashPermissions(ctx, n)
+	switch {
+	case err != nil:
+		return nil, err
+	case !rp.ListRecycle:
+		if rp.Stat {
+			return nil, errtypes.PermissionDenied(key)
+		}
+		return nil, errtypes.NotFound(key)
+	}
+
 	trashRoot := trashRootForNode(n)
 	base := filepath.Join(trashRoot, "files")
 
@@ -250,6 +268,18 @@ func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, ref *provider.Refere
 		return err
 	}
 
+	// check permissions of deleted node
+	rp, err := tb.p.AssembleTrashPermissions(ctx, n)
+	switch {
+	case err != nil:
+		return err
+	case !rp.RestoreRecycleItem:
+		if rp.Stat {
+			return errtypes.PermissionDenied(key)
+		}
+		return errtypes.NotFound(key)
+	}
+
 	trashRoot := trashRootForNode(n)
 	trashPath := filepath.Clean(filepath.Join(trashRoot, "files", key+".trashitem", relativePath))
 
@@ -303,6 +333,18 @@ func (tb *Trashbin) PurgeRecycleItem(ctx context.Context, ref *provider.Referenc
 		return err
 	}
 
+	// check permissions of deleted node
+	rp, err := tb.p.AssembleTrashPermissions(ctx, n)
+	switch {
+	case err != nil:
+		return err
+	case !rp.PurgeRecycle:
+		if rp.Stat {
+			return errtypes.PermissionDenied(key)
+		}
+		return errtypes.NotFound(key)
+	}
+
 	trashRoot := trashRootForNode(n)
 	err = os.RemoveAll(filepath.Clean(filepath.Join(trashRoot, "files", key+".trashitem", relativePath)))
 	if err != nil {
@@ -321,6 +363,17 @@ func (tb *Trashbin) EmptyRecycle(ctx context.Context, ref *provider.Reference) e
 	n, err := tb.lu.NodeFromResource(ctx, ref)
 	if err != nil {
 		return err
+	}
+	// check permissions of deleted node
+	rp, err := tb.p.AssembleTrashPermissions(ctx, n)
+	switch {
+	case err != nil:
+		return err
+	case !rp.ListRecycle && !rp.PurgeRecycle:
+		if rp.Stat {
+			return errtypes.PermissionDenied(n.ID)
+		}
+		return errtypes.NotFound(n.ID)
 	}
 
 	trashRoot := trashRootForNode(n)
