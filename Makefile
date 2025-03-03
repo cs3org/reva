@@ -122,11 +122,15 @@ build-reva-docker: off
 
 .PHONY: test
 test: off
-	go test -coverprofile coverage.out -race $$(go list ./... | grep -v /tests/integration)
+	go test -coverprofile coverage.out -race $$(go list ./... | grep -v /tests/integration | grep -v /tests/benchmark)
 
 .PHONY: test-integration
 test-integration: build-ci
 	cd tests/integration && go test -race ./...
+
+.PHONY: test-benchmark
+test-benchmark:
+	cd tests/benchmark && go test
 
 .PHONY: litmus-test-old
 litmus-test-old: build
