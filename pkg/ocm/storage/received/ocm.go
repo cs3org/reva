@@ -26,7 +26,6 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -45,6 +44,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/studio-b12/gowebdav"
+	"github.com/ReneKroon/ttlcache/v2"
 )
 
 func init() {
@@ -52,16 +52,14 @@ func init() {
 }
 
 type cachedClient struct {
-	client    *gowebdav.Client
-	share     *ocmpb.ReceivedShare
-	expiresAt time.Time
+	client *gowebdav.Client
+	share  *ocmpb.ReceivedShare
 }
 
 type driver struct {
 	c       *config
 	gateway gateway.GatewayAPIClient
-	ccache  map[string]*cachedClient
-	mu      sync.Mutex
+	ccache  *ttlcache.Cache
 }
 
 type config struct {
@@ -88,9 +86,8 @@ func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 	d := &driver{
 		c:       &c,
 		gateway: gateway,
-		ccache:  make(map[string]*cachedClient), // this is a cache of webdav clients
+		ccache:  ttlcache.NewCache(), // this is a cache of webdav clients
 	}
-	go d.ccacheCleanupThread()
 	return d, nil
 }
 
@@ -157,11 +154,10 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 	id, rel := shareInfoFromReference(ref)
 
 	// check first if we have a cached webdav client
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if entry, found := d.ccache[id.OpaqueId]; found {
-		log.Info().Interface("share", entry.share).Str("rel", rel).Msg("Using cached client to access OCM share")
-		return entry.client, entry.share, rel, nil
+	if entry, err := d.ccache.Get(id.OpaqueId); err == nil {
+		cc := entry.(*cachedClient)
+		log.Info().Interface("share", cc.share).Str("rel", rel).Msg("accessing OCM share via cached client")
+		return cc.client, cc.share, rel, nil
 	}
 
 	// we don't, build a webdav client
@@ -187,11 +183,10 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 	}
 
 	// add to cache and return
-	d.ccache[id.OpaqueId] = &cachedClient{
-		client:    c,
-		expiresAt: time.Now().Add(1 * time.Hour),
-		share:     share,
-	}
+	d.ccache.SetWithTTL(id.OpaqueId, &cachedClient{
+		client: c,
+		share:  share,
+	}, time.Hour)
 	return c, share, rel, nil
 }
 
@@ -444,27 +439,4 @@ func (d *driver) CreateStorageSpace(ctx context.Context, req *provider.CreateSto
 
 func (d *driver) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("operation not supported")
-}
-
-// Cleanup function to remove expired cache entries
-func (d *driver) cleanupCache() {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	now := time.Now()
-	for key, entry := range d.ccache {
-		if now.After(entry.expiresAt) {
-			delete(d.ccache, key)
-		}
-	}
-}
-
-// Periodic cache cleanup goroutine
-func (d *driver) ccacheCleanupThread() {
-	ticker := time.NewTicker(1 * time.Hour)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		d.cleanupCache()
-	}
 }
