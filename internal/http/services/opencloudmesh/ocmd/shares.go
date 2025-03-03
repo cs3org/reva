@@ -264,19 +264,27 @@ func getAndResolveProtocols(p Protocols, r *http.Request) ([]*ocm.Protocol, erro
 			uri = ocmProto.GetWebappOptions().Uri
 		}
 
-		// Irrespective from the presence of a full `uri` in the payload (deprecated), validate the
-		// remote is an OCM server and resolve the remote root
-		// yet skip this if the remote is localhost (for integration tests)
-		if strings.Contains(uri, "localhost") {
+		// If the `uri` contains a hostname, use it as is
+		u, _ := url.Parse(uri)
+		if u.Host != "" {
 			protos = append(protos, ocmProto)
 			continue
 		}
+		// otherwise resolve the hostname using the OCM discovery endpoint
 		remoteRoot, err := discoverOcmRoot(r, protocolName)
 		if err != nil {
 			return nil, err
 		}
+		if strings.HasPrefix(uri, "/") {
+			// only take the host from remoteRoot and append the absolute uri
+			u, _ := url.Parse(remoteRoot)
+			u.Path = uri
+			uri = u.String()
+		} else {
+			// relative uri
+			uri, _ = url.JoinPath(remoteRoot, uri)
+		}
 
-		uri, _ = url.JoinPath(remoteRoot, uri[strings.LastIndex(uri, "/")+1:])
 		switch protocolName {
 		case "webdav":
 			ocmProto.GetWebdavOptions().Uri = uri
