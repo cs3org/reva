@@ -34,6 +34,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/spaces"
 
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
@@ -51,6 +52,54 @@ func (h *TrashbinHandler) init(c *Config) error {
 	return nil
 }
 
+func (h *TrashbinHandler) handleTrashbinSpaces(s *svc, w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	var spaceID string
+	spaceID, r.URL.Path = router.ShiftPath(r.URL.Path)
+
+	_, base, ok := spaces.DecodeSpaceID(spaceID)
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	log.Debug().Str("path", base).Msg("decoded space base path")
+
+	u := appctx.ContextMustGetUser(ctx)
+
+	if r.Method == MethodPropfind {
+		h.listTrashbin(w, r, s, u, base, "", "")
+		return
+	}
+
+	var key string
+	key, r.URL.Path = router.ShiftPath(r.URL.Path)
+	if key != "" && r.Method == MethodMove {
+		// find path in url relative to trash base
+		// TODO make request.php optional in destination header
+		dst, err := extractDestination(r)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		dst = path.Clean(dst)
+		_, dst = router.ShiftPath(dst)
+
+		log.Debug().Str("key", key).Str("dst", dst).Msg("restore")
+
+		h.restore(w, r, s, u, base, dst, key, "")
+		return
+	}
+
+	if r.Method == http.MethodDelete {
+		h.delete(w, r, s, u, base, key, "")
+		return
+	}
+
+	http.Error(w, "501 Not implemented", http.StatusNotImplemented)
+}
+
 // Handler handles requests.
 func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -59,6 +108,13 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 
 		if r.Method == http.MethodOptions {
 			s.handleOptions(w, r)
+			return
+		}
+
+		// check if we are in a space
+		spaceID, _ := router.ShiftPath(r.URL.Path)
+		if _, _, ok := spaces.DecodeSpaceID(spaceID); ok {
+			h.handleTrashbinSpaces(s, w, r)
 			return
 		}
 

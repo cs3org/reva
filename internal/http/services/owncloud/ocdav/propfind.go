@@ -42,6 +42,8 @@ import (
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/spaces"
+	"github.com/pkg/errors"
 
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rhttp/router"
@@ -505,6 +507,20 @@ func (s *svc) newPropRaw(key, val string) *propertyXML {
 	}
 }
 
+func spaceHref(ctx context.Context, baseURI, fullPath string) (string, error) {
+	// in the context of spaces, the final URL will be baseURI + /<space_id>/relative/path/to/space
+	spacePath, ok := ctx.Value(ctxSpacePath).(string)
+	if !ok {
+		return "", errors.New("space path expected to be in the context")
+	}
+	relativePath := strings.TrimPrefix(fullPath, spacePath)
+	spaceID, ok := ctx.Value(ctxSpaceID).(string)
+	if !ok {
+		return "", errors.New("space id expected to be in the context")
+	}
+	return path.Join(baseURI, spaceID, relativePath), nil
+}
+
 func appendSlash(path string) string {
 	if path == "" {
 		return "/"
@@ -532,15 +548,35 @@ func (s *svc) isOpenable(path string) bool {
 func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string, usershares, linkshares map[string]struct{}) (*responseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
 
-	md.Path = strings.TrimPrefix(md.Path, ns)
-	ocm, _ := ctx.Value(ctxOCM).(bool)
-	if ocm {
-		// /<token>/ was injected in front of the OCM path for the routing to work, we now remove it (see internal/http/services/owncloud/ocdav/dav.go)
-		_, md.Path = router.ShiftPath(md.Path)
-	}
-
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
-	ref := path.Join(baseURI, md.Path)
+	var ref string
+	var err error
+	if _, ok := ctx.Value(ctxSpaceID).(string); ok {
+		// spaces are enabled; for now we do not support the OCM case with spaces
+		ref, err = spaceHref(ctx, baseURI, md.Path)
+		if err != nil {
+			pxml := propstatXML{
+				Status: "HTTP/1.1 400 Bad Request",
+				Prop:   []*propertyXML{},
+			}
+
+			return &responseXML{
+				Href:     encodePath(ref),
+				Propstat: []propstatXML{pxml},
+			}, err
+
+		}
+	} else {
+		// spaces are not enabled
+		md.Path = strings.TrimPrefix(md.Path, ns)
+
+		if ocm, _ := ctx.Value(ctxOCM).(bool); ocm {
+			// /<token>/ was injected in front of the OCM path for the routing to work, we now remove it (see internal/http/services/owncloud/ocdav/dav.go)
+			_, md.Path = router.ShiftPath(md.Path)
+		}
+
+		ref = path.Join(baseURI, md.Path)
+	}
 	if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ref += "/"
 	}
@@ -596,12 +632,17 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		Status: "HTTP/1.1 404 Not Found",
 		Prop:   []*propertyXML{},
 	}
+
+	propstatOK.Prop = append(propstatOK.Prop,
+		s.newProp("oc:name", path.Base(md.Path)),
+	)
+
 	// when allprops has been requested
 	if pf.Allprop != nil {
 		// return all known properties
 
 		if md.Id != nil {
-			id := resourceid.OwnCloudResourceIDWrap(md.Id)
+			id := spaces.EncodeResourceID(md.Id)
 			propstatOK.Prop = append(propstatOK.Prop,
 				s.newProp("oc:id", id),
 				s.newProp("oc:fileid", id),
@@ -700,13 +741,13 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				// I tested the desktop client and phoenix to annotate which properties are requestted, see below cases
 				case "fileid": // phoenix only
 					if md.Id != nil {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", resourceid.OwnCloudResourceIDWrap(md.Id)))
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", spaces.EncodeResourceID(md.Id)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
 					}
 				case "id": // desktop client only
 					if md.Id != nil {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:id", resourceid.OwnCloudResourceIDWrap(md.Id)))
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:id", spaces.EncodeResourceID(md.Id)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:id", ""))
 					}
