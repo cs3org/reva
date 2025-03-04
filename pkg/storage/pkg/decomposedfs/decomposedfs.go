@@ -86,7 +86,7 @@ var (
 )
 
 func init() {
-	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/utils/decomposedfs")
+	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/pkg/decomposedfs")
 }
 
 // Session is the interface that DecomposedfsSession implements. By combining tus.Upload,
@@ -1223,7 +1223,33 @@ func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference, loc
 }
 
 func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
-	return fs.trashbin.ListRecycle(ctx, ref, key, relativePath)
+	_, span := tracer.Start(ctx, "ListRecycle")
+	defer span.End()
+	if ref == nil || ref.ResourceId == nil || ref.ResourceId.OpaqueId == "" {
+		return nil, errtypes.BadRequest("spaceid required")
+	}
+	if key == "" && relativePath != "" {
+		return nil, errtypes.BadRequest("key is required when navigating with a path")
+	}
+	spaceID := ref.ResourceId.OpaqueId
+
+	// check permissions
+	trashnode, err := fs.lu.NodeFromSpaceID(ctx, spaceID)
+	if err != nil {
+		return nil, err
+	}
+	rp, err := fs.p.AssembleTrashPermissions(ctx, trashnode)
+	switch {
+	case err != nil:
+		return nil, err
+	case !rp.ListRecycle:
+		if rp.Stat {
+			return nil, errtypes.PermissionDenied(key)
+		}
+		return nil, errtypes.NotFound(key)
+	}
+
+	return fs.trashbin.ListRecycle(ctx, spaceID, key, relativePath)
 }
 func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
 	return fs.trashbin.RestoreRecycleItem(ctx, ref, key, relativePath, restoreRef)

@@ -64,34 +64,10 @@ func (tb *DecomposedfsTrashbin) Setup(fs storage.FS) error {
 
 // ListRecycle returns the list of available recycle items
 // ref -> the space (= resourceid), key -> deleted node id, relativePath = relative to key
-func (tb *DecomposedfsTrashbin) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (tb *DecomposedfsTrashbin) ListRecycle(ctx context.Context, spaceID string, key, relativePath string) ([]*provider.RecycleItem, error) {
 	_, span := tracer.Start(ctx, "ListRecycle")
 	defer span.End()
-	if ref == nil || ref.ResourceId == nil || ref.ResourceId.OpaqueId == "" {
-		return nil, errtypes.BadRequest("spaceid required")
-	}
-	if key == "" && relativePath != "" {
-		return nil, errtypes.BadRequest("key is required when navigating with a path")
-	}
-	spaceID := ref.ResourceId.OpaqueId
-
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("key", key).Str("relative_path", relativePath).Logger()
-
-	// check permissions
-	trashnode, err := tb.fs.lu.NodeFromSpaceID(ctx, spaceID)
-	if err != nil {
-		return nil, err
-	}
-	rp, err := tb.fs.p.AssembleTrashPermissions(ctx, trashnode)
-	switch {
-	case err != nil:
-		return nil, err
-	case !rp.ListRecycle:
-		if rp.Stat {
-			return nil, errtypes.PermissionDenied(key)
-		}
-		return nil, errtypes.NotFound(key)
-	}
 
 	if key == "" && relativePath == "" {
 		return tb.listTrashRoot(ctx, spaceID)
@@ -110,10 +86,10 @@ func (tb *DecomposedfsTrashbin) ListRecycle(ctx context.Context, ref *provider.R
 
 	origin := ""
 	raw, err := tb.fs.lu.MetadataBackend().All(ctx, originalNode)
-	attrs := node.Attributes(raw)
 	if err != nil {
 		return items, err
 	}
+	attrs := node.Attributes(raw)
 	// lookup origin path in extended attributes
 	origin = attrs.String(prefixes.TrashOriginAttr)
 	if origin == "" {
@@ -178,8 +154,8 @@ func (tb *DecomposedfsTrashbin) ListRecycle(ctx context.Context, ref *provider.R
 	for _, name := range names {
 		nodeID, err := node.ReadChildNodeFromLink(ctx, filepath.Join(childrenPath, name))
 		if err != nil {
-			sublog.Error().Err(err).Str("name", name).Msg("could not read child node")
-			provider.ResourceType_RESOURCE_TYPE_CONTAINER.Number()
+			sublog.Error().Err(err).Str("name", name).Msg("could not read child node, skipping")
+			continue
 		}
 		childNode := node.NewBaseNode(spaceID, nodeID, tb.fs.lu)
 
@@ -187,6 +163,10 @@ func (tb *DecomposedfsTrashbin) ListRecycle(ctx context.Context, ref *provider.R
 		size = 0
 
 		raw, err := tb.fs.lu.MetadataBackend().All(ctx, childNode)
+		if err != nil {
+			sublog.Error().Err(err).Str("name", name).Msg("could not read metadata, skipping")
+			continue
+		}
 		attrs := node.Attributes(raw)
 		typeInt, err := attrs.Int64(prefixes.TypeAttr)
 		if err != nil {
@@ -459,7 +439,7 @@ func (tb *DecomposedfsTrashbin) EmptyRecycle(ctx context.Context, ref *provider.
 		return errtypes.BadRequest("spaceid must be set")
 	}
 
-	items, err := tb.ListRecycle(ctx, ref, "", "")
+	items, err := tb.ListRecycle(ctx, ref.ResourceId.SpaceId, "", "")
 	if err != nil {
 		return err
 	}

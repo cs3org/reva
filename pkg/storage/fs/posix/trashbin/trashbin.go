@@ -28,6 +28,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -39,6 +41,14 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
+
+var (
+	tracer trace.Tracer
+)
+
+func init() {
+	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/fs/posix/trashbin")
+}
 
 type Trashbin struct {
 	fs  storage.FS
@@ -170,24 +180,11 @@ func (tb *Trashbin) MoveToTrash(ctx context.Context, n *node.Node, path string) 
 
 // ListRecycle returns the list of available recycle items
 // ref -> the space (= resourceid), key -> deleted node id, relativePath = relative to key
-func (tb *Trashbin) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
-	n, err := tb.lu.NodeFromResource(ctx, ref)
-	if err != nil {
-		return nil, err
-	}
+func (tb *Trashbin) ListRecycle(ctx context.Context, spaceID string, key, relativePath string) ([]*provider.RecycleItem, error) {
+	_, span := tracer.Start(ctx, "ListRecycle")
+	defer span.End()
 
-	rp, err := tb.p.AssembleTrashPermissions(ctx, n)
-	switch {
-	case err != nil:
-		return nil, err
-	case !rp.ListRecycle:
-		if rp.Stat {
-			return nil, errtypes.PermissionDenied(key)
-		}
-		return nil, errtypes.NotFound(key)
-	}
-
-	trashRoot := trashRootForNode(n)
+	trashRoot := filepath.Join(tb.lu.InternalPath(spaceID, spaceID), ".Trash")
 	base := filepath.Join(trashRoot, "files")
 
 	var originalPath string
@@ -195,11 +192,12 @@ func (tb *Trashbin) ListRecycle(ctx context.Context, ref *provider.Reference, ke
 	if key != "" {
 		// this is listing a specific item/folder
 		base = filepath.Join(base, key+".trashitem", relativePath)
+		var err error
 		originalPath, ts, err = tb.readInfoFile(trashRoot, key)
-		originalPath = filepath.Join(originalPath, relativePath)
 		if err != nil {
 			return nil, err
 		}
+		originalPath = filepath.Join(originalPath, relativePath)
 	}
 
 	items := []*provider.RecycleItem{}
@@ -242,8 +240,8 @@ func (tb *Trashbin) ListRecycle(ctx context.Context, ref *provider.Reference, ke
 			Size: uint64(fi.Size()),
 			Ref: &provider.Reference{
 				ResourceId: &provider.ResourceId{
-					SpaceId:  ref.GetResourceId().GetSpaceId(),
-					OpaqueId: ref.GetResourceId().GetSpaceId(),
+					SpaceId:  spaceID,
+					OpaqueId: spaceID,
 				},
 				Path: entryOriginalPath,
 			},

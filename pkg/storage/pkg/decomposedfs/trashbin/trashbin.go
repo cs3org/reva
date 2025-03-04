@@ -28,7 +28,7 @@ import (
 type Trashbin interface {
 	Setup(storage.FS) error
 
-	ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error)
+	ListRecycle(ctx context.Context, spaceID string, key, relativePath string) ([]*provider.RecycleItem, error)
 	RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error
 	PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error
 	EmptyRecycle(ctx context.Context, ref *provider.Reference) error
