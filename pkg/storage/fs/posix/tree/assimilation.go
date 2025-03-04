@@ -701,11 +701,11 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 	sizes := make(map[string]int64)
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		// skip lock and upload files
+		if t.isIndex(path) || isTrash(path) || t.isUpload(path) {
+			return filepath.SkipDir
+		}
 		if t.isInternal(path) || isLockFile(path) {
 			return nil
-		}
-		if isTrash(path) || t.isUpload(path) {
-			return filepath.SkipDir
 		}
 
 		if err != nil {
@@ -838,6 +838,9 @@ func (t *Tree) setDirty(path string, dirty bool) error {
 func (t *Tree) isDirty(path string) (bool, error) {
 	dirtyAttr, err := xattr.Get(path, dirtyFlag)
 	if err != nil {
+		if metadata.IsAttrUnset(err) {
+			return true, nil
+		}
 		return false, err
 	}
 	return string(dirtyAttr) == "true", nil
