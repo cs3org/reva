@@ -94,7 +94,13 @@ func New(m map[string]interface{}, stream events.Stream, log *zerolog.Logger) (s
 		return nil, fmt.Errorf("unknown metadata backend %s, only 'xattrs' or 'hybrid' (default) supported", o.MetadataBackend)
 	}
 
-	trashbin, err := trashbin.New(o, lu, log)
+	permissionsSelector, err := pool.PermissionsSelector(o.PermissionsSVC, pool.WithTLSMode(o.PermTLSMode))
+	if err != nil {
+		return nil, err
+	}
+	p := permissions.NewPermissions(node.NewPermissions(lu), permissionsSelector)
+
+	trashbin, err := trashbin.New(o, p, lu, log)
 	if err != nil {
 		return nil, err
 	}
@@ -112,12 +118,6 @@ func New(m map[string]interface{}, stream events.Stream, log *zerolog.Logger) (s
 	case "", "memory", "noop":
 		return nil, fmt.Errorf("the posix driver requires a shared id cache, e.g. nats-js-kv or redis")
 	}
-
-	permissionsSelector, err := pool.PermissionsSelector(o.PermissionsSVC, pool.WithTLSMode(o.PermTLSMode))
-	if err != nil {
-		return nil, err
-	}
-	p := permissions.NewPermissions(node.NewPermissions(lu), permissionsSelector)
 
 	tp, err := tree.New(lu, bs, um, trashbin, p, o, stream, store.Create(
 		store.Store(o.IDCache.Store),

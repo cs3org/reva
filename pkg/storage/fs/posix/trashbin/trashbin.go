@@ -28,6 +28,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -39,9 +41,18 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
 )
 
+var (
+	tracer trace.Tracer
+)
+
+func init() {
+	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/fs/posix/trashbin")
+}
+
 type Trashbin struct {
 	fs  storage.FS
 	o   *options.Options
+	p   Permissions
 	lu  *lookup.Lookup
 	log *zerolog.Logger
 }
@@ -70,10 +81,15 @@ const (
 	timeFormat  = "2006-01-02T15:04:05"
 )
 
+type Permissions interface {
+	AssembleTrashPermissions(ctx context.Context, n *node.Node) (*provider.ResourcePermissions, error)
+}
+
 // New returns a new Trashbin
-func New(o *options.Options, lu *lookup.Lookup, log *zerolog.Logger) (*Trashbin, error) {
+func New(o *options.Options, p Permissions, lu *lookup.Lookup, log *zerolog.Logger) (*Trashbin, error) {
 	return &Trashbin{
 		o:   o,
+		p:   p,
 		lu:  lu,
 		log: log,
 	}, nil
@@ -163,13 +179,11 @@ func (tb *Trashbin) MoveToTrash(ctx context.Context, n *node.Node, path string) 
 
 // ListRecycle returns the list of available recycle items
 // ref -> the space (= resourceid), key -> deleted node id, relativePath = relative to key
-func (tb *Trashbin) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
-	n, err := tb.lu.NodeFromResource(ctx, ref)
-	if err != nil {
-		return nil, err
-	}
+func (tb *Trashbin) ListRecycle(ctx context.Context, spaceID string, key, relativePath string) ([]*provider.RecycleItem, error) {
+	_, span := tracer.Start(ctx, "ListRecycle")
+	defer span.End()
 
-	trashRoot := trashRootForNode(n)
+	trashRoot := filepath.Join(tb.lu.InternalPath(spaceID, spaceID), ".Trash")
 	base := filepath.Join(trashRoot, "files")
 
 	var originalPath string
@@ -177,11 +191,12 @@ func (tb *Trashbin) ListRecycle(ctx context.Context, ref *provider.Reference, ke
 	if key != "" {
 		// this is listing a specific item/folder
 		base = filepath.Join(base, key+".trashitem", relativePath)
+		var err error
 		originalPath, ts, err = tb.readInfoFile(trashRoot, key)
-		originalPath = filepath.Join(originalPath, relativePath)
 		if err != nil {
 			return nil, err
 		}
+		originalPath = filepath.Join(originalPath, relativePath)
 	}
 
 	items := []*provider.RecycleItem{}
@@ -224,8 +239,8 @@ func (tb *Trashbin) ListRecycle(ctx context.Context, ref *provider.Reference, ke
 			Size: uint64(fi.Size()),
 			Ref: &provider.Reference{
 				ResourceId: &provider.ResourceId{
-					SpaceId:  ref.GetResourceId().GetSpaceId(),
-					OpaqueId: ref.GetResourceId().GetSpaceId(),
+					SpaceId:  spaceID,
+					OpaqueId: spaceID,
 				},
 				Path: entryOriginalPath,
 			},
@@ -244,22 +259,22 @@ func (tb *Trashbin) ListRecycle(ctx context.Context, ref *provider.Reference, ke
 }
 
 // RestoreRecycleItem restores the specified item
-func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
-	n, err := tb.lu.NodeFromResource(ctx, ref)
-	if err != nil {
-		return err
-	}
+func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, spaceID string, key, relativePath string, restoreRef *provider.Reference) error {
+	_, span := tracer.Start(ctx, "RestoreRecycleItem")
+	defer span.End()
 
-	trashRoot := trashRootForNode(n)
+	trashRoot := filepath.Join(tb.lu.InternalPath(spaceID, spaceID), ".Trash")
 	trashPath := filepath.Clean(filepath.Join(trashRoot, "files", key+".trashitem", relativePath))
 
+	// TODO why can we not use NodeFromResource here? It will use walk path. Do trashed items have a problem with that?
 	restoreBaseNode, err := tb.lu.NodeFromID(ctx, restoreRef.GetResourceId())
 	if err != nil {
 		return err
 	}
 	restorePath := filepath.Join(restoreBaseNode.InternalPath(), restoreRef.GetPath())
+	// TODO the decomposed trash also checks the permissions on the restore node
 
-	spaceID, id, _, err := tb.lu.MetadataBackend().IdentifyPath(ctx, trashPath)
+	_, id, _, err := tb.lu.MetadataBackend().IdentifyPath(ctx, trashPath)
 	if err != nil {
 		return err
 	}
@@ -284,8 +299,8 @@ func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, ref *provider.Refere
 	if err != nil {
 		return err
 	}
-	if err := tb.lu.CacheID(ctx, n.SpaceID, string(id), restorePath); err != nil {
-		tb.log.Error().Err(err).Str("spaceID", n.SpaceID).Str("id", string(id)).Str("path", restorePath).Msg("trashbin: error caching id")
+	if err := tb.lu.CacheID(ctx, spaceID, string(id), restorePath); err != nil {
+		tb.log.Error().Err(err).Str("spaceID", spaceID).Str("id", string(id)).Str("path", restorePath).Msg("trashbin: error caching id")
 	}
 
 	// cleanup trash info
@@ -297,14 +312,12 @@ func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, ref *provider.Refere
 }
 
 // PurgeRecycleItem purges the specified item, all its children and all their revisions
-func (tb *Trashbin) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
-	n, err := tb.lu.NodeFromResource(ctx, ref)
-	if err != nil {
-		return err
-	}
+func (tb *Trashbin) PurgeRecycleItem(ctx context.Context, spaceID, key, relativePath string) error {
+	_, span := tracer.Start(ctx, "PurgeRecycleItem")
+	defer span.End()
 
-	trashRoot := trashRootForNode(n)
-	err = os.RemoveAll(filepath.Clean(filepath.Join(trashRoot, "files", key+".trashitem", relativePath)))
+	trashRoot := filepath.Join(tb.lu.InternalPath(spaceID, spaceID), ".Trash")
+	err := os.RemoveAll(filepath.Clean(filepath.Join(trashRoot, "files", key+".trashitem", relativePath)))
 	if err != nil {
 		return err
 	}
@@ -317,14 +330,12 @@ func (tb *Trashbin) PurgeRecycleItem(ctx context.Context, ref *provider.Referenc
 }
 
 // EmptyRecycle empties the trash
-func (tb *Trashbin) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
-	n, err := tb.lu.NodeFromResource(ctx, ref)
-	if err != nil {
-		return err
-	}
+func (tb *Trashbin) EmptyRecycle(ctx context.Context, spaceID string) error {
+	_, span := tracer.Start(ctx, "EmptyRecycle")
+	defer span.End()
 
-	trashRoot := trashRootForNode(n)
-	err = os.RemoveAll(filepath.Clean(filepath.Join(trashRoot, "files")))
+	trashRoot := filepath.Join(tb.lu.InternalPath(spaceID, spaceID), ".Trash")
+	err := os.RemoveAll(filepath.Clean(filepath.Join(trashRoot, "files")))
 	if err != nil {
 		return err
 	}

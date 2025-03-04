@@ -64,34 +64,10 @@ func (tb *DecomposedfsTrashbin) Setup(fs storage.FS) error {
 
 // ListRecycle returns the list of available recycle items
 // ref -> the space (= resourceid), key -> deleted node id, relativePath = relative to key
-func (tb *DecomposedfsTrashbin) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (tb *DecomposedfsTrashbin) ListRecycle(ctx context.Context, spaceID string, key, relativePath string) ([]*provider.RecycleItem, error) {
 	_, span := tracer.Start(ctx, "ListRecycle")
 	defer span.End()
-	if ref == nil || ref.ResourceId == nil || ref.ResourceId.OpaqueId == "" {
-		return nil, errtypes.BadRequest("spaceid required")
-	}
-	if key == "" && relativePath != "" {
-		return nil, errtypes.BadRequest("key is required when navigating with a path")
-	}
-	spaceID := ref.ResourceId.OpaqueId
-
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("key", key).Str("relative_path", relativePath).Logger()
-
-	// check permissions
-	trashnode, err := tb.fs.lu.NodeFromSpaceID(ctx, spaceID)
-	if err != nil {
-		return nil, err
-	}
-	rp, err := tb.fs.p.AssembleTrashPermissions(ctx, trashnode)
-	switch {
-	case err != nil:
-		return nil, err
-	case !rp.ListRecycle:
-		if rp.Stat {
-			return nil, errtypes.PermissionDenied(key)
-		}
-		return nil, errtypes.NotFound(key)
-	}
 
 	if key == "" && relativePath == "" {
 		return tb.listTrashRoot(ctx, spaceID)
@@ -110,10 +86,10 @@ func (tb *DecomposedfsTrashbin) ListRecycle(ctx context.Context, ref *provider.R
 
 	origin := ""
 	raw, err := tb.fs.lu.MetadataBackend().All(ctx, originalNode)
-	attrs := node.Attributes(raw)
 	if err != nil {
 		return items, err
 	}
+	attrs := node.Attributes(raw)
 	// lookup origin path in extended attributes
 	origin = attrs.String(prefixes.TrashOriginAttr)
 	if origin == "" {
@@ -178,8 +154,8 @@ func (tb *DecomposedfsTrashbin) ListRecycle(ctx context.Context, ref *provider.R
 	for _, name := range names {
 		nodeID, err := node.ReadChildNodeFromLink(ctx, filepath.Join(childrenPath, name))
 		if err != nil {
-			sublog.Error().Err(err).Str("name", name).Msg("could not read child node")
-			provider.ResourceType_RESOURCE_TYPE_CONTAINER.Number()
+			sublog.Error().Err(err).Str("name", name).Msg("could not read child node, skipping")
+			continue
 		}
 		childNode := node.NewBaseNode(spaceID, nodeID, tb.fs.lu)
 
@@ -187,6 +163,10 @@ func (tb *DecomposedfsTrashbin) ListRecycle(ctx context.Context, ref *provider.R
 		size = 0
 
 		raw, err := tb.fs.lu.MetadataBackend().All(ctx, childNode)
+		if err != nil {
+			sublog.Error().Err(err).Str("name", name).Msg("could not read metadata, skipping")
+			continue
+		}
 		attrs := node.Attributes(raw)
 		typeInt, err := attrs.Int64(prefixes.TypeAttr)
 		if err != nil {
@@ -365,12 +345,9 @@ func (tb *DecomposedfsTrashbin) listTrashRoot(ctx context.Context, spaceID strin
 }
 
 // RestoreRecycleItem restores the specified item
-func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
+func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID string, key, relativePath string, restoreRef *provider.Reference) error {
 	_, span := tracer.Start(ctx, "RestoreRecycleItem")
 	defer span.End()
-	if ref == nil {
-		return errtypes.BadRequest("missing reference, needs a space id")
-	}
 
 	var targetNode *node.Node
 	if restoreRef != nil {
@@ -382,7 +359,7 @@ func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, ref *pro
 		targetNode = tn
 	}
 
-	rn, parent, restoreFunc, err := tb.fs.tp.(*tree.Tree).RestoreRecycleItemFunc(ctx, ref.ResourceId.SpaceId, key, relativePath, targetNode)
+	rn, parent, restoreFunc, err := tb.fs.tp.(*tree.Tree).RestoreRecycleItemFunc(ctx, spaceID, key, relativePath, targetNode)
 	if err != nil {
 		return err
 	}
@@ -420,14 +397,11 @@ func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, ref *pro
 }
 
 // PurgeRecycleItem purges the specified item, all its children and all their revisions
-func (tb *DecomposedfsTrashbin) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
+func (tb *DecomposedfsTrashbin) PurgeRecycleItem(ctx context.Context, spaceID, key, relativePath string) error {
 	_, span := tracer.Start(ctx, "PurgeRecycleItem")
 	defer span.End()
-	if ref == nil {
-		return errtypes.BadRequest("missing reference, needs a space id")
-	}
 
-	rn, purgeFunc, err := tb.fs.tp.(*tree.Tree).PurgeRecycleItemFunc(ctx, ref.ResourceId.OpaqueId, key, relativePath)
+	rn, purgeFunc, err := tb.fs.tp.(*tree.Tree).PurgeRecycleItemFunc(ctx, spaceID, key, relativePath)
 	if err != nil {
 		if errors.Is(err, iofs.ErrNotExist) {
 			return errtypes.NotFound(key)
@@ -452,26 +426,23 @@ func (tb *DecomposedfsTrashbin) PurgeRecycleItem(ctx context.Context, ref *provi
 }
 
 // EmptyRecycle empties the trash
-func (tb *DecomposedfsTrashbin) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
+func (tb *DecomposedfsTrashbin) EmptyRecycle(ctx context.Context, spaceID string) error {
 	_, span := tracer.Start(ctx, "EmptyRecycle")
 	defer span.End()
-	if ref == nil || ref.ResourceId == nil || ref.ResourceId.OpaqueId == "" {
-		return errtypes.BadRequest("spaceid must be set")
-	}
 
-	items, err := tb.ListRecycle(ctx, ref, "", "")
+	items, err := tb.ListRecycle(ctx, spaceID, "", "")
 	if err != nil {
 		return err
 	}
 
 	for _, i := range items {
-		if err := tb.PurgeRecycleItem(ctx, ref, i.Key, ""); err != nil {
+		if err := tb.PurgeRecycleItem(ctx, spaceID, i.Key, ""); err != nil {
 			return err
 		}
 	}
 	// TODO what permission should we check? we could check the root node of the user? or the owner permissions on his home root node?
 	// The current impl will wipe your own trash. or when no user provided the trash of 'root'
-	return os.RemoveAll(tb.getRecycleRoot(ref.ResourceId.SpaceId))
+	return os.RemoveAll(tb.getRecycleRoot(spaceID))
 }
 
 func (tb *DecomposedfsTrashbin) getRecycleRoot(spaceID string) string {
