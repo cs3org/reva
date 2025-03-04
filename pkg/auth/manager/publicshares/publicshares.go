@@ -28,6 +28,7 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/auth/scope"
@@ -79,6 +80,8 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 		return nil, nil, err
 	}
 
+	log := appctx.GetLogger(ctx)
+
 	var auth *link.PublicShareAuthentication
 	if strings.HasPrefix(secret, "password|") {
 		secret = strings.TrimPrefix(secret, "password|")
@@ -106,11 +109,15 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 		}
 	}
 
+	log.Debug().Str("token", token).Msg("Handling Authenticate() call")
+
 	publicShareResponse, err := gwConn.GetPublicShareByToken(ctx, &link.GetPublicShareByTokenRequest{
 		Token:          token,
 		Authentication: auth,
 		Sign:           true,
 	})
+	log.Debug().Str("token", token).Err(err).Any("psresp", publicShareResponse).Msg("GetPublicShareByToken return")
+
 	switch {
 	case err != nil:
 		return nil, nil, err
