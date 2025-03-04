@@ -1222,16 +1222,17 @@ func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference, loc
 	return node.Unlock(ctx, lock)
 }
 
-func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (fs *Decomposedfs) ListRecycle(ctx context.Context, space *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
 	_, span := tracer.Start(ctx, "ListRecycle")
 	defer span.End()
-	if ref == nil || ref.ResourceId == nil || ref.ResourceId.OpaqueId == "" {
-		return nil, errtypes.BadRequest("spaceid required")
+
+	spaceID := space.GetResourceId().GetSpaceId()
+	if spaceID == "" {
+		return nil, errtypes.BadRequest("missing space reference, needs a space id")
 	}
 	if key == "" && relativePath != "" {
 		return nil, errtypes.BadRequest("key is required when navigating with a path")
 	}
-	spaceID := ref.ResourceId.OpaqueId
 
 	// check permissions
 	trashnode, err := fs.lu.NodeFromSpaceID(ctx, spaceID)
@@ -1260,12 +1261,17 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, space *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
 	_, span := tracer.Start(ctx, "RestoreRecycleItem")
 	defer span.End()
-	if space == nil {
+
+	spaceID := space.GetResourceId().GetSpaceId()
+	if spaceID == "" {
 		return errtypes.BadRequest("missing space reference, needs a space id")
+	}
+	if key == "" && relativePath != "" {
+		return errtypes.BadRequest("key is required when navigating with a path")
 	}
 
 	trashItem := &provider.ResourceId{
-		SpaceId:  space.GetResourceId().GetSpaceId(),
+		SpaceId:  spaceID,
 		OpaqueId: key,
 	}
 
@@ -1286,13 +1292,75 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, space *provider.
 		return errtypes.NotFound(key)
 	}
 
-	return fs.trashbin.RestoreRecycleItem(ctx, space.GetResourceId().GetSpaceId(), key, relativePath, restoreRef)
+	return fs.trashbin.RestoreRecycleItem(ctx, spaceID, key, relativePath, restoreRef)
 }
-func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
-	return fs.trashbin.PurgeRecycleItem(ctx, ref, key, relativePath)
+
+func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, space *provider.Reference, key, relativePath string) error {
+	_, span := tracer.Start(ctx, "PurgeRecycleItem")
+	defer span.End()
+
+	spaceID := space.GetResourceId().GetSpaceId()
+	if spaceID == "" {
+		return errtypes.BadRequest("missing space reference, needs a space id")
+	}
+	if key == "" && relativePath != "" {
+		return errtypes.BadRequest("key is required when navigating with a path")
+	}
+
+	trashItem := &provider.ResourceId{
+		SpaceId:  spaceID,
+		OpaqueId: key,
+	}
+
+	trashBaseNode, err := fs.lu.NodeFromID(ctx, trashItem)
+	if err != nil {
+		return err
+	}
+
+	// check permissions of deleted node
+	rp, err := fs.p.AssembleTrashPermissions(ctx, trashBaseNode)
+	switch {
+	case err != nil:
+		return err
+	case !rp.PurgeRecycle:
+		if rp.Stat {
+			return errtypes.PermissionDenied(key)
+		}
+		return errtypes.NotFound(key)
+	}
+
+	return fs.trashbin.PurgeRecycleItem(ctx, spaceID, key, relativePath)
 }
-func (fs *Decomposedfs) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
-	return fs.trashbin.EmptyRecycle(ctx, ref)
+
+func (fs *Decomposedfs) EmptyRecycle(ctx context.Context, space *provider.Reference) error {
+	_, span := tracer.Start(ctx, "EmptyRecycle")
+	defer span.End()
+
+	spaceID := space.GetResourceId().GetSpaceId()
+	if spaceID == "" {
+		return errtypes.BadRequest("missing space reference, needs a space id")
+	}
+
+	trashItem := &provider.ResourceId{
+		SpaceId:  spaceID,
+		OpaqueId: spaceID,
+	}
+	trashBaseNode, err := fs.lu.NodeFromID(ctx, trashItem)
+	if err != nil {
+		return err
+	}
+	// check permissions of space
+	rp, err := fs.p.AssembleTrashPermissions(ctx, trashBaseNode)
+	switch {
+	case err != nil:
+		return err
+	case !rp.ListRecycle && !rp.PurgeRecycle:
+		if rp.Stat {
+			return errtypes.PermissionDenied(spaceID)
+		}
+		return errtypes.NotFound(spaceID)
+	}
+	return fs.trashbin.EmptyRecycle(ctx, spaceID)
 }
 
 func (fs *Decomposedfs) getNodePath(ctx context.Context, n *node.Node, perms *provider.ResourcePermissions) (string, error) {

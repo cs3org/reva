@@ -397,14 +397,11 @@ func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID 
 }
 
 // PurgeRecycleItem purges the specified item, all its children and all their revisions
-func (tb *DecomposedfsTrashbin) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
+func (tb *DecomposedfsTrashbin) PurgeRecycleItem(ctx context.Context, spaceID, key, relativePath string) error {
 	_, span := tracer.Start(ctx, "PurgeRecycleItem")
 	defer span.End()
-	if ref == nil {
-		return errtypes.BadRequest("missing reference, needs a space id")
-	}
 
-	rn, purgeFunc, err := tb.fs.tp.(*tree.Tree).PurgeRecycleItemFunc(ctx, ref.ResourceId.OpaqueId, key, relativePath)
+	rn, purgeFunc, err := tb.fs.tp.(*tree.Tree).PurgeRecycleItemFunc(ctx, spaceID, key, relativePath)
 	if err != nil {
 		if errors.Is(err, iofs.ErrNotExist) {
 			return errtypes.NotFound(key)
@@ -429,26 +426,23 @@ func (tb *DecomposedfsTrashbin) PurgeRecycleItem(ctx context.Context, ref *provi
 }
 
 // EmptyRecycle empties the trash
-func (tb *DecomposedfsTrashbin) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
+func (tb *DecomposedfsTrashbin) EmptyRecycle(ctx context.Context, spaceID string) error {
 	_, span := tracer.Start(ctx, "EmptyRecycle")
 	defer span.End()
-	if ref == nil || ref.ResourceId == nil || ref.ResourceId.OpaqueId == "" {
-		return errtypes.BadRequest("spaceid must be set")
-	}
 
-	items, err := tb.ListRecycle(ctx, ref.ResourceId.SpaceId, "", "")
+	items, err := tb.ListRecycle(ctx, spaceID, "", "")
 	if err != nil {
 		return err
 	}
 
 	for _, i := range items {
-		if err := tb.PurgeRecycleItem(ctx, ref, i.Key, ""); err != nil {
+		if err := tb.PurgeRecycleItem(ctx, spaceID, i.Key, ""); err != nil {
 			return err
 		}
 	}
 	// TODO what permission should we check? we could check the root node of the user? or the owner permissions on his home root node?
 	// The current impl will wipe your own trash. or when no user provided the trash of 'root'
-	return os.RemoveAll(tb.getRecycleRoot(ref.ResourceId.SpaceId))
+	return os.RemoveAll(tb.getRecycleRoot(spaceID))
 }
 
 func (tb *DecomposedfsTrashbin) getRecycleRoot(spaceID string) string {

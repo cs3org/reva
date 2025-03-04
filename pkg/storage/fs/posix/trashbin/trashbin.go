@@ -33,7 +33,6 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
@@ -313,26 +312,12 @@ func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, spaceID string, key,
 }
 
 // PurgeRecycleItem purges the specified item, all its children and all their revisions
-func (tb *Trashbin) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
-	n, err := tb.lu.NodeFromResource(ctx, ref)
-	if err != nil {
-		return err
-	}
+func (tb *Trashbin) PurgeRecycleItem(ctx context.Context, spaceID, key, relativePath string) error {
+	_, span := tracer.Start(ctx, "PurgeRecycleItem")
+	defer span.End()
 
-	// check permissions of deleted node
-	rp, err := tb.p.AssembleTrashPermissions(ctx, n)
-	switch {
-	case err != nil:
-		return err
-	case !rp.PurgeRecycle:
-		if rp.Stat {
-			return errtypes.PermissionDenied(key)
-		}
-		return errtypes.NotFound(key)
-	}
-
-	trashRoot := trashRootForNode(n)
-	err = os.RemoveAll(filepath.Clean(filepath.Join(trashRoot, "files", key+".trashitem", relativePath)))
+	trashRoot := filepath.Join(tb.lu.InternalPath(spaceID, spaceID), ".Trash")
+	err := os.RemoveAll(filepath.Clean(filepath.Join(trashRoot, "files", key+".trashitem", relativePath)))
 	if err != nil {
 		return err
 	}
@@ -345,25 +330,12 @@ func (tb *Trashbin) PurgeRecycleItem(ctx context.Context, ref *provider.Referenc
 }
 
 // EmptyRecycle empties the trash
-func (tb *Trashbin) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
-	n, err := tb.lu.NodeFromResource(ctx, ref)
-	if err != nil {
-		return err
-	}
-	// check permissions of deleted node
-	rp, err := tb.p.AssembleTrashPermissions(ctx, n)
-	switch {
-	case err != nil:
-		return err
-	case !rp.ListRecycle && !rp.PurgeRecycle:
-		if rp.Stat {
-			return errtypes.PermissionDenied(n.ID)
-		}
-		return errtypes.NotFound(n.ID)
-	}
+func (tb *Trashbin) EmptyRecycle(ctx context.Context, spaceID string) error {
+	_, span := tracer.Start(ctx, "EmptyRecycle")
+	defer span.End()
 
-	trashRoot := trashRootForNode(n)
-	err = os.RemoveAll(filepath.Clean(filepath.Join(trashRoot, "files")))
+	trashRoot := filepath.Join(tb.lu.InternalPath(spaceID, spaceID), ".Trash")
+	err := os.RemoveAll(filepath.Clean(filepath.Join(trashRoot, "files")))
 	if err != nil {
 		return err
 	}
