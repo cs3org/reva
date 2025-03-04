@@ -662,8 +662,14 @@ func (t *Tree) isUpload(path string) bool {
 	return strings.HasPrefix(path, t.options.UploadDirectory)
 }
 
+func (t *Tree) isIndex(path string) bool {
+	return strings.HasPrefix(path, filepath.Join(t.options.Root, "indexes"))
+}
+
 func (t *Tree) isInternal(path string) bool {
-	return path == t.options.Root || strings.HasPrefix(path, filepath.Join(t.options.Root, "indexes")) || strings.Contains(path, lookup.RevisionsDir)
+	return path == t.options.Root ||
+		path == filepath.Join(t.options.Root, "users") ||
+		t.isIndex(path) || strings.Contains(path, lookup.RevisionsDir)
 }
 
 func isLockFile(path string) bool {
