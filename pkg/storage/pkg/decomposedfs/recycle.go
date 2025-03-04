@@ -345,12 +345,9 @@ func (tb *DecomposedfsTrashbin) listTrashRoot(ctx context.Context, spaceID strin
 }
 
 // RestoreRecycleItem restores the specified item
-func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
+func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID string, key, relativePath string, restoreRef *provider.Reference) error {
 	_, span := tracer.Start(ctx, "RestoreRecycleItem")
 	defer span.End()
-	if ref == nil {
-		return errtypes.BadRequest("missing reference, needs a space id")
-	}
 
 	var targetNode *node.Node
 	if restoreRef != nil {
@@ -362,7 +359,7 @@ func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, ref *pro
 		targetNode = tn
 	}
 
-	rn, parent, restoreFunc, err := tb.fs.tp.(*tree.Tree).RestoreRecycleItemFunc(ctx, ref.ResourceId.SpaceId, key, relativePath, targetNode)
+	rn, parent, restoreFunc, err := tb.fs.tp.(*tree.Tree).RestoreRecycleItemFunc(ctx, spaceID, key, relativePath, targetNode)
 	if err != nil {
 		return err
 	}

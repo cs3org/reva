@@ -260,34 +260,22 @@ func (tb *Trashbin) ListRecycle(ctx context.Context, spaceID string, key, relati
 }
 
 // RestoreRecycleItem restores the specified item
-func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
-	n, err := tb.lu.NodeFromResource(ctx, ref)
-	if err != nil {
-		return err
-	}
+func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, spaceID string, key, relativePath string, restoreRef *provider.Reference) error {
+	_, span := tracer.Start(ctx, "RestoreRecycleItem")
+	defer span.End()
 
-	// check permissions of deleted node
-	rp, err := tb.p.AssembleTrashPermissions(ctx, n)
-	switch {
-	case err != nil:
-		return err
-	case !rp.RestoreRecycleItem:
-		if rp.Stat {
-			return errtypes.PermissionDenied(key)
-		}
-		return errtypes.NotFound(key)
-	}
-
-	trashRoot := trashRootForNode(n)
+	trashRoot := filepath.Join(tb.lu.InternalPath(spaceID, spaceID), ".Trash")
 	trashPath := filepath.Clean(filepath.Join(trashRoot, "files", key+".trashitem", relativePath))
 
+	// TODO why can we not use NodeFromResource here? It will use walk path. Do trashed items have a problem with that?
 	restoreBaseNode, err := tb.lu.NodeFromID(ctx, restoreRef.GetResourceId())
 	if err != nil {
 		return err
 	}
 	restorePath := filepath.Join(restoreBaseNode.InternalPath(), restoreRef.GetPath())
+	// TODO the decomposed trash also checks the permissions on the restore node
 
-	spaceID, id, _, err := tb.lu.MetadataBackend().IdentifyPath(ctx, trashPath)
+	_, id, _, err := tb.lu.MetadataBackend().IdentifyPath(ctx, trashPath)
 	if err != nil {
 		return err
 	}
@@ -312,8 +300,8 @@ func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, ref *provider.Refere
 	if err != nil {
 		return err
 	}
-	if err := tb.lu.CacheID(ctx, n.SpaceID, string(id), restorePath); err != nil {
-		tb.log.Error().Err(err).Str("spaceID", n.SpaceID).Str("id", string(id)).Str("path", restorePath).Msg("trashbin: error caching id")
+	if err := tb.lu.CacheID(ctx, spaceID, string(id), restorePath); err != nil {
+		tb.log.Error().Err(err).Str("spaceID", spaceID).Str("id", string(id)).Str("path", restorePath).Msg("trashbin: error caching id")
 	}
 
 	// cleanup trash info
