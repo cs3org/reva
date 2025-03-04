@@ -19,8 +19,8 @@
 package exporters
 
 import (
-	"github.com/cs3org/reva/v2/pkg/mentix/exchangers"
-	"github.com/cs3org/reva/v2/pkg/mentix/meshdata"
+	"github.com/owncloud/reva/v2/pkg/mentix/exchangers"
+	"github.com/owncloud/reva/v2/pkg/mentix/meshdata"
 )
 
 // Exporter is the interface that all exporters must implement.

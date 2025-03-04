@@ -23,10 +23,10 @@ import (
 	"errors"
 	"os"
 
-	"github.com/cs3org/reva/v2/pkg/metrics/driver/registry"
+	"github.com/owncloud/reva/v2/pkg/metrics/driver/registry"
 
-	"github.com/cs3org/reva/v2/pkg/logger"
-	"github.com/cs3org/reva/v2/pkg/metrics/config"
+	"github.com/owncloud/reva/v2/pkg/logger"
+	"github.com/owncloud/reva/v2/pkg/metrics/config"
 	"github.com/rs/zerolog"
 )
 

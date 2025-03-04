@@ -19,7 +19,7 @@
 package indexer
 
 import (
-	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/index"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/indexer/index"
 	"github.com/iancoleman/strcase"
 )
 

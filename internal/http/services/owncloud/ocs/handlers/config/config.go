@@ -22,9 +22,9 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/config"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/data"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/response"
+	"github.com/owncloud/reva/v2/internal/http/services/owncloud/ocs/config"
+	"github.com/owncloud/reva/v2/internal/http/services/owncloud/ocs/data"
+	"github.com/owncloud/reva/v2/internal/http/services/owncloud/ocs/response"
 )
 
 // Handler renders the config endpoint

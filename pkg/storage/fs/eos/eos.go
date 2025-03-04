@@ -19,10 +19,10 @@
 package eos
 
 import (
-	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/storage"
-	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/eosfs"
+	"github.com/owncloud/reva/v2/pkg/events"
+	"github.com/owncloud/reva/v2/pkg/storage"
+	"github.com/owncloud/reva/v2/pkg/storage/fs/registry"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/eosfs"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"

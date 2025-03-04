@@ -25,10 +25,10 @@ import (
 	"strconv"
 
 	sprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/owncloud/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
@@ -38,7 +38,7 @@ import (
 var tracer trace.Tracer
 
 func init() {
-	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/propagator")
+	tracer = otel.Tracer("github.com/owncloud/reva/pkg/storage/utils/decomposedfs/tree/propagator")
 }
 
 type Propagator interface {

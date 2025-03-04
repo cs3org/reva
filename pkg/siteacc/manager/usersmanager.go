@@ -21,8 +21,8 @@ package manager
 import (
 	"strings"
 
-	"github.com/cs3org/reva/v2/pkg/siteacc/config"
-	"github.com/cs3org/reva/v2/pkg/siteacc/html"
+	"github.com/owncloud/reva/v2/pkg/siteacc/config"
+	"github.com/owncloud/reva/v2/pkg/siteacc/html"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )

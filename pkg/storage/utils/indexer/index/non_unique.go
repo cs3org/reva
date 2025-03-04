@@ -25,9 +25,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	idxerrs "github.com/cs3org/reva/v2/pkg/storage/utils/indexer/errors"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/option"
-	metadata "github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
+	idxerrs "github.com/owncloud/reva/v2/pkg/storage/utils/indexer/errors"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/indexer/option"
+	metadata "github.com/owncloud/reva/v2/pkg/storage/utils/metadata"
 )
 
 // NonUnique are fields for an index of type non_unique.

@@ -19,7 +19,7 @@
 package cors
 
 import (
-	"github.com/cs3org/reva/v2/pkg/rhttp/global"
+	"github.com/owncloud/reva/v2/pkg/rhttp/global"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/cors"
 )

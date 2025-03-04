@@ -24,8 +24,8 @@ import (
 	"time"
 
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/receivedsharecache"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
+	"github.com/owncloud/reva/v2/pkg/share/manager/jsoncs3/receivedsharecache"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/metadata"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

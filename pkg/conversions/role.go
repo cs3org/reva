@@ -24,7 +24,7 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/grants"
 )
 
 // Role is a set of ocs permissions and cs3 resource permissions under a common name.

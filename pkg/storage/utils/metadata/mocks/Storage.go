@@ -23,7 +23,7 @@ package mocks
 import (
 	context "context"
 
-	metadata "github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
+	metadata "github.com/owncloud/reva/v2/pkg/storage/utils/metadata"
 	mock "github.com/stretchr/testify/mock"
 
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"

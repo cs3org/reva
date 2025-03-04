@@ -40,23 +40,23 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/conversions"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/eosclient"
-	"github.com/cs3org/reva/v2/pkg/eosclient/eosbinary"
-	"github.com/cs3org/reva/v2/pkg/eosclient/eosgrpc"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/mime"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/v2/pkg/sharedconf"
-	"github.com/cs3org/reva/v2/pkg/storage"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/acl"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/owncloud/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/conversions"
+	ctxpkg "github.com/owncloud/reva/v2/pkg/ctx"
+	"github.com/owncloud/reva/v2/pkg/eosclient"
+	"github.com/owncloud/reva/v2/pkg/eosclient/eosbinary"
+	"github.com/owncloud/reva/v2/pkg/eosclient/eosgrpc"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/mime"
+	"github.com/owncloud/reva/v2/pkg/rgrpc/status"
+	"github.com/owncloud/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/owncloud/reva/v2/pkg/sharedconf"
+	"github.com/owncloud/reva/v2/pkg/storage"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/acl"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/chunking"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/grants"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/templates"
+	"github.com/owncloud/reva/v2/pkg/utils"
 	"github.com/jellydator/ttlcache/v2"
 	"github.com/pkg/errors"
 )
@@ -892,7 +892,7 @@ func encodeLock(l *provider.Lock) (string, error) {
 }
 
 // RefreshLock refreshes an existing lock on the given reference
-// TODO: use existingLockId. See https://github.com/cs3org/reva/pull/3286
+// TODO: use existingLockId. See https://github.com/owncloud/reva/pull/3286
 func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLock *provider.Lock, _ string) error {
 	// TODO (gdelmont): check if the new lock is already expired?
 

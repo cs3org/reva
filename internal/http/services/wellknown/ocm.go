@@ -24,7 +24,7 @@ import (
 	"net/url"
 	"path/filepath"
 
-	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/appctx"
 )
 
 const OCMAPIVersion = "1.1.0"

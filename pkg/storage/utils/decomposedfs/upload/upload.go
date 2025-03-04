@@ -39,14 +39,14 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/metrics"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/owncloud/reva/v2/pkg/appctx"
+	ctxpkg "github.com/owncloud/reva/v2/pkg/ctx"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/events"
+	"github.com/owncloud/reva/v2/pkg/rhttp/datatx/metrics"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/owncloud/reva/v2/pkg/utils"
 )
 
 var (
@@ -56,7 +56,7 @@ var (
 )
 
 func init() {
-	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/utils/decomposedfs/upload")
+	tracer = otel.Tracer("github.com/owncloud/reva/pkg/storage/utils/decomposedfs/upload")
 }
 
 // WriteChunk writes the stream from the reader to the given offset of the upload

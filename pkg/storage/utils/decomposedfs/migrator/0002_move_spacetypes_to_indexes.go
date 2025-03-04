@@ -24,7 +24,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cs3org/reva/v2/pkg/logger"
+	"github.com/owncloud/reva/v2/pkg/logger"
 )
 
 func init() {

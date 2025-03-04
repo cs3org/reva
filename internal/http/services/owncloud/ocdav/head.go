@@ -27,16 +27,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"github.com/owncloud/reva/v2/pkg/storagespace"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/internal/grpc/services/storageprovider"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/owncloud/reva/v2/internal/grpc/services/storageprovider"
+	"github.com/owncloud/reva/v2/internal/http/services/owncloud/ocdav/errors"
+	"github.com/owncloud/reva/v2/internal/http/services/owncloud/ocdav/net"
+	"github.com/owncloud/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
+	"github.com/owncloud/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 )
 

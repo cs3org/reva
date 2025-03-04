@@ -18,7 +18,7 @@
 
 package registry
 
-import "github.com/cs3org/reva/v2/pkg/preferences"
+import "github.com/owncloud/reva/v2/pkg/preferences"
 
 // NewFunc is the function that preferences implementations
 // should register at init time.

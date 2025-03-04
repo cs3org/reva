@@ -23,7 +23,7 @@ import (
 
 	"runtime/debug"
 
-	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/appctx"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

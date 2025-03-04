@@ -25,8 +25,8 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/cs3org/reva/v2/pkg/mentix/config"
-	"github.com/cs3org/reva/v2/pkg/mentix/exchangers"
+	"github.com/owncloud/reva/v2/pkg/mentix/config"
+	"github.com/owncloud/reva/v2/pkg/mentix/exchangers"
 )
 
 // BaseRequestExporter implements basic exporter functionality common to all request exporters.

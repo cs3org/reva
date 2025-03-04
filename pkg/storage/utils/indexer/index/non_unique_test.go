@@ -24,11 +24,11 @@ import (
 	"path"
 	"testing"
 
-	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/errors"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/index"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/option"
-	. "github.com/cs3org/reva/v2/pkg/storage/utils/indexer/test"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/indexer/errors"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/indexer/index"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/indexer/option"
+	. "github.com/owncloud/reva/v2/pkg/storage/utils/indexer/test"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/metadata"
 	"github.com/stretchr/testify/assert"
 )
 

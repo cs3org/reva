@@ -31,15 +31,15 @@ import (
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree/propagator"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/owncloud/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/metadata"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/tree/propagator"
+	"github.com/owncloud/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -52,7 +52,7 @@ import (
 var tracer trace.Tracer
 
 func init() {
-	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree")
+	tracer = otel.Tracer("github.com/owncloud/reva/pkg/storage/utils/decomposedfs/tree")
 }
 
 // Blobstore defines an interface for storing blobs in a blobstore

@@ -22,8 +22,8 @@ import (
 	"context"
 
 	group "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/owncloud/reva/v2/pkg/rgrpc/status"
+	"github.com/owncloud/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
 

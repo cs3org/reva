@@ -28,8 +28,8 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ocmshare "github.com/cs3org/reva/v2/pkg/ocm/share"
-	utils "github.com/cs3org/reva/v2/pkg/utils"
+	ocmshare "github.com/owncloud/reva/v2/pkg/ocm/share"
+	utils "github.com/owncloud/reva/v2/pkg/utils"
 )
 
 // Protocols is the list of protocols.

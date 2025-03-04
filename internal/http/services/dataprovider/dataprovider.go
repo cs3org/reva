@@ -25,14 +25,14 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/events/stream"
-	datatxregistry "github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/registry"
-	"github.com/cs3org/reva/v2/pkg/rhttp/global"
-	"github.com/cs3org/reva/v2/pkg/rhttp/router"
-	"github.com/cs3org/reva/v2/pkg/storage"
-	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
+	"github.com/owncloud/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/events"
+	"github.com/owncloud/reva/v2/pkg/events/stream"
+	datatxregistry "github.com/owncloud/reva/v2/pkg/rhttp/datatx/manager/registry"
+	"github.com/owncloud/reva/v2/pkg/rhttp/global"
+	"github.com/owncloud/reva/v2/pkg/rhttp/router"
+	"github.com/owncloud/reva/v2/pkg/storage"
+	"github.com/owncloud/reva/v2/pkg/storage/fs/registry"
 )
 
 func init() {

@@ -23,18 +23,18 @@ import (
 	"net/http"
 	"path"
 
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/config"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/owncloud/reva/v2/internal/http/services/owncloud/ocdav/config"
+	"github.com/owncloud/reva/v2/internal/http/services/owncloud/ocdav/errors"
+	"github.com/owncloud/reva/v2/internal/http/services/owncloud/ocdav/net"
+	"github.com/owncloud/reva/v2/internal/http/services/owncloud/ocdav/propfind"
+	"github.com/owncloud/reva/v2/pkg/storagespace"
+	"github.com/owncloud/reva/v2/pkg/utils"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/rhttp/router"
+	"github.com/owncloud/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/rhttp/router"
 )
 
 // VersionsHandler handles version requests

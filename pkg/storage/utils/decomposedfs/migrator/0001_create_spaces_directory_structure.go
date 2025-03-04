@@ -24,9 +24,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/node"
 )
 
 func init() {

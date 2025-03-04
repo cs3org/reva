@@ -21,13 +21,13 @@ package siteacc
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/v2/pkg/siteacc"
-	"github.com/cs3org/reva/v2/pkg/siteacc/config"
+	"github.com/owncloud/reva/v2/pkg/siteacc"
+	"github.com/owncloud/reva/v2/pkg/siteacc/config"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
-	"github.com/cs3org/reva/v2/pkg/rhttp/global"
+	"github.com/owncloud/reva/v2/pkg/rhttp/global"
 )
 
 func init() {

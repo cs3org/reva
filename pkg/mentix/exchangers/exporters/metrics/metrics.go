@@ -21,8 +21,8 @@ package metrics
 import (
 	"context"
 
-	"github.com/cs3org/reva/v2/pkg/mentix/config"
-	"github.com/cs3org/reva/v2/pkg/mentix/meshdata"
+	"github.com/owncloud/reva/v2/pkg/mentix/config"
+	"github.com/owncloud/reva/v2/pkg/mentix/meshdata"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.opencensus.io/stats"

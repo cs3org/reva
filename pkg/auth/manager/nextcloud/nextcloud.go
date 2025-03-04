@@ -28,9 +28,9 @@ import (
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/auth"
-	"github.com/cs3org/reva/v2/pkg/auth/manager/registry"
+	"github.com/owncloud/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/auth"
+	"github.com/owncloud/reva/v2/pkg/auth/manager/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -40,7 +40,7 @@ func init() {
 }
 
 // Manager is the Nextcloud-based implementation of the auth.Manager interface
-// see https://github.com/cs3org/reva/blob/v1.13.0/pkg/auth/auth.go#L32-L35
+// see https://github.com/owncloud/reva/blob/v1.13.0/pkg/auth/auth.go#L32-L35
 type Manager struct {
 	client       *http.Client
 	sharedSecret string
@@ -108,7 +108,7 @@ func NewAuthManager(c *AuthManagerConfig) (*Manager, error) {
 	}, nil
 }
 
-// Configure method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/auth/auth.go#L32-L35
+// Configure method as defined in https://github.com/owncloud/reva/blob/v1.13.0/pkg/auth/auth.go#L32-L35
 func (am *Manager) Configure(ml map[string]interface{}) error {
 	return nil
 }
@@ -144,7 +144,7 @@ func (am *Manager) do(ctx context.Context, a Action) (int, []byte, error) {
 	return resp.StatusCode, body, nil
 }
 
-// Authenticate method as defined in https://github.com/cs3org/reva/blob/28500a8/pkg/auth/auth.go#L31-L33
+// Authenticate method as defined in https://github.com/owncloud/reva/blob/28500a8/pkg/auth/auth.go#L31-L33
 func (am *Manager) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
 	type paramsObj struct {
 		ClientID     string `json:"clientID"`

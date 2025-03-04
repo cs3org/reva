@@ -31,13 +31,13 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/ocm/invite"
-	"github.com/cs3org/reva/v2/pkg/ocm/invite/repository/registry"
-	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/cs3org/reva/v2/pkg/utils/cfg"
-	"github.com/cs3org/reva/v2/pkg/utils/list"
+	"github.com/owncloud/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/ocm/invite"
+	"github.com/owncloud/reva/v2/pkg/ocm/invite/repository/registry"
+	"github.com/owncloud/reva/v2/pkg/utils"
+	"github.com/owncloud/reva/v2/pkg/utils/cfg"
+	"github.com/owncloud/reva/v2/pkg/utils/list"
 	"github.com/pkg/errors"
 )
 

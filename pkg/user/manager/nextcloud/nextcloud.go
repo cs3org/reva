@@ -26,16 +26,16 @@ import (
 	"net/http"
 	"strings"
 
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	ctxpkg "github.com/owncloud/reva/v2/pkg/ctx"
 
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/user"
-	"github.com/cs3org/reva/v2/pkg/user/manager/registry"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/user"
+	"github.com/owncloud/reva/v2/pkg/user/manager/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	// "github.com/cs3org/reva/v2/pkg/errtypes"
+	// "github.com/owncloud/reva/v2/pkg/errtypes"
 )
 
 func init() {
@@ -43,7 +43,7 @@ func init() {
 }
 
 // Manager is the Nextcloud-based implementation of the share.Manager interface
-// see https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
+// see https://github.com/owncloud/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
 type Manager struct {
 	client       *http.Client
 	sharedSecret string
@@ -144,12 +144,12 @@ func (um *Manager) do(ctx context.Context, a Action, username string) (int, []by
 	return resp.StatusCode, body, err
 }
 
-// Configure method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
+// Configure method as defined in https://github.com/owncloud/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
 func (um *Manager) Configure(ml map[string]interface{}) error {
 	return nil
 }
 
-// GetUser method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
+// GetUser method as defined in https://github.com/owncloud/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
 func (um *Manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
 	bodyStr, _ := json.Marshal(uid)
 	_, respBody, err := um.do(ctx, Action{"GetUser", string(bodyStr)}, "unauthenticated")
@@ -164,7 +164,7 @@ func (um *Manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetching
 	return result, err
 }
 
-// GetUserByClaim method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
+// GetUserByClaim method as defined in https://github.com/owncloud/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
 func (um *Manager) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
 	type paramsObj struct {
 		Claim string `json:"claim"`
@@ -192,7 +192,7 @@ func (um *Manager) GetUserByClaim(ctx context.Context, claim, value string, skip
 	return result, err
 }
 
-// GetUserGroups method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
+// GetUserGroups method as defined in https://github.com/owncloud/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
 func (um *Manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
 	bodyStr, err := json.Marshal(uid)
 	if err != nil {
@@ -215,7 +215,7 @@ func (um *Manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]str
 	return gs, err
 }
 
-// FindUsers method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
+// FindUsers method as defined in https://github.com/owncloud/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
 func (um *Manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
 	user, err := getUser(ctx)
 	if err != nil {

@@ -24,7 +24,7 @@ import (
 
 	applicationsv1beta1 "github.com/cs3org/go-cs3apis/cs3/auth/applications/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
 )
 
 func appTokensRemoveCommand() *command {

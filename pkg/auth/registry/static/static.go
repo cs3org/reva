@@ -22,10 +22,10 @@ import (
 	"context"
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/auth"
-	"github.com/cs3org/reva/v2/pkg/auth/registry/registry"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/sharedconf"
+	"github.com/owncloud/reva/v2/pkg/auth"
+	"github.com/owncloud/reva/v2/pkg/auth/registry/registry"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
 )
 

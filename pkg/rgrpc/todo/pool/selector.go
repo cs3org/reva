@@ -42,7 +42,7 @@ import (
 	storageProvider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageRegistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	tx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/registry"
+	"github.com/owncloud/reva/v2/pkg/registry"
 	"github.com/pkg/errors"
 	"github.com/sercand/kuberesolver/v5"
 	"google.golang.org/grpc"

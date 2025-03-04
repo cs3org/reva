@@ -31,9 +31,9 @@ import (
 	"testing"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	downMock "github.com/cs3org/reva/v2/pkg/storage/utils/downloader/mock"
-	walkerMock "github.com/cs3org/reva/v2/pkg/storage/utils/walker/mock"
-	"github.com/cs3org/reva/v2/pkg/test"
+	downMock "github.com/owncloud/reva/v2/pkg/storage/utils/downloader/mock"
+	walkerMock "github.com/owncloud/reva/v2/pkg/storage/utils/walker/mock"
+	"github.com/owncloud/reva/v2/pkg/test"
 )
 
 func UnTar(dir string, r io.Reader) error {

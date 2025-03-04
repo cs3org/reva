@@ -21,10 +21,10 @@ package alerting
 import (
 	"strings"
 
-	"github.com/cs3org/reva/v2/pkg/siteacc/config"
-	"github.com/cs3org/reva/v2/pkg/siteacc/data"
-	"github.com/cs3org/reva/v2/pkg/siteacc/email"
-	"github.com/cs3org/reva/v2/pkg/smtpclient"
+	"github.com/owncloud/reva/v2/pkg/siteacc/config"
+	"github.com/owncloud/reva/v2/pkg/siteacc/data"
+	"github.com/owncloud/reva/v2/pkg/siteacc/email"
+	"github.com/owncloud/reva/v2/pkg/smtpclient"
 	"github.com/pkg/errors"
 	"github.com/prometheus/alertmanager/template"
 	"github.com/rs/zerolog"

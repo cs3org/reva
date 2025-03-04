@@ -28,26 +28,26 @@ As mentioned earlier, the components that can be created and used in a Reva Plug
 
 All you need to do to create a plugin is:
 
-1. Create an implementation of the desired interface: A Plugin should implement the interface exposed by the corresponding service. Eg: [Userprovider](https://github.com/cs3org/reva/blob/master/pkg/user/user.go#L67) interface.
+1. Create an implementation of the desired interface: A Plugin should implement the interface exposed by the corresponding service. Eg: [Userprovider](https://github.com/owncloud/reva/blob/master/pkg/user/user.go#L67) interface.
 2. Serve the plugin using the [go-plugin's](https://github.com/hashicorp/go-plugin) `plugin.Serve` method.
 
 The core handles all of the communication details and go-plugin implementations inside the server.
 
 Your plugin must use the packages from the Reva core to implement the interfaces. You're encouraged to use whatever other packages you want in your plugin implementation. Because plugins are their own processes, there is no danger of colliding dependencies.
 
-- `github.com/cs3org/reva/v2/pkg/<service_type>`: Contains the interface that you have to implement for any give plugin.
+- `github.com/owncloud/reva/v2/pkg/<service_type>`: Contains the interface that you have to implement for any give plugin.
 - `github.com/hashicorp/go-plugin`: To serve the plugin over RPC. This handles all the inter-process communication.
 
-Basic example of serving your component is shown below. This example consists of a simple `JSON` plugin driver for the [Userprovider](https://github.com/cs3org/reva/blob/master/internal/grpc/services/userprovider/userprovider.go) service. You can find the example code [here](https://github.com/cs3org/reva/blob/master/examples/plugin/json/json.go).
+Basic example of serving your component is shown below. This example consists of a simple `JSON` plugin driver for the [Userprovider](https://github.com/owncloud/reva/blob/master/internal/grpc/services/userprovider/userprovider.go) service. You can find the example code [here](https://github.com/owncloud/reva/blob/master/examples/plugin/json/json.go).
 
 ```go
 
 // main.go
 
 import (
-   	"github.com/cs3org/reva/v2/pkg/user"
+   	"github.com/owncloud/reva/v2/pkg/user"
     "github.com/hashicorp/go-plugin"
-	revaPlugin "github.com/cs3org/reva/v2/pkg/plugin"
+	revaPlugin "github.com/owncloud/reva/v2/pkg/plugin"
 )
 
 // Assume this implements the user.Manager interface
@@ -68,7 +68,7 @@ The `plugin.Serve` method handles all the details of communicating with Reva cor
 
 The `plugin.Serve` method takes in the plugin configuration, which you would have to define in your plugin source code:
 
-- `HandshakeConfig`: The handshake is defined in `github.com/cs3org/reva/v2/pkg/plugin`
+- `HandshakeConfig`: The handshake is defined in `github.com/owncloud/reva/v2/pkg/plugin`
 
 ```go
 var Handshake = plugin.HandshakeConfig{

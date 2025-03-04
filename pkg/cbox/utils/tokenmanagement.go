@@ -29,7 +29,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cs3org/reva/v2/pkg/rhttp"
+	"github.com/owncloud/reva/v2/pkg/rhttp"
 )
 
 // APITokenManager stores config related to api management

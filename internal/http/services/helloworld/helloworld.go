@@ -21,8 +21,8 @@ package helloworld
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/rhttp/global"
+	"github.com/owncloud/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/rhttp/global"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )

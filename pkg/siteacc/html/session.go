@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cs3org/reva/v2/pkg/siteacc/data"
+	"github.com/owncloud/reva/v2/pkg/siteacc/data"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )

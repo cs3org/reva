@@ -22,8 +22,8 @@ import (
 	"context"
 	"io"
 
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/acl"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/acl"
 )
 
 // EOSClient is the interface which enables access to EOS instances through various interfaces.

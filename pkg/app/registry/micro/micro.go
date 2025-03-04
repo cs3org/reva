@@ -21,7 +21,7 @@ package micro
 import (
 	"strings"
 
-	"github.com/cs3org/reva/v2/pkg/app/registry/registry"
+	"github.com/owncloud/reva/v2/pkg/app/registry/registry"
 )
 
 const defaultPriority = "0"

@@ -19,7 +19,7 @@
 package entity
 
 import (
-	"github.com/cs3org/reva/v2/pkg/mentix/config"
+	"github.com/owncloud/reva/v2/pkg/mentix/config"
 
 	"github.com/rs/zerolog"
 )

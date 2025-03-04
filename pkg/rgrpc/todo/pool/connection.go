@@ -23,7 +23,7 @@ import (
 	"os"
 	"strconv"
 
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
+	rtrace "github.com/owncloud/reva/v2/pkg/trace"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"

@@ -26,9 +26,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cs3org/reva/v2/pkg/storage/cache"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
+	"github.com/owncloud/reva/v2/pkg/storage/cache"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 	"github.com/rogpeppe/go-internal/lockedfile"

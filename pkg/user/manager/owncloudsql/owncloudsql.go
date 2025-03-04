@@ -24,11 +24,11 @@ import (
 	"fmt"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/user"
-	"github.com/cs3org/reva/v2/pkg/user/manager/owncloudsql/accounts"
-	"github.com/cs3org/reva/v2/pkg/user/manager/registry"
+	"github.com/owncloud/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/user"
+	"github.com/owncloud/reva/v2/pkg/user/manager/owncloudsql/accounts"
+	"github.com/owncloud/reva/v2/pkg/user/manager/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 
@@ -167,7 +167,7 @@ func (m *manager) convertToCS3User(ctx context.Context, a *accounts.Account, ski
 		GidNumber: m.c.Nobody,
 		UidNumber: m.c.Nobody,
 	}
-	// https://github.com/cs3org/reva/pull/4135
+	// https://github.com/owncloud/reva/pull/4135
 	// fall back to userid
 	if u.Id.OpaqueId == "" {
 		u.Id.OpaqueId = a.UserID

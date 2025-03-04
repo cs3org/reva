@@ -21,9 +21,9 @@ package capabilities
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/config"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/response"
-	"github.com/cs3org/reva/v2/pkg/owncloud/ocs"
+	"github.com/owncloud/reva/v2/internal/http/services/owncloud/ocs/config"
+	"github.com/owncloud/reva/v2/internal/http/services/owncloud/ocs/response"
+	"github.com/owncloud/reva/v2/pkg/owncloud/ocs"
 )
 
 // Handler renders the capability endpoint

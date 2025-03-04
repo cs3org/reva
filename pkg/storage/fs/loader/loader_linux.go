@@ -20,6 +20,6 @@ package loader
 
 import (
 	// Load core storage filesystem backends.
-	_ "github.com/cs3org/reva/v2/pkg/storage/fs/posix"
+	_ "github.com/owncloud/reva/v2/pkg/storage/fs/posix"
 	// Add your own here
 )

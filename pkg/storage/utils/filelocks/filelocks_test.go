@@ -22,7 +22,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/test-go/testify/require"
 )

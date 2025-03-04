@@ -25,11 +25,11 @@ import (
 	"net/url"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/mentix/utils"
+	"github.com/owncloud/reva/v2/pkg/mentix/utils"
 	"github.com/rs/zerolog"
 
-	"github.com/cs3org/reva/v2/pkg/mentix/config"
-	"github.com/cs3org/reva/v2/pkg/mentix/meshdata"
+	"github.com/owncloud/reva/v2/pkg/mentix/config"
+	"github.com/owncloud/reva/v2/pkg/mentix/meshdata"
 )
 
 // HandleDefaultQuery processes a basic query.

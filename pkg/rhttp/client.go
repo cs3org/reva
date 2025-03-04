@@ -26,7 +26,7 @@ import (
 
 	"go.opencensus.io/plugin/ochttp"
 
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	ctxpkg "github.com/owncloud/reva/v2/pkg/ctx"
 	"github.com/pkg/errors"
 )
 

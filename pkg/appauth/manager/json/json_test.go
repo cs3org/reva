@@ -32,7 +32,7 @@ import (
 	apppb "github.com/cs3org/go-cs3apis/cs3/auth/applications/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	ctxpkg "github.com/owncloud/reva/v2/pkg/ctx"
 	"github.com/gdexlab/go-render/render"
 	"github.com/google/go-cmp/cmp"
 	"github.com/sethvargo/go-password/password"

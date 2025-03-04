@@ -24,8 +24,8 @@ import (
 	"net/rpc"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/plugin"
+	"github.com/owncloud/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/plugin"
 	hcplugin "github.com/hashicorp/go-plugin"
 )
 

@@ -22,7 +22,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
+	"github.com/owncloud/reva/v2/internal/http/services/owncloud/ocdav/net"
 )
 
 func (s *svc) handleOptions(w http.ResponseWriter, r *http.Request) {

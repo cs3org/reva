@@ -9,7 +9,7 @@ import (
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	helpers "github.com/cs3org/reva/v2/pkg/storage/fs/posix/testhelpers"
+	helpers "github.com/owncloud/reva/v2/pkg/storage/fs/posix/testhelpers"
 	"github.com/shirou/gopsutil/process"
 
 	. "github.com/onsi/ginkgo/v2"

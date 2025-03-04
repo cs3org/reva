@@ -20,6 +20,6 @@ package loader
 
 import (
 	// Load core token writer strategies.
-	_ "github.com/cs3org/reva/v2/internal/http/interceptors/auth/tokenwriter/strategy/header"
+	_ "github.com/owncloud/reva/v2/internal/http/interceptors/auth/tokenwriter/strategy/header"
 	// Add your own here.
 )

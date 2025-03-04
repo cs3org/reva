@@ -24,8 +24,8 @@ package posix_test
 import (
 	"os"
 
-	"github.com/cs3org/reva/v2/pkg/storage/fs/posix"
-	"github.com/cs3org/reva/v2/tests/helpers"
+	"github.com/owncloud/reva/v2/pkg/storage/fs/posix"
+	"github.com/owncloud/reva/v2/tests/helpers"
 	"github.com/rs/zerolog"
 
 	. "github.com/onsi/ginkgo/v2"

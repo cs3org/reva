@@ -24,7 +24,7 @@ package appctx
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/appctx"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/trace"
 )
