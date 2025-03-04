@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"path/filepath"
 
 	apppb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
@@ -436,7 +437,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log := appctx.GetLogger(ctx)
-	log.Info().Interface("resource", fileRef).Str("url", openRes.AppUrl.AppUrl).Str("method", openRes.AppUrl.Method).Interface("viewMode", viewMode).Msg("returning app URL for file")
+	log.Info().Interface("resource", fileRef).Str("url", openRes.AppUrl.AppUrl).Str("method", openRes.AppUrl.Method).Interface("viewMode", viewMode).Str("fileExt", filepath.Ext(statRes.Info.Path)).Msg("returning app URL for file")
 
 	w.Header().Set("Content-Type", "application/json")
 	if _, err = w.Write(js); err != nil {
