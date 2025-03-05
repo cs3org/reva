@@ -19,6 +19,7 @@
 package ocmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"mime"
@@ -137,7 +138,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	protocols, err := getAndResolveProtocols(req.Protocols, r)
+	protocols, err := getAndResolveProtocols(ctx, req.Protocols, owner.Idp)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with protocols payload", err)
 		return
@@ -246,7 +247,7 @@ func getOCMShareType(t string) ocm.ShareType {
 	}
 }
 
-func getAndResolveProtocols(p Protocols, r *http.Request) ([]*ocm.Protocol, error) {
+func getAndResolveProtocols(ctx context.Context, p Protocols, ownerServer string) ([]*ocm.Protocol, error) {
 	protos := make([]*ocm.Protocol, 0, len(p))
 	for _, data := range p {
 		var uri string
@@ -270,8 +271,8 @@ func getAndResolveProtocols(p Protocols, r *http.Request) ([]*ocm.Protocol, erro
 			protos = append(protos, ocmProto)
 			continue
 		}
-		// otherwise resolve the hostname using the OCM discovery endpoint
-		remoteRoot, err := discoverOcmRoot(r, protocolName)
+		// otherwise use as endpoint the owner's server from the payload
+		remoteRoot, err := discoverOcmRoot(ctx, ownerServer, protocolName)
 		if err != nil {
 			return nil, err
 		}
@@ -297,28 +298,15 @@ func getAndResolveProtocols(p Protocols, r *http.Request) ([]*ocm.Protocol, erro
 	return protos, nil
 }
 
-func discoverOcmRoot(r *http.Request, proto string) (string, error) {
+func discoverOcmRoot(ctx context.Context, ownerServer string, proto string) (string, error) {
 	// implements the OCM discovery logic to fetch the root at the remote host that sent the share for the given proto, see
 	// https://cs3org.github.io/OCM-API/docs.html?branch=v1.1.0&repo=OCM-API&user=cs3org#/paths/~1ocm-provider/get
-	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	// assume the sender host is either given in the usual reverse proxy headers or as RemoteAddr, and that the
-	// remote end listens on https regardless if the incoming connection got its TLS terminated upstream of us
-	senderURL := r.Header.Get("X-Real-Ip")
-	if senderURL == "" {
-		senderURL = r.Header.Get("X-Forwarded-For")
-	}
-	if senderURL == "" {
-		senderURL = r.RemoteAddr
-	}
-	senderURL = "https://" + senderURL[:strings.LastIndex(senderURL, ":")]
-	log.Debug().Str("sender", senderURL).Msg("received OCM share, attempting to discover sender endpoint")
-
 	ocmClient := NewClient(time.Duration(10)*time.Second, true)
-	ocmCaps, err := ocmClient.Discover(ctx, senderURL)
+	ocmCaps, err := ocmClient.Discover(ctx, "https://"+ownerServer)
 	if err != nil {
-		log.Warn().Str("sender", senderURL).Err(err).Msg("failed to discover OCM sender")
+		log.Warn().Str("sender", ownerServer).Err(err).Msg("failed to discover OCM sender")
 		return "", err
 	}
 	for _, t := range ocmCaps.ResourceTypes {
@@ -329,10 +317,11 @@ func discoverOcmRoot(r *http.Request, proto string) (string, error) {
 			u, _ := url.Parse(ocmCaps.Endpoint)
 			u.Path = protoRoot
 			u.RawQuery = ""
+			log.Debug().Str("sender", ownerServer).Str("proto", proto).Str("URL", u.String()).Msg("resolved protocol URL")
 			return u.String(), nil
 		}
 	}
 
-	log.Warn().Str("sender", r.Host).Interface("response", ocmCaps).Msg("missing root")
+	log.Warn().Str("sender", ownerServer).Interface("response", ocmCaps).Msg("missing protocol root")
 	return "", errtypes.NotFound(fmt.Sprintf("root not found on OCM discovery for protocol %s", proto))
 }
