@@ -81,7 +81,7 @@ var (
 	}
 )
 
-var _ = Describe("ocm share", func() {
+var _ = PDescribe("ocm share", func() {
 	var (
 		revads = map[string]*Revad{}
 

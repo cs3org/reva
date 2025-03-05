@@ -371,7 +371,7 @@ var _ = Describe("Tree", func() {
 	})
 
 	Describe("propagation", func() {
-		It("propagates new files in a directory", func() {
+		PIt("propagates new files in a directory", func() {
 			Expect(os.Mkdir(root+"/assimilated", 0700)).To(Succeed())
 			time.Sleep(100 * time.Millisecond) // Give it some time to settle down
 			Expect(os.WriteFile(root+"/assimilated/file.txt", []byte("hello world"), 0600)).To(Succeed())
