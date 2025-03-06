@@ -23,10 +23,10 @@ import (
 	"database/sql"
 	"fmt"
 
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/preferences"
-	"github.com/cs3org/reva/v2/pkg/preferences/registry"
+	ctxpkg "github.com/owncloud/reva/v2/pkg/ctx"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/preferences"
+	"github.com/owncloud/reva/v2/pkg/preferences/registry"
 	"github.com/mitchellh/mapstructure"
 )
 

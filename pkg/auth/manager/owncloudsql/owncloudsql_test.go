@@ -21,7 +21,7 @@ package owncloudsql
 import (
 	"testing"
 
-	"github.com/cs3org/reva/v2/pkg/auth/manager/owncloudsql/accounts"
+	"github.com/owncloud/reva/v2/pkg/auth/manager/owncloudsql/accounts"
 	"github.com/pkg/errors"
 )
 

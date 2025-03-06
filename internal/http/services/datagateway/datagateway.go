@@ -27,11 +27,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/rhttp"
-	"github.com/cs3org/reva/v2/pkg/rhttp/global"
-	"github.com/cs3org/reva/v2/pkg/sharedconf"
+	"github.com/owncloud/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/rhttp"
+	"github.com/owncloud/reva/v2/pkg/rhttp/global"
+	"github.com/owncloud/reva/v2/pkg/sharedconf"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -44,7 +44,7 @@ import (
 var tracer trace.Tracer
 
 func init() {
-	tracer = otel.Tracer("github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree")
+	tracer = otel.Tracer("github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/tree")
 }
 
 const (

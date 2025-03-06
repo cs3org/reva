@@ -29,11 +29,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/config"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/handlers/apps/sharing/shares"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v2/tests/cs3mocks/mocks"
+	"github.com/owncloud/reva/v2/internal/http/services/owncloud/ocs/config"
+	"github.com/owncloud/reva/v2/internal/http/services/owncloud/ocs/handlers/apps/sharing/shares"
+	ctxpkg "github.com/owncloud/reva/v2/pkg/ctx"
+	"github.com/owncloud/reva/v2/pkg/rgrpc/status"
+	"github.com/owncloud/reva/v2/tests/cs3mocks/mocks"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

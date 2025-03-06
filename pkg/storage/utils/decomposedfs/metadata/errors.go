@@ -23,7 +23,7 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )

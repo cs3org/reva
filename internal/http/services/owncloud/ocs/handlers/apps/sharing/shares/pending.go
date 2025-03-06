@@ -34,11 +34,11 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
-	"github.com/cs3org/reva/v2/internal/grpc/services/usershareprovider"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/response"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/conversions"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/internal/grpc/services/usershareprovider"
+	"github.com/owncloud/reva/v2/internal/http/services/owncloud/ocs/response"
+	"github.com/owncloud/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/conversions"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
 )
 
 const (

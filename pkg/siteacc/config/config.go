@@ -21,7 +21,7 @@ package config
 import (
 	"strings"
 
-	"github.com/cs3org/reva/v2/pkg/smtpclient"
+	"github.com/owncloud/reva/v2/pkg/smtpclient"
 )
 
 // Configuration holds the general service configuration.

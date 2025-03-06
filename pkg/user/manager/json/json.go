@@ -25,14 +25,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cs3org/reva/v2/pkg/user"
-	"github.com/cs3org/reva/v2/pkg/user/manager/registry"
+	"github.com/owncloud/reva/v2/pkg/user"
+	"github.com/owncloud/reva/v2/pkg/user/manager/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
 )
 
 func init() {

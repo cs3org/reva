@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/appctx"
 	"github.com/pkg/errors"
 )
 

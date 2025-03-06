@@ -21,12 +21,12 @@ package ocis
 import (
 	"path"
 
-	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/storage"
-	"github.com/cs3org/reva/v2/pkg/storage/fs/ocis/blobstore"
-	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/owncloud/reva/v2/pkg/events"
+	"github.com/owncloud/reva/v2/pkg/storage"
+	"github.com/owncloud/reva/v2/pkg/storage/fs/ocis/blobstore"
+	"github.com/owncloud/reva/v2/pkg/storage/fs/registry"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/rs/zerolog"
 )
 

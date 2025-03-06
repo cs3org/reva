@@ -21,7 +21,7 @@ package prometheus
 import (
 	"context"
 
-	"github.com/cs3org/reva/v2/pkg/rgrpc"
+	"github.com/owncloud/reva/v2/pkg/rgrpc"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"google.golang.org/grpc"

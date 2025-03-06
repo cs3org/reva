@@ -3,9 +3,9 @@ package lookup_test
 import (
 	"context"
 
-	"github.com/cs3org/reva/v2/pkg/storage/cache"
-	"github.com/cs3org/reva/v2/pkg/storage/fs/posix/lookup"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/owncloud/reva/v2/pkg/storage/cache"
+	"github.com/owncloud/reva/v2/pkg/storage/fs/posix/lookup"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/options"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

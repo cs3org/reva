@@ -23,7 +23,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/cs3org/reva/v2/pkg/mentix/utils/network"
+	"github.com/owncloud/reva/v2/pkg/mentix/utils/network"
 )
 
 // Site represents a single site managed by Mentix.

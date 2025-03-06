@@ -38,17 +38,17 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/owncloud/reva/v2/internal/http/services/owncloud/ocdav/net"
+	ctxpkg "github.com/owncloud/reva/v2/pkg/ctx"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/owncloud/reva/v2/pkg/utils"
 )
 
 var tracer trace.Tracer
 
 func init() {
-	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/utils/metadata")
+	tracer = otel.Tracer("github.com/owncloud/reva/pkg/storage/utils/metadata")
 }
 
 // CS3 represents a metadata storage with a cs3 storage backend

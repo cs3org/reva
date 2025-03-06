@@ -23,8 +23,8 @@ import (
 
 	storage "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 
-	"github.com/cs3org/reva/v2/pkg/sdk"
-	"github.com/cs3org/reva/v2/pkg/sdk/common/net"
+	"github.com/owncloud/reva/v2/pkg/sdk"
+	"github.com/owncloud/reva/v2/pkg/sdk/common/net"
 )
 
 // EnumFilesAction offers functions to enumerate files and directories.

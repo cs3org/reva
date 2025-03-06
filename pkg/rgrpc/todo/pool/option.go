@@ -19,8 +19,8 @@
 package pool
 
 import (
-	"github.com/cs3org/reva/v2/pkg/sharedconf"
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
+	"github.com/owncloud/reva/v2/pkg/sharedconf"
+	rtrace "github.com/owncloud/reva/v2/pkg/trace"
 	"go-micro.dev/v4/registry"
 	"go.opentelemetry.io/otel/trace"
 )

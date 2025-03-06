@@ -18,7 +18,7 @@
 
 package manager
 
-import "github.com/cs3org/reva/v2/pkg/siteacc/data"
+import "github.com/owncloud/reva/v2/pkg/siteacc/data"
 
 // AccountsListenerCallback is the generic function type for accounts listeners.
 type AccountsListenerCallback = func(AccountsListener, *data.Account)

@@ -20,8 +20,8 @@ package lookup_test
 
 import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/node"
+	helpers "github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )

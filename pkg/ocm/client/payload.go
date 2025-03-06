@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/cs3org/reva/v2/internal/http/services/ocmd"
+	"github.com/owncloud/reva/v2/internal/http/services/ocmd"
 )
 
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1notifications/post

@@ -26,8 +26,8 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/cs3org/reva/v2/pkg/mentix/config"
-	"github.com/cs3org/reva/v2/pkg/mentix/meshdata"
+	"github.com/owncloud/reva/v2/pkg/mentix/config"
+	"github.com/owncloud/reva/v2/pkg/mentix/meshdata"
 )
 
 // HandleDefaultQuery processes a basic query.

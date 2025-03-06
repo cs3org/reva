@@ -22,8 +22,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cs3org/reva/v2/internal/grpc/services/helloworld/proto"
-	"github.com/cs3org/reva/v2/pkg/rgrpc"
+	"github.com/owncloud/reva/v2/internal/grpc/services/helloworld/proto"
+	"github.com/owncloud/reva/v2/pkg/rgrpc"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"

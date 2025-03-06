@@ -21,7 +21,7 @@ package requestid
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/v2/pkg/rhttp/global"
+	"github.com/owncloud/reva/v2/pkg/rhttp/global"
 	"github.com/go-chi/chi/v5/middleware"
 )
 

@@ -23,7 +23,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cs3org/reva/v2/pkg/siteacc/config"
+	"github.com/owncloud/reva/v2/pkg/siteacc/config"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )

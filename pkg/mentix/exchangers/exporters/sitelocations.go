@@ -21,8 +21,8 @@ package exporters
 import (
 	"github.com/rs/zerolog"
 
-	"github.com/cs3org/reva/v2/pkg/mentix/config"
-	"github.com/cs3org/reva/v2/pkg/mentix/exchangers/exporters/siteloc"
+	"github.com/owncloud/reva/v2/pkg/mentix/config"
+	"github.com/owncloud/reva/v2/pkg/mentix/exchangers/exporters/siteloc"
 )
 
 // SiteLocationsExporter implements the Site Locations exporter to use with Grafana.

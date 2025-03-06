@@ -19,7 +19,7 @@
 package registry
 
 import (
-	"github.com/cs3org/reva/v2/pkg/metrics/reader"
+	"github.com/owncloud/reva/v2/pkg/metrics/reader"
 )
 
 var drivers map[string]reader.Reader // map key is driver type name

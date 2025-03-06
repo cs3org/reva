@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/acl"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/acl"
 	"google.golang.org/protobuf/proto"
 )
 

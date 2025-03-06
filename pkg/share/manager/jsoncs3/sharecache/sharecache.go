@@ -32,11 +32,11 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"golang.org/x/exp/maps"
 
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/shareid"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/mtimesyncedcache"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
+	"github.com/owncloud/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/share/manager/jsoncs3/shareid"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/mtimesyncedcache"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/metadata"
 )
 
 // name is the Tracer name used to identify this instrumentation library.

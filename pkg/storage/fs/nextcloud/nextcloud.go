@@ -35,12 +35,12 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/storage"
-	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
+	"github.com/owncloud/reva/v2/pkg/appctx"
+	ctxpkg "github.com/owncloud/reva/v2/pkg/ctx"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/events"
+	"github.com/owncloud/reva/v2/pkg/storage"
+	"github.com/owncloud/reva/v2/pkg/storage/fs/registry"
 )
 
 func init() {
@@ -211,7 +211,7 @@ func (nc *StorageDriver) do(ctx context.Context, a Action) (int, []byte, error) 
 	if err != nil {
 		return 0, nil, err
 	}
-	// See https://github.com/cs3org/reva/issues/2377
+	// See https://github.com/owncloud/reva/issues/2377
 	// for discussion of user.Username vs user.Id.OpaqueId
 	url := nc.endPoint + "~" + user.Id.OpaqueId + "/api/storage/" + a.verb
 	log.Info().Msgf("nc.do req %s %s", url, a.argS)

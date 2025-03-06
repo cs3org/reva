@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/cs3org/reva/v2/pkg/bytesize"
+	"github.com/owncloud/reva/v2/pkg/bytesize"
 	"github.com/test-go/testify/require"
 )
 

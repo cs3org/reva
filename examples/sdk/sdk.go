@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/cs3org/reva/v2/pkg/sdk"
-	"github.com/cs3org/reva/v2/pkg/sdk/action"
+	"github.com/owncloud/reva/v2/pkg/sdk"
+	"github.com/owncloud/reva/v2/pkg/sdk/action"
 )
 
 func runActions(session *sdk.Session) {

@@ -27,7 +27,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	revactx "github.com/cs3org/reva/v2/pkg/ctx"
+	revactx "github.com/owncloud/reva/v2/pkg/ctx"
 )
 
 // UnixMapper is a user mapper that maps users to unix uids and gids

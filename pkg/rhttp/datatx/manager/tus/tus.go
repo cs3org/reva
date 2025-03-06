@@ -31,15 +31,15 @@ import (
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 	"golang.org/x/exp/slog"
 
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/rhttp/datatx"
-	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/registry"
-	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/metrics"
-	"github.com/cs3org/reva/v2/pkg/storage"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"github.com/owncloud/reva/v2/internal/http/services/owncloud/ocdav/net"
+	"github.com/owncloud/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/events"
+	"github.com/owncloud/reva/v2/pkg/rhttp/datatx"
+	"github.com/owncloud/reva/v2/pkg/rhttp/datatx/manager/registry"
+	"github.com/owncloud/reva/v2/pkg/rhttp/datatx/metrics"
+	"github.com/owncloud/reva/v2/pkg/storage"
+	"github.com/owncloud/reva/v2/pkg/storagespace"
 )
 
 func init() {

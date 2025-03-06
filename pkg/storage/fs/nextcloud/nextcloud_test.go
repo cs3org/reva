@@ -34,11 +34,11 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/testing/protocmp"
 
-	"github.com/cs3org/reva/v2/pkg/auth/scope"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/storage"
-	"github.com/cs3org/reva/v2/pkg/storage/fs/nextcloud"
-	jwt "github.com/cs3org/reva/v2/pkg/token/manager/jwt"
+	"github.com/owncloud/reva/v2/pkg/auth/scope"
+	ctxpkg "github.com/owncloud/reva/v2/pkg/ctx"
+	"github.com/owncloud/reva/v2/pkg/storage"
+	"github.com/owncloud/reva/v2/pkg/storage/fs/nextcloud"
+	jwt "github.com/owncloud/reva/v2/pkg/token/manager/jwt"
 )
 
 func setUpNextcloudServer() (*nextcloud.StorageDriver, *[]string, func()) {

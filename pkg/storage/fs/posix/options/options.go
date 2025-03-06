@@ -21,7 +21,7 @@ package options
 import (
 	"time"
 
-	decomposedoptions "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
+	decomposedoptions "github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )

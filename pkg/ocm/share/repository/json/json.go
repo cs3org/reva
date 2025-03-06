@@ -35,11 +35,11 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
 
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/ocm/share"
-	"github.com/cs3org/reva/v2/pkg/ocm/share/repository/registry"
-	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/cs3org/reva/v2/pkg/utils/cfg"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/ocm/share"
+	"github.com/owncloud/reva/v2/pkg/ocm/share/repository/registry"
+	"github.com/owncloud/reva/v2/pkg/utils"
+	"github.com/owncloud/reva/v2/pkg/utils/cfg"
 )
 
 func init() {

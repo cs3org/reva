@@ -26,7 +26,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/cs3org/reva/v2/pkg/storage/fs/owncloudsql/filecache"
+	"github.com/owncloud/reva/v2/pkg/storage/fs/owncloudsql/filecache"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

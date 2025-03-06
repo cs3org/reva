@@ -21,10 +21,10 @@ package ocmd
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/rhttp/global"
-	"github.com/cs3org/reva/v2/pkg/sharedconf"
-	"github.com/cs3org/reva/v2/pkg/utils/cfg"
+	"github.com/owncloud/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/rhttp/global"
+	"github.com/owncloud/reva/v2/pkg/sharedconf"
+	"github.com/owncloud/reva/v2/pkg/utils/cfg"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 )

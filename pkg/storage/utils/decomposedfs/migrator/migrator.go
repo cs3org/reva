@@ -25,7 +25,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/rogpeppe/go-internal/lockedfile"
 	"github.com/rs/zerolog"
 )

@@ -19,8 +19,8 @@
 package gocdb
 
 import (
-	"github.com/cs3org/reva/v2/pkg/siteacc/config"
-	"github.com/cs3org/reva/v2/pkg/siteacc/data"
+	"github.com/owncloud/reva/v2/pkg/siteacc/config"
+	"github.com/owncloud/reva/v2/pkg/siteacc/data"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )

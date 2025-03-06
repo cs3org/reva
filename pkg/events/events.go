@@ -23,7 +23,7 @@ import (
 	"log"
 	"reflect"
 
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	ctxpkg "github.com/owncloud/reva/v2/pkg/ctx"
 	"github.com/google/uuid"
 	"go-micro.dev/v4/events"
 	"go.opentelemetry.io/otel/propagation"

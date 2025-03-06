@@ -18,7 +18,7 @@
 
 package registry
 
-import "github.com/cs3org/reva/v2/pkg/storage/favorite"
+import "github.com/owncloud/reva/v2/pkg/storage/favorite"
 
 // NewFunc is the function that favorite storage implementations
 // should register at init time.

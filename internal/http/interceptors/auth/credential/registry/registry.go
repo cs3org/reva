@@ -19,7 +19,7 @@
 package registry
 
 import (
-	"github.com/cs3org/reva/v2/pkg/auth"
+	"github.com/owncloud/reva/v2/pkg/auth"
 )
 
 // NewCredentialFunc is the function that credential strategies

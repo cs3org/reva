@@ -27,9 +27,9 @@ import (
 	"sync"
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/app"
-	"github.com/cs3org/reva/v2/pkg/app/registry/registry"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/app"
+	"github.com/owncloud/reva/v2/pkg/app/registry/registry"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog/log"
 	orderedmap "github.com/wk8/go-ordered-map"

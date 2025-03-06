@@ -26,9 +26,9 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 
-	"github.com/cs3org/reva/v2/pkg/storage"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"github.com/owncloud/reva/v2/pkg/storage"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/upload"
+	"github.com/owncloud/reva/v2/pkg/storagespace"
 )
 
 // UnHook is a function that is called after the actual method is executed.

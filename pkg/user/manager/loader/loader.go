@@ -20,11 +20,11 @@ package loader
 
 import (
 	// Load core user manager drivers.
-	_ "github.com/cs3org/reva/v2/pkg/user/manager/demo"
-	_ "github.com/cs3org/reva/v2/pkg/user/manager/json"
-	_ "github.com/cs3org/reva/v2/pkg/user/manager/ldap"
-	_ "github.com/cs3org/reva/v2/pkg/user/manager/memory"
-	_ "github.com/cs3org/reva/v2/pkg/user/manager/nextcloud"
-	_ "github.com/cs3org/reva/v2/pkg/user/manager/owncloudsql"
+	_ "github.com/owncloud/reva/v2/pkg/user/manager/demo"
+	_ "github.com/owncloud/reva/v2/pkg/user/manager/json"
+	_ "github.com/owncloud/reva/v2/pkg/user/manager/ldap"
+	_ "github.com/owncloud/reva/v2/pkg/user/manager/memory"
+	_ "github.com/owncloud/reva/v2/pkg/user/manager/nextcloud"
+	_ "github.com/owncloud/reva/v2/pkg/user/manager/owncloudsql"
 	// Add your own here
 )

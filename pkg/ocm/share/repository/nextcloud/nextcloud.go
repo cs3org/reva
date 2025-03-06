@@ -28,16 +28,16 @@ import (
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/ocm/share"
-	"github.com/cs3org/reva/v2/pkg/ocm/share/repository/registry"
-	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/cs3org/reva/v2/pkg/utils/cfg"
+	"github.com/owncloud/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/ocm/share"
+	"github.com/owncloud/reva/v2/pkg/ocm/share/repository/registry"
+	"github.com/owncloud/reva/v2/pkg/utils"
+	"github.com/owncloud/reva/v2/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
 )
@@ -47,7 +47,7 @@ func init() {
 }
 
 // Manager is the Nextcloud-based implementation of the share.Repository interface
-// see https://github.com/cs3org/reva/blob/v1.13.0/pkg/ocm/share/share.go#L30-L57
+// see https://github.com/owncloud/reva/blob/v1.13.0/pkg/ocm/share/share.go#L30-L57
 type Manager struct {
 	client       *http.Client
 	sharedSecret string
@@ -296,7 +296,7 @@ func (sm *Manager) ListReceivedShares(ctx context.Context, user *userpb.User) ([
 		}
 		res = append(res, &ocm.ReceivedShare{
 			Id:            altResultShare.ID,
-			RemoteShareId: altResultShare.RemoteShareID, // sic, see https://github.com/cs3org/reva/pull/3852#discussion_r1189681465
+			RemoteShareId: altResultShare.RemoteShareID, // sic, see https://github.com/owncloud/reva/pull/3852#discussion_r1189681465
 			Grantee: &provider.Grantee{
 				Id: altResultShare.Grantee.ID,
 			},
@@ -334,7 +334,7 @@ func (sm *Manager) GetReceivedShare(ctx context.Context, user *userpb.User, ref 
 	}
 	return &ocm.ReceivedShare{
 		Id:            altResultShare.ID,
-		RemoteShareId: altResultShare.RemoteShareID, // sic, see https://github.com/cs3org/reva/pull/3852#discussion_r1189681465
+		RemoteShareId: altResultShare.RemoteShareID, // sic, see https://github.com/owncloud/reva/pull/3852#discussion_r1189681465
 		Grantee: &provider.Grantee{
 			Id: altResultShare.Grantee.ID,
 		},
@@ -385,7 +385,7 @@ func (sm *Manager) UpdateReceivedShare(ctx context.Context, user *userpb.User, s
 	}
 	return &ocm.ReceivedShare{
 		Id:            altResultShare.ID,
-		RemoteShareId: altResultShare.RemoteShareID, // sic, see https://github.com/cs3org/reva/pull/3852#discussion_r1189681465
+		RemoteShareId: altResultShare.RemoteShareID, // sic, see https://github.com/owncloud/reva/pull/3852#discussion_r1189681465
 		Grantee: &provider.Grantee{
 			Id: altResultShare.Grantee.ID,
 		},

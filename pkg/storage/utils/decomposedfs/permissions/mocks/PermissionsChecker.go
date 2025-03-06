@@ -23,7 +23,7 @@ package mocks
 import (
 	context "context"
 
-	node "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	node "github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/node"
 	mock "github.com/stretchr/testify/mock"
 
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"

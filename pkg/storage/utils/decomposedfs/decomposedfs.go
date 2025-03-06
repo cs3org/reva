@@ -42,32 +42,32 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/logger"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/metrics"
-	"github.com/cs3org/reva/v2/pkg/storage"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/aspects"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/migrator"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/permissions"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/spaceidindex"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/timemanager"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/trashbin"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/usermapper"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
-	"github.com/cs3org/reva/v2/pkg/store"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	ctxpkg "github.com/owncloud/reva/v2/pkg/ctx"
+	"github.com/owncloud/reva/v2/pkg/errtypes"
+	"github.com/owncloud/reva/v2/pkg/events"
+	"github.com/owncloud/reva/v2/pkg/logger"
+	"github.com/owncloud/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/owncloud/reva/v2/pkg/rhttp/datatx/metrics"
+	"github.com/owncloud/reva/v2/pkg/storage"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/chunking"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/aspects"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/metadata"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/migrator"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/permissions"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/spaceidindex"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/timemanager"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/trashbin"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/tree"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/upload"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/usermapper"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/filelocks"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/templates"
+	"github.com/owncloud/reva/v2/pkg/storagespace"
+	"github.com/owncloud/reva/v2/pkg/store"
+	"github.com/owncloud/reva/v2/pkg/utils"
 )
 
 type CtxKey int
@@ -87,7 +87,7 @@ var (
 )
 
 func init() {
-	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/utils/decomposedfs")
+	tracer = otel.Tracer("github.com/owncloud/reva/pkg/storage/utils/decomposedfs")
 }
 
 // Session is the interface that OcisSession implements. By combining tus.Upload,

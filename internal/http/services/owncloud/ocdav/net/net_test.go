@@ -21,7 +21,7 @@ package net_test
 import (
 	"time"
 
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
+	"github.com/owncloud/reva/v2/internal/http/services/owncloud/ocdav/net"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

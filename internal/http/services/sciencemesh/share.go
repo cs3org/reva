@@ -31,11 +31,11 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/internal/http/services/reqres"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/conversions"
-	"github.com/cs3org/reva/v2/pkg/ocm/share"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/owncloud/reva/v2/internal/http/services/reqres"
+	"github.com/owncloud/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/conversions"
+	"github.com/owncloud/reva/v2/pkg/ocm/share"
+	"github.com/owncloud/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/go-playground/validator/v10"
 )
 

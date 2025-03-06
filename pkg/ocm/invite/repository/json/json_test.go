@@ -28,7 +28,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/ocm/invite"
+	"github.com/owncloud/reva/v2/pkg/ocm/invite"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -26,7 +26,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/appctx"
 	"github.com/rs/zerolog"
 )
 

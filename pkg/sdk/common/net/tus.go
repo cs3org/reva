@@ -30,7 +30,7 @@ import (
 	"github.com/eventials/go-tus"
 	"github.com/eventials/go-tus/memorystore"
 
-	"github.com/cs3org/reva/v2/pkg/sdk/common"
+	"github.com/owncloud/reva/v2/pkg/sdk/common"
 )
 
 // TUSClient is a simple client wrapper for uploading files via TUS.

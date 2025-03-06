@@ -30,13 +30,13 @@ import (
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 
-	"github.com/cs3org/reva/v2/internal/http/services/reqres"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/events/stream"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/cs3org/reva/v2/pkg/utils/list"
+	"github.com/owncloud/reva/v2/internal/http/services/reqres"
+	"github.com/owncloud/reva/v2/pkg/appctx"
+	"github.com/owncloud/reva/v2/pkg/events"
+	"github.com/owncloud/reva/v2/pkg/events/stream"
+	"github.com/owncloud/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/owncloud/reva/v2/pkg/utils"
+	"github.com/owncloud/reva/v2/pkg/utils/list"
 )
 
 type tokenHandler struct {
@@ -106,7 +106,7 @@ func (h *tokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK) // FIXME this should be a 201 created status. Tracked in https://github.com/cs3org/reva/issues/4838
+	w.WriteHeader(http.StatusOK) // FIXME this should be a 201 created status. Tracked in https://github.com/owncloud/reva/issues/4838
 
 	tknRes := h.prepareGenerateTokenResponse(genTokenRes.GetInviteToken())
 	if err := json.NewEncoder(w).Encode(tknRes); err != nil {

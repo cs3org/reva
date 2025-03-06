@@ -18,7 +18,7 @@
 
 package manage
 
-import "github.com/cs3org/reva/v2/pkg/siteacc/html"
+import "github.com/owncloud/reva/v2/pkg/siteacc/html"
 
 // PanelTemplate is the content provider for the mangement form.
 type PanelTemplate struct {

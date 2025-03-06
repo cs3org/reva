@@ -30,7 +30,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/grants"
 )
 
 /*
@@ -38,7 +38,7 @@ ACE represents an Access Control Entry, mimicing NFSv4 ACLs
 The difference is tht grant ACEs are not propagated down the tree when being set on a dir.
 The tradeoff is that every read has to check the permissions of all path segments up to the root,
 to determine the permissions. But reads can be scaled better than writes, so here we are.
-See https://github.com/cs3org/reva/pull/1170#issuecomment-700526118 for more details.
+See https://github.com/owncloud/reva/pull/1170#issuecomment-700526118 for more details.
 
 The following is taken from the nfs4_acl man page,
 see https://linux.die.net/man/5/nfs4_acl:

@@ -20,6 +20,6 @@ package loader
 
 import (
 	// Load share cache drivers.
-	_ "github.com/cs3org/reva/v2/pkg/storage/favorite/memory"
+	_ "github.com/owncloud/reva/v2/pkg/storage/favorite/memory"
 	// Add your own here
 )

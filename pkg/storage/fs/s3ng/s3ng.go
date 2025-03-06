@@ -21,11 +21,11 @@ package s3ng
 import (
 	"fmt"
 
-	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/storage"
-	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
-	"github.com/cs3org/reva/v2/pkg/storage/fs/s3ng/blobstore"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
+	"github.com/owncloud/reva/v2/pkg/events"
+	"github.com/owncloud/reva/v2/pkg/storage"
+	"github.com/owncloud/reva/v2/pkg/storage/fs/registry"
+	"github.com/owncloud/reva/v2/pkg/storage/fs/s3ng/blobstore"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs"
 	"github.com/rs/zerolog"
 )
 

@@ -20,6 +20,6 @@ package loader
 
 import (
 	// Load share cache drivers.
-	_ "github.com/cs3org/reva/v2/pkg/share/cache/warmup/cbox"
+	_ "github.com/owncloud/reva/v2/pkg/share/cache/warmup/cbox"
 	// Add your own here
 )
