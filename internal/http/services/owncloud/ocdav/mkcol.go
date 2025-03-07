@@ -27,10 +27,12 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	rstatus "github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 )
@@ -123,6 +125,15 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 	case err != nil:
 		return http.StatusInternalServerError, err
 	case res.Status.Code == rpc.Code_CODE_OK:
+		sReq := &provider.StatRequest{
+			Ref: childRef,
+		}
+		sRes, err := client.Stat(ctx, sReq)
+		if err != nil {
+			return http.StatusInternalServerError, err
+		}
+		w.Header().Set(net.HeaderOCFileID, storagespace.FormatResourceID(sRes.GetInfo().GetId()))
+		w.Header().Set(net.HeaderOCETag, sRes.GetInfo().GetEtag())
 		w.WriteHeader(http.StatusCreated)
 		return 0, nil
 	case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
