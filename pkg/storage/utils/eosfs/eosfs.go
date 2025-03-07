@@ -1120,6 +1120,9 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	// We cannot use the current user, because the file may be a shared file
 	// and lightweight accounts don't have a uid
 	auth, err := fs.getDaemonAuth(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error getting daemon aut")
+	}
 
 	if ref.ResourceId != nil {
 		fid, err := strconv.ParseUint(ref.ResourceId.OpaqueId, 10, 64)
@@ -1129,12 +1132,15 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 
 		eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
 		if err != nil {
+			log.Error().Err(err).Str("fid", strconv.Itoa(int(fid))).Msg("Failed to get file info by inode")
 			return nil, err
 		}
 
 		if ref.Path != "" {
-			eosFileInfo, err = fs.c.GetFileInfoByPath(ctx, auth, filepath.Join(eosFileInfo.File, ref.Path))
+			fn := filepath.Join(eosFileInfo.File, ref.Path)
+			eosFileInfo, err = fs.c.GetFileInfoByPath(ctx, auth, fn)
 			if err != nil {
+				log.Error().Err(err).Str("path", fn).Msg("Failed to get file info by path")
 				return nil, err
 			}
 		}
@@ -1143,6 +1149,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 
 	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, fn)
 	if err != nil {
+		log.Error().Err(err).Str("path", fn).Msg("Failed to get file info by path")
 		return nil, err
 	}
 
@@ -1174,6 +1181,7 @@ func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 
 	eosFileInfos, err := fs.c.List(ctx, auth, fn)
 	if err != nil {
+		log.Error().Str("filename", fn).Err(err).Msg("eosfs: error listing")
 		return nil, errors.Wrap(err, "eosfs: error listing")
 	}
 

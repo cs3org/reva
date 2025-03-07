@@ -1199,6 +1199,7 @@ func (s *svc) statSharesFolder(ctx context.Context) (*provider.StatResponse, err
 }
 
 func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
+	log := appctx.GetLogger(ctx)
 	providers, err := s.findProviders(ctx, req.Ref)
 	if err != nil {
 		return &provider.StatResponse{
@@ -1217,6 +1218,7 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		}
 		rsp, err := c.Stat(ctx, req)
 		if err != nil || rsp.Status.Code != rpc.Code_CODE_OK {
+			log.Error().Err(err).Any("Status", rsp.Status).Msg("Failed to stat " + resPath)
 			return rsp, err
 		}
 		return rsp, nil
