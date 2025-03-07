@@ -923,6 +923,7 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 }
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
+	log := appctx.GetLogger(ctx)
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		// The path might be a virtual view; handle that case
@@ -944,6 +945,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
+			log.Error().Str("path", newRef.Path).Err(err).Msg("storageprovider: error listing container")
 			st = status.NewInternal(ctx, err, "error listing container: "+req.Ref.String())
 		}
 		return &provider.ListContainerResponse{
