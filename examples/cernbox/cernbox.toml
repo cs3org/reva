@@ -146,6 +146,8 @@ enable_home_creation = true
 
 [grpc.services.storageprovider.drivers.localhome]
 user_layout = "{{.Username}}"
+root = "/revalocalstorage"
+share_folder = "/revalocalstorage/shares"
 
 [[grpc.services.storageprovider]]
 driver = "ocmoutcoming"
