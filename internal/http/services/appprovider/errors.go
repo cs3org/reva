@@ -56,7 +56,7 @@ type appError struct {
 // writeError handles writing error responses.
 func writeError(w http.ResponseWriter, r *http.Request, code appErrorCode, message string, err error) {
 	if err != nil {
-		appctx.GetLogger(r.Context()).Error().Err(err).Msg(message)
+		appctx.GetLogger(r.Context()).Warn().Err(err).Msg(message)
 	}
 
 	var encoded []byte

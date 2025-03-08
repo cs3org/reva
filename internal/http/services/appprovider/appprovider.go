@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"strings"
 
 	apppb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
@@ -436,8 +437,25 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var agent string
+	switch {
+	case strings.Contains(r.UserAgent(), "Firefox"):
+		agent = "Firefox"
+	case strings.Contains(r.UserAgent(), "Chrome"):
+		agent = "Chrome"
+	case strings.Contains(r.UserAgent(), "Safari"):
+		agent = "Safari"
+	default:
+		agent = "Other"
+	}
 	log := appctx.GetLogger(ctx)
-	log.Info().Interface("resource", fileRef).Str("url", openRes.AppUrl.AppUrl).Str("method", openRes.AppUrl.Method).Interface("viewMode", viewMode).Str("fileExt", filepath.Ext(statRes.Info.Path)).Msg("returning app URL for file")
+	log.Info().Interface("resource", fileRef).
+		Str("url", openRes.AppUrl.AppUrl).
+		Str("method", openRes.AppUrl.Method).
+		Interface("viewMode", viewMode).
+		Str("fileExt", filepath.Ext(statRes.Info.Path)).
+		Str("agent", agent).
+		Msg("returning app URL for file")
 
 	w.Header().Set("Content-Type", "application/json")
 	if _, err = w.Write(js); err != nil {
