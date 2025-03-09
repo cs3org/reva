@@ -97,8 +97,8 @@ type EfssShare struct {
 			Permissions int    `json:"permissions" validate:"required"`
 		} `json:"webdav" validate:"required"`
 		WebApp struct {
-			URITemplate string `json:"uri_template"`
-			ViewMode    string `json:"view_mode"`
+			URI      string `json:"uri_template"`
+			ViewMode string `json:"view_mode"`
 		} `json:"webapp" validate:"omitempty"`
 		DataTx struct {
 			SourceURI string `json:"source_uri"`
@@ -181,7 +181,7 @@ func (sm *Manager) efssShareToOcm(resp *EfssShare) *ocm.Share {
 	// first generate the map of access methods, assuming WebDAV is always present
 	var am = make([]*ocm.AccessMethod, 0, 3)
 	am = append(am, share.NewWebDavAccessMethod(conversions.RoleFromOCSPermissions(
-		conversions.Permissions(resp.Protocols.WebDAV.Permissions)).CS3ResourcePermissions()))
+		conversions.Permissions(resp.Protocols.WebDAV.Permissions)).CS3ResourcePermissions(), []string{}))
 	if resp.Protocols.WebApp.ViewMode != "" {
 		am = append(am, share.NewWebappAccessMethod(utils.GetAppViewMode(resp.Protocols.WebApp.ViewMode)))
 	}
@@ -326,9 +326,9 @@ func efssReceivedShareToOcm(resp *ReceivedEfssShare) *ocm.ReceivedShare {
 	var proto = make([]*ocm.Protocol, 0, 3)
 	proto = append(proto, share.NewWebDAVProtocol(resp.Share.Protocols.WebDAV.URI, resp.Share.Token, &ocm.SharePermissions{
 		Permissions: conversions.RoleFromOCSPermissions(conversions.Permissions(resp.Share.Protocols.WebDAV.Permissions)).CS3ResourcePermissions(),
-	}))
+	}, []string{}))
 	if resp.Share.Protocols.WebApp.ViewMode != "" {
-		proto = append(proto, share.NewWebappProtocol(resp.Share.Protocols.WebApp.URITemplate, utils.GetAppViewMode(resp.Share.Protocols.WebApp.ViewMode)))
+		proto = append(proto, share.NewWebappProtocol(resp.Share.Protocols.WebApp.URI, utils.GetAppViewMode(resp.Share.Protocols.WebApp.ViewMode)))
 	}
 	if resp.Share.Protocols.DataTx.SourceURI != "" {
 		proto = append(proto, share.NewTransferProtocol(resp.Share.Protocols.DataTx.SourceURI, resp.Share.Token, uint64(resp.Share.Protocols.DataTx.Size)))
