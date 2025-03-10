@@ -29,6 +29,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -800,6 +801,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 	s.fixPermissions(md)
+	s.stripNonUtf8Metadata(ctx, md)
 	res := &provider.StatResponse{
 		Status: status.NewOK(ctx),
 		Info:   md,
@@ -823,6 +825,28 @@ func (s *service) fixPermissions(md *provider.ResourceInfo) {
 		md.PermissionSet.RemoveGrant = false
 		md.PermissionSet.DenyGrant = false
 		md.PermissionSet.UpdateGrant = false
+	}
+}
+
+// This method removes any entries in the ArbitraryMetadata map that
+// are not valid UTF-8
+// This is necessary because protobuf requires strings to only contain valid UTF-8
+func (s *service) stripNonUtf8Metadata(ctx context.Context, md *provider.ResourceInfo) {
+	log := appctx.GetLogger(ctx)
+	if md.ArbitraryMetadata == nil {
+		return
+	}
+
+	toDelete := []string{}
+	for k, v := range md.ArbitraryMetadata.Metadata {
+		if !utf8.ValidString(v) {
+			toDelete = append(toDelete, k)
+		}
+	}
+
+	for _, k := range toDelete {
+		log.Debug().Str("attribute", k).Msg("Dropping non-UTF8 metadata entry")
+		delete(md.ArbitraryMetadata.Metadata, k)
 	}
 }
 
@@ -945,7 +969,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			log.Error().Str("path", newRef.Path).Err(err).Msg("storageprovider: error listing container")
+			log.Error().Any("ref", newRef).Err(err).Msg("storageprovider: error listing container")
 			st = status.NewInternal(ctx, err, "error listing container: "+req.Ref.String())
 		}
 		return &provider.ListContainerResponse{
@@ -962,6 +986,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 			}, nil
 		}
 		s.fixPermissions(md)
+		s.stripNonUtf8Metadata(ctx, md)
 		infos = append(infos, md)
 	}
 	res := &provider.ListContainerResponse{
