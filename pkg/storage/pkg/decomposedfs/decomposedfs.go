@@ -1292,7 +1292,23 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, space *provider.
 		return errtypes.NotFound(key)
 	}
 
-	return fs.trashbin.RestoreRecycleItem(ctx, spaceID, key, relativePath, restoreRef)
+	restoredNode, err := fs.trashbin.RestoreRecycleItem(ctx, spaceID, key, relativePath, restoreRef)
+	if err != nil {
+		return err
+	}
+
+	var sizeDiff int64
+	if restoredNode.IsDir(ctx) {
+		treeSize, err := restoredNode.GetTreeSize(ctx)
+		if err != nil {
+			return err
+		}
+		sizeDiff = int64(treeSize)
+	} else {
+		sizeDiff = restoredNode.Blobsize
+	}
+
+	return fs.tp.Propagate(ctx, restoredNode, sizeDiff)
 }
 
 func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, space *provider.Reference, key, relativePath string) error {

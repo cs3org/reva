@@ -259,7 +259,7 @@ func (tb *Trashbin) ListRecycle(ctx context.Context, spaceID string, key, relati
 }
 
 // RestoreRecycleItem restores the specified item
-func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, spaceID string, key, relativePath string, restoreRef *provider.Reference) error {
+func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, spaceID string, key, relativePath string, restoreRef *provider.Reference) (*node.Node, error) {
 	_, span := tracer.Start(ctx, "RestoreRecycleItem")
 	defer span.End()
 
@@ -269,46 +269,52 @@ func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, spaceID string, key,
 	// TODO why can we not use NodeFromResource here? It will use walk path. Do trashed items have a problem with that?
 	restoreBaseNode, err := tb.lu.NodeFromID(ctx, restoreRef.GetResourceId())
 	if err != nil {
-		return err
+		return nil, err
 	}
 	restorePath := filepath.Join(restoreBaseNode.InternalPath(), restoreRef.GetPath())
 	// TODO the decomposed trash also checks the permissions on the restore node
 
 	_, id, _, err := tb.lu.MetadataBackend().IdentifyPath(ctx, trashPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// update parent id in case it was restored to a different location
 	_, parentID, _, err := tb.lu.MetadataBackend().IdentifyPath(ctx, filepath.Dir(restorePath))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(parentID) == 0 {
-		return fmt.Errorf("trashbin: parent id not found for %s", restorePath)
+		return nil, fmt.Errorf("trashbin: parent id not found for %s", restorePath)
 	}
 
 	trashNode := &trashNode{spaceID: spaceID, id: id, path: trashPath}
 	err = tb.lu.MetadataBackend().Set(ctx, trashNode, prefixes.ParentidAttr, []byte(parentID))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// restore the item
 	err = os.Rename(trashPath, restorePath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := tb.lu.CacheID(ctx, spaceID, string(id), restorePath); err != nil {
 		tb.log.Error().Err(err).Str("spaceID", spaceID).Str("id", string(id)).Str("path", restorePath).Msg("trashbin: error caching id")
 	}
 
+	restoredNode, err := tb.lu.NodeFromID(ctx, &provider.ResourceId{SpaceId: spaceID, OpaqueId: id})
+	if err != nil {
+		return nil, err
+	}
+
 	// cleanup trash info
 	if relativePath == "." || relativePath == "/" {
-		return os.Remove(filepath.Join(trashRoot, "info", key+".trashinfo"))
+		return restoredNode, os.Remove(filepath.Join(trashRoot, "info", key+".trashinfo"))
 	} else {
-		return nil
+		return restoredNode, nil
 	}
+
 }
 
 // PurgeRecycleItem purges the specified item, all its children and all their revisions

@@ -181,7 +181,8 @@ var _ = Describe("Tree", func() {
 					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", nil)
 					Expect(err).ToNot(HaveOccurred())
 
-					Expect(restoreFunc()).To(Succeed())
+					_, err = restoreFunc()
+					Expect(err).ToNot(HaveOccurred())
 
 					originalNode, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
@@ -202,7 +203,8 @@ var _ = Describe("Tree", func() {
 					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", dest)
 					Expect(err).ToNot(HaveOccurred())
 
-					Expect(restoreFunc()).To(Succeed())
+					_, err = restoreFunc()
+					Expect(err).ToNot(HaveOccurred())
 
 					newNode, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 					Expect(err).ToNot(HaveOccurred())
@@ -218,7 +220,8 @@ var _ = Describe("Tree", func() {
 					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", nil)
 					Expect(err).ToNot(HaveOccurred())
 
-					Expect(restoreFunc()).To(Succeed())
+					_, err = restoreFunc()
+					Expect(err).ToNot(HaveOccurred())
 
 					_, err = os.Stat(trashPath)
 					Expect(err).To(HaveOccurred())

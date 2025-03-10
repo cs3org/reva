@@ -345,7 +345,7 @@ func (tb *DecomposedfsTrashbin) listTrashRoot(ctx context.Context, spaceID strin
 }
 
 // RestoreRecycleItem restores the specified item
-func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID string, key, relativePath string, restoreRef *provider.Reference) error {
+func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID string, key, relativePath string, restoreRef *provider.Reference) (*node.Node, error) {
 	_, span := tracer.Start(ctx, "RestoreRecycleItem")
 	defer span.End()
 
@@ -353,7 +353,7 @@ func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID 
 	if restoreRef != nil {
 		tn, err := tb.fs.lu.NodeFromResource(ctx, restoreRef)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		targetNode = tn
@@ -361,19 +361,19 @@ func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID 
 
 	rn, parent, restoreFunc, err := tb.fs.tp.(*tree.Tree).RestoreRecycleItemFunc(ctx, spaceID, key, relativePath, targetNode)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// check permissions of deleted node
 	rp, err := tb.fs.p.AssembleTrashPermissions(ctx, rn)
 	switch {
 	case err != nil:
-		return err
+		return nil, err
 	case !rp.RestoreRecycleItem:
 		if rp.Stat {
-			return errtypes.PermissionDenied(key)
+			return nil, errtypes.PermissionDenied(key)
 		}
-		return errtypes.NotFound(key)
+		return nil, errtypes.NotFound(key)
 	}
 
 	// Set space owner in context
@@ -383,13 +383,13 @@ func (tb *DecomposedfsTrashbin) RestoreRecycleItem(ctx context.Context, spaceID 
 	pp, err := tb.fs.p.AssemblePermissions(ctx, parent)
 	switch {
 	case err != nil:
-		return err
+		return nil, err
 	case !pp.InitiateFileUpload:
 		// share receiver cannot restore to a shared resource to which she does not have write permissions.
 		if rp.Stat {
-			return errtypes.PermissionDenied(key)
+			return nil, errtypes.PermissionDenied(key)
 		}
-		return errtypes.NotFound(key)
+		return nil, errtypes.NotFound(key)
 	}
 
 	// Run the restore func
