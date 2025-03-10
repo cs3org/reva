@@ -753,7 +753,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 					}
 
 					spaceID, _, _, err = t.lookup.MetadataBackend().IdentifyPath(context.Background(), spaceCandidate)
-					if err == nil {
+					if err == nil && len(spaceID) > 0 {
 						err = scopeSpace(path)
 						if err != nil {
 							return err
