@@ -136,8 +136,8 @@ type Tree interface {
 	ReadBlob(node *Node) (io.ReadCloser, error)
 	DeleteBlob(node *Node) error
 
-	BuildSpaceIDIndexEntry(spaceID, nodeID string) string
-	ResolveSpaceIDIndexEntry(spaceID, entry string) (string, string, error)
+	BuildSpaceIDIndexEntry(spaceID string) string
+	ResolveSpaceIDIndexEntry(spaceID string) (string, error)
 
 	CreateRevision(ctx context.Context, n *Node, version string, f *lockedfile.File) (string, error)
 	ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)

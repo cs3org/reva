@@ -30,6 +30,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"maps"
+
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -248,7 +250,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	var (
 		spaceID         = spaceIDAny
-		nodeID          = spaceIDAny
+		entry           = spaceIDAny
 		requestedUserID *userv1beta1.UserId
 	)
 
@@ -266,8 +268,8 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 				spaceTypes[filter[i].GetSpaceType()] = struct{}{}
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			_, spaceID, nodeID, _ = storagespace.SplitID(filter[i].GetId().OpaqueId)
-			if strings.Contains(nodeID, "/") {
+			_, spaceID, entry, _ = storagespace.SplitID(filter[i].GetId().OpaqueId)
+			if strings.Contains(entry, "/") {
 				return []*provider.StorageSpace{}, nil
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_USER:
@@ -296,11 +298,11 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	// /path/to/root/spaces/personal/nodeid
 	// /path/to/root/spaces/shared/nodeid
 
-	if spaceID != spaceIDAny && nodeID != spaceIDAny {
+	if spaceID != spaceIDAny && entry != spaceIDAny {
 		// try directly reading the node
-		n, err := node.ReadNode(ctx, fs.lu, spaceID, nodeID, true, nil, false) // permission to read disabled space is checked later
+		n, err := node.ReadNode(ctx, fs.lu, spaceID, entry, true, nil, false) // permission to read disabled space is checked later
 		if err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Str("id", nodeID).Msg("could not read node")
+			appctx.GetLogger(ctx).Error().Err(err).Str("id", entry).Msg("could not read node")
 			return nil, err
 		}
 		if !n.Exists {
@@ -332,12 +334,10 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			return nil, errors.Wrap(err, "error reading user index")
 		}
 
-		if nodeID == spaceIDAny {
-			for spaceID, nodeID := range allMatches {
-				matches[spaceID] = nodeID
-			}
+		if entry == spaceIDAny {
+			maps.Copy(matches, allMatches)
 		} else {
-			matches[allMatches[nodeID]] = allMatches[nodeID]
+			matches[allMatches[entry]] = allMatches[entry]
 		}
 
 		// get Groups for userid
@@ -359,12 +359,10 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 				return nil, errors.Wrap(err, "error reading group index")
 			}
 
-			if nodeID == spaceIDAny {
-				for spaceID, nodeID := range allMatches {
-					matches[spaceID] = nodeID
-				}
+			if entry == spaceIDAny {
+				maps.Copy(matches, allMatches)
 			} else {
-				matches[allMatches[nodeID]] = allMatches[nodeID]
+				matches[allMatches[entry]] = allMatches[entry]
 			}
 		}
 
@@ -389,12 +387,10 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 				return nil, errors.Wrap(err, "error reading type index")
 			}
 
-			if nodeID == spaceIDAny {
-				for spaceID, nodeID := range allMatches {
-					matches[spaceID] = nodeID
-				}
+			if entry == spaceIDAny {
+				maps.Copy(matches, allMatches)
 			} else {
-				matches[allMatches[nodeID]] = allMatches[nodeID]
+				matches[allMatches[entry]] = allMatches[entry]
 			}
 		}
 	}
@@ -417,9 +413,9 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	// Distribute work
 	errg.Go(func() error {
 		defer close(work)
-		for spaceID, nodeID := range matches {
+		for spaceID, entry := range matches {
 			select {
-			case work <- []string{spaceID, nodeID}:
+			case work <- []string{spaceID, entry}:
 			case <-ctx.Done():
 				return ctx.Err()
 			}
@@ -435,15 +431,15 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	for i := 0; i < numWorkers; i++ {
 		errg.Go(func() error {
 			for match := range work {
-				spaceID, nodeID, err := fs.tp.ResolveSpaceIDIndexEntry(match[0], match[1])
+				spaceID, err := fs.tp.ResolveSpaceIDIndexEntry(match[0])
 				if err != nil {
-					appctx.GetLogger(ctx).Error().Err(err).Str("id", nodeID).Msg("resolve space id index entry, skipping")
+					appctx.GetLogger(ctx).Error().Err(err).Str("id", spaceID).Msg("resolve space id index entry, skipping")
 					continue
 				}
 
-				n, err := node.ReadNode(ctx, fs.lu, spaceID, nodeID, true, nil, true)
+				n, err := node.ReadNode(ctx, fs.lu, spaceID, spaceID, true, nil, true)
 				if err != nil {
-					appctx.GetLogger(ctx).Error().Err(err).Str("id", nodeID).Msg("could not read node, skipping")
+					appctx.GetLogger(ctx).Error().Err(err).Str("id", spaceID).Msg("could not read node, skipping")
 					continue
 				}
 
@@ -459,7 +455,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 					case errtypes.NotFound:
 						// ok
 					default:
-						appctx.GetLogger(ctx).Error().Err(err).Str("id", nodeID).Msg("could not convert to storage space")
+						appctx.GetLogger(ctx).Error().Err(err).Str("id", spaceID).Msg("could not convert to storage space")
 					}
 					continue
 				}
@@ -497,9 +493,9 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	}
 
 	// if there are no matches (or they happened to be spaces for the owner) and the node is a child return a space
-	if int64(len(matches)) <= numShares.Load() && nodeID != spaceID {
+	if int64(len(matches)) <= numShares.Load() && entry != spaceID {
 		// try node id
-		n, err := node.ReadNode(ctx, fs.lu, spaceID, nodeID, true, nil, false) // permission to read disabled space is checked in storageSpaceFromNode
+		n, err := node.ReadNode(ctx, fs.lu, spaceID, entry, true, nil, false) // permission to read disabled space is checked in storageSpaceFromNode
 		if err != nil {
 			return nil, err
 		}
@@ -817,7 +813,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 // - for decomposedfs/decomposeds3 it is the relative link to the space root
 // - for the posixfs it is the node id
 func (fs *Decomposedfs) updateIndexes(ctx context.Context, grantee *provider.Grantee, spaceType, spaceID, nodeID string) error {
-	target := fs.tp.BuildSpaceIDIndexEntry(spaceID, nodeID)
+	target := fs.tp.BuildSpaceIDIndexEntry(spaceID)
 	err := fs.linkStorageSpaceType(ctx, spaceType, spaceID, target)
 	if err != nil {
 		return err
