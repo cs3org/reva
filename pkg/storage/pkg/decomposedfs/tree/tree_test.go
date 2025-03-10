@@ -181,7 +181,13 @@ var _ = Describe("Tree", func() {
 					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", nil)
 					Expect(err).ToNot(HaveOccurred())
 
-					Expect(restoreFunc()).To(Succeed())
+					restoredNode, err := restoreFunc()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(restoredNode).ToNot(BeNil())
+					Expect(restoredNode.Exists).To(BeTrue())
+					Expect(restoredNode.SpaceID).To(Equal(n.SpaceID))
+					Expect(restoredNode.ID).To(Equal(n.ID))
+					Expect(restoredNode.ParentID).To(Equal(n.ParentID))
 
 					originalNode, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
@@ -202,7 +208,13 @@ var _ = Describe("Tree", func() {
 					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", dest)
 					Expect(err).ToNot(HaveOccurred())
 
-					Expect(restoreFunc()).To(Succeed())
+					restoredNode, err := restoreFunc()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(restoredNode).ToNot(BeNil())
+					Expect(restoredNode.Exists).To(BeTrue())
+					Expect(restoredNode.SpaceID).To(Equal(dest.SpaceID))
+					Expect(restoredNode.ID).To(Equal(n.ID))
+					Expect(restoredNode.ParentID).To(Equal(dest.ParentID))
 
 					newNode, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 					Expect(err).ToNot(HaveOccurred())
@@ -218,7 +230,13 @@ var _ = Describe("Tree", func() {
 					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.SpaceRoot.ID, n.ID, "", nil)
 					Expect(err).ToNot(HaveOccurred())
 
-					Expect(restoreFunc()).To(Succeed())
+					restoredNode, err := restoreFunc()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(restoredNode).ToNot(BeNil())
+					Expect(restoredNode.Exists).To(BeTrue())
+					Expect(restoredNode.SpaceID).To(Equal(n.SpaceID))
+					Expect(restoredNode.ID).To(Equal(n.ID))
+					Expect(restoredNode.ParentID).To(Equal(n.ParentID))
 
 					_, err = os.Stat(trashPath)
 					Expect(err).To(HaveOccurred())
