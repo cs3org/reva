@@ -19,8 +19,6 @@ GOLANGCI_LINT	?= $(TOOLCHAIN)/golangci-lint
 CALENS			?= $(TOOLCHAIN)/calens
 GOIMPORTS		?= $(TOOLCHAIN)/goimports
 
-include .bingo/Variables.mk
-
 .PHONY: toolchain
 toolchain: $(GOLANGCI_LINT) $(CALENS) $(GOIMPORTS)
 
@@ -181,8 +179,8 @@ dist: gen-doc
 	go run tools/create-artifacts/main.go -version ${VERSION} -commit ${GIT_COMMIT} -goversion ${GO_VERSION}
 
 .PHONY: mockery
-mockery: $(MOCKERY)
-	$(MOCKERY) --boilerplate-file ./.templates/mockery.go.tmpl
+mockery:
+	go tool mockery --boilerplate-file ./.templates/mockery.go.tmpl
 
 .PHONY: go-generate
 go-generate:
