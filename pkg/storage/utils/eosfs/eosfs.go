@@ -1121,7 +1121,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	// and lightweight accounts don't have a uid
 	auth, err := fs.getDaemonAuth(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error getting daemon aut")
+		return nil, fmt.Errorf("error getting daemon auth")
 	}
 
 	if ref.ResourceId != nil {
