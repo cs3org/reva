@@ -56,7 +56,7 @@ require (
 	golang.org/x/crypto v0.32.0
 	golang.org/x/oauth2 v0.26.0
 	golang.org/x/sync v0.11.0
-	golang.org/x/sys v0.29.0
+	golang.org/x/sys v0.31.0
 	golang.org/x/term v0.28.0
 	google.golang.org/genproto v0.0.0-20241209162323-e6fa225c2576
 	google.golang.org/grpc v1.71.0
@@ -132,3 +132,4 @@ require (
 )
 
 go 1.22.7
+toolchain go1.23.7
