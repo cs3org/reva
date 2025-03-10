@@ -19,12 +19,16 @@ packages:
     github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/tree:
         interfaces:
             Blobstore:
+    github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions:
+        interfaces:
+            PermissionsChecker:
+            CS3PermissionsClient:
+    github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree:
+        interfaces:
+            Blobstore:
     github.com/opencloud-eu/reva/v2/pkg/storage/registry/spaces:
         interfaces:
             StorageProviderClient:
-    github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/node:
-        interfaces:
-            Tree:
     github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/permissions:
         interfaces:
             PermissionsChecker:
@@ -32,9 +36,6 @@ packages:
     github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/tree:
         interfaces:
             Blobstore:
-    github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/usermapper:
-        interfaces:
-            Mapper:
     github.com/opencloud-eu/reva/v2/pkg/storage/utils/metadata:
         interfaces:
             Storage:
