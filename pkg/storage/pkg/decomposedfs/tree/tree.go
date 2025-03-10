@@ -609,9 +609,10 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 				logger.Error().Err(err).Str("trashItem", trashItem).Str("deletePath", deletePath).Str("trashPath", trashPath).Msg("error recursively deleting trash item")
 			}
 		}
-
+		rn := node.New(restoreNode.SpaceID, restoreNode.ID, targetNode.ParentID, targetNode.Name, recycleNode.Blobsize, recycleNode.BlobID, recycleNode.Type(ctx), recycleNode.Owner(), t.lookup)
+		rn.Exists = true
 		// the recycle node has an id with the trish timestamp, but the propagation is only interested in the parent id
-		return recycleNode, nil
+		return rn, nil
 	}
 	return recycleNode, parent, fn, nil
 }
