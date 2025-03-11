@@ -37,12 +37,11 @@ import (
 
 // XattrsBackend stores the file attributes in extended attributes
 type XattrsBackend struct {
-	rootPath  string
 	metaCache cache.FileMetadataCache
 }
 
 // NewMessageBackend returns a new XattrsBackend instance
-func NewXattrsBackend(rootPath string, o cache.Config) XattrsBackend {
+func NewXattrsBackend(o cache.Config) XattrsBackend {
 	return XattrsBackend{
 		metaCache: cache.GetFileMetadataCache(o),
 	}

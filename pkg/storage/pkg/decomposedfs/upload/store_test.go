@@ -25,7 +25,7 @@ func TestInitNewNode(t *testing.T) {
 	log := &zerolog.Logger{}
 	root := t.TempDir()
 
-	lookup := lookup.New(metadata.NewMessagePackBackend(root, cache.Config{}), &options.Options{Root: root}, &timemanager.Manager{})
+	lookup := lookup.New(metadata.NewMessagePackBackend(cache.Config{}), &options.Options{Root: root}, &timemanager.Manager{})
 	tp := tree.New(lookup, nil, &options.Options{}, permissions.Permissions{}, nil, log)
 
 	aspects := aspects.Aspects{

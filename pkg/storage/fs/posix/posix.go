@@ -78,7 +78,7 @@ func New(m map[string]interface{}, stream events.Stream, log *zerolog.Logger) (s
 	var lu *lookup.Lookup
 	switch o.MetadataBackend {
 	case "xattrs":
-		lu = lookup.New(metadata.NewXattrsBackend(o.Root, o.FileMetadataCache), um, o, &timemanager.Manager{})
+		lu = lookup.New(metadata.NewXattrsBackend(o.FileMetadataCache), um, o, &timemanager.Manager{})
 	case "hybrid":
 		lu = lookup.New(metadata.NewHybridBackend(1024, // start offloading grants after 1KB
 			func(n metadata.MetadataNode) string {

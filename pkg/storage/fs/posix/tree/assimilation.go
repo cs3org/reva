@@ -342,7 +342,7 @@ func (t *Tree) findSpaceId(path string) (string, node.Attributes, error) {
 				}
 			}
 
-			return string(spaceID), spaceAttrs, nil
+			return spaceID, spaceAttrs, nil
 		}
 		spaceCandidate = filepath.Dir(spaceCandidate)
 	}
@@ -387,7 +387,7 @@ func (t *Tree) assimilate(item scanItem) error {
 		// the file has an id set, we already know it from the past
 		n := node.NewBaseNode(spaceID, id, t.lookup)
 
-		previousPath, ok := t.lookup.GetCachedID(context.Background(), spaceID, string(id))
+		previousPath, ok := t.lookup.GetCachedID(context.Background(), spaceID, id)
 		previousParentID, _ := t.lookup.MetadataBackend().Get(context.Background(), n, prefixes.ParentidAttr)
 
 		// compare metadata mtime with actual mtime. if it matches AND the path hasn't changed (move operation)
@@ -418,10 +418,10 @@ func (t *Tree) assimilate(item scanItem) error {
 				// this is a move
 				t.log.Debug().Str("path", item.Path).Msg("move detected")
 
-				if err := t.lookup.CacheID(context.Background(), spaceID, string(id), item.Path); err != nil {
-					t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", string(id)).Str("path", item.Path).Msg("could not cache id")
+				if err := t.lookup.CacheID(context.Background(), spaceID, id, item.Path); err != nil {
+					t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", id).Str("path", item.Path).Msg("could not cache id")
 				}
-				_, attrs, err := t.updateFile(item.Path, string(id), spaceID)
+				_, attrs, err := t.updateFile(item.Path, id, spaceID)
 				if err != nil {
 					return err
 				}
@@ -471,11 +471,11 @@ func (t *Tree) assimilate(item scanItem) error {
 		} else {
 			// This item had already been assimilated in the past. Update the path
 			t.log.Debug().Str("path", item.Path).Msg("updating cached path")
-			if err := t.lookup.CacheID(context.Background(), spaceID, string(id), item.Path); err != nil {
-				t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", string(id)).Str("path", item.Path).Msg("could not cache id")
+			if err := t.lookup.CacheID(context.Background(), spaceID, id, item.Path); err != nil {
+				t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", id).Str("path", item.Path).Msg("could not cache id")
 			}
 
-			_, _, err := t.updateFile(item.Path, string(id), spaceID)
+			_, _, err := t.updateFile(item.Path, id, spaceID)
 			if err != nil {
 				return err
 			}

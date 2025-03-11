@@ -129,7 +129,7 @@ func (tb *DecomposedfsTrashbin) ListRecycle(ctx context.Context, spaceID string,
 		}
 		item := &provider.RecycleItem{
 			Type:         provider.ResourceType(typeInt),
-			Size:         uint64(size),
+			Size:         size,
 			Key:          filepath.Join(key, relativePath),
 			DeletionTime: deletionTime,
 			Ref: &provider.Reference{

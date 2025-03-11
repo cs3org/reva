@@ -125,7 +125,7 @@ func (store OcisStore) List(ctx context.Context) ([]*OcisSession, error) {
 func (store OcisStore) Get(ctx context.Context, id string) (*OcisSession, error) {
 	sessionPath := sessionPath(store.root, id)
 	match := _idRegexp.FindStringSubmatch(sessionPath)
-	if match == nil || len(match) < 2 {
+	if len(match) < 2 {
 		return nil, fmt.Errorf("invalid upload path")
 	}
 

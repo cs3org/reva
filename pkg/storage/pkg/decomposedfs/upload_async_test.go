@@ -143,7 +143,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		})
 		Expect(err).ToNot(HaveOccurred())
 
-		lu = lookup.New(metadata.NewXattrsBackend(o.Root, o.FileMetadataCache), o, &timemanager.Manager{})
+		lu = lookup.New(metadata.NewXattrsBackend(o.FileMetadataCache), o, &timemanager.Manager{})
 		pmock = &mocks.PermissionsChecker{}
 
 		cs3permissionsclient = &mocks.CS3PermissionsClient{}

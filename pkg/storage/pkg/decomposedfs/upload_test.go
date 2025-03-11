@@ -108,7 +108,7 @@ var _ = Describe("File uploads", func() {
 			},
 		})
 		Expect(err).ToNot(HaveOccurred())
-		lu = lookup.New(metadata.NewXattrsBackend(o.Root, o.FileMetadataCache), o, &timemanager.Manager{})
+		lu = lookup.New(metadata.NewXattrsBackend(o.FileMetadataCache), o, &timemanager.Manager{})
 		pmock = &mocks.PermissionsChecker{}
 		cs3permissionsclient = &mocks.CS3PermissionsClient{}
 		pool.RemoveSelector("PermissionsSelector" + "any")
