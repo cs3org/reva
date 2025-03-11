@@ -14,6 +14,14 @@ steps:
     commands:
       - make go-generate
       - git diff --exit-code
+  - name: inotify info
+    image: *golang_image
+    depends_on: [] # enable parallel steps
+    commands:
+      - git clone https://github.com/mikesart/inotify-info
+      - cd inotify-info
+      - make
+      - _release/inotify-info
   - name: build-ci
     image: *golang_image
     depends_on: [] # enable parallel steps
