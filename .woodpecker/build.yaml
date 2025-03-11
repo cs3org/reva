@@ -26,7 +26,7 @@ steps:
       - make go-generate
   lint:
     image: *golang_image
-    depends_on: [] # enable parallel steps
+    depends_on: [ generate ]
     commands:
       - make lint
   build:
