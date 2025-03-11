@@ -8,12 +8,6 @@ when:
   - event: [ pull_request ]
 
 steps:
-  - name: check go generate
-    image: *golang_image
-    depends_on: [] # enable parallel steps
-    commands:
-      - make go-generate
-      - git diff --exit-code
   - name: inotify info
     image: *golang_image
     depends_on: [] # enable parallel steps
@@ -22,24 +16,19 @@ steps:
       - cd inotify-info
       - make
       - _release/inotify-info
-  - name: build-ci
+  - name: build
     image: *golang_image
     depends_on: [] # enable parallel steps
-    commands:   
-      - make build-ci
-  - name: test
-    image: *golang_image
-    depends_on: [ build-ci ]
     commands:
+      - export GIT_COMMIT=`git rev-parse --short HEAD`
+      - export VERSION=`git describe --always`
+      - export GO_VERSION=`go version | awk '{print $$3}'`
+      - export BUILD_DATE=`date +%FT%T%z`
+      - export BUILD_FLAGS="-X main.gitCommit=$GIT_COMMIT -X main.version=$VERSION -X main.goVersion=$GO_VERSION -X main.buildDate=$BUILD_DATE"
+      - go generate ./...
+      - go build -ldflags "$BUILD_FLAGS" -o ./cmd/revad/revad ./cmd/revad
+      - go build -ldflags "$BUILD_FLAGS" -o ./cmd/reva/reva ./cmd/reva
       - apt-get update -qq && apt-get install -y inotify-tools 
-      - make test
-  - name: test integration
-    image: *golang_image
-    depends_on: [ build-ci ]
-    commands:
-      - make test-integration
-  - name: test benchmark
-    image: *golang_image
-    depends_on: [ build-ci ]
-    commands:
-      - make test-benchmark
+      - go test -coverprofile coverage.out -race $$(go list ./... | grep -v /tests/integration | grep -v /tests/benchmark)
+      - go test ./tests/integration
+      - go test ./tests/benchmark
