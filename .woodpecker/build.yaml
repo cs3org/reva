@@ -24,6 +24,7 @@ steps:
     depends_on: [] # enable parallel steps
     commands:
       - make go-generate
+      - git diff --exit-code
   lint:
     image: *golang_image
     depends_on: [ generate ]
