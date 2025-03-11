@@ -266,12 +266,21 @@ func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, spaceID string, key,
 	trashRoot := filepath.Join(tb.lu.InternalPath(spaceID, spaceID), ".Trash")
 	trashPath := filepath.Clean(filepath.Join(trashRoot, "files", key+".trashitem", relativePath))
 
+	restorePath := ""
 	// TODO why can we not use NodeFromResource here? It will use walk path. Do trashed items have a problem with that?
-	restoreBaseNode, err := tb.lu.NodeFromID(ctx, restoreRef.GetResourceId())
-	if err != nil {
-		return nil, err
+	if restoreRef != nil {
+		restoreBaseNode, err := tb.lu.NodeFromID(ctx, restoreRef.GetResourceId())
+		if err != nil {
+			return nil, err
+		}
+		restorePath = filepath.Join(restoreBaseNode.InternalPath(), restoreRef.GetPath())
+	} else {
+		originalPath, _, err := tb.readInfoFile(trashRoot, key)
+		if err != nil {
+			return nil, err
+		}
+		restorePath = filepath.Join(tb.lu.InternalPath(spaceID, spaceID), originalPath, relativePath)
 	}
-	restorePath := filepath.Join(restoreBaseNode.InternalPath(), restoreRef.GetPath())
 	// TODO the decomposed trash also checks the permissions on the restore node
 
 	_, id, _, err := tb.lu.MetadataBackend().IdentifyPath(ctx, trashPath)
