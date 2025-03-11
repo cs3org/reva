@@ -17,12 +17,9 @@ TESTS="basic http copymove props"
 TOOLCHAIN		?= $(CURDIR)/toolchain
 GOLANGCI_LINT	?= $(TOOLCHAIN)/golangci-lint
 CALENS			?= $(TOOLCHAIN)/calens
-GOIMPORTS		?= $(TOOLCHAIN)/goimports
-
-include .bingo/Variables.mk
 
 .PHONY: toolchain
-toolchain: $(GOLANGCI_LINT) $(CALENS) $(GOIMPORTS)
+toolchain: $(GOLANGCI_LINT) $(CALENS)
 
 .PHONY: toolchain-clean
 toolchain-clean:
@@ -57,10 +54,6 @@ else
 		grep -E '^\*   [[:alpha:]]{3} #$(PR): '
 endif
 
-$(GOIMPORTS):
-	@mkdir -p $(@D)
-	GOBIN=$(@D) go install golang.org/x/tools/cmd/goimports@v0.3.0
-
 .PHONY: off
 off:
 	GOPROXY=off
@@ -71,8 +64,8 @@ off:
 	echo GO_VERSION=${GO_VERSION}
 
 .PHONY: imports
-imports: off $(GOIMPORTS)
-	$(GOIMPORTS) -w tools pkg internal cmd
+imports: off
+	go tool goimports -w tools pkg internal cmd
 
 .PHONY: build
 build: build-revad build-reva test-go-version
@@ -181,8 +174,8 @@ dist: gen-doc
 	go run tools/create-artifacts/main.go -version ${VERSION} -commit ${GIT_COMMIT} -goversion ${GO_VERSION}
 
 .PHONY: mockery
-mockery: $(MOCKERY)
-	$(MOCKERY) --boilerplate-file ./.templates/mockery.go.tmpl
+mockery:
+	go tool mockery --boilerplate-file ./.templates/mockery.go.tmpl
 
 .PHONY: go-generate
 go-generate:
