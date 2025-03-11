@@ -18,7 +18,7 @@ var _NFac = 1
 
 var _ = Describe("FS Benchmark", func() {
 	var (
-		decomposedEnv *decomposedhelpers.TestEnv
+		decomposedEnv *decomposedhelpers.DecomposedTestEnv
 		posixEnv      *posixhelpers.TestEnv
 	)
 

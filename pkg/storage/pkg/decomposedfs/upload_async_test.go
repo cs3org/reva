@@ -20,12 +20,12 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
+	nodemocks "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node/mocks"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions/mocks"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/timemanager"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree"
-	treemocks "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree/mocks"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v2/pkg/store"
 	"github.com/opencloud-eu/reva/v2/pkg/utils"
@@ -79,7 +79,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		pmock                *mocks.PermissionsChecker
 		cs3permissionsclient *mocks.CS3PermissionsClient
 		permissionsSelector  pool.Selectable[cs3permissions.PermissionsAPIClient]
-		bs                   *treemocks.Blobstore
+		bs                   *nodemocks.Blobstore
 
 		succeedPostprocessing = func(uploadID string) {
 			// finish postprocessing
@@ -155,7 +155,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 				return cs3permissionsclient
 			},
 		)
-		bs = &treemocks.Blobstore{}
+		bs = &nodemocks.Blobstore{}
 
 		// create space uses CheckPermission endpoint
 		cs3permissionsclient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&cs3permissions.CheckPermissionResponse{

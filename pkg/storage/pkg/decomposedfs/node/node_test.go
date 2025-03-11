@@ -36,7 +36,7 @@ import (
 
 var _ = Describe("Node", func() {
 	var (
-		env *helpers.TestEnv
+		env *helpers.DecomposedTestEnv
 
 		id   string
 		name string

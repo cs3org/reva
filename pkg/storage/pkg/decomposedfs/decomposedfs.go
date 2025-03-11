@@ -130,7 +130,7 @@ type Decomposedfs struct {
 }
 
 // NewDefault returns an instance with default components
-func NewDefault(m map[string]interface{}, bs tree.Blobstore, es events.Stream, log *zerolog.Logger) (storage.FS, error) {
+func NewDefault(m map[string]interface{}, bs node.Blobstore, es events.Stream, log *zerolog.Logger) (storage.FS, error) {
 	if log == nil {
 		log = &zerolog.Logger{}
 	}

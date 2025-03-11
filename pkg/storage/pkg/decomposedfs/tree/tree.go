@@ -56,17 +56,10 @@ func init() {
 	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree")
 }
 
-// Blobstore defines an interface for storing blobs in a blobstore
-type Blobstore interface {
-	Upload(node *node.Node, source string) error
-	Download(node *node.Node) (io.ReadCloser, error)
-	Delete(node *node.Node) error
-}
-
 // Tree manages a hierarchical tree
 type Tree struct {
 	lookup      node.PathLookup
-	blobstore   Blobstore
+	blobstore   node.Blobstore
 	propagator  propagator.Propagator
 	permissions permissions.Permissions
 
@@ -79,7 +72,7 @@ type Tree struct {
 type PermissionCheckFunc func(rp *provider.ResourcePermissions) bool
 
 // New returns a new instance of Tree
-func New(lu node.PathLookup, bs Blobstore, o *options.Options, p permissions.Permissions, cache store.Store, log *zerolog.Logger) *Tree {
+func New(lu node.PathLookup, bs node.Blobstore, o *options.Options, p permissions.Permissions, cache store.Store, log *zerolog.Logger) *Tree {
 	return &Tree{
 		lookup:      lu,
 		blobstore:   bs,
@@ -794,7 +787,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 
 // WriteBlob writes a blob to the blobstore
 func (t *Tree) WriteBlob(node *node.Node, source string) error {
-	return t.blobstore.Upload(node, source)
+	return t.blobstore.Upload(node, source, "")
 }
 
 // ReadBlob reads a blob from the blobstore

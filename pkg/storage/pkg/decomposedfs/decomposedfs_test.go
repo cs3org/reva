@@ -24,8 +24,8 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs"
+	nodemocks "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node/mocks"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/testhelpers"
-	treemocks "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree/mocks"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -33,7 +33,7 @@ import (
 
 var _ = Describe("Decomposed", func() {
 	var (
-		env *helpers.TestEnv
+		env *helpers.DecomposedTestEnv
 
 		ref *provider.Reference
 	)
@@ -57,7 +57,7 @@ var _ = Describe("Decomposed", func() {
 
 	Describe("NewDefault", func() {
 		It("works", func() {
-			bs := &treemocks.Blobstore{}
+			bs := &nodemocks.Blobstore{}
 			_, err := decomposedfs.NewDefault(map[string]interface{}{
 				"root":           env.Root,
 				"permissionssvc": "any",

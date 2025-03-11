@@ -37,7 +37,7 @@ import (
 
 var _ = Describe("Node locks", func() {
 	var (
-		env *helpers.TestEnv
+		env *helpers.DecomposedTestEnv
 
 		lockByUser      *provider.Lock
 		wrongLockByUser *provider.Lock

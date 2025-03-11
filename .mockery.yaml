@@ -16,14 +16,11 @@ packages:
     github.com/opencloud-eu/reva/v2/pkg/share/manager/owncloudsql:
         interfaces:
             UserConverter:
-    github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/tree:
-        interfaces:
-            Blobstore:
     github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions:
         interfaces:
             PermissionsChecker:
             CS3PermissionsClient:
-    github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree:
+    github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node:
         interfaces:
             Blobstore:
     github.com/opencloud-eu/reva/v2/pkg/storage/registry/spaces:

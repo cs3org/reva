@@ -28,7 +28,7 @@ import (
 
 var _ = Describe("Lookup", func() {
 	var (
-		env *helpers.TestEnv
+		env *helpers.DecomposedTestEnv
 	)
 
 	JustBeforeEach(func() {

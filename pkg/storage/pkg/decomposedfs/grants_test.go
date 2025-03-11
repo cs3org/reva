@@ -34,7 +34,7 @@ import (
 
 var _ = Describe("Grants", func() {
 	var (
-		env   *helpers.TestEnv
+		env   *helpers.DecomposedTestEnv
 		ref   *provider.Reference
 		grant *provider.Grant
 	)

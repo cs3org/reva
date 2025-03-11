@@ -39,7 +39,7 @@ var _ = Describe("Spaces", func() {
 
 	Describe("Create Space", func() {
 		var (
-			env *helpers.TestEnv
+			env *helpers.DecomposedTestEnv
 		)
 		BeforeEach(func() {
 			var err error
@@ -207,7 +207,7 @@ var _ = Describe("Spaces", func() {
 
 		Describe("Create Spaces with custom alias template", func() {
 			var (
-				env *helpers.TestEnv
+				env *helpers.DecomposedTestEnv
 			)
 
 			BeforeEach(func() {
@@ -254,7 +254,7 @@ var _ = Describe("Spaces", func() {
 
 	Describe("Update Space", func() {
 		var (
-			env     *helpers.TestEnv
+			env     *helpers.DecomposedTestEnv
 			spaceid *provider.StorageSpaceId
 
 			manager  = &userv1beta1.User{Id: &userv1beta1.UserId{OpaqueId: "manager"}}

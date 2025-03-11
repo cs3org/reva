@@ -61,13 +61,6 @@ func init() {
 	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/pkg/decomposedfs/tree")
 }
 
-// Blobstore defines an interface for storing blobs in a blobstore
-type Blobstore interface {
-	Upload(node *node.Node, source, copyTarget string) error
-	Download(node *node.Node) (io.ReadCloser, error)
-	Delete(node *node.Node) error
-}
-
 type Watcher interface {
 	Watch(path string)
 }
@@ -81,7 +74,7 @@ type scanItem struct {
 // Tree manages a hierarchical tree
 type Tree struct {
 	lookup      *lookup.Lookup
-	blobstore   Blobstore
+	blobstore   node.Blobstore
 	trashbin    *trashbin.Trashbin
 	propagator  propagator.Propagator
 	permissions permissions.Permissions
@@ -102,7 +95,7 @@ type Tree struct {
 type PermissionCheckFunc func(rp *provider.ResourcePermissions) bool
 
 // New returns a new instance of Tree
-func New(lu node.PathLookup, bs Blobstore, um usermapper.Mapper, trashbin *trashbin.Trashbin, permissions permissions.Permissions, o *options.Options, es events.Stream, cache store.Store, log *zerolog.Logger) (*Tree, error) {
+func New(lu node.PathLookup, bs node.Blobstore, um usermapper.Mapper, trashbin *trashbin.Trashbin, permissions permissions.Permissions, o *options.Options, es events.Stream, cache store.Store, log *zerolog.Logger) (*Tree, error) {
 	scanQueue := make(chan scanItem)
 	t := &Tree{
 		lookup:      lu.(*lookup.Lookup),

@@ -86,6 +86,13 @@ const (
 	ProcessingStatus = "processing:"
 )
 
+// Blobstore defines an interface for storing blobs in a blobstore
+type Blobstore interface {
+	Upload(node *Node, source, copyTarget string) error
+	Download(node *Node) (io.ReadCloser, error)
+	Delete(node *Node) error
+}
+
 type TimeManager interface {
 	// OverrideMTime overrides the mtime of the node, either on the node itself or in the given attributes, depending on the implementation
 	OverrideMtime(ctx context.Context, n *Node, attrs *Attributes, mtime time.Time) error
