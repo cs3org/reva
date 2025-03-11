@@ -41,7 +41,7 @@ var (
 
 var _ = SynchronizedBeforeSuite(func() {
 	var err error
-	env, err = helpers.NewTestEnv(nil)
+	env, err = helpers.NewTestEnv(map[string]interface{}{"watch_fs": true})
 	Expect(err).ToNot(HaveOccurred())
 
 	Eventually(func() bool {

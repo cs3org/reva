@@ -79,7 +79,7 @@ var _ = Describe("Blobstore", func() {
 				Expect(os.WriteFile(blobSrcFile, data, 0700)).To(Succeed())
 			})
 			It("writes the blob", func() {
-				err := bs.Upload(blobNode, blobSrcFile)
+				err := bs.Upload(blobNode, blobSrcFile, "")
 				Expect(err).ToNot(HaveOccurred())
 
 				writtenBytes, err := os.ReadFile(blobPath)

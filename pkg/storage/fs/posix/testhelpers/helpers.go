@@ -29,6 +29,8 @@ import (
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 
+	"maps"
+
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -129,9 +131,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		"scan_fs":                    true,
 	}
 	// make it possible to override single config values
-	for k, v := range config {
-		defaultConfig[k] = v
-	}
+	maps.Copy(defaultConfig, config)
 
 	o, err := options.New(defaultConfig)
 	if err != nil {
