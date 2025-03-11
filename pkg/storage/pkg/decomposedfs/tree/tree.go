@@ -610,6 +610,7 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 			}
 		}
 		rn := node.New(restoreNode.SpaceID, restoreNode.ID, targetNode.ParentID, targetNode.Name, recycleNode.Blobsize, recycleNode.BlobID, recycleNode.Type(ctx), recycleNode.Owner(), t.lookup)
+		rn.SpaceRoot = targetNode.SpaceRoot
 		rn.Exists = true
 		// the recycle node has an id with the trish timestamp, but the propagation is only interested in the parent id
 		return rn, nil
