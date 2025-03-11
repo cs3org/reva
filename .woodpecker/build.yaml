@@ -7,8 +7,11 @@ when:
     branch: ${CI_REPO_DEFAULT_BRANCH}
   - event: [ pull_request ]
 
+workspace:
+  base: /go
+
 steps:
-  - name: inotify info
+  inotify-info:
     image: *golang_image
     depends_on: [] # enable parallel steps
     commands:
@@ -16,7 +19,7 @@ steps:
       - cd inotify-info
       - make
       - _release/inotify-info
-  - name: build
+  build:
     image: *golang_image
     depends_on: [] # enable parallel steps
     commands:
@@ -28,7 +31,19 @@ steps:
       - go generate ./...
       - go build -ldflags "$BUILD_FLAGS" -o ./cmd/revad/revad ./cmd/revad
       - go build -ldflags "$BUILD_FLAGS" -o ./cmd/reva/reva ./cmd/reva
+  test:
+    image: *golang_image
+    depends_on: [ build ]
+    commands:
       - apt-get update -qq && apt-get install -y inotify-tools 
       - go test -coverprofile coverage.out -race $$(go list ./... | grep -v /tests/integration | grep -v /tests/benchmark)
-      - go test ./tests/integration
-      - go test ./tests/benchmark
+  test-integration:
+    image: *golang_image
+    depends_on: [ build ]
+    commands:
+      - go test -race ./tests/integration/grpc
+  test-benchmark:
+    image: *golang_image
+    depends_on: [ build ]
+    commands:
+      - make test-benchmark
