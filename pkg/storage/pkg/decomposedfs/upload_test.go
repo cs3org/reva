@@ -38,12 +38,12 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
+	nodemocks "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node/mocks"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions/mocks"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/timemanager"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree"
-	treemocks "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree/mocks"
 	"github.com/opencloud-eu/reva/v2/pkg/storagespace"
 	"github.com/opencloud-eu/reva/v2/pkg/store"
 	"github.com/opencloud-eu/reva/v2/tests/helpers"
@@ -68,7 +68,7 @@ var _ = Describe("File uploads", func() {
 		pmock                *mocks.PermissionsChecker
 		cs3permissionsclient *mocks.CS3PermissionsClient
 		permissionsSelector  pool.Selectable[cs3permissions.PermissionsAPIClient]
-		bs                   *treemocks.Blobstore
+		bs                   *nodemocks.Blobstore
 	)
 
 	BeforeEach(func() {
@@ -120,7 +120,7 @@ var _ = Describe("File uploads", func() {
 			},
 		)
 
-		bs = &treemocks.Blobstore{}
+		bs = &nodemocks.Blobstore{}
 	})
 
 	AfterEach(func() {

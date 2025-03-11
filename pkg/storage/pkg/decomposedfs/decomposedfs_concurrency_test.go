@@ -35,7 +35,7 @@ import (
 
 var _ = Describe("Decomposed", func() {
 	var (
-		env *testhelpers.TestEnv
+		env *testhelpers.DecomposedTestEnv
 	)
 
 	BeforeEach(func() {

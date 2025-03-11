@@ -77,7 +77,7 @@ func New(endpoint, region, bucket, accessKey, secretKey string, defaultPutOption
 }
 
 // Upload stores some data in the blobstore under the given key
-func (bs *Blobstore) Upload(node *node.Node, source string) error {
+func (bs *Blobstore) Upload(node *node.Node, source, _copyTarget string) error {
 	reader, err := os.Open(source)
 	if err != nil {
 		return errors.Wrap(err, "can not open source file to upload")

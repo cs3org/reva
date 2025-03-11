@@ -53,7 +53,7 @@ func New(root string) (*Blobstore, error) {
 }
 
 // Upload stores some data in the blobstore under the given key
-func (bs *Blobstore) Upload(node *node.Node, source string) error {
+func (bs *Blobstore) Upload(node *node.Node, source, _copyTarget string) error {
 	if node.BlobID == "" {
 		return ErrBlobIDEmpty
 	}

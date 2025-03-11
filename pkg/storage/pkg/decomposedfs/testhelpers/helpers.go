@@ -26,6 +26,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/timemanager"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/aspects"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/lookup"
@@ -45,20 +46,31 @@ import (
 	ruser "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
+	nodemocks "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node/mocks"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions/mocks"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree"
-	treemocks "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/tree/mocks"
 	"github.com/opencloud-eu/reva/v2/tests/helpers"
 )
 
-// TestEnv represents a test environment for unit tests
-type TestEnv struct {
+type TestEnv interface {
+	CreateTestStorageSpace(string, *providerv1beta1.Quota) (*providerv1beta1.ResourceId, error)
+	CreateTestFile(name, blobID, parentID, spaceID string, blobSize int64) (*node.Node, error)
+	Cleanup()
+	GetFs() storage.FS
+	GetPermissions() *mocks.PermissionsChecker
+	GetCtx() context.Context
+	GetSpaceRootRes() *providerv1beta1.ResourceId
+	GetBlobstore() *nodemocks.Blobstore
+}
+
+// DecomposedTestEnv represents a test environment for unit tests
+type DecomposedTestEnv struct {
 	Root                 string
 	Fs                   *decomposedfs.Decomposedfs
 	Tree                 *tree.Tree
 	Permissions          *mocks.PermissionsChecker
-	Blobstore            *treemocks.Blobstore
+	Blobstore            *nodemocks.Blobstore
 	Owner                *userpb.User
 	DeleteAllSpacesUser  *userpb.User
 	DeleteHomeSpacesUser *userpb.User
@@ -68,6 +80,26 @@ type TestEnv struct {
 	SpaceRootRes         *providerv1beta1.ResourceId
 	PermissionsClient    *mocks.CS3PermissionsClient
 	Options              *options.Options
+}
+
+func (e *DecomposedTestEnv) GetFs() storage.FS {
+	return e.Fs
+}
+
+func (e *DecomposedTestEnv) GetPermissions() *mocks.PermissionsChecker {
+	return e.Permissions
+}
+
+func (e *DecomposedTestEnv) GetCtx() context.Context {
+	return e.Ctx
+}
+
+func (e *DecomposedTestEnv) GetSpaceRootRes() *providerv1beta1.ResourceId {
+	return e.SpaceRootRes
+}
+
+func (e *DecomposedTestEnv) GetBlobstore() *nodemocks.Blobstore {
+	return e.Blobstore
 }
 
 // Constant UUIDs for the space users
@@ -88,7 +120,7 @@ const (
 //
 // The default config can be overridden by providing the strings to override
 // via map as a parameter
-func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
+func NewTestEnv(config map[string]interface{}) (*DecomposedTestEnv, error) {
 	tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
 	if err != nil {
 		return nil, err
@@ -175,7 +207,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	)
 
 	log := &zerolog.Logger{}
-	bs := &treemocks.Blobstore{}
+	bs := &nodemocks.Blobstore{}
 	tree := tree.New(lu, bs, o, permissions.Permissions{}, store.Create(), log)
 	aspects := aspects.Aspects{
 		Lookup:      lu,
@@ -191,7 +223,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 
 	tmpFs, _ := fs.(*decomposedfs.Decomposedfs)
 
-	env := &TestEnv{
+	env := &DecomposedTestEnv{
 		Root:                 tmpRoot,
 		Fs:                   tmpFs,
 		Tree:                 tree,
@@ -212,12 +244,12 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 }
 
 // Cleanup removes all files from disk
-func (t *TestEnv) Cleanup() {
+func (t *DecomposedTestEnv) Cleanup() {
 	os.RemoveAll(t.Root)
 }
 
 // CreateTestDir create a directory and returns a corresponding Node
-func (t *TestEnv) CreateTestDir(name string, parentRef *providerv1beta1.Reference) (*node.Node, error) {
+func (t *DecomposedTestEnv) CreateTestDir(name string, parentRef *providerv1beta1.Reference) (*node.Node, error) {
 	ref := parentRef
 	ref.Path = name
 
@@ -236,7 +268,7 @@ func (t *TestEnv) CreateTestDir(name string, parentRef *providerv1beta1.Referenc
 }
 
 // CreateTestFile creates a new file and its metadata and returns a corresponding Node
-func (t *TestEnv) CreateTestFile(name, blobID, parentID, spaceID string, blobSize int64) (*node.Node, error) {
+func (t *DecomposedTestEnv) CreateTestFile(name, blobID, parentID, spaceID string, blobSize int64) (*node.Node, error) {
 	// Create n in dir1
 	n := node.New(
 		spaceID,
@@ -281,7 +313,7 @@ func (t *TestEnv) CreateTestFile(name, blobID, parentID, spaceID string, blobSiz
 // /dir1/
 // /dir1/file1
 // /dir1/subdir1
-func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quota) (*providerv1beta1.ResourceId, error) {
+func (t *DecomposedTestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quota) (*providerv1beta1.ResourceId, error) {
 	t.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Times(1).Return(&cs3permissions.CheckPermissionResponse{
 		Status: &v1beta11.Status{Code: v1beta11.Code_CODE_OK},
 	}, nil)

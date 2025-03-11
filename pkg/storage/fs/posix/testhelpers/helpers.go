@@ -35,18 +35,19 @@ import (
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ruser "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/options"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/timemanager"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/trashbin"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/tree"
-	treemocks "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/tree/mocks"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/aspects"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
+	nodemocks "github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node/mocks"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/permissions/mocks"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/usermapper"
@@ -61,7 +62,7 @@ type TestEnv struct {
 	Fs                   *decomposedfs.Decomposedfs
 	Tree                 *tree.Tree
 	Permissions          *mocks.PermissionsChecker
-	Blobstore            *treemocks.Blobstore
+	Blobstore            *nodemocks.Blobstore
 	Owner                *userpb.User
 	DeleteAllSpacesUser  *userpb.User
 	DeleteHomeSpacesUser *userpb.User
@@ -71,6 +72,26 @@ type TestEnv struct {
 	SpaceRootRes         *providerv1beta1.ResourceId
 	PermissionsClient    *mocks.CS3PermissionsClient
 	Options              *options.Options
+}
+
+func (e *TestEnv) GetFs() storage.FS {
+	return e.Fs
+}
+
+func (e *TestEnv) GetPermissions() *mocks.PermissionsChecker {
+	return e.Permissions
+}
+
+func (e *TestEnv) GetCtx() context.Context {
+	return e.Ctx
+}
+
+func (e *TestEnv) GetSpaceRootRes() *providerv1beta1.ResourceId {
+	return e.SpaceRootRes
+}
+
+func (e *TestEnv) GetBlobstore() *nodemocks.Blobstore {
+	return e.Blobstore
 }
 
 // Constant UUIDs for the space users
@@ -104,7 +125,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		"treesize_accounting":        true,
 		"personalspacepath_template": "users/{{.User.Username}}",
 		"generalspacepath_template":  "projects/{{.SpaceId}}",
-		"watch_fs":                   true,
+		"watch_fs":                   false,
 		"scan_fs":                    true,
 	}
 	// make it possible to override single config values
@@ -190,13 +211,13 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 
 	logger := zerolog.New(os.Stderr).With().Logger()
 
-	bs := &treemocks.Blobstore{}
-	tree, err := tree.New(lu, bs, um, &trashbin.Trashbin{}, permissions.Permissions{}, o, nil, store.Create(), &logger)
+	bs := &nodemocks.Blobstore{}
+	p := permissions.NewPermissions(pmock, permissionsSelector)
+	tb, err := trashbin.New(o, p, lu, &logger)
 	if err != nil {
 		return nil, err
 	}
-	p := permissions.NewPermissions(pmock, permissionsSelector)
-	tb, err := trashbin.New(o, p, lu, &logger)
+	tree, err := tree.New(lu, bs, um, tb, permissions.Permissions{}, o, nil, store.Create(), &logger)
 	if err != nil {
 		return nil, err
 	}
@@ -207,6 +228,10 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		Trashbin:    tb,
 	}
 	fs, err := decomposedfs.New(&o.Options, aspects, &logger)
+	if err != nil {
+		return nil, err
+	}
+	err = tb.Setup(fs)
 	if err != nil {
 		return nil, err
 	}

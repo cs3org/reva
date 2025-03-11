@@ -39,7 +39,7 @@ import (
 
 var _ = Describe("Tree", func() {
 	var (
-		env *helpers.TestEnv
+		env *helpers.DecomposedTestEnv
 
 		t *tree.Tree
 	)
