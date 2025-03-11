@@ -125,7 +125,7 @@ func (store DecomposedFsStore) List(ctx context.Context) ([]*DecomposedFsSession
 func (store DecomposedFsStore) Get(ctx context.Context, id string) (*DecomposedFsSession, error) {
 	sessionPath := sessionPath(store.root, id)
 	match := _idRegexp.FindStringSubmatch(sessionPath)
-	if match == nil || len(match) < 2 {
+	if len(match) < 2 {
 		return nil, fmt.Errorf("invalid upload path")
 	}
 

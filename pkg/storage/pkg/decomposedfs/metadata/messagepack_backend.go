@@ -40,7 +40,6 @@ import (
 
 // MessagePackBackend persists the attributes in messagepack format inside the file
 type MessagePackBackend struct {
-	rootPath  string
 	metaCache cache.FileMetadataCache
 }
 
@@ -51,9 +50,8 @@ type readWriteCloseSeekTruncater interface {
 }
 
 // NewMessagePackBackend returns a new MessagePackBackend instance
-func NewMessagePackBackend(rootPath string, o cache.Config) MessagePackBackend {
+func NewMessagePackBackend(o cache.Config) MessagePackBackend {
 	return MessagePackBackend{
-		rootPath:  filepath.Clean(rootPath),
 		metaCache: cache.GetFileMetadataCache(o),
 	}
 }
@@ -63,7 +61,7 @@ func (MessagePackBackend) Name() string { return "messagepack" }
 
 // IdentifyPath returns the id and mtime of a file
 func (b MessagePackBackend) IdentifyPath(_ context.Context, path string) (string, string, time.Time, error) {
-	metaPath := filepath.Join(path + ".mpk")
+	metaPath := filepath.Clean(path + ".mpk")
 	source, err := os.Open(metaPath)
 	// // No cached entry found. Read from storage and store in cache
 	if err != nil {

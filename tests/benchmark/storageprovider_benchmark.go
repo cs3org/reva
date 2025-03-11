@@ -166,14 +166,16 @@ var _ = Describe("FS Benchmark", func() {
 			Path:       "file.txt",
 		}, false, "")).To(Succeed())
 		for i := range N {
-			posixEnv.Fs.CreateDir(posixEnv.Ctx, &provider.Reference{
+			err := posixEnv.Fs.CreateDir(posixEnv.Ctx, &provider.Reference{
 				ResourceId: posixEnv.SpaceRootRes,
 				Path:       fmt.Sprintf("%d", i),
 			})
-			decomposedEnv.Fs.CreateDir(decomposedEnv.Ctx, &provider.Reference{
+			Expect(err).ToNot(HaveOccurred())
+			err = decomposedEnv.Fs.CreateDir(decomposedEnv.Ctx, &provider.Reference{
 				ResourceId: decomposedEnv.SpaceRootRes,
 				Path:       fmt.Sprintf("%d", i),
 			})
+			Expect(err).ToNot(HaveOccurred())
 		}
 
 		By("testing posix fs")

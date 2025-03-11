@@ -299,8 +299,8 @@ func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, spaceID string, key,
 	if err != nil {
 		return nil, err
 	}
-	if err := tb.lu.CacheID(ctx, spaceID, string(id), restorePath); err != nil {
-		tb.log.Error().Err(err).Str("spaceID", spaceID).Str("id", string(id)).Str("path", restorePath).Msg("trashbin: error caching id")
+	if err := tb.lu.CacheID(ctx, spaceID, id, restorePath); err != nil {
+		tb.log.Error().Err(err).Str("spaceID", spaceID).Str("id", id).Str("path", restorePath).Msg("trashbin: error caching id")
 	}
 
 	restoredNode, err := tb.lu.NodeFromID(ctx, &provider.ResourceId{SpaceId: spaceID, OpaqueId: id})

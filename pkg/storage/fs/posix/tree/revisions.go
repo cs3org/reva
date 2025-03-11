@@ -223,44 +223,6 @@ func (tp *Tree) DownloadRevision(ctx context.Context, ref *provider.Reference, r
 	return ri, reader, nil
 }
 
-func (tp *Tree) getRevisionNode(ctx context.Context, ref *provider.Reference, revisionKey string, hasPermission func(*provider.ResourcePermissions) bool) (*node.Node, error) {
-	_, span := tracer.Start(ctx, "getRevisionNode")
-	defer span.End()
-	log := appctx.GetLogger(ctx)
-
-	// verify revision key format
-	kp := strings.SplitN(revisionKey, node.RevisionIDDelimiter, 2)
-	if len(kp) != 2 {
-		log.Error().Str("revisionKey", revisionKey).Msg("malformed revisionKey")
-		return nil, errtypes.NotFound(revisionKey)
-	}
-	log.Debug().Str("revisionKey", revisionKey).Msg("DownloadRevision")
-
-	spaceID := ref.ResourceId.SpaceId
-	// check if the node is available and has not been deleted
-	n, err := node.ReadNode(ctx, tp.lookup, spaceID, kp[0], false, nil, false)
-	if err != nil {
-		return nil, err
-	}
-	if !n.Exists {
-		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
-		return nil, err
-	}
-
-	p, err := tp.permissions.AssemblePermissions(ctx, n)
-	switch {
-	case err != nil:
-		return nil, err
-	case !hasPermission(p):
-		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
-	}
-
-	// Set space owner in context
-	storagespace.ContextSendSpaceOwnerID(ctx, n.SpaceOwnerOrManager(ctx))
-
-	return n, nil
-}
-
 func (tp *Tree) RestoreRevision(ctx context.Context, srcNode, targetNode metadata.MetadataNode) error {
 	source := srcNode.InternalPath()
 	target := targetNode.InternalPath()
@@ -275,7 +237,10 @@ func (tp *Tree) RestoreRevision(ctx context.Context, srcNode, targetNode metadat
 		return err
 	}
 	defer wf.Close()
-	wf.Truncate(0)
+	err = wf.Truncate(0)
+	if err != nil {
+		return err
+	}
 
 	if _, err := io.Copy(wf, rf); err != nil {
 		return err
@@ -293,7 +258,11 @@ func (tp *Tree) RestoreRevision(ctx context.Context, srcNode, targetNode metadat
 
 	// always set the node mtime to the current time
 	mtime := time.Now()
-	os.Chtimes(target, mtime, mtime)
+	err = os.Chtimes(target, mtime, mtime)
+	if err != nil {
+		return errtypes.InternalError("failed to update times:" + err.Error())
+	}
+
 	err = tp.lookup.MetadataBackend().SetMultiple(ctx, targetNode,
 		map[string][]byte{
 			prefixes.MTimeAttr: []byte(mtime.UTC().Format(time.RFC3339Nano)),

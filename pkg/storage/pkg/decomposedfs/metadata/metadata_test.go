@@ -77,7 +77,7 @@ var _ = Describe("Backend", func() {
 
 	Describe("MessagePackBackend", func() {
 		BeforeEach(func() {
-			backend = metadata.NewMessagePackBackend(tmpdir, cache.Config{
+			backend = metadata.NewMessagePackBackend(cache.Config{
 				Database: tmpdir,
 			})
 		})

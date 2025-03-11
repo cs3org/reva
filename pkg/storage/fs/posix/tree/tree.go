@@ -26,7 +26,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -242,7 +241,10 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 		if err != nil {
 			return err
 		}
-		t.lookup.TimeManager().OverrideMtime(ctx, n, &attributes, nodeMTime)
+		err = t.lookup.TimeManager().OverrideMtime(ctx, n, &attributes, nodeMTime)
+		if err != nil {
+			return err
+		}
 	} else {
 		fi, err := f.Stat()
 		if err != nil {
@@ -651,8 +653,6 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 	}
 	return n.SetXattrsWithContext(ctx, attributes, false)
 }
-
-var nodeIDRegep = regexp.MustCompile(`.*/nodes/([^.]*).*`)
 
 func (t *Tree) isIgnored(path string) bool {
 	return isLockFile(path) || isTrash(path) || t.isUpload(path) || t.isInternal(path)

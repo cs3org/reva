@@ -161,7 +161,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	var lu *lookup.Lookup
 	switch o.MetadataBackend {
 	case "xattrs":
-		lu = lookup.New(metadata.NewXattrsBackend(o.Root, o.FileMetadataCache), um, o, &timemanager.Manager{})
+		lu = lookup.New(metadata.NewXattrsBackend(o.FileMetadataCache), um, o, &timemanager.Manager{})
 	case "hybrid":
 		lu = lookup.New(metadata.NewHybridBackend(1024,
 			func(n metadata.MetadataNode) string {
@@ -171,7 +171,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 				Database: o.Root,
 			}), um, o, &timemanager.Manager{})
 	case "messagepack":
-		lu = lookup.New(metadata.NewMessagePackBackend(o.Root, o.FileMetadataCache), um, o, &timemanager.Manager{})
+		lu = lookup.New(metadata.NewMessagePackBackend(o.FileMetadataCache), um, o, &timemanager.Manager{})
 	default:
 		return nil, fmt.Errorf("unknown metadata backend %s", o.MetadataBackend)
 	}
