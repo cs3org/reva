@@ -1,0 +1,37 @@
+---
+variables:
+  - &golang_image 'docker.io/golang:1.24'
+
+when:
+  - event: [ push , manual ]
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+  - event: [ pull_request ]
+
+steps:
+  - name: check go generate
+    image: *golang_image
+    depends_on: [] # enable parallel steps
+    commands:
+      - make go-generate
+      - git diff --exit-code
+  - name: build-ci
+    image: *golang_image
+    depends_on: [] # enable parallel steps
+    commands:   
+      - make build-ci
+  - name: test
+    image: *golang_image
+    depends_on: [ build-ci ]
+    commands:
+      - apt-get update -qq && apt-get install -y inotify-tools 
+      - make test
+  - name: test integration
+    image: *golang_image
+    depends_on: [ build-ci ]
+    commands:
+      - make test-integration
+  - name: test benchmark
+    image: *golang_image
+    depends_on: [ build-ci ]
+    commands:
+      - make test-benchmark
