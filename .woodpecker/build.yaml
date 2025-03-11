@@ -8,7 +8,7 @@ when:
   - event: [ pull_request ]
 
 workspace:
-  base: /go
+  base: /go # use the go home dir as workspace to share go packages, see https://woodpecker-ci.org/docs/usage/workflow-syntax#workspace
 
 steps:
   inotify-info:
@@ -19,29 +19,32 @@ steps:
       - cd inotify-info
       - make
       - _release/inotify-info
-  build:
+  generate:
     image: *golang_image
     depends_on: [] # enable parallel steps
     commands:
-      - export GIT_COMMIT=`git rev-parse --short HEAD`
-      - export VERSION=`git describe --always`
-      - export GO_VERSION=`go version | awk '{print $$3}'`
-      - export BUILD_DATE=`date +%FT%T%z`
-      - export BUILD_FLAGS="-X main.gitCommit=$GIT_COMMIT -X main.version=$VERSION -X main.goVersion=$GO_VERSION -X main.buildDate=$BUILD_DATE"
-      - go generate ./...
-      - go build -ldflags "$BUILD_FLAGS" -o ./cmd/revad/revad ./cmd/revad
-      - go build -ldflags "$BUILD_FLAGS" -o ./cmd/reva/reva ./cmd/reva
+      - make go-generate
+  lint:
+    image: *golang_image
+    depends_on: [] # enable parallel steps
+    commands:
+      - make lint
+  build:
+    image: *golang_image
+    depends_on: [ generate ]
+    commands:
+      - make build-ci
   test:
     image: *golang_image
     depends_on: [ build ]
     commands:
       - apt-get update -qq && apt-get install -y inotify-tools 
-      - go test -coverprofile coverage.out -race $$(go list ./... | grep -v /tests/integration | grep -v /tests/benchmark)
+      - make test
   test-integration:
     image: *golang_image
     depends_on: [ build ]
     commands:
-      - go test -race ./tests/integration/grpc
+      - make test-integration
   test-benchmark:
     image: *golang_image
     depends_on: [ build ]
