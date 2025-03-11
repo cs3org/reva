@@ -318,7 +318,9 @@ func (t *TestEnv) CreateTestFile(name, blobID, parentID, spaceID string, blobSiz
 	if err != nil {
 		return nil, err
 	}
-	err = n.SetXattrs(n.NodeMetadata(t.Ctx), true)
+	attrs := n.NodeMetadata(t.Ctx)
+	attrs.SetString(prefixes.IDAttr, n.ID)
+	err = n.SetXattrs(attrs, true)
 	if err != nil {
 		return nil, err
 	}
