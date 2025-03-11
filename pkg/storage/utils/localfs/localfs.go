@@ -912,6 +912,7 @@ func (fs *localfs) moveReferences(ctx context.Context, oldName, newName string) 
 }
 
 func (fs *localfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
+	log := appctx.GetLogger(ctx)
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error resolving ref")
@@ -926,6 +927,7 @@ func (fs *localfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []
 	fn = fs.wrap(ctx, fn)
 	md, err := os.Stat(fn)
 	if err != nil {
+		log.Warn().Str("path", fn).Any("md", md).Err(err).Msg("failed stat call in localfs")
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(fn)
 		}
@@ -952,6 +954,7 @@ func (fs *localfs) getMDShareFolder(ctx context.Context, p string, mdKeys []stri
 }
 
 func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
+	log := appctx.GetLogger(ctx)
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error resolving ref")
@@ -960,6 +963,7 @@ func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKe
 	if fn == "/" {
 		homeFiles, err := fs.listFolder(ctx, fn, mdKeys)
 		if err != nil {
+			log.Warn().Err(err).Msg("failed to execute listFolder for root")
 			return nil, err
 		}
 		if !fs.conf.DisableHome {
@@ -973,14 +977,22 @@ func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKe
 	}
 
 	if fs.isShareFolderRoot(ctx, fn) {
-		return fs.listShareFolderRoot(ctx, fn, mdKeys)
+		res, err := fs.listShareFolderRoot(ctx, fn, mdKeys)
+		if err != nil {
+			log.Warn().Str("fn", fn).Err(err).Msg("failed to execute listShareFolderRoot")
+		}
+		return res, err
 	}
 
 	if fs.isShareFolderChild(ctx, fn) {
 		return nil, errtypes.PermissionDenied("localfs: error listing folders inside the shared folder, only file references are stored inside")
 	}
 
-	return fs.listFolder(ctx, fn, mdKeys)
+	res, err := fs.listFolder(ctx, fn, mdKeys)
+	if err != nil {
+		log.Warn().Str("fn", fn).Err(err).Msg("failed to execute listFolder")
+	}
+	return res, err
 }
 
 func (fs *localfs) listFolder(ctx context.Context, fn string, mdKeys []string) ([]*provider.ResourceInfo, error) {

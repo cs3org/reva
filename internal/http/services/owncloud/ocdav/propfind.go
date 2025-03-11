@@ -263,7 +263,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 
 	res, err := client.Stat(ctx, req)
 	if err != nil {
-		log.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
+		log.Error().Err(err).Interface("req", req).Msg("error sending a stat request to the gateway")
 		w.WriteHeader(http.StatusInternalServerError)
 		return nil, nil, false
 	} else if res.Status.Code != rpc.Code_CODE_OK {
