@@ -301,10 +301,19 @@ func (t *TestEnv) CreateTestFile(name, blobID, parentID, spaceID string, blobSiz
 	if err := os.MkdirAll(filepath.Dir(nodePath), 0700); err != nil {
 		return nil, err
 	}
-	_, err := os.OpenFile(nodePath, os.O_CREATE, 0700)
+	f, err := os.OpenFile(nodePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0700)
 	if err != nil {
 		return nil, err
 	}
+	buf := make([]byte, blobSize)
+	if _, err := f.Write(buf); err != nil {
+		return nil, err
+	}
+
+	if err := f.Close(); err != nil {
+		return nil, err
+	}
+
 	err = t.Lookup.CacheID(t.Ctx, spaceID, n.ID, nodePath)
 	if err != nil {
 		return nil, err
