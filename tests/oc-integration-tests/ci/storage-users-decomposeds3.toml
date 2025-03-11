@@ -1,5 +1,5 @@
 # This config file will start a reva service that:
-# - uses the s3ng driver to serve users (/users)
+# - uses the decomposeds3 driver to serve users (/users)
 # - serves the storage provider on grpc port 11000
 # - serves http dataprovider for this storage on port 11001
 #   - /data - dataprovider: file up and download
@@ -13,12 +13,12 @@ address = "0.0.0.0:11000"
 
 # This is a storage provider that grants direct access to the wrapped storage
 [grpc.services.storageprovider]
-driver = "s3ng"
+driver = "decomposeds3"
 expose_data_server = true
 data_server_url = "http://revad-services:11001/data"
 mount_id = "1284d238-aa92-42ce-bdc4-0b0000009157"
 
-[grpc.services.storageprovider.drivers.s3ng]
+[grpc.services.storageprovider.drivers.decomposeds3]
 root = "/drone/src/tmp/reva/data"
 treetime_accounting = true
 treesize_accounting = true
@@ -35,10 +35,10 @@ permissionssvc = "localhost:10000"
 address = "0.0.0.0:11001"
 
 [http.services.dataprovider]
-driver = "s3ng"
+driver = "decomposeds3"
 temp_folder = "/drone/src/tmp/reva/tmp"
 
-[http.services.dataprovider.drivers.s3ng]
+[http.services.dataprovider.drivers.decomposeds3]
 root = "/drone/src/tmp/reva/data"
 treetime_accounting = true
 treesize_accounting = true

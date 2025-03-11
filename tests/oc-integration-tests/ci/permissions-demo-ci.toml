@@ -1,5 +1,5 @@
 # This config file will start a reva service that:
-# - serves the OpenCloud ci permissions service
+# - serves a demo ci permissions service
 [shared]
 jwt_secret = "Pive-Fumkiu4"
 
