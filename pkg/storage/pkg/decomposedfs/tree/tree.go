@@ -812,13 +812,14 @@ func (t *Tree) DeleteBlob(node *node.Node) error {
 }
 
 // BuildSpaceIDIndexEntry returns the entry for the space id index
-func (t *Tree) BuildSpaceIDIndexEntry(spaceID, nodeID string) string {
+func (t *Tree) BuildSpaceIDIndexEntry(spaceID string) string {
 	return "../../../spaces/" + lookup.Pathify(spaceID, 1, 2) + "/nodes/" + lookup.Pathify(spaceID, 4, 2)
 }
 
 // ResolveSpaceIDIndexEntry returns the node id for the space id index entry
-func (t *Tree) ResolveSpaceIDIndexEntry(_, entry string) (string, string, error) {
-	return ReadSpaceAndNodeFromIndexLink(entry)
+func (t *Tree) ResolveSpaceIDIndexEntry(entry string) (string, error) {
+	spaceID, _, err := ReadSpaceAndNodeFromIndexLink(entry)
+	return spaceID, err
 }
 
 // ReadSpaceAndNodeFromIndexLink reads a symlink and parses space and node id if the link has the correct format, eg:

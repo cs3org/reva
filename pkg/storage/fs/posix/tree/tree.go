@@ -567,13 +567,13 @@ func (t *Tree) DeleteBlob(node *node.Node) error {
 }
 
 // BuildSpaceIDIndexEntry returns the entry for the space id index
-func (t *Tree) BuildSpaceIDIndexEntry(spaceID, nodeID string) string {
-	return nodeID
+func (t *Tree) BuildSpaceIDIndexEntry(spaceID string) string {
+	return spaceID
 }
 
 // ResolveSpaceIDIndexEntry returns the node id for the space id index entry
-func (t *Tree) ResolveSpaceIDIndexEntry(spaceid, entry string) (string, string, error) {
-	return spaceid, entry, nil
+func (t *Tree) ResolveSpaceIDIndexEntry(spaceID string) (string, error) {
+	return spaceID, nil
 }
 
 // InitNewNode initializes a new node
