@@ -59,6 +59,11 @@ func New(m map[string]interface{}) (*Options, error) {
 		m["metadata_backend"] = "hybrid"
 	}
 
+	// debounced scan delay
+	if o.ScanDebounceDelay == 0 {
+		o.ScanDebounceDelay = 10 * time.Millisecond
+	}
+
 	do, err := decomposedoptions.New(m)
 	if err != nil {
 		return nil, err
