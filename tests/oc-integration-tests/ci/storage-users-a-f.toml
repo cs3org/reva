@@ -8,38 +8,36 @@
 jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:19000"
 
+[log]
+#level = "warn"
+#mode = "json"
+
 [grpc]
-address = "0.0.0.0:11000"
+address = "0.0.0.0:11010"
 
 # This is a storage provider that grants direct access to the wrapped storage
 # we have a locally running dataprovider
 [grpc.services.storageprovider]
 driver = "decomposed"
 expose_data_server = true
-data_server_url = "http://revad-services:11001/data"
-gateway_addr = "0.0.0.0:19000"
-mount_id = "1284d238-aa92-42ce-bdc4-0b0000009157"
+data_server_url = "http://revad-services:11011/data"
 
 [grpc.services.storageprovider.drivers.decomposed]
-root = "/drone/src/tmp/reva/data"
+root = "/go/src/tmp/reva/data-a-f"
 treetime_accounting = true
 treesize_accounting = true
 permissionssvc = "localhost:10000"
-personalspacealias_template = "{{.SpaceType}}/{{.User.Username}}"
-generalspacealias_template = "{{.SpaceType}}/{{.SpaceName | replace \" \" \"-\" | lower}}"
-metadata_backend = "messagepack"
 
 # we have a locally running dataprovider
 [http]
-address = "0.0.0.0:11001"
+address = "0.0.0.0:11011"
 
 [http.services.dataprovider]
 driver = "decomposed"
-temp_folder = "/drone/src/tmp/reva/tmp"
+temp_folder = "/var/tmp/reva/tmp"
 
 [http.services.dataprovider.drivers.decomposed]
-root = "/drone/src/tmp/reva/data"
+root = "/go/src/tmp/reva/data-a-f"
 treetime_accounting = true
 treesize_accounting = true
 permissionssvc = "localhost:10000"
-metadata_backend = "messagepack"

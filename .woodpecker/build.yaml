@@ -1,0 +1,53 @@
+---
+variables:
+  - &golang_image 'docker.io/golang:1.24'
+
+when:
+  - event: [ push , manual ]
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+  - event: [ pull_request ]
+
+workspace:
+  base: /go # use the go home dir as workspace to share go packages, see https://woodpecker-ci.org/docs/usage/workflow-syntax#workspace
+
+steps:
+  inotify-info:
+    image: *golang_image
+    depends_on: [] # enable parallel steps
+    commands:
+      - git clone https://github.com/mikesart/inotify-info
+      - cd inotify-info
+      - make
+      - _release/inotify-info
+  generate:
+    image: *golang_image
+    depends_on: [] # enable parallel steps
+    commands:
+      - make go-generate
+      - git diff --exit-code
+  lint:
+    image: *golang_image
+    depends_on: [ generate ]
+    commands:
+      - make lint
+  build:
+    image: *golang_image
+    depends_on: [ generate ]
+    commands:
+      - make build-ci
+  test:
+    image: *golang_image
+    depends_on: [ build ]
+    commands:
+      - apt-get update -qq && apt-get install -y inotify-tools 
+      - make test
+  test-integration:
+    image: *golang_image
+    depends_on: [ build ]
+    commands:
+      - make test-integration
+  test-benchmark:
+    image: *golang_image
+    depends_on: [ build ]
+    commands:
+      - make test-benchmark

@@ -1,5 +1,5 @@
 # This config file will start a reva service that:
-# - uses the decomposed driver to serve users (/users)
+# - uses the decomposeds3 driver to serve users (/users)
 # - serves the storage provider on grpc port 11000
 # - serves http dataprovider for this storage on port 11001
 #   - /data - dataprovider: file up and download
@@ -8,36 +8,44 @@
 jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:19000"
 
-[log]
-#level = "warn"
-#mode = "json"
-
 [grpc]
 address = "0.0.0.0:11000"
 
 # This is a storage provider that grants direct access to the wrapped storage
-# we have a locally running dataprovider
 [grpc.services.storageprovider]
-driver = "decomposed"
+driver = "decomposeds3"
 expose_data_server = true
 data_server_url = "http://revad-services:11001/data"
+mount_id = "1284d238-aa92-42ce-bdc4-0b0000009157"
 
-[grpc.services.storageprovider.drivers.decomposed]
-root = "/drone/src/tmp/reva/data-0-9"
+[grpc.services.storageprovider.drivers.decomposeds3]
+root = "/go/src/tmp/reva/data"
 treetime_accounting = true
 treesize_accounting = true
 permissionssvc = "localhost:10000"
+"s3.endpoint" = "http://ceph:8080"
+"s3.region" = "default"
+"s3.bucket" = "test"
+"s3.access_key" = "test"
+"s3.secret_key" = "test"
+"metadata_backend" = "xattrs"
 
 # we have a locally running dataprovider
 [http]
 address = "0.0.0.0:11001"
 
 [http.services.dataprovider]
-driver = "decomposed"
-temp_folder = "/var/tmp/reva/tmp"
+driver = "decomposeds3"
+temp_folder = "/go/src/tmp/reva/tmp"
 
-[http.services.dataprovider.drivers.decomposed]
-root = "/drone/src/tmp/reva/data-0-9"
+[http.services.dataprovider.drivers.decomposeds3]
+root = "/go/src/tmp/reva/data"
 treetime_accounting = true
 treesize_accounting = true
 permissionssvc = "localhost:10000"
+"s3.endpoint" = "http://ceph:8080"
+"s3.region" = "default"
+"s3.bucket" = "test"
+"s3.access_key" = "test"
+"s3.secret_key" = "test"
+"metadata_backend" = "xattrs"
