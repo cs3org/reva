@@ -36,7 +36,8 @@ var _ = Describe("Posix", func() {
 	)
 
 	BeforeEach(func() {
-		tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
+		var err error
+		tmpRoot, err = helpers.TempDir("reva-unit-tests-*-root")
 		Expect(err).ToNot(HaveOccurred())
 
 		options = map[string]interface{}{

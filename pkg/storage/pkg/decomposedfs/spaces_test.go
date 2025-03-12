@@ -36,7 +36,6 @@ import (
 )
 
 var _ = Describe("Spaces", func() {
-
 	Describe("Create Space", func() {
 		var (
 			env *helpers.DecomposedTestEnv
@@ -204,7 +203,9 @@ var _ = Describe("Spaces", func() {
 				Expect(err).To(Not(HaveOccurred()))
 			})
 		})
+	})
 
+	Context("Create Space with custom alias template", func() {
 		Describe("Create Spaces with custom alias template", func() {
 			var (
 				env *helpers.DecomposedTestEnv

@@ -37,6 +37,13 @@ var _ = Describe("Recycle", func() {
 		env       helpers.TestEnv
 		projectID *provider.ResourceId
 	)
+
+	AfterEach(func() {
+		if env != nil {
+			env.Cleanup()
+		}
+	})
+
 	AssertBehavior := func() {
 		Context("with sufficient permissions", func() {
 			When("a user deletes files from the same space", func() {
