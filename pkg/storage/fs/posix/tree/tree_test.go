@@ -81,7 +81,7 @@ var _ = Describe("Tree", func() {
 	)
 
 	BeforeEach(func() {
-		SetDefaultEventuallyTimeout(30 * time.Second)
+		SetDefaultEventuallyTimeout(15 * time.Second)
 
 		var err error
 		subtree, err = generateRandomString(10)
