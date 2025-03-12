@@ -242,6 +242,7 @@ func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArb
 }
 
 func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest) (*provider.UnsetArbitraryMetadataResponse, error) {
+	log := appctx.GetLogger(ctx)
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
@@ -258,6 +259,7 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
+			log.Error().Err(err).Str("ref", req.Ref.String()).Any("keys", req.ArbitraryMetadataKeys).Msg("error unsetting arbitrary metadata")
 			st = status.NewInternal(ctx, err, "error unsetting arbitrary metadata: "+req.Ref.String())
 		}
 		return &provider.UnsetArbitraryMetadataResponse{

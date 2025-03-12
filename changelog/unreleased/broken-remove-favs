@@ -1,0 +1,6 @@
+Bugfix: allow folders to be un-favorited
+
+Currently, removing a folder from your favorites is broken, if you are the only one who has favorited it.
+This is because the UnsetAttr call to EOS over gRPC is failing. As a temporary workaround, we now always set it to empty.
+
+https://github.com/cs3org/reva/pull/5120
