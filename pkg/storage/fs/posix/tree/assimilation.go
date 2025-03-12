@@ -197,7 +197,7 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 				})
 			}
 			if err := t.setDirty(filepath.Dir(path), true); err != nil {
-				return err
+				t.log.Error().Err(err).Str("path", path).Bool("isDir", isDir).Msg("failed to mark directory as dirty")
 			}
 			t.scanDebouncer.Debounce(scanItem{
 				Path:        filepath.Dir(path),
@@ -208,7 +208,7 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 			// 2. New directory
 			//  -> scan directory
 			if err := t.setDirty(path, true); err != nil {
-				return err
+				t.log.Error().Err(err).Str("path", path).Bool("isDir", isDir).Msg("failed to mark directory as dirty")
 			}
 			t.scanDebouncer.Debounce(scanItem{
 				Path:        path,
@@ -244,8 +244,13 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 		t.log.Debug().Str("path", path).Bool("isDir", isDir).Msg("scanning path (ActionMoveFrom)")
 		// 6. file/directory moved out of the watched directory
 		//   -> update directory
-		if err := t.setDirty(filepath.Dir(path), true); err != nil {
-			return err
+		err := t.HandleFileDelete(path)
+		if err != nil {
+			t.log.Error().Err(err).Str("path", path).Bool("isDir", isDir).Msg("failed to handle deleted item")
+		}
+		err = t.setDirty(filepath.Dir(path), true)
+		if err != nil {
+			t.log.Error().Err(err).Str("path", path).Bool("isDir", isDir).Msg("failed to mark directory as dirty")
 		}
 
 		go func() { _ = t.WarmupIDCache(filepath.Dir(path), false, true) }()
@@ -258,7 +263,7 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 
 		err := t.HandleFileDelete(path)
 		if err != nil {
-			return err
+			t.log.Error().Err(err).Str("path", path).Bool("isDir", isDir).Msg("failed to handle deleted item")
 		}
 
 		t.scanDebouncer.Debounce(scanItem{
