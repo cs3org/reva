@@ -162,6 +162,7 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 }
 
 func (fs *localfs) wrap(ctx context.Context, p string) string {
+	log := appctx.GetLogger(ctx)
 	// This is to prevent path traversal.
 	// With this p can't break out of its parent folder
 	p = path.Join("/", p)
@@ -175,6 +176,7 @@ func (fs *localfs) wrap(ctx context.Context, p string) string {
 	} else {
 		internal = path.Join(fs.conf.DataDirectory, p)
 	}
+	log.Debug().Str("old", p).Str("wrapped", internal).Msg("localfs: wrap")
 	return internal
 }
 
@@ -842,6 +844,8 @@ func (fs *localfs) Delete(ctx context.Context, ref *provider.Reference) error {
 }
 
 func (fs *localfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
+	log := appctx.GetLogger(ctx)
+	log.Debug().Any("from", oldRef).Any("to", newRef).Msg("localfs: move")
 	oldName, err := fs.resolve(ctx, oldRef)
 	if err != nil {
 		return errors.Wrap(err, "localfs: error resolving ref")
@@ -860,6 +864,7 @@ func (fs *localfs) Move(ctx context.Context, oldRef, newRef *provider.Reference)
 	newName = fs.wrap(ctx, newName)
 
 	if err := os.Rename(oldName, newName); err != nil {
+		log.Error().Err(err).Msg("localfs: error moving " + oldName + " to " + newName)
 		return errors.Wrap(err, "localfs: error moving "+oldName+" to "+newName)
 	}
 
@@ -1062,7 +1067,10 @@ func (fs *localfs) listShareFolderRoot(ctx context.Context, home string, mdKeys 
 
 func (fs *localfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
 	fn, err := fs.resolve(ctx, ref)
+	log := appctx.GetLogger(ctx)
+
 	if err != nil {
+		log.Error().Err(err).Any("ref", ref).Msg("localfs: error resolving ref")
 		return nil, errors.Wrap(err, "localfs: error resolving ref")
 	}
 
@@ -1074,8 +1082,10 @@ func (fs *localfs) Download(ctx context.Context, ref *provider.Reference) (io.Re
 	r, err := os.Open(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
+			log.Error().Err(err).Str("path", fn).Msg("localfs: file not found")
 			return nil, errtypes.NotFound(fn)
 		}
+		log.Error().Err(err).Str("path", fn).Msg("localfs: error opening file")
 		return nil, errors.Wrap(err, "localfs: error reading "+fn)
 	}
 	return r, nil
