@@ -431,7 +431,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	for i := 0; i < numWorkers; i++ {
 		errg.Go(func() error {
 			for match := range work {
-				spaceID, err := fs.tp.ResolveSpaceIDIndexEntry(match[0])
+				spaceID, err := fs.tp.ResolveSpaceIDIndexEntry(match[1])
 				if err != nil {
 					appctx.GetLogger(ctx).Error().Err(err).Str("id", spaceID).Msg("resolve space id index entry, skipping")
 					continue
