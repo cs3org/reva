@@ -4,9 +4,7 @@ variables:
   - &cs3apivalidator_image 'owncloud/cs3api-validator:0.2.1'
 
 when:
-  - event: [ push , manual ]
-    branch: ${CI_REPO_DEFAULT_BRANCH}
-  - event: [ pull_request ]
+  - event: [ manual ]
 
 workspace:
   base: /go # use the go home dir as workspace to share go packages, see https://woodpecker-ci.org/docs/usage/workflow-syntax#workspace
