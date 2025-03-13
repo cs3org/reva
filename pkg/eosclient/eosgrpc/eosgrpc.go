@@ -605,17 +605,11 @@ func (c *Client) handleFavAttr(ctx context.Context, auth eosclient.Authorization
 	}
 	attr.Val = favs.Serialize()
 
-	// If the value is empty, we should actually unset it
-	// However, for some reason, for folders, we currently get
-	// permission denied from EOS when removing the attr.
-	// So, as a temporary workaround, we now set to empty
-	// See CERNBOX-3793
-
-	// if attr.Val == "" {
-	// 	return c.unsetEOSAttr(ctx, auth, attr, recursive, path, "", true)
-	// } else {
-	return c.setEOSAttr(ctx, auth, attr, false, recursive, path, "")
-	// }
+	if attr.Val == "" {
+		return c.unsetEOSAttr(ctx, auth, attr, recursive, path, "", true)
+	} else {
+		return c.setEOSAttr(ctx, auth, attr, false, recursive, path, "")
+	}
 }
 
 // UnsetAttr unsets an extended attribute on a path.
