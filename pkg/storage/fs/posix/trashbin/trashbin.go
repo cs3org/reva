@@ -26,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -145,7 +144,7 @@ func trashRootForNode(n *node.Node) string {
 }
 
 func (tb *Trashbin) MoveToTrash(ctx context.Context, n *node.Node, path string) error {
-	key := uuid.New().String()
+	key := n.ID
 	trashPath := trashRootForNode(n)
 
 	err := os.MkdirAll(filepath.Join(trashPath, "info"), 0755)
