@@ -145,6 +145,7 @@ type eosfs struct {
 	singleUserAuth eosclient.Authorization
 	userIDCache    *ttlcache.Cache
 	tokenCache     gcache.Cache
+	binaryClient   eosclient.EOSClient
 }
 
 // NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance.
@@ -160,6 +161,7 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 	}
 
 	var eosClient eosclient.EOSClient
+	var eosBinaryClient eosclient.EOSClient
 	var err error
 	if c.UseGRPC {
 		eosClientOpts := &eosgrpc.Options{
@@ -189,6 +191,27 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 			Authkey:             c.HTTPSAuthkey,
 		}
 		eosClient, err = eosgrpc.New(ctx, eosClientOpts, eosHTTPOpts)
+
+		// Very ugly temporary workaround for CERNBOX-3797
+		if err != nil {
+			return nil, errors.Wrap(err, "error initializing eosclient")
+		}
+
+		eosBinaryClientOpts := &eosbinary.Options{
+			XrdcopyBinary:       c.XrdcopyBinary,
+			URL:                 c.MasterURL,
+			EosBinary:           c.EosBinary,
+			CacheDirectory:      c.CacheDirectory,
+			ForceSingleUserMode: c.ForceSingleUserMode,
+			SingleUsername:      c.SingleUsername,
+			UseKeytab:           c.UseKeytab,
+			Keytab:              c.Keytab,
+			SecProtocol:         c.SecProtocol,
+			VersionInvariant:    c.VersionInvariant,
+			TokenExpiry:         c.TokenExpiry,
+		}
+		eosBinaryClient, err = eosbinary.New(eosBinaryClientOpts)
+
 	} else {
 		eosClientOpts := &eosbinary.Options{
 			XrdcopyBinary:       c.XrdcopyBinary,
@@ -212,6 +235,7 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 
 	eosfs := &eosfs{
 		c:            eosClient,
+		binaryClient: eosBinaryClient,
 		conf:         c,
 		chunkHandler: chunking.NewChunkHandler(c.CacheDirectory),
 		userIDCache:  ttlcache.NewCache(),
@@ -473,7 +497,7 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 		return err
 	}
 
-	cboxAuth := utils.GetEmptyAuth()
+	//cboxAuth := utils.GetEmptyAuth()
 
 	for _, k := range keys {
 		if k == "" {
@@ -485,7 +509,17 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 			Key:  k,
 		}
 
-		err := fs.c.UnsetAttr(ctx, cboxAuth, attr, false, fn, "")
+		// Temporary workaround for CERNBOX-3797
+
+		// err := fs.c.UnsetAttr(ctx, cboxAuth, attr, false, fn, "")
+		rootAuth := eosclient.Authorization{
+			Role: eosclient.Role{
+				UID: "0",
+				GID: "0",
+			},
+		}
+		err := fs.binaryClient.UnsetAttr(ctx, rootAuth, attr, false, fn, "")
+
 		if err != nil {
 			if errors.Is(err, eosclient.AttrNotExistsError) {
 				continue
@@ -995,7 +1029,16 @@ func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pr
 			Type: SystemAttr,
 			Key:  fmt.Sprintf("%s.%s", lwShareAttrKey, eosACL.Qualifier),
 		}
-		if err := fs.c.UnsetAttr(ctx, cboxAuth, attr, true, fn, ""); err != nil {
+
+		// Temporary workaround for CERNBOX-3797
+		rootAuth := eosclient.Authorization{
+			Role: eosclient.Role{
+				UID: "0",
+				GID: "0",
+			},
+		}
+		if err := fs.binaryClient.UnsetAttr(ctx, rootAuth, attr, true, fn, ""); err != nil {
+			//if err := fs.c.UnsetAttr(ctx, cboxAuth, attr, true, fn, ""); err != nil {
 			return errors.Wrap(err, "eosfs: error removing acl for lightweight account")
 		}
 		return nil
