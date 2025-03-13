@@ -932,7 +932,13 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 			Key:  fmt.Sprintf("%s.%s", lwShareAttrKey, eosACL.Qualifier),
 			Val:  eosACL.Permissions,
 		}
-		if err := fs.c.SetAttr(ctx, cboxAuth, attr, false, true, fn, ""); err != nil {
+
+		// Temporary workaround (See #5123)
+		// EOS < 5.3 gRPC does not recognize the "recursive" attribute
+		// So we use the binary client for now
+
+		if err := fs.binaryClient.SetAttr(ctx, cboxAuth, attr, false, true, fn, ""); err != nil {
+			// if err := fs.c.SetAttr(ctx, cboxAuth, attr, false, true, fn, ""); err != nil {
 			return errors.Wrap(err, "eosfs: error adding acl for lightweight account")
 		}
 		return nil
