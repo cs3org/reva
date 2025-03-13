@@ -37,7 +37,12 @@ var _ = Describe("FS Benchmark", func() {
 	})
 
 	AfterEach(func() {
-		posixEnv.Cleanup()
+		if posixEnv != nil {
+			posixEnv.Cleanup()
+		}
+		if decomposedEnv != nil {
+			decomposedEnv.Cleanup()
+		}
 	})
 
 	It("measures fs.TouchFile", func() {

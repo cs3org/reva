@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/opencloud-eu/reva/v2/pkg/rgrpc/todo/pool"
@@ -245,7 +246,13 @@ func NewTestEnv(config map[string]interface{}) (*DecomposedTestEnv, error) {
 
 // Cleanup removes all files from disk
 func (t *DecomposedTestEnv) Cleanup() {
-	os.RemoveAll(t.Root)
+	for range 5 {
+		err := os.RemoveAll(t.Root)
+		if err == nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 // CreateTestDir create a directory and returns a corresponding Node

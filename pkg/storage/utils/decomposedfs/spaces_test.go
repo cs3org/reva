@@ -204,7 +204,9 @@ var _ = Describe("Spaces", func() {
 				Expect(err).To(Not(HaveOccurred()))
 			})
 		})
+	})
 
+	Context("Create Space with custom alias template", func() {
 		Describe("Create Spaces with custom alias template", func() {
 			var (
 				env *helpers.TestEnv

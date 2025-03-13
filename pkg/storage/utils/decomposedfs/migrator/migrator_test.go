@@ -26,12 +26,6 @@ var _ = Describe("Migrator", func() {
 		nullLogger = zerolog.New(io.Discard).With().Logger()
 	)
 
-	BeforeEach(func() {
-		var err error
-		env, err = helpers.NewTestEnv(nil)
-		Expect(err).ToNot(HaveOccurred())
-	})
-
 	AfterEach(func() {
 		if env != nil {
 			env.Cleanup()
@@ -39,7 +33,7 @@ var _ = Describe("Migrator", func() {
 	})
 
 	Describe("migrating metadata - migration 0003", func() {
-		When("staying at xattrs", func() {
+		Context("staying at xattrs", func() {
 			JustBeforeEach(func() {
 				var err error
 				env, err = helpers.NewTestEnv(map[string]interface{}{
@@ -67,12 +61,11 @@ var _ = Describe("Migrator", func() {
 			})
 		})
 
-		When("going from xattrs to messagepack", func() {
+		Context("going from xattrs to messagepack", func() {
 			var (
 				path    string
 				backend metadata.Backend
 			)
-
 			JustBeforeEach(func() {
 				backend = metadata.NewMessagePackBackend(env.Root, env.Options.FileMetadataCache)
 

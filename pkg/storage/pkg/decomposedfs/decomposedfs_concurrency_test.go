@@ -46,7 +46,7 @@ var _ = Describe("Decomposed", func() {
 
 	AfterEach(func() {
 		if env != nil {
-			os.RemoveAll(env.Root)
+			env.Cleanup()
 		}
 	})
 
