@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
-	"strings"
 
 	apppb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
@@ -437,24 +436,13 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var agent string
-	switch {
-	case strings.Contains(r.UserAgent(), "Firefox"):
-		agent = "Firefox"
-	case strings.Contains(r.UserAgent(), "Chrome"):
-		agent = "Chrome"
-	case strings.Contains(r.UserAgent(), "Safari"):
-		agent = "Safari"
-	default:
-		agent = "Other"
-	}
 	log := appctx.GetLogger(ctx)
-	log.Info().Interface("resource", fileRef).
+	log.Info().Interface("resource", fileRef.ResourceId).
 		Str("url", openRes.AppUrl.AppUrl).
 		Str("method", openRes.AppUrl.Method).
 		Interface("viewMode", viewMode).
 		Str("fileExt", filepath.Ext(statRes.Info.Path)).
-		Str("agent", agent).
+		Str("agent", utils.SimplifiedUserAgent(r)).
 		Msg("returning app URL for file")
 
 	w.Header().Set("Content-Type", "application/json")
@@ -496,9 +484,9 @@ func (s *svc) handleNotify(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	if len(failure) == 0 {
-		log.Info().Interface("resource", fileRef).Msg("file successfully opened in app")
+		log.Info().Interface("resource", fileRef.ResourceId).Msg("file successfully opened in app")
 	} else {
-		log.Info().Interface("resource", fileRef).Str("failure", string(failure)).Msg("failed to open file in app")
+		log.Info().Interface("resource", fileRef.ResourceId).Str("failure", string(failure)).Msg("failed to open file in app")
 	}
 
 	w.WriteHeader(http.StatusOK)
