@@ -26,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -146,7 +145,7 @@ func trashRootForNode(n *node.Node) string {
 }
 
 func (tb *Trashbin) MoveToTrash(ctx context.Context, n *node.Node, path string) error {
-	key := uuid.New().String()
+	key := n.ID
 	trashPath := trashRootForNode(n)
 
 	err := os.MkdirAll(filepath.Join(trashPath, "info"), 0755)
@@ -198,6 +197,30 @@ func (tb *Trashbin) ListRecycle(ctx context.Context, spaceID string, key, relati
 			return nil, err
 		}
 		originalPath = filepath.Join(originalPath, relativePath)
+
+		fi, err := os.Stat(base)
+		if err != nil {
+			return nil, err
+		}
+		item := &provider.RecycleItem{
+			Key:  filepath.Join(key, relativePath),
+			Size: uint64(fi.Size()),
+			Ref: &provider.Reference{
+				ResourceId: &provider.ResourceId{
+					SpaceId:  spaceID,
+					OpaqueId: spaceID,
+				},
+				Path: originalPath,
+			},
+			DeletionTime: ts,
+			Type:         provider.ResourceType_RESOURCE_TYPE_FILE,
+		}
+		if fi.IsDir() {
+			item.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+		} else {
+			item.Type = provider.ResourceType_RESOURCE_TYPE_FILE
+		}
+		return []*provider.RecycleItem{item}, nil
 	}
 
 	items := []*provider.RecycleItem{}
