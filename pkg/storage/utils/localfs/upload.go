@@ -40,7 +40,9 @@ import (
 var defaultFilePerm = os.FileMode(0664)
 
 func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, metadata map[string]string) error {
+	log := appctx.GetLogger(ctx)
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
+	log.Info().Any("upload", upload).Msg("localfs: upload")
 	if err != nil {
 		return errors.Wrap(err, "localfs: error retrieving upload")
 	}
@@ -156,6 +158,7 @@ func (fs *localfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tu
 	info.ID = uuid.New().String()
 
 	binPath, err := fs.getUploadPath(ctx, info.ID)
+	log.Info().Str("upload-path", binPath).Err(err).Msg("localfs: got upload path")
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error resolving upload path")
 	}
@@ -307,6 +310,7 @@ func (upload *fileUpload) writeInfo() error {
 
 // FinishUpload finishes an upload and moves the file to the internal destination.
 func (upload *fileUpload) FinishUpload(ctx context.Context) error {
+	log := appctx.GetLogger(ctx)
 	np := upload.info.Storage["InternalDestination"]
 
 	// TODO check etag with If-Match header
@@ -318,6 +322,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	//}
 
 	// if destination exists
+	log.Info().Str("oldpath", upload.binPath).Str("newpath", np).Msg("localfs: FinishUpload")
 	if _, err := os.Stat(np); err == nil {
 		// create revision
 		if err := upload.fs.archiveRevision(upload.ctx, np); err != nil {
@@ -327,6 +332,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 
 	err := os.Rename(upload.binPath, np)
 	if err != nil {
+		log.Error().Msg("localfs: Failed to rename in FinishUpload")
 		return err
 	}
 

@@ -60,9 +60,7 @@ type APIError struct {
 
 // WriteError handles writing error responses.
 func WriteError(w http.ResponseWriter, r *http.Request, code APIErrorCode, message string, e error) {
-	if e != nil {
-		appctx.GetLogger(r.Context()).Error().Err(e).Msg(message)
-	}
+	appctx.GetLogger(r.Context()).Error().Err(e).Any("code", code).Str("message", message).Msg("sending back error response")
 
 	var encoded []byte
 	var err error

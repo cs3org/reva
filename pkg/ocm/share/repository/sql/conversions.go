@@ -169,7 +169,7 @@ type dbProtocol struct {
 	WebDAVURI            *string
 	WebDAVSharedSecret   *string
 	WebDavPermissions    *int
-	WebappURITemplate    *string
+	WebappURI            *string
 	WebappViewMode       *int
 	TransferSourceURI    *string
 	TransferSharedSecret *string
@@ -267,7 +267,9 @@ func convertToCS3OCMReceivedShare(s *dbReceivedShare, p []*ocm.Protocol) *ocm.Re
 func convertToCS3AccessMethod(m *dbAccessMethod) *ocm.AccessMethod {
 	switch m.Type {
 	case WebDAVAccessMethod:
-		return share.NewWebDavAccessMethod(conversions.RoleFromOCSPermissions(conversions.Permissions(*m.WebDAVPermissions)).CS3ResourcePermissions())
+		return share.NewWebDavAccessMethod(
+			conversions.RoleFromOCSPermissions(conversions.Permissions(*m.WebDAVPermissions)).CS3ResourcePermissions(),
+			[]string{}) // TODO persist requirements
 	case WebappAccessMethod:
 		return share.NewWebappAccessMethod(appprovider.ViewMode(*m.WebAppViewMode))
 	case TransferAccessMethod:
@@ -281,9 +283,9 @@ func convertToCS3Protocol(p *dbProtocol) *ocm.Protocol {
 	case WebDAVProtocol:
 		return share.NewWebDAVProtocol(*p.WebDAVURI, *p.WebDAVSharedSecret, &ocm.SharePermissions{
 			Permissions: conversions.RoleFromOCSPermissions(conversions.Permissions(*p.WebDavPermissions)).CS3ResourcePermissions(),
-		})
+		}, []string{}) // TODO persist requirements
 	case WebappProtocol:
-		return share.NewWebappProtocol(*p.WebappURITemplate, appprovider.ViewMode(*p.WebappViewMode))
+		return share.NewWebappProtocol(*p.WebappURI, appprovider.ViewMode(*p.WebappViewMode))
 	case TransferProtocol:
 		return share.NewTransferProtocol(*p.TransferSourceURI, *p.TransferSharedSecret, uint64(*p.TransferSize))
 	}
