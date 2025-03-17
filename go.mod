@@ -1,7 +1,6 @@
 module github.com/opencloud-eu/reva/v2
 
 go 1.24.1
-
 require (
 	bou.ke/monkey v1.0.2
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
@@ -58,7 +57,7 @@ require (
 	github.com/nats-io/nats-server/v2 v2.10.26
 	github.com/nats-io/nats.go v1.39.1
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/ginkgo/v2 v2.22.2
+	github.com/onsi/ginkgo/v2 v2.23.0
 	github.com/onsi/gomega v1.36.2
 	github.com/opencloud-eu/opencloud v1.0.0
 	github.com/pablodz/inotifywaitgo v0.0.9
