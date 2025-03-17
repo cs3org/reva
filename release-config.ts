@@ -2,7 +2,7 @@ export default {
     changeTypes: [
         {
             title: '💥 Breaking changes',
-            labels: ['breaking', 'Type:Breaking-Changes'],
+            labels: ['breaking', 'Type:Breaking-Change'],
             bump: 'major',
             weight: 3,
         },
