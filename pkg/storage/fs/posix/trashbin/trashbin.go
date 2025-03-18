@@ -188,22 +188,21 @@ func (tb *Trashbin) ListRecycle(ctx context.Context, spaceID string, key, relati
 
 	var originalPath string
 	var ts *typesv1beta1.Timestamp
-	if key != "" {
+	if key != "" && relativePath == "" {
 		// this is listing a specific item/folder
-		base = filepath.Join(base, key+".trashitem", relativePath)
+		base = filepath.Join(base, key+".trashitem")
 		var err error
 		originalPath, ts, err = tb.readInfoFile(trashRoot, key)
 		if err != nil {
 			return nil, err
 		}
-		originalPath = filepath.Join(originalPath, relativePath)
 
 		fi, err := os.Stat(base)
 		if err != nil {
 			return nil, err
 		}
 		item := &provider.RecycleItem{
-			Key:  filepath.Join(key, relativePath),
+			Key:  key,
 			Size: uint64(fi.Size()),
 			Ref: &provider.Reference{
 				ResourceId: &provider.ResourceId{
@@ -221,6 +220,15 @@ func (tb *Trashbin) ListRecycle(ctx context.Context, spaceID string, key, relati
 			item.Type = provider.ResourceType_RESOURCE_TYPE_FILE
 		}
 		return []*provider.RecycleItem{item}, nil
+	} else if key != "" {
+		// this is listing a specific item/folder
+		base = filepath.Join(base, key+".trashitem", relativePath)
+		var err error
+		originalPath, ts, err = tb.readInfoFile(trashRoot, key)
+		if err != nil {
+			return nil, err
+		}
+		originalPath = filepath.Join(originalPath, relativePath)
 	}
 
 	items := []*provider.RecycleItem{}
