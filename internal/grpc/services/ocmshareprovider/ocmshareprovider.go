@@ -191,7 +191,8 @@ func (s *service) getWebdavProtocol(share *ocm.Share, m *ocm.AccessMethod_Webdav
 
 	return &ocmd.WebDAV{
 		Permissions:  perms,
-		URL:          s.webdavURL(share),
+		Requirements: m.WebdavOptions.Requirements,
+		URI:          s.webdavURL(share),
 		SharedSecret: share.Token,
 	}
 }
@@ -202,7 +203,7 @@ func (s *service) getWebappProtocol(share *ocm.Share) *ocmd.Webapp {
 		panic(err)
 	}
 	return &ocmd.Webapp{
-		URITemplate: b.String(),
+		URI: b.String(),
 	}
 }
 

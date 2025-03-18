@@ -184,12 +184,13 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 			c, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
 			if err != nil {
+				log.Error().Err(err).Msg("error getting gateway during OCM authentication")
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
 
 			var token, ocmshare string
-			// OCM v1.1 (OCIS et al.).
+			// OCM v1.1+ (OCIS et al.).
 			bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 			if bearer != "" {
 				// Bearer token is the shared secret, path is /{shareId}/path/to/resource.

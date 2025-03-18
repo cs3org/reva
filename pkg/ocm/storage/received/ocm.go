@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -43,15 +44,22 @@ import (
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/studio-b12/gowebdav"
+	"github.com/ReneKroon/ttlcache/v2"
 )
 
 func init() {
 	registry.Register("ocmreceived", New)
 }
 
+type cachedClient struct {
+	client *gowebdav.Client
+	share  *ocmpb.ReceivedShare
+}
+
 type driver struct {
 	c       *config
 	gateway gateway.GatewayAPIClient
+	ccache  *ttlcache.Cache
 }
 
 type config struct {
@@ -78,8 +86,8 @@ func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 	d := &driver{
 		c:       &c,
 		gateway: gateway,
+		ccache:  ttlcache.NewCache(), // this is a cache of webdav clients
 	}
-
 	return d, nil
 }
 
@@ -106,7 +114,6 @@ func shareInfoFromReference(ref *provider.Reference) (*ocmpb.ShareId, string) {
 }
 
 func (d *driver) getWebDAVFromShare(ctx context.Context, shareID *ocmpb.ShareId) (*ocmpb.ReceivedShare, string, string, error) {
-	// TODO: we may want to cache the share
 	res, err := d.gateway.GetReceivedOCMShare(ctx, &ocmpb.GetReceivedOCMShareRequest{
 		Ref: &ocmpb.ShareReference{
 			Spec: &ocmpb.ShareReference_Id{
@@ -143,13 +150,21 @@ func getWebDAVProtocol(protocols []*ocmpb.Protocol) (*ocmpb.WebDAVProtocol, bool
 }
 
 func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*gowebdav.Client, *ocmpb.ReceivedShare, string, error) {
+	log := appctx.GetLogger(ctx)
 	id, rel := shareInfoFromReference(ref)
 
+	// check first if we have a cached webdav client
+	if entry, err := d.ccache.Get(id.OpaqueId); err == nil {
+		cc := entry.(*cachedClient)
+		log.Info().Interface("share", cc.share).Str("rel", rel).Msg("accessing OCM share via cached client")
+		return cc.client, cc.share, rel, nil
+	}
+
+	// we don't, build a webdav client
 	share, endpoint, secret, err := d.getWebDAVFromShare(ctx, id)
 	if err != nil {
 		return nil, nil, "", err
 	}
-
 	endpoint, err = url.PathUnescape(endpoint)
 	if err != nil {
 		return nil, nil, "", err
@@ -158,9 +173,20 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 	// use the secret as bearer authentication according to OCM v1.1+
 	c := gowebdav.NewClient(endpoint, "", "")
 	c.SetHeader("Authorization", "Bearer "+secret)
+	_, err = c.Stat(rel)
+	if err != nil {
+		// if we got an error, try to use OCM v1.0 basic auth
+		log.Info().Str("endpoint", endpoint).Interface("share", share).Str("rel", rel).Str("secret", secret).Err(err).Msg("falling back to OCM v1.0 access")
+		c.SetHeader("Authorization", "Basic "+secret+":")
+	} else {
+		log.Info().Str("endpoint", endpoint).Interface("share", share).Str("rel", rel).Str("secret", secret).Msg("using OCM v1.1 access")
+	}
 
-	log := appctx.GetLogger(ctx)
-	log.Info().Str("endpoint", endpoint).Interface("share", share).Str("rel", rel).Str("secret", secret).Msg("Accessing OCM share")
+	// add to cache and return
+	d.ccache.SetWithTTL(id.OpaqueId, &cachedClient{
+		client: c,
+		share:  share,
+	}, time.Hour)
 	return c, share, rel, nil
 }
 

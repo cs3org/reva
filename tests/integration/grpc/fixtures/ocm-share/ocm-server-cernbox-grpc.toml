@@ -1,5 +1,4 @@
 [log]
-mode = "json"
 
 [shared]
 gatewaysvc = "{{grpc_address}}"
@@ -39,6 +38,7 @@ driver = "static"
 
 [grpc.services.authregistry.drivers.static.rules]
 basic = "{{grpc_address}}"
+bearer = "{{grpc_address}}"
 ocmshares = "{{cernboxoutcomingocm_address}}"
 machine = "{{cernboxmachineauth_address}}"
 

@@ -75,7 +75,8 @@ func ocmShareUpdateCommand() *command {
 					AccessMethods: &ocm.AccessMethod{
 						Term: &ocm.AccessMethod_WebdavOptions{
 							WebdavOptions: &ocm.WebDAVAccessMethod{
-								Permissions: perm,
+								Permissions:  perm,
+								Requirements: []string{},
 							},
 						},
 					},
