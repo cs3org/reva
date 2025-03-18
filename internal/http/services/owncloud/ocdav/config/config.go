@@ -75,10 +75,6 @@ func (c *Config) Init() {
 		c.ProductVersion = "10.0.11"
 	}
 
-	if c.Edition == "" {
-		c.Edition = "community"
-	}
-
 	if c.NameValidation.InvalidChars == nil {
 		c.NameValidation.InvalidChars = []string{"\f", "\r", "\n", "\\"}
 	}
