@@ -72,7 +72,7 @@ require (
 	github.com/segmentio/kafka-go v0.4.47
 	github.com/sercand/kuberesolver/v5 v5.1.1
 	github.com/sethvargo/go-password v0.3.1
-	github.com/shamaton/msgpack/v2 v2.2.2
+	github.com/shamaton/msgpack/v2 v2.2.3
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/stretchr/testify v1.10.0
 	github.com/studio-b12/gowebdav v0.9.0
