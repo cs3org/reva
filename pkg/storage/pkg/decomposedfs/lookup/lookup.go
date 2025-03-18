@@ -34,6 +34,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
+	"github.com/opencloud-eu/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/rogpeppe/go-internal/lockedfile"
 	"go.opentelemetry.io/otel"
@@ -347,6 +348,17 @@ func (lu *Lookup) CopyMetadataWithSourceLock(ctx context.Context, sourceNode, ta
 	}
 
 	return lu.MetadataBackend().SetMultiple(ctx, targetNode, newAttrs, acquireTargetLock)
+}
+
+func (lu *Lookup) PurgeNode(n *node.Node) error {
+	// remove node
+	if err := utils.RemoveItem(n.InternalPath()); err != nil {
+		return err
+	}
+
+	// remove child entry in parent
+	src := filepath.Join(n.ParentPath(), n.Name)
+	return os.Remove(src)
 }
 
 // TimeManager returns the time manager
