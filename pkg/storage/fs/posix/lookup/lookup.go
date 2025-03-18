@@ -406,6 +406,13 @@ func (lu *Lookup) GenerateSpaceID(spaceType string, owner *user.User) (string, e
 	}
 }
 
+func (lu *Lookup) PurgeNode(n *node.Node) error {
+	if err := lu.IDCache.Delete(context.Background(), n.SpaceID, n.ID); err != nil {
+		return err
+	}
+	return os.RemoveAll(n.InternalPath())
+}
+
 // TimeManager returns the time manager
 func (lu *Lookup) TimeManager() node.TimeManager {
 	return lu.tm

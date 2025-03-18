@@ -29,7 +29,6 @@ import (
 	"hash/adler32"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -165,6 +164,8 @@ type PathLookup interface {
 	ReadBlobIDAndSizeAttr(ctx context.Context, n metadata.MetadataNode, attrs Attributes) (string, int64, error)
 	CopyMetadataWithSourceLock(ctx context.Context, sourceNode, targetNode metadata.MetadataNode, filter func(attributeName string, value []byte) (newValue []byte, copy bool), lockedSource *lockedfile.File, acquireTargetLock bool) (err error)
 	CopyMetadata(ctx context.Context, sourceNode, targetNode metadata.MetadataNode, filter func(attributeName string, value []byte) (newValue []byte, copy bool), acquireTargetLock bool) (err error)
+
+	PurgeNode(n *Node) error
 }
 
 type IDCacher interface {
@@ -1195,14 +1196,7 @@ func (n *Node) DeleteGrant(ctx context.Context, g *provider.Grant, acquireLock b
 
 // Purge removes a node from disk. It does not move it to the trash
 func (n *Node) Purge(ctx context.Context) error {
-	// remove node
-	if err := utils.RemoveItem(n.InternalPath()); err != nil {
-		return err
-	}
-
-	// remove child entry in parent
-	src := filepath.Join(n.ParentPath(), n.Name)
-	return os.Remove(src)
+	return n.lu.PurgeNode(n)
 }
 
 // ListGrants lists all grants of the current node.
