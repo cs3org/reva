@@ -139,7 +139,7 @@ func New(m map[string]interface{}, stream events.Stream, log *zerolog.Logger) (s
 		Permissions:       p,
 		EventStream:       stream,
 		UserMapper:        um,
-		DisableVersioning: false,
+		DisableVersioning: o.DisableVersioning,
 		Trashbin:          trashbin,
 	}
 
