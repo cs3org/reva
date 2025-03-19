@@ -53,7 +53,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/maxymania/go-system v0.0.0-20170110133659-647cc364bf0b
 	github.com/mileusna/useragent v1.3.5
-	github.com/minio/minio-go/v7 v7.0.87
+	github.com/minio/minio-go/v7 v7.0.88
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/nats-io/nats-server/v2 v2.10.26
 	github.com/nats-io/nats.go v1.39.1
