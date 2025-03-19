@@ -297,13 +297,6 @@ func VersionString(val string) Option {
 	}
 }
 
-// Edition provides a function to set the Edition config option.
-func Edition(val string) Option {
-	return func(o *Options) {
-		o.config.Edition = val
-	}
-}
-
 // Product provides a function to set the Product config option.
 func Product(val string) Option {
 	return func(o *Options) {
