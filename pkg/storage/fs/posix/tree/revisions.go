@@ -62,7 +62,18 @@ func (tp *Tree) CreateRevision(ctx context.Context, n *node.Node, version string
 	defer sf.Close()
 	vf, err := os.OpenFile(versionPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0600)
 	if err != nil {
-		return "", err
+		if os.IsExist(err) {
+			err := os.Remove(versionPath)
+			if err != nil {
+				return "", err
+			}
+			vf, err = os.OpenFile(versionPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0600)
+			if err != nil {
+				return "", err
+			}
+		} else {
+			return "", err
+		}
 	}
 	defer vf.Close()
 	if _, err := io.Copy(vf, sf); err != nil {
