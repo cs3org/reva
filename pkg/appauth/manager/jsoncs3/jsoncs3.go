@@ -190,6 +190,9 @@ func (m *manager) ListAppPasswords(ctx context.Context) ([]*apppb.AppPassword, e
 	}
 	_, userAppPasswords, err := m.getUserAppPasswords(ctx, userID)
 	if err != nil {
+		if _, ok := err.(errtypes.NotFound); ok {
+			return []*apppb.AppPassword{}, nil
+		}
 		log.Error().Err(err).Msg("getUserAppPasswords failed")
 		return nil, err
 	}
