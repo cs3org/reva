@@ -472,17 +472,37 @@ func (b HybridBackend) Rename(oldNode, newNode MetadataNode) error {
 }
 
 // MetadataPath returns the path of the file holding the metadata for the given path
-func (b HybridBackend) MetadataPath(n MetadataNode) string { return b.metadataPathFunc(n) }
+func (b HybridBackend) MetadataPath(n MetadataNode) string {
+	base := b.metadataPathFunc(n)
+
+	return filepath.Join(base, pathify(n.GetID(), 4, 2)+".mpk")
+}
 
 // LockfilePath returns the path of the lock file
-func (HybridBackend) LockfilePath(n MetadataNode) string { return n.InternalPath() + ".mlock" }
+func (b HybridBackend) LockfilePath(n MetadataNode) string {
+	base := b.metadataPathFunc(n)
+
+	return filepath.Join(base, "locks", n.GetID()+".mlock")
+}
 
 // Lock locks the metadata for the given path
 func (b HybridBackend) Lock(n MetadataNode) (UnlockFunc, error) {
 	metaLockPath := b.LockfilePath(n)
 	mlock, err := lockedfile.OpenFile(metaLockPath, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, os.ErrNotExist) {
+			// create the parent directory
+			err = os.MkdirAll(filepath.Dir(metaLockPath), 0700)
+			if err != nil {
+				return nil, err
+			}
+			mlock, err = lockedfile.OpenFile(metaLockPath, os.O_RDWR|os.O_CREATE, 0600)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
 	}
 	return func() error {
 		err := mlock.Close()
@@ -508,4 +528,18 @@ func (b HybridBackend) cacheKey(n MetadataNode) string {
 
 func isOffloadingAttribute(key string) bool {
 	return strings.HasPrefix(key, prefixes.GrantPrefix) || strings.HasPrefix(key, prefixes.MetadataPrefix)
+}
+
+func pathify(id string, depth, width int) string {
+	b := strings.Builder{}
+	i := 0
+	for ; i < depth; i++ {
+		if len(id) <= i*width+width {
+			break
+		}
+		b.WriteString(id[i*width : i*width+width])
+		b.WriteRune(filepath.Separator)
+	}
+	b.WriteString(id[i*width:])
+	return b.String()
 }
