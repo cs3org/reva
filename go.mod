@@ -7,6 +7,7 @@ require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
 	github.com/BurntSushi/toml v1.4.0
 	github.com/Masterminds/sprig v2.22.0+incompatible
+	github.com/alexedwards/argon2id v1.0.0
 	github.com/armon/go-radix v1.0.0
 	github.com/aws/aws-sdk-go v1.55.6
 	github.com/beevik/etree v1.5.0
@@ -71,6 +72,7 @@ require (
 	github.com/rs/zerolog v1.33.0
 	github.com/segmentio/kafka-go v0.4.47
 	github.com/sercand/kuberesolver/v5 v5.1.1
+	github.com/sethvargo/go-diceware v0.5.0
 	github.com/sethvargo/go-password v0.3.1
 	github.com/shamaton/msgpack/v2 v2.2.3
 	github.com/shirou/gopsutil v3.21.11+incompatible
