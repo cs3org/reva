@@ -30,6 +30,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/pkg/errors"
 	"github.com/rogpeppe/go-internal/lockedfile"
+	"github.com/shamaton/msgpack/v2"
 
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
@@ -62,7 +63,29 @@ func (tp *Tree) CreateRevision(ctx context.Context, n *node.Node, version string
 	vf, err := os.OpenFile(versionPath, os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		if os.IsExist(err) {
-			err := os.Remove(versionPath)
+			revisionNode := node.NewBaseNode(n.SpaceID, n.ID+node.RevisionIDDelimiter+version, tp.lookup)
+			revisionPath := tp.lookup.MetadataBackend().MetadataPath(revisionNode)
+			b, err := os.ReadFile(revisionPath)
+			if err != nil {
+				return "", err
+			}
+
+			m := map[string][]byte{}
+			if err := msgpack.Unmarshal(b, &m); err != nil {
+				return "", err
+			}
+
+			bid := m["user.oc.blobid"]
+			if string(bid) != "" {
+				if err := tp.DeleteBlob(&node.Node{
+					BaseNode: *revisionNode,
+					BlobID:   string(bid),
+				}); err != nil {
+					return "", err
+				}
+			}
+
+			err = os.Remove(versionPath)
 			if err != nil {
 				return "", err
 			}
