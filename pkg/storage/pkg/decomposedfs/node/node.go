@@ -156,6 +156,7 @@ type PathLookup interface {
 	GenerateSpaceID(spaceType string, owner *userpb.User) (string, error)
 
 	InternalRoot() string
+	InternalSpaceRoot(spaceID string) string
 	InternalPath(spaceID, nodeID string) string
 	VersionPath(spaceID, nodeID, version string) string
 	Path(ctx context.Context, n *Node, hasPermission PermissionFunc) (path string, err error)

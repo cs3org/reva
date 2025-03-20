@@ -276,6 +276,11 @@ func (lu *Lookup) InternalRoot() string {
 	return lu.Options.Root
 }
 
+// InternalSpaceRoot returns the internal path for a space
+func (lu *Lookup) InternalSpaceRoot(spaceID string) string {
+	return lu.InternalPath(spaceID, spaceID)
+}
+
 // InternalPath returns the internal path for a given ID
 func (lu *Lookup) InternalPath(spaceID, nodeID string) string {
 	if strings.Contains(nodeID, node.RevisionIDDelimiter) || strings.HasSuffix(nodeID, node.CurrentIDDelimiter) {

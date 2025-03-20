@@ -786,8 +786,11 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		}
 
 		// remove space metadata
-		if err := os.RemoveAll(root); err != nil {
-			return err
+		spaceRoot := fs.lu.InternalSpaceRoot(spaceID)
+		if spaceRoot != "" {
+			if err := os.RemoveAll(fs.lu.InternalSpaceRoot(spaceID)); err != nil {
+				return err
+			}
 		}
 
 		// invalidate id in cache
