@@ -226,6 +226,15 @@ func (m *manager) InvalidateAppPassword(ctx context.Context, secret string) erro
 
 	updater := func(a map[string]*apppb.AppPassword) (map[string]*apppb.AppPassword, error) {
 		for key, pw := range a {
+			// Allow deleting a token using the password hash. This is needed because of
+			// some shortcomings of the CS3 APIs. On the API level tokens don't have IDs
+			// ListAppPasswords only returns the hashed password. So allowing to delete
+			// using the hashed password as the key is the only way to delete tokens for
+			// which the user does not remember the password.
+			if secret == pw.Password {
+				delete(a, key)
+				return a, nil
+			}
 			ok, err := argon2id.ComparePasswordAndHash(secret, pw.Password)
 			switch {
 			case err != nil:
