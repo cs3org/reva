@@ -199,15 +199,11 @@ func (b HybridBackend) Set(ctx context.Context, n MetadataNode, key string, val 
 func (b HybridBackend) SetMultiple(ctx context.Context, n MetadataNode, attribs map[string][]byte, acquireLock bool) (err error) {
 	path := n.InternalPath()
 	if acquireLock {
-		err := os.MkdirAll(filepath.Dir(path), 0600)
+		unlock, err := b.Lock(n)
 		if err != nil {
 			return err
 		}
-		lockedFile, err := lockedfile.OpenFile(b.LockfilePath(n), os.O_CREATE|os.O_WRONLY, 0600)
-		if err != nil {
-			return err
-		}
-		defer cleanupLockfile(ctx, lockedFile)
+		defer unlock()
 	}
 
 	offloadAttr, err := xattr.Get(path, _metadataOffloadedAttr)
