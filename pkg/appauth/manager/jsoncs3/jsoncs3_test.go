@@ -296,10 +296,11 @@ var _ = Describe("Jsoncs3", func() {
 		})
 		Describe("InvalidateAppPassword", func() {
 			var appPasswords = map[string]*apppb.AppPassword{}
+			var hash2 string
 			BeforeEach(func() {
 				hash1, err := argon2id.CreateHash("password1", argon2id.DefaultParams)
 				Expect(err).ToNot(HaveOccurred())
-				hash2, err := argon2id.CreateHash("password2", argon2id.DefaultParams)
+				hash2, err = argon2id.CreateHash("password2", argon2id.DefaultParams)
 				Expect(err).ToNot(HaveOccurred())
 				appPasswords["id1"] = &apppb.AppPassword{
 					Password: hash1,
@@ -332,6 +333,28 @@ var _ = Describe("Jsoncs3", func() {
 					}),
 				).Return(nil, nil)
 				err := manager.InvalidateAppPassword(ctx, "password2")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(uploadedPw)).To(Equal(1))
+
+				_, ok := uploadedPw["id1"]
+				Expect(ok).To(BeTrue())
+
+				_, ok = uploadedPw["id2"]
+				Expect(ok).To(BeFalse())
+			})
+			It("Removes the requested password from the store when using the password hash", func() {
+				var uploadedPw map[string]*apppb.AppPassword
+				md.EXPECT().Upload(
+					mock.Anything,
+					mock.MatchedBy(func(req metadata.UploadRequest) bool {
+						if req.Path != testUserID+".json" {
+							return false
+						}
+						err := json.Unmarshal(req.Content, &uploadedPw)
+						return err == nil
+					}),
+				).Return(nil, nil)
+				err := manager.InvalidateAppPassword(ctx, hash2)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(uploadedPw)).To(Equal(1))
 
