@@ -187,7 +187,12 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	case "hybrid":
 		lu = lookup.New(metadata.NewHybridBackend(1024,
 			func(n metadata.MetadataNode) string {
-				return n.InternalPath() + ".mpk"
+				spaceRoot, _ := lu.IDCache.Get(context.Background(), n.GetSpaceID(), n.GetSpaceID())
+				if len(spaceRoot) == 0 {
+					return ""
+				}
+
+				return filepath.Join(spaceRoot, lookup.MetadataDir)
 			},
 			cache.Config{
 				Database: o.Root,

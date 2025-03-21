@@ -662,7 +662,7 @@ func (t *Tree) isIndex(path string) bool {
 func (t *Tree) isInternal(path string) bool {
 	return path == t.options.Root ||
 		path == filepath.Join(t.options.Root, "users") ||
-		t.isIndex(path) || strings.Contains(path, lookup.RevisionsDir)
+		t.isIndex(path) || strings.Contains(path, lookup.MetadataDir)
 }
 
 func isLockFile(path string) bool {
