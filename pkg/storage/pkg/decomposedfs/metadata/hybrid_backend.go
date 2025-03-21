@@ -203,7 +203,7 @@ func (b HybridBackend) SetMultiple(ctx context.Context, n MetadataNode, attribs 
 		if err != nil {
 			return err
 		}
-		defer unlock()
+		defer func() { _ = unlock() }()
 	}
 
 	offloadAttr, err := xattr.Get(path, _metadataOffloadedAttr)

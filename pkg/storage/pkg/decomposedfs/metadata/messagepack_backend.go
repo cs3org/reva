@@ -43,12 +43,6 @@ type MessagePackBackend struct {
 	metaCache cache.FileMetadataCache
 }
 
-type readWriteCloseSeekTruncater interface {
-	io.ReadWriteCloser
-	io.Seeker
-	Truncate(int64) error
-}
-
 // NewMessagePackBackend returns a new MessagePackBackend instance
 func NewMessagePackBackend(o cache.Config) MessagePackBackend {
 	return MessagePackBackend{
@@ -165,7 +159,7 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, n MetadataNode, 
 		if err != nil {
 			return err
 		}
-		defer unlock()
+		defer func() { _ = unlock() }()
 	}
 	// Read current state
 	_, subspan := tracer.Start(ctx, "os.ReadFile")
