@@ -95,7 +95,10 @@ func (tp *Tree) CreateRevision(ctx context.Context, n *node.Node, version string
 
 			// rename existing revision
 			oldNode := node.NewBaseNode(n.SpaceID, n.ID+node.RevisionIDDelimiter+version+"."+strconv.Itoa(highest+1), tp.lookup)
-			tp.lookup.MetadataBackend().Rename(versionNode, oldNode)
+			err = tp.lookup.MetadataBackend().Rename(versionNode, oldNode)
+			if err != nil {
+				return "", err
+			}
 			newPath := versionPath + "." + strconv.Itoa(highest+1)
 			err = os.Rename(versionPath, newPath)
 			if err != nil {
