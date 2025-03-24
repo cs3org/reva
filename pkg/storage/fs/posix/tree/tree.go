@@ -114,26 +114,29 @@ func New(lu node.PathLookup, bs node.Blobstore, um usermapper.Mapper, trashbin *
 		log: log,
 	}
 
-	watchPath := o.WatchPath
-	var err error
-	switch o.WatchType {
-	case "gpfswatchfolder":
-		t.watcher, err = NewGpfsWatchFolderWatcher(t, strings.Split(o.WatchFolderKafkaBrokers, ","), log)
-		if err != nil {
-			return nil, err
-		}
-	case "gpfsfileauditlogging":
-		t.watcher, err = NewGpfsFileAuditLoggingWatcher(t, o.WatchPath, log)
-		if err != nil {
-			return nil, err
-		}
-	default:
-		t.watcher = NewInotifyWatcher(t, log)
-		watchPath = o.Root
-	}
-
 	// Start watching for fs events and put them into the queue
 	if o.WatchFS {
+		watchPath := o.WatchPath
+		var err error
+		switch o.WatchType {
+		case "gpfswatchfolder":
+			t.watcher, err = NewGpfsWatchFolderWatcher(t, strings.Split(o.WatchFolderKafkaBrokers, ","), log)
+			if err != nil {
+				return nil, err
+			}
+		case "gpfsfileauditlogging":
+			t.watcher, err = NewGpfsFileAuditLoggingWatcher(t, o.WatchPath, log)
+			if err != nil {
+				return nil, err
+			}
+		default:
+			t.watcher, err = NewInotifyWatcher(t, log)
+			if err != nil {
+				return nil, err
+			}
+			watchPath = o.Root
+		}
+
 		go t.watcher.Watch(watchPath)
 		go t.workScanQueue()
 	}
