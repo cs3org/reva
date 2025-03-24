@@ -10,13 +10,13 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// DummyWatcher is a dummy watcher that does nothing
-type DummyWatcher struct{}
+// NullWatcher is a dummy watcher that does nothing
+type NullWatcher struct{}
 
 // Watch does nothing
-func (*DummyWatcher) Watch(path string) {}
+func (*NullWatcher) Watch(path string) {}
 
 // NewInotifyWatcher returns a new inotify watcher
-func NewInotifyWatcher(tree *Tree, log *zerolog.Logger) (*DummyWatcher, error) {
+func NewInotifyWatcher(tree *Tree, log *zerolog.Logger) (*NullWatcher, error) {
 	return nil, errtypes.NotSupported("inotify watcher is not supported on this platform")
 }
