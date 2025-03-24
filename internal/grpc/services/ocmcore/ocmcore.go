@@ -186,6 +186,9 @@ func (s *service) DeleteOCMCoreShare(ctx context.Context, req *ocmcore.DeleteOCM
 	}
 
 	user := &userpb.User{Id: ocmuser.RemoteID(&userpb.UserId{OpaqueId: grantee})}
+	resourceName := "placeholder name"
+	granteeOpaqueID := "placeholder granteeOpaqueID"
+	executantOpaqueID := "placehodler executantOpaqueID"
 
 	err := s.repo.DeleteReceivedShare(ctx, user, &ocm.ShareReference{
 		Spec: &ocm.ShareReference_Id{
@@ -197,6 +200,22 @@ func (s *service) DeleteOCMCoreShare(ctx context.Context, req *ocmcore.DeleteOCM
 	res := &ocmcore.DeleteOCMCoreShareResponse{}
 	if err == nil {
 		res.Status = status.NewOK(ctx)
+		res.Opaque = &typesv1beta1.Opaque{
+			Map: map[string]*typesv1beta1.OpaqueEntry{
+				"executantname": {
+					Decoder: "plain",
+					Value:   []byte(executantOpaqueID),
+				},
+				"granteename": {
+					Decoder: "plain",
+					Value:   []byte(granteeOpaqueID),
+				},
+				"resourcename": {
+					Decoder: "plain",
+					Value:   []byte(resourceName),
+				},
+			},
+		}
 	} else {
 		var notFound errtypes.NotFound
 		if errors.As(err, &notFound) {

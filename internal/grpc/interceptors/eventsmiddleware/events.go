@@ -117,6 +117,12 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			if isSuccess(v) {
 				ev = OCMCoreShareCreated(v, req.(*ocmcore.CreateOCMCoreShareRequest), executant)
 			}
+		case *ocmcore.DeleteOCMCoreShareResponse:
+			// if isSuccess(v) && v.GetOpaque() != nil {
+			if isSuccess(v) {
+				ev = OCMCoreShareDelete(v, req.(*ocmcore.DeleteOCMCoreShareRequest), executant)
+			}
+
 		case *provider.AddGrantResponse:
 			// TODO: update CS3 APIs
 			// FIXME these should be part of the RemoveGrantRequest object
