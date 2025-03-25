@@ -32,7 +32,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"go-micro.dev/v4/store"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -442,7 +441,8 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 
 				_, nodeID, err := t.lookup.IDsForPath(ctx, path)
 				if err != nil {
-					return err
+					t.log.Error().Err(err).Str("path", path).Msg("failed to get ids for entry")
+					continue
 				}
 
 				child, err := node.ReadNode(ctx, t.lookup, n.SpaceID, nodeID, false, n.SpaceRoot, true)
@@ -494,7 +494,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) error {
 	// remove entry from cache immediately to avoid inconsistencies
 	defer func() {
 		if err := t.idCache.Delete(path); err != nil {
-			log.Error().Err(err).Str("path", path).Msg("could not delete id from cache")
+			t.log.Error().Err(err).Str("path", path).Msg("could not delete id from cache")
 		}
 	}()
 
@@ -516,7 +516,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) error {
 
 	// Remove lock file if it exists
 	if err := os.Remove(n.LockFilePath()); err != nil {
-		log.Error().Err(err).Str("path", n.LockFilePath()).Msg("could not remove lock file")
+		t.log.Error().Err(err).Str("path", n.LockFilePath()).Msg("could not remove lock file")
 	}
 
 	err := t.trashbin.MoveToTrash(ctx, n, path)
@@ -637,7 +637,7 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 	}
 
 	if err := idcache.Set(ctx, n.SpaceID, n.ID, path); err != nil {
-		log.Error().Err(err).Str("spaceID", n.SpaceID).Str("id", n.ID).Str("path", path).Msg("could not cache id")
+		t.log.Error().Err(err).Str("spaceID", n.SpaceID).Str("id", n.ID).Str("path", path).Msg("could not cache id")
 	}
 
 	attributes := n.NodeMetadata(ctx)
