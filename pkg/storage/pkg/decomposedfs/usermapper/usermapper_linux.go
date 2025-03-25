@@ -1,3 +1,5 @@
+//go:build linux
+
 // Copyright 2018-2021 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,14 +39,14 @@ type UnixMapper struct {
 }
 
 // New returns a new user mapper
-func NewUnixMapper() *UnixMapper {
+func NewUnixMapper() (*UnixMapper, error) {
 	baseUid, _ := unix.SetfsuidRetUid(-1)
 	baseGid, _ := unix.SetfsgidRetGid(-1)
 
 	return &UnixMapper{
 		baseUid: baseUid,
 		baseGid: baseGid,
-	}
+	}, nil
 }
 
 // RunInUserScope runs the given function in the scope of the base user

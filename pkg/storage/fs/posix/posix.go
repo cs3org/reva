@@ -1,6 +1,3 @@
-//go:build linux
-// +build linux
-
 // Copyright 2018-2021 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -73,7 +70,15 @@ func New(m map[string]interface{}, stream events.Stream, log *zerolog.Logger) (s
 	}
 
 	fs := &posixFS{}
-	um := usermapper.NewUnixMapper()
+	var um usermapper.Mapper
+	if o.UseSpaceGroups {
+		um, err = usermapper.NewUnixMapper()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		um = &usermapper.NullMapper{}
+	}
 
 	var lu *lookup.Lookup
 	switch o.MetadataBackend {

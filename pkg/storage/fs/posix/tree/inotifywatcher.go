@@ -1,3 +1,5 @@
+//go:build linux
+
 // Copyright 2018-2024 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,11 +32,11 @@ type InotifyWatcher struct {
 	log  *zerolog.Logger
 }
 
-func NewInotifyWatcher(tree *Tree, log *zerolog.Logger) *InotifyWatcher {
+func NewInotifyWatcher(tree *Tree, log *zerolog.Logger) (*InotifyWatcher, error) {
 	return &InotifyWatcher{
 		tree: tree,
 		log:  log,
-	}
+	}, nil
 }
 
 func (iw *InotifyWatcher) Watch(path string) {
