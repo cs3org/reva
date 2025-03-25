@@ -1,6 +1,11 @@
 ---
 variables:
   - &golang_image 'docker.io/golang:1.24'
+  - &environment
+    HTTP_PROXY:
+      from_secret: ci_http_proxy
+    HTTPS_PROXY:
+      from_secret: ci_http_proxy
 
 when:
   - event: [ push , manual ]
@@ -11,43 +16,34 @@ workspace:
   base: /go # use the go home dir as workspace to share go packages, see https://woodpecker-ci.org/docs/usage/workflow-syntax#workspace
 
 steps:
-  inotify-info:
-    image: *golang_image
-    depends_on: [] # enable parallel steps
-    commands:
-      - git clone https://github.com/mikesart/inotify-info
-      - cd inotify-info
-      - make
-      - _release/inotify-info
   generate:
     image: *golang_image
-    depends_on: [] # enable parallel steps
+    environment: *environment
     commands:
       - make go-generate
       - git diff --exit-code
   lint:
     image: *golang_image
-    depends_on: [ generate ]
+    environment: *environment
     commands:
       - make lint
   build:
     image: *golang_image
-    depends_on: [ generate ]
+    environment: *environment
     commands:
       - make build-ci
-  test:
-    image: *golang_image
+  upload:
+    image: minio/mc:RELEASE.2021-10-07T04-19-58Z
     depends_on: [ build ]
+    environment:
+      AWS_ACCESS_KEY_ID:
+        from_secret: cache_s3_access_key
+      AWS_SECRET_ACCESS_KEY:
+        from_secret: cache_s3_secret_key
+      S3_BUCKET:
+        from_secret: cache_s3_bucket
+      S3_ENDPOINT:
+        from_secret: cache_s3_server
     commands:
-      - apt-get update -qq && apt-get install -y inotify-tools 
-      - make test
-  test-integration:
-    image: *golang_image
-    depends_on: [ build ]
-    commands:
-      - make test-integration
-  test-benchmark:
-    image: *golang_image
-    depends_on: [ build ]
-    commands:
-      - make test-benchmark
+      - mc alias set s3 $S3_ENDPOINT $AWS_ACCESS_KEY_ID $AWS_SECRET_ACCESS_KEY
+      - mc cp -a --attr="content-type=application/octet-stream" $CI_WORKSPACE/cmd/revad/revad s3/$S3_BUCKET/opencloud-eu/reva/$CI_COMMIT_SHA-$CI_PIPELINE_NUMBER-revad

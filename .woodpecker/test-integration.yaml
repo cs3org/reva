@@ -3,7 +3,6 @@ depends_on: [ build ]
 
 variables:
   - &golang_image 'docker.io/golang:1.24'
-  - &cs3apivalidator_image 'owncloud/cs3api-validator:0.2.1'
 
 when:
   - event: [ push , manual ]
@@ -28,25 +27,13 @@ steps:
     commands:
       - mc alias set s3 $S3_ENDPOINT $AWS_ACCESS_KEY_ID $AWS_SECRET_ACCESS_KEY
       - mc cp -a s3/$S3_BUCKET/opencloud-eu/reva/$CI_COMMIT_SHA-$CI_PIPELINE_NUMBER-revad $CI_WORKSPACE/cmd/revad/revad
-  revad-services:
+  test-integration:
     image: *golang_image
-    detach: true
+    environment:
+      HTTP_PROXY:
+        from_secret: ci_http_proxy
+      HTTPS_PROXY:
+        from_secret: ci_http_proxy
     commands:
-      - cd tests/oc-integration-tests/ci/
-      - ../../../cmd/revad/revad -c frontend.toml &
-      - ../../../cmd/revad/revad -c gateway.toml &
-      - ../../../cmd/revad/revad -c storage-users-decomposed.toml &
-      - ../../../cmd/revad/revad -c storage-shares.toml &
-      - ../../../cmd/revad/revad -c storage-publiclink.toml &
-      - ../../../cmd/revad/revad -c shares.toml &
-      - ../../../cmd/revad/revad -c permissions-demo-ci.toml &
-      - ../../../cmd/revad/revad -c users.toml
-  wait_for_server:
-    image: ghcr.io/dvjn/woodpecker-is-it-up-yet-plugin
-    settings:
-      host: revad-services
-      port: 19000
-  cs3api-validator-oci:
-    image: *cs3apivalidator_image
-    commands:
-      - /usr/bin/cs3api-validator /var/lib/cs3api-validator --endpoint=revad-services:19000
+      # `make test-integration` rebuilds the binaries, which is unnecessary in the pipeline, so only using `go test` here
+      - cd tests/integration && go test -race ./...
