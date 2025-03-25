@@ -118,8 +118,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 				ev = OCMCoreShareCreated(v, req.(*ocmcore.CreateOCMCoreShareRequest), executant)
 			}
 		case *ocmcore.DeleteOCMCoreShareResponse:
-			// if isSuccess(v) && v.GetOpaque() != nil {
-			if isSuccess(v) {
+			if isSuccess(v) && v.GetOpaque() != nil {
 				ev = OCMCoreShareDelete(v, req.(*ocmcore.DeleteOCMCoreShareRequest), executant)
 			}
 
