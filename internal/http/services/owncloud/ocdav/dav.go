@@ -212,12 +212,13 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 			c, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
 			if err != nil {
+				log.Error().Err(err).Msg("error getting gateway during OCM authentication")
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
 
 			var token, ocmshare string
-			// OCM v1.1 (OCIS et al.).
+			// OCM v1.1+ (OCIS et al.).
 			bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 			if bearer != "" {
 				// Bearer token is the shared secret, path is /{shareId}/path/to/resource.
@@ -285,6 +286,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			var res *gatewayv1beta1.AuthenticateResponse
 			token, _ := router.ShiftPath(r.URL.Path)
 			if _, pass, ok := r.BasicAuth(); ok {
+				log.Info().Str("token", token).Msg("Handling public-files DAV request with BasicAuth")
 				res, err = handleBasicAuth(r.Context(), c, token, pass)
 			} else {
 				q := r.URL.Query()
@@ -293,13 +295,20 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				// We restrict the pre-signed urls to downloads.
 				if sig != "" && expiration != "" && r.Method != http.MethodGet {
 					w.WriteHeader(http.StatusUnauthorized)
+					log.Info().Str("token", token).Msg("Client tried to use pre-signed URL for a method other than GET, which is not allowed")
 					return
 				}
-				res, err = handleSignatureAuth(r.Context(), c, token, sig, expiration)
+				log.Info().Str("token", token).Str("sig", sig).Msg("Handling public-files DAV request with handleSignatureAuth()")
+				res, err = handleSignatureAuth(ctx, c, token, sig, expiration)
 			}
 
 			switch {
 			case err != nil:
+				log.Error().Str("token", token).Err(err).Msg("Error while handling public-files DAV request")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			case res.Status == nil:
+				log.Error().Msg("DAV public-files got a AuthenticateResponse without status!")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			case res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:

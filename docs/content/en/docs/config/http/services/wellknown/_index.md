@@ -48,8 +48,16 @@ webapp_root = "/external/sciencemesh"
 {{< /highlight >}}
 {{% /dir %}}
 
+{{% dir name="invite_accept_dialog" type="string" default="/sciencemesh-app/invitations" %}}
+The frontend URL where to land when receiving an invitation [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L38)
+{{< highlight toml >}}
+[http.services.wellknown]
+invite_accept_dialog = "/sciencemesh-app/invitations"
+{{< /highlight >}}
+{{% /dir %}}
+
 {{% dir name="enable_webapp" type="bool" default=false %}}
-Whether web apps are enabled in OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L38)
+Whether web apps are enabled in OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L39)
 {{< highlight toml >}}
 [http.services.wellknown]
 enable_webapp = false
@@ -57,7 +65,7 @@ enable_webapp = false
 {{% /dir %}}
 
 {{% dir name="enable_datatx" type="bool" default=false %}}
-Whether data transfers are enabled in OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L39)
+Whether data transfers are enabled in OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L40)
 {{< highlight toml >}}
 [http.services.wellknown]
 enable_datatx = false

@@ -1,5 +1,4 @@
 [log]
-mode = "json"
 
 [shared]
 gatewaysvc = "{{cernboxgw_address}}"
@@ -21,3 +20,12 @@ driver = "json"
 
 [http.middlewares.providerauthorizer.drivers.json]
 providers = "fixtures/ocm-providers.demo.json"
+
+[http.services.wellknown]
+
+[http.services.wellknown.ocmprovider]
+ocm_prefix = "ocm"
+provider = "Reva for CERNBox"
+endpoint = "http://{{cernboxhttp_address}}"
+enable_webapp = true
+enable_datatx = true
