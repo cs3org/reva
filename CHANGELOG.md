@@ -1,5 +1,44 @@
 # Changelog
 
+## [2.29.0](https://github.com/opencloud-eu/reva/releases/tag/v2.29.0) - 2025-03-26
+
+### ❤️ Thanks to all contributors! ❤️
+
+@JammingBen, @aduffeck, @amrita-shrestha, @butonic, @rhafer
+
+### 🐛 Bug Fixes
+
+- fix(appauth/jsoncs3) Avoid returing password hashes on API [[#139](https://github.com/opencloud-eu/reva/pull/139)]
+- Make non-collaborative posix driver available on other OSes [[#132](https://github.com/opencloud-eu/reva/pull/132)]
+- Fix moving lockfiles during moves [[#125](https://github.com/opencloud-eu/reva/pull/125)]
+- Keep metadata lock files in .oc-nodes [[#120](https://github.com/opencloud-eu/reva/pull/120)]
+- appauth/jsoncs3: Allow deletion using password hash [[#119](https://github.com/opencloud-eu/reva/pull/119)]
+- Replace revisions with the exact same mtime [[#114](https://github.com/opencloud-eu/reva/pull/114)]
+- Properly support disabling versioning [[#113](https://github.com/opencloud-eu/reva/pull/113)]
+- Properly purge nodes depending on the storage type [[#108](https://github.com/opencloud-eu/reva/pull/108)]
+- Fix traversing thrash items [[#106](https://github.com/opencloud-eu/reva/pull/106)]
+
+### 📈 Enhancement
+
+- New "jsoncs3" backend for app token storage [[#112](https://github.com/opencloud-eu/reva/pull/112)]
+
+### 📦️ Dependencies
+
+- Bump github.com/rs/zerolog from 1.33.0 to 1.34.0 [[#137](https://github.com/opencloud-eu/reva/pull/137)]
+- Bump github.com/onsi/gomega from 1.36.2 to 1.36.3 [[#134](https://github.com/opencloud-eu/reva/pull/134)]
+- Bump github.com/BurntSushi/toml from 1.4.0 to 1.5.0 [[#133](https://github.com/opencloud-eu/reva/pull/133)]
+- Bump github.com/go-sql-driver/mysql from 1.9.0 to 1.9.1 [[#128](https://github.com/opencloud-eu/reva/pull/128)]
+- Bump go.etcd.io/etcd/client/v3 from 3.5.19 to 3.5.20 [[#127](https://github.com/opencloud-eu/reva/pull/127)]
+- Bump github.com/golang-jwt/jwt/v5 from 5.2.1 to 5.2.2 in the go_modules group [[#126](https://github.com/opencloud-eu/reva/pull/126)]
+- Bump github.com/nats-io/nats-server/v2 from 2.10.26 to 2.11.0 [[#122](https://github.com/opencloud-eu/reva/pull/122)]
+- Bump github.com/onsi/ginkgo/v2 from 2.23.1 to 2.23.2 [[#121](https://github.com/opencloud-eu/reva/pull/121)]
+- Bump github.com/cheggaaa/pb/v3 from 3.1.6 to 3.1.7 [[#117](https://github.com/opencloud-eu/reva/pull/117)]
+- Bump github.com/onsi/ginkgo/v2 from 2.23.0 to 2.23.1 [[#116](https://github.com/opencloud-eu/reva/pull/116)]
+- Bump github.com/minio/minio-go/v7 from 7.0.87 to 7.0.88 [[#111](https://github.com/opencloud-eu/reva/pull/111)]
+- Bump github.com/opencloud-eu/opencloud from 1.0.0 to 1.1.0 [[#110](https://github.com/opencloud-eu/reva/pull/110)]
+- Bump github.com/shamaton/msgpack/v2 from 2.2.2 to 2.2.3 [[#103](https://github.com/opencloud-eu/reva/pull/103)]
+- Bump github.com/coreos/go-oidc/v3 from 3.12.0 to 3.13.0 [[#104](https://github.com/opencloud-eu/reva/pull/104)]
+
 ## [2.28.0](https://github.com/opencloud-eu/reva/releases/tag/v2.28.0) - 2025-03-17
 
 ### ❤️ Thanks to all contributors! ❤️
