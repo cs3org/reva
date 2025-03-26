@@ -42,7 +42,7 @@ steps:
     image: *woodpecker_wait_plugin_image
     settings:
       host: ceph
-      port: 6800
+      port: 8080
   revad-services:
     image: *golang_image
     detach: true
