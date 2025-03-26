@@ -354,7 +354,7 @@ var _ = Describe("Jsoncs3", func() {
 						return err == nil
 					}),
 				).Return(nil, nil)
-				err := manager.InvalidateAppPassword(ctx, hash2)
+				err := manager.InvalidateAppPassword(ctx, "id2")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(uploadedPw)).To(Equal(1))
 
