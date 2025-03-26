@@ -34,10 +34,11 @@ export default {
             bump: 'patch',
         },
         {
-            title: '📦️ Dependency',
+            title: '📦️ Dependencies',
             labels: ['dependency', 'dependencies', 'Type:Dependencies'],
             bump: 'patch',
             weight: -1,
         },
     ],
+    useVersionPrefixV: true,
 };
