@@ -33,6 +33,16 @@ steps:
     commands:
       - mc alias set s3 $S3_ENDPOINT $AWS_ACCESS_KEY_ID $AWS_SECRET_ACCESS_KEY
       - mc cp -a s3/$S3_BUCKET/opencloud-eu/reva/$CI_COMMIT_SHA-$CI_PIPELINE_NUMBER-revad $CI_WORKSPACE/cmd/revad/revad
+  wait_for_ldap:
+    image: *woodpecker_wait_plugin_image
+    settings:
+      host: ldap
+      port: 389
+  wait_for_ceph:
+    image: *woodpecker_wait_plugin_image
+    settings:
+      host: ceph
+      port: 6800
   revad-services:
     image: *golang_image
     detach: true
@@ -52,7 +62,6 @@ steps:
     settings:
       host: revad-services
       port: 19000
-
   clone_api_tests:
     image: *alpine_image
     commands:
@@ -60,7 +69,6 @@ steps:
       - git clone -b $APITESTS_BRANCH --single-branch --no-tags $APITESTS_REPO_GIT_URL
       - cd opencloud
       - git checkout $APITESTS_COMMITID
-
   opencloud-api-tests:
     image: *behat_image
     commands:
