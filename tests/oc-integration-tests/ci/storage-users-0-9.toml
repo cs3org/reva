@@ -23,7 +23,7 @@ expose_data_server = true
 data_server_url = "http://revad-services:11001/data"
 
 [grpc.services.storageprovider.drivers.decomposed]
-root = "/go/src/tmp/reva/data-0-9"
+root = "/woodpecker/src/reva/data-0-9"
 treetime_accounting = true
 treesize_accounting = true
 permissionssvc = "localhost:10000"
@@ -37,7 +37,7 @@ driver = "decomposed"
 temp_folder = "/var/tmp/reva/tmp"
 
 [http.services.dataprovider.drivers.decomposed]
-root = "/go/src/tmp/reva/data-0-9"
+root = "/woodpecker/src/reva/data-0-9"
 treetime_accounting = true
 treesize_accounting = true
 permissionssvc = "localhost:10000"

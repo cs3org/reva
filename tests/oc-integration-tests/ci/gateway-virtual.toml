@@ -37,7 +37,7 @@ datagateway = "http://localhost:19001/data"
 transfer_shared_secret = "replace-me-with-a-transfer-secret" # for direct uploads
 transfer_expires = 6 # give it a moment
 #disable_home_creation_on_login = true
-link_grants_file = "/go/src/tmp/reva/link_grants_file.json"
+link_grants_file = "/woodpecker/src/reva/link_grants_file.json"
 
 [grpc.services.authregistry]
 driver = "static"

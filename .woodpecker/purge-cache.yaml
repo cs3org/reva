@@ -1,9 +1,8 @@
 ---
-depends_on: [test, test-integration]
+depends_on: [test, test-integration, api-integration-test-on-decomposed]
 
 variables:
   - &minio_image 'minio/mc:RELEASE.2021-10-07T04-19-58Z'
-  - &s3_plugin_image 'plugins/s3-cache:1'
 
 when:
   - event: [ push , manual ]
@@ -25,5 +24,5 @@ steps:
         from_secret: cache_s3_server
     commands:
       - mc alias set s3 $S3_ENDPOINT $AWS_ACCESS_KEY_ID $AWS_SECRET_ACCESS_KEY
-      - mc rm --recursive --force s3/$S3_BUCKET/opencloud-eu/reva
+      - mc rm --recursive --force s3/$S3_BUCKET/${CI_REPO}/$CI_COMMIT_SHA-$CI_PIPELINE_NUMBER-revad
       - mc ls --recursive s3/$S3_BUCKET/opencloud-eu/reva

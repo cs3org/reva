@@ -20,7 +20,7 @@ gateway_addr = "0.0.0.0:19000"
 mount_id = "1284d238-aa92-42ce-bdc4-0b0000009157"
 
 [grpc.services.storageprovider.drivers.posix]
-root = "/go/src/tmp/reva/data"
+root = "/woodpecker/src/reva/data"
 permissionssvc = "localhost:10000"
 treetime_accounting = true
 treesize_accounting = true
@@ -42,10 +42,10 @@ address = "0.0.0.0:11001"
 
 [http.services.dataprovider]
 driver = "posix"
-temp_folder = "/go/src/tmp/reva/tmp"
+temp_folder = "/woodpecker/src/reva/tmp"
 
 [http.services.dataprovider.drivers.posix]
-root = "/go/src/tmp/reva/data"
+root = "/woodpecker/src/reva/data"
 permissionssvc = "localhost:10000"
 treetime_accounting = true
 treesize_accounting = true

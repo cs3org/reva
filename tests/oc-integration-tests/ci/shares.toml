@@ -17,5 +17,5 @@ auth_manager = "publicshares"
 gateway_addr = "localhost:19000"
 
 [grpc.services.publicshareprovider.drivers.json]
-file = "/go/src/tmp/reva/publicshares.json"
+file = "/woodpecker/src/reva/publicshares.json"
 gateway_addr = "localhost:19000"

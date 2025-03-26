@@ -1,0 +1,91 @@
+---
+depends_on: [ build ]
+
+variables:
+  - &golang_image 'docker.io/golang:1.24'
+  - &alpine_image 'owncloudci/alpine:latest'
+  - &behat_image 'cs3org/behat:latest'
+  - &ldap_image 'osixia/openldap:1.3.0'
+  - &minio_image 'minio/mc:RELEASE.2021-10-07T04-19-58Z'
+  - &woodpecker_wait_plugin_image 'ghcr.io/dvjn/woodpecker-is-it-up-yet-plugin'
+
+when:
+  - event: [ push , manual ]
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+  - event: [ pull_request ]
+
+matrix:
+  RUN_PART: [ 1, 2, 3, 4 ]
+
+steps:
+  fetch-binary:
+    image: *minio_image
+    environment:
+      AWS_ACCESS_KEY_ID:
+        from_secret: cache_s3_access_key
+      AWS_SECRET_ACCESS_KEY:
+        from_secret: cache_s3_secret_key
+      S3_BUCKET:
+        from_secret: cache_s3_bucket
+      S3_ENDPOINT:
+        from_secret: cache_s3_server
+    commands:
+      - mc alias set s3 $S3_ENDPOINT $AWS_ACCESS_KEY_ID $AWS_SECRET_ACCESS_KEY
+      - mc cp -a s3/$S3_BUCKET/opencloud-eu/reva/$CI_COMMIT_SHA-$CI_PIPELINE_NUMBER-revad $CI_WORKSPACE/cmd/revad/revad
+  revad-services:
+    image: *golang_image
+    detach: true
+    commands:
+      - cd tests/oc-integration-tests/ci/
+      - ../../../cmd/revad/revad -c frontend.toml &
+      - ../../../cmd/revad/revad -c gateway.toml &
+      - ../../../cmd/revad/revad -c shares.toml &
+      - ../../../cmd/revad/revad -c storage-shares.toml &
+      - ../../../cmd/revad/revad -c machine-auth.toml &
+      - ../../../cmd/revad/revad -c storage-users-decomposed.toml &
+      - ../../../cmd/revad/revad -c storage-publiclink.toml &
+      - ../../../cmd/revad/revad -c permissions-demo-ci.toml &
+      - ../../../cmd/revad/revad -c ldap-users.toml
+  wait_for_server:
+    image: *woodpecker_wait_plugin_image
+    settings:
+      host: revad-services
+      port: 19000
+
+  clone_api_tests:
+    image: *alpine_image
+    commands:
+      - . ./.woodpecker.env
+      - git clone -b $APITESTS_BRANCH --single-branch --no-tags $APITESTS_REPO_GIT_URL
+      - cd opencloud
+      - git checkout $APITESTS_COMMITID
+
+  opencloud-api-tests:
+    image: *behat_image
+    commands:
+      - cd opencloud
+      - make test-acceptance-api
+    environment:
+      TEST_SERVER_URL: "http://revad-services:20080"
+      OC_REVA_DATA_ROOT: "/woodpecker/src/reva/data"
+      DELETE_USER_DATA_CMD: "rm -rf /woodpecker/src/reva/data/spaces/* /woodpecker/src/reva/data/blobs/* /woodpecker/src/reva/data/indexes/by-type/*"
+      STORAGE_DRIVER: "decomposed"
+      TEST_WITH_LDAP: True
+      REVA_LDAP_HOSTNAME: "ldap"
+      TEST_REVA: True
+      SEND_SCENARIO_LINE_REFERENCES: True
+      BEHAT_FILTER_TAGS: "~@skip&&~@skipOnReva&&~@env-config"
+      DIVIDE_INTO_NUM_PARTS: "4"
+      RUN_PART: "${RUN_PART}"
+      EXPECTED_FAILURES_FILE: "/woodpecker/src/github.com/opencloud-eu/reva/tests/acceptance/expected-failures-on-decomposed-storage.md"
+      ACCEPTANCE_TEST_TYPE: "core-api"
+
+services:
+  ldap:
+    image: *ldap_image
+    environment:
+      LDAP_DOMAIN: "example.org"
+      LDAP_ORGANISATION: "example"
+      LDAP_ADMIN_PASSWORD: "admin"
+      LDAP_TLS_VERIFY_CLIENT: "never"
+      HOSTNAME: "ldap"
