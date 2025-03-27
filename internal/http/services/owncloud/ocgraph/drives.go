@@ -119,7 +119,7 @@ func isMountpointRequest(request *godata.GoDataRequest) bool {
 	return request.Query.Filter.Tree.Children[0].Token.Value == "driveType" && strings.Trim(request.Query.Filter.Tree.Children[1].Token.Value, "'") == "mountpoint"
 }
 
-const shareJailID = "a0ca6a90-a365-4782-871e-d44447bbc668"
+const SHARE_JAIL_ID = "a0ca6a90-a365-4782-871e-d44447bbc668"
 
 func (s *svc) getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClient) ([]*libregraph.Drive, error) {
 	res, err := gw.ListExistingReceivedShares(ctx, &collaborationv1beta1.ListReceivedSharesRequest{})
@@ -138,7 +138,7 @@ func (s *svc) getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClien
 }
 
 func libregraphShareID(shareID *collaborationv1beta1.ShareId) string {
-	return fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, shareID.OpaqueId)
+	return fmt.Sprintf("%s$%s!%s", SHARE_JAIL_ID, SHARE_JAIL_ID, shareID.OpaqueId)
 }
 
 func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libregraph.Drive {
@@ -155,7 +155,7 @@ func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libre
 			Remaining: libregraph.PtrInt64(24154387158408),
 		},
 		Root: &libregraph.DriveItem{
-			Id:        libregraph.PtrString(fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, rsi.ReceivedShare.Share.Id.OpaqueId)),
+			Id:        libregraph.PtrString(fmt.Sprintf("%s$%s!%s", SHARE_JAIL_ID, SHARE_JAIL_ID, rsi.ReceivedShare.Share.Id.OpaqueId)),
 			WebDavUrl: libregraph.PtrString(fullURL(s.c.WebDavBase, rsi.ResourceInfo.Path)),
 			RemoteItem: &libregraph.RemoteItem{
 				DriveAlias: libregraph.PtrString(strings.TrimSuffix(strings.TrimPrefix(rsi.ResourceInfo.Path, "/"), spaces.RelativePathToSpaceID(rsi.ResourceInfo))), // the drive alias must not start with /
@@ -250,9 +250,9 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	spaceID, _ := router.ShiftPath(r.URL.Path)
-	// For the moment, not implemented
-	// (code will be only for sync clients, which do not yet go through Reva)
 	if isShareJail(spaceID) {
+		// For now we never go through this branch
+		// (code will be only for sync clients, which do not yet go through Reva)
 		shareRes, err := gw.GetReceivedShare(ctx, &collaborationv1beta1.GetReceivedShareRequest{
 			Ref: &collaborationv1beta1.ShareReference{
 				Spec: &collaborationv1beta1.ShareReference_Id{
@@ -331,13 +331,13 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 }
 
-// For the moment, not supported
 func isShareJail(spaceID string) bool {
-	return false // TODO
+	return spaceID == SHARE_JAIL_ID
 }
 
 func shareID(spaceID string) string {
-	return "" // TODO
+	// TODO
+	return ""
 }
 
 func fullURL(base, path string) string {

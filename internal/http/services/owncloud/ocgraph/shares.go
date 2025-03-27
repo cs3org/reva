@@ -62,11 +62,10 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 	for _, share := range resShares.ShareInfos {
 		drive, err := s.cs3ReceivedShareToDriveItem(ctx, share)
 		if err != nil {
-			log.Error().Err(err).Msg("error getting received shares")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
+			log.Error().Err(err).Any("share", share).Msg("error parsing received share, ignoring")
+		} else {
+			shares = append(shares, drive)
 		}
-		shares = append(shares, drive)
 	}
 
 	if err := json.NewEncoder(w).Encode(map[string]any{
@@ -116,9 +115,9 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.Rece
 		LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(rsi.ResourceInfo.Mtime)),
 		Name:                 libregraph.PtrString(rsi.ResourceInfo.Name),
 		ParentReference: &libregraph.ItemReference{
-			DriveId:   libregraph.PtrString(fmt.Sprintf("%s$%s", shareJailID, shareJailID)),
+			DriveId:   libregraph.PtrString(fmt.Sprintf("%s$%s", SHARE_JAIL_ID, SHARE_JAIL_ID)),
 			DriveType: libregraph.PtrString("virtual"),
-			Id:        libregraph.PtrString(fmt.Sprintf("%s$%s!%s", shareJailID, shareJailID, shareJailID)),
+			Id:        libregraph.PtrString(fmt.Sprintf("%s$%s!%s", SHARE_JAIL_ID, SHARE_JAIL_ID, SHARE_JAIL_ID)),
 		},
 		RemoteItem: &libregraph.RemoteItem{
 			CreatedBy: &libregraph.IdentitySet{
