@@ -32,6 +32,7 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/myofficefiles"
 
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/httpclient"
@@ -141,12 +142,13 @@ func (c *Config) ApplyDefaults() {
 }
 
 type svc struct {
-	c                  *Config
-	webDavHandler      *WebDavHandler
-	davHandler         *DavHandler
-	favoritesManager   favorite.Manager
-	client             *httpclient.Client
-	notificationHelper *notificationhelper.NotificationHelper
+	c                    *Config
+	webDavHandler        *WebDavHandler
+	davHandler           *DavHandler
+	favoritesManager     favorite.Manager
+	myOfficeFilesManager myofficefiles.Manager
+	client               *httpclient.Client
+	notificationHelper   *notificationhelper.NotificationHelper
 }
 
 func getFavoritesManager(c *Config) (favorite.Manager, error) {
@@ -168,6 +170,11 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 		return nil, err
 	}
 
+	myOfficeFilesManager, err := myofficefiles.New(ctx, c.GatewaySvc)
+	if err != nil {
+		return nil, err
+	}
+
 	log := appctx.GetLogger(ctx)
 	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: c.Insecure}}
 	s := &svc{
@@ -178,8 +185,9 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 			httpclient.Timeout(time.Duration(c.Timeout*int64(time.Second))),
 			httpclient.RoundTripper(tr),
 		),
-		favoritesManager:   fm,
-		notificationHelper: notificationhelper.New("ocdav", c.Notifications, log),
+		favoritesManager:     fm,
+		notificationHelper:   notificationhelper.New("ocdav", c.Notifications, log),
+		myOfficeFilesManager: myOfficeFilesManager,
 	}
 
 	// initialize handlers and set default cigs
