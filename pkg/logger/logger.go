@@ -50,6 +50,7 @@ type Option func(l *zerolog.Logger)
 // New creates a new logger.
 func New(opts ...Option) *zerolog.Logger {
 	// create a default logger
+	zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	zl := zerolog.New(os.Stderr).With().Timestamp().Caller().Logger()
 	for _, opt := range opts {
 		opt(&zl)
