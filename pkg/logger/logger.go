@@ -128,7 +128,7 @@ type LogConf struct {
 
 func fromConfig(conf *LogConf) (*zerolog.Logger, error) {
 	if conf.Level == "" {
-		conf.Level = zerolog.DebugLevel.String()
+		conf.Level = zerolog.InfoLevel.String()
 	}
 
 	var opts []Option
