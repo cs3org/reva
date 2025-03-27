@@ -1220,6 +1220,7 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 	fdrq.Id.Path = []byte(dpath)
 
 	fdrq.Role = new(erpc.RoleId)
+
 	uid, gid, err := utils.ExtractUidGid(auth)
 	if err == nil {
 		fdrq.Role.Uid = uid

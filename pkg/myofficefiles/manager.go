@@ -2,6 +2,7 @@ package myofficefiles
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -17,18 +18,31 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 )
 
+type OfficeFileType string
+
+const (
+	TypeWord       OfficeFileType = "doc"
+	TypeExcel      OfficeFileType = "xls"
+	TypePowerpoint OfficeFileType = "ppt"
+)
+
 // Manager defines an interface for a MyOfficeFiles manager.
 type Manager interface {
 	// ListMyOfficeFiles returns all recent Office files of a user.
-	ListMyOfficeFiles(ctx context.Context, user *userpb.User) ([]*provider.ResourceInfo, error)
+	ListMyOfficeFiles(ctx context.Context, user *userpb.User, filetype OfficeFileType) ([]*provider.ResourceInfo, error)
 }
 
-// This feature is only enabled for users that are in the
+// This feature is only enabled for users that are in the targetGroup
 const (
-	targetGroup      = "cernbox-office-view"
-	officeFilesRegex = "(.*?)(.xls|.doc|.ppt|.XLS|.DOC|.PPT)[x|X]?"
-	depth            = 5
+	targetGroup = "cernbox-office-view"
+	depth       = 10
 )
+
+var officeFilesRegex = map[OfficeFileType]string{
+	TypeWord:       "(.*?)(.doc|.DOC)[x|X]?$",
+	TypeExcel:      "(.*?)(.xls|.XLS|)[x|X]?$",
+	TypePowerpoint: "(.*?)(.ppt|.PPT)[x|X]?$",
+}
 
 type svc struct {
 	gateway gatewayv1beta1.GatewayAPIClient
@@ -45,7 +59,20 @@ func New(ctx context.Context, gatewayEndpoint string) (Manager, error) {
 	}, nil
 }
 
-func (s *svc) ListMyOfficeFiles(ctx context.Context, user *userpb.User) ([]*provider.ResourceInfo, error) {
+func FileType(filetype string) (OfficeFileType, error) {
+	switch filetype {
+	case "doc":
+		return TypeWord, nil
+	case "xls":
+		return TypeExcel, nil
+	case "ppt":
+		return TypePowerpoint, nil
+	default:
+		return "", errors.New("Invalid filetype")
+	}
+}
+
+func (s *svc) ListMyOfficeFiles(ctx context.Context, user *userpb.User, filetype OfficeFileType) ([]*provider.ResourceInfo, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("ListMyOfficeFiles")
 
@@ -61,6 +88,7 @@ func (s *svc) ListMyOfficeFiles(ctx context.Context, user *userpb.User) ([]*prov
 	paths := []string{
 		home,
 	}
+	var regex = officeFilesRegex[filetype]
 
 	resourceInfos := []*provider.ResourceInfo{}
 
@@ -71,7 +99,7 @@ func (s *svc) ListMyOfficeFiles(ctx context.Context, user *userpb.User) ([]*prov
 				Map: map[string]*typesv1beta1.OpaqueEntry{
 					"regex": {
 						Decoder: "plain",
-						Value:   []byte(officeFilesRegex),
+						Value:   []byte(regex),
 					},
 					"depth": {
 						Decoder: "plain",

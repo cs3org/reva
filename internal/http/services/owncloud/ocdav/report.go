@@ -27,6 +27,7 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/myofficefiles"
 )
 
 const (
@@ -122,10 +123,15 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 			resourceInfos = append(resourceInfos, statRes.Info)
 		}
 
-	} else if ff.Rules.MyOfficeFiles {
+	} else if ff.Rules.MyOfficeFiles != "" {
 		currentUser := appctx.ContextMustGetUser(ctx)
 		var err error
-		resourceInfos, err = s.myOfficeFilesManager.ListMyOfficeFiles(ctx, currentUser)
+		filetype, err := myofficefiles.FileType(ff.Rules.MyOfficeFiles)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		resourceInfos, err = s.myOfficeFilesManager.ListMyOfficeFiles(ctx, currentUser, filetype)
 		if err != nil {
 			log.Error().Err(err).Msg("error listing MyOfficeFiles")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -172,9 +178,9 @@ type reportFilterFiles struct {
 }
 
 type reportFilterFilesRules struct {
-	Favorite      bool `xml:"favorite"`
-	SystemTag     int  `xml:"systemtag"`
-	MyOfficeFiles bool `xml:"my-office-files"`
+	Favorite      bool   `xml:"favorite"`
+	SystemTag     int    `xml:"systemtag"`
+	MyOfficeFiles string `xml:"my-office-files"`
 }
 
 func readReport(r io.Reader) (rep *report, status int, err error) {
