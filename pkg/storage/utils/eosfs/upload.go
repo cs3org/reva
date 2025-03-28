@@ -77,13 +77,11 @@ func (fs *Eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 		metadata = map[string]string{}
 	}
 	app := metadata["lockholder"]
+	// if we have a lock context, the app for EOS must match the lock holder, else we just tag the traffic as write
 	if app == "" {
-		app = "reva_eosclient::write"
-	} else {
-		// if we have a lock context, the app for EOS must match the lock holder
-		app = fs.EncodeAppName(app)
+		app = "write"
 	}
-	return fs.c.Write(ctx, auth, fn, r, app)
+	return fs.c.Write(ctx, auth, fn, r, fs.EncodeAppName(app))
 }
 
 func (fs *Eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
