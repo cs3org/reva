@@ -532,10 +532,10 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 
 func (fs *eosfs) EncodeAppName(a string) string {
 	// this function returns the string to be used as EOS "app" tag, both in uploads and when handling locks;
-	// note that the GET (and PUT) operations in eosbinary.go and eoshttp.go use a `reva_eosclient::read`
-	// (resp. `write`) tag when no locks are involved.
+	// note that the GET (and PUT) operations in eosbinary.go and eoshttp.go use a `read`
+	// (resp. `write`) app name when no locks are involved.
 	r := strings.NewReplacer(" ", "_")
-	return "reva_eosclient::app_" + strings.ToLower(r.Replace(a))
+	return eosclient.EosAppPrefix + "_" + strings.ToLower(r.Replace(a))
 }
 
 func (fs *eosfs) getLockPayloads(ctx context.Context, path string) (string, string, error) {

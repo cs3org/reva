@@ -253,7 +253,7 @@ func (c *Client) initNSRequest(ctx context.Context, auth eosclient.Authorization
 
 	// For NS operations, specifically for locking, we also need to provide the app
 	if app != "" {
-		rq.Role.App = app
+		rq.Role.App = eosclient.EosAppPrefix + "_" + app
 	}
 
 	return rq, nil
