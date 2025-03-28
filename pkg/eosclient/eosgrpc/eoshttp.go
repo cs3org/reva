@@ -36,6 +36,8 @@ import (
 	"github.com/cs3org/reva/pkg/logger"
 )
 
+const EOS_APP_HEADER = "eos.app"
+
 // HTTPOptions to configure the Client.
 type HTTPOptions struct {
 
@@ -274,7 +276,7 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 		return nil, err
 	}
 	// similar to eosbinary.go::Read()
-	req.Header.Set("app", "reva_eosclient::read")
+	req.Header.Set(EOS_APP_HEADER, "reva_eosclient::read")
 
 	ntries := 0
 	nredirs := 0
@@ -379,7 +381,7 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 	}
 
 	if app != "" {
-		req.Header.Set("app", app)
+		req.Header.Set(EOS_APP_HEADER, app)
 	}
 	req.Close = true
 

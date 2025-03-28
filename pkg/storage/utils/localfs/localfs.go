@@ -162,6 +162,7 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 }
 
 func (fs *localfs) wrap(ctx context.Context, p string) string {
+	log := appctx.GetLogger(ctx)
 	// This is to prevent path traversal.
 	// With this p can't break out of its parent folder
 	p = path.Join("/", p)
@@ -175,6 +176,7 @@ func (fs *localfs) wrap(ctx context.Context, p string) string {
 	} else {
 		internal = path.Join(fs.conf.DataDirectory, p)
 	}
+	log.Debug().Str("old", p).Str("wrapped", internal).Msg("localfs: wrap")
 	return internal
 }
 
@@ -842,6 +844,8 @@ func (fs *localfs) Delete(ctx context.Context, ref *provider.Reference) error {
 }
 
 func (fs *localfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
+	log := appctx.GetLogger(ctx)
+	log.Debug().Any("from", oldRef).Any("to", newRef).Msg("localfs: move")
 	oldName, err := fs.resolve(ctx, oldRef)
 	if err != nil {
 		return errors.Wrap(err, "localfs: error resolving ref")
@@ -860,6 +864,7 @@ func (fs *localfs) Move(ctx context.Context, oldRef, newRef *provider.Reference)
 	newName = fs.wrap(ctx, newName)
 
 	if err := os.Rename(oldName, newName); err != nil {
+		log.Error().Err(err).Msg("localfs: error moving " + oldName + " to " + newName)
 		return errors.Wrap(err, "localfs: error moving "+oldName+" to "+newName)
 	}
 
@@ -912,6 +917,7 @@ func (fs *localfs) moveReferences(ctx context.Context, oldName, newName string) 
 }
 
 func (fs *localfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
+	log := appctx.GetLogger(ctx)
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error resolving ref")
@@ -926,6 +932,7 @@ func (fs *localfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []
 	fn = fs.wrap(ctx, fn)
 	md, err := os.Stat(fn)
 	if err != nil {
+		log.Warn().Str("path", fn).Any("md", md).Err(err).Msg("failed stat call in localfs")
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(fn)
 		}
@@ -952,6 +959,7 @@ func (fs *localfs) getMDShareFolder(ctx context.Context, p string, mdKeys []stri
 }
 
 func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
+	log := appctx.GetLogger(ctx)
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error resolving ref")
@@ -960,6 +968,7 @@ func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKe
 	if fn == "/" {
 		homeFiles, err := fs.listFolder(ctx, fn, mdKeys)
 		if err != nil {
+			log.Warn().Err(err).Msg("failed to execute listFolder for root")
 			return nil, err
 		}
 		if !fs.conf.DisableHome {
@@ -973,14 +982,22 @@ func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKe
 	}
 
 	if fs.isShareFolderRoot(ctx, fn) {
-		return fs.listShareFolderRoot(ctx, fn, mdKeys)
+		res, err := fs.listShareFolderRoot(ctx, fn, mdKeys)
+		if err != nil {
+			log.Warn().Str("fn", fn).Err(err).Msg("failed to execute listShareFolderRoot")
+		}
+		return res, err
 	}
 
 	if fs.isShareFolderChild(ctx, fn) {
 		return nil, errtypes.PermissionDenied("localfs: error listing folders inside the shared folder, only file references are stored inside")
 	}
 
-	return fs.listFolder(ctx, fn, mdKeys)
+	res, err := fs.listFolder(ctx, fn, mdKeys)
+	if err != nil {
+		log.Warn().Str("fn", fn).Err(err).Msg("failed to execute listFolder")
+	}
+	return res, err
 }
 
 func (fs *localfs) listFolder(ctx context.Context, fn string, mdKeys []string) ([]*provider.ResourceInfo, error) {
@@ -1050,7 +1067,10 @@ func (fs *localfs) listShareFolderRoot(ctx context.Context, home string, mdKeys 
 
 func (fs *localfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
 	fn, err := fs.resolve(ctx, ref)
+	log := appctx.GetLogger(ctx)
+
 	if err != nil {
+		log.Error().Err(err).Any("ref", ref).Msg("localfs: error resolving ref")
 		return nil, errors.Wrap(err, "localfs: error resolving ref")
 	}
 
@@ -1062,8 +1082,10 @@ func (fs *localfs) Download(ctx context.Context, ref *provider.Reference) (io.Re
 	r, err := os.Open(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
+			log.Error().Err(err).Str("path", fn).Msg("localfs: file not found")
 			return nil, errtypes.NotFound(fn)
 		}
+		log.Error().Err(err).Str("path", fn).Msg("localfs: error opening file")
 		return nil, errors.Wrap(err, "localfs: error reading "+fn)
 	}
 	return r, nil

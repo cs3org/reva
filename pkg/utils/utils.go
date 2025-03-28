@@ -499,3 +499,19 @@ func GetUser(ctx context.Context) (*userpb.User, error) {
 	}
 	return u, nil
 }
+
+// Extract a simplified user agent
+func SimplifiedUserAgent(r *http.Request) string {
+	switch {
+	case strings.Contains(r.UserAgent(), "Firefox"):
+		return "Firefox"
+	case strings.Contains(r.UserAgent(), "Safari") && (strings.Contains(r.UserAgent(), "Mac OS X")):
+		// the order is important! Safari advertises itself as "Safari/Chrome"
+		return "Safari"
+	case strings.Contains(r.UserAgent(), "Chrome"):
+		// this includes any Chromium-based browser such as Edge and Opera
+		return "Chrome"
+	default:
+		return "Other"
+	}
+}

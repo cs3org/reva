@@ -291,7 +291,7 @@ func (c *Client) initMDRequest(ctx context.Context, auth eosclient.Authorization
 // AddACL adds an new acl to EOS with the given aclType.
 func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, pos uint, a *acl.Entry) error {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "AddACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
+	log.Info().Str("func", "AddACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Str("acl", a.CitrineSerialize()).Msg("")
 
 	// First, we need to figure out if the path is a directory
 	// to know whether our request should be recursive
@@ -604,6 +604,7 @@ func (c *Client) handleFavAttr(ctx context.Context, auth eosclient.Authorization
 		favs.DeleteEntry(acl.TypeUser, u.Id.OpaqueId)
 	}
 	attr.Val = favs.Serialize()
+
 	if attr.Val == "" {
 		return c.unsetEOSAttr(ctx, auth, attr, recursive, path, "", true)
 	} else {

@@ -1,0 +1,9 @@
+Bugfix: Use binary client for Attrs
+
+EOS < 5.3 has a couple of bugs related to attributes:
+* Attributes can only be removed as root or the owner, but over gRPC we cannot become root
+* The recursive property is ignored on set attributes
+
+For these two issues, we circumvent them by calling the binary client until we have deployed EOS 5.3
+
+https://github.com/cs3org/reva/pull/5123

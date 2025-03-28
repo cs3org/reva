@@ -258,7 +258,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 			})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(*share).To(Equal(ocm.Share{
+			Expect(share).To(Equal(&ocm.Share{
 				Id: &ocm.ShareId{},
 				ResourceId: &provider.ResourceId{
 					OpaqueId:  "fileid-/some/path",
@@ -283,7 +283,7 @@ var _ = Describe("Nextcloud", func() {
 					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
 				},
 				AccessMethods: []*ocm.AccessMethod{
-					ocmshare.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
+					ocmshare.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions(), []string{}),
 					ocmshare.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 					ocmshare.NewTransferAccessMethod(),
 				},
@@ -388,7 +388,7 @@ var _ = Describe("Nextcloud", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(1))
-			Expect(*shares[0]).To(Equal(ocm.Share{
+			Expect(shares[0]).To(Equal(&ocm.Share{
 				Id: &ocm.ShareId{},
 				ResourceId: &provider.ResourceId{
 					OpaqueId:  "fileid-/some/path",
@@ -422,7 +422,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 				ShareType: ocm.ShareType_SHARE_TYPE_USER,
 				AccessMethods: []*ocm.AccessMethod{
-					ocmshare.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
+					ocmshare.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions(), []string{}),
 					ocmshare.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 					ocmshare.NewTransferAccessMethod(),
 				},
@@ -441,7 +441,7 @@ var _ = Describe("Nextcloud", func() {
 			receivedShares, err := am.ListReceivedShares(ctx, user)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(receivedShares)).To(Equal(1))
-			Expect(*receivedShares[0]).To(Equal(ocm.ReceivedShare{
+			Expect(receivedShares[0]).To(Equal(&ocm.ReceivedShare{
 				Id:            &ocm.ShareId{},
 				Name:          "test share",
 				RemoteShareId: "",
@@ -475,7 +475,7 @@ var _ = Describe("Nextcloud", func() {
 				Protocols: []*ocm.Protocol{
 					ocmshare.NewWebDAVProtocol("webdav-uri", "some-token", &ocm.SharePermissions{
 						Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
-					}),
+					}, []string{}),
 					ocmshare.NewWebappProtocol("app-uri-template", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 					ocmshare.NewTransferProtocol("source-uri", "some-token", 1),
 				},
@@ -499,7 +499,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 			})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(*receivedShare).To(Equal(ocm.ReceivedShare{
+			Expect(receivedShare).To(Equal(&ocm.ReceivedShare{
 				Id:            &ocm.ShareId{},
 				Name:          "test share",
 				RemoteShareId: "",
@@ -533,7 +533,7 @@ var _ = Describe("Nextcloud", func() {
 				Protocols: []*ocm.Protocol{
 					ocmshare.NewWebDAVProtocol("webdav-uri", "some-token", &ocm.SharePermissions{
 						Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
-					}),
+					}, []string{}),
 					ocmshare.NewWebappProtocol("app-uri-template", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 					ocmshare.NewTransferProtocol("source-uri", "some-token", 1),
 				},
@@ -588,7 +588,7 @@ var _ = Describe("Nextcloud", func() {
 					Paths: []string{"state"},
 				})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(*receivedShare).To(Equal(ocm.ReceivedShare{
+			Expect(receivedShare).To(Equal(&ocm.ReceivedShare{
 				Id:            &ocm.ShareId{},
 				Name:          "test share",
 				RemoteShareId: "",
@@ -622,7 +622,7 @@ var _ = Describe("Nextcloud", func() {
 				Protocols: []*ocm.Protocol{
 					ocmshare.NewWebDAVProtocol("webdav-uri", "some-token", &ocm.SharePermissions{
 						Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
-					}),
+					}, []string{}),
 					ocmshare.NewWebappProtocol("app-uri-template", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 					ocmshare.NewTransferProtocol("source-uri", "some-token", 1),
 				},

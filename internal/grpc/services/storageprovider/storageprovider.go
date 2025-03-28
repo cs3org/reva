@@ -29,6 +29,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -62,12 +63,12 @@ type config struct {
 	MountID                         string                            `docs:"-;The ID of the mounted file system."                                                                         mapstructure:"mount_id"`
 	Driver                          string                            `docs:"localhome;The storage driver to be used."                                                                     mapstructure:"driver"`
 	Drivers                         map[string]map[string]interface{} `docs:"url:pkg/storage/fs/localhome/localhome.go"                                                                    mapstructure:"drivers"`
-	TmpFolder                       string                            `docs:"/var/tmp;Path to temporary folder."                                                                           mapstructure:"tmp_folder"`
 	DataServerURL                   string                            `docs:"http://localhost/data;The URL for the data server."                                                           mapstructure:"data_server_url"`
 	ExposeDataServer                bool                              `docs:"false;Whether to expose data server."                                                                         mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
 	AvailableXS                     map[string]uint32                 `docs:"nil;List of available checksums."                                                                             mapstructure:"available_checksums"`
 	CustomMimeTypesJSON             string                            `docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types." mapstructure:"custom_mime_types_json"`
 	MinimunAllowedPathLevelForShare int                               `mapstructure:"minimum_allowed_path_level_for_share"`
+	SpaceLevel                      int                               `mapstructure:"space_level;The number of path components that identify the path of a Space out of an absolute path"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -83,10 +84,6 @@ func (c *config) ApplyDefaults() {
 		c.MountID = "00000000-0000-0000-0000-000000000000"
 	}
 
-	if c.TmpFolder == "" {
-		c.TmpFolder = "/var/tmp/reva/tmp"
-	}
-
 	if c.DataServerURL == "" {
 		host, err := os.Hostname()
 		if err != nil || host == "" {
@@ -94,6 +91,10 @@ func (c *config) ApplyDefaults() {
 		} else {
 			c.DataServerURL = fmt.Sprintf("http://%s:19001/data", host)
 		}
+	}
+
+	if c.SpaceLevel == 0 {
+		c.SpaceLevel = 4
 	}
 
 	// set sane defaults
@@ -106,7 +107,6 @@ type service struct {
 	conf               *config
 	storage            storage.FS
 	mountPath, mountID string
-	tmpFolder          string
 	dataServerURL      *url.URL
 	availableXS        []*provider.ResourceChecksumPriority
 }
@@ -163,10 +163,6 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	if err := os.MkdirAll(c.TmpFolder, 0755); err != nil {
-		return nil, err
-	}
-
 	mountPath := c.MountPath
 	mountID := c.MountID
 
@@ -204,7 +200,6 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	service := &service{
 		conf:          &c,
 		storage:       fs,
-		tmpFolder:     c.TmpFolder,
 		mountPath:     mountPath,
 		mountID:       mountID,
 		dataServerURL: u,
@@ -245,6 +240,7 @@ func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArb
 }
 
 func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest) (*provider.UnsetArbitraryMetadataResponse, error) {
+	log := appctx.GetLogger(ctx)
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
@@ -261,6 +257,7 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
+			log.Error().Err(err).Str("ref", req.Ref.String()).Any("keys", req.ArbitraryMetadataKeys).Msg("error unsetting arbitrary metadata")
 			st = status.NewInternal(ctx, err, "error unsetting arbitrary metadata: "+req.Ref.String())
 		}
 		return &provider.UnsetArbitraryMetadataResponse{
@@ -773,6 +770,22 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	return res, nil
 }
 
+func spaceFromPath(path string, lvl int) string {
+	path = strings.TrimPrefix(path, "/")
+	s := strings.SplitN(path, "/", lvl+1)
+	if len(s) < lvl {
+		// TODO: outside space. what to do??
+		return ""
+	}
+
+	return "/" + strings.Join(s[:lvl], "/")
+}
+
+func (s *service) addSpaceInfo(ri *provider.ResourceInfo) {
+	space := spaceFromPath(ri.Path, s.conf.SpaceLevel)
+	ri.Id.SpaceId = space
+}
+
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
@@ -804,6 +817,8 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 	s.fixPermissions(md)
+	s.stripNonUtf8Metadata(ctx, md)
+	s.addSpaceInfo(md)
 	res := &provider.StatResponse{
 		Status: status.NewOK(ctx),
 		Info:   md,
@@ -827,6 +842,28 @@ func (s *service) fixPermissions(md *provider.ResourceInfo) {
 		md.PermissionSet.RemoveGrant = false
 		md.PermissionSet.DenyGrant = false
 		md.PermissionSet.UpdateGrant = false
+	}
+}
+
+// This method removes any entries in the ArbitraryMetadata map that
+// are not valid UTF-8
+// This is necessary because protobuf requires strings to only contain valid UTF-8
+func (s *service) stripNonUtf8Metadata(ctx context.Context, md *provider.ResourceInfo) {
+	log := appctx.GetLogger(ctx)
+	if md.ArbitraryMetadata == nil {
+		return
+	}
+
+	toDelete := []string{}
+	for k, v := range md.ArbitraryMetadata.Metadata {
+		if !utf8.ValidString(v) {
+			toDelete = append(toDelete, k)
+		}
+	}
+
+	for _, k := range toDelete {
+		log.Debug().Str("attribute", k).Msg("Dropping non-UTF8 metadata entry")
+		delete(md.ArbitraryMetadata.Metadata, k)
 	}
 }
 
@@ -927,6 +964,7 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 }
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
+	log := appctx.GetLogger(ctx)
 	newRef, err := s.unwrap(ctx, req.Ref)
 	mds, err := s.storage.ListFolder(ctx, newRef, req.ArbitraryMetadataKeys)
 	if err != nil {
@@ -937,6 +975,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
+			log.Error().Any("ref", newRef).Err(err).Msg("storageprovider: error listing container")
 			st = status.NewInternal(ctx, err, "error listing container: "+req.Ref.String())
 		}
 		return &provider.ListContainerResponse{
@@ -953,6 +992,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 			}, nil
 		}
 		s.fixPermissions(md)
+		s.stripNonUtf8Metadata(ctx, md)
 		infos = append(infos, md)
 	}
 	res := &provider.ListContainerResponse{

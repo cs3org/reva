@@ -22,8 +22,10 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"io"
 	"net/http"
 	"path"
+	"path/filepath"
 
 	apppb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
@@ -38,9 +40,9 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
-	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/go-chi/chi/v5"
 	ua "github.com/mileusna/useragent"
 	"github.com/pkg/errors"
@@ -142,8 +144,8 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parentContainerRef := resourceid.OwnCloudResourceIDUnwrap(parentContainerID)
-	if parentContainerRef == nil {
+	parentContainerRef, ok := spaces.ParseResourceID(parentContainerID)
+	if !ok {
 		writeError(w, r, appErrorInvalidParameter, "invalid parent container ID", nil)
 		return
 	}
@@ -277,7 +279,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 
 	js, err := json.Marshal(
 		map[string]interface{}{
-			"file_id": resourceid.OwnCloudResourceIDWrap(statRes.Info.Id),
+			"file_id": spaces.EncodeResourceID(statRes.Info.Id),
 		},
 	)
 	if err != nil {
@@ -349,8 +351,8 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		}
 		fileRef.Path = path
 	} else {
-		resourceID := resourceid.OwnCloudResourceIDUnwrap(fileID)
-		if resourceID == nil {
+		resourceID, ok := spaces.ParseResourceID(fileID)
+		if !ok {
 			writeError(w, r, appErrorInvalidParameter, "invalid file ID", nil)
 			return
 		}
@@ -435,7 +437,13 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log := appctx.GetLogger(ctx)
-	log.Info().Interface("resource", fileRef).Str("url", openRes.AppUrl.AppUrl).Str("method", openRes.AppUrl.Method).Interface("viewMode", viewMode).Msg("returning app URL for file")
+	log.Info().Interface("resource", fileRef.ResourceId).
+		Str("url", openRes.AppUrl.AppUrl).
+		Str("method", openRes.AppUrl.Method).
+		Interface("viewMode", viewMode).
+		Str("fileExt", filepath.Ext(statRes.Info.Path)).
+		Str("agent", utils.SimplifiedUserAgent(r)).
+		Msg("returning app URL for file")
 
 	w.Header().Set("Content-Type", "application/json")
 	if _, err = w.Write(js); err != nil {
@@ -461,18 +469,25 @@ func (s *svc) handleNotify(w http.ResponseWriter, r *http.Request) {
 		}
 		fileRef.Path = path
 	} else {
-		resourceID := resourceid.OwnCloudResourceIDUnwrap(fileID)
-		if resourceID == nil {
+		resourceID, ok := spaces.ParseResourceID(fileID)
+		if !ok {
 			writeError(w, r, appErrorInvalidParameter, "invalid file ID", nil)
 			return
 		}
 		fileRef.ResourceId = resourceID
 	}
 
+	// the body of the request may contain any error the client got when attempting to open the app
+	failure, _ := io.ReadAll(r.Body)
+
 	// log the fileid for later correlation / monitoring
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-	log.Info().Interface("resource", fileRef).Msg("file successfully opened in app")
+	if len(failure) == 0 {
+		log.Info().Interface("resource", fileRef.ResourceId).Msg("file successfully opened in app")
+	} else {
+		log.Info().Interface("resource", fileRef.ResourceId).Str("failure", string(failure)).Msg("failed to open file in app")
+	}
 
 	w.WriteHeader(http.StatusOK)
 }

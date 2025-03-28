@@ -146,6 +146,8 @@ enable_home_creation = true
 
 [grpc.services.storageprovider.drivers.localhome]
 user_layout = "{{.Username}}"
+root = "/revalocalstorage"
+share_folder = "/revashares"
 
 [[grpc.services.storageprovider]]
 driver = "ocmoutcoming"
@@ -257,6 +259,7 @@ driver = "localhome"
 
 [http.services.dataprovider.drivers.localhome]
 user_layout = "{{.Username}}"
+root = "/revalocalstorage"
 
 [[http.services.dataprovider]]
 address = ":443"
@@ -406,3 +409,7 @@ debug = true
 exposed_headers = []
 
 [http.middlewares.log]
+level = "debug"
+
+[http.interceptors.log]
+level = "debug"
