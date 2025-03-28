@@ -56,7 +56,7 @@ require (
 	go.opencensus.io v0.24.0
 	go.step.sm/crypto v0.57.0
 	golang.org/x/crypto v0.32.0
-	golang.org/x/oauth2 v0.26.0
+	golang.org/x/oauth2 v0.28.0
 	golang.org/x/sync v0.11.0
 	golang.org/x/sys v0.29.0
 	golang.org/x/term v0.28.0
@@ -143,6 +143,7 @@ require (
 )
 
 go 1.22.7
+toolchain go1.24.1
 
 replace (
 	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
