@@ -15,7 +15,6 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/storage/utils/templates"
 )
 
 type OfficeFileType string
@@ -34,8 +33,9 @@ type Manager interface {
 
 // This feature is only enabled for users that are in the targetGroup
 const (
-	targetGroup = "cernbox-office-view"
-	depth       = 10
+	targetGroup   = "cernbox-office-view"
+	depth         = 10
+	maxInodeQuota = 1000000000
 )
 
 var officeFilesRegex = map[OfficeFileType]string{
@@ -68,7 +68,7 @@ func FileType(filetype string) (OfficeFileType, error) {
 	case "ppt":
 		return TypePowerpoint, nil
 	default:
-		return "", errors.New("Invalid filetype")
+		return "", errors.New("invalid filetype")
 	}
 }
 
@@ -80,17 +80,22 @@ func (s *svc) ListMyOfficeFiles(ctx context.Context, user *userpb.User, filetype
 		return nil, errtypes.PermissionDenied("ListMyOfficeFiles is only enabled for users in the " + targetGroup + " group")
 	}
 
-	u := appctx.ContextMustGetUser(ctx)
-	home := templates.WithUser(u, "/eos/user/{{substr 0 1 .Username}}/{{.Username}}/")
-
-	// home and all projects
-	paths := []string{home}
+	// u := appctx.ContextMustGetUser(ctx)
+	// home := templates.WithUser(u, "/eos/user/{{substr 0 1 .Username}}/{{.Username}}/")
+	spaces, err := s.gateway.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{})
+	if err != nil {
+		return nil, err
+	}
 
 	var regex = officeFilesRegex[filetype]
 
 	resourceInfos := []*provider.ResourceInfo{}
 
-	for _, path := range paths {
+	for _, space := range spaces.StorageSpaces {
+		if space.Quota.QuotaMaxFiles > maxInodeQuota {
+			continue
+		}
+		path := space.RootInfo.Path
 		log.Info().Str("path", path).Msg("ListMyOfficeFiles")
 		res, err := s.gateway.ListContainer(ctx, &provider.ListContainerRequest{
 			Opaque: &typesv1beta1.Opaque{
