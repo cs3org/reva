@@ -53,7 +53,7 @@ type Capabilities struct {
 	Core         *CapabilitiesCore         `json:"core"             xml:"core"`
 	Checksums    *CapabilitiesChecksums    `json:"checksums"        xml:"checksums"`
 	Files        *CapabilitiesFiles        `json:"files"            mapstructure:"files"         xml:"files"`
-	Dav          *CapabilitiesDav          `json:"dav"              xml:"dav"`
+	Dav          *CapabilitiesDav          `json:"dav"              mapstructure:"dav"          xml:"dav"`
 	FilesSharing *CapabilitiesFilesSharing `json:"files_sharing"    mapstructure:"files_sharing" xml:"files_sharing"`
 	Spaces       *Spaces                   `json:"spaces,omitempty" mapstructure:"spaces"        xml:"spaces,omitempty"`
 
