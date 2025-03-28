@@ -84,10 +84,8 @@ func (s *svc) ListMyOfficeFiles(ctx context.Context, user *userpb.User, filetype
 	home := templates.WithUser(u, "/eos/user/{{substr 0 1 .Username}}/{{.Username}}/")
 
 	// home and all projects
-	// TODO: get user projects
-	paths := []string{
-		home,
-	}
+	paths := []string{home}
+
 	var regex = officeFilesRegex[filetype]
 
 	resourceInfos := []*provider.ResourceInfo{}

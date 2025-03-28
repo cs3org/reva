@@ -1923,7 +1923,7 @@ func mergePermissions(l *provider.ResourcePermissions, r *provider.ResourcePermi
 }
 
 func (fs *Eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
-	path, err := fs.unwrap(ctx, eosFileInfo.File)
+	p, err := fs.unwrap(ctx, eosFileInfo.File)
 	if err != nil {
 		return nil, err
 	}
