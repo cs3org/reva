@@ -158,3 +158,11 @@ const AttrNotExistsError = errtypes.BadRequest("attr not exists")
 // FileIsLockedError is the error raised when attempting to set a lock
 // attribute to an already locked file with a mismatched lock.
 const FileIsLockedError = errtypes.BadRequest("file is locked")
+
+// The header or URL query parameter to be used to pass the app "tag" to EOS
+const EosAppHeader = "eos.app"
+
+// A prefix for the app "tag": note we use 'http/' as we interact via HTTP
+// and EOS would anyway prefix our traffic as such: this is critical for
+// apps locking to work correctly!
+const EosAppPrefix = "http/reva"
