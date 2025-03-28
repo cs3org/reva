@@ -852,6 +852,8 @@ github.com/ceph/go-ceph v0.32.0 h1:iXRUGdPmH7h9Vf/WA1Dg3Wo1tgL7gcUbylfpbxrlGLs=
 github.com/ceph/go-ceph v0.32.0/go.mod h1:42eoJzyLS3VREzqrg2ot44NtuluQZi55hFRSoLF36GQ=
 github.com/cern-eos/go-eosgrpc v0.0.0-20240909164147-ad693be93181 h1:2ZK/g0kTWuO98hM8uCuGnFwtljWhjI3k6nTQJLYj8vE=
 github.com/cern-eos/go-eosgrpc v0.0.0-20240909164147-ad693be93181/go.mod h1:ZiIzbg4sDO2MwYlspcnauUR2dfwZHUzxker+HP9k+20=
+github.com/cernbox/reva-plugins v0.0.17 h1:BjFv806MAMGlwl7COa0ETuXzIOSkejh1THmAdNQIQtg=
+github.com/cernbox/reva-plugins v0.0.17/go.mod h1:TlUbMnuRV4XhhJwGJVGhy78GZYnPNyY56Q04CuM8F0s=
 github.com/cespare/xxhash v1.1.0 h1:a6HrQnmkObjyL+Gs60czilIUGqrzKutQD6XZog3p+ko=
 github.com/cespare/xxhash v1.1.0/go.mod h1:XrSqR1VqqWfGrhpAt58auRo0WTKS1nRRg3ghfAqPWnc=
 github.com/cespare/xxhash/v2 v2.1.1/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
@@ -895,6 +897,8 @@ github.com/creasty/defaults v1.8.0 h1:z27FJxCAa0JKt3utc0sCImAEb+spPucmKoOdLHvHYK
 github.com/creasty/defaults v1.8.0/go.mod h1:iGzKe6pbEHnpMPtfDXZEr0NVxWnPTjb1bbDy08fPzYM=
 github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e h1:tqSPWQeueWTKnJVMJffz4pz0o1WuQxJ28+5x5JgaHD8=
 github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e/go.mod h1:XJEZ3/EQuI3BXTp/6DUzFr850vlxq11I6satRtz0YQ4=
+github.com/cs3org/go-cs3apis v0.0.0-20250128143938-cc671934a7a1 h1:/WqyxkOGmocjx9ryVNGpwY3h+Fsm2VeQWweARkk0Svw=
+github.com/cs3org/go-cs3apis v0.0.0-20250128143938-cc671934a7a1/go.mod h1:DedpcqXl193qF/08Y04IO0PpxyyMu8+GrkD6kWK2MEQ=
 github.com/cs3org/go-cs3apis v0.0.0-20250218144737-544dd3919658 h1:CmH7twDuNUrHQXChZMafWjsEp1V47KutJlOAt6FjzGA=
 github.com/cs3org/go-cs3apis v0.0.0-20250218144737-544dd3919658/go.mod h1:DedpcqXl193qF/08Y04IO0PpxyyMu8+GrkD6kWK2MEQ=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

@@ -27,6 +27,7 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/myofficefiles"
 )
 
 const (
@@ -76,6 +77,8 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
+	var resourceInfos []*provider.ResourceInfo
+
 	if ff.Rules.Favorite {
 		// List the users favorite resources.
 		currentUser := appctx.ContextMustGetUser(ctx)
@@ -93,7 +96,7 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 			return
 		}
 
-		infos := make([]*provider.ResourceInfo, 0, len(favorites))
+		resourceInfos = make([]*provider.ResourceInfo, 0, len(favorites))
 		for i := range favorites {
 			statRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: favorites[i]}})
 			if err != nil {
@@ -117,21 +120,36 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 				statRes.Info.Path = parts[3]
 			}
 
-			infos = append(infos, statRes.Info)
+			resourceInfos = append(resourceInfos, statRes.Info)
 		}
 
-		responsesXML, err := s.multistatusResponse(ctx, &propfindXML{Prop: ff.Prop}, infos, namespace, nil, nil)
+	} else if ff.Rules.MyOfficeFiles != "" {
+		currentUser := appctx.ContextMustGetUser(ctx)
+		var err error
+		filetype, err := myofficefiles.FileType(ff.Rules.MyOfficeFiles)
 		if err != nil {
-			log.Error().Err(err).Msg("error formatting propfind")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		resourceInfos, err = s.myOfficeFilesManager.ListMyOfficeFiles(ctx, currentUser, filetype)
+		if err != nil {
+			log.Error().Err(err).Msg("error listing MyOfficeFiles")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
-		w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
-		w.WriteHeader(http.StatusMultiStatus)
-		if _, err := w.Write([]byte(responsesXML)); err != nil {
-			log.Err(err).Msg("error writing response")
-		}
+	}
+
+	responsesXML, err := s.multistatusResponse(ctx, &propfindXML{Prop: ff.Prop}, resourceInfos, namespace, nil, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("error formatting propfind")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
+	w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
+	w.WriteHeader(http.StatusMultiStatus)
+	if _, err := w.Write([]byte(responsesXML)); err != nil {
+		log.Err(err).Msg("error writing response")
 	}
 }
 
@@ -160,8 +178,9 @@ type reportFilterFiles struct {
 }
 
 type reportFilterFilesRules struct {
-	Favorite  bool `xml:"favorite"`
-	SystemTag int  `xml:"systemtag"`
+	Favorite      bool   `xml:"favorite"`
+	SystemTag     int    `xml:"systemtag"`
+	MyOfficeFiles string `xml:"my-office-files"`
 }
 
 func readReport(r io.Reader) (rep *report, status int, err error) {

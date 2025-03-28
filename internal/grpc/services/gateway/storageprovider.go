@@ -1474,6 +1474,7 @@ func (s *svc) listHome(ctx context.Context, req *provider.ListContainerRequest) 
 	lcr, err := s.listContainer(ctx, &provider.ListContainerRequest{
 		Ref:                   &provider.Reference{Path: s.getHome(ctx)},
 		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
+		Opaque:                req.Opaque,
 	})
 	if err != nil {
 		return &provider.ListContainerResponse{
@@ -1664,6 +1665,7 @@ func (s *svc) listContainerAcrossProviders(ctx context.Context, req *provider.Li
 
 func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	log := appctx.GetLogger(ctx)
+	log.Info().Any("Opaque", req.Opaque).Msg("ListContainer gateway")
 
 	if utils.IsRelativeReference(req.Ref) {
 		return s.listContainer(ctx, req)
