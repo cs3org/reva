@@ -183,14 +183,14 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 	}
 
 	ps := &publicShare{
-		PublicShare: s,
+		PublicShare: &s,
 		Password:    password,
 	}
 
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	encShare, err := utils.MarshalProtoV1ToJSON(&ps.PublicShare)
+	encShare, err := utils.MarshalProtoV1ToJSON(ps.PublicShare)
 	if err != nil {
 		return nil, err
 	}
@@ -364,7 +364,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 
 	for _, v := range db {
 		var local publicShare
-		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]interface{})["share"].(string)), &local.PublicShare); err != nil {
+		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]interface{})["share"].(string)), local.PublicShare); err != nil {
 			return nil, err
 		}
 
@@ -374,20 +374,20 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		}
 
 		if local.PublicShare.PasswordProtected && sign {
-			if err := publicshare.AddSignature(&local.PublicShare, local.Password); err != nil {
+			if err := publicshare.AddSignature(local.PublicShare, local.Password); err != nil {
 				return nil, err
 			}
 		}
 
 		if len(filters) == 0 {
-			shares = append(shares, &local.PublicShare)
+			shares = append(shares, local.PublicShare)
 			continue
 		}
 
-		if publicshare.MatchesFilters(&local.PublicShare, filters) {
-			if !publicshare.IsExpired(&local.PublicShare) {
-				shares = append(shares, &local.PublicShare)
-			} else if err := m.revokeExpiredPublicShare(ctx, &local.PublicShare, u); err != nil {
+		if publicshare.MatchesFilters(local.PublicShare, filters) {
+			if !publicshare.IsExpired(local.PublicShare) {
+				shares = append(shares, local.PublicShare)
+			} else if err := m.revokeExpiredPublicShare(ctx, local.PublicShare, u); err != nil {
 				return nil, err
 			}
 		}
@@ -584,6 +584,6 @@ func authenticate(share *link.PublicShare, pw string, auth *link.PublicShareAuth
 }
 
 type publicShare struct {
-	link.PublicShare
+	*link.PublicShare
 	Password string `json:"password"`
 }

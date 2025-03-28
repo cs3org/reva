@@ -125,7 +125,7 @@ func (s *service) GetUserByClaim(ctx context.Context, req *userpb.GetUserByClaim
 			res.Status = status.NewNotFound(ctx, fmt.Sprintf("user not found %s %s", req.Claim, req.Value))
 		} else {
 			err = errors.Wrap(err, "userprovidersvc: error getting user by claim")
-			res.Status = status.NewInternal(ctx, err, "error getting user by claim")
+			res.Status = status.NewInternal(ctx, err, fmt.Sprintf("error getting user %s by claim %s", req.Value, req.Claim))
 		}
 		return res, nil
 	}

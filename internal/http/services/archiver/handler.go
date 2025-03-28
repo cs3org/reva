@@ -39,10 +39,10 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
 	"github.com/cs3org/reva/pkg/storage/utils/walker"
 	"github.com/cs3org/reva/pkg/utils/cfg"
-	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/gdexlab/go-render/render"
 	ua "github.com/mileusna/useragent"
 )
@@ -128,8 +128,8 @@ func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, erro
 	for _, id := range ids {
 		// id is base64 encoded and after decoding has the form <storage_id>:<resource_id>
 
-		ref := resourceid.OwnCloudResourceIDUnwrap(id)
-		if ref == nil {
+		ref, ok := spaces.ParseResourceID(id)
+		if !ok {
 			return nil, errors.New("could not unwrap given file id")
 		}
 

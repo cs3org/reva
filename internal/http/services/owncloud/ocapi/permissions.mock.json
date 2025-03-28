@@ -1,0 +1,14 @@
+{
+    "permissions": [
+        "ReadOnlyPublicLinkPassword.Delete.all",
+        "EmailNotifications.ReadWriteDisabled.own",
+        "Favorites.Write.own",
+        "AutoAcceptShares.ReadWriteDisabled.own",
+        "PublicLink.Write.all",
+        "Drives.ReadWriteEnabled.all",
+        "Language.ReadWrite.all",
+        "Favorites.List.own",
+        "Drives.ReadWrite.all",
+        "Shares.Write.all"
+    ]
+}

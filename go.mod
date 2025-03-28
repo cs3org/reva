@@ -2,6 +2,7 @@ module github.com/cs3org/reva
 
 require (
 	github.com/BurntSushi/toml v1.4.0
+	github.com/CiscoM31/godata v1.0.8
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/ReneKroon/ttlcache/v2 v2.11.0
 	github.com/beevik/etree v1.5.0
@@ -41,6 +42,7 @@ require (
 	github.com/nats-io/nats.go v1.39.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.36.2
+	github.com/owncloud/libre-graph-api-go v1.0.5-0.20240425090020-dba6d1507c38
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.21.1
 	github.com/rs/cors v1.11.1
@@ -61,7 +63,16 @@ require (
 	google.golang.org/genproto v0.0.0-20241209162323-e6fa225c2576
 	google.golang.org/grpc v1.71.0
 	google.golang.org/protobuf v1.36.5
+	gorm.io/driver/mysql v1.5.7
+	gorm.io/driver/sqlite v1.5.7
+	gorm.io/gorm v1.25.12
 	gotest.tools v2.2.0+incompatible
+)
+
+require (
+	github.com/google/go-cmp v0.6.0 // indirect
+	github.com/jinzhu/inflection v1.0.0 // indirect
+	github.com/jinzhu/now v1.1.5 // indirect
 )
 
 require (
@@ -69,6 +80,7 @@ require (
 	github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
+	github.com/alitto/pond/v2 v2.1.6
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bmizerany/pat v0.0.0-20210406213842-e4b6760bdd6f // indirect
@@ -87,7 +99,6 @@ require (
 	github.com/go-openapi/strfmt v0.23.0 // indirect
 	github.com/gocraft/dbr/v2 v2.7.2 // indirect
 	github.com/google/flatbuffers v2.0.8+incompatible // indirect
-	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.2.0 // indirect
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/huandu/xstrings v1.5.0 // indirect
@@ -123,7 +134,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.34.0 // indirect
 	golang.org/x/mod v0.22.0 // indirect
 	golang.org/x/net v0.34.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 	golang.org/x/tools v0.28.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250115164207-1a7da9e5054f // indirect
 	gopkg.in/src-d/go-errors.v1 v1.0.0 // indirect
@@ -132,3 +143,8 @@ require (
 )
 
 go 1.22.7
+
+replace (
+	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
+	github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
+)

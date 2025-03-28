@@ -40,9 +40,9 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
-	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/go-chi/chi/v5"
 	ua "github.com/mileusna/useragent"
 	"github.com/pkg/errors"
@@ -144,8 +144,8 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parentContainerRef := resourceid.OwnCloudResourceIDUnwrap(parentContainerID)
-	if parentContainerRef == nil {
+	parentContainerRef, ok := spaces.ParseResourceID(parentContainerID)
+	if !ok {
 		writeError(w, r, appErrorInvalidParameter, "invalid parent container ID", nil)
 		return
 	}
@@ -279,7 +279,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 
 	js, err := json.Marshal(
 		map[string]interface{}{
-			"file_id": resourceid.OwnCloudResourceIDWrap(statRes.Info.Id),
+			"file_id": spaces.EncodeResourceID(statRes.Info.Id),
 		},
 	)
 	if err != nil {
@@ -351,8 +351,8 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		}
 		fileRef.Path = path
 	} else {
-		resourceID := resourceid.OwnCloudResourceIDUnwrap(fileID)
-		if resourceID == nil {
+		resourceID, ok := spaces.ParseResourceID(fileID)
+		if !ok {
 			writeError(w, r, appErrorInvalidParameter, "invalid file ID", nil)
 			return
 		}
@@ -469,8 +469,8 @@ func (s *svc) handleNotify(w http.ResponseWriter, r *http.Request) {
 		}
 		fileRef.Path = path
 	} else {
-		resourceID := resourceid.OwnCloudResourceIDUnwrap(fileID)
-		if resourceID == nil {
+		resourceID, ok := spaces.ParseResourceID(fileID)
+		if !ok {
 			writeError(w, r, appErrorInvalidParameter, "invalid file ID", nil)
 			return
 		}

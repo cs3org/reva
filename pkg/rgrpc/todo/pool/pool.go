@@ -74,6 +74,7 @@ var (
 	appRegistries          = newProvider()
 	appProviders           = newProvider()
 	storageRegistries      = newProvider()
+	spacesProvider         = newProvider()
 	gatewayProviders       = newProvider()
 	userProviders          = newProvider()
 	groupProviders         = newProvider()
@@ -421,6 +422,26 @@ func GetStorageRegistryClient(opts ...Option) (storageregistry.RegistryAPIClient
 	return v, nil
 }
 
+// GetSpacesClient returns a new StorageRegistryClient.
+func GetSpacesClient(opts ...Option) (storageprovider.SpacesAPIClient, error) {
+	spacesProvider.m.Lock()
+	defer spacesProvider.m.Unlock()
+
+	options := newOptions(opts...)
+	if c, ok := spacesProvider.conn[options.Endpoint]; ok {
+		return c.(storageprovider.SpacesAPIClient), nil
+	}
+
+	conn, err := NewConn(options)
+	if err != nil {
+		return nil, err
+	}
+
+	v := storageprovider.NewSpacesAPIClient(conn)
+	spacesProvider.conn[options.Endpoint] = v
+	return v, nil
+}
+
 // GetOCMProviderAuthorizerClient returns a new OCMProviderAuthorizerClient.
 func GetOCMProviderAuthorizerClient(opts ...Option) (ocmprovider.ProviderAPIClient, error) {
 	ocmProviderAuthorizers.m.Lock()
@@ -480,19 +501,3 @@ func GetDataTxClient(opts ...Option) (datatx.TxAPIClient, error) {
 	dataTxs.conn[options.Endpoint] = v
 	return v, nil
 }
-
-// getEndpointByName resolve service names to ip addresses present on the registry.
-//	func getEndpointByName(name string) (string, error) {
-//		if services, err := utils.GlobalRegistry.GetService(name); err == nil {
-//			if len(services) > 0 {
-//				for i := range services {
-//					for j := range services[i].Nodes() {
-//						// return the first one. This MUST be improved upon with selectors.
-//						return services[i].Nodes()[j].Address(), nil
-//					}
-//				}
-//			}
-//		}
-//
-//		return "", fmt.Errorf("could not get service by name: %v", name)
-//	}

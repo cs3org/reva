@@ -243,6 +243,9 @@ func (s *Server) getHandlerLongestCommongURL(url string) (http.Handler, string, 
 }
 
 func getSubURL(url, prefix string) string {
+	if url == "" {
+		return ""
+	}
 	// pre cond: prefix is a prefix for url
 	// example: url = "/api/v0/", prefix = "/api", res = "/v0"
 	url = cleanURL(url)
@@ -264,6 +267,9 @@ func (s *Server) getHandler() (http.Handler, error) {
 		if h, url, ok := s.getHandlerLongestCommongURL(r.URL.Path); ok {
 			s.log.Debug().Msgf("http routing: url=%s", url)
 			r.URL.Path = getSubURL(r.URL.Path, url)
+			// go chi internally uses the RawPath for the routing
+			// so this has to be adapted accordingly
+			r.URL.RawPath = getSubURL(r.URL.RawPath, url)
 			h.ServeHTTP(w, r)
 			return
 		}

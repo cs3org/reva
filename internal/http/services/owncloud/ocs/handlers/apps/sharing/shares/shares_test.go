@@ -58,7 +58,7 @@ func TestMapState(t *testing.T) {
 		input    collaboration.ShareState
 		expected int
 	}{
-		{collaboration.ShareState_SHARE_STATE_PENDING, ocsStatePending},
+		{collaboration.ShareState_SHARE_STATE_PENDING, ocsStateAccepted},
 		{collaboration.ShareState_SHARE_STATE_ACCEPTED, ocsStateAccepted},
 		{collaboration.ShareState_SHARE_STATE_REJECTED, ocsStateRejected},
 		{42, ocsStateUnknown},

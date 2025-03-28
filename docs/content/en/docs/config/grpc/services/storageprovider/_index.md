@@ -9,7 +9,7 @@ description: >
 # _struct: config_
 
 {{% dir name="mount_path" type="string" default="/" %}}
-The path where the file system would be mounted. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L61)
+The path where the file system would be mounted. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L62)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 mount_path = "/"
@@ -17,7 +17,7 @@ mount_path = "/"
 {{% /dir %}}
 
 {{% dir name="mount_id" type="string" default="-" %}}
-The ID of the mounted file system. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L62)
+The ID of the mounted file system. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L63)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 mount_id = "-"
@@ -25,7 +25,7 @@ mount_id = "-"
 {{% /dir %}}
 
 {{% dir name="driver" type="string" default="localhome" %}}
-The storage driver to be used. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L63)
+The storage driver to be used. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L64)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 driver = "localhome"
@@ -33,21 +33,13 @@ driver = "localhome"
 {{% /dir %}}
 
 {{% dir name="drivers" type="map[string]map[string]interface{}" default="localhome" %}}
- [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L64)
+ [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L65)
 {{< highlight toml >}}
 [grpc.services.storageprovider.drivers.localhome]
 root = "/var/tmp/reva/"
 share_folder = "/MyShares"
 user_layout = "{{.Username}}"
 
-{{< /highlight >}}
-{{% /dir %}}
-
-{{% dir name="tmp_folder" type="string" default="/var/tmp" %}}
-Path to temporary folder. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L65)
-{{< highlight toml >}}
-[grpc.services.storageprovider]
-tmp_folder = "/var/tmp"
 {{< /highlight >}}
 {{% /dir %}}
 

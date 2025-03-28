@@ -258,7 +258,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 			})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(*share).To(Equal(ocm.Share{
+			Expect(share).To(Equal(&ocm.Share{
 				Id: &ocm.ShareId{},
 				ResourceId: &provider.ResourceId{
 					OpaqueId:  "fileid-/some/path",
@@ -388,7 +388,7 @@ var _ = Describe("Nextcloud", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(1))
-			Expect(*shares[0]).To(Equal(ocm.Share{
+			Expect(shares[0]).To(Equal(&ocm.Share{
 				Id: &ocm.ShareId{},
 				ResourceId: &provider.ResourceId{
 					OpaqueId:  "fileid-/some/path",
@@ -441,7 +441,7 @@ var _ = Describe("Nextcloud", func() {
 			receivedShares, err := am.ListReceivedShares(ctx, user)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(receivedShares)).To(Equal(1))
-			Expect(*receivedShares[0]).To(Equal(ocm.ReceivedShare{
+			Expect(receivedShares[0]).To(Equal(&ocm.ReceivedShare{
 				Id:            &ocm.ShareId{},
 				Name:          "test share",
 				RemoteShareId: "",
@@ -499,7 +499,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 			})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(*receivedShare).To(Equal(ocm.ReceivedShare{
+			Expect(receivedShare).To(Equal(&ocm.ReceivedShare{
 				Id:            &ocm.ShareId{},
 				Name:          "test share",
 				RemoteShareId: "",
@@ -588,7 +588,7 @@ var _ = Describe("Nextcloud", func() {
 					Paths: []string{"state"},
 				})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(*receivedShare).To(Equal(ocm.ReceivedShare{
+			Expect(receivedShare).To(Equal(&ocm.ReceivedShare{
 				Id:            &ocm.ShareId{},
 				Name:          "test share",
 				RemoteShareId: "",

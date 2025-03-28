@@ -39,15 +39,21 @@ import (
 type Handler struct {
 	gatewayAddr      string
 	allowedLanguages []string
+	signingKey       string
 }
 
 // Init initializes this and any contained handlers.
-func (h *Handler) Init(c *config.Config) {
+func (h *Handler) Init(c *config.Config) error {
+	if len(c.SigningKey) < 32 {
+		return errors.New("Please set a signing key with an appropriate length")
+	}
 	h.gatewayAddr = c.GatewaySvc
 	h.allowedLanguages = c.AllowedLanguages
+	h.signingKey = c.SigningKey
 	if len(h.allowedLanguages) == 0 {
 		h.allowedLanguages = []string{"cs", "de", "en", "es", "fr", "it", "gl"}
 	}
+	return nil
 }
 
 const (
@@ -72,6 +78,20 @@ func (h *Handler) GetSelf(w http.ResponseWriter, r *http.Request) {
 		Email:       u.Mail,
 		UserType:    conversions.UserTypeString(u.Id.Type),
 		Language:    h.getLanguage(ctx),
+	})
+}
+
+type SigningKey struct {
+	User       string `json:"user"        xml:"user"`
+	SigningKey string `json:"signing-key" xml:"signing-key"`
+}
+
+func (h *Handler) SigningKey(w http.ResponseWriter, r *http.Request) {
+	u := appctx.ContextMustGetUser(r.Context())
+
+	response.WriteOCSSuccess(w, r, &SigningKey{
+		User:       u.Username,
+		SigningKey: h.signingKey,
 	})
 }
 

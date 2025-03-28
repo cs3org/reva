@@ -46,6 +46,8 @@ type Config struct {
 	OCMMountPoint            string                            `mapstructure:"ocm_mount_point"`
 	ListOCMShares            bool                              `mapstructure:"list_ocm_shares"`
 	Notifications            map[string]interface{}            `mapstructure:"notifications"`
+	EnableSpaces             bool                              `mapstructure:"enable_spaces"`
+	SigningKey               string                            `mapstructure:"signing_key"`
 }
 
 // Init sets sane defaults.

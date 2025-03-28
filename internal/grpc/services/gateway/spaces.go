@@ -22,20 +22,71 @@ import (
 	"context"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/pkg/errors"
 )
 
 func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	return nil, nil
+	c, err := pool.GetSpacesClient(pool.Endpoint(s.c.SpacesEndpoint))
+	if err != nil {
+		return &provider.CreateStorageSpaceResponse{
+			Status: status.NewInternal(ctx, err, "error getting spaces client"),
+		}, nil
+	}
+
+	res, err := c.CreateStorageSpace(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling CreateStorageSpace")
+	}
+
+	return res, nil
 }
 
 func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
-	return nil, nil
+	c, err := pool.GetSpacesClient(pool.Endpoint(s.c.SpacesEndpoint))
+	if err != nil {
+		return &provider.ListStorageSpacesResponse{
+			Status: status.NewInternal(ctx, err, "error getting spaces client"),
+		}, nil
+	}
+
+	res, err := c.ListStorageSpaces(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling ListStorageSpaces")
+	}
+
+	return res, nil
 }
 
 func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
-	return nil, nil
+	c, err := pool.GetSpacesClient(pool.Endpoint(s.c.SpacesEndpoint))
+	if err != nil {
+		return &provider.UpdateStorageSpaceResponse{
+			Status: status.NewInternal(ctx, err, "error getting spaces client"),
+		}, nil
+	}
+
+	res, err := c.UpdateStorageSpace(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling UpdateStorageSpace")
+	}
+
+	return res, nil
 }
 
 func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
-	return nil, nil
+	c, err := pool.GetSpacesClient(pool.Endpoint(s.c.SpacesEndpoint))
+	if err != nil {
+		return &provider.DeleteStorageSpaceResponse{
+			Status: status.NewInternal(ctx, err, "error getting spaces client"),
+		}, nil
+	}
+
+	res, err := c.DeleteStorageSpace(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling DeleteStorageSpace")
+	}
+
+	return res, nil
 }

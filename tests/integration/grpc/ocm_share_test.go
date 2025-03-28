@@ -758,7 +758,8 @@ func ocmPath(id *ocmv1beta1.ShareId, p string) string {
 }
 
 func checkResourceInfo(info, target *provider.ResourceInfo) {
-	Expect(info.Id).To(Equal(target.Id))
+	Expect(info.Id.OpaqueId).To(Equal(target.Id.OpaqueId))
+	Expect(info.Id.StorageId).To(Equal(target.Id.StorageId))
 	Expect(info.Name).To(Equal(target.Name))
 	Expect(info.Path).To(Equal(target.Path))
 	Expect(info.Size).To(Equal(target.Size))

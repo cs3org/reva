@@ -1898,7 +1898,7 @@ func mergePermissions(l *provider.ResourcePermissions, r *provider.ResourcePermi
 }
 
 func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
-	path, err := fs.unwrap(ctx, eosFileInfo.File)
+	p, err := fs.unwrap(ctx, eosFileInfo.File)
 	if err != nil {
 		return nil, err
 	}
@@ -1937,10 +1937,11 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 
 	info := &provider.ResourceInfo{
 		Id:            &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.Inode)},
-		Path:          path,
+		Path:          p,
+		Name:          path.Base(p),
 		Owner:         owner,
 		Etag:          fmt.Sprintf("\"%s\"", strings.Trim(eosFileInfo.ETag, "\"")),
-		MimeType:      mime.Detect(eosFileInfo.IsDir, path),
+		MimeType:      mime.Detect(eosFileInfo.IsDir, p),
 		Size:          size,
 		ParentId:      &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.FID)},
 		PermissionSet: fs.permissionSet(ctx, eosFileInfo, owner),
