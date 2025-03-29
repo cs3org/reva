@@ -119,7 +119,7 @@ func isMountpointRequest(request *godata.GoDataRequest) bool {
 	return request.Query.Filter.Tree.Children[0].Token.Value == "driveType" && strings.Trim(request.Query.Filter.Tree.Children[1].Token.Value, "'") == "mountpoint"
 }
 
-const SHARE_JAIL_ID = "a0ca6a90-a365-4782-871e-d44447bbc668"
+const ShareJailID = "a0ca6a90-a365-4782-871e-d44447bbc668"
 
 func (s *svc) getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClient) ([]*libregraph.Drive, error) {
 	res, err := gw.ListExistingReceivedShares(ctx, &collaborationv1beta1.ListReceivedSharesRequest{})
@@ -138,7 +138,7 @@ func (s *svc) getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClien
 }
 
 func libregraphShareID(shareID *collaborationv1beta1.ShareId) string {
-	return fmt.Sprintf("%s$%s!%s", SHARE_JAIL_ID, SHARE_JAIL_ID, shareID.OpaqueId)
+	return fmt.Sprintf("%s$%s!%s", ShareJailID, ShareJailID, shareID.OpaqueId)
 }
 
 func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libregraph.Drive {
@@ -155,7 +155,7 @@ func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libre
 			Remaining: libregraph.PtrInt64(24154387158408),
 		},
 		Root: &libregraph.DriveItem{
-			Id:        libregraph.PtrString(fmt.Sprintf("%s$%s!%s", SHARE_JAIL_ID, SHARE_JAIL_ID, rsi.ReceivedShare.Share.Id.OpaqueId)),
+			Id:        libregraph.PtrString(fmt.Sprintf("%s$%s!%s", ShareJailID, ShareJailID, rsi.ReceivedShare.Share.Id.OpaqueId)),
 			WebDavUrl: libregraph.PtrString(fullURL(s.c.WebDavBase, rsi.ResourceInfo.Path)),
 			RemoteItem: &libregraph.RemoteItem{
 				DriveAlias: libregraph.PtrString(strings.TrimSuffix(strings.TrimPrefix(rsi.ResourceInfo.Path, "/"), spaces.RelativePathToSpaceID(rsi.ResourceInfo))), // the drive alias must not start with /
@@ -332,7 +332,7 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 }
 
 func isShareJail(spaceID string) bool {
-	return spaceID == SHARE_JAIL_ID
+	return spaceID == ShareJailID
 }
 
 func shareID(spaceID string) string {
