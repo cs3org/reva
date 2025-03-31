@@ -168,10 +168,6 @@ func (tb *Trashbin) MoveToTrash(ctx context.Context, n *node.Node, path string) 
 	if err = tb.lu.IDCache.DeleteByPath(ctx, path); err != nil {
 		return err
 	}
-	err = tb.lu.MetadataBackend().Purge(ctx, n)
-	if err != nil {
-		return err
-	}
 
 	itemTrashPath := filepath.Join(trashPath, "files", key+".trashitem")
 	return os.Rename(path, itemTrashPath)
