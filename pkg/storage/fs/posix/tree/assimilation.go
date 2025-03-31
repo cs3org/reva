@@ -796,7 +796,11 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 				t.log.Error().Err(err).Str("path", path).Msg("could not assimilate item")
 			}
 		}
-		return t.setDirty(path, false)
+
+		if info.IsDir() {
+			return t.setDirty(path, false)
+		}
+		return nil
 	})
 
 	for dir, size := range sizes {
