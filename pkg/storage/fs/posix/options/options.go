@@ -48,20 +48,19 @@ type Options struct {
 
 // New returns a new Options instance for the given configuration
 func New(m map[string]interface{}) (*Options, error) {
-	o := &Options{}
-	if err := mapstructure.Decode(m, o); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-
 	// default to hybrid metadatabackend for posixfs
 	if _, ok := m["metadata_backend"]; !ok {
 		m["metadata_backend"] = "hybrid"
 	}
-
 	// debounced scan delay
-	if o.ScanDebounceDelay == 0 {
-		o.ScanDebounceDelay = 10 * time.Millisecond
+	if _, ok := m["scan_debounce_delay"]; !ok {
+		m["scan_debounce_delay"] = 10 * time.Millisecond
+	}
+
+	o := &Options{}
+	if err := mapstructure.Decode(m, o); err != nil {
+		err = errors.Wrap(err, "error decoding conf")
+		return nil, err
 	}
 
 	do, err := decomposedoptions.New(m)
