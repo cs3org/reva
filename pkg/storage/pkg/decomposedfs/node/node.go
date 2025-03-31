@@ -215,6 +215,7 @@ type Node struct {
 	SpaceRoot *Node
 
 	xattrsCache map[string][]byte
+	disabled    *bool
 	nodeType    *provider.ResourceType
 }
 
@@ -1002,10 +1003,17 @@ func (n *Node) HasPropagation(ctx context.Context) (propagation bool) {
 // only used to check if a space is disabled
 // FIXME confusing with the trash logic
 func (n *Node) IsDisabled(ctx context.Context) bool {
-	if _, err := n.GetDTime(ctx); err == nil {
-		return true
+	if n.disabled != nil {
+		return *n.disabled
 	}
-	return false
+	if _, err := n.GetDTime(ctx); err == nil {
+		v := true
+		n.disabled = &v
+	} else {
+		v := false
+		n.disabled = &v
+	}
+	return *n.disabled
 }
 
 // GetTreeSize reads the treesize from the extended attributes
