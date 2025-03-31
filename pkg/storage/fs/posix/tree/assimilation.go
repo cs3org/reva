@@ -282,6 +282,9 @@ func (t *Tree) HandleFileDelete(path string) error {
 		return err
 	}
 	n := node.NewBaseNode(spaceID, id, t.lookup)
+	if n.InternalPath() != path {
+		return fmt.Errorf("internal path does not match path")
+	}
 
 	// purge metadata
 	if err := t.lookup.IDCache.DeleteByPath(context.Background(), path); err != nil {
