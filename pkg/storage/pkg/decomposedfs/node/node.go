@@ -178,7 +178,8 @@ type BaseNode struct {
 	SpaceID string
 	ID      string
 
-	lu PathLookup
+	lu           PathLookup
+	internalPath string
 }
 
 func NewBaseNode(spaceID, nodeID string, lu PathLookup) *BaseNode {
@@ -194,7 +195,12 @@ func (n *BaseNode) GetID() string      { return n.ID }
 
 // InternalPath returns the internal path of the Node
 func (n *BaseNode) InternalPath() string {
-	return n.lu.InternalPath(n.SpaceID, n.ID)
+	if len(n.internalPath) > 0 {
+		return n.internalPath
+	}
+
+	n.internalPath = n.lu.InternalPath(n.SpaceID, n.ID)
+	return n.internalPath
 }
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
