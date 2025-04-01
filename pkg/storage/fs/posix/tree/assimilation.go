@@ -282,6 +282,9 @@ func (t *Tree) HandleFileDelete(path string) error {
 		return err
 	}
 	n := node.NewBaseNode(spaceID, id, t.lookup)
+	if n.InternalPath() != path {
+		return fmt.Errorf("internal path does not match path")
+	}
 
 	// purge metadata
 	if err := t.lookup.IDCache.DeleteByPath(context.Background(), path); err != nil {
@@ -615,54 +618,56 @@ assimilate:
 
 	n.SpaceRoot = &node.Node{BaseNode: node.BaseNode{SpaceID: spaceID, ID: spaceID}}
 
-	go func() {
-		// Copy the previous current version to a revision
-		currentNode := node.NewBaseNode(n.SpaceID, n.ID+node.CurrentIDDelimiter, t.lookup)
-		currentPath := currentNode.InternalPath()
-		stat, err := os.Stat(currentPath)
-		if err != nil {
-			t.log.Error().Err(err).Str("path", path).Str("currentPath", currentPath).Msg("could not stat current path")
-			return
-		}
-		revisionPath := t.lookup.VersionPath(n.SpaceID, n.ID, stat.ModTime().UTC().Format(time.RFC3339Nano))
+	if t.options.EnableFSRevisions {
+		go func() {
+			// Copy the previous current version to a revision
+			currentNode := node.NewBaseNode(n.SpaceID, n.ID+node.CurrentIDDelimiter, t.lookup)
+			currentPath := currentNode.InternalPath()
+			stat, err := os.Stat(currentPath)
+			if err != nil {
+				t.log.Error().Err(err).Str("path", path).Str("currentPath", currentPath).Msg("could not stat current path")
+				return
+			}
+			revisionPath := t.lookup.VersionPath(n.SpaceID, n.ID, stat.ModTime().UTC().Format(time.RFC3339Nano))
 
-		err = os.Rename(currentPath, revisionPath)
-		if err != nil {
-			t.log.Error().Err(err).Str("path", path).Str("revisionPath", revisionPath).Msg("could not create revision")
-			return
-		}
+			err = os.Rename(currentPath, revisionPath)
+			if err != nil {
+				t.log.Error().Err(err).Str("path", path).Str("revisionPath", revisionPath).Msg("could not create revision")
+				return
+			}
 
-		// Copy the new version to the current version
-		w, err := os.OpenFile(currentPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
-		if err != nil {
-			t.log.Error().Err(err).Str("path", path).Str("currentPath", currentPath).Msg("could not open current path for writing")
-			return
-		}
-		defer w.Close()
-		r, err := os.OpenFile(n.InternalPath(), os.O_RDONLY, 0600)
-		if err != nil {
-			t.log.Error().Err(err).Str("path", path).Msg("could not open file for reading")
-			return
-		}
-		defer r.Close()
+			// Copy the new version to the current version
+			w, err := os.OpenFile(currentPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+			if err != nil {
+				t.log.Error().Err(err).Str("path", path).Str("currentPath", currentPath).Msg("could not open current path for writing")
+				return
+			}
+			defer w.Close()
+			r, err := os.OpenFile(n.InternalPath(), os.O_RDONLY, 0600)
+			if err != nil {
+				t.log.Error().Err(err).Str("path", path).Msg("could not open file for reading")
+				return
+			}
+			defer r.Close()
 
-		_, err = io.Copy(w, r)
-		if err != nil {
-			t.log.Error().Err(err).Str("currentPath", currentPath).Str("path", path).Msg("could not copy new version to current version")
-			return
-		}
+			_, err = io.Copy(w, r)
+			if err != nil {
+				t.log.Error().Err(err).Str("currentPath", currentPath).Str("path", path).Msg("could not copy new version to current version")
+				return
+			}
 
-		err = t.lookup.CopyMetadata(context.Background(), n, currentNode, func(attributeName string, value []byte) (newValue []byte, copy bool) {
-			return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
-				attributeName == prefixes.TypeAttr ||
-				attributeName == prefixes.BlobIDAttr ||
-				attributeName == prefixes.BlobsizeAttr
-		}, false)
-		if err != nil {
-			t.log.Error().Err(err).Str("currentPath", currentPath).Str("path", path).Msg("failed to copy xattrs to 'current' file")
-			return
-		}
-	}()
+			err = t.lookup.CopyMetadata(context.Background(), n, currentNode, func(attributeName string, value []byte) (newValue []byte, copy bool) {
+				return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
+					attributeName == prefixes.TypeAttr ||
+					attributeName == prefixes.BlobIDAttr ||
+					attributeName == prefixes.BlobsizeAttr
+			}, false)
+			if err != nil {
+				t.log.Error().Err(err).Str("currentPath", currentPath).Str("path", path).Msg("failed to copy xattrs to 'current' file")
+				return
+			}
+		}()
+	}
 
 	err = t.Propagate(context.Background(), n, 0)
 	if err != nil {
@@ -791,7 +796,11 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 				t.log.Error().Err(err).Str("path", path).Msg("could not assimilate item")
 			}
 		}
-		return t.setDirty(path, false)
+
+		if info.IsDir() {
+			return t.setDirty(path, false)
+		}
+		return nil
 	})
 
 	for dir, size := range sizes {

@@ -50,15 +50,17 @@ func NewStoreIDCache(o *options.Options) *StoreIDCache {
 
 // Delete removes an entry from the cache
 func (c *StoreIDCache) Delete(_ context.Context, spaceID, nodeID string) error {
+	var rerr error
 	v, err := c.cache.Read(cacheKey(spaceID, nodeID))
 	if err == nil {
-		err := c.cache.Delete(reverseCacheKey(string(v[0].Value)))
-		if err != nil {
-			return err
-		}
+		rerr = c.cache.Delete(reverseCacheKey(string(v[0].Value)))
 	}
 
-	return c.cache.Delete(cacheKey(spaceID, nodeID))
+	err = c.cache.Delete(cacheKey(spaceID, nodeID))
+	if err != nil {
+		return err
+	}
+	return rerr
 }
 
 // DeleteByPath removes an entry from the cache
