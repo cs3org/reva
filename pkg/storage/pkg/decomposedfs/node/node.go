@@ -178,7 +178,9 @@ type BaseNode struct {
 	SpaceID string
 	ID      string
 
-	lu PathLookup
+	lu             PathLookup
+	internalPathID string
+	internalPath   string
 }
 
 func NewBaseNode(spaceID, nodeID string, lu PathLookup) *BaseNode {
@@ -194,7 +196,13 @@ func (n *BaseNode) GetID() string      { return n.ID }
 
 // InternalPath returns the internal path of the Node
 func (n *BaseNode) InternalPath() string {
-	return n.lu.InternalPath(n.SpaceID, n.ID)
+	if len(n.internalPath) > 0 && n.ID == n.internalPathID {
+		return n.internalPath
+	}
+
+	n.internalPath = n.lu.InternalPath(n.SpaceID, n.ID)
+	n.internalPathID = n.ID
+	return n.internalPath
 }
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
@@ -209,6 +217,7 @@ type Node struct {
 	SpaceRoot *Node
 
 	xattrsCache map[string][]byte
+	disabled    *bool
 	nodeType    *provider.ResourceType
 }
 
@@ -996,10 +1005,17 @@ func (n *Node) HasPropagation(ctx context.Context) (propagation bool) {
 // only used to check if a space is disabled
 // FIXME confusing with the trash logic
 func (n *Node) IsDisabled(ctx context.Context) bool {
-	if _, err := n.GetDTime(ctx); err == nil {
-		return true
+	if n.disabled != nil {
+		return *n.disabled
 	}
-	return false
+	if _, err := n.GetDTime(ctx); err == nil {
+		v := true
+		n.disabled = &v
+	} else {
+		v := false
+		n.disabled = &v
+	}
+	return *n.disabled
 }
 
 // GetTreeSize reads the treesize from the extended attributes
