@@ -311,7 +311,7 @@ func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, spaceID string, key,
 	}
 	// TODO the decomposed trash also checks the permissions on the restore node
 
-	_, id, _, err := tb.lu.MetadataBackend().IdentifyPath(ctx, trashPath)
+	_, id, _, _, err := tb.lu.MetadataBackend().IdentifyPath(ctx, trashPath)
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +321,7 @@ func (tb *Trashbin) RestoreRecycleItem(ctx context.Context, spaceID string, key,
 	}
 
 	// update parent id in case it was restored to a different location
-	_, parentID, _, err := tb.lu.MetadataBackend().IdentifyPath(ctx, filepath.Dir(restorePath))
+	_, parentID, _, _, err := tb.lu.MetadataBackend().IdentifyPath(ctx, filepath.Dir(restorePath))
 	if err != nil {
 		return nil, err
 	}

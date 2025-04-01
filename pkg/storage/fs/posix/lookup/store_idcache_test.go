@@ -5,7 +5,6 @@ import (
 
 	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -17,13 +16,11 @@ var _ = Describe("StoreIdcache", func() {
 	)
 
 	BeforeEach(func() {
-		storeIdcache = lookup.NewStoreIDCache(&options.Options{
-			IDCache: cache.Config{
-				Store:    "memory",
-				Database: "idcache",
-				Size:     100,
-				Nodes:    []string{"localhost:2379"},
-			},
+		storeIdcache = lookup.NewStoreIDCache(cache.Config{
+			Store:    "memory",
+			Database: "idcache",
+			Size:     100,
+			Nodes:    []string{"localhost:2379"},
 		})
 
 		Expect(storeIdcache.Set(context.TODO(), "spaceID", "nodeID", "path")).To(Succeed())

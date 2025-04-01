@@ -921,7 +921,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		ri.Opaque = utils.AppendPlainToOpaque(ri.Opaque, "scantime", date.Format(time.RFC3339Nano))
 	}
 
-	sublog.Debug().
+	sublog.Trace().
 		Interface("ri", ri).
 		Msg("AsResourceInfo")
 
@@ -987,7 +987,7 @@ func (n *Node) readQuotaIntoOpaque(ctx context.Context, ri *provider.ResourceInf
 			appctx.GetLogger(ctx).Error().Err(err).Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Str("nodepath", n.InternalPath()).Str("quota", v).Msg("malformed quota")
 		}
 	case metadata.IsAttrUnset(err):
-		appctx.GetLogger(ctx).Debug().Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Str("nodepath", n.InternalPath()).Msg("quota not set")
+		appctx.GetLogger(ctx).Trace().Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Str("nodepath", n.InternalPath()).Msg("quota not set")
 	default:
 		appctx.GetLogger(ctx).Error().Err(err).Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Str("nodepath", n.InternalPath()).Msg("could not read quota")
 	}
@@ -1132,7 +1132,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap *pro
 		}
 	}
 
-	appctx.GetLogger(ctx).Debug().Interface("permissions", ap).Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Interface("user", u).Msg("returning aggregated permissions")
+	appctx.GetLogger(ctx).Trace().Interface("permissions", ap).Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Interface("user", u).Msg("returning aggregated permissions")
 	return ap, false, nil
 }
 
