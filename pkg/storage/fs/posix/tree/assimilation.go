@@ -470,7 +470,7 @@ func (t *Tree) assimilate(item scanItem) error {
 						ResourceId: &provider.ResourceId{
 							StorageId: t.options.MountID,
 							SpaceId:   spaceID,
-							OpaqueId:  string(parentID),
+							OpaqueId:  parentID,
 						},
 						Path: filepath.Base(previousPath),
 					}
