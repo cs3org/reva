@@ -386,17 +386,20 @@ func (t *Tree) assimilate(item scanItem) error {
 	}
 
 	// check for the id attribute again after grabbing the lock, maybe the file was assimilated/created by us in the meantime
-	_, id, mtime, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), item.Path)
+	_, id, parentID, mtime, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), item.Path)
 	if err != nil {
 		return err
 	}
 
 	if id != "" {
 		// the file has an id set, we already know it from the past
-		n := node.NewBaseNode(spaceID, id, t.lookup)
+		// n := node.NewBaseNode(spaceID, id, t.lookup)
 
 		previousPath, ok := t.lookup.GetCachedID(context.Background(), spaceID, id)
-		previousParentID, _ := t.lookup.MetadataBackend().Get(context.Background(), n, prefixes.ParentidAttr)
+		if previousPath == "" || !ok {
+			previousPath, ok = t.lookup.IDHistoryCache.Get(context.Background(), spaceID, id)
+		}
+		// previousParentID, _ := t.lookup.MetadataBackend().Get(context.Background(), n, prefixes.ParentidAttr)
 
 		// compare metadata mtime with actual mtime. if it matches AND the path hasn't changed (move operation)
 		// we can skip the assimilation because the file was handled by us
@@ -740,7 +743,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 			sizes[path] += 0 // Make sure to set the size to 0 for empty directories
 		}
 
-		nodeSpaceID, id, _, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), path)
+		nodeSpaceID, id, _, _, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), path)
 		if err == nil && len(id) > 0 {
 			if len(nodeSpaceID) > 0 {
 				spaceID = nodeSpaceID
@@ -762,7 +765,7 @@ func (t *Tree) WarmupIDCache(root string, assimilate, onlyDirty bool) error {
 						break
 					}
 
-					spaceID, _, _, err = t.lookup.MetadataBackend().IdentifyPath(context.Background(), spaceCandidate)
+					spaceID, _, _, _, err = t.lookup.MetadataBackend().IdentifyPath(context.Background(), spaceCandidate)
 					if err == nil && len(spaceID) > 0 {
 						err = scopeSpace(path)
 						if err != nil {
