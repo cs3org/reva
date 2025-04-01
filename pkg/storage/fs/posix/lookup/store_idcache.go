@@ -25,7 +25,7 @@ import (
 	microstore "go-micro.dev/v4/store"
 
 	"github.com/opencloud-eu/reva/v2/pkg/appctx"
-	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/options"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/cache"
 	"github.com/opencloud-eu/reva/v2/pkg/store"
 )
 
@@ -34,16 +34,16 @@ type StoreIDCache struct {
 }
 
 // NewMemoryIDCache returns a new MemoryIDCache
-func NewStoreIDCache(o *options.Options) *StoreIDCache {
+func NewStoreIDCache(c cache.Config) *StoreIDCache {
 	return &StoreIDCache{
 		cache: store.Create(
-			store.Store(o.IDCache.Store),
-			store.Size(o.IDCache.Size),
-			microstore.Nodes(o.IDCache.Nodes...),
-			microstore.Database(o.IDCache.Database),
-			microstore.Table(o.IDCache.Table),
-			store.DisablePersistence(o.IDCache.DisablePersistence),
-			store.Authentication(o.IDCache.AuthUsername, o.IDCache.AuthPassword),
+			store.Store(c.Store),
+			store.Size(c.Size),
+			microstore.Nodes(c.Nodes...),
+			microstore.Database(c.Database),
+			microstore.Table(c.Table),
+			store.DisablePersistence(c.DisablePersistence),
+			store.Authentication(c.AuthUsername, c.AuthPassword),
 		),
 	}
 }
