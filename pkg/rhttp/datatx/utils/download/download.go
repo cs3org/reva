@@ -139,6 +139,8 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 	}
 
 	// If we want to adhere to the Range request, the content must be seekable
+	// If the storage provider does not support seeking the content,
+	// we ignore the Range request
 	if s != nil && len(ranges) > 0 {
 		sublog.Debug().Int64("start", ranges[0].Start).Int64("length", ranges[0].Length).Msg("range request")
 
