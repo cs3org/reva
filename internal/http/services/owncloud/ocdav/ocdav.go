@@ -32,6 +32,7 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/myofficefiles"
 
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/httpclient"
@@ -118,13 +119,14 @@ type Config struct {
 	// Possible values:
 	// "bearer"				results in header: Authorization: Bearer ...token...
 	// "x-access-token":	results in header: X-Access-Token: ...token...
-	HTTPTpcPushAuthHeader  string                            `mapstructure:"http_tpc_push_auth_header"`
-	PublicURL              string                            `mapstructure:"public_url"`
-	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
-	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
-	PublicLinkDownload     *ConfigPublicLinkDownload         `mapstructure:"publiclink_download"`
-	DisabledOpenInAppPaths []string                          `mapstructure:"disabled_open_in_app_paths"`
-	Notifications          map[string]interface{}            `docs:"nil; settings for the notification helper" mapstructure:"notifications"`
+	HTTPTpcPushAuthHeader        string                            `mapstructure:"http_tpc_push_auth_header"`
+	PublicURL                    string                            `mapstructure:"public_url"`
+	FavoriteStorageDriver        string                            `mapstructure:"favorite_storage_driver"`
+	FavoriteStorageDrivers       map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
+	PublicLinkDownload           *ConfigPublicLinkDownload         `mapstructure:"publiclink_download"`
+	DisabledOpenInAppPaths       []string                          `mapstructure:"disabled_open_in_app_paths"`
+	Notifications                map[string]interface{}            `docs:"nil; settings for the notification helper" mapstructure:"notifications"`
+	MyOfficeFilesAllowedProjects []string                          `mapstructure:"my_office_files_projects"`
 }
 
 func (c *Config) ApplyDefaults() {
@@ -138,15 +140,20 @@ func (c *Config) ApplyDefaults() {
 	if c.OCMNamespace == "" {
 		c.OCMNamespace = "/ocm"
 	}
+
+	if len(c.MyOfficeFilesAllowedProjects) == 0 {
+		c.MyOfficeFilesAllowedProjects = []string{"cernbox"}
+	}
 }
 
 type svc struct {
-	c                  *Config
-	webDavHandler      *WebDavHandler
-	davHandler         *DavHandler
-	favoritesManager   favorite.Manager
-	client             *httpclient.Client
-	notificationHelper *notificationhelper.NotificationHelper
+	c                    *Config
+	webDavHandler        *WebDavHandler
+	davHandler           *DavHandler
+	favoritesManager     favorite.Manager
+	myOfficeFilesManager myofficefiles.Manager
+	client               *httpclient.Client
+	notificationHelper   *notificationhelper.NotificationHelper
 }
 
 func getFavoritesManager(c *Config) (favorite.Manager, error) {
@@ -168,6 +175,11 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 		return nil, err
 	}
 
+	myOfficeFilesManager, err := myofficefiles.New(ctx, c.GatewaySvc, c.MyOfficeFilesAllowedProjects)
+	if err != nil {
+		return nil, err
+	}
+
 	log := appctx.GetLogger(ctx)
 	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: c.Insecure}}
 	s := &svc{
@@ -178,8 +190,9 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 			httpclient.Timeout(time.Duration(c.Timeout*int64(time.Second))),
 			httpclient.RoundTripper(tr),
 		),
-		favoritesManager:   fm,
-		notificationHelper: notificationhelper.New("ocdav", c.Notifications, log),
+		favoritesManager:     fm,
+		notificationHelper:   notificationhelper.New("ocdav", c.Notifications, log),
+		myOfficeFilesManager: myOfficeFilesManager,
 	}
 
 	// initialize handlers and set default cigs

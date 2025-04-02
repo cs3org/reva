@@ -31,6 +31,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/cernbox/reva-plugins/storage/eoshomewrapper"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -783,6 +784,7 @@ func (s *service) addSpaceInfo(ri *provider.ResourceInfo) {
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
+	log := appctx.GetLogger(ctx)
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		// The path might be a virtual view; handle that case
@@ -819,7 +821,6 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		Status: status.NewOK(ctx),
 		Info:   md,
 	}
-	log := appctx.GetLogger(ctx)
 	log.Trace().Interface("md", md).Msg("GetMD returns")
 	return res, nil
 }
@@ -973,7 +974,22 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		}, nil
 	}
 
-	mds, err := s.storage.ListFolder(ctx, newRef, req.ArbitraryMetadataKeys)
+	// TODO: to be removed (see https://github.com/cs3org/reva/pull/5127)
+	var mds []*provider.ResourceInfo
+	if req.Opaque != nil && req.Opaque.Map != nil && req.Opaque.Map["regex"] != nil && req.Opaque.Map["depth"] != nil {
+		user := appctx.ContextMustGetUser(ctx)
+		// Cast, because for now we don't want to modify the FS interface
+		eosfs := s.storage.(eoshomewrapper.FSWithListRegexSupport)
+		regex := string(req.Opaque.Map["regex"].Value)
+		depth, e := strconv.Atoi(string(req.Opaque.Map["depth"].Value))
+		if e != nil {
+			return nil, errors.New("Regex passed to ListContainer expects a valid depth as well")
+		}
+		mds, err = eosfs.ListWithRegex(ctx, req.Ref.Path, regex, uint(depth), user)
+	} else {
+		mds, err = s.storage.ListFolder(ctx, newRef, req.ArbitraryMetadataKeys)
+	}
+
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
@@ -1597,6 +1613,9 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 }
 
 func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo, prefixMountpoint bool) error {
+	if ri == nil {
+		return nil
+	}
 	if ri.Id.StorageId == "" {
 		// For wrapper drivers, the storage ID might already be set. In that case, skip setting it
 		ri.Id.StorageId = s.mountID
@@ -1608,6 +1627,7 @@ func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo, prefixMou
 		// TODO move mount path prefixing to the gateway
 		ri.Path = path.Join(s.mountPath, ri.Path)
 	}
+
 	return nil
 }
 

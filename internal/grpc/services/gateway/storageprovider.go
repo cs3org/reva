@@ -1474,6 +1474,7 @@ func (s *svc) listHome(ctx context.Context, req *provider.ListContainerRequest) 
 	lcr, err := s.listContainer(ctx, &provider.ListContainerRequest{
 		Ref:                   &provider.Reference{Path: s.getHome(ctx)},
 		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
+		Opaque:                req.Opaque,
 	})
 	if err != nil {
 		return &provider.ListContainerResponse{
