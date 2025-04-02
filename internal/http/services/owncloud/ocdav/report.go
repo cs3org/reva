@@ -76,6 +76,15 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
+	var resourceInfos []*provider.ResourceInfo
+
+	client, err := s.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting gateway client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	if ff.Rules.Favorite {
 		// List the users favorite resources.
 		currentUser := appctx.ContextMustGetUser(ctx)
@@ -86,14 +95,7 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 			return
 		}
 
-		client, err := s.getClient()
-		if err != nil {
-			log.Error().Err(err).Msg("error getting gateway client")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		infos := make([]*provider.ResourceInfo, 0, len(favorites))
+		resourceInfos = make([]*provider.ResourceInfo, 0, len(favorites))
 		for i := range favorites {
 			statRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: favorites[i]}})
 			if err != nil {
@@ -117,21 +119,21 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 				statRes.Info.Path = parts[3]
 			}
 
-			infos = append(infos, statRes.Info)
+			resourceInfos = append(resourceInfos, statRes.Info)
 		}
+	}
 
-		responsesXML, err := s.multistatusResponse(ctx, &propfindXML{Prop: ff.Prop}, infos, namespace, nil, nil)
-		if err != nil {
-			log.Error().Err(err).Msg("error formatting propfind")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
-		w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
-		w.WriteHeader(http.StatusMultiStatus)
-		if _, err := w.Write([]byte(responsesXML)); err != nil {
-			log.Err(err).Msg("error writing response")
-		}
+	responsesXML, err := s.multistatusResponse(ctx, &propfindXML{Prop: ff.Prop}, resourceInfos, namespace, nil, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("error formatting propfind")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
+	w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
+	w.WriteHeader(http.StatusMultiStatus)
+	if _, err := w.Write([]byte(responsesXML)); err != nil {
+		log.Err(err).Msg("error writing response")
 	}
 }
 
