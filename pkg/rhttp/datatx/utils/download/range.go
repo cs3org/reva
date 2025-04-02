@@ -65,7 +65,10 @@ func ParseRange(s string, size int64) ([]HTTPRange, error) {
 	}
 	const b = "bytes="
 	if !strings.HasPrefix(s, b) {
-		return nil, errors.New("invalid range")
+		// We do not return an error, because RFC 7233 states:
+		// An origin server MUST ignore a Range header field that contains a
+		// range unit it does not understand
+		return nil, nil
 	}
 	ranges := []HTTPRange{}
 	noOverlap := false
@@ -76,7 +79,7 @@ func ParseRange(s string, size int64) ([]HTTPRange, error) {
 		}
 		i := strings.Index(ra, "-")
 		if i < 0 {
-			return nil, errors.New("invalid range")
+			return nil, nil
 		}
 		start, end := textproto.TrimString(ra[:i]), textproto.TrimString(ra[i+1:])
 		var r HTTPRange
