@@ -25,6 +25,8 @@ import (
 	"net/http"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
@@ -75,6 +77,9 @@ func (s *svc) initRouter() {
 		r.Route("/drives", func(r chi.Router) {
 			r.Get("/{space-id}", s.getSpace)
 		})
+		r.Route("/users", func(r chi.Router) {
+			r.Get("/", s.listUsers)
+		})
 	})
 	s.router.Route("/v1beta1", func(r chi.Router) {
 		r.Route("/me", func(r chi.Router) {
@@ -104,3 +109,21 @@ func (s *svc) Prefix() string { return "graph" }
 func (s *svc) Close() error { return nil }
 
 func (s *svc) Unprotected() []string { return nil }
+
+func handleError(err error, w http.ResponseWriter) {
+	w.WriteHeader(http.StatusInternalServerError)
+}
+
+func handleRpcStatus(ctx context.Context, status *rpcv1beta1.Status, w http.ResponseWriter) {
+	log := appctx.GetLogger(ctx)
+	log.Error().Str("Status", status.String()).Msg("Failed to contact gateway in listUsers")
+
+	switch status.Code {
+	case rpcv1beta1.Code_CODE_PERMISSION_DENIED:
+		w.WriteHeader(http.StatusForbidden)
+	case rpcv1beta1.Code_CODE_UNAUTHENTICATED:
+		w.WriteHeader(http.StatusUnauthorized)
+	default:
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+}
