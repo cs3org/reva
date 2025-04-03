@@ -289,6 +289,11 @@ func (t *Tree) HandleFileDelete(path string) error {
 	if n.InternalPath() != path {
 		return fmt.Errorf("internal path does not match path")
 	}
+	_, err = os.Stat(path)
+	if err == nil || !os.IsNotExist(err) {
+		t.log.Info().Str("path", path).Msg("file that was about to be cleared still exists/exists again. We'll leave it alone")
+		return nil
+	}
 
 	// purge metadata
 	if err := t.lookup.IDCache.DeleteByPath(context.Background(), path); err != nil {
