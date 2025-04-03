@@ -73,7 +73,7 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		filters, err := generateCs3Filters(odataReq)
+		filters, err := generateCs3StorageSpaceFilters(odataReq)
 		if err != nil {
 			log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("could not get drives: error parsing filters")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -176,7 +176,7 @@ func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libre
 	}
 }
 
-func generateCs3Filters(request *godata.GoDataRequest) ([]*providerpb.ListStorageSpacesRequest_Filter, error) {
+func generateCs3StorageSpaceFilters(request *godata.GoDataRequest) ([]*providerpb.ListStorageSpacesRequest_Filter, error) {
 	var filters spaces.ListStorageSpaceFilter
 	if request.Query.Filter != nil {
 		if request.Query.Filter.Tree.Token.Value == "eq" {
