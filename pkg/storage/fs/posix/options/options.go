@@ -43,6 +43,7 @@ type Options struct {
 	WatchFS                 bool   `mapstructure:"watch_fs"`
 	WatchType               string `mapstructure:"watch_type"`
 	WatchPath               string `mapstructure:"watch_path"`
+	WatchRoot               string `mapstructure:"watch_root"` // base directory for the watch. events will be considered relative to this path
 	WatchFolderKafkaBrokers string `mapstructure:"watch_folder_kafka_brokers"`
 
 	// InotifyWatcher specific options
