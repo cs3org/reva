@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.30.0](https://github.com/opencloud-eu/reva/releases/tag/v2.30.0) - 2025-04-04
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck, @amrita-shrestha, @fschade, @rhafer
+
+### 🐛 Bug Fixes
+
+- Fix race condition when moving/restoring items in quick succession [[#158](https://github.com/opencloud-eu/reva/pull/158)]
+- Fix handling collaborative moves [[#152](https://github.com/opencloud-eu/reva/pull/152)]
+- Fix move races [[#150](https://github.com/opencloud-eu/reva/pull/150)]
+
+### 📈 Enhancement
+
+- Periodically log stats about inotify resources usage on the system [[#155](https://github.com/opencloud-eu/reva/pull/155)]
+- Cache internal path and disabled flag [[#149](https://github.com/opencloud-eu/reva/pull/149)]
+- enhancement(tus): Improve zerolog wrapper for slog [[#146](https://github.com/opencloud-eu/reva/pull/146)]
+
+### 📦️ Dependencies
+
+- Bump github.com/tus/tusd/v2 from 2.7.1 to 2.8.0 [[#159](https://github.com/opencloud-eu/reva/pull/159)]
+- Bump github.com/mattn/go-sqlite3 from 1.14.24 to 1.14.27 [[#156](https://github.com/opencloud-eu/reva/pull/156)]
+- Bump google.golang.org/grpc from 1.71.0 to 1.71.1 [[#154](https://github.com/opencloud-eu/reva/pull/154)]
+- Bump github.com/minio/minio-go/v7 from 7.0.88 to 7.0.89 [[#151](https://github.com/opencloud-eu/reva/pull/151)]
+- Bump google.golang.org/protobuf from 1.36.5 to 1.36.6 [[#142](https://github.com/opencloud-eu/reva/pull/142)]
+
 ## [2.29.1](https://github.com/opencloud-eu/reva/releases/tag/v2.29.1) - 2025-03-26
 
 ### ❤️ Thanks to all contributors! ❤️
