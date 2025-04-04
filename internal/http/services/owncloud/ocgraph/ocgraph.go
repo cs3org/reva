@@ -48,6 +48,11 @@ func (c *config) ApplyDefaults() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
+// ListResponse is used for proper marshalling of Graph list responses
+type ListResponse struct {
+	Value interface{} `json:"value,omitempty"`
+}
+
 type svc struct {
 	c      *config
 	router *chi.Mux
@@ -79,6 +84,9 @@ func (s *svc) initRouter() {
 		})
 		r.Route("/users", func(r chi.Router) {
 			r.Get("/", s.listUsers)
+		})
+		r.Route("/groups", func(r chi.Router) {
+			r.Get("/", s.listGroups)
 		})
 	})
 	s.router.Route("/v1beta1", func(r chi.Router) {

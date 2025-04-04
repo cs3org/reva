@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2025 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,22 +36,22 @@ import (
 	"github.com/pkg/errors"
 )
 
-type SelectableProperty string
+type UserSelectableProperty string
 
 const (
-	propId                           SelectableProperty = "id"
-	propDisplayName                  SelectableProperty = "displayName"
-	propDisplayNameDesc              SelectableProperty = "displayName desc"
-	propMail                         SelectableProperty = "mail"
-	propMailDesc                     SelectableProperty = "mail desc"
-	propOnPremisesSamAccountName     SelectableProperty = "onPremisesSamAccountName"
-	propOnPremisesSamAccountNameDesc SelectableProperty = "onPremisesSamAccountName desc"
+	propUserId                           UserSelectableProperty = "id"
+	propUserDisplayName                  UserSelectableProperty = "displayName"
+	propUserDisplayNameDesc              UserSelectableProperty = "displayName desc"
+	propUserMail                         UserSelectableProperty = "mail"
+	propUserMailDesc                     UserSelectableProperty = "mail desc"
+	propUserOnPremisesSamAccountName     UserSelectableProperty = "onPremisesSamAccountName"
+	propUserOnPremisesSamAccountNameDesc UserSelectableProperty = "onPremisesSamAccountName desc"
 )
 
-func (s SelectableProperty) Valid() bool {
-	valid := []SelectableProperty{
-		propId, propDisplayName, propDisplayNameDesc, propMail, propMailDesc,
-		propOnPremisesSamAccountName, propOnPremisesSamAccountNameDesc,
+func (s UserSelectableProperty) Valid() bool {
+	valid := []UserSelectableProperty{
+		propUserId, propUserDisplayName, propUserDisplayNameDesc, propUserMail, propUserMailDesc,
+		propUserOnPremisesSamAccountName, propUserOnPremisesSamAccountNameDesc,
 	}
 	return slices.Contains(valid, s)
 }
@@ -87,11 +87,11 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Query.Search == nil || req.Query.Search.RawValue == "" || len(req.Query.Search.RawValue) < 3 {
-		log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("must pass a search string of at least length 3 to list uses")
+		log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("must pass a search string of at least length 3 to list users")
 	}
 	queryVal := strings.Trim(req.Query.Search.RawValue, "\"")
 
-	log.Debug().Str("Query", queryVal).Str("orderBy", req.Query.OrderBy.RawValue).Any("select", getSelectionFromRequest(req.Query.Select)).Msg("Listing users in libregraph API")
+	log.Debug().Str("Query", queryVal).Str("orderBy", req.Query.OrderBy.RawValue).Any("select", getUserSelectionFromRequest(req.Query.Select)).Msg("Listing users in libregraph API")
 
 	users, err := gw.FindUsers(ctx, &userv1beta1.FindUsersRequest{
 		SkipFetchingUserGroups: true,
@@ -107,7 +107,7 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lgUsers := mapToLibregraphUsers(users.GetUsers(), getSelectionFromRequest(req.Query.Select))
+	lgUsers := mapToLibregraphUsers(users.GetUsers(), getUserSelectionFromRequest(req.Query.Select))
 
 	if req.Query.OrderBy.RawValue != "" {
 		lgUsers, err = sortUsers(ctx, lgUsers, req.Query.OrderBy.RawValue)
@@ -118,19 +118,21 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	_ = json.NewEncoder(w).Encode(lgUsers)
+	_ = json.NewEncoder(w).Encode(&ListResponse{
+		Value: lgUsers,
+	})
 
 }
 
 // From a Select query, return a list of `SelectableProperty`s
-func getSelectionFromRequest(selQuery *godata.GoDataSelectQuery) []SelectableProperty {
+func getUserSelectionFromRequest(selQuery *godata.GoDataSelectQuery) []UserSelectableProperty {
 	if selQuery == nil {
 		return nil
 	}
-	selection := []SelectableProperty{}
+	selection := []UserSelectableProperty{}
 	items := strings.Split(selQuery.RawValue, ",")
 	for _, item := range items {
-		prop := SelectableProperty(item)
+		prop := UserSelectableProperty(item)
 		if prop.Valid() {
 			selection = append(selection, prop)
 		}
@@ -140,16 +142,16 @@ func getSelectionFromRequest(selQuery *godata.GoDataSelectQuery) []SelectablePro
 
 // Map Reva users to LibreGraph users. If `selection` is nil, we map everything,
 // otherwise we only map the properties set in `selection`
-func mapToLibregraphUsers(users []*userv1beta1.User, selection []SelectableProperty) []*libregraph.User {
-	lgUsers := make([]*libregraph.User, 0, len(users))
+func mapToLibregraphUsers(users []*userv1beta1.User, selection []UserSelectableProperty) []libregraph.User {
+	lgUsers := make([]libregraph.User, 0, len(users))
 
 	for _, u := range users {
 		if u == nil {
 			continue
 		}
-		lgUser := &libregraph.User{}
+		lgUser := libregraph.User{}
 		if len(selection) == 0 {
-			lgUser = &libregraph.User{
+			lgUser = libregraph.User{
 				Id:                       &u.Id.OpaqueId,
 				Mail:                     &u.Mail,
 				OnPremisesSamAccountName: &u.Username,
@@ -157,7 +159,7 @@ func mapToLibregraphUsers(users []*userv1beta1.User, selection []SelectablePrope
 			}
 		} else {
 			for _, prop := range selection {
-				appendPropToLgUser(u, lgUser, prop)
+				lgUser = appendPropToLgUser(u, lgUser, prop)
 			}
 		}
 		lgUsers = append(lgUsers, lgUser)
@@ -167,54 +169,43 @@ func mapToLibregraphUsers(users []*userv1beta1.User, selection []SelectablePrope
 }
 
 // Add a property `prop` from `u` to `lgUser`
-func appendPropToLgUser(u *userv1beta1.User, lgUser *libregraph.User, prop SelectableProperty) {
+func appendPropToLgUser(u *userv1beta1.User, lgUser libregraph.User, prop UserSelectableProperty) libregraph.User {
 	switch prop {
-	case propId:
+	case propUserId:
 		lgUser.Id = &u.Id.OpaqueId
-	case propDisplayName:
+	case propUserDisplayName:
 		lgUser.DisplayName = &u.DisplayName
-	case propMail:
+	case propUserMail:
 		lgUser.Mail = &u.Mail
-	case propOnPremisesSamAccountName:
+	case propUserOnPremisesSamAccountName:
 		lgUser.OnPremisesSamAccountName = &u.Username
 	}
+	return lgUser
 }
 
 // Sort users by the given sortKey. Valid sortkeys are `SelectableProperty`s
-func sortUsers(ctx context.Context, users []*libregraph.User, sortKey string) ([]*libregraph.User, error) {
+func sortUsers(ctx context.Context, users []libregraph.User, sortKey string) ([]libregraph.User, error) {
 	log := appctx.GetLogger(ctx)
 	log.Trace().Any("users", users).Str("sortKey", sortKey).Msg("func=sortUsers")
-	if !SelectableProperty(sortKey).Valid() {
+	if !UserSelectableProperty(sortKey).Valid() {
 		return nil, errors.New("Not a valid orderBy argument: " + sortKey)
 	}
 
-	switch SelectableProperty(sortKey) {
-	case propDisplayName:
-		slices.SortFunc(users, func(a, b *libregraph.User) int {
-			if a == nil || b == nil {
-				return 0
-			}
+	switch UserSelectableProperty(sortKey) {
+	case propUserDisplayName:
+		slices.SortFunc(users, func(a, b libregraph.User) int {
 			return cmp.Compare(*a.DisplayName, *b.DisplayName)
 		})
-	case propId:
-		slices.SortFunc(users, func(a, b *libregraph.User) int {
-			if a == nil || b == nil {
-				return 0
-			}
+	case propUserId:
+		slices.SortFunc(users, func(a, b libregraph.User) int {
 			return cmp.Compare(*a.Id, *b.Id)
 		})
-	case propMail:
-		slices.SortFunc(users, func(a, b *libregraph.User) int {
-			if a == nil || b == nil {
-				return 0
-			}
+	case propUserMail:
+		slices.SortFunc(users, func(a, b libregraph.User) int {
 			return cmp.Compare(*a.Mail, *b.Mail)
 		})
-	case propOnPremisesSamAccountName:
-		slices.SortFunc(users, func(a, b *libregraph.User) int {
-			if a == nil || b == nil {
-				return 0
-			}
+	case propUserOnPremisesSamAccountName:
+		slices.SortFunc(users, func(a, b libregraph.User) int {
 			return cmp.Compare(*a.OnPremisesSamAccountName, *b.OnPremisesSamAccountName)
 		})
 	}
