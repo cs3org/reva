@@ -71,7 +71,7 @@ reva-posix: ldap redis reva-services
 
 .PHONY: reva-decomposeds3
 reva-decomposeds3: ldap ceph reva-services
-	@echo "Running reva with posixfs storage"
+	@echo "Running reva with decomposeds3 storage"
 	@$(REVA_CMD) -c $(CONFIG_DIR)/storage-users-decomposeds3.toml
 
 .PHONY: clean

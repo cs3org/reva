@@ -1,5 +1,5 @@
 ---
-depends_on: [test, test-integration, api-integration-test-on-decomposed, api-integration-test-on-decomposedS3]
+depends_on: [test, test-integration, api-integration-test-on-decomposed, api-integration-test-on-decomposedS3, api-integration-test-on-posixfs]
 
 variables:
   - &minio_image 'minio/mc:RELEASE.2021-10-07T04-19-58Z'
