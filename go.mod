@@ -80,7 +80,7 @@ require (
 	github.com/studio-b12/gowebdav v0.9.0
 	github.com/test-go/testify v1.1.4
 	github.com/thanhpk/randstr v1.0.6
-	github.com/tus/tusd/v2 v2.7.1
+	github.com/tus/tusd/v2 v2.8.0
 	github.com/wk8/go-ordered-map v1.0.0
 	go-micro.dev/v4 v4.11.0
 	go.etcd.io/etcd/client/v3 v3.5.20
@@ -97,7 +97,7 @@ require (
 	golang.org/x/sys v0.31.0
 	golang.org/x/term v0.30.0
 	golang.org/x/text v0.23.0
-	google.golang.org/genproto v0.0.0-20241118233622-e639e219e697
+	google.golang.org/genproto v0.0.0-20250303144028-a0af3efb3deb
 	google.golang.org/grpc v1.71.1
 	google.golang.org/protobuf v1.36.6
 )
@@ -235,8 +235,8 @@ require (
 	golang.org/x/net v0.37.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
 	golang.org/x/tools v0.31.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20250218202821-56aae31c358a // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250219182151-9fdb1cabc7b2 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20250303144028-a0af3efb3deb // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250303144028-a0af3efb3deb // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
