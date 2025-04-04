@@ -63,6 +63,11 @@ type ListResponse struct {
 	Value interface{} `json:"value,omitempty"`
 }
 
+// ListResponse is used for proper marshalling of Graph list responses
+type ListResponse struct {
+	Value interface{} `json:"value,omitempty"`
+}
+
 type svc struct {
 	c      *config
 	router *chi.Mux
