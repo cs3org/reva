@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.30.1](https://github.com/opencloud-eu/reva/releases/tag/v2.30.1) - 2025-04-05
+
+### ❤️ Thanks to all contributors! ❤️
+
+@individual-it
+
+
+
 ## [2.30.0](https://github.com/opencloud-eu/reva/releases/tag/v2.30.0) - 2025-04-04
 
 ### ❤️ Thanks to all contributors! ❤️
