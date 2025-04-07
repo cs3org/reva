@@ -1,10 +1,14 @@
 # Changelog
 
-## [2.30.1](https://github.com/opencloud-eu/reva/releases/tag/v2.30.1) - 2025-04-07
+## [2.31.0](https://github.com/opencloud-eu/reva/releases/tag/v2.31.0) - 2025-04-07
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@aduffeck, @individual-it
+@JammingBen, @aduffeck, @individual-it
+
+### ✨ Features
+
+- revert: remove "edition" property [[#167](https://github.com/opencloud-eu/reva/pull/167)]
 
 ### 🐛 Bug Fixes
 
