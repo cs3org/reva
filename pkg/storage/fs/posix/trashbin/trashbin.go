@@ -164,13 +164,22 @@ func (tb *Trashbin) MoveToTrash(ctx context.Context, n *node.Node, path string) 
 		return err
 	}
 
-	// purge metadata
+	// 1. "Forget" the node
 	if err = tb.lu.IDCache.DeleteByPath(ctx, path); err != nil {
 		return err
 	}
 
+	// 2. Move the node to the trash
 	itemTrashPath := filepath.Join(trashPath, "files", key+".trashitem")
-	return os.Rename(path, itemTrashPath)
+	err = os.Rename(path, itemTrashPath)
+	if err != nil {
+		return err
+	}
+
+	// 3. Purge the node from the metadata backend. This will not delete the xattrs from the
+	// node as it has already been moved but still remove it from the file metadata cache so
+	// that the metadata is no longer available when reading the node.
+	return tb.lu.MetadataBackend().Purge(ctx, n)
 }
 
 // ListRecycle returns the list of available recycle items
