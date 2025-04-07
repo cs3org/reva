@@ -103,6 +103,7 @@ func (s *svc) initRouter() {
 		r.Get("/roleManagement/permissions/roleDefinitions", s.getRoleDefinitions)
 		r.Get("/drives/{space-id}/root/permissions", s.getRootDrivePermissions)
 		r.Get("/drives/{space-id}/items/{resource-id}/permissions", s.getDrivePermissions)
+		r.Post("/drives/{space-id}/items/{resource-id}/invite", s.share)
 	})
 }
 
@@ -120,6 +121,7 @@ func (s *svc) Unprotected() []string { return nil }
 
 func handleError(err error, w http.ResponseWriter) {
 	w.WriteHeader(http.StatusInternalServerError)
+	w.Write([]byte(err.Error()))
 }
 
 func handleRpcStatus(ctx context.Context, status *rpcv1beta1.Status, w http.ResponseWriter) {

@@ -25,11 +25,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"path"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/go-chi/chi/v5"
+	"github.com/pkg/errors"
 
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	linkv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -75,6 +80,141 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+}
+
+func (s *svc) share(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	// First we get the gateway client
+	gw, err := s.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting gateway client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// We extract the inode and storage ID from the request
+	resourceID := chi.URLParam(r, "resource-id")
+	resourceID, _ = url.QueryUnescape(resourceID)
+	storageID, _, itemID, ok := spaces.DecodeResourceID(resourceID)
+	if !ok {
+		log.Error().Str("resource-id", resourceID).Msg("resource id cannot be decoded")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// We use this to fetch the path and the owner
+	statRes, err := gw.Stat(ctx, &provider.StatRequest{
+		Ref: &provider.Reference{
+			ResourceId: &provider.ResourceId{
+				StorageId: storageID,
+				OpaqueId:  itemID,
+			},
+		},
+	})
+	if err != nil {
+		handleError(err, w)
+		return
+	}
+	if statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+		handleRpcStatus(ctx, statRes.Status, w)
+		return
+	}
+	path := statRes.Info.Path
+	owner := statRes.Info.Owner
+
+	// Now we decode the request body
+	invite := &libregraph.DriveItemInvite{}
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err = dec.Decode(invite); err != nil {
+		log.Error().Err(err).Interface("Body", r.Body).Msg("failed unmarshalling request body")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// From this, we first extract the requested role, which we translate into permissions
+	roles := invite.Roles
+	if len(roles) != 1 {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Reva expects exaclty one role"))
+		return
+	}
+	role, ok := UnifiedRoleIDToDefinition(roles[0])
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Invalid role"))
+		return
+	}
+	perms := PermissionsToCS3ResourcePermissions(role.RolePermissions)
+
+	// Then we also set an expiry, if needed
+	var exp *typesv1beta1.Timestamp
+	if invite.ExpirationDateTime != nil {
+		exp = &typesv1beta1.Timestamp{
+			Seconds: uint64(invite.ExpirationDateTime.Unix()),
+		}
+	}
+
+	// TODO: validate that user is allowed to do this? Or handled by interceptor?
+
+	// We keep a list of users to who we have sent the
+	identitySet := &libregraph.SharePointIdentitySet{}
+
+	// Finally, we create the actual share for every requested recipient
+	for _, recepient := range invite.Recipients {
+		grantee, err := toGrantee(*recepient.LibreGraphRecipientType, *recepient.ObjectId)
+		if err != nil {
+			log.Error().Err(err).Msg("invalid recipient type passed")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		createShareRequest := &collaborationv1beta1.CreateShareRequest{
+			ResourceInfo: &provider.ResourceInfo{
+				Id: &provider.ResourceId{
+					StorageId: storageID,
+					OpaqueId:  itemID,
+				},
+				Path:  path,
+				Owner: owner,
+			},
+			Grant: &collaborationv1beta1.ShareGrant{
+				Grantee:    grantee,
+				Expiration: exp,
+				Permissions: &collaborationv1beta1.SharePermissions{
+					Permissions: perms,
+				},
+			},
+		}
+
+		resp, err := gw.CreateShare(ctx, createShareRequest)
+		if err != nil {
+			handleError(err, w)
+			return
+		}
+		if resp.Status.Code != rpcv1beta1.Code_CODE_OK {
+			handleRpcStatus(ctx, resp.Status, w)
+			return
+		}
+
+		if grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
+			identitySet.SetUser(*libregraph.NewIdentity(grantee.GetUserId().OpaqueId))
+		} else if grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+			identitySet.SetGroup(*libregraph.NewIdentity(grantee.GetGroupId().OpaqueId))
+		}
+
+	}
+
+	lgPerm := libregraph.Permission{
+		Roles:       roles,
+		GrantedToV2: identitySet,
+	}
+	_ = json.NewEncoder(w).Encode(&ListResponse{
+		Value: lgPerm,
+	})
+
 }
 
 func encodeSpaceIDForShareJail(res *provider.ResourceInfo) string {
@@ -255,11 +395,6 @@ func groupByResourceID(shares []*gateway.ShareResourceInfo, publicShares []*gate
 	return grouped, infos
 }
 
-type pair[T, V any] struct {
-	First  T
-	Second V
-}
-
 func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
@@ -398,4 +533,21 @@ func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*share) ([]li
 	}
 
 	return permissions, nil
+}
+
+func toGrantee(recipientType string, id string) (*provider.Grantee, error) {
+	switch recipientType {
+	case "user":
+		return &provider.Grantee{
+			Type: provider.GranteeType_GRANTEE_TYPE_USER,
+			Id:   &provider.Grantee_UserId{UserId: &userv1beta1.UserId{OpaqueId: id}},
+		}, nil
+	case "group":
+		return &provider.Grantee{
+			Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+			Id:   &provider.Grantee_GroupId{GroupId: &groupv1beta1.GroupId{OpaqueId: id}},
+		}, nil
+	default:
+		return nil, errors.New(recipientType + " is not a valid granteetype")
+	}
 }
