@@ -254,7 +254,7 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 			}
 		}
 
-		err = t.HandleFileDelete(path)
+		err = t.HandleFileDelete(path, false) // Do not send a item-trashed SSE in case of moves. They trigger a item-renamed event instead.
 		if err != nil {
 			t.log.Error().Err(err).Str("path", path).Bool("isDir", isDir).Msg("failed to handle moved away item")
 		}
@@ -265,7 +265,7 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 		// 7. Deleted file or directory
 		//   -> update parent and all children
 
-		err := t.HandleFileDelete(path)
+		err := t.HandleFileDelete(path, true)
 		if err != nil {
 			t.log.Error().Err(err).Str("path", path).Bool("isDir", isDir).Msg("failed to handle deleted item")
 		}
@@ -280,7 +280,7 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 	return nil
 }
 
-func (t *Tree) HandleFileDelete(path string) error {
+func (t *Tree) HandleFileDelete(path string, sendSSE bool) error {
 	spaceID, id, err := t.lookup.IDsForPath(context.Background(), path)
 	if err != nil {
 		return err
@@ -301,6 +301,10 @@ func (t *Tree) HandleFileDelete(path string) error {
 	}
 	if err := t.lookup.MetadataBackend().Purge(context.Background(), n); err != nil {
 		t.log.Error().Err(err).Str("path", path).Msg("could not purge metadata")
+	}
+
+	if !sendSSE {
+		return nil
 	}
 
 	parentNode, err := t.getNodeForPath(filepath.Dir(path))
