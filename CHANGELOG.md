@@ -1,12 +1,14 @@
 # Changelog
 
-## [2.30.1](https://github.com/opencloud-eu/reva/releases/tag/v2.30.1) - 2025-04-05
+## [2.30.1](https://github.com/opencloud-eu/reva/releases/tag/v2.30.1) - 2025-04-07
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@individual-it
+@aduffeck, @individual-it
 
+### 🐛 Bug Fixes
 
+- Do not send "delete" sses when items are moved [[#165](https://github.com/opencloud-eu/reva/pull/165)]
 
 ## [2.30.0](https://github.com/opencloud-eu/reva/releases/tag/v2.30.0) - 2025-04-04
 
