@@ -4,7 +4,7 @@
 
 ### ❤️ Thanks to all contributors! ❤️
 
-@JammingBen, @aduffeck, @individual-it
+@JammingBen, @aduffeck, @individual-it, @openclouders
 
 ### ✨ Features
 
