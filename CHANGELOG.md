@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.31.0](https://github.com/opencloud-eu/reva/releases/tag/v2.31.0) - 2025-04-07
+
+### ❤️ Thanks to all contributors! ❤️
+
+@JammingBen, @aduffeck, @individual-it
+
+### ✨ Features
+
+- revert: remove "edition" property [[#167](https://github.com/opencloud-eu/reva/pull/167)]
+
+### 🐛 Bug Fixes
+
+- Fix stale file metadata cache entries [[#166](https://github.com/opencloud-eu/reva/pull/166)]
+- Do not send "delete" sses when items are moved [[#165](https://github.com/opencloud-eu/reva/pull/165)]
+
 ## [2.30.0](https://github.com/opencloud-eu/reva/releases/tag/v2.30.0) - 2025-04-04
 
 ### ❤️ Thanks to all contributors! ❤️
