@@ -63,11 +63,6 @@ type ListResponse struct {
 	Value interface{} `json:"value,omitempty"`
 }
 
-// ListResponse is used for proper marshalling of Graph list responses
-type ListResponse struct {
-	Value interface{} `json:"value,omitempty"`
-}
-
 type svc struct {
 	c      *config
 	router *chi.Mux
@@ -137,10 +132,8 @@ func (s *svc) Unprotected() []string { return nil }
 
 func handleError(err error, w http.ResponseWriter) {
 	w.WriteHeader(http.StatusInternalServerError)
-<<<<<<< HEAD
+
 	w.Write([]byte(err.Error()))
-=======
->>>>>>> 2f58acbb1 (Implemented v0.1 of listUsers libregraph endpoint)
 }
 
 func handleRpcStatus(ctx context.Context, status *rpcv1beta1.Status, w http.ResponseWriter) {
