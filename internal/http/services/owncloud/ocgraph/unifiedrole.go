@@ -259,7 +259,7 @@ func GetApplicableRoleDefinitionsForActions(actions []string) []*libregraph.Unif
 }
 
 // PermissionsToCS3ResourcePermissions converts the provided libregraph UnifiedRolePermissions to a cs3 ResourcePermissions
-func PermissionsToCS3ResourcePermissions(unifiedRolePermissions []*libregraph.UnifiedRolePermission) *provider.ResourcePermissions {
+func PermissionsToCS3ResourcePermissions(unifiedRolePermissions []libregraph.UnifiedRolePermission) *provider.ResourcePermissions {
 	p := &provider.ResourcePermissions{}
 
 	for _, permission := range unifiedRolePermissions {
@@ -442,4 +442,28 @@ var ocsRoleUnifiedRole = map[string]*libregraph.UnifiedRoleDefinition{
 	conversions.RoleCollaborator: NewManagerUnifiedRole(),
 	conversions.RoleUploader:     NewUploaderUnifiedRole(),
 	conversions.RoleManager:      NewManagerUnifiedRole(),
+}
+
+// TODO: verify that these are correct
+func UnifiedRoleIDToDefinition(unifiedRoleID string) (*libregraph.UnifiedRoleDefinition, bool) {
+	switch unifiedRoleID {
+	case UnifiedRoleViewerID:
+		return NewViewerUnifiedRole(), true
+	case UnifiedRoleSpaceViewerID:
+		return NewViewerUnifiedRole(), true
+	case UnifiedRoleEditorID:
+		return NewEditorUnifiedRole(), true
+	case UnifiedRoleSpaceEditorID:
+		return NewEditorUnifiedRole(), true
+	case UnifiedRoleFileEditorID:
+		return NewEditorUnifiedRole(), true
+	case UnifiedRoleEditorLiteID:
+		return NewEditorUnifiedRole(), true
+	case UnifiedRoleManagerID:
+		return NewManagerUnifiedRole(), true
+	case UnifiedRoleSecureViewerID:
+		return NewViewerUnifiedRole(), true
+	default:
+		return nil, false
+	}
 }
