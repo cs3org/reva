@@ -294,6 +294,9 @@ func (session *DecomposedFsSession) Finalize(ctx context.Context) (err error) {
 
 	// lock the node before writing the blob
 	unlock, err := session.store.lu.MetadataBackend().Lock(revisionNode)
+	if err != nil {
+		return err
+	}
 	defer func() { _ = unlock() }()
 
 	// upload the data to the blobstore
