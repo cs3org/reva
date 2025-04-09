@@ -407,13 +407,11 @@ func (t *Tree) assimilate(item scanItem) error {
 
 	if id != "" {
 		// the file has an id set, we already know it from the past
-		// n := node.NewBaseNode(spaceID, id, t.lookup)
 
 		previousPath, ok := t.lookup.GetCachedID(context.Background(), spaceID, id)
 		if previousPath == "" || !ok {
 			previousPath, ok = t.lookup.IDHistoryCache.Get(context.Background(), spaceID, id)
 		}
-		// previousParentID, _ := t.lookup.MetadataBackend().Get(context.Background(), n, prefixes.ParentidAttr)
 
 		// compare metadata mtime with actual mtime. if it matches AND the path hasn't changed (move operation)
 		// we can skip the assimilation because the file was handled by us
