@@ -51,6 +51,7 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -548,7 +549,10 @@ func (s *svc) isOpenable(path string) bool {
 func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string, usershares, linkshares map[string]struct{}) (*responseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
 
-	_, spacesEnabled := ctx.Value(ctxSpaceID).(string)
+	spacesEnabled := s.c.SpacesEnabled
+	if !spacesEnabled {
+		sublog.Warn().Msg("Spaces is not enabled for request to " + md.Path + "(" + md.Id.StorageId + ": " + md.Id.OpaqueId + ")")
+	}
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 	var ref string
@@ -748,15 +752,29 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				// TODO(jfd): maybe phoenix and the other clients can just use this id as an opaque string?
 				// I tested the desktop client and phoenix to annotate which properties are requestted, see below cases
 				case "fileid": // phoenix only
-					if md.Id != nil {
-						if spacesEnabled {
+					if md.Id == nil {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
+					} else if spacesEnabled {
+						fileId, err := spaces.EncodeResourceInfo(md)
+						log.Info().Any("md", md).Str("fileid", fileId).Msg("FindMe - encode file id")
+						if err != nil {
+							log.Error().Err(err).Any("md", md).Msg("Failed to encode file id")
+							//propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", spaces.EncodeResourceID(md.Id)))
 						} else {
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", spaces.ResourceIdToString(md.Id)))
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", fileId))
 						}
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", spaces.ResourceIdToString(md.Id)))
 					}
+
+					// if md.Id != nil {
+					// 	if spacesEnabled {
+					// 		propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", spaces.EncodeResourceID(md.Id)))
+					// 	} else {
+					// 	}
+					// } else {
+					// }
 				case "id": // desktop client only
 					if md.Id != nil {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:id", spaces.EncodeResourceID(md.Id)))

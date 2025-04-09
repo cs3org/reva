@@ -32,12 +32,12 @@ import (
 	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
-	linkv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/spaces"
@@ -150,9 +150,9 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 	perms := PermissionsToCS3ResourcePermissions(role.RolePermissions)
 
 	// Then we also set an expiry, if needed
-	var exp *typesv1beta1.Timestamp
+	var exp *types.Timestamp
 	if invite.ExpirationDateTime != nil {
-		exp = &typesv1beta1.Timestamp{
+		exp = &types.Timestamp{
 			Seconds: uint64(invite.ExpirationDateTime.Unix()),
 		}
 	}
@@ -214,6 +214,110 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(&ListResponse{
 		Value: lgPerm,
 	})
+
+}
+
+func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	// First we get the gateway client
+	gw, err := s.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting gateway client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// We extract the inode and storage ID from the request
+	resourceID := chi.URLParam(r, "resource-id")
+	resourceID, _ = url.QueryUnescape(resourceID)
+	storageID, _, itemID, ok := spaces.DecodeResourceID(resourceID)
+	if !ok {
+		log.Error().Str("resource-id", resourceID).Msg("resource id cannot be decoded")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// We use this to fetch the path and the owner
+	statRes, err := gw.Stat(ctx, &provider.StatRequest{
+		Ref: &provider.Reference{
+			ResourceId: &provider.ResourceId{
+				StorageId: storageID,
+				OpaqueId:  itemID,
+			},
+		},
+	})
+	if err != nil {
+		handleError(err, w)
+		return
+	}
+	if statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+		handleRpcStatus(ctx, statRes.Status, w)
+		return
+	}
+
+	// Now we decode the request body
+	linkRequest := &libregraph.DriveItemCreateLink{}
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err = dec.Decode(linkRequest); err != nil {
+		log.Error().Err(err).Interface("Body", r.Body).Msg("failed unmarshalling request body")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Then we also set an expiry, if needed
+	var exp *types.Timestamp
+	if linkRequest.ExpirationDateTime != nil {
+		exp = &types.Timestamp{
+			Seconds: uint64(linkRequest.ExpirationDateTime.Unix()),
+		}
+	}
+
+	// And we set a password, if needed
+	password := ""
+	if linkRequest.Password != nil {
+		password = *linkRequest.Password
+	}
+
+	// TODO: validate that user is allowed to do this? Or handled by interceptor?
+
+	if linkRequest.Type == nil {
+		log.Error().Err(err).Interface("Body", r.Body).Msg("failed unmarshalling request body")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Must pass a link type"))
+		return
+	}
+
+	req := &link.CreatePublicShareRequest{
+		ResourceInfo: statRes.Info,
+		Grant: &link.Grant{
+			Expiration: exp,
+			Password:   password,
+			Permissions: &link.PublicSharePermissions{
+				Permissions: LinkTypeToPermissions(*linkRequest.Type),
+			},
+		},
+	}
+
+	resp, err := gw.CreatePublicShare(ctx, req)
+	if err != nil {
+		handleError(err, w)
+		return
+	}
+	if resp.Status.Code != rpcv1beta1.Code_CODE_OK {
+		handleRpcStatus(ctx, resp.Status, w)
+		return
+	}
+
+	lgPerm := s.libreGraphPermissionFromCS3PublicShare(resp.GetShare())
+	if lgPerm == nil {
+		log.Error().Err(err).Any("link", resp.GetShare()).Any("lgPerm", lgPerm).Msg("error converting created link to permissions")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(lgPerm)
 
 }
 
@@ -369,7 +473,7 @@ func (s *svc) cs3GranteeToSharePointIdentitySet(ctx context.Context, grantee *pr
 
 type share struct {
 	share  *collaborationv1beta1.Share
-	public *linkv1beta1.PublicShare
+	public *link.PublicShare
 }
 
 func groupByResourceID(shares []*gateway.ShareResourceInfo, publicShares []*gateway.PublicShareResourceInfo) (map[string][]*share, map[string]*provider.ResourceInfo) {
@@ -411,7 +515,7 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	publicShares, err := gw.ListExistingPublicShares(ctx, &linkv1beta1.ListPublicSharesRequest{})
+	publicShares, err := gw.ListExistingPublicShares(ctx, &link.ListPublicSharesRequest{})
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
