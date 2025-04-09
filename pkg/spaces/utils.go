@@ -20,6 +20,7 @@ package spaces
 
 import (
 	"encoding/base32"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -77,6 +78,17 @@ func ParseResourceID(raw string) (*provider.ResourceId, bool) {
 func EncodeResourceID(r *provider.ResourceId) string {
 	spaceID := EncodeSpaceID(r.StorageId, r.SpaceId)
 	return fmt.Sprintf("%s!%s", spaceID, r.OpaqueId)
+}
+
+func EncodeResourceInfo(md *provider.ResourceInfo) (spaceId string, err error) {
+	if md.Id.SpaceId != "" {
+		return fmt.Sprintf("%s$%s!%s", md.Id.StorageId, md.Id.SpaceId, md.Id.OpaqueId), nil
+	} else if md.Path != "" {
+		encodedPath := base32.StdEncoding.EncodeToString([]byte(md.Path))
+		return fmt.Sprintf("%s$%s!%s", md.Id.StorageId, encodedPath, md.Id.OpaqueId), nil
+	} else {
+		return "", errors.New("resourceInfo must contain a spaceID or a path")
+	}
 }
 
 // EncodeSpaceID encodes storage ID and path to create a space ID,
