@@ -439,7 +439,7 @@ func (t *Tree) assimilate(item scanItem) error {
 				if err := t.lookup.CacheID(context.Background(), spaceID, id, item.Path); err != nil {
 					t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", id).Str("path", item.Path).Msg("could not cache id")
 				}
-				_, attrs, err := t.updateFile(item.Path, id, spaceID)
+				_, attrs, err := t.updateFile(item.Path, id, spaceID, fi)
 				if err != nil {
 					return err
 				}
@@ -490,7 +490,7 @@ func (t *Tree) assimilate(item scanItem) error {
 				t.log.Error().Err(err).Str("spaceID", spaceID).Str("id", id).Str("path", item.Path).Msg("could not cache id")
 			}
 
-			_, _, err := t.updateFile(item.Path, id, spaceID)
+			_, _, err := t.updateFile(item.Path, id, spaceID, fi)
 			if err != nil {
 				return err
 			}
@@ -499,7 +499,7 @@ func (t *Tree) assimilate(item scanItem) error {
 		t.log.Debug().Str("path", item.Path).Msg("new item detected")
 		// assimilate new file
 		newId := uuid.New().String()
-		fi, _, err := t.updateFile(item.Path, newId, spaceID)
+		fi, _, err := t.updateFile(item.Path, newId, spaceID, nil)
 		if err != nil {
 			return err
 		}
@@ -533,7 +533,7 @@ func (t *Tree) assimilate(item scanItem) error {
 	return nil
 }
 
-func (t *Tree) updateFile(path, id, spaceID string) (fs.FileInfo, node.Attributes, error) {
+func (t *Tree) updateFile(path, id, spaceID string, fi fs.FileInfo) (fs.FileInfo, node.Attributes, error) {
 	retries := 1
 	parentID := ""
 	bn := assimilationNode{spaceID: spaceID, nodeId: id, path: path}
@@ -569,9 +569,12 @@ assimilate:
 	}
 
 	// assimilate file
-	fi, err := os.Stat(path)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to stat item")
+	if fi == nil {
+		var err error
+		fi, err = os.Stat(path)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "failed to stat item")
+		}
 	}
 
 	attrs, err := t.lookup.MetadataBackend().All(context.Background(), bn)
