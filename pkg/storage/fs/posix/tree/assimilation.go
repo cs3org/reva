@@ -497,6 +497,28 @@ func (t *Tree) assimilate(item scanItem) error {
 		}
 	} else {
 		t.log.Debug().Str("path", item.Path).Msg("new item detected")
+		assimilationNode := &assimilationNode{
+			spaceID: spaceID,
+			// Use the path as the node ID (which is used for calculating the lock file path) since we do not have an ID yet
+			nodeId: strings.ReplaceAll(strings.TrimPrefix(item.Path, "/"), "/", "-"),
+		}
+		unlock, err := t.lookup.MetadataBackend().Lock(assimilationNode)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = unlock() }()
+
+		// check if the file got an ID while we were waiting for the lock
+		_, id, _, _, err = t.lookup.MetadataBackend().IdentifyPath(context.Background(), item.Path)
+		if err != nil {
+			return err
+		}
+		if id != "" {
+			// file was assimilated by another thread while we were waiting for the lock
+			t.log.Debug().Str("path", item.Path).Msg("file was assimilated by another thread")
+			return nil
+		}
+
 		// assimilate new file
 		newId := uuid.New().String()
 		fi, _, err := t.updateFile(item.Path, newId, spaceID, nil)
