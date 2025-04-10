@@ -372,39 +372,36 @@ func (t *Tree) assimilate(item scanItem) error {
 	t.log.Debug().Str("path", item.Path).Bool("rescan", item.ForceRescan).Bool("recurse", item.Recurse).Msg("assimilate")
 	var err error
 
-	// First find the space id
-	spaceID, spaceAttrs, err := t.findSpaceId(item.Path)
+	spaceID, id, parentID, mtime, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), item.Path)
 	if err != nil {
 		return err
 	}
 
-	assimilationNode := &assimilationNode{
-		spaceID: spaceID,
-		path:    item.Path,
-	}
-
-	// lock the file for assimilation
-	unlock, err := t.lookup.MetadataBackend().Lock(assimilationNode)
-	if err != nil {
-		return errors.Wrap(err, "failed to lock item for assimilation")
-	}
-	defer func() {
-		_ = unlock()
-	}()
-
-	user := &userv1beta1.UserId{
-		Idp:      string(spaceAttrs[prefixes.OwnerIDPAttr]),
-		OpaqueId: string(spaceAttrs[prefixes.OwnerIDAttr]),
-	}
-
-	// check for the id attribute again after grabbing the lock, maybe the file was assimilated/created by us in the meantime
-	_, id, parentID, mtime, err := t.lookup.MetadataBackend().IdentifyPath(context.Background(), item.Path)
-	if err != nil {
-		return err
+	if spaceID == "" {
+		// node didn't have a space ID attached. try to find it by walking up the path on disk
+		spaceID, err = t.findSpaceId(item.Path)
+		if err != nil {
+			return err
+		}
 	}
 
 	if id != "" {
 		// the file has an id set, we already know it from the past
+
+		// lock the file for re-assimilation
+		assimilationNode := &assimilationNode{
+			spaceID: spaceID,
+			nodeId:  id,
+			path:    item.Path,
+		}
+
+		unlock, err := t.lookup.MetadataBackend().Lock(assimilationNode)
+		if err != nil {
+			return errors.Wrap(err, "failed to lock item for assimilation")
+		}
+		defer func() {
+			_ = unlock()
+		}()
 
 		previousPath, ok := t.lookup.GetCachedID(context.Background(), spaceID, id)
 		if previousPath == "" || !ok {
