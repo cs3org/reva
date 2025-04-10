@@ -36,7 +36,6 @@ import (
 	"github.com/pkg/xattr"
 	"github.com/rs/zerolog/log"
 
-	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/opencloud-eu/reva/v2/pkg/events"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
@@ -342,10 +341,9 @@ func (t *Tree) getNodeForPath(path string) (*node.Node, error) {
 	return node.ReadNode(context.Background(), t.lookup, spaceID, nodeID, false, nil, false)
 }
 
-func (t *Tree) findSpaceId(path string) (string, node.Attributes, error) {
+func (t *Tree) findSpaceId(path string) (string, error) {
 	// find the space id, scope by the according user
 	spaceCandidate := path
-	spaceAttrs := node.Attributes{}
 	for strings.HasPrefix(spaceCandidate, t.options.Root) {
 		spaceID, _, err := t.lookup.IDsForPath(context.Background(), spaceCandidate)
 		if err == nil && len(spaceID) > 0 {
@@ -353,21 +351,21 @@ func (t *Tree) findSpaceId(path string) (string, node.Attributes, error) {
 				// set the uid and gid for the space
 				fi, err := os.Stat(spaceCandidate)
 				if err != nil {
-					return "", spaceAttrs, err
+					return "", err
 				}
 				sys := fi.Sys().(*syscall.Stat_t)
 				gid := int(sys.Gid)
 				_, err = t.userMapper.ScopeUserByIds(-1, gid)
 				if err != nil {
-					return "", spaceAttrs, err
+					return "", err
 				}
 			}
 
-			return spaceID, spaceAttrs, nil
+			return spaceID, nil
 		}
 		spaceCandidate = filepath.Dir(spaceCandidate)
 	}
-	return "", spaceAttrs, fmt.Errorf("could not find space for path %s", path)
+	return "", fmt.Errorf("could not find space for path %s", path)
 }
 
 func (t *Tree) assimilate(item scanItem) error {
@@ -482,9 +480,6 @@ func (t *Tree) assimilate(item scanItem) error {
 						Path: filepath.Base(previousPath),
 					}
 					t.PublishEvent(events.ItemMoved{
-						SpaceOwner:   user,
-						Executant:    user,
-						Owner:        user,
 						Ref:          ref,
 						OldReference: oldRef,
 						Timestamp:    utils.TSNow(),
@@ -521,25 +516,19 @@ func (t *Tree) assimilate(item scanItem) error {
 		}
 		if fi.IsDir() {
 			t.PublishEvent(events.ContainerCreated{
-				SpaceOwner: user,
-				Executant:  user,
-				Owner:      user,
-				Ref:        ref,
-				Timestamp:  utils.TSNow(),
+				Ref:       ref,
+				Timestamp: utils.TSNow(),
 			})
 		} else {
 			if fi.Size() == 0 {
 				t.PublishEvent(events.FileTouched{
-					SpaceOwner: user,
-					Executant:  user,
-					Ref:        ref,
-					Timestamp:  utils.TSNow(),
+					Ref:       ref,
+					Timestamp: utils.TSNow(),
 				})
 			} else {
 				t.PublishEvent(events.UploadReady{
-					SpaceOwner: user,
-					FileRef:    ref,
-					Timestamp:  utils.TSNow(),
+					FileRef:   ref,
+					Timestamp: utils.TSNow(),
 				})
 			}
 		}
