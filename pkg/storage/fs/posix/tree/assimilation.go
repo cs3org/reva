@@ -591,13 +591,6 @@ assimilate:
 		attributes[prefixes.ParentidAttr] = []byte(parentID)
 	}
 
-	sha1h, md5h, adler32h, err := node.CalculateChecksums(context.Background(), path)
-	if err == nil {
-		attributes[prefixes.ChecksumPrefix+"sha1"] = sha1h.Sum(nil)
-		attributes[prefixes.ChecksumPrefix+"md5"] = md5h.Sum(nil)
-		attributes[prefixes.ChecksumPrefix+"adler32"] = adler32h.Sum(nil)
-	}
-
 	var n *node.Node
 	if fi.IsDir() {
 		attributes.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_CONTAINER))
@@ -612,6 +605,13 @@ assimilate:
 		}
 		n = node.New(spaceID, id, parentID, filepath.Base(path), treeSize, "", provider.ResourceType_RESOURCE_TYPE_CONTAINER, nil, t.lookup)
 	} else {
+		sha1h, md5h, adler32h, err := node.CalculateChecksums(context.Background(), path)
+		if err == nil {
+			attributes[prefixes.ChecksumPrefix+"sha1"] = sha1h.Sum(nil)
+			attributes[prefixes.ChecksumPrefix+"md5"] = md5h.Sum(nil)
+			attributes[prefixes.ChecksumPrefix+"adler32"] = adler32h.Sum(nil)
+		}
+
 		blobID := uuid.NewString()
 		attributes.SetString(prefixes.BlobIDAttr, blobID)
 		attributes.SetInt64(prefixes.BlobsizeAttr, fi.Size())

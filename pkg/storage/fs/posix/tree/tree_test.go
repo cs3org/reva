@@ -10,6 +10,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/testhelpers"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/shirou/gopsutil/process"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -116,6 +117,7 @@ var _ = Describe("Tree", func() {
 					g.Expect(n.Type(env.Ctx)).To(Equal(provider.ResourceType_RESOURCE_TYPE_FILE))
 					g.Expect(n.ID).ToNot(BeEmpty())
 					g.Expect(n.Blobsize).To(Equal(int64(0)))
+					g.Expect(n.Xattr(env.Ctx, prefixes.ChecksumPrefix+"adler32")).ToNot(BeEmpty())
 				}).ProbeEvery(200 * time.Millisecond).Should(Succeed())
 			})
 
@@ -124,6 +126,7 @@ var _ = Describe("Tree", func() {
 				_, err := os.Create(root + "/changed.txt")
 				Expect(err).ToNot(HaveOccurred())
 
+				var oldChecksum []byte
 				Eventually(func(g Gomega) {
 					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
@@ -133,6 +136,8 @@ var _ = Describe("Tree", func() {
 					g.Expect(n).ToNot(BeNil())
 					g.Expect(n.ID).ToNot(BeEmpty())
 					g.Expect(n.Blobsize).To(Equal(int64(0)))
+					oldChecksum, _ = n.Xattr(env.Ctx, prefixes.ChecksumPrefix+"adler32")
+					g.Expect(oldChecksum).ToNot(BeEmpty())
 				}).ProbeEvery(200 * time.Millisecond).Should(Succeed())
 
 				// Change file content
@@ -148,6 +153,8 @@ var _ = Describe("Tree", func() {
 					g.Expect(n.Type(env.Ctx)).To(Equal(provider.ResourceType_RESOURCE_TYPE_FILE))
 					g.Expect(n.ID).ToNot(BeEmpty())
 					g.Expect(n.Blobsize).To(Equal(int64(11)))
+					checksum, _ := n.Xattr(env.Ctx, prefixes.ChecksumPrefix+"adler32")
+					g.Expect(checksum).ToNot(Equal(oldChecksum))
 				}).Should(Succeed())
 			})
 
