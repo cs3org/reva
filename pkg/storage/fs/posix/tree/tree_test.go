@@ -10,6 +10,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	helpers "github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/testhelpers"
+	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/shirou/gopsutil/process"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -116,7 +117,57 @@ var _ = Describe("Tree", func() {
 					g.Expect(n.Type(env.Ctx)).To(Equal(provider.ResourceType_RESOURCE_TYPE_FILE))
 					g.Expect(n.ID).ToNot(BeEmpty())
 					g.Expect(n.Blobsize).To(Equal(int64(0)))
+					g.Expect(n.Xattr(env.Ctx, prefixes.ChecksumPrefix+"adler32")).ToNot(BeEmpty())
 				}).ProbeEvery(200 * time.Millisecond).Should(Succeed())
+			})
+
+			It("handles new files which are still being written", func() {
+				f, err := os.Create(root + "/file.txt")
+				Expect(err).ToNot(HaveOccurred())
+
+				// Write initial bytes
+				initialContent := []byte("initial data")
+				_, err = f.Write(initialContent)
+				Expect(err).ToNot(HaveOccurred())
+				err = f.Sync()
+				Expect(err).ToNot(HaveOccurred())
+
+				By("assimilating the file with the initial content")
+				Eventually(func(g Gomega) {
+					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+						ResourceId: env.SpaceRootRes,
+						Path:       subtree + "/file.txt",
+					})
+					g.Expect(err).ToNot(HaveOccurred())
+					g.Expect(n).ToNot(BeNil())
+					g.Expect(n.Type(env.Ctx)).To(Equal(provider.ResourceType_RESOURCE_TYPE_FILE))
+					g.Expect(n.ID).ToNot(BeEmpty())
+					g.Expect(n.Blobsize).To(Equal(int64(len(initialContent))))
+					g.Expect(n.Xattr(env.Ctx, prefixes.ChecksumPrefix+"adler32")).ToNot(BeEmpty())
+				}).ProbeEvery(200 * time.Millisecond).Should(Succeed())
+
+				// Write more data to the file
+				additionalContent := []byte(" and more data")
+				_, err = f.Write(additionalContent)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Close the file
+				err = f.Close()
+				Expect(err).ToNot(HaveOccurred())
+
+				By("assimilating the file with the final content")
+				Eventually(func(g Gomega) {
+					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+						ResourceId: env.SpaceRootRes,
+						Path:       subtree + "/file.txt",
+					})
+					g.Expect(err).ToNot(HaveOccurred())
+					g.Expect(n).ToNot(BeNil())
+					g.Expect(n.Type(env.Ctx)).To(Equal(provider.ResourceType_RESOURCE_TYPE_FILE))
+					g.Expect(n.Blobsize).To(Equal(int64(len(initialContent) + len(additionalContent))))
+					checksum, _ := n.Xattr(env.Ctx, prefixes.ChecksumPrefix+"adler32")
+					g.Expect(checksum).ToNot(BeEmpty())
+				}).Should(Succeed())
 			})
 
 			It("handles changed files", func() {
@@ -124,6 +175,7 @@ var _ = Describe("Tree", func() {
 				_, err := os.Create(root + "/changed.txt")
 				Expect(err).ToNot(HaveOccurred())
 
+				var oldChecksum []byte
 				Eventually(func(g Gomega) {
 					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 						ResourceId: env.SpaceRootRes,
@@ -133,6 +185,8 @@ var _ = Describe("Tree", func() {
 					g.Expect(n).ToNot(BeNil())
 					g.Expect(n.ID).ToNot(BeEmpty())
 					g.Expect(n.Blobsize).To(Equal(int64(0)))
+					oldChecksum, _ = n.Xattr(env.Ctx, prefixes.ChecksumPrefix+"adler32")
+					g.Expect(oldChecksum).ToNot(BeEmpty())
 				}).ProbeEvery(200 * time.Millisecond).Should(Succeed())
 
 				// Change file content
@@ -148,6 +202,8 @@ var _ = Describe("Tree", func() {
 					g.Expect(n.Type(env.Ctx)).To(Equal(provider.ResourceType_RESOURCE_TYPE_FILE))
 					g.Expect(n.ID).ToNot(BeEmpty())
 					g.Expect(n.Blobsize).To(Equal(int64(11)))
+					checksum, _ := n.Xattr(env.Ctx, prefixes.ChecksumPrefix+"adler32")
+					g.Expect(checksum).ToNot(Equal(oldChecksum))
 				}).Should(Succeed())
 			})
 
