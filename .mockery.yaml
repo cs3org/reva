@@ -23,6 +23,9 @@ packages:
     github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/node:
         interfaces:
             Blobstore:
+    github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup:
+        interfaces:
+            IDCache:
     github.com/opencloud-eu/reva/v2/pkg/storage/registry/spaces:
         interfaces:
             StorageProviderClient:
