@@ -28,7 +28,7 @@ var _ = Describe("Lookup", func() {
 				Expect(spaceId).ToNot(BeEmpty())
 			})
 
-			It("should not reuse exising ids", func() {
+			It("should not reuse existing ids", func() {
 				spaceId, err := env.Lookup.GenerateSpaceID("project", env.Owner)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(spaceId).ToNot(BeEmpty())
@@ -47,7 +47,7 @@ var _ = Describe("Lookup", func() {
 				Expect(spaceId).ToNot(BeEmpty())
 			})
 
-			It("should reuse exising ids", func() {
+			It("should reuse existing ids", func() {
 				spaceId, err := env.Lookup.GenerateSpaceID("personal", env.Owner)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(spaceId).ToNot(BeEmpty())
