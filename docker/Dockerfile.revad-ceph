@@ -16,7 +16,11 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
+# v18 == reef. We (re)inject the RPM repository that was removed in
+# https://github.com/ceph/ceph/commit/08432ef and that will have to be
+# updated once we decide to upgrade Ceph.
 FROM quay.io/ceph/ceph:v18
+RUN dnf config-manager --add-repo http://download.ceph.com/rpm-reef/el9/x86_64
 
 RUN dnf update --nobest -y  && dnf install -y \
   git \
