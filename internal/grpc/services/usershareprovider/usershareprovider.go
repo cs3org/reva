@@ -136,7 +136,7 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 
 	if !s.isPathAllowed(req.ResourceInfo.Path) {
 		return &collaboration.CreateShareResponse{
-			Status: status.NewInvalidArg(ctx, "share creation is not allowed for the specified path"),
+			Status: status.NewInvalidArg(ctx, "share creation is not allowed for path"+req.ResourceInfo.Path),
 		}, nil
 	}
 
