@@ -1305,34 +1305,29 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 	}
 
 	for _, fi := range mylst {
-		// For files, inherit ACLs from the parent
-		// And set the inode to that of their version folder
-		if !fi.IsDir && !isVersionFolder(dpath) {
-			if parent != nil && parent.SysACL != nil {
-				if fi.SysACL == nil {
-					log.Warn().Str("func", "List").Str("path", dpath).Str("SysACL is nil, taking parent", "").Msg("grpc response")
-					fi.SysACL = &acl.ACLs{
-						Entries: parent.SysACL.Entries,
-					}
-				} else {
-					fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
-				}
+		if fi.SysACL == nil {
+			fi.SysACL = &acl.ACLs{
+				Entries: []*acl.Entry{},
 			}
-
-			// If there is a version folder then use its info
-			// to emulate the invariability of the fileid
-			// If there is no version folder then create one
+		}
+		if !fi.IsDir && !isVersionFolder(dpath) {
+			// For files, inherit ACLs from the parent
+			if parent != nil && parent.SysACL != nil {
+				fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
+			}
+			// If there is a version folder then use its inode
+			// to implement the invariance of the fileid across updates
 			versionFolderPath := getVersionFolder(fi.File)
 			if vf, ok := versionFolders[versionFolderPath]; ok {
 				fi.Inode = vf.Inode
 				if vf.SysACL != nil {
-					log.Debug().Str("func", "List").Str("path", dpath).Msg("vf.SysACL is nil")
 					fi.SysACL.Entries = append(fi.SysACL.Entries, vf.SysACL.Entries...)
 				}
 				for k, v := range vf.Attrs {
 					fi.Attrs[k] = v
 				}
-			} else if err := c.CreateDir(ctx, *ownerAuth, versionFolderPath); err == nil { // Create the version folder if it doesn't exist
+			} else if err := c.CreateDir(ctx, *ownerAuth, versionFolderPath); err == nil {
+				// Create the version folder if it doesn't exist
 				if md, err := c.GetFileInfoByPath(ctx, auth, versionFolderPath); err == nil {
 					fi.Inode = md.Inode
 				} else {
