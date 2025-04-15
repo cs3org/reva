@@ -27,19 +27,20 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-//go:embed roleslist.mock.json
-var roleslistMock string
+// This API exposes all supported roles/assignments/permissions/values by the system,
+// and as such it provides static content.
 
-//go:embed assignments.mock.json
-var assigmentMock string
+//go:embed roles.json
+var roles string
 
-// TODO(lopresti) this is currently mocked for a "primary" user, need to remove some of those permissions for other types.
+//go:embed assignments.json
+var assignments string
 
-//go:embed permissions.mock.json
-var permissionsMock string
+//go:embed permissions.json
+var permissions string
 
-//go:embed values.mock.json
-var valuesMock string
+//go:embed values.json
+var values string
 
 func init() {
 	global.Register("ocapi", New)
@@ -48,15 +49,15 @@ func init() {
 func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	r := chi.NewRouter()
 
-	r.Post("/v0/settings/roles-list", mockResponse(roleslistMock))
-	r.Post("/v0/settings/assignments-list", mockResponse(assigmentMock))
-	r.Post("/v0/settings/permissions-list", mockResponse(permissionsMock))
-	r.Post("/v0/settings/values-list", mockResponse(valuesMock))
+	r.Post("/v0/settings/roles-list", staticResponse(roles))
+	r.Post("/v0/settings/assignments-list", staticResponse(assignments))
+	r.Post("/v0/settings/permissions-list", staticResponse(permissions))
+	r.Post("/v0/settings/values-list", staticResponse(values))
 
 	return svc{r: r}, nil
 }
 
-func mockResponse(content string) http.HandlerFunc {
+func staticResponse(content string) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(content))
 	})
