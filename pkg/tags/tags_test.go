@@ -19,6 +19,7 @@
 package tags
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -353,5 +354,157 @@ func TestBuilders(t *testing.T) {
 
 		require.Equal(t, list.AsSlice(), slice.AsSlice())
 		require.Equal(t, list.AsList(), slice.AsList())
+	}
+}
+
+func TestTags_normalize(t1 *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{
+			name: "single tag",
+			args: []string{"tag1"},
+			want: []string{"tag1"},
+		},
+		{
+			name: "multiple tags in one string",
+			args: []string{"tag1,tag2,tag3"},
+			want: []string{"tag1", "tag2", "tag3"},
+		},
+		{
+			name: "multiple tags in one string with spaces",
+			args: []string{"tag1 , tag2, tag3"},
+			want: []string{"tag1", "tag2", "tag3"},
+		},
+		{
+			name: "multiple tags in multiple strings",
+			args: []string{"tag1,tag2", "tag3,tag4"},
+			want: []string{"tag1", "tag2", "tag3", "tag4"},
+		},
+		{
+			name: "empty tags are ignored",
+			args: []string{"tag1,,tag2", "tag3,"},
+			want: []string{"tag1", "tag2", "tag3"},
+		},
+		{
+			name: "trailing separators are ignored",
+			args: []string{"tag1,", "tag2,tag3,"},
+			want: []string{"tag1", "tag2", "tag3"},
+		},
+		{
+			name: "empty input",
+			args: []string{},
+			want: []string{},
+		},
+		{
+			name: "all empty tags",
+			args: []string{",,,", ",", ""},
+			want: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t1.Run(tt.name, func(t1 *testing.T) {
+			t := New("")
+			if got := t.normalize(tt.args); !reflect.DeepEqual(got, tt.want) {
+				t1.Errorf("normalize() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMaxLengthValidator(t *testing.T) {
+	type args struct {
+		maxTagLength int
+		tags         []string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid tags within max length",
+			args: args{
+				maxTagLength: 5,
+				tags:         []string{"tag1", "tag2"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "tag exceeds max length",
+			args: args{
+				maxTagLength: 5,
+				tags:         []string{"tag1", "toolongtag"},
+			},
+			wantErr: true,
+			errMsg:  "tag [toolongtag] too long, max length is 5",
+		},
+		{
+			name: "empty tags",
+			args: args{
+				maxTagLength: 5,
+				tags:         []string{""},
+			},
+			wantErr: false,
+		},
+		{
+			name: "no max length restriction",
+			args: args{
+				maxTagLength: 0,
+				tags:         []string{"anylengthtag"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid UTF-8 characters",
+			args: args{
+				maxTagLength: 5,
+				tags:         []string{"tag1", string([]byte{0xff, 0xfe, 0xfd})},
+			},
+			wantErr: true,
+			errMsg:  "tag [\xff\xfe\xfd] contains invalid characters",
+		},
+		{
+			name: "multiple tags with mixed validity",
+			args: args{
+				maxTagLength: 5,
+				tags:         []string{"tag1", "toolongtag", "valid"},
+			},
+			wantErr: true,
+			errMsg:  "tag [toolongtag] too long, max length is 5",
+		},
+		{
+			name: "all tags exceed max length",
+			args: args{
+				maxTagLength: 3,
+				tags:         []string{"long", "toolong"},
+			},
+			wantErr: true,
+			errMsg:  "tag [long, toolong] too long, max length is 3",
+		},
+		{
+			name: "tags with spaces within max length",
+			args: args{
+				maxTagLength: 10,
+				tags:         []string{"tag 1", "tag 2"},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotFn := MaxLengthValidator(tt.args.maxTagLength)
+			err := gotFn(tt.args.tags)
+			if tt.wantErr {
+				require.EqualError(t, err, tt.errMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
 	}
 }
