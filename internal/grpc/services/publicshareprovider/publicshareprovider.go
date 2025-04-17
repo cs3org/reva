@@ -453,8 +453,17 @@ func (s *service) ListPublicShares(ctx context.Context, req *link.ListPublicShar
 	shares, err := s.sm.ListPublicShares(ctx, user, req.Filters, req.GetSign())
 	if err != nil {
 		log.Err(err).Msg("error listing shares")
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.AlreadyExists:
+			st = status.NewNotFound(ctx, err.Error())
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, err.Error())
+		default:
+			st = status.NewInternal(ctx, err.Error())
+		}
 		return &link.ListPublicSharesResponse{
-			Status: status.NewInternal(ctx, "error listing public shares"),
+			Status: st,
 		}, nil
 	}
 
