@@ -153,24 +153,32 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 
 	// create home directory
 	if _, err = s.createHomeCache.Get(res.User.Id.OpaqueId); err != nil {
-		createHomeRes, err := s.CreateHome(ctx, &storageprovider.CreateHomeRequest{})
-		if err != nil {
-			log.Err(err).Msg("error calling CreateHome")
-			return &gateway.AuthenticateResponse{
-				Status: status.NewInternal(ctx, err, "error creating user home"),
-			}, nil
+		statRes, err := s.stat(ctx, &storageprovider.StatRequest{
+			Ref: &storageprovider.Reference{
+				Path: s.getHome(ctx),
+			},
+		})
+		if err != nil || statRes.Status == nil || statRes.Status.Code != rpc.Code_CODE_OK {
+			createHomeRes, err := s.CreateHome(ctx, &storageprovider.CreateHomeRequest{})
+			if err != nil {
+				log.Err(err).Msg("error calling CreateHome")
+				return &gateway.AuthenticateResponse{
+					Status: status.NewInternal(ctx, err, "error creating user home"),
+				}, nil
+			}
+
+			if createHomeRes.Status.Code != rpc.Code_CODE_OK {
+				err := status.NewErrorFromCode(createHomeRes.Status.Code, "gateway")
+				log.Err(err).Any("response", createHomeRes).Msg("return from CreateHome")
+				return &gateway.AuthenticateResponse{
+					Status: status.NewInternal(ctx, err, "error creating user home"),
+				}, nil
+			}
+			if s.c.CreateHomeCacheTTL > 0 {
+				_ = s.createHomeCache.Set(res.User.Id.OpaqueId, true)
+			}
 		}
 
-		if createHomeRes.Status.Code != rpc.Code_CODE_OK {
-			err := status.NewErrorFromCode(createHomeRes.Status.Code, "gateway")
-			log.Err(err).Any("response", createHomeRes).Msg("return from CreateHome")
-			return &gateway.AuthenticateResponse{
-				Status: status.NewInternal(ctx, err, "error creating user home"),
-			}, nil
-		}
-		if s.c.CreateHomeCacheTTL > 0 {
-			_ = s.createHomeCache.Set(res.User.Id.OpaqueId, true)
-		}
 	}
 
 	gwRes := &gateway.AuthenticateResponse{
