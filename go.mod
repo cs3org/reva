@@ -16,7 +16,7 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/ceph/go-ceph v0.32.0
 	github.com/cheggaaa/pb/v3 v3.1.7
-	github.com/coreos/go-oidc/v3 v3.13.0
+	github.com/coreos/go-oidc/v3 v3.14.1
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
 	github.com/cs3org/go-cs3apis v0.0.0-20241105092511-3ad35d174fc1
 	github.com/dgraph-io/ristretto v0.2.0
