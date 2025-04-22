@@ -41,7 +41,7 @@ const (
 
 var officeFilesRegex = map[OfficeFileType]string{
 	TypeWord:       "(.*?)(.doc|.DOC)[x|X]?$",
-	TypeExcel:      "(.*?)(.xls|.XLS|)[x|X]?$",
+	TypeExcel:      "(.*?)(.xls|.XLS)[x|X]?$",
 	TypePowerpoint: "(.*?)(.ppt|.PPT)[x|X]?$",
 }
 
