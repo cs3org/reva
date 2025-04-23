@@ -40,9 +40,9 @@ const (
 )
 
 var officeFilesRegex = map[OfficeFileType]string{
-	TypeWord:       "(.*?)(.doc|.DOC)[x|X]?$",
-	TypeExcel:      "(.*?)(.xls|.XLS)[x|X]?$",
-	TypePowerpoint: "(.*?)(.ppt|.PPT)[x|X]?$",
+	TypeWord:       "(.*?)(.docx)$",
+	TypeExcel:      "(.*?)(.xlsx)$",
+	TypePowerpoint: "(.*?)(.pptx)$",
 }
 
 type svc struct {

@@ -706,7 +706,8 @@ func (c *Client) Rename(ctx context.Context, auth eosclient.Authorization, oldPa
 func (c *Client) ListWithRegex(ctx context.Context, auth eosclient.Authorization, path string, depth uint, regex string) ([]*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("regex", regex).Uint("depth", depth).Msg("ListWithRegex")
-	args := []string{"newfind", "--fileinfo", "--maxdepth", strconv.Itoa(int(depth)), "--name", regex, "-f", path, "--cache"}
+	// we would like to use --skip-version-dirs, but need EOS 5.3 for that
+	args := []string{"newfind", "--fileinfo", "--maxdepth", strconv.Itoa(int(depth)), "--name", regex, "-f", path}
 	stdout, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		return nil, errors.Wrapf(err, "eosclient: error listing fn=%s", path)
