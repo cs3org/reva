@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -131,6 +132,12 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 		NotifyUploadsExtraRecipients: notifyUploadsExtraRecipients,
 	}
 
+	endOfDay := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 23, 59, 59, 0, time.Now().Location())
+	maxExpiration := uint64(h.pubRWLinkMaxExpiration.Seconds())
+	defaultExpiration := uint64(h.pubRWLinkDefaultExpiration.Seconds())
+	totalMaxExpiration := uint64(endOfDay.Unix()) + maxExpiration
+	totalDefaultExpiration := uint64(endOfDay.Unix()) + defaultExpiration
+
 	expireTimeString, ok := r.Form["expireDate"]
 	if ok {
 		if expireTimeString[0] != "" {
@@ -139,10 +146,19 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "invalid datetime format", err)
 				return
 			}
+			if isPermissionEditor(newPermissions) && expireTime.Seconds > totalMaxExpiration {
+				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "expiration date exceeds maximum allowed", err)
+				return
+			}
 			if expireTime != nil {
 				req.Grant.Expiration = expireTime
 			}
 		}
+	} else if isPermissionEditor(newPermissions) && defaultExpiration != 0 {
+		expireTime := &types.Timestamp{
+			Seconds: totalDefaultExpiration,
+		}
+		req.Grant.Expiration = expireTime
 	}
 
 	// set displayname and password protected as arbitrary metadata
@@ -307,6 +323,12 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 	// not whether an actual update has been performed
 	updatesFound := false
 
+	endOfDay := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 23, 59, 59, 0, time.Now().Location())
+	maxExpiration := uint64(h.pubRWLinkMaxExpiration.Seconds())
+	defaultExpiration := uint64(h.pubRWLinkDefaultExpiration.Seconds())
+	totalMaxExpiration := uint64(endOfDay.Unix()) + maxExpiration
+	totalDefaultExpiration := uint64(endOfDay.Unix()) + defaultExpiration
+
 	newName, ok := r.Form["name"]
 	if ok {
 		updatesFound = true
@@ -344,6 +366,31 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 			})
 		}
 
+		// add default expiration date if it has 'editor' permissions
+		if isPermissionEditor(newPermissions) && defaultExpiration != 0 {
+			if before.Share.Expiration == nil {
+				updates = append(updates, &link.UpdatePublicShareRequest_Update{
+					Type: link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION,
+					Grant: &link.Grant{
+						Expiration: &types.Timestamp{
+							Seconds: totalDefaultExpiration,
+						},
+					},
+				})
+			} else if maxExpiration != 0 {
+				if before.Share.Expiration.Seconds > totalMaxExpiration {
+					updates = append(updates, &link.UpdatePublicShareRequest_Update{
+						Type: link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION,
+						Grant: &link.Grant{
+							Expiration: &types.Timestamp{
+								Seconds: totalMaxExpiration,
+							},
+						},
+					})
+				}
+			}
+		}
+
 		// remove notifications when a public link stops having 'uploader' permissions
 		if !isPermissionUploader(newPermissions) {
 			if before.Share.NotifyUploads {
@@ -370,6 +417,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 	if ok {
 		updatesFound = true
 		var newExpiration *types.Timestamp
+
 		if expireTimeString[0] != "" {
 			newExpiration, err = conversions.ParseTimestamp(expireTimeString[0])
 			if err != nil {
@@ -381,6 +429,18 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 		beforeExpiration, _ := json.Marshal(before.Share.Expiration)
 		afterExpiration, _ := json.Marshal(newExpiration)
 		if string(afterExpiration) != string(beforeExpiration) {
+			if maxExpiration != 0 {
+				if newPermissions != nil {
+					if isPermissionEditor(newPermissions) && newExpiration.Seconds > totalMaxExpiration {
+						response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "expiration date exceeds maximum allowed", err)
+						return
+					} else if isPermissionEditor(before.Share.Permissions.Permissions) && newExpiration.Seconds > totalMaxExpiration {
+						response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "expiration date exceeds maximum allowed", err)
+						return
+					}
+				}
+			}
+
 			logger.Debug().Str("shares", "update").Msgf("updating expire date from %v to: %v", string(beforeExpiration), string(afterExpiration))
 			updates = append(updates, &link.UpdatePublicShareRequest_Update{
 				Type: link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION,
@@ -476,7 +536,8 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 
 	publicShare := before.Share
 
-	// Updates are atomical. See: https://github.com/cs3org/cs3apis/pull/67#issuecomment-617651428 so in order to get the latest updated version
+	// The update API is atomic and requires a single property update at a time,
+	// see: https://github.com/cs3org/cs3apis/pull/67#issuecomment-617651428
 	if len(updates) > 0 {
 		uRes := &link.UpdatePublicShareResponse{Share: before.Share}
 		for k := range updates {
@@ -629,6 +690,17 @@ func isPermissionUploader(permissions *provider.ResourcePermissions) bool {
 		Permissions: permissions,
 	}
 	return conversions.RoleFromResourcePermissions(publicSharePermissions.Permissions).Name == conversions.RoleUploader
+}
+
+func isPermissionEditor(permissions *provider.ResourcePermissions) bool {
+	if permissions == nil {
+		return false
+	}
+
+	publicSharePermissions := &link.PublicSharePermissions{
+		Permissions: permissions,
+	}
+	return conversions.RoleFromResourcePermissions(publicSharePermissions.Permissions).Name == conversions.RoleEditor
 }
 
 func permissionsStayUploader(before *link.GetPublicShareResponse, newPermissions *provider.ResourcePermissions) bool {

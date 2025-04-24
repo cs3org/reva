@@ -72,20 +72,22 @@ const (
 
 // Handler implements the shares part of the ownCloud sharing API.
 type Handler struct {
-	gatewayAddr            string
-	storageRegistryAddr    string
-	publicURL              string
-	sharePrefix            string
-	homeNamespace          string
-	ocmMountPoint          string
-	additionalInfoTemplate *template.Template
-	userIdentifierCache    *ttlcache.Cache
-	resourceInfoCache      cache.ResourceInfoCache
-	resourceInfoCacheTTL   time.Duration
-	listOCMShares          bool
-	notificationHelper     *notificationhelper.NotificationHelper
-	Log                    *zerolog.Logger
-	EnableSpaces           bool
+	gatewayAddr                string
+	storageRegistryAddr        string
+	publicURL                  string
+	sharePrefix                string
+	homeNamespace              string
+	ocmMountPoint              string
+	additionalInfoTemplate     *template.Template
+	userIdentifierCache        *ttlcache.Cache
+	resourceInfoCache          cache.ResourceInfoCache
+	resourceInfoCacheTTL       time.Duration
+	listOCMShares              bool
+	notificationHelper         *notificationhelper.NotificationHelper
+	Log                        *zerolog.Logger
+	EnableSpaces               bool
+	pubRWLinkMaxExpiration     time.Duration
+	pubRWLinkDefaultExpiration time.Duration
 }
 
 // we only cache the minimal set of data instead of the full user metadata.
@@ -123,6 +125,8 @@ func (h *Handler) Init(c *config.Config, l *zerolog.Logger) {
 	h.notificationHelper = notificationhelper.New("ocs", c.Notifications, l)
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
 	h.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
+	h.pubRWLinkMaxExpiration = time.Second * time.Duration(c.PubRWLinkMaxExpiration)
+	h.pubRWLinkDefaultExpiration = time.Second * time.Duration(c.PubRWLinkDefaultExpiration)
 
 	h.userIdentifierCache = ttlcache.NewCache()
 	_ = h.userIdentifierCache.SetTTL(time.Second * time.Duration(c.UserIdentifierCacheTTL))
