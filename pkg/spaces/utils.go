@@ -82,6 +82,10 @@ func EncodeResourceID(r *provider.ResourceId) string {
 // EncodeSpaceID encodes storage ID and path to create a space ID,
 // in the format <storage_id>$base32(<path>).
 func EncodeSpaceID(storageID, path string) string {
+	if path == "" {
+		return storageID
+	}
+
 	encodedPath := base32.StdEncoding.EncodeToString([]byte(path))
 	return fmt.Sprintf("%s$%s", storageID, encodedPath)
 }

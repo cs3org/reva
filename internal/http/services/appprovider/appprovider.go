@@ -43,6 +43,7 @@ import (
 	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/go-chi/chi/v5"
 	ua "github.com/mileusna/useragent"
 	"github.com/pkg/errors"
@@ -353,8 +354,12 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	} else {
 		resourceID, ok := spaces.ParseResourceID(fileID)
 		if !ok {
-			writeError(w, r, appErrorInvalidParameter, "invalid file ID", nil)
-			return
+			// we try to fall back for non-spaces requests
+			resourceID = resourceid.OwnCloudResourceIDUnwrap(fileID)
+			if resourceID == nil {
+				writeError(w, r, appErrorInvalidParameter, "invalid file ID", nil)
+				return
+			}
 		}
 		fileRef.ResourceId = resourceID
 	}
