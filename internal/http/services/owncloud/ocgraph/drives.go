@@ -249,7 +249,7 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	spaceID, _ := router.ShiftPath(r.URL.Path)
+	spaceID, _ := router.GetIdFromPath(r.URL.Path)
 	if isShareJail(spaceID) {
 		// For now we never go through this branch
 		// (code will be only for sync clients, which do not yet go through Reva)

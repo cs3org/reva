@@ -39,3 +39,16 @@ func ShiftPath(p string) (head, tail string) {
 	}
 	return p[:i], p[i:]
 }
+
+// Returns the ID, last component, from a given path p.
+// The path is split by '/' and the last component is returned as the ID.
+// The other components are joined again and returned, starting with a leading slash.
+func GetIdFromPath(p string) (id, path string) {
+	if p == "" {
+		return "", "/"
+	}
+	s := strings.Split(p, "/")
+	i := s[len(s)-1]
+	r := strings.Join(s[:len(s)-1], "/")
+	return i, r
+}
