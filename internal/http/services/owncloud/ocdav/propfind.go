@@ -548,10 +548,12 @@ func (s *svc) isOpenable(path string) bool {
 func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string, usershares, linkshares map[string]struct{}) (*responseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
 
+	_, spacesEnabled := ctx.Value(ctxSpaceID).(string)
+
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 	var ref string
 	var err error
-	if _, ok := ctx.Value(ctxSpaceID).(string); ok {
+	if spacesEnabled {
 		// spaces are enabled; for now we do not support the OCM case with spaces
 		ref, err = spaceHref(ctx, baseURI, md.Path)
 		if err != nil {
@@ -642,11 +644,17 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		// return all known properties
 
 		if md.Id != nil {
-			id := spaces.EncodeResourceID(md.Id)
-			propstatOK.Prop = append(propstatOK.Prop,
-				s.newProp("oc:id", id),
-				s.newProp("oc:fileid", id),
-			)
+			if spacesEnabled {
+				id := spaces.EncodeResourceID(md.Id)
+				propstatOK.Prop = append(propstatOK.Prop,
+					s.newProp("oc:id", id),
+					s.newProp("oc:fileid", id))
+			} else {
+				id := spaces.ResourceIdToString(md.Id)
+				propstatOK.Prop = append(propstatOK.Prop,
+					s.newProp("oc:id", id),
+					s.newProp("oc:fileid", id))
+			}
 		}
 
 		if md.Etag != "" {
@@ -741,7 +749,11 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				// I tested the desktop client and phoenix to annotate which properties are requestted, see below cases
 				case "fileid": // phoenix only
 					if md.Id != nil {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", spaces.EncodeResourceID(md.Id)))
+						if spacesEnabled {
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", spaces.EncodeResourceID(md.Id)))
+						} else {
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", spaces.ResourceIdToString(md.Id)))
+						}
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
 					}
