@@ -1,5 +1,38 @@
 # Changelog
 
+## [2.32.0](https://github.com/opencloud-eu/reva/releases/tag/v2.32.0) - 2025-04-28
+
+### ❤️ Thanks to all contributors! ❤️
+
+@JammingBen, @aduffeck, @rhafer
+
+### 🐛 Bug Fixes
+
+- ocdav: Fix check for empty request body [[#188](https://github.com/opencloud-eu/reva/pull/188)]
+- Fix space ids getting overwritten [[#178](https://github.com/opencloud-eu/reva/pull/178)]
+- Improve performance and stabiity of assimilation [[#176](https://github.com/opencloud-eu/reva/pull/176)]
+- Fix wrong blobsize attributes due to premature assimilation [[#172](https://github.com/opencloud-eu/reva/pull/172)]
+
+### 📈 Enhancement
+
+- Cephfs [[#180](https://github.com/opencloud-eu/reva/pull/180)]
+
+### 📦️ Dependencies
+
+- Bump google.golang.org/grpc from 1.71.1 to 1.72.0 [[#193](https://github.com/opencloud-eu/reva/pull/193)]
+- Bump github.com/ceph/go-ceph from 0.32.0 to 0.33.0 [[#192](https://github.com/opencloud-eu/reva/pull/192)]
+- Bump github.com/prometheus/client_golang from 1.21.1 to 1.22.0 [[#191](https://github.com/opencloud-eu/reva/pull/191)]
+- Bump golang.org/x/sync from 0.12.0 to 0.13.0 [[#190](https://github.com/opencloud-eu/reva/pull/190)]
+- Bump github.com/nats-io/nats.go from 1.41.1 to 1.41.2 [[#189](https://github.com/opencloud-eu/reva/pull/189)]
+- Bump github.com/go-playground/validator/v10 from 10.25.0 to 10.26.0 [[#187](https://github.com/opencloud-eu/reva/pull/187)]
+- Bump github.com/go-sql-driver/mysql from 1.9.1 to 1.9.2 [[#186](https://github.com/opencloud-eu/reva/pull/186)]
+- Bump golang.org/x/net from 0.37.0 to 0.38.0 in the go_modules group [[#185](https://github.com/opencloud-eu/reva/pull/185)]
+- Bump github.com/coreos/go-oidc/v3 from 3.13.0 to 3.14.1 [[#164](https://github.com/opencloud-eu/reva/pull/164)]
+- Bump github.com/nats-io/nats-server/v2 from 2.11.0 to 2.11.1 in the go_modules group [[#182](https://github.com/opencloud-eu/reva/pull/182)]
+- Bump golang.org/x/term from 0.30.0 to 0.31.0 [[#177](https://github.com/opencloud-eu/reva/pull/177)]
+- Bump github.com/nats-io/nats.go from 1.41.0 to 1.41.1 [[#175](https://github.com/opencloud-eu/reva/pull/175)]
+- Bump github.com/nats-io/nats.go from 1.39.1 to 1.41.0 [[#160](https://github.com/opencloud-eu/reva/pull/160)]
+
 ## [2.31.0](https://github.com/opencloud-eu/reva/releases/tag/v2.31.0) - 2025-04-07
 
 ### ❤️ Thanks to all contributors! ❤️
