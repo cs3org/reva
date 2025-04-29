@@ -32,6 +32,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/cs3org/reva/pkg/appctx"
 
 	"github.com/cs3org/reva/pkg/eosclient"
@@ -145,6 +146,8 @@ func (opt *Options) ApplyDefaults() {
 // It requires the eos-client and xrootd-client packages installed to work.
 type Client struct {
 	opt *Options
+	// Keep path -> version folder cache
+	versionFolderCache *ttlcache.Cache
 }
 
 // New creates a new client with the given options.
@@ -152,6 +155,8 @@ func New(opt *Options) (*Client, error) {
 	opt.ApplyDefaults()
 	c := new(Client)
 	c.opt = opt
+	c.versionFolderCache = ttlcache.NewCache()
+	c.versionFolderCache.SetTTL(24 * 31 * time.Hour)
 	return c, nil
 }
 
@@ -706,12 +711,13 @@ func (c *Client) Rename(ctx context.Context, auth eosclient.Authorization, oldPa
 func (c *Client) ListWithRegex(ctx context.Context, auth eosclient.Authorization, path string, depth uint, regex string) ([]*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("regex", regex).Uint("depth", depth).Msg("ListWithRegex")
-	args := []string{"newfind", "--fileinfo", "--maxdepth", strconv.Itoa(int(depth)), "--name", regex, "-f", path, "--cache"}
+	// here we want to use --skip-version-dirs and drop -f so to have version folders' metadata in the results without access errors, but need EOS 5.3 for that. So for now we restrict to files and use a cache afterwards...
+	args := []string{"newfind", "--fileinfo", "--maxdepth", strconv.Itoa(int(depth)), "--name", regex, "-f", path}
 	stdout, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		return nil, errors.Wrapf(err, "eosclient: error listing fn=%s", path)
 	}
-	return c.parseFind(ctx, auth, path, stdout)
+	return c.parseFind(ctx, auth, path, stdout, true)
 }
 
 // List the contents of the directory given by path.
@@ -721,7 +727,7 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, path st
 	if err != nil {
 		return nil, errors.Wrapf(err, "eosclient: error listing fn=%s", path)
 	}
-	return c.parseFind(ctx, auth, path, stdout)
+	return c.parseFind(ctx, auth, path, stdout, false)
 }
 
 // Read reads a file from the mgm.
@@ -979,7 +985,7 @@ func getMap(partsBySpace []string) map[string]string {
 	return kv
 }
 
-func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, dirPath, raw string) ([]*eosclient.FileInfo, error) {
+func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, dirPath, raw string, cache bool) ([]*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
 
 	finfos := []*eosclient.FileInfo{}
@@ -1033,7 +1039,14 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 				fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
 			}
 			versionFolderPath := getVersionFolder(fi.File)
-			if vf, ok := versionFolders[versionFolderPath]; ok {
+			vf, ok := versionFolders[versionFolderPath]
+			if cache && !ok {
+				verfolder, err := c.versionFolderCache.Get(versionFolderPath)
+				if err == nil && verfolder != nil {
+					vf, ok = verfolder.(*eosclient.FileInfo)
+				}
+			}
+			if ok {
 				fi.Inode = vf.Inode
 				fi.SysACL.Entries = append(fi.SysACL.Entries, vf.SysACL.Entries...)
 				for k, v := range vf.Attrs {
@@ -1045,6 +1058,9 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 				} else {
 					log.Error().Err(err).Interface("auth", ownerAuth).Str("path", versionFolderPath).Msg("got error creating version folder")
 				}
+			}
+			if cache {
+				c.versionFolderCache.Set(versionFolderPath, fi)
 			}
 		}
 	}
