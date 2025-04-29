@@ -86,7 +86,7 @@ func (s *svc) ListMyOfficeFiles(ctx context.Context, user *userpb.User, filetype
 	u := appctx.ContextMustGetUser(ctx)
 	home := templates.WithUser(u, "/eos/user/{{substr 0 1 .Username}}/{{.Username}}/")
 
-	storages := []string{home}
+	storages := []string{}
 
 	var regex = officeFilesRegex[filetype]
 	resourceInfos := []*provider.ResourceInfo{}
@@ -97,6 +97,11 @@ func (s *svc) ListMyOfficeFiles(ctx context.Context, user *userpb.User, filetype
 			path := fmt.Sprintf("/eos/project/%s/%s/", string(proj[0]), proj)
 			storages = append(storages, path)
 		}
+	}
+
+	// If no project is selected, we search the user's home instead
+	if len(storages) == 0 {
+		storages = []string{home}
 	}
 
 	for _, path := range storages {
