@@ -36,10 +36,10 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/notification/trigger"
+	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
-	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 	"go.step.sm/crypto/randutil"
 )
@@ -121,6 +121,8 @@ func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
 }
 
 func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
+	_, spacesEnabled := ctx.Value(ctxSpaceID).(string)
+
 	if !checkPreconditions(w, r, log) {
 		// checkPreconditions handles error returns
 		return
@@ -343,7 +345,11 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	w.Header().Add(HeaderContentType, newInfo.MimeType)
 	w.Header().Set(HeaderETag, newInfo.Etag)
-	w.Header().Set(HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(newInfo.Id))
+	if spacesEnabled {
+		w.Header().Set(HeaderOCFileID, spaces.EncodeResourceID(newInfo.Id))
+	} else {
+		w.Header().Set(HeaderOCFileID, spaces.ResourceIdToString(newInfo.Id))
+	}
 	w.Header().Set(HeaderOCETag, newInfo.Etag)
 	t := utils.TSToTime(newInfo.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
