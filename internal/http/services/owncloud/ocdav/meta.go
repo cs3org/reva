@@ -47,8 +47,13 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 
 		rid, ok := spaces.ParseResourceID(id)
 		if !ok {
-			http.Error(w, "400 Bad Request", http.StatusBadRequest)
-			return
+			// If this fails, client might be non-spaces
+			var err error
+			rid, err = spaces.ResourceIdFromString(id)
+			if err != nil {
+				http.Error(w, "400 Bad Request", http.StatusBadRequest)
+				return
+			}
 		}
 
 		var head string
