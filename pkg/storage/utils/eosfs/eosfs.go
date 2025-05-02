@@ -1187,6 +1187,10 @@ func (fs *Eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("eosfs: get md for ref:" + ref.String())
 
+	if ref == nil {
+		return nil, errtypes.BadRequest("No ref was given to GetMD")
+	}
+
 	p := ref.Path
 	fn := fs.wrap(ctx, p)
 
