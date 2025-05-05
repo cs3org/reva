@@ -476,8 +476,13 @@ func (s *svc) handleNotify(w http.ResponseWriter, r *http.Request) {
 	} else {
 		resourceID, ok := spaces.ParseResourceID(fileID)
 		if !ok {
-			writeError(w, r, appErrorInvalidParameter, "invalid file ID", nil)
-			return
+			// If this fails, client might be non-spaces
+			var err error
+			resourceID, err = spaces.ResourceIdFromString(fileID)
+			if err != nil {
+				writeError(w, r, appErrorInvalidParameter, "invalid file ID", nil)
+				return
+			}
 		}
 		fileRef.ResourceId = resourceID
 	}
