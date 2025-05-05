@@ -147,8 +147,13 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 
 	parentContainerRef, ok := spaces.ParseResourceID(parentContainerID)
 	if !ok {
-		writeError(w, r, appErrorInvalidParameter, "invalid parent container ID", nil)
-		return
+		// If this fails, client might be non-spaces
+		var err error
+		parentContainerRef, err = spaces.ResourceIdFromString(parentContainerID)
+		if err != nil {
+			writeError(w, r, appErrorInvalidParameter, "invalid parent container ID", nil)
+			return
+		}
 	}
 
 	filename := r.Form.Get("filename")
