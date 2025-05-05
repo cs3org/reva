@@ -126,11 +126,16 @@ func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, erro
 	f := make([]string, 0, len(files)+len(ids))
 
 	for _, id := range ids {
-		// id is base64 encoded and after decoding has the form <storage_id>:<resource_id>
+		// id is base64 encoded and after decoding has the form <storage_id>!<resource_id>
 
 		ref, ok := spaces.ParseResourceID(id)
 		if !ok {
-			return nil, errors.New("could not unwrap given file id")
+			// If this fails, client might be non-spaces
+			var err error
+			ref, err = spaces.ResourceIdFromString(id)
+			if err != nil {
+				return nil, errors.New("could not unwrap given file id")
+			}
 		}
 
 		resp, err := s.gtwClient.Stat(ctx, &provider.StatRequest{
