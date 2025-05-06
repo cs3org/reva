@@ -112,6 +112,13 @@ func (session *OcisSession) GetReader(ctx context.Context) (io.ReadCloser, error
 func (session *OcisSession) FinishUpload(ctx context.Context) error {
 	err := session.FinishUploadDecomposed(ctx)
 
+	if err != nil {
+		// this is part of the tusd integration and we might be able to
+		// log the error in another place
+		log := appctx.GetLogger(ctx)
+		log.Error().Err(err).Msg("failed to finish upload")
+	}
+
 	//  we need to return a tusd error here to make the tusd handler return the correct status code
 	switch err.(type) {
 	case errtypes.AlreadyExists:
