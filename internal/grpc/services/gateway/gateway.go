@@ -77,6 +77,7 @@ type config struct {
 	ResourceInfoCacheDriver  string                            `mapstructure:"resource_info_cache_type"`
 	ResourceInfoCacheTTL     int                               `mapstructure:"resource_info_cache_ttl"`
 	ResourceInfoCacheDrivers map[string]map[string]interface{} `mapstructure:"resource_info_caches"`
+	HomeLayout               string                            `mapstructure:"home_layout"`
 }
 
 // sets defaults.
@@ -117,6 +118,11 @@ func (c *config) ApplyDefaults() {
 	// lifetime for the transfer token (TUS upload)
 	if c.TransferExpires == 0 {
 		c.TransferExpires = 100 * 60 // seconds
+	}
+
+	// default to /home
+	if c.HomeLayout == "" {
+		c.HomeLayout = "/home"
 	}
 }
 
