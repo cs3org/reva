@@ -161,6 +161,8 @@ func (h *Handler) Init(c *config.Config) {
 		h.c.Capabilities.FilesSharing.Public.ExpireDate = &data.CapabilitiesFilesSharingPublicExpireDate{}
 	}
 	// h.c.Capabilities.FilesSharing.IsPublic.ExpireDate.Enabled is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.ExpireDate.DefaultRwFolders is an object
+	// h.c.Capabilities.FilesSharing.IsPublic.ExpireDate.MaxRwFolders is an object
 
 	// h.c.Capabilities.FilesSharing.IsPublic.SendMail is boolean
 	// h.c.Capabilities.FilesSharing.IsPublic.SocialShare is boolean

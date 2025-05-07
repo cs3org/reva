@@ -202,7 +202,15 @@ type CapabilitiesFilesSharingPublicPasswordEnforcedFor struct {
 
 // CapabilitiesFilesSharingPublicExpireDate TODO document.
 type CapabilitiesFilesSharingPublicExpireDate struct {
-	Enabled ocsBool `json:"enabled" xml:"enabled"`
+	Enabled          ocsBool     `json:"enabled"            xml:"enabled"`
+	DefaultRwFolders *ExpireDate `json:"default_rw_folders" mapstructure:"default_rw_folders" xml:"default_rw_folders"`
+	MaxRwFolders     *ExpireDate `json:"max_rw_folders"     mapstructure:"max_rw_folders"     xml:"max_rw_folders"`
+}
+
+type ExpireDate struct {
+	Days   int `json:"days"   xml:"days"`
+	Months int `json:"months" xml:"months"`
+	Years  int `json:"years"  xml:"years"`
 }
 
 // CapabilitiesFilesSharingUser TODO document.
