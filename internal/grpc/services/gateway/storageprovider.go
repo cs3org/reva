@@ -521,81 +521,6 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	}, nil
 }
 
-func (s *svc) checkRef(ctx context.Context, ri *provider.ResourceInfo) (*provider.ResourceInfo, string, error) {
-	if ri.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-		panic("gateway: calling checkRef on a non reference type:" + ri.String())
-	}
-
-	// reference types MUST have a target resource id.
-	if ri.Target == "" {
-		err := errtypes.BadRequest("gateway: ref target is an empty uri")
-		return nil, "", err
-	}
-
-	uri, err := url.Parse(ri.Target)
-	if err != nil {
-		return nil, "", errors.Wrapf(err, "gateway: error parsing target uri: %s", ri.Target)
-	}
-
-	switch uri.Scheme {
-	case "cs3":
-		ref, err := s.handleCS3Ref(ctx, uri.Opaque)
-		return ref, "cs3", err
-	case "webdav":
-		return nil, "webdav", nil
-	default:
-		err := errtypes.BadRequest("gateway: no reference handler for scheme: " + uri.Scheme)
-		return nil, "", err
-	}
-}
-
-func (s *svc) handleCS3Ref(ctx context.Context, opaque string) (*provider.ResourceInfo, error) {
-	// a cs3 ref has the following layout: <storage_id>/<opaque_id>
-	parts := strings.SplitN(opaque, "/", 2)
-	if len(parts) < 2 {
-		err := errtypes.BadRequest("gateway: cs3 ref does not follow the layout storageid/opaqueid:" + opaque)
-		return nil, err
-	}
-
-	// we could call here the Stat method again, but that is calling for problems in case
-	// there is a loop of targets pointing to targets, so better avoid it.
-
-	req := &provider.StatRequest{
-		Ref: &provider.Reference{
-			ResourceId: &provider.ResourceId{
-				StorageId: parts[0],
-				OpaqueId:  parts[1],
-			},
-		},
-	}
-	res, err := s.Stat(ctx, req)
-	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling stat")
-	}
-
-	if res.Status.Code != rpc.Code_CODE_OK {
-		switch res.Status.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			return nil, errtypes.NotFound(req.Ref.String())
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			return nil, errtypes.PermissionDenied(req.Ref.String())
-		case rpc.Code_CODE_INVALID_ARGUMENT, rpc.Code_CODE_FAILED_PRECONDITION, rpc.Code_CODE_OUT_OF_RANGE:
-			return nil, errtypes.BadRequest(req.Ref.String())
-		case rpc.Code_CODE_UNIMPLEMENTED:
-			return nil, errtypes.NotSupported(req.Ref.String())
-		default:
-			return nil, errtypes.InternalError("gateway: error stating target reference")
-		}
-	}
-
-	if res.Info.Type == provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-		err := errtypes.BadRequest("gateway: error the target of a reference cannot be another reference")
-		return nil, err
-	}
-
-	return res.Info, nil
-}
-
 func (s *svc) ListContainerStream(_ *provider.ListContainerStreamRequest, _ gateway.GatewayAPI_ListContainerStreamServer) error {
 	return errtypes.NotSupported("Unimplemented")
 }
@@ -976,9 +901,4 @@ func getUniqueProviders(providers []*registry.ProviderInfo) []*registry.Provider
 		res = append(res, provider)
 	}
 	return res
-}
-
-type etagWithTS struct {
-	Etag      string
-	Timestamp time.Time
 }
