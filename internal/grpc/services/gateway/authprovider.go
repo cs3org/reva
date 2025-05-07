@@ -153,7 +153,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 
 	// create home directory
 	if _, err = s.createHomeCache.Get(res.User.Id.OpaqueId); err != nil {
-		statRes, err := s.stat(ctx, &storageprovider.StatRequest{
+		statRes, err := s.Stat(ctx, &storageprovider.StatRequest{
 			Ref: &storageprovider.Reference{
 				Path: s.getHome(ctx),
 			},
