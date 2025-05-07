@@ -66,7 +66,10 @@ func (session *OcisSession) WriteChunk(ctx context.Context, offset int64, src io
 	_, subspan := tracer.Start(ctx, "os.OpenFile")
 	file, err := os.OpenFile(session.binPath(), os.O_WRONLY|os.O_APPEND, defaultFilePerm)
 	subspan.End()
+
+	log := appctx.GetLogger(ctx)
 	if err != nil {
+		log.Error().Err(err).Msg("WriteChunk: error opening upload file")
 		return 0, err
 	}
 	defer file.Close()
@@ -84,6 +87,7 @@ func (session *OcisSession) WriteChunk(ctx context.Context, offset int64, src io
 	// However, for the ocis driver it's not important whether the stream has ended
 	// on purpose or accidentally.
 	if err != nil && err != io.ErrUnexpectedEOF {
+		log.Error().Err(err).Msg("WriteChunk: error copying data to upload file")
 		return n, err
 	}
 
