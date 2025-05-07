@@ -127,6 +127,7 @@ type Config struct {
 	DisabledOpenInAppPaths       []string                          `mapstructure:"disabled_open_in_app_paths"`
 	Notifications                map[string]interface{}            `docs:"nil; settings for the notification helper" mapstructure:"notifications"`
 	MyOfficeFilesAllowedProjects []string                          `mapstructure:"my_office_files_projects"`
+	SpacesEnabled                bool                              `mapstructure:"spaces_enabled"`
 }
 
 func (c *Config) ApplyDefaults() {
