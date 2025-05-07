@@ -109,43 +109,10 @@ func (s *svc) getHome(ctx context.Context) string {
 }
 
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
-	if utils.IsRelativeReference(req.Ref) {
-		return s.initiateFileDownload(ctx, req)
-	}
-
-	statReq := &provider.StatRequest{Ref: req.Ref}
-	statRes, err := s.stat(ctx, statReq)
-	if err != nil {
-		return &gateway.InitiateFileDownloadResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
-		}, nil
-	}
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		return &gateway.InitiateFileDownloadResponse{
-			Status: statRes.Status,
-		}, nil
-	}
-	return s.initiateFileDownload(ctx, req)
-
-}
-
-func versionKey(req *provider.InitiateFileDownloadRequest) string {
-	if req.Opaque == nil || req.Opaque.Map == nil {
-		return ""
-	}
-	val := req.Opaque.Map["version_key"]
-	if val == nil {
-		return ""
-	}
-	return string(val.Value)
-}
-
-func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
-	// TODO(ishank011): enable downloading references spread across storage providers, eg. /eos
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &gateway.InitiateFileDownloadResponse{
-			Status: status.NewStatusFromErrType(ctx, "error initiating download ref="+req.Ref.String(), err),
+			Status: status.NewStatusFromErrType(ctx, "download: error finding ref: "+req.Ref.String(), err),
 		}, nil
 	}
 
@@ -195,15 +162,22 @@ func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFi
 	}, nil
 }
 
-func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
-	return s.initiateFileUpload(ctx, req)
+func versionKey(req *provider.InitiateFileDownloadRequest) string {
+	if req.Opaque == nil || req.Opaque.Map == nil {
+		return ""
+	}
+	val := req.Opaque.Map["version_key"]
+	if val == nil {
+		return ""
+	}
+	return string(val.Value)
 }
 
-func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
+func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &gateway.InitiateFileUploadResponse{
-			Status: status.NewStatusFromErrType(ctx, "initiateFileUpload ref="+req.Ref.String(), err),
+			Status: status.NewStatusFromErrType(ctx, "upload: error finding ref: "+req.Ref.String(), err),
 		}, nil
 	}
 
@@ -262,7 +236,7 @@ func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFile
 
 func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
 	statReq := &provider.StatRequest{Ref: &provider.Reference{ResourceId: req.ResourceId}}
-	statRes, err := s.stat(ctx, statReq)
+	statRes, err := s.Stat(ctx, statReq)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error stating ref:"+statReq.Ref.String())
 		return nil, err
@@ -281,14 +255,6 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 }
 
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
-	if utils.IsRelativeReference(req.Ref) {
-		return s.createContainer(ctx, req)
-	}
-
-	return s.createContainer(ctx, req)
-}
-
-func (s *svc) createContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.CreateContainerResponse{
@@ -327,10 +293,6 @@ func (s *svc) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*p
 }
 
 func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
-	return s.delete(ctx, req)
-}
-
-func (s *svc) delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
 	// TODO(ishank011): enable deleting references spread across storage providers, eg. /eos
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
@@ -351,10 +313,6 @@ func (s *svc) delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 }
 
 func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	return s.move(ctx, req)
-}
-
-func (s *svc) move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
 	srcProviders, err := s.findProviders(ctx, req.Source)
 	if err != nil {
 		return &provider.MoveResponse{
@@ -517,7 +475,7 @@ func (s *svc) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provide
 	return res, nil
 }
 
-func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
+func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
 	log := appctx.GetLogger(ctx)
 	providers, err := s.findProviders(ctx, req.Ref)
 	if err != nil {
@@ -561,13 +519,6 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		Status: status.NewOK(ctx),
 		Info:   info,
 	}, nil
-}
-
-func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	if utils.IsRelativeReference(req.Ref) {
-		return s.stat(ctx, req)
-	}
-	return s.stat(ctx, req)
 }
 
 func (s *svc) checkRef(ctx context.Context, ri *provider.ResourceInfo) (*provider.ResourceInfo, string, error) {
@@ -617,7 +568,7 @@ func (s *svc) handleCS3Ref(ctx context.Context, opaque string) (*provider.Resour
 			},
 		},
 	}
-	res, err := s.stat(ctx, req)
+	res, err := s.Stat(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling stat")
 	}
@@ -679,34 +630,6 @@ func (s *svc) isPathAllowed(cat string, path string) bool {
 	return false
 }
 
-func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	providers, err := s.findProviders(ctx, req.Ref)
-	if err != nil {
-		return &provider.ListContainerResponse{
-			Status: status.NewStatusFromErrType(ctx, "listContainer ref: "+req.Ref.String(), err),
-		}, nil
-	}
-	providers = getUniqueProviders(providers)
-
-	resPath := req.Ref.GetPath()
-
-	if len(providers) == 1 && (utils.IsRelativeReference(req.Ref) || resPath == "" || strings.HasPrefix(resPath, providers[0].ProviderPath)) {
-		c, err := s.getStorageProviderClient(ctx, providers[0])
-		if err != nil {
-			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+providers[0].Address),
-			}, nil
-		}
-		rsp, err := c.ListContainer(ctx, req)
-		if err != nil || rsp.Status.Code != rpc.Code_CODE_OK {
-			return rsp, err
-		}
-		return rsp, nil
-	}
-
-	return s.listContainerAcrossProviders(ctx, req, providers)
-}
-
 func (s *svc) listContainerAcrossProviders(ctx context.Context, req *provider.ListContainerRequest, providers []*registry.ProviderInfo) (*provider.ListContainerResponse, error) {
 	nestedInfos := make(map[string]*provider.ResourceInfo)
 	log := appctx.GetLogger(ctx)
@@ -765,14 +688,38 @@ func (s *svc) listContainerAcrossProviders(ctx context.Context, req *provider.Li
 }
 
 func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	return s.listContainer(ctx, req)
+	providers, err := s.findProviders(ctx, req.Ref)
+	if err != nil {
+		return &provider.ListContainerResponse{
+			Status: status.NewStatusFromErrType(ctx, "listContainer ref: "+req.Ref.String(), err),
+		}, nil
+	}
+	providers = getUniqueProviders(providers)
+
+	resPath := req.Ref.GetPath()
+
+	if len(providers) == 1 && (utils.IsRelativeReference(req.Ref) || resPath == "" || strings.HasPrefix(resPath, providers[0].ProviderPath)) {
+		c, err := s.getStorageProviderClient(ctx, providers[0])
+		if err != nil {
+			return &provider.ListContainerResponse{
+				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+providers[0].Address),
+			}, nil
+		}
+		rsp, err := c.ListContainer(ctx, req)
+		if err != nil || rsp.Status.Code != rpc.Code_CODE_OK {
+			return rsp, err
+		}
+		return rsp, nil
+	}
+
+	return s.listContainerAcrossProviders(ctx, req, providers)
 }
 
 func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...string) (string, *rpc.Status) {
 	// check if it is an id based or combined reference first
 	if ref.ResourceId != nil {
 		req := &provider.StatRequest{Ref: ref, ArbitraryMetadataKeys: keys}
-		res, err := s.stat(ctx, req)
+		res, err := s.Stat(ctx, req)
 		if err != nil {
 			return "", status.NewStatusFromErrType(ctx, "getPath ref="+ref.String(), err)
 		}
