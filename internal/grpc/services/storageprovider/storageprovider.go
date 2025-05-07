@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/utils"
@@ -783,7 +784,7 @@ func spaceFromPath(path string, lvl int) string {
 }
 
 func (s *service) addSpaceInfo(ri *provider.ResourceInfo) {
-	space := spaceFromPath(ri.Path, s.conf.SpaceLevel)
+	space := spaces.PathToSpaceId(ri.Path) //spaceFromPath(ri.Path, s.conf.SpaceLevel)
 	ri.Id.SpaceId = space
 }
 
