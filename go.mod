@@ -251,9 +251,9 @@ replace github.com/studio-b12/gowebdav => github.com/kobergj/gowebdav v0.0.0-202
 // see https://github.com/mattn/go-sqlite3/issues/965 for more details
 exclude github.com/mattn/go-sqlite3 v2.0.3+incompatible
 
-replace github.com/go-micro/plugins/v4/store/nats-js-kv => github.com/kobergj/plugins/v4/store/nats-js-kv v0.0.0-20240807130109-f62bb67e8c90
-
 tool (
 	github.com/vektra/mockery/v2
 	golang.org/x/tools/cmd/goimports
 )
+
+replace github.com/go-micro/plugins/v4/store/nats-js-kv => github.com/opencloud-eu/go-micro-plugins/v4/store/nats-js-kv v0.0.0-20250512152754-23325793059a
