@@ -1183,7 +1183,12 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		s.MimeType = parsedMt
 		// TODO STime:     &types.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
 		// TODO Storage: int
-		itemID := spaces.EncodeResourceID(info.Id)
+		var itemID string
+		if h.EnableSpaces {
+			itemID = spaces.EncodeResourceID(info.Id)
+		} else {
+			itemID = spaces.ResourceIdToString(info.Id)
+		}
 
 		s.ItemSource = itemID
 		s.FileSource = s.ItemSource
