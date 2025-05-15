@@ -11,7 +11,7 @@ import (
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata/prefixes"
 	"github.com/pkg/xattr"
-	"github.com/shamaton/msgpack/v2"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 var _ = Describe("HybridBackend", func() {
