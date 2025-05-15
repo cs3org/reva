@@ -70,6 +70,7 @@ func RunDrivenServerWithOptions(mainConf map[string]interface{}, pidFile string,
 // Start runs the revad drivenServer with the given config file and pid file.
 func (s *drivenServer) Start() error {
 	errCh := make(chan error, 2)
+	done := make(chan struct{}, 1)
 	wg := &sync.WaitGroup{}
 
 	if s.rhttpServer != nil {
@@ -89,16 +90,17 @@ func (s *drivenServer) Start() error {
 
 	go func() {
 		wg.Wait()
-		close(errCh)
+		close(done)
 	}()
-
-	select {
-	case err := <-errCh:
-		if err != nil {
-			s.log.Error().Err(err).Msg("error starting revad service")
-			return err
+	for {
+		select {
+		case err := <-errCh:
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
+				return err
+			}
+		case <-done:
+			return nil
 		}
-		return nil
 	}
 }
 
@@ -135,8 +137,10 @@ func (s *drivenServer) startHTTPServer() error {
 	if err != nil {
 		s.log.Fatal().Err(err).Send()
 	}
-	if err = s.rhttpServer.Start(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		s.log.Error().Err(err).Msg("http server error")
+	if err = s.rhttpServer.Start(ln); err != nil {
+		if !errors.Is(err, http.ErrServerClosed) {
+			s.log.Error().Err(err).Msg("http server error")
+		}
 		return err
 	}
 	return nil
@@ -150,8 +154,10 @@ func (s *drivenServer) startGRPCServer() error {
 	if err != nil {
 		s.log.Fatal().Err(err).Send()
 	}
-	if err = s.rgrpcServer.Start(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		s.log.Error().Err(err).Msg("grpc server error")
+	if err = s.rgrpcServer.Start(ln); err != nil {
+		if !errors.Is(err, http.ErrServerClosed) {
+			s.log.Error().Err(err).Msg("grpc server error")
+		}
 		return err
 	}
 	return nil
@@ -164,7 +170,7 @@ func (s *drivenServer) gracefulStopHTTPServer(wg *sync.WaitGroup) {
 			defer wg.Done()
 			s.log.Info().Msgf("fd to %s:%s gracefully closing", s.rhttpServer.Network(), s.rhttpServer.Address())
 			if err := s.rhttpServer.GracefulStop(); err != nil {
-				s.log.Error().Err(err).Msg("error stopping server")
+				s.log.Error().Err(err).Msg("error gracefully stopping server")
 				s.rhttpServer.Stop()
 			}
 		}()
