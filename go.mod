@@ -81,6 +81,7 @@ require (
 	github.com/test-go/testify v1.1.4
 	github.com/thanhpk/randstr v1.0.6
 	github.com/tus/tusd/v2 v2.8.0
+	github.com/vmihailenco/msgpack/v5 v5.4.1
 	github.com/wk8/go-ordered-map v1.0.0
 	go-micro.dev/v4 v4.11.0
 	go.etcd.io/etcd/client/v3 v3.5.20
@@ -218,6 +219,7 @@ require (
 	github.com/tus/tusd v1.10.0 // indirect
 	github.com/urfave/cli/v2 v2.27.5 // indirect
 	github.com/vektra/mockery/v2 v2.53.2 // indirect
+	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
