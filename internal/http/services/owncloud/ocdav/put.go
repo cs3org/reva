@@ -121,7 +121,7 @@ func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
 }
 
 func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
-	_, spacesEnabled := ctx.Value(ctxSpaceID).(string)
+	spacesEnabled := s.c.SpacesEnabled
 
 	if !checkPreconditions(w, r, log) {
 		// checkPreconditions handles error returns
