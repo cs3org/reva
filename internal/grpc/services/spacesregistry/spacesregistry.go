@@ -105,6 +105,8 @@ func getSpacesDriver(ctx context.Context, driver string, cfg map[string]map[stri
 }
 
 func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	log := appctx.GetLogger(ctx)
+	log.Warn().Msg("spacesregistry: CreateStorageSpace")
 	// The creation of a space requires a provisioning and approval workflow, which for now is implemented externally
 	return nil, errors.New("not supportedd")
 }

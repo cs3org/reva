@@ -579,6 +579,8 @@ func (nc *StorageDriver) ListStorageSpaces(ctx context.Context, f []*provider.Li
 
 // CreateStorageSpace creates a storage space.
 func (nc *StorageDriver) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	log := appctx.GetLogger(ctx)
+	log.Warn().Msg("nextcloud: CreateStorageSpace")
 	return nil, errtypes.NotSupported("unimplemented")
 }
 

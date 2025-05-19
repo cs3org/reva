@@ -567,6 +567,8 @@ func (fs *localfs) CreateReference(ctx context.Context, path string, targetURI *
 
 // CreateStorageSpace creates a storage space.
 func (fs *localfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	log := appctx.GetLogger(ctx)
+	log.Warn().Msg("localfs: CreateStorageSpace")
 	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
 }
 

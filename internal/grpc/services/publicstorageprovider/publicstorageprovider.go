@@ -326,6 +326,8 @@ func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeReques
 }
 
 func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	log := appctx.GetLogger(ctx)
+	log.Warn().Msg("publicstorageprovider: CreateStorageSpace")
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
