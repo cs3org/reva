@@ -507,6 +507,8 @@ func (fs *cephfs) EmptyRecycle(ctx context.Context) error {
 }
 
 func (fs *cephfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (r *provider.CreateStorageSpaceResponse, err error) {
+	log := appctx.GetLogger(ctx)
+	log.Warn().Msg("cephfs: CreateStorageSpace")
 	return nil, errtypes.NotSupported("unimplemented")
 }
 

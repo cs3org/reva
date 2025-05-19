@@ -43,6 +43,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/spaces"
 
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/eosclient/eosbinary"
@@ -81,6 +82,8 @@ var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
 var eosLockReg = regexp.MustCompile(`expires:\d+,type:[a-z]+,owner:.+:.+`)
 
 func (c *Config) ApplyDefaults() {
+	c.EnableHome = true
+
 	c.Namespace = path.Clean(c.Namespace)
 	if !strings.HasPrefix(c.Namespace, "/") {
 		c.Namespace = "/"
@@ -1285,7 +1288,31 @@ func (fs *Eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 
 // CreateStorageSpace creates a storage space.
 func (fs *Eosfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
+	log := appctx.GetLogger(ctx)
+	log.Warn().Msg("EOSFS: CreateStorageSpace")
+	//return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
+	ri, err := fs.GetMD(ctx, &provider.Reference{
+		Path: fs.getInternalHome(ctx),
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+	spaceId := spaces.EncodeSpaceID(ri.Id.StorageId, ri.Path)
+	return &provider.CreateStorageSpaceResponse{
+		StorageSpace: &provider.StorageSpace{
+			SpaceType: req.Type,
+			Owner:     req.Owner,
+			Quota:     req.Quota,
+			Id: &provider.StorageSpaceId{
+				OpaqueId: spaceId,
+			},
+			Root: &provider.ResourceId{
+				StorageId: ri.Id.StorageId,
+				OpaqueId:  ri.Id.OpaqueId,
+				SpaceId:   spaceId,
+			},
+		},
+	}, nil
 }
 
 func (fs *Eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (totalbytes, usedbytes uint64, err error) {
@@ -1360,13 +1387,13 @@ func (fs *Eosfs) createNominalHome(ctx context.Context) error {
 }
 
 func (fs *Eosfs) CreateHome(ctx context.Context) error {
-	if !fs.conf.EnableHome {
-		return errtypes.NotSupported("eosfs: create home not supported")
-	}
+	// if !fs.conf.EnableHome {
+	// 	return errtypes.NotSupported("eosfs: create home not supported")
+	// }
 
-	if err := fs.createNominalHome(ctx); err != nil {
-		return errors.Wrap(err, "eosfs: error creating nominal home")
-	}
+	// if err := fs.createNominalHome(ctx); err != nil {
+	// 	return errors.Wrap(err, "eosfs: error creating nominal home")
+	// }
 
 	return nil
 }
