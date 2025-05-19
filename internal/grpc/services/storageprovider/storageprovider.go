@@ -121,6 +121,7 @@ func (s *service) UnprotectedEndpoints() []string { return []string{} }
 
 func (s *service) Register(ss *grpc.Server) {
 	provider.RegisterProviderAPIServer(ss, s)
+	provider.RegisterSpacesAPIServer(ss, s)
 }
 
 func parseXSTypes(xsTypes map[string]uint32) ([]*provider.ResourceChecksumPriority, error) {
@@ -577,6 +578,8 @@ func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeReques
 
 // CreateStorageSpace creates a storage space.
 func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	log := appctx.GetLogger(ctx)
+	log.Warn().Msg("storageprovider: CreateStorageSpace")
 	resp, err := s.storage.CreateStorageSpace(ctx, req)
 	if err != nil {
 		return nil, err
