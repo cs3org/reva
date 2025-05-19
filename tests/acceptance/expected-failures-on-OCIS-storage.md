@@ -221,9 +221,16 @@ _The below features have been added after I last categorized them. AFAICT they a
 - [coreApiWebdavUpload/uploadFile.feature:400](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUpload/uploadFile.feature#L400)
 - [coreApiWebdavUpload/uploadFile.feature:401](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUpload/uploadFile.feature#L401)
 - [coreApiWebdavUpload/uploadFile.feature:402](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUpload/uploadFile.feature#L402)
-- [coreApiWebdavUploadTUS/uploadFileMtime.feature:79](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L79)
-- [coreApiWebdavUploadTUS/uploadFileMtime.feature:80](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L80)
-- [coreApiWebdavUploadTUS/uploadFileMtime.feature:81](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L81)
+- [coreApiWebdavUploadTUS/uploadFileMtime.feature:84](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L84)
+- [coreApiWebdavUploadTUS/uploadFileMtime.feature:85](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L85)
+- [coreApiWebdavUploadTUS/uploadFileMtime.feature:86](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L86)
+
+#### [Cannot create new TUS upload resource using /webdav without remote.php - returns html instead](https://github.com/owncloud/ocis/issues/10346)
+
+- [coreApiWebdavUploadTUS/uploadToNonExistingFolder.feature:19](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadToNonExistingFolder.feature#L19)
+- [coreApiWebdavUploadTUS/uploadToNonExistingFolder.feature:20](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadToNonExistingFolder.feature#L20)
+- [coreApiWebdavUploadTUS/uploadToNonExistingFolder.feature:36](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadToNonExistingFolder.feature#L36)
+- [coreApiWebdavUploadTUS/uploadToNonExistingFolder.feature:37](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadToNonExistingFolder.feature#L37)
 
 - Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
