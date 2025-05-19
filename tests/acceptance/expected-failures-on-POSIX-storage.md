@@ -211,12 +211,12 @@ _The below features have been added after I last categorized them. AFAICT they a
 
 ### posixfs doesn't do versions at that point
 - [coreApiWebdavEtagPropagation2/restoreVersion.feature:12](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavEtagPropagation2/restoreVersion.feature#L12)
-- [coreApiWebdavUploadTUS/uploadFile.feature:146](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFile.feature#L146)
-- [coreApiWebdavUploadTUS/uploadFile.feature:147](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFile.feature#L147)
-- [coreApiWebdavUploadTUS/uploadFile.feature:122](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFile.feature#L122)
-- [coreApiWebdavUploadTUS/uploadFile.feature:123](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFile.feature#L123)
-- [coreApiWebdavUploadTUS/uploadFile.feature:124](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFile.feature#L124)
-- [coreApiWebdavUploadTUS/uploadFile.feature:148](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFile.feature#L148)
+- [coreApiWebdavUploadTUS/uploadFile.feature:155](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFile.feature#L155)
+- [coreApiWebdavUploadTUS/uploadFile.feature:156](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFile.feature#L156)
+- [coreApiWebdavUploadTUS/uploadFile.feature:157](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFile.feature#L157)
+- [coreApiWebdavUploadTUS/uploadFile.feature:129](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFile.feature#L129)
+- [coreApiWebdavUploadTUS/uploadFile.feature:130](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFile.feature#L130)
+- [coreApiWebdavUploadTUS/uploadFile.feature:131](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFile.feature#L131)
 - [coreApiVersions/fileVersions.feature:43](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L43)
 - [coreApiVersions/fileVersions.feature:44](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L44)
 - [coreApiVersions/fileVersions.feature:45](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L45)
@@ -248,9 +248,9 @@ _The below features have been added after I last categorized them. AFAICT they a
 - [coreApiWebdavMove2/moveFile.feature:41](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L41)
 - [coreApiWebdavMove2/moveFile.feature:42](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L42)
 - [coreApiWebdavMove2/moveFile.feature:43](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L43)
-- [coreApiWebdavUploadTUS/uploadFileMtime.feature:65](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L65)
-- [coreApiWebdavUploadTUS/uploadFileMtime.feature:66](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L66)
-- [coreApiWebdavUploadTUS/uploadFileMtime.feature:67](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L67)
+- [coreApiWebdavUploadTUS/uploadFileMtime.feature:70](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L70)
+- [coreApiWebdavUploadTUS/uploadFileMtime.feature:71](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L71)
+- [coreApiWebdavUploadTUS/uploadFileMtime.feature:72](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L72)
 
 
 ### [COPY file/folder to same name is possible (but 500 code error for folder with spaces path)](https://github.com/owncloud/ocis/issues/8711)
@@ -264,9 +264,16 @@ _The below features have been added after I last categorized them. AFAICT they a
 - [coreApiWebdavUpload/uploadFile.feature:400](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUpload/uploadFile.feature#L400)
 - [coreApiWebdavUpload/uploadFile.feature:401](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUpload/uploadFile.feature#L401)
 - [coreApiWebdavUpload/uploadFile.feature:402](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUpload/uploadFile.feature#L402)
-- [coreApiWebdavUploadTUS/uploadFileMtime.feature:79](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L79)
-- [coreApiWebdavUploadTUS/uploadFileMtime.feature:80](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L80)
-- [coreApiWebdavUploadTUS/uploadFileMtime.feature:81](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L81)
+- [coreApiWebdavUploadTUS/uploadFileMtime.feature:84](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L84)
+- [coreApiWebdavUploadTUS/uploadFileMtime.feature:85](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L85)
+- [coreApiWebdavUploadTUS/uploadFileMtime.feature:86](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadFileMtime.feature#L86)
+
+#### [Cannot create new TUS upload resource using /webdav without remote.php - returns html instead](https://github.com/owncloud/ocis/issues/10346)
+
+- [coreApiWebdavUploadTUS/uploadToNonExistingFolder.feature:19](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadToNonExistingFolder.feature#L19)
+- [coreApiWebdavUploadTUS/uploadToNonExistingFolder.feature:20](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadToNonExistingFolder.feature#L20)
+- [coreApiWebdavUploadTUS/uploadToNonExistingFolder.feature:36](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadToNonExistingFolder.feature#L36)
+- [coreApiWebdavUploadTUS/uploadToNonExistingFolder.feature:37](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavUploadTUS/uploadToNonExistingFolder.feature#L37)
 
 - Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
