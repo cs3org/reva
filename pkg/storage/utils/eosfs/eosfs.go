@@ -1288,16 +1288,17 @@ func (fs *Eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 
 // CreateStorageSpace creates a storage space.
 func (fs *Eosfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	log := appctx.GetLogger(ctx)
-	log.Warn().Msg("EOSFS: CreateStorageSpace")
-	//return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
 	ri, err := fs.GetMD(ctx, &provider.Reference{
-		Path: fs.getInternalHome(ctx),
+		Path: "",
 	}, nil)
 	if err != nil {
 		return nil, err
 	}
-	spaceId := spaces.EncodeSpaceID(ri.Id.StorageId, ri.Path)
+	if ri.Id == nil {
+		return nil, errors.New("Did not get resource id")
+	}
+	wrappedPath := fs.wrap(ctx, ri.Path)
+	spaceId := spaces.EncodeSpaceID(ri.Id.StorageId, wrappedPath)
 	return &provider.CreateStorageSpaceResponse{
 		StorageSpace: &provider.StorageSpace{
 			SpaceType: req.Type,
@@ -1311,6 +1312,10 @@ func (fs *Eosfs) CreateStorageSpace(ctx context.Context, req *provider.CreateSto
 				OpaqueId:  ri.Id.OpaqueId,
 				SpaceId:   spaceId,
 			},
+			Name: "My personal space",
+		},
+		Status: &rpc.Status{
+			Code: rpc.Code_CODE_OK,
 		},
 	}, nil
 }
@@ -1762,7 +1767,35 @@ func (fs *Eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relative
 }
 
 func (fs *Eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
-	return nil, errtypes.NotSupported("list storage spaces")
+	u := appctx.ContextMustGetUser(ctx)
+	ri, err := fs.GetMD(ctx, &provider.Reference{
+		Path: "",
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+	wrappedPath := fs.wrap(ctx, ri.Path)
+	spaceId := spaces.EncodeSpaceID(ri.Id.StorageId, wrappedPath)
+
+	return []*provider.StorageSpace{
+		{
+			SpaceType: "personal",
+			Quota: &provider.Quota{
+				QuotaMaxBytes: 1000000,
+				QuotaMaxFiles: 1000000,
+			},
+			Owner: u,
+			Name:  "My personal space",
+			Id: &provider.StorageSpaceId{
+				OpaqueId: spaceId,
+			},
+			Root: &provider.ResourceId{
+				StorageId: ri.Id.StorageId,
+				OpaqueId:  ri.Id.OpaqueId,
+				SpaceId:   spaceId,
+			},
+		},
+	}, nil
 }
 
 // UpdateStorageSpace updates a storage space.
