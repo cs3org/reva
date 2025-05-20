@@ -33,13 +33,13 @@ import (
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/utils/etag"
 	"github.com/cs3org/reva/pkg/utils"
-	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
@@ -49,7 +49,7 @@ import (
 
 // transferClaims are custom claims for a JWT token to be used between the metadata and data gateways.
 type transferClaims struct {
-	jwt.StandardClaims
+	jwt.RegisteredClaims
 	Target     string `json:"target"`
 	VersionKey string `json:"version_key,omitempty"`
 }
@@ -59,10 +59,10 @@ func (s *svc) sign(_ context.Context, target, versionKey string) (string, error)
 	// For large files, this can take a long time, so we extend the expiration
 	ttl := time.Duration(s.c.TransferExpires) * time.Second
 	claims := transferClaims{
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(ttl).Unix(),
-			Audience:  "reva",
-			IssuedAt:  time.Now().Unix(),
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(ttl)),
+			Audience:  jwt.ClaimStrings{"reva"},
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 		Target:     target,
 		VersionKey: versionKey,
