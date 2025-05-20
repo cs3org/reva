@@ -9,7 +9,7 @@ require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/alexedwards/argon2id v1.0.0
 	github.com/armon/go-radix v1.0.0
-	github.com/aws/aws-sdk-go v1.55.6
+	github.com/aws/aws-sdk-go v1.55.7
 	github.com/beevik/etree v1.5.1
 	github.com/bluele/gcache v0.0.2
 	github.com/c-bata/go-prompt v0.2.6
