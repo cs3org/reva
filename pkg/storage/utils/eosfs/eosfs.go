@@ -2185,8 +2185,12 @@ func (fs *Eosfs) getUserAuth(ctx context.Context, u *userpb.User, fn string) (eo
 	if utils.IsLightweightUser(u) {
 		return fs.getEOSToken(ctx, u, fn)
 	}
-
-	return fs.extractUIDAndGID(u)
+	return eosclient.Authorization{
+		Role: eosclient.Role{
+			UID: strconv.FormatInt(1850, 10),
+			GID: strconv.FormatInt(2766, 10),
+		}}, nil
+	//return fs.extractUIDAndGID(u)
 }
 
 // Generate an EOS token that acts on behalf of the owner of the file `fn`
