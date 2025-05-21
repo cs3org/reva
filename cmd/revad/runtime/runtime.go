@@ -54,6 +54,7 @@ func RunWithOptions(mainConf map[string]interface{}, pidFile string, opts ...Opt
 
 	if err := registry.Init(options.Registry); err != nil {
 		options.Logger.Fatal().Err(err).Msg("failed to initialize registry client")
+		return
 	}
 
 	run(mainConf, coreConf, options.Logger, options.TraceProvider, pidFile)
