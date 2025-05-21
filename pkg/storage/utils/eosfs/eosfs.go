@@ -20,6 +20,7 @@ package eosfs
 
 import (
 	"context"
+	"encoding/base64"
 	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -1792,7 +1793,19 @@ func (fs *Eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListS
 			Root: &provider.ResourceId{
 				StorageId: ri.Id.StorageId,
 				OpaqueId:  ri.Id.OpaqueId,
-				SpaceId:   spaceId,
+				SpaceId:   base64.StdEncoding.EncodeToString([]byte(wrappedPath)),
+			},
+			Opaque: &types.Opaque{
+				Map: map[string]*types.OpaqueEntry{
+					"spaceAlias": {
+						Decoder: "plain",
+						Value:   []byte("personal/admin"),
+					},
+					"etag": {
+						Decoder: "plain",
+						Value:   []byte(fmt.Sprintf(`"%s"`, ri.Etag)),
+					},
+				},
 			},
 		},
 	}, nil
@@ -2025,7 +2038,10 @@ func (fs *Eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 	parseAndSetFavoriteAttr(ctx, filteredAttrs)
 
 	info := &provider.ResourceInfo{
-		Id:            &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.Inode)},
+		Id: &provider.ResourceId{
+			OpaqueId:  fmt.Sprintf("%d", eosFileInfo.Inode),
+			StorageId: "eoshomedev",
+		},
 		Path:          p,
 		Name:          path.Base(p),
 		Owner:         owner,
