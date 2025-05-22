@@ -566,7 +566,12 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				Href:     encodePath(ref),
 				Propstat: []propstatXML{pxml},
 			}, err
-
+		}
+		if md.Id.SpaceId == "" {
+			md.Id.SpaceId, err = spaces.Base32EncodeEOSBasePath(md.Path)
+			if err != nil {
+				sublog.Error().Err(err).Msg("Failed mdToProp")
+			}
 		}
 	} else {
 		// spaces are not enabled
@@ -645,7 +650,9 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 
 		if md.Id != nil {
 			if spacesEnabled {
-				id := spaces.EncodeResourceID(md.Id)
+				if md.Path == "" && md.Id.SpaceId == "" {
+				}
+				id := spaces.EncodeResourceInfo(md) //spaces.EncodeResourceID(md.Id)
 				propstatOK.Prop = append(propstatOK.Prop,
 					s.newProp("oc:id", id),
 					s.newProp("oc:fileid", id))
