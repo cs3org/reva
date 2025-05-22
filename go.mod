@@ -61,7 +61,7 @@ require (
 	golang.org/x/sys v0.33.0
 	golang.org/x/term v0.32.0
 	google.golang.org/genproto v0.0.0-20250414145226-207652e42e2e
-	google.golang.org/grpc v1.72.0
+	google.golang.org/grpc v1.72.1
 	google.golang.org/protobuf v1.36.6
 	gorm.io/driver/mysql v1.5.7
 	gorm.io/driver/sqlite v1.5.7
