@@ -20,7 +20,7 @@ package eosfs
 
 import (
 	"context"
-	"encoding/base64"
+	"encoding/base32"
 	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -45,6 +45,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/spaces"
+	"github.com/rs/zerolog/log"
 
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/eosclient/eosbinary"
@@ -1284,6 +1285,8 @@ func (fs *Eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 		}
 	}
 
+	log.Info().Any("finfos", finfos).Msg("Files infos in path " + fn)
+
 	return finfos, nil
 }
 
@@ -1793,7 +1796,7 @@ func (fs *Eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListS
 			Root: &provider.ResourceId{
 				StorageId: ri.Id.StorageId,
 				OpaqueId:  ri.Id.OpaqueId,
-				SpaceId:   base64.StdEncoding.EncodeToString([]byte(wrappedPath)),
+				SpaceId:   base32.StdEncoding.EncodeToString([]byte(wrappedPath)),
 			},
 			Opaque: &types.Opaque{
 				Map: map[string]*types.OpaqueEntry{
@@ -2036,19 +2039,29 @@ func (fs *Eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 	}
 
 	parseAndSetFavoriteAttr(ctx, filteredAttrs)
+	spaceId, err := spaces.Base32EncodeEOSBasePath(eosFileInfo.File)
+
+	if err != nil {
+		log.Error().Err(err).Msg("Error when converting to ResourceInfo")
+	}
 
 	info := &provider.ResourceInfo{
 		Id: &provider.ResourceId{
 			OpaqueId:  fmt.Sprintf("%d", eosFileInfo.Inode),
 			StorageId: "eoshomedev",
+			SpaceId:   spaceId,
 		},
-		Path:          p,
-		Name:          path.Base(p),
-		Owner:         owner,
-		Etag:          fmt.Sprintf("\"%s\"", strings.Trim(eosFileInfo.ETag, "\"")),
-		MimeType:      mime.Detect(eosFileInfo.IsDir, p),
-		Size:          size,
-		ParentId:      &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.FID)},
+		Path:     p,
+		Name:     path.Base(p),
+		Owner:    owner,
+		Etag:     fmt.Sprintf("\"%s\"", strings.Trim(eosFileInfo.ETag, "\"")),
+		MimeType: mime.Detect(eosFileInfo.IsDir, p),
+		Size:     size,
+		ParentId: &provider.ResourceId{
+			OpaqueId:  fmt.Sprintf("%d", eosFileInfo.FID),
+			StorageId: "eoshomedev",
+			SpaceId:   spaceId,
+		},
 		PermissionSet: fs.permissionSet(ctx, eosFileInfo, owner),
 		Checksum:      &xs,
 		Type:          getResourceType(eosFileInfo.IsDir),

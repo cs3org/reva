@@ -74,6 +74,15 @@ func ParseResourceID(raw string) (*provider.ResourceId, bool) {
 	}, true
 }
 
+func Base32EncodeEOSBasePath(path string) (string, error) {
+	parts := strings.Split(path, string(os.PathSeparator))
+	if len(parts) < 5 {
+		return "", errors.New(path + ": not a space: must follow format of /eos/(user|project)/n/name[/...]")
+	}
+	basePath := strings.Join(parts[:5], string(os.PathSeparator))
+	return base32.StdEncoding.EncodeToString([]byte(basePath)), nil
+}
+
 // EncodeResourceID encodes the provided resource ID as a string,
 // in the format <storage_id>$<space_id>!<item_id>.
 func EncodeResourceID(r *provider.ResourceId) string {
@@ -81,15 +90,12 @@ func EncodeResourceID(r *provider.ResourceId) string {
 	return fmt.Sprintf("%s!%s", spaceID, r.OpaqueId)
 }
 
-func EncodeResourceInfo(md *provider.ResourceInfo) (spaceId string, err error) {
-	if md.Id.SpaceId != "" {
-		return fmt.Sprintf("%s$%s!%s", md.Id.StorageId, md.Id.SpaceId, md.Id.OpaqueId), nil
-	} else if md.Path != "" {
-		encodedPath := PathToSpaceId(md.Path)
-		return fmt.Sprintf("%s$%s!%s", md.Id.StorageId, encodedPath, md.Id.OpaqueId), nil
-	} else {
-		return "", errors.New("resourceInfo must contain a spaceID or a path")
+func EncodeResourceInfo(r *provider.ResourceInfo) string {
+	if r.Id.SpaceId == "" && r.Path != "" {
+		spaceId, _ := Base32EncodeEOSBasePath(r.Path)
+		return fmt.Sprintf("%s&%s!%s", r.Id.StorageId, spaceId, r.Id.OpaqueId)
 	}
+	return fmt.Sprintf("%s&%s!%s", r.Id.StorageId, r.Id.SpaceId, r.Id.OpaqueId)
 }
 
 // EncodeSpaceID encodes storage ID and path to create a space ID,
