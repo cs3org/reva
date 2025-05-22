@@ -776,8 +776,10 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 }
 
 func (s *service) addSpaceInfo(ri *provider.ResourceInfo) {
-	space := spaces.PathToSpaceID(ri.Path)
-	ri.Id.SpaceId = space
+	if ri.Id.SpaceId == "" && ri.Path != "" {
+		space := spaces.PathToSpaceID(ri.Path)
+		ri.Id.SpaceId = space
+	}
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
@@ -794,6 +796,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 	}
 
 	md, err := s.storage.GetMD(ctx, newRef, req.ArbitraryMetadataKeys)
+
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
@@ -807,6 +810,9 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		return &provider.StatResponse{
 			Status: st,
 		}, nil
+	}
+	if md.Id.SpaceId == "" {
+		log.Error().Msg("GetMD returned result without space ID!")
 	}
 
 	if err := s.wrap(ctx, md, true); err != nil {

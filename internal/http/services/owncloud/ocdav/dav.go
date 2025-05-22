@@ -187,7 +187,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				h.TrashbinHandler.Handler(s).ServeHTTP(w, r)
 			default:
 				// path is of type: space_id/relative/path/from/space
-				// the space_id is the base64 encode of the path where
+				// the space_id is the base32 encode of the path where
 				// the space is located
 
 				_, base, ok := spaces.DecodeStorageSpaceID(head)
