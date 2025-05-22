@@ -29,7 +29,7 @@ import (
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/cs3org/reva/pkg/utils/cfg"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/pkg/errors"
 )
 
@@ -51,7 +51,7 @@ type manager struct {
 
 // claims are custom claims for the JWT token.
 type claims struct {
-	jwt.StandardClaims
+	jwt.RegisteredClaims
 	User  *user.User             `json:"user"`
 	Scope map[string]*auth.Scope `json:"scope"`
 }
@@ -81,11 +81,11 @@ func New(m map[string]interface{}) (token.Manager, error) {
 
 func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error) {
 	claims := claims{
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: getExpirationDate(m.conf.ExpiresNextWeekend, time.Duration(m.conf.Expires)*time.Second).Unix(),
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(getExpirationDate(m.conf.ExpiresNextWeekend, time.Duration(m.conf.Expires)*time.Second)),
 			Issuer:    u.Id.Idp,
-			Audience:  "reva",
-			IssuedAt:  time.Now().Unix(),
+			Audience:  jwt.ClaimStrings{"reva"},
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 		User:  u,
 		Scope: scope,
