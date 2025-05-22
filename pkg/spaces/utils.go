@@ -20,7 +20,9 @@ package spaces
 
 import (
 	"encoding/base32"
+	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -47,7 +49,7 @@ func DecodeSpaceID(raw string) (storageID, path string, ok bool) {
 }
 
 // Decode resourceID returns the components of the space ID.
-// The resource ID is expected to be in the form of <storage_id>$<base32(<path>)!<item_id>.
+// The resource ID is expected to be in the form of <storage_id>$base32(<path>)!<item_id>.
 func DecodeResourceID(raw string) (storageID, path, itemID string, ok bool) {
 	// The input is expected to be in the form of <storage_id>$base32(<path>)!<item_id>
 	s := strings.SplitN(raw, "!", 2)
@@ -79,6 +81,23 @@ func EncodeResourceID(r *provider.ResourceId) string {
 	return fmt.Sprintf("%s!%s", spaceID, r.OpaqueId)
 }
 
+func EncodeResourceInfo(md *provider.ResourceInfo) (spaceId string, err error) {
+	if md.Id.SpaceId != "" {
+		return fmt.Sprintf("%s$%s!%s", md.Id.StorageId, md.Id.SpaceId, md.Id.OpaqueId), nil
+	} else if md.Path != "" {
+		// get only user or project path
+		paths := strings.Split(md.Path, string(os.PathSeparator))
+		if len(paths) < 5 {
+			return "", errors.New("path is too short")
+		}
+		spacesPath := strings.Join(paths[:5], string(os.PathSeparator))
+		encodedPath := base32.StdEncoding.EncodeToString([]byte(spacesPath))
+		return fmt.Sprintf("%s$%s!%s", md.Id.StorageId, encodedPath, md.Id.OpaqueId), nil
+	} else {
+		return "", errors.New("resourceInfo must contain a spaceID or a path")
+	}
+}
+
 // EncodeSpaceID encodes storage ID and path to create a space ID,
 // in the format <storage_id>$base32(<path>).
 func EncodeSpaceID(storageID, path string) string {
@@ -86,8 +105,12 @@ func EncodeSpaceID(storageID, path string) string {
 		return storageID
 	}
 
-	encodedPath := base32.StdEncoding.EncodeToString([]byte(path))
+	encodedPath := PathToSpaceId(path)
 	return fmt.Sprintf("%s$%s", storageID, encodedPath)
+}
+
+func PathToSpaceId(path string) string {
+	return base32.StdEncoding.EncodeToString([]byte(path))
 }
 
 func RelativePathToSpaceID(info *provider.ResourceInfo) string {
