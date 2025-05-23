@@ -1280,6 +1280,7 @@ func (fs *Eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 		// Remove the hidden folders in the topmost directory
 		if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo); err == nil &&
 			finfo.Path != "/" && !strings.HasPrefix(finfo.Path, "/.") {
+			setPathRelativeToBase(p, finfo)
 			finfos = append(finfos, finfo)
 		}
 	}
@@ -1287,6 +1288,13 @@ func (fs *Eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 	log.Info().Any("finfos", finfos).Msg("Files infos in path " + fn)
 
 	return finfos, nil
+}
+
+func setPathRelativeToBase(basePath string, rinfo *provider.ResourceInfo) {
+	res, err := filepath.Rel(basePath, rinfo.Path)
+	if err == nil {
+		rinfo.Path = res
+	}
 }
 
 // CreateStorageSpace creates a storage space.
