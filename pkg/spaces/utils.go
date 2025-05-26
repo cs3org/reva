@@ -52,7 +52,7 @@ func DecodeSpaceID(raw string) (storageID, path string, ok bool) {
 // The resource ID is expected to be in the form of <storage_id>$<base32(<path>)!<item_id>.
 func DecodeResourceID(raw string) (storageID, path, itemID string, ok bool) {
 	// The input is expected to be in the form of <storage_id>$base32(<path>)!<item_id>
-	s := strings.SplitN(raw, "!", 2)
+	s := strings.SplitN(raw, "+", 2)
 	if len(s) != 2 {
 		return "", "", "", false
 	}
@@ -87,15 +87,15 @@ func Base32EncodeEOSBasePath(path string) (string, error) {
 // in the format <storage_id>$<space_id>!<item_id>.
 func EncodeResourceID(r *provider.ResourceId) string {
 	spaceID := EncodeSpaceID(r.StorageId, r.SpaceId)
-	return fmt.Sprintf("%s!%s", spaceID, r.OpaqueId)
+	return fmt.Sprintf("%s+%s", spaceID, r.OpaqueId)
 }
 
 func EncodeResourceInfo(r *provider.ResourceInfo) string {
 	if r.Id.SpaceId == "" && r.Path != "" {
 		spaceId, _ := Base32EncodeEOSBasePath(r.Path)
-		return fmt.Sprintf("%s&%s!%s", r.Id.StorageId, spaceId, r.Id.OpaqueId)
+		return fmt.Sprintf("%s&%s+%s", r.Id.StorageId, spaceId, r.Id.OpaqueId)
 	}
-	return fmt.Sprintf("%s&%s!%s", r.Id.StorageId, r.Id.SpaceId, r.Id.OpaqueId)
+	return fmt.Sprintf("%s&%s+%s", r.Id.StorageId, r.Id.SpaceId, r.Id.OpaqueId)
 }
 
 // EncodeSpaceID encodes storage ID and path to create a space ID,
@@ -124,11 +124,11 @@ func RelativePathToSpaceID(info *provider.ResourceInfo) string {
 }
 
 func ResourceIdToString(id *provider.ResourceId) string {
-	return fmt.Sprintf("%s!%s", id.StorageId, id.OpaqueId)
+	return fmt.Sprintf("%s+%s", id.StorageId, id.OpaqueId)
 }
 
 func ResourceIdFromString(s string) (*provider.ResourceId, error) {
-	parts := strings.Split(s, "!")
+	parts := strings.Split(s, "+")
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("string does not have right format: should be storageid!opaqueid, got %s", s)
 	}
