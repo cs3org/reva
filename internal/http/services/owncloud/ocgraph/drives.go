@@ -138,7 +138,7 @@ func (s *svc) getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClien
 }
 
 func libregraphShareID(shareID *collaborationv1beta1.ShareId) string {
-	return fmt.Sprintf("%s$%s-%s", ShareJailID, ShareJailID, shareID.OpaqueId)
+	return fmt.Sprintf("%s$%s!%s", ShareJailID, ShareJailID, shareID.OpaqueId)
 }
 
 func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libregraph.Drive {
@@ -155,7 +155,7 @@ func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libre
 			Remaining: libregraph.PtrInt64(24154387158408),
 		},
 		Root: &libregraph.DriveItem{
-			Id:        libregraph.PtrString(fmt.Sprintf("%s$%s-%s", ShareJailID, ShareJailID, rsi.ReceivedShare.Share.Id.OpaqueId)),
+			Id:        libregraph.PtrString(fmt.Sprintf("%s$%s!%s", ShareJailID, ShareJailID, rsi.ReceivedShare.Share.Id.OpaqueId)),
 			WebDavUrl: libregraph.PtrString(fullURL(s.c.WebDavBase, rsi.ResourceInfo.Path)),
 			RemoteItem: &libregraph.RemoteItem{
 				DriveAlias: libregraph.PtrString(strings.TrimSuffix(strings.TrimPrefix(rsi.ResourceInfo.Path, "/"), spaces.RelativePathToSpaceID(rsi.ResourceInfo))), // the drive alias must not start with /
