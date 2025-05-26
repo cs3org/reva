@@ -765,7 +765,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					if md.Id == nil {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
 					} else if spacesEnabled {
-						fileId, err := spaces.EncodeResourceInfo(md)
+						fileId := spaces.EncodeResourceInfo(md)
 						log.Info().Any("md", md).Str("fileid", fileId).Msg("FindMe - encode file id")
 						if err != nil {
 							log.Error().Err(err).Any("md", md).Msg("Failed to encode file id")

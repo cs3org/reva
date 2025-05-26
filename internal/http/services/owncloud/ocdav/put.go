@@ -346,7 +346,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	w.Header().Add(HeaderContentType, newInfo.MimeType)
 	w.Header().Set(HeaderETag, newInfo.Etag)
 	if spacesEnabled {
-		newInfoID, _ := spaces.EncodeResourceInfo(newInfo)
+		newInfoID := spaces.EncodeResourceInfo(newInfo)
 		w.Header().Set(HeaderOCFileID, newInfoID)
 	} else {
 		w.Header().Set(HeaderOCFileID, spaces.ResourceIdToString(newInfo.Id))
