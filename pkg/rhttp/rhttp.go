@@ -229,7 +229,7 @@ func urlHasPrefix(url, prefix string) bool {
 	return true
 }
 
-func (s *Server) getHandlerLongestCommongURL(url string) (http.Handler, string, bool) {
+func (s *Server) getHandlerLongestCommonURL(url string) (http.Handler, string, bool) {
 	var match string
 
 	for k := range s.handlers {
@@ -257,15 +257,15 @@ func getSubURL(url, prefix string) string {
 func (s *Server) getHandler() (http.Handler, error) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if h, ok := s.handlers[r.URL.Path]; ok {
-			s.log.Debug().Str("url", r.URL.Path).Msg("http routing via handler")
+			s.log.Debug().Str("url", r.URL.Path).Msg("routing via handler")
 			r.URL.Path = "/"
 			h.ServeHTTP(w, r)
 			return
 		}
 
 		// find by longest common path
-		if h, url, ok := s.getHandlerLongestCommongURL(r.URL.Path); ok {
-			s.log.Debug().Str("url", url).Msg("http routing via longest-matching URL")
+		if h, url, ok := s.getHandlerLongestCommonURL(r.URL.Path); ok {
+			s.log.Debug().Str("url", url).Msg("routing via longest-matching URL")
 			r.URL.Path = getSubURL(r.URL.Path, url)
 			// go chi internally uses the RawPath for the routing
 			// so this has to be adapted accordingly
@@ -274,7 +274,7 @@ func (s *Server) getHandler() (http.Handler, error) {
 			return
 		}
 
-		s.log.Error().Str("url", r.URL.Path).Msg("http routing: missing route, check revad config")
+		s.log.Error().Str("url", r.URL.Path).Msg("routing: missing route, check revad config")
 		w.WriteHeader(http.StatusNotFound)
 	})
 
