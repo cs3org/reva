@@ -420,7 +420,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 
 	if utils.IsRelativeReference(req.Ref) {
 		protocol.Protocol = "spaces"
-		u.Path = path.Join(u.Path, "spaces", req.Ref.ResourceId.StorageId+"!"+req.Ref.ResourceId.OpaqueId, req.Ref.Path)
+		u.Path = path.Join(u.Path, "spaces", req.Ref.ResourceId.StorageId+"+"+req.Ref.ResourceId.OpaqueId, req.Ref.Path)
 	} else {
 		newRef, err := s.unwrap(ctx, req.Ref)
 		if err != nil {
@@ -586,7 +586,7 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 	}
 
 	resp.StorageSpace.Root = &provider.ResourceId{StorageId: s.mountID, OpaqueId: resp.StorageSpace.Id.OpaqueId}
-	resp.StorageSpace.Id = &provider.StorageSpaceId{OpaqueId: s.mountID + "!" + resp.StorageSpace.Id.OpaqueId}
+	resp.StorageSpace.Id = &provider.StorageSpaceId{OpaqueId: s.mountID + "+" + resp.StorageSpace.Id.OpaqueId}
 	return resp, nil
 }
 
@@ -619,7 +619,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		if hasNodeID(spaces[i]) {
 			// fill in storagespace id if it is not set
 			if spaces[i].Id == nil || spaces[i].Id.OpaqueId == "" {
-				spaces[i].Id = &provider.StorageSpaceId{OpaqueId: s.mountID + "!" + spaces[i].Root.OpaqueId}
+				spaces[i].Id = &provider.StorageSpaceId{OpaqueId: s.mountID + "+" + spaces[i].Root.OpaqueId}
 			}
 			// fill in storage id if it is not set
 			if spaces[i].Root.StorageId == "" {
