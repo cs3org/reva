@@ -795,6 +795,29 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
+	// Handling stats to spaces:
+	// OC sets the Opaque ID to the Space ID sometimes,
+	// while we use it for inodes, so we need to clear this
+	if req.Ref.ResourceId != nil &&
+		req.Ref.ResourceId.OpaqueId == req.Ref.ResourceId.SpaceId {
+		req.Ref.ResourceId.OpaqueId = ""
+	}
+	// // If we have no Opaque ID, we need to read the path
+	// // If we then don't have a path, we should populate this
+	// // with the root of the Space ID
+	// if (req.Ref.Path == "" || req.Ref.Path == ".") &&
+	// 	req.Ref.ResourceId != nil &&
+	// 	req.Ref.ResourceId.OpaqueId == "" &&
+	// 	req.Ref.ResourceId.SpaceId != "" {
+	// 	//_, path, ok := spaces.DecodeSpaceID(req.Ref.ResourceId.SpaceId)
+	// 	path, err := spaces.Base32DecodeEOSBasePath(req.Ref.ResourceId.SpaceId)
+	// 	log.Warn().Str("path", path).Err(err).Str("SpaceID", req.Ref.ResourceId.SpaceId).Msg("In case!")
+	// 	if err == nil {
+	// 		req.Ref.Path = path
+	// 		req.Ref.ResourceId = nil
+	// 	}
+	// }
+
 	md, err := s.storage.GetMD(ctx, newRef, req.ArbitraryMetadataKeys)
 
 	if err != nil {
@@ -920,6 +943,11 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 		return nil
 	}
 
+	if req.Ref.ResourceId != nil &&
+		req.Ref.ResourceId.OpaqueId == req.Ref.ResourceId.SpaceId {
+		req.Ref.ResourceId.OpaqueId = ""
+	}
+
 	mds, err := s.storage.ListFolder(ctx, newRef, req.ArbitraryMetadataKeys)
 	if err != nil {
 		var st *rpc.Status
@@ -978,6 +1006,11 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		return &provider.ListContainerResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
+	}
+
+	if req.Ref.ResourceId != nil &&
+		req.Ref.ResourceId.OpaqueId == req.Ref.ResourceId.SpaceId {
+		req.Ref.ResourceId.OpaqueId = ""
 	}
 
 	// TODO: to be removed (see https://github.com/cs3org/reva/pull/5127)

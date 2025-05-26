@@ -410,7 +410,7 @@ func (fs *Eosfs) resolveRefAndGetAuth(ctx context.Context, ref *provider.Referen
 
 // resolve takes in a request path or request id and returns the unwrapped path.
 func (fs *Eosfs) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
-	if ref.ResourceId != nil {
+	if ref.ResourceId != nil && ref.ResourceId.OpaqueId != "" {
 		p, err := fs.getPath(ctx, ref.ResourceId)
 		if err != nil {
 			return "", err
@@ -1206,7 +1206,7 @@ func (fs *Eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		return nil, fmt.Errorf("error getting daemon auth")
 	}
 
-	if ref.ResourceId != nil {
+	if ref.ResourceId != nil && ref.ResourceId.OpaqueId != "" {
 		fid, err := strconv.ParseUint(ref.ResourceId.OpaqueId, 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("error converting string to int for eos fileid: %s", ref.ResourceId.OpaqueId)

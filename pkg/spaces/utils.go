@@ -97,6 +97,14 @@ func EncodeResourceID(r *provider.ResourceId) string {
 	return fmt.Sprintf("%s$%s!%s", r.StorageId, r.SpaceId, r.OpaqueId)
 }
 
+func Base32DecodeEOSBasePath(spaceId string) (string, error) {
+	res, err := base32.StdEncoding.DecodeString(spaceId)
+	if err != nil {
+		return "", err
+	}
+	return string(res), nil
+}
+
 // EncodeResourceID encodes the provided resource ID as a string,
 // in the format <storage_id>$<space_id>!<item_id>.
 // If space_id is not set, it will be calculated from the path.
