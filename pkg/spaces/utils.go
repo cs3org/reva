@@ -59,9 +59,9 @@ func DecodeSpaceID(spaceId string) (string, error) {
 }
 
 // Decode resourceID returns the components of the space ID.
-// The resource ID is expected to be in the form of <storage_id>$base32(<path>)!<item_id>.
+// The resource ID is expected to be in the form of <storage_id>$<hex(<path>)!<item_id>.
 func DecodeResourceID(raw string) (storageID, path, itemID string, ok bool) {
-	// The input is expected to be in the form of <storage_id>$base32(<path>)!<item_id>
+	// The input is expected to be in the form of <storage_id>$hex(<path>)!<item_id>
 	s := strings.SplitN(raw, "!", 2)
 	if len(s) != 2 {
 		return "", "", "", false

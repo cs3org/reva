@@ -20,8 +20,8 @@ package eosfs
 
 import (
 	"context"
-	"encoding/base32"
 	b64 "encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -1803,7 +1803,7 @@ func (fs *Eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListS
 			Root: &provider.ResourceId{
 				StorageId: ri.Id.StorageId,
 				OpaqueId:  ri.Id.OpaqueId,
-				SpaceId:   base32.StdEncoding.EncodeToString([]byte(wrappedPath)),
+				SpaceId:   hex.EncodeToString([]byte(wrappedPath)),
 			},
 			Opaque: &types.Opaque{
 				Map: map[string]*types.OpaqueEntry{
