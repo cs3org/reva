@@ -20,6 +20,7 @@ package spaces
 
 import (
 	"encoding/base32"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -29,9 +30,9 @@ import (
 )
 
 // DecodeSpaceID returns the components of the space ID.
-// The space ID is expected to be in the format <storage_id>$base32(<path>).
+// The space ID is expected to be in the format <storage_id>$hex(<path>).
 func DecodeSpaceID(raw string) (storageID, path string, ok bool) {
-	// The input is expected to be in the form of <storage_id>$<base32(<path>)
+	// The input is expected to be in the form of <storage_id>$<hex(<path>)
 	s := strings.SplitN(raw, "$", 2)
 	if len(s) != 2 {
 		return "", "", false
@@ -39,7 +40,7 @@ func DecodeSpaceID(raw string) (storageID, path string, ok bool) {
 
 	storageID = s[0]
 	encodedPath := s[1]
-	p, err := base32.StdEncoding.DecodeString(encodedPath)
+	p, err := hex.DecodeString(encodedPath)
 	if err != nil {
 		return "", "", false
 	}
@@ -49,9 +50,9 @@ func DecodeSpaceID(raw string) (storageID, path string, ok bool) {
 }
 
 // Decode resourceID returns the components of the space ID.
-// The resource ID is expected to be in the form of <storage_id>$base32(<path>)!<item_id>.
+// The resource ID is expected to be in the form of <storage_id>$<hex(<path>)!<item_id>.
 func DecodeResourceID(raw string) (storageID, path, itemID string, ok bool) {
-	// The input is expected to be in the form of <storage_id>$base32(<path>)!<item_id>
+	// The input is expected to be in the form of <storage_id>$hex(<path>)!<item_id>
 	s := strings.SplitN(raw, "!", 2)
 	if len(s) != 2 {
 		return "", "", "", false
@@ -80,7 +81,7 @@ func Base32EncodeEOSBasePath(path string) (string, error) {
 		return "", errors.New(path + ": not a space: must follow format of /eos/(user|project)/n/name[/...]")
 	}
 	basePath := strings.Join(parts[:5], string(os.PathSeparator))
-	return base32.StdEncoding.EncodeToString([]byte(basePath)), nil
+	return hex.EncodeToString([]byte(basePath)), nil
 }
 
 // EncodeResourceID encodes the provided resource ID as a string,
@@ -99,13 +100,13 @@ func EncodeResourceInfo(r *provider.ResourceInfo) string {
 }
 
 // EncodeSpaceID encodes storage ID and path to create a space ID,
-// in the format <storage_id>$base32(<path>).
+// in the format <storage_id>$hex(<path>).
 func EncodeSpaceID(storageID, path string) string {
 	if path == "" {
 		return storageID
 	}
 
-	encodedPath := PathToSpaceId(path)
+	encodedPath := hex.EncodeToString([]byte(path))
 	return fmt.Sprintf("%s$%s", storageID, encodedPath)
 }
 
