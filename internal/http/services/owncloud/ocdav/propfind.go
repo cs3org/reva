@@ -508,14 +508,17 @@ func (s *svc) newPropRaw(key, val string) *propertyXML {
 	}
 }
 
-func spaceHref(ctx context.Context, baseURI, fullPath string) (string, error) {
+func spaceHref(ctx context.Context, baseURI string, md *provider.ResourceInfo) (string, error) {
 	// in the context of spaces, the final URL will be baseURI + /<space_id>/relative/path/to/space
 	spacePath, ok := ctx.Value(ctxSpacePath).(string)
 	if !ok {
 		return "", errors.New("space path expected to be in the context")
 	}
-	relativePath := strings.TrimPrefix(fullPath, spacePath)
-	spaceID, ok := ctx.Value(ctxSpaceID).(string)
+	if spacePath != md.Id.SpaceId {
+		_, spacePath, _ = spaces.DecodeSpaceID(fmt.Sprintf("%s$%s", md.Id.StorageId, md.Id.SpaceId))
+	}
+	relativePath := strings.TrimPrefix(md.Path, spacePath)
+	spaceID, ok := md.Id.SpaceId, true
 	if !ok {
 		return "", errors.New("space id expected to be in the context")
 	}
@@ -559,7 +562,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	var err error
 	if spacesEnabled {
 		// spaces are enabled; for now we do not support the OCM case with spaces
-		ref, err = spaceHref(ctx, baseURI, md.Path)
+		ref, err = spaceHref(ctx, baseURI, md)
 		if err != nil {
 			pxml := propstatXML{
 				Status: "HTTP/1.1 400 Bad Request",
@@ -759,7 +762,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						log.Info().Any("md", md).Str("fileid", fileId).Msg("FindMe - encode file id")
 						if err != nil {
 							log.Error().Err(err).Any("md", md).Msg("Failed to encode file id")
-							//propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
+							// propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", spaces.EncodeResourceID(md.Id)))
 						} else {
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", fileId))

@@ -85,13 +85,7 @@ func EncodeResourceInfo(md *provider.ResourceInfo) (spaceId string, err error) {
 	if md.Id.SpaceId != "" {
 		return fmt.Sprintf("%s$%s!%s", md.Id.StorageId, md.Id.SpaceId, md.Id.OpaqueId), nil
 	} else if md.Path != "" {
-		// get only user or project path
-		paths := strings.Split(md.Path, string(os.PathSeparator))
-		if len(paths) < 5 {
-			return "", errors.New("path is too short")
-		}
-		spacesPath := strings.Join(paths[:5], string(os.PathSeparator))
-		encodedPath := base32.StdEncoding.EncodeToString([]byte(spacesPath))
+		encodedPath := PathToSpaceId(md.Path)
 		return fmt.Sprintf("%s$%s!%s", md.Id.StorageId, encodedPath, md.Id.OpaqueId), nil
 	} else {
 		return "", errors.New("resourceInfo must contain a spaceID or a path")
@@ -110,7 +104,13 @@ func EncodeSpaceID(storageID, path string) string {
 }
 
 func PathToSpaceId(path string) string {
-	return base32.StdEncoding.EncodeToString([]byte(path))
+	paths := strings.Split(path, string(os.PathSeparator))
+	if len(paths) < 5 {
+		return base32.StdEncoding.EncodeToString([]byte(path))
+	}
+	spacesPath := strings.Join(paths[:5], string(os.PathSeparator))
+	encodedPath := base32.StdEncoding.EncodeToString([]byte(spacesPath))
+	return encodedPath
 }
 
 func RelativePathToSpaceID(info *provider.ResourceInfo) string {

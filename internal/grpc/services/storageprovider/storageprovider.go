@@ -124,7 +124,7 @@ func (s *service) Register(ss *grpc.Server) {
 }
 
 func parseXSTypes(xsTypes map[string]uint32) ([]*provider.ResourceChecksumPriority, error) {
-	var types = make([]*provider.ResourceChecksumPriority, 0, len(xsTypes))
+	types := make([]*provider.ResourceChecksumPriority, 0, len(xsTypes))
 	for xs, prio := range xsTypes {
 		t := PKG2GRPCXS(xs)
 		if t == provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID {
@@ -784,7 +784,7 @@ func spaceFromPath(path string, lvl int) string {
 }
 
 func (s *service) addSpaceInfo(ri *provider.ResourceInfo) {
-	space := spaces.PathToSpaceId(ri.Path) //spaceFromPath(ri.Path, s.conf.SpaceLevel)
+	space := spaces.PathToSpaceId(ri.Path) // spaceFromPath(ri.Path, s.conf.SpaceLevel)
 	ri.Id.SpaceId = space
 }
 
@@ -1014,7 +1014,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		}, nil
 	}
 
-	var infos = make([]*provider.ResourceInfo, 0, len(mds))
+	infos := make([]*provider.ResourceInfo, 0, len(mds))
 	prefixMountpoint := utils.IsAbsoluteReference(req.Ref)
 	for _, md := range mds {
 		if err := s.wrap(ctx, md, prefixMountpoint); err != nil {
@@ -1024,6 +1024,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		}
 		s.fixPermissions(md)
 		s.stripNonUtf8Metadata(ctx, md)
+		s.addSpaceInfo(md)
 		infos = append(infos, md)
 	}
 	res := &provider.ListContainerResponse{
