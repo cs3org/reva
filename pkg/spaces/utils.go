@@ -62,7 +62,7 @@ func DecodeSpaceID(spaceId string) (string, error) {
 // The resource ID is expected to be in the form of <storage_id>$<base32(<path>)!<item_id>.
 func DecodeResourceID(raw string) (storageID, path, itemID string, ok bool) {
 	// The input is expected to be in the form of <storage_id>$base32(<path>)!<item_id>
-	s := strings.SplitN(raw, "+", 2)
+	s := strings.SplitN(raw, "!", 2)
 	if len(s) != 2 {
 		return "", "", "", false
 	}
@@ -159,11 +159,11 @@ func RelativePathToSpaceID(info *provider.ResourceInfo) string {
 }
 
 func ResourceIdToString(id *provider.ResourceId) string {
-	return fmt.Sprintf("%s+%s", id.StorageId, id.OpaqueId)
+	return fmt.Sprintf("%s!%s", id.StorageId, id.OpaqueId)
 }
 
 func ResourceIdFromString(s string) (*provider.ResourceId, error) {
-	parts := strings.Split(s, "+")
+	parts := strings.Split(s, "!")
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("string does not have right format: should be storageid!opaqueid, got %s", s)
 	}

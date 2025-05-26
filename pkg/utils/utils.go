@@ -327,9 +327,9 @@ func UserTypeToString(accountType userpb.UserType) string {
 // Note: This would in effect change the storage registry into a storage space registry.
 func SplitStorageSpaceID(ssid string) (storageid, nodeid string, err error) {
 	// query that specific storage provider
-	parts := strings.SplitN(ssid, "+", 2)
+	parts := strings.SplitN(ssid, "!", 2)
 	if len(parts) != 2 {
-		return "", "", fmt.Errorf("storage space id must be separated by '+'")
+		return "", "", fmt.Errorf("storage space id must be separated by '!'")
 	}
 	return parts[0], parts[1], nil
 }

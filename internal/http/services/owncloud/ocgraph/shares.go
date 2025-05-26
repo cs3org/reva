@@ -370,7 +370,7 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.Rece
 		ParentReference: &libregraph.ItemReference{
 			DriveId:   libregraph.PtrString(fmt.Sprintf("%s$%s", ShareJailID, ShareJailID)),
 			DriveType: libregraph.PtrString("virtual"),
-			Id:        libregraph.PtrString(fmt.Sprintf("%s$%s-%s", ShareJailID, ShareJailID, ShareJailID)),
+			Id:        libregraph.PtrString(fmt.Sprintf("%s$%s!%s", ShareJailID, ShareJailID, ShareJailID)),
 		},
 		RemoteItem: &libregraph.RemoteItem{
 			CreatedBy: &libregraph.IdentitySet{

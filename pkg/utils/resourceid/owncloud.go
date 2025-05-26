@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	idDelimiter string = "+"
+	idDelimiter string = "!"
 )
 
 // OwnCloudResourceIDUnwrap returns the wrapped resource id
