@@ -1787,6 +1787,13 @@ func (fs *Eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListS
 	}
 	wrappedPath := fs.wrap(ctx, ri.Path)
 	spaceId := spaces.EncodeStorageSpaceID(ri.Id.StorageId, wrappedPath)
+	for _, f := range filter {
+		if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE {
+			if f.GetSpaceType() == "project" {
+				return []*provider.StorageSpace{}, nil
+			}
+		}
+	}
 
 	return []*provider.StorageSpace{
 		{
