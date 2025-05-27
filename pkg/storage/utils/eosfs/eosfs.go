@@ -1280,7 +1280,7 @@ func (fs *Eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 		// Remove the hidden folders in the topmost directory
 		if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo); err == nil &&
 			finfo.Path != "/" && !strings.HasPrefix(finfo.Path, "/.") {
-			setPathRelativeToBase(p, finfo)
+			setPathRelativeToBase(ctx, p, finfo)
 			finfos = append(finfos, finfo)
 		}
 	}
@@ -1290,10 +1290,17 @@ func (fs *Eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 	return finfos, nil
 }
 
-func setPathRelativeToBase(basePath string, rinfo *provider.ResourceInfo) {
+func setPathRelativeToBase(ctx context.Context, basePath string, rinfo *provider.ResourceInfo) {
+	log := appctx.GetLogger(ctx)
+	if strings.HasPrefix(basePath, "./") {
+		basePath = basePath[1:]
+	}
 	res, err := filepath.Rel(basePath, rinfo.Path)
 	if err == nil {
+		log.Info().Any("rinfo", rinfo).Str("base_path", basePath).Msg("func=setPathRelativeToBase()")
 		rinfo.Path = res
+	} else {
+		log.Error().Err(err).Any("rinfo", rinfo).Str("base_path", basePath).Msg("Failed to make " + rinfo.Path + " relative to " + basePath)
 	}
 }
 
