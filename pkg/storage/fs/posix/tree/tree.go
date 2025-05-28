@@ -549,12 +549,15 @@ func (t *Tree) WriteBlob(n *node.Node, source string) error {
 		currentPath = t.lookup.CurrentPath(n.SpaceID, n.ID)
 
 		defer func() {
-			_ = t.lookup.CopyMetadata(context.Background(), n, node.NewBaseNode(n.SpaceID, n.ID+node.CurrentIDDelimiter, t.lookup), func(attributeName string, value []byte) (newValue []byte, copy bool) {
-				return value, strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
-					attributeName == prefixes.TypeAttr ||
-					attributeName == prefixes.BlobIDAttr ||
-					attributeName == prefixes.BlobsizeAttr
-			}, false)
+			attrs := node.Attributes{}
+			attrs.SetInt64(prefixes.TypeAttr, int64(n.Type(context.Background())))
+			attrs.SetString(prefixes.BlobIDAttr, n.BlobID)
+			attrs.SetInt64(prefixes.BlobsizeAttr, n.Blobsize)
+
+			err := t.lookup.MetadataBackend().SetMultiple(context.Background(), node.NewBaseNode(n.SpaceID, n.ID+node.CurrentIDDelimiter, t.lookup), attrs, true)
+			if err != nil {
+				t.log.Error().Err(err).Str("spaceID", n.SpaceID).Str("id", n.ID).Msg("could not copy metadata to current revision")
+			}
 		}()
 	}
 
