@@ -169,7 +169,7 @@ func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libre
 				Path:                 libregraph.PtrString(spaces.RelativePathToSpaceID(rsi.ResourceInfo)),
 				// RootId must have the same token before ! as Id
 				// the second part for the time being is not used
-				RootId: libregraph.PtrString(fmt.Sprintf("%s!unused_root_id", spaces.EncodeSpaceID(rsi.ResourceInfo.Id.StorageId, rsi.ResourceInfo.Id.SpaceId))),
+				RootId: libregraph.PtrString(fmt.Sprintf("%s!unused_root_id", spaces.EncodeStorageSpaceID(rsi.ResourceInfo.Id.StorageId, rsi.ResourceInfo.Id.SpaceId))),
 				Size:   libregraph.PtrInt64(int64(rsi.ResourceInfo.Size)),
 			},
 		},
@@ -403,7 +403,7 @@ func (s *svc) getRootDrivePermissions(w http.ResponseWriter, r *http.Request) {
 
 	spaceID := chi.URLParam(r, "space-id")
 	spaceID, _ = url.QueryUnescape(spaceID)
-	_, path, ok := spaces.DecodeSpaceID(spaceID)
+	_, path, ok := spaces.DecodeStorageSpaceID(spaceID)
 	if !ok {
 		log.Error().Str("space-id", spaceID).Msg("space id cannot be decoded")
 		w.WriteHeader(http.StatusBadRequest)

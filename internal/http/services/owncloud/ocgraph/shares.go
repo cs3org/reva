@@ -323,7 +323,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 
 func encodeSpaceIDForShareJail(res *provider.ResourceInfo) string {
 	return spaces.EncodeResourceID(res.Id)
-	//return spaces.EncodeSpaceID(res.Id.StorageId, res.Path)
+	//return spaces.EncodeStorageSpaceID(res.Id.StorageId, res.Path)
 }
 
 func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.ReceivedShareResourceInfo) (*libregraph.DriveItem, error) {
@@ -560,7 +560,7 @@ func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceIn
 		LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(info.Mtime)),
 		Name:                 libregraph.PtrString(info.Name),
 		ParentReference: &libregraph.ItemReference{
-			DriveId: libregraph.PtrString(spaces.EncodeSpaceID(info.Id.StorageId, info.Id.SpaceId)),
+			DriveId: libregraph.PtrString(spaces.EncodeStorageSpaceID(info.Id.StorageId, info.Id.SpaceId)),
 			// DriveType: libregraph.PtrString(info.Space.SpaceType),
 			Id:   libregraph.PtrString(spaces.EncodeResourceID(info.ParentId)),
 			Name: libregraph.PtrString(path.Base(parentRelativePath)),

@@ -516,7 +516,7 @@ func spaceHref(ctx context.Context, baseURI string, md *provider.ResourceInfo) (
 		return "", errors.New("space path expected to be in the context")
 	}
 	if spacePath != md.Id.SpaceId {
-		_, spacePath, _ = spaces.DecodeSpaceID(fmt.Sprintf("%s$%s", md.Id.StorageId, md.Id.SpaceId))
+		_, spacePath, _ = spaces.DecodeStorageSpaceID(fmt.Sprintf("%s$%s", md.Id.StorageId, md.Id.SpaceId))
 	}
 	relativePath := strings.TrimPrefix(md.Path, spacePath)
 	spaceID, ok := md.Id.SpaceId, true

@@ -84,7 +84,7 @@ func TestListProjects(t *testing.T) {
 			expected: []*provider.StorageSpace{
 				{
 					Id: &provider.StorageSpaceId{
-						OpaqueId: spaces.EncodeSpaceID("storage_id", "/path/to/project"),
+						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", "/path/to/project"),
 					},
 					Owner: &userpb.User{
 						Id: &userpb.UserId{
@@ -117,7 +117,7 @@ func TestListProjects(t *testing.T) {
 			expected: []*provider.StorageSpace{
 				{
 					Id: &provider.StorageSpaceId{
-						OpaqueId: spaces.EncodeSpaceID("storage_id", "/path/to/project"),
+						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", "/path/to/project"),
 					},
 					Owner: &userpb.User{
 						Id: &userpb.UserId{
@@ -150,7 +150,7 @@ func TestListProjects(t *testing.T) {
 			expected: []*provider.StorageSpace{
 				{
 					Id: &provider.StorageSpaceId{
-						OpaqueId: spaces.EncodeSpaceID("storage_id", "/path/to/project"),
+						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", "/path/to/project"),
 					},
 					Owner: &userpb.User{
 						Id: &userpb.UserId{
@@ -183,7 +183,7 @@ func TestListProjects(t *testing.T) {
 			expected: []*provider.StorageSpace{
 				{
 					Id: &provider.StorageSpaceId{
-						OpaqueId: spaces.EncodeSpaceID("storage_id", "/path/to/project"),
+						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", "/path/to/project"),
 					},
 					Owner: &userpb.User{
 						Id: &userpb.UserId{
@@ -216,7 +216,7 @@ func TestListProjects(t *testing.T) {
 			expected: []*provider.StorageSpace{
 				{
 					Id: &provider.StorageSpaceId{
-						OpaqueId: spaces.EncodeSpaceID("storage_id", "/path/to/project"),
+						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", "/path/to/project"),
 					},
 					Owner: &userpb.User{
 						Id: &userpb.UserId{

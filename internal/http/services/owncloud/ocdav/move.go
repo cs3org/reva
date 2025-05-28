@@ -44,7 +44,7 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 	}
 
 	head, rel := router.ShiftPath(dstPath)
-	if _, base, ok := spaces.DecodeSpaceID(head); ok {
+	if _, base, ok := spaces.DecodeStorageSpaceID(head); ok {
 		dstPath = path.Join(base, rel)
 	}
 
