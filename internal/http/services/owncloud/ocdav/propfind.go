@@ -508,8 +508,9 @@ func (s *svc) newPropRaw(key, val string) *propertyXML {
 	}
 }
 
+// Compute the URL of the resource in the spaces format:
+// baseURI + /<space_id>/relative/path/to/space
 func spaceHref(ctx context.Context, baseURI string, md *provider.ResourceInfo) (string, error) {
-	// in the context of spaces, the final URL will be baseURI + /<space_id>/relative/path/to/space
 	spacePath, ok := ctx.Value(ctxSpacePath).(string)
 	if !ok {
 		return "", errors.New("space path expected to be in the context")
@@ -758,11 +759,10 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					if md.Id == nil {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
 					} else if spacesEnabled {
+						// If our client uses spaces, we try to use the spaces-encoded file id (storage$base32(spacePath)!inode)
 						fileId, err := spaces.EncodeResourceInfo(md)
-						log.Info().Any("md", md).Str("fileid", fileId).Msg("FindMe - encode file id")
 						if err != nil {
 							log.Error().Err(err).Any("md", md).Msg("Failed to encode file id")
-							// propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", spaces.EncodeResourceID(md.Id)))
 						} else {
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", fileId))
@@ -771,13 +771,6 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", spaces.ResourceIdToString(md.Id)))
 					}
 
-					// if md.Id != nil {
-					// 	if spacesEnabled {
-					// 		propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", spaces.EncodeResourceID(md.Id)))
-					// 	} else {
-					// 	}
-					// } else {
-					// }
 				case "id": // desktop client only
 					if md.Id != nil {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:id", spaces.EncodeResourceID(md.Id)))
