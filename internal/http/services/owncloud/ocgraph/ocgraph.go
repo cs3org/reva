@@ -23,6 +23,7 @@ package ocgraph
 import (
 	"context"
 	"net/http"
+	"path"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -40,12 +41,21 @@ func init() {
 
 type config struct {
 	GatewaySvc string `mapstructure:"gatewaysvc"  validate:"required"`
-	WebDavBase string `mapstructure:"webdav_base" validate:"required"`
-	WebBase    string `mapstructure:"web_base"    validate:"required"`
+	WebDavBase string `mapstructure:"webdav_base"`
+	WebBase    string `mapstructure:"web_base"`
+	BaseURL    string `mapstructure:"base_url"    validate:"required"`
 }
 
 func (c *config) ApplyDefaults() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+
+	if c.WebBase == "" {
+		c.WebBase = path.Join(c.BaseURL, "/files/spaces")
+	}
+
+	if c.WebDavBase == "" {
+		c.WebDavBase = path.Join(c.BaseURL, "/remote.php/dav/spaces")
+	}
 }
 
 // ListResponse is used for proper marshalling of Graph list responses

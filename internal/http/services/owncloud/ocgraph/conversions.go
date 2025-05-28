@@ -13,6 +13,7 @@ import (
 
 func (s *svc) libreGraphPermissionFromCS3PublicShare(createdLink *link.PublicShare) *libregraph.Permission {
 	lt, actions := SharingLinkTypeFromCS3Permissions(createdLink.GetPermissions())
+	baseURI := s.c.BaseURL
 
 	perm := libregraph.NewPermission()
 	perm.Id = libregraph.PtrString(createdLink.GetId().GetOpaqueId())
@@ -24,9 +25,7 @@ func (s *svc) libreGraphPermissionFromCS3PublicShare(createdLink *link.PublicSha
 	}
 	perm.LibreGraphPermissionsActions = actions
 
-	// TODO: this is wrong; results in https:/cbox-ocisdev-diogo.cern.ch/files/spaces/s/1Yp1g8i6MLQkUmz
-	// instead of https:/cbox-ocisdev-diogo.cern.ch/s/1Yp1g8i6MLQkUmz
-	webURL := path.Join(s.c.WebBase, "s", createdLink.GetToken())
+	webURL := path.Join(baseURI, "s", createdLink.GetToken())
 	perm.Link.SetWebUrl(webURL)
 
 	// set expiration date
