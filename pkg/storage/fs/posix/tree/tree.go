@@ -552,7 +552,7 @@ func (t *Tree) WriteBlob(n *node.Node, source string) error {
 			attrs := node.Attributes{}
 			attrs.SetInt64(prefixes.TypeAttr, int64(n.Type(context.Background())))
 			attrs.SetString(prefixes.BlobIDAttr, n.BlobID)
-			attrs.SetInt64(prefixes.BlobsizeAttr, int64(n.Blobsize))
+			attrs.SetInt64(prefixes.BlobsizeAttr, n.Blobsize)
 
 			err := t.lookup.MetadataBackend().SetMultiple(context.Background(), node.NewBaseNode(n.SpaceID, n.ID+node.CurrentIDDelimiter, t.lookup), attrs, true)
 			if err != nil {
