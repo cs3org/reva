@@ -555,7 +555,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 
 	spacesEnabled := s.c.SpacesEnabled
 	if !spacesEnabled {
-		sublog.Warn().Msg("Spaces is not enabled for request to " + md.Path + "(" + md.Id.StorageId + ": " + md.Id.OpaqueId + ")")
+		sublog.Warn().Msg("Spaces not enabled for request to " + md.Path + "(" + md.Id.StorageId + ": " + md.Id.OpaqueId + ")")
 	}
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
