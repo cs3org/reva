@@ -4,6 +4,9 @@ dir: "{{.InterfaceDir}}/mocks"
 mockname: "{{.InterfaceName}}"
 outpkg: "mocks"
 packages:
+    github.com/opencloud-eu/reva/v2/pkg/events:
+        interfaces:
+            Stream:
     github.com/opencloud-eu/reva/v2/pkg/publicshare/manager/owncloudsql:
         interfaces:
             UserConverter:
