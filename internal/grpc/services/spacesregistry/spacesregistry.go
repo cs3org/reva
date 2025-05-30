@@ -288,7 +288,7 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 
 	return &provider.StorageSpace{
 		Id: &provider.StorageSpaceId{
-			OpaqueId: spaces.EncodeSpaceID(stat.Info.Id.StorageId, home),
+			OpaqueId: spaces.EncodeStorageSpaceID(stat.Info.Id.StorageId, home),
 		},
 		Owner:     user,
 		Name:      user.Username,

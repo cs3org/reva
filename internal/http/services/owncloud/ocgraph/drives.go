@@ -73,7 +73,7 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		filters, err := generateCs3Filters(odataReq)
+		filters, err := generateCs3StorageSpaceFilters(odataReq)
 		if err != nil {
 			log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("could not get drives: error parsing filters")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -169,14 +169,14 @@ func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libre
 				Path:                 libregraph.PtrString(spaces.RelativePathToSpaceID(rsi.ResourceInfo)),
 				// RootId must have the same token before ! as Id
 				// the second part for the time being is not used
-				RootId: libregraph.PtrString(fmt.Sprintf("%s!unused_root_id", spaces.EncodeSpaceID(rsi.ResourceInfo.Id.StorageId, rsi.ResourceInfo.Id.SpaceId))),
+				RootId: libregraph.PtrString(fmt.Sprintf("%s!unused_root_id", spaces.EncodeStorageSpaceID(rsi.ResourceInfo.Id.StorageId, rsi.ResourceInfo.Id.SpaceId))),
 				Size:   libregraph.PtrInt64(int64(rsi.ResourceInfo.Size)),
 			},
 		},
 	}
 }
 
-func generateCs3Filters(request *godata.GoDataRequest) ([]*providerpb.ListStorageSpacesRequest_Filter, error) {
+func generateCs3StorageSpaceFilters(request *godata.GoDataRequest) ([]*providerpb.ListStorageSpacesRequest_Filter, error) {
 	var filters spaces.ListStorageSpaceFilter
 	if request.Query.Filter != nil {
 		if request.Query.Filter.Tree.Token.Value == "eq" {
@@ -403,7 +403,7 @@ func (s *svc) getRootDrivePermissions(w http.ResponseWriter, r *http.Request) {
 
 	spaceID := chi.URLParam(r, "space-id")
 	spaceID, _ = url.QueryUnescape(spaceID)
-	_, path, ok := spaces.DecodeSpaceID(spaceID)
+	_, path, ok := spaces.DecodeStorageSpaceID(spaceID)
 	if !ok {
 		log.Error().Str("space-id", spaceID).Msg("space id cannot be decoded")
 		w.WriteHeader(http.StatusBadRequest)
