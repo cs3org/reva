@@ -137,9 +137,22 @@ func PathToSpaceID(path string) string {
 }
 
 // Returns how many parts of the path belong to the space identifier
-// - For EOS, this is 5 ((1)/(2)eos/(3)user/(4)u/(5)user)
+// - For EOS user/project, this is 5 ((1)/(2)eos/(3)user/(4)u/(5)user)
 func spacesLevel(path string) int {
-	return 5
+
+	if strings.HasPrefix(path, "/eos/user") {
+		return 5
+	} else if strings.HasPrefix(path, "/eos/project") {
+		return 5
+	} else if strings.HasPrefix(path, "/eos/experiment") {
+		return 4
+	} else if strings.HasPrefix(path, "/eos") {
+		// e.g. /eos/web
+		return 3
+	} else {
+		// winspaces
+		return 4
+	}
 }
 
 func RelativePathToSpaceID(info *provider.ResourceInfo) string {
