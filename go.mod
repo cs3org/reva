@@ -57,7 +57,7 @@ require (
 	github.com/minio/minio-go/v7 v7.0.92
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/nats-io/nats-server/v2 v2.11.3
-	github.com/nats-io/nats.go v1.41.2
+	github.com/nats-io/nats.go v1.42.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.37.0
