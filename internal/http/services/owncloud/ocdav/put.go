@@ -121,7 +121,7 @@ func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
 }
 
 func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
-	_, spacesEnabled := ctx.Value(ctxSpaceID).(string)
+	spacesEnabled := s.c.SpacesEnabled
 
 	if !checkPreconditions(w, r, log) {
 		// checkPreconditions handles error returns
@@ -346,7 +346,8 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	w.Header().Add(HeaderContentType, newInfo.MimeType)
 	w.Header().Set(HeaderETag, newInfo.Etag)
 	if spacesEnabled {
-		w.Header().Set(HeaderOCFileID, spaces.EncodeResourceID(newInfo.Id))
+		newInfoID, _ := spaces.EncodeResourceInfo(newInfo)
+		w.Header().Set(HeaderOCFileID, newInfoID)
 	} else {
 		w.Header().Set(HeaderOCFileID, spaces.ResourceIdToString(newInfo.Id))
 	}

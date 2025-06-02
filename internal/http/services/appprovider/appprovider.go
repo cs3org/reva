@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"path"
 	"path/filepath"
 
@@ -403,11 +404,18 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	appName := r.Form.Get("app_name")
+	appName, err = url.QueryUnescape(appName)
+	if err != nil {
+		writeError(w, r, appErrorServerError,
+			"Error decoding app_name", err)
+		return
+	}
 
 	openReq := gateway.OpenInAppRequest{
 		Ref:      &fileRef,
 		ViewMode: viewMode,
-		App:      r.Form.Get("app_name"),
+		App:      appName,
 		Opaque:   &typespb.Opaque{Map: opaqueMap},
 	}
 	openRes, err := client.OpenInApp(ctx, &openReq)

@@ -51,6 +51,7 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -507,18 +508,31 @@ func (s *svc) newPropRaw(key, val string) *propertyXML {
 	}
 }
 
-func spaceHref(ctx context.Context, baseURI, fullPath string) (string, error) {
-	// in the context of spaces, the final URL will be baseURI + /<space_id>/relative/path/to/space
+// Compute the URL of the resource in the spaces format:
+// baseURI + /<space_id>/relative/path/to/space
+// The space_id MUST be set on `md`.
+// The path of the space root MAY be set in the context, in the `ctxSpacePath` key, but if it
+// is not set, it is calculated from `md.Id.SpaceId`
+// Note that the path on `md.Path` must also be set, and must be a path relative to the space root.
+func spaceHref(ctx context.Context, baseURI string, md *provider.ResourceInfo) (string, error) {
+	if md.Id == nil || md.Id.SpaceId == "" {
+		return "", errors.New("Space ID must be set to calculate Href")
+	}
+
 	spacePath, ok := ctx.Value(ctxSpacePath).(string)
 	if !ok {
-		return "", errors.New("space path expected to be in the context")
+		// If no space path is set in the context, we calculate it
+		_, spacePath, ok = spaces.DecodeStorageSpaceID(fmt.Sprintf("%s$%s", md.Id.StorageId, md.Id.SpaceId))
+		if !ok {
+			return "", errors.New("Failed to decode space ID")
+		}
 	}
-	relativePath := strings.TrimPrefix(fullPath, spacePath)
-	spaceID, ok := ctx.Value(ctxSpaceID).(string)
-	if !ok {
-		return "", errors.New("space id expected to be in the context")
+
+	relativePath, err := filepath.Rel(spacePath, md.Path)
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to calculate path relative to space root: %v", spacePath)
 	}
-	return path.Join(baseURI, spaceID, relativePath), nil
+	return path.Join(baseURI, md.Id.SpaceId, relativePath), nil
 }
 
 func appendSlash(path string) string {
@@ -548,14 +562,17 @@ func (s *svc) isOpenable(path string) bool {
 func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string, usershares, linkshares map[string]struct{}) (*responseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
 
-	_, spacesEnabled := ctx.Value(ctxSpaceID).(string)
+	spacesEnabled := s.c.SpacesEnabled
+	if !spacesEnabled {
+		sublog.Warn().Msg("Spaces not enabled for request to " + md.Path + "(" + md.Id.StorageId + ": " + md.Id.OpaqueId + ")")
+	}
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 	var ref string
 	var err error
 	if spacesEnabled {
 		// spaces are enabled; for now we do not support the OCM case with spaces
-		ref, err = spaceHref(ctx, baseURI, md.Path)
+		ref, err = spaceHref(ctx, baseURI, md)
 		if err != nil {
 			pxml := propstatXML{
 				Status: "HTTP/1.1 400 Bad Request",
@@ -748,15 +765,21 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				// TODO(jfd): maybe phoenix and the other clients can just use this id as an opaque string?
 				// I tested the desktop client and phoenix to annotate which properties are requestted, see below cases
 				case "fileid": // phoenix only
-					if md.Id != nil {
-						if spacesEnabled {
+					if md.Id == nil {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
+					} else if spacesEnabled {
+						// If our client uses spaces, we try to use the spaces-encoded file id (storage$base32(spacePath)!inode)
+						fileId, err := spaces.EncodeResourceInfo(md)
+						if err != nil {
+							log.Error().Err(err).Any("md", md).Msg("Failed to encode file id")
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", spaces.EncodeResourceID(md.Id)))
 						} else {
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", spaces.ResourceIdToString(md.Id)))
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", fileId))
 						}
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", spaces.ResourceIdToString(md.Id)))
 					}
+
 				case "id": // desktop client only
 					if md.Id != nil {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:id", spaces.EncodeResourceID(md.Id)))

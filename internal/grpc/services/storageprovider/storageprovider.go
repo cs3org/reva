@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/utils"
@@ -69,7 +70,6 @@ type config struct {
 	AvailableXS                     map[string]uint32                 `docs:"nil;List of available checksums."                                                                             mapstructure:"available_checksums"`
 	CustomMimeTypesJSON             string                            `docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types." mapstructure:"custom_mime_types_json"`
 	MinimunAllowedPathLevelForShare int                               `mapstructure:"minimum_allowed_path_level_for_share"`
-	SpaceLevel                      int                               `mapstructure:"space_level;The number of path components that identify the path of a Space out of an absolute path"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -92,10 +92,6 @@ func (c *config) ApplyDefaults() {
 		} else {
 			c.DataServerURL = fmt.Sprintf("http://%s:19001/data", host)
 		}
-	}
-
-	if c.SpaceLevel == 0 {
-		c.SpaceLevel = 4
 	}
 
 	// set sane defaults
@@ -128,7 +124,7 @@ func (s *service) Register(ss *grpc.Server) {
 }
 
 func parseXSTypes(xsTypes map[string]uint32) ([]*provider.ResourceChecksumPriority, error) {
-	var types = make([]*provider.ResourceChecksumPriority, 0, len(xsTypes))
+	types := make([]*provider.ResourceChecksumPriority, 0, len(xsTypes))
 	for xs, prio := range xsTypes {
 		t := PKG2GRPCXS(xs)
 		if t == provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID {
@@ -776,19 +772,8 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	return res, nil
 }
 
-func spaceFromPath(path string, lvl int) string {
-	path = strings.TrimPrefix(path, "/")
-	s := strings.SplitN(path, "/", lvl+1)
-	if len(s) < lvl {
-		// TODO: outside space. what to do??
-		return ""
-	}
-
-	return "/" + strings.Join(s[:lvl], "/")
-}
-
 func (s *service) addSpaceInfo(ri *provider.ResourceInfo) {
-	space := spaceFromPath(ri.Path, s.conf.SpaceLevel)
+	space := spaces.PathToSpaceID(ri.Path)
 	ri.Id.SpaceId = space
 }
 
@@ -1022,7 +1007,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		}, nil
 	}
 
-	var infos = make([]*provider.ResourceInfo, 0, len(mds))
+	infos := make([]*provider.ResourceInfo, 0, len(mds))
 	prefixMountpoint := utils.IsAbsoluteReference(req.Ref)
 	for _, md := range mds {
 		if err := s.wrap(ctx, md, prefixMountpoint); err != nil {
@@ -1032,6 +1017,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		}
 		s.fixPermissions(md)
 		s.stripNonUtf8Metadata(ctx, md)
+		s.addSpaceInfo(md)
 		infos = append(infos, md)
 	}
 	res := &provider.ListContainerResponse{

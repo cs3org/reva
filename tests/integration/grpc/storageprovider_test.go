@@ -22,7 +22,7 @@ import (
 	"context"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storagep "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/scope"
@@ -99,19 +99,19 @@ var _ = Describe("storage providers", func() {
 		It("creates a home directory", func() {
 			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+			Expect(statRes.Status.Code).To(Equal(rpc.Code_CODE_NOT_FOUND))
 
 			res, err := serviceClient.CreateHome(ctx, &storagep.CreateHomeRequest{})
-			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
 			Expect(err).ToNot(HaveOccurred())
 
 			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(statRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
 			ghRes, err := serviceClient.GetHome(ctx, &storagep.GetHomeRequest{})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(ghRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(ghRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 		})
 	}
 
@@ -121,15 +121,15 @@ var _ = Describe("storage providers", func() {
 
 			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: newRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+			Expect(statRes.Status.Code).To(Equal(rpc.Code_CODE_NOT_FOUND))
 
 			res, err := serviceClient.CreateContainer(ctx, &storagep.CreateContainerRequest{Ref: newRef})
-			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
 			Expect(err).ToNot(HaveOccurred())
 
 			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: newRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(statRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 		})
 	}
 
@@ -137,7 +137,7 @@ var _ = Describe("storage providers", func() {
 		It("lists a directory", func() {
 			listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(listRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 			Expect(len(listRes.Infos)).To(Equal(1))
 
 			info := listRes.Infos[0]
@@ -151,7 +151,7 @@ var _ = Describe("storage providers", func() {
 	// 	It("lists file versions", func() {
 	// 		listRes, err := serviceClient.ListFileVersions(ctx, &storagep.ListFileVersionsRequest{Ref: versionedFileRef})
 	// 		Expect(err).ToNot(HaveOccurred())
-	// 		Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+	// 		Expect(listRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 	// 		Expect(len(listRes.Versions)).To(Equal(1))
 	// 		Expect(listRes.Versions[0].Size).To(Equal(uint64(1)))
 	// 	})
@@ -159,7 +159,7 @@ var _ = Describe("storage providers", func() {
 	// 	It("restores a file version", func() {
 	// 		statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: versionedFileRef})
 	// 		Expect(err).ToNot(HaveOccurred())
-	// 		Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+	// 		Expect(statRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 	// 		Expect(statRes.Info.Size).To(Equal(uint64(2))) // second version contains 2 bytes
 
 	// 		listRes, err := serviceClient.ListFileVersions(ctx, &storagep.ListFileVersionsRequest{Ref: versionedFileRef})
@@ -170,11 +170,11 @@ var _ = Describe("storage providers", func() {
 	// 				Key: listRes.Versions[0].Key,
 	// 			})
 	// 		Expect(err).ToNot(HaveOccurred())
-	// 		Expect(restoreRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+	// 		Expect(restoreRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
 	// 		statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: versionedFileRef})
 	// 		Expect(err).ToNot(HaveOccurred())
-	// 		Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+	// 		Expect(statRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 	// 		Expect(statRes.Info.Size).To(Equal(uint64(1))) // initial version contains 1 byte
 	// 	})
 	// }
@@ -183,15 +183,15 @@ var _ = Describe("storage providers", func() {
 		It("deletes a directory", func() {
 			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(statRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
 			res, err := serviceClient.Delete(ctx, &storagep.DeleteRequest{Ref: subdirRef})
-			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
 			Expect(err).ToNot(HaveOccurred())
 
 			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+			Expect(statRes.Status.Code).To(Equal(rpc.Code_CODE_NOT_FOUND))
 		})
 	}
 
@@ -199,20 +199,20 @@ var _ = Describe("storage providers", func() {
 		It("moves a directory", func() {
 			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(statRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
 			targetRef := &storagep.Reference{Path: "/new_subdir"}
 			res, err := serviceClient.Move(ctx, &storagep.MoveRequest{Source: subdirRef, Destination: targetRef})
-			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
 			Expect(err).ToNot(HaveOccurred())
 
 			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+			Expect(statRes.Status.Code).To(Equal(rpc.Code_CODE_NOT_FOUND))
 
 			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: targetRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(statRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 		})
 	}
 
@@ -220,9 +220,9 @@ var _ = Describe("storage providers", func() {
 		It("gets the path to an ID", func() {
 			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
 			Expect(err).ToNot(HaveOccurred())
-
 			res, err := serviceClient.GetPath(ctx, &storagep.GetPathRequest{ResourceId: statRes.Info.Id})
 			Expect(err).ToNot(HaveOccurred())
+			Expect(res.Status.GetCode()).To(Equal(rpc.Code_CODE_OK))
 			Expect(res.Path).To(Equal(subdirPath))
 		})
 	}
@@ -252,7 +252,7 @@ var _ = Describe("storage providers", func() {
 			}
 			addRes, err := serviceClient.AddGrant(ctx, &storagep.AddGrantRequest{Ref: subdirRef, Grant: grant})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(addRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(addRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
 			By("listing the new grant")
 			listRes, err = serviceClient.ListGrants(ctx, &storagep.ListGrantsRequest{Ref: subdirRef})
@@ -267,7 +267,7 @@ var _ = Describe("storage providers", func() {
 			grant.Permissions.Delete = true
 			updateRes, err := serviceClient.UpdateGrant(ctx, &storagep.UpdateGrantRequest{Ref: subdirRef, Grant: grant})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(updateRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(updateRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
 			By("listing the update grant")
 			listRes, err = serviceClient.ListGrants(ctx, &storagep.ListGrantsRequest{Ref: subdirRef})
@@ -281,7 +281,7 @@ var _ = Describe("storage providers", func() {
 			By("deleting a grant")
 			delRes, err := serviceClient.RemoveGrant(ctx, &storagep.RemoveGrantRequest{Ref: subdirRef, Grant: readGrant})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(delRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(delRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
 			By("the grant is gone")
 			listRes, err = serviceClient.ListGrants(ctx, &storagep.ListGrantsRequest{Ref: subdirRef})
@@ -294,7 +294,7 @@ var _ = Describe("storage providers", func() {
 		It("returns upload URLs for simple and tus", func() {
 			res, err := serviceClient.InitiateFileUpload(ctx, &storagep.InitiateFileUploadRequest{Ref: fileRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
 			Expect(len(res.Protocols)).To(Equal(2))
 		})
 	}
@@ -303,7 +303,7 @@ var _ = Describe("storage providers", func() {
 		It("returns 'simple' download URLs", func() {
 			res, err := serviceClient.InitiateFileDownload(ctx, &storagep.InitiateFileDownloadRequest{Ref: fileRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
 			Expect(len(res.Protocols)).To(Equal(1))
 		})
 	}
@@ -313,12 +313,12 @@ var _ = Describe("storage providers", func() {
 			By("deleting an item")
 			res, err := serviceClient.Delete(ctx, &storagep.DeleteRequest{Ref: subdirRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
 			By("listing the recycle items")
 			listRes, err := serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(listRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
 			Expect(len(listRes.RecycleItems)).To(Equal(1))
 			item := listRes.RecycleItems[0]
@@ -327,7 +327,7 @@ var _ = Describe("storage providers", func() {
 			By("restoring a recycle item")
 			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+			Expect(statRes.Status.Code).To(Equal(rpc.Code_CODE_NOT_FOUND))
 
 			restoreRes, err := serviceClient.RestoreRecycleItem(ctx,
 				&storagep.RestoreRecycleItemRequest{
@@ -336,11 +336,11 @@ var _ = Describe("storage providers", func() {
 				},
 			)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(restoreRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(restoreRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
 			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(statRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 		})
 
 		It("restores resources to a different location", func() {
@@ -348,12 +348,12 @@ var _ = Describe("storage providers", func() {
 			By("deleting an item")
 			res, err := serviceClient.Delete(ctx, &storagep.DeleteRequest{Ref: subdirRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
 			By("listing the recycle items")
 			listRes, err := serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(listRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
 			Expect(len(listRes.RecycleItems)).To(Equal(1))
 			item := listRes.RecycleItems[0]
@@ -362,7 +362,7 @@ var _ = Describe("storage providers", func() {
 			By("restoring the item to a different location")
 			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: restoreRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+			Expect(statRes.Status.Code).To(Equal(rpc.Code_CODE_NOT_FOUND))
 
 			restoreRes, err := serviceClient.RestoreRecycleItem(ctx,
 				&storagep.RestoreRecycleItemRequest{
@@ -372,33 +372,33 @@ var _ = Describe("storage providers", func() {
 				},
 			)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(restoreRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(restoreRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
 			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: restoreRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(statRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 		})
 
 		It("purges recycle items resources", func() {
 			By("deleting an item")
 			res, err := serviceClient.Delete(ctx, &storagep.DeleteRequest{Ref: subdirRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
 			By("listing recycle items")
 			listRes, err := serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(listRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 			Expect(len(listRes.RecycleItems)).To(Equal(1))
 
 			By("purging a recycle item")
 			purgeRes, err := serviceClient.PurgeRecycle(ctx, &storagep.PurgeRecycleRequest{Ref: subdirRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(purgeRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(purgeRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
 			listRes, err = serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(listRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 			Expect(len(listRes.RecycleItems)).To(Equal(0))
 		})
 	}
@@ -407,7 +407,7 @@ var _ = Describe("storage providers", func() {
 		It("creates references", func() {
 			listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: sharesRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+			Expect(listRes.Status.Code).To(Equal(rpc.Code_CODE_NOT_FOUND))
 			Expect(len(listRes.Infos)).To(Equal(0))
 
 			res, err := serviceClient.CreateReference(ctx, &storagep.CreateReferenceRequest{
@@ -415,11 +415,11 @@ var _ = Describe("storage providers", func() {
 				TargetUri: "scheme://target",
 			})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
 			listRes, err = serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: sharesRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(listRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 			Expect(len(listRes.Infos)).To(Equal(1))
 		})
 	}
@@ -429,7 +429,7 @@ var _ = Describe("storage providers", func() {
 			It("sets and unsets metadata", func() {
 				statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
 				Expect(err).ToNot(HaveOccurred())
-				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(statRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 				Expect(statRes.Info.ArbitraryMetadata.Metadata["foo"]).To(BeEmpty())
 
 				By("setting arbitrary metadata")
@@ -438,11 +438,11 @@ var _ = Describe("storage providers", func() {
 					ArbitraryMetadata: &storagep.ArbitraryMetadata{Metadata: map[string]string{"foo": "bar"}},
 				})
 				Expect(err).ToNot(HaveOccurred())
-				Expect(samRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(samRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
 				statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
 				Expect(err).ToNot(HaveOccurred())
-				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(statRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 				Expect(statRes.Info.ArbitraryMetadata.Metadata["foo"]).To(Equal("bar"))
 
 				By("unsetting arbitrary metadata")
@@ -451,11 +451,11 @@ var _ = Describe("storage providers", func() {
 					ArbitraryMetadataKeys: []string{"foo"},
 				})
 				Expect(err).ToNot(HaveOccurred())
-				Expect(uamRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(uamRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
 				statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
 				Expect(err).ToNot(HaveOccurred())
-				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(statRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 				Expect(statRes.Info.ArbitraryMetadata.Metadata["foo"]).To(BeEmpty())
 			})
 		}
@@ -474,11 +474,11 @@ var _ = Describe("storage providers", func() {
 			JustBeforeEach(func() {
 				res, err := serviceClient.CreateHome(ctx, &storagep.CreateHomeRequest{})
 				Expect(err).ToNot(HaveOccurred())
-				Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
 				subdirRes, err := serviceClient.CreateContainer(ctx, &storagep.CreateContainerRequest{Ref: subdirRef})
 				Expect(err).ToNot(HaveOccurred())
-				Expect(subdirRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(subdirRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 			})
 
 			assertCreateContainer()
