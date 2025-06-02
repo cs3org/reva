@@ -39,6 +39,7 @@ import (
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/utils"
@@ -147,7 +148,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Invalid role"))
 		return
 	}
-	perms := PermissionsToCS3ResourcePermissions(role.RolePermissions)
+	requestedPerms := PermissionsToCS3ResourcePermissions(role.RolePermissions)
 
 	// Then we also set an expiry, if needed
 	var exp *types.Timestamp
@@ -157,7 +158,11 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// TODO: validate that user is allowed to do this? Or handled by interceptor?
+	// Check that the user has share permissions
+	if !conversions.RoleFromResourcePermissions(statRes.Info.PermissionSet).OCSPermissions().Contain(conversions.PermissionShare) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
 
 	// We keep a list of users to who we have sent the
 	identitySet := &libregraph.SharePointIdentitySet{}
@@ -184,7 +189,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 				Grantee:    grantee,
 				Expiration: exp,
 				Permissions: &collaborationv1beta1.SharePermissions{
-					Permissions: perms,
+					Permissions: requestedPerms,
 				},
 			},
 		}
@@ -281,7 +286,11 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 		password = *linkRequest.Password
 	}
 
-	// TODO: validate that user is allowed to do this? Or handled by interceptor?
+	// Check that the user has share permissions
+	if !conversions.RoleFromResourcePermissions(statRes.Info.PermissionSet).OCSPermissions().Contain(conversions.PermissionShare) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
 
 	if linkRequest.Type == nil {
 		log.Error().Err(err).Interface("Body", r.Body).Msg("failed unmarshalling request body")
