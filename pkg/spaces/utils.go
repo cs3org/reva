@@ -136,22 +136,21 @@ func PathToSpaceID(path string) string {
 	return EncodeSpaceID(spacesPath)
 }
 
+// TODO: for now, we hardcoded this. But this will not be necessary anymore
+// once all storage providers decorate all the returned ResourceInfos with a space ID,
+// because we won't need to do path -> space_id anymore
+
 // Returns how many parts of the path belong to the space identifier
 // - For EOS user/project, this is 5 ((1)/(2)eos/(3)user/(4)u/(5)user)
 func spacesLevel(path string) int {
-
-	if strings.HasPrefix(path, "/eos/user") {
+	if strings.HasPrefix(path, "/eos/user") || strings.HasPrefix(path, "/eos/project") {
 		return 5
-	} else if strings.HasPrefix(path, "/eos/project") {
-		return 5
-	} else if strings.HasPrefix(path, "/eos/experiment") {
+	} else if strings.HasPrefix(path, "/winspaces") {
+		// e.g. /winspaces/c/copstest-doyle
 		return 4
-	} else if strings.HasPrefix(path, "/eos") {
-		// e.g. /eos/web
-		return 3
 	} else {
-		// winspaces
-		return 4
+		// a safe default for all other eos paths (e.g. /eos/experiment etc)
+		return 3
 	}
 }
 
