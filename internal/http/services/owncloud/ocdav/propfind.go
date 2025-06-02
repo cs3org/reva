@@ -510,17 +510,29 @@ func (s *svc) newPropRaw(key, val string) *propertyXML {
 
 // Compute the URL of the resource in the spaces format:
 // baseURI + /<space_id>/relative/path/to/space
+// The space_id MUST be set on `md`.
+// The path of the space root MAY be set in the context, in the `ctxSpacePath` key, but if it
+// is not set, it is calculated from `md.Id.SpaceId`
+// Note that the path on `md.Path` must also be set, and must be a path relative to the space root.
 func spaceHref(ctx context.Context, baseURI string, md *provider.ResourceInfo) (string, error) {
+	if md.Id == nil || md.Id.SpaceId == "" {
+		return "", errors.New("Space ID must be set to calculate Href")
+	}
+
 	spacePath, ok := ctx.Value(ctxSpacePath).(string)
 	if !ok {
-		return "", errors.New("space path expected to be in the context")
+		// If no space path is set in the context, we calculate it
+		_, spacePath, ok = spaces.DecodeStorageSpaceID(fmt.Sprintf("%s$%s", md.Id.StorageId, md.Id.SpaceId))
+		if !ok {
+			return "", errors.New("Failed to decode space ID")
+		}
 	}
-	if spacePath != md.Id.SpaceId {
-		_, spacePath, _ = spaces.DecodeStorageSpaceID(fmt.Sprintf("%s$%s", md.Id.StorageId, md.Id.SpaceId))
+
+	relativePath, err := filepath.Rel(spacePath, md.Path)
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to calculate path relative to space root: %v", spacePath)
 	}
-	relativePath := strings.TrimPrefix(md.Path, spacePath)
-	spaceID := md.Id.SpaceId
-	return path.Join(baseURI, spaceID, relativePath), nil
+	return path.Join(baseURI, md.Id.SpaceId, relativePath), nil
 }
 
 func appendSlash(path string) string {
