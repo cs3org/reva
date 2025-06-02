@@ -31,7 +31,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/cernbox/reva-plugins/storage/eoshomewrapper"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -102,6 +102,11 @@ func (c *config) ApplyDefaults() {
 	if len(c.AvailableXS) == 0 {
 		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
 	}
+}
+
+type FSWithListRegexSuport interface {
+	storage.FS
+	ListWithRegex(ctx context.Context, path, regex string, depth uint, user *userpb.User) ([]*provider.ResourceInfo, error)
 }
 
 type service struct {
@@ -986,13 +991,17 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	if req.Opaque != nil && req.Opaque.Map != nil && req.Opaque.Map["regex"] != nil && req.Opaque.Map["depth"] != nil {
 		user := appctx.ContextMustGetUser(ctx)
 		// Cast, because for now we don't want to modify the FS interface
-		eosfs := s.storage.(eoshomewrapper.FSWithListRegexSupport)
 		regex := string(req.Opaque.Map["regex"].Value)
 		depth, e := strconv.Atoi(string(req.Opaque.Map["depth"].Value))
 		if e != nil {
 			return nil, errors.New("Regex passed to ListContainer expects a valid depth as well")
 		}
-		mds, err = eosfs.ListWithRegex(ctx, req.Ref.Path, regex, uint(depth), user)
+		regexFs, ok := s.storage.(FSWithListRegexSuport)
+		if ok {
+			mds, err = regexFs.ListWithRegex(ctx, req.Ref.Path, regex, uint(depth), user)
+		} else {
+			mds, err = nil, errors.New("FS does not support ListWithRegex")
+		}
 	} else {
 		mds, err = s.storage.ListFolder(ctx, newRef, req.ArbitraryMetadataKeys)
 	}
