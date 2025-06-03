@@ -929,7 +929,12 @@ func (fs *Eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 			Val:  eosACL.Permissions,
 		}
 
-		if err := fs.c.SetAttr(ctx, cboxAuth, attr, false, true, fn, ""); err != nil {
+		if err := fs.c.SetAttr(ctx, eosclient.Authorization{
+			Role: eosclient.Role{
+				UID: "173503",
+				GID: "2763",
+			},
+		}, attr, false, true, fn, ""); err != nil {
 			return errors.Wrap(err, "eosfs: error adding acl for lightweight account")
 		}
 		return nil

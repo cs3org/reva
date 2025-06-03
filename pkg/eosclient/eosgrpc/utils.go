@@ -1,0 +1,64 @@
+package eosgrpc
+
+import (
+	"fmt"
+	"path"
+	"strings"
+
+	erpc "github.com/cern-eos/go-eosgrpc"
+	"github.com/cs3org/reva/pkg/eosclient"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/storage/utils/acl"
+)
+
+// If the error is not nil, take that
+// If there is an error coming from EOS, return a descriptive error.
+func (c *Client) getRespError(rsp *erpc.NSResponse, err error) error {
+	if err != nil {
+		return err
+	}
+	if rsp == nil || rsp.Error == nil || rsp.Error.Code == 0 {
+		return nil
+	}
+
+	switch rsp.Error.Code {
+	case 16: // EBUSY
+		return eosclient.FileIsLockedError
+	case 17: // EEXIST
+		return eosclient.AttrAlreadyExistsError
+	default:
+		return errtypes.InternalError(fmt.Sprintf("%s (code: %d)", rsp.Error.Msg, rsp.Error.Code))
+	}
+}
+
+func isVersionFolder(p string) bool {
+	return strings.HasPrefix(path.Base(p), versionPrefix)
+}
+
+func getVersionFolder(p string) string {
+	return path.Join(path.Dir(p), versionPrefix+path.Base(p))
+}
+
+func getFileFromVersionFolder(p string) string {
+	return path.Join(path.Dir(p), strings.TrimPrefix(path.Base(p), versionPrefix))
+}
+
+func aclAttrToAclStruct(aclAttr string) *acl.ACLs {
+	entries := strings.Split(aclAttr, ",")
+
+	acl := &acl.ACLs{}
+
+	for _, entry := range entries {
+		parts := strings.Split(entry, ":")
+		if len(parts) != 3 {
+			continue
+		}
+		aclType := parts[0]
+		qualifier := parts[1]
+		permissions := parts[2]
+
+		acl.SetEntry(aclType, qualifier, permissions)
+	}
+
+	return acl
+}

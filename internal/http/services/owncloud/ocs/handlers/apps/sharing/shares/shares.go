@@ -1359,7 +1359,6 @@ func (h *Handler) getResourceInfoByID(ctx context.Context, client gateway.Gatewa
 // getResourceInfo retrieves the resource info to a target.
 // This method utilizes caching if it is enabled.
 func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPIClient, key string, ref *provider.Reference) (*provider.ResourceInfo, *rpc.Status, error) {
-	logger := appctx.GetLogger(ctx)
 
 	var pinfo *provider.ResourceInfo
 	var status *rpc.Status
@@ -1367,13 +1366,11 @@ func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPI
 	var foundInCache bool
 	if h.resourceInfoCacheTTL > 0 && h.resourceInfoCache != nil {
 		if pinfo, err = h.resourceInfoCache.Get(key); err == nil {
-			logger.Debug().Msgf("cache hit for resource %+v", key)
 			status = &rpc.Status{Code: rpc.Code_CODE_OK}
 			foundInCache = true
 		}
 	}
 	if !foundInCache {
-		logger.Debug().Msgf("cache miss for resource %+v, statting", key)
 		statReq := &provider.StatRequest{
 			Ref: ref,
 		}
