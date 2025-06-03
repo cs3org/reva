@@ -852,6 +852,8 @@ github.com/ceph/go-ceph v0.33.0 h1:xT9v/MAa+DIBmflyITyFkGRgWngATghGegKJguEOInQ=
 github.com/ceph/go-ceph v0.33.0/go.mod h1:6ef0lIyDHnwArykqfWZDWCfbbJAVTXL1tOYrM1M4bAE=
 github.com/cern-eos/go-eosgrpc v0.0.0-20250205160007-5263e0105295 h1:KvrRAX/MfI1jXxEgm0Ayfn37/pqkrqWm0vrP2nYPOe8=
 github.com/cern-eos/go-eosgrpc v0.0.0-20250205160007-5263e0105295/go.mod h1:ZiIzbg4sDO2MwYlspcnauUR2dfwZHUzxker+HP9k+20=
+github.com/cern-eos/go-eosgrpc v0.0.0-20250429151059-e8c6e014a629 h1:Q74zaUyx63S7pJ0gVDyPb2nN2otAoJlAx4btz+OhhJI=
+github.com/cern-eos/go-eosgrpc v0.0.0-20250429151059-e8c6e014a629/go.mod h1:ZiIzbg4sDO2MwYlspcnauUR2dfwZHUzxker+HP9k+20=
 github.com/cernbox/reva-plugins v0.0.21 h1:jQIFnBBCAWxtIarMRQBRxB0tqLvBqsi8OASe4ng8mLY=
 github.com/cernbox/reva-plugins v0.0.21/go.mod h1:Ph7tAgnfqKKPqLXXxAFzaiqB6Zfa8rEvisO46a0QoZY=
 github.com/cespare/xxhash v1.1.0 h1:a6HrQnmkObjyL+Gs60czilIUGqrzKutQD6XZog3p+ko=
@@ -2312,6 +2314,8 @@ google.golang.org/genproto/googleapis/rpc v0.0.0-20230731190214-cbb8c96f2d6d/go.
 google.golang.org/genproto/googleapis/rpc v0.0.0-20230807174057-1744710a1577/go.mod h1:+Bk1OCOj40wS2hwAMA+aCW9ypzm63QTBBHp6lQ3p+9M=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20250512202823-5a2f75b736a9 h1:IkAfh6J/yllPtpYFU0zZN1hUPYdT0ogkBT/9hMxHjvg=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20250512202823-5a2f75b736a9/go.mod h1:qQ0YXyHHx3XkvlzUtpXDkS29lDSafHMZBAZDc03LQ3A=
+google.golang.org/genproto/googleapis/rpc v0.0.0-20250528174236-200df99c418a h1:v2PbRU4K3llS09c7zodFpNePeamkAwG3mPrAery9VeE=
+google.golang.org/genproto/googleapis/rpc v0.0.0-20250528174236-200df99c418a/go.mod h1:qQ0YXyHHx3XkvlzUtpXDkS29lDSafHMZBAZDc03LQ3A=
 google.golang.org/grpc v1.17.0/go.mod h1:6QZJwpn2B+Zp71q/5VxRsJ6NXXVCE5NRUHRo+f3cWCs=
 google.golang.org/grpc v1.19.0/go.mod h1:mqu4LbDTu4XGKhr4mRzUsmM4RtVoemTSY81AxZiDr8c=
 google.golang.org/grpc v1.20.0/go.mod h1:chYK+tFQF0nDUGJgXMSgLCQk3phJEuONr2DCgLDdAQM=
