@@ -49,16 +49,7 @@ To run EOS tests you need to have an up and running Docker system:
 
 ## Versioning
 
-There are currently two major versions in active development.
-
-### 1.x versions
-
-The ``master`` branch is the stable development branch. Releases from master are tagged as 1.x.x versions following [semver](https://semver.org/).
-Use this version for standalone deployment.
-
-### 2.x versions
-
-The ``edge`` branch is used as a dependency for ownCloud's OCIS product and differs from 1.X versions. Please do not use 2.X for standalone deployments and always use them as part of the OCIS product.
+The `master` branch is the stable development branch. All versions are tagged from it except for the `2.x` series: such versions were tagged out of a different branch codenamed `edge`, which now lives in external forks.
 
 ## Docker images
 
