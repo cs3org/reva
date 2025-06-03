@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -154,8 +155,22 @@ func spacesLevel(path string) int {
 	}
 }
 
+// Removes the Space ID from the path of a resource info, preserving the leading slash.
 func RelativePathToSpaceID(info *provider.ResourceInfo) string {
 	return strings.TrimPrefix(info.Path, info.Id.SpaceId)
+}
+
+// Returns the path relative to the space root.
+func PathRelativeToSpaceRoot(info *provider.ResourceInfo) (relativePath string, err error) {
+	if info.Id.SpaceId == "" {
+		return "", errors.New("resourceInfo must contain a space ID")
+	}
+	_, spacePath, ok := DecodeStorageSpaceID(fmt.Sprintf("%s$%s", info.Id.StorageId, info.Id.SpaceId))
+	if !ok {
+		return "", fmt.Errorf("failed to decode storage space ID: %s", fmt.Sprintf("%s$%s", info.Id.StorageId, info.Id.SpaceId))
+	}
+
+	return filepath.Rel(spacePath, info.Path)
 }
 
 func ResourceIdToString(id *provider.ResourceId) string {
