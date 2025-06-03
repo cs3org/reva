@@ -1216,7 +1216,18 @@ func (c *Client) Rename(ctx context.Context, auth eosclient.Authorization, oldPa
 }
 
 // List the contents of the directory given by path.
-func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath string) ([]*eosclient.FileInfo, error) {
+func (c *Client) List(ctx context.Context, auth eosclient.Authorization, path string) ([]*eosclient.FileInfo, error) {
+	return c.list(ctx, auth, path, "")
+}
+
+func (c *Client) ListWithRegex(ctx context.Context, auth eosclient.Authorization, path string, depth uint, regex string) ([]*eosclient.FileInfo, error) {
+	log := appctx.GetLogger(ctx)
+	log.Info().Str("path", path).Str("regex", regex).Msg("ListWithRegex")
+	return c.list(ctx, auth, path, regex)
+}
+
+// List the contents of the directory given by path.
+func (c *Client) list(ctx context.Context, auth eosclient.Authorization, dpath string, regex string) ([]*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
 
 	// Stuff filename, uid, gid into the FindRequest type
@@ -1239,6 +1250,14 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 			return nil, errors.Wrap(err, "Failed to extract uid/gid from auth")
 		}
 		fdrq.Authkey = auth.Token
+	}
+
+	if regex != "" {
+		fdrq.Selection = &erpc.MDSelection{
+			RegexpFilename: []byte(regex),
+			RegexpDirname:  []byte(regex),
+			Select:         true,
+		}
 	}
 
 	// Now send the req and see what happens
