@@ -258,7 +258,6 @@ func (fs *Eosfs) userIDcacheWarmup() {
 }
 
 func (fs *Eosfs) ListWithRegex(ctx context.Context, path, regex string, depth uint, user *userpb.User) ([]*provider.ResourceInfo, error) {
-	//client := fs.binaryClient.(*eosbinary.Client)
 	userAuth, err := fs.getUserAuth(ctx, user, "")
 	if err != nil {
 		return nil, err

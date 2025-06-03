@@ -38,6 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
+	"github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -130,10 +131,6 @@ func (opt *Options) init() {
 	}
 }
 
-func serializeAttribute(a *eosclient.Attribute) string {
-	return fmt.Sprintf("%s.%s=%s", attrTypeToString(a.Type), a.Key, a.Val)
-}
-
 func attrTypeToString(at eosclient.AttrType) string {
 	switch at {
 	case eosclient.SystemAttr:
@@ -143,14 +140,6 @@ func attrTypeToString(at eosclient.AttrType) string {
 	default:
 		return "invalid"
 	}
-}
-
-func isValidAttribute(a *eosclient.Attribute) bool {
-	// validate that an attribute is correct.
-	if (a.Type != eosclient.SystemAttr && a.Type != eosclient.UserAttr) || a.Key == "" {
-		return false
-	}
-	return true
 }
 
 // Create and connect a grpc eos Client.
@@ -206,26 +195,6 @@ func New(ctx context.Context, opt *Options, httpOpts *HTTPOptions) (*Client, err
 	}, nil
 }
 
-// If the error is not nil, take that
-// If there is an error coming from EOS, return a descriptive error.
-func (c *Client) getRespError(rsp *erpc.NSResponse, err error) error {
-	if err != nil {
-		return err
-	}
-	if rsp == nil || rsp.Error == nil || rsp.Error.Code == 0 {
-		return nil
-	}
-
-	switch rsp.Error.Code {
-	case 16: // EBUSY
-		return eosclient.FileIsLockedError
-	case 17: // EEXIST
-		return eosclient.AttrAlreadyExistsError
-	default:
-		return errtypes.InternalError(fmt.Sprintf("%s (code: %d)", rsp.Error.Msg, rsp.Error.Code))
-	}
-}
-
 // Common code to create and initialize a NSRequest.
 func (c *Client) initNSRequest(ctx context.Context, auth eosclient.Authorization, app string) (*erpc.NSRequest, error) {
 	log := appctx.GetLogger(ctx)
@@ -252,9 +221,9 @@ func (c *Client) initNSRequest(ctx context.Context, auth eosclient.Authorization
 	}
 
 	// For NS operations, specifically for locking, we also need to provide the app
-	if app != "" {
-		rq.Role.App = app
-	}
+	rq.Role.App = app
+
+	rq.Role.Trace = trace.Get(ctx)
 
 	return rq, nil
 }
@@ -285,160 +254,9 @@ func (c *Client) initMDRequest(ctx context.Context, auth eosclient.Authorization
 		}
 	}
 
+	rq.Role.Trace = trace.Get(ctx)
+
 	return rq, nil
-}
-
-// AddACL adds an new acl to EOS with the given aclType.
-func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, pos uint, a *acl.Entry) error {
-	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "AddACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Str("acl", a.CitrineSerialize()).Msg("")
-
-	// First, we need to figure out if the path is a directory
-	// to know whether our request should be recursive
-	fileInfo, err := c.GetFileInfoByPath(ctx, auth, path)
-	if err != nil {
-		return err
-	}
-
-	// Init a new NSRequest
-	rq, err := c.initNSRequest(ctx, rootAuth, "")
-	if err != nil {
-		return err
-	}
-
-	// workaround to be root
-	// TODO: removed once fixed in eos grpc
-	rq.Role.Gid = 1
-
-	msg := new(erpc.NSRequest_AclRequest)
-	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["MODIFY"])
-	msg.Type = erpc.NSRequest_AclRequest_ACL_TYPE(erpc.NSRequest_AclRequest_ACL_TYPE_value["SYS_ACL"])
-	msg.Recursive = fileInfo.IsDir
-	msg.Rule = a.CitrineSerialize()
-
-	msg.Id = new(erpc.MDId)
-	msg.Id.Path = []byte(path)
-
-	rq.Command = &erpc.NSRequest_Acl{Acl: msg}
-
-	// Now send the req and see what happens
-	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
-	e := c.getRespError(resp, err)
-	if e != nil {
-		log.Error().Str("func", "AddACL").Str("path", path).Str("err", e.Error()).Msg("")
-		return e
-	}
-
-	if resp == nil {
-		return errtypes.NotFound(fmt.Sprintf("Path: %s", path))
-	}
-
-	log.Debug().Str("func", "AddACL").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
-
-	return err
-}
-
-// RemoveACL removes the acl from EOS.
-func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, a *acl.Entry) error {
-	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "RemoveACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Str("ACL", a.CitrineSerialize()).Msg("")
-
-	// We set permissions to "", so the ACL will serialize to `u:123456=`, which will make EOS delete the entry
-	a.Permissions = ""
-	return c.AddACL(ctx, auth, rootAuth, path, eosclient.StartPosition, a)
-}
-
-// UpdateACL updates the EOS acl.
-func (c *Client) UpdateACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, position uint, a *acl.Entry) error {
-	return c.AddACL(ctx, auth, rootAuth, path, position, a)
-}
-
-// GetACL for a file.
-func (c *Client) GetACL(ctx context.Context, auth eosclient.Authorization, path, aclType, target string) (*acl.Entry, error) {
-	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "GetACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
-
-	acls, err := c.ListACLs(ctx, auth, path)
-	if err != nil {
-		return nil, err
-	}
-	for _, a := range acls {
-		if a.Type == aclType && a.Qualifier == target {
-			return a, nil
-		}
-	}
-	return nil, errtypes.NotFound(fmt.Sprintf("%s:%s", aclType, target))
-}
-
-// ListACLs returns the list of ACLs present under the given path.
-// EOS returns uids/gid for Citrine version and usernames for older versions.
-// For Citire we need to convert back the uid back to username.
-func (c *Client) ListACLs(ctx context.Context, auth eosclient.Authorization, path string) ([]*acl.Entry, error) {
-	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "ListACLs").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
-
-	parsedACLs, err := c.getACLForPath(ctx, auth, path)
-	if err != nil {
-		return nil, err
-	}
-
-	// EOS Citrine ACLs are stored with uid. The UID will be resolved to the
-	// user opaque ID at the eosfs level.
-	return parsedACLs.Entries, nil
-}
-
-func (c *Client) getACLForPath(ctx context.Context, auth eosclient.Authorization, path string) (*acl.ACLs, error) {
-	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "GetACLForPath").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
-
-	fileInfo, err := c.GetFileInfoByPath(ctx, auth, path)
-	if err != nil {
-		return nil, err
-	}
-
-	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth, "")
-	if err != nil {
-		return nil, err
-	}
-
-	msg := new(erpc.NSRequest_AclRequest)
-	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["LIST"])
-	msg.Type = erpc.NSRequest_AclRequest_ACL_TYPE(erpc.NSRequest_AclRequest_ACL_TYPE_value["SYS_ACL"])
-	msg.Recursive = fileInfo.IsDir
-
-	msg.Id = new(erpc.MDId)
-	msg.Id.Path = []byte(path)
-
-	rq.Command = &erpc.NSRequest_Acl{Acl: msg}
-
-	// Now send the req and see what happens
-	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
-	e := c.getRespError(resp, err)
-	if e != nil {
-		log.Error().Str("func", "GetACLForPath").Str("path", path).Str("err", e.Error()).Msg("")
-		return nil, e
-	}
-
-	if resp == nil {
-		return nil, errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' path: '%s'", auth.Role.UID, path))
-	}
-
-	log.Debug().Str("func", "GetACLForPath").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
-
-	if resp.Acl == nil {
-		return nil, errtypes.InternalError(fmt.Sprintf("nil acl for uid: '%s' path: '%s'", auth.Role.UID, path))
-	}
-
-	if resp.GetError() != nil {
-		log.Error().Str("func", "GetACLForPath").Str("uid", auth.Role.UID).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
-	}
-
-	aclret, err := acl.Parse(resp.Acl.Rule, acl.ShortTextForm)
-
-	// Now loop and build the correct return value
-
-	return aclret, err
 }
 
 // GetFileInfoByInode returns the FileInfo by the given inode.
@@ -498,239 +316,6 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 
 	log.Info().Str("func", "GetFileInfoByInode").Uint64("inode", inode).Uint64("info.Inode", info.Inode).Str("file", info.File).Uint64("size", info.Size).Str("etag", info.ETag).Msg("result")
 	return c.fixupACLs(ctx, auth, info), nil
-}
-
-func (c *Client) fixupACLs(ctx context.Context, auth eosclient.Authorization, info *eosclient.FileInfo) *eosclient.FileInfo {
-	// Append the ACLs that are described by the xattr sys.acl entry
-	a, err := acl.Parse(info.Attrs["sys.acl"], acl.ShortTextForm)
-	if err == nil {
-		if info.SysACL != nil {
-			info.SysACL.Entries = append(info.SysACL.Entries, a.Entries...)
-		} else {
-			info.SysACL = a
-		}
-	}
-
-	// We need to inherit the ACLs for the parent directory as these are not available for files
-	if !info.IsDir {
-		parentInfo, err := c.GetFileInfoByPath(ctx, auth, path.Dir(info.File))
-		// Even if this call fails, at least return the current file object
-		if err == nil {
-			info.SysACL.Entries = append(info.SysACL.Entries, parentInfo.SysACL.Entries...)
-		}
-	}
-	return info
-}
-
-// SetAttr sets an extended attributes on a path.
-func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path, app string) error {
-	if !isValidAttribute(attr) {
-		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
-	}
-
-	// Favorites need to be stored per user so handle these separately
-	if attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
-		info, err := c.GetFileInfoByPath(ctx, auth, path)
-		if err != nil {
-			return err
-		}
-		return c.handleFavAttr(ctx, auth, attr, recursive, path, info, true)
-	}
-	return c.setEOSAttr(ctx, auth, attr, errorIfExists, recursive, path, app)
-}
-
-func (c *Client) setEOSAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path, app string) error {
-	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "SetAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
-
-	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth, app)
-	if err != nil {
-		return err
-	}
-
-	msg := new(erpc.NSRequest_SetXAttrRequest)
-
-	var m = map[string][]byte{attr.GetKey(): []byte(attr.Val)}
-	msg.Xattrs = m
-	msg.Recursive = recursive
-
-	msg.Id = new(erpc.MDId)
-	msg.Id.Path = []byte(path)
-
-	if errorIfExists {
-		msg.Create = true
-	}
-
-	rq.Command = &erpc.NSRequest_Xattr{Xattr: msg}
-
-	// Now send the req and see what happens
-	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
-	e := c.getRespError(resp, err)
-
-	if resp != nil && resp.Error != nil && resp.Error.Code == 17 {
-		return eosclient.AttrAlreadyExistsError
-	}
-
-	if e != nil {
-		log.Error().Str("func", "SetAttr").Str("path", path).Str("err", e.Error()).Msg("")
-		return e
-	}
-
-	if resp == nil {
-		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' gid: '%s' path: '%s'", auth.Role.UID, auth.Role.GID, path))
-	}
-
-	if resp.GetError() != nil {
-		log.Error().Str("func", "setAttr").Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative result")
-	}
-
-	return err
-}
-
-func (c *Client) handleFavAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path string, info *eosclient.FileInfo, set bool) error {
-	var err error
-	u := appctx.ContextMustGetUser(ctx)
-	if info == nil {
-		info, err = c.GetFileInfoByPath(ctx, auth, path)
-		if err != nil {
-			return err
-		}
-	}
-	favStr := info.Attrs[favoritesKey]
-	favs, err := acl.Parse(favStr, acl.ShortTextForm)
-	if err != nil {
-		return err
-	}
-	if set {
-		err = favs.SetEntry(acl.TypeUser, u.Id.OpaqueId, "1")
-		if err != nil {
-			return err
-		}
-	} else {
-		favs.DeleteEntry(acl.TypeUser, u.Id.OpaqueId)
-	}
-	attr.Val = favs.Serialize()
-
-	if attr.Val == "" {
-		return c.unsetEOSAttr(ctx, auth, attr, recursive, path, "", true)
-	} else {
-		return c.setEOSAttr(ctx, auth, attr, false, recursive, path, "")
-	}
-}
-
-// UnsetAttr unsets an extended attribute on a path.
-func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path, app string) error {
-	// In the case of handleFavs, we call unsetEOSAttr with deleteFavs = true, which is why this simply calls a subroutine
-	return c.unsetEOSAttr(ctx, auth, attr, recursive, path, app, false)
-}
-
-func (c *Client) unsetEOSAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path, app string, deleteFavs bool) error {
-	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "unsetEOSAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
-
-	// Favorites need to be stored per user so handle these separately
-	if !deleteFavs && attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
-		info, err := c.GetFileInfoByPath(ctx, auth, path)
-		if err != nil {
-			return err
-		}
-		return c.handleFavAttr(ctx, auth, attr, recursive, path, info, false)
-	}
-
-	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth, app)
-	if err != nil {
-		return err
-	}
-
-	msg := new(erpc.NSRequest_SetXAttrRequest)
-
-	var ktd = []string{attr.GetKey()}
-	msg.Keystodelete = ktd
-	msg.Recursive = recursive
-	msg.Id = new(erpc.MDId)
-	msg.Id.Path = []byte(path)
-
-	rq.Command = &erpc.NSRequest_Xattr{Xattr: msg}
-
-	// Now send the req and see what happens
-	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
-
-	if resp != nil && resp.Error != nil && resp.Error.Code == 61 {
-		return eosclient.AttrNotExistsError
-	}
-
-	e := c.getRespError(resp, err)
-	if e != nil {
-		log.Error().Str("func", "UnsetAttr").Str("path", path).Str("err", e.Error()).Msg("")
-		return e
-	}
-
-	if resp == nil {
-		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' gid: '%s' path: '%s'", auth.Role.UID, auth.Role.GID, path))
-	}
-
-	if resp.GetError() != nil {
-		log.Error().Str("func", "UnsetAttr").Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
-	}
-	return err
-}
-
-// GetAttr returns the attribute specified by key.
-func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, key, path string) (*eosclient.Attribute, error) {
-	info, err := c.GetFileInfoByPath(ctx, auth, path)
-	if err != nil {
-		return nil, err
-	}
-
-	for k, v := range info.Attrs {
-		if k == key {
-			attr, err := getAttribute(k, v)
-			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("eosgrpc: cannot parse attribute key=%s value=%s", k, v))
-			}
-			return attr, nil
-		}
-	}
-	return nil, errtypes.NotFound(fmt.Sprintf("key %s not found", key))
-}
-
-// GetAttrs returns all the attributes of a resource.
-func (c *Client) GetAttrs(ctx context.Context, auth eosclient.Authorization, path string) ([]*eosclient.Attribute, error) {
-	info, err := c.GetFileInfoByPath(ctx, auth, path)
-	if err != nil {
-		return nil, err
-	}
-
-	attrs := make([]*eosclient.Attribute, 0, len(info.Attrs))
-	for k, v := range info.Attrs {
-		attr, err := getAttribute(k, v)
-		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("eosgrpc: cannot parse attribute key=%s value=%s", k, v))
-		}
-		attrs = append(attrs, attr)
-	}
-
-	return attrs, nil
-}
-
-func getAttribute(key, val string) (*eosclient.Attribute, error) {
-	// key is in the form sys.forced.checksum
-	type2key := strings.SplitN(key, ".", 2) // type2key = ["sys", "forced.checksum"]
-	if len(type2key) != 2 {
-		return nil, errtypes.InternalError("wrong attr format to deserialize")
-	}
-	t, err := eosclient.AttrStringToType(type2key[0])
-	if err != nil {
-		return nil, err
-	}
-	attr := &eosclient.Attribute{
-		Type: t,
-		Key:  type2key[1],
-		Val:  val,
-	}
-	return attr, nil
 }
 
 // GetFileInfoByPath returns the FilInfo at the given path.
@@ -827,6 +412,7 @@ func (c *Client) GetQuota(ctx context.Context, username string, rootAuth eosclie
 	// Eos filters the returned quotas by username. This means that EOS must know it, someone
 	// must have created an user with that name
 	msg.Id.Username = username
+	msg.Id.Trace = trace.Get(ctx)
 	rq.Command = &erpc.NSRequest_Quota{Quota: msg}
 
 	// Now send the req and see what happens
@@ -892,10 +478,11 @@ func (c *Client) SetQuota(ctx context.Context, rootAuth eosclient.Authorization,
 		return err
 	}
 
-	// We set a quota for an user, not a group!
+	// We set a quota for a user, not a group!
 	msg.Id.Uid = uidInt
 	msg.Id.Gid = 0
 	msg.Id.Username = info.Username
+	msg.Id.Trace = trace.Get(ctx)
 	msg.Op = erpc.QUOTAOP_SET
 	msg.Maxbytes = info.MaxBytes
 	msg.Maxfiles = info.MaxFiles
@@ -1217,27 +804,30 @@ func (c *Client) Rename(ctx context.Context, auth eosclient.Authorization, oldPa
 
 // List the contents of the directory given by path.
 func (c *Client) List(ctx context.Context, auth eosclient.Authorization, path string) ([]*eosclient.FileInfo, error) {
-	return c.list(ctx, auth, path, "")
+	return c.list(ctx, auth, path, "", 1)
 }
 
 func (c *Client) ListWithRegex(ctx context.Context, auth eosclient.Authorization, path string, depth uint, regex string) ([]*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("path", path).Str("regex", regex).Msg("ListWithRegex")
-	return c.list(ctx, auth, path, regex)
+	result, err := c.list(ctx, auth, path, regex, depth)
+	log.Info().Str("path", path).Str("regex", regex).Any("results", result).Msg("ListWithRegex")
+
+	return result, err
 }
 
 // List the contents of the directory given by path.
-func (c *Client) list(ctx context.Context, auth eosclient.Authorization, dpath string, regex string) ([]*eosclient.FileInfo, error) {
+func (c *Client) list(ctx context.Context, auth eosclient.Authorization, dpath string, regex string, depth uint) ([]*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
 
 	// Stuff filename, uid, gid into the FindRequest type
 	fdrq := new(erpc.FindRequest)
-	fdrq.Maxdepth = 1
+	fdrq.Maxdepth = uint64(depth)
 	fdrq.Type = erpc.TYPE_LISTING
 	fdrq.Id = new(erpc.MDId)
 	fdrq.Id.Path = []byte(dpath)
 
 	fdrq.Role = new(erpc.RoleId)
+	fdrq.Role.Trace = trace.Get(ctx)
 
 	uid, gid, err := utils.ExtractUidGid(auth)
 	if err == nil {
@@ -1261,9 +851,11 @@ func (c *Client) list(ctx context.Context, auth eosclient.Authorization, dpath s
 	}
 
 	// Now send the req and see what happens
+	log.Info().Any("request", fdrq).Msg("dump fdrq")
 	resp, err := c.cl.Find(appctx.ContextGetClean(ctx), fdrq)
+	log.Info().Str("func", "List").Str("path", dpath).Any("resp", resp).Msg("findrequest grpc response")
 	if err != nil {
-		log.Error().Err(err).Str("func", "List").Str("path", dpath).Str("err", err.Error()).Msg("grpc response")
+		log.Error().Err(err).Str("func", "List").Str("path", dpath).Any("resp", resp).Str("err", err.Error()).Msg("findrequest grpc response")
 
 		return nil, err
 	}
@@ -1306,7 +898,7 @@ func (c *Client) list(ctx context.Context, auth eosclient.Authorization, dpath s
 
 		i++
 		// The first item is the directory itself... skip
-		if i == 1 {
+		if i == 1 && regex == "" {
 			parent = myitem
 			log.Debug().Str("func", "List").Str("path", dpath).Str("skipping first item resp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 			continue
@@ -1329,6 +921,8 @@ func (c *Client) list(ctx context.Context, auth eosclient.Authorization, dpath s
 
 		mylst = append(mylst, myitem)
 	}
+
+	log.Info().Any("resp-list", mylst).Msg("FindRequest raw response")
 
 	for _, fi := range mylst {
 		if fi.SysACL == nil {
@@ -1590,65 +1184,6 @@ func (c *Client) PurgeDeletedEntries(ctx context.Context, auth eosclient.Authori
 	return err
 }
 
-// ListVersions list all the versions for a given file.
-func (c *Client) ListVersions(ctx context.Context, auth eosclient.Authorization, p string) ([]*eosclient.FileInfo, error) {
-	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "ListVersions").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("p", p).Msg("")
-
-	versionFolder := getVersionFolder(p)
-	finfos, err := c.List(ctx, auth, versionFolder)
-	if err != nil {
-		return []*eosclient.FileInfo{}, err
-	}
-	return finfos, nil
-}
-
-// RollbackToVersion rollbacks a file to a previous version.
-func (c *Client) RollbackToVersion(ctx context.Context, auth eosclient.Authorization, path, version string) error {
-	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "RollbackToVersion").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Str("version", version).Msg("")
-
-	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, auth, "")
-	if err != nil {
-		return err
-	}
-
-	msg := new(erpc.NSRequest_VersionRequest)
-	msg.Cmd = erpc.NSRequest_VersionRequest_VERSION_CMD(erpc.NSRequest_VersionRequest_VERSION_CMD_value["GRAB"])
-	msg.Id = new(erpc.MDId)
-	msg.Id.Path = []byte(path)
-	msg.Grabversion = version
-
-	rq.Command = &erpc.NSRequest_Version{Version: msg}
-
-	// Now send the req and see what happens
-	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
-	e := c.getRespError(resp, err)
-	if e != nil {
-		log.Error().Str("func", "RollbackToVersion").Str("err", e.Error()).Msg("")
-		return e
-	}
-
-	if resp == nil {
-		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' ", auth.Role.UID))
-	}
-
-	if resp.GetError() != nil {
-		log.Info().Str("func", "RollbackToVersion").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
-	}
-	return err
-}
-
-// ReadVersion reads the version for the given file.
-func (c *Client) ReadVersion(ctx context.Context, auth eosclient.Authorization, p, version string) (io.ReadCloser, error) {
-	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "ReadVersion").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("p", p).Str("version", version).Msg("")
-
-	versionFile := path.Join(getVersionFolder(p), version)
-	return c.Read(ctx, auth, versionFile)
-}
-
 // GenerateToken returns a token on behalf of the resource owner to be used by lightweight accounts.
 func (c *Client) GenerateToken(ctx context.Context, auth eosclient.Authorization, path string, a *acl.Entry) (string, error) {
 	log := appctx.GetLogger(ctx)
@@ -1726,18 +1261,6 @@ func (c *Client) getFileInfoFromVersion(ctx context.Context, auth eosclient.Auth
 	return md, nil
 }
 
-func isVersionFolder(p string) bool {
-	return strings.HasPrefix(path.Base(p), versionPrefix)
-}
-
-func getVersionFolder(p string) string {
-	return path.Join(path.Dir(p), versionPrefix+path.Base(p))
-}
-
-func getFileFromVersionFolder(p string) string {
-	return path.Join(path.Dir(p), strings.TrimPrefix(path.Base(p), versionPrefix))
-}
-
 func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDResponse) (*eosclient.FileInfo, error) {
 	if st.Cmd == nil && st.Fmd == nil {
 		return nil, errors.Wrap(errtypes.NotSupported(""), "Invalid response (st.Cmd and st.Fmd are nil)")
@@ -1801,24 +1324,4 @@ func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDRespon
 		}
 	}
 	return fi, nil
-}
-
-func aclAttrToAclStruct(aclAttr string) *acl.ACLs {
-	entries := strings.Split(aclAttr, ",")
-
-	acl := &acl.ACLs{}
-
-	for _, entry := range entries {
-		parts := strings.Split(entry, ":")
-		if len(parts) != 3 {
-			continue
-		}
-		aclType := parts[0]
-		qualifier := parts[1]
-		permissions := parts[2]
-
-		acl.SetEntry(aclType, qualifier, permissions)
-	}
-
-	return acl
 }
