@@ -219,7 +219,6 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(&ListResponse{
 		Value: lgPerm,
 	})
-
 }
 
 func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
@@ -327,12 +326,11 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = json.NewEncoder(w).Encode(lgPerm)
-
 }
 
 func encodeSpaceIDForShareJail(res *provider.ResourceInfo) string {
 	return spaces.EncodeResourceID(res.Id)
-	//return spaces.EncodeStorageSpaceID(res.Id.StorageId, res.Path)
+	// return spaces.EncodeStorageSpaceID(res.Id.StorageId, res.Path)
 }
 
 func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.ReceivedShareResourceInfo) (*libregraph.DriveItem, error) {
@@ -555,12 +553,25 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceInfo, shares []*share) (*libregraph.DriveItem, error) {
+	parentSpacePath := path.Dir(spaces.RelativePathToSpaceID(info))
 
-	parentRelativePath := path.Dir(spaces.RelativePathToSpaceID(info))
+	relativePath, err := spaces.PathRelativeToSpaceRoot(info)
+	if err != nil {
+		return nil, err
+	}
+
+	parentRelativePath := path.Dir(relativePath)
+	if parentRelativePath == "." {
+		parentRelativePath = ""
+	}
 
 	permissions, err := s.cs3sharesToPermissions(ctx, shares)
 	if err != nil {
 		return nil, err
+	}
+
+	if info.ParentId.SpaceId == "" {
+		info.ParentId.SpaceId = spaces.PathToSpaceID(parentSpacePath)
 	}
 
 	d := &libregraph.DriveItem{
@@ -569,10 +580,10 @@ func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceIn
 		LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(info.Mtime)),
 		Name:                 libregraph.PtrString(info.Name),
 		ParentReference: &libregraph.ItemReference{
-			DriveId: libregraph.PtrString(spaces.EncodeStorageSpaceID(info.Id.StorageId, info.Id.SpaceId)),
+			DriveId: libregraph.PtrString(fmt.Sprintf("%s$%s", info.ParentId.StorageId, info.ParentId.SpaceId)),
 			// DriveType: libregraph.PtrString(info.Space.SpaceType),
 			Id:   libregraph.PtrString(spaces.EncodeResourceID(info.ParentId)),
-			Name: libregraph.PtrString(path.Base(parentRelativePath)),
+			Name: libregraph.PtrString(path.Base(parentSpacePath)),
 			Path: libregraph.PtrString(parentRelativePath),
 		},
 		Permissions: permissions,
