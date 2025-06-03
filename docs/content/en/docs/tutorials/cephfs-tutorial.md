@@ -99,7 +99,7 @@ For this tutorial, we'll use two files:
 - `revad.toml` (main configuration file to run reva, preconfigured for Ceph cluster)
 - `test_users.json` (configuration used to store users, only `einstein` is configured)
 
-These files are available at https://github.com/cs3org/reva/tree/master/examples/cephfs
+These files are available at https://github.com/cs3org/reva-configs/tree/main/cephfs
 
 Copy the `revad.toml` to `/etc/revad/revad.toml`, the default location where the reva binary will load its configuration.
 Copy the `test_users.json` file to `/etc/revad/test_users.json` to match the configuration from `/etc/revad/revad.toml`.

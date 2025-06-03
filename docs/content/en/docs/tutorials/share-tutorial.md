@@ -15,10 +15,11 @@ This is a guide on how to try the OCM share functionality in Reva in your local 
 * curl or wget
 
 ## 1. Clone the Reva repos
-Clone the reva repo from https://github.com/cs3org/reva
+Clone the reva and the configs repos:
 
 ```
 git clone https://github.com/cs3org/reva
+git clone https://github.com/cs3org/reva-configs
 ```
 
 ## 2. Build Reva
@@ -28,8 +29,9 @@ Follow the instructions in https://reva.link/docs/getting-started/install-reva/ 
 Now we need to start two Reva daemons corresponding to two different mesh providers, thus enabling sharing of files between users belonging to these two providers. For our example,  we consider the example of CERNBox deployed at localhost:19000 and the CESNET owncloud at localhost:17000. Follow these steps:
 
 ```
-mkdir -p /var/tmp/reva && cd examples/ocmd/
-../../cmd/revad/revad -dev-dir server-1 & ../../cmd/revad/revad -dev-dir server-2 &
+mkdir -p /var/tmp/reva
+cd ~/reva-configs/ocmd
+~/reva/cmd/revad/revad -dev-dir server-1 & ~/reva/cmd/revad/revad -dev-dir server-2 &
 ```
 
 This should start two Reva daemon (revad) services at the aforementioned endpoints.
