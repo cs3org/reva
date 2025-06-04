@@ -20,11 +20,13 @@ package node_test
 
 import (
 	"encoding/json"
+	"os"
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ocsconv "github.com/owncloud/reva/v2/pkg/conversions"
 	ctxpkg "github.com/owncloud/reva/v2/pkg/ctx"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 	"github.com/owncloud/reva/v2/pkg/storage/utils/grants"
@@ -78,6 +80,27 @@ var _ = Describe("Node", func() {
 			n, err := node.ReadNode(env.Ctx, env.Lookup, lookupNode.SpaceID, lookupNode.ID, false, nil, false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n.BlobID).To(Equal("file1-blobid"))
+		})
+
+		It("returns error when node has missing parent ID", func() {
+			// Create a node in the existing space
+			n := node.New(env.SpaceRootRes.SpaceId, "node1", "", "test", 0, "", provider.ResourceType_RESOURCE_TYPE_FILE, env.Owner.Id, env.Lookup)
+
+			// Create the node's directory
+			err := os.MkdirAll(n.InternalPath(), 0700)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Set metadata without parent ID
+			attribs := node.Attributes{}
+			attribs.SetString(prefixes.NameAttr, n.Name)
+			attribs.SetInt64(prefixes.TypeAttr, int64(n.Type(env.Ctx)))
+			err = n.SetXattrsWithContext(env.Ctx, attribs, true)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Try to read the node - should fail with missing parent ID error
+			_, err = node.ReadNode(env.Ctx, env.Lookup, n.SpaceID, n.ID, false, nil, false)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("Missing parent ID on node"))
 		})
 	})
 

@@ -48,6 +48,10 @@ var _ = Describe("Tree", func() {
 		env, err = helpers.NewTestEnv(nil)
 		Expect(err).ToNot(HaveOccurred())
 		t = env.Tree
+		env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(&provider.ResourcePermissions{
+			Stat:            true,
+			CreateContainer: true,
+		}, nil).Maybe()
 	})
 
 	AfterEach(func() {
@@ -444,4 +448,106 @@ var _ = Describe("Tree", func() {
 		Entry("uuid", "../../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51.T.2022-02-24T12:35:18.196484592Z", "4c510ada-c86b-4815-8820-42cdf82c3d51", "4c510ada-c86b-4815-8820-42cdf82c3d51.T.2022-02-24T12:35:18.196484592Z", false),
 		Entry("short", "../../../spaces/sp/ace-id/nodes/sh/or/tn/od/eid", "space-id", "shortnodeid", false),
 	)
+
+	Describe("ListFolder", func() {
+		It("lists simple folder", func() {
+			testdir := "/testdir"
+			// Create testdir first
+			parentRef := &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       testdir,
+			}
+			parentNode, err := env.CreateTestDir("testdir", parentRef)
+			Expect(err).ToNot(HaveOccurred())
+
+			fileName := "file1.txt"
+			fileNode := node.New(parentNode.SpaceID, "", parentNode.ID, fileName, 0, "", provider.ResourceType_RESOURCE_TYPE_FILE, nil, env.Lookup)
+			fileNode.SpaceRoot = parentNode.SpaceRoot
+			Expect(env.Tree.TouchFile(env.Ctx, fileNode, false, "")).To(Succeed())
+
+			// Wait for the node to be indexed
+			Eventually(func(g Gomega) {
+				n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       testdir + "/" + fileName,
+				})
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(n).ToNot(BeNil())
+				g.Expect(n.Type(env.Ctx)).To(Equal(provider.ResourceType_RESOURCE_TYPE_FILE))
+			}).Should(Succeed())
+
+			children, err := env.Tree.ListFolder(env.Ctx, parentNode)
+			Expect(err).ToNot(HaveOccurred())
+			// Should contain at least the file we created
+			var found bool
+			for _, child := range children {
+				if child.Name == fileName {
+					found = true
+					Expect(child.Type(env.Ctx)).To(Equal(provider.ResourceType_RESOURCE_TYPE_FILE))
+				}
+			}
+			Expect(found).To(BeTrue())
+		})
+
+		It("handles child error", func() {
+			testdir := "/testdir2"
+			// Create testdir2 first
+			parentRef := &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       testdir,
+			}
+			parentNode, err := env.CreateTestDir("testdir2", parentRef)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Create a valid file
+			fileName := "file1.txt"
+			fileNode := node.New(parentNode.SpaceID, "", parentNode.ID, fileName, 0, "", provider.ResourceType_RESOURCE_TYPE_FILE, nil, env.Lookup)
+			fileNode.SpaceRoot = parentNode.SpaceRoot
+			Expect(env.Tree.TouchFile(env.Ctx, fileNode, false, "")).To(Succeed())
+
+			// Wait for the node to be indexed
+			Eventually(func(g Gomega) {
+				n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       testdir + "/" + fileName,
+				})
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(n).ToNot(BeNil())
+				g.Expect(n.Type(env.Ctx)).To(Equal(provider.ResourceType_RESOURCE_TYPE_FILE))
+			}).Should(Succeed())
+
+			// Create a broken file by creating a node with missing metadata
+			brokenFileName := "brokenfile.txt"
+			brokenFileNode := node.New(parentNode.SpaceID, uuid.New().String(), parentNode.ID, brokenFileName, 0, "", provider.ResourceType_RESOURCE_TYPE_FILE, nil, env.Lookup)
+			brokenFileNode.SpaceRoot = parentNode.SpaceRoot
+
+			// 1. Create the node directory
+			brokenNodeDir := brokenFileNode.InternalPath()
+			err = os.MkdirAll(brokenNodeDir, 0700)
+			Expect(err).ToNot(HaveOccurred())
+
+			// 2. Set incomplete xattrs (missing ParentID)
+			attribs := node.Attributes{}
+			attribs.SetString(prefixes.NameAttr, brokenFileNode.Name)
+			attribs.SetInt64(prefixes.TypeAttr, int64(brokenFileNode.Type(env.Ctx)))
+			err = brokenFileNode.SetXattrsWithContext(env.Ctx, attribs, true)
+			Expect(err).ToNot(HaveOccurred())
+
+			// 3. Create the symlink in the parent directory
+			symlinkTarget := filepath.Join("../../../../../", lookup.Pathify(brokenFileNode.ID, 4, 2))
+			symlinkPath := filepath.Join(parentNode.InternalPath(), brokenFileName)
+			err = os.Symlink(symlinkTarget, symlinkPath)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify the broken node returns error on ReadNode
+			n, err := node.ReadNode(env.Ctx, env.Lookup, parentNode.SpaceID, brokenFileNode.ID, false, parentNode.SpaceRoot, true)
+			Expect(err).To(HaveOccurred())
+			Expect(n).To(BeNil())
+
+			// ListFolder should not return an error for whole folder when it encounters the broken node
+			d, err := env.Tree.ListFolder(env.Ctx, parentNode)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(d).To(Not(BeNil()))
+		})
+	})
 })

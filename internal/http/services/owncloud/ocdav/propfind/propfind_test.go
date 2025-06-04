@@ -1694,3 +1694,137 @@ var _ = Describe("PropfindWithoutDepthInfinity", func() {
 		})
 	})
 })
+
+var _ = Describe("PropfindWithBrokenItems", func() {
+
+	/*
+		Case 1: PROPFIND on a single node
+			see: propfind_test.go:"PROPFIND should not fail on node with missing parent id"
+
+		 - WebDAV PROPFIND Handler, expected resiliant response regardless of nodes errors
+		    HandlePathPropfind(...)
+
+		 - PROPFIND getResourceInfos calls Stat on storage provider
+
+		 - Filesystem calls node.ReadNode that may return "missing parent ID" error
+		    i.e. reva/pkg/storage/utils/decomposedfs/node/node.go
+
+
+		Case 2: PROPFIND on a folder
+			see: tree_tests.go:ListFolder
+
+		- WebDAV PROPFIND Handler, expected resiliant response regardless of nodes errors
+		    HandlePathPropfind(...)
+
+		- PROPFIND getResourceInfos calls ListContainer on storage provider
+
+		- Filesystem ListContainer, tree.ListFolder calls node.ReadNode on children and propagates results
+	*/
+
+	var (
+		handler *propfind.Handler
+		client  *mocks.GatewayAPIClient
+		ctx     context.Context
+	)
+
+	JustBeforeEach(func() {
+		ctx = context.WithValue(context.Background(), net.CtxKeyBaseURI, "http://127.0.0.1:3000")
+		client = &mocks.GatewayAPIClient{}
+		sel := selector{
+			client: client,
+		}
+
+		cfg := &config.Config{
+			FilesNamespace:              "/users/{{.Username}}",
+			WebdavNamespace:             "/users/{{.Username}}",
+			AllowPropfindDepthInfinitiy: true,
+			NameValidation: config.NameValidation{
+				MaxLength:    255,
+				InvalidChars: []string{"\f", "\r", "\n", "\\"},
+			},
+		}
+
+		handler = propfind.NewHandler("127.0.0.1:3000", sel, cfg)
+	})
+
+	It("PROPFIND should not fail on node with missing parent id", func() {
+
+		// Mock ListStorageSpaces
+		client.On("ListStorageSpaces", mock.Anything, mock.Anything).Return(&sprovider.ListStorageSpacesResponse{
+			Status: status.NewOK(ctx),
+			StorageSpaces: []*sprovider.StorageSpace{
+				{
+					Id:   &sprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(&sprovider.ResourceId{StorageId: "provider-1", SpaceId: "personalspace", OpaqueId: "root"})},
+					Root: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "personalspace", OpaqueId: "root"},
+					Name: "personalspace",
+					Opaque: &typesv1beta1.Opaque{
+						Map: map[string]*typesv1beta1.OpaqueEntry{
+							"path": {
+								Decoder: "plain",
+								Value:   []byte("/users/testuser"),
+							},
+						},
+					},
+				},
+			},
+		}, nil)
+
+		// Mock stat for root node
+		statReqRoot := &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "personalspace", OpaqueId: "root"}
+		client.On("Stat", mock.Anything, mock.MatchedBy(func(req *sprovider.StatRequest) bool {
+			return utils.ResourceIDEqual(req.Ref.ResourceId, statReqRoot) && req.Ref.Path == "."
+		})).Return(&sprovider.StatResponse{
+			Status: status.NewOK(ctx),
+			Info: &sprovider.ResourceInfo{
+				Id:   &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "personalspace", OpaqueId: "root"},
+				Type: sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
+				Path: ".",
+				Name: ".",
+				Size: uint64(200),
+			},
+		}, nil)
+
+		// Mock stat for orphan file - simulate the actual error from node.ReadNode
+		client.On("Stat", mock.Anything, mock.MatchedBy(func(req *sprovider.StatRequest) bool {
+			// Match either direct orphan file request or request with path
+			return utils.ResourceIDEqual(req.Ref.ResourceId, &sprovider.ResourceId{
+				StorageId: "provider-1",
+				SpaceId:   "personalspace",
+				OpaqueId:  "root",
+			}) && req.Ref.Path == "./orphanfile"
+		})).Return(&sprovider.StatResponse{
+			Status: status.NewInternal(ctx, "Missing parent ID on node"),
+			Info:   nil,
+		}, nil)
+
+		// Create and send PROPFIND request directly to orphan file
+		req := httptest.NewRequest("PROPFIND", "http://127.0.0.1:3000/users/testuser/orphanfile", strings.NewReader(`<?xml version="1.0" encoding="utf-8" ?>
+			   <d:propfind xmlns:d="DAV:">
+			     <d:prop>
+			       <d:resourcetype/>
+			       <d:getcontentlength/>
+			     </d:prop>
+			   </d:propfind>`))
+		req.Header.Set("Depth", "0")
+		req = req.WithContext(context.WithValue(ctx, net.CtxKeyBaseURI, "http://127.0.0.1:3000"))
+
+		rec := httptest.NewRecorder()
+		handler.HandlePathPropfind(rec, req, "")
+		Expect(rec.Code).To(Equal(http.StatusNotFound))
+
+		totalStatCalls := func(path string) int {
+			statCallCount := 0
+			for _, call := range client.Calls {
+				if call.Method == "Stat" {
+					req := call.Arguments[1].(*sprovider.StatRequest)
+					if utils.ResourceIDEqual(req.Ref.ResourceId, statReqRoot) && req.Ref.Path == path {
+						statCallCount++
+					}
+				}
+			}
+			return statCallCount
+		}
+		Expect(totalStatCalls(".")).To(Equal(1))
+		Expect(totalStatCalls("./orphanfile")).To(Equal(1))
+	})
+})
