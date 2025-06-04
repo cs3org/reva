@@ -143,6 +143,8 @@ func libregraphShareID(shareID *collaborationv1beta1.ShareId) string {
 
 func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libregraph.Drive {
 	// the prefix of the remote_item.id and rootid
+	resourceRelativePath, _ := spaces.PathRelativeToSpaceRoot(rsi.ResourceInfo)
+
 	return &libregraph.Drive{
 		Id:         libregraph.PtrString(libregraphShareID(rsi.ReceivedShare.Share.Id)),
 		DriveType:  libregraph.PtrString("mountpoint"),
@@ -158,7 +160,7 @@ func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libre
 			Id:        libregraph.PtrString(fmt.Sprintf("%s$%s!%s", ShareJailID, ShareJailID, rsi.ReceivedShare.Share.Id.OpaqueId)),
 			WebDavUrl: libregraph.PtrString(fullURL(s.c.WebDavBase, rsi.ResourceInfo.Path)),
 			RemoteItem: &libregraph.RemoteItem{
-				DriveAlias: libregraph.PtrString(strings.TrimSuffix(strings.TrimPrefix(rsi.ResourceInfo.Path, "/"), spaces.RelativePathToSpaceID(rsi.ResourceInfo))), // the drive alias must not start with /
+				DriveAlias: libregraph.PtrString(rsi.ResourceInfo.Id.StorageId),
 				ETag:       libregraph.PtrString(rsi.ResourceInfo.Etag),
 				Folder:     &libregraph.Folder{},
 				// The Id must correspond to the id in the OCS response, for the time being
@@ -166,7 +168,7 @@ func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libre
 				Id:                   libregraph.PtrString(spaces.EncodeResourceID(rsi.ResourceInfo.Id)),
 				LastModifiedDateTime: libregraph.PtrTime(time.Unix(int64(rsi.ResourceInfo.Mtime.Seconds), int64(rsi.ResourceInfo.Mtime.Nanos))),
 				Name:                 libregraph.PtrString(filepath.Base(rsi.ResourceInfo.Path)),
-				Path:                 libregraph.PtrString(spaces.RelativePathToSpaceID(rsi.ResourceInfo)),
+				Path:                 libregraph.PtrString(resourceRelativePath),
 				// RootId must have the same token before ! as Id
 				// the second part for the time being is not used
 				RootId: libregraph.PtrString(fmt.Sprintf("%s!unused_root_id", spaces.EncodeStorageSpaceID(rsi.ResourceInfo.Id.StorageId, rsi.ResourceInfo.Id.SpaceId))),

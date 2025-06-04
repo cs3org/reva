@@ -1194,8 +1194,12 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		s.FileSource = s.ItemSource
 		switch {
 		case h.sharePrefix == "/":
-			s.FileTarget = spaces.RelativePathToSpaceID(info)
-			s.Path = spaces.RelativePathToSpaceID(info)
+			relativePath, err := spaces.PathRelativeToSpaceRoot(info)
+			if err != nil {
+				return err
+			}
+			s.FileTarget = relativePath
+			s.Path = relativePath
 		case s.ShareType == conversions.ShareTypePublicLink:
 			s.FileTarget = path.Join("/", path.Base(info.Path))
 			s.Path = path.Join("/", path.Base(info.Path))
