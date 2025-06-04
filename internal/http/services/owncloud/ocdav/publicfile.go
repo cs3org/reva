@@ -174,6 +174,8 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 	}
 	infos := s.getPublicFileInfos(onContainer, depth == "0", tokenStatInfo)
 
+	sublog.Info().Any("infos", infos).Msg("handlePropfindPublicLinkToken")
+
 	propRes, err := s.multistatusResponse(ctx, &pf, infos, ns, nil, nil)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
