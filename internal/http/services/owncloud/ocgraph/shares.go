@@ -23,7 +23,6 @@ package ocgraph
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 	"path"
@@ -330,7 +329,6 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 
 func encodeSpaceIDForShareJail(res *provider.ResourceInfo) string {
 	return spaces.EncodeResourceID(res.Id)
-	// return spaces.EncodeStorageSpaceID(res.Id.StorageId, res.Path)
 }
 
 func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.ReceivedShareResourceInfo) (*libregraph.DriveItem, error) {
@@ -342,6 +340,11 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.Rece
 	}
 
 	grantee, err := s.cs3GranteeToSharePointIdentitySet(ctx, rsi.ReceivedShare.Share.Grantee)
+	if err != nil {
+		return nil, err
+	}
+
+	relativePath, err := spaces.PathRelativeToSpaceRoot(rsi.ResourceInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -366,9 +369,9 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.Rece
 		LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(rsi.ResourceInfo.Mtime)),
 		Name:                 libregraph.PtrString(rsi.ResourceInfo.Name),
 		ParentReference: &libregraph.ItemReference{
-			DriveId:   libregraph.PtrString(fmt.Sprintf("%s$%s", ShareJailID, ShareJailID)),
+			DriveId:   libregraph.PtrString(spaces.ConcatStorageSpaceID(ShareJailID, ShareJailID)),
 			DriveType: libregraph.PtrString("virtual"),
-			Id:        libregraph.PtrString(fmt.Sprintf("%s$%s!%s", ShareJailID, ShareJailID, ShareJailID)),
+			Id:        libregraph.PtrString(spaces.EncodeResourceID(&provider.ResourceId{OpaqueId: ShareJailID, StorageId: ShareJailID, SpaceId: ShareJailID})),
 		},
 		RemoteItem: &libregraph.RemoteItem{
 			CreatedBy: &libregraph.IdentitySet{
@@ -384,7 +387,7 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.Rece
 			Id:                   libregraph.PtrString(encodeSpaceIDForShareJail(rsi.ResourceInfo)),
 			LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(rsi.ResourceInfo.Mtime)),
 			Name:                 libregraph.PtrString(rsi.ResourceInfo.Name),
-			Path:                 libregraph.PtrString(spaces.RelativePathToSpaceID(rsi.ResourceInfo)),
+			Path:                 libregraph.PtrString(relativePath),
 			// ParentReference: &libregraph.ItemReference{
 			// 	DriveId:   libregraph.PtrString(spaces.EncodeResourceID(share.ResourceInfo.ParentId)),
 			// 	DriveType: nil, // FIXME: no way to know it unless we hardcode it
@@ -553,8 +556,6 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceInfo, shares []*share) (*libregraph.DriveItem, error) {
-	parentSpacePath := path.Dir(spaces.RelativePathToSpaceID(info))
-
 	relativePath, err := spaces.PathRelativeToSpaceRoot(info)
 	if err != nil {
 		return nil, err
@@ -571,7 +572,7 @@ func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceIn
 	}
 
 	if info.ParentId.SpaceId == "" {
-		info.ParentId.SpaceId = spaces.PathToSpaceID(parentSpacePath)
+		info.ParentId.SpaceId = spaces.PathToSpaceID(info.Path)
 	}
 
 	d := &libregraph.DriveItem{
@@ -580,10 +581,10 @@ func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceIn
 		LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(info.Mtime)),
 		Name:                 libregraph.PtrString(info.Name),
 		ParentReference: &libregraph.ItemReference{
-			DriveId: libregraph.PtrString(fmt.Sprintf("%s$%s", info.ParentId.StorageId, info.ParentId.SpaceId)),
+			DriveId: libregraph.PtrString(spaces.ConcatStorageSpaceID(info.ParentId.StorageId, info.ParentId.SpaceId)),
 			// DriveType: libregraph.PtrString(info.Space.SpaceType),
 			Id:   libregraph.PtrString(spaces.EncodeResourceID(info.ParentId)),
-			Name: libregraph.PtrString(path.Base(parentSpacePath)),
+			Name: libregraph.PtrString(path.Base(relativePath)),
 			Path: libregraph.PtrString(parentRelativePath),
 		},
 		Permissions: permissions,
