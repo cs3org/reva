@@ -26,6 +26,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storagep "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/google/uuid"
 	"github.com/owncloud/reva/v2/pkg/auth/scope"
 	ctxpkg "github.com/owncloud/reva/v2/pkg/ctx"
 	"github.com/owncloud/reva/v2/pkg/rgrpc/todo/pool"
@@ -35,7 +36,6 @@ import (
 	"github.com/owncloud/reva/v2/pkg/storage/fs/registry"
 	jwt "github.com/owncloud/reva/v2/pkg/token/manager/jwt"
 	"github.com/owncloud/reva/v2/tests/helpers"
-	"github.com/google/uuid"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -318,7 +318,7 @@ var _ = Describe("storage providers", func() {
 				Permissions: &storagep.ResourcePermissions{
 					Stat:                 true,
 					Move:                 true,
-					Delete:               false,
+					Delete:               true,
 					InitiateFileDownload: true,
 				},
 			}
@@ -333,7 +333,7 @@ var _ = Describe("storage providers", func() {
 			readGrant := listRes.Grants[0]
 			Expect(readGrant.Permissions.Stat).To(BeTrue())
 			Expect(readGrant.Permissions.Move).To(BeTrue())
-			Expect(readGrant.Permissions.Delete).To(BeFalse())
+			Expect(readGrant.Permissions.Delete).To(BeTrue())
 			Expect(readGrant.Permissions.InitiateFileDownload).To(BeTrue())
 
 			By("updating the grant")

@@ -25,10 +25,10 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
-	helpers "github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
+	helpers "github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -52,7 +52,7 @@ var _ = Describe("Grants", func() {
 			Permissions: &provider.ResourcePermissions{
 				Stat:                 true,
 				Move:                 true,
-				Delete:               false,
+				Delete:               true,
 				InitiateFileDownload: true,
 			},
 			Creator: &userpb.UserId{
@@ -131,7 +131,7 @@ var _ = Describe("Grants", func() {
 				Expect(err).ToNot(HaveOccurred())
 				attr, err := n.XattrString(env.Ctx, prefixes.GrantUserAcePrefix+grant.Grantee.GetUserId().OpaqueId)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(attr).To(Equal(fmt.Sprintf("\x00t=A:f=:p=trw:c=%s:e=0\n", o.GetOpaqueId()))) // NOTE: this tests ace package
+				Expect(attr).To(Equal(fmt.Sprintf("\x00t=A:f=:p=trwd:c=%s:e=0\n", o.GetOpaqueId()))) // NOTE: this tests ace package
 			})
 
 			It("creates a storage space per created grant", func() {
@@ -157,7 +157,7 @@ var _ = Describe("Grants", func() {
 				Expect(g.Grantee.GetUserId().OpaqueId).To(Equal(grant.Grantee.GetUserId().OpaqueId))
 				Expect(g.Permissions.Stat).To(BeTrue())
 				Expect(g.Permissions.Move).To(BeTrue())
-				Expect(g.Permissions.Delete).To(BeFalse())
+				Expect(g.Permissions.Delete).To(BeTrue())
 			})
 		})
 
