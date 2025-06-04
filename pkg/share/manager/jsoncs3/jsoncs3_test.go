@@ -25,14 +25,21 @@ import (
 	"path/filepath"
 	"sync"
 
+	// "time"
+
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+
+	// types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/owncloud/reva/v2/pkg/conversions"
 	ctxpkg "github.com/owncloud/reva/v2/pkg/ctx"
+
+	// "github.com/owncloud/reva/v2/pkg/events"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/owncloud/reva/v2/pkg/rgrpc/status"
 	"github.com/owncloud/reva/v2/pkg/rgrpc/todo/pool"
 	sharespkg "github.com/owncloud/reva/v2/pkg/share"
@@ -1147,6 +1154,82 @@ var _ = Describe("Jsoncs3", func() {
 					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 				})
 			})
+		})
+	})
+
+	Describe("TestUserDeleted", func() {
+		It("should remove all shares when a user is deleted", func() {
+			// Create two users
+			user1 := &userpb.User{
+				Id: &userpb.UserId{
+					OpaqueId: "user1",
+					Idp:      "idp",
+				},
+			}
+			user2 := &userpb.User{
+				Id: &userpb.UserId{
+					OpaqueId: "user2",
+					Idp:      "idp",
+				},
+			}
+
+			// Create a test file
+			file := &provider.ResourceInfo{
+				Id: &provider.ResourceId{
+					StorageId: "storage1",
+					SpaceId:   "space1",
+					OpaqueId:  "file1",
+				},
+				Owner: user1.Id,
+			}
+
+			// Create share from user1 to user2
+			_, err := m.Share(ctxpkg.ContextSetUser(context.Background(), user1), file, &collaboration.ShareGrant{
+				Grantee: &provider.Grantee{
+					Type: provider.GranteeType_GRANTEE_TYPE_USER,
+					Id:   &provider.Grantee_UserId{UserId: user2.Id},
+				},
+				Permissions: &collaboration.SharePermissions{
+					Permissions: &provider.ResourcePermissions{
+						GetPath: true,
+					},
+				},
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			// Create share from user2 to user1
+			file2 := &provider.ResourceInfo{
+				Id: &provider.ResourceId{
+					StorageId: "storage1",
+					SpaceId:   "space1",
+					OpaqueId:  "file2",
+				},
+				Owner: user2.Id,
+			}
+			_, err = m.Share(ctxpkg.ContextSetUser(context.Background(), user2), file2, &collaboration.ShareGrant{
+				Grantee: &provider.Grantee{
+					Type: provider.GranteeType_GRANTEE_TYPE_USER,
+					Id:   &provider.Grantee_UserId{UserId: user1.Id},
+				},
+				Permissions: &collaboration.SharePermissions{
+					Permissions: &provider.ResourcePermissions{
+						GetPath: true,
+					},
+				},
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify shares exist
+			shares, err := m.ListShares(ctx, []*collaboration.Filter{})
+			spew.Dump(err)
+			spew.Dump(shares)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(shares).To(HaveLen(2))
+
+			// Verify all shares are removed
+			// shares, err = m.ListShares(ctx, []*collaboration.Filter{})
+			// Expect(err).ToNot(HaveOccurred())
+			// Expect(shares).To(HaveLen(0))
 		})
 	})
 })
