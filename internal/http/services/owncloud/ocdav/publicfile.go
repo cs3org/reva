@@ -125,7 +125,7 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 	ctx := r.Context()
 	tokenStatInfo := ctx.Value(tokenStatInfoKey{}).(*provider.ResourceInfo)
 	sublog := appctx.GetLogger(ctx).With().Interface("tokenStatInfo", tokenStatInfo).Logger()
-	sublog.Debug().Msg("handlePropfindOnToken")
+	sublog.Info().Any("tokenStatInfo", tokenStatInfo).Msg("handlePropfindOnToken")
 
 	depth := r.Header.Get(HeaderDepth)
 	if depth == "" {
@@ -173,6 +173,8 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 		return
 	}
 	infos := s.getPublicFileInfos(onContainer, depth == "0", tokenStatInfo)
+
+	sublog.Info().Any("infos", infos).Msg("handlePropfindPublicLinkToken")
 
 	propRes, err := s.multistatusResponse(ctx, &pf, infos, ns, nil, nil)
 	if err != nil {
