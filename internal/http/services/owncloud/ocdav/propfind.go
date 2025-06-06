@@ -519,6 +519,10 @@ func spaceHref(ctx context.Context, baseURI string, md *provider.ResourceInfo) (
 		return "", errors.New("Space ID must be set to calculate Href")
 	}
 
+	if md.Id.StorageId == "versions" {
+		return versionSpaceHref(ctx, baseURI, md)
+	}
+
 	spacePath, ok := ctx.Value(ctxSpacePath).(string)
 	if !ok {
 		// If no space path is set in the context, we calculate it
@@ -533,6 +537,24 @@ func spaceHref(ctx context.Context, baseURI string, md *provider.ResourceInfo) (
 		return "", errors.Wrapf(err, "failed to calculate path relative to space root: %v", spacePath)
 	}
 	return path.Join(baseURI, md.Id.SpaceId, relativePath), nil
+}
+
+func versionSpaceHref(ctx context.Context, baseURI string, md *provider.ResourceInfo) (string, error) {
+	spacePath, ok := ctx.Value(ctxSpacePath).(string)
+	if !ok {
+		// If no space path is set in the context, we calculate it
+		_, spacePath, ok = spaces.DecodeStorageSpaceID(fmt.Sprintf("%s$%s", md.Id.StorageId, md.Id.SpaceId))
+		if !ok {
+			return "", errors.New("Failed to decode space ID")
+		}
+	}
+
+	relativePath, err := filepath.Rel(spacePath, md.Path)
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to calculate path relative to space root: %v", spacePath)
+	}
+
+	return path.Join(baseURI, relativePath), nil
 }
 
 func appendSlash(path string) string {
