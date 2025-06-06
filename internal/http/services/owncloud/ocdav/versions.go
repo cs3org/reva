@@ -32,8 +32,8 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
-	"github.com/cs3org/reva/pkg/utils/resourceid"
 )
 
 // VersionsHandler handles version requests.
@@ -56,7 +56,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 		}
 
 		// baseURI is encoded as part of the response payload in href field
-		baseURI := path.Join(ctx.Value(ctxKeyBaseURI).(string), resourceid.OwnCloudResourceIDWrap(rid))
+		baseURI := path.Join(ctx.Value(ctxKeyBaseURI).(string), spaces.EncodeResourceID(rid))
 		ctx = context.WithValue(ctx, ctxKeyBaseURI, baseURI)
 		r = r.WithContext(ctx)
 
@@ -141,9 +141,12 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 	versions := lvRes.GetVersions()
 	infos := make([]*provider.ResourceInfo, 0, len(versions)+1)
 	// add version dir . entry, derived from file info
-	infos = append(infos, &provider.ResourceInfo{
-		Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-	})
+	_, spacePath, ok := spaces.DecodeStorageSpaceID(fmt.Sprintf("%s$%s", rid.StorageId, rid.SpaceId))
+	if !ok {
+		sublog.Error().Msg("error decoding storage space id")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	for i := range versions {
 		vi := &provider.ResourceInfo{
@@ -162,7 +165,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 				Seconds: versions[i].Mtime,
 				// TODO cs3apis FileVersion should use types.Timestamp instead of uint64
 			},
-			Path: path.Join("v", versions[i].Key),
+			Path: path.Join(spacePath, "v", versions[i].Key),
 			// PermissionSet
 			Size:  versions[i].Size,
 			Owner: info.Owner,
