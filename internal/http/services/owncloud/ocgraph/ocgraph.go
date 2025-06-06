@@ -132,6 +132,7 @@ func (s *svc) Unprotected() []string { return nil }
 
 func handleError(err error, w http.ResponseWriter) {
 	w.WriteHeader(http.StatusInternalServerError)
+
 	w.Write([]byte(err.Error()))
 }
 

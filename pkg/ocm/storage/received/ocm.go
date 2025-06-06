@@ -434,6 +434,8 @@ func (d *driver) ListStorageSpaces(ctx context.Context, filter []*provider.ListS
 }
 
 func (d *driver) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	log := appctx.GetLogger(ctx)
+	log.Warn().Msg("OCM received: CreateStorageSpace")
 	return nil, errtypes.NotSupported("operation not supported")
 }
 
