@@ -532,7 +532,13 @@ func spaceHref(ctx context.Context, baseURI string, md *provider.ResourceInfo) (
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to calculate path relative to space root: %v", spacePath)
 	}
-	return path.Join(baseURI, md.Id.SpaceId, relativePath), nil
+
+	spaceID, ok := ctx.Value(ctxSpaceID).(string)
+	if !ok {
+		return "", errors.New("space id expected to be in the context")
+	}
+
+	return path.Join(baseURI, spaceID, relativePath), nil
 }
 
 func appendSlash(path string) string {
