@@ -1,5 +1,35 @@
 # Changelog
 
+## [2.33.1](https://github.com/opencloud-eu/reva/releases/tag/v2.33.1) - 2025-06-10
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck, @rhafer
+
+### 🐛 Bug Fixes
+
+- Fix posixfs id cache after failed renames on disk [[#229](https://github.com/opencloud-eu/reva/pull/229)]
+- Fix deadlock while copying metadata to CURRENT file [[#228](https://github.com/opencloud-eu/reva/pull/228)]
+
+### 📦️ Dependencies
+
+- Bump golang.org/x/crypto from 0.38.0 to 0.39.0 [[#236](https://github.com/opencloud-eu/reva/pull/236)]
+- Bump github.com/pkg/xattr from 0.4.10 to 0.4.11 [[#237](https://github.com/opencloud-eu/reva/pull/237)]
+- Bump golang.org/x/sync from 0.14.0 to 0.15.0 [[#235](https://github.com/opencloud-eu/reva/pull/235)]
+- Bump golang.org/x/text from 0.25.0 to 0.26.0 [[#234](https://github.com/opencloud-eu/reva/pull/234)]
+- Bump github.com/nats-io/nats.go from 1.42.0 to 1.43.0 [[#232](https://github.com/opencloud-eu/reva/pull/232)]
+- Bump github.com/nats-io/nats-server/v2 from 2.11.3 to 2.11.4 [[#231](https://github.com/opencloud-eu/reva/pull/231)]
+- Bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc from 1.35.0 to 1.36.0 [[#225](https://github.com/opencloud-eu/reva/pull/225)]
+- Bump github.com/nats-io/nats.go from 1.41.2 to 1.42.0 [[#226](https://github.com/opencloud-eu/reva/pull/226)]
+- Bump google.golang.org/grpc from 1.72.1 to 1.72.2 [[#224](https://github.com/opencloud-eu/reva/pull/224)]
+- Bump github.com/mattn/go-sqlite3 from 1.14.27 to 1.14.28 [[#223](https://github.com/opencloud-eu/reva/pull/223)]
+- Bump go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc from 0.60.0 to 0.61.0 [[#222](https://github.com/opencloud-eu/reva/pull/222)]
+- Bump google.golang.org/grpc from 1.72.0 to 1.72.1 [[#220](https://github.com/opencloud-eu/reva/pull/220)]
+- Bump go.etcd.io/etcd/client/v3 from 3.5.20 to 3.6.0 [[#219](https://github.com/opencloud-eu/reva/pull/219)]
+- Bump github.com/nats-io/nats-server/v2 from 2.11.1 to 2.11.3 [[#204](https://github.com/opencloud-eu/reva/pull/204)]
+- Bump github.com/minio/minio-go/v7 from 7.0.89 to 7.0.92 [[#218](https://github.com/opencloud-eu/reva/pull/218)]
+- Bump github.com/aws/aws-sdk-go from 1.55.6 to 1.55.7 [[#215](https://github.com/opencloud-eu/reva/pull/215)]
+
 ## [2.33.0](https://github.com/opencloud-eu/reva/releases/tag/v2.33.0) - 2025-05-19
 
 ### ❤️ Thanks to all contributors! ❤️
