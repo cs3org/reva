@@ -226,7 +226,7 @@ replace github.com/studio-b12/gowebdav => github.com/kobergj/gowebdav v0.0.0-202
 
 replace github.com/go-micro/plugins/v4/store/nats-js-kv => github.com/kobergj/plugins/v4/store/nats-js-kv v0.0.0-20240807130109-f62bb67e8c90
 
-replace go-micro.dev/v4 => github.com/kobergj/go-micro/v4 v4.0.0-20250117084952-d07d30666b7c
+replace go-micro.dev/v4 => github.com/kobergj/go-micro/v4 v4.0.0-20250610135441-d0b187215699
 
 // exclude the v2 line of go-sqlite3 which was released accidentally and prevents pulling in newer versions of go-sqlite3
 // see https://github.com/mattn/go-sqlite3/issues/965 for more details
