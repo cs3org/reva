@@ -1,0 +1,16 @@
+pprof logging
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# Date:      Wed Jun 11 11:27:19 2025 +0200
+#
+# On branch fix/spaces-public-links
+# Your branch is up to date with 'origin/fix/spaces-public-links'.
+#
+# Changes to be committed:
+#	modified:   internal/http/services/pprof/pprof.go
+#
+# Changes not staged for commit:
+#	modified:   tests/ocis (modified content)
+#

@@ -20,9 +20,11 @@ package pprof
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/pprof"
 
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 )
@@ -39,6 +41,8 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 	}
 
 	c.ApplyDefaults()
+
+	fmt.Println("pprof service created")
 
 	return &svc{conf: &c}, nil
 }
@@ -66,15 +70,25 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/"}
+	return []string{"/", "/pprof/", "/pprof/profile", "/pprof/symbol", "/pprof/trace", "/pprof/heap", "/pprof/goroutine"}
 }
 
 func (s *svc) Handler() http.Handler {
 	mux := http.NewServeMux()
 	// example: /debug/pprof/profile
-	mux.HandleFunc("/pprof/", pprof.Index)
-	mux.HandleFunc("/pprof/profile", pprof.Profile)
-	mux.HandleFunc("/pprof/symbol", pprof.Symbol)
-	mux.HandleFunc("/pprof/trace", pprof.Trace)
+	mux.HandleFunc("/pprof/", func(w http.ResponseWriter, r *http.Request) { handle(pprof.Index, w, r) })
+	mux.HandleFunc("/pprof/profile", func(w http.ResponseWriter, r *http.Request) { handle(pprof.Profile, w, r) })
+	mux.HandleFunc("/pprof/symbol", func(w http.ResponseWriter, r *http.Request) { handle(pprof.Symbol, w, r) })
+	mux.HandleFunc("/pprof/trace", func(w http.ResponseWriter, r *http.Request) { handle(pprof.Trace, w, r) })
+	mux.HandleFunc("/pprof/heap", func(w http.ResponseWriter, r *http.Request) { pprof.Handler("heap").ServeHTTP(w, r) })
+	mux.HandleFunc("/pprof/goroutine", func(w http.ResponseWriter, r *http.Request) { pprof.Handler("goroutine").ServeHTTP(w, r) })
+
 	return mux
+}
+
+func handle(handler func(w http.ResponseWriter, r *http.Request), w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sublog := appctx.GetLogger(ctx)
+	sublog.Warn().Msg("handle pprof")
+	handler(w, r)
 }
