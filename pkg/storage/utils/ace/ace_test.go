@@ -153,11 +153,13 @@ var _ = Describe("ACE", func() {
 
 			userGrant.Permissions.InitiateFileUpload = true
 			userGrant.Permissions.InitiateFileDownload = true
+			userGrant.Permissions.Delete = true
 			newGrant = ace.FromGrant(userGrant).Grant()
 			userGrant.Permissions.InitiateFileUpload = false
+			userGrant.Permissions.Delete = false
 			Expect(newGrant.Permissions.InitiateFileUpload).To(BeTrue())
 			Expect(newGrant.Permissions.Move).To(BeTrue())
-			Expect(newGrant.Permissions.Delete).To(BeFalse())
+			Expect(newGrant.Permissions.Delete).To(BeTrue())
 		})
 
 		It("converts a", func() {
