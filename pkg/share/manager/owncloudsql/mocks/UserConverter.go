@@ -41,9 +41,9 @@ func (_m *UserConverter) EXPECT() *UserConverter_Expecter {
 	return &UserConverter_Expecter{mock: &_m.Mock}
 }
 
-// GetUser provides a mock function with given fields: userid
-func (_m *UserConverter) GetUser(userid *userv1beta1.UserId) (*userv1beta1.User, error) {
-	ret := _m.Called(userid)
+// GetUser provides a mock function with given fields: ctx, userid
+func (_m *UserConverter) GetUser(ctx context.Context, userid *userv1beta1.UserId) (*userv1beta1.User, error) {
+	ret := _m.Called(ctx, userid)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetUser")
@@ -51,19 +51,19 @@ func (_m *UserConverter) GetUser(userid *userv1beta1.UserId) (*userv1beta1.User,
 
 	var r0 *userv1beta1.User
 	var r1 error
-	if rf, ok := ret.Get(0).(func(*userv1beta1.UserId) (*userv1beta1.User, error)); ok {
-		return rf(userid)
+	if rf, ok := ret.Get(0).(func(context.Context, *userv1beta1.UserId) (*userv1beta1.User, error)); ok {
+		return rf(ctx, userid)
 	}
-	if rf, ok := ret.Get(0).(func(*userv1beta1.UserId) *userv1beta1.User); ok {
-		r0 = rf(userid)
+	if rf, ok := ret.Get(0).(func(context.Context, *userv1beta1.UserId) *userv1beta1.User); ok {
+		r0 = rf(ctx, userid)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*userv1beta1.User)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(*userv1beta1.UserId) error); ok {
-		r1 = rf(userid)
+	if rf, ok := ret.Get(1).(func(context.Context, *userv1beta1.UserId) error); ok {
+		r1 = rf(ctx, userid)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -77,14 +77,15 @@ type UserConverter_GetUser_Call struct {
 }
 
 // GetUser is a helper method to define mock.On call
+//   - ctx context.Context
 //   - userid *userv1beta1.UserId
-func (_e *UserConverter_Expecter) GetUser(userid interface{}) *UserConverter_GetUser_Call {
-	return &UserConverter_GetUser_Call{Call: _e.mock.On("GetUser", userid)}
+func (_e *UserConverter_Expecter) GetUser(ctx interface{}, userid interface{}) *UserConverter_GetUser_Call {
+	return &UserConverter_GetUser_Call{Call: _e.mock.On("GetUser", ctx, userid)}
 }
 
-func (_c *UserConverter_GetUser_Call) Run(run func(userid *userv1beta1.UserId)) *UserConverter_GetUser_Call {
+func (_c *UserConverter_GetUser_Call) Run(run func(ctx context.Context, userid *userv1beta1.UserId)) *UserConverter_GetUser_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(*userv1beta1.UserId))
+		run(args[0].(context.Context), args[1].(*userv1beta1.UserId))
 	})
 	return _c
 }
@@ -94,7 +95,7 @@ func (_c *UserConverter_GetUser_Call) Return(_a0 *userv1beta1.User, _a1 error) *
 	return _c
 }
 
-func (_c *UserConverter_GetUser_Call) RunAndReturn(run func(*userv1beta1.UserId) (*userv1beta1.User, error)) *UserConverter_GetUser_Call {
+func (_c *UserConverter_GetUser_Call) RunAndReturn(run func(context.Context, *userv1beta1.UserId) (*userv1beta1.User, error)) *UserConverter_GetUser_Call {
 	_c.Call.Return(run)
 	return _c
 }
