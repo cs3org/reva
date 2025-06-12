@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2025 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/"}
+	return []string{"/", "/pprof/", "/pprof/profile", "/pprof/symbol", "/pprof/trace", "/pprof/heap", "/pprof/goroutine"}
 }
 
 func (s *svc) Handler() http.Handler {
@@ -76,5 +76,9 @@ func (s *svc) Handler() http.Handler {
 	mux.HandleFunc("/pprof/profile", pprof.Profile)
 	mux.HandleFunc("/pprof/symbol", pprof.Symbol)
 	mux.HandleFunc("/pprof/trace", pprof.Trace)
+	// See https://pkg.go.dev/runtime/pprof#Profile for predefined profile names.
+	mux.HandleFunc("/pprof/heap", func(w http.ResponseWriter, r *http.Request) { pprof.Handler("heap").ServeHTTP(w, r) })
+	mux.HandleFunc("/pprof/goroutine", func(w http.ResponseWriter, r *http.Request) { pprof.Handler("goroutine").ServeHTTP(w, r) })
+
 	return mux
 }
