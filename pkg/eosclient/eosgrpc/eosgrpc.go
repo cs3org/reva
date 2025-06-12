@@ -453,7 +453,14 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 	}
 
 	// Stuff filename, uid, gid into the MDRequest type
-	mdrq.Type = erpc.TYPE_STAT
+	// TODO this is temporary, until EOS keeps support for both legacy and new inode scheme:
+	// we have to do the EOS mapping ourselves and issue a request with the right type.
+	// In the future, we should switch back to erpc.TYPE_STAT.
+	if inode&(1<<63) != 0 {
+		mdrq.Type = erpc.TYPE_FILE
+	} else {
+		mdrq.Type = erpc.TYPE_CONTAINER
+	}
 	mdrq.Id = new(erpc.MDId)
 	mdrq.Id.Ino = inode
 
@@ -1743,7 +1750,7 @@ func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDRespon
 		fi.Size = fi.TreeSize
 		fi.TreeCount = st.Cmd.Files + st.Cmd.Containers
 
-		log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Msg("grpc response")
+		log.Debug().Str("stat file path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Msg("grpc response")
 	} else {
 		fi.Inode = st.Fmd.Inode
 		fi.FID = st.Fmd.ContId
@@ -1771,7 +1778,7 @@ func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDRespon
 			}
 			fi.XS = xs
 
-			log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Str("checksum", fi.XS.XSType+":"+fi.XS.XSSum).Msg("grpc response")
+			log.Debug().Str("stat folder path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Str("checksum", fi.XS.XSType+":"+fi.XS.XSSum).Msg("grpc response")
 		}
 	}
 	return fi, nil
