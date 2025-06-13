@@ -38,6 +38,7 @@ import (
 )
 
 func init() {
+	rgrpc.Register("eu.opencloud.api.users", New)
 	rgrpc.Register("userprovider", New)
 	plugin.RegisterNamespace("grpc.services.userprovider.drivers", func(name string, newFunc any) {
 		var f registry.NewFunc

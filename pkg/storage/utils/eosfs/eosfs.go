@@ -20,6 +20,7 @@ package eosfs
 
 import (
 	"context"
+	"encoding/base32"
 	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -43,6 +44,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/spaces"
 
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/eosclient/eosbinary"
@@ -81,6 +83,8 @@ var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
 var eosLockReg = regexp.MustCompile(`expires:\d+,type:[a-z]+,owner:.+:.+`)
 
 func (c *Config) ApplyDefaults() {
+	c.EnableHome = true
+
 	c.Namespace = path.Clean(c.Namespace)
 	if !strings.HasPrefix(c.Namespace, "/") {
 		c.Namespace = "/"
@@ -406,7 +410,7 @@ func (fs *Eosfs) resolveRefAndGetAuth(ctx context.Context, ref *provider.Referen
 
 // resolve takes in a request path or request id and returns the unwrapped path.
 func (fs *Eosfs) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
-	if ref.ResourceId != nil {
+	if ref.ResourceId != nil && ref.ResourceId.OpaqueId != "" {
 		p, err := fs.getPath(ctx, ref.ResourceId)
 		if err != nil {
 			return "", err
@@ -1202,7 +1206,7 @@ func (fs *Eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		return nil, fmt.Errorf("error getting daemon auth")
 	}
 
-	if ref.ResourceId != nil {
+	if ref.ResourceId != nil && ref.ResourceId.OpaqueId != "" {
 		fid, err := strconv.ParseUint(ref.ResourceId.OpaqueId, 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("error converting string to int for eos fileid: %s", ref.ResourceId.OpaqueId)
@@ -1276,16 +1280,62 @@ func (fs *Eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 		// Remove the hidden folders in the topmost directory
 		if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo); err == nil &&
 			finfo.Path != "/" && !strings.HasPrefix(finfo.Path, "/.") {
+			setPathRelativeToBase(ctx, p, finfo)
 			finfos = append(finfos, finfo)
 		}
 	}
 
+	log.Info().Any("finfos", finfos).Msg("Files infos in path " + fn)
+
 	return finfos, nil
+}
+
+func setPathRelativeToBase(ctx context.Context, basePath string, rinfo *provider.ResourceInfo) {
+	log := appctx.GetLogger(ctx)
+	if strings.HasPrefix(basePath, "./") {
+		basePath = basePath[1:]
+	}
+	res, err := filepath.Rel(basePath, rinfo.Path)
+	if err == nil {
+		log.Info().Any("rinfo", rinfo).Str("base_path", basePath).Msg("func=setPathRelativeToBase()")
+		rinfo.Path = res
+	} else {
+		log.Error().Err(err).Any("rinfo", rinfo).Str("base_path", basePath).Msg("Failed to make " + rinfo.Path + " relative to " + basePath)
+	}
 }
 
 // CreateStorageSpace creates a storage space.
 func (fs *Eosfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
+	ri, err := fs.GetMD(ctx, &provider.Reference{
+		Path: "",
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+	if ri.Id == nil {
+		return nil, errors.New("Did not get resource id")
+	}
+	wrappedPath := fs.wrap(ctx, ri.Path)
+	spaceId := spaces.EncodeStorageSpaceID(ri.Id.StorageId, wrappedPath)
+	return &provider.CreateStorageSpaceResponse{
+		StorageSpace: &provider.StorageSpace{
+			SpaceType: req.Type,
+			Owner:     req.Owner,
+			Quota:     req.Quota,
+			Id: &provider.StorageSpaceId{
+				OpaqueId: spaceId,
+			},
+			Root: &provider.ResourceId{
+				StorageId: ri.Id.StorageId,
+				OpaqueId:  ri.Id.OpaqueId,
+				SpaceId:   spaceId,
+			},
+			Name: "My personal space",
+		},
+		Status: &rpc.Status{
+			Code: rpc.Code_CODE_OK,
+		},
+	}, nil
 }
 
 func (fs *Eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (totalbytes, usedbytes uint64, err error) {
@@ -1360,13 +1410,13 @@ func (fs *Eosfs) createNominalHome(ctx context.Context) error {
 }
 
 func (fs *Eosfs) CreateHome(ctx context.Context) error {
-	if !fs.conf.EnableHome {
-		return errtypes.NotSupported("eosfs: create home not supported")
-	}
+	// if !fs.conf.EnableHome {
+	// 	return errtypes.NotSupported("eosfs: create home not supported")
+	// }
 
-	if err := fs.createNominalHome(ctx); err != nil {
-		return errors.Wrap(err, "eosfs: error creating nominal home")
-	}
+	// if err := fs.createNominalHome(ctx); err != nil {
+	// 	return errors.Wrap(err, "eosfs: error creating nominal home")
+	// }
 
 	return nil
 }
@@ -1735,7 +1785,54 @@ func (fs *Eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relative
 }
 
 func (fs *Eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
-	return nil, errtypes.NotSupported("list storage spaces")
+	u := appctx.ContextMustGetUser(ctx)
+	ri, err := fs.GetMD(ctx, &provider.Reference{
+		Path: "",
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+	wrappedPath := fs.wrap(ctx, ri.Path)
+	spaceId := spaces.EncodeStorageSpaceID(ri.Id.StorageId, wrappedPath)
+	for _, f := range filter {
+		if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE {
+			if f.GetSpaceType() == "project" {
+				return []*provider.StorageSpace{}, nil
+			}
+		}
+	}
+
+	return []*provider.StorageSpace{
+		{
+			SpaceType: "personal",
+			Quota: &provider.Quota{
+				QuotaMaxBytes: 1000000,
+				QuotaMaxFiles: 1000000,
+			},
+			Owner: u,
+			Name:  "My personal space",
+			Id: &provider.StorageSpaceId{
+				OpaqueId: spaceId,
+			},
+			Root: &provider.ResourceId{
+				StorageId: ri.Id.StorageId,
+				OpaqueId:  ri.Id.OpaqueId,
+				SpaceId:   base32.StdEncoding.EncodeToString([]byte(wrappedPath)),
+			},
+			Opaque: &types.Opaque{
+				Map: map[string]*types.OpaqueEntry{
+					"spaceAlias": {
+						Decoder: "plain",
+						Value:   []byte("personal/admin"),
+					},
+					"etag": {
+						Decoder: "plain",
+						Value:   []byte(fmt.Sprintf(`"%s"`, ri.Etag)),
+					},
+				},
+			},
+		},
+	}, nil
 }
 
 // UpdateStorageSpace updates a storage space.
@@ -1963,16 +2060,25 @@ func (fs *Eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 	}
 
 	parseAndSetFavoriteAttr(ctx, filteredAttrs)
+	spaceId := spaces.PathToSpaceID(eosFileInfo.File)
 
 	info := &provider.ResourceInfo{
-		Id:            &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.Inode)},
-		Path:          p,
-		Name:          path.Base(p),
-		Owner:         owner,
-		Etag:          fmt.Sprintf("\"%s\"", strings.Trim(eosFileInfo.ETag, "\"")),
-		MimeType:      mime.Detect(eosFileInfo.IsDir, p),
-		Size:          size,
-		ParentId:      &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.FID)},
+		Id: &provider.ResourceId{
+			OpaqueId:  fmt.Sprintf("%d", eosFileInfo.Inode),
+			StorageId: "eoshomedev",
+			SpaceId:   spaceId,
+		},
+		Path:     p,
+		Name:     path.Base(p),
+		Owner:    owner,
+		Etag:     fmt.Sprintf("\"%s\"", strings.Trim(eosFileInfo.ETag, "\"")),
+		MimeType: mime.Detect(eosFileInfo.IsDir, p),
+		Size:     size,
+		ParentId: &provider.ResourceId{
+			OpaqueId:  fmt.Sprintf("%d", eosFileInfo.FID),
+			StorageId: "eoshomedev",
+			SpaceId:   spaceId,
+		},
 		PermissionSet: fs.permissionSet(ctx, eosFileInfo, owner),
 		Checksum:      &xs,
 		Type:          getResourceType(eosFileInfo.IsDir),
@@ -2109,8 +2215,12 @@ func (fs *Eosfs) getUserAuth(ctx context.Context, u *userpb.User, fn string) (eo
 	if utils.IsLightweightUser(u) {
 		return fs.getEOSToken(ctx, u, fn)
 	}
-
-	return fs.extractUIDAndGID(u)
+	return eosclient.Authorization{
+		Role: eosclient.Role{
+			UID: strconv.FormatInt(1850, 10),
+			GID: strconv.FormatInt(2766, 10),
+		}}, nil
+	//return fs.extractUIDAndGID(u)
 }
 
 // Generate an EOS token that acts on behalf of the owner of the file `fn`
