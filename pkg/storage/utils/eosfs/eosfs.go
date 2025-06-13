@@ -1504,6 +1504,7 @@ func (fs *Eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]
 	var auth eosclient.Authorization
 	var fn string
 	var err error
+
 	if !fs.conf.EnableHome {
 		// We need to access the revisions for a non-home reference.
 		// We'll get the owner of the particular resource and impersonate them
