@@ -14,8 +14,7 @@ steps:
     settings:
       access_key:
         from_secret: cache_s3_access_key
-      endpoint:
-        from_secret: cache_s3_server
+      endpoint: "https://s3.ci.opencloud.eu"
       flush: true
       flush_age: 1
       flush_path: dev/opencloud-eu/reva/
