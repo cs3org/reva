@@ -8,7 +8,7 @@ require (
 	github.com/beevik/etree v1.5.1
 	github.com/bluele/gcache v0.0.2
 	github.com/c-bata/go-prompt v0.2.6
-	github.com/ceph/go-ceph v0.33.0
+	github.com/ceph/go-ceph v0.34.0
 	github.com/cern-eos/go-eosgrpc v0.0.0-20250205160007-5263e0105295
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc/v3 v3.14.1
