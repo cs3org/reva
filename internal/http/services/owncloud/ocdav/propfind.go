@@ -675,6 +675,13 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			}
 		}
 
+		if md.ParentId != nil {
+			id := spaces.EncodeResourceID(md.ParentId)
+			propstatOK.Prop = append(propstatOK.Prop,
+				s.newProp("oc:file-parent", id),
+			)
+		}
+
 		if md.Etag != "" {
 			// etags must be enclosed in double quotes and cannot contain them.
 			// See https://tools.ietf.org/html/rfc7232#section-2.3 for details
@@ -786,6 +793,16 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:id", spaces.EncodeResourceID(md.Id)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:id", ""))
+					}
+				case "file-parent":
+					if md.ParentId != nil {
+						if spacesEnabled {
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:file-parent", spaces.EncodeResourceID(md.ParentId)))
+						} else {
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:file-parent", spaces.ResourceIdToString(md.ParentId)))
+						}
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:file-parent", ""))
 					}
 				case "permissions": // both
 					// oc:permissions take several char flags to indicate the permissions the user has on this node:
