@@ -189,7 +189,6 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 			Authkey:             c.HTTPSAuthkey,
 		}
 		eosClient, err = eosgrpc.New(ctx, eosClientOpts, eosHTTPOpts)
-
 		if err != nil {
 			return nil, errors.Wrap(err, "error initializing eosclient")
 		}
@@ -296,20 +295,18 @@ func (fs *Eosfs) getLayout(ctx context.Context) (layout string) {
 
 func (fs *Eosfs) getInternalHome(ctx context.Context) string {
 	log := appctx.GetLogger(ctx)
-	log.Info().Msgf("get internal home: %+v", fs.conf.EnableHome) 
+	log.Info().Msgf("get internal home: %+v", fs.conf.EnableHome)
 	if !fs.conf.EnableHome {
 		// TODO(lopresti): this is to be removed as we always want to support home,
 		// cf. https://github.com/cs3org/reva/pull/4940
 		return "/"
 	}
 
-	
 	u := appctx.ContextMustGetUser(ctx)
 	relativeHome := templates.WithUser(u, fs.conf.UserLayout)
-	log.Info().Msgf("get internal home: %+v", relativeHome) 
+	log.Info().Msgf("get internal home: %+v", relativeHome)
 	return relativeHome
 }
-
 
 func (fs *Eosfs) wrap(ctx context.Context, fn string) (internal string) {
 	if fs.conf.EnableHome {
@@ -520,6 +517,7 @@ func (fs *Eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 
 		err := fs.c.UnsetAttr(ctx, cboxAuth, attr, false, fn, "")
 
+		err := fs.binaryClient.UnsetAttr(ctx, rootAuth, attr, false, fn, "")
 		if err != nil {
 			if errors.Is(err, eosclient.AttrNotExistsError) {
 				continue
@@ -721,7 +719,6 @@ func (fs *Eosfs) getUserFromID(ctx context.Context, userID *userpb.UserId) (*use
 	res, err := client.GetUser(ctx, &userpb.GetUserRequest{
 		UserId: userID,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -1165,6 +1162,28 @@ func (fs *Eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	}
 
 	if ref.ResourceId != nil {
+		// Check if it's a version
+		// Cannot check with (ResourceId.StorageId == "versions") because of the storage provider
+		if strings.Contains(ref.ResourceId.OpaqueId, "@") {
+			parts := strings.Split(ref.ResourceId.OpaqueId, "@")
+			version := ""
+			ref.ResourceId.OpaqueId, version = parts[0], parts[1]
+
+			path, err := fs.getPath(ctx, ref.ResourceId)
+			if err != nil {
+				return nil, fmt.Errorf("error getting path for resource id: %s", ref.ResourceId.OpaqueId)
+			}
+			path = filepath.Join(fn, path)
+
+			versionFolder := fs.getVersionFolder(path)
+			versionPath := filepath.Join(versionFolder, version)
+			eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, versionPath)
+			if err != nil {
+				return nil, fmt.Errorf("error getting file info by path: %s", versionPath)
+			}
+
+			return fs.convertToResourceInfo(ctx, eosFileInfo)
+		}
 		fid, err := strconv.ParseUint(ref.ResourceId.OpaqueId, 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("error converting string to int for eos fileid: %s", ref.ResourceId.OpaqueId)
@@ -1291,7 +1310,6 @@ func (fs *Eosfs) createNominalHome(ctx context.Context) error {
 
 	home := templates.WithUser(u, fs.conf.UserLayout)
 	home = path.Join(fs.conf.Namespace, home)
-
 
 	auth, err := fs.getUserAuth(ctx, u, "")
 	if err != nil {
@@ -2152,6 +2170,11 @@ func (fs *Eosfs) getEosMetadata(finfo *eosclient.FileInfo) []byte {
 
 	v, _ := json.Marshal(sys)
 	return v
+}
+
+func (fs *Eosfs) getVersionFolder(p string) string {
+	versionPrefix := ".sys.v#."
+	return path.Join(path.Dir(p), versionPrefix+path.Base(p))
 }
 
 func parseAndSetFavoriteAttr(ctx context.Context, attrs map[string]string) {
