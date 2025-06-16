@@ -32,13 +32,13 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/httpclient"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
-	"github.com/cs3org/reva/pkg/utils/resourceid"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 // VersionsHandler handles version requests.
-type VersionsHandler struct {
-}
+type VersionsHandler struct{}
 
 func (h *VersionsHandler) init(c *Config) error {
 	return nil
@@ -57,7 +57,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 		}
 
 		// baseURI is encoded as part of the response payload in href field
-		baseURI := path.Join(ctx.Value(ctxKeyBaseURI).(string), resourceid.OwnCloudResourceIDWrap(rid))
+		baseURI := path.Join(ctx.Value(ctxKeyBaseURI).(string), spaces.EncodeResourceID(rid))
 		ctx = context.WithValue(ctx, ctxKeyBaseURI, baseURI)
 		r = r.WithContext(ctx)
 
@@ -71,12 +71,38 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 			h.doListVersions(w, r, s, rid)
 			return
 		}
-		if key != "" && r.Method == MethodCopy {
-			// TODO(jfd) it seems we cannot directly GET version content with cs3 ...
-			// TODO(jfd) cs3api has no delete file version call
-			// TODO(jfd) restore version to given Destination, but cs3api has no destination
-			h.doRestore(w, r, s, rid, key)
-			return
+		if key != "" {
+			switch r.Method {
+			case MethodCopy:
+				// TODO(jfd) cs3api has no delete file version call
+				// TODO(jfd) restore version to given Destination, but cs3api has no destination
+				h.doRestore(w, r, s, rid, key)
+				return
+			case http.MethodHead:
+				log := appctx.GetLogger(ctx)
+				ref := &provider.Reference{
+					ResourceId: &provider.ResourceId{
+						StorageId: rid.StorageId,
+						SpaceId:   rid.SpaceId,
+						OpaqueId: rid.OpaqueId + "@" + key,
+					},
+					Path: utils.MakeRelativePath(r.URL.Path),
+				}
+				s.handleHead(ctx, w, r, ref, *log)
+				return
+			case http.MethodGet:
+				log := appctx.GetLogger(ctx)
+				ref := &provider.Reference{
+					ResourceId: &provider.ResourceId{
+						StorageId: rid.StorageId,
+						SpaceId:   rid.SpaceId,
+						OpaqueId: rid.OpaqueId + "@" + key,
+					},
+					Path: utils.MakeRelativePath(r.URL.Path),
+				}
+				s.handleGet(ctx, w, r, ref, "spaces", *log)
+				return
+			}
 		}
 		if key != "" && r.Method == http.MethodGet {
 			h.doDownload(w, r, s, rid, key)
@@ -142,9 +168,12 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 	versions := lvRes.GetVersions()
 	infos := make([]*provider.ResourceInfo, 0, len(versions)+1)
 	// add version dir . entry, derived from file info
-	infos = append(infos, &provider.ResourceInfo{
-		Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-	})
+	_, spacePath, ok := spaces.DecodeStorageSpaceID(fmt.Sprintf("%s$%s", rid.StorageId, rid.SpaceId))
+	if !ok {
+		sublog.Error().Msg("error decoding storage space id")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	for i := range versions {
 		vi := &provider.ResourceInfo{
@@ -163,7 +192,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 				Seconds: versions[i].Mtime,
 				// TODO cs3apis FileVersion should use types.Timestamp instead of uint64
 			},
-			Path: path.Join("v", versions[i].Key),
+			Path: path.Join(spacePath, "v", versions[i].Key),
 			// PermissionSet
 			Size:  versions[i].Size,
 			Owner: info.Owner,
@@ -232,7 +261,6 @@ func (h *VersionsHandler) doDownload(w http.ResponseWriter, r *http.Request, s *
 			ResourceId: rid,
 		},
 	})
-
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

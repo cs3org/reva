@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"path"
 	"strconv"
 	"strings"
@@ -34,8 +33,8 @@ import (
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/utils"
-	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 )
 
@@ -122,9 +121,9 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set(HeaderContentType, info.MimeType)
 	w.Header().Set(HeaderContentDisposistion, "attachment; filename*=UTF-8''"+
-		url.PathEscape(path.Base(r.URL.Path))+"; filename=\""+path.Base(r.URL.Path)+"\"")
+		path.Base(info.Path)+"; filename=\""+path.Base(info.Path)+"\"")
 	w.Header().Set(HeaderETag, info.Etag)
-	w.Header().Set(HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(info.Id))
+	w.Header().Set(HeaderOCFileID, spaces.EncodeResourceID(info.Id))
 	w.Header().Set(HeaderOCETag, info.Etag)
 	t := utils.TSToTime(info.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
