@@ -24,13 +24,7 @@ import (
 	"io"
 	"net/http"
 	"path"
-
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"path/filepath"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -40,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 // VersionsHandler handles version requests.
@@ -88,7 +83,8 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 				ref := &provider.Reference{
 					ResourceId: &provider.ResourceId{
 						StorageId: rid.StorageId,
-						OpaqueId:  key,
+						SpaceId:   rid.SpaceId,
+						OpaqueId:  rid.OpaqueId + "@" + key,
 					},
 					Path: utils.MakeRelativePath(r.URL.Path),
 				}
@@ -99,17 +95,18 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 				ref := &provider.Reference{
 					ResourceId: &provider.ResourceId{
 						StorageId: rid.StorageId,
-						OpaqueId:  key,
+						SpaceId:   rid.SpaceId,
+						OpaqueId:  rid.OpaqueId + "@" + key,
 					},
 					Path: utils.MakeRelativePath(r.URL.Path),
 				}
-				s.handleGet(ctx, w, r, ref, "spaces", *log)
+				if s.c.SpacesEnabled {
+					s.handleGet(ctx, w, r, ref, "spaces", *log)
+				} else {
+					h.doDownload(w, r, s, rid, key)
+				}
 				return
 			}
-		}
-		if key != "" && r.Method == http.MethodGet {
-			h.doDownload(w, r, s, rid, key)
-			return
 		}
 
 		http.Error(w, "501 Forbidden", http.StatusNotImplemented)
@@ -171,11 +168,19 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 	versions := lvRes.GetVersions()
 	infos := make([]*provider.ResourceInfo, 0, len(versions)+1)
 	// add version dir . entry, derived from file info
-	_, spacePath, ok := spaces.DecodeStorageSpaceID(fmt.Sprintf("%s$%s", rid.StorageId, rid.SpaceId))
-	if !ok {
-		sublog.Error().Msg("error decoding storage space id")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+
+	var spacePath string
+	var ok bool
+	if s.c.SpacesEnabled {
+		storageSpaceID := spaces.ConcatStorageSpaceID(rid.StorageId, rid.SpaceId)
+		_, spacePath, ok = spaces.DecodeStorageSpaceID(storageSpaceID)
+		if !ok {
+			sublog.Error().Msg("error decoding storage space id")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	} else {
+		spacePath = ""
 	}
 
 	for i := range versions {

@@ -34,8 +34,8 @@ import (
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/utils"
-	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 )
 
@@ -120,12 +120,12 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	info := sRes.Info
 
-	w.Header().Set(net.HeaderContentType, info.MimeType)
-	w.Header().Set(net.HeaderContentDisposistion, "attachment; filename*=UTF-8''"+
-		path.Base(info.Path)+"; filename=\""+path.Base(info.Path)+"\"")
-	w.Header().Set(net.HeaderETag, info.Etag)
-	w.Header().Set(net.HeaderOCFileID, storagespace.FormatResourceID(*info.Id))
-	w.Header().Set(net.HeaderOCETag, info.Etag)
+	w.Header().Set(HeaderContentType, info.MimeType)
+	w.Header().Set(HeaderContentDisposistion, "attachment; filename*=UTF-8''"+
+		url.PathEscape(path.Base(r.URL.Path))+"; filename=\""+path.Base(r.URL.Path)+"\"")
+	w.Header().Set(HeaderETag, info.Etag)
+	w.Header().Set(HeaderOCFileID, spaces.EncodeResourceID(info.Id))
+	w.Header().Set(HeaderOCETag, info.Etag)
 	t := utils.TSToTime(info.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
 	w.Header().Set(HeaderLastModified, lastModifiedString)
