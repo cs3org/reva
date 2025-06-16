@@ -24,13 +24,7 @@ import (
 	"io"
 	"net/http"
 	"path"
-
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"path/filepath"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -40,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/spaces"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 // VersionsHandler handles version requests.
@@ -88,7 +83,8 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 				ref := &provider.Reference{
 					ResourceId: &provider.ResourceId{
 						StorageId: rid.StorageId,
-						OpaqueId:  key,
+						SpaceId:   rid.SpaceId,
+						OpaqueId: rid.OpaqueId + "@" + key,
 					},
 					Path: utils.MakeRelativePath(r.URL.Path),
 				}
@@ -99,7 +95,8 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 				ref := &provider.Reference{
 					ResourceId: &provider.ResourceId{
 						StorageId: rid.StorageId,
-						OpaqueId:  key,
+						SpaceId:   rid.SpaceId,
+						OpaqueId: rid.OpaqueId + "@" + key,
 					},
 					Path: utils.MakeRelativePath(r.URL.Path),
 				}
