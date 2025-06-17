@@ -189,6 +189,7 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 			// 1. New file (could be emitted as part of a new directory)
 			//	 -> assimilate file
 			//   -> scan parent directory recursively to update tree size and catch nodes that weren't covered by an event
+			AssimilationCounter.WithLabelValues(_labelFile, _labelAdded).Inc()
 			if !t.scanDebouncer.InProgress(filepath.Dir(path)) {
 				t.scanDebouncer.Debounce(scanItem{
 					Path:        path,
@@ -209,6 +210,7 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 			if err := t.setDirty(path, true); err != nil {
 				t.log.Error().Err(err).Str("path", path).Bool("isDir", isDir).Msg("failed to mark directory as dirty")
 			}
+			AssimilationCounter.WithLabelValues(_labelDir, _labelAdded).Inc()
 			t.scanDebouncer.Debounce(scanItem{
 				Path:        path,
 				ForceRescan: true,
@@ -227,6 +229,12 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 			})
 		}
 
+		if !isDir {
+			AssimilationCounter.WithLabelValues(_labelFile, _labelUpdated).Inc()
+		} else {
+			AssimilationCounter.WithLabelValues(_labelDir, _labelUpdated).Inc()
+		}
+
 	case ActionMove:
 		t.log.Debug().Str("path", path).Bool("isDir", isDir).Msg("scanning path (ActionMove)")
 		// 4. Moved file
@@ -238,6 +246,12 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 			ForceRescan: isDir,
 			Recurse:     isDir,
 		})
+
+		if !isDir {
+			AssimilationCounter.WithLabelValues(_labelFile, _labelMoved).Inc()
+		} else {
+			AssimilationCounter.WithLabelValues(_labelDir, _labelMoved).Inc()
+		}
 
 	case ActionMoveFrom:
 		t.log.Debug().Str("path", path).Bool("isDir", isDir).Msg("scanning path (ActionMoveFrom)")
@@ -258,6 +272,8 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 			t.log.Error().Err(err).Str("path", path).Bool("isDir", isDir).Msg("failed to handle moved away item")
 		}
 
+		// We do not do metrics here because this has been handled in `ActionMove`
+
 	case ActionDelete:
 		t.log.Debug().Str("path", path).Bool("isDir", isDir).Msg("handling deleted item")
 
@@ -274,6 +290,12 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 			ForceRescan: true,
 			Recurse:     true,
 		})
+
+		if !isDir {
+			AssimilationCounter.WithLabelValues(_labelFile, _labelDeleted).Inc()
+		} else {
+			AssimilationCounter.WithLabelValues(_labelDir, _labelDeleted).Inc()
+		}
 	}
 
 	return nil
