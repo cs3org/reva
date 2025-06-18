@@ -112,12 +112,14 @@ func (d *ScanDebouncer) Debounce(item scanItem) {
 	force := item.ForceRescan
 	recurse := item.Recurse
 	if i, ok := d.pending.Load(item.Path); ok {
+		AssimilationPendingTasks.Dec()
 		queueItem := i.(*queueItem)
 		force = force || queueItem.item.ForceRescan
 		recurse = recurse || queueItem.item.Recurse
 		queueItem.timer.Stop()
 	}
 
+	AssimilationPendingTasks.Inc()
 	d.pending.Store(item.Path, &queueItem{
 		item: item,
 		timer: time.AfterFunc(d.after, func() {
@@ -132,6 +134,7 @@ func (d *ScanDebouncer) Debounce(item scanItem) {
 				return
 			}
 
+			AssimilationPendingTasks.Dec()
 			d.pending.Delete(path)
 			d.inProgress.Store(path, true)
 			defer d.inProgress.Delete(path)

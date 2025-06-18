@@ -23,4 +23,10 @@ var (
 		// action can be "added", "updated", "deleted", "moved"
 		[]string{"type", "action"},
 	)
+
+	// AssimilationPendingTasks is a Prometheus gauge that tracks the number of active assimilation tasks.
+	AssimilationPendingTasks = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "reva_assimilation_active_tasks",
+		Help: "Number of active assimilation tasks in posixfs",
+	})
 )
