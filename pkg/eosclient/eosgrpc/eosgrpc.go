@@ -316,6 +316,8 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 	msg.Recursive = fileInfo.IsDir
 	msg.Rule = a.CitrineSerialize()
 
+	log.Info().Str("acl", a.CitrineSerialize()).Msg("Setting EOS ACL")
+
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
 
