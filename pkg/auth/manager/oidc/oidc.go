@@ -44,7 +44,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils/cfg"
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/golang-jwt/jwt"
 	"github.com/juliangruber/go-intersect"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
