@@ -192,7 +192,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	}
 	u := &user.User{
 		Id: userID,
-		// TODO add more claims from the RegisteredClaims, eg EmailVerified
+		// TODO add more claims from the StandardClaims, eg EmailVerified
 		Username: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UID),
 		// TODO groups
 		Groups:      getGroupsResp.Groups,

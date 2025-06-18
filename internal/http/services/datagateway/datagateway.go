@@ -34,7 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils/cfg"
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/golang-jwt/jwt"
 	"github.com/pkg/errors"
 )
 
@@ -51,7 +51,7 @@ func init() {
 
 // transferClaims are custom claims for a JWT token to be used between the metadata and data gateways.
 type transferClaims struct {
-	jwt.RegisteredClaims
+	jwt.StandardClaims
 	Target     string `json:"target"`
 	VersionKey string `json:"version_key,omitempty"`
 }
@@ -211,7 +211,7 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 	copyHeader(w.Header(), httpRes.Header)
 
 	// add upload expiry / transfer token expiry header for tus https://tus.io/protocols/resumable-upload.html#expiration
-	w.Header().Set(UploadExpiresHeader, time.Unix(claims.ExpiresAt.Unix(), 0).Format(time.RFC1123))
+	w.Header().Set(UploadExpiresHeader, time.Unix(claims.ExpiresAt, 0).Format(time.RFC1123))
 
 	if httpRes.StatusCode != http.StatusOK {
 		// swallow the body and set content-length to 0 to prevent reverse proxies from trying to read from it
