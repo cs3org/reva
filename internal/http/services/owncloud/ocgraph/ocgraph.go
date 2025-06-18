@@ -115,6 +115,8 @@ func (s *svc) initRouter() {
 		r.Get("/drives/{space-id}/items/{resource-id}/permissions", s.getDrivePermissions)
 		r.Post("/drives/{space-id}/items/{resource-id}/invite", s.share)
 		r.Post("/drives/{space-id}/items/{resource-id}/createLink", s.createLink)
+		r.Patch("/drives/{space-id}/items/{resource-id}/permissions/{share-id}", s.updateDrivePermissions)
+
 	})
 }
 
