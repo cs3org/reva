@@ -303,7 +303,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 			Expiration: exp,
 			Password:   password,
 			Permissions: &link.PublicSharePermissions{
-				Permissions: LinkTypeToPermissions(*linkRequest.Type),
+				Permissions: LinkTypeToPermissions(*linkRequest.Type, statRes.Info.Type),
 			},
 		},
 	}
@@ -318,7 +318,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lgPerm := s.libreGraphPermissionFromCS3PublicShare(resp.GetShare())
+	lgPerm := s.libreGraphPermissionFromCS3PublicShare(ctx, resp.GetShare())
 	if lgPerm == nil {
 		log.Error().Err(err).Any("link", resp.GetShare()).Any("lgPerm", lgPerm).Msg("error converting created link to permissions")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -481,27 +481,26 @@ func (s *svc) cs3GranteeToSharePointIdentitySet(ctx context.Context, grantee *pr
 	return p, nil
 }
 
-type share struct {
-	share  *collaborationv1beta1.Share
-	public *link.PublicShare
-}
-
-func groupByResourceID(shares []*gateway.ShareResourceInfo, publicShares []*gateway.PublicShareResourceInfo) (map[string][]*share, map[string]*provider.ResourceInfo) {
-	grouped := make(map[string][]*share, len(shares)+len(publicShares)) // at most we have the sum of both lists
+func groupByResourceID(shares []*gateway.ShareResourceInfo, publicShares []*gateway.PublicShareResourceInfo) (map[string][]*ShareOrLink, map[string]*provider.ResourceInfo) {
+	grouped := make(map[string][]*ShareOrLink, len(shares)+len(publicShares)) // at most we have the sum of both lists
 	infos := make(map[string]*provider.ResourceInfo, len(shares)+len(publicShares))
 
 	for _, s := range shares {
 		id := spaces.ResourceIdToString(s.Share.ResourceId)
-		grouped[id] = append(grouped[id], &share{
-			share: s.Share,
+		grouped[id] = append(grouped[id], &ShareOrLink{
+			shareType: "share",
+			ID:        s.Share.Id.OpaqueId,
+			share:     s.Share,
 		})
 		infos[id] = s.ResourceInfo // all shares of the same resource are assumed to have the same ResourceInfo payload, here we take the last
 	}
 
 	for _, s := range publicShares {
 		id := spaces.ResourceIdToString(s.PublicShare.ResourceId)
-		grouped[id] = append(grouped[id], &share{
-			public: s.PublicShare,
+		grouped[id] = append(grouped[id], &ShareOrLink{
+			shareType: "link",
+			ID:        s.PublicShare.Id.OpaqueId,
+			link:      s.PublicShare,
 		})
 		infos[id] = s.ResourceInfo
 	}
@@ -555,7 +554,7 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceInfo, shares []*share) (*libregraph.DriveItem, error) {
+func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceInfo, shares []*ShareOrLink) (*libregraph.DriveItem, error) {
 	relativePath, err := spaces.PathRelativeToSpaceRoot(info)
 	if err != nil {
 		return nil, err
@@ -603,7 +602,7 @@ func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceIn
 	return d, nil
 }
 
-func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*share) ([]libregraph.Permission, error) {
+func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*ShareOrLink) ([]libregraph.Permission, error) {
 	permissions := make([]libregraph.Permission, 0, len(shares))
 
 	for _, e := range shares {
@@ -638,17 +637,17 @@ func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*share) ([]li
 				},
 				Roles: roles,
 			})
-		} else if e.public != nil {
-			createdTime := utils.TSToTime(e.public.Ctime)
-			linktype, _ := SharingLinkTypeFromCS3Permissions(e.public.Permissions)
+		} else if e.link != nil {
+			createdTime := utils.TSToTime(e.link.Ctime)
+			linktype, _ := SharingLinkTypeFromCS3Permissions(ctx, e.link.Permissions)
 
 			permissions = append(permissions, libregraph.Permission{
 				CreatedDateTime: *libregraph.NewNullableTime(&createdTime),
-				HasPassword:     libregraph.PtrBool(e.public.PasswordProtected),
-				Id:              libregraph.PtrString(e.public.Token),
+				HasPassword:     libregraph.PtrBool(e.link.PasswordProtected),
+				Id:              libregraph.PtrString(e.link.Token),
 				Link: &libregraph.SharingLink{
-					LibreGraphDisplayName: libregraph.PtrString(e.public.DisplayName),
-					LibreGraphQuickLink:   libregraph.PtrBool(e.public.Quicklink),
+					LibreGraphDisplayName: libregraph.PtrString(e.link.DisplayName),
+					LibreGraphQuickLink:   libregraph.PtrBool(e.link.Quicklink),
 					PreventsDownload:      libregraph.PtrBool(false),
 					Type:                  linktype,
 					// WebUrl:                libregraph.PtrString(""),
