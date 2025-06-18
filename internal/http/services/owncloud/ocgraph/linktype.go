@@ -21,10 +21,13 @@
 package ocgraph
 
 import (
+	"context"
 	"errors"
 
 	linkv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/storage/utils/grants"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 )
@@ -49,23 +52,36 @@ func (l *LinkType) GetPermissions() *provider.ResourcePermissions {
 
 // SharingLinkTypeFromCS3Permissions creates a libregraph link type
 // It returns a list of libregraph actions when the conversion is not possible
-func SharingLinkTypeFromCS3Permissions(permissions *linkv1beta1.PublicSharePermissions) (*libregraph.SharingLinkType, []string) {
+func SharingLinkTypeFromCS3Permissions(ctx context.Context, permissions *linkv1beta1.PublicSharePermissions) (*libregraph.SharingLinkType, []string) {
+	log := appctx.GetLogger(ctx)
 	if permissions == nil {
 		return nil, nil
 	}
-	linkTypes := GetAvailableLinkTypes()
-	for _, linkType := range linkTypes {
-		if grants.PermissionsEqual(linkType.GetPermissions(), permissions.GetPermissions()) {
-			return &linkType.linkType, nil
-		}
+
+	var lt libregraph.SharingLinkType
+
+	log.Info().Bool("equal", grants.PermissionsEqual(permissions.GetPermissions(), conversions.NewViewerRole().CS3ResourcePermissions())).
+		Any("passed", permissions.GetPermissions()).
+		Any("viewer-role", conversions.NewViewerRole().CS3ResourcePermissions()).
+		Msg("FindMe")
+
+	if grants.PermissionsEqual(permissions.GetPermissions(), conversions.NewViewerRole().CS3ResourcePermissions()) {
+		lt = libregraph.VIEW
+	} else if grants.PermissionsEqual(permissions.GetPermissions(), conversions.NewEditorRole().CS3ResourcePermissions()) {
+		lt = libregraph.EDIT
+	} else if grants.PermissionsEqual(permissions.GetPermissions(), conversions.NewUploaderRole().CS3ResourcePermissions()) {
+		lt = libregraph.UPLOAD
+	} else {
+		return nil, CS3ResourcePermissionsToLibregraphActions(permissions.GetPermissions())
 	}
-	return nil, CS3ResourcePermissionsToLibregraphActions(permissions.GetPermissions())
+	log.Info().Any("linkType", lt).Msg("FindMe return")
+	return &lt, nil
 }
 
 // CS3ResourcePermissionsFromSharingLink creates a cs3 resource permissions type
 // it returns an error when the link type is not allowed or empty
-func CS3ResourcePermissionsFromSharingLink(createLink libregraph.DriveItemCreateLink, info provider.ResourceType) (*provider.ResourcePermissions, error) {
-	switch createLink.GetType() {
+func CS3ResourcePermissionsFromSharingLink(linkType libregraph.SharingLinkType, info provider.ResourceType) (*provider.ResourcePermissions, error) {
+	switch linkType {
 	case "":
 		return nil, errors.New("link type is empty")
 	case libregraph.VIEW:

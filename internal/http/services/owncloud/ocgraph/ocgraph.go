@@ -111,11 +111,20 @@ func (s *svc) initRouter() {
 			r.Get("/sharedByMe", s.getSharedByMe)
 		})
 		r.Get("/roleManagement/permissions/roleDefinitions", s.getRoleDefinitions)
-		r.Get("/drives/{space-id}/root/permissions", s.getRootDrivePermissions)
-		r.Get("/drives/{space-id}/items/{resource-id}/permissions", s.getDrivePermissions)
-		r.Post("/drives/{space-id}/items/{resource-id}/invite", s.share)
-		r.Post("/drives/{space-id}/items/{resource-id}/createLink", s.createLink)
-		r.Patch("/drives/{space-id}/items/{resource-id}/permissions/{share-id}", s.updateDrivePermissions)
+		r.Route("/drives/{space-id}", func(r chi.Router) {
+			r.Get("/root/permissions", s.getRootDrivePermissions)
+			r.Route("/items/{resource-id}", func(r chi.Router) {
+				r.Post("/invite", s.share)
+				r.Post("/createLink", s.createLink)
+				r.Route("/permissions", func(r chi.Router) {
+					r.Get("/", s.getDrivePermissions)
+					r.Patch("/{share-id}", s.updateDrivePermissions)
+					r.Delete("/{share-id}", s.deleteDrivePermissions)
+					r.Post("/{share-id}/setPassword", s.updateLinkPassword)
+
+				})
+			})
+		})
 
 	})
 }
