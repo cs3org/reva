@@ -43,7 +43,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
 )
 
 func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
@@ -391,13 +390,86 @@ func (s *svc) getDrivePermissions(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	s.getPermissionsByCs3Reference(ctx, w, log, &providerpb.Reference{
+	actions, roles, err := s.getPermissionsByCs3Reference(ctx, &providerpb.Reference{
 		ResourceId: &providerpb.ResourceId{
 			StorageId: storageID,
 			OpaqueId:  itemID,
 		},
 	})
+	if err != nil {
+		log.Error().Err(err).Msg("error getting permissions by cs3 reference")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	s.writePermissions(ctx, w, actions, roles)
 }
+
+func (s *svc) updateDrivePermissions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	// We extract all the parameters from the request
+	resourceID := chi.URLParam(r, "resource-id")
+	resourceID, _ = url.QueryUnescape(resourceID)
+	storageID, _, itemID, ok := spaces.DecodeResourceID(resourceID)
+	if !ok {
+		log.Error().Str("resource-id", resourceID).Msg("resource id cannot be decoded")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	shareID := chi.URLParam(r, "share-id")
+	shareID, _ = url.QueryUnescape(shareID)
+	if shareID == "" {
+		log.Error().Str("resource-id", resourceID).Msg("resource id cannot be decoded")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Next, we need to determine if it is a link or a permission update request
+	// we try to get a share, if this succeeds, it's a share, otherwise we assume it's a link
+	gw, err := s.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	share, err := gw.GetShare(ctx, &collaborationv1beta1.GetShareRequest{
+		Ref: &collaborationv1beta1.ShareReference{
+			Spec: &collaborationv1beta1.ShareReference_Id{
+				Id: &collaborationv1beta1.ShareId{
+					OpaqueId: shareID,
+				},
+			},
+		},
+	})
+
+	if err == nil && share != nil && share.Status.Code == rpcv1beta1.Code_CODE_OK {
+		// We have a share, so we update the share permissions
+		s.updateSharePermissions(w, r)
+		return
+	}
+
+	link, err := gw.GetPublicShare(ctx, &collaborationv1beta1.GetPublicShareRequest{})
+
+}
+
+func (s *svc) updateLinkPermissions(w http.ResponseWriter, r *http.Request) {}
+
+func (s *svc) updateSharePermissions(w http.ResponseWriter, r *http.Request) {}
+
+/*
+
+	// And we try to decode the body of the request
+	// TODO: can we parse into this even though we miss some fields?
+	linkRequest := &libregraph.DriveItemCreateLink{}
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(linkRequest); err != nil {
+		log.Error().Err(err).Interface("Body", r.Body).Msg("failed unmarshalling request body")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+*/
 
 func (s *svc) getRootDrivePermissions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -412,15 +484,23 @@ func (s *svc) getRootDrivePermissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.getPermissionsByCs3Reference(ctx, w, log, &providerpb.Reference{Path: path})
+	actions, roles, err := s.getPermissionsByCs3Reference(ctx, &providerpb.Reference{
+		Path: path,
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("error getting permissions by cs3 reference")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	s.writePermissions(ctx, w, actions, roles)
 }
 
-func (s *svc) getPermissionsByCs3Reference(ctx context.Context, w http.ResponseWriter, log *zerolog.Logger, ref *providerpb.Reference) {
+func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *providerpb.Reference) (actions []string, roles []*libregraph.UnifiedRoleDefinition, err error) {
+	log := appctx.GetLogger(ctx)
 	gw, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return nil, nil, err
 	}
 
 	statRes, err := gw.Stat(ctx, &providerpb.StatRequest{
@@ -428,23 +508,27 @@ func (s *svc) getPermissionsByCs3Reference(ctx context.Context, w http.ResponseW
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("error getting space by id")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return nil, nil, err
 	}
 	if statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
 		log.Error().Interface("ref", ref).Int("code", int(statRes.Status.Code)).Str("message", statRes.Status.Message).Msg("error statting resource")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return nil, nil, err
 	}
 
-	actions := CS3ResourcePermissionsToLibregraphActions(statRes.Info.PermissionSet)
-	roles := GetApplicableRoleDefinitionsForActions(actions)
+	actions = CS3ResourcePermissionsToLibregraphActions(statRes.Info.PermissionSet)
+	roles = GetApplicableRoleDefinitionsForActions(actions)
 
+	return actions, roles, nil
+
+}
+
+func (s *svc) writePermissions(ctx context.Context, w http.ResponseWriter, actions []string, roles []*libregraph.UnifiedRoleDefinition) {
 	if err := json.NewEncoder(w).Encode(map[string]any{
 		"@libre.graph.permissions.actions.allowedValues": actions,
 		"@libre.graph.permissions.roles.allowedValues":   roles,
 	}); err != nil {
-		log.Error().Err(err).Msg("error marshalling spaces as json")
+		log := appctx.GetLogger(ctx)
+		log.Error().Err(err).Msg("error marshalling permissions as json")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
