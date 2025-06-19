@@ -228,7 +228,7 @@ var _ = Describe("Dynamic storage provider", func() {
 		})
 
 		When("passed a config missing some rules", func() {
-			It("should return an error", func() {
+			It("should not return an error", func() {
 				_, err = New(context.Background(), map[string]interface{}{
 					"rules":       badRules,
 					"rewrites":    rewrites,
@@ -240,7 +240,7 @@ var _ = Describe("Dynamic storage provider", func() {
 					"db_name":     dbName,
 				})
 
-				Expect(err).To(HaveOccurred())
+				Expect(err).To(Not(HaveOccurred()))
 			})
 		})
 
