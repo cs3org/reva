@@ -34,7 +34,7 @@ require (
 	github.com/go-playground/universal-translator v0.18.1
 	github.com/go-playground/validator/v10 v10.26.0
 	github.com/go-redis/redis/v8 v8.11.5
-	github.com/go-sql-driver/mysql v1.9.2
+	github.com/go-sql-driver/mysql v1.9.3
 	github.com/gofrs/flock v0.12.1
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/golang/protobuf v1.5.4
