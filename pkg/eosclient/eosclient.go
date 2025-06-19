@@ -50,6 +50,7 @@ type EOSClient interface {
 	Remove(ctx context.Context, auth Authorization, path string, noRecycle bool) error
 	Rename(ctx context.Context, auth Authorization, oldPath, newPath string) error
 	List(ctx context.Context, auth Authorization, path string) ([]*FileInfo, error)
+	ListWithRegex(ctx context.Context, auth Authorization, path string, depth uint, regex string) ([]*FileInfo, error)
 	Read(ctx context.Context, auth Authorization, path string) (io.ReadCloser, error)
 	Write(ctx context.Context, auth Authorization, path string, stream io.ReadCloser, app string) error
 	ListDeletedEntries(ctx context.Context, auth Authorization, maxentries int, from, to time.Time) ([]*DeletedEntry, error)
