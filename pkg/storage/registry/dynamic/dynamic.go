@@ -75,7 +75,7 @@ func New(ctx context.Context, m map[string]interface{}) (storage.Registry, error
 	log := appctx.GetLogger(ctx)
 	annotatedLog := log.With().Str("storageregistry", "dynamic").Logger()
 
-	rt, err := initRoutingTree(c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName, c.Rules)
+	rt, err := initRoutingTree(ctx, c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName, c.Rules)
 	if err != nil {
 		return nil, errors.Wrap(err, "error initializing routing tree")
 	}
@@ -96,7 +96,9 @@ func New(ctx context.Context, m map[string]interface{}) (storage.Registry, error
 	return d, nil
 }
 
-func initRoutingTree(dbUsername, dbPassword, dbHost string, dbPort int, dbName string, rules map[string]string) (*routingtree.RoutingTree, error) {
+func initRoutingTree(ctx context.Context, dbUsername, dbPassword, dbHost string, dbPort int, dbName string, rules map[string]string) (*routingtree.RoutingTree, error) {
+	log := appctx.GetLogger(ctx).With().Str("storageregistry", "dynamic").Logger()
+
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", dbUsername, dbPassword, dbHost, dbPort, dbName))
 	if err != nil {
 		return nil, errors.Wrap(err, "error opening sql connection")
@@ -124,7 +126,7 @@ func initRoutingTree(dbUsername, dbPassword, dbHost string, dbPort int, dbName s
 	}
 
 	if len(missingRules) != 0 {
-		return nil, errors.New("config: missing routes for: " + strings.Join(missingRules, ", "))
+		log.Error().Msgf("missing routes for: %s", strings.Join(missingRules, ", "))
 	}
 
 	return routingtree.New(rs), nil
