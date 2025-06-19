@@ -32,7 +32,7 @@ This is a guide on how to set up Reva in your local environment and try out some
 Follow the instructions in https://reva.link/docs/getting-started/install-reva/ for how to build Reva. If you're making local changes, you'll need to build the binary again.
 
 ## 3. Start Reva Daemons
-Reva daemons are spawned using configuration specified in `toml` format. Multiple microservices can run on the same server. For a minimal example with the default values, take a look at the [storage-references](https://github.com/cs3org/reva/tree/master/examples/storage-references) example in Reva. The `gateway.toml` starts these service at port 19000 while the storage providers run on ports 17000 and 18000. The `storageregistry` rules specify that the home directory requests for the users should go to the `storage-home` server while others (shares, project spaces) should be handled by a global storage provider. This can be visualised below.
+Reva daemons are spawned using configuration specified in `toml` format. Multiple microservices can run on the same server. For a minimal example with the default values, take a look at the [storage-references](https://github.com/cs3org/reva-configs/tree/main/storage-references) example in Reva. The `gateway.toml` starts these service at port 19000 while the storage providers run on ports 17000 and 18000. The `storageregistry` rules specify that the home directory requests for the users should go to the `storage-home` server while others (shares, project spaces) should be handled by a global storage provider. This can be visualised below.
 
 ```
           +                             +----+
@@ -60,12 +60,15 @@ Reva daemons are spawned using configuration specified in `toml` format. Multipl
 You can start these three daemons using the `-dev-dir` flag which fires up a daemon for each toml file in a directory. The user, group and mesh provider services use JSON files by default as their data store, and expects these to be located at `/etc/revad`. Some of these commands may require `sudo`, depending on your system setup.
 
 ```
+> # from your home folder
 > mkdir -p /var/tmp/reva
 > mkdir -p /etc/revad
-> cp examples/storage-references/users.demo.json /etc/revad/users.json
-> cp examples/storage-references/groups.demo.json /etc/revad/groups.json
-> cp examples/storage-references/providers.demo.json /etc/revad/ocm-providers.json
-> cmd/revad/revad -dev-dir examples/storage-references
+> git clone https://github.com/cs3org/reva-configs
+> cp reva-configs/storage-references/users.demo.json /etc/revad/users.json
+> cp reva-configs/storage-references/groups.demo.json /etc/revad/groups.json
+> cp reva-configs/storage-references/providers.demo.json /etc/revad/ocm-providers.json
+> cd reva  # assuming you have already cloned and compiled reva
+> cmd/revad/revad -dev-dir /etc/revad
 ```
 
 ## 4. Access through the CLI
