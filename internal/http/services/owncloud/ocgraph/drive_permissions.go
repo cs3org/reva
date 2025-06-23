@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
-	"path"
-	"time"
 
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -44,7 +42,6 @@ func (s *svc) getDrivePermissions(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	// TODO: populate permission
 	s.writePermissions(ctx, w, actions, roles, perms)
 }
 
@@ -516,46 +513,4 @@ func getLinkUpdate(permission *libregraph.Permission, resourceType *providerpb.R
 	// 		},
 	// 	}, nil
 
-}
-
-func (s *svc) shareToLibregraphPerm(ctx context.Context, share *ShareOrLink) (*libregraph.Permission, error) {
-	if share == nil {
-		return nil, errors.New("share is nil")
-	}
-
-	nilTime := libregraph.NewNullableTime(nil)
-	nilTime.Unset()
-
-	if share.shareType == "share" {
-
-		perm := &libregraph.Permission{
-			Id:                 libregraph.PtrString(share.ID),
-			ExpirationDateTime: *nilTime,
-			HasPassword:        libregraph.PtrBool(false),
-			CreatedDateTime:    *libregraph.NewNullableTime(libregraph.PtrTime(time.Unix(int64(share.share.GetCtime().Seconds), 0))),
-		}
-		return perm, nil
-	} else {
-		lt, actions := SharingLinkTypeFromCS3Permissions(ctx, share.link.GetPermissions())
-		var expTime libregraph.NullableTime
-		if share.link.GetExpiration() != nil {
-			expTime = *libregraph.NewNullableTime(libregraph.PtrTime(time.Unix(int64(share.link.GetExpiration().Seconds), 0)))
-		} else {
-			expTime = *nilTime
-		}
-		perm := &libregraph.Permission{
-			Id:                 libregraph.PtrString(share.ID),
-			ExpirationDateTime: expTime,
-			HasPassword:        libregraph.PtrBool(share.link.GetPasswordProtected()),
-			CreatedDateTime:    *libregraph.NewNullableTime(libregraph.PtrTime(time.Unix(int64(share.link.GetCtime().Seconds), 0))),
-			Link: &libregraph.SharingLink{
-				Type:                  lt,
-				LibreGraphDisplayName: libregraph.PtrString(share.link.GetDisplayName()),
-				LibreGraphQuickLink:   libregraph.PtrBool(share.link.GetQuicklink()),
-				WebUrl:                libregraph.PtrString(path.Join(s.c.BaseURL, "s", share.link.GetToken())),
-			},
-			LibreGraphPermissionsActions: actions,
-		}
-		return perm, nil
-	}
 }
