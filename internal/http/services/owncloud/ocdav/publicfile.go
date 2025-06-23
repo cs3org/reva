@@ -124,8 +124,8 @@ func (s *svc) adjustResourcePathInURL(w http.ResponseWriter, r *http.Request) bo
 func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns string, onContainer bool) {
 	ctx := r.Context()
 	tokenStatInfo := ctx.Value(tokenStatInfoKey{}).(*provider.ResourceInfo)
-	sublog := appctx.GetLogger(ctx).With().Interface("tokenStatInfo", tokenStatInfo).Logger()
-	sublog.Debug().Msg("handlePropfindOnToken")
+	sublog := appctx.GetLogger(ctx) //.With().Interface("tokenStatInfo", tokenStatInfo).Logger()
+	sublog.Debug().Bool("onContainer", onContainer).Str("linkId", tokenStatInfo.GetId().OpaqueId).Msg("handlePropfindOnToken")
 
 	depth := r.Header.Get(HeaderDepth)
 	if depth == "" {
@@ -163,7 +163,7 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 		return
 	}
 	if pathRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, pathRes.Status)
+		HandleErrorStatus(sublog, w, pathRes.Status)
 		return
 	}
 
@@ -173,6 +173,7 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 		return
 	}
 	infos := s.getPublicFileInfos(onContainer, depth == "0", tokenStatInfo)
+	sublog.Debug().Interface("infos", infos).Msg("public file infos")
 
 	propRes, err := s.multistatusResponse(ctx, &pf, infos, ns, nil, nil)
 	if err != nil {
@@ -211,6 +212,11 @@ func (s *svc) getPublicFileInfos(onContainer, onlyRoot bool, i *provider.Resourc
 			Opaque: o,
 			Path:   path.Dir(i.Path),
 			Type:   provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+			Id: &provider.ResourceId{
+				StorageId: i.Id.StorageId,
+				SpaceId:   i.Id.SpaceId,
+				OpaqueId:  i.Id.OpaqueId,
+			},
 		})
 		if onlyRoot {
 			return infos
