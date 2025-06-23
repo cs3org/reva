@@ -31,7 +31,7 @@ require (
 	github.com/gomodule/redigo v1.9.2
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
-	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.0.1
+	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/jt-nti/gproto v0.0.0-20210304092907-23e645af1351
 	github.com/juliangruber/go-intersect v1.1.0
