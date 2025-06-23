@@ -1125,9 +1125,14 @@ func quoteEtag(etag string) string {
 // a file is only yours if you are the owner.
 func isCurrentUserOwner(ctx context.Context, owner *userv1beta1.UserId) bool {
 	contextUser, ok := appctx.ContextGetUser(ctx)
-	if ok && contextUser.Id != nil && owner != nil &&
-		contextUser.Id.Idp == owner.Idp &&
+	if !ok || contextUser.Id == nil || owner == nil {
+		return false
+	}
+	if contextUser.Id.Idp == owner.Idp &&
 		contextUser.Id.OpaqueId == owner.OpaqueId {
+		return true
+	}
+	if owner.Idp == "" && contextUser.Id.OpaqueId == owner.OpaqueId {
 		return true
 	}
 	return false
