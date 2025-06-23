@@ -163,8 +163,8 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// We keep a list of users to who we have sent the
-	identitySet := &libregraph.SharePointIdentitySet{}
+	// And we keep a list of share responses
+	response := make([]*libregraph.Permission, 0, len(invite.Recipients))
 
 	// Finally, we create the actual share for every requested recipient
 	for _, recepient := range invite.Recipients {
@@ -203,20 +203,22 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
-			identitySet.SetUser(*libregraph.NewIdentity(grantee.GetUserId().OpaqueId))
-		} else if grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-			identitySet.SetGroup(*libregraph.NewIdentity(grantee.GetGroupId().OpaqueId))
+		lgPerm, err := s.shareToLibregraphPerm(ctx, &ShareOrLink{
+			shareType: "share",
+			share:     resp.GetShare(),
+			ID:        resp.GetShare().GetId().GetOpaqueId()})
+		if err != nil || lgPerm == nil {
+			log.Error().Err(err).Any("share", resp.GetShare()).Err(err).Any("lgPerm", lgPerm).Msg("error converting created share to permissions")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
 
+		response = append(response, lgPerm)
+
 	}
 
-	lgPerm := libregraph.Permission{
-		Roles:       roles,
-		GrantedToV2: identitySet,
-	}
 	_ = json.NewEncoder(w).Encode(&ListResponse{
-		Value: lgPerm,
+		Value: response,
 	})
 }
 
