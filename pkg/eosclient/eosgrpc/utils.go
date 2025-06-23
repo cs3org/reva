@@ -62,3 +62,14 @@ func aclAttrToAclStruct(aclAttr string) *acl.ACLs {
 
 	return acl
 }
+
+func attrTypeToString(at eosclient.AttrType) string {
+	switch at {
+	case eosclient.SystemAttr:
+		return "sys"
+	case eosclient.UserAttr:
+		return "user"
+	default:
+		return "invalid"
+	}
+}
