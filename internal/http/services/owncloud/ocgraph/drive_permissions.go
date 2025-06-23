@@ -536,7 +536,7 @@ func (s *svc) shareToLibregraphPerm(ctx context.Context, share *ShareOrLink) (*l
 		}
 		return perm, nil
 	} else {
-		lt, _ := SharingLinkTypeFromCS3Permissions(ctx, share.link.GetPermissions())
+		lt, actions := SharingLinkTypeFromCS3Permissions(ctx, share.link.GetPermissions())
 		var expTime libregraph.NullableTime
 		if share.link.GetExpiration() != nil {
 			expTime = *libregraph.NewNullableTime(libregraph.PtrTime(time.Unix(int64(share.link.GetExpiration().Seconds), 0)))
@@ -554,6 +554,7 @@ func (s *svc) shareToLibregraphPerm(ctx context.Context, share *ShareOrLink) (*l
 				LibreGraphQuickLink:   libregraph.PtrBool(share.link.GetQuicklink()),
 				WebUrl:                libregraph.PtrString(path.Join(s.c.BaseURL, "s", share.link.GetToken())),
 			},
+			LibreGraphPermissionsActions: actions,
 		}
 		return perm, nil
 	}
