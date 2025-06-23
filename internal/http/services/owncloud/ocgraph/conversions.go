@@ -1,48 +1,45 @@
 package ocgraph
 
 import (
-	"context"
-	"path"
 	"time"
 
-	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 )
 
-func (s *svc) libreGraphPermissionFromCS3PublicShare(ctx context.Context, createdLink *link.PublicShare) *libregraph.Permission {
-	lt, actions := SharingLinkTypeFromCS3Permissions(ctx, createdLink.GetPermissions())
-	baseURI := s.c.BaseURL
+// func (s *svc) libreGraphPermissionFromCS3PublicShare(ctx context.Context, createdLink *link.PublicShare) *libregraph.Permission {
+// 	lt, actions := SharingLinkTypeFromCS3Permissions(ctx, createdLink.GetPermissions())
+// 	baseURI := s.c.BaseURL
 
-	perm := libregraph.NewPermission()
-	perm.Id = libregraph.PtrString(createdLink.GetId().GetOpaqueId())
-	perm.Link = &libregraph.SharingLink{
-		Type:                  lt,
-		PreventsDownload:      libregraph.PtrBool(false),
-		LibreGraphDisplayName: libregraph.PtrString(createdLink.GetDisplayName()),
-		LibreGraphQuickLink:   libregraph.PtrBool(createdLink.GetQuicklink()),
-	}
-	perm.LibreGraphPermissionsActions = actions
+// 	perm := libregraph.NewPermission()
+// 	perm.Id = libregraph.PtrString(createdLink.GetId().GetOpaqueId())
+// 	perm.Link = &libregraph.SharingLink{
+// 		Type:                  lt,
+// 		PreventsDownload:      libregraph.PtrBool(false),
+// 		LibreGraphDisplayName: libregraph.PtrString(createdLink.GetDisplayName()),
+// 		LibreGraphQuickLink:   libregraph.PtrBool(createdLink.GetQuicklink()),
+// 	}
+// 	perm.LibreGraphPermissionsActions = actions
 
-	webURL := path.Join(baseURI, "s", createdLink.GetToken())
-	perm.Link.SetWebUrl(webURL)
+// 	webURL := path.Join(baseURI, "s", createdLink.GetToken())
+// 	perm.Link.SetWebUrl(webURL)
 
-	// set expiration date
-	if createdLink.GetExpiration() != nil {
-		perm.SetExpirationDateTime(cs3TimestampToTime(createdLink.GetExpiration()).UTC())
-	}
+// 	// set expiration date
+// 	if createdLink.GetExpiration() != nil {
+// 		perm.SetExpirationDateTime(cs3TimestampToTime(createdLink.GetExpiration()).UTC())
+// 	}
 
-	// set cTime
-	if createdLink.GetCtime() != nil {
-		perm.SetCreatedDateTime(cs3TimestampToTime(createdLink.GetCtime()).UTC())
-	}
+// 	// set cTime
+// 	if createdLink.GetCtime() != nil {
+// 		perm.SetCreatedDateTime(cs3TimestampToTime(createdLink.GetCtime()).UTC())
+// 	}
 
-	perm.SetHasPassword(createdLink.GetPasswordProtected())
+// 	perm.SetHasPassword(createdLink.GetPasswordProtected())
 
-	return perm
-}
+// 	return perm
+// }
 
 func cs3TimestampToTime(t *types.Timestamp) time.Time {
 	return time.Unix(int64(t.GetSeconds()), int64(t.GetNanos()))
