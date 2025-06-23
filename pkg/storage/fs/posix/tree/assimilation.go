@@ -404,7 +404,7 @@ func (t *Tree) assimilate(item scanItem) error {
 
 	if spaceID == "" {
 		// node didn't have a space ID attached. try to find it by walking up the path on disk
-		spaceID, err = t.findSpaceId(item.Path)
+		spaceID, err = t.findSpaceId(filepath.Dir(item.Path))
 		if err != nil {
 			return err
 		}
