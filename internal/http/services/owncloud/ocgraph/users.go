@@ -29,9 +29,11 @@ import (
 	"strings"
 
 	"github.com/CiscoM31/godata"
-	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"github.com/pkg/errors"
 )
@@ -93,7 +95,7 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 
 	log.Debug().Str("Query", queryVal).Str("orderBy", req.Query.OrderBy.RawValue).Any("select", getUserSelectionFromRequest(req.Query.Select)).Msg("Listing users in libregraph API")
 
-	users, err := gw.FindUsers(ctx, &userv1beta1.FindUsersRequest{
+	users, err := gw.FindUsers(ctx, &userpb.FindUsersRequest{
 		SkipFetchingUserGroups: true,
 		Filter:                 queryVal,
 	})
@@ -124,6 +126,42 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func (s *svc) getUserInfo(ctx context.Context, id *userpb.UserId) (*userpb.User, error) {
+	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+	if err != nil {
+		return nil, err
+	}
+	res, err := gw.GetUser(ctx, &userpb.GetUserRequest{
+		UserId: id,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return nil, errors.New(res.Status.Message)
+	}
+
+	return res.User, nil
+}
+
+func (s *svc) getGroupInfo(ctx context.Context, id *grouppb.GroupId) (*grouppb.Group, error) {
+	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+	if err != nil {
+		return nil, err
+	}
+	res, err := gw.GetGroup(ctx, &grouppb.GetGroupRequest{
+		GroupId: id,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return nil, errors.New(res.Status.Message)
+	}
+
+	return res.Group, nil
+}
+
 // From a Select query, return a list of `SelectableProperty`s
 func getUserSelectionFromRequest(selQuery *godata.GoDataSelectQuery) []UserSelectableProperty {
 	if selQuery == nil {
@@ -142,7 +180,7 @@ func getUserSelectionFromRequest(selQuery *godata.GoDataSelectQuery) []UserSelec
 
 // Map Reva users to LibreGraph users. If `selection` is nil, we map everything,
 // otherwise we only map the properties set in `selection`
-func mapToLibregraphUsers(users []*userv1beta1.User, selection []UserSelectableProperty) []libregraph.User {
+func mapToLibregraphUsers(users []*userpb.User, selection []UserSelectableProperty) []libregraph.User {
 	lgUsers := make([]libregraph.User, 0, len(users))
 
 	for _, u := range users {
@@ -169,7 +207,7 @@ func mapToLibregraphUsers(users []*userv1beta1.User, selection []UserSelectableP
 }
 
 // Add a property `prop` from `u` to `lgUser`
-func appendPropToLgUser(u *userv1beta1.User, lgUser libregraph.User, prop UserSelectableProperty) libregraph.User {
+func appendPropToLgUser(u *userpb.User, lgUser libregraph.User, prop UserSelectableProperty) libregraph.User {
 	switch prop {
 	case propUserId:
 		lgUser.Id = &u.Id.OpaqueId
