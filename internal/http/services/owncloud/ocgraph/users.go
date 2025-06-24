@@ -48,6 +48,9 @@ const (
 	propUserMailDesc                     UserSelectableProperty = "mail desc"
 	propUserOnPremisesSamAccountName     UserSelectableProperty = "onPremisesSamAccountName"
 	propUserOnPremisesSamAccountNameDesc UserSelectableProperty = "onPremisesSamAccountName desc"
+
+	// Max number of users to return in a ListUsers query
+	maxUserResponseLength int = 30
 )
 
 func (s UserSelectableProperty) Valid() bool {
@@ -109,7 +112,7 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lgUsers := mapToLibregraphUsers(users.GetUsers(), getUserSelectionFromRequest(req.Query.Select))
+	lgUsers := mapToLibregraphUsers(users.GetUsers(), getUserSelectionFromRequest(req.Query.Select), maxUserResponseLength)
 
 	if req.Query.OrderBy.RawValue != "" {
 		lgUsers, err = sortUsers(ctx, lgUsers, req.Query.OrderBy.RawValue)
@@ -180,7 +183,8 @@ func getUserSelectionFromRequest(selQuery *godata.GoDataSelectQuery) []UserSelec
 
 // Map Reva users to LibreGraph users. If `selection` is nil, we map everything,
 // otherwise we only map the properties set in `selection`
-func mapToLibregraphUsers(users []*userpb.User, selection []UserSelectableProperty) []libregraph.User {
+// If `max` > 0, we limit our response to `max` users
+func mapToLibregraphUsers(users []*userpb.User, selection []UserSelectableProperty, max int) []libregraph.User {
 	lgUsers := make([]libregraph.User, 0, len(users))
 
 	for _, u := range users {
@@ -201,6 +205,9 @@ func mapToLibregraphUsers(users []*userpb.User, selection []UserSelectableProper
 			}
 		}
 		lgUsers = append(lgUsers, lgUser)
+		if max > 0 && len(lgUsers) > max {
+			break
+		}
 	}
 
 	return lgUsers
