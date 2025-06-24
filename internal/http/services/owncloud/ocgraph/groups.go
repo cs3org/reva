@@ -45,6 +45,9 @@ const (
 	propGroupMail        GroupSelectableProperty = "mail"
 	propGroupDescription GroupSelectableProperty = "description"
 	propGroupMembers     GroupSelectableProperty = "members"
+
+	// Max number of groups to return in a ListUsers query
+	maxGroupResponseLength int = 30
 )
 
 func (s GroupSelectableProperty) Valid() bool {
@@ -93,7 +96,7 @@ func (s *svc) listGroups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lgGroups := mapToLibregraphGroups(groups.GetGroups(), getGroupSelectionFromRequest(req.Query.Select))
+	lgGroups := mapToLibregraphGroups(groups.GetGroups(), getGroupSelectionFromRequest(req.Query.Select), maxGroupResponseLength)
 
 	if req.Query.OrderBy.RawValue != "" {
 		lgGroups, err = sortGroups(ctx, lgGroups, req.Query.OrderBy.RawValue)
@@ -128,7 +131,8 @@ func getGroupSelectionFromRequest(selQuery *godata.GoDataSelectQuery) []GroupSel
 
 // Map Reva users to LibreGraph users. If `selection` is nil, we map everything,
 // otherwise we only map the properties set in `selection`
-func mapToLibregraphGroups(groups []*groupv1beta1.Group, selection []GroupSelectableProperty) []libregraph.Group {
+// If `max` > 0, we limit our response to `max` groups
+func mapToLibregraphGroups(groups []*groupv1beta1.Group, selection []GroupSelectableProperty, max int) []libregraph.Group {
 	lgGroups := make([]libregraph.Group, 0, len(groups))
 
 	for _, g := range groups {
@@ -148,6 +152,9 @@ func mapToLibregraphGroups(groups []*groupv1beta1.Group, selection []GroupSelect
 			}
 		}
 		lgGroups = append(lgGroups, lgGroup)
+		if max > 0 && len(lgGroups) > max {
+			break
+		}
 	}
 
 	return lgGroups
