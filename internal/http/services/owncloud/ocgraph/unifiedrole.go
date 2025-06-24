@@ -433,8 +433,8 @@ func GetBuiltinRoleDefinitionList() []*libregraph.UnifiedRoleDefinition {
 	return []*libregraph.UnifiedRoleDefinition{
 		NewViewerUnifiedRole(),
 		NewEditorUnifiedRole(),
-		NewFileEditorUnifiedRole(),
-		NewManagerUnifiedRole(),
+		//NewFileEditorUnifiedRole(),
+		//NewManagerUnifiedRole(),
 	}
 }
 
