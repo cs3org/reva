@@ -43,11 +43,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-const (
-	versionPrefix = ".sys.v#."
-	favoritesKey  = "http://owncloud.org/ns/favorite"
-)
-
 func serializeAttribute(a *eosclient.Attribute) string {
 	return fmt.Sprintf("%s.%s=%s", attrTypeToString(a.Type), a.Key, a.Val)
 }
@@ -73,7 +68,6 @@ func isValidAttribute(a *eosclient.Attribute) bool {
 
 // Options to configure the Client.
 type Options struct {
-
 	// ForceSingleUserMode forces all connections to use only one user.
 	// This is the case when access to EOS is done from FUSE under apache or www-data.
 	ForceSingleUserMode bool
@@ -392,7 +386,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 		return nil, err
 	}
 
-	if c.opt.VersionInvariant && isVersionFolder(info.File) {
+	if c.opt.VersionInvariant && eosclient.IsVersionFolder(info.File) {
 		info, err = c.getFileInfoFromVersion(ctx, auth, info.File)
 		if err != nil {
 			return nil, err
@@ -431,7 +425,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 		return nil, err
 	}
 
-	if c.opt.VersionInvariant && !isVersionFolder(path) && !info.IsDir {
+	if c.opt.VersionInvariant && !eosclient.IsVersionFolder(path) && !info.IsDir {
 		ownerAuth := eosclient.Authorization{Role: eosclient.Role{
 			UID: strconv.FormatUint(info.UID, 10),
 			GID: strconv.FormatUint(info.GID, 10),
@@ -473,7 +467,7 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 	}
 
 	// Favorites need to be stored per user so handle these separately
-	if attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
+	if attr.Type == eosclient.UserAttr && attr.Key == eosclient.FavoritesKey {
 		info, err := c.getRawFileInfoByPath(ctx, auth, path)
 		if err != nil {
 			return err
@@ -521,7 +515,7 @@ func (c *Client) handleFavAttr(ctx context.Context, auth eosclient.Authorization
 			return err
 		}
 	}
-	favStr := info.Attrs[favoritesKey]
+	favStr := info.Attrs[eosclient.FavoritesKey]
 	favs, err := acl.Parse(favStr, acl.ShortTextForm)
 	if err != nil {
 		return err
@@ -557,7 +551,7 @@ func (c *Client) unsetEOSAttr(ctx context.Context, auth eosclient.Authorization,
 
 	var err error
 	// Favorites need to be stored per user so handle these separately
-	if !deleteFavs && attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
+	if !deleteFavs && attr.Type == eosclient.UserAttr && attr.Key == eosclient.FavoritesKey {
 		info, err := c.getRawFileInfoByPath(ctx, auth, path)
 		if err != nil {
 			return err
@@ -831,7 +825,7 @@ func (c *Client) PurgeDeletedEntries(ctx context.Context, auth eosclient.Authori
 
 // ListVersions list all the versions for a given file.
 func (c *Client) ListVersions(ctx context.Context, auth eosclient.Authorization, p string) ([]*eosclient.FileInfo, error) {
-	versionFolder := getVersionFolder(p)
+	versionFolder := eosclient.GetVersionFolder(p)
 	finfos, err := c.List(ctx, auth, versionFolder)
 	if err != nil {
 		// we send back an empty list
@@ -849,7 +843,7 @@ func (c *Client) RollbackToVersion(ctx context.Context, auth eosclient.Authoriza
 
 // ReadVersion reads the version for the given file.
 func (c *Client) ReadVersion(ctx context.Context, auth eosclient.Authorization, p, version string) (io.ReadCloser, error) {
-	versionFile := path.Join(getVersionFolder(p), version)
+	versionFile := path.Join(eosclient.GetVersionFolder(p), version)
 	return c.Read(ctx, auth, versionFile)
 }
 
@@ -862,7 +856,7 @@ func (c *Client) GenerateToken(ctx context.Context, auth eosclient.Authorization
 }
 
 func (c *Client) getVersionFolderInode(ctx context.Context, auth, ownerAuth eosclient.Authorization, p string) (uint64, error) {
-	versionFolder := getVersionFolder(p)
+	versionFolder := eosclient.GetVersionFolder(p)
 	md, err := c.getRawFileInfoByPath(ctx, auth, versionFolder)
 	if err != nil {
 		if err = c.CreateDir(ctx, ownerAuth, versionFolder); err != nil {
@@ -877,24 +871,12 @@ func (c *Client) getVersionFolderInode(ctx context.Context, auth, ownerAuth eosc
 }
 
 func (c *Client) getFileInfoFromVersion(ctx context.Context, auth eosclient.Authorization, p string) (*eosclient.FileInfo, error) {
-	file := getFileFromVersionFolder(p)
+	file := eosclient.GetFileFromVersionFolder(p)
 	md, err := c.GetFileInfoByPath(ctx, auth, file)
 	if err != nil {
 		return nil, err
 	}
 	return md, nil
-}
-
-func isVersionFolder(p string) bool {
-	return strings.HasPrefix(path.Base(p), versionPrefix)
-}
-
-func getVersionFolder(p string) string {
-	return path.Join(path.Dir(p), versionPrefix+path.Base(p))
-}
-
-func getFileFromVersionFolder(p string) string {
-	return path.Join(path.Dir(p), strings.TrimPrefix(path.Base(p), versionPrefix))
 }
 
 func parseRecycleList(raw string) ([]*eosclient.DeletedEntry, error) {
@@ -1015,7 +997,7 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 
 		// If it's a version folder, store it in a map, so that for the corresponding file,
 		// we can return its inode instead
-		if isVersionFolder(fi.File) {
+		if eosclient.IsVersionFolder(fi.File) {
 			versionFolders[fi.File] = fi
 		}
 
@@ -1034,11 +1016,11 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 	for _, fi := range finfos {
 		// For files, inherit ACLs from the parent
 		// And set the inode to that of their version folder
-		if !fi.IsDir && !isVersionFolder(dirPath) {
+		if !fi.IsDir && !eosclient.IsVersionFolder(dirPath) {
 			if parent != nil {
 				fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
 			}
-			versionFolderPath := getVersionFolder(fi.File)
+			versionFolderPath := eosclient.GetVersionFolder(fi.File)
 			vf, ok := versionFolders[versionFolderPath]
 			if cache && !ok {
 				verfolder, err := c.versionFolderCache.Get(versionFolderPath)
@@ -1075,6 +1057,7 @@ func (c Client) parseEosOutputLine(line string) map[string]string {
 	m := getMap(partsBySpace)
 	return m
 }
+
 func (c *Client) parseQuota(path, raw string) (*eosclient.QuotaInfo, error) {
 	rawLines := strings.FieldsFunc(raw, func(c rune) bool {
 		return c == '\n'
@@ -1133,7 +1116,7 @@ func (c *Client) parseFileInfo(ctx context.Context, raw string) (*eosclient.File
 	partsBySpace := strings.FieldsFunc(line, func(c rune) bool { // we have [size=45 container=3 ...}
 		return c == ' '
 	})
-	var previousXAttr = ""
+	previousXAttr := ""
 	for _, p := range partsBySpace {
 		partsByEqual := strings.SplitN(p, "=", 2) // we have kv pairs like [size 14]
 		if len(partsByEqual) == 2 {

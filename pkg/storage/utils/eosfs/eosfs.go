@@ -66,7 +66,6 @@ const (
 	lwShareAttrKey   = "reva.lwshare"     // used to store grants to lightweight accounts
 	lockPayloadKey   = "reva.lockpayload" // used to store lock payloads
 	eosLockKey       = "app.lock"         // this is the key known by EOS to enforce a lock.
-	FavoritesKey     = "http://owncloud.org/ns/favorite"
 )
 
 const (
@@ -316,20 +315,18 @@ func (fs *Eosfs) getLayout(ctx context.Context) (layout string) {
 
 func (fs *Eosfs) getInternalHome(ctx context.Context) string {
 	log := appctx.GetLogger(ctx)
-	log.Info().Msgf("get internal home: %+v", fs.conf.EnableHome) 
+	log.Info().Msgf("get internal home: %+v", fs.conf.EnableHome)
 	if !fs.conf.EnableHome {
 		// TODO(lopresti): this is to be removed as we always want to support home,
 		// cf. https://github.com/cs3org/reva/pull/4940
 		return "/"
 	}
 
-	
 	u := appctx.ContextMustGetUser(ctx)
 	relativeHome := templates.WithUser(u, fs.conf.UserLayout)
-	log.Info().Msgf("get internal home: %+v", relativeHome) 
+	log.Info().Msgf("get internal home: %+v", relativeHome)
 	return relativeHome
 }
-
 
 func (fs *Eosfs) wrap(ctx context.Context, fn string) (internal string) {
 	if fs.conf.EnableHome {
@@ -1219,7 +1216,7 @@ func (fs *Eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 			}
 			path = filepath.Join(fn, path)
 
-			versionFolder := fs.getVersionFolder(path)
+			versionFolder := eosclient.GetVersionFolder(path)
 			versionPath := filepath.Join(versionFolder, version)
 			eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, versionPath)
 			if err != nil {
@@ -1354,7 +1351,6 @@ func (fs *Eosfs) createNominalHome(ctx context.Context) error {
 
 	home := templates.WithUser(u, fs.conf.UserLayout)
 	home = path.Join(fs.conf.Namespace, home)
-
 
 	auth, err := fs.getUserAuth(ctx, u, "")
 	if err != nil {
@@ -2231,15 +2227,10 @@ func (fs *Eosfs) getEosMetadata(finfo *eosclient.FileInfo) []byte {
 	return v
 }
 
-func (fs *Eosfs) getVersionFolder(p string) string {
-	versionPrefix := ".sys.v#."
-	return path.Join(path.Dir(p), versionPrefix+path.Base(p))
-}
-
 func parseAndSetFavoriteAttr(ctx context.Context, attrs map[string]string) {
 	// Read and correctly set the favorite attr
 	if user, ok := appctx.ContextGetUser(ctx); ok {
-		if favAttrStr, ok := attrs[FavoritesKey]; ok {
+		if favAttrStr, ok := attrs[eosclient.FavoritesKey]; ok {
 			favUsers, err := acl.Parse(favAttrStr, acl.ShortTextForm)
 			if err != nil {
 				return
@@ -2248,7 +2239,7 @@ func parseAndSetFavoriteAttr(ctx context.Context, attrs map[string]string) {
 				// Check if the current user has favorited this resource
 				if u.Qualifier == user.Id.OpaqueId {
 					// Set attr val to 1
-					attrs[FavoritesKey] = "1"
+					attrs[eosclient.FavoritesKey] = "1"
 					return
 				}
 			}
@@ -2256,5 +2247,5 @@ func parseAndSetFavoriteAttr(ctx context.Context, attrs map[string]string) {
 	}
 
 	// Delete the favorite attr from the response
-	delete(attrs, FavoritesKey)
+	delete(attrs, eosclient.FavoritesKey)
 }
