@@ -47,8 +47,7 @@ import (
 )
 
 const (
-	versionPrefix = ".sys.v#."
-	favoritesKey  = "http://owncloud.org/ns/favorite"
+	favoritesKey = "http://owncloud.org/ns/favorite"
 )
 
 const (
@@ -68,7 +67,6 @@ type Client struct {
 
 // Options to configure the Client.
 type Options struct {
-
 	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
 	UseKeytab bool
 
@@ -488,7 +486,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 		return nil, err
 	}
 
-	if c.opt.VersionInvariant && isVersionFolder(info.File) {
+	if c.opt.VersionInvariant && eosclient.IsVersionFolder(info.File) {
 		info, err = c.getFileInfoFromVersion(ctx, auth, info.File)
 		if err != nil {
 			return nil, err
@@ -551,7 +549,7 @@ func (c *Client) setEOSAttr(ctx context.Context, auth eosclient.Authorization, a
 
 	msg := new(erpc.NSRequest_SetXAttrRequest)
 
-	var m = map[string][]byte{attr.GetKey(): []byte(attr.Val)}
+	m := map[string][]byte{attr.GetKey(): []byte(attr.Val)}
 	msg.Xattrs = m
 	msg.Recursive = recursive
 
@@ -646,7 +644,7 @@ func (c *Client) unsetEOSAttr(ctx context.Context, auth eosclient.Authorization,
 
 	msg := new(erpc.NSRequest_SetXAttrRequest)
 
-	var ktd = []string{attr.GetKey()}
+	ktd := []string{attr.GetKey()}
 	msg.Keystodelete = ktd
 	msg.Recursive = recursive
 	msg.Id = new(erpc.MDId)
@@ -783,7 +781,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, userAuth eosclient.Autho
 		return nil, err
 	}
 
-	if c.opt.VersionInvariant && !isVersionFolder(path) && !info.IsDir {
+	if c.opt.VersionInvariant && !eosclient.IsVersionFolder(path) && !info.IsDir {
 		// Here we have to create a missing version folder, irrespective from the user (that could be a sharee, or a lw account, or...)
 		// Therefore, we impersonate the owner of the file
 		ownerAuth := eosclient.Authorization{
@@ -1295,7 +1293,7 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 
 		// If it's a version folder, store it in a map, so that for the corresponding file,
 		// we can return its inode instead
-		if isVersionFolder(myitem.File) {
+		if eosclient.IsVersionFolder(myitem.File) {
 			versionFolders[myitem.File] = myitem
 		}
 
@@ -1317,14 +1315,14 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 				Entries: []*acl.Entry{},
 			}
 		}
-		if !fi.IsDir && !isVersionFolder(dpath) {
+		if !fi.IsDir && !eosclient.IsVersionFolder(dpath) {
 			// For files, inherit ACLs from the parent
 			if parent != nil && parent.SysACL != nil {
 				fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
 			}
 			// If there is a version folder then use its inode
 			// to implement the invariance of the fileid across updates
-			versionFolderPath := getVersionFolder(fi.File)
+			versionFolderPath := eosclient.GetVersionFolder(fi.File)
 			if vf, ok := versionFolders[versionFolderPath]; ok {
 				fi.Inode = vf.Inode
 				if vf.SysACL != nil {
@@ -1576,7 +1574,7 @@ func (c *Client) ListVersions(ctx context.Context, auth eosclient.Authorization,
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "ListVersions").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("p", p).Msg("")
 
-	versionFolder := getVersionFolder(p)
+	versionFolder := eosclient.GetVersionFolder(p)
 	finfos, err := c.List(ctx, auth, versionFolder)
 	if err != nil {
 		return []*eosclient.FileInfo{}, err
@@ -1626,7 +1624,7 @@ func (c *Client) ReadVersion(ctx context.Context, auth eosclient.Authorization, 
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "ReadVersion").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("p", p).Str("version", version).Msg("")
 
-	versionFile := path.Join(getVersionFolder(p), version)
+	versionFile := path.Join(eosclient.GetVersionFolder(p), version)
 	return c.Read(ctx, auth, versionFile)
 }
 
@@ -1681,7 +1679,7 @@ func (c *Client) getOrCreateVersionFolderInode(ctx context.Context, ownerAuth eo
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "getOrCreateVersionFolderInode").Str("uid,gid", ownerAuth.Role.UID+","+ownerAuth.Role.GID).Str("p", p).Msg("")
 
-	versionFolder := getVersionFolder(p)
+	versionFolder := eosclient.GetVersionFolder(p)
 	md, err := c.GetFileInfoByPath(ctx, ownerAuth, versionFolder)
 	if err != nil {
 		if err = c.CreateDir(ctx, ownerAuth, versionFolder); err != nil {
@@ -1699,24 +1697,12 @@ func (c *Client) getFileInfoFromVersion(ctx context.Context, auth eosclient.Auth
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "getFileInfoFromVersion").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("p", p).Msg("")
 
-	file := getFileFromVersionFolder(p)
+	file := eosclient.GetFileFromVersionFolder(p)
 	md, err := c.GetFileInfoByPath(ctx, auth, file)
 	if err != nil {
 		return nil, err
 	}
 	return md, nil
-}
-
-func isVersionFolder(p string) bool {
-	return strings.HasPrefix(path.Base(p), versionPrefix)
-}
-
-func getVersionFolder(p string) string {
-	return path.Join(path.Dir(p), versionPrefix+path.Base(p))
-}
-
-func getFileFromVersionFolder(p string) string {
-	return path.Join(path.Dir(p), strings.TrimPrefix(path.Base(p), versionPrefix))
 }
 
 func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDResponse) (*eosclient.FileInfo, error) {

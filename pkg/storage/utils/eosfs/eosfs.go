@@ -1214,7 +1214,7 @@ func (fs *Eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 			}
 			path = filepath.Join(fn, path)
 
-			versionFolder := fs.getVersionFolder(path)
+			versionFolder := eosclient.GetVersionFolder(path)
 			versionPath := filepath.Join(versionFolder, version)
 			eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, versionPath)
 			if err != nil {
@@ -2220,11 +2220,6 @@ func (fs *Eosfs) getEosMetadata(finfo *eosclient.FileInfo) []byte {
 
 	v, _ := json.Marshal(sys)
 	return v
-}
-
-func (fs *Eosfs) getVersionFolder(p string) string {
-	versionPrefix := ".sys.v#."
-	return path.Join(path.Dir(p), versionPrefix+path.Base(p))
 }
 
 func parseAndSetFavoriteAttr(ctx context.Context, attrs map[string]string) {

@@ -1,5 +1,6 @@
 Bugfix: list file versions
 
+- moved versions-related functions to utils package
 - new `spaceHref` function for listing file versions
 - adapts code from #2855 for restoring and downloading file versions
 - add parent info to propfind response
