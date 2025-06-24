@@ -42,11 +42,6 @@ import (
 )
 
 const (
-	versionPrefix = ".sys.v#."
-	favoritesKey  = "http://owncloud.org/ns/favorite"
-)
-
-const (
 	// SystemAttr is the system extended attribute.
 	SystemAttr eosclient.AttrType = iota
 	// UserAttr is the user extended attribute.
@@ -63,7 +58,6 @@ type Client struct {
 
 // Options to configure the Client.
 type Options struct {
-
 	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
 	UseKeytab bool
 
@@ -332,7 +326,7 @@ func (c *Client) getOrCreateVersionFolderInode(ctx context.Context, ownerAuth eo
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "getOrCreateVersionFolderInode").Str("uid,gid", ownerAuth.Role.UID+","+ownerAuth.Role.GID).Str("p", p).Msg("")
 
-	versionFolder := getVersionFolder(p)
+	versionFolder := eosclient.GetVersionFolder(p)
 	md, err := c.GetFileInfoByPath(ctx, ownerAuth, versionFolder)
 	if err != nil {
 		if err = c.CreateDir(ctx, ownerAuth, versionFolder); err != nil {
