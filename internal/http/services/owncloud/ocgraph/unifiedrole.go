@@ -21,11 +21,13 @@
 package ocgraph
 
 import (
+	"context"
 	"errors"
 	"slices"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/pkg/appctx"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"google.golang.org/protobuf/proto"
 )
@@ -379,8 +381,10 @@ func GetLegacyName(role libregraph.UnifiedRoleDefinition) string {
 
 // CS3ResourcePermissionsToUnifiedRole tries to find the UnifiedRoleDefinition that matches the supplied
 // CS3 ResourcePermissions.
-func CS3ResourcePermissionsToUnifiedRole(p *provider.ResourcePermissions) *libregraph.UnifiedRoleDefinition {
+func CS3ResourcePermissionsToUnifiedRole(ctx context.Context, p *provider.ResourcePermissions) *libregraph.UnifiedRoleDefinition {
+	log := appctx.GetLogger(ctx)
 	role := conversions.RoleFromResourcePermissions(p)
+	log.Info().Interface("role", role).Interface("perms", p).Msg("Converting cs3 resource permissions to unified role")
 	return ocsRoleUnifiedRole[role.Name]
 }
 
