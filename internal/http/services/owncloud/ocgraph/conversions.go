@@ -6,6 +6,7 @@ import (
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	libregraph "github.com/owncloud/libre-graph-api-go"
@@ -55,7 +56,7 @@ func (s *svc) shareToLibregraphPerm(ctx context.Context, share *ShareOrLink) (*l
 		})
 		invitation.SetInvitedBy(idSet)
 
-		unifiedRoleDefinition, role := CS3ResourcePermissionsToUnifiedRole(share.share.Permissions.Permissions), ""
+		unifiedRoleDefinition, role := CS3ResourcePermissionsToUnifiedRole(ctx, share.share.Permissions.Permissions), ""
 		if unifiedRoleDefinition != nil {
 			role = *unifiedRoleDefinition.Id
 		}
@@ -92,6 +93,27 @@ func (s *svc) shareToLibregraphPerm(ctx context.Context, share *ShareOrLink) (*l
 		}
 		return perm, nil
 	}
+}
+
+func (s *svc) lgPermToCS3Perm(ctx context.Context, lgPerm *libregraph.Permission, resourceType provider.ResourceType) (*provider.ResourcePermissions, error) {
+	if lgPerm == nil {
+		return nil, errors.New("no permissions passed")
+	}
+	if lgPerm.Link != nil && lgPerm.Link.Type != nil {
+		return LinkTypeToPermissions(*lgPerm.Link.Type, resourceType), nil
+	}
+	if lgPerm.Roles != nil {
+		rolePerms := make([]libregraph.UnifiedRolePermission, 0)
+		for _, role := range lgPerm.Roles {
+			def, ok := UnifiedRoleIDToDefinition(role)
+			if ok {
+				rolePerms = append(rolePerms, def.RolePermissions...)
+			}
+		}
+		return PermissionsToCS3ResourcePermissions(rolePerms), nil
+	}
+	return nil, nil
+
 }
 
 func cs3TimestampToTime(t *types.Timestamp) time.Time {
