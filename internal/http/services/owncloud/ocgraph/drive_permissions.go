@@ -137,7 +137,7 @@ func (s *svc) updateDrivePermissions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if shareOrLink.shareType == "share" {
-		s.updateSharePermissions(ctx, w, r, &collaborationv1beta1.ShareId{OpaqueId: shareOrLink.ID}, permission)
+		s.updateSharePermissions(ctx, w, r, &collaborationv1beta1.ShareId{OpaqueId: shareOrLink.ID}, permission, resourceID)
 	} else {
 		s.updateLinkPermissions(ctx, w, r, &linkv1beta1.PublicShareId{OpaqueId: shareOrLink.ID}, permission, resourceID)
 	}
@@ -238,8 +238,59 @@ func (s *svc) updateLinkPermissions(ctx context.Context, w http.ResponseWriter, 
 	}
 }
 
-// TODO
-func (s *svc) updateSharePermissions(ctx context.Context, w http.ResponseWriter, r *http.Request, shareId *collaborationv1beta1.ShareId, permission *libregraph.Permission) {
+func (s *svc) updateSharePermissions(ctx context.Context, w http.ResponseWriter, r *http.Request, shareId *collaborationv1beta1.ShareId, lgPerm *libregraph.Permission, resourceId *providerpb.ResourceId) {
+	log := appctx.GetLogger(ctx)
+
+	gw, err := s.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	statRes, err := gw.Stat(ctx, &providerpb.StatRequest{
+		Ref: &providerpb.Reference{
+			ResourceId: resourceId,
+		},
+	})
+	if err != nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+		log.Error().Err(err).Msg("Failed to stat resource")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	perms, err := s.lgPermToCS3Perm(ctx, lgPerm, statRes.Info.Type)
+	if err != nil {
+		log.Error().Err(err).Msg("nothing provided to update")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	res, err := gw.UpdateShare(ctx, &collaborationv1beta1.UpdateShareRequest{
+		Ref: &collaborationv1beta1.ShareReference{
+			Spec: &collaborationv1beta1.ShareReference_Id{
+				Id: shareId,
+			},
+		},
+		Field: &collaborationv1beta1.UpdateShareRequest_UpdateField{
+			Field: &collaborationv1beta1.UpdateShareRequest_UpdateField_Permissions{
+				Permissions: &collaborationv1beta1.SharePermissions{
+					Permissions: perms,
+				},
+			},
+		},
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("error updating public share")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+		log.Error().Interface("response", res).Msg("error updating public share")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 }
 
 func (s *svc) updateLinkPassword(w http.ResponseWriter, r *http.Request) {
@@ -388,7 +439,6 @@ func (s *svc) getRootDrivePermissions(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	// TODO: populate permission
 	s.writePermissions(ctx, w, actions, roles, perms)
 }
 

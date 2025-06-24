@@ -183,6 +183,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 				},
 				Path:  path,
 				Owner: owner,
+				Type:  statRes.Info.Type,
 			},
 			Grant: &collaborationv1beta1.ShareGrant{
 				Grantee:    grantee,
@@ -356,7 +357,7 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.Rece
 	}
 
 	roles := make([]string, 0, 1)
-	role := CS3ResourcePermissionsToUnifiedRole(rsi.ResourceInfo.PermissionSet)
+	role := CS3ResourcePermissionsToUnifiedRole(ctx, rsi.ResourceInfo.PermissionSet)
 	if role != nil {
 		roles = append(roles, *role.Id)
 	}
@@ -626,7 +627,7 @@ func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*ShareOrLink)
 			}
 
 			roles := make([]string, 0, 1)
-			role := CS3ResourcePermissionsToUnifiedRole(e.share.Permissions.Permissions)
+			role := CS3ResourcePermissionsToUnifiedRole(ctx, e.share.Permissions.Permissions)
 			if role != nil {
 				roles = append(roles, *role.Id)
 			}
