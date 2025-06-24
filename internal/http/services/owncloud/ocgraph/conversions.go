@@ -63,8 +63,8 @@ func (s *svc) shareToLibregraphPerm(ctx context.Context, share *ShareOrLink) (*l
 
 		perm := &libregraph.Permission{
 			Id:                 libregraph.PtrString(share.ID),
-			ExpirationDateTime: *nilTime,
-			CreatedDateTime:    *libregraph.NewNullableTime(libregraph.PtrTime(time.Unix(int64(share.share.GetCtime().Seconds), 0))),
+			ExpirationDateTime: *cs3TimestampToNullableTime(share.share.Expiration),
+			CreatedDateTime:    *cs3TimestampToNullableTime(share.share.GetCtime()),
 			GrantedToV2:        grantedTo,
 			Invitation:         invitation,
 			Roles:              []string{role},
@@ -118,6 +118,24 @@ func (s *svc) lgPermToCS3Perm(ctx context.Context, lgPerm *libregraph.Permission
 
 func cs3TimestampToTime(t *types.Timestamp) time.Time {
 	return time.Unix(int64(t.GetSeconds()), int64(t.GetNanos()))
+}
+
+func cs3TimestampToNullableTime(t *types.Timestamp) *libregraph.NullableTime {
+	if t == nil {
+		nilTime := libregraph.NewNullableTime(nil)
+		nilTime.Unset()
+		return nilTime
+	}
+	return libregraph.NewNullableTime(libregraph.PtrTime(time.Unix(int64(t.GetSeconds()), 0)))
+}
+
+func nullableTimeToCs3Timestamp(t libregraph.NullableTime) *types.Timestamp {
+	if !t.IsSet() || t.Get() == nil {
+		return nil
+	}
+	return &types.Timestamp{
+		Seconds: uint64(t.Get().Unix()),
+	}
 }
 
 func LinkTypeToPermissions(lt libregraph.SharingLinkType, resourceType provider.ResourceType) *provider.ResourcePermissions {
