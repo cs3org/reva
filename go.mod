@@ -14,7 +14,7 @@ require (
 	github.com/bluele/gcache v0.0.2
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/cenkalti/backoff v2.2.1+incompatible
-	github.com/ceph/go-ceph v0.33.0
+	github.com/ceph/go-ceph v0.34.0
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc/v3 v3.11.0
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
