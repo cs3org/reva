@@ -325,7 +325,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 		shareType: "link",
 		ID:        resp.GetShare().GetId().GetOpaqueId(),
 		link:      resp.GetShare(),
-	}) //s.libreGraphPermissionFromCS3PublicShare(ctx, resp.GetShare())
+	})
 	if err != nil || lgPerm == nil {
 		log.Error().Err(err).Any("link", resp.GetShare()).Err(err).Any("lgPerm", lgPerm).Msg("error converting created link to permissions")
 		w.WriteHeader(http.StatusInternalServerError)
