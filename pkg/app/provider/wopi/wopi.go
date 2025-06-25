@@ -53,7 +53,7 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	gomime "github.com/glpatcern/go-mime"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/pkg/errors"
 )
 
@@ -442,16 +442,16 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 
 func (p *wopiProvider) getAccessTokenTTL(ctx context.Context) (string, error) {
 	tkn := appctx.ContextMustGetToken(ctx)
-	token, err := jwt.ParseWithClaims(tkn, &jwt.StandardClaims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tkn, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(p.conf.JWTSecret), nil
 	})
 	if err != nil {
 		return "", err
 	}
 
-	if claims, ok := token.Claims.(*jwt.StandardClaims); ok && token.Valid {
+	if claims, ok := token.Claims.(*jwt.RegisteredClaims); ok && token.Valid {
 		// milliseconds since Jan 1, 1970 UTC as required in https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/concepts#the-access_token_ttl-property
-		return strconv.FormatInt(claims.ExpiresAt*1000, 10), nil
+		return strconv.FormatInt(claims.ExpiresAt.UnixMicro()*1000, 10), nil
 	}
 
 	return "", errtypes.InvalidCredentials("wopi: invalid token present in ctx")
