@@ -29,7 +29,6 @@ import (
 	"strings"
 
 	"github.com/CiscoM31/godata"
-	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -145,24 +144,6 @@ func (s *svc) getUserInfo(ctx context.Context, id *userpb.UserId) (*userpb.User,
 	}
 
 	return res.User, nil
-}
-
-func (s *svc) getGroupInfo(ctx context.Context, id *grouppb.GroupId) (*grouppb.Group, error) {
-	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
-	if err != nil {
-		return nil, err
-	}
-	res, err := gw.GetGroup(ctx, &grouppb.GetGroupRequest{
-		GroupId: id,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
-		return nil, errors.New(res.Status.Message)
-	}
-
-	return res.Group, nil
 }
 
 // From a Select query, return a list of `SelectableProperty`s

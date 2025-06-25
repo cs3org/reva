@@ -300,6 +300,8 @@ func (s *svc) updateSharePermissions(ctx context.Context, w http.ResponseWriter,
 
 	if strings.Contains(requestBody, "expiration") {
 		// TODO: implement support for updating expiration
+		// This requires an update to the CS3 API
+		// See CERNBOX-3920
 	}
 
 	res, err := gw.UpdateShare(ctx, &collaborationv1beta1.UpdateShareRequest{
