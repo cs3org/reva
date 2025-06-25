@@ -384,7 +384,7 @@ func GetLegacyName(role libregraph.UnifiedRoleDefinition) string {
 func CS3ResourcePermissionsToUnifiedRole(ctx context.Context, p *provider.ResourcePermissions) *libregraph.UnifiedRoleDefinition {
 	log := appctx.GetLogger(ctx)
 	role := conversions.RoleFromResourcePermissions(p)
-	log.Info().Interface("role", role).Interface("perms", p).Msg("Converting cs3 resource permissions to unified role")
+	log.Debug().Interface("role", role).Interface("perms", p).Msg("Converting cs3 resource permissions to unified role")
 	return ocsRoleUnifiedRole[role.Name]
 }
 
@@ -433,6 +433,13 @@ func GetBuiltinRoleDefinitionList() []*libregraph.UnifiedRoleDefinition {
 	return []*libregraph.UnifiedRoleDefinition{
 		NewViewerUnifiedRole(),
 		NewEditorUnifiedRole(),
+
+		// We currently don't support these roles (e.g.
+		// the manager role supposes you can add members to a folder,
+		// which is a concept we don't have at the moment)
+		// Since this function is used to tell the front-end which
+		// roles are supported, we have commented them out for the time being
+
 		//NewFileEditorUnifiedRole(),
 		//NewManagerUnifiedRole(),
 	}
@@ -448,7 +455,6 @@ var ocsRoleUnifiedRole = map[string]*libregraph.UnifiedRoleDefinition{
 	conversions.RoleManager:      NewManagerUnifiedRole(),
 }
 
-// TODO: verify that these are correct
 func UnifiedRoleIDToDefinition(unifiedRoleID string) (*libregraph.UnifiedRoleDefinition, bool) {
 	switch unifiedRoleID {
 	case UnifiedRoleViewerID:

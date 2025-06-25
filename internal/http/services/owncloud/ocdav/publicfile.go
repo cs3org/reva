@@ -173,7 +173,6 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 		return
 	}
 	infos := s.getPublicFileInfos(onContainer, depth == "0", tokenStatInfo)
-	sublog.Debug().Interface("infos", infos).Msg("public file infos")
 
 	propRes, err := s.multistatusResponse(ctx, &pf, infos, ns, nil, nil)
 	if err != nil {
