@@ -314,7 +314,7 @@ func sharesEqual(ref *collaboration.ShareReference, s *collaboration.Share) bool
 	return false
 }
 
-func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
+func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, req *collaboration.UpdateShareRequest) (*collaboration.Share, error) {
 	m.Lock()
 	defer m.Unlock()
 	user := appctx.ContextMustGetUser(ctx)
@@ -322,7 +322,7 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 		if sharesEqual(ref, s) {
 			if share.IsCreatedByUser(s, user) {
 				now := time.Now().UnixNano()
-				m.model.Shares[i].Permissions = p
+				m.model.Shares[i].Permissions = req.GetField().GetPermissions()
 				m.model.Shares[i].Mtime = &typespb.Timestamp{
 					Seconds: uint64(now / 1000000000),
 					Nanos:   uint32(now % 1000000000),

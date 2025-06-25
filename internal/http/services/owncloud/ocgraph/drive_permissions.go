@@ -156,7 +156,7 @@ func (s *svc) updateDrivePermissions(w http.ResponseWriter, r *http.Request) {
 	permission.Id = libregraph.PtrString(shareID)
 
 	if shareOrLink.shareType == "share" {
-		s.updateSharePermissions(ctx, w, bodyCopy.String(), &collaborationv1beta1.ShareId{OpaqueId: shareOrLink.ID}, permission, resourceID)
+		s.updateSharePermissions(ctx, w, bodyCopy.String(), shareOrLink.share, permission, resourceID)
 	} else {
 		s.updateLinkPermissions(ctx, w, bodyCopy.String(), &linkv1beta1.PublicShareId{OpaqueId: shareOrLink.ID}, permission, resourceID)
 	}
@@ -270,7 +270,7 @@ func (s *svc) updateLinkPermissions(ctx context.Context, w http.ResponseWriter, 
 
 }
 
-func (s *svc) updateSharePermissions(ctx context.Context, w http.ResponseWriter, requestBody string, shareId *collaborationv1beta1.ShareId, lgPerm *libregraph.Permission, resourceId *providerpb.ResourceId) {
+func (s *svc) updateSharePermissions(ctx context.Context, w http.ResponseWriter, requestBody string, share *collaborationv1beta1.Share, lgPerm *libregraph.Permission, resourceId *providerpb.ResourceId) {
 	log := appctx.GetLogger(ctx)
 
 	gw, err := s.getClient()
@@ -298,10 +298,14 @@ func (s *svc) updateSharePermissions(ctx context.Context, w http.ResponseWriter,
 		return
 	}
 
+	if strings.Contains(requestBody, "expiration") {
+		// TODO: implement support for updating expiration
+	}
+
 	res, err := gw.UpdateShare(ctx, &collaborationv1beta1.UpdateShareRequest{
 		Ref: &collaborationv1beta1.ShareReference{
 			Spec: &collaborationv1beta1.ShareReference_Id{
-				Id: shareId,
+				Id: share.Id,
 			},
 		},
 		Field: &collaborationv1beta1.UpdateShareRequest_UpdateField{
