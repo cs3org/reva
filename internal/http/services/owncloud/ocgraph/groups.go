@@ -33,6 +33,7 @@ import (
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"github.com/pkg/errors"
 )
@@ -111,6 +112,24 @@ func (s *svc) listGroups(w http.ResponseWriter, r *http.Request) {
 		Value: lgGroups,
 	})
 
+}
+
+func (s *svc) getGroupInfo(ctx context.Context, id *groupv1beta1.GroupId) (*groupv1beta1.Group, error) {
+	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+	if err != nil {
+		return nil, err
+	}
+	res, err := gw.GetGroup(ctx, &groupv1beta1.GetGroupRequest{
+		GroupId: id,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return nil, errors.New(res.Status.Message)
+	}
+
+	return res.Group, nil
 }
 
 // From a Select query, return a list of `SelectableProperty`s
