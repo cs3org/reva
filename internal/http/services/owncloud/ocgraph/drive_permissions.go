@@ -586,6 +586,15 @@ func getLinkUpdate(permission *libregraph.Permission, resourceType *providerpb.R
 				Expiration: nullableTimeToCs3Timestamp(permission.ExpirationDateTime),
 			},
 		}, nil
+	} else if permission.Link != nil && permission.Link.LibreGraphDisplayName != nil {
+		if *permission.Link.LibreGraphDisplayName == "" {
+			return nil, errtypes.BadRequest("Link name cannot be empty")
+		}
+		return &linkv1beta1.UpdatePublicShareRequest_Update{
+			Type:        linkv1beta1.UpdatePublicShareRequest_Update_TYPE_DISPLAYNAME,
+			DisplayName: *permission.Link.LibreGraphDisplayName,
+		}, nil
+
 	} else if permission.Link != nil && permission.Link.Type != nil {
 		permissions, err := CS3ResourcePermissionsFromSharingLink(permission.Link.GetType(), *resourceType)
 		if err != nil {
