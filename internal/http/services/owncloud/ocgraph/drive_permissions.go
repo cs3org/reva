@@ -1,13 +1,10 @@
 package ocgraph
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/url"
-	"strings"
 
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -129,23 +126,8 @@ func (s *svc) updateDrivePermissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Decode the requested permissions
-
-	// Unfortunately, we need to do something sketchy here: we can only read `r.Body` once
-	// since it is a ReadCloser. However, when parsing its contents into a struct using
-	// the json decoder, we lose info about whether a value was explicitly set to nil, or
-	// whether it was just absent. For example, when removing the expiration time, the body
-	// will have an entry like `expiration: nil`.
-	// To fix this, we duplicate the stream using a TeeReader, and manually check for the
-	// presence of certain fields to check if these should be updated
-
-	// Buffer to store the copy
-	var bodyCopy bytes.Buffer
-	// Body stores a copy of the stream
-	body := io.TeeReader(r.Body, &bodyCopy)
-
 	permission := &libregraph.Permission{}
-	dec := json.NewDecoder(body)
+	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(permission); err != nil {
 		log.Error().Err(err).Interface("Body", r.Body).Msg("failed unmarshalling request body")
@@ -156,9 +138,9 @@ func (s *svc) updateDrivePermissions(w http.ResponseWriter, r *http.Request) {
 	permission.Id = libregraph.PtrString(shareID)
 
 	if shareOrLink.shareType == "share" {
-		s.updateSharePermissions(ctx, w, bodyCopy.String(), shareOrLink.share, permission, resourceID)
+		s.updateSharePermissions(ctx, w, shareOrLink.share, permission, resourceID)
 	} else {
-		s.updateLinkPermissions(ctx, w, bodyCopy.String(), &linkv1beta1.PublicShareId{OpaqueId: shareOrLink.ID}, permission, resourceID)
+		s.updateLinkPermissions(ctx, w, &linkv1beta1.PublicShareId{OpaqueId: shareOrLink.ID}, permission, resourceID)
 	}
 }
 
@@ -208,7 +190,7 @@ func (s *svc) deleteDrivePermissions(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *svc) updateLinkPermissions(ctx context.Context, w http.ResponseWriter, requestBody string, linkId *linkv1beta1.PublicShareId, permission *libregraph.Permission, resourceId *providerpb.ResourceId) {
+func (s *svc) updateLinkPermissions(ctx context.Context, w http.ResponseWriter, linkId *linkv1beta1.PublicShareId, permission *libregraph.Permission, resourceId *providerpb.ResourceId) {
 	log := appctx.GetLogger(ctx)
 
 	gw, err := s.getClient()
@@ -229,7 +211,7 @@ func (s *svc) updateLinkPermissions(ctx context.Context, w http.ResponseWriter, 
 		return
 	}
 
-	update, err := getLinkUpdate(permission, &statRes.Info.Type, requestBody)
+	update, err := getLinkUpdate(permission, &statRes.Info.Type)
 	if err != nil {
 		log.Error().Err(err).Msg("nothing provided to update")
 		w.WriteHeader(http.StatusBadRequest)
@@ -270,7 +252,7 @@ func (s *svc) updateLinkPermissions(ctx context.Context, w http.ResponseWriter, 
 
 }
 
-func (s *svc) updateSharePermissions(ctx context.Context, w http.ResponseWriter, requestBody string, share *collaborationv1beta1.Share, lgPerm *libregraph.Permission, resourceId *providerpb.ResourceId) {
+func (s *svc) updateSharePermissions(ctx context.Context, w http.ResponseWriter, share *collaborationv1beta1.Share, lgPerm *libregraph.Permission, resourceId *providerpb.ResourceId) {
 	log := appctx.GetLogger(ctx)
 
 	gw, err := s.getClient()
@@ -297,27 +279,28 @@ func (s *svc) updateSharePermissions(ctx context.Context, w http.ResponseWriter,
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
-	if strings.Contains(requestBody, "expiration") {
+	var res *collaborationv1beta1.UpdateShareResponse
+	if lgPerm.ExpirationDateTime.IsSet() {
 		// TODO: implement support for updating expiration
 		// This requires an update to the CS3 API
 		// See CERNBOX-3920
-	}
-
-	res, err := gw.UpdateShare(ctx, &collaborationv1beta1.UpdateShareRequest{
-		Ref: &collaborationv1beta1.ShareReference{
-			Spec: &collaborationv1beta1.ShareReference_Id{
-				Id: share.Id,
-			},
-		},
-		Field: &collaborationv1beta1.UpdateShareRequest_UpdateField{
-			Field: &collaborationv1beta1.UpdateShareRequest_UpdateField_Permissions{
-				Permissions: &collaborationv1beta1.SharePermissions{
-					Permissions: perms,
+	} else {
+		res, err = gw.UpdateShare(ctx, &collaborationv1beta1.UpdateShareRequest{
+			Ref: &collaborationv1beta1.ShareReference{
+				Spec: &collaborationv1beta1.ShareReference_Id{
+					Id: share.Id,
 				},
 			},
-		},
-	})
+			Field: &collaborationv1beta1.UpdateShareRequest_UpdateField{
+				Field: &collaborationv1beta1.UpdateShareRequest_UpdateField_Permissions{
+					Permissions: &collaborationv1beta1.SharePermissions{
+						Permissions: perms,
+					},
+				},
+			},
+		})
+	}
+
 	if err != nil {
 		log.Error().Err(err).Msg("error updating public share")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -595,8 +578,8 @@ func (s *svc) writePermissions(ctx context.Context, w http.ResponseWriter, actio
 	}
 }
 
-func getLinkUpdate(permission *libregraph.Permission, resourceType *providerpb.ResourceType, body string) (*linkv1beta1.UpdatePublicShareRequest_Update, error) {
-	if strings.Contains(body, "expiration") {
+func getLinkUpdate(permission *libregraph.Permission, resourceType *providerpb.ResourceType) (*linkv1beta1.UpdatePublicShareRequest_Update, error) {
+	if permission.ExpirationDateTime.IsSet() {
 		return &linkv1beta1.UpdatePublicShareRequest_Update{
 			Type: linkv1beta1.UpdatePublicShareRequest_Update_TYPE_EXPIRATION,
 			Grant: &linkv1beta1.Grant{
