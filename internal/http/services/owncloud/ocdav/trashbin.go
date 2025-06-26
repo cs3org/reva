@@ -137,7 +137,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			// listing other users trash is forbidden, no auth will change that
 			b, err := Marshal(exception{
 				code: SabredavNotAuthenticated,
-			})
+			}, "")
 			if err != nil {
 				log.Error().Msgf("error marshaling xml response: %s", b)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -280,7 +280,6 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		ToTs:   toTS,
 		Key:    path.Join(key, itemPath),
 	})
-
 	if err != nil {
 		sublog.Error().Err(err).Msg("error calling ListRecycle")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -579,7 +578,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 				code:    SabredavPreconditionFailed,
 				message: "The destination node already exists, and the overwrite header is set to false",
 				header:  HeaderOverwrite,
-			})
+			}, "")
 			HandleWebdavError(&sublog, w, b, err)
 			return
 		}
@@ -623,7 +622,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 			b, err := Marshal(exception{
 				code:    SabredavPermissionDenied,
 				message: "Permission denied to restore",
-			})
+			}, "")
 			HandleWebdavError(&sublog, w, b, err)
 		}
 		HandleErrorStatus(&sublog, w, res.Status)
@@ -688,7 +687,7 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 		b, err := Marshal(exception{
 			code:    SabredavConflict,
 			message: m,
-		})
+		}, "")
 		HandleWebdavError(&sublog, w, b, err)
 	case rpc.Code_CODE_PERMISSION_DENIED:
 		w.WriteHeader(http.StatusForbidden)
@@ -701,7 +700,7 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 		b, err := Marshal(exception{
 			code:    SabredavPermissionDenied,
 			message: m,
-		})
+		}, "")
 		HandleWebdavError(&sublog, w, b, err)
 	default:
 		HandleErrorStatus(&sublog, w, res.Status)

@@ -47,17 +47,15 @@ const (
 	SabredavConflict
 )
 
-var (
-	codesEnum = []string{
-		"Sabre\\DAV\\Exception\\BadRequest",
-		"Sabre\\DAV\\Exception\\MethodNotAllowed",
-		"Sabre\\DAV\\Exception\\NotAuthenticated",
-		"Sabre\\DAV\\Exception\\PreconditionFailed",
-		"Sabre\\DAV\\Exception\\PermissionDenied",
-		"Sabre\\DAV\\Exception\\NotFound",
-		"Sabre\\DAV\\Exception\\Conflict",
-	}
-)
+var codesEnum = []string{
+	"Sabre\\DAV\\Exception\\BadRequest",
+	"Sabre\\DAV\\Exception\\MethodNotAllowed",
+	"Sabre\\DAV\\Exception\\NotAuthenticated",
+	"Sabre\\DAV\\Exception\\PreconditionFailed",
+	"Sabre\\DAV\\Exception\\PermissionDenied",
+	"Sabre\\DAV\\Exception\\NotFound",
+	"Sabre\\DAV\\Exception\\Conflict",
+}
 
 type exception struct {
 	code    code
@@ -66,13 +64,14 @@ type exception struct {
 }
 
 // Marshal just calls the xml marshaller for a given exception.
-func Marshal(e exception) ([]byte, error) {
+func Marshal(e exception, errorCode string) ([]byte, error) {
 	xmlstring, err := xml.Marshal(&errorXML{
 		Xmlnsd:    "DAV",
 		Xmlnss:    "http://sabredav.org/ns",
 		Exception: codesEnum[e.code],
 		Message:   e.message,
 		Header:    e.header,
+		ErrorCode: errorCode,
 	})
 	if err != nil {
 		return []byte(""), err
@@ -88,6 +87,7 @@ type errorXML struct {
 	Exception string   `xml:"s:exception"`
 	Message   string   `xml:"s:message"`
 	InnerXML  []byte   `xml:",innerxml"`
+	ErrorCode string   `xml:"s:errorcode,omitempty"`
 	// Header is used to indicate the conflicting request header
 	Header string `xml:"s:header,omitempty"`
 }
