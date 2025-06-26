@@ -231,7 +231,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		b, err := Marshal(exception{
 			code:    SabredavBadRequest,
 			message: m,
-		})
+		}, "")
 		HandleWebdavError(&log, w, b, err)
 		return nil, nil, false
 	}
@@ -276,7 +276,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			b, err := Marshal(exception{
 				code:    SabredavNotFound,
 				message: m,
-			})
+			}, "")
 			HandleWebdavError(&log, w, b, err)
 			return nil, nil, false
 		}
@@ -316,7 +316,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 				b, err := Marshal(exception{
 					code:    SabredavNotFound,
 					message: m,
-				})
+				}, "")
 				HandleWebdavError(&log, w, b, err)
 				return nil, nil, false
 			}

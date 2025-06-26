@@ -49,7 +49,7 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 		b, err := Marshal(exception{
 			code:    SabredavBadRequest,
 			message: m,
-		})
+		}, "")
 		HandleWebdavError(&sublog, w, b, err)
 		return
 	}
@@ -78,7 +78,7 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 			b, err := Marshal(exception{
 				code:    SabredavNotFound,
 				message: m,
-			})
+			}, "")
 			HandleWebdavError(&sublog, w, b, err)
 		}
 		HandleErrorStatus(&sublog, w, statRes.Status)
@@ -221,7 +221,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 						b, err := Marshal(exception{
 							code:    SabredavPermissionDenied,
 							message: m,
-						})
+						}, "")
 						HandleWebdavError(&log, w, b, err)
 						return nil, nil, false
 					}
@@ -258,7 +258,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 						b, err := Marshal(exception{
 							code:    SabredavPermissionDenied,
 							message: m,
-						})
+						}, "")
 						HandleWebdavError(&log, w, b, err)
 						return nil, nil, false
 					}
