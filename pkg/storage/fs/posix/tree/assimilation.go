@@ -156,6 +156,15 @@ func (d *ScanDebouncer) InProgress(path string) bool {
 	return ok
 }
 
+// Pending returns true if the given path is currently pending to be processed
+func (d *ScanDebouncer) Pending(path string) bool {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+
+	_, ok := d.pending.Load(path)
+	return ok
+}
+
 func (t *Tree) workScanQueue() {
 	for i := 0; i < t.options.MaxConcurrency; i++ {
 		go func() {
@@ -190,7 +199,7 @@ func (t *Tree) Scan(path string, action EventAction, isDir bool) error {
 			//	 -> assimilate file
 			//   -> scan parent directory recursively to update tree size and catch nodes that weren't covered by an event
 			AssimilationCounter.WithLabelValues(_labelFile, _labelAdded).Inc()
-			if !t.scanDebouncer.InProgress(filepath.Dir(path)) {
+			if !t.scanDebouncer.Pending(filepath.Dir(path)) {
 				t.scanDebouncer.Debounce(scanItem{
 					Path: path,
 				})
