@@ -60,7 +60,7 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 			b, err := Marshal(exception{
 				code:    SabredavNotFound,
 				message: m,
-			})
+			}, "")
 			HandleWebdavError(&log, w, b, err)
 		}
 		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
@@ -70,7 +70,7 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 			b, err := Marshal(exception{
 				code:    SabredavPermissionDenied,
 				message: m,
-			})
+			}, "")
 			HandleWebdavError(&log, w, b, err)
 		}
 		if res.Status.Code == rpc.Code_CODE_INTERNAL && res.Status.Message == "can't delete mount path" {
@@ -78,7 +78,7 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 			b, err := Marshal(exception{
 				code:    SabredavPermissionDenied,
 				message: res.Status.Message,
-			})
+			}, "")
 			HandleWebdavError(&log, w, b, err)
 		}
 

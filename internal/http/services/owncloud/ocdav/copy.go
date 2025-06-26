@@ -131,7 +131,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 				b, err := Marshal(exception{
 					code:    SabredavPermissionDenied,
 					message: m,
-				})
+				}, "")
 				HandleWebdavError(log, w, b, err)
 			}
 			return nil
@@ -215,7 +215,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 				b, err := Marshal(exception{
 					code:    SabredavPermissionDenied,
 					message: m,
-				})
+				}, "")
 				HandleWebdavError(log, w, b, err)
 				return nil
 			}
@@ -351,7 +351,7 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 				b, err := Marshal(exception{
 					code:    SabredavPermissionDenied,
 					message: m,
-				})
+				}, "")
 				HandleWebdavError(log, w, b, err)
 			}
 			return nil
@@ -430,7 +430,7 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 				b, err := Marshal(exception{
 					code:    SabredavPermissionDenied,
 					message: m,
-				})
+				}, "")
 				HandleWebdavError(log, w, b, err)
 				return nil
 			}
@@ -491,7 +491,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 		b, err := Marshal(exception{
 			code:    SabredavBadRequest,
 			message: m,
-		})
+		}, "")
 		HandleWebdavError(log, w, b, err)
 		return nil
 	}
@@ -502,7 +502,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 		b, err := Marshal(exception{
 			code:    SabredavBadRequest,
 			message: m,
-		})
+		}, "")
 		HandleWebdavError(log, w, b, err)
 		return nil
 	}
@@ -531,7 +531,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 			b, err := Marshal(exception{
 				code:    SabredavNotFound,
 				message: m,
-			})
+			}, "")
 			HandleWebdavError(log, w, b, err)
 		}
 		HandleErrorStatus(log, w, srcStatRes.Status)
@@ -561,7 +561,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 			b, err := Marshal(exception{
 				code:    SabredavPreconditionFailed,
 				message: m,
-			})
+			}, "")
 			HandleWebdavError(log, w, b, err) // 412, see https://tools.ietf.org/html/rfc4918#section-9.8.5
 			return nil
 		}
