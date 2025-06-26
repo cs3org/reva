@@ -281,9 +281,18 @@ func (s *svc) updateSharePermissions(ctx context.Context, w http.ResponseWriter,
 	}
 	var res *collaborationv1beta1.UpdateShareResponse
 	if lgPerm.ExpirationDateTime.IsSet() {
-		// TODO: implement support for updating expiration
-		// This requires an update to the CS3 API
-		// See CERNBOX-3920
+		res, err = gw.UpdateShare(ctx, &collaborationv1beta1.UpdateShareRequest{
+			Ref: &collaborationv1beta1.ShareReference{
+				Spec: &collaborationv1beta1.ShareReference_Id{
+					Id: share.Id,
+				},
+			},
+			Field: &collaborationv1beta1.UpdateShareRequest_UpdateField{
+				Field: &collaborationv1beta1.UpdateShareRequest_UpdateField_Expiration{
+					Expiration: nullableTimeToCs3Timestamp(lgPerm.ExpirationDateTime),
+				},
+			},
+		})
 	} else {
 		res, err = gw.UpdateShare(ctx, &collaborationv1beta1.UpdateShareRequest{
 			Ref: &collaborationv1beta1.ShareReference{
@@ -594,7 +603,6 @@ func getLinkUpdate(permission *libregraph.Permission, resourceType *providerpb.R
 			Type:        linkv1beta1.UpdatePublicShareRequest_Update_TYPE_DISPLAYNAME,
 			DisplayName: *permission.Link.LibreGraphDisplayName,
 		}, nil
-
 	} else if permission.Link != nil && permission.Link.Type != nil {
 		permissions, err := CS3ResourcePermissionsFromSharingLink(permission.Link.GetType(), *resourceType)
 		if err != nil {
