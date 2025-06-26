@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -28,9 +29,11 @@ import (
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/spaces"
+	"github.com/cs3org/reva/pkg/storage/utils/grants"
 
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
@@ -51,6 +54,14 @@ type DavHandler struct {
 	PublicFileHandler   *PublicFileHandler
 	OCMSharesHandler    *WebDavHandler
 }
+
+const (
+	ErrListingMembers     = "ERR_LISTING_MEMBERS_NOT_ALLOWED"
+	ErrInvalidCredentials = "ERR_INVALID_CREDENTIALS"
+	ErrMissingBasicAuth   = "ERR_MISSING_BASIC_AUTH"
+	ErrMissingBearerAuth  = "ERR_MISSING_BEARER_AUTH"
+	ErrFileNotFoundInRoot = "ERR_FILE_NOT_FOUND_IN_ROOT"
+)
 
 func (h *DavHandler) init(c *Config) error {
 	h.AvatarsHandler = new(AvatarsHandler)
@@ -118,7 +129,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				b, err := Marshal(exception{
 					code:    SabredavMethodNotAllowed,
 					message: "Listing members of this collection is disabled",
-				})
+				}, ErrListingMembers)
 				if err != nil {
 					log.Error().Msgf("error marshaling xml response: %s", b)
 					w.WriteHeader(http.StatusInternalServerError)
@@ -142,7 +153,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			h.AvatarsHandler.Handler(s).ServeHTTP(w, r)
 		case "files":
 			var requestUserID string
-			var oldPath = r.URL.Path
+			oldPath := r.URL.Path
 
 			// detect and check current user in URL
 			requestUserID, r.URL.Path = router.ShiftPath(r.URL.Path)
@@ -285,7 +296,36 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 			var res *gatewayv1beta1.AuthenticateResponse
 			token, _ := router.ShiftPath(r.URL.Path)
-			if _, pass, ok := r.BasicAuth(); ok {
+			var hasValidBasicAuthHeader bool
+			var pass string
+			_, userExists := appctx.ContextGetUser(ctx)
+			if userExists {
+				psRes, err := c.GetPublicShare(ctx, &link.GetPublicShareRequest{
+					Ref: &link.PublicShareReference{
+						Spec: &link.PublicShareReference_Token{
+							Token: token,
+						},
+					},
+				})
+				if err != nil && !strings.Contains(err.Error(), "core access token not found") {
+					log.Error().Err(err).Msg("error sending grpc stat request")
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				// If the link is internal then 307 redirect
+				if psRes.Status.Code == rpc.Code_CODE_OK && grants.PermissionsEqual(psRes.Share.Permissions.GetPermissions(), &provider.ResourcePermissions{}) {
+					if psRes.GetShare().GetResourceId() != nil {
+						rUrl := path.Join("/dav/spaces", spaces.EncodeResourceID(*&psRes.GetShare().ResourceId))
+						http.Redirect(w, r, rUrl, http.StatusTemporaryRedirect)
+						return
+					}
+					log.Debug().Str("token", token).Interface("status", res.Status).Msg("resource id not found")
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+			}
+
+			if _, pass, hasValidBasicAuthHeader = r.BasicAuth(); hasValidBasicAuthHeader {
 				log.Info().Str("token", token).Msg("Handling public-files DAV request with BasicAuth")
 				res, err = handleBasicAuth(r.Context(), c, token, pass)
 			} else {
@@ -313,8 +353,34 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				return
 			case res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
 				fallthrough
+			case res.Status.Code == rpc.Code_CODE_OK && grants.PermissionsEqual(res.GetInfo().GetPermissionSet(), &provider.ResourcePermissions{}):
+				// If the link is internal
+				if !userExists {
+					w.Header().Add("Www-Authenticate", fmt.Sprintf("Bearer realm=\"%s\", charset=\"UTF-8\"", r.Host))
+					w.WriteHeader(http.StatusUnauthorized)
+					b, err := Marshal(exception{
+						code:    http.StatusUnauthorized,
+						message: "No 'Authorization: Bearer' header found",
+					}, ErrMissingBearerAuth)
+					HandleWebdavError(log, w, b, err)
+					return
+				}
+				fallthrough
 			case res.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
 				w.WriteHeader(http.StatusUnauthorized)
+				if hasValidBasicAuthHeader {
+					b, err := Marshal(exception{
+						code:    SabredavNotAuthenticated,
+						message: "Username or password was incorrect",
+					}, ErrInvalidCredentials)
+					HandleWebdavError(log, w, b, err)
+					return
+				}
+				b, err := Marshal(exception{
+					code:    SabredavNotAuthenticated,
+					message: "No 'Authorization: Basic' header found",
+				}, ErrMissingBasicAuth)
+				HandleWebdavError(log, w, b, err)
 				return
 			case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
 				w.WriteHeader(http.StatusNotFound)
@@ -367,7 +433,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			b, err := Marshal(exception{
 				code:    SabredavNotFound,
 				message: "File not found in root",
-			})
+			}, ErrFileNotFoundInRoot)
 			HandleWebdavError(log, w, b, err)
 		}
 	})
