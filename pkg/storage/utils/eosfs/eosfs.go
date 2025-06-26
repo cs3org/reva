@@ -43,6 +43,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/rs/zerolog/log"
 
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/eosclient/eosbinary"
@@ -1322,6 +1323,7 @@ func (fs *Eosfs) GetHome(ctx context.Context) (string, error) {
 func (fs *Eosfs) createNominalHome(ctx context.Context) error {
 	home := fs.wrap(ctx, "/")
 
+	log.Info().Str("home", home).Msg("Creating user home")
 	u, err := utils.GetUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
@@ -1334,6 +1336,7 @@ func (fs *Eosfs) createNominalHome(ctx context.Context) error {
 
 	_, err = fs.c.GetFileInfoByPath(ctx, auth, home)
 	if err == nil { // home already exists
+		log.Error().Str("home", home).Msg("Home already exists")
 		return nil
 	}
 
@@ -1360,7 +1363,7 @@ func (fs *Eosfs) createNominalHome(ctx context.Context) error {
 }
 
 func (fs *Eosfs) CreateHome(ctx context.Context) error {
-	if !fs.conf.EnableHome {
+	if !fs.conf.EnableHomeCreation {
 		return errtypes.NotSupported("eosfs: create home not supported")
 	}
 
