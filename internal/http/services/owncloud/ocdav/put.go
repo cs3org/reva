@@ -250,7 +250,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			b, err := Marshal(exception{
 				code:    SabredavPermissionDenied,
 				message: "permission denied: you have no permission to upload content",
-			})
+			}, "")
 			HandleWebdavError(&log, w, b, err)
 		case rpc.Code_CODE_NOT_FOUND:
 			w.WriteHeader(http.StatusConflict)
@@ -297,7 +297,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			b, err := Marshal(exception{
 				code:    SabredavBadRequest,
 				message: "The computed checksum does not match the one received from the client.",
-			})
+			}, "")
 			HandleWebdavError(&log, w, b, err)
 			return
 		}
@@ -305,7 +305,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			w.WriteHeader(http.StatusConflict)
 			b, err := Marshal(exception{
 				message: "The file cannot be uploaded. Try again.",
-			})
+			}, "")
 			HandleWebdavError(&log, w, b, err)
 			return
 		}

@@ -52,6 +52,14 @@ type DavHandler struct {
 	OCMSharesHandler    *WebDavHandler
 }
 
+const (
+	ErrListingMembers     = "ERR_LISTING_MEMBERS_NOT_ALLOWED"
+	ErrInvalidCredentials = "ERR_INVALID_CREDENTIALS"
+	ErrMissingBasicAuth   = "ERR_MISSING_BASIC_AUTH"
+	// ErrMissingBearerAuth  = "ERR_MISSING_BEARER_AUTH"
+	ErrFileNotFoundInRoot = "ERR_FILE_NOT_FOUND_IN_ROOT"
+)
+
 func (h *DavHandler) init(c *Config) error {
 	h.AvatarsHandler = new(AvatarsHandler)
 	if err := h.AvatarsHandler.init(c); err != nil {
@@ -118,7 +126,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				b, err := Marshal(exception{
 					code:    SabredavMethodNotAllowed,
 					message: "Listing members of this collection is disabled",
-				})
+				}, ErrListingMembers)
 				if err != nil {
 					log.Error().Msgf("error marshaling xml response: %s", b)
 					w.WriteHeader(http.StatusInternalServerError)
@@ -142,7 +150,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			h.AvatarsHandler.Handler(s).ServeHTTP(w, r)
 		case "files":
 			var requestUserID string
-			var oldPath = r.URL.Path
+			oldPath := r.URL.Path
 
 			// detect and check current user in URL
 			requestUserID, r.URL.Path = router.ShiftPath(r.URL.Path)
@@ -285,7 +293,10 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 			var res *gatewayv1beta1.AuthenticateResponse
 			token, _ := router.ShiftPath(r.URL.Path)
-			if _, pass, ok := r.BasicAuth(); ok {
+			var hasValidBasicAuthHeader bool
+			var pass string
+
+			if _, pass, hasValidBasicAuthHeader = r.BasicAuth(); hasValidBasicAuthHeader {
 				log.Info().Str("token", token).Msg("Handling public-files DAV request with BasicAuth")
 				res, err = handleBasicAuth(r.Context(), c, token, pass)
 			} else {
@@ -315,6 +326,19 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				fallthrough
 			case res.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
 				w.WriteHeader(http.StatusUnauthorized)
+				if hasValidBasicAuthHeader {
+					b, err := Marshal(exception{
+						code:    SabredavNotAuthenticated,
+						message: "Username or password was incorrect",
+					}, ErrInvalidCredentials)
+					HandleWebdavError(log, w, b, err)
+					return
+				}
+				b, err := Marshal(exception{
+					code:    SabredavNotAuthenticated,
+					message: "No 'Authorization: Basic' header found",
+				}, ErrMissingBasicAuth)
+				HandleWebdavError(log, w, b, err)
 				return
 			case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
 				w.WriteHeader(http.StatusNotFound)
@@ -367,7 +391,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			b, err := Marshal(exception{
 				code:    SabredavNotFound,
 				message: "File not found in root",
-			})
+			}, ErrFileNotFoundInRoot)
 			HandleWebdavError(log, w, b, err)
 		}
 	})

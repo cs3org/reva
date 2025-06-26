@@ -113,7 +113,7 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 			b, err := Marshal(exception{
 				code:    SabredavNotFound,
 				message: "Parent node does not exist",
-			})
+			}, "")
 			HandleWebdavError(&log, w, b, err)
 		} else {
 			HandleErrorStatus(&log, w, parentStatRes.Status)
@@ -136,7 +136,7 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 			b, err := Marshal(exception{
 				code:    SabredavMethodNotAllowed,
 				message: "The resource you tried to create already exists",
-			})
+			}, "")
 			HandleWebdavError(&log, w, b, err)
 		} else {
 			HandleErrorStatus(&log, w, statRes.Status)
@@ -164,7 +164,7 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 		b, err := Marshal(exception{
 			code:    SabredavPermissionDenied,
 			message: m,
-		})
+		}, "")
 		HandleWebdavError(&log, w, b, err)
 	default:
 		HandleErrorStatus(&log, w, res.Status)

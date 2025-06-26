@@ -149,7 +149,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 			b, err := Marshal(exception{
 				code:    SabredavNotFound,
 				message: m,
-			})
+			}, "")
 			HandleWebdavError(&log, w, b, err)
 		}
 		HandleErrorStatus(&log, w, srcStatRes.Status)
@@ -239,7 +239,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 			b, err := Marshal(exception{
 				code:    SabredavPermissionDenied,
 				message: m,
-			})
+			}, "")
 			HandleWebdavError(&log, w, b, err)
 		}
 		HandleErrorStatus(&log, w, mRes.Status)

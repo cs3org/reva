@@ -37,8 +37,7 @@ import (
 )
 
 // VersionsHandler handles version requests.
-type VersionsHandler struct {
-}
+type VersionsHandler struct{}
 
 func (h *VersionsHandler) init(c *Config) error {
 	return nil
@@ -118,7 +117,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 			b, err := Marshal(exception{
 				code:    SabredavNotFound,
 				message: "Resource not found",
-			})
+			}, "")
 			HandleWebdavError(&sublog, w, b, err)
 			return
 		}
@@ -232,7 +231,6 @@ func (h *VersionsHandler) doDownload(w http.ResponseWriter, r *http.Request, s *
 			ResourceId: rid,
 		},
 	})
-
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

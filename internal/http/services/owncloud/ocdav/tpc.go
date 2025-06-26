@@ -127,7 +127,7 @@ func (s *svc) handleTPCPull(ctx context.Context, w http.ResponseWriter, r *http.
 		b, err := Marshal(exception{
 			code:    SabredavBadRequest,
 			message: m,
-		})
+		}, "")
 		HandleWebdavError(&sublog, w, b, err)
 		return
 	}
@@ -289,7 +289,7 @@ func (s *svc) handleTPCPush(ctx context.Context, w http.ResponseWriter, r *http.
 		b, err := Marshal(exception{
 			code:    SabredavBadRequest,
 			message: m,
-		})
+		}, "")
 		HandleWebdavError(&sublog, w, b, err)
 		return
 	}
