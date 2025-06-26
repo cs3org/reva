@@ -211,7 +211,7 @@ func (s *svc) updateLinkPermissions(ctx context.Context, w http.ResponseWriter, 
 		return
 	}
 
-	update, err := getLinkUpdate(permission, &statRes.Info.Type)
+	update, err := s.getLinkUpdate(ctx, permission, statRes.Info.Type)
 	if err != nil {
 		log.Error().Err(err).Msg("nothing provided to update")
 		w.WriteHeader(http.StatusBadRequest)
@@ -273,42 +273,20 @@ func (s *svc) updateSharePermissions(ctx context.Context, w http.ResponseWriter,
 		return
 	}
 
-	perms, err := s.lgPermToCS3Perm(ctx, lgPerm, statRes.Info.Type)
+	update, err := s.getShareUpdate(ctx, lgPerm, statRes.Info.Type)
 	if err != nil {
-		log.Error().Err(err).Msg("nothing provided to update")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	var res *collaborationv1beta1.UpdateShareResponse
-	if lgPerm.ExpirationDateTime.IsSet() {
-		res, err = gw.UpdateShare(ctx, &collaborationv1beta1.UpdateShareRequest{
-			Ref: &collaborationv1beta1.ShareReference{
-				Spec: &collaborationv1beta1.ShareReference_Id{
-					Id: share.Id,
-				},
+
+	res, err := gw.UpdateShare(ctx, &collaborationv1beta1.UpdateShareRequest{
+		Ref: &collaborationv1beta1.ShareReference{
+			Spec: &collaborationv1beta1.ShareReference_Id{
+				Id: share.Id,
 			},
-			Field: &collaborationv1beta1.UpdateShareRequest_UpdateField{
-				Field: &collaborationv1beta1.UpdateShareRequest_UpdateField_Expiration{
-					Expiration: nullableTimeToCs3Timestamp(lgPerm.ExpirationDateTime),
-				},
-			},
-		})
-	} else {
-		res, err = gw.UpdateShare(ctx, &collaborationv1beta1.UpdateShareRequest{
-			Ref: &collaborationv1beta1.ShareReference{
-				Spec: &collaborationv1beta1.ShareReference_Id{
-					Id: share.Id,
-				},
-			},
-			Field: &collaborationv1beta1.UpdateShareRequest_UpdateField{
-				Field: &collaborationv1beta1.UpdateShareRequest_UpdateField_Permissions{
-					Permissions: &collaborationv1beta1.SharePermissions{
-						Permissions: perms,
-					},
-				},
-			},
-		})
-	}
+		},
+		Field: update,
+	})
 
 	if err != nil {
 		log.Error().Err(err).Msg("error updating public share")
@@ -587,7 +565,7 @@ func (s *svc) writePermissions(ctx context.Context, w http.ResponseWriter, actio
 	}
 }
 
-func getLinkUpdate(permission *libregraph.Permission, resourceType *providerpb.ResourceType) (*linkv1beta1.UpdatePublicShareRequest_Update, error) {
+func (s *svc) getLinkUpdate(ctx context.Context, permission *libregraph.Permission, resourceType providerpb.ResourceType) (*linkv1beta1.UpdatePublicShareRequest_Update, error) {
 	if permission.ExpirationDateTime.IsSet() {
 		return &linkv1beta1.UpdatePublicShareRequest_Update{
 			Type: linkv1beta1.UpdatePublicShareRequest_Update_TYPE_EXPIRATION,
@@ -604,7 +582,7 @@ func getLinkUpdate(permission *libregraph.Permission, resourceType *providerpb.R
 			DisplayName: *permission.Link.LibreGraphDisplayName,
 		}, nil
 	} else if permission.Link != nil && permission.Link.Type != nil {
-		permissions, err := CS3ResourcePermissionsFromSharingLink(permission.Link.GetType(), *resourceType)
+		permissions, err := CS3ResourcePermissionsFromSharingLink(permission.Link.GetType(), resourceType)
 		if err != nil {
 			return nil, errors.Wrap(err, "error converting link type to permissions")
 		}
@@ -619,4 +597,26 @@ func getLinkUpdate(permission *libregraph.Permission, resourceType *providerpb.R
 	} else {
 		return nil, errors.New("body contained nothing to update")
 	}
+}
+
+func (s *svc) getShareUpdate(ctx context.Context, permission *libregraph.Permission, resourceType providerpb.ResourceType) (*collaborationv1beta1.UpdateShareRequest_UpdateField, error) {
+
+	if permission.ExpirationDateTime.IsSet() {
+		return &collaborationv1beta1.UpdateShareRequest_UpdateField{
+			Field: &collaborationv1beta1.UpdateShareRequest_UpdateField_Expiration{
+				Expiration: nullableTimeToCs3Timestamp(permission.ExpirationDateTime),
+			},
+		}, nil
+	}
+	perms, err := s.lgPermToCS3Perm(ctx, permission, resourceType)
+	if err != nil || perms == nil {
+		return nil, errors.New("Failed to extract permissions")
+	}
+	return &collaborationv1beta1.UpdateShareRequest_UpdateField{
+		Field: &collaborationv1beta1.UpdateShareRequest_UpdateField_Permissions{
+			Permissions: &collaborationv1beta1.SharePermissions{
+				Permissions: perms,
+			},
+		},
+	}, nil
 }
