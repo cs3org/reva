@@ -75,8 +75,11 @@ type Config struct {
 	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
 	UseKeytab bool `mapstructure:"use_keytab"`
 
-	// EnableHome enables the creation of home directories.
+	// TODO: what does this do??
 	EnableHome bool `mapstructure:"enable_home"`
+
+	// EnableHome enables the creation of home directories.
+	EnableHomeCreation bool `mapstructure:"enable_home_creation"`
 
 	// Whether to maintain the same inode across various versions of a file.
 	// Requires extra metadata operations if set to true
