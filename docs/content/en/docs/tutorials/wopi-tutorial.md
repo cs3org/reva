@@ -11,22 +11,23 @@ The wopiserver will allow you to connect Reva to online editors such as collabor
 
 ## Prerequisites
 If you encounter strange problems, please check which version of the prerequisites you are running, it might be that you need to update/downgrade. For reference ask someone who already has reva and Phoenix running, they will have updated information on the versions.
-* golang >= 1.12
+* golang >= 1.24
 * make/automake
 * git >= 2
 * python >=3.7
 
 ## 1. Clone the wopiserver and Reva repos
-Clone the wopiserver repo from https://github.com/cs3org/wopiserver
+Clone the wopiserver repo:
 
 ```
 git clone https://github.com/cs3org/wopiserver
 ```
 
-Clone the reva repo from https://github.com/cs3org/reva 
+Clone the reva and the configs repos:
 
 ```
 git clone https://github.com/cs3org/reva
+git clone https://github.com/cs3org/reva-configs
 ```
 
 ## 2. Configure Reva
@@ -41,7 +42,8 @@ Now you need to run Revad (the Reva daemon). Follow these steps
 from the *reva* folder:
 
 ```
-cd examples/ocm/ && ../../cmd/revad/revad -c server-1.toml & ../../cmd/revad/revad -c server-2.toml &.
+cd ~/reva-configs/ocm/
+~/reva/cmd/revad/revad -c server-1.toml & ~/reva/cmd/revad/revad -c server-2.toml &
 ``` 
 
 The Reva daemon (revad) should now be running.
@@ -55,7 +57,7 @@ Run according to instructions in the readme ("Run the WOPI server locally", http
 
 ## 7. Local changes
 To try the connection you could for example go to a new reva terminal window and type 
-`./cmd/reva/reva -insecure login basic` - use einstein and relativity as log in ccredentials
-`./cmd/reva/reva -insecure open-in-app /home/example.txt read` - this should print out the app provider url in your terminal.
+`~/reva/cmd/reva/reva -insecure login basic` - use einstein and relativity as log in ccredentials
+`~/reva/cmd/reva/reva -insecure open-in-app /home/example.txt read` - this should print out the app provider url in your terminal.
 
 ## 8. Enjoy your new Reva and wopiserver set up!
