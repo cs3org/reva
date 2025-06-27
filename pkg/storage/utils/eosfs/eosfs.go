@@ -43,7 +43,6 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/rs/zerolog/log"
 
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/eosclient/eosbinary"
@@ -317,16 +316,21 @@ func (fs *Eosfs) getLayout(ctx context.Context) (layout string) {
 }
 
 func (fs *Eosfs) getInternalHome(ctx context.Context) string {
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("get internal home: %+v", fs.conf.EnableHome) 
 	if !fs.conf.EnableHome {
 		// TODO(lopresti): this is to be removed as we always want to support home,
 		// cf. https://github.com/cs3org/reva/pull/4940
 		return "/"
 	}
 
+	
 	u := appctx.ContextMustGetUser(ctx)
 	relativeHome := templates.WithUser(u, fs.conf.UserLayout)
+	log.Info().Msgf("get internal home: %+v", relativeHome) 
 	return relativeHome
 }
+
 
 func (fs *Eosfs) wrap(ctx context.Context, fn string) (internal string) {
 	if fs.conf.EnableHome {
@@ -1321,13 +1325,16 @@ func (fs *Eosfs) GetHome(ctx context.Context) (string, error) {
 }
 
 func (fs *Eosfs) createNominalHome(ctx context.Context) error {
-	home := fs.wrap(ctx, "/")
+	log := appctx.GetLogger(ctx)
 
-	log.Info().Str("home", home).Msg("Creating user home")
 	u, err := utils.GetUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
+
+	home := templates.WithUser(u, fs.conf.UserLayout)
+	home = path.Join(fs.conf.Namespace, home)
+
 
 	auth, err := fs.getUserAuth(ctx, u, "")
 	if err != nil {
@@ -1344,8 +1351,7 @@ func (fs *Eosfs) createNominalHome(ctx context.Context) error {
 		return errors.Wrap(err, "eosfs: error verifying if user home directory exists")
 	}
 
-	log := appctx.GetLogger(ctx)
-	log.Info().Interface("user", u.Id).Msg("creating user home")
+	log.Info().Interface("user", u.Id).Interface("home", home).Msg("creating user home")
 
 	if fs.conf.CreateHomeHook != "" {
 		hook := exec.Command(fs.conf.CreateHomeHook, u.Username, utils.UserTypeToString(u.Id.Type))
