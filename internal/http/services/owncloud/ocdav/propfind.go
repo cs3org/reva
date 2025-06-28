@@ -511,15 +511,14 @@ func (s *svc) newPropRaw(key, val string) *propertyXML {
 // Compute the URL of the resource in the spaces format:
 // baseURI + /<space_id>/relative/path/to/space
 // The space_id MUST be set on `md`.
-// The path of the space root MAY be set in the context, in the `ctxSpacePath` key, but if it
-// is not set, it is calculated from `md.Id.SpaceId`
+// The path of the space root it is calculated from `md.Id.SpaceId`
 // Note that the path on `md.Path` must also be set, and must be a path relative to the space root.
 func spaceHref(ctx context.Context, baseURI string, md *provider.ResourceInfo) (string, error) {
 	if md.Id == nil || md.Id.SpaceId == "" {
 		return "", errors.New("Space ID must be set to calculate Href")
 	}
-	storageSpaceID := spaces.ConcatStorageSpaceID(md.Id.StorageId, md.Id.SpaceId)
 
+	storageSpaceID := spaces.ConcatStorageSpaceID(md.Id.StorageId, md.Id.SpaceId)
 	_, spacePath, ok := spaces.DecodeStorageSpaceID(storageSpaceID)
 	if !ok {
 		return "", errors.New("Failed to decode space ID")
@@ -528,6 +527,13 @@ func spaceHref(ctx context.Context, baseURI string, md *provider.ResourceInfo) (
 	relativePath, err := filepath.Rel(spacePath, md.Path)
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to calculate path relative to space root: %v", spacePath)
+	}
+
+	// When requesting for versions, the request URL is baseURI=/remote.php/dav/meta/<resource-id>
+	// When listing other resources, its value is baseURI=/remote.php/dav/spaces.
+	// Because of this, a different response is expected, without the storageSpaceID.
+	if md.Id.StorageId == "versions" {
+		return path.Join(baseURI, relativePath), nil
 	}
 
 	return path.Join(baseURI, storageSpaceID, relativePath), nil
@@ -672,6 +678,13 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			}
 		}
 
+		if md.ParentId != nil {
+			id := spaces.EncodeResourceID(md.ParentId)
+			propstatOK.Prop = append(propstatOK.Prop,
+				s.newProp("oc:file-parent", id),
+			)
+		}
+
 		if md.Etag != "" {
 			// etags must be enclosed in double quotes and cannot contain them.
 			// See https://tools.ietf.org/html/rfc7232#section-2.3 for details
@@ -783,6 +796,16 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:id", spaces.EncodeResourceID(md.Id)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:id", ""))
+					}
+				case "file-parent":
+					if md.ParentId != nil {
+						if spacesEnabled {
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:file-parent", spaces.EncodeResourceID(md.ParentId)))
+						} else {
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:file-parent", spaces.ResourceIdToString(md.ParentId)))
+						}
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:file-parent", ""))
 					}
 				case "permissions": // both
 					// oc:permissions take several char flags to indicate the permissions the user has on this node:

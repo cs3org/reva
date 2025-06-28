@@ -775,6 +775,7 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 func (s *service) addSpaceInfo(ri *provider.ResourceInfo) {
 	space := spaces.PathToSpaceID(ri.Path)
 	ri.Id.SpaceId = space
+	ri.ParentId.SpaceId = space
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {

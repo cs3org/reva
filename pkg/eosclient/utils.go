@@ -20,8 +20,14 @@ package eosclient
 
 import (
 	"fmt"
+	"path"
+	"strings"
 
 	"github.com/cs3org/reva/pkg/errtypes"
+)
+
+const (
+	versionPrefix = ".sys.v#."
 )
 
 const (
@@ -58,4 +64,16 @@ func AttrTypeToString(at AttrType) string {
 // GetKey returns the key considering the type of attribute.
 func (a *Attribute) GetKey() string {
 	return fmt.Sprintf("%s.%s", AttrTypeToString(a.Type), a.Key)
+}
+
+func GetVersionFolder(p string) string {
+	return path.Join(path.Dir(p), versionPrefix+path.Base(p))
+}
+
+func IsVersionFolder(p string) bool {
+	return strings.HasPrefix(path.Base(p), versionPrefix)
+}
+
+func GetFileFromVersionFolder(p string) string {
+	return path.Join(path.Dir(p), strings.TrimPrefix(path.Base(p), versionPrefix))
 }
