@@ -1,5 +1,37 @@
 # Changelog
 
+## [2.34.0](https://github.com/opencloud-eu/reva/releases/tag/v2.34.0) - 2025-06-27
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck, @dragonchaser, @individual-it, @micbar, @rhafer
+
+### ✨ Features
+
+- feat: indicate if file has preview [[#214](https://github.com/opencloud-eu/reva/pull/214)]
+- Add pending tasks to metrics endpoint [[#252](https://github.com/opencloud-eu/reva/pull/252)]
+- Add rudimentary metrics for posixfs [[#251](https://github.com/opencloud-eu/reva/pull/251)]
+
+### 🐛 Bug Fixes
+
+- Use the parent to find the space id of items to be assimilated [[#255](https://github.com/opencloud-eu/reva/pull/255)]
+- Do not try to read attributes from nodes with empty internal paths [[#257](https://github.com/opencloud-eu/reva/pull/257)]
+- Fix handling of webdav write locks [[#233](https://github.com/opencloud-eu/reva/pull/233)]
+
+### 📦️ Dependencies
+
+- Bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc from 1.36.0 to 1.37.0 [[#263](https://github.com/opencloud-eu/reva/pull/263)]
+- Bump github.com/nats-io/nats-server/v2 from 2.11.4 to 2.11.5 [[#262](https://github.com/opencloud-eu/reva/pull/262)]
+- Bump go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc from 0.61.0 to 0.62.0 [[#259](https://github.com/opencloud-eu/reva/pull/259)]
+- Bump github.com/go-chi/chi/v5 from 5.2.1 to 5.2.2 in the go_modules group [[#254](https://github.com/opencloud-eu/reva/pull/254)]
+- Bump github.com/minio/minio-go/v7 from 7.0.93 to 7.0.94 [[#253](https://github.com/opencloud-eu/reva/pull/253)]
+- Bump go.etcd.io/etcd/client/v3 from 3.6.0 to 3.6.1 [[#245](https://github.com/opencloud-eu/reva/pull/245)]
+- Bump github.com/go-sql-driver/mysql from 1.9.2 to 1.9.3 [[#249](https://github.com/opencloud-eu/reva/pull/249)]
+- Bump google.golang.org/grpc from 1.72.2 to 1.73.0 [[#243](https://github.com/opencloud-eu/reva/pull/243)]
+- Bump github.com/minio/minio-go/v7 from 7.0.92 to 7.0.93 [[#244](https://github.com/opencloud-eu/reva/pull/244)]
+- Bump github.com/cloudflare/circl from 1.3.7 to 1.6.1 in the go_modules group [[#239](https://github.com/opencloud-eu/reva/pull/239)]
+- Bump github.com/ceph/go-ceph from 0.33.0 to 0.34.0 [[#241](https://github.com/opencloud-eu/reva/pull/241)]
+
 ## [2.33.1](https://github.com/opencloud-eu/reva/releases/tag/v2.33.1) - 2025-06-10
 
 ### ❤️ Thanks to all contributors! ❤️
