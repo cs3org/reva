@@ -30,7 +30,6 @@ import (
 	"syscall"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/errtypes"
 
 	goceph "github.com/ceph/go-ceph/cephfs"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -200,12 +199,20 @@ func (user *User) fileAsResourceInfo(cv *cacheVal, path string, stat *goceph.Cep
 }
 
 func (user *User) resolveRef(ref *provider.Reference) (string, error) {
+
+	log := appctx.GetLogger(user.ctx)
 	if ref == nil {
 		return "", fmt.Errorf("cephfs: nil reference provided")
 	}
 
 	if ref.GetPath() == "" {
-		return "", errtypes.NotSupported("cephfs: path not provided, id based refs are not supported")
+		path, err := user.fs.GetPathByID(user.ctx, ref.ResourceId)
+		if err != nil {
+			log.Debug().Any("OpaqueId", ref.ResourceId.OpaqueId).Err(err).Msg("No matching path found for inode")
+			return "", err
+		}
+		return path, nil
 	}
+
 	return ref.GetPath(), nil
 }
