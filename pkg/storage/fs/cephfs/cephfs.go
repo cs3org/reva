@@ -45,6 +45,7 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -306,8 +307,134 @@ func (fs *cephfs) RestoreRevision(ctx context.Context, ref *provider.Reference, 
 	return errtypes.NotSupported("cephfs:  RestoreRevision not supported")
 }
 
+func (fs *cephfs) getFSStatus() ([]byte, error) {
+	cmdObj := map[string]interface{}{
+		"prefix": "fs status",
+		"format": "json",
+	}
+
+	jsonCmd, err := json.Marshal(cmdObj)
+	if err != nil {
+		log.Debug().Err(err).Msg("Error marshalling fs status command")
+		return nil, err
+	}
+
+	command := [][]byte{jsonCmd}
+	output, _, err := fs.adminConn.radosConn.MgrCommand(command)
+	log.Debug().Any("output", output).Err(err).Msg("MgrCommand fs status")
+
+	if err != nil {
+		log.Debug().Err(err).Msg("Error executing fs status command")
+		return nil, err
+	}
+
+	return output, nil
+}
+
+func (fs *cephfs) parseActiveMDS(output []byte) (string, error) {
+	var mgrJson struct {
+		MDSMap []struct {
+			Name  string `json:"name"`
+			State string `json:"state"`
+		} `json:"mdsmap"`
+	}
+
+	err := json.Unmarshal(output, &mgrJson)
+	if err != nil {
+		log.Debug().Err(err).Msg("Error unmarshalling MDS map")
+		return "", err
+	}
+
+	// Filter for state == "active"
+	var active []string
+	for _, m := range mgrJson.MDSMap {
+		if m.State == "active" {
+			active = append(active, m.Name)
+		}
+	}
+
+	if len(active) == 0 {
+		log.Debug().Msg("No active MDS found")
+		return "", fmt.Errorf("no active MDS found")
+	}
+
+	return active[0], nil
+}
+
+func (fs *cephfs) dumpInode(mdsSpec string, inode int) ([]byte, error) {
+	cmdObj := map[string]interface{}{
+		"prefix": "dump inode",
+		"number": inode,
+	}
+
+	jsonCmd, err := json.Marshal(cmdObj)
+	if err != nil {
+		log.Debug().Err(err).Msg("Error marshalling dump inode command")
+		return nil, err
+	}
+
+	command := [][]byte{jsonCmd}
+	output, _, err := fs.adminConn.adminMount.MdsCommand(mdsSpec, command)
+
+	if err != nil {
+		log.Debug().Err(err).Str("mds", mdsSpec).Int("inode", inode).Msg("Error executing dump inode command")
+		return nil, err
+	}
+
+	return output, nil
+}
+
+func (fs *cephfs) extractPathFromInodeOutput(output []byte) (string, error) {
+	var mdsJson map[string]interface{}
+	err := json.Unmarshal(output, &mdsJson)
+	if err != nil {
+		log.Debug().Err(err).Msg("Error unmarshalling MDS inode output")
+		return "", err
+	}
+
+	path, ok := mdsJson["path"].(string)
+	if !ok {
+		log.Debug().Any("mds_output", mdsJson).Msg("Path not found in MDS output")
+		return "", fmt.Errorf("path not found in MDS output")
+	}
+
+	return path, nil
+}
+
 func (fs *cephfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (str string, err error) {
-	return "", errtypes.NotSupported("cephfs: ids currently not supported")
+	// Get filesystem status
+	fsOutput, err := fs.getFSStatus()
+	if err != nil {
+		return "", err
+	}
+
+	// Parse active MDS from status
+	mdsSpec, err := fs.parseActiveMDS(fsOutput)
+	if err != nil {
+		return "", err
+	}
+
+	inode, err := strconv.Atoi(id.OpaqueId)
+	if err != nil {
+		return "", err
+	}
+
+	// Dump inode information
+	inodeOutput, err := fs.dumpInode(mdsSpec, inode)
+	if err != nil {
+		return "", err
+	}
+
+	// Extract path from inode output
+	path, err := fs.extractPathFromInodeOutput(inodeOutput)
+	if err != nil {
+		return "", err
+	}
+
+	// Extract the path without the root
+	path = strings.TrimPrefix(path, fs.conf.Root+"/")
+
+	return path, nil
 }
 
 func (fs *cephfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
