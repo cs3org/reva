@@ -660,7 +660,6 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	// when allprops has been requested
 	if pf.Allprop != nil {
 		// return all known properties
-
 		if md.Id != nil {
 			if spacesEnabled {
 				id := spaces.EncodeResourceID(md.Id)
@@ -1014,8 +1013,16 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:signature-auth", ""))
 						}
 					}
-				case "privatelink": // phoenix only
-					// <oc:privatelink>https://phoenix.owncloud.com/f/9</oc:privatelink>
+				case "privatelink":
+					privateURL, err := url.Parse(s.c.PublicURL)
+					if err == nil {
+						// privateURL.Path = path.Join("f", spaces.EncodeResourceID(md.Id))
+						// TODO: create a choice between id based and path based links
+						privateURL.Path = path.Join("files", "spaces", md.Path)
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:privatelink", privateURL.String()))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:privatelink", ""))
+					}
 					fallthrough
 				case "dDC": // desktop
 					fallthrough
