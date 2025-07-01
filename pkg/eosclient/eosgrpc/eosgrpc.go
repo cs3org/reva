@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	erpc "github.com/cern-eos/go-eosgrpc"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -325,6 +326,11 @@ func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path s
 func (c *Client) getOrCreateVersionFolderInode(ctx context.Context, ownerAuth eosclient.Authorization, p string) (uint64, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "getOrCreateVersionFolderInode").Str("uid,gid", ownerAuth.Role.UID+","+ownerAuth.Role.GID).Str("p", p).Msg("")
+
+	if eosclient.IsVersionFolder(filepath.Dir(p)) {
+		log.Error().Str("path", p).Msg("getOrCreateVersionFolderInode called on version file!")
+		return 0, errors.New("cannot get version folder of version file")
+	}
 
 	versionFolder := eosclient.GetVersionFolder(p)
 	md, err := c.GetFileInfoByPath(ctx, ownerAuth, versionFolder)

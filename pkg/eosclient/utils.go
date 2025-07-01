@@ -21,6 +21,7 @@ package eosclient
 import (
 	"fmt"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -72,7 +73,13 @@ func GetVersionFolder(p string) string {
 }
 
 func IsVersionFolder(p string) bool {
-	return strings.HasPrefix(path.Base(p), versionPrefix)
+	// Folder itself
+	if strings.HasPrefix(path.Base(p), versionPrefix) {
+		return true
+	}
+	// Parent (e.g. when calling with /eos/user/m/myuser/.sys.v#.MyFile.txt/1737542468.05d85a7b)
+	parentFolder := filepath.Dir(p)
+	return strings.HasPrefix(path.Base(parentFolder), versionPrefix)
 }
 
 func GetFileFromVersionFolder(p string) string {
