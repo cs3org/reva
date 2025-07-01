@@ -29,6 +29,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -727,7 +728,7 @@ func getAttribute(key, val string) (*eosclient.Attribute, error) {
 	return attr, nil
 }
 
-// GetFileInfoByPath returns the FilInfo at the given path.
+// GetFileInfoByPath returns the FileInfo at the given path.
 func (c *Client) GetFileInfoByPath(ctx context.Context, userAuth eosclient.Authorization, path string) (*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("func", "GetFileInfoByPath").Str("uid,gid", userAuth.Role.UID+","+userAuth.Role.GID).Str("path", path).Msg("entering")
@@ -1674,6 +1675,11 @@ func (c *Client) GenerateToken(ctx context.Context, auth eosclient.Authorization
 func (c *Client) getOrCreateVersionFolderInode(ctx context.Context, ownerAuth eosclient.Authorization, p string) (uint64, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "getOrCreateVersionFolderInode").Str("uid,gid", ownerAuth.Role.UID+","+ownerAuth.Role.GID).Str("p", p).Msg("")
+
+	if eosclient.IsVersionFolder(filepath.Dir(p)) {
+		log.Error().Str("path", p).Msg("getOrCreateVersionFolderInode called on version file!")
+		return 0, errors.New("cannot get version folder of version file")
+	}
 
 	versionFolder := eosclient.GetVersionFolder(p)
 	md, err := c.GetFileInfoByPath(ctx, ownerAuth, versionFolder)
