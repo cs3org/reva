@@ -448,3 +448,23 @@ func (tb *DecomposedfsTrashbin) EmptyRecycle(ctx context.Context, spaceID string
 func (tb *DecomposedfsTrashbin) getRecycleRoot(spaceID string) string {
 	return filepath.Join(tb.fs.o.Root, "spaces", lookup.Pathify(spaceID, 1, 2), "trash")
 }
+
+func (fs *DecomposedfsTrashbin) HasTrashedItems(ctx context.Context, spaceID, spaceType string) bool {
+	_, span := tracer.Start(ctx, "HasTrashedItems")
+	defer span.End()
+
+	trashRoot := fs.getRecycleRoot(spaceID)
+	// check if the trash root exists
+	if _, err := os.Stat(trashRoot); os.IsNotExist(err) {
+		return false
+	} else if err != nil {
+		return false
+	}
+
+	// check if there are any items in the trash root
+	subTrees, err := filepath.Glob(trashRoot + "/*")
+	if err != nil {
+		return false
+	}
+	return len(subTrees) > 0
+}

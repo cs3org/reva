@@ -493,6 +493,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	}()
 
 	for r := range results {
+		r.HasTrashedItems = false // FIXME: implement me
 		spaces = append(spaces, r)
 	}
 

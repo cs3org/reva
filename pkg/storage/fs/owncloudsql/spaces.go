@@ -85,6 +85,11 @@ func (fs *owncloudsqlfs) ListStorageSpaces(ctx context.Context, filter []*provid
 		}
 		spaces = append(spaces, space)
 	}
+
+	for _, space := range spaces {
+		space.HasTrashedItems = false // owncloudsql does not support checking for trashed items
+	}
+
 	return spaces, nil
 }
 
