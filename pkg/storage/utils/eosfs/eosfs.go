@@ -1559,11 +1559,11 @@ func (fs *Eosfs) DownloadRevision(ctx context.Context, ref *provider.Reference, 
 			return nil, err
 		}
 	}
-
 	return fs.c.ReadVersion(ctx, auth, fn, revisionKey)
 }
 
 func (fs *Eosfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
+	log := appctx.GetLogger(ctx)
 	var auth eosclient.Authorization
 	var fn string
 	var err error
@@ -1594,6 +1594,7 @@ func (fs *Eosfs) RestoreRevision(ctx context.Context, ref *provider.Reference, r
 		}
 	}
 
+	log.Debug().Any("auth", auth).Any("file", fn).Any("revision", revisionKey).Msg("eosfs RestoreRevision")
 	return fs.c.RollbackToVersion(ctx, auth, fn, revisionKey)
 }
 

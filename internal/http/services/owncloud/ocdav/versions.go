@@ -50,6 +50,7 @@ func (h *VersionsHandler) init(c *Config) error {
 func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
+		log := appctx.GetLogger(ctx)
 
 		if rid == nil {
 			http.Error(w, "404 Not Found", http.StatusNotFound)
@@ -72,6 +73,8 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 			return
 		}
 		if key != "" {
+			log.Debug().Any("method", r.Method).Str("key", key).Any("resource", rid).Msg("handling versions call")
+
 			switch r.Method {
 			case MethodCopy:
 				// TODO(jfd) cs3api has no delete file version call
@@ -91,20 +94,11 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 				s.handleHead(ctx, w, r, ref, *log)
 				return
 			case http.MethodGet:
-				log := appctx.GetLogger(ctx)
-				ref := &provider.Reference{
-					ResourceId: &provider.ResourceId{
-						StorageId: rid.StorageId,
-						SpaceId:   rid.SpaceId,
-						OpaqueId:  rid.OpaqueId + "@" + key,
-					},
-					Path: utils.MakeRelativePath(r.URL.Path),
+				resourceId := &provider.ResourceId{
+					StorageId: rid.StorageId,
+					OpaqueId:  rid.OpaqueId,
 				}
-				if s.c.SpacesEnabled {
-					s.handleGet(ctx, w, r, ref, "spaces", *log)
-				} else {
-					h.doDownload(w, r, s, rid, key)
-				}
+				h.doDownload(w, r, s, resourceId, key)
 				return
 			}
 		}
