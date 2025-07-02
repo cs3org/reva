@@ -494,14 +494,13 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	for r := range results {
 		r.HasTrashedItems = true
-		if r.SpaceType == _spaceTypePersonal || r.SpaceType == _spaceTypeProject {
-			// if the space is personal or project, we can check the node for trashed items
-			r.HasTrashedItems = fs.trashbin.HasTrashedItems(ctx, r.GetId().GetOpaqueId(), r.SpaceType)
-			if err != nil {
-				appctx.GetLogger(ctx).Error().Err(err).Str("id", r.Id.GetOpaqueId()).Msg("could not get trashed items")
-				r.HasTrashedItems = false
-			}
+		resourceID, err := storagespace.ParseID(r.GetId().GetOpaqueId())
+		if err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("id", r.Id.GetOpaqueId()).Msg("could not parse space id")
+			r.HasTrashedItems = false
+			continue
 		}
+		r.HasTrashedItems = !fs.trashbin.IsEmpty(ctx, resourceID.GetSpaceId())
 		spaces = append(spaces, r)
 	}
 

@@ -32,7 +32,6 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	revaCtx "github.com/opencloud-eu/reva/v2/pkg/ctx"
 	"github.com/opencloud-eu/reva/v2/pkg/errtypes"
 	"github.com/opencloud-eu/reva/v2/pkg/storage"
 	"github.com/opencloud-eu/reva/v2/pkg/storage/fs/posix/lookup"
@@ -399,29 +398,25 @@ func (tb *Trashbin) EmptyRecycle(ctx context.Context, spaceID string) error {
 	return os.RemoveAll(filepath.Clean(filepath.Join(trashRoot, "info")))
 }
 
-func (tb *Trashbin) HasTrashedItems(ctx context.Context, spaceID, spaceType string) bool {
+func (tb *Trashbin) IsEmpty(ctx context.Context, spaceID string) bool {
 	_, span := tracer.Start(ctx, "HasTrashedItems")
 	defer span.End()
-	var trashRoot string
-	if spaceType == "personal" {
-		user, ok := revaCtx.ContextGetUser(ctx)
-		if !ok {
-			tb.log.Warn().Msg("HasTrashedItems called without user in context")
-			return false
-		}
-
-		trashRoot = filepath.Join(tb.lu.InternalPath(spaceID, spaceID), "users", user.GetId().GetOpaqueId(), ".Trash", "files")
-	} else if spaceType == "project" {
-		trashRoot = filepath.Join(tb.lu.InternalPath(spaceID, spaceID), "projects", "UUID", ".Trash", "files")
-	}
+	trashRoot := filepath.Join(tb.lu.InternalPath(spaceID, spaceID), ".Trash", "info")
 	trash, err := os.Open(filepath.Clean(trashRoot))
 	if err != nil {
 		// there is no trash for this space, so no trashed items
-		return false
-	}
-	if hasItem, err := trash.ReadDir(1); err != nil && hasItem != nil && len(hasItem) > 0 {
 		return true
 	}
+	dirItems, err := trash.ReadDir(1)
+	if err != nil {
+		// if we cannot read the trash, we assume there are no trashed items
+		tb.log.Error().Err(err).Str("spaceID", spaceID).Msg("trashbin: error reading trash directory")
+		return true
+	}
+	if len(dirItems) > 0 {
+		// if we can read the trash and there are items, we assume there are trashed items
+		return false
+	}
 	// if we cannot read the trash, we assume there are no trashed items
-	return false
+	return true
 }
