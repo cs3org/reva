@@ -2,7 +2,6 @@ package eosgrpc
 
 import (
 	"fmt"
-	"path"
 	"strings"
 
 	erpc "github.com/cern-eos/go-eosgrpc"
@@ -29,18 +28,6 @@ func (c *Client) getRespError(rsp *erpc.NSResponse, err error) error {
 	default:
 		return errtypes.InternalError(fmt.Sprintf("%s (code: %d)", rsp.Error.Msg, rsp.Error.Code))
 	}
-}
-
-func isVersionFolder(p string) bool {
-	return strings.HasPrefix(path.Base(p), versionPrefix)
-}
-
-func getVersionFolder(p string) string {
-	return path.Join(path.Dir(p), versionPrefix+path.Base(p))
-}
-
-func getFileFromVersionFolder(p string) string {
-	return path.Join(path.Dir(p), strings.TrimPrefix(path.Base(p), versionPrefix))
 }
 
 func aclAttrToAclStruct(aclAttr string) *acl.ACLs {

@@ -404,7 +404,7 @@ func (c *Client) list(ctx context.Context, auth eosclient.Authorization, dpath s
 
 		// If it's a version folder, store it in a map, so that for the corresponding file,
 		// we can return its inode instead
-		if isVersionFolder(myitem.File) {
+		if eosclient.IsVersionFolder(myitem.File) {
 			versionFolders[myitem.File] = myitem
 		}
 
@@ -428,14 +428,14 @@ func (c *Client) list(ctx context.Context, auth eosclient.Authorization, dpath s
 				Entries: []*acl.Entry{},
 			}
 		}
-		if !fi.IsDir && !isVersionFolder(dpath) {
+		if !fi.IsDir && !eosclient.IsVersionFolder(dpath) {
 			// For files, inherit ACLs from the parent
 			if parent != nil && parent.SysACL != nil {
 				fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
 			}
 			// If there is a version folder then use its inode
 			// to implement the invariance of the fileid across updates
-			versionFolderPath := getVersionFolder(fi.File)
+			versionFolderPath := eosclient.GetVersionFolder(fi.File)
 			if vf, ok := versionFolders[versionFolderPath]; ok {
 				fi.Inode = vf.Inode
 				if vf.SysACL != nil {

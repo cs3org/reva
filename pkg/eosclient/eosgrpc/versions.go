@@ -17,7 +17,7 @@ func (c *Client) ListVersions(ctx context.Context, auth eosclient.Authorization,
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "ListVersions").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("p", p).Msg("")
 
-	versionFolder := getVersionFolder(p)
+	versionFolder := eosclient.GetVersionFolder(p)
 	finfos, err := c.List(ctx, auth, versionFolder)
 	if err != nil {
 		return []*eosclient.FileInfo{}, err
@@ -67,6 +67,6 @@ func (c *Client) ReadVersion(ctx context.Context, auth eosclient.Authorization, 
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "ReadVersion").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("p", p).Str("version", version).Msg("")
 
-	versionFile := path.Join(getVersionFolder(p), version)
+	versionFile := path.Join(eosclient.GetVersionFolder(p), version)
 	return c.Read(ctx, auth, versionFile)
 }

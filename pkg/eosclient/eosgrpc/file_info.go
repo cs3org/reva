@@ -63,7 +63,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 		return nil, err
 	}
 
-	if c.opt.VersionInvariant && isVersionFolder(info.File) {
+	if c.opt.VersionInvariant && eosclient.IsVersionFolder(info.File) {
 		info, err = c.getFileInfoFromVersion(ctx, auth, info.File)
 		if err != nil {
 			return nil, err
@@ -125,7 +125,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, userAuth eosclient.Autho
 		return nil, err
 	}
 
-	if c.opt.VersionInvariant && !isVersionFolder(path) && !info.IsDir {
+	if c.opt.VersionInvariant && !eosclient.IsVersionFolder(path) && !info.IsDir {
 		// Here we have to create a missing version folder, irrespective from the user (that could be a sharee, or a lw account, or...)
 		// Therefore, we impersonate the owner of the file
 		ownerAuth := eosclient.Authorization{
@@ -155,7 +155,7 @@ func (c *Client) getFileInfoFromVersion(ctx context.Context, auth eosclient.Auth
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "getFileInfoFromVersion").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("p", p).Msg("")
 
-	file := getFileFromVersionFolder(p)
+	file := eosclient.GetFileFromVersionFolder(p)
 	md, err := c.GetFileInfoByPath(ctx, auth, file)
 	if err != nil {
 		return nil, err

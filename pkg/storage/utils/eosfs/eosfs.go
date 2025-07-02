@@ -516,7 +516,6 @@ func (fs *Eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 
 		err := fs.c.UnsetAttr(ctx, cboxAuth, attr, false, fn, "")
 
-		err := fs.binaryClient.UnsetAttr(ctx, rootAuth, attr, false, fn, "")
 		if err != nil {
 			if errors.Is(err, eosclient.AttrNotExistsError) {
 				continue

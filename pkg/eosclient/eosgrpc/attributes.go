@@ -24,7 +24,7 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 
 	log.Debug().Bool("recursive", recursive).Str("path", path).Any("attr", attr).Str("trace", trace.Get(ctx)).Msg("eos-grpc SetAttr()")
 	// Favorites need to be stored per user so handle these separately
-	if attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
+	if attr.Type == eosclient.UserAttr && attr.Key == eosclient.FavoritesKey {
 		info, err := c.GetFileInfoByPath(ctx, auth, path)
 		if err != nil {
 			return err
@@ -98,7 +98,7 @@ func (c *Client) handleFavAttr(ctx context.Context, auth eosclient.Authorization
 			return err
 		}
 	}
-	favStr := info.Attrs[favoritesKey]
+	favStr := info.Attrs[eosclient.FavoritesKey]
 	favs, err := acl.Parse(favStr, acl.ShortTextForm)
 	if err != nil {
 		return err
@@ -131,7 +131,7 @@ func (c *Client) unsetEOSAttr(ctx context.Context, auth eosclient.Authorization,
 	log.Info().Str("func", "unsetEOSAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Favorites need to be stored per user so handle these separately
-	if !deleteFavs && attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
+	if !deleteFavs && attr.Type == eosclient.UserAttr && attr.Key == eosclient.FavoritesKey {
 		info, err := c.GetFileInfoByPath(ctx, auth, path)
 		if err != nil {
 			return err
