@@ -450,6 +450,7 @@ func (tb *DecomposedfsTrashbin) getRecycleRoot(spaceID string) string {
 }
 
 func (fs *DecomposedfsTrashbin) IsEmpty(ctx context.Context, spaceID string) bool {
+	log := appctx.GetLogger(ctx)
 	_, span := tracer.Start(ctx, "HasTrashedItems")
 	defer span.End()
 
@@ -462,7 +463,7 @@ func (fs *DecomposedfsTrashbin) IsEmpty(ctx context.Context, spaceID string) boo
 	dirItems, err := trash.ReadDir(1)
 	if err != nil {
 		// if we cannot read the trash, we assume there are no trashed items
-		tb.log.Error().Err(err).Str("spaceID", spaceID).Msg("trashbin: error reading trash directory")
+		log.Error().Err(err).Str("trashRoot", trashRoot).Str("spaceID", spaceID).Msg("trashbin: error reading trash directory")
 		return true
 	}
 	if len(dirItems) > 0 {

@@ -107,10 +107,6 @@ func (fs *eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListS
 		spaces = append(spaces, projectSpaces...)
 	}
 
-	for _, space := range spaces {
-		space.HasTrashedItems = false // EOS does not support checking for trashed items
-	}
-
 	fs.cacheSpaces(ctx, u, spaceType, spaceID, spacePath, spaces)
 	return spaces, nil
 }
