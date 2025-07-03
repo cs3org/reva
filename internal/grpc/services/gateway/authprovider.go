@@ -158,7 +158,9 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 				Path: s.getHome(ctx),
 			},
 		})
-		if err != nil || statRes.Status == nil || statRes.Status.Code != rpc.Code_CODE_OK {
+		if err != nil || statRes.Status == nil {
+			return nil, errors.Wrap(err, "failed to check if a home already exists")
+		} else if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			createHomeRes, err := s.CreateHome(ctx, &storageprovider.CreateHomeRequest{})
 			if err != nil {
 				log.Err(err).Msg("error calling CreateHome")
@@ -177,6 +179,9 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 			if s.c.CreateHomeCacheTTL > 0 {
 				_ = s.createHomeCache.Set(res.User.Id.OpaqueId, true)
 			}
+		} else if statRes.Status.Code != rpc.Code_CODE_OK {
+			log.Error().Any("status", statRes.Status).Str("path", s.getHome(ctx)).Msg("failed to check if home directory exists")
+			return nil, fmt.Errorf("failed to check if a home directory exists: %+v", statRes.Status)
 		}
 
 	}
