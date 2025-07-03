@@ -21,7 +21,7 @@ package notification
 import (
 	"fmt"
 
-	"github.com/cs3org/reva/pkg/notification/template"
+	"github.com/cs3org/reva/v3/pkg/notification/template"
 )
 
 // Notification is the representation of a notification.

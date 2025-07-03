@@ -25,11 +25,11 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/ocm/invite"
-	"github.com/cs3org/reva/pkg/ocm/invite/repository/registry"
-	"github.com/cs3org/reva/pkg/utils"
-	"github.com/cs3org/reva/pkg/utils/list"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/ocm/invite"
+	"github.com/cs3org/reva/v3/pkg/ocm/invite/repository/registry"
+	"github.com/cs3org/reva/v3/pkg/utils"
+	"github.com/cs3org/reva/v3/pkg/utils/list"
 )
 
 func init() {

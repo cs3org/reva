@@ -23,9 +23,9 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/cs3org/reva/pkg/notification"
-	"github.com/cs3org/reva/pkg/notification/manager/registry"
-	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/cs3org/reva/v3/pkg/notification"
+	"github.com/cs3org/reva/v3/pkg/notification/manager/registry"
+	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
 
 func init() {

@@ -18,7 +18,7 @@
 
 package registry
 
-import "github.com/cs3org/reva/pkg/auth"
+import "github.com/cs3org/reva/v3/pkg/auth"
 
 // NewTokenFunc is the function that token strategies
 // should register at init time.

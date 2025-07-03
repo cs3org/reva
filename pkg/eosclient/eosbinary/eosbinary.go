@@ -33,12 +33,12 @@ import (
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
-	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 
-	"github.com/cs3org/reva/pkg/eosclient"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/storage/utils/acl"
-	"github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/v3/pkg/eosclient"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/storage/utils/acl"
+	"github.com/cs3org/reva/v3/pkg/trace"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )

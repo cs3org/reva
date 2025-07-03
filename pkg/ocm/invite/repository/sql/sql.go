@@ -27,14 +27,14 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	conversions "github.com/cs3org/reva/pkg/cbox/utils"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/ocm/invite"
-	"github.com/cs3org/reva/pkg/utils/cfg"
+	conversions "github.com/cs3org/reva/v3/pkg/cbox/utils"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/ocm/invite"
+	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/go-sql-driver/mysql"
 
-	"github.com/cs3org/reva/pkg/ocm/invite/repository/registry"
-	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/v3/pkg/ocm/invite/repository/registry"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/pkg/errors"
 )
 

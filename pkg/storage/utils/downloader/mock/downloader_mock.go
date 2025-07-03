@@ -23,7 +23,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/cs3org/reva/pkg/storage/utils/downloader"
+	"github.com/cs3org/reva/v3/pkg/storage/utils/downloader"
 )
 
 type mockDownloader struct{}

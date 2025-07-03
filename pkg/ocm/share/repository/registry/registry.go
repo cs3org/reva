@@ -21,7 +21,7 @@ package registry
 import (
 	"context"
 
-	"github.com/cs3org/reva/pkg/ocm/share"
+	"github.com/cs3org/reva/v3/pkg/ocm/share"
 )
 
 // NewFunc is the function that share repositories

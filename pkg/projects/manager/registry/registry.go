@@ -21,7 +21,7 @@ package registry
 import (
 	"context"
 
-	"github.com/cs3org/reva/pkg/projects"
+	"github.com/cs3org/reva/v3/pkg/projects"
 )
 
 // NewFunc is the function that the projects' catalogues implementations

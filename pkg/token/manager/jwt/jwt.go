@@ -24,11 +24,11 @@ import (
 
 	auth "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/cs3org/reva/pkg/token"
-	"github.com/cs3org/reva/pkg/token/manager/registry"
-	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
+	"github.com/cs3org/reva/v3/pkg/token"
+	"github.com/cs3org/reva/v3/pkg/token/manager/registry"
+	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/pkg/errors"
 )

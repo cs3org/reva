@@ -26,11 +26,11 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/cs3org/reva/pkg/logger"
-	"github.com/cs3org/reva/pkg/metrics"
-	"github.com/cs3org/reva/pkg/metrics/config"
-	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/cs3org/reva/v3/pkg/logger"
+	"github.com/cs3org/reva/v3/pkg/metrics"
+	"github.com/cs3org/reva/v3/pkg/metrics/config"
+	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
 
 func init() {

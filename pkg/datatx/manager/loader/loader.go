@@ -20,8 +20,8 @@ package loader
 
 import (
 	// Load datatx drivers.
-	_ "github.com/cs3org/reva/pkg/datatx/manager/rclone"
-	_ "github.com/cs3org/reva/pkg/datatx/manager/rclone/repository/json"
-	_ "github.com/cs3org/reva/pkg/datatx/repository/json"
+	_ "github.com/cs3org/reva/v3/pkg/datatx/manager/rclone"
+	_ "github.com/cs3org/reva/v3/pkg/datatx/manager/rclone/repository/json"
+	_ "github.com/cs3org/reva/v3/pkg/datatx/repository/json"
 	// Add your own here.
 )

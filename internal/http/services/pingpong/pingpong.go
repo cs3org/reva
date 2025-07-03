@@ -23,10 +23,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cs3org/reva/internal/grpc/services/pingpong/proto"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/cs3org/reva/v3/internal/grpc/services/pingpong/proto"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

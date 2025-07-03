@@ -21,8 +21,8 @@ package ocdav
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/rhttp/router"
-	"github.com/cs3org/reva/pkg/spaces"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 )
 
 // MetaHandler handles meta requests.

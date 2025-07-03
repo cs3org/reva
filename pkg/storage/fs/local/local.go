@@ -21,10 +21,10 @@ package local
 import (
 	"context"
 
-	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/cs3org/reva/pkg/storage/utils/localfs"
-	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/cs3org/reva/v3/pkg/storage"
+	"github.com/cs3org/reva/v3/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/v3/pkg/storage/utils/localfs"
+	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
 
 func init() {

@@ -29,10 +29,10 @@ import (
 	"strconv"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/storage"
+	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/rs/zerolog"
 )
 

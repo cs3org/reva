@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/cs3org/reva/internal/http/interceptors/auth/credential/registry"
-	"github.com/cs3org/reva/pkg/auth"
+	"github.com/cs3org/reva/v3/internal/http/interceptors/auth/credential/registry"
+	"github.com/cs3org/reva/v3/pkg/auth"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )

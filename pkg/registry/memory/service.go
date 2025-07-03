@@ -18,7 +18,7 @@
 
 package memory
 
-import "github.com/cs3org/reva/pkg/registry"
+import "github.com/cs3org/reva/v3/pkg/registry"
 
 // NewService creates a new memory registry.Service.
 func NewService(name string, nodes []interface{}) registry.Service {

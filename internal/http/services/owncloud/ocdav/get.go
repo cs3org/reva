@@ -31,11 +31,11 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
-	"github.com/cs3org/reva/internal/http/services/datagateway"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/spaces"
-	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/v3/internal/grpc/services/storageprovider"
+	"github.com/cs3org/reva/v3/internal/http/services/datagateway"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/spaces"
+	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/rs/zerolog"
 )
 

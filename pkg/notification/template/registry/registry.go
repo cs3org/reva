@@ -22,8 +22,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/cs3org/reva/pkg/notification/handler"
-	"github.com/cs3org/reva/pkg/notification/template"
+	"github.com/cs3org/reva/v3/pkg/notification/handler"
+	"github.com/cs3org/reva/v3/pkg/notification/template"
 	"github.com/pkg/errors"
 )
 

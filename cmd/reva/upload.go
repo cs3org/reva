@@ -32,13 +32,13 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 
 	// TODO(labkode): this should not come from this package.
-	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
-	"github.com/cs3org/reva/internal/http/services/datagateway"
+	"github.com/cs3org/reva/v3/internal/grpc/services/storageprovider"
+	"github.com/cs3org/reva/v3/internal/http/services/datagateway"
 
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/crypto"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/crypto"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/studio-b12/gowebdav"
 )

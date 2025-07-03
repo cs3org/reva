@@ -27,9 +27,9 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
-	projects_catalogue "github.com/cs3org/reva/pkg/projects"
-	"github.com/cs3org/reva/pkg/spaces"
+	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	projects_catalogue "github.com/cs3org/reva/v3/pkg/projects"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/gdexlab/go-render/render"
 )
 

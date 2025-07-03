@@ -22,11 +22,11 @@ import (
 	"path"
 	"sort"
 
-	"github.com/cs3org/reva/internal/http/interceptors/appctx"
-	"github.com/cs3org/reva/internal/http/interceptors/auth"
-	"github.com/cs3org/reva/internal/http/interceptors/log"
-	"github.com/cs3org/reva/internal/http/interceptors/trace"
-	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/internal/http/interceptors/appctx"
+	"github.com/cs3org/reva/v3/internal/http/interceptors/auth"
+	"github.com/cs3org/reva/v3/internal/http/interceptors/log"
+	"github.com/cs3org/reva/v3/internal/http/interceptors/trace"
+	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )

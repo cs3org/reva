@@ -27,9 +27,9 @@ import (
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	txv1beta "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
-	"github.com/cs3org/reva/pkg/datatx"
-	"github.com/cs3org/reva/pkg/datatx/repository/registry"
-	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/cs3org/reva/v3/pkg/datatx"
+	"github.com/cs3org/reva/v3/pkg/datatx/repository/registry"
+	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
 

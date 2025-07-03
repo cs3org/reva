@@ -20,7 +20,7 @@ package loader
 
 import (
 	// Load preferences drivers.
-	_ "github.com/cs3org/reva/pkg/preferences/memory"
-	_ "github.com/cs3org/reva/pkg/preferences/sql"
+	_ "github.com/cs3org/reva/v3/pkg/preferences/memory"
+	_ "github.com/cs3org/reva/v3/pkg/preferences/sql"
 	// Add your own here.
 )

@@ -30,9 +30,9 @@ import (
 	"strings"
 	"testing"
 
-	downMock "github.com/cs3org/reva/pkg/storage/utils/downloader/mock"
-	walkerMock "github.com/cs3org/reva/pkg/storage/utils/walker/mock"
-	"github.com/cs3org/reva/pkg/test"
+	downMock "github.com/cs3org/reva/v3/pkg/storage/utils/downloader/mock"
+	walkerMock "github.com/cs3org/reva/v3/pkg/storage/utils/walker/mock"
+	"github.com/cs3org/reva/v3/pkg/test"
 )
 
 func TestGetDeepestCommonDir(t *testing.T) {

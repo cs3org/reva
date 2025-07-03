@@ -20,14 +20,14 @@ package loader
 
 import (
 	// Load core authentication managers.
-	_ "github.com/cs3org/reva/pkg/auth/manager/appauth"
-	_ "github.com/cs3org/reva/pkg/auth/manager/demo"
-	_ "github.com/cs3org/reva/pkg/auth/manager/json"
-	_ "github.com/cs3org/reva/pkg/auth/manager/ldap"
-	_ "github.com/cs3org/reva/pkg/auth/manager/machine"
-	_ "github.com/cs3org/reva/pkg/auth/manager/nextcloud"
-	_ "github.com/cs3org/reva/pkg/auth/manager/ocmshares"
-	_ "github.com/cs3org/reva/pkg/auth/manager/oidc"
-	_ "github.com/cs3org/reva/pkg/auth/manager/publicshares"
+	_ "github.com/cs3org/reva/v3/pkg/auth/manager/appauth"
+	_ "github.com/cs3org/reva/v3/pkg/auth/manager/demo"
+	_ "github.com/cs3org/reva/v3/pkg/auth/manager/json"
+	_ "github.com/cs3org/reva/v3/pkg/auth/manager/ldap"
+	_ "github.com/cs3org/reva/v3/pkg/auth/manager/machine"
+	_ "github.com/cs3org/reva/v3/pkg/auth/manager/nextcloud"
+	_ "github.com/cs3org/reva/v3/pkg/auth/manager/ocmshares"
+	_ "github.com/cs3org/reva/v3/pkg/auth/manager/oidc"
+	_ "github.com/cs3org/reva/v3/pkg/auth/manager/publicshares"
 	// Add your own here.
 )

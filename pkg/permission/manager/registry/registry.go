@@ -21,7 +21,7 @@ package registry
 import (
 	"context"
 
-	"github.com/cs3org/reva/pkg/permission"
+	"github.com/cs3org/reva/v3/pkg/permission"
 )
 
 // NewFunc is the function that permission managers

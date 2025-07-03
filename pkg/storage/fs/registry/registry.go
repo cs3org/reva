@@ -21,7 +21,7 @@ package registry
 import (
 	"context"
 
-	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/v3/pkg/storage"
 )
 
 // NewFunc is the function that storage implementations

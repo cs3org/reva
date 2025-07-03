@@ -22,8 +22,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
-	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/data"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 )
 
 func (s *svc) doStatus(w http.ResponseWriter, r *http.Request) {

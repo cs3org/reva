@@ -24,7 +24,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 )
 
 func (s *svc) getRoleDefinitions(w http.ResponseWriter, r *http.Request) {

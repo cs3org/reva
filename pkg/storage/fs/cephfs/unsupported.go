@@ -24,8 +24,8 @@ package cephfs
 import (
 	"context"
 
-	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/v3/pkg/storage"
+	"github.com/cs3org/reva/v3/pkg/storage/fs/registry"
 	"github.com/pkg/errors"
 )
 

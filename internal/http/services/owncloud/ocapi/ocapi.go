@@ -23,7 +23,7 @@ import (
 	_ "embed"
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/go-chi/chi/v5"
 )
 

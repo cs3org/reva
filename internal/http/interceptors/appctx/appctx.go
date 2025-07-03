@@ -24,8 +24,8 @@ package appctx
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/trace"
 	"github.com/rs/zerolog"
 )
 

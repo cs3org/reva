@@ -31,11 +31,11 @@ import (
 	"time"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/httpclient"
-	"github.com/cs3org/reva/pkg/ocm/provider"
-	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
-	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/httpclient"
+	"github.com/cs3org/reva/v3/pkg/ocm/provider"
+	"github.com/cs3org/reva/v3/pkg/ocm/provider/authorizer/registry"
+	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
 

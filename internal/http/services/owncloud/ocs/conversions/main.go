@@ -33,12 +33,12 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/mime"
-	"github.com/cs3org/reva/pkg/publicshare"
-	publicsharemgr "github.com/cs3org/reva/pkg/publicshare/manager/registry"
-	"github.com/cs3org/reva/pkg/user"
-	usermgr "github.com/cs3org/reva/pkg/user/manager/registry"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/mime"
+	"github.com/cs3org/reva/v3/pkg/publicshare"
+	publicsharemgr "github.com/cs3org/reva/v3/pkg/publicshare/manager/registry"
+	"github.com/cs3org/reva/v3/pkg/user"
+	usermgr "github.com/cs3org/reva/v3/pkg/user/manager/registry"
 )
 
 const (

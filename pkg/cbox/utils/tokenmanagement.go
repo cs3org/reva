@@ -30,7 +30,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cs3org/reva/pkg/httpclient"
+	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/mitchellh/mapstructure"
 )
 

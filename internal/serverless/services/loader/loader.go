@@ -20,8 +20,8 @@ package loader
 
 import (
 	// Load core serverless services.
-	_ "github.com/cs3org/reva/internal/serverless/services/helloworld"
-	_ "github.com/cs3org/reva/internal/serverless/services/notifications"
-	_ "github.com/cs3org/reva/internal/serverless/services/plugins"
+	_ "github.com/cs3org/reva/v3/internal/serverless/services/helloworld"
+	_ "github.com/cs3org/reva/v3/internal/serverless/services/notifications"
+	_ "github.com/cs3org/reva/v3/internal/serverless/services/plugins"
 	// Add your own service here.
 )

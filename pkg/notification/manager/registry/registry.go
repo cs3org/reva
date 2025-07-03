@@ -21,10 +21,10 @@ package registry
 import (
 	"context"
 
-	"github.com/cs3org/reva/pkg/notification"
+	"github.com/cs3org/reva/v3/pkg/notification"
 )
 
-// import "github.com/cs3org/reva/pkg/share"
+// import "github.com/cs3org/reva/v3/pkg/share"
 
 // NewFunc is the function that notification managers
 // should register at init time.

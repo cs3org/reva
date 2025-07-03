@@ -19,9 +19,9 @@
 package plugins
 
 import (
-	"github.com/cs3org/reva/pkg/plugin"
-	"github.com/cs3org/reva/pkg/rserverless"
-	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/v3/pkg/plugin"
+	"github.com/cs3org/reva/v3/pkg/rserverless"
+	"github.com/cs3org/reva/v3/pkg/utils"
 )
 
 func init() {

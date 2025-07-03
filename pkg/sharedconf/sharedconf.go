@@ -21,7 +21,7 @@ package sharedconf
 import (
 	"sync"
 
-	"github.com/cs3org/reva/cmd/revad/pkg/config"
+	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 )
 
 var sharedConf *config.Shared = &config.Shared{}
