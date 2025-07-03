@@ -20,12 +20,12 @@ package loader
 
 import (
 	// Load core storage filesystem backends.
-	_ "github.com/cs3org/reva/pkg/ocm/storage/outcoming"
-	_ "github.com/cs3org/reva/pkg/ocm/storage/received"
-	_ "github.com/cs3org/reva/pkg/storage/fs/cephfs"
-	_ "github.com/cs3org/reva/pkg/storage/fs/eos"
-	_ "github.com/cs3org/reva/pkg/storage/fs/local"
-	_ "github.com/cs3org/reva/pkg/storage/fs/localhome"
-	_ "github.com/cs3org/reva/pkg/storage/fs/nextcloud"
+	_ "github.com/cs3org/reva/v3/pkg/ocm/storage/outcoming"
+	_ "github.com/cs3org/reva/v3/pkg/ocm/storage/received"
+	_ "github.com/cs3org/reva/v3/pkg/storage/fs/cephfs"
+	_ "github.com/cs3org/reva/v3/pkg/storage/fs/eos"
+	_ "github.com/cs3org/reva/v3/pkg/storage/fs/local"
+	_ "github.com/cs3org/reva/v3/pkg/storage/fs/localhome"
+	_ "github.com/cs3org/reva/v3/pkg/storage/fs/nextcloud"
 	// Add your own here.
 )

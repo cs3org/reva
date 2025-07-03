@@ -21,8 +21,8 @@ package dummy
 import (
 	"math/rand"
 
-	"github.com/cs3org/reva/pkg/metrics/config"
-	"github.com/cs3org/reva/pkg/metrics/driver/registry"
+	"github.com/cs3org/reva/v3/pkg/metrics/config"
+	"github.com/cs3org/reva/v3/pkg/metrics/driver/registry"
 )
 
 func init() {

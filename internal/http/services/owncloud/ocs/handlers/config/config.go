@@ -21,9 +21,9 @@ package ocs
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
+	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/config"
+	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/data"
+	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 )
 
 // Handler renders the config endpoint.

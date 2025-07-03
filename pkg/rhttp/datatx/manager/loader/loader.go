@@ -20,8 +20,8 @@ package loader
 
 import (
 	// Load core data transfer protocols.
-	_ "github.com/cs3org/reva/pkg/rhttp/datatx/manager/simple"
-	_ "github.com/cs3org/reva/pkg/rhttp/datatx/manager/spaces"
-	_ "github.com/cs3org/reva/pkg/rhttp/datatx/manager/tus"
+	_ "github.com/cs3org/reva/v3/pkg/rhttp/datatx/manager/simple"
+	_ "github.com/cs3org/reva/v3/pkg/rhttp/datatx/manager/spaces"
+	_ "github.com/cs3org/reva/v3/pkg/rhttp/datatx/manager/tus"
 	// Add your own here.
 )

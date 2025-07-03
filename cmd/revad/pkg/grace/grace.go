@@ -29,7 +29,7 @@ import (
 	"syscall"
 	"time"
 
-	netutil "github.com/cs3org/reva/pkg/utils/net"
+	netutil "github.com/cs3org/reva/v3/pkg/utils/net"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )

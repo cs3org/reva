@@ -8,7 +8,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"github.com/pkg/errors"
 )

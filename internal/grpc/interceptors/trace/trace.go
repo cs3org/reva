@@ -21,7 +21,7 @@ package trace
 import (
 	"context"
 
-	"github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/v3/pkg/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )

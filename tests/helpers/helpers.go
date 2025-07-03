@@ -35,10 +35,10 @@ import (
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/datagateway"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
-	"github.com/cs3org/reva/pkg/httpclient"
-	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/v3/internal/http/services/datagateway"
+	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocdav"
+	"github.com/cs3org/reva/v3/pkg/httpclient"
+	"github.com/cs3org/reva/v3/pkg/storage"
 	"github.com/studio-b12/gowebdav"
 )
 

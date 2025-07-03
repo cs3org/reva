@@ -19,8 +19,8 @@
 package config
 
 import (
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
-	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/data"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
 )
 
 // Config holds the config options that need to be passed down to all ocs handlers.

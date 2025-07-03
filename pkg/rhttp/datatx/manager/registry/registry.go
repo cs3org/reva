@@ -21,7 +21,7 @@ package registry
 import (
 	"context"
 
-	"github.com/cs3org/reva/pkg/rhttp/datatx"
+	"github.com/cs3org/reva/v3/pkg/rhttp/datatx"
 )
 
 // NewFunc is the function that data transfer implementations

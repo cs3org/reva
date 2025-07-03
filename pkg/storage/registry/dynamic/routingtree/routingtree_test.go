@@ -21,7 +21,7 @@ package routingtree_test
 import (
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 
-	"github.com/cs3org/reva/pkg/storage/registry/dynamic/routingtree"
+	"github.com/cs3org/reva/v3/pkg/storage/registry/dynamic/routingtree"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

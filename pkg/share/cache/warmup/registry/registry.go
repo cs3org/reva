@@ -18,7 +18,7 @@
 
 package registry
 
-import "github.com/cs3org/reva/pkg/share/cache"
+import "github.com/cs3org/reva/v3/pkg/share/cache"
 
 // NewFunc is the function that cache warmup implementations
 // should register at init time.

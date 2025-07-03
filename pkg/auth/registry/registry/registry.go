@@ -21,7 +21,7 @@ package registry
 import (
 	"context"
 
-	"github.com/cs3org/reva/pkg/auth"
+	"github.com/cs3org/reva/v3/pkg/auth"
 )
 
 // NewFunc is the function that auth registry implementations

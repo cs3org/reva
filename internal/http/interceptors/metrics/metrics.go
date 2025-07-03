@@ -25,7 +25,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/prom/registry"
+	"github.com/cs3org/reva/v3/pkg/prom/registry"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )

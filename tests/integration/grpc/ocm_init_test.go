@@ -24,14 +24,14 @@ import (
 	"os"
 	"time"
 
-	conversions "github.com/cs3org/reva/pkg/cbox/utils"
+	conversions "github.com/cs3org/reva/v3/pkg/cbox/utils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
-	"github.com/cs3org/reva/tests/helpers"
+	"github.com/cs3org/reva/v3/tests/helpers"
 
 	_ "github.com/go-sql-driver/mysql"
 )

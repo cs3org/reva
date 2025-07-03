@@ -27,9 +27,9 @@ import (
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/app"
-	"github.com/cs3org/reva/pkg/app/provider/registry"
-	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/cs3org/reva/v3/pkg/app"
+	"github.com/cs3org/reva/v3/pkg/app/provider/registry"
+	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
 
 func init() {

@@ -23,7 +23,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/v3/pkg/trace"
 )
 
 type testPair struct {

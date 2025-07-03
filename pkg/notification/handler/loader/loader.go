@@ -20,6 +20,6 @@ package loader
 
 import (
 	// Load notification handlers.
-	_ "github.com/cs3org/reva/pkg/notification/handler/emailhandler"
+	_ "github.com/cs3org/reva/v3/pkg/notification/handler/emailhandler"
 	// Add your own here.
 )

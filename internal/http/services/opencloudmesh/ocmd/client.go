@@ -27,9 +27,9 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/cs3org/reva/internal/http/services/wellknown"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/pkg/errors"
 )
 

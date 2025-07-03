@@ -31,7 +31,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cs3org/reva/tests/helpers"
+	"github.com/cs3org/reva/v3/tests/helpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"

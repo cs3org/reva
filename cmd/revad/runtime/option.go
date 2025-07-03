@@ -21,7 +21,7 @@ package runtime
 import (
 	"context"
 
-	"github.com/cs3org/reva/pkg/registry"
+	"github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/rs/zerolog"
 )
 

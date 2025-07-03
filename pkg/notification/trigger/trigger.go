@@ -19,7 +19,7 @@
 package trigger
 
 import (
-	"github.com/cs3org/reva/pkg/notification"
+	"github.com/cs3org/reva/v3/pkg/notification"
 )
 
 // Trigger represents a notification Trigger.

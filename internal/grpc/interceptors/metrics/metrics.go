@@ -21,7 +21,7 @@ package metrics
 import (
 	"context"
 
-	"github.com/cs3org/reva/pkg/prom/registry"
+	"github.com/cs3org/reva/v3/pkg/prom/registry"
 	grpcprom "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc"

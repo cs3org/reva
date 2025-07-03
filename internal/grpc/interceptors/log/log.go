@@ -22,7 +22,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

@@ -21,7 +21,7 @@ package registry
 import (
 	"context"
 
-	"github.com/cs3org/reva/pkg/ocm/invite"
+	"github.com/cs3org/reva/v3/pkg/ocm/invite"
 )
 
 // NewFunc is the function that invite repositories

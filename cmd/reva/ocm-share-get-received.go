@@ -25,7 +25,7 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
-	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/v3/pkg/utils"
 )
 
 func ocmShareGetReceivedCommand() *command {

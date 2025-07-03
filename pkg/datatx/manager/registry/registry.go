@@ -21,7 +21,7 @@ package registry
 import (
 	"context"
 
-	"github.com/cs3org/reva/pkg/datatx"
+	"github.com/cs3org/reva/v3/pkg/datatx"
 )
 
 // NewFunc is the function that datatx implementations

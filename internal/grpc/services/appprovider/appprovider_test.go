@@ -21,7 +21,7 @@ package appprovider
 import (
 	"testing"
 
-	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/mitchellh/mapstructure"
 	"github.com/stretchr/testify/assert"
 )

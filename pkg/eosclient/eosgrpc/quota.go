@@ -6,10 +6,10 @@ import (
 	"strconv"
 
 	erpc "github.com/cern-eos/go-eosgrpc"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/eosclient"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/eosclient"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/trace"
 )
 
 // GetQuota gets the quota of a user on the quota node defined by path.

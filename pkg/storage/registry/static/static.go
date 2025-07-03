@@ -27,14 +27,14 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/registry/registry"
-	"github.com/cs3org/reva/pkg/storage/registry/utils"
-	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
+	"github.com/cs3org/reva/v3/pkg/storage"
+	"github.com/cs3org/reva/v3/pkg/storage/registry/registry"
+	"github.com/cs3org/reva/v3/pkg/storage/registry/utils"
+	"github.com/cs3org/reva/v3/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
 

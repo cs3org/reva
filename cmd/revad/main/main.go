@@ -18,7 +18,7 @@
 
 package main
 
-import revadcmd "github.com/cs3org/reva/cmd/revad"
+import revadcmd "github.com/cs3org/reva/v3/cmd/revad"
 
 func main() {
 	revadcmd.Main()

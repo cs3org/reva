@@ -22,10 +22,10 @@ import (
 	"context"
 	"sync"
 
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/preferences"
-	"github.com/cs3org/reva/pkg/preferences/registry"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/preferences"
+	"github.com/cs3org/reva/v3/pkg/preferences/registry"
 )
 
 func init() {

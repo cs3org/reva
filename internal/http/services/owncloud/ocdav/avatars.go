@@ -22,8 +22,8 @@ import (
 	"encoding/hex"
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 )
 
 // AvatarsHandler handles avatar requests.

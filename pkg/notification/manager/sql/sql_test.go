@@ -23,8 +23,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cs3org/reva/pkg/notification"
-	sqlmanager "github.com/cs3org/reva/pkg/notification/manager/sql"
+	"github.com/cs3org/reva/v3/pkg/notification"
+	sqlmanager "github.com/cs3org/reva/v3/pkg/notification/manager/sql"
 	_ "github.com/mattn/go-sqlite3"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

@@ -25,7 +25,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/storage/utils/walker"
+	"github.com/cs3org/reva/v3/pkg/storage/utils/walker"
 )
 
 type mockWalker struct{}

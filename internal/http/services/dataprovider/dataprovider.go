@@ -23,13 +23,13 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/appctx"
-	datatxregistry "github.com/cs3org/reva/pkg/rhttp/datatx/manager/registry"
-	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/cs3org/reva/pkg/rhttp/router"
-	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	datatxregistry "github.com/cs3org/reva/v3/pkg/rhttp/datatx/manager/registry"
+	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
+	"github.com/cs3org/reva/v3/pkg/storage"
+	"github.com/cs3org/reva/v3/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
 
 func init() {

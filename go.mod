@@ -1,4 +1,4 @@
-module github.com/cs3org/reva
+module github.com/cs3org/reva/v3
 
 require (
 	github.com/BurntSushi/toml v1.5.0

@@ -24,7 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 )
 
 const (

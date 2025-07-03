@@ -22,14 +22,14 @@ import (
 	"context"
 
 	preferencespb "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/plugin"
-	"github.com/cs3org/reva/pkg/preferences"
-	"github.com/cs3org/reva/pkg/preferences/registry"
-	"github.com/cs3org/reva/pkg/rgrpc"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/utils"
-	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/plugin"
+	"github.com/cs3org/reva/v3/pkg/preferences"
+	"github.com/cs3org/reva/v3/pkg/preferences/registry"
+	"github.com/cs3org/reva/v3/pkg/rgrpc"
+	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v3/pkg/utils"
+	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"google.golang.org/grpc"
 )
 

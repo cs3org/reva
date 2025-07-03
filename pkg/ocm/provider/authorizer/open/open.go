@@ -26,10 +26,10 @@ import (
 	"time"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
-	client "github.com/cs3org/reva/internal/http/services/opencloudmesh/ocmd"
-	"github.com/cs3org/reva/pkg/ocm/provider"
-	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
-	"github.com/cs3org/reva/pkg/utils/cfg"
+	client "github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
+	"github.com/cs3org/reva/v3/pkg/ocm/provider"
+	"github.com/cs3org/reva/v3/pkg/ocm/provider/authorizer/registry"
+	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
 

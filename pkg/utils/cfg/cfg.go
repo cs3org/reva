@@ -22,7 +22,7 @@ import (
 	"errors"
 	"reflect"
 
-	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"

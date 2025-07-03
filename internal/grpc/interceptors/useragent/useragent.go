@@ -21,7 +21,7 @@ package useragent
 import (
 	"context"
 
-	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )

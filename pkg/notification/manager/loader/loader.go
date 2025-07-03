@@ -20,6 +20,6 @@ package loader
 
 import (
 	// Load core notification manager drivers.
-	_ "github.com/cs3org/reva/pkg/notification/manager/sql"
+	_ "github.com/cs3org/reva/v3/pkg/notification/manager/sql"
 	// Add your own here.
 )

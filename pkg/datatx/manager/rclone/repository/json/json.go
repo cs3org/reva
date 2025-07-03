@@ -25,9 +25,9 @@ import (
 	"os"
 	"sync"
 
-	"github.com/cs3org/reva/pkg/datatx/manager/rclone/repository"
-	"github.com/cs3org/reva/pkg/datatx/manager/rclone/repository/registry"
-	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/cs3org/reva/v3/pkg/datatx/manager/rclone/repository"
+	"github.com/cs3org/reva/v3/pkg/datatx/manager/rclone/repository/registry"
+	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
 

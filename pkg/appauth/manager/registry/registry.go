@@ -21,7 +21,7 @@ package registry
 import (
 	"context"
 
-	"github.com/cs3org/reva/pkg/appauth"
+	"github.com/cs3org/reva/v3/pkg/appauth"
 )
 
 // NewFunc is the function that application auth implementations

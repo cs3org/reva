@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/cs3org/reva/pkg/registry"
+	"github.com/cs3org/reva/v3/pkg/registry"
 )
 
 // Registry implements the Registry interface.

@@ -27,12 +27,12 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/auth/scope"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/share/cache"
-	"github.com/cs3org/reva/pkg/share/cache/warmup/registry"
-	"github.com/cs3org/reva/pkg/token/manager/jwt"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
+	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/share/cache"
+	"github.com/cs3org/reva/v3/pkg/share/cache/warmup/registry"
+	"github.com/cs3org/reva/v3/pkg/token/manager/jwt"
 
 	// Provides mysql drivers.
 	_ "github.com/go-sql-driver/mysql"

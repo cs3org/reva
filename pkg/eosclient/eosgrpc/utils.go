@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	erpc "github.com/cern-eos/go-eosgrpc"
-	"github.com/cs3org/reva/pkg/eosclient"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/storage/utils/acl"
+	"github.com/cs3org/reva/v3/pkg/eosclient"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/storage/utils/acl"
 )
 
 // If the error is not nil, take that
