@@ -493,6 +493,14 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	}()
 
 	for r := range results {
+		r.HasTrashedItems = true
+		resourceID, err := storagespace.ParseID(r.GetId().GetOpaqueId())
+		if err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("id", r.Id.GetOpaqueId()).Msg("could not parse space id")
+			r.HasTrashedItems = false
+			continue
+		}
+		r.HasTrashedItems = !fs.trashbin.IsEmpty(ctx, resourceID.GetSpaceId())
 		spaces = append(spaces, r)
 	}
 

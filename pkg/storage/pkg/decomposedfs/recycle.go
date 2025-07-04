@@ -448,3 +448,28 @@ func (tb *DecomposedfsTrashbin) EmptyRecycle(ctx context.Context, spaceID string
 func (tb *DecomposedfsTrashbin) getRecycleRoot(spaceID string) string {
 	return filepath.Join(tb.fs.o.Root, "spaces", lookup.Pathify(spaceID, 1, 2), "trash")
 }
+
+func (fs *DecomposedfsTrashbin) IsEmpty(ctx context.Context, spaceID string) bool {
+	log := appctx.GetLogger(ctx)
+	_, span := tracer.Start(ctx, "HasTrashedItems")
+	defer span.End()
+
+	trashRoot := fs.getRecycleRoot(spaceID)
+	trash, err := os.Open(filepath.Clean(trashRoot))
+	if err != nil {
+		// there is no trash for this space, so no trashed items
+		return true
+	}
+	dirItems, err := trash.ReadDir(1)
+	if err != nil {
+		// if we cannot read the trash, we assume there are no trashed items
+		log.Error().Err(err).Str("trashRoot", trashRoot).Str("spaceID", spaceID).Msg("trashbin: error reading trash directory")
+		return true
+	}
+	if len(dirItems) > 0 {
+		// if we can read the trash and there are items, we assume there are trashed items
+		return false
+	}
+	// if we cannot read the trash, we assume there are no trashed items
+	return true
+}

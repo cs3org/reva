@@ -33,4 +33,5 @@ type Trashbin interface {
 	RestoreRecycleItem(ctx context.Context, spaceID, key, relativePath string, restoreRef *provider.Reference) (*node.Node, error)
 	PurgeRecycleItem(ctx context.Context, spaceID, key, relativePath string) error
 	EmptyRecycle(ctx context.Context, spaceID string) error
+	IsEmpty(ctx context.Context, spaceID string) bool
 }
