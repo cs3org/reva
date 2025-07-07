@@ -59,7 +59,7 @@ func (re *Event) InProgress() error {
 }
 
 type Stream struct {
-	js jetstream.Stream
+	Js jetstream.Stream
 }
 
 func FromConfig(ctx context.Context, name string, cfg Config) (*Stream, error) {
@@ -122,7 +122,7 @@ func FromConfig(ctx context.Context, name string, cfg Config) (*Stream, error) {
 		}
 
 		s = &Stream{
-			js: js,
+			Js: js,
 		}
 		return nil
 	}
@@ -177,7 +177,7 @@ func (s *Stream) Consume(group string, evs ...events.Unmarshaller) (<-chan Event
 }
 
 func (s *Stream) consumeRaw(group string) (<-chan RawEvent, error) {
-	consumer, err := s.js.CreateOrUpdateConsumer(context.Background(), jetstream.ConsumerConfig{
+	consumer, err := s.Js.CreateOrUpdateConsumer(context.Background(), jetstream.ConsumerConfig{
 		Durable:       group,
 		DeliverPolicy: jetstream.DeliverNewPolicy,
 		AckPolicy:     jetstream.AckExplicitPolicy, // Require manual acknowledgment
