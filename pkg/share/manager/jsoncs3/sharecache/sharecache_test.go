@@ -55,7 +55,7 @@ var _ = Describe("Sharecache", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		c = sharecache.New(storage, "users", "created.json", 0*time.Second)
-		Expect(c).ToNot(BeNil()) //nolint:all
+		Expect(&c).ToNot(BeNil())
 	})
 
 	AfterEach(func() {

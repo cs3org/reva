@@ -64,7 +64,7 @@ var _ = Describe("Cache", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		c = providercache.New(storage, 0*time.Second)
-		Expect(c).ToNot(BeNil()) //nolint:all
+		Expect(&c).ToNot(BeNil())
 	})
 
 	AfterEach(func() {

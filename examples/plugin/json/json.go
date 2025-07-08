@@ -30,6 +30,7 @@ import (
 	"github.com/owncloud/reva/v2/pkg/user"
 	"github.com/hashicorp/go-plugin"
 	"github.com/mitchellh/mapstructure"
+	"google.golang.org/protobuf/proto"
 )
 
 // Manager is a real implementation of Manager interface.
@@ -84,11 +85,11 @@ func (m *Manager) Configure(ml map[string]interface{}) error {
 func (m *Manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
 	for _, u := range m.users {
 		if (u.Id.GetOpaqueId() == uid.OpaqueId || u.Username == uid.OpaqueId) && (uid.Idp == "" || uid.Idp == u.Id.GetIdp()) {
-			user := *u
+			user := proto.Clone(u).(*userpb.User)
 			if skipFetchingGroups {
 				user.Groups = nil
 			}
-			return &user, nil
+			return user, nil
 		}
 	}
 	return nil, nil
@@ -98,11 +99,11 @@ func (m *Manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingG
 func (m *Manager) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
 	for _, u := range m.users {
 		if userClaim, err := extractClaim(u, claim); err == nil && value == userClaim {
-			user := *u
+			user := proto.Clone(u).(*userpb.User)
 			if skipFetchingGroups {
 				user.Groups = nil
 			}
-			return &user, nil
+			return user, nil
 		}
 	}
 	return nil, errtypes.NotFound(value)
@@ -138,11 +139,11 @@ func (m *Manager) FindUsers(ctx context.Context, query string, skipFetchingGroup
 	users := []*userpb.User{}
 	for _, u := range m.users {
 		if userContains(u, query) {
-			user := *u
+			user := proto.Clone(u).(*userpb.User)
 			if skipFetchingGroups {
 				user.Groups = nil
 			}
-			users = append(users, &user)
+			users = append(users, user)
 		}
 	}
 	return users, nil
