@@ -33,8 +33,6 @@ type Config struct {
 	ProductVersion              string                            `mapstructure:"product_version"`
 	AllowPropfindDepthInfinitiy bool                              `mapstructure:"allow_depth_infinity"`
 
-	TransferSharedSecret string `mapstructure:"transfer_shared_secret"`
-
 	NameValidation NameValidation `mapstructure:"validation"`
 
 	MachineAuthAPIKey string `mapstructure:"machine_auth_apikey"`
