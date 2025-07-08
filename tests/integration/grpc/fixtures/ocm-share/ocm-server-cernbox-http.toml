@@ -38,3 +38,4 @@ cache_store = "noop"
 
 
 [http.services.ocdav]
+url_signing_shared_secret = "change-me-please"

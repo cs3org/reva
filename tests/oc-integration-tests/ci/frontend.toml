@@ -50,6 +50,7 @@ files_namespace = "/users/{{.Id.OpaqueId}}"
 # - TODO android? no sync ... but will see different tree
 webdav_namespace = "/users/{{.Id.OpaqueId}}"
 machine_auth_apikey = "change-me-please"
+url_signing_shared_secret = "change-me-please"
 
 allow_depth_infinity = true
 
