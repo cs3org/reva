@@ -117,7 +117,7 @@ var _ = Describe("PropfindWithDepthInfinity", func() {
 			},
 		}
 
-		handler = propfind.NewHandler("127.0.0.1:3000", sel, cfg)
+		handler = propfind.NewHandler("127.0.0.1:3000", sel, nil, cfg)
 
 		foospace = &sprovider.StorageSpace{
 			Opaque: &typesv1beta1.Opaque{
@@ -948,7 +948,7 @@ var _ = Describe("PropfindWithoutDepthInfinity", func() {
 			},
 		}
 
-		handler = propfind.NewHandler("127.0.0.1:3000", sel, cfg)
+		handler = propfind.NewHandler("127.0.0.1:3000", sel, nil, cfg)
 
 		foospace = &sprovider.StorageSpace{
 			Opaque: &typesv1beta1.Opaque{

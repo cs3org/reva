@@ -35,6 +35,9 @@ type Config struct {
 
 	NameValidation NameValidation `mapstructure:"validation"`
 
+	// SharedSecret used to sign the 'oc:download' URLs
+	URLSigningSharedSecret string `mapstructure:"url_signing_shared_secret"`
+
 	MachineAuthAPIKey string `mapstructure:"machine_auth_apikey"`
 }
 

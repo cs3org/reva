@@ -156,6 +156,7 @@ var _ = Describe("ocdav", func() {
 				MaxLength:    255,
 				InvalidChars: []string{"\f", "\r", "\n", "\\"},
 			},
+			URLSigningSharedSecret: "testsecret",
 		}
 		sel := selector{
 			client: client,
