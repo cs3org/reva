@@ -9,6 +9,7 @@
         "Language.ReadWrite.all",
         "Favorites.List.own",
         "Drives.ReadWrite.all",
-        "Shares.Write.all"
+        "Shares.Write.all",
+        "Drives.Create.all"
     ]
 }
