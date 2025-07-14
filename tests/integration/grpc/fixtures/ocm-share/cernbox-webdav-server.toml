@@ -12,3 +12,4 @@ token_strategy = "bearer"
 
 [http.services.ocdav]
 ocm_namespace = "/public"
+url_signing_shared_secret = "change-me-please"
