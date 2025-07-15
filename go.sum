@@ -848,7 +848,7 @@ github.com/cenkalti/backoff v2.2.1+incompatible/go.mod h1:90ReRw6GdpyfrHakVjL/QH
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/census-instrumentation/opencensus-proto v0.3.0/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/census-instrumentation/opencensus-proto v0.4.1/go.mod h1:4T9NM4+4Vw91VeyqjLS6ao50K5bOcLKN6Q42XnYaRYw=
-github.com/ceph/go-ceph v0.34.0 h1:PRTIzZ03Hgd2dFo3C6aNNelu6LnfnHoEYbrqNy9vYuo=
+github.com/ceph/go-ceph v0.34.0 h1:C45yU8VRl0Rg+/I0qw5bzT337HG6DL0yBQ0VR6QHv4o=
 github.com/ceph/go-ceph v0.34.0/go.mod h1:otRLwpVgM81lK5zdGYOfr4OELdeS97luDBE/PjXAB5o=
 github.com/cern-eos/go-eosgrpc v0.0.0-20250429151059-e8c6e014a629 h1:Q74zaUyx63S7pJ0gVDyPb2nN2otAoJlAx4btz+OhhJI=
 github.com/cern-eos/go-eosgrpc v0.0.0-20250429151059-e8c6e014a629/go.mod h1:ZiIzbg4sDO2MwYlspcnauUR2dfwZHUzxker+HP9k+20=
