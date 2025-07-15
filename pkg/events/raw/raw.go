@@ -19,13 +19,15 @@ import (
 
 // Config is the configuration needed for a NATS event stream
 type Config struct {
-	Endpoint             string `mapstructure:"address"`          // Endpoint of the nats server
-	Cluster              string `mapstructure:"clusterID"`        // CluserID of the nats cluster
-	TLSInsecure          bool   `mapstructure:"tls-insecure"`     // Whether to verify TLS certificates
-	TLSRootCACertificate string `mapstructure:"tls-root-ca-cert"` // The root CA certificate used to validate the TLS certificate
-	EnableTLS            bool   `mapstructure:"enable-tls"`       // Enable TLS
-	AuthUsername         string `mapstructure:"username"`         // Username for authentication
-	AuthPassword         string `mapstructure:"password"`         // Password for authentication
+	Endpoint             string        `mapstructure:"address"`          // Endpoint of the nats server
+	Cluster              string        `mapstructure:"clusterID"`        // CluserID of the nats cluster
+	TLSInsecure          bool          `mapstructure:"tls-insecure"`     // Whether to verify TLS certificates
+	TLSRootCACertificate string        `mapstructure:"tls-root-ca-cert"` // The root CA certificate used to validate the TLS certificate
+	EnableTLS            bool          `mapstructure:"enable-tls"`       // Enable TLS
+	AuthUsername         string        `mapstructure:"username"`         // Username for authentication
+	AuthPassword         string        `mapstructure:"password"`         // Password for authentication
+	MaxAckPending        int           `mapstructure:"max-ack-pending"`  // Maximum number of unacknowledged messages
+	AckWait              time.Duration `mapstructure:"ack-wait"`         // Time to wait for an ack
 }
 
 type RawEvent struct {
@@ -60,6 +62,8 @@ func (re *Event) InProgress() error {
 
 type Stream struct {
 	Js jetstream.Stream
+
+	c Config
 }
 
 func FromConfig(ctx context.Context, name string, cfg Config) (*Stream, error) {
@@ -123,6 +127,7 @@ func FromConfig(ctx context.Context, name string, cfg Config) (*Stream, error) {
 
 		s = &Stream{
 			Js: js,
+			c:  cfg,
 		}
 		return nil
 	}
@@ -181,8 +186,8 @@ func (s *Stream) consumeRaw(group string) (<-chan RawEvent, error) {
 		Durable:       group,
 		DeliverPolicy: jetstream.DeliverNewPolicy,
 		AckPolicy:     jetstream.AckExplicitPolicy, // Require manual acknowledgment
-		MaxAckPending: 10000,                       // Maximum number of unacknowledged messages
-		AckWait:       1 * time.Minute,             // Time to wait for an ack
+		MaxAckPending: s.c.MaxAckPending,           // Maximum number of unacknowledged messages
+		AckWait:       s.c.AckWait,                 // Time to wait for an ack
 	})
 	if err != nil {
 		return nil, err
