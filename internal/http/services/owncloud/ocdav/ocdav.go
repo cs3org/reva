@@ -119,9 +119,13 @@ func NewWith(conf *config.Config, fm favorite.Manager, ls LockSystem, _ *zerolog
 	// be safe - init the conf again
 	conf.Init()
 
-	signer, err := signedurl.NewJWTSignedURL(signedurl.WithSecret(conf.URLSigningSharedSecret))
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize URL signer: %w", err)
+	var signer signedurl.Signer
+	if conf.URLSigningSharedSecret != "" {
+		var err error
+		signer, err = signedurl.NewJWTSignedURL(signedurl.WithSecret(conf.URLSigningSharedSecret))
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize URL signer: %w", err)
+		}
 	}
 
 	s := &svc{
