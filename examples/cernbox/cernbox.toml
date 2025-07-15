@@ -31,6 +31,7 @@ preferencessvc = "{{ grpc.services.userprovider.address }}"
 userprovidersvc = "{{ grpc.services.userprovider.address }}"
 usershareprovidersvc = "{{ grpc.services.usershareprovider.address }}"
 publicshareprovidersvc = "{{ grpc.services.publicshareprovider.address }}"
+groupprovidersvc = "{{ grpc.services.groupprovider.address }}"
 ocmcoresvc = "{{ grpc.services.ocmcore.address }}"
 ocmshareprovidersvc = "{{ grpc.services.ocmshareprovider.address }}"
 ocminvitemanagersvc = "{{ grpc.services.ocminvitemanager.address }}"
@@ -214,6 +215,12 @@ driver = "json"
 
 [grpc.services.userprovider.drivers.json]
 users = "/etc/revad/users.demo.json"
+
+[grpc.services.groupprovider]
+driver = "json"
+
+[grpc.services.groupprovider.drivers.json]
+groups = "/etc/revad/groups.demo.json"
 
 [grpc.services.datatx]
 txdriver = "rclone"
