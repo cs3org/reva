@@ -24,6 +24,7 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/trace"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -59,6 +60,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 
 func staticResponse(content string) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("x-request-id", trace.Get(r.Context()))
 		_, _ = w.Write([]byte(content))
 	})
 }
