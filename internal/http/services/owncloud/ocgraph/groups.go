@@ -65,14 +65,14 @@ func (s *svc) listGroups(w http.ResponseWriter, r *http.Request) {
 	gw, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting gateway client")
-		w.WriteHeader(http.StatusInternalServerError)
+		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
 	}
 
 	req, err := godata.ParseRequest(ctx, r.URL.Path, r.URL.Query())
 	if err != nil {
 		log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("could not get groups: query error")
-		w.WriteHeader(http.StatusBadRequest)
+		handleError(ctx, err, http.StatusBadRequest, w)
 		return
 	}
 
@@ -87,9 +87,8 @@ func (s *svc) listGroups(w http.ResponseWriter, r *http.Request) {
 		SkipFetchingMembers: true,
 		Filter:              queryVal,
 	})
-
 	if err != nil {
-		handleError(err, w)
+		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
 	}
 	if groups.Status.Code != rpcv1beta1.Code_CODE_OK {
@@ -102,8 +101,7 @@ func (s *svc) listGroups(w http.ResponseWriter, r *http.Request) {
 	if req.Query.OrderBy.RawValue != "" {
 		lgGroups, err = sortGroups(ctx, lgGroups, req.Query.OrderBy.RawValue)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(err.Error()))
+			handleError(ctx, err, http.StatusBadRequest, w)
 			return
 		}
 	}
@@ -111,7 +109,6 @@ func (s *svc) listGroups(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(&ListResponse{
 		Value: lgGroups,
 	})
-
 }
 
 func (s *svc) getGroupInfo(ctx context.Context, id *groupv1beta1.GroupId) (*groupv1beta1.Group, error) {

@@ -27,6 +27,7 @@ import (
 	"reflect"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/trace"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -36,9 +37,7 @@ const (
 	apiVersionKey key = 1
 )
 
-var (
-	defaultStatusCodeMapper = OcsV2StatusCodes
-)
+var defaultStatusCodeMapper = OcsV2StatusCodes
 
 // Response is the top level response structure.
 type Response struct {
@@ -139,6 +138,8 @@ func WriteOCSError(w http.ResponseWriter, r *http.Request, c int, m string, err 
 
 // WriteOCSData handles writing ocs data in json and xml.
 func WriteOCSData(w http.ResponseWriter, r *http.Request, m Meta, d interface{}, err error) {
+	ctx := r.Context()
+	w.Header().Set("x-request-id", trace.Get(ctx))
 	WriteOCSResponse(w, r, Response{
 		OCS: &Payload{
 			Meta: m,
