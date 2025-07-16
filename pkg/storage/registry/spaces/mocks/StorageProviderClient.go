@@ -45,14 +45,13 @@ func (_m *StorageProviderClient) EXPECT() *StorageProviderClient_Expecter {
 
 // ListStorageSpaces provides a mock function with given fields: ctx, in, opts
 func (_m *StorageProviderClient) ListStorageSpaces(ctx context.Context, in *providerv1beta1.ListStorageSpacesRequest, opts ...grpc.CallOption) (*providerv1beta1.ListStorageSpacesResponse, error) {
-	_va := make([]interface{}, len(opts))
-	for _i := range opts {
-		_va[_i] = opts[_i]
+	var tmpRet mock.Arguments
+	if len(opts) > 0 {
+		tmpRet = _m.Called(ctx, in, opts)
+	} else {
+		tmpRet = _m.Called(ctx, in)
 	}
-	var _ca []interface{}
-	_ca = append(_ca, ctx, in)
-	_ca = append(_ca, _va...)
-	ret := _m.Called(_ca...)
+	ret := tmpRet
 
 	if len(ret) == 0 {
 		panic("no return value specified for ListStorageSpaces")

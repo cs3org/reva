@@ -175,7 +175,7 @@ dist: gen-doc
 
 .PHONY: mockery
 mockery:
-	go tool mockery --boilerplate-file ./.templates/mockery.go.tmpl
+	go tool mockery --boilerplate-file ./.templates/mockery.go.tmpl --unroll-variadic=False
 
 .PHONY: go-generate
 go-generate:
