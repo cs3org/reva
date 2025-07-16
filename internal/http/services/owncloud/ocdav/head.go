@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"path"
 	"strconv"
-	"strings"
 	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -73,8 +72,8 @@ func (s *svc) handleHead(ctx context.Context, w http.ResponseWriter, r *http.Req
 	w.Header().Set(HeaderOCFileID, spaces.EncodeResourceID((info.Id)))
 	w.Header().Set(HeaderOCETag, info.Etag)
 	if info.Checksum != nil {
-		w.Header().Set(HeaderOCChecksum, fmt.Sprintf("%s:%s", strings.ToUpper(string(storageprovider.GRPC2PKGXS(info.Checksum.Type))), info.Checksum.Sum))
-		w.Header().Set(HeaderChecksum, fmt.Sprintf("%s=%s", strings.ToLower(string(storageprovider.GRPC2PKGXS(info.Checksum.Type))), info.Checksum.Sum))
+		w.Header().Set(HeaderOCChecksum, fmt.Sprintf("%s:%s", storageprovider.GRPC2PKGXS(info.Checksum.Type).String(), info.Checksum.Sum))
+		w.Header().Set(HeaderChecksum, fmt.Sprintf("%s:%s", storageprovider.GRPC2PKGXS(info.Checksum.Type).String(), info.Checksum.Sum))
 	}
 	t := utils.TSToTime(info.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)

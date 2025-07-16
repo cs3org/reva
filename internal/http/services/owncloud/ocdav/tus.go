@@ -104,7 +104,6 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 	// r.Header.Get("OC-Checksum")
-	// TODO must be SHA1, ADLER32 or MD5 ... in capital letters????
 	// curl -X PUT https://demo.owncloud.com/remote.php/webdav/testcs.bin -u demo:demo -d '123' -v -H 'OC-Checksum: SHA1:40bd001563085fc35165329ea1ff5c5ecbdbbeef'
 
 	// TODO check Expect: 100-continue
