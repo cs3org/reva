@@ -60,14 +60,18 @@ func (re *Event) InProgress() error {
 	return re.msg.InProgress()
 }
 
-type Stream struct {
+type Stream interface {
+	Consume(group string, evs ...events.Unmarshaller) (<-chan Event, error)
+}
+
+type RawStream struct {
 	Js jetstream.Stream
 
 	c Config
 }
 
-func FromConfig(ctx context.Context, name string, cfg Config) (*Stream, error) {
-	var s *Stream
+func FromConfig(ctx context.Context, name string, cfg Config) (Stream, error) {
+	var s Stream
 	b := backoff.NewExponentialBackOff()
 
 	connect := func() error {
@@ -125,7 +129,7 @@ func FromConfig(ctx context.Context, name string, cfg Config) (*Stream, error) {
 			return err
 		}
 
-		s = &Stream{
+		s = &RawStream{
 			Js: js,
 			c:  cfg,
 		}
@@ -138,7 +142,7 @@ func FromConfig(ctx context.Context, name string, cfg Config) (*Stream, error) {
 	return s, nil
 }
 
-func (s *Stream) Consume(group string, evs ...events.Unmarshaller) (<-chan Event, error) {
+func (s *RawStream) Consume(group string, evs ...events.Unmarshaller) (<-chan Event, error) {
 	c, err := s.consumeRaw(group)
 	if err != nil {
 		return nil, err
@@ -181,7 +185,7 @@ func (s *Stream) Consume(group string, evs ...events.Unmarshaller) (<-chan Event
 	return outchan, nil
 }
 
-func (s *Stream) consumeRaw(group string) (<-chan RawEvent, error) {
+func (s *RawStream) consumeRaw(group string) (<-chan RawEvent, error) {
 	consumer, err := s.Js.CreateOrUpdateConsumer(context.Background(), jetstream.ConsumerConfig{
 		Durable:       group,
 		DeliverPolicy: jetstream.DeliverNewPolicy,
