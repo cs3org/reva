@@ -32,6 +32,7 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/myofficefiles"
+	"github.com/cs3org/reva/v3/pkg/trace"
 
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
@@ -221,6 +222,7 @@ func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
+		w.Header().Set("x-request-id", trace.Get(ctx))
 
 		addAccessHeaders(w, r)
 

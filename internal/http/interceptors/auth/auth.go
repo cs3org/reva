@@ -33,6 +33,7 @@ import (
 	tokenregistry "github.com/cs3org/reva/v3/internal/http/interceptors/auth/token/registry"
 	tokenwriterregistry "github.com/cs3org/reva/v3/internal/http/interceptors/auth/tokenwriter/registry"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/trace"
 
 	"github.com/cs3org/reva/v3/pkg/auth"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
@@ -187,6 +188,7 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, tokenStrategies []auth.TokenStrategy, tokenManager token.Manager, tokenWriter auth.TokenWriter, credChain map[string]auth.CredentialStrategy, isUnprotectedEndpoint bool) (context.Context, error) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
+	w.Header().Set("x-request-id", trace.Get(ctx))
 
 	// Add the request user-agent to the ctx
 	ctx = metadata.NewIncomingContext(ctx, metadata.New(map[string]string{appctx.UserAgentHeader: r.UserAgent()}))
