@@ -1,5 +1,34 @@
 # Changelog
 
+## [2.35.0](https://github.com/opencloud-eu/reva/releases/tag/v2.35.0) - 2025-07-21
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck, @dragonchaser, @individual-it, @rhafer
+
+### 🐛 Bug Fixes
+
+- Do not leave .trashinfo files behind when restoring items [[#289](https://github.com/opencloud-eu/reva/pull/289)]
+- log middleware: Implement Unwrap() method [[#285](https://github.com/opencloud-eu/reva/pull/285)]
+- Fix read permissions crash [[#272](https://github.com/opencloud-eu/reva/pull/272)]
+
+### 📈 Enhancement
+
+- Add a raw package for directly consuming nats events [[#270](https://github.com/opencloud-eu/reva/pull/270)]
+- Set 'oc:downloadURL' WebDAV property for "normal" files [[#271](https://github.com/opencloud-eu/reva/pull/271)]
+
+### 📦️ Dependencies
+
+- Bump google.golang.org/grpc from 1.73.0 to 1.74.0 [[#286](https://github.com/opencloud-eu/reva/pull/286)]
+- Bump github.com/golang-jwt/jwt/v5 from 5.2.2 to 5.2.3 [[#283](https://github.com/opencloud-eu/reva/pull/283)]
+- Bump go.etcd.io/etcd/client/v3 from 3.6.1 to 3.6.2 [[#281](https://github.com/opencloud-eu/reva/pull/281)]
+- Bump golang.org/x/crypto from 0.39.0 to 0.40.0 [[#278](https://github.com/opencloud-eu/reva/pull/278)]
+- Bump golang.org/x/sys from 0.33.0 to 0.34.0 [[#275](https://github.com/opencloud-eu/reva/pull/275)]
+- Bump golang.org/x/sync from 0.15.0 to 0.16.0 [[#274](https://github.com/opencloud-eu/reva/pull/274)]
+- Bump github.com/go-playground/validator/v10 from 10.26.0 to 10.27.0 [[#269](https://github.com/opencloud-eu/reva/pull/269)]
+- Bump github.com/nats-io/nats-server/v2 from 2.11.5 to 2.11.6 [[#267](https://github.com/opencloud-eu/reva/pull/267)]
+- Bump github.com/pkg/xattr from 0.4.11 to 0.4.12 [[#265](https://github.com/opencloud-eu/reva/pull/265)]
+
 ## [2.34.0](https://github.com/opencloud-eu/reva/releases/tag/v2.34.0) - 2025-06-27
 
 ### ❤️ Thanks to all contributors! ❤️
