@@ -22,6 +22,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -51,52 +52,64 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "missing shareWith", nil)
 		return
 	}
+	sharees := strings.Split(shareWith, ",")
 
-	userRes, err := c.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
-		Claim:                  "username",
-		Value:                  shareWith,
-		SkipFetchingUserGroups: true,
-	})
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching recipient", err)
-		return
-	}
+	shares := make([]*conversions.ShareData, 0)
 
-	if userRes.Status.Code != rpc.Code_CODE_OK {
-		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "user not found", err)
-		return
-	}
+	for _, sharee := range sharees {
+		userRes, err := c.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+			Claim:                  "username",
+			Value:                  sharee,
+			SkipFetchingUserGroups: true,
+		})
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching recipient", err)
+			return
+		}
 
-	createShareReq := &collaboration.CreateShareRequest{
-		Opaque: &types.Opaque{
-			Map: map[string]*types.OpaqueEntry{
-				"role": {
-					Decoder: "json",
-					Value:   roleVal,
+		if userRes.Status.Code != rpc.Code_CODE_OK {
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "user not found", err)
+			return
+		}
+
+		createShareReq := &collaboration.CreateShareRequest{
+			Opaque: &types.Opaque{
+				Map: map[string]*types.OpaqueEntry{
+					"role": {
+						Decoder: "json",
+						Value:   roleVal,
+					},
 				},
 			},
-		},
-		ResourceInfo: statInfo,
-		Grant: &collaboration.ShareGrant{
-			Grantee: &provider.Grantee{
-				Type: provider.GranteeType_GRANTEE_TYPE_USER,
-				Id:   &provider.Grantee_UserId{UserId: userRes.User.GetId()},
+			ResourceInfo: statInfo,
+			Grant: &collaboration.ShareGrant{
+				Grantee: &provider.Grantee{
+					Type: provider.GranteeType_GRANTEE_TYPE_USER,
+					Id:   &provider.Grantee_UserId{UserId: userRes.User.GetId()},
+				},
+				Permissions: &collaboration.SharePermissions{
+					Permissions: role.CS3ResourcePermissions(),
+				},
 			},
-			Permissions: &collaboration.SharePermissions{
-				Permissions: role.CS3ResourcePermissions(),
-			},
-		},
-	}
+		}
 
-	if shareID, ok := h.createCs3Share(ctx, w, r, c, createShareReq, statInfo); ok {
-		notify, _ := strconv.ParseBool(r.FormValue("notify"))
-		if notify {
-			granter, ok := appctx.ContextGetUser(ctx)
-			if ok {
-				h.SendShareNotification(shareID.OpaqueId, granter, userRes.User, statInfo)
+		newShare, err := h.createCs3Share(ctx, r, c, createShareReq, statInfo)
+		if err == nil {
+			if newShare != nil {
+				shares = append(shares, newShare)
 			}
+			notify, _ := strconv.ParseBool(r.FormValue("notify"))
+			if notify {
+				granter, ok := appctx.ContextGetUser(ctx)
+				if ok {
+					h.SendShareNotification(newShare.ID, granter, userRes.User, statInfo)
+				}
+			}
+		} else {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "An error occurred when creating the share", err)
 		}
 	}
+	response.WriteOCSSuccess(w, r, shares)
 }
 
 func (h *Handler) isUserShare(r *http.Request, oid string) bool {

@@ -1363,7 +1363,6 @@ func (h *Handler) getResourceInfoByID(ctx context.Context, client gateway.Gatewa
 // getResourceInfo retrieves the resource info to a target.
 // This method utilizes caching if it is enabled.
 func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPIClient, key string, ref *provider.Reference) (*provider.ResourceInfo, *rpc.Status, error) {
-
 	var pinfo *provider.ResourceInfo
 	var status *rpc.Status
 	var err error
@@ -1398,34 +1397,28 @@ func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPI
 	return pinfo, status, nil
 }
 
-func (h *Handler) createCs3Share(ctx context.Context, w http.ResponseWriter, r *http.Request, client gateway.GatewayAPIClient, req *collaboration.CreateShareRequest, info *provider.ResourceInfo) (*collaboration.ShareId, bool) {
+func (h *Handler) createCs3Share(ctx context.Context, r *http.Request, client gateway.GatewayAPIClient, req *collaboration.CreateShareRequest, info *provider.ResourceInfo) (*conversions.ShareData, error) {
 	createShareResponse, err := client.CreateShare(ctx, req)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc create share request", err)
-		return nil, false
+		return nil, err
 	}
 	if createShareResponse.Status.Code != rpc.Code_CODE_OK {
 		if createShareResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
-			return nil, false
+			return nil, nil
 		}
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc create share request failed", err)
-		return nil, false
+		return nil, err
 	}
 	s, err := conversions.CS3Share2ShareData(ctx, createShareResponse.Share)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
-		return nil, false
+		return nil, err
 	}
 	err = h.addFileInfo(ctx, s, info)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error adding fileinfo to share", err)
-		return nil, false
+		return nil, err
 	}
 	h.mapUserIds(ctx, client, s)
 
-	response.WriteOCSSuccess(w, r, s)
-	return createShareResponse.Share.Id, true
+	return s, nil
 }
 
 func mapState(state collaboration.ShareState) int {
