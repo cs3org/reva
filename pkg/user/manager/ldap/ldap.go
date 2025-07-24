@@ -261,6 +261,7 @@ func (m *manager) ldapEntryToUserID(entry *ldap.Entry) (*userpb.UserId, error) {
 	return &userpb.UserId{
 		Idp:      m.c.Idp,
 		OpaqueId: uid,
+		TenantId: entry.GetEqualFoldAttributeValue(m.c.LDAPIdentity.User.Schema.TenantID),
 		Type:     m.c.LDAPIdentity.GetUserType(entry),
 	}, nil
 }

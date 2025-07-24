@@ -94,6 +94,8 @@ type userSchema struct {
 	UIDNumber string `mapstructure:"uidNumber"`
 	// GIDNumber is a numeric id that maps to a filesystem gid, eg. 654321
 	GIDNumber string `mapstructure:"gidNumber"`
+	// TenantID is the tenant id of the user, if applicable.
+	TenantID string `mapstructure:"tenantId"`
 }
 
 // Default userConfig (somewhat inspired by Active Directory)
@@ -205,6 +207,7 @@ func (i *Identity) GetLDAPUserByFilter(log *zerolog.Logger, lc ldap.Client, filt
 		[]string{
 			i.User.Schema.DisplayName,
 			i.User.Schema.ID,
+			i.User.Schema.TenantID,
 			i.User.Schema.Mail,
 			i.User.Schema.Username,
 			i.User.Schema.UIDNumber,
@@ -523,6 +526,8 @@ func (i *Identity) getUserAttributeFilter(attribute, value string) (string, erro
 		attribute = i.User.Schema.Username
 	case "userid":
 		attribute = i.User.Schema.ID
+	case "tenant_id":
+		attribute = i.User.Schema.TenantID
 	default:
 		return "", errors.New("ldap: invalid field " + attribute)
 	}
