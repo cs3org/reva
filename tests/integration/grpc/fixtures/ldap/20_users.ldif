@@ -21,6 +21,7 @@ uidNumber: 123
 gidNumber: 30000
 homeDirectory: /home/einstein
 openCloudUUID:: NGM1MTBhZGEtYzg2Yi00ODE1LTg4MjAtNDJjZGY4MmMzZDUx
+openCloudTenantId: c239389d-c249-499d-ae80-07558429769a
 userPassword:: e1NTSEF9TXJEcXpFNGdKbXZxbVRVTGhvWEZ1VzJBbkV3NWFLK3J3WTIvbHc9PQ==
 
 dn: uid=marie,ou=users,dc=example,dc=org
@@ -41,6 +42,7 @@ uidNumber: 20001
 gidNumber: 30000
 homeDirectory: /home/marie
 openCloudUUID:: ZjdmYmY4YzgtMTM5Yi00Mzc2LWIzMDctY2YwYThjMmQwZDlj
+openCloudTenantId: c239389d-c249-499d-ae80-07558429769a
 userPassword:: e1NTSEF9UmFvQWs3TU9jRHBIUWY3bXN3MGhHNnVraFZQWnRIRlhOSUNNZEE9PQ==
 
 dn: uid=richard,ou=users,dc=example,dc=org
@@ -61,6 +63,7 @@ uidNumber: 20002
 gidNumber: 30000
 homeDirectory: /home/richard
 openCloudUUID:: OTMyYjQ1NDAtOGQxNi00ODFlLThlZjQtNTg4ZTRiNmIxNTFj
+openCloudTenantId: c239389d-c249-499d-ae80-07558429769a
 userPassword:: e1NTSEF9Z05LZTRreHdmOGRUREY5eHlhSmpySTZ3MGxSVUM1d1RGcWROTVE9PQ==
 
 dn: uid=moss,ou=users,dc=example,dc=org
@@ -81,4 +84,47 @@ uidNumber: 20003
 gidNumber: 30000
 homeDirectory: /home/moss
 openCloudUUID:: MDU4YmZmOTUtNjcwOC00ZmU1LTkxZTQtOWVhM2QzNzc1ODhi
+openCloudTenantId: c239389d-c249-499d-ae80-07558429769a
 userPassword:: e1NTSEF9N0hEdTRoMkFDVExFWWt4U0RtSDZVQjhmUlpKRExDZDc=
+
+dn: uid=jen,ou=users,dc=example,dc=org
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: openCloudObject
+objectClass: person
+objectClass: posixAccount
+objectClass: top
+uid: jen
+givenName: Jen
+sn: Barber
+cn: jen
+displayName: Jen Barber
+description: A worker in the IT Department of Reynholm Industries. She is a very capable and intelligent person, but she is also very clumsy and accident-prone. She is also very kind and caring, and she is always willing to help her friends.
+mail: jen@example.org
+uidNumber: 20004
+gidNumber: 30000
+homeDirectory: /home/jen
+openCloudUUID:: YmYyZWUyZjItNjdiYy00MThmLWFjNGUtMmY2NDI3ZjlmYjJm
+openCloudTenantId: d375ba5e-1140-472a-b199-ca7d671a9fe1
+userPassword:: e1NTSEF9Zk5lZ0d2c3V4bG5mY3J6cW9nZ2xqZzVvN3h6aG9iYjJpT0d1aXc9PQ==
+
+dn: uid=ralph,ou=users,dc=example,dc=org
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: openCloudObject
+objectClass: person
+objectClass: posixAccount
+objectClass: top
+uid: ralph
+givenName: Ralph
+sn: Wiggum
+cn: ralph
+displayName: Ralph Wiggum
+description: A character from the animated television series The Simpsons. He is the son of Chief Wiggum and is known for his simple-mindedness and childlike innocence.
+mail: ralphi@example.org
+uidNumber: 20005
+gidNumber: 30000
+homeDirectory: /home/ralph
+openCloudUUID:: NzlhOTFhZTMtMTNkYS00YmFiLTlmOTEtNjNjNjAyOTVjN2Nm
+openCloudTenantId: d375ba5e-1140-472a-b199-ca7d671a9fe1
+userPassword:: e1NTSEF9Zk5lZ0d2c3V4bG5mY3J6cW9nZ2xqZzVvN3h6aG9iYjJpT0d1aXc9PQ==

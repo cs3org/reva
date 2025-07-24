@@ -2,6 +2,7 @@
 	{
 		"id": {
 			"opaque_id": "4c510ada-c86b-4815-8820-42cdf82c3d51",
+			"tenant_id": "c239389d-c249-499d-ae80-07558429769a",
 			"idp": "http://localhost:20080"
 		},
 		"username": "einstein",
@@ -14,6 +15,7 @@
 	{
 		"id": {
 			"opaque_id": "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+			"tenant_id": "c239389d-c249-499d-ae80-07558429769a",
 			"idp": "http://localhost:20080"
 		},
 		"username": "marie",
@@ -25,6 +27,7 @@
 	{
 		"id": {
 			"opaque_id": "932b4540-8d16-481e-8ef4-588e4b6b151c",
+			"tenant_id": "c239389d-c249-499d-ae80-07558429769a",
 			"idp": "http://localhost:20080"
 		},
 		"username": "richard",
@@ -32,5 +35,29 @@
 		"mail": "richard@example.org",
 		"display_name": "Richard Feynman",
 		"groups": ["quantum-lovers", "philosophy-haters", "physics-lovers"]
+	},
+	{
+		"id": {
+			"opaque_id": "bf2ee2f2-67bc-418f-ac4e-2f6427f9fb2f",
+			"tenant_id": "d375ba5e-1140-472a-b199-ca7d671a9fe1",
+			"idp": "http://localhost:20080"
+		},
+		"username": "jen",
+		"secret": "demo",
+		"mail": "jen@example.org",
+		"display_name": "Jen Barber",
+		"groups": []
+	},
+	{
+		"id": {
+			"opaque_id": "79a91ae3-13da-4bab-9f91-63c60295c7cf",
+			"tenant_id": "d375ba5e-1140-472a-b199-ca7d671a9fe1",
+			"idp": "http://localhost:20080"
+		},
+		"username": "ralph",
+		"secret": "demo",
+		"mail": "ralphi@example.org",
+		"display_name": "Ralph Wiggum",
+		"groups": []
 	}
 ]
