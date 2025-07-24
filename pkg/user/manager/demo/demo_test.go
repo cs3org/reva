@@ -98,13 +98,13 @@ func TestUserManager(t *testing.T) {
 	}
 
 	// test FindUsers
-	resUser, _ := manager.FindUsers(ctx, "einstein", false)
+	resUser, _ := manager.FindUsers(ctx, "einstein", "", false)
 	if !cmp.Equal(resUser, []*userpb.User{userEinstein}, protocmp.Transform()) {
 		t.Fatalf("user differs: expected=%v got=%v", []*userpb.User{userEinstein}, resUser)
 	}
 
 	// negative test FindUsers
-	resUsers, _ := manager.FindUsers(ctx, "notARealUser", false)
+	resUsers, _ := manager.FindUsers(ctx, "notARealUser", "", false)
 	if len(resUsers) > 0 {
 		t.Fatalf("user not in group: expected=%v got=%v", []*userpb.User{}, resUsers)
 	}

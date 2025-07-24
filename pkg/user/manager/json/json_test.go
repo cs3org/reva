@@ -139,7 +139,7 @@ func TestUserManager(t *testing.T) {
 	}
 
 	// test FindUsers
-	resUser, _ := manager.FindUsers(ctx, "stein", false)
+	resUser, _ := manager.FindUsers(ctx, "stein", "", false)
 	if len(resUser) != 1 {
 		t.Fatalf("too many users found: expected=%d got=%d", 1, len(resUser))
 	}

@@ -134,7 +134,11 @@ func userContains(u *userpb.User, query string) bool {
 }
 
 // FindUsers returns the user based on the query
-func (m *Manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
+func (m *Manager) FindUsers(ctx context.Context, query, tenantID string, skipFetchingGroups bool) ([]*userpb.User, error) {
+	if tenantID != "" {
+		return nil, errtypes.NotSupported("tenant filter not supported")
+	}
+
 	users := []*userpb.User{}
 	for _, u := range m.users {
 		if userContains(u, query) {

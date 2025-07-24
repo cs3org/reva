@@ -272,8 +272,8 @@ func (i *Identity) GetLDAPUserByDN(log *zerolog.Logger, lc ldap.Client, dn strin
 
 // GetLDAPUsers searches for users using a prefix-substring match on the user
 // attributes. Returns a slice of matching ldap.Entries
-func (i *Identity) GetLDAPUsers(log *zerolog.Logger, lc ldap.Client, query string) ([]*ldap.Entry, error) {
-	filter := i.getUserFindFilter(query)
+func (i *Identity) GetLDAPUsers(log *zerolog.Logger, lc ldap.Client, query, tenantID string) ([]*ldap.Entry, error) {
+	filter := i.getUserFindFilter(query, tenantID)
 	searchRequest := ldap.NewSearchRequest(
 		i.User.BaseDN,
 		i.User.scopeVal, ldap.NeverDerefAliases, 0, 0, false,
@@ -559,7 +559,7 @@ func (i *Identity) disabledFilter() string {
 
 // getUserFindFilter construct a LDAP filter to perform a prefix-substring
 // search for users.
-func (i *Identity) getUserFindFilter(query string) string {
+func (i *Identity) getUserFindFilter(query, tenantID string) string {
 	searchAttrs := []string{
 		i.User.Schema.Mail,
 		i.User.Schema.DisplayName,
@@ -578,9 +578,14 @@ func (i *Identity) getUserFindFilter(query string) string {
 		filter = fmt.Sprintf("%s(%s=%s)", filter, attr, squery)
 	}
 	// substring search for UUID is not possible
-	filter = fmt.Sprintf("%s(%s=%s)", filter, i.User.Schema.ID, ldap.EscapeFilter(query))
+	filter = fmt.Sprintf("(|%s(%s=%s))", filter, i.User.Schema.ID, ldap.EscapeFilter(query))
 
-	return fmt.Sprintf("(&%s(objectclass=%s)(|%s))",
+	if tenantID != "" {
+		// If a tenant ID is provided, we AND a filter for the tenant ID
+		filter = fmt.Sprintf("(&%s(%s=%s))", filter, i.User.Schema.TenantID, ldap.EscapeFilter(tenantID))
+	}
+
+	return fmt.Sprintf("(&%s(objectclass=%s)%s)",
 		i.User.Filter,
 		i.User.Objectclass,
 		filter,

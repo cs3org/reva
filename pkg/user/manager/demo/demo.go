@@ -98,14 +98,20 @@ func extractClaim(u *userpb.User, claim string) (string, error) {
 }
 
 // TODO(jfd) compare sub?
-func userContains(u *userpb.User, query string) bool {
-	return strings.Contains(u.Username, query) || strings.Contains(u.DisplayName, query) || strings.Contains(u.Mail, query) || strings.Contains(u.Id.OpaqueId, query)
+func userContains(u *userpb.User, query, tenantID string) bool {
+	if tenantID != "" && u.Id.TenantId != tenantID {
+		return false
+	}
+	return strings.Contains(u.Username, query) ||
+		strings.Contains(u.DisplayName, query) ||
+		strings.Contains(u.Mail, query) ||
+		strings.Contains(u.Id.OpaqueId, query)
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
+func (m *manager) FindUsers(ctx context.Context, query, tenantID string, skipFetchingGroups bool) ([]*userpb.User, error) {
 	users := []*userpb.User{}
 	for _, u := range m.catalog {
-		if userContains(u, query) {
+		if userContains(u, query, tenantID) {
 			user := proto.Clone(u).(*userpb.User)
 			if skipFetchingGroups {
 				user.Groups = nil
