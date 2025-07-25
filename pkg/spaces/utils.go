@@ -165,6 +165,15 @@ func spacesLevel(path string) int {
 
 // Returns the path relative to the space root.
 func PathRelativeToSpaceRoot(info *provider.ResourceInfo) (relativePath string, err error) {
+	spacePath, err := ResourceToSpacePath(info)
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Rel(spacePath, info.Path)
+}
+
+func ResourceToSpacePath(info *provider.ResourceInfo) (path string, err error) {
 	if info.Id.SpaceId == "" {
 		return "", errors.New("resourceInfo must contain a space ID")
 	}
@@ -173,7 +182,7 @@ func PathRelativeToSpaceRoot(info *provider.ResourceInfo) (relativePath string, 
 		return "", fmt.Errorf("failed to decode storage space ID: %s", fmt.Sprintf("%s$%s", info.Id.StorageId, info.Id.SpaceId))
 	}
 
-	return filepath.Rel(spacePath, info.Path)
+	return spacePath, nil
 }
 
 func ResourceIdToString(id *provider.ResourceId) string {
