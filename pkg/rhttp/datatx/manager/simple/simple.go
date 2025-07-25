@@ -93,6 +93,12 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 
 			if _, err := strconv.ParseInt(contentLength, 10, 64); err == nil {
 				metadata[ocdav.HeaderContentLength] = contentLength
+			} else {
+				contentLength := r.Header.Get(ocdav.HeaderContentLength)
+				if _, err := strconv.ParseInt(contentLength, 10, 64); err == nil {
+					metadata[ocdav.HeaderContentLength] = contentLength
+				}
+
 			}
 
 			err := fs.Upload(ctx, ref, r.Body, metadata)

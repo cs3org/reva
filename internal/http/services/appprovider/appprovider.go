@@ -219,7 +219,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		Ref: fileRef,
 		Opaque: &typespb.Opaque{
 			Map: map[string]*typespb.OpaqueEntry{
-				"Upload-Length": {
+				ocdav.HeaderUploadLength: {
 					Decoder: "plain",
 					Value:   []byte("0"),
 				},
@@ -254,6 +254,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 
 	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
 	httpReq.Header.Set(ocdav.HeaderContentLength, strconv.Itoa(0))
+	httpReq.Header.Set(ocdav.HeaderUploadLength, strconv.Itoa(0))
 
 	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: s.conf.Insecure}}
 	httpRes, err := httpclient.New(httpclient.RoundTripper(tr)).Do(httpReq)
