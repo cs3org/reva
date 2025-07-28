@@ -65,7 +65,7 @@ require (
 	google.golang.org/protobuf v1.36.6
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/driver/sqlite v1.6.0
-	gorm.io/gorm v1.30.0
+	gorm.io/gorm v1.30.1
 	gotest.tools v2.2.0+incompatible
 )
 
