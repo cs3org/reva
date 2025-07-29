@@ -19,13 +19,25 @@
 package storageprovider
 
 import (
+	"strings"
+
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 // XS defines an hex-encoded string as checksum.
 type XS string
 
-func (x XS) String() string { return string(x) }
+func (x XS) String() string {
+	// Based on https://github.com/owncloud/client/blob/15fc9d017fcdcc4cc95728c16a2dd171d0395b85/src/common/checksums.h#L38-L42
+	if x == XSMD5 || x == XSSHA1 || x == XSSHA256 {
+		return strings.ToUpper(string(x))
+	}
+	if x == XSAdler32 {
+		return strings.Title(string(x))
+	}
+	return string(x)
+
+}
 
 const (
 	// XSInvalid means the checksum type is invalid.

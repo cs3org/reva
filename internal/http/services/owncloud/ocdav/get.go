@@ -26,7 +26,6 @@ import (
 	"net/url"
 	"path"
 	"strconv"
-	"strings"
 	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -138,7 +137,7 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		w.Header().Set(HeaderContentLength, strconv.FormatUint(info.Size, 10))
 	}
 	if info.Checksum != nil {
-		w.Header().Set(HeaderOCChecksum, fmt.Sprintf("%s:%s", strings.ToUpper(string(storageprovider.GRPC2PKGXS(info.Checksum.Type))), info.Checksum.Sum))
+		w.Header().Set(HeaderOCChecksum, fmt.Sprintf("%s:%s", storageprovider.GRPC2PKGXS(info.Checksum.Type).String(), info.Checksum.Sum))
 	}
 	var c int64
 	if c, err = io.Copy(w, httpRes.Body); err != nil {
