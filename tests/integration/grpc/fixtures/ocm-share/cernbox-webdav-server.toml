@@ -10,3 +10,4 @@ address = "{{grpc_address}}"
 token_strategy = "bearer"
 
 [http.services.ocdav]
+spaces_enabled = true
