@@ -34,6 +34,7 @@ driver = "localhome"
 root = "{{localhome_root}}"
 
 [http.services.ocdav]
+spaces_enabled = true
 
 [http.services.wellknown]
 [http.services.wellknown.ocmprovider]

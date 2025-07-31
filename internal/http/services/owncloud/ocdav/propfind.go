@@ -514,6 +514,11 @@ func (s *svc) newPropRaw(key, val string) *propertyXML {
 // The path of the space root it is calculated from `md.Id.SpaceId`
 // Note that the path on `md.Path` must also be set, and must be a path relative to the space root.
 func spaceHref(ctx context.Context, baseURI string, md *provider.ResourceInfo) (string, error) {
+	if ocm, _ := ctx.Value(ctxOCM).(bool); ocm {
+		// /<token>/ was injected in front of the OCM path for the routing to work, we now remove it (see internal/http/services/owncloud/ocdav/dav.go)
+		_, md.Path = router.ShiftPath(md.Path)
+	}
+
 	if md.Id == nil || md.Id.SpaceId == "" {
 		return "", errors.New("Space ID must be set to calculate Href")
 	}
@@ -572,7 +577,6 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	var ref string
 	var err error
 	if spacesEnabled {
-		// spaces are enabled; for now we do not support the OCM case with spaces
 		ref, err = spaceHref(ctx, baseURI, md)
 		if err != nil {
 			pxml := propstatXML{
@@ -587,14 +591,12 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 
 		}
 	} else {
-		// spaces are not enabled
 		md.Path = strings.TrimPrefix(md.Path, ns)
 
 		if ocm, _ := ctx.Value(ctxOCM).(bool); ocm {
 			// /<token>/ was injected in front of the OCM path for the routing to work, we now remove it (see internal/http/services/owncloud/ocdav/dav.go)
 			_, md.Path = router.ShiftPath(md.Path)
 		}
-
 		ref = path.Join(baseURI, md.Path)
 	}
 	if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
@@ -660,7 +662,6 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	// when allprops has been requested
 	if pf.Allprop != nil {
 		// return all known properties
-
 		if md.Id != nil {
 			if spacesEnabled {
 				id := spaces.EncodeResourceID(md.Id)
@@ -992,7 +993,8 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 
 							path = sb.String()
 						}
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:downloadURL", s.c.PublicURL+baseURI+path))
+						relativePath := strings.TrimPrefix(path, "/public")
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:downloadURL", s.c.PublicURL+baseURI+relativePath))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
 					}
@@ -1014,8 +1016,16 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:signature-auth", ""))
 						}
 					}
-				case "privatelink": // phoenix only
-					// <oc:privatelink>https://phoenix.owncloud.com/f/9</oc:privatelink>
+				case "privatelink":
+					privateURL, err := url.Parse(s.c.PublicURL)
+					if err == nil {
+						// privateURL.Path = path.Join("f", spaces.EncodeResourceID(md.Id))
+						// TODO: create a choice between id based and path based links
+						privateURL.Path = path.Join("files", "spaces", md.Path)
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:privatelink", privateURL.String()))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:privatelink", ""))
+					}
 					fallthrough
 				case "dDC": // desktop
 					fallthrough

@@ -79,14 +79,14 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 	gw, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting gateway client")
-		w.WriteHeader(http.StatusInternalServerError)
+		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
 	}
 
 	req, err := godata.ParseRequest(ctx, r.URL.Path, r.URL.Query())
 	if err != nil {
 		log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("could not get users: query error")
-		w.WriteHeader(http.StatusBadRequest)
+		handleError(ctx, err, http.StatusBadRequest, w)
 		return
 	}
 
@@ -101,9 +101,8 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 		SkipFetchingUserGroups: true,
 		Filter:                 queryVal,
 	})
-
 	if err != nil {
-		handleError(err, w)
+		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
 	}
 	if users.Status.Code != rpcv1beta1.Code_CODE_OK {
@@ -116,8 +115,7 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 	if req.Query.OrderBy.RawValue != "" {
 		lgUsers, err = sortUsers(ctx, lgUsers, req.Query.OrderBy.RawValue)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(err.Error()))
+			handleError(ctx, err, http.StatusBadRequest, w)
 			return
 		}
 	}
@@ -125,7 +123,6 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(&ListResponse{
 		Value: lgUsers,
 	})
-
 }
 
 func (s *svc) getUserInfo(ctx context.Context, id *userpb.UserId) (*userpb.User, error) {

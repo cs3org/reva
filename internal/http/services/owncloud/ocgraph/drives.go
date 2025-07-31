@@ -51,14 +51,14 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 	gw, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
+		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
 	}
 
 	odataReq, err := godata.ParseRequest(r.Context(), r.URL.Path, r.URL.Query())
 	if err != nil {
 		log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("could not get drives: query error")
-		w.WriteHeader(http.StatusBadRequest)
+		handleError(ctx, err, http.StatusBadRequest, w)
 		return
 	}
 
@@ -67,14 +67,14 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 		spaces, err = s.getDrivesForShares(ctx, gw)
 		if err != nil {
 			log.Error().Err(err).Msg("error getting share spaces")
-			w.WriteHeader(http.StatusInternalServerError)
+			handleError(ctx, err, http.StatusInternalServerError, w)
 			return
 		}
 	} else {
 		filters, err := generateCs3StorageSpaceFilters(odataReq)
 		if err != nil {
 			log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("could not get drives: error parsing filters")
-			w.WriteHeader(http.StatusInternalServerError)
+			handleError(ctx, err, http.StatusInternalServerError, w)
 			return
 		}
 
@@ -83,12 +83,12 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			log.Error().Err(err).Msg("error listing storage spaces")
-			w.WriteHeader(http.StatusInternalServerError)
+			handleError(ctx, err, http.StatusInternalServerError, w)
 			return
 		}
 		if res.Status.Code != rpcv1beta1.Code_CODE_OK {
 			log.Error().Int("code", int(res.Status.Code)).Str("message", res.Status.Message).Msg("error listing storage spaces")
-			w.WriteHeader(http.StatusInternalServerError)
+			handleRpcStatus(ctx, res.Status, w)
 			return
 		}
 
@@ -102,7 +102,7 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 		"value": spaces,
 	}); err != nil {
 		log.Error().Err(err).Msg("error marshalling spaces as json")
-		w.WriteHeader(http.StatusInternalServerError)
+		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
 	}
 }
@@ -141,6 +141,7 @@ func libregraphShareID(shareID *collaborationv1beta1.ShareId) string {
 
 func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libregraph.Drive {
 	// the prefix of the remote_item.id and rootid
+	spacePath, _ := spaces.ResourceToSpacePath(rsi.ResourceInfo)
 	resourceRelativePath, _ := spaces.PathRelativeToSpaceRoot(rsi.ResourceInfo)
 
 	return &libregraph.Drive{
@@ -158,7 +159,8 @@ func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libre
 			Id:        libregraph.PtrString(fmt.Sprintf("%s$%s!%s", ShareJailID, ShareJailID, rsi.ReceivedShare.Share.Id.OpaqueId)),
 			WebDavUrl: libregraph.PtrString(fullURL(s.c.WebDavBase, rsi.ResourceInfo.Path)),
 			RemoteItem: &libregraph.RemoteItem{
-				DriveAlias: libregraph.PtrString(rsi.ResourceInfo.Id.StorageId),
+				// Drive Alias does not contain the first '/'
+				DriveAlias: libregraph.PtrString(spacePath[1:]),
 				ETag:       libregraph.PtrString(rsi.ResourceInfo.Etag),
 				Folder:     &libregraph.Folder{},
 				// The Id must correspond to the id in the OCS response, for the time being
@@ -169,7 +171,7 @@ func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libre
 				Path:                 libregraph.PtrString(resourceRelativePath),
 				// RootId must have the same token before ! as Id
 				// the second part for the time being is not used
-				RootId: libregraph.PtrString(fmt.Sprintf("%s!unused_root_id", spaces.EncodeStorageSpaceID(rsi.ResourceInfo.Id.StorageId, rsi.ResourceInfo.Id.SpaceId))),
+				RootId: libregraph.PtrString(fmt.Sprintf("%s$%s!unused_root_id", rsi.ResourceInfo.Id.StorageId, rsi.ResourceInfo.Id.SpaceId)),
 				Size:   libregraph.PtrInt64(int64(rsi.ResourceInfo.Size)),
 			},
 		},
@@ -245,7 +247,7 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 	gw, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
+		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
 	}
 
@@ -264,12 +266,12 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			log.Error().Err(err).Msg("error getting received share")
-			w.WriteHeader(http.StatusInternalServerError)
+			handleError(ctx, err, http.StatusInternalServerError, w)
 			return
 		}
 		if shareRes.Status.Code != rpcv1beta1.Code_CODE_OK {
 			log.Error().Int("code", int(shareRes.Status.Code)).Str("message", shareRes.Status.Message).Msg("error getting received share")
-			w.WriteHeader(http.StatusInternalServerError)
+			handleRpcStatus(ctx, shareRes.Status, w)
 			return
 		}
 
@@ -280,12 +282,12 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			log.Error().Err(err).Msg("error statting received share")
-			w.WriteHeader(http.StatusInternalServerError)
+			handleError(ctx, err, http.StatusInternalServerError, w)
 			return
 		}
 		if stat.Status.Code != rpcv1beta1.Code_CODE_OK {
 			log.Error().Interface("stat.Status", stat.Status).Msg("error statting received share")
-			w.WriteHeader(http.StatusInternalServerError)
+			handleRpcStatus(ctx, shareRes.Status, w)
 			return
 		}
 
@@ -310,12 +312,12 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			log.Error().Err(err).Msg("error getting space by id")
-			w.WriteHeader(http.StatusInternalServerError)
+			handleError(ctx, err, http.StatusInternalServerError, w)
 			return
 		}
 		if listRes.Status.Code != rpcv1beta1.Code_CODE_OK {
 			log.Error().Int("code", int(listRes.Status.Code)).Str("message", listRes.Status.Message).Msg("error getting space by id")
-			w.WriteHeader(http.StatusInternalServerError)
+			handleRpcStatus(ctx, listRes.Status, w)
 			return
 		}
 
@@ -328,7 +330,7 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.WriteHeader(http.StatusNotFound)
+	handleError(ctx, errors.New("space not found"), http.StatusNotFound, w)
 }
 
 func isShareJail(spaceID string) bool {

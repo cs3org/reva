@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
+	"github.com/cs3org/reva/v3/pkg/trace"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/go-chi/chi/v5"
 )
@@ -85,6 +86,17 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 func (s *svc) initRouter() {
 	s.router = chi.NewRouter()
 
+	s.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		w.Header().Set("x-request-id", trace.Get(ctx))
+		w.WriteHeader(http.StatusNotFound)
+	})
+	s.router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		w.Header().Set("x-request-id", trace.Get(ctx))
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	})
+
 	s.router.Route("/v1.0", func(r chi.Router) {
 		r.Route("/me", func(r chi.Router) {
 			r.Get("/", s.getMe)
@@ -103,7 +115,6 @@ func (s *svc) initRouter() {
 		r.Route("/me", func(r chi.Router) {
 			r.Route("/drives", func(r chi.Router) {
 				r.Get("/", s.listMySpaces)
-
 			})
 		})
 		r.Route("/me/drive", func(r chi.Router) {
@@ -121,11 +132,9 @@ func (s *svc) initRouter() {
 					r.Patch("/{share-id}", s.updateDrivePermissions)
 					r.Delete("/{share-id}", s.deleteDrivePermissions)
 					r.Post("/{share-id}/setPassword", s.updateLinkPassword)
-
 				})
 			})
 		})
-
 	})
 }
 
@@ -141,16 +150,21 @@ func (s *svc) Close() error { return nil }
 
 func (s *svc) Unprotected() []string { return nil }
 
-func handleError(err error, w http.ResponseWriter) {
-	w.WriteHeader(http.StatusInternalServerError)
-	w.Write([]byte(err.Error()))
+func handleError(ctx context.Context, err error, status int, w http.ResponseWriter) {
+	w.Header().Set("x-request-id", trace.Get(ctx))
+	w.WriteHeader(status)
+	w.Write([]byte("Error: " + err.Error()))
 }
 
 func handleRpcStatus(ctx context.Context, status *rpcv1beta1.Status, w http.ResponseWriter) {
 	log := appctx.GetLogger(ctx)
 	log.Error().Str("Status", status.String()).Msg("Failed to contact gateway in listUsers")
 
+	w.Header().Set("x-request-id", trace.Get(ctx))
+
 	switch status.Code {
+	case rpcv1beta1.Code_CODE_NOT_FOUND:
+		w.WriteHeader(http.StatusNotFound)
 	case rpcv1beta1.Code_CODE_PERMISSION_DENIED:
 		w.WriteHeader(http.StatusForbidden)
 	case rpcv1beta1.Code_CODE_UNAUTHENTICATED:
