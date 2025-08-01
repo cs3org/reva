@@ -178,7 +178,7 @@ func (t *Tree) workScanQueue() {
 				}
 
 				if item.Recurse {
-					err = t.WarmupIDCache(item.Path, true, false)
+					err = t.WarmupIDCache(item.Path, true, true)
 					if err != nil {
 						log.Error().Err(err).Str("path", item.Path).Msg("failed to warmup id cache")
 					}
