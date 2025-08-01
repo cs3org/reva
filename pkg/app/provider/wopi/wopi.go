@@ -451,7 +451,7 @@ func (p *wopiProvider) getAccessTokenTTL(ctx context.Context) (string, error) {
 
 	if claims, ok := token.Claims.(*jwt.RegisteredClaims); ok && token.Valid {
 		// milliseconds since Jan 1, 1970 UTC as required in https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/concepts#the-access_token_ttl-property
-		return strconv.FormatInt(claims.ExpiresAt.UnixMicro()*1000, 10), nil
+		return strconv.FormatInt(claims.ExpiresAt.UnixMicro()/1000, 10), nil
 	}
 
 	return "", errtypes.InvalidCredentials("wopi: invalid token present in ctx")
