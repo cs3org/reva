@@ -353,13 +353,13 @@ func cs3PermissionsToLibreGraph(user *userpb.User, perms *providerpb.ResourcePer
 	switch {
 	// having RemoveGrant qualifies you as a manager
 	case perms.RemoveGrant:
-		p.SetRoles([]string{"manager"})
+		p.SetRoles([]string{*NewManagerUnifiedRole().Id})
 	// InitiateFileUpload means you are an editor
 	case perms.InitiateFileUpload:
-		p.SetRoles([]string{"editor"})
+		p.SetRoles([]string{*NewSpaceEditorUnifiedRole().Id})
 	// Stat permission at least makes you a viewer
 	case perms.Stat:
-		p.SetRoles([]string{"viewer"})
+		p.SetRoles([]string{*NewSpaceViewerUnifiedRole().Id})
 	}
 
 	identity := &libregraph.Identity{

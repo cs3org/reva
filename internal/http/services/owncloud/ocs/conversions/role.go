@@ -237,7 +237,7 @@ func NewEditorRole() *Role {
 // NewFileEditorRole creates a file-editor role.
 func NewFileEditorRole() *Role {
 	return &Role{
-		Name: RoleEditor,
+		Name: RoleFileEditor,
 		cS3ResourcePermissions: &provider.ResourcePermissions{
 			GetPath:              true,
 			InitiateFileDownload: true,
@@ -447,12 +447,15 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 	}
 
 	if r.ocsPermissions.Contain(PermissionRead) {
-		if r.ocsPermissions.Contain(PermissionWrite) && r.ocsPermissions.Contain(PermissionCreate) && r.ocsPermissions.Contain(PermissionDelete) {
-			r.Name = RoleEditor
-			if r.ocsPermissions.Contain(PermissionShare) {
-				r.Name = RoleCollaborator
+		if r.ocsPermissions.Contain(PermissionWrite) {
+			r.Name = RoleFileEditor
+			if r.ocsPermissions.Contain(PermissionCreate) && r.ocsPermissions.Contain(PermissionDelete) {
+				r.Name = RoleEditor
+				if r.ocsPermissions.Contain(PermissionShare) {
+					r.Name = RoleCollaborator
+				}
 			}
-			return r // editor or collaborator
+			return r // file-editor, editor or collaborator
 		}
 		if r.ocsPermissions == PermissionRead {
 			r.Name = RoleViewer

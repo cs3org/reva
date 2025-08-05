@@ -49,6 +49,8 @@ const (
 	UnifiedRoleManagerID = "312c0871-5ef7-4b3a-85b6-0e4074c64049"
 	// UnifiedRoleSecureViewerID Unified role secure viewer id.
 	UnifiedRoleSecureViewerID = "aa97fe03-7980-45ac-9e50-b325749fd7e6"
+	// UnifiedRoleUploaderID Unified role uploader id.
+	UnifiedRoleUploaderID = "bf483fbf-5998-4afd-b593-e0f5ab823695"
 
 	// UnifiedRoleConditionDrive defines constraint that matches a Driveroot/Spaceroot
 	UnifiedRoleConditionDrive = "exists @Resource.Root"
@@ -200,13 +202,13 @@ func NewManagerUnifiedRole() *libregraph.UnifiedRoleDefinition {
 func NewUploaderUnifiedRole() *libregraph.UnifiedRoleDefinition {
 	r := conversions.NewUploaderRole()
 	return &libregraph.UnifiedRoleDefinition{
-		Id:          proto.String(UnifiedRoleManagerID),
+		Id:          proto.String(UnifiedRoleUploaderID),
 		Description: proto.String("Upload only."),
 		DisplayName: displayName(r),
 		RolePermissions: []libregraph.UnifiedRolePermission{
 			{
 				AllowedResourceActions: convert(r),
-				Condition:              proto.String(UnifiedRoleConditionDrive),
+				Condition:              proto.String(UnifiedRoleConditionFolder),
 			},
 		},
 		LibreGraphWeight: proto.Int32(0),
@@ -433,15 +435,10 @@ func GetBuiltinRoleDefinitionList() []*libregraph.UnifiedRoleDefinition {
 	return []*libregraph.UnifiedRoleDefinition{
 		NewViewerUnifiedRole(),
 		NewEditorUnifiedRole(),
-
-		// We currently don't support these roles (e.g.
-		// the manager role supposes you can add members to a folder,
-		// which is a concept we don't have at the moment)
-		// Since this function is used to tell the front-end which
-		// roles are supported, we have commented them out for the time being
-
-		//NewFileEditorUnifiedRole(),
-		//NewManagerUnifiedRole(),
+		NewFileEditorUnifiedRole(),
+		NewManagerUnifiedRole(),
+		NewSpaceEditorUnifiedRole(),
+		NewSpaceViewerUnifiedRole(),
 	}
 }
 
