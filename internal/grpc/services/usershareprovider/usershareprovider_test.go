@@ -60,6 +60,30 @@ var _ = Describe("user share provider service", func() {
 		statResourceResponse     *providerpb.StatResponse
 		cs3permissionsNoAddGrant *providerpb.ResourcePermissions
 		getShareResponse         *collaborationpb.Share
+
+		alice = &userpb.User{
+			Id: &userpb.UserId{
+				OpaqueId: "alice",
+				TenantId: "tenant1",
+			},
+			Username: "alice",
+		}
+
+		bob = &userpb.User{
+			Id: &userpb.UserId{
+				OpaqueId: "bob",
+				TenantId: "tenant1",
+			},
+			Username: "bob",
+		}
+
+		carol = &userpb.User{
+			Id: &userpb.UserId{
+				OpaqueId: "carol",
+				TenantId: "tenant2",
+			},
+			Username: "carol",
+		}
 	)
 	cs3permissionsNoAddGrant = conversions.RoleFromName("manager").CS3ResourcePermissions()
 	cs3permissionsNoAddGrant.AddGrant = false
@@ -86,7 +110,6 @@ var _ = Describe("user share provider service", func() {
 		}
 		gatewayClient.On("CheckPermission", mock.Anything, mock.Anything).
 			Return(checkPermissionResponse, nil)
-
 		statResourceResponse = &providerpb.StatResponse{
 			Status: status.NewOK(ctx),
 			Info: &providerpb.ResourceInfo{
@@ -94,12 +117,6 @@ var _ = Describe("user share provider service", func() {
 			},
 		}
 		gatewayClient.On("Stat", mock.Anything, mock.Anything).Return(statResourceResponse, nil)
-		alice := &userpb.User{
-			Id: &userpb.UserId{
-				OpaqueId: "alice",
-			},
-			Username: "alice",
-		}
 
 		getShareResponse = &collaborationpb.Share{
 			Id: &collaborationpb.ShareId{
@@ -303,6 +320,10 @@ var _ = Describe("user share provider service", func() {
 	})
 
 	Describe("CreateShare", func() {
+		BeforeEach(func() {
+			manager.On("Share", mock.Anything, mock.Anything, mock.Anything).Return(&collaborationpb.Share{}, nil)
+		})
+
 		DescribeTable("only requests with sufficient permissions get passed to the manager",
 			func(
 				resourceInfoPermissions *providerpb.ResourcePermissions,
@@ -311,7 +332,6 @@ var _ = Describe("user share provider service", func() {
 				expectedCode rpcpb.Code,
 				expectedCalls int,
 			) {
-				manager.On("Share", mock.Anything, mock.Anything, mock.Anything).Return(&collaborationpb.Share{}, nil)
 				checkPermissionResponse.Status.Code = checkPermissionStatusCode
 
 				statResourceResponse.Info.PermissionSet = resourceInfoPermissions
@@ -410,6 +430,62 @@ var _ = Describe("user share provider service", func() {
 				Entry("ListGrants", conversions.RoleFromName("manager").CS3ResourcePermissions(), &providerpb.ResourcePermissions{ListGrants: true}, rpcpb.Code_CODE_OK, 1),
 			)
 		})
+		Context("create share with tenant awareness", func() {
+			JustBeforeEach(func() {
+				rgrpcService := usershareprovider.New(gatewaySelector, manager, []*regexp.Regexp{})
+
+				provider = rgrpcService.(collaborationpb.CollaborationAPIServer)
+				Expect(provider).ToNot(BeNil())
+
+				// user has list grants access
+				statResourceResponse.Info.PermissionSet = conversions.RoleFromName(conversions.RoleCoowner).CS3ResourcePermissions()
+			})
+
+			It("fails when the tenantId of the user does not match the tenantId of the target user", func() {
+				createShareResponse, err := provider.CreateShare(ctx, &collaborationpb.CreateShareRequest{
+					ResourceInfo: &providerpb.ResourceInfo{
+						PermissionSet: conversions.RoleFromName("manager").CS3ResourcePermissions(),
+					},
+					Grant: &collaborationpb.ShareGrant{
+						Grantee: &providerpb.Grantee{
+							Type: providerpb.GranteeType_GRANTEE_TYPE_USER,
+							Id:   &providerpb.Grantee_UserId{UserId: carol.GetId()},
+						},
+						Permissions: &collaborationpb.SharePermissions{
+							Permissions: conversions.RoleFromName("spaceeditor").CS3ResourcePermissions(),
+						},
+					},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(createShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_PERMISSION_DENIED))
+
+				manager.AssertNumberOfCalls(GinkgoT(), "Share", 0)
+			})
+
+			It("succeeds when the tenantId of the user matches the tenantId of the target user", func() {
+
+				createShareResponse, err := provider.CreateShare(ctx, &collaborationpb.CreateShareRequest{
+					ResourceInfo: &providerpb.ResourceInfo{
+						PermissionSet: conversions.RoleFromName("manager").CS3ResourcePermissions(),
+					},
+					Grant: &collaborationpb.ShareGrant{
+						Grantee: &providerpb.Grantee{
+							Type: providerpb.GranteeType_GRANTEE_TYPE_USER,
+							Id:   &providerpb.Grantee_UserId{UserId: bob.GetId()},
+						},
+						Permissions: &collaborationpb.SharePermissions{
+							Permissions: conversions.RoleFromName("viewer").CS3ResourcePermissions(),
+						},
+					},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(createShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+
+				manager.AssertNumberOfCalls(GinkgoT(), "Share", 1)
+			})
+		})
 	})
 
 	Describe("UpdateShare", func() {
@@ -476,9 +552,8 @@ var _ = Describe("user share provider service", func() {
 				InitiateFileDownload: true,
 				Stat:                 true,
 			}
-			bobId := &userpb.UserId{OpaqueId: "bob"}
-			getShareResponse.Owner = bobId
-			getShareResponse.Creator = bobId
+			getShareResponse.Owner = bob.GetId()
+			getShareResponse.Creator = bob.GetId()
 
 			// user tries to update a share to give write permissions
 			updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
@@ -548,9 +623,8 @@ var _ = Describe("user share provider service", func() {
 				InitiateFileDownload: true,
 				Stat:                 true,
 			}
-			bobId := &userpb.UserId{OpaqueId: "bob"}
-			getShareResponse.Owner = bobId
-			getShareResponse.Creator = bobId
+			getShareResponse.Owner = bob.GetId()
+			getShareResponse.Creator = bob.GetId()
 
 			// user tries to update a share to give write permissions
 			updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
@@ -575,6 +649,90 @@ var _ = Describe("user share provider service", func() {
 			})
 
 			Expect(err).ToNot(HaveOccurred())
+			Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+
+			manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
+		})
+
+		It("succeeds when the tennantId of the user matches the tenantId of the target user", func() {
+			statResourceResponse.Info.PermissionSet = &providerpb.ResourcePermissions{
+				UpdateGrant:          true,
+				InitiateFileDownload: true,
+				Stat:                 true,
+			}
+
+			getShareResponse.Owner = bob.GetId()
+			getShareResponse.Creator = bob.GetId()
+
+			getShareResponse.Grantee = &providerpb.Grantee{
+				Type: providerpb.GranteeType_GRANTEE_TYPE_USER,
+				Id:   &providerpb.Grantee_UserId{UserId: alice.GetId()},
+			}
+
+			// user tries to update a share to give write permissions
+			updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
+				Ref: &collaborationpb.ShareReference{
+					Spec: &collaborationpb.ShareReference_Id{
+						Id: &collaborationpb.ShareId{
+							OpaqueId: "shareid",
+						},
+					},
+				},
+				Share: &collaborationpb.Share{
+					Permissions: &collaborationpb.SharePermissions{
+						Permissions: &providerpb.ResourcePermissions{
+							Stat:                 true,
+							InitiateFileDownload: true,
+						},
+					},
+				},
+				UpdateMask: &fieldmaskpb.FieldMask{
+					Paths: []string{"permissions"},
+				},
+			})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
+
+			manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)
+		})
+
+		It("fails when the tennantId of the user does not matche the tenantId of the target user", func() {
+			statResourceResponse.Info.PermissionSet = &providerpb.ResourcePermissions{
+				UpdateGrant:          true,
+				InitiateFileDownload: true,
+				Stat:                 true,
+			}
+
+			getShareResponse.Owner = bob.GetId()
+			getShareResponse.Creator = bob.GetId()
+			getShareResponse.Grantee = &providerpb.Grantee{
+				Type: providerpb.GranteeType_GRANTEE_TYPE_USER,
+				Id:   &providerpb.Grantee_UserId{UserId: carol.GetId()},
+			}
+			// user tries to update a share to give write permissions
+			updateShareResponse, err := provider.UpdateShare(ctx, &collaborationpb.UpdateShareRequest{
+				Ref: &collaborationpb.ShareReference{
+					Spec: &collaborationpb.ShareReference_Id{
+						Id: &collaborationpb.ShareId{
+							OpaqueId: "shareid",
+						},
+					},
+				},
+				Share: &collaborationpb.Share{
+					Permissions: &collaborationpb.SharePermissions{
+						Permissions: &providerpb.ResourcePermissions{
+							Stat:                 true,
+							InitiateFileDownload: true,
+						},
+					},
+				},
+				UpdateMask: &fieldmaskpb.FieldMask{
+					Paths: []string{"permissions"},
+				},
+			})
+
+			Expect(err).To(HaveOccurred())
 			Expect(updateShareResponse.Status.Code).To(Equal(rpcpb.Code_CODE_OK))
 
 			manager.AssertNumberOfCalls(GinkgoT(), "UpdateShare", 1)

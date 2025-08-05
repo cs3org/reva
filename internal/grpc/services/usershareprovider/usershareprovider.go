@@ -179,7 +179,7 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 		if user.GetId().GetTenantId() != req.GetGrant().GetGrantee().GetUserId().GetTenantId() {
 			log.Warn().Msg("user tenantId does not match the target user tenantId, this is not supported yet")
 			return &collaboration.CreateShareResponse{
-				Status: status.NewInvalid(ctx, "user tenantId does not match the target user tenantId"),
+				Status: status.NewPermissionDenied(ctx, nil, "user tenantId does not match the target user tenantId"),
 			}, nil
 		}
 	}
