@@ -125,7 +125,8 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 	ctx := r.Context()
 	tokenStatInfo := ctx.Value(tokenStatInfoKey{}).(*provider.ResourceInfo)
 	sublog := appctx.GetLogger(ctx) //.With().Interface("tokenStatInfo", tokenStatInfo).Logger()
-	sublog.Debug().Bool("onContainer", onContainer).Str("linkId", tokenStatInfo.GetId().OpaqueId).Msg("handlePropfindOnToken")
+
+	sublog.Debug().Any("tokenStatInfo", tokenStatInfo).Bool("onContainer", onContainer).Str("linkId", tokenStatInfo.GetId().OpaqueId).Msg("handlePropfindOnToken")
 
 	depth := r.Header.Get(HeaderDepth)
 	if depth == "" {
@@ -211,11 +212,6 @@ func (s *svc) getPublicFileInfos(onContainer, onlyRoot bool, i *provider.Resourc
 			Opaque: o,
 			Path:   path.Dir(i.Path),
 			Type:   provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-			Id: &provider.ResourceId{
-				StorageId: i.Id.StorageId,
-				SpaceId:   i.Id.SpaceId,
-				OpaqueId:  i.Id.OpaqueId,
-			},
 		})
 		if onlyRoot {
 			return infos
