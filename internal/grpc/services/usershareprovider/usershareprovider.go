@@ -249,8 +249,6 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 		}, nil
 	}
 
-	// check if the users tenantId matches the tenantId of the target user or group
-
 	createdShare, err := s.sm.Share(ctx, req.GetResourceInfo(), req.GetGrant())
 	if err != nil {
 		return &collaboration.CreateShareResponse{
