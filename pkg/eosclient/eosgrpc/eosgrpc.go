@@ -24,6 +24,7 @@ package eosgrpc
 
 import (
 	"context"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"os"
@@ -39,6 +40,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -104,6 +106,10 @@ type Options struct {
 	// TokenExpiry stores in seconds the time after which generated tokens will expire
 	// Default is 3600
 	TokenExpiry int
+
+	// AllowInsecure determines whether EOS can fall back to no TLS
+	// Default is false
+	AllowInsecure bool
 }
 
 func (opt *Options) init() {
@@ -124,9 +130,14 @@ func (opt *Options) init() {
 func newgrpc(ctx context.Context, log *zerolog.Logger, opt *Options) (erpc.EosClient, error) {
 	log.Debug().Msgf("Setting up GRPC towards '%s'", opt.GrpcURI)
 
-	conn, err := grpc.NewClient(opt.GrpcURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	certpool, err := x509.SystemCertPool()
 	if err != nil {
-		log.Warn().Err(err).Msgf("Error connecting to '%s'", opt.GrpcURI)
+		return nil, err
+	}
+	conn, err := grpc.NewClient(opt.GrpcURI, grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(certpool, "")))
+	if err != nil {
+		log.Warn().Err(err).Msgf("Error connecting to '%s' using TLS", opt.GrpcURI)
+		return nil, err
 	}
 
 	log.Debug().Msgf("Going to ping '%s'", opt.GrpcURI)
@@ -138,6 +149,19 @@ func newgrpc(ctx context.Context, log *zerolog.Logger, opt *Options) (erpc.EosCl
 	prq.Message = []byte("hi this is a ping from reva")
 	prep, err := ecl.Ping(ctx, prq)
 	if err != nil {
+		if opt.AllowInsecure {
+			conn, err = grpc.NewClient(opt.GrpcURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				log.Warn().Err(err).Msgf("Error connecting to '%s' using insecure", opt.GrpcURI)
+				return nil, err
+			} else {
+				log.Warn().Err(err).Msgf("Fell back to insecure mode when connecting to %s because TLS ping failed", opt.GrpcURI)
+				ecl = erpc.NewEosClient(conn)
+			}
+		} else {
+			log.Error().Err(err).Msgf("Failed to connect to '%s' using TLS, and allow_insecure is false", opt.GrpcURI)
+			return nil, err
+		}
 		log.Warn().Err(err).Msgf("Could not ping to '%s'", opt.GrpcURI)
 	}
 
