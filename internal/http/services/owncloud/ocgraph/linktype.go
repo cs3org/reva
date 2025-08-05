@@ -60,7 +60,8 @@ func SharingLinkTypeFromCS3Permissions(ctx context.Context, permissions *linkv1b
 
 	if grants.PermissionsEqual(permissions.GetPermissions(), conversions.NewViewerRole().CS3ResourcePermissions()) {
 		lt = libregraph.VIEW
-	} else if grants.PermissionsEqual(permissions.GetPermissions(), conversions.NewEditorRole().CS3ResourcePermissions()) {
+	} else if grants.PermissionsEqual(permissions.GetPermissions(), conversions.NewEditorRole().CS3ResourcePermissions()) ||
+		grants.PermissionsEqual(permissions.GetPermissions(), conversions.NewFileEditorRole().CS3ResourcePermissions()) {
 		lt = libregraph.EDIT
 	} else if grants.PermissionsEqual(permissions.GetPermissions(), conversions.NewUploaderRole().CS3ResourcePermissions()) {
 		lt = libregraph.UPLOAD
