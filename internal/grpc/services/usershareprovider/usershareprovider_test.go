@@ -411,6 +411,7 @@ var _ = Describe("user share provider service", func() {
 			)
 		})
 	})
+
 	Describe("UpdateShare", func() {
 		It("fails without WriteShare permission in user role", func() {
 			checkPermissionResponse.Status.Code = rpcpb.Code_CODE_PERMISSION_DENIED
