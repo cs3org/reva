@@ -436,10 +436,12 @@ func (t *Tree) assimilate(item scanItem) error {
 		// compare metadata mtime with actual mtime. if it matches AND the path hasn't changed (move operation)
 		// we can skip the assimilation because the file was handled by us
 		fi, err := os.Lstat(item.Path)
-		if err == nil && previousPath == item.Path {
-			if mtime.Equal(fi.ModTime()) {
-				return nil
-			}
+		if err != nil {
+			return err
+		}
+
+		if previousPath == item.Path && mtime.Equal(fi.ModTime()) {
+			return nil
 		}
 
 		if !fi.IsDir() && !fi.Mode().IsRegular() {
