@@ -165,4 +165,8 @@ type Config struct {
 	// Maximum time span in days a ListRecycle call may return: if exceeded, ListRecycle
 	// will override the "to" date with "from" + this value
 	MaxDaysInRecycleList int `mapstructure:"max_days_in_recycle_list"`
+
+	// AllowInsecure determines whether EOS can fall back to no TLS
+	// Default is false
+	AllowInsecure bool `mapstructure:"allow_insecure"`
 }

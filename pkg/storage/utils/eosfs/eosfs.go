@@ -174,6 +174,7 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 			ReadUsesLocalTemp:  c.ReadUsesLocalTemp,
 			WriteUsesLocalTemp: c.WriteUsesLocalTemp,
 			TokenExpiry:        c.TokenExpiry,
+			AllowInsecure:      c.AllowInsecure,
 		}
 		eosHTTPOpts := &eosgrpc.HTTPOptions{
 			BaseURL:             c.MasterURL,
