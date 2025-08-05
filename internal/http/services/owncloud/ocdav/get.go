@@ -137,7 +137,7 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	} else {
 		w.Header().Set(HeaderContentLength, strconv.FormatUint(info.Size, 10))
 	}
-	if info.Checksum != nil {
+	if info.Checksum != nil && info.Checksum.Type != provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID && info.Checksum.Type != provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET {
 		w.Header().Set(HeaderOCChecksum, fmt.Sprintf("%s:%s", strings.ToUpper(string(storageprovider.GRPC2PKGXS(info.Checksum.Type))), info.Checksum.Sum))
 	}
 	var c int64
