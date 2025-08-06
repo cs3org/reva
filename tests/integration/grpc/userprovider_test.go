@@ -43,20 +43,25 @@ var _ = Describe("user providers", func() {
 
 		ctx           context.Context
 		serviceClient userpb.UserAPIClient
+
+		user *userpb.User
 	)
 
-	JustBeforeEach(func() {
-		var err error
-		ctx = context.Background()
-
-		// Add auth token
-		user := &userpb.User{
+	BeforeEach(func() {
+		user = &userpb.User{
 			Id: &userpb.UserId{
 				Idp:      existingIdp,
 				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
 				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 		}
+	})
+
+	JustBeforeEach(func() {
+		var err error
+		ctx = context.Background()
+
+		// Add auth token
 		tokenManager, err := jwt.New(map[string]interface{}{"secret": "changemeplease"})
 		Expect(err).ToNot(HaveOccurred())
 		scope, err := scope.AddOwnerScope(nil)
@@ -239,6 +244,53 @@ var _ = Describe("user providers", func() {
 			Expect(len(res.Users)).To(Equal(1))
 			user := res.Users[0]
 			Expect(user.Mail).To(Equal("marie@example.org"))
+		})
+
+		Context("in multi-tenancy scenarios", func() {
+			Context("in tenant A", func() {
+				BeforeEach(func() {
+					user.Id.TenantId = "c239389d-c249-499d-ae80-07558429769a"
+				})
+				It("finds users of tenant A by email", func() {
+					res, err := serviceClient.FindUsers(ctx, &userpb.FindUsersRequest{Filter: "marie"})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(len(res.Users)).To(Equal(1))
+					user := res.Users[0]
+					Expect(user.Mail).To(Equal("marie@example.org"))
+				})
+
+				It("doesn't find users from other tenants", func() {
+					res, err := serviceClient.FindUsers(ctx, &userpb.FindUsersRequest{Filter: "jen"})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(res.Users).To(BeEmpty())
+				})
+			})
+
+			Context("in tenant B", func() {
+				BeforeEach(func() {
+					user = &userpb.User{
+						Id: &userpb.UserId{
+							Idp:      existingIdp,
+							OpaqueId: "79a91ae3-13da-4bab-9f91-63c60295c7cf",
+							TenantId: "d375ba5e-1140-472a-b199-ca7d671a9fe1",
+							Type:     userpb.UserType_USER_TYPE_PRIMARY,
+						},
+					}
+				})
+				It("finds users of tenant B by email", func() {
+					res, err := serviceClient.FindUsers(ctx, &userpb.FindUsersRequest{Filter: "jen"})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(len(res.Users)).To(Equal(1))
+					user := res.Users[0]
+					Expect(user.Mail).To(Equal("jen@example.org"))
+				})
+
+				It("doesn't find users from other tenants", func() {
+					res, err := serviceClient.FindUsers(ctx, &userpb.FindUsersRequest{Filter: "marie"})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(res.Users).To(BeEmpty())
+				})
+			})
 		})
 	}
 
