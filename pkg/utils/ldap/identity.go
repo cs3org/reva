@@ -526,7 +526,7 @@ func (i *Identity) getUserAttributeFilter(attribute, value string) (string, erro
 		attribute = i.User.Schema.Username
 	case "userid":
 		attribute = i.User.Schema.ID
-	case "tenant_id":
+	case "tenantid":
 		attribute = i.User.Schema.TenantID
 	default:
 		return "", errors.New("ldap: invalid field " + attribute)
