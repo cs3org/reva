@@ -47,6 +47,11 @@ type TrashbinHandler struct {
 	gatewaySvc string
 }
 
+const (
+	DateFromHeader = "X-Trashbin-From"
+	DateToHeader   = "X-Trashbin-To"
+)
+
 func (h *TrashbinHandler) init(c *Config) error {
 	h.gatewaySvc = c.GatewaySvc
 	return nil
@@ -272,6 +277,14 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	// resolve date boundaries, ignore if invalid/missing
 	fromTS, _ := conversions.ParseTimestamp(r.URL.Query().Get("from"))
 	toTS, _ := conversions.ParseTimestamp(r.URL.Query().Get("to"))
+
+	if fromTS == nil {
+		fromTS, _ = conversions.ParseTimestamp(r.Header.Get(DateFromHeader))
+	}
+
+	if toTS == nil {
+		toTS, _ = conversions.ParseTimestamp(r.Header.Get(DateToHeader))
+	}
 
 	// ask gateway for recycle items
 	getRecycleRes, err := gc.ListRecycle(ctx, &provider.ListRecycleRequest{
