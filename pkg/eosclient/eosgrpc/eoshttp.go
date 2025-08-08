@@ -36,8 +36,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/logger"
 )
 
-const EOS_APP_HEADER = "eos.app"
-
 // HTTPOptions to configure the Client.
 type HTTPOptions struct {
 
@@ -276,7 +274,7 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 		return nil, err
 	}
 	// similar to eosbinary.go::Read()
-	req.Header.Set(EOS_APP_HEADER, "reva_eosclient::read")
+	req.Header.Set(eosclient.EosAppHeader, fmt.Sprintf("%s_read", eosclient.EosAppPrefix))
 
 	ntries := 0
 	nredirs := 0
@@ -391,9 +389,11 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 		return err
 	}
 
-	if app != "" {
-		req.Header.Set(EOS_APP_HEADER, app)
+	// prepare the app tag: if given (e.g. when file is locked), use it, else tag the traffic as write
+	if app == "" {
+		app = fmt.Sprintf("%s_write", eosclient.EosAppPrefix)
 	}
+	req.Header.Set(eosclient.EosAppHeader, app)
 	req.Close = true
 
 	ntries := 0
