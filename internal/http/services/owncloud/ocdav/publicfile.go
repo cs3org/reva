@@ -226,7 +226,6 @@ func (s *svc) getPublicFileInfos(onContainer, onlyRoot bool, i *provider.Resourc
 	return infos
 }
 
-// ns is the namespace that is prefixed to the path in the cs3 namespace.
 func (s *svc) handleFileGetOnToken(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tokenStatInfo := ctx.Value(tokenStatInfoKey{}).(*provider.ResourceInfo)
