@@ -9,19 +9,20 @@
 Reva is an interoperability platform consisting of several daemons written in Go.
 It acts as bridge between high-level clients (mobile, web, desktop) and the underlying storage (CephFS, EOS, local filesytems). 
 It exports well-known APIs, like WebDAV, to faciliate access from these devices.
-It also exports a high-performance gRPC API, codenamed [CS3APIS](https://buf.build/cs3org-buf/cs3apis), to easily integrate with other systems.
-Reva is meant to be a high performant and customizable HTTP and GRPC server.
+It also exports a high-performance gRPC API, codenamed [CS3 APIs](https://buf.build/cs3org-buf/cs3apis), to easily integrate with other systems.
+Reva is meant to be a high performant and customizable HTTP and gRPC server.
 
 ## Installation
 
-Head to [Documentation](https://reva.link) for documentation or [download](https://github.com/cs3org/reva/releases) to get the latest available release.
+Head to the [Releases](https://github.com/cs3org/reva/releases) to get the latest available release.
 
 ## Documentation & Support
 
-Read the [getting started guide](https://reva.link/docs/getting-started/) and the other feature guides.
+Read the [beginners guide](https://github.com/cs3org/reva/wiki/beginners-guide) and the other featured guides in the [wiki](https://github.com/cs3org/reva/wiki). The wiki includes tutorials and guides contributed by the community.
 
+In addition, at https://reva.link you can learn about the Reva project and its software components.
 
-## Contributing: Build and run it yourself
+### Build and run it yourself
 
 You need to have [Go](https://golang.org/doc/install) (version 1.21 or higher), [git](https://git-scm.com/) and [make](https://en.wikipedia.org/wiki/Make_(software)) installed. Some of these commands may require `sudo`, depending on your system setup.
 
@@ -33,14 +34,14 @@ $ make revad
 $ cmd/revad/revad --version
 ```
 
-You can also read the [build from sources guide](https://reva.link/docs/getting-started/build-reva/) and the [setup tutorial](https://github.com/cs3org/reva/blob/master/docs/content/en/docs/tutorials/setup-tutorial.md).
+You can also read the [build from sources guide](https://github.com/cs3org/reva/wiki/build-reva) and the [setup tutorial](https://github.com/cs3org/reva/wiki/setup-tutorial).
 
-## Contributing: Run tests
+### Run tests
 
 To run unit tests do:
 `make test-go`
 
-To run GRPC integration tests do:
+To run gRPC integration tests do:
 `make test-integration`
 You can get more verbose output with `ginkgo -v -r tests/integration/`.
 
@@ -57,7 +58,7 @@ See [https://hub.docker.com/r/cs3org/reva](https://hub.docker.com/r/cs3org/reva)
 
 ## Plugin development
 You can extend Reva without having to create PR's to this repo.
-To do so, you can create plugins, pease checkout the [Tutorials](https://reva.link/docs/tutorials/).
+To do so, you can create plugins, pease checkout the [Wiki](https://github.com/cs3org/reva/wiki).
 
 ## License
 
@@ -74,9 +75,11 @@ Reva is distributed under [Apache 2.0 license](https://github.com/cs3org/reva/bl
 
 ## Logo
 
-Reva logo's have been designed and contributed to the project by Eamonn Maguire.
+Reva's logo has been designed and contributed to the project by Eamonn Maguire.
 
 ## History
+
 This project was initially conceived and brought to life by Hugo Gonzalez Labrador (@labkode) in 2017.
 Since its roots, Reva has evolved and expanded thanks to the passion and commitment of 
 dozens of remarkable individual contributors. [Learn more](https://reva.link/about/).
+
