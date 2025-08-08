@@ -56,6 +56,7 @@ const (
 	ctxSpaceFullPath
 	ctxSpaceRelativePath
 	ctxOCM
+	ctxPublicLink
 )
 
 var (
