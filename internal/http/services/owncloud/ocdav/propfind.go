@@ -519,6 +519,10 @@ func spaceHref(ctx context.Context, baseURI string, md *provider.ResourceInfo) (
 		_, md.Path = router.ShiftPath(md.Path)
 	}
 
+	if linkToken, _ := ctx.Value(ctxPublicLink).(string); linkToken != "" {
+		return path.Join(baseURI, linkToken), nil
+	}
+
 	if md.Id == nil || md.Id.SpaceId == "" {
 		return "", errors.New("Space ID must be set to calculate Href")
 	}

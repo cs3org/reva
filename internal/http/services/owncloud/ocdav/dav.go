@@ -286,6 +286,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		case "public-files":
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "public-files")
 			ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
+			ctx = context.WithValue(ctx, ctxPublicLink, "")
 			c, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
 			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
@@ -293,6 +294,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 			var res *gatewayv1beta1.AuthenticateResponse
 			token, _ := router.ShiftPath(r.URL.Path)
+			ctx = context.WithValue(ctx, ctxPublicLink, token)
 			var hasValidBasicAuthHeader bool
 			var pass string
 
