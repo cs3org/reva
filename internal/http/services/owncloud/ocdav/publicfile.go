@@ -77,6 +77,8 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 				s.handleOptions(w, r)
 			case http.MethodHead:
 				s.handlePathHead(w, r, h.namespace)
+			case http.MethodGet:
+				s.handleFileGetOnToken(w, r)
 			default:
 				w.WriteHeader(http.StatusMethodNotAllowed)
 			}
@@ -222,4 +224,15 @@ func (s *svc) getPublicFileInfos(onContainer, onlyRoot bool, i *provider.Resourc
 	infos = append(infos, i)
 
 	return infos
+}
+
+// ns is the namespace that is prefixed to the path in the cs3 namespace.
+func (s *svc) handleFileGetOnToken(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tokenStatInfo := ctx.Value(tokenStatInfoKey{}).(*provider.ResourceInfo)
+	sublog := appctx.GetLogger(ctx)
+	sublog.Debug().Any("reference", tokenStatInfo.Id).Str("path", tokenStatInfo.Path).Str("linkId", tokenStatInfo.GetId().OpaqueId).Msg("handleFileGetOnToken")
+
+	s.handleGet(ctx, w, r, &provider.Reference{Path: tokenStatInfo.Path}, "simple", *sublog)
+
 }
