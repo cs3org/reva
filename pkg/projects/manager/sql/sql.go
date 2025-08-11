@@ -69,16 +69,23 @@ const cacheKey = "projects/projectsListCache"
 // Project represents a project in the DB.
 type Project struct {
 	gorm.Model
-	StorageID        string `gorm:"size:255"`
-	Path             string
-	Name             string `gorm:"size:255;uniqueIndex:i_name"`
-	Owner            string `gorm:"size:255"`
-	Readers          string
-	Writers          string
-	Admins           string
-	Subtitle         string
-	DescriptionInode string `gorm:"size:32"`
-	ThumbnailInode   string `gorm:"size:32"`
+	StorageID string `gorm:"size:255"`
+	Path      string
+	Name      string `gorm:"size:255;uniqueIndex:i_name"`
+	Owner     string `gorm:"size:255"`
+	// Readers e-group ID
+	Readers string
+	// Writers e-group ID
+	Writers string
+	// Admins e-group ID
+	Admins string
+	// Called description in libregraph API
+	// Called subtitle in front-end
+	Description string
+	// Inode of .space/readme.md
+	ReadmeInode string `gorm:"size:32"`
+	// Inode of .space/thumbnail.png
+	ThumbnailInode string `gorm:"size:32"`
 }
 
 func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
@@ -151,22 +158,7 @@ func (m *mgr) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 	projects := []*provider.StorageSpace{}
 	for _, p := range fetchedProjects {
 		if perms, ok := projectBelongsToUser(user, p); ok {
-			projects = append(projects, &provider.StorageSpace{
-				Id: &provider.StorageSpaceId{
-					OpaqueId: spaces.EncodeStorageSpaceID(p.StorageID, p.Path),
-				},
-				Owner: &userpb.User{
-					Id: &userpb.UserId{
-						OpaqueId: p.Owner,
-					},
-				},
-				Name:      p.Name,
-				SpaceType: spaces.SpaceTypeProject.AsString(),
-				RootInfo: &provider.ResourceInfo{
-					Path:          p.Path,
-					PermissionSet: perms,
-				},
-			})
+			projects = append(projects, projectToStorageSpace(p, perms))
 		}
 	}
 
@@ -178,9 +170,84 @@ func (m *mgr) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 	}, nil
 }
 
+func (m *mgr) GetStorageSpaces(ctx context.Context, id *provider.StorageSpaceId) (*provider.StorageSpace, error) {
+	var fetchedProjects []*Project
+
+	user, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return nil, errors.New("must provide a user for fetching storage spaces")
+	}
+
+	if res, err := m.cache.Get(cacheKey); err == nil && res != nil {
+		fetchedProjects = res.([]*Project)
+	} else {
+		query := m.db.Model(&Project{}).Where("id = ", id.OpaqueId)
+		res := query.Find(&fetchedProjects)
+		if res.Error != nil {
+			return nil, res.Error
+		}
+		m.cache.Set(cacheKey, fetchedProjects)
+	}
+
+	projects := []*provider.StorageSpace{}
+	for _, p := range fetchedProjects {
+		if perms, ok := projectBelongsToUser(user, p); ok {
+			projects = append(projects, projectToStorageSpace(p, perms))
+		}
+	}
+
+	if len(projects) != 1 {
+		return nil, fmt.Errorf("failed to find project matching id %s", id.OpaqueId)
+	}
+
+	return projects[0], nil
+
+}
+
 func (m *mgr) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
-	// TODO
-	return nil, nil
+	if req.StorageSpace == nil || req.StorageSpace.Id == nil {
+		return &provider.UpdateStorageSpaceResponse{
+			Status: &rpcv1beta1.Status{
+				Code: rpcv1beta1.Code_CODE_INVALID,
+			},
+		}, errors.New("Must provide an ID when updating a storage space")
+	}
+
+	var res *gorm.DB
+	if req.Field.GetMetadata() != nil {
+		switch req.Field.GetMetadata().Type {
+		case provider.SpaceMetadata_TYPE_README:
+			res = m.db.Model(&Project{}).
+				Where("id = ?", req.StorageSpace.Id.OpaqueId).
+				Update("readme_inode", req.Field.GetMetadata().Id)
+		case provider.SpaceMetadata_TYPE_THUMBNAIL:
+			res = m.db.Model(&Project{}).
+				Where("id = ?", req.StorageSpace.Id.OpaqueId).
+				Update("thumbnail_inode", req.Field.GetMetadata().Id)
+		}
+	} else if req.Field.GetDescription() != "" {
+		res = m.db.Model(&Project{}).
+			Where("id = ?", req.StorageSpace.Id.OpaqueId).
+			Update("description", req.Field.GetDescription())
+	} else {
+		return nil, errors.New("Unsupported update type")
+	}
+
+	if res.Error != nil {
+		return nil, res.Error
+	}
+
+	space, err := m.GetStorageSpaces(ctx, req.StorageSpace.Id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &provider.UpdateStorageSpaceResponse{
+		Status: &rpcv1beta1.Status{
+			Code: rpcv1beta1.Code_CODE_OK,
+		},
+		StorageSpace: space,
+	}, nil
 }
 
 func (m *mgr) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
@@ -205,4 +272,26 @@ func projectBelongsToUser(user *userpb.User, p *Project) (*provider.ResourcePerm
 		return conversions.NewViewerRole().CS3ResourcePermissions(), true
 	}
 	return nil, false
+}
+
+func projectToStorageSpace(p *Project, perms *provider.ResourcePermissions) *provider.StorageSpace {
+	return &provider.StorageSpace{
+		Id: &provider.StorageSpaceId{
+			OpaqueId: spaces.EncodeStorageSpaceID(p.StorageID, p.Path),
+		},
+		Owner: &userpb.User{
+			Id: &userpb.UserId{
+				OpaqueId: p.Owner,
+			},
+		},
+		Name:      p.Name,
+		SpaceType: spaces.SpaceTypeProject.AsString(),
+		RootInfo: &provider.ResourceInfo{
+			Path:          p.Path,
+			PermissionSet: perms,
+		},
+		Description: p.Description,
+		ThumbnailId: p.ThumbnailInode,
+		ReadmeId:    p.ReadmeInode,
+	}
 }

@@ -380,8 +380,6 @@ func (s *svc) patchSpace(w http.ResponseWriter, r *http.Request) {
 	user := appctx.ContextMustGetUser(ctx)
 	space := s.cs3StorageSpaceToDrive(user, res.StorageSpace)
 	_ = json.NewEncoder(w).Encode(space)
-	return
-
 }
 
 func isShareJail(spaceID string) bool {
