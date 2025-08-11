@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.36.0](https://github.com/opencloud-eu/reva/releases/tag/v2.36.0) - 2025-08-11
+
+### ❤️ Thanks to all contributors! ❤️
+
+@aduffeck, @dragonchaser
+
+### ✨ Features
+
+- add tenant check for shares [[#295](https://github.com/opencloud-eu/reva/pull/295)]
+
+### 🐛 Bug Fixes
+
+- Check storage for writability and xattrs support during startup [[#296](https://github.com/opencloud-eu/reva/pull/296)]
+- Do not assimilate irregular files [[#294](https://github.com/opencloud-eu/reva/pull/294)]
+- Only scan dirty directories when recursing [[#292](https://github.com/opencloud-eu/reva/pull/292)]
+
+### 📈 Enhancement
+
+- Filter users by tenant id [[#297](https://github.com/opencloud-eu/reva/pull/297)]
+
 ## [2.35.0](https://github.com/opencloud-eu/reva/releases/tag/v2.35.0) - 2025-07-21
 
 ### ❤️ Thanks to all contributors! ❤️
