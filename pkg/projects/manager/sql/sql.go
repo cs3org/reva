@@ -26,8 +26,10 @@ import (
 
 	"github.com/ReneKroon/ttlcache/v2"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/projects"
 	"github.com/cs3org/reva/v3/pkg/projects/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/spaces"
@@ -67,13 +69,16 @@ const cacheKey = "projects/projectsListCache"
 // Project represents a project in the DB.
 type Project struct {
 	gorm.Model
-	StorageID string `gorm:"size:255"`
-	Path      string
-	Name      string `gorm:"size:255;uniqueIndex:i_name"`
-	Owner     string `gorm:"size:255"`
-	Readers   string
-	Writers   string
-	Admins    string
+	StorageID        string `gorm:"size:255"`
+	Path             string
+	Name             string `gorm:"size:255;uniqueIndex:i_name"`
+	Owner            string `gorm:"size:255"`
+	Readers          string
+	Writers          string
+	Admins           string
+	Subtitle         string
+	DescriptionInode string `gorm:"size:32"`
+	ThumbnailInode   string `gorm:"size:32"`
 }
 
 func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
@@ -119,8 +124,18 @@ func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
 	return mgr, nil
 }
 
-func (m *mgr) ListProjects(ctx context.Context, user *userpb.User) ([]*provider.StorageSpace, error) {
+func (m *mgr) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 	var fetchedProjects []*Project
+
+	user, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return &provider.ListStorageSpacesResponse{
+			Status: &rpcv1beta1.Status{
+				Code:    rpcv1beta1.Code_CODE_UNAUTHENTICATED,
+				Message: "must provide a user for listing storage spaces",
+			},
+		}, nil
+	}
 
 	if res, err := m.cache.Get(cacheKey); err == nil && res != nil {
 		fetchedProjects = res.([]*Project)
@@ -135,7 +150,7 @@ func (m *mgr) ListProjects(ctx context.Context, user *userpb.User) ([]*provider.
 
 	projects := []*provider.StorageSpace{}
 	for _, p := range fetchedProjects {
-		if perms, ok := projectBelongToUser(user, p); ok {
+		if perms, ok := projectBelongsToUser(user, p); ok {
 			projects = append(projects, &provider.StorageSpace{
 				Id: &provider.StorageSpaceId{
 					OpaqueId: spaces.EncodeStorageSpaceID(p.StorageID, p.Path),
@@ -155,10 +170,28 @@ func (m *mgr) ListProjects(ctx context.Context, user *userpb.User) ([]*provider.
 		}
 	}
 
-	return projects, nil
+	return &provider.ListStorageSpacesResponse{
+		StorageSpaces: projects,
+		Status: &rpcv1beta1.Status{
+			Code: rpcv1beta1.Code_CODE_OK,
+		},
+	}, nil
 }
 
-func projectBelongToUser(user *userpb.User, p *Project) (*provider.ResourcePermissions, bool) {
+func (m *mgr) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	// TODO
+	return nil, nil
+}
+
+func (m *mgr) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	return nil, errors.New("Unsupported")
+}
+
+func (m *mgr) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
+	return nil, errors.New("Unsupported")
+}
+
+func projectBelongsToUser(user *userpb.User, p *Project) (*provider.ResourcePermissions, bool) {
 	if user.Id.OpaqueId == p.Owner {
 		return conversions.NewManagerRole().CS3ResourcePermissions(), true
 	}
