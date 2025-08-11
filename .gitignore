@@ -37,10 +37,7 @@ docs/public/
 docs/resources/
 docs/node_modules/
 docs/tech-doc-hugo
-
-dist/
-bin/
-vendor/
+docs/.hugo_build.lock
 
 # API acceptance tests
 tests/acceptance/output
@@ -48,15 +45,15 @@ tmp/
 tests/ocis/tests/acceptance/tus-upload-test-*
 tests/ocis/tests/acceptance/work_tmp
 
-# drone
-.drone.yml
-
 # air config file
 .air.toml
 
+# other artifacts
+dist/
+bin/
+vendor/
 toolchain/
-
+node_modules/
 logs_test/
-
 tmp/
 public/

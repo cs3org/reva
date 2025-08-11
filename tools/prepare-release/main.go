@@ -112,8 +112,8 @@ func main() {
 	run(cmd)
 
 	// Generate changelog also in the documentation
-	if err := os.MkdirAll(fmt.Sprintf("docs/content/en/docs/changelog/%s", *version), 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "error creating docs/content/en/docs/changelog/%s: %s", *version, err)
+	if err := os.MkdirAll(fmt.Sprintf("docs/content/en/changelog/%s", *version), 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "error creating changelog/%s: %s", *version, err)
 		os.RemoveAll(tmp)
 		os.Exit(1)
 	}
@@ -137,7 +137,7 @@ description: >
 `, *version, *version, *version, date)
 
 	releaseDocs += string(data)
-	if err := os.WriteFile(fmt.Sprintf("docs/content/en/docs/changelog/%s/_index.md", *version), []byte(releaseDocs), 0644); err != nil {
+	if err := os.WriteFile(fmt.Sprintf("docs/content/en/changelog/%s/_index.md", *version), []byte(releaseDocs), 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "error writing docs release file _index.md: %s", err)
 		os.Exit(1)
 	}
@@ -147,7 +147,7 @@ description: >
 		"CHANGELOG.md",
 		"VERSION",
 		"RELEASE_DATE",
-		"docs/content/en/docs/changelog",
+		"docs/content/en/changelog",
 	)
 
 	if *commit {
