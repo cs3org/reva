@@ -40,6 +40,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils/list"
+	"github.com/go-chi/chi/v5"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"github.com/pkg/errors"
 )
@@ -175,6 +176,7 @@ func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libre
 				Size:   libregraph.PtrInt64(int64(rsi.ResourceInfo.Size)),
 			},
 		},
+		Special: []libregraph.DriveItem{},
 	}
 }
 
@@ -204,6 +206,7 @@ func (s *svc) cs3StorageSpaceToDrive(user *userpb.User, space *providerpb.Storag
 		Id:         libregraph.PtrString(space.Id.OpaqueId),
 		Name:       space.Name,
 		DriveType:  libregraph.PtrString(space.SpaceType),
+		Special:    []libregraph.DriveItem{},
 	}
 
 	drive.Root = &libregraph.DriveItem{}
@@ -331,6 +334,54 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handleError(ctx, errors.New("space not found"), http.StatusNotFound, w)
+}
+
+func (s *svc) patchSpace(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	update := &libregraph.DriveUpdate{}
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(update); err != nil {
+		log.Error().Err(err).Interface("Body", r.Body).Msg("failed unmarshalling request body")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	gw, err := s.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting grpc client")
+		handleError(ctx, err, http.StatusInternalServerError, w)
+		return
+	}
+
+	spaceId := chi.URLParam(r, "space-id")
+
+	res, err := gw.UpdateStorageSpace(ctx, &providerpb.UpdateStorageSpaceRequest{
+		StorageSpace: &providerpb.StorageSpace{
+			Id: &providerpb.StorageSpaceId{
+				OpaqueId: spaceId,
+			},
+		},
+	})
+
+	if err != nil {
+		handleError(ctx, errors.New("failed to update storage space"), http.StatusInternalServerError, w)
+		return
+	}
+
+	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+		log.Error().Interface("response", res).Msg("error updating public share")
+		handleError(ctx, errors.New("failed to update storage space"), http.StatusInternalServerError, w)
+		return
+	}
+
+	user := appctx.ContextMustGetUser(ctx)
+	space := s.cs3StorageSpaceToDrive(user, res.StorageSpace)
+	_ = json.NewEncoder(w).Encode(space)
+	return
+
 }
 
 func isShareJail(spaceID string) bool {

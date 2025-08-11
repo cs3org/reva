@@ -20,14 +20,17 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"slices"
 
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/projects"
 	"github.com/cs3org/reva/v3/pkg/projects/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	conversions "github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 )
@@ -66,8 +69,17 @@ func NewWithConfig(ctx context.Context, c *Config) (projects.Catalogue, error) {
 	return &service{c: c}, nil
 }
 
-func (s *service) ListProjects(ctx context.Context, user *userpb.User) ([]*provider.StorageSpace, error) {
+func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 	projects := []*provider.StorageSpace{}
+	user, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return &provider.ListStorageSpacesResponse{
+			Status: &rpcv1beta1.Status{
+				Code:    rpcv1beta1.Code_CODE_UNAUTHENTICATED,
+				Message: "must provide a user for listing storage spaces",
+			},
+		}, nil
+	}
 	for _, space := range s.c.Spaces {
 		if perms, ok := projectBelongToUser(user, &space); ok {
 			projects = append(projects, &provider.StorageSpace{
@@ -88,7 +100,25 @@ func (s *service) ListProjects(ctx context.Context, user *userpb.User) ([]*provi
 			})
 		}
 	}
-	return projects, nil
+	return &provider.ListStorageSpacesResponse{
+		StorageSpaces: projects,
+		Status: &rpcv1beta1.Status{
+			Code: rpcv1beta1.Code_CODE_OK,
+		},
+	}, nil
+}
+
+// TODO: at least this should be implemented
+func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	return nil, errors.New("Unsupported")
+}
+
+func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	return nil, errors.New("Unsupported")
+}
+
+func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
+	return nil, errors.New("Unsupported")
 }
 
 func projectBelongToUser(user *userpb.User, project *SpaceDescription) (*provider.ResourcePermissions, bool) {

@@ -1405,8 +1405,8 @@ github.com/openzipkin-contrib/zipkin-go-opentracing v0.4.5/go.mod h1:/wsWhb9smxS
 github.com/openzipkin/zipkin-go v0.1.6/go.mod h1:QgAqvLzwWbR/WpD4A3cGpPtJrZXNIiJc5AZX7/PBEpw=
 github.com/openzipkin/zipkin-go v0.2.1/go.mod h1:NaW6tEwdmWMaCDZzg8sh+IBNOxHMPnhQw8ySjnjRyN4=
 github.com/openzipkin/zipkin-go v0.2.2/go.mod h1:NaW6tEwdmWMaCDZzg8sh+IBNOxHMPnhQw8ySjnjRyN4=
-github.com/owncloud/libre-graph-api-go v1.0.5-0.20240425090020-dba6d1507c38 h1:Ld9bPh0c4y1H22mhiWZBw4AoupWjg8L0WLKX0hfbJho=
-github.com/owncloud/libre-graph-api-go v1.0.5-0.20240425090020-dba6d1507c38/go.mod h1:yXI+rmE8yYx+ZsGVrnCpprw/gZMcxjwntnX2y2+VKxY=
+github.com/owncloud/libre-graph-api-go v1.0.5-0.20250217093259-fa3804be6c27 h1:ID8s5lGBntmrlI6TbDAjTzRyHucn3bVM2wlW+HBplv4=
+github.com/owncloud/libre-graph-api-go v1.0.5-0.20250217093259-fa3804be6c27/go.mod h1:+gT+x62AS9u2Farh9wE2uYmgdvTg0MQgsSI62D+xoRg=
 github.com/pact-foundation/pact-go v1.0.4/go.mod h1:uExwJY4kCzNPcHRj+hCR/HBbOOIwwtUjcrb0b5/5kLM=
 github.com/pascaldekloe/goe v0.0.0-20180627143212-57f6aae5913c/go.mod h1:lzWF7FIEvWOWxwDKqyGYQf6ZUaNfKdP144TG7ZOy1lc=
 github.com/pborman/uuid v1.2.0/go.mod h1:X/NO0urCmaxf9VXbdlT7C2Yzkj2IKimNn4k+gtPdI/k=

@@ -103,6 +103,7 @@ func (s *svc) initRouter() {
 		})
 		r.Route("/drives", func(r chi.Router) {
 			r.Get("/{space-id}", s.getSpace)
+			r.Patch("/{space-id}", s.patchSpace)
 		})
 		r.Route("/users", func(r chi.Router) {
 			r.Get("/", s.listUsers)
@@ -111,6 +112,7 @@ func (s *svc) initRouter() {
 			r.Get("/", s.listGroups)
 		})
 	})
+
 	s.router.Route("/v1beta1", func(r chi.Router) {
 		r.Route("/me", func(r chi.Router) {
 			r.Route("/drives", func(r chi.Router) {
