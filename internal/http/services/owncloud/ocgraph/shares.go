@@ -28,8 +28,8 @@ import (
 	"path"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
-	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/go-chi/chi/v5"
@@ -165,8 +165,13 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 	response := make([]*libregraph.Permission, 0, len(invite.Recipients))
 
 	// Finally, we create the actual share for every requested recipient
-	for _, recepient := range invite.Recipients {
-		grantee, err := toGrantee(*recepient.LibreGraphRecipientType, *recepient.ObjectId)
+	for _, recipient := range invite.Recipients {
+		// We check if the sharee exists
+		if recipient.ObjectId == nil {
+			handleError(ctx, errors.New("missing recipient data"), http.StatusBadRequest, w)
+		}
+
+		grantee, err := s.toGrantee(ctx, *recipient.LibreGraphRecipientType, *recipient.ObjectId)
 		if err != nil {
 			log.Error().Err(err).Msg("invalid recipient type passed")
 			handleError(ctx, err, http.StatusBadRequest, w)
@@ -428,13 +433,13 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.Rece
 	return d, nil
 }
 
-func (s *svc) getUserByID(ctx context.Context, u *userv1beta1.UserId) (*userv1beta1.User, error) {
+func (s *svc) getUserByID(ctx context.Context, u *userpb.UserId) (*userpb.User, error) {
 	client, err := s.getClient()
 	if err != nil {
 		return nil, err
 	}
 
-	res, err := client.GetUser(ctx, &userv1beta1.GetUserRequest{
+	res, err := client.GetUser(ctx, &userpb.GetUserRequest{
 		UserId: u,
 	})
 	if err != nil {
@@ -444,13 +449,13 @@ func (s *svc) getUserByID(ctx context.Context, u *userv1beta1.UserId) (*userv1be
 	return res.User, nil
 }
 
-func (s *svc) getGroupByID(ctx context.Context, g *groupv1beta1.GroupId) (*groupv1beta1.Group, error) {
+func (s *svc) getGroupByID(ctx context.Context, g *grouppb.GroupId) (*grouppb.Group, error) {
 	client, err := s.getClient()
 	if err != nil {
 		return nil, err
 	}
 
-	res, err := client.GetGroup(ctx, &groupv1beta1.GetGroupRequest{
+	res, err := client.GetGroup(ctx, &grouppb.GetGroupRequest{
 		GroupId: g,
 	})
 	if err != nil {
@@ -664,17 +669,38 @@ func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*ShareOrLink)
 	return permissions, nil
 }
 
-func toGrantee(recipientType string, id string) (*provider.Grantee, error) {
+func (s *svc) toGrantee(ctx context.Context, recipientType string, id string) (*provider.Grantee, error) {
+	gw, err := s.getClient()
+	if err != nil {
+		return nil, err
+	}
+
 	switch recipientType {
 	case "user":
+		userRes, err := gw.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+			Claim:                  "username",
+			Value:                  id,
+			SkipFetchingUserGroups: true,
+		})
+		if err != nil || userRes.Status == nil || userRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+			return nil, errors.New("failed to fetch sharee data")
+		}
 		return &provider.Grantee{
 			Type: provider.GranteeType_GRANTEE_TYPE_USER,
-			Id:   &provider.Grantee_UserId{UserId: &userv1beta1.UserId{OpaqueId: id}},
+			Id:   &provider.Grantee_UserId{UserId: userRes.User.GetId()},
 		}, nil
 	case "group":
+		groupRes, err := gw.GetGroupByClaim(ctx, &grouppb.GetGroupByClaimRequest{
+			Claim:               "group_name",
+			Value:               id,
+			SkipFetchingMembers: true,
+		})
+		if err != nil || groupRes.Status == nil || groupRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+			return nil, errors.New("failed to fetch sharee data")
+		}
 		return &provider.Grantee{
 			Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
-			Id:   &provider.Grantee_GroupId{GroupId: &groupv1beta1.GroupId{OpaqueId: id}},
+			Id:   &provider.Grantee_GroupId{GroupId: groupRes.Group.GetId()},
 		}, nil
 	default:
 		return nil, errors.New(recipientType + " is not a valid granteetype")

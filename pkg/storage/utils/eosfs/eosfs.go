@@ -906,14 +906,14 @@ func (fs *Eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 }
 
 func (fs *Eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
+	cboxAuth := utils.GetEmptyAuth()
+
+	eosACL, err := fs.getEosACL(ctx, g)
 	if err != nil {
 		return err
 	}
 
-	cboxAuth := utils.GetEmptyAuth()
-
-	eosACL, err := fs.getEosACL(ctx, g)
+	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
 	if err != nil {
 		return err
 	}
@@ -2090,7 +2090,7 @@ func (fs *Eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eo
 		return eosclient.Authorization{}, errtypes.BadRequest("eosfs: path cannot be empty")
 	}
 
-	daemonAuth, err := fs.getDaemonAuth(ctx)
+	daemonAuth, _ := fs.getDaemonAuth(ctx)
 	info, err := fs.c.GetFileInfoByPath(ctx, daemonAuth, fn)
 	if err != nil {
 		return eosclient.Authorization{}, err
