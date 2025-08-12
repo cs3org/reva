@@ -108,7 +108,6 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	}, nil
 }
 
-// TODO: at least this should be implemented
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, errors.New("Unsupported")
 }
