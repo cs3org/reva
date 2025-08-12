@@ -170,7 +170,7 @@ func (m *mgr) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 	}, nil
 }
 
-func (m *mgr) GetStorageSpaces(ctx context.Context, id *provider.StorageSpaceId) (*provider.StorageSpace, error) {
+func (m *mgr) GetStorageSpaces(ctx context.Context, name string) (*provider.StorageSpace, error) {
 	var fetchedProjects []*Project
 
 	user, ok := appctx.ContextGetUser(ctx)
@@ -181,7 +181,7 @@ func (m *mgr) GetStorageSpaces(ctx context.Context, id *provider.StorageSpaceId)
 	if res, err := m.cache.Get(cacheKey); err == nil && res != nil {
 		fetchedProjects = res.([]*Project)
 	} else {
-		query := m.db.Model(&Project{}).Where("id = ", id.OpaqueId)
+		query := m.db.Model(&Project{}).Where("name = ?", name)
 		res := query.Find(&fetchedProjects)
 		if res.Error != nil {
 			return nil, res.Error
@@ -197,7 +197,7 @@ func (m *mgr) GetStorageSpaces(ctx context.Context, id *provider.StorageSpaceId)
 	}
 
 	if len(projects) != 1 {
-		return nil, fmt.Errorf("failed to find project matching id %s", id.OpaqueId)
+		return nil, fmt.Errorf("failed to find project matching name %s", name)
 	}
 
 	return projects[0], nil
@@ -205,6 +205,8 @@ func (m *mgr) GetStorageSpaces(ctx context.Context, id *provider.StorageSpaceId)
 }
 
 func (m *mgr) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	log := appctx.GetLogger(ctx)
+	log.Debug().Any("space", req.StorageSpace).Any("update", req.Field).Any("type", req.Field.GetMetadata().Type).Msg("Updating storage space")
 	if req.StorageSpace == nil || req.StorageSpace.Id == nil {
 		return &provider.UpdateStorageSpaceResponse{
 			Status: &rpcv1beta1.Status{
@@ -213,21 +215,29 @@ func (m *mgr) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 		}, errors.New("Must provide an ID when updating a storage space")
 	}
 
+	if req.Field == nil {
+		return &provider.UpdateStorageSpaceResponse{
+			Status: &rpcv1beta1.Status{
+				Code: rpcv1beta1.Code_CODE_INVALID,
+			},
+		}, errors.New("No field given to update")
+	}
+
 	var res *gorm.DB
 	if req.Field.GetMetadata() != nil {
 		switch req.Field.GetMetadata().Type {
 		case provider.SpaceMetadata_TYPE_README:
 			res = m.db.Model(&Project{}).
-				Where("id = ?", req.StorageSpace.Id.OpaqueId).
+				Where("name = ?", req.StorageSpace.Name).
 				Update("readme_inode", req.Field.GetMetadata().Id)
 		case provider.SpaceMetadata_TYPE_THUMBNAIL:
 			res = m.db.Model(&Project{}).
-				Where("id = ?", req.StorageSpace.Id.OpaqueId).
+				Where("name = ?", req.StorageSpace.Name).
 				Update("thumbnail_inode", req.Field.GetMetadata().Id)
 		}
 	} else if req.Field.GetDescription() != "" {
 		res = m.db.Model(&Project{}).
-			Where("id = ?", req.StorageSpace.Id.OpaqueId).
+			Where("name = ?", req.StorageSpace.Name).
 			Update("description", req.Field.GetDescription())
 	} else {
 		return nil, errors.New("Unsupported update type")
@@ -237,7 +247,7 @@ func (m *mgr) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 		return nil, res.Error
 	}
 
-	space, err := m.GetStorageSpaces(ctx, req.StorageSpace.Id)
+	space, err := m.GetStorageSpaces(ctx, req.StorageSpace.Name)
 	if err != nil {
 		return nil, err
 	}
