@@ -295,11 +295,31 @@ func ItemMoved(r *provider.MoveResponse, req *provider.MoveRequest, spaceOwner *
 	}
 }
 
+// TrashbinPurged converts the response to an event
+func TrashbinPurged(r *provider.PurgeRecycleResponse, req *provider.PurgeRecycleRequest, executant *user.User) events.TrashbinPurged {
+	return events.TrashbinPurged{
+		Executant: executant.GetId(),
+		Ref: &provider.Reference{
+			ResourceId: &provider.ResourceId{
+				StorageId: req.Ref.GetResourceId().GetStorageId(),
+				SpaceId:   req.Ref.GetResourceId().GetSpaceId(),
+				OpaqueId:  req.Ref.GetResourceId().GetSpaceId(),
+			},
+		},
+		Timestamp:         utils.TSNow(),
+		ImpersonatingUser: extractImpersonator(executant),
+	}
+}
+
 // ItemPurged converts the response to an event
 func ItemPurged(r *provider.PurgeRecycleResponse, req *provider.PurgeRecycleRequest, executant *user.User) events.ItemPurged {
 	root, relativePath := router.ShiftPath(req.Key)
 	if relativePath == "/" && !strings.HasSuffix(req.Key, "/") {
 		relativePath = ""
+	}
+	if root == "" {
+		// if there is no key this is about purging the whole trashbin
+		root = req.Ref.GetResourceId().GetSpaceId()
 	}
 
 	ref := &provider.Reference{
