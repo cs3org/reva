@@ -21,17 +21,17 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 	if !isValidAttribute(attr) {
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
 	}
+	info, err := c.GetFileInfoByPath(ctx, auth, path)
+	if err != nil {
+		return err
+	}
 
 	log.Debug().Bool("recursive", recursive).Str("path", path).Any("attr", attr).Str("trace", trace.Get(ctx)).Msg("eos-grpc SetAttr()")
 	// Favorites need to be stored per user so handle these separately
 	if attr.Type == eosclient.UserAttr && attr.Key == eosclient.FavoritesKey {
-		info, err := c.GetFileInfoByPath(ctx, auth, path)
-		if err != nil {
-			return err
-		}
 		return c.handleFavAttr(ctx, auth, attr, recursive, path, info, true)
 	}
-	return c.setEOSAttr(ctx, auth, attr, errorIfExists, recursive, path, app)
+	return c.setEOSAttr(ctx, auth, attr, errorIfExists, recursive && info.IsDir, path, app)
 }
 
 func (c *Client) setEOSAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path, app string) error {
