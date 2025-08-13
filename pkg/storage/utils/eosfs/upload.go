@@ -92,9 +92,12 @@ func (fs *Eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 	}
 
 	contentLength := metadata[ocdav.HeaderContentLength]
+	if contentLength == "" {
+		contentLength = metadata[ocdav.HeaderUploadLength]
+	}
 	len, err := strconv.ParseInt(contentLength, 10, 64)
 	if err != nil {
-		return errors.New("No content length specified in EOS upload, got: " + contentLength)
+		return errtypes.BadRequest("no content length specified in EOS upload")
 	}
 
 	return fs.c.Write(ctx, auth, fn, r, len, app, disableVersioning)

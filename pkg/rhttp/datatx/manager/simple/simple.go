@@ -89,16 +89,16 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				metadata["disableVersioning"] = disableVersioning
 			}
 
+			// Check that Content-Length or Upload-Length is set
 			contentLength := r.Header.Get(ocdav.HeaderUploadLength)
+			if contentLength == "" {
+				contentLength = r.Header.Get(ocdav.HeaderContentLength)
+			}
 
 			if _, err := strconv.ParseInt(contentLength, 10, 64); err == nil {
 				metadata[ocdav.HeaderContentLength] = contentLength
 			} else {
-				contentLength := r.Header.Get(ocdav.HeaderContentLength)
-				if _, err := strconv.ParseInt(contentLength, 10, 64); err == nil {
-					metadata[ocdav.HeaderContentLength] = contentLength
-				}
-
+				sublog.Warn().Msg("Internal data server got PUT request without valid Content-Length or Upload-Length header")
 			}
 
 			err := fs.Upload(ctx, ref, r.Body, metadata)

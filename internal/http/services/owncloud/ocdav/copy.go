@@ -104,11 +104,14 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 		return
 	}
 
-	if err := s.executePathCopy(ctx, client, w, r, cp); err != nil {
+	err = s.executePathCopy(ctx, client, w, r, cp)
+	if err != nil {
 		sublog.Error().Err(err).Str("depth", cp.depth).Msg("error executing path copy")
 		w.WriteHeader(http.StatusInternalServerError)
+		return
+	} else {
+		w.WriteHeader(cp.successCode)
 	}
-	w.WriteHeader(cp.successCode)
 }
 
 func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClient, w http.ResponseWriter, r *http.Request, cp *copy) error {
@@ -246,7 +249,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 		if httpDownloadRes.StatusCode != http.StatusOK {
 			return fmt.Errorf("status code %d", httpDownloadRes.StatusCode)
 		}
-
+		contentLength := httpDownloadRes.Header.Get(HeaderContentLength)
 		// 4. do upload
 
 		httpUploadReq, err := http.NewRequestWithContext(ctx, http.MethodPut, uploadEP, httpDownloadRes.Body)
@@ -254,13 +257,16 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 			return err
 		}
 		httpUploadReq.Header.Set(datagateway.TokenTransportHeader, uploadToken)
+		httpUploadReq.Header.Set(HeaderUploadLength, contentLength)
 
 		httpUploadRes, err := s.client.Do(httpUploadReq)
 		if err != nil {
+			log.Error().Err(err).Msg("executePathCopy: failed to do upload to data server")
 			return err
 		}
 		defer httpUploadRes.Body.Close()
 		if httpUploadRes.StatusCode != http.StatusOK {
+			log.Error().Any("status", httpUploadRes.StatusCode).Msg("executePathCopy: failed to do upload to data server")
 			return err
 		}
 	}
