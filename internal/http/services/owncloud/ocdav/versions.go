@@ -161,7 +161,9 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 
 	versions := lvRes.GetVersions()
 	infos := make([]*provider.ResourceInfo, 0, len(versions)+1)
+
 	// add version dir . entry, derived from file info
+	infos = append(infos, info)
 
 	var spacePath string
 	var ok bool
