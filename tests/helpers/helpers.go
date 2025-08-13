@@ -137,6 +137,7 @@ func UploadGateway(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ref 
 	}
 
 	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+	httpReq.Header.Set(ocdav.HeaderUploadLength, strconv.Itoa(len(content)))
 
 	httpRes, err := httpclient.New().Do(httpReq)
 	if err != nil {
@@ -246,6 +247,7 @@ func CreateFile(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, path st
 	}
 
 	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+	httpReq.Header.Set(ocdav.HeaderUploadLength, strconv.Itoa(len(content)))
 
 	httpRes, err := httpclient.New().Do(httpReq)
 	if err != nil {
