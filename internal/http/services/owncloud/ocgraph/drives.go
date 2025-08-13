@@ -40,8 +40,10 @@ import (
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils/list"
+	gomime "github.com/glpatcern/go-mime"
 	"github.com/go-chi/chi/v5"
 	libregraph "github.com/owncloud/libre-graph-api-go"
+
 	"github.com/pkg/errors"
 )
 
@@ -255,6 +257,10 @@ func (s *svc) cs3StorageSpaceToDrive(ctx context.Context, user *userpb.User, spa
 		} else {
 			log.Error().Err(err).Any("spaceID", space.Id).Msg("Failed to get gateway client or failed to decode space ID")
 		}
+	}
+
+	if space.Description != "" {
+		drive.Description = libregraph.PtrString(space.Description)
 	}
 
 	if space.SpaceType != "personal" {
@@ -521,12 +527,22 @@ func cs3PermissionsToLibreGraph(user *userpb.User, perms *provider.ResourcePermi
 }
 
 func (s *svc) ResourceInfoToDriveItem(r *provider.ResourceInfo, special string) libregraph.DriveItem {
+
 	item := libregraph.DriveItem{
 		Id:        libregraph.PtrString(spaces.EncodeResourceID(r.Id)),
 		ETag:      libregraph.PtrString(r.Etag),
 		Name:      libregraph.PtrString(r.Name),
 		Size:      libregraph.PtrInt64(int64(r.Size)),
 		WebDavUrl: libregraph.PtrString(fullURL(s.c.WebDavBase, r.Path)),
+	}
+
+	if len(strings.Split(r.Path, ".")) > 1 {
+		mimetype := gomime.TypeByExtension(filepath.Ext(r.Path))
+		if mimetype != "" {
+			item.File = &libregraph.OpenGraphFile{
+				MimeType: libregraph.PtrString(mimetype),
+			}
+		}
 	}
 
 	if special != "" {
