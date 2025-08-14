@@ -30,7 +30,6 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	projects_catalogue "github.com/cs3org/reva/v3/pkg/projects"
 	"github.com/cs3org/reva/v3/pkg/spaces"
-	"github.com/gdexlab/go-render/render"
 )
 
 // You can use testing.T, if you want to test the code without benchmarking
@@ -274,7 +273,7 @@ func TestListProjects(t *testing.T) {
 			}
 
 			if !reflect.DeepEqual(got, tt.expected) {
-				t.Fatalf("projects' list do not match. got=%+v expected=%+v", render.AsCode(got), render.AsCode(tt.expected))
+				t.Fatalf("projects' list do not match. got=%#v expected=%#v", got, tt.expected)
 			}
 
 			err = teardown(t)

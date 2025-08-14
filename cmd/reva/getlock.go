@@ -25,7 +25,6 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/gdexlab/go-render/render"
 )
 
 func getlockCommand() *command {
@@ -62,7 +61,7 @@ func getlockCommand() *command {
 			return formatError(res.Status)
 		}
 
-		fmt.Println(render.Render(res.Lock))
+		fmt.Printf("%#v\n", res.Lock)
 
 		return nil
 	}

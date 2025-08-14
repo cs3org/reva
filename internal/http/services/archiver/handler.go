@@ -44,7 +44,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/storage/utils/walker"
 	"github.com/cs3org/reva/v3/pkg/trace"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
-	"github.com/gdexlab/go-render/render"
 	ua "github.com/mileusna/useragent"
 )
 
@@ -262,7 +261,7 @@ func (s *svc) Handler() http.Handler {
 			archName = s.config.Name + "." + archType
 		}
 
-		log.Debug().Msg("Requested the following files/folders to archive: " + render.Render(files))
+		log.Debug().Any("files", files).Msg("Requested files/folders to archive")
 
 		rw.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", archName))
 		rw.Header().Set("Content-Transfer-Encoding", "binary")

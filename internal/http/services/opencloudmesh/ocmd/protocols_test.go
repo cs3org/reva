@@ -22,8 +22,6 @@ import (
 	"encoding/json"
 	"reflect"
 	"testing"
-
-	"github.com/gdexlab/go-render/render"
 )
 
 func TestUnmarshalProtocol(t *testing.T) {
@@ -116,7 +114,7 @@ func TestUnmarshalProtocol(t *testing.T) {
 
 		if tt.err == "" {
 			if !protocolsEqual(got, tt.expected) {
-				t.Fatalf("result does not match with expected. got=%+v expected=%+v", render.AsCode(got), render.AsCode(tt.expected))
+				t.Fatalf("result does not match with expected. got=%#v expected=%#v", got, tt.expected)
 			}
 		}
 	}
@@ -259,7 +257,7 @@ func TestMarshalProtocol(t *testing.T) {
 			}
 
 			if !reflect.DeepEqual(tt.expected, got) {
-				t.Fatalf("result does not match with expected. got=%+v expected=%+v", render.AsCode(got), render.AsCode(tt.expected))
+				t.Fatalf("result does not match with expected. got=%#v expected=%#v", got, tt.expected)
 			}
 		}
 	}
