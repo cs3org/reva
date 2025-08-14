@@ -10,7 +10,7 @@ variables:
 when:
   - event: [ push , manual ]
     branch: ${CI_REPO_DEFAULT_BRANCH}
-  - event: [ pull_request ]
+  - event: [ pull_request, cron ]
 
 workspace:
   base: /go # use the go home dir as workspace to share go packages, see https://woodpecker-ci.org/docs/usage/workflow-syntax#workspace
