@@ -42,7 +42,6 @@ import (
 	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/gdexlab/go-render/render"
 )
 
 var (
@@ -634,7 +633,7 @@ func TestGetShare(t *testing.T) {
 
 			if tt.err == nil {
 				if !proto.Equal(got, tt.expected) {
-					t.Fatalf("shares do not match. got=%+v expected=%+v", render.AsCode(got), render.AsCode(tt.expected))
+					t.Fatalf("shares do not match. got=%#v expected=%#v", got, tt.expected)
 				}
 			}
 		})
@@ -1072,7 +1071,7 @@ func TestListShares(t *testing.T) {
 			}
 
 			if !reflect.DeepEqual(got, tt.expected) {
-				t.Fatalf("list of shares do not match. got=%+v expected=%+v", render.AsCode(got), render.AsCode(tt.expected))
+				t.Fatalf("list of shares do not match. got=%#v expected=%#v", got, tt.expected)
 			}
 		})
 	}
@@ -1107,7 +1106,7 @@ func checkRows(ctx *sql.Context, engine *sqle.Engine, rows []sql.Row, table stri
 	}
 
 	if !reflect.DeepEqual(gotRows, rows) {
-		t.Fatalf("rows are not equal. got=%+v expected=%+v", render.AsCode(gotRows), render.AsCode(rows))
+		t.Fatalf("rows are not equal. got=%#v expected=%#v", gotRows, rows)
 	}
 }
 
@@ -1706,7 +1705,7 @@ func TestGetReceivedShare(t *testing.T) {
 
 			if tt.err == nil {
 				if !reflect.DeepEqual(got, tt.expected) {
-					t.Fatalf("shares do not match. got=%+v expected=%+v", render.AsCode(got), render.AsCode(tt.expected))
+					t.Fatalf("shares do not match. got=%#v expected=%#v", got, tt.expected)
 				}
 			}
 		})
@@ -2059,7 +2058,7 @@ func TestListReceviedShares(t *testing.T) {
 			}
 
 			if !reflect.DeepEqual(got, tt.expected) {
-				t.Fatalf("shares do not match. got=%+v expected=%+v", render.AsCode(got), render.AsCode(tt.expected))
+				t.Fatalf("shares do not match. got=%#v expected=%#v", got, tt.expected)
 			}
 		})
 	}

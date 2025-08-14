@@ -33,7 +33,6 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/eosclient"
-	"github.com/gdexlab/go-render/render"
 	"github.com/thanhpk/randstr"
 )
 
@@ -289,7 +288,7 @@ func TestAddGrant(t *testing.T) {
 			}
 
 			if !reflect.DeepEqual(grants, test.expected) {
-				t.Fatalf("grants do not correspond in folder %s: got=%v expected=%v", dir, render.AsCode(grants), render.AsCode(test.expected))
+				t.Fatalf("grants do not correspond in folder %s: got=%#v expected=%#v", dir, grants, test.expected)
 			}
 
 			// test grants for a file
@@ -317,7 +316,7 @@ func TestAddGrant(t *testing.T) {
 			}
 
 			if !reflect.DeepEqual(grants, test.expected) {
-				t.Fatalf("grants do not correspond in file %s: got=%v expected=%v", file, render.AsCode(grants), render.AsCode(test.expected))
+				t.Fatalf("grants do not correspond in file %s: got=%#v expected=%#v", file, grants, test.expected)
 			}
 		})
 
