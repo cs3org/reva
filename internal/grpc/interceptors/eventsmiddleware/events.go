@@ -150,8 +150,8 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		case *provider.PurgeRecycleResponse:
 			if isSuccess(v) {
 				id := req.(*provider.PurgeRecycleRequest).GetRef().GetResourceId()
-				if id != nil && id.OpaqueId == id.SpaceId {
-					// if the opaque id is the same as the space id, this is a purge of the whole trashbin, NOT the whole space
+				if id != nil && id.OpaqueId == id.SpaceId && req.(*provider.PurgeRecycleRequest).Key == "" {
+					// this is a purge of the whole trashbin, NOT the whole space
 					ev = TrashbinPurged(v, req.(*provider.PurgeRecycleRequest), executant)
 				} else {
 					ev = ItemPurged(v, req.(*provider.PurgeRecycleRequest), executant)
