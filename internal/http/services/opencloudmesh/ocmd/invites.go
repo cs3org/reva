@@ -49,7 +49,7 @@ func (h *invitesHandler) init(c *config) error {
 	return nil
 }
 
-// AcceptInvite informs avout an accepted invitation so that the users
+// AcceptInvite informs about an accepted invitation so that the users
 // can initiate the OCM share creation.
 func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
