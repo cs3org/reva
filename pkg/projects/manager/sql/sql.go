@@ -206,14 +206,15 @@ func (m *mgr) GetStorageSpaces(ctx context.Context, name string) (*provider.Stor
 
 func (m *mgr) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	log := appctx.GetLogger(ctx)
-	log.Debug().Any("space", req.StorageSpace).Any("update", req.Field).Any("type", req.Field.GetMetadata().Type).Msg("Updating storage space")
-	if req.StorageSpace == nil || req.StorageSpace.Id == nil {
+	if req == nil || req.StorageSpace == nil || req.StorageSpace.Id == nil {
+		log.Error().Msg("UpdateStorageSpace called without valid request")
 		return &provider.UpdateStorageSpaceResponse{
 			Status: &rpcv1beta1.Status{
 				Code: rpcv1beta1.Code_CODE_INVALID,
 			},
 		}, errors.New("Must provide an ID when updating a storage space")
 	}
+	log.Debug().Any("space", req.StorageSpace).Any("update", req.Field).Msg("Updating storage space")
 
 	if req.Field == nil {
 		return &provider.UpdateStorageSpaceResponse{

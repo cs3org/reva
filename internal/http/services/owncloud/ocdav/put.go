@@ -111,15 +111,29 @@ func isContentRange(r *http.Request) bool {
 
 func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
+	ref := &provider.Reference{}
+	sublog := appctx.GetLogger(ctx).With().Any("ref", ref).Logger()
+
 	fn := path.Join(ns, r.URL.Path)
+	ref.Path = fn
 
-	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
-
-	sublog.Error().Msg("FindMe")
-
-	ref := &provider.Reference{Path: fn}
+	// First, we check if the PUT was made to a resource ID instead of a path
+	if opaqueId := ctx.Value(ctxResourceOpaqueId); opaqueId != nil {
+		storageId := ctx.Value(ctxStorageId)
+		if storageId != nil {
+			// We make the path relative
+			ref.Path = path.Join(".", fn)
+			ref.ResourceId = &provider.ResourceId{
+				StorageId: storageId.(string),
+				OpaqueId:  opaqueId.(string),
+			}
+			s.handlePut(ctx, w, r, ref, sublog)
+			return
+		}
+	}
 
 	s.handlePut(ctx, w, r, ref, sublog)
+
 }
 
 func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {

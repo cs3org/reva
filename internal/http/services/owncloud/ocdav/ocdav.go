@@ -57,6 +57,8 @@ const (
 	ctxSpaceRelativePath
 	ctxOCM
 	ctxPublicLink
+	ctxStorageId
+	ctxResourceOpaqueId
 )
 
 var (

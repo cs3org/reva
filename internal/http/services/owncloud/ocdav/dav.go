@@ -199,18 +199,30 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				// the space is located
 
 				_, base, ok := spaces.DecodeStorageSpaceID(head)
-				if !ok {
-					w.WriteHeader(http.StatusBadRequest)
-					return
+				if ok {
+					fullPath := filepath.Join(base, r.URL.Path)
+					r.URL.Path = fullPath
+					ctx = context.WithValue(ctx, ctxSpaceFullPath, fullPath)
+					ctx = context.WithValue(ctx, ctxSpaceRelativePath, r.URL.Path)
+					ctx = context.WithValue(ctx, ctxSpaceID, head)
+
+					// We support doing a PUT and a PROPFIND on a resource ID (eg eos$space!inode/file.txt)
+				} else if r.Method == http.MethodPut || r.Method == MethodPropfind {
+					// If it's not a space ID, we try to parse it as a resource ID
+					var storageId, itemId string
+					storageId, base, itemId, ok = spaces.DecodeResourceID(head)
+					if !ok {
+						w.WriteHeader(http.StatusBadRequest)
+						return
+					}
+
+					spaceId := spaces.EncodeSpaceID(base)
+					ctx = context.WithValue(ctx, ctxSpaceID, spaceId)
+					ctx = context.WithValue(ctx, ctxStorageId, storageId)
+					ctx = context.WithValue(ctx, ctxResourceOpaqueId, itemId)
 				}
 
-				fullPath := filepath.Join(base, r.URL.Path)
-				r.URL.Path = fullPath
-
-				ctx = context.WithValue(ctx, ctxSpaceID, head)
-				ctx = context.WithValue(ctx, ctxSpaceFullPath, fullPath)
 				ctx = context.WithValue(ctx, ctxSpacePath, base)
-				ctx = context.WithValue(ctx, ctxSpaceRelativePath, r.URL.Path)
 				r = r.WithContext(ctx)
 				h.SpacesHandler.Handler(s).ServeHTTP(w, r)
 			}
