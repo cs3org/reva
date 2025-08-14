@@ -115,6 +115,8 @@ func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
 
+	sublog.Error().Msg("FindMe")
+
 	ref := &provider.Reference{Path: fn}
 
 	s.handlePut(ctx, w, r, ref, sublog)
@@ -122,6 +124,7 @@ func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
 
 func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
 	spacesEnabled := s.c.SpacesEnabled
+
 	if !checkPreconditions(w, r, log) {
 		// checkPreconditions handles error returns
 		return

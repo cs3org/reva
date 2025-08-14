@@ -216,19 +216,13 @@ func (s *svc) cs3StorageSpaceToDrive(ctx context.Context, user *userpb.User, spa
 	drive.Root = &libregraph.DriveItem{}
 
 	if space.ReadmeId != "" || space.ThumbnailId != "" {
-		storageId, _, ok := spaces.DecodeStorageSpaceID(space.Id.OpaqueId)
-
 		gw, err := s.getClient()
 		// If an error occurs, we just don't set the readme / thumbnail
-		if err == nil && ok {
+		if err == nil {
 			if space.ReadmeId != "" {
 				res, err := gw.Stat(ctx, &provider.StatRequest{
 					Ref: &provider.Reference{
-						ResourceId: &provider.ResourceId{
-							StorageId: storageId,
-							OpaqueId:  space.ReadmeId,
-							SpaceId:   space.Id.OpaqueId,
-						},
+						Path: space.ReadmeId,
 					},
 				})
 				if err == nil && res.Status.Code == rpcv1beta1.Code_CODE_OK {
@@ -241,11 +235,7 @@ func (s *svc) cs3StorageSpaceToDrive(ctx context.Context, user *userpb.User, spa
 			if space.ThumbnailId != "" {
 				res, err := gw.Stat(ctx, &provider.StatRequest{
 					Ref: &provider.Reference{
-						ResourceId: &provider.ResourceId{
-							StorageId: storageId,
-							OpaqueId:  space.ThumbnailId,
-							SpaceId:   space.Id.OpaqueId,
-						},
+						Path: space.ThumbnailId,
 					},
 				})
 				if err == nil && res.Status.Code == rpcv1beta1.Code_CODE_OK {
@@ -255,7 +245,7 @@ func (s *svc) cs3StorageSpaceToDrive(ctx context.Context, user *userpb.User, spa
 				}
 			}
 		} else {
-			log.Error().Err(err).Any("spaceID", space.Id).Msg("Failed to get gateway client or failed to decode space ID")
+			log.Error().Err(err).Any("spaceID", space.Id).Msg("Failed to get gateway client")
 		}
 	}
 
@@ -429,18 +419,34 @@ func (s *svc) patchSpace(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		_, _, id, ok := spaces.DecodeResourceID(*updateData.Id)
+		storage, _, id, ok := spaces.DecodeResourceID(*updateData.Id)
 		if !ok {
 			handleError(ctx, errors.New("ID not in an understandable format"), http.StatusBadRequest, w)
 			return
 		}
+
+		statRes, err := gw.Stat(ctx, &provider.StatRequest{
+			Ref: &provider.Reference{
+				ResourceId: &provider.ResourceId{
+					StorageId: storage,
+					OpaqueId:  id,
+				},
+			},
+		})
+
+		if err != nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+			log.Error().Err(err).Any("res", statRes.Status).Msg("error statting provided special resource")
+			handleError(ctx, err, http.StatusInternalServerError, w)
+			return
+		}
+
 		switch *updateData.SpecialFolder.Name {
 		case "readme":
 			updateRequest.Field = &provider.UpdateStorageSpaceRequest_UpdateField{
 				Field: &provider.UpdateStorageSpaceRequest_UpdateField_Metadata{
 					Metadata: &provider.SpaceMetadata{
 						Type: provider.SpaceMetadata_TYPE_README,
-						Id:   id,
+						Id:   statRes.Info.Path,
 					},
 				},
 			}
@@ -449,13 +455,19 @@ func (s *svc) patchSpace(w http.ResponseWriter, r *http.Request) {
 				Field: &provider.UpdateStorageSpaceRequest_UpdateField_Metadata{
 					Metadata: &provider.SpaceMetadata{
 						Type: provider.SpaceMetadata_TYPE_THUMBNAIL,
-						Id:   id,
+						Id:   statRes.Info.Path,
 					},
 				},
 			}
 		default:
 			handleError(ctx, errors.New("Unsupported update type"), http.StatusBadRequest, w)
 			return
+		}
+	} else if update.Description != nil {
+		updateRequest.Field = &provider.UpdateStorageSpaceRequest_UpdateField{
+			Field: &provider.UpdateStorageSpaceRequest_UpdateField_Description{
+				Description: *update.Description,
+			},
 		}
 	} else {
 		handleError(ctx, errors.New("Unsupported update type"), http.StatusBadRequest, w)
