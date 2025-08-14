@@ -12,7 +12,7 @@ variables:
 when:
   - event: [ push , manual ]
     branch: ${CI_REPO_DEFAULT_BRANCH}
-  - event: [ pull_request ]
+  - event: [ pull_request, cron ]
 
 matrix:
   RUN_PART: [ 1, 2, 3, 4 ]

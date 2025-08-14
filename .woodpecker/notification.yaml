@@ -9,7 +9,7 @@ runs_on: [ success, failure ]
 when:
   - event: [ push , manual ]
     branch: ${CI_REPO_DEFAULT_BRANCH}
-  - event: [ pull_request ]
+  - event: [ pull_request, cron ]
 skip_clone: true
 
 steps:
