@@ -82,10 +82,10 @@ type Project struct {
 	// Called description in libregraph API
 	// Called subtitle in front-end
 	Description string
-	// Inode of .space/readme.md
-	ReadmeInode string `gorm:"size:32"`
-	// Inode of .space/thumbnail.png
-	ThumbnailInode string `gorm:"size:32"`
+	// Path of readme.md
+	ReadmePath string
+	// Path of the thumbnail file
+	ThumbnailPath string
 }
 
 func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
@@ -224,22 +224,24 @@ func (m *mgr) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 	}
 
 	var res *gorm.DB
-	if req.Field.GetMetadata() != nil {
+
+	switch req.Field.Field.(type) {
+	case *provider.UpdateStorageSpaceRequest_UpdateField_Description:
+		res = m.db.Model(&Project{}).
+			Where("name = ?", req.StorageSpace.Name).
+			Update("description", req.Field.GetDescription())
+	case *provider.UpdateStorageSpaceRequest_UpdateField_Metadata:
 		switch req.Field.GetMetadata().Type {
 		case provider.SpaceMetadata_TYPE_README:
 			res = m.db.Model(&Project{}).
 				Where("name = ?", req.StorageSpace.Name).
-				Update("readme_inode", req.Field.GetMetadata().Id)
+				Update("readme_path", req.Field.GetMetadata().Id)
 		case provider.SpaceMetadata_TYPE_THUMBNAIL:
 			res = m.db.Model(&Project{}).
 				Where("name = ?", req.StorageSpace.Name).
-				Update("thumbnail_inode", req.Field.GetMetadata().Id)
+				Update("thumbnail_path", req.Field.GetMetadata().Id)
 		}
-	} else if req.Field.GetDescription() != "" {
-		res = m.db.Model(&Project{}).
-			Where("name = ?", req.StorageSpace.Name).
-			Update("description", req.Field.GetDescription())
-	} else {
+	default:
 		return nil, errors.New("Unsupported update type")
 	}
 
@@ -301,7 +303,7 @@ func projectToStorageSpace(p *Project, perms *provider.ResourcePermissions) *pro
 			PermissionSet: perms,
 		},
 		Description: p.Description,
-		ThumbnailId: p.ThumbnailInode,
-		ReadmeId:    p.ReadmeInode,
+		ThumbnailId: p.ThumbnailPath,
+		ReadmeId:    p.ReadmePath,
 	}
 }
