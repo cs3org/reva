@@ -170,38 +170,24 @@ func (m *mgr) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 	}, nil
 }
 
-func (m *mgr) GetStorageSpaces(ctx context.Context, name string) (*provider.StorageSpace, error) {
-	var fetchedProjects []*Project
+func (m *mgr) GetStorageSpace(ctx context.Context, name string) (*provider.StorageSpace, error) {
+	var fetchedProject *Project
 
 	user, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		return nil, errors.New("must provide a user for fetching storage spaces")
 	}
 
-	if res, err := m.cache.Get(cacheKey); err == nil && res != nil {
-		fetchedProjects = res.([]*Project)
-	} else {
-		query := m.db.Model(&Project{}).Where("name = ?", name)
-		res := query.Find(&fetchedProjects)
-		if res.Error != nil {
-			return nil, res.Error
-		}
-		m.cache.Set(cacheKey, fetchedProjects)
+	query := m.db.Model(&Project{}).Where("name = ?", name)
+	res := query.First(fetchedProject)
+	if res.Error != nil {
+		return nil, res.Error
 	}
 
-	projects := []*provider.StorageSpace{}
-	for _, p := range fetchedProjects {
-		if perms, ok := projectBelongsToUser(user, p); ok {
-			projects = append(projects, projectToStorageSpace(p, perms))
-		}
+	if perms, ok := projectBelongsToUser(user, fetchedProject); ok {
+		return projectToStorageSpace(fetchedProject, perms), nil
 	}
-
-	if len(projects) != 1 {
-		return nil, fmt.Errorf("failed to find project matching name %s", name)
-	}
-
-	return projects[0], nil
-
+	return nil, fmt.Errorf("no project named %s belonging to which user has access was found", name)
 }
 
 func (m *mgr) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
@@ -250,7 +236,7 @@ func (m *mgr) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 		return nil, res.Error
 	}
 
-	space, err := m.GetStorageSpaces(ctx, req.StorageSpace.Name)
+	space, err := m.GetStorageSpace(ctx, req.StorageSpace.Name)
 	if err != nil {
 		return nil, err
 	}
