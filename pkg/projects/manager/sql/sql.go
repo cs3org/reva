@@ -170,7 +170,7 @@ func (m *mgr) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 	}, nil
 }
 
-func (m *mgr) GetStorageSpaces(ctx context.Context, name string) (*provider.StorageSpace, error) {
+func (m *mgr) GetStorageSpace(ctx context.Context, name string) (*provider.StorageSpace, error) {
 	var fetchedProjects []*Project
 
 	user, ok := appctx.ContextGetUser(ctx)
@@ -178,15 +178,10 @@ func (m *mgr) GetStorageSpaces(ctx context.Context, name string) (*provider.Stor
 		return nil, errors.New("must provide a user for fetching storage spaces")
 	}
 
-	if res, err := m.cache.Get(cacheKey); err == nil && res != nil {
-		fetchedProjects = res.([]*Project)
-	} else {
-		query := m.db.Model(&Project{}).Where("name = ?", name)
-		res := query.Find(&fetchedProjects)
-		if res.Error != nil {
-			return nil, res.Error
-		}
-		m.cache.Set(cacheKey, fetchedProjects)
+	query := m.db.Model(&Project{}).Where("name = ?", name)
+	res := query.Find(&fetchedProjects)
+	if res.Error != nil {
+		return nil, res.Error
 	}
 
 	projects := []*provider.StorageSpace{}
@@ -250,7 +245,7 @@ func (m *mgr) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 		return nil, res.Error
 	}
 
-	space, err := m.GetStorageSpaces(ctx, req.StorageSpace.Name)
+	space, err := m.GetStorageSpace(ctx, req.StorageSpace.Name)
 	if err != nil {
 		return nil, err
 	}
