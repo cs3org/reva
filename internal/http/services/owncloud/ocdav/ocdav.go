@@ -53,8 +53,6 @@ const (
 	ctxKeyBaseURI ctxKey = iota
 	ctxSpaceID
 	ctxSpacePath
-	ctxSpaceFullPath
-	ctxSpaceRelativePath
 	ctxOCM
 	ctxPublicLink
 	ctxStorageId

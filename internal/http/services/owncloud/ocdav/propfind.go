@@ -72,30 +72,24 @@ const (
 // ns is the namespace that is prefixed to the path in the cs3 namespace.
 func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
-	ref := &provider.Reference{}
-	sublog := appctx.GetLogger(ctx).With().Any("ref", ref).Logger()
 
 	fn := path.Join(ns, r.URL.Path)
-	ref.Path = fn
+	ref := &provider.Reference{}
+
+	// We check if the PROPFIND was made to a resource ID instead of a path
+	if r, ok := requestWasMadeToResourceId(ctx, fn); ok {
+		ref = r
+	} else {
+		ref.Path = fn
+	}
+
+	sublog := appctx.GetLogger(ctx).With().Any("ref", ref).Logger()
 
 	pf, status, err := readPropfind(r.Body)
 	if err != nil {
 		sublog.Debug().Err(err).Msg("error reading propfind request")
 		w.WriteHeader(status)
 		return
-	}
-
-	// We check if the PROPFIND was made to a resource ID instead of a path
-	if opaqueId := ctx.Value(ctxResourceOpaqueId); opaqueId != nil {
-		storageId := ctx.Value(ctxStorageId)
-		if storageId != nil {
-			// We make the path relative
-			ref.Path = path.Join(".", fn)
-			ref.ResourceId = &provider.ResourceId{
-				StorageId: storageId.(string),
-				OpaqueId:  opaqueId.(string),
-			}
-		}
 	}
 
 	parentInfo, resourceInfos, ok := s.getResourceInfos(ctx, w, r, pf, ref, false, sublog)
