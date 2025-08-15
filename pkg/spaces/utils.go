@@ -90,15 +90,15 @@ func EncodeResourceID(r *provider.ResourceId) string {
 
 // Decode resourceID returns the components of the space ID.
 // The resource ID is expected to be in the form of <storage_id>$base32(<path>)!<item_id>.
-func DecodeResourceID(raw string) (storageID, path, itemID string, ok bool) {
+func DecodeResourceID(raw string) (storageID, spacePath, itemID string, ok bool) {
 	// The input is expected to be in the form of <storage_id>$base32(<path>)!<item_id>
 	s := strings.SplitN(raw, "!", 2)
 	if len(s) != 2 {
 		return "", "", "", false
 	}
 	itemID = s[1]
-	storageID, path, ok = DecodeStorageSpaceID(s[0])
-	return storageID, path, itemID, ok
+	storageID, spacePath, ok = DecodeStorageSpaceID(s[0])
+	return storageID, spacePath, itemID, ok
 }
 
 // ParseResourceID converts the encoded resource id in a CS3API ResourceId.

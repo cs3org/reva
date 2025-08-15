@@ -14,7 +14,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.14.1
 	github.com/creasty/defaults v1.8.0
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20250626104136-a0b31b323c48
+	github.com/cs3org/go-cs3apis v0.0.0-20250811135935-5147e5c98678
 	github.com/dgraph-io/ristretto v0.2.0
 	github.com/dolthub/go-mysql-server v0.14.0
 	github.com/gdexlab/go-render v1.0.1
@@ -42,7 +42,7 @@ require (
 	github.com/nats-io/nats.go v1.43.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.38.0
-	github.com/owncloud/libre-graph-api-go v1.0.5-0.20240425090020-dba6d1507c38
+	github.com/owncloud/libre-graph-api-go v1.0.5-0.20250217093259-fa3804be6c27
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.22.0
 	github.com/rs/cors v1.11.1

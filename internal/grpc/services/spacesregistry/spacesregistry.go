@@ -181,10 +181,15 @@ func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, space
 			sp = append(sp, space)
 		}
 	} else if spaceType == spaces.SpaceTypeProject {
-		projects, err := s.projects.ListProjects(ctx, user)
+		resp, err := s.projects.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{})
 		if err != nil {
 			return nil, err
 		}
+		if resp.Status.Code != rpcv1beta1.Code_CODE_OK {
+			return nil, fmt.Errorf("%s: %s", resp.Status.Code.String(), resp.Status.Message)
+		}
+
+		projects := resp.StorageSpaces
 		if err := s.decorateProjects(ctx, projects); err != nil {
 			return nil, err
 		}
@@ -305,7 +310,7 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 }
 
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
-	return nil, errors.New("not yet implemented")
+	return s.projects.UpdateStorageSpace(ctx, req)
 }
 
 func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {

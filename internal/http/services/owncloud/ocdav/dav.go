@@ -194,23 +194,41 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				r = r.WithContext(ctx)
 				h.TrashbinHandler.Handler(s).ServeHTTP(w, r)
 			default:
-				// path is of type: space_id/relative/path/from/space
-				// the space_id is the base64 encode of the path where
-				// the space is located
+				// there are two possible types of path
+				// 1) path is of type: space_id/relative/path/from/space
+				//    the space_id is the base64 encode of the path where
+				//    the space is located
+				// 2) path is of type: resource_id/relative/path
+				//    here, resource_id is the encoded resource id of a folder
+				//    i.e. in the form of storage$space_id!inode
+				//    and the relative path is relative to this folder
 
 				_, base, ok := spaces.DecodeStorageSpaceID(head)
-				if !ok {
-					w.WriteHeader(http.StatusBadRequest)
-					return
+				if ok {
+					// this is case (1)
+					ctx = context.WithValue(ctx, ctxSpaceID, head)
+					fullPath := filepath.Join(base, r.URL.Path)
+					// like this, we can use the existing DAV handler
+					// we replace the space id with it's actual path in the URL
+					r.URL.Path = fullPath
+
+					// We support doing a PUT and a PROPFIND on a resource ID (eg eos$space!inode/file.txt)
+				} else if r.Method == http.MethodPut || r.Method == MethodPropfind {
+					// If it's not a space ID, we try to parse it as a resource ID, i.e. case (2)
+					var storageId, itemId string
+					storageId, base, itemId, ok = spaces.DecodeResourceID(head)
+					if !ok {
+						w.WriteHeader(http.StatusBadRequest)
+						return
+					}
+
+					spaceId := spaces.EncodeSpaceID(base)
+					ctx = context.WithValue(ctx, ctxSpaceID, spaceId)
+					ctx = context.WithValue(ctx, ctxStorageId, storageId)
+					ctx = context.WithValue(ctx, ctxResourceOpaqueId, itemId)
 				}
 
-				fullPath := filepath.Join(base, r.URL.Path)
-				r.URL.Path = fullPath
-
-				ctx = context.WithValue(ctx, ctxSpaceID, head)
-				ctx = context.WithValue(ctx, ctxSpaceFullPath, fullPath)
 				ctx = context.WithValue(ctx, ctxSpacePath, base)
-				ctx = context.WithValue(ctx, ctxSpaceRelativePath, r.URL.Path)
 				r = r.WithContext(ctx)
 				h.SpacesHandler.Handler(s).ServeHTTP(w, r)
 			}

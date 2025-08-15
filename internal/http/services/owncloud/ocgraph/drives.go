@@ -35,12 +35,15 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
-	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils/list"
+	gomime "github.com/glpatcern/go-mime"
+	"github.com/go-chi/chi/v5"
 	libregraph "github.com/owncloud/libre-graph-api-go"
+
 	"github.com/pkg/errors"
 )
 
@@ -78,7 +81,7 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		res, err := gw.ListStorageSpaces(ctx, &providerpb.ListStorageSpacesRequest{
+		res, err := gw.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{
 			Filters: filters,
 		})
 		if err != nil {
@@ -93,8 +96,8 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 		}
 
 		me := appctx.ContextMustGetUser(ctx)
-		spaces = list.Map(res.StorageSpaces, func(space *providerpb.StorageSpace) *libregraph.Drive {
-			return s.cs3StorageSpaceToDrive(me, space)
+		spaces = list.Map(res.StorageSpaces, func(space *provider.StorageSpace) *libregraph.Drive {
+			return s.cs3StorageSpaceToDrive(ctx, me, space)
 		})
 	}
 
@@ -175,10 +178,11 @@ func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libre
 				Size:   libregraph.PtrInt64(int64(rsi.ResourceInfo.Size)),
 			},
 		},
+		Special: []libregraph.DriveItem{},
 	}
 }
 
-func generateCs3StorageSpaceFilters(request *godata.GoDataRequest) ([]*providerpb.ListStorageSpacesRequest_Filter, error) {
+func generateCs3StorageSpaceFilters(request *godata.GoDataRequest) ([]*provider.ListStorageSpacesRequest_Filter, error) {
 	var filters spaces.ListStorageSpaceFilter
 	if request.Query.Filter != nil {
 		if request.Query.Filter.Tree.Token.Value == "eq" {
@@ -188,7 +192,7 @@ func generateCs3StorageSpaceFilters(request *godata.GoDataRequest) ([]*providerp
 				filters = filters.BySpaceType(spaceType)
 			case "id":
 				id := strings.Trim(request.Query.Filter.Tree.Children[1].Token.Value, "'")
-				filters = filters.ByID(&providerpb.StorageSpaceId{OpaqueId: id})
+				filters = filters.ByID(&provider.StorageSpaceId{OpaqueId: id})
 			}
 		} else {
 			err := errors.Errorf("unsupported filter operand: %s", request.Query.Filter.Tree.Token.Value)
@@ -198,15 +202,56 @@ func generateCs3StorageSpaceFilters(request *godata.GoDataRequest) ([]*providerp
 	return filters.List(), nil
 }
 
-func (s *svc) cs3StorageSpaceToDrive(user *userpb.User, space *providerpb.StorageSpace) *libregraph.Drive {
+func (s *svc) cs3StorageSpaceToDrive(ctx context.Context, user *userpb.User, space *provider.StorageSpace) *libregraph.Drive {
+	log := appctx.GetLogger(ctx)
+
 	drive := &libregraph.Drive{
 		DriveAlias: libregraph.PtrString(space.RootInfo.Path[1:]),
 		Id:         libregraph.PtrString(space.Id.OpaqueId),
 		Name:       space.Name,
 		DriveType:  libregraph.PtrString(space.SpaceType),
+		Special:    []libregraph.DriveItem{},
 	}
 
 	drive.Root = &libregraph.DriveItem{}
+
+	if space.ReadmeId != "" || space.ThumbnailId != "" {
+		gw, err := s.getClient()
+		// If an error occurs, we just don't set the readme / thumbnail
+		if err == nil {
+			if space.ReadmeId != "" {
+				res, err := gw.Stat(ctx, &provider.StatRequest{
+					Ref: &provider.Reference{
+						Path: space.ReadmeId,
+					},
+				})
+				if err == nil && res.Status.Code == rpcv1beta1.Code_CODE_OK {
+					item := s.ResourceInfoToDriveItem(res.Info, "readme")
+					drive.Special = append(drive.Special, item)
+				} else {
+					log.Error().Err(err).Str("spaceid", space.Id.OpaqueId).Any("status", res.Status).Msg("Failed to stat space README")
+				}
+			}
+			if space.ThumbnailId != "" {
+				res, err := gw.Stat(ctx, &provider.StatRequest{
+					Ref: &provider.Reference{
+						Path: space.ThumbnailId,
+					},
+				})
+				if err == nil && res.Status.Code == rpcv1beta1.Code_CODE_OK {
+					drive.Special = append(drive.Special, s.ResourceInfoToDriveItem(res.Info, "image"))
+				} else {
+					log.Error().Err(err).Str("spaceid", space.Id.OpaqueId).Any("status", res.Status).Msg("Failed to stat space thumbnail")
+				}
+			}
+		} else {
+			log.Error().Err(err).Any("spaceID", space.Id).Msg("Failed to get gateway client")
+		}
+	}
+
+	if space.Description != "" {
+		drive.Description = libregraph.PtrString(space.Description)
+	}
 
 	if space.SpaceType != "personal" {
 		drive.Root = &libregraph.DriveItem{
@@ -275,8 +320,8 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		stat, err := gw.Stat(ctx, &providerpb.StatRequest{
-			Ref: &providerpb.Reference{
+		stat, err := gw.Stat(ctx, &provider.StatRequest{
+			Ref: &provider.Reference{
 				ResourceId: shareRes.Share.Share.ResourceId,
 			},
 		})
@@ -298,12 +343,12 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(space)
 		return
 	} else {
-		listRes, err := gw.ListStorageSpaces(ctx, &providerpb.ListStorageSpacesRequest{
-			Filters: []*providerpb.ListStorageSpacesRequest_Filter{
+		listRes, err := gw.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{
+			Filters: []*provider.ListStorageSpacesRequest_Filter{
 				{
-					Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_ID,
-					Term: &providerpb.ListStorageSpacesRequest_Filter_Id{
-						Id: &providerpb.StorageSpaceId{
+					Type: provider.ListStorageSpacesRequest_Filter_TYPE_ID,
+					Term: &provider.ListStorageSpacesRequest_Filter_Id{
+						Id: &provider.StorageSpaceId{
 							OpaqueId: spaceID,
 						},
 					},
@@ -324,13 +369,127 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 		spaces := listRes.StorageSpaces
 		if len(spaces) == 1 {
 			user := appctx.ContextMustGetUser(ctx)
-			space := s.cs3StorageSpaceToDrive(user, spaces[0])
+			space := s.cs3StorageSpaceToDrive(ctx, user, spaces[0])
 			_ = json.NewEncoder(w).Encode(space)
 			return
 		}
 	}
 
 	handleError(ctx, errors.New("space not found"), http.StatusNotFound, w)
+}
+
+func (s *svc) patchSpace(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	update := &libregraph.DriveUpdate{}
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(update); err != nil {
+		log.Error().Err(err).Interface("Body", r.Body).Msg("failed unmarshalling request body")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if update.Name == nil {
+		handleError(ctx, errors.New("patching a space requires the space name"), http.StatusBadRequest, w)
+		return
+	}
+
+	gw, err := s.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting grpc client")
+		handleError(ctx, err, http.StatusInternalServerError, w)
+		return
+	}
+
+	spaceId := chi.URLParam(r, "space-id")
+	updateRequest := &provider.UpdateStorageSpaceRequest{
+		StorageSpace: &provider.StorageSpace{
+			Id: &provider.StorageSpaceId{
+				OpaqueId: spaceId,
+			},
+			Name: *update.Name,
+		}}
+
+	if len(update.Special) > 0 {
+		updateData := update.Special[0]
+		if updateData.Id == nil || updateData.SpecialFolder == nil {
+			handleError(ctx, errors.New("Unsupported update type"), http.StatusBadRequest, w)
+			return
+		}
+
+		storage, _, id, ok := spaces.DecodeResourceID(*updateData.Id)
+		if !ok {
+			handleError(ctx, errors.New("ID not in an understandable format"), http.StatusBadRequest, w)
+			return
+		}
+
+		statRes, err := gw.Stat(ctx, &provider.StatRequest{
+			Ref: &provider.Reference{
+				ResourceId: &provider.ResourceId{
+					StorageId: storage,
+					OpaqueId:  id,
+				},
+			},
+		})
+
+		if err != nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+			log.Error().Err(err).Any("res", statRes.Status).Msg("error statting provided special resource")
+			handleError(ctx, err, http.StatusInternalServerError, w)
+			return
+		}
+
+		switch *updateData.SpecialFolder.Name {
+		case "readme":
+			updateRequest.Field = &provider.UpdateStorageSpaceRequest_UpdateField{
+				Field: &provider.UpdateStorageSpaceRequest_UpdateField_Metadata{
+					Metadata: &provider.SpaceMetadata{
+						Type: provider.SpaceMetadata_TYPE_README,
+						Id:   statRes.Info.Path,
+					},
+				},
+			}
+		case "image":
+			updateRequest.Field = &provider.UpdateStorageSpaceRequest_UpdateField{
+				Field: &provider.UpdateStorageSpaceRequest_UpdateField_Metadata{
+					Metadata: &provider.SpaceMetadata{
+						Type: provider.SpaceMetadata_TYPE_THUMBNAIL,
+						Id:   statRes.Info.Path,
+					},
+				},
+			}
+		default:
+			handleError(ctx, errors.New("Unsupported update type"), http.StatusBadRequest, w)
+			return
+		}
+	} else if update.Description != nil {
+		updateRequest.Field = &provider.UpdateStorageSpaceRequest_UpdateField{
+			Field: &provider.UpdateStorageSpaceRequest_UpdateField_Description{
+				Description: *update.Description,
+			},
+		}
+	} else {
+		handleError(ctx, errors.New("Unsupported update type"), http.StatusBadRequest, w)
+		return
+	}
+
+	res, err := gw.UpdateStorageSpace(ctx, updateRequest)
+
+	if err != nil {
+		handleError(ctx, errors.New("failed to update storage space"), http.StatusInternalServerError, w)
+		return
+	}
+
+	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+		log.Error().Interface("response", res).Msg("error updating public share")
+		handleError(ctx, errors.New("failed to update storage space"), http.StatusInternalServerError, w)
+		return
+	}
+
+	user := appctx.ContextMustGetUser(ctx)
+	space := s.cs3StorageSpaceToDrive(ctx, user, res.StorageSpace)
+	_ = json.NewEncoder(w).Encode(space)
 }
 
 func isShareJail(spaceID string) bool {
@@ -347,7 +506,7 @@ func fullURL(base, path string) string {
 	return full
 }
 
-func cs3PermissionsToLibreGraph(user *userpb.User, perms *providerpb.ResourcePermissions) []libregraph.Permission {
+func cs3PermissionsToLibreGraph(user *userpb.User, perms *provider.ResourcePermissions) []libregraph.Permission {
 	var p libregraph.Permission
 	// we need to map the permissions to the roles
 	switch {
@@ -377,4 +536,32 @@ func cs3PermissionsToLibreGraph(user *userpb.User, perms *providerpb.ResourcePer
 		User: identity,
 	}
 	return []libregraph.Permission{p}
+}
+
+func (s *svc) ResourceInfoToDriveItem(r *provider.ResourceInfo, special string) libregraph.DriveItem {
+
+	item := libregraph.DriveItem{
+		Id:        libregraph.PtrString(spaces.EncodeResourceID(r.Id)),
+		ETag:      libregraph.PtrString(r.Etag),
+		Name:      libregraph.PtrString(r.Name),
+		Size:      libregraph.PtrInt64(int64(r.Size)),
+		WebDavUrl: libregraph.PtrString(fullURL(s.c.WebDavBase, r.Path)),
+	}
+
+	if len(strings.Split(r.Path, ".")) > 1 {
+		mimetype := gomime.TypeByExtension(filepath.Ext(r.Path))
+		if mimetype != "" {
+			item.File = &libregraph.OpenGraphFile{
+				MimeType: libregraph.PtrString(mimetype),
+			}
+		}
+	}
+
+	if special != "" {
+		item.SpecialFolder = &libregraph.SpecialFolder{
+			Name: libregraph.PtrString(special),
+		}
+	}
+
+	return item
 }

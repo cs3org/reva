@@ -22,8 +22,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"path"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageProvider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/utils"
@@ -129,4 +131,22 @@ func (s *svc) lookUpStorageSpaceReference(ctx context.Context, spaceID string, r
 		ResourceId: space.Root,
 		Path:       utils.MakeRelativePath(relativePath),
 	}, lSSRes.Status, nil
+}
+
+func requestWasMadeToResourceId(ctx context.Context, fn string) (ref *provider.Reference, ok bool) {
+	if opaqueId := ctx.Value(ctxResourceOpaqueId); opaqueId != nil {
+		storageId := ctx.Value(ctxStorageId)
+		if storageId != nil {
+			ref := &provider.Reference{
+				// We make the path relative
+				Path: path.Join(".", fn),
+				ResourceId: &provider.ResourceId{
+					StorageId: storageId.(string),
+					OpaqueId:  opaqueId.(string),
+				},
+			}
+			return ref, true
+		}
+	}
+	return nil, false
 }

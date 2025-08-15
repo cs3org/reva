@@ -28,6 +28,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	projects_catalogue "github.com/cs3org/reva/v3/pkg/projects"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 )
@@ -267,13 +268,14 @@ func TestListProjects(t *testing.T) {
 				catmgr.db.Create(&proj)
 			}
 
-			got, err := catalogue.ListProjects(ctx, tt.user)
+			ctx = appctx.ContextSetUser(ctx, tt.user)
+			got, err := catalogue.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{})
 			if err != nil {
 				t.Fatalf("not expected error while listing projects: %+v", err)
 			}
 
-			if !reflect.DeepEqual(got, tt.expected) {
-				t.Fatalf("projects' list do not match. got=%#v expected=%#v", got, tt.expected)
+			if !reflect.DeepEqual(got.StorageSpaces, tt.expected) {
+				t.Fatalf("projects' list do not match. got=%#v expected=%#v", got.StorageSpaces, tt.expected)
 			}
 
 			err = teardown(t)
