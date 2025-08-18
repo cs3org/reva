@@ -249,7 +249,6 @@ func (s *svc) updateLinkPermissions(ctx context.Context, w http.ResponseWriter, 
 		return
 	}
 	_ = json.NewEncoder(w).Encode(lgPerm)
-
 }
 
 func (s *svc) updateSharePermissions(ctx context.Context, w http.ResponseWriter, share *collaborationv1beta1.Share, lgPerm *libregraph.Permission, resourceId *providerpb.ResourceId) {
@@ -287,7 +286,6 @@ func (s *svc) updateSharePermissions(ctx context.Context, w http.ResponseWriter,
 		},
 		Field: update,
 	})
-
 	if err != nil {
 		log.Error().Err(err).Msg("error updating public share")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -546,10 +544,9 @@ func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *providerpb.
 	}
 
 	actions = CS3ResourcePermissionsToLibregraphActions(statRes.Info.PermissionSet)
-	roles = GetApplicableRoleDefinitionsForActions(actions)
+	roles = GetApplicableRoleDefinitionsForActions(actions, statRes.Info)
 
 	return actions, roles, perms, nil
-
 }
 
 func (s *svc) writePermissions(ctx context.Context, w http.ResponseWriter, actions []string, roles []*libregraph.UnifiedRoleDefinition, perms []*libregraph.Permission) {
@@ -600,7 +597,6 @@ func (s *svc) getLinkUpdate(ctx context.Context, permission *libregraph.Permissi
 }
 
 func (s *svc) getShareUpdate(ctx context.Context, permission *libregraph.Permission, resourceType providerpb.ResourceType) (*collaborationv1beta1.UpdateShareRequest_UpdateField, error) {
-
 	if permission.ExpirationDateTime.IsSet() {
 		return &collaborationv1beta1.UpdateShareRequest_UpdateField{
 			Field: &collaborationv1beta1.UpdateShareRequest_UpdateField_Expiration{
