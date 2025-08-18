@@ -96,6 +96,7 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 			return
 		}
 
+		log.Info().Any("favorites", favorites).Msg("FindMe")
 		resourceInfos = make([]*provider.ResourceInfo, 0, len(favorites))
 		for i := range favorites {
 			statRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: favorites[i]}})
@@ -138,6 +139,7 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 			return
 		}
 	}
+	log.Info().Any("favorites-RIs", resourceInfos).Msg("FindMe")
 
 	responsesXML, err := s.multistatusResponse(ctx, &propfindXML{Prop: ff.Prop}, resourceInfos, namespace, nil, nil)
 	if err != nil {
