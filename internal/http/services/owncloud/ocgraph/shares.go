@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"path/filepath"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -398,6 +399,7 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.Rece
 			LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(rsi.ResourceInfo.Mtime)),
 			Name:                 libregraph.PtrString(rsi.ResourceInfo.Name),
 			Path:                 libregraph.PtrString(relativePath),
+			WebUrl:               libregraph.PtrString(filepath.Join(s.c.WebBase, rsi.ResourceInfo.Path)),
 			// ParentReference: &libregraph.ItemReference{
 			// 	DriveId:   libregraph.PtrString(spaces.EncodeResourceID(share.ResourceInfo.ParentId)),
 			// 	DriveType: nil, // FIXME: no way to know it unless we hardcode it
@@ -596,6 +598,7 @@ func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceIn
 			Name: libregraph.PtrString(path.Base(relativePath)),
 			Path: libregraph.PtrString(parentRelativePath),
 		},
+		WebUrl:      libregraph.PtrString(filepath.Join(s.c.WebBase, info.Path)),
 		Permissions: permissions,
 
 		Size: libregraph.PtrInt64(int64(info.Size)),
