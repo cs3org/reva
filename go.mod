@@ -17,7 +17,6 @@ require (
 	github.com/cs3org/go-cs3apis v0.0.0-20250811135935-5147e5c98678
 	github.com/dgraph-io/ristretto v0.2.0
 	github.com/dolthub/go-mysql-server v0.14.0
-	github.com/gdexlab/go-render v1.0.1
 	github.com/glpatcern/go-mime v0.0.0-20221026162842-2a8d71ad17a9
 	github.com/go-chi/chi/v5 v5.2.2
 	github.com/go-ldap/ldap/v3 v3.4.11
@@ -39,7 +38,7 @@ require (
 	github.com/maxymania/go-system v0.0.0-20170110133659-647cc364bf0b
 	github.com/mileusna/useragent v1.3.5
 	github.com/mitchellh/mapstructure v1.5.0
-	github.com/nats-io/nats.go v1.43.0
+	github.com/nats-io/nats.go v1.44.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.38.0
 	github.com/owncloud/libre-graph-api-go v1.0.5-0.20250217093259-fa3804be6c27
