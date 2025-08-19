@@ -16,17 +16,10 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
-
-import (
-	// Load core storage filesystem backends.
-	_ "github.com/cs3org/reva/v3/pkg/ocm/storage/outcoming"
-	_ "github.com/cs3org/reva/v3/pkg/ocm/storage/received"
-	_ "github.com/cs3org/reva/v3/pkg/storage/fs/cephfs"
-	_ "github.com/cs3org/reva/v3/pkg/storage/fs/eos"
-	_ "github.com/cs3org/reva/v3/pkg/storage/fs/local"
-	_ "github.com/cs3org/reva/v3/pkg/storage/fs/localhome"
-	_ "github.com/cs3org/reva/v3/pkg/storage/fs/nceph"
-	_ "github.com/cs3org/reva/v3/pkg/storage/fs/nextcloud"
-	// Add your own here.
-)
+// Package nceph provides a local filesystem implementation for Reva
+// that emulates CephFS operations using the local filesystem.
+//
+// This driver implements the storage.FS interface using standard Go
+// os package operations instead of libcephfs, making it suitable for
+// development, testing, or single-node deployments.
+package nceph

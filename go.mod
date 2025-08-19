@@ -17,7 +17,6 @@ require (
 	github.com/cs3org/go-cs3apis v0.0.0-20250626104136-a0b31b323c48
 	github.com/dgraph-io/ristretto v0.2.0
 	github.com/dolthub/go-mysql-server v0.14.0
-	github.com/gdexlab/go-render v1.0.1
 	github.com/glpatcern/go-mime v0.0.0-20221026162842-2a8d71ad17a9
 	github.com/go-chi/chi/v5 v5.2.2
 	github.com/go-ldap/ldap/v3 v3.4.11
@@ -44,6 +43,7 @@ require (
 	github.com/onsi/gomega v1.38.0
 	github.com/owncloud/libre-graph-api-go v1.0.5-0.20240425090020-dba6d1507c38
 	github.com/pkg/errors v0.9.1
+	github.com/pkg/xattr v0.4.12
 	github.com/prometheus/client_golang v1.22.0
 	github.com/rs/cors v1.11.1
 	github.com/rs/zerolog v1.34.0
@@ -142,9 +142,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-go 1.24
-
-toolchain go1.24.2
+go 1.25
 
 replace (
 	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
