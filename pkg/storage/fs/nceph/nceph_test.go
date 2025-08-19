@@ -36,6 +36,15 @@ func TestNCeph_BasicOperations(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
+	// Ensure the tmpDir is writable by the test user (UID 1000)
+	// When running as root, the tmpDir will be owned by root, but we need the test user to be able to write
+	err = os.Chmod(tmpDir, 0755)
+	require.NoError(t, err)
+
+	// Also change ownership to allow the test user to write
+	err = os.Chown(tmpDir, 1000, 1000)
+	require.NoError(t, err)
+
 	// Create nceph instance
 	config := map[string]interface{}{
 		"root":        tmpDir,

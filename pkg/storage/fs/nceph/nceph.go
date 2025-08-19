@@ -56,8 +56,9 @@ const (
 // ncephfs is a local filesystem implementation that provides a ceph-like interface
 type ncephfs struct {
 	conf          *Options
-	cephAdminConn *CephAdminConn // Only used for GetPathByID (defined in build-tag files)
-	rootFS        *os.Root       // Chrooted filesystem root using os.Root
+	cephAdminConn *CephAdminConn  // Only used for GetPathByID (defined in build-tag files)
+	rootFS        *os.Root        // Chrooted filesystem root using os.Root
+	threadPool    *UserThreadPool // Pool of per-user threads with dedicated UIDs
 }
 
 func init() {
@@ -98,10 +99,48 @@ func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err erro
 		}
 	}
 
+	// Initialize user thread pool for per-user filesystem operations
+	threadPool, privResult, err := NewUserThreadPool(UserThreadPoolConfig{
+		ThreadTTL:     5 * time.Minute, // Keep threads alive for 5 minutes after last use
+		CleanupPeriod: 1 * time.Minute, // Check for expired threads every minute
+		NobodyUID:     o.NobodyUID,     // Use configured nobody UID
+		NobodyGID:     o.NobodyGID,     // Use configured nobody GID
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "nceph: failed to initialize user thread pool")
+	}
+
+	// Log privilege verification results
+	log := appctx.GetLogger(ctx)
+	if !privResult.HasSufficientPrivileges() {
+		if privResult.HasPartialPrivileges() {
+			log.Warn().
+				Bool("can_change_uid", privResult.CanChangeUID).
+				Bool("can_change_gid", privResult.CanChangeGID).
+				Str("recommendations", fmt.Sprintf("%v", privResult.Recommendations)).
+				Msg("nceph: partial privileges detected - some operations may not work correctly")
+		} else {
+			log.Error().
+				Int("current_uid", privResult.CurrentUID).
+				Int("current_gid", privResult.CurrentGID).
+				Str("errors", fmt.Sprintf("%v", privResult.ErrorMessages)).
+				Str("recommendations", fmt.Sprintf("%v", privResult.Recommendations)).
+				Msg("nceph: insufficient privileges for setfsuid/setfsgid - per-user thread isolation will not work")
+		}
+	} else {
+		log.Info().
+			Bool("can_change_uid", privResult.CanChangeUID).
+			Bool("can_change_gid", privResult.CanChangeGID).
+			Int("nobody_uid", o.NobodyUID).
+			Int("nobody_gid", o.NobodyGID).
+			Msg("nceph: sufficient privileges verified for per-user thread isolation")
+	}
+
 	return &ncephfs{
 		conf:          &o,
 		cephAdminConn: cephAdminConn,
 		rootFS:        rootFS,
+		threadPool:    threadPool,
 	}, nil
 }
 
@@ -256,8 +295,8 @@ func (fs *ncephfs) CreateDir(ctx context.Context, ref *provider.Reference) error
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("path", path).Msg("CreateDir")
 
-	// path is already chroot-relative from resolveRef
-	err = fs.rootFS.MkdirAll(path, os.FileMode(fs.conf.DirPerms))
+	// Execute directory creation on user's thread with correct UID
+	err = fs.createDirectoryAsUser(ctx, path, os.FileMode(fs.conf.DirPerms))
 	if err != nil {
 		return errors.Wrap(err, "nceph: failed to create directory")
 	}
@@ -274,9 +313,8 @@ func (fs *ncephfs) Delete(ctx context.Context, ref *provider.Reference) (err err
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("path", path).Msg("Delete")
 
-	// path is already chroot-relative from resolveRef
-	// Check if it's a directory or file using chrooted operations
-	info, err := fs.rootFS.Stat(path)
+	// Execute stat and delete operations on user's thread with correct UID
+	info, err := fs.statAsUser(ctx, path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil // Already deleted
@@ -285,9 +323,9 @@ func (fs *ncephfs) Delete(ctx context.Context, ref *provider.Reference) (err err
 	}
 
 	if info.IsDir() {
-		err = fs.rootFS.RemoveAll(path)
+		err = fs.removeAllAsUser(ctx, path)
 	} else {
-		err = fs.rootFS.Remove(path)
+		err = fs.removeAsUser(ctx, path)
 	}
 
 	if err != nil {
@@ -311,15 +349,15 @@ func (fs *ncephfs) Move(ctx context.Context, oldRef, newRef *provider.Reference)
 	log.Debug().Str("oldPath", oldPath).Str("newPath", newPath).Msg("Move")
 
 	// oldPath and newPath are already chroot-relative from resolveRef
-	// Create parent directory if needed using chrooted operations
+	// Create parent directory if needed and execute move on user's thread with correct UID
 	parentPath := path.Dir(newPath)
 	if parentPath != "." {
-		if err := fs.rootFS.MkdirAll(parentPath, os.FileMode(fs.conf.DirPerms)); err != nil {
+		if err := fs.createDirectoryAsUser(ctx, parentPath, os.FileMode(fs.conf.DirPerms)); err != nil {
 			return errors.Wrap(err, "nceph: failed to create parent directory for move")
 		}
 	}
 
-	err = fs.rootFS.Rename(oldPath, newPath)
+	err = fs.renameAsUser(ctx, oldPath, newPath)
 	if err != nil {
 		return errors.Wrap(err, "nceph: failed to move file")
 	}
@@ -341,7 +379,8 @@ func (fs *ncephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []
 	log.Debug().Str("path", path).Msg("GetMD")
 
 	// path is already chroot-relative from resolveRef
-	info, err := fs.rootFS.Stat(path)
+	// Execute stat operation on user's thread with correct UID
+	info, err := fs.statAsUser(ctx, path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound("file not found")
@@ -371,14 +410,8 @@ func (fs *ncephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKe
 
 	log.Debug().Str("path", path).Msg("ListFolder")
 
-	// Use chrooted operations since path is already chroot-relative
-	dir, err := fs.rootFS.Open(path)
-	if err != nil {
-		return nil, errors.Wrap(err, "nceph: failed to open directory")
-	}
-	defer dir.Close()
-
-	entries, err := dir.Readdir(-1)
+	// Execute directory listing on user's thread with correct UID
+	entries, err := fs.readDirectoryAsUser(ctx, path)
 	if err != nil {
 		return nil, errors.Wrap(err, "nceph: failed to read directory")
 	}
@@ -411,7 +444,8 @@ func (fs *ncephfs) Download(ctx context.Context, ref *provider.Reference) (rc io
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("path", path).Msg("Download")
 
-	file, err := os.Open(path)
+	// Execute file open on user's thread with correct UID
+	file, err := fs.openFileAsUser(ctx, path)
 	if err != nil {
 		return nil, errors.Wrap(err, "nceph: failed to open file for download")
 	}
@@ -429,23 +463,18 @@ func (fs *ncephfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("path", path).Msg("Upload")
 
-	// Create parent directory if needed
+	// Create parent directory if needed and execute upload on user's thread with correct UID
 	parentDir := filepath.Dir(path)
-	if err := os.MkdirAll(parentDir, os.FileMode(fs.conf.DirPerms)); err != nil {
-		return errors.Wrap(err, "nceph: failed to create parent directory for upload")
+	if parentDir != "." {
+		if err := fs.createDirectoryAsUser(ctx, parentDir, os.FileMode(fs.conf.DirPerms)); err != nil {
+			return errors.Wrap(err, "nceph: failed to create parent directory for upload")
+		}
 	}
 
-	// Create or truncate the file
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.FileMode(fs.conf.FilePerms))
+	// Create and upload the file on user's thread
+	err = fs.uploadFileAsUser(ctx, path, r, os.FileMode(fs.conf.FilePerms))
 	if err != nil {
-		return errors.Wrap(err, "nceph: error opening file for upload")
-	}
-	defer file.Close()
-
-	// Copy data from reader to file
-	_, err = io.Copy(file, r)
-	if err != nil {
-		return errors.Wrap(err, "nceph: error writing to file")
+		return errors.Wrap(err, "nceph: error uploading file")
 	}
 
 	return nil
@@ -486,14 +515,15 @@ func (fs *ncephfs) AddGrant(ctx context.Context, ref *provider.Reference, g *pro
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("path", path).Any("grant", g).Msg("AddGrant")
 
-	// Store grant information as extended attributes
+	// Store grant information as extended attributes using user's thread
 	grantData, err := json.Marshal(g)
 	if err != nil {
 		return errors.Wrap(err, "nceph: failed to marshal grant")
 	}
 
 	grantKey := fmt.Sprintf("user.grant.%s", g.Grantee.GetUserId().GetOpaqueId())
-	if err := xattr.Set(path, grantKey, grantData); err != nil {
+	err = fs.setXattrAsUser(ctx, path, grantKey, grantData)
+	if err != nil {
 		return errors.Wrap(err, "nceph: failed to set grant xattr")
 	}
 
@@ -510,7 +540,8 @@ func (fs *ncephfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *
 	log.Debug().Str("path", path).Any("grant", g).Msg("RemoveGrant")
 
 	grantKey := fmt.Sprintf("user.grant.%s", g.Grantee.GetUserId().GetOpaqueId())
-	if err := xattr.Remove(path, grantKey); err != nil {
+	err = fs.removeXattrAsUser(ctx, path, grantKey)
+	if err != nil {
 		// Ignore if the attribute doesn't exist
 		if !strings.Contains(err.Error(), "no such attribute") {
 			return errors.Wrap(err, "nceph: failed to remove grant xattr")
@@ -535,7 +566,8 @@ func (fs *ncephfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *pr
 	log.Debug().Str("path", path).Any("grantee", g).Msg("DenyGrant")
 
 	grantKey := fmt.Sprintf("user.grant.%s", g.GetUserId().GetOpaqueId())
-	if err := xattr.Remove(path, grantKey); err != nil {
+	err = fs.removeXattrAsUser(ctx, path, grantKey)
+	if err != nil {
 		// Ignore if the attribute doesn't exist
 		if !strings.Contains(err.Error(), "no such attribute") {
 			return errors.Wrap(err, "nceph: failed to deny grant")
@@ -554,15 +586,15 @@ func (fs *ncephfs) ListGrants(ctx context.Context, ref *provider.Reference) (gli
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("path", path).Msg("ListGrants")
 
-	// List all grant-related extended attributes
-	attrs, err := xattr.List(path)
+	// List all grant-related extended attributes on user's thread
+	attrs, err := fs.listXattrsAsUser(ctx, path)
 	if err != nil {
 		return nil, errors.Wrap(err, "nceph: failed to list xattrs")
 	}
 
 	for _, attr := range attrs {
 		if strings.HasPrefix(attr, "user.grant.") {
-			data, err := xattr.Get(path, attr)
+			data, err := fs.getXattrAsUser(ctx, path, attr)
 			if err != nil {
 				continue
 			}

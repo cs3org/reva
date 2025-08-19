@@ -26,6 +26,10 @@ type Options struct {
 	FilePerms      uint32 `mapstructure:"file_perms"`
 	UserQuotaBytes uint64 `mapstructure:"user_quota_bytes"`
 
+	// Nobody user/group for fallback operations (instead of root)
+	NobodyUID int `mapstructure:"nobody_uid"`
+	NobodyGID int `mapstructure:"nobody_gid"`
+
 	// Ceph configuration for GetPathByID operations
 	CephConfig   string `mapstructure:"ceph_config"`
 	CephClientID string `mapstructure:"ceph_client_id"`
@@ -44,6 +48,15 @@ func (c *Options) ApplyDefaults() {
 
 	if c.UploadFolder == "" {
 		c.UploadFolder = ".uploads"
+	}
+
+	// Nobody user/group defaults (commonly 65534 on Linux systems)
+	if c.NobodyUID == 0 {
+		c.NobodyUID = 65534
+	}
+
+	if c.NobodyGID == 0 {
+		c.NobodyGID = 65534
 	}
 
 	// Ceph defaults for GetPathByID operations
