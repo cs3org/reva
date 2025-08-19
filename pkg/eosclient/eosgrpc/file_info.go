@@ -178,6 +178,10 @@ func (c *Client) grpcMDResponseToFileInfo(ctx context.Context, st *erpc.MDRespon
 		fi.UID = st.Cmd.Uid
 		fi.GID = st.Cmd.Gid
 		fi.MTimeSec = st.Cmd.Mtime.Sec
+		// For directories, we prefer stime over mtime
+		if st.Cmd.Stime != nil {
+			fi.MTimeSec = st.Cmd.Stime.Sec
+		}
 		fi.ETag = st.Cmd.Etag
 		fi.File = path.Clean(string(st.Cmd.Path))
 
