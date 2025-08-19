@@ -292,13 +292,14 @@ func (fs *ncephfs) CreateDir(ctx context.Context, ref *provider.Reference) error
 		return err
 	}
 
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("path", path).Msg("CreateDir")
+	fs.logOperation(ctx, "CreateDir", path)
 
 	// Execute directory creation on user's thread with correct UID
 	err = fs.createDirectoryAsUser(ctx, path, os.FileMode(fs.conf.DirPerms))
 	if err != nil {
-		return errors.Wrap(err, "nceph: failed to create directory")
+		wrappedErr := errors.Wrap(err, "nceph: failed to create directory")
+		fs.logOperationError(ctx, "CreateDir", path, wrappedErr)
+		return wrappedErr
 	}
 
 	return nil
@@ -310,8 +311,7 @@ func (fs *ncephfs) Delete(ctx context.Context, ref *provider.Reference) (err err
 		return err
 	}
 
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("path", path).Msg("Delete")
+	fs.logOperation(ctx, "Delete", path)
 
 	// Execute stat and delete operations on user's thread with correct UID
 	info, err := fs.statAsUser(ctx, path)
@@ -319,7 +319,9 @@ func (fs *ncephfs) Delete(ctx context.Context, ref *provider.Reference) (err err
 		if os.IsNotExist(err) {
 			return nil // Already deleted
 		}
-		return errors.Wrap(err, "nceph: failed to stat file for deletion")
+		wrappedErr := errors.Wrap(err, "nceph: failed to stat file for deletion")
+		fs.logOperationError(ctx, "Delete", path, wrappedErr)
+		return wrappedErr
 	}
 
 	if info.IsDir() {
@@ -329,7 +331,9 @@ func (fs *ncephfs) Delete(ctx context.Context, ref *provider.Reference) (err err
 	}
 
 	if err != nil {
-		return errors.Wrap(err, "nceph: failed to delete")
+		wrappedErr := errors.Wrap(err, "nceph: failed to delete")
+		fs.logOperationError(ctx, "Delete", path, wrappedErr)
+		return wrappedErr
 	}
 
 	return nil
@@ -338,28 +342,35 @@ func (fs *ncephfs) Delete(ctx context.Context, ref *provider.Reference) (err err
 func (fs *ncephfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
 	oldPath, err := fs.resolveRef(ctx, oldRef)
 	if err != nil {
-		return err
+		wrappedErr := errors.Wrap(err, "nceph: failed to resolve old path")
+		fs.logOperationError(ctx, "Move", "", wrappedErr)
+		return wrappedErr
 	}
 	newPath, err := fs.resolveRef(ctx, newRef)
 	if err != nil {
-		return err
+		wrappedErr := errors.Wrap(err, "nceph: failed to resolve new path")
+		fs.logOperationError(ctx, "Move", oldPath, wrappedErr)
+		return wrappedErr
 	}
 
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("oldPath", oldPath).Str("newPath", newPath).Msg("Move")
+	fs.logOperation(ctx, "Move", fmt.Sprintf("%s -> %s", oldPath, newPath))
 
 	// oldPath and newPath are already chroot-relative from resolveRef
 	// Create parent directory if needed and execute move on user's thread with correct UID
 	parentPath := path.Dir(newPath)
 	if parentPath != "." {
 		if err := fs.createDirectoryAsUser(ctx, parentPath, os.FileMode(fs.conf.DirPerms)); err != nil {
-			return errors.Wrap(err, "nceph: failed to create parent directory for move")
+			wrappedErr := errors.Wrap(err, "nceph: failed to create parent directory for move")
+			fs.logOperationError(ctx, "Move", fmt.Sprintf("%s -> %s", oldPath, newPath), wrappedErr)
+			return wrappedErr
 		}
 	}
 
 	err = fs.renameAsUser(ctx, oldPath, newPath)
 	if err != nil {
-		return errors.Wrap(err, "nceph: failed to move file")
+		wrappedErr := errors.Wrap(err, "nceph: failed to move file")
+		fs.logOperationError(ctx, "Move", fmt.Sprintf("%s -> %s", oldPath, newPath), wrappedErr)
+		return wrappedErr
 	}
 
 	return nil
@@ -367,31 +378,41 @@ func (fs *ncephfs) Move(ctx context.Context, oldRef, newRef *provider.Reference)
 
 func (fs *ncephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (ri *provider.ResourceInfo, err error) {
 	if ref == nil {
-		return nil, errors.New("error: ref is nil")
+		wrappedErr := errors.New("error: ref is nil")
+		fs.logOperationError(ctx, "GetMD", "", wrappedErr)
+		return nil, wrappedErr
 	}
 
 	log := appctx.GetLogger(ctx)
 	path, err := fs.resolveRef(ctx, ref)
 	if err != nil {
-		return nil, err
+		wrappedErr := errors.Wrap(err, "nceph: failed to resolve reference")
+		fs.logOperationError(ctx, "GetMD", "", wrappedErr)
+		return nil, wrappedErr
 	}
 
-	log.Debug().Str("path", path).Msg("GetMD")
+	fs.logOperation(ctx, "GetMD", path)
 
 	// path is already chroot-relative from resolveRef
 	// Execute stat operation on user's thread with correct UID
 	info, err := fs.statAsUser(ctx, path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, errtypes.NotFound("file not found")
+			wrappedErr := errtypes.NotFound("file not found")
+			fs.logOperationError(ctx, "GetMD", path, wrappedErr)
+			return nil, wrappedErr
 		}
-		return nil, errors.Wrap(err, "nceph: failed to stat file")
+		wrappedErr := errors.Wrap(err, "nceph: failed to stat file")
+		fs.logOperationError(ctx, "GetMD", path, wrappedErr)
+		return nil, wrappedErr
 	}
 
 	ri, err = fs.fileAsResourceInfo(path, info, mdKeys)
 	if err != nil {
 		log.Debug().Any("resourceInfo", ri).Err(err).Msg("fileAsResourceInfo returned error")
-		return nil, err
+		wrappedErr := errors.Wrap(err, "nceph: failed to convert file to resource info")
+		fs.logOperationError(ctx, "GetMD", path, wrappedErr)
+		return nil, wrappedErr
 	}
 
 	return ri, nil
@@ -399,21 +420,27 @@ func (fs *ncephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []
 
 func (fs *ncephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (files []*provider.ResourceInfo, err error) {
 	if ref == nil {
-		return nil, errors.New("error: ref is nil")
+		wrappedErr := errors.New("error: ref is nil")
+		fs.logOperationError(ctx, "ListFolder", "", wrappedErr)
+		return nil, wrappedErr
 	}
 
 	log := appctx.GetLogger(ctx)
 	path, err := fs.resolveRef(ctx, ref)
 	if err != nil {
-		return nil, err
+		wrappedErr := errors.Wrap(err, "nceph: failed to resolve reference")
+		fs.logOperationError(ctx, "ListFolder", "", wrappedErr)
+		return nil, wrappedErr
 	}
 
-	log.Debug().Str("path", path).Msg("ListFolder")
+	fs.logOperation(ctx, "ListFolder", path)
 
 	// Execute directory listing on user's thread with correct UID
 	entries, err := fs.readDirectoryAsUser(ctx, path)
 	if err != nil {
-		return nil, errors.Wrap(err, "nceph: failed to read directory")
+		wrappedErr := errors.Wrap(err, "nceph: failed to read directory")
+		fs.logOperationError(ctx, "ListFolder", path, wrappedErr)
+		return nil, wrappedErr
 	}
 
 	for _, entry := range entries {
@@ -438,16 +465,19 @@ func (fs *ncephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKe
 func (fs *ncephfs) Download(ctx context.Context, ref *provider.Reference) (rc io.ReadCloser, err error) {
 	path, err := fs.resolveRef(ctx, ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "nceph: error resolving ref")
+		wrappedErr := errors.Wrap(err, "nceph: error resolving ref")
+		fs.logOperationError(ctx, "Download", "", wrappedErr)
+		return nil, wrappedErr
 	}
 
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("path", path).Msg("Download")
+	fs.logOperation(ctx, "Download", path)
 
 	// Execute file open on user's thread with correct UID
 	file, err := fs.openFileAsUser(ctx, path)
 	if err != nil {
-		return nil, errors.Wrap(err, "nceph: failed to open file for download")
+		wrappedErr := errors.Wrap(err, "nceph: failed to open file for download")
+		fs.logOperationError(ctx, "Download", path, wrappedErr)
+		return nil, wrappedErr
 	}
 
 	return file, nil
@@ -457,24 +487,29 @@ func (fs *ncephfs) Download(ctx context.Context, ref *provider.Reference) (rc io
 func (fs *ncephfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, metadata map[string]string) error {
 	path, err := fs.resolveRef(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "nceph: error resolving reference")
+		wrappedErr := errors.Wrap(err, "nceph: error resolving reference")
+		fs.logOperationError(ctx, "Upload", "", wrappedErr)
+		return wrappedErr
 	}
 
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("path", path).Msg("Upload")
+	fs.logOperation(ctx, "Upload", path)
 
 	// Create parent directory if needed and execute upload on user's thread with correct UID
 	parentDir := filepath.Dir(path)
 	if parentDir != "." {
 		if err := fs.createDirectoryAsUser(ctx, parentDir, os.FileMode(fs.conf.DirPerms)); err != nil {
-			return errors.Wrap(err, "nceph: failed to create parent directory for upload")
+			wrappedErr := errors.Wrap(err, "nceph: failed to create parent directory for upload")
+			fs.logOperationError(ctx, "Upload", path, wrappedErr)
+			return wrappedErr
 		}
 	}
 
 	// Create and upload the file on user's thread
 	err = fs.uploadFileAsUser(ctx, path, r, os.FileMode(fs.conf.FilePerms))
 	if err != nil {
-		return errors.Wrap(err, "nceph: error uploading file")
+		wrappedErr := errors.Wrap(err, "nceph: error uploading file")
+		fs.logOperationError(ctx, "Upload", path, wrappedErr)
+		return wrappedErr
 	}
 
 	return nil
@@ -483,11 +518,12 @@ func (fs *ncephfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 func (fs *ncephfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 	path, err := fs.resolveRef(ctx, ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "nceph: error resolving reference")
+		wrappedErr := errors.Wrap(err, "nceph: error resolving reference")
+		fs.logOperationError(ctx, "InitiateUpload", "", wrappedErr)
+		return nil, wrappedErr
 	}
 
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("path", path).Int64("uploadLength", uploadLength).Msg("InitiateUpload")
+	fs.logOperation(ctx, "InitiateUpload", fmt.Sprintf("%s (length: %d)", path, uploadLength))
 
 	return map[string]string{
 		"simple": path,
@@ -495,36 +531,47 @@ func (fs *ncephfs) InitiateUpload(ctx context.Context, ref *provider.Reference, 
 }
 
 func (fs *ncephfs) ListRevisions(ctx context.Context, ref *provider.Reference) (fvs []*provider.FileVersion, err error) {
-	return nil, errtypes.NotSupported("nceph: ListRevisions not supported")
+	wrappedErr := errtypes.NotSupported("nceph: ListRevisions not supported")
+	fs.logOperationError(ctx, "ListRevisions", "", wrappedErr)
+	return nil, wrappedErr
 }
 
 func (fs *ncephfs) DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (file io.ReadCloser, err error) {
-	return nil, errtypes.NotSupported("nceph: DownloadRevision not supported")
+	wrappedErr := errtypes.NotSupported("nceph: DownloadRevision not supported")
+	fs.logOperationError(ctx, "DownloadRevision", "", wrappedErr)
+	return nil, wrappedErr
 }
 
 func (fs *ncephfs) RestoreRevision(ctx context.Context, ref *provider.Reference, key string) (err error) {
-	return errtypes.NotSupported("nceph: RestoreRevision not supported")
+	wrappedErr := errtypes.NotSupported("nceph: RestoreRevision not supported")
+	fs.logOperationError(ctx, "RestoreRevision", "", wrappedErr)
+	return wrappedErr
 }
 
 func (fs *ncephfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
 	path, err := fs.resolveRef(ctx, ref)
 	if err != nil {
-		return err
+		wrappedErr := errors.Wrap(err, "nceph: failed to resolve reference")
+		fs.logOperationError(ctx, "AddGrant", "", wrappedErr)
+		return wrappedErr
 	}
 
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("path", path).Any("grant", g).Msg("AddGrant")
+	fs.logOperation(ctx, "AddGrant", path)
 
 	// Store grant information as extended attributes using user's thread
 	grantData, err := json.Marshal(g)
 	if err != nil {
-		return errors.Wrap(err, "nceph: failed to marshal grant")
+		wrappedErr := errors.Wrap(err, "nceph: failed to marshal grant")
+		fs.logOperationError(ctx, "AddGrant", path, wrappedErr)
+		return wrappedErr
 	}
 
 	grantKey := fmt.Sprintf("user.grant.%s", g.Grantee.GetUserId().GetOpaqueId())
 	err = fs.setXattrAsUser(ctx, path, grantKey, grantData)
 	if err != nil {
-		return errors.Wrap(err, "nceph: failed to set grant xattr")
+		wrappedErr := errors.Wrap(err, "nceph: failed to set grant xattr")
+		fs.logOperationError(ctx, "AddGrant", path, wrappedErr)
+		return wrappedErr
 	}
 
 	return nil
@@ -533,18 +580,21 @@ func (fs *ncephfs) AddGrant(ctx context.Context, ref *provider.Reference, g *pro
 func (fs *ncephfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
 	path, err := fs.resolveRef(ctx, ref)
 	if err != nil {
-		return err
+		wrappedErr := errors.Wrap(err, "nceph: failed to resolve reference")
+		fs.logOperationError(ctx, "RemoveGrant", "", wrappedErr)
+		return wrappedErr
 	}
 
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("path", path).Any("grant", g).Msg("RemoveGrant")
+	fs.logOperation(ctx, "RemoveGrant", path)
 
 	grantKey := fmt.Sprintf("user.grant.%s", g.Grantee.GetUserId().GetOpaqueId())
 	err = fs.removeXattrAsUser(ctx, path, grantKey)
 	if err != nil {
 		// Ignore if the attribute doesn't exist
 		if !strings.Contains(err.Error(), "no such attribute") {
-			return errors.Wrap(err, "nceph: failed to remove grant xattr")
+			wrappedErr := errors.Wrap(err, "nceph: failed to remove grant xattr")
+			fs.logOperationError(ctx, "RemoveGrant", path, wrappedErr)
+			return wrappedErr
 		}
 	}
 
@@ -562,8 +612,7 @@ func (fs *ncephfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *pr
 		return err
 	}
 
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("path", path).Any("grantee", g).Msg("DenyGrant")
+	fs.logOperation(ctx, "DenyGrant", path)
 
 	grantKey := fmt.Sprintf("user.grant.%s", g.GetUserId().GetOpaqueId())
 	err = fs.removeXattrAsUser(ctx, path, grantKey)
@@ -583,8 +632,7 @@ func (fs *ncephfs) ListGrants(ctx context.Context, ref *provider.Reference) (gli
 		return nil, err
 	}
 
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("path", path).Msg("ListGrants")
+	fs.logOperation(ctx, "ListGrants", path)
 
 	// List all grant-related extended attributes on user's thread
 	attrs, err := fs.listXattrsAsUser(ctx, path)
@@ -677,18 +725,21 @@ func (fs *ncephfs) Shutdown(ctx context.Context) (err error) {
 func (fs *ncephfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
 	path, err := fs.resolveRef(ctx, ref)
 	if err != nil {
-		return err
+		wrappedErr := errors.Wrap(err, "nceph: failed to resolve reference")
+		fs.logOperationError(ctx, "SetArbitraryMetadata", "", wrappedErr)
+		return wrappedErr
 	}
 
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("path", path).Any("metadata", md).Msg("SetArbitraryMetadata")
+	fs.logOperation(ctx, "SetArbitraryMetadata", path)
 
 	for k, v := range md.Metadata {
 		if !strings.HasPrefix(k, xattrUserNs) {
 			k = xattrUserNs + k
 		}
 		if err := xattr.Set(path, k, []byte(v)); err != nil {
-			return errors.Wrap(err, "nceph: failed to set xattr")
+			wrappedErr := errors.Wrap(err, "nceph: failed to set xattr")
+			fs.logOperationError(ctx, "SetArbitraryMetadata", path, wrappedErr)
+			return wrappedErr
 		}
 	}
 
@@ -698,11 +749,12 @@ func (fs *ncephfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 func (fs *ncephfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) (err error) {
 	path, err := fs.resolveRef(ctx, ref)
 	if err != nil {
-		return err
+		wrappedErr := errors.Wrap(err, "nceph: failed to resolve reference")
+		fs.logOperationError(ctx, "UnsetArbitraryMetadata", "", wrappedErr)
+		return wrappedErr
 	}
 
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("path", path).Any("keys", keys).Msg("UnsetArbitraryMetadata")
+	fs.logOperation(ctx, "UnsetArbitraryMetadata", path)
 
 	for _, key := range keys {
 		if !strings.HasPrefix(key, xattrUserNs) {
@@ -711,7 +763,9 @@ func (fs *ncephfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Ref
 		if err := xattr.Remove(path, key); err != nil {
 			// Ignore if the attribute doesn't exist
 			if !strings.Contains(err.Error(), "no such attribute") {
-				return errors.Wrap(err, "nceph: failed to remove xattr")
+				wrappedErr := errors.Wrap(err, "nceph: failed to remove xattr")
+				fs.logOperationError(ctx, "UnsetArbitraryMetadata", path, wrappedErr)
+				return wrappedErr
 			}
 		}
 	}
@@ -725,8 +779,7 @@ func (fs *ncephfs) TouchFile(ctx context.Context, ref *provider.Reference) error
 		return err
 	}
 
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("path", path).Msg("TouchFile")
+	fs.logOperation(ctx, "TouchFile", path)
 
 	// Create parent directory if needed using chrooted operations
 	parentDir := filepath.Dir(path)
@@ -801,8 +854,7 @@ func (fs *ncephfs) SetLock(ctx context.Context, ref *provider.Reference, lock *p
 		return err
 	}
 
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("path", path).Any("lock", lock).Msg("SetLock")
+	fs.logOperation(ctx, "SetLock", path)
 
 	// Open the file for locking
 	file, err := os.OpenFile(path, os.O_RDWR, os.FileMode(fs.conf.FilePerms))
@@ -836,8 +888,7 @@ func (fs *ncephfs) GetLock(ctx context.Context, ref *provider.Reference) (*provi
 		return nil, err
 	}
 
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("path", path).Msg("GetLock")
+	fs.logOperation(ctx, "GetLock", path)
 
 	// Try to read lock metadata
 	buf, err := xattr.Get(path, xattrLock)
@@ -892,8 +943,7 @@ func (fs *ncephfs) Unlock(ctx context.Context, ref *provider.Reference, lock *pr
 		return err
 	}
 
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("path", path).Any("lock", lock).Msg("Unlock")
+	fs.logOperation(ctx, "Unlock", path)
 
 	oldLock, err := fs.GetLock(ctx, ref)
 	if err != nil {

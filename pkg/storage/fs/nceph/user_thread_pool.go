@@ -335,6 +335,19 @@ func (p *UserThreadPool) ExecuteOnUserThread(ctx context.Context, user *userv1be
 	return thread.Execute(ctx, fn)
 }
 
+// getExistingUserThread returns an existing user thread for the given UID, or nil if it doesn't exist
+func (p *UserThreadPool) getExistingUserThread(uid int) (*UserThread, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	thread, exists := p.threads[uid]
+	if !exists {
+		return nil, nil
+	}
+
+	return thread, nil
+}
+
 // Shutdown gracefully shuts down all user threads
 func (p *UserThreadPool) Shutdown() {
 	p.mu.Lock()

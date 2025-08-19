@@ -28,6 +28,54 @@ import (
 	"github.com/pkg/xattr"
 )
 
+// getUserInfo extracts user information for logging
+func (fs *ncephfs) getUserInfo(ctx context.Context) (username string, uid int, threadID int) {
+	user, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return "nobody", fs.conf.NobodyUID, 0
+	}
+
+	username = user.Username
+	uid, _ = fs.threadPool.mapUserToUIDGID(user)
+
+	// Get thread ID from the thread pool
+	thread, err := fs.threadPool.getExistingUserThread(uid)
+	if err == nil && thread != nil {
+		threadID = thread.threadID
+	}
+
+	return username, uid, threadID
+}
+
+// logOperation creates a debug log entry with consistent user and thread context
+func (fs *ncephfs) logOperation(ctx context.Context, operation, path string) {
+	username, uid, threadID := fs.getUserInfo(ctx)
+
+	log := appctx.GetLogger(ctx)
+	log.Debug().
+		Str("operation", operation).
+		Str("path", path).
+		Str("username", username).
+		Int("uid", uid).
+		Int("thread_id", threadID).
+		Msg("nceph operation")
+}
+
+// logOperationError creates an error log entry with consistent user and thread context
+func (fs *ncephfs) logOperationError(ctx context.Context, operation, path string, err error) {
+	username, uid, threadID := fs.getUserInfo(ctx)
+
+	log := appctx.GetLogger(ctx)
+	log.Error().
+		Err(err).
+		Str("operation", operation).
+		Str("path", path).
+		Str("username", username).
+		Int("uid", uid).
+		Int("thread_id", threadID).
+		Msg("nceph operation failed")
+}
+
 // executeAsUser runs a function that returns a result on the user's thread with correct UID
 func (fs *ncephfs) executeAsUser(ctx context.Context, fn func() (interface{}, error)) (interface{}, error) {
 	user, ok := appctx.ContextGetUser(ctx)
