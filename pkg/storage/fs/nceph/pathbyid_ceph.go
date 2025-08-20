@@ -289,6 +289,9 @@ func (fs *ncephfs) getActiveMDS(ctx context.Context) (string, error) {
 
 // parseObjectFormatResponse handles the original object-format response
 func (fs *ncephfs) parseObjectFormatResponse(ctx context.Context, buf []byte) (string, error) {
+	log := appctx.GetLogger(ctx)
+	
+	// First, try to parse as expected format where mdsmap is an object with info field
 	var fsStatus struct {
 		MDSMap struct {
 			Info json.RawMessage `json:"info"`
@@ -296,9 +299,56 @@ func (fs *ncephfs) parseObjectFormatResponse(ctx context.Context, buf []byte) (s
 	}
 
 	if err := json.Unmarshal(buf, &fsStatus); err != nil {
-		return "", errors.Wrap(err, "failed to parse object format fs status response")
+		// If that failed, maybe mdsmap itself is an array
+		log.Debug().Err(err).Msg("nceph: Failed to parse with mdsmap as object, trying mdsmap as array")
+		
+		// Try parsing where mdsmap is an array of MDS entries directly (no info wrapper)
+		var fsStatusWithDirectMDSArray struct {
+			MDSMap []struct {
+				Name  string `json:"name"`
+				State string `json:"state"`
+				Rank  int    `json:"rank,omitempty"`
+			} `json:"mdsmap"`
+		}
+
+		if err2 := json.Unmarshal(buf, &fsStatusWithDirectMDSArray); err2 != nil {
+			// If that also failed, try mdsmap as array with info fields
+			var fsStatusWithArrayMDSMap struct {
+				MDSMap []struct {
+					Info json.RawMessage `json:"info"`
+				} `json:"mdsmap"`
+			}
+
+			if err3 := json.Unmarshal(buf, &fsStatusWithArrayMDSMap); err3 != nil {
+				// All parsing attempts failed
+				log.Error().Err(err).Err(err2).Err(err3).Msg("nceph: Failed to parse fs status with all known mdsmap formats")
+				return "", errors.Wrap(err, "failed to parse fs status response - tried all known mdsmap formats")
+			}
+
+			// Successfully parsed with mdsmap as array with info fields, try each element
+			for i, mdsmap := range fsStatusWithArrayMDSMap.MDSMap {
+				log.Debug().Int("mdsmap_index", i).Msg("nceph: Processing mdsmap array element with info field")
+				activeMDS, err := fs.extractActiveMDSFromRawInfo(ctx, mdsmap.Info)
+				if err == nil && activeMDS != "" {
+					return activeMDS, nil
+				}
+			}
+			return "", errors.New("no active MDS found in mdsmap array with info fields")
+		}
+
+		// Successfully parsed with mdsmap as direct array (your case)
+		log.Debug().Int("mds_entries", len(fsStatusWithDirectMDSArray.MDSMap)).Msg("nceph: Successfully parsed mdsmap as direct array")
+		for i, mds := range fsStatusWithDirectMDSArray.MDSMap {
+			log.Debug().Int("mdsmap_index", i).Str("mds_name", mds.Name).Str("mds_state", mds.State).Msg("nceph: Processing direct mdsmap array element")
+			if strings.Contains(mds.State, "active") {
+				log.Debug().Str("active_mds", mds.Name).Msg("nceph: Found active MDS in direct array")
+				return mds.Name, nil
+			}
+		}
+		return "", errors.New("no active MDS found in direct mdsmap array")
 	}
 
+	// Successfully parsed with mdsmap as object (normal case)
 	return fs.extractActiveMDSFromRawInfo(ctx, fsStatus.MDSMap.Info)
 }
 
