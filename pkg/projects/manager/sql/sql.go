@@ -71,8 +71,9 @@ type Project struct {
 	gorm.Model
 	StorageID string `gorm:"size:255"`
 	Path      string
-	Name      string `gorm:"size:255;uniqueIndex:i_name"`
-	Owner     string `gorm:"size:255"`
+	Name      string `gorm:"size:255;uniqueIndex:i_name_archived"`
+	// Owner of the project
+	Owner string `gorm:"size:255"`
 	// Readers e-group ID
 	Readers string
 	// Writers e-group ID
@@ -86,6 +87,23 @@ type Project struct {
 	ReadmePath string
 	// Path of the thumbnail file
 	ThumbnailPath string
+	// True if the project is archived, i.e. not available to users in this state
+	Archived bool `gorm:"uniqueIndex:i_name_archived"`
+
+	// For internal use:
+
+	// Description of the use-case that was passed in the creation ticket
+	UserProvidedDescription string
+	// Service acount linked to the project
+	ServiceAccount string
+	// Comments about the project, for second / third level support
+	Comments string
+	// Reference to the ticket that requested the project
+	SnowTicket string
+	// ID of the Backup Job
+	BackupJobId string
+	// Initially requested capacity
+	InitialCapacityBytes uint64
 }
 
 func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
@@ -147,7 +165,7 @@ func (m *mgr) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 	if res, err := m.cache.Get(cacheKey); err == nil && res != nil {
 		fetchedProjects = res.([]*Project)
 	} else {
-		query := m.db.Model(&Project{})
+		query := m.db.Model(&Project{}).Where("archived = ?", false)
 		res := query.Find(&fetchedProjects)
 		if res.Error != nil {
 			return nil, res.Error
@@ -178,7 +196,7 @@ func (m *mgr) GetStorageSpace(ctx context.Context, name string) (*provider.Stora
 		return nil, errors.New("must provide a user for fetching storage spaces")
 	}
 
-	query := m.db.Model(&Project{}).Where("name = ?", name)
+	query := m.db.Model(&Project{}).Where("name = ?", name).Where("archived = ?", false)
 	res := query.First(fetchedProject)
 	if res.Error != nil {
 		return nil, res.Error
