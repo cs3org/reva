@@ -11,43 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGetPathByIDWithCeph(t *testing.T) {
-	// This test requires real Ceph configuration and the -ceph-integration flag
-	RequireCephIntegration(t)
-
-	// Create test directory (configurable via NCEPH_TEST_DIR environment variable)
-	tempDir, cleanup := GetTestDir(t, "nceph-ceph-test")
-	defer cleanup()
-
-	// Get Ceph configuration from environment or defaults
-	config := GetCephConfig()
-	config["root"] = tempDir // Override root with our test directory
-
-	// Initialize nceph with ceph configuration
-	ctx := context.Background()
-	fs, err := New(ctx, config)
-	require.NoError(t, err, "Failed to create nceph filesystem with Ceph configuration")
-	require.NotNil(t, fs)
-
-	// Test GetPathByID with a real Ceph connection
-	// This should either succeed (if the ID exists) or fail with a legitimate Ceph error
-	_, err = fs.GetPathByID(ctx, &provider.ResourceId{OpaqueId: "1"})
-
-	if err != nil {
-		// With valid Ceph configuration, we should get legitimate Ceph errors, not "not supported" errors
-		assert.NotContains(t, err.Error(), "build with -tags ceph", "Should not get build tag error with proper config")
-		assert.NotContains(t, err.Error(), "ceph support not enabled", "Should not get support disabled error with proper config")
-		assert.NotContains(t, err.Error(), "incomplete ceph configuration", "Should not get incomplete config error with proper config")
-
-		// Log the actual error for debugging
-		t.Logf("GetPathByID returned Ceph error (expected for non-existent ID): %v", err)
-	} else {
-		t.Log("GetPathByID succeeded - this means the resource ID '1' actually exists in the Ceph cluster")
-	}
-}
-
-func TestCephAdminConnWithCeph(t *testing.T) {
-	// This test requires real Ceph configuration and the -ceph-integration flag
+func TestCephAdminConnection(t *testing.T) {
+	// This test only verifies that we can establish a Ceph admin connection
 	RequireCephIntegration(t)
 
 	ctx := context.Background()
@@ -71,7 +36,7 @@ func TestCephAdminConnWithCeph(t *testing.T) {
 		assert.NotContains(t, err.Error(), "build with -tags ceph", "Should not get build tag error with proper config")
 		assert.NotContains(t, err.Error(), "incomplete ceph configuration", "Should not get incomplete config error with proper config")
 
-		// This could be a legitimate connection error (cluster not accessible, authentication issues, etc.)
+		// Any other error means the connection failed - this is a test failure
 		t.Fatalf("Failed to create Ceph admin connection with valid configuration: %v", err)
 	} else {
 		// Successfully created connection
@@ -83,5 +48,36 @@ func TestCephAdminConnWithCeph(t *testing.T) {
 		if conn != nil && conn.fsMount != nil {
 			conn.fsMount.Release()
 		}
+	}
+}
+
+func TestGetPathByIDIntegration(t *testing.T) {
+	// This test verifies the complete GetPathByID functionality
+	// It should fail for ANY error - connection issues, privilege issues, etc.
+	RequireCephIntegration(t)
+
+	// Create test directory (configurable via NCEPH_TEST_DIR environment variable)
+	tempDir, cleanup := GetTestDir(t, "nceph-pathbyid-test")
+	defer cleanup()
+
+	// Get Ceph configuration from environment or defaults
+	config := GetCephConfig()
+	config["root"] = tempDir // Override root with our test directory
+
+	// Initialize nceph with ceph configuration
+	ctx := context.Background()
+	fs, err := New(ctx, config)
+	require.NoError(t, err, "Failed to create nceph filesystem with Ceph configuration")
+	require.NotNil(t, fs)
+
+	// Test GetPathByID - this should work without any errors
+	// If it fails for any reason (connection, privileges, file not found, etc.), the test fails
+	_, err = fs.GetPathByID(ctx, &provider.ResourceId{OpaqueId: "1"})
+
+	if err != nil {
+		// ANY error is a test failure - we expect GetPathByID to work properly
+		t.Fatalf("GetPathByID failed. This indicates issues with Ceph connection, privileges, or configuration: %v", err)
+	} else {
+		t.Log("GetPathByID succeeded - Ceph integration is working correctly")
 	}
 }
