@@ -135,7 +135,7 @@ var (
 //	    // ... rest of test
 //	}
 //
-// Run with: go test -ceph-integration -v
+// Run with: go test -tags ceph -ceph-integration -v
 func RequireCephIntegration(t *testing.T) {
 	if !*cephIntegration {
 		t.Skip("Ceph integration tests disabled. Use -ceph-integration flag to enable.")

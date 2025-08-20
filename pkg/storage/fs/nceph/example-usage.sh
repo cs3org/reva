@@ -34,18 +34,24 @@ echo
 # Example 5: Ceph integration tests
 echo "5. Running Ceph integration tests (requires real Ceph cluster):"
 echo "   # With default Ceph configuration"
-echo "   go test -ceph-integration -v ./pkg/storage/fs/nceph/..."
+echo "   go test -tags ceph -ceph-integration -v ./pkg/storage/fs/nceph/..."
 echo
 echo "   # With custom Ceph configuration"
 echo "   export NCEPH_CEPH_CONFIG=/etc/ceph/custom.conf"
 echo "   export NCEPH_CEPH_CLIENT_ID=testuser"
 echo "   export NCEPH_CEPH_KEYRING=/etc/ceph/ceph.client.testuser.keyring"
-echo "   go test -ceph-integration -v ./pkg/storage/fs/nceph/..."
+echo "   go test -tags ceph -ceph-integration -v ./pkg/storage/fs/nceph/..."
 echo
 
 # Example 6: Running only Ceph integration tests
 echo "6. Running only Ceph GetPathByID tests:"
-echo "   go test -ceph-integration -v ./pkg/storage/fs/nceph/ -run TestGetPathByIDWithCeph"
+echo "   go test -tags ceph -ceph-integration -v ./pkg/storage/fs/nceph/ -run TestGetPathByIDWithCeph"
+echo
+
+# Example 7: What happens when you use the flag incorrectly
+echo "7. Incorrect usage (will fail):"
+echo "   go test -ceph-integration -v ./pkg/storage/fs/nceph/"
+echo "   # This fails because you need -tags ceph"
 echo
 
 echo "Environment Variables:"
@@ -60,6 +66,7 @@ echo
 
 echo "Test Flags:"
 echo "- -ceph-integration: Enable tests that require real Ceph cluster connection"
+echo "                     (Must be used with -tags ceph)"
 echo
 
 echo "For more information, see TESTING.md"
