@@ -19,6 +19,7 @@
 package nceph
 
 import (
+	"flag"
 	"os"
 	"path/filepath"
 	"testing"
@@ -118,4 +119,107 @@ func GetTestSubDir(t *testing.T, baseDir, subDirName string) string {
 		t.Fatalf("Failed to create subdirectory %s: %v", subDir, err)
 	}
 	return subDir
+}
+
+var (
+	cephIntegration = flag.Bool("ceph-integration", false, "Enable Ceph integration tests (requires valid Ceph configuration)")
+)
+
+// RequireCephIntegration checks if Ceph integration tests are enabled and configuration is valid.
+// If not, it skips the test. If the integration flag is set but configuration is invalid, it fails the test.
+//
+// Usage:
+//
+//	func TestCephFeature(t *testing.T) {
+//	    RequireCephIntegration(t)
+//	    // ... rest of test
+//	}
+//
+// Run with: go test -ceph-integration -v
+func RequireCephIntegration(t *testing.T) {
+	if !*cephIntegration {
+		t.Skip("Ceph integration tests disabled. Use -ceph-integration flag to enable.")
+	}
+
+	// Check for required Ceph configuration
+	if !ValidateCephConfig(t) {
+		t.Fatal("Ceph integration tests enabled but invalid configuration. Please set NCEPH_CEPH_CONFIG, NCEPH_CEPH_CLIENT_ID, and NCEPH_CEPH_KEYRING environment variables or ensure /etc/ceph/ceph.conf exists.")
+	}
+}
+
+// ValidateCephConfig checks if the required Ceph configuration is available.
+// It returns true if configuration appears to be valid, false otherwise.
+func ValidateCephConfig(t *testing.T) bool {
+	// Check environment variables first
+	cephConfig := os.Getenv("NCEPH_CEPH_CONFIG")
+	cephClientID := os.Getenv("NCEPH_CEPH_CLIENT_ID")
+	cephKeyring := os.Getenv("NCEPH_CEPH_KEYRING")
+
+	if cephConfig != "" && cephClientID != "" && cephKeyring != "" {
+		// Verify files exist
+		if _, err := os.Stat(cephConfig); err != nil {
+			t.Logf("Ceph config file not found: %s", cephConfig)
+			return false
+		}
+		if _, err := os.Stat(cephKeyring); err != nil {
+			t.Logf("Ceph keyring file not found: %s", cephKeyring)
+			return false
+		}
+		return true
+	}
+
+	// Fallback to default locations
+	defaultConfig := "/etc/ceph/ceph.conf"
+	defaultKeyring := "/etc/ceph/ceph.client.admin.keyring"
+
+	configExists := false
+	keyringExists := false
+
+	if _, err := os.Stat(defaultConfig); err == nil {
+		configExists = true
+	}
+	if _, err := os.Stat(defaultKeyring); err == nil {
+		keyringExists = true
+	}
+
+	if !configExists {
+		t.Logf("Default Ceph config not found at %s and NCEPH_CEPH_CONFIG not set", defaultConfig)
+	}
+	if !keyringExists {
+		t.Logf("Default Ceph keyring not found at %s and NCEPH_CEPH_KEYRING not set", defaultKeyring)
+	}
+
+	return configExists && keyringExists
+}
+
+// GetCephConfig returns the Ceph configuration to use for tests.
+// It checks environment variables first, then falls back to defaults.
+func GetCephConfig() map[string]interface{} {
+	config := map[string]interface{}{}
+
+	// Get base test directory
+	if baseDir := os.Getenv("NCEPH_TEST_DIR"); baseDir != "" {
+		config["root"] = baseDir
+	}
+
+	// Get Ceph configuration
+	cephConfig := os.Getenv("NCEPH_CEPH_CONFIG")
+	if cephConfig == "" {
+		cephConfig = "/etc/ceph/ceph.conf"
+	}
+	config["ceph_config"] = cephConfig
+
+	cephClientID := os.Getenv("NCEPH_CEPH_CLIENT_ID")
+	if cephClientID == "" {
+		cephClientID = "admin"
+	}
+	config["ceph_client_id"] = cephClientID
+
+	cephKeyring := os.Getenv("NCEPH_CEPH_KEYRING")
+	if cephKeyring == "" {
+		cephKeyring = "/etc/ceph/ceph.client.admin.keyring"
+	}
+	config["ceph_keyring"] = cephKeyring
+
+	return config
 }
