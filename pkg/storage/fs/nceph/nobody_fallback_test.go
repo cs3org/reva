@@ -30,12 +30,9 @@ import (
 )
 
 func TestNobodyUserFallback(t *testing.T) {
-	// Create temporary directory for test
-	tempDir, err := os.MkdirTemp("", "nceph-nobody-test-")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	// Create test directory (configurable via NCEPH_TEST_DIR environment variable)
+	tempDir, cleanup := GetTestDir(t, "nceph-nobody-test")
+	defer cleanup()
 
 	// Create nceph filesystem with custom nobody UID/GID
 	customNobodyUID := 99999
@@ -75,12 +72,9 @@ func TestNobodyUserFallback(t *testing.T) {
 }
 
 func TestNobodyUserMapping(t *testing.T) {
-	// Create temporary directory for test
-	tempDir, err := os.MkdirTemp("", "nceph-nobody-mapping-test-")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	// Create test directory (configurable via NCEPH_TEST_DIR environment variable)
+	tempDir, cleanup := GetTestDir(t, "nceph-nobody-mapping-test")
+	defer cleanup()
 
 	// Create nceph filesystem with default configuration
 	config := map[string]interface{}{
@@ -147,15 +141,12 @@ func TestNobodyUserMapping(t *testing.T) {
 }
 
 func TestNobodyUserOperations(t *testing.T) {
-	// Create temporary directory for test
-	tempDir, err := os.MkdirTemp("", "nceph-nobody-ops-test-")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	// Create test directory (configurable via NCEPH_TEST_DIR environment variable)
+	tempDir, cleanup := GetTestDir(t, "nceph-nobody-ops-test")
+	defer cleanup()
 
 	// Set permissions for the temp directory to be widely accessible
-	err = os.Chmod(tempDir, 0755)
+	err := os.Chmod(tempDir, 0755)
 	if err != nil {
 		t.Fatalf("Failed to set permissions: %v", err)
 	}

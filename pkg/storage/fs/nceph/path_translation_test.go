@@ -28,16 +28,9 @@ import (
 )
 
 func TestPathTranslation(t *testing.T) {
-	// Create temporary directory for test
-	tmpDir, err := os.MkdirTemp("", "nceph-path-test-*")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	// Set permissions for test user to write to the temp directory
-	err = os.Chmod(tmpDir, 0755)
-	require.NoError(t, err)
-	err = os.Chown(tmpDir, 1000, 1000)
-	require.NoError(t, err)
+	// Create test directory (configurable via NCEPH_TEST_DIR environment variable)
+	tmpDir, cleanup := SetupTestDir(t, "nceph-path-test", 1000, 1000)
+	defer cleanup()
 
 	// Create test context with user
 	ctx := context.Background()

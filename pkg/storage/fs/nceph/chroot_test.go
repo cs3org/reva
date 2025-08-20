@@ -30,16 +30,13 @@ import (
 )
 
 func TestChrootJail(t *testing.T) {
-	// Create a temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "nceph-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	// Create a test directory (configurable via NCEPH_TEST_DIR environment variable)
+	tempDir, cleanup := GetTestDir(t, "nceph-test")
+	defer cleanup()
 
 	// Create a test file outside the chroot
 	outsideFile := filepath.Join(os.TempDir(), "outside-chroot.txt")
-	err = os.WriteFile(outsideFile, []byte("secret data"), 0644)
+	err := os.WriteFile(outsideFile, []byte("secret data"), 0644)
 	if err != nil {
 		t.Fatalf("Failed to create outside file: %v", err)
 	}
@@ -105,12 +102,9 @@ func TestChrootJail(t *testing.T) {
 }
 
 func TestBasicFileOperations(t *testing.T) {
-	// Create a temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "nceph-ops-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	// Create test directory (configurable via NCEPH_TEST_DIR environment variable)
+	tempDir, cleanup := GetTestDir(t, "nceph-ops-test")
+	defer cleanup()
 
 	// Initialize nceph
 	ctx := context.Background()
@@ -158,12 +152,9 @@ func TestBasicFileOperations(t *testing.T) {
 }
 
 func TestGetPathByIDNotSupported(t *testing.T) {
-	// Create a temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "nceph-pathbyid-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	// Create test directory (configurable via NCEPH_TEST_DIR environment variable)
+	tempDir, cleanup := GetTestDir(t, "nceph-pathbyid-test")
+	defer cleanup()
 
 	// Initialize nceph without ceph configuration
 	ctx := context.Background()

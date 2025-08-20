@@ -151,12 +151,9 @@ func TestThreadPoolPrivilegeVerification(t *testing.T) {
 }
 
 func TestNCephPrivilegeVerificationIntegration(t *testing.T) {
-	// Create temporary directory for test
-	tempDir, err := os.MkdirTemp("", "nceph-privilege-test-")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	// Create test directory (configurable via NCEPH_TEST_DIR environment variable)
+	tempDir, cleanup := GetTestDir(t, "nceph-privilege-test")
+	defer cleanup()
 
 	// Create nceph filesystem - this should trigger privilege verification
 	config := map[string]interface{}{

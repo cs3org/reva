@@ -20,7 +20,6 @@ package nceph
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -31,19 +30,9 @@ import (
 )
 
 func TestNCeph_BasicOperations(t *testing.T) {
-	// Create a temporary directory for testing
-	tmpDir, err := os.MkdirTemp("", "nceph_test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	// Ensure the tmpDir is writable by the test user (UID 1000)
-	// When running as root, the tmpDir will be owned by root, but we need the test user to be able to write
-	err = os.Chmod(tmpDir, 0755)
-	require.NoError(t, err)
-
-	// Also change ownership to allow the test user to write
-	err = os.Chown(tmpDir, 1000, 1000)
-	require.NoError(t, err)
+	// Create a test directory (configurable via NCEPH_TEST_DIR environment variable)
+	tmpDir, cleanup := SetupTestDir(t, "nceph_test", 1000, 1000)
+	defer cleanup()
 
 	// Create nceph instance
 	config := map[string]interface{}{

@@ -4,7 +4,6 @@ package nceph
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -13,12 +12,9 @@ import (
 )
 
 func TestGetPathByIDWithoutCeph(t *testing.T) {
-	// Create a temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "nceph-noceph-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	// Create test directory (configurable via NCEPH_TEST_DIR environment variable)
+	tempDir, cleanup := GetTestDir(t, "nceph-noceph-test")
+	defer cleanup()
 
 	// Initialize nceph without ceph configuration
 	ctx := context.Background()
