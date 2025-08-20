@@ -19,10 +19,14 @@
 package nceph
 
 import (
+	"context"
 	"flag"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/rs/zerolog"
 )
 
 // GetTestDir returns a directory for testing. It checks for the NCEPH_TEST_DIR
@@ -109,6 +113,26 @@ func SetupTestDir(t *testing.T, prefix string, uid, gid int) (string, func()) {
 	}
 
 	return testDir, cleanup
+}
+
+// ContextWithTestLogger creates a context with a configured logger for testing.
+// This ensures that debug logs are visible during test runs.
+//
+// Usage:
+//
+//	ctx := ContextWithTestLogger(t)
+//	fs, err := newCephAdminConn(ctx, config)
+func ContextWithTestLogger(t *testing.T) context.Context {
+	// Create a logger that outputs to the test log
+	logger := zerolog.New(zerolog.NewTestWriter(t)).
+		Level(zerolog.DebugLevel).
+		With().
+		Timestamp().
+		Logger()
+
+	// Create context with the logger
+	ctx := appctx.WithLogger(context.Background(), &logger)
+	return ctx
 }
 
 // GetTestSubDir creates a subdirectory within an existing test directory.

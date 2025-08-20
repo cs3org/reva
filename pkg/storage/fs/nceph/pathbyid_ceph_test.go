@@ -3,7 +3,6 @@
 package nceph
 
 import (
-	"context"
 	"testing"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -15,7 +14,7 @@ func TestCephAdminConnection(t *testing.T) {
 	// This test only verifies that we can establish a Ceph admin connection
 	RequireCephIntegration(t)
 
-	ctx := context.Background()
+	ctx := ContextWithTestLogger(t)
 
 	// Get Ceph configuration from environment or defaults
 	cephConfig := GetCephConfig()
@@ -65,7 +64,7 @@ func TestGetPathByIDIntegration(t *testing.T) {
 	config["root"] = tempDir // Override root with our test directory
 
 	// Initialize nceph with ceph configuration
-	ctx := context.Background()
+	ctx := ContextWithTestLogger(t)
 	fs, err := New(ctx, config)
 	require.NoError(t, err, "Failed to create nceph filesystem with Ceph configuration")
 	require.NotNil(t, fs)
