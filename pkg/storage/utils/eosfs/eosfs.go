@@ -1274,14 +1274,17 @@ func (fs *Eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (totalby
 		return 0, 0, errors.Wrap(err, "eosfs: no user in ctx")
 	}
 	// lightweight accounts don't have quota nodes, so we're passing an empty string as path
-	auth, err := fs.getUserAuth(ctx, u, "")
+	userAuth, err := fs.getUserAuth(ctx, u, "")
 	if err != nil {
 		return 0, 0, err
 	}
-
 	cboxAuth := utils.GetEmptyAuth()
 
-	qi, err := fs.c.GetQuota(ctx, auth.Role.UID, cboxAuth, fs.conf.QuotaNode)
+	if ref.Path != fs.conf.QuotaNode && ref.Path != "" {
+		ref.Path = fs.wrap(ctx, ref.Path)
+	}
+
+	qi, err := fs.c.GetQuota(ctx, userAuth, cboxAuth, ref.Path)
 	if err != nil {
 		err := errors.Wrap(err, "eosfs: error getting quota")
 		return 0, 0, err
