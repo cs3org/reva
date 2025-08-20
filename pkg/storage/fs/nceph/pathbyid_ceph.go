@@ -237,10 +237,7 @@ func (fs *ncephfs) getActiveMDS(ctx context.Context) (string, error) {
 	// Parse response to find active MDS
 	var fsStatus struct {
 		MDSMap struct {
-			Info map[string]struct {
-				Name  string `json:"name"`
-				State string `json:"state"`
-			} `json:"info"`
+			Info json.RawMessage `json:"info"`
 		} `json:"mdsmap"`
 	}
 
@@ -248,14 +245,54 @@ func (fs *ncephfs) getActiveMDS(ctx context.Context) (string, error) {
 		return "", errors.Wrap(err, "failed to parse fs status response")
 	}
 
-	// Find active MDS
-	for _, mds := range fsStatus.MDSMap.Info {
-		if strings.Contains(mds.State, "active") {
-			return mds.Name, nil
+	// Handle both array and object formats for mdsmap.info
+	// Some Ceph versions return an array, others return a map/object
+	var activeMDS string
+	var parseErr error
+
+	// First, try to parse as array (newer Ceph versions)
+	var infoArray []struct {
+		Name  string `json:"name"`
+		State string `json:"state"`
+	}
+	if err := json.Unmarshal(fsStatus.MDSMap.Info, &infoArray); err == nil {
+		log := appctx.GetLogger(ctx)
+		log.Debug().Int("mds_count", len(infoArray)).Msg("nceph: Parsed mdsmap.info as array")
+		for _, mds := range infoArray {
+			if strings.Contains(mds.State, "active") {
+				activeMDS = mds.Name
+				break
+			}
+		}
+	} else {
+		// Try to parse as map/object (older Ceph versions)
+		var infoMap map[string]struct {
+			Name  string `json:"name"`
+			State string `json:"state"`
+		}
+		if err := json.Unmarshal(fsStatus.MDSMap.Info, &infoMap); err == nil {
+			log := appctx.GetLogger(ctx)
+			log.Debug().Int("mds_count", len(infoMap)).Msg("nceph: Parsed mdsmap.info as map")
+			for _, mds := range infoMap {
+				if strings.Contains(mds.State, "active") {
+					activeMDS = mds.Name
+					break
+				}
+			}
+		} else {
+			parseErr = errors.Wrap(err, "failed to parse mdsmap.info as either array or map")
 		}
 	}
 
-	return "", errors.New("no active MDS found")
+	if parseErr != nil {
+		return "", parseErr
+	}
+
+	if activeMDS == "" {
+		return "", errors.New("no active MDS found")
+	}
+
+	return activeMDS, nil
 }
 
 // dumpInodeViaCommand uses MDS commands to dump inode information
