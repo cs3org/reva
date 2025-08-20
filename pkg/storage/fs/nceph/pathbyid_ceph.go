@@ -234,7 +234,61 @@ func (fs *ncephfs) getActiveMDS(ctx context.Context) (string, error) {
 		log.Debug().Str("info", info).Msg("Manager command info")
 	}
 
-	// Parse response to find active MDS
+	// Add debug logging to see the raw response
+	log := appctx.GetLogger(ctx)
+	log.Debug().Str("fs_status_response", string(buf)).Msg("nceph: Raw fs status response for debugging")
+
+	// Try to determine the response format by looking at the first character
+	trimmed := strings.TrimSpace(string(buf))
+	if len(trimmed) == 0 {
+		return "", errors.New("empty fs status response")
+	}
+
+	var activeMDS string
+	var parseErr error
+
+	// Check if response starts with '[' (array) or '{' (object)
+	if strings.HasPrefix(trimmed, "[") {
+		log.Debug().Msg("nceph: fs status response appears to be an array")
+		// Handle array response format
+		var responseArray []map[string]interface{}
+		if err := json.Unmarshal(buf, &responseArray); err != nil {
+			parseErr = errors.Wrap(err, "failed to parse fs status array response")
+		} else {
+			// Look for mdsmap in array elements
+			for _, item := range responseArray {
+				if mdsmap, ok := item["mdsmap"]; ok {
+					activeMDS, parseErr = fs.extractActiveMDSFromMap(ctx, mdsmap)
+					if parseErr == nil && activeMDS != "" {
+						break
+					}
+				}
+			}
+			if activeMDS == "" && parseErr == nil {
+				parseErr = errors.New("no mdsmap found in array response")
+			}
+		}
+	} else if strings.HasPrefix(trimmed, "{") {
+		log.Debug().Msg("nceph: fs status response appears to be an object")
+		// Handle object response format (original approach)
+		activeMDS, parseErr = fs.parseObjectFormatResponse(ctx, buf)
+	} else {
+		parseErr = errors.New("fs status response format not recognized - does not start with { or [")
+	}
+
+	if parseErr != nil {
+		return "", parseErr
+	}
+
+	if activeMDS == "" {
+		return "", errors.New("no active MDS found in response")
+	}
+
+	return activeMDS, nil
+}
+
+// parseObjectFormatResponse handles the original object-format response
+func (fs *ncephfs) parseObjectFormatResponse(ctx context.Context, buf []byte) (string, error) {
 	var fsStatus struct {
 		MDSMap struct {
 			Info json.RawMessage `json:"info"`
@@ -242,12 +296,35 @@ func (fs *ncephfs) getActiveMDS(ctx context.Context) (string, error) {
 	}
 
 	if err := json.Unmarshal(buf, &fsStatus); err != nil {
-		return "", errors.Wrap(err, "failed to parse fs status response")
+		return "", errors.Wrap(err, "failed to parse object format fs status response")
 	}
 
-	// Handle both array and object formats for mdsmap.info
-	// Some Ceph versions return an array, others return a map/object
-	var activeMDS string
+	return fs.extractActiveMDSFromRawInfo(ctx, fsStatus.MDSMap.Info)
+}
+
+// extractActiveMDSFromMap extracts active MDS from a generic map (used for array responses)
+func (fs *ncephfs) extractActiveMDSFromMap(ctx context.Context, mdsmapInterface interface{}) (string, error) {
+
+	// Convert to JSON and back to handle the interface{}
+	mdsmapBytes, err := json.Marshal(mdsmapInterface)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to marshal mdsmap from array")
+	}
+
+	var mdsmap struct {
+		Info json.RawMessage `json:"info"`
+	}
+
+	if err := json.Unmarshal(mdsmapBytes, &mdsmap); err != nil {
+		return "", errors.Wrap(err, "failed to unmarshal mdsmap from array")
+	}
+
+	return fs.extractActiveMDSFromRawInfo(ctx, mdsmap.Info)
+}
+
+// extractActiveMDSFromRawInfo extracts active MDS from raw info JSON (handles both array and object)
+func (fs *ncephfs) extractActiveMDSFromRawInfo(ctx context.Context, infoRaw json.RawMessage) (string, error) {
+	log := appctx.GetLogger(ctx)
 	var parseErr error
 
 	// First, try to parse as array (newer Ceph versions)
@@ -255,13 +332,11 @@ func (fs *ncephfs) getActiveMDS(ctx context.Context) (string, error) {
 		Name  string `json:"name"`
 		State string `json:"state"`
 	}
-	if err := json.Unmarshal(fsStatus.MDSMap.Info, &infoArray); err == nil {
-		log := appctx.GetLogger(ctx)
+	if err := json.Unmarshal(infoRaw, &infoArray); err == nil {
 		log.Debug().Int("mds_count", len(infoArray)).Msg("nceph: Parsed mdsmap.info as array")
 		for _, mds := range infoArray {
 			if strings.Contains(mds.State, "active") {
-				activeMDS = mds.Name
-				break
+				return mds.Name, nil
 			}
 		}
 	} else {
@@ -270,13 +345,11 @@ func (fs *ncephfs) getActiveMDS(ctx context.Context) (string, error) {
 			Name  string `json:"name"`
 			State string `json:"state"`
 		}
-		if err := json.Unmarshal(fsStatus.MDSMap.Info, &infoMap); err == nil {
-			log := appctx.GetLogger(ctx)
+		if err := json.Unmarshal(infoRaw, &infoMap); err == nil {
 			log.Debug().Int("mds_count", len(infoMap)).Msg("nceph: Parsed mdsmap.info as map")
 			for _, mds := range infoMap {
 				if strings.Contains(mds.State, "active") {
-					activeMDS = mds.Name
-					break
+					return mds.Name, nil
 				}
 			}
 		} else {
@@ -288,11 +361,7 @@ func (fs *ncephfs) getActiveMDS(ctx context.Context) (string, error) {
 		return "", parseErr
 	}
 
-	if activeMDS == "" {
-		return "", errors.New("no active MDS found")
-	}
-
-	return activeMDS, nil
+	return "", nil // No active MDS found, but no error
 }
 
 // dumpInodeViaCommand uses MDS commands to dump inode information
