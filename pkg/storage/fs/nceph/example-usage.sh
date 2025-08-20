@@ -44,8 +44,12 @@ echo "   go test -tags ceph -ceph-integration -v ./pkg/storage/fs/nceph/..."
 echo
 
 # Example 6: Running only Ceph integration tests
-echo "6. Running only Ceph GetPathByID tests:"
-echo "   go test -tags ceph -ceph-integration -v ./pkg/storage/fs/nceph/ -run TestGetPathByIDWithCeph"
+echo "6. Running specific Ceph integration tests:"
+echo "   # Test just the Ceph connection"
+echo "   go test -tags ceph -ceph-integration -v ./pkg/storage/fs/nceph/ -run TestCephAdminConnection"
+echo
+echo "   # Test complete GetPathByID functionality (most comprehensive)"
+echo "   go test -tags ceph -ceph-integration -v ./pkg/storage/fs/nceph/ -run TestGetPathByIDIntegration"
 echo
 
 # Example 7: What happens when you use the flag incorrectly
@@ -67,6 +71,11 @@ echo
 echo "Test Flags:"
 echo "- -ceph-integration: Enable tests that require real Ceph cluster connection"
 echo "                     (Must be used with -tags ceph)"
+echo
+
+echo "Ceph Requirements for GetPathByID tests:"
+echo "- MDS admin access: ceph auth caps client.admin mds 'allow *'"
+echo "- Without MDS admin access, GetPathByID tests will fail"
 echo
 
 echo "For more information, see TESTING.md"

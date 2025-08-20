@@ -45,69 +45,97 @@ type CephAdminConn struct {
 // newCephAdminConn creates a ceph admin connection for GetPathByID operations
 func newCephAdminConn(ctx context.Context, conf *Options) (*CephAdminConn, error) {
 	log := appctx.GetLogger(ctx)
+	log.Debug().Msg("nceph: Starting ceph admin connection creation")
 
 	// Validate configuration
+	log.Debug().Str("ceph_config", conf.CephConfig).Str("client_id", conf.CephClientID).Str("keyring", conf.CephKeyring).Msg("nceph: Validating ceph configuration")
 	if conf.CephConfig == "" || conf.CephClientID == "" || conf.CephKeyring == "" {
+		log.Error().Str("ceph_config", conf.CephConfig).Str("client_id", conf.CephClientID).Str("keyring", conf.CephKeyring).Msg("nceph: Incomplete ceph configuration")
 		return nil, errors.New("nceph: incomplete ceph configuration")
 	}
+	log.Debug().Msg("nceph: Configuration validation passed")
 
 	// Create rados connection
+	log.Debug().Str("client_id", conf.CephClientID).Msg("nceph: Creating rados connection")
 	conn, err := rados2.NewConnWithUser(conf.CephClientID)
 	if err != nil {
+		log.Error().Err(err).Str("client_id", conf.CephClientID).Msg("nceph: Failed to create rados connection")
 		return nil, errors.Wrap(err, "nceph: failed to create rados connection")
 	}
+	log.Debug().Msg("nceph: Rados connection created successfully")
 
 	// Set configuration
+	log.Debug().Str("config_file", conf.CephConfig).Msg("nceph: Reading ceph config file")
 	err = conn.ReadConfigFile(conf.CephConfig)
 	if err != nil {
+		log.Error().Err(err).Str("config_file", conf.CephConfig).Msg("nceph: Failed to read ceph config file")
 		conn.Shutdown()
 		return nil, errors.Wrap(err, "nceph: failed to read ceph config file")
 	}
+	log.Debug().Str("config_file", conf.CephConfig).Msg("nceph: Config file read successfully")
 
 	// Set keyring
+	log.Debug().Str("keyring", conf.CephKeyring).Msg("nceph: Setting keyring for rados connection")
 	err = conn.SetConfigOption("keyring", conf.CephKeyring)
 	if err != nil {
+		log.Error().Err(err).Str("keyring", conf.CephKeyring).Msg("nceph: Failed to set keyring")
 		conn.Shutdown()
 		return nil, errors.Wrap(err, "nceph: failed to set keyring")
 	}
+	log.Debug().Str("keyring", conf.CephKeyring).Msg("nceph: Keyring set successfully")
 
 	// Connect to cluster
+	log.Debug().Msg("nceph: Connecting to ceph cluster")
 	err = conn.Connect()
 	if err != nil {
+		log.Error().Err(err).Msg("nceph: Failed to connect to ceph cluster")
 		conn.Shutdown()
 		return nil, errors.Wrap(err, "nceph: failed to connect to ceph cluster")
 	}
+	log.Debug().Msg("nceph: Successfully connected to ceph cluster")
 
 	// Create cephfs mount
+	log.Debug().Str("client_id", conf.CephClientID).Msg("nceph: Creating cephfs mount")
 	fsMount, err := goceph.CreateMountWithId(conf.CephClientID)
 	if err != nil {
+		log.Error().Err(err).Str("client_id", conf.CephClientID).Msg("nceph: Failed to create cephfs mount")
 		conn.Shutdown()
 		return nil, errors.Wrap(err, "nceph: failed to create cephfs mount")
 	}
+	log.Debug().Msg("nceph: CephFS mount created successfully")
 
 	// Configure mount with the same configuration
+	log.Debug().Str("config_file", conf.CephConfig).Msg("nceph: Reading config file for cephfs mount")
 	err = fsMount.ReadConfigFile(conf.CephConfig)
 	if err != nil {
+		log.Error().Err(err).Str("config_file", conf.CephConfig).Msg("nceph: Failed to read config for cephfs mount")
 		fsMount.Release()
 		conn.Shutdown()
 		return nil, errors.Wrap(err, "nceph: failed to read config for mount")
 	}
+	log.Debug().Str("config_file", conf.CephConfig).Msg("nceph: Config file read successfully for cephfs mount")
 
 	// Set keyring for mount
+	log.Debug().Str("keyring", conf.CephKeyring).Msg("nceph: Setting keyring for cephfs mount")
 	err = fsMount.SetConfigOption("keyring", conf.CephKeyring)
 	if err != nil {
+		log.Error().Err(err).Str("keyring", conf.CephKeyring).Msg("nceph: Failed to set keyring for cephfs mount")
 		fsMount.Release()
 		conn.Shutdown()
 		return nil, errors.Wrap(err, "nceph: failed to set keyring for mount")
 	}
+	log.Debug().Str("keyring", conf.CephKeyring).Msg("nceph: Keyring set successfully for cephfs mount")
 
 	// Mount the filesystem
+	log.Debug().Msg("nceph: Mounting cephfs filesystem")
 	err = fsMount.Mount()
 	if err != nil {
+		log.Error().Err(err).Msg("nceph: Failed to mount cephfs")
 		fsMount.Release()
 		conn.Shutdown()
 		return nil, errors.Wrap(err, "nceph: failed to mount cephfs")
 	}
+	log.Debug().Msg("nceph: CephFS filesystem mounted successfully")
 
 	log.Info().Msg("Successfully created ceph admin connection for GetPathByID with go-ceph library")
 
