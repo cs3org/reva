@@ -209,7 +209,18 @@ func (fs *ncephfs) getPathByInode(ctx context.Context, inode int64) (string, err
 
 	// Method 3: Try using the cephfs mount API directly
 	// This is a fallback method that doesn't require MDS commands
-	return "", errtypes.NotSupported("nceph: inode to path resolution requires MDS admin access")
+	log.Info().
+		Int64("inode", inode).
+		Str("available_methods", "tried MDS commands").
+		Msg("nceph: All MDS command approaches failed - inode to path resolution requires either MDS admin access or alternative implementation")
+
+	// Additional information about what might be needed
+	log.Info().
+		Str("requirement", "MDS admin permissions").
+		Str("alternative", "direct CephFS API").
+		Msg("nceph: To enable inode-to-path resolution, ensure the client has MDS admin capabilities or implement direct CephFS API approach")
+
+	return "", errtypes.NotSupported("nceph: inode to path resolution requires MDS admin access - tried multiple MDS command approaches but none succeeded")
 }
 
 // getActiveMDS gets the active MDS using manager commands
@@ -290,7 +301,7 @@ func (fs *ncephfs) getActiveMDS(ctx context.Context) (string, error) {
 // parseObjectFormatResponse handles the original object-format response
 func (fs *ncephfs) parseObjectFormatResponse(ctx context.Context, buf []byte) (string, error) {
 	log := appctx.GetLogger(ctx)
-	
+
 	// First, try to parse as expected format where mdsmap is an object with info field
 	var fsStatus struct {
 		MDSMap struct {
@@ -301,7 +312,7 @@ func (fs *ncephfs) parseObjectFormatResponse(ctx context.Context, buf []byte) (s
 	if err := json.Unmarshal(buf, &fsStatus); err != nil {
 		// If that failed, maybe mdsmap itself is an array
 		log.Debug().Err(err).Msg("nceph: Failed to parse with mdsmap as object, trying mdsmap as array")
-		
+
 		// Try parsing where mdsmap is an array of MDS entries directly (no info wrapper)
 		var fsStatusWithDirectMDSArray struct {
 			MDSMap []struct {
@@ -416,8 +427,73 @@ func (fs *ncephfs) extractActiveMDSFromRawInfo(ctx context.Context, infoRaw json
 
 // dumpInodeViaCommand uses MDS commands to dump inode information
 func (fs *ncephfs) dumpInodeViaCommand(ctx context.Context, mdsName string, inode int64) (string, error) {
-	// Prepare dump inode command
-	cmd, err := json.Marshal(map[string]interface{}{
+	log := appctx.GetLogger(ctx)
+
+	// Try different MDS commands that might work to get inode path information
+
+	// Method 1: Try inodes ls command to list inodes
+	cmd1, err := json.Marshal(map[string]interface{}{
+		"prefix": "inodes ls",
+		"format": "json",
+	})
+	if err == nil {
+		log.Debug().Str("command", "inodes ls").Msg("nceph: Trying inodes ls command")
+		buf, info, err := fs.cephAdminConn.radosConn.MgrCommand([][]byte{cmd1})
+		if err == nil {
+			log.Debug().Str("inodes_ls_response", string(buf)).Msg("nceph: inodes ls response")
+			// TODO: Parse the response to find the inode and extract path
+			if info != "" {
+				log.Debug().Str("info", info).Msg("inodes ls command info")
+			}
+		} else {
+			log.Debug().Err(err).Msg("nceph: inodes ls command failed")
+		}
+	}
+
+	// Method 2: Try dump inode command directly to the MDS
+	cmd2, err := json.Marshal(map[string]interface{}{
+		"prefix": "dump inode",
+		"inode":  inode,
+		"format": "json",
+	})
+	if err == nil {
+		log.Debug().Str("command", "dump inode").Int64("inode", inode).Msg("nceph: Trying dump inode command")
+		buf, info, err := fs.cephAdminConn.radosConn.MgrCommand([][]byte{cmd2})
+		if err == nil {
+			log.Debug().Str("dump_inode_response", string(buf)).Msg("nceph: dump inode response")
+			// TODO: Parse the response to extract path
+			if info != "" {
+				log.Debug().Str("info", info).Msg("dump inode command info")
+			}
+		} else {
+			log.Debug().Err(err).Msg("nceph: dump inode command failed")
+		}
+	}
+
+	// Method 3: Try using MDS tell command instead of MgrCommand
+	// This sends commands directly to the MDS daemon
+	cmd3, err := json.Marshal(map[string]interface{}{
+		"prefix": "tell",
+		"target": fmt.Sprintf("mds.%s", mdsName),
+		"args":   []string{"dump", "inode", fmt.Sprintf("%d", inode)},
+		"format": "json",
+	})
+	if err == nil {
+		log.Debug().Str("command", "tell mds dump inode").Str("mds", mdsName).Int64("inode", inode).Msg("nceph: Trying tell mds dump inode command")
+		buf, info, err := fs.cephAdminConn.radosConn.MgrCommand([][]byte{cmd3})
+		if err == nil {
+			log.Debug().Str("tell_mds_response", string(buf)).Msg("nceph: tell mds response")
+			// TODO: Parse the response to extract path
+			if info != "" {
+				log.Debug().Str("info", info).Msg("tell mds command info")
+			}
+		} else {
+			log.Debug().Err(err).Msg("nceph: tell mds command failed")
+		}
+	}
+
+	// Method 4: Get MDS metadata first (original approach but with better logging)
+	cmd4, err := json.Marshal(map[string]interface{}{
 		"prefix": "mds metadata",
 		"who":    mdsName,
 		"format": "json",
@@ -426,36 +502,24 @@ func (fs *ncephfs) dumpInodeViaCommand(ctx context.Context, mdsName string, inod
 		return "", errors.Wrap(err, "failed to marshal mds metadata command")
 	}
 
-	// Execute MDS command
-	buf, info, err := fs.cephAdminConn.radosConn.MgrCommand([][]byte{cmd})
+	log.Debug().Str("command", "mds metadata").Str("mds", mdsName).Msg("nceph: Trying mds metadata command")
+	buf, info, err := fs.cephAdminConn.radosConn.MgrCommand([][]byte{cmd4})
 	if err != nil {
+		log.Warn().Err(err).Str("mds", mdsName).Msg("nceph: mds metadata command failed - this may indicate insufficient MDS admin permissions")
 		return "", errors.Wrap(err, "failed to execute mds metadata command")
 	}
 
 	if info != "" {
-		log := appctx.GetLogger(ctx)
-		log.Debug().Str("info", info).Msg("MDS command info")
+		log.Debug().Str("info", info).Msg("MDS metadata command info")
 	}
 
-	// For a real implementation, you would need to:
-	// 1. Get the MDS rank/address from the metadata
-	// 2. Connect directly to the MDS
-	// 3. Send an inode dump command
-	// 4. Parse the response to extract the path
-
-	// This is a simplified approach - in production you might use:
-	// - Direct MDS socket connection
-	// - Custom admin socket commands
-	// - CephFS admin API calls
-
-	log := appctx.GetLogger(ctx)
 	log.Debug().
 		Str("mds", mdsName).
 		Int64("inode", inode).
-		Str("buffer", string(buf)).
-		Msg("Would dump inode information via MDS command")
+		Str("mds_metadata_response", string(buf)).
+		Msg("nceph: MDS metadata response - inode resolution not yet fully implemented")
 
-	// For now, return a placeholder indicating the command structure is ready
-	// but actual inode->path resolution requires more specific MDS integration
-	return "", fmt.Errorf("inode %d path resolution via MDS '%s' not fully implemented", inode, mdsName)
+	// For now, indicate that we got the MDS metadata but full inode->path resolution
+	// requires additional MDS API integration that's not yet implemented
+	return "", fmt.Errorf("inode %d path resolution via MDS '%s': got MDS metadata but full inode->path mapping requires additional MDS API integration (not yet implemented)", inode, mdsName)
 }
