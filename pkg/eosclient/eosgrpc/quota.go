@@ -13,9 +13,9 @@ import (
 )
 
 // GetQuota gets the quota of a user on the quota node defined by path.
-func (c *Client) GetQuota(ctx context.Context, username string, rootAuth eosclient.Authorization, path string) (*eosclient.QuotaInfo, error) {
+func (c *Client) GetQuota(ctx context.Context, user eosclient.Authorization, rootAuth eosclient.Authorization, path string) (*eosclient.QuotaInfo, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "GetQuota").Str("rootuid,rootgid", rootAuth.Role.UID+","+rootAuth.Role.GID).Str("username", username).Str("path", path).Msg("")
+	log.Info().Str("func", "GetQuota").Str("rootuid,rootgid", rootAuth.Role.UID+","+rootAuth.Role.GID).Any("user", user).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
 	rq, err := c.initNSRequest(ctx, rootAuth, "")
@@ -29,7 +29,21 @@ func (c *Client) GetQuota(ctx context.Context, username string, rootAuth eosclie
 	msg.Op = erpc.QUOTAOP_GET
 	// Eos filters the returned quotas by username. This means that EOS must know it, someone
 	// must have created an user with that name
-	msg.Id.Username = username
+
+	uid, err := strconv.ParseUint(user.Role.UID, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	gid, err := strconv.ParseUint(user.Role.GID, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	if gid == 99 {
+		msg.Id.Gid = gid
+	} else {
+		msg.Id.Uid = uid
+	}
 	msg.Id.Trace = trace.Get(ctx)
 	rq.Command = &erpc.NSRequest_Quota{Quota: msg}
 
@@ -41,13 +55,13 @@ func (c *Client) GetQuota(ctx context.Context, username string, rootAuth eosclie
 	}
 
 	if resp == nil {
-		return nil, errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
+		return nil, errtypes.InternalError(fmt.Sprintf("nil response for quota to user: '%s' path: '%s'", user, path))
 	}
 
 	if resp.GetError() != nil {
-		log.Error().Str("func", "GetQuota").Str("username", username).Str("info:", fmt.Sprintf("%#v", resp)).Int64("eoserrcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
+		log.Error().Str("func", "GetQuota").Any("user", user).Str("info:", fmt.Sprintf("%#v", resp)).Int64("eoserrcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
 	} else {
-		log.Debug().Str("func", "GetQuota").Str("username", username).Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+		log.Debug().Str("func", "GetQuota").Any("user", user).Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 	}
 
 	if resp.Quota == nil {

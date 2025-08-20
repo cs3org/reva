@@ -635,8 +635,15 @@ func deserializeAttribute(attrStr string) (*eosclient.Attribute, error) {
 }
 
 // GetQuota gets the quota of a user on the quota node defined by path.
-func (c *Client) GetQuota(ctx context.Context, username string, rootAuth eosclient.Authorization, path string) (*eosclient.QuotaInfo, error) {
-	args := []string{"quota", "ls", "-u", username, "-m"}
+func (c *Client) GetQuota(ctx context.Context, user eosclient.Authorization, rootAuth eosclient.Authorization, path string) (*eosclient.QuotaInfo, error) {
+	var args []string
+	// NewStyle project quota
+	if user.Role.GID == "99" {
+		args = []string{"quota", "ls", "-g", "99", "-p", path}
+	} else {
+		// Old style quota
+		args = []string{"quota", "ls", "-u", user.Role.UID, "-m"}
+	}
 	stdout, _, err := c.executeEOS(ctx, args, rootAuth)
 	if err != nil {
 		return nil, err

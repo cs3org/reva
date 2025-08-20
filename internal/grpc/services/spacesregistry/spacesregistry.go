@@ -172,7 +172,8 @@ func isFilterByID(filters []*provider.ListStorageSpacesRequest_Filter) (string, 
 func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, spaceType spaces.SpaceType) ([]*provider.StorageSpace, error) {
 	sp := []*provider.StorageSpace{}
 
-	if spaceType == spaces.SpaceTypeHome {
+	switch spaceType {
+	case spaces.SpaceTypeHome:
 		space, err := s.userSpace(ctx, user)
 		if err != nil {
 			return nil, err
@@ -180,7 +181,7 @@ func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, space
 		if space != nil {
 			sp = append(sp, space)
 		}
-	} else if spaceType == spaces.SpaceTypeProject {
+	case spaces.SpaceTypeProject:
 		resp, err := s.projects.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{})
 		if err != nil {
 			return nil, err
@@ -201,7 +202,7 @@ func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, space
 
 func (s *service) decorateProjects(ctx context.Context, projects []*provider.StorageSpace) error {
 	for _, proj := range projects {
-		// ADD QUOTA
+		// Add quota
 
 		// To get the quota for a project, we cannot do the request
 		// on behalf of the current logged user, because the project
@@ -209,6 +210,11 @@ func (s *service) decorateProjects(ctx context.Context, projects []*provider.Sto
 		// logged in user.
 		// We need then to impersonate the owner and ask the quota
 		// on behalf of him.
+
+		// This is no longer necessary for the new project quota nodes,
+		// but we need to keep it here until we migrate all of the old
+		// project quota nodes
+		// See CERNBOX-3995
 
 		authRes, err := s.gw.Authenticate(ctx, &gateway.AuthenticateRequest{
 			Type:         "machine",
@@ -225,7 +231,7 @@ func (s *service) decorateProjects(ctx context.Context, projects []*provider.Sto
 		token := authRes.Token
 		owner := authRes.User
 
-		ownerCtx := appctx.ContextSetToken(context.TODO(), token)
+		ownerCtx := appctx.ContextSetToken(context.Background(), token)
 		ownerCtx = metadata.AppendToOutgoingContext(ownerCtx, appctx.TokenHeader, token)
 		ownerCtx = appctx.ContextSetUser(ownerCtx, owner)
 
@@ -242,7 +248,7 @@ func (s *service) decorateProjects(ctx context.Context, projects []*provider.Sto
 			RemainingBytes: quota.TotalBytes - quota.UsedBytes,
 		}
 
-		// ADD LAST ACTIVITY
+		// Add mtime of space
 		statRes, err := s.gw.Stat(ctx, &provider.StatRequest{
 			Ref: &provider.Reference{
 				Path: proj.RootInfo.Path,
