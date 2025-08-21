@@ -18,6 +18,90 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
+package nceph
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/ceph/go-ceph/cephfs"
+	"github.com/ceph/go-ceph/rados"
+	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
+	cephfspb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	goceph "github.com/ceph/go-ceph/cephfs"
+)
+
+// CephAdminConn represents an admin connection to Ceph with both rados and cephfs components
+// adminMount is used for privileged operations like MDS commands
+type CephAdminConn struct {
+	radosConn  *rados.Conn
+	fsMount    *goceph.MountInfo
+	adminMount *goceph.MountInfo // Admin mount for privileged MDS commands
+}
+
+// Close releases resources and closes the admin connection
+func (conn *CephAdminConn) Close() error {
+	var errs []error
+
+	log.Debug().Msg("nceph: Closing admin ceph connection")
+
+	if conn.adminMount != nil {
+		log.Debug().Msg("nceph: Unmounting admin cephfs filesystem")
+		if err := conn.adminMount.Unmount(); err != nil {
+			log.Error().Err(err).Msg("nceph: Failed to unmount admin cephfs")
+			errs = append(errs, errors.Wrap(err, "nceph: failed to unmount admin cephfs"))
+		}
+		
+		log.Debug().Msg("nceph: Releasing admin mount")
+		conn.adminMount.Release()
+		conn.adminMount = nil
+	}
+
+	if conn.fsMount != nil {
+		log.Debug().Msg("nceph: Unmounting cephfs filesystem")
+		if err := conn.fsMount.Unmount(); err != nil {
+			log.Error().Err(err).Msg("nceph: Failed to unmount cephfs")
+			errs = append(errs, errors.Wrap(err, "nceph: failed to unmount cephfs"))
+		}
+		
+		log.Debug().Msg("nceph: Releasing mount")
+		conn.fsMount.Release()
+		conn.fsMount = nil
+	}
+
+	if conn.radosConn != nil {
+		log.Debug().Msg("nceph: Shutting down rados connection")
+		conn.radosConn.Shutdown()
+		conn.radosConn = nil
+	}
+
+	if len(errs) > 0 {
+		log.Error().Int("error_count", len(errs)).Msg("nceph: Errors occurred while closing admin connection")
+		return errs[0] // Return the first error
+	}
+
+	log.Debug().Msg("nceph: Admin ceph connection closed successfully")
+	return nil
+}of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
 // GetPathByID implementation with ceph support using go-ceph library
 package nceph
 
@@ -38,8 +122,9 @@ import (
 
 // CephAdminConn represents the admin connection to ceph for GetPathByID operations
 type CephAdminConn struct {
-	radosConn *rados2.Conn
-	fsMount   *goceph.MountInfo
+	radosConn  *rados2.Conn
+	fsMount    *goceph.MountInfo
+	adminMount *goceph.MountInfo // Admin mount for MDS commands
 }
 
 // newCephAdminConn creates a ceph admin connection for GetPathByID operations
@@ -126,22 +211,72 @@ func newCephAdminConn(ctx context.Context, conf *Options) (*CephAdminConn, error
 	}
 	log.Debug().Str("keyring", conf.CephKeyring).Msg("nceph: Keyring set successfully for cephfs mount")
 
-	// Mount the filesystem
-	log.Debug().Msg("nceph: Mounting cephfs filesystem")
-	err = fsMount.Mount()
+	// Mount the filesystem with root
+	log.Debug().Str("ceph_root", conf.CephRoot).Msg("nceph: Mounting cephfs filesystem with root")
+	err = fsMount.MountWithRoot(conf.CephRoot)
 	if err != nil {
-		log.Error().Err(err).Msg("nceph: Failed to mount cephfs")
+		log.Error().Err(err).Str("ceph_root", conf.CephRoot).Msg("nceph: Failed to mount cephfs with root")
 		fsMount.Release()
 		conn.Shutdown()
-		return nil, errors.Wrap(err, "nceph: failed to mount cephfs")
+		return nil, errors.Wrap(err, "nceph: failed to mount cephfs with root")
 	}
-	log.Debug().Msg("nceph: CephFS filesystem mounted successfully")
+	log.Debug().Msg("nceph: CephFS filesystem mounted successfully with root")
 
-	log.Info().Msg("Successfully created ceph admin connection for GetPathByID with go-ceph library")
+	// Create admin mount for MDS commands (following cephfs pattern)
+	log.Debug().Str("client_id", conf.CephClientID).Msg("nceph: Creating admin mount for MDS commands")
+	adminMount, err := goceph.CreateMountWithId(conf.CephClientID)
+	if err != nil {
+		log.Error().Err(err).Str("client_id", conf.CephClientID).Msg("nceph: Failed to create admin mount")
+		fsMount.Unmount()
+		fsMount.Release()
+		conn.Shutdown()
+		return nil, errors.Wrap(err, "nceph: failed to create admin mount")
+	}
+	log.Debug().Msg("nceph: Admin mount created successfully")
+
+	// Configure admin mount with the same configuration
+	log.Debug().Str("config_file", conf.CephConfig).Msg("nceph: Reading config file for admin mount")
+	err = adminMount.ReadConfigFile(conf.CephConfig)
+	if err != nil {
+		log.Error().Err(err).Str("config_file", conf.CephConfig).Msg("nceph: Failed to read config for admin mount")
+		adminMount.Release()
+		fsMount.Unmount()
+		fsMount.Release()
+		conn.Shutdown()
+		return nil, errors.Wrap(err, "nceph: failed to read config for admin mount")
+	}
+
+	// Set keyring for admin mount
+	log.Debug().Str("keyring", conf.CephKeyring).Msg("nceph: Setting keyring for admin mount")
+	err = adminMount.SetConfigOption("keyring", conf.CephKeyring)
+	if err != nil {
+		log.Error().Err(err).Str("keyring", conf.CephKeyring).Msg("nceph: Failed to set keyring for admin mount")
+		adminMount.Release()
+		fsMount.Unmount()
+		fsMount.Release()
+		conn.Shutdown()
+		return nil, errors.Wrap(err, "nceph: failed to set keyring for admin mount")
+	}
+
+	// Mount the admin filesystem with root
+	log.Debug().Str("ceph_root", conf.CephRoot).Msg("nceph: Mounting admin cephfs filesystem with root")
+	err = adminMount.MountWithRoot(conf.CephRoot)
+	if err != nil {
+		log.Error().Err(err).Str("ceph_root", conf.CephRoot).Msg("nceph: Failed to mount admin cephfs with root")
+		adminMount.Release()
+		fsMount.Unmount()
+		fsMount.Release()
+		conn.Shutdown()
+		return nil, errors.Wrap(err, "nceph: failed to mount admin cephfs with root")
+	}
+	log.Debug().Msg("nceph: Admin CephFS filesystem mounted successfully with root")
+
+	log.Info().Msg("Successfully created ceph admin connection with admin mount for MDS commands")
 
 	return &CephAdminConn{
-		radosConn: conn,
-		fsMount:   fsMount,
+		radosConn:  conn,
+		fsMount:    fsMount,
+		adminMount: adminMount,
 	}, nil
 }
 
@@ -162,7 +297,7 @@ func (fs *ncephfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (st
 	}
 
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("resourceId", id.OpaqueId).Msg("nceph: Starting GetPathByID operation using MDSCommand dump inode")
+	log.Info().Str("resourceId", id.OpaqueId).Msg("nceph: Starting GetPathByID operation using MdsCommand dump inode")
 
 	// Convert resource ID to inode number
 	inode, err := strconv.ParseInt(id.OpaqueId, 10, 64)
@@ -208,7 +343,7 @@ func (fs *ncephfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (st
 		log.Info().Str("final_path", path).Msg("nceph: Added leading slash to path")
 	}
 
-	log.Info().Str("final_path", path).Int64("inode", inode).Str("active_mds", activeMDS).Msg("nceph: Successfully resolved path by ID using MDSCommand dump inode")
+	log.Info().Str("final_path", path).Int64("inode", inode).Str("active_mds", activeMDS).Msg("nceph: Successfully resolved path by ID using MdsCommand dump inode")
 	return path, nil
 }
 
@@ -217,7 +352,7 @@ func (fs *ncephfs) dumpInode(ctx context.Context, mdsName string, inode int64) (
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("mds_name", mdsName).Int64("inode", inode).Msg("nceph: Preparing dump inode command")
 
-	// Use dump inode command directly to the MDS via MDSCommand
+	// Use dump inode command directly to the MDS via MdsCommand
 	cmdData := map[string]interface{}{
 		"prefix": "dump inode",
 		"inode":  inode,
@@ -237,7 +372,7 @@ func (fs *ncephfs) dumpInode(ctx context.Context, mdsName string, inode int64) (
 		Msg("nceph: Executing dump inode MdsCommand (direct to MDS)")
 
 	// Use MdsCommand instead of MgrCommand for direct MDS communication
-	buf, info, err := fs.cephAdminConn.fsMount.MdsCommand(mdsName, [][]byte{cmd})
+	buf, info, err := fs.cephAdminConn.adminMount.MdsCommand(mdsName, [][]byte{cmd})
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -281,7 +416,7 @@ func (fs *ncephfs) dumpInode(ctx context.Context, mdsName string, inode int64) (
 		Str("extracted_path", path).
 		Int64("inode", inode).
 		Str("mds_name", mdsName).
-		Msg("nceph: Successfully extracted path from dump inode MDSCommand response")
+		Msg("nceph: Successfully extracted path from dump inode MdsCommand response")
 
 	return path, nil
 }
