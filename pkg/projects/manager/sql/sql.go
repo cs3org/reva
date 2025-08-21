@@ -171,7 +171,8 @@ func (m *mgr) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 }
 
 func (m *mgr) GetStorageSpace(ctx context.Context, name string) (*provider.StorageSpace, error) {
-	var fetchedProject *Project
+	log := appctx.GetLogger(ctx)
+	fetchedProject := &Project{}
 
 	user, ok := appctx.ContextGetUser(ctx)
 	if !ok {
@@ -181,6 +182,8 @@ func (m *mgr) GetStorageSpace(ctx context.Context, name string) (*provider.Stora
 	query := m.db.Model(&Project{}).Where("name = ?", name)
 	res := query.First(fetchedProject)
 	if res.Error != nil {
+		log.Error().Err(res.Error).Msg("GetStorageSpace: database error")
+
 		return nil, res.Error
 	}
 
@@ -192,13 +195,13 @@ func (m *mgr) GetStorageSpace(ctx context.Context, name string) (*provider.Stora
 
 func (m *mgr) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	log := appctx.GetLogger(ctx)
-	if req == nil || req.StorageSpace == nil || req.StorageSpace.Id == nil {
+	if req == nil || req.StorageSpace == nil || req.StorageSpace.Id == nil || req.StorageSpace.Name == "" {
 		log.Error().Msg("UpdateStorageSpace called without valid request")
 		return &provider.UpdateStorageSpaceResponse{
 			Status: &rpcv1beta1.Status{
 				Code: rpcv1beta1.Code_CODE_INVALID,
 			},
-		}, errors.New("Must provide an ID when updating a storage space")
+		}, errors.New("Must provide an ID and name when updating a storage space")
 	}
 	log.Debug().Any("space", req.StorageSpace).Any("update", req.Field).Msg("Updating storage space")
 
@@ -233,6 +236,7 @@ func (m *mgr) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 	}
 
 	if res.Error != nil {
+		log.Error().Err(res.Error).Msg("UpdateStorageSpace: database error")
 		return nil, res.Error
 	}
 
