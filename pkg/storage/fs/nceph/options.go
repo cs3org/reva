@@ -31,10 +31,10 @@ type Options struct {
 	NobodyGID int `mapstructure:"nobody_gid"`
 
 	// Ceph configuration for GetPathByID operations
-	CephConfig   string `mapstructure:"ceph_config"`
-	CephClientID string `mapstructure:"ceph_client_id"`
-	CephKeyring  string `mapstructure:"ceph_keyring"`
-	CephRoot     string `mapstructure:"ceph_root"`
+	CephConfig   string `mapstructure:"ceph_config"`    // Path to /etc/ceph/ceph.conf
+	CephClientID string `mapstructure:"ceph_client_id"` // Ceph client ID (from keyring)
+	CephKeyring  string `mapstructure:"ceph_keyring"`   // Path to keyring file
+	CephRoot     string `mapstructure:"ceph_root"`      // Application-level: mount root for MountWithRoot() (NOT a Ceph config directive)
 
 	HiddenDirs map[string]bool
 }

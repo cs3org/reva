@@ -28,66 +28,31 @@ import (
 	"strconv"
 	"strings"
 
+	goceph "github.com/ceph/go-ceph/cephfs"
 	rados2 "github.com/ceph/go-ceph/rados"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/pkg/errors"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	goceph "github.com/ceph/go-ceph/cephfs"
 )
 
 // CephAdminConn represents an admin connection to Ceph with both rados and cephfs components
 // adminMount is used for privileged operations like MDS commands
 type CephAdminConn struct {
 	radosConn  *rados2.Conn
-	fsMount    *goceph.MountInfo
 	adminMount *goceph.MountInfo // Admin mount for privileged MDS commands
 }
 
 // Close releases resources and closes the admin connection
-func (conn *CephAdminConn) Close(ctx context.Context) error {
-	var errs []error
-
-	log := appctx.GetLogger(ctx)
-	log.Debug().Msg("nceph: Closing admin ceph connection")
-
-	if conn.adminMount != nil {
-		log.Debug().Msg("nceph: Unmounting admin cephfs filesystem")
-		if err := conn.adminMount.Unmount(); err != nil {
-			log.Error().Err(err).Msg("nceph: Failed to unmount admin cephfs")
-			errs = append(errs, errors.Wrap(err, "nceph: failed to unmount admin cephfs"))
-		}
-		
-		log.Debug().Msg("nceph: Releasing admin mount")
-		conn.adminMount.Release()
-		conn.adminMount = nil
+// Close cleans up the CephAdminConn resources
+func (c *CephAdminConn) Close() {
+	if c.adminMount != nil {
+		c.adminMount.Unmount()
+		c.adminMount.Release()
 	}
-
-	if conn.fsMount != nil {
-		log.Debug().Msg("nceph: Unmounting cephfs filesystem")
-		if err := conn.fsMount.Unmount(); err != nil {
-			log.Error().Err(err).Msg("nceph: Failed to unmount cephfs")
-			errs = append(errs, errors.Wrap(err, "nceph: failed to unmount cephfs"))
-		}
-		
-		log.Debug().Msg("nceph: Releasing mount")
-		conn.fsMount.Release()
-		conn.fsMount = nil
+	if c.radosConn != nil {
+		c.radosConn.Shutdown()
 	}
-
-	if conn.radosConn != nil {
-		log.Debug().Msg("nceph: Shutting down rados connection")
-		conn.radosConn.Shutdown()
-		conn.radosConn = nil
-	}
-
-	if len(errs) > 0 {
-		log.Error().Int("error_count", len(errs)).Msg("nceph: Errors occurred while closing admin connection")
-		return errs[0] // Return the first error
-	}
-
-	log.Debug().Msg("nceph: Admin ceph connection closed successfully")
-	return nil
 }
 
 // mustMarshal is a helper function to marshal data to JSON, panicking on error
@@ -99,155 +64,60 @@ func mustMarshal(v interface{}) []byte {
 	return data
 }
 
-// newCephAdminConn creates a ceph admin connection for GetPathByID operations
-func newCephAdminConn(ctx context.Context, conf *Options) (*CephAdminConn, error) {
-	log := appctx.GetLogger(ctx)
-	log.Debug().Msg("nceph: Starting ceph admin connection creation")
+// newCephAdminConn creates a new CephAdminConn with rados and admin mount connections
+func newCephAdminConn(ctx context.Context, cluster, user, secret, fsname, cephRoot string) (*CephAdminConn, error) {
+	logger := appctx.GetLogger(ctx)
 
-	// Validate configuration
-	log.Debug().Str("ceph_config", conf.CephConfig).Str("client_id", conf.CephClientID).Str("keyring", conf.CephKeyring).Msg("nceph: Validating ceph configuration")
-	if conf.CephConfig == "" || conf.CephClientID == "" || conf.CephKeyring == "" {
-		log.Error().Str("ceph_config", conf.CephConfig).Str("client_id", conf.CephClientID).Str("keyring", conf.CephKeyring).Msg("nceph: Incomplete ceph configuration")
-		return nil, errors.New("nceph: incomplete ceph configuration")
-	}
-	log.Debug().Msg("nceph: Configuration validation passed")
-
-	// Create rados connection
-	log.Debug().Str("client_id", conf.CephClientID).Msg("nceph: Creating rados connection")
-	conn, err := rados2.NewConnWithUser(conf.CephClientID)
+	// Create RADOS connection
+	conn, err := rados2.NewConn()
 	if err != nil {
-		log.Error().Err(err).Str("client_id", conf.CephClientID).Msg("nceph: Failed to create rados connection")
-		return nil, errors.Wrap(err, "nceph: failed to create rados connection")
+		logger.Error().Err(err).Msg("failed to create rados conn")
+		return nil, err
 	}
-	log.Debug().Msg("nceph: Rados connection created successfully")
 
-	// Set configuration
-	log.Debug().Str("config_file", conf.CephConfig).Msg("nceph: Reading ceph config file")
-	err = conn.ReadConfigFile(conf.CephConfig)
+	// Set cluster name and read config
+	conn.SetConfigOption("cluster", cluster)
+	err = conn.ReadDefaultConfigFile()
 	if err != nil {
-		log.Error().Err(err).Str("config_file", conf.CephConfig).Msg("nceph: Failed to read ceph config file")
+		logger.Error().Err(err).Msg("failed to read ceph config")
 		conn.Shutdown()
-		return nil, errors.Wrap(err, "nceph: failed to read ceph config file")
+		return nil, err
 	}
-	log.Debug().Str("config_file", conf.CephConfig).Msg("nceph: Config file read successfully")
 
-	// Set keyring
-	log.Debug().Str("keyring", conf.CephKeyring).Msg("nceph: Setting keyring for rados connection")
-	err = conn.SetConfigOption("keyring", conf.CephKeyring)
-	if err != nil {
-		log.Error().Err(err).Str("keyring", conf.CephKeyring).Msg("nceph: Failed to set keyring")
-		conn.Shutdown()
-		return nil, errors.Wrap(err, "nceph: failed to set keyring")
-	}
-	log.Debug().Str("keyring", conf.CephKeyring).Msg("nceph: Keyring set successfully")
+	// Set authentication
+	conn.SetConfigOption("key", secret)
 
-	// Connect to cluster
-	log.Debug().Msg("nceph: Connecting to ceph cluster")
+	// Connect to RADOS
 	err = conn.Connect()
 	if err != nil {
-		log.Error().Err(err).Msg("nceph: Failed to connect to ceph cluster")
+		logger.Error().Err(err).Msg("failed to connect to rados")
 		conn.Shutdown()
-		return nil, errors.Wrap(err, "nceph: failed to connect to ceph cluster")
+		return nil, err
 	}
-	log.Debug().Msg("nceph: Successfully connected to ceph cluster")
 
-	// Create cephfs mount
-	log.Debug().Str("client_id", conf.CephClientID).Msg("nceph: Creating cephfs mount")
-	fsMount, err := goceph.CreateMountWithId(conf.CephClientID)
+	// Create admin mount from rados connection to avoid redundant config setup
+	adminMount, err := goceph.CreateFromRados(conn)
 	if err != nil {
-		log.Error().Err(err).Str("client_id", conf.CephClientID).Msg("nceph: Failed to create cephfs mount")
+		logger.Error().Err(err).Msg("failed to create admin mount from rados")
 		conn.Shutdown()
-		return nil, errors.Wrap(err, "nceph: failed to create cephfs mount")
+		return nil, err
 	}
-	log.Debug().Msg("nceph: CephFS mount created successfully")
 
-	// Configure mount with the same configuration
-	log.Debug().Str("config_file", conf.CephConfig).Msg("nceph: Reading config file for cephfs mount")
-	err = fsMount.ReadConfigFile(conf.CephConfig)
-	if err != nil {
-		log.Error().Err(err).Str("config_file", conf.CephConfig).Msg("nceph: Failed to read config for cephfs mount")
-		fsMount.Release()
-		conn.Shutdown()
-		return nil, errors.Wrap(err, "nceph: failed to read config for mount")
+	// Mount the filesystem with root path
+	if cephRoot != "" {
+		err = adminMount.MountWithRoot(cephRoot)
+	} else {
+		err = adminMount.Mount()
 	}
-	log.Debug().Str("config_file", conf.CephConfig).Msg("nceph: Config file read successfully for cephfs mount")
-
-	// Set keyring for mount
-	log.Debug().Str("keyring", conf.CephKeyring).Msg("nceph: Setting keyring for cephfs mount")
-	err = fsMount.SetConfigOption("keyring", conf.CephKeyring)
 	if err != nil {
-		log.Error().Err(err).Str("keyring", conf.CephKeyring).Msg("nceph: Failed to set keyring for cephfs mount")
-		fsMount.Release()
-		conn.Shutdown()
-		return nil, errors.Wrap(err, "nceph: failed to set keyring for mount")
-	}
-	log.Debug().Str("keyring", conf.CephKeyring).Msg("nceph: Keyring set successfully for cephfs mount")
-
-	// Mount the filesystem with root
-	log.Debug().Str("ceph_root", conf.CephRoot).Msg("nceph: Mounting cephfs filesystem with root")
-	err = fsMount.MountWithRoot(conf.CephRoot)
-	if err != nil {
-		log.Error().Err(err).Str("ceph_root", conf.CephRoot).Msg("nceph: Failed to mount cephfs with root")
-		fsMount.Release()
-		conn.Shutdown()
-		return nil, errors.Wrap(err, "nceph: failed to mount cephfs with root")
-	}
-	log.Debug().Msg("nceph: CephFS filesystem mounted successfully with root")
-
-	// Create admin mount for MDS commands (following cephfs pattern)
-	log.Debug().Str("client_id", conf.CephClientID).Msg("nceph: Creating admin mount for MDS commands")
-	adminMount, err := goceph.CreateMountWithId(conf.CephClientID)
-	if err != nil {
-		log.Error().Err(err).Str("client_id", conf.CephClientID).Msg("nceph: Failed to create admin mount")
-		fsMount.Unmount()
-		fsMount.Release()
-		conn.Shutdown()
-		return nil, errors.Wrap(err, "nceph: failed to create admin mount")
-	}
-	log.Debug().Msg("nceph: Admin mount created successfully")
-
-	// Configure admin mount with the same configuration
-	log.Debug().Str("config_file", conf.CephConfig).Msg("nceph: Reading config file for admin mount")
-	err = adminMount.ReadConfigFile(conf.CephConfig)
-	if err != nil {
-		log.Error().Err(err).Str("config_file", conf.CephConfig).Msg("nceph: Failed to read config for admin mount")
+		logger.Error().Err(err).Msg("failed to mount ceph filesystem")
 		adminMount.Release()
-		fsMount.Unmount()
-		fsMount.Release()
 		conn.Shutdown()
-		return nil, errors.Wrap(err, "nceph: failed to read config for admin mount")
+		return nil, err
 	}
-
-	// Set keyring for admin mount
-	log.Debug().Str("keyring", conf.CephKeyring).Msg("nceph: Setting keyring for admin mount")
-	err = adminMount.SetConfigOption("keyring", conf.CephKeyring)
-	if err != nil {
-		log.Error().Err(err).Str("keyring", conf.CephKeyring).Msg("nceph: Failed to set keyring for admin mount")
-		adminMount.Release()
-		fsMount.Unmount()
-		fsMount.Release()
-		conn.Shutdown()
-		return nil, errors.Wrap(err, "nceph: failed to set keyring for admin mount")
-	}
-
-	// Mount the admin filesystem with root
-	log.Debug().Str("ceph_root", conf.CephRoot).Msg("nceph: Mounting admin cephfs filesystem with root")
-	err = adminMount.MountWithRoot(conf.CephRoot)
-	if err != nil {
-		log.Error().Err(err).Str("ceph_root", conf.CephRoot).Msg("nceph: Failed to mount admin cephfs with root")
-		adminMount.Release()
-		fsMount.Unmount()
-		fsMount.Release()
-		conn.Shutdown()
-		return nil, errors.Wrap(err, "nceph: failed to mount admin cephfs with root")
-	}
-	log.Debug().Msg("nceph: Admin CephFS filesystem mounted successfully with root")
-
-	log.Info().Msg("Successfully created ceph admin connection with admin mount for MDS commands")
 
 	return &CephAdminConn{
 		radosConn:  conn,
-		fsMount:    fsMount,
 		adminMount: adminMount,
 	}, nil
 }
@@ -319,7 +189,7 @@ func (fs *ncephfs) dumpInode(ctx context.Context, mdsName string, inode int64) (
 		"inode":  inode,
 		"format": "json",
 	}
-	
+
 	cmd, err := json.Marshal(cmdData)
 	if err != nil {
 		log.Error().Err(err).Interface("command_data", cmdData).Msg("nceph: Failed to marshal dump inode command")
@@ -381,6 +251,7 @@ func (fs *ncephfs) dumpInode(ctx context.Context, mdsName string, inode int64) (
 
 	return path, nil
 }
+
 // extractPathFromInodeOutput extracts path from MDS dump inode output
 func (fs *ncephfs) extractPathFromInodeOutput(ctx context.Context, output []byte) (string, error) {
 	log := appctx.GetLogger(ctx)
@@ -475,7 +346,7 @@ func (fs *ncephfs) getActiveMDS(ctx context.Context) (string, error) {
 	}
 
 	log.Info().Int("fields_count", len(fsStatus)).Msg("nceph: Successfully parsed fs status JSON")
-	
+
 	// Log all top-level fields for debugging
 	topLevelFields := make([]string, 0, len(fsStatus))
 	for key := range fsStatus {
@@ -509,7 +380,7 @@ func (fs *ncephfs) getActiveMDS(ctx context.Context) (string, error) {
 
 	if err := json.Unmarshal(mdsmapBytes, &mdsmap); err == nil && len(mdsmap.Info) > 0 {
 		log.Info().Int("info_size", len(mdsmap.Info)).Msg("nceph: Found 'info' field in mdsmap, parsing MDS entries")
-		
+
 		// Parse the info section as array first (newer Ceph format)
 		var infoArray []struct {
 			Name  string `json:"name"`
@@ -518,7 +389,7 @@ func (fs *ncephfs) getActiveMDS(ctx context.Context) (string, error) {
 		}
 		if err := json.Unmarshal(mdsmap.Info, &infoArray); err == nil {
 			log.Info().Int("mds_count", len(infoArray)).Msg("nceph: Successfully parsed mdsmap.info as array format")
-			
+
 			for i, mds := range infoArray {
 				log.Info().
 					Int("mds_index", i).
@@ -527,7 +398,7 @@ func (fs *ncephfs) getActiveMDS(ctx context.Context) (string, error) {
 					Int("mds_rank", mds.Rank).
 					Bool("is_active", strings.Contains(mds.State, "active")).
 					Msg("nceph: Evaluating MDS entry from array")
-				
+
 				if strings.Contains(mds.State, "active") {
 					log.Info().
 						Str("chosen_mds", mds.Name).
@@ -548,7 +419,7 @@ func (fs *ncephfs) getActiveMDS(ctx context.Context) (string, error) {
 			}
 			if err := json.Unmarshal(mdsmap.Info, &infoMap); err == nil {
 				log.Info().Int("mds_count", len(infoMap)).Msg("nceph: Successfully parsed mdsmap.info as map format")
-				
+
 				for key, mds := range infoMap {
 					log.Info().
 						Str("mds_key", key).
@@ -557,7 +428,7 @@ func (fs *ncephfs) getActiveMDS(ctx context.Context) (string, error) {
 						Int("mds_rank", mds.Rank).
 						Bool("is_active", strings.Contains(mds.State, "active")).
 						Msg("nceph: Evaluating MDS entry from map")
-					
+
 					if strings.Contains(mds.State, "active") {
 						log.Info().
 							Str("chosen_mds", mds.Name).
@@ -586,7 +457,7 @@ func (fs *ncephfs) getActiveMDS(ctx context.Context) (string, error) {
 	}
 	if err := json.Unmarshal(mdsmapBytes, &directMDSArray); err == nil {
 		log.Info().Int("mds_entries", len(directMDSArray)).Msg("nceph: Successfully parsed mdsmap as direct array")
-		
+
 		for i, mds := range directMDSArray {
 			log.Info().
 				Int("mds_index", i).
@@ -595,7 +466,7 @@ func (fs *ncephfs) getActiveMDS(ctx context.Context) (string, error) {
 				Int("mds_rank", mds.Rank).
 				Bool("is_active", strings.Contains(mds.State, "active")).
 				Msg("nceph: Evaluating MDS entry from direct array")
-			
+
 			if strings.Contains(mds.State, "active") {
 				log.Info().
 					Str("chosen_mds", mds.Name).
