@@ -23,7 +23,6 @@ package nceph
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -67,7 +66,7 @@ func mustMarshal(v interface{}) []byte {
 // newCephAdminConn creates a new CephAdminConn with rados and admin mount connections
 func newCephAdminConn(ctx context.Context, o *Options) (*CephAdminConn, error) {
 	logger := appctx.GetLogger(ctx)
-	
+
 	logger.Info().
 		Str("ceph_config", o.CephConfig).
 		Str("ceph_client_id", o.CephClientID).
@@ -228,8 +227,7 @@ func (fs *ncephfs) dumpInode(ctx context.Context, mdsName string, inode int64) (
 	// Use dump inode command directly to the MDS via MdsCommand
 	cmdData := map[string]interface{}{
 		"prefix": "dump inode",
-		"inode":  inode,
-		"format": "json",
+		"number": inode,
 	}
 
 	cmd, err := json.Marshal(cmdData)

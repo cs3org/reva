@@ -160,9 +160,12 @@ var (
 //	}
 //
 // Run with: go test -tags ceph -ceph-integration -v
+// Or set environment variable: NCEPH_ENABLE_INTEGRATION=true go test -tags ceph -v
 func RequireCephIntegration(t *testing.T) {
-	if !*cephIntegration {
-		t.Skip("Ceph integration tests disabled. Use -ceph-integration flag to enable.")
+	// Check both flag and environment variable
+	envEnabled := os.Getenv("NCEPH_ENABLE_INTEGRATION") == "true"
+	if !*cephIntegration && !envEnabled {
+		t.Skip("Ceph integration tests disabled. Use -ceph-integration flag or set NCEPH_ENABLE_INTEGRATION=true to enable.")
 	}
 
 	// Check for required Ceph configuration
