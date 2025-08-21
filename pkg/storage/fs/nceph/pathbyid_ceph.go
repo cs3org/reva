@@ -23,6 +23,7 @@ package nceph
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -66,53 +67,96 @@ func mustMarshal(v interface{}) []byte {
 // newCephAdminConn creates a new CephAdminConn with rados and admin mount connections
 func newCephAdminConn(ctx context.Context, o *Options) (*CephAdminConn, error) {
 	logger := appctx.GetLogger(ctx)
+	
+	logger.Info().
+		Str("ceph_config", o.CephConfig).
+		Str("ceph_client_id", o.CephClientID).
+		Str("ceph_keyring", o.CephKeyring).
+		Str("ceph_root", o.CephRoot).
+		Msg("creating new ceph admin connection")
 
 	// Create RADOS connection
+	logger.Info().Str("client_id", o.CephClientID).Msg("creating rados connection with user")
 	conn, err := rados2.NewConnWithUser(o.CephClientID)
 	if err != nil {
 		logger.Error().Err(err).Str("client_id", o.CephClientID).Msg("failed to create rados connection with user")
 		return nil, err
 	}
+	logger.Info().Msg("successfully created rados connection")
+
+	logger.Info().Msg("successfully created rados connection")
 
 	// Read config from the ceph config file
+	logger.Info().Str("config_file", o.CephConfig).Msg("reading ceph config file")
 	err = conn.ReadConfigFile(o.CephConfig)
 	if err != nil {
 		logger.Error().Err(err).Str("config_file", o.CephConfig).Msg("failed to read ceph config")
 		conn.Shutdown()
 		return nil, err
 	}
+	logger.Info().Str("config_file", o.CephConfig).Msg("successfully read ceph config file")
 
 	// Set keyring for authentication
+	logger.Info().Str("keyring_file", o.CephKeyring).Msg("setting keyring for authentication")
 	err = conn.SetConfigOption("keyring", o.CephKeyring)
 	if err != nil {
 		logger.Error().Err(err).Str("keyring_file", o.CephKeyring).Msg("failed to set keyring config")
 		conn.Shutdown()
 		return nil, err
 	}
+	logger.Info().Str("keyring_file", o.CephKeyring).Msg("successfully set keyring for authentication")
 
 	// Connect to RADOS
+	logger.Info().Msg("connecting to rados cluster")
 	err = conn.Connect()
 	if err != nil {
 		logger.Error().Err(err).Msg("failed to connect to rados")
 		conn.Shutdown()
 		return nil, err
 	}
+	logger.Info().Msg("successfully connected to rados cluster")
 
 	// Create admin mount from rados connection to avoid redundant config setup
+	logger.Info().Msg("creating ceph admin mount from rados connection")
 	adminMount, err := goceph.CreateFromRados(conn)
 	if err != nil {
 		logger.Error().Err(err).Msg("failed to create admin mount from rados")
 		conn.Shutdown()
 		return nil, err
 	}
+	logger.Info().Msg("successfully created ceph admin mount from rados connection")
 
-	err = adminMount.MountWithRoot(o.CephRoot)
-	if err != nil {
-		logger.Error().Err(err).Msg("failed to mount ceph filesystem")
-		adminMount.Release()
-		conn.Shutdown()
-		return nil, err
+	// Mount the filesystem with appropriate root path
+	if o.CephRoot != "" && o.CephRoot != "/" {
+		logger.Info().Str("ceph_root", o.CephRoot).Msg("attempting to mount ceph filesystem with custom root")
+		err = adminMount.MountWithRoot(o.CephRoot)
+		if err != nil {
+			logger.Error().Err(err).Str("ceph_root", o.CephRoot).Msg("failed to mount ceph filesystem with custom root - trying default mount")
+			// Fallback to default mount
+			err = adminMount.Mount()
+			if err != nil {
+				logger.Error().Err(err).Msg("failed to mount ceph filesystem at default root")
+				adminMount.Release()
+				conn.Shutdown()
+				return nil, err
+			}
+			logger.Info().Msg("successfully mounted ceph filesystem at default root (fallback from custom root)")
+		} else {
+			logger.Info().Str("ceph_root", o.CephRoot).Msg("successfully mounted ceph filesystem with custom root")
+		}
+	} else {
+		logger.Info().Msg("mounting ceph filesystem at default root")
+		err = adminMount.Mount()
+		if err != nil {
+			logger.Error().Err(err).Msg("failed to mount ceph filesystem at default root")
+			adminMount.Release()
+			conn.Shutdown()
+			return nil, err
+		}
+		logger.Info().Msg("successfully mounted ceph filesystem at default root")
 	}
+
+	logger.Info().Msg("ceph admin connection created successfully")
 
 	return &CephAdminConn{
 		radosConn:  conn,
