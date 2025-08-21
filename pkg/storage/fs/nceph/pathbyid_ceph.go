@@ -23,7 +23,6 @@ package nceph
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -65,27 +64,31 @@ func mustMarshal(v interface{}) []byte {
 }
 
 // newCephAdminConn creates a new CephAdminConn with rados and admin mount connections
-func newCephAdminConn(ctx context.Context, cluster, user, secret, fsname, cephRoot string) (*CephAdminConn, error) {
+func newCephAdminConn(ctx context.Context, o *Options) (*CephAdminConn, error) {
 	logger := appctx.GetLogger(ctx)
 
 	// Create RADOS connection
-	conn, err := rados2.NewConn()
+	conn, err := rados2.NewConnWithUser(o.CephClientID)
 	if err != nil {
-		logger.Error().Err(err).Msg("failed to create rados conn")
+		logger.Error().Err(err).Str("client_id", o.CephClientID).Msg("failed to create rados connection with user")
 		return nil, err
 	}
 
-	// Set cluster name and read config
-	conn.SetConfigOption("cluster", cluster)
-	err = conn.ReadDefaultConfigFile()
+	// Read config from the ceph config file
+	err = conn.ReadConfigFile(o.CephConfig)
 	if err != nil {
-		logger.Error().Err(err).Msg("failed to read ceph config")
+		logger.Error().Err(err).Str("config_file", o.CephConfig).Msg("failed to read ceph config")
 		conn.Shutdown()
 		return nil, err
 	}
 
-	// Set authentication
-	conn.SetConfigOption("key", secret)
+	// Set keyring for authentication
+	err = conn.SetConfigOption("keyring", o.CephKeyring)
+	if err != nil {
+		logger.Error().Err(err).Str("keyring_file", o.CephKeyring).Msg("failed to set keyring config")
+		conn.Shutdown()
+		return nil, err
+	}
 
 	// Connect to RADOS
 	err = conn.Connect()
@@ -103,12 +106,7 @@ func newCephAdminConn(ctx context.Context, cluster, user, secret, fsname, cephRo
 		return nil, err
 	}
 
-	// Mount the filesystem with root path
-	if cephRoot != "" {
-		err = adminMount.MountWithRoot(cephRoot)
-	} else {
-		err = adminMount.Mount()
-	}
+	err = adminMount.MountWithRoot(o.CephRoot)
 	if err != nil {
 		logger.Error().Err(err).Msg("failed to mount ceph filesystem")
 		adminMount.Release()

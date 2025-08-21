@@ -123,7 +123,7 @@ func TestCephRootConfiguration(t *testing.T) {
 			t.Logf("Successfully created connection with custom Ceph root: %s", customRoot)
 			// Clean up
 			if conn != nil {
-				_ = conn.Close(ctx)
+				conn.Close()
 			}
 		}
 	})
