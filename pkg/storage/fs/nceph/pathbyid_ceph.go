@@ -24,31 +24,31 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
-	"github.com/ceph/go-ceph/cephfs"
-	"github.com/ceph/go-ceph/rados"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/errtypes"
+	rados2 "github.com/ceph/go-ceph/rados"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
-	cephfspb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	goceph "github.com/ceph/go-ceph/cephfs"
 )
 
 // CephAdminConn represents an admin connection to Ceph with both rados and cephfs components
 // adminMount is used for privileged operations like MDS commands
 type CephAdminConn struct {
-	radosConn  *rados.Conn
+	radosConn  *rados2.Conn
 	fsMount    *goceph.MountInfo
 	adminMount *goceph.MountInfo // Admin mount for privileged MDS commands
 }
 
 // Close releases resources and closes the admin connection
-func (conn *CephAdminConn) Close() error {
+func (conn *CephAdminConn) Close(ctx context.Context) error {
 	var errs []error
 
+	log := appctx.GetLogger(ctx)
 	log.Debug().Msg("nceph: Closing admin ceph connection")
 
 	if conn.adminMount != nil {
@@ -88,43 +88,15 @@ func (conn *CephAdminConn) Close() error {
 
 	log.Debug().Msg("nceph: Admin ceph connection closed successfully")
 	return nil
-}of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// In applying this license, CERN does not waive the privileges and immunities
-// granted to it by virtue of its status as an Intergovernmental Organization
-// or submit itself to any jurisdiction.
+}
 
-// GetPathByID implementation with ceph support using go-ceph library
-package nceph
-
-import (
-	"context"
-	"encoding/json"
-	"regexp"
-	"strconv"
-	"strings"
-
-	goceph "github.com/ceph/go-ceph/cephfs"
-	rados2 "github.com/ceph/go-ceph/rados"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"github.com/pkg/errors"
-)
-
-// CephAdminConn represents the admin connection to ceph for GetPathByID operations
-type CephAdminConn struct {
-	radosConn  *rados2.Conn
-	fsMount    *goceph.MountInfo
-	adminMount *goceph.MountInfo // Admin mount for MDS commands
+// mustMarshal is a helper function to marshal data to JSON, panicking on error
+func mustMarshal(v interface{}) []byte {
+	data, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return data
 }
 
 // newCephAdminConn creates a ceph admin connection for GetPathByID operations
@@ -278,17 +250,6 @@ func newCephAdminConn(ctx context.Context, conf *Options) (*CephAdminConn, error
 		fsMount:    fsMount,
 		adminMount: adminMount,
 	}, nil
-}
-
-// Close closes the ceph admin connection
-func (c *CephAdminConn) Close() {
-	if c.fsMount != nil {
-		c.fsMount.Unmount()
-		c.fsMount.Release()
-	}
-	if c.radosConn != nil {
-		c.radosConn.Shutdown()
-	}
 }
 
 func (fs *ncephfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
