@@ -162,140 +162,129 @@ func (fs *ncephfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (st
 	}
 
 	log := appctx.GetLogger(ctx)
-	log.Debug().Str("resourceId", id.OpaqueId).Msg("GetPathByID with CephFS implementation approach")
+	log.Info().Str("resourceId", id.OpaqueId).Msg("nceph: Starting GetPathByID operation using dump inode command")
 
 	// Convert resource ID to inode number
 	inode, err := strconv.ParseInt(id.OpaqueId, 10, 64)
 	if err != nil {
+		log.Error().Str("resourceId", id.OpaqueId).Err(err).Msg("nceph: Invalid resource ID format - must be numeric inode")
 		return "", errors.Wrap(err, "nceph: invalid resource ID format")
 	}
 
+	log.Info().Int64("inode", inode).Msg("nceph: Successfully parsed resource ID to inode number")
+
 	// Get filesystem status to find active MDS
+	log.Info().Msg("nceph: Finding active MDS for inode operation")
 	activeMDS, err := fs.getActiveMDS(ctx)
 	if err != nil {
+		log.Error().Err(err).Msg("nceph: Failed to find active MDS - cannot proceed with inode lookup")
 		return "", errors.Wrap(err, "nceph: failed to get active MDS")
 	}
 
-	log.Debug().Str("active_mds", activeMDS).Int64("inode", inode).Msg("Found active MDS, dumping inode")
+	log.Info().Str("active_mds", activeMDS).Int64("inode", inode).Msg("nceph: Active MDS selected - proceeding with inode dump")
 
 	// Dump inode information using the active MDS
+	log.Info().Str("active_mds", activeMDS).Int64("inode", inode).Msg("nceph: Executing dump inode command")
 	path, err := fs.dumpInode(ctx, activeMDS, inode)
 	if err != nil {
+		log.Error().Str("active_mds", activeMDS).Int64("inode", inode).Err(err).Msg("nceph: Dump inode command failed")
 		return "", errors.Wrap(err, "nceph: failed to dump inode")
 	}
 
+	log.Info().Str("raw_path", path).Msg("nceph: Successfully extracted path from inode dump")
+
 	// Remove ceph root prefix if configured
+	originalPath := path
 	if fs.conf.CephRoot != "" {
 		path = strings.TrimPrefix(path, fs.conf.CephRoot)
+		if originalPath != path {
+			log.Info().Str("ceph_root", fs.conf.CephRoot).Str("original_path", originalPath).Str("trimmed_path", path).Msg("nceph: Removed CephRoot prefix from path")
+		}
 	}
 
 	// Ensure path starts with /
 	if path != "" && !strings.HasPrefix(path, "/") {
 		path = "/" + path
+		log.Info().Str("final_path", path).Msg("nceph: Added leading slash to path")
 	}
 
-	log.Debug().Str("path", path).Int64("inode", inode).Msg("Successfully resolved path by ID using CephFS approach")
+	log.Info().Str("final_path", path).Int64("inode", inode).Str("active_mds", activeMDS).Msg("nceph: Successfully resolved path by ID using dump inode command")
 	return path, nil
 }
 
-// dumpInodeViaCommand uses MDS commands to dump inode information
+// dumpInode uses the dump inode command to get inode information
 func (fs *ncephfs) dumpInode(ctx context.Context, mdsName string, inode int64) (string, error) {
 	log := appctx.GetLogger(ctx)
+	log.Info().Str("mds_name", mdsName).Int64("inode", inode).Msg("nceph: Preparing dump inode command")
 
-	// Try different MDS commands that might work to get inode path information
-
-	// Method 1: Try inodes ls command to list inodes
-	cmd1, err := json.Marshal(map[string]interface{}{
-		"prefix": "inodes ls",
-		"format": "json",
-	})
-	if err == nil {
-		log.Debug().Str("command", "inodes ls").Msg("nceph: Trying inodes ls command")
-		buf, info, err := fs.cephAdminConn.radosConn.MgrCommand([][]byte{cmd1})
-		if err == nil {
-			log.Debug().Str("inodes_ls_response", string(buf)).Msg("nceph: inodes ls response")
-			// TODO: Parse the response to find the inode and extract path
-			if info != "" {
-				log.Debug().Str("info", info).Msg("inodes ls command info")
-			}
-		} else {
-			log.Debug().Err(err).Msg("nceph: inodes ls command failed")
-		}
-	}
-
-	// Method 2: Try dump inode command directly to the MDS
-	cmd2, err := json.Marshal(map[string]interface{}{
+	// Use dump inode command directly to the MDS
+	cmdData := map[string]interface{}{
 		"prefix": "dump inode",
 		"inode":  inode,
 		"format": "json",
-	})
-	if err == nil {
-		log.Debug().Str("command", "dump inode").Int64("inode", inode).Msg("nceph: Trying dump inode command")
-		buf, info, err := fs.cephAdminConn.radosConn.MgrCommand([][]byte{cmd2})
-		if err == nil {
-			log.Debug().Str("dump_inode_response", string(buf)).Msg("nceph: dump inode response")
-			// TODO: Parse the response to extract path
-			if info != "" {
-				log.Debug().Str("info", info).Msg("dump inode command info")
-			}
-		} else {
-			log.Debug().Err(err).Msg("nceph: dump inode command failed")
-		}
 	}
-
-	// Method 3: Try using MDS tell command instead of MgrCommand
-	// This sends commands directly to the MDS daemon
-	cmd3, err := json.Marshal(map[string]interface{}{
-		"prefix": "tell",
-		"target": "mds." + mdsName,
-		"args":   []string{"dump", "inode", strconv.FormatInt(inode, 10)},
-		"format": "json",
-	})
-	if err == nil {
-		log.Debug().Str("command", "tell mds dump inode").Str("mds", mdsName).Int64("inode", inode).Msg("nceph: Trying tell mds dump inode command")
-		buf, info, err := fs.cephAdminConn.radosConn.MgrCommand([][]byte{cmd3})
-		if err == nil {
-			log.Debug().Str("tell_mds_response", string(buf)).Msg("nceph: tell mds response")
-			// TODO: Parse the response to extract path
-			if info != "" {
-				log.Debug().Str("info", info).Msg("tell mds command info")
-			}
-		} else {
-			log.Debug().Err(err).Msg("nceph: tell mds command failed")
-		}
-	}
-
-	// Method 4: Get MDS metadata first (original approach but with better logging)
-	cmd4, err := json.Marshal(map[string]interface{}{
-		"prefix": "mds metadata",
-		"who":    mdsName,
-		"format": "json",
-	})
+	
+	cmd, err := json.Marshal(cmdData)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to marshal mds metadata command")
+		log.Error().Err(err).Interface("command_data", cmdData).Msg("nceph: Failed to marshal dump inode command")
+		return "", errors.Wrap(err, "failed to marshal dump inode command")
 	}
 
-	log.Debug().Str("command", "mds metadata").Str("mds", mdsName).Msg("nceph: Trying mds metadata command")
-	buf, info, err := fs.cephAdminConn.radosConn.MgrCommand([][]byte{cmd4})
+	log.Info().
+		Str("command_json", string(cmd)).
+		Str("mds_target", mdsName).
+		Int64("target_inode", inode).
+		Msg("nceph: Executing dump inode MgrCommand")
+
+	buf, info, err := fs.cephAdminConn.radosConn.MgrCommand([][]byte{cmd})
 	if err != nil {
-		log.Warn().Err(err).Str("mds", mdsName).Msg("nceph: mds metadata command failed - this may indicate insufficient MDS admin permissions")
-		return "", errors.Wrap(err, "failed to execute mds metadata command")
+		log.Error().
+			Err(err).
+			Str("mds_name", mdsName).
+			Int64("inode", inode).
+			Str("command", string(cmd)).
+			Msg("nceph: MgrCommand failed - check MDS permissions and inode validity")
+		return "", errors.Wrap(err, "dump inode command failed")
 	}
+
+	log.Info().
+		Int("response_size", len(buf)).
+		Bool("has_info", info != "").
+		Str("mds_name", mdsName).
+		Int64("inode", inode).
+		Msg("nceph: Dump inode command executed successfully")
 
 	if info != "" {
-		log.Debug().Str("info", info).Msg("MDS metadata command info")
+		log.Info().Str("command_info", info).Msg("nceph: Additional info from dump inode command")
 	}
 
 	log.Debug().
-		Str("mds", mdsName).
+		Str("dump_inode_response", string(buf)).
+		Str("mds_name", mdsName).
 		Int64("inode", inode).
-		Str("mds_metadata_response", string(buf)).
-		Msg("nceph: MDS metadata response - inode resolution not yet fully implemented")
+		Msg("nceph: Raw dump inode response")
 
-	// For now, indicate that we got the MDS metadata but full inode->path resolution
-	// requires additional MDS API integration that's not yet implemented
-	return "", errors.New("inode to path resolution requires MDS admin access - tried multiple MDS command approaches but none succeeded yet")
-}// extractPathFromInodeOutput extracts path from MDS dump inode output (based on CephFS implementation)
+	// Extract path from the dump inode output
+	log.Info().Msg("nceph: Parsing dump inode response to extract path information")
+	path, err := fs.extractPathFromInodeOutput(ctx, buf)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("response", string(buf)).
+			Int64("inode", inode).
+			Msg("nceph: Failed to extract path from dump inode response")
+		return "", errors.Wrap(err, "failed to extract path from dump inode output")
+	}
+
+	log.Info().
+		Str("extracted_path", path).
+		Int64("inode", inode).
+		Str("mds_name", mdsName).
+		Msg("nceph: Successfully extracted path from dump inode response")
+
+	return path, nil
+}
+// extractPathFromInodeOutput extracts path from MDS dump inode output
 func (fs *ncephfs) extractPathFromInodeOutput(ctx context.Context, output []byte) (string, error) {
 	log := appctx.GetLogger(ctx)
 
@@ -352,274 +341,178 @@ func (fs *ncephfs) extractPathFromInodeOutput(ctx context.Context, output []byte
 
 // getActiveMDS gets the active MDS using manager commands
 func (fs *ncephfs) getActiveMDS(ctx context.Context) (string, error) {
+	log := appctx.GetLogger(ctx)
+	log.Info().Msg("nceph: Starting active MDS detection process")
+
 	// Prepare fs status command
 	cmd, err := json.Marshal(map[string]interface{}{
 		"prefix": "fs status",
 		"format": "json",
 	})
 	if err != nil {
+		log.Error().Err(err).Msg("nceph: Failed to marshal fs status command")
 		return "", errors.Wrap(err, "failed to marshal fs status command")
 	}
+
+	log.Debug().Str("command", "fs status").Msg("nceph: Executing fs status command to get cluster state")
 
 	// Execute manager command
 	buf, info, err := fs.cephAdminConn.radosConn.MgrCommand([][]byte{cmd})
 	if err != nil {
+		log.Error().Err(err).Msg("nceph: Failed to execute fs status command - check MDS cluster connectivity")
 		return "", errors.Wrap(err, "failed to execute fs status command")
 	}
 
 	if info != "" {
-		log := appctx.GetLogger(ctx)
-		log.Debug().Str("info", info).Msg("Manager command info")
+		log.Debug().Str("info", info).Msg("nceph: Manager command returned additional info")
 	}
 
-	// Add debug logging to see the raw response
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("fs_status_response", string(buf)).Msg("nceph: Raw fs status response for debugging")
+	log.Debug().Str("fs_status_response", string(buf)).Msg("nceph: Raw fs status response received")
+	log.Info().Int("response_size", len(buf)).Msg("nceph: Received fs status response, parsing for MDS information")
 
-	// Try to determine the response format by looking at the first character
-	trimmed := strings.TrimSpace(string(buf))
-	if len(trimmed) == 0 {
-		return "", errors.New("empty fs status response")
-	}
-
-	var activeMDS string
-	var parseErr error
-
-	// Check if response starts with '[' (array) or '{' (object)
-	if strings.HasPrefix(trimmed, "[") {
-		log.Debug().Msg("nceph: fs status response appears to be an array")
-		// Handle array response format
-		var responseArray []map[string]interface{}
-		if err := json.Unmarshal(buf, &responseArray); err != nil {
-			parseErr = errors.Wrap(err, "failed to parse fs status array response")
-		} else {
-			// Look for mdsmap in array elements
-			for _, item := range responseArray {
-				if mdsmap, ok := item["mdsmap"]; ok {
-					activeMDS, parseErr = fs.extractActiveMDSFromMap(ctx, mdsmap)
-					if parseErr == nil && activeMDS != "" {
-						break
-					}
-				}
-			}
-			if activeMDS == "" && parseErr == nil {
-				parseErr = errors.New("no mdsmap found in array response")
-			}
-		}
-	} else if strings.HasPrefix(trimmed, "{") {
-		log.Debug().Msg("nceph: fs status response appears to be an object")
-		// Handle object response format (original approach)
-		activeMDS, parseErr = fs.parseObjectFormatResponse(ctx, buf)
-	} else {
-		parseErr = errors.New("fs status response format not recognized - does not start with { or [")
-	}
-
-	if parseErr != nil {
-		return "", parseErr
-	}
-
-	if activeMDS == "" {
-		return "", errors.New("no active MDS found in response")
-	}
-
-	return activeMDS, nil
-}
-
-// parseObjectFormatResponse handles the original object-format response
-func (fs *ncephfs) parseObjectFormatResponse(ctx context.Context, buf []byte) (string, error) {
 	// Parse the filesystem status JSON
 	var fsStatus map[string]interface{}
 	if err := json.Unmarshal(buf, &fsStatus); err != nil {
+		log.Error().Err(err).Str("response", string(buf)).Msg("nceph: Failed to parse fs status as JSON")
 		return "", errors.Wrap(err, "failed to parse fs status JSON")
 	}
+
+	log.Info().Int("fields_count", len(fsStatus)).Msg("nceph: Successfully parsed fs status JSON")
+	
+	// Log all top-level fields for debugging
+	topLevelFields := make([]string, 0, len(fsStatus))
+	for key := range fsStatus {
+		topLevelFields = append(topLevelFields, key)
+	}
+	log.Debug().Strs("available_fields", topLevelFields).Msg("nceph: Available fields in fs status")
 
 	// Look for mdsmap
 	mdsmapRaw, ok := fsStatus["mdsmap"]
 	if !ok {
+		log.Error().Strs("available_fields", topLevelFields).Msg("nceph: No mdsmap field found in fs status - cluster may not have MDS services")
 		return "", errors.New("no mdsmap found in fs status")
 	}
 
-	// The key issue: mdsmap can be either an object with info, or directly an array
-	return fs.extractActiveMDSFromMap(ctx, mdsmapRaw)
-}
-
-// extractActiveMDSFromMap extracts active MDS from a generic map (used for both array and object responses)
-func (fs *ncephfs) extractActiveMDSFromMap(ctx context.Context, mdsmapInterface interface{}) (string, error) {
-	log := appctx.GetLogger(ctx)
+	log.Info().Msg("nceph: Found mdsmap in fs status, analyzing MDS configuration")
 
 	// Convert to JSON and back to handle the interface{}
-	mdsmapBytes, err := json.Marshal(mdsmapInterface)
+	mdsmapBytes, err := json.Marshal(mdsmapRaw)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to marshal mdsmap from interface")
+		log.Error().Err(err).Msg("nceph: Failed to marshal mdsmap for analysis")
+		return "", errors.Wrap(err, "failed to marshal mdsmap")
 	}
 
-	log.Debug().Str("mdsmap_json", string(mdsmapBytes)).Msg("nceph: mdsmap JSON for parsing")
+	log.Debug().Str("mdsmap_json", string(mdsmapBytes)).Int("mdsmap_size", len(mdsmapBytes)).Msg("nceph: Serialized mdsmap for parsing")
 
-	// Check if mdsmap is directly an array (your case)
+	// Try parsing as object with info field first (most common format)
+	log.Info().Msg("nceph: Attempting to parse mdsmap as object with 'info' field")
+	var mdsmap struct {
+		Info json.RawMessage `json:"info"`
+	}
+
+	if err := json.Unmarshal(mdsmapBytes, &mdsmap); err == nil && len(mdsmap.Info) > 0 {
+		log.Info().Int("info_size", len(mdsmap.Info)).Msg("nceph: Found 'info' field in mdsmap, parsing MDS entries")
+		
+		// Parse the info section as array first (newer Ceph format)
+		var infoArray []struct {
+			Name  string `json:"name"`
+			State string `json:"state"`
+			Rank  int    `json:"rank,omitempty"`
+		}
+		if err := json.Unmarshal(mdsmap.Info, &infoArray); err == nil {
+			log.Info().Int("mds_count", len(infoArray)).Msg("nceph: Successfully parsed mdsmap.info as array format")
+			
+			for i, mds := range infoArray {
+				log.Info().
+					Int("mds_index", i).
+					Str("mds_name", mds.Name).
+					Str("mds_state", mds.State).
+					Int("mds_rank", mds.Rank).
+					Bool("is_active", strings.Contains(mds.State, "active")).
+					Msg("nceph: Evaluating MDS entry from array")
+				
+				if strings.Contains(mds.State, "active") {
+					log.Info().
+						Str("chosen_mds", mds.Name).
+						Str("mds_state", mds.State).
+						Int("mds_rank", mds.Rank).
+						Msg("nceph: SELECTED ACTIVE MDS - This MDS will be used for inode operations")
+					return mds.Name, nil
+				}
+			}
+			log.Warn().Int("total_mds", len(infoArray)).Msg("nceph: No active MDS found in array format - all MDS may be inactive")
+		} else {
+			log.Info().Msg("nceph: Array parsing failed, trying map format for mdsmap.info")
+			// Try parsing as map (older Ceph format)
+			var infoMap map[string]struct {
+				Name  string `json:"name"`
+				State string `json:"state"`
+				Rank  int    `json:"rank,omitempty"`
+			}
+			if err := json.Unmarshal(mdsmap.Info, &infoMap); err == nil {
+				log.Info().Int("mds_count", len(infoMap)).Msg("nceph: Successfully parsed mdsmap.info as map format")
+				
+				for key, mds := range infoMap {
+					log.Info().
+						Str("mds_key", key).
+						Str("mds_name", mds.Name).
+						Str("mds_state", mds.State).
+						Int("mds_rank", mds.Rank).
+						Bool("is_active", strings.Contains(mds.State, "active")).
+						Msg("nceph: Evaluating MDS entry from map")
+					
+					if strings.Contains(mds.State, "active") {
+						log.Info().
+							Str("chosen_mds", mds.Name).
+							Str("mds_state", mds.State).
+							Int("mds_rank", mds.Rank).
+							Str("mds_key", key).
+							Msg("nceph: SELECTED ACTIVE MDS - This MDS will be used for inode operations")
+						return mds.Name, nil
+					}
+				}
+				log.Warn().Int("total_mds", len(infoMap)).Msg("nceph: No active MDS found in map format - all MDS may be inactive")
+			} else {
+				log.Error().Err(err).Str("info_raw", string(mdsmap.Info)).Msg("nceph: Failed to parse mdsmap.info as either array or map")
+			}
+		}
+	} else {
+		log.Info().Msg("nceph: No 'info' field found or empty, trying direct array parsing of mdsmap")
+	}
+
+	// If mdsmap.info approach fails, try direct array parsing (alternative format)
+	log.Info().Msg("nceph: Attempting direct array parsing of mdsmap (alternative format)")
 	var directMDSArray []struct {
 		Name  string `json:"name"`
 		State string `json:"state"`
 		Rank  int    `json:"rank,omitempty"`
 	}
-	
 	if err := json.Unmarshal(mdsmapBytes, &directMDSArray); err == nil {
-		log.Debug().Int("mds_entries", len(directMDSArray)).Msg("nceph: Successfully parsed mdsmap as direct array")
+		log.Info().Int("mds_entries", len(directMDSArray)).Msg("nceph: Successfully parsed mdsmap as direct array")
+		
 		for i, mds := range directMDSArray {
-			log.Debug().Int("mdsmap_index", i).Str("mds_name", mds.Name).Str("mds_state", mds.State).Msg("nceph: Processing direct mdsmap array element")
+			log.Info().
+				Int("mds_index", i).
+				Str("mds_name", mds.Name).
+				Str("mds_state", mds.State).
+				Int("mds_rank", mds.Rank).
+				Bool("is_active", strings.Contains(mds.State, "active")).
+				Msg("nceph: Evaluating MDS entry from direct array")
+			
 			if strings.Contains(mds.State, "active") {
-				log.Debug().Str("active_mds", mds.Name).Msg("nceph: Found active MDS in direct array")
+				log.Info().
+					Str("chosen_mds", mds.Name).
+					Str("mds_state", mds.State).
+					Int("mds_rank", mds.Rank).
+					Msg("nceph: SELECTED ACTIVE MDS - This MDS will be used for inode operations")
 				return mds.Name, nil
 			}
 		}
-		return "", errors.New("no active MDS found in direct mdsmap array")
-	}
-
-	// If not a direct array, try parsing as object with info field
-	var mdsmap struct {
-		Info json.RawMessage `json:"info"`
-	}
-
-	if err := json.Unmarshal(mdsmapBytes, &mdsmap); err != nil {
-		return "", errors.Wrap(err, "failed to unmarshal mdsmap as object with info")
-	}
-
-	// Parse the info section
-	return fs.extractActiveMDSFromRawInfo(ctx, mdsmap.Info)
-}
-
-// extractActiveMDSFromRawInfo extracts active MDS from raw info JSON (handles both array and object)
-func (fs *ncephfs) extractActiveMDSFromRawInfo(ctx context.Context, infoRaw json.RawMessage) (string, error) {
-	log := appctx.GetLogger(ctx)
-
-	// First, try to parse as array (newer Ceph versions)
-	var infoArray []struct {
-		Name  string `json:"name"`
-		State string `json:"state"`
-	}
-	if err := json.Unmarshal(infoRaw, &infoArray); err == nil {
-		log.Debug().Int("mds_count", len(infoArray)).Msg("nceph: Parsed mdsmap.info as array")
-		for _, mds := range infoArray {
-			if strings.Contains(mds.State, "active") {
-				return mds.Name, nil
-			}
-		}
+		log.Warn().Int("total_mds", len(directMDSArray)).Msg("nceph: No active MDS found in direct array - all MDS may be inactive")
 	} else {
-		// Try to parse as map/object (older Ceph versions)
-		var infoMap map[string]struct {
-			Name  string `json:"name"`
-			State string `json:"state"`
-		}
-		if err := json.Unmarshal(infoRaw, &infoMap); err == nil {
-			log.Debug().Int("mds_count", len(infoMap)).Msg("nceph: Parsed mdsmap.info as map")
-			for _, mds := range infoMap {
-				if strings.Contains(mds.State, "active") {
-					return mds.Name, nil
-				}
-			}
-		} else {
-			return "", errors.Wrap(err, "failed to parse mdsmap.info as either array or map")
-		}
+		log.Error().Err(err).Str("mdsmap_raw", string(mdsmapBytes)).Msg("nceph: Failed to parse mdsmap as direct array")
 	}
 
-	return "", errors.New("no active MDS found in mdsmap info")
-}
-
-// getFSStatus gets filesystem status (based on CephFS implementation)
-func (fs *ncephfs) getFSStatus(ctx context.Context) ([]byte, error) {
-	// Prepare fs status command
-	cmd, err := json.Marshal(map[string]interface{}{
-		"prefix": "fs status",
-		"format": "json",
-	})
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshal fs status command")
-	}
-
-	// Execute manager command
-	buf, info, err := fs.cephAdminConn.radosConn.MgrCommand([][]byte{cmd})
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to execute fs status command")
-	}
-
-	if info != "" {
-		log := appctx.GetLogger(ctx)
-		log.Debug().Str("info", info).Msg("Manager command info")
-	}
-
-	return buf, nil
-}
-
-// parseActiveMDS parses the active MDS from fs status output (based on CephFS implementation)
-func (fs *ncephfs) parseActiveMDS(ctx context.Context, fsStatusOutput []byte) (string, error) {
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("fs_status_response", string(fsStatusOutput)).Msg("Parsing fs status for active MDS")
-
-	// Parse the filesystem status JSON
-	var fsStatus map[string]interface{}
-	if err := json.Unmarshal(fsStatusOutput, &fsStatus); err != nil {
-		return "", errors.Wrap(err, "failed to parse fs status JSON")
-	}
-
-	// Look for mdsmap
-	mdsmapRaw, ok := fsStatus["mdsmap"]
-	if !ok {
-		return "", errors.New("no mdsmap found in fs status")
-	}
-
-	// Convert mdsmap to map
-	mdsmapBytes, err := json.Marshal(mdsmapRaw)
-	if err != nil {
-		return "", errors.Wrap(err, "failed to marshal mdsmap")
-	}
-
-	var mdsmap map[string]interface{}
-	if err := json.Unmarshal(mdsmapBytes, &mdsmap); err != nil {
-		return "", errors.Wrap(err, "failed to unmarshal mdsmap")
-	}
-
-	// Look for info section
-	infoRaw, ok := mdsmap["info"]
-	if !ok {
-		return "", errors.New("no info section found in mdsmap")
-	}
-
-	// Convert info to bytes for parsing
-	infoBytes, err := json.Marshal(infoRaw)
-	if err != nil {
-		return "", errors.Wrap(err, "failed to marshal mdsmap info")
-	}
-
-	// Try parsing as map first (key-value pairs with MDS names as keys)
-	var infoMap map[string]struct {
-		Name  string `json:"name"`
-		State string `json:"state"`
-	}
-
-	if err := json.Unmarshal(infoBytes, &infoMap); err == nil {
-		log.Debug().Int("mds_count", len(infoMap)).Msg("Parsed mdsmap.info as map")
-		for _, mds := range infoMap {
-			if strings.Contains(mds.State, "active") {
-				log.Debug().Str("active_mds", mds.Name).Msg("Found active MDS in map format")
-				return mds.Name, nil
-			}
-		}
-	}
-
-	// Try parsing as array (newer Ceph versions might use arrays)
-	var infoArray []struct {
-		Name  string `json:"name"`
-		State string `json:"state"`
-	}
-
-	if err := json.Unmarshal(infoBytes, &infoArray); err == nil {
-		log.Debug().Int("mds_count", len(infoArray)).Msg("Parsed mdsmap.info as array")
-		for _, mds := range infoArray {
-			if strings.Contains(mds.State, "active") {
-				log.Debug().Str("active_mds", mds.Name).Msg("Found active MDS in array format")
-				return mds.Name, nil
-			}
-		}
-	}
-
-	return "", errors.New("no active MDS found in mdsmap info")
+	log.Error().Msg("nceph: FAILED TO FIND ACTIVE MDS - No active MDS found in any format. Check MDS cluster health.")
+	return "", errors.New("no active MDS found")
 }
