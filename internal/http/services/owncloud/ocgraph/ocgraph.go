@@ -153,6 +153,8 @@ func (s *svc) Close() error { return nil }
 func (s *svc) Unprotected() []string { return nil }
 
 func handleError(ctx context.Context, err error, status int, w http.ResponseWriter) {
+	log := appctx.GetLogger(ctx)
+	log.Error().Err(err).Msg("ocgraph error")
 	w.Header().Set("x-request-id", trace.Get(ctx))
 	w.WriteHeader(status)
 	w.Write([]byte("Error: " + err.Error()))

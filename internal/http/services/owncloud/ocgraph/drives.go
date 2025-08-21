@@ -477,6 +477,7 @@ func (s *svc) patchSpace(w http.ResponseWriter, r *http.Request) {
 	res, err := gw.UpdateStorageSpace(ctx, updateRequest)
 
 	if err != nil {
+		log.Error().Err(err).Msg("Failed to call gateway UpdateStorageSpace")
 		handleError(ctx, errors.New("failed to update storage space"), http.StatusInternalServerError, w)
 		return
 	}
