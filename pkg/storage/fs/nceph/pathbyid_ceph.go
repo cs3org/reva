@@ -162,7 +162,7 @@ func (fs *ncephfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (st
 	}
 
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("resourceId", id.OpaqueId).Msg("nceph: Starting GetPathByID operation using dump inode command")
+	log.Info().Str("resourceId", id.OpaqueId).Msg("nceph: Starting GetPathByID operation using MDSCommand dump inode")
 
 	// Convert resource ID to inode number
 	inode, err := strconv.ParseInt(id.OpaqueId, 10, 64)
@@ -208,7 +208,7 @@ func (fs *ncephfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (st
 		log.Info().Str("final_path", path).Msg("nceph: Added leading slash to path")
 	}
 
-	log.Info().Str("final_path", path).Int64("inode", inode).Str("active_mds", activeMDS).Msg("nceph: Successfully resolved path by ID using dump inode command")
+	log.Info().Str("final_path", path).Int64("inode", inode).Str("active_mds", activeMDS).Msg("nceph: Successfully resolved path by ID using MDSCommand dump inode")
 	return path, nil
 }
 
@@ -217,7 +217,7 @@ func (fs *ncephfs) dumpInode(ctx context.Context, mdsName string, inode int64) (
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("mds_name", mdsName).Int64("inode", inode).Msg("nceph: Preparing dump inode command")
 
-	// Use dump inode command directly to the MDS
+	// Use dump inode command directly to the MDS via MDSCommand
 	cmdData := map[string]interface{}{
 		"prefix": "dump inode",
 		"inode":  inode,
@@ -234,17 +234,18 @@ func (fs *ncephfs) dumpInode(ctx context.Context, mdsName string, inode int64) (
 		Str("command_json", string(cmd)).
 		Str("mds_target", mdsName).
 		Int64("target_inode", inode).
-		Msg("nceph: Executing dump inode MgrCommand")
+		Msg("nceph: Executing dump inode MdsCommand (direct to MDS)")
 
-	buf, info, err := fs.cephAdminConn.radosConn.MgrCommand([][]byte{cmd})
+	// Use MdsCommand instead of MgrCommand for direct MDS communication
+	buf, info, err := fs.cephAdminConn.fsMount.MdsCommand(mdsName, [][]byte{cmd})
 	if err != nil {
 		log.Error().
 			Err(err).
 			Str("mds_name", mdsName).
 			Int64("inode", inode).
 			Str("command", string(cmd)).
-			Msg("nceph: MgrCommand failed - check MDS permissions and inode validity")
-		return "", errors.Wrap(err, "dump inode command failed")
+			Msg("nceph: MdsCommand failed - check MDS connectivity and inode validity")
+		return "", errors.Wrap(err, "dump inode MdsCommand failed")
 	}
 
 	log.Info().
@@ -252,17 +253,17 @@ func (fs *ncephfs) dumpInode(ctx context.Context, mdsName string, inode int64) (
 		Bool("has_info", info != "").
 		Str("mds_name", mdsName).
 		Int64("inode", inode).
-		Msg("nceph: Dump inode command executed successfully")
+		Msg("nceph: Dump inode MdsCommand executed successfully")
 
 	if info != "" {
-		log.Info().Str("command_info", info).Msg("nceph: Additional info from dump inode command")
+		log.Info().Str("command_info", info).Msg("nceph: Additional info from dump inode MdsCommand")
 	}
 
 	log.Debug().
 		Str("dump_inode_response", string(buf)).
 		Str("mds_name", mdsName).
 		Int64("inode", inode).
-		Msg("nceph: Raw dump inode response")
+		Msg("nceph: Raw dump inode MdsCommand response")
 
 	// Extract path from the dump inode output
 	log.Info().Msg("nceph: Parsing dump inode response to extract path information")
@@ -280,7 +281,7 @@ func (fs *ncephfs) dumpInode(ctx context.Context, mdsName string, inode int64) (
 		Str("extracted_path", path).
 		Int64("inode", inode).
 		Str("mds_name", mdsName).
-		Msg("nceph: Successfully extracted path from dump inode response")
+		Msg("nceph: Successfully extracted path from dump inode MDSCommand response")
 
 	return path, nil
 }
@@ -356,7 +357,7 @@ func (fs *ncephfs) getActiveMDS(ctx context.Context) (string, error) {
 
 	log.Debug().Str("command", "fs status").Msg("nceph: Executing fs status command to get cluster state")
 
-	// Execute manager command
+	// Execute manager command (fs status is a manager command, not MDS command)
 	buf, info, err := fs.cephAdminConn.radosConn.MgrCommand([][]byte{cmd})
 	if err != nil {
 		log.Error().Err(err).Msg("nceph: Failed to execute fs status command - check MDS cluster connectivity")
