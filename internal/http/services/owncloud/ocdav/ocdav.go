@@ -30,9 +30,13 @@ import (
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	storageProvider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/myofficefiles"
 	"github.com/cs3org/reva/v3/pkg/trace"
+	"github.com/cs3org/reva/v3/pkg/utils"
 
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
@@ -399,4 +403,59 @@ func encodePath(path string) string {
 		}
 		return sb.String()
 	})
+}
+
+func (s *svc) lookUpStorageSpaceReference(ctx context.Context, spaceID string, relativePath string) (*storageProvider.Reference, *rpc.Status, error) {
+	// Get the getway client
+	gatewayClient, err := s.getClient()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// retrieve a specific storage space
+	lSSReq := &storageProvider.ListStorageSpacesRequest{
+		Filters: []*storageProvider.ListStorageSpacesRequest_Filter{
+			{
+				Type: storageProvider.ListStorageSpacesRequest_Filter_TYPE_ID,
+				Term: &storageProvider.ListStorageSpacesRequest_Filter_Id{
+					Id: &storageProvider.StorageSpaceId{
+						OpaqueId: spaceID,
+					},
+				},
+			},
+		},
+	}
+
+	lSSRes, err := gatewayClient.ListStorageSpaces(ctx, lSSReq)
+	if err != nil || lSSRes.Status.Code != rpc.Code_CODE_OK {
+		return nil, lSSRes.Status, err
+	}
+
+	if len(lSSRes.StorageSpaces) != 1 {
+		return nil, nil, fmt.Errorf("unexpected number of spaces")
+	}
+	space := lSSRes.StorageSpaces[0]
+
+	return &storageProvider.Reference{
+		ResourceId: space.Root,
+		Path:       utils.MakeRelativePath(relativePath),
+	}, lSSRes.Status, nil
+}
+
+func requestWasMadeToResourceId(ctx context.Context, fn string) (ref *provider.Reference, ok bool) {
+	if opaqueId := ctx.Value(ctxResourceOpaqueId); opaqueId != nil {
+		storageId := ctx.Value(ctxStorageId)
+		if storageId != nil {
+			ref := &provider.Reference{
+				// We make the path relative
+				Path: path.Join(".", fn),
+				ResourceId: &provider.ResourceId{
+					StorageId: storageId.(string),
+					OpaqueId:  opaqueId.(string),
+				},
+			}
+			return ref, true
+		}
+	}
+	return nil, false
 }
