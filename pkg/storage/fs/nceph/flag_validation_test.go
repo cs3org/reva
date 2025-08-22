@@ -1,3 +1,5 @@
+//go:build !ceph
+
 // Copyright 2018-2024 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,17 +18,18 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package nceph
 
 import (
-	// Load core storage filesystem backends.
-	_ "github.com/cs3org/reva/v3/pkg/ocm/storage/outcoming"
-	_ "github.com/cs3org/reva/v3/pkg/ocm/storage/received"
-	_ "github.com/cs3org/reva/v3/pkg/storage/fs/cephfs"
-	_ "github.com/cs3org/reva/v3/pkg/storage/fs/eos"
-	_ "github.com/cs3org/reva/v3/pkg/storage/fs/local"
-	_ "github.com/cs3org/reva/v3/pkg/storage/fs/localhome"
-	_ "github.com/cs3org/reva/v3/pkg/storage/fs/nceph"
-	_ "github.com/cs3org/reva/v3/pkg/storage/fs/nextcloud"
-	// Add your own here.
+	"testing"
 )
+
+// TestCephIntegrationFlagValidation ensures that the -ceph-integration flag
+// is only used with the 'ceph' build tag. This test runs when the ceph build tag is NOT present.
+func TestCephIntegrationFlagValidation(t *testing.T) {
+	if *cephIntegration {
+		t.Fatal("The -ceph-integration flag was used but no Ceph integration tests are available. " +
+			"You must use the 'ceph' build tag: go test -tags ceph -ceph-integration -v")
+	}
+	// If the flag is not set, this test passes silently
+}
