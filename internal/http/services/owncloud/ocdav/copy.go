@@ -32,6 +32,8 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/datagateway"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/rhttp/router"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/rs/zerolog"
 )
 
@@ -46,6 +48,8 @@ type intermediateDirRefFunc func() (*provider.Reference, *rpc.Status, error)
 
 func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
 	if s.c.EnableHTTPTpc {
 		if r.Header.Get("Source") != "" {
 			// HTTP Third-Party Copy Pull mode
@@ -59,7 +63,6 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 	}
 
 	// Local copy: in this case Destination is mandatory
-	src := path.Join(ns, r.URL.Path)
 	dst, err := extractDestination(r)
 	if err != nil {
 		appctx.GetLogger(ctx).Warn().Msg("HTTP COPY: failed to extract destination")
@@ -67,6 +70,10 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 		return
 	}
 
+	// Handle source
+	// The source is part of the request URL, so the space head has already been taken care of
+	// by the handler
+	src := path.Join(ns, r.URL.Path)
 	for _, r := range nameRules {
 		if !r.Test(dst) {
 			appctx.GetLogger(ctx).Warn().Msgf("HTTP COPY: destination %s failed validation", dst)
@@ -75,18 +82,32 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 		}
 	}
 
-	dst = path.Join(ns, dst)
+	// For the destination, we still need to handle this ourselves
+	if s.c.SpacesEnabled {
+		dstSpaceID, dstRelPath := router.ShiftPath(dst)
+		_, spaceRoot, ok := spaces.DecodeStorageSpaceID(dstSpaceID)
+		if !ok {
+			appctx.GetLogger(ctx).Warn().Str("dstSpaceID", dstSpaceID).Msg("handlePathCopy: Failed to parse destination space ID")
+		}
+		dst = path.Join(spaceRoot, dstRelPath)
+	} else {
+		dst = path.Join(ns, dst)
+	}
 
-	sublog := appctx.GetLogger(ctx).With().Str("src", src).Str("dst", dst).Logger()
+	srcRef := &provider.Reference{
+		Path: src,
+	}
+	dstRef := &provider.Reference{
+		Path: dst,
+	}
 
-	srcRef := &provider.Reference{Path: src}
+	sublog := log.With().Any("src", srcRef).Any("dst", dstRef).Logger()
 
 	// check dst exists
-	dstRef := &provider.Reference{Path: dst}
-
 	intermediateDirRefFunc := func() (*provider.Reference, *rpc.Status, error) {
-		intermediateDir := path.Dir(dst)
-		ref := &provider.Reference{Path: intermediateDir}
+		ref := &provider.Reference{
+			Path: path.Dir(dstRef.Path),
+		}
 		return ref, &rpc.Status{Code: rpc.Code_CODE_OK}, nil
 	}
 
