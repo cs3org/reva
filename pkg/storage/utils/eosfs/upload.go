@@ -79,18 +79,14 @@ func (fs *Eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 		metadata = map[string]string{}
 	}
 	app := metadata["lockholder"]
+	// if we have a lock context, the app for EOS must match the lock holder, else we just tag the traffic as write
 	if app == "" {
-		app = "reva_eosclient::write"
-	} else {
-		// if we have a lock context, the app for EOS must match the lock holder
-		app = fs.EncodeAppName(app)
+		app = "write"
 	}
-
 	disableVersioning, err := strconv.ParseBool(metadata["disableVersioning"])
 	if err != nil {
 		disableVersioning = false
 	}
-
 	contentLength := metadata[ocdav.HeaderContentLength]
 	if contentLength == "" {
 		contentLength = metadata[ocdav.HeaderUploadLength]
@@ -100,7 +96,7 @@ func (fs *Eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 		return errtypes.BadRequest("no content length specified in EOS upload")
 	}
 
-	return fs.c.Write(ctx, auth, fn, r, len, app, disableVersioning)
+	return fs.c.Write(ctx, auth, fn, r, len, fs.EncodeAppName(app), disableVersioning)
 }
 
 func (fs *Eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
