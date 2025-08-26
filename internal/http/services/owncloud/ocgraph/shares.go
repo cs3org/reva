@@ -26,11 +26,14 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
@@ -40,6 +43,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	libregraph "github.com/owncloud/libre-graph-api-go"
@@ -73,6 +77,16 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// include ocm shares in the response
+	listRes, err := gw.ListReceivedOCMShares(ctx, &ocm.ListReceivedOCMSharesRequest{})
+	if err != nil {
+		handleError(ctx, err, http.StatusInternalServerError, w)
+	}
+	for _, s := range listRes.Shares {
+		// OCM Share needs to be converted to a DriveItem
+		log.Debug().Any("share", s).Msg("processing received ocm share")
+	}
+
 	if err := json.NewEncoder(w).Encode(map[string]any{
 		"value": shares,
 	}); err != nil {
@@ -82,11 +96,89 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *svc) createLocalShare(ctx context.Context, gw gateway.GatewayAPIClient, storageID, itemID, path string, owner *userpb.UserId, resourceType provider.ResourceType, recipientType string, recipientID string, exp *types.Timestamp, requestedPerms *provider.ResourcePermissions) (*collaborationv1beta1.CreateShareResponse, error) {
+	grantee, err := s.toGrantee(ctx, recipientType, recipientID)
+	if err != nil {
+		return nil, err
+	}
+
+	createShareRequest := &collaborationv1beta1.CreateShareRequest{
+		ResourceInfo: &provider.ResourceInfo{
+			Id: &provider.ResourceId{
+				StorageId: storageID,
+				OpaqueId:  itemID,
+			},
+			Path:  path,
+			Owner: owner,
+			Type:  resourceType,
+		},
+		Grant: &collaborationv1beta1.ShareGrant{
+			Grantee:    grantee,
+			Expiration: exp,
+			Permissions: &collaborationv1beta1.SharePermissions{
+				Permissions: requestedPerms,
+			},
+		},
+	}
+
+	resp, err := gw.CreateShare(ctx, createShareRequest)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return nil, errors.New("failed to create share: " + resp.Status.Message)
+	}
+
+	return resp, nil
+}
+
+func (s *svc) createOCMShare(ctx context.Context, gw gateway.GatewayAPIClient, resourceId *provider.ResourceId, path string, owner *userpb.UserId, resourceType provider.ResourceType, recipientType string, recipientID string, idp string, exp *types.Timestamp, role string) (*ocm.CreateOCMShareResponse, error) {
+	log := appctx.GetLogger(ctx)
+	recipientProviderInfo, err := gw.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
+		Domain: idp,
+	})
+	log.Debug().Any("response", recipientProviderInfo).Msg("called gatewayClient.GetInfoByDomain")
+	if err != nil {
+		return nil, errors.New("error sending a grpc get invite by domain info request" + recipientProviderInfo.Status.Message)
+	}
+	if recipientProviderInfo.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return nil, errors.New("error sending a grpc get invite by domain info request" + recipientProviderInfo.Status.Message)
+	}
+	log.Debug().Msg("calling gatewayClient.CreateOCMShare")
+	perm, viewMode := UnifiedRoleToOCMPermissions(role)
+	resp, err := gw.CreateOCMShare(ctx, &ocm.CreateOCMShareRequest{
+		ResourceId: resourceId,
+		Grantee: &provider.Grantee{
+			Type: provider.GranteeType_GRANTEE_TYPE_USER,
+			Id: &provider.Grantee_UserId{
+				UserId: &userpb.UserId{
+					Idp:      idp,
+					OpaqueId: recipientID,
+				},
+			},
+		},
+		RecipientMeshProvider: recipientProviderInfo.ProviderInfo,
+		AccessMethods: []*ocm.AccessMethod{
+			share.NewWebDavAccessMethod(perm, []string{}),
+			share.NewWebappAccessMethod(viewMode),
+		},
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return nil, errors.New("failed to create share: " + resp.Status.Message)
+	}
+	return resp, nil
+}
+
 func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-
 	// First we get the gateway client
+	log.Debug().Any("request", r).Msg("http service called, called share")
 	gw, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting gateway client")
@@ -103,14 +195,15 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 		handleError(ctx, errors.New("error decoding resource id"), http.StatusBadRequest, w)
 		return
 	}
+	var resourceId *provider.ResourceId = &provider.ResourceId{
+		StorageId: storageID,
+		OpaqueId:  itemID,
+	}
 
 	// We use this to fetch the path and the owner
 	statRes, err := gw.Stat(ctx, &provider.StatRequest{
 		Ref: &provider.Reference{
-			ResourceId: &provider.ResourceId{
-				StorageId: storageID,
-				OpaqueId:  itemID,
-			},
+			ResourceId: resourceId,
 		},
 	})
 	if err != nil {
@@ -133,6 +226,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 		handleError(ctx, err, http.StatusBadRequest, w)
 		return
 	}
+	log.Debug().Any("Body", r.Body).Msg("request body")
 
 	// From this, we first extract the requested role, which we translate into permissions
 	roles := invite.Roles
@@ -140,13 +234,17 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 		handleError(ctx, errors.New("exactly one role is expected"), http.StatusBadRequest, w)
 		return
 	}
+	log.Debug().Any("role[0]", roles[0]).Msg("requested roles")
 	role, ok := UnifiedRoleIDToDefinition(roles[0])
 	if !ok {
 		handleError(ctx, errors.New("invalid role"), http.StatusBadRequest, w)
 		return
 	}
+	log.Debug().Any("role", role).Msg("requested role")
+
 	requestedPerms := PermissionsToCS3ResourcePermissions(role.RolePermissions)
 
+	log.Debug().Any("requestedPerms", requestedPerms).Msg("requested permissions")
 	// Then we also set an expiry, if needed
 	var exp *types.Timestamp
 	if invite.ExpirationDateTime != nil {
@@ -170,57 +268,72 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 		if recipient.ObjectId == nil {
 			handleError(ctx, errors.New("missing recipient data"), http.StatusBadRequest, w)
 		}
+		// If the recipient is a user or a group, we create a local share
+		switch *recipient.LibreGraphRecipientType {
+		case "user", "group":
+			var username string
+			if strings.Contains(*recipient.ObjectId, "@") {
+				// split the string into a user and an idp
+				parts := strings.SplitN(*recipient.ObjectId, "@", 2)
+				username = parts[0]
+			}
+			resp, err := s.createLocalShare(ctx, gw, storageID, itemID, path, owner, statRes.Info.Type, *recipient.LibreGraphRecipientType, username, exp, requestedPerms)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to create share")
+				handleError(ctx, err, http.StatusInternalServerError, w)
+				return
+			}
+			share := resp.GetShare()
+			lgPerm, err := s.shareToLibregraphPerm(ctx, &GenericShare{
+				shareType: "share",
+				share:     share,
+				ID:        share.GetId().GetOpaqueId(),
+			})
 
-		grantee, err := s.toGrantee(ctx, *recipient.LibreGraphRecipientType, *recipient.ObjectId)
-		if err != nil {
-			log.Error().Err(err).Msg("invalid recipient type passed")
-			handleError(ctx, err, http.StatusBadRequest, w)
-			return
+			if err != nil || lgPerm == nil {
+				log.Error().Err(err).Any("share", share).Err(err).Any("lgPerm", lgPerm).Msg("error converting created share to permissions")
+				handleError(ctx, err, http.StatusInternalServerError, w)
+				return
+			}
+			response = append(response, lgPerm)
+		case "remote":
+			// If the recipient is a remote share, we call the remote share creation function
+			var username, idp string
+			if strings.Contains(*recipient.ObjectId, "@") {
+				// split the string into a user and an idp
+				parts := strings.SplitN(*recipient.ObjectId, "@", 2)
+				username = parts[0]
+				idp = parts[1]
+			}
+			resp, err := s.createOCMShare(ctx, gw, resourceId, path, owner, statRes.Info.Type, *recipient.LibreGraphRecipientType, username, idp, exp, roles[0])
+			log.Debug().Any("response", resp).Msg("called createOCMShare from share")
+			if err != nil {
+				log.Error().Err(err).Msg("failed to create remote share")
+				handleError(ctx, err, http.StatusInternalServerError, w)
+				return
+			}
+			ocmshare := resp.GetShare()
+			if ocmshare == nil {
+				log.Error().Any("response", resp).Msg("share is nil")
+				handleError(ctx, errors.New("share is nil"), http.StatusInternalServerError, w)
+				return
+			}
+			log.Debug().Any("ocmshare", ocmshare).Msg("created remote share")
+			lgPerm, err := s.shareToLibregraphPerm(ctx, &GenericShare{
+				shareType: "ocmshare",
+				ocmshare:  ocmshare,
+				ID:        ocmshare.GetId().GetOpaqueId(),
+			})
+			log.Debug().Any("lgPerm", lgPerm).Msg("converted remote share to libregraph permission")
+			if err != nil || lgPerm == nil {
+				log.Error().Err(err).Any("ocmshare", ocmshare).Err(err).Any("lgPerm", lgPerm).Msg("error converting created share to permissions")
+				handleError(ctx, err, http.StatusInternalServerError, w)
+				return
+			}
+			response = append(response, lgPerm)
 		}
-
-		createShareRequest := &collaborationv1beta1.CreateShareRequest{
-			ResourceInfo: &provider.ResourceInfo{
-				Id: &provider.ResourceId{
-					StorageId: storageID,
-					OpaqueId:  itemID,
-				},
-				Path:  path,
-				Owner: owner,
-				Type:  statRes.Info.Type,
-			},
-			Grant: &collaborationv1beta1.ShareGrant{
-				Grantee:    grantee,
-				Expiration: exp,
-				Permissions: &collaborationv1beta1.SharePermissions{
-					Permissions: requestedPerms,
-				},
-			},
-		}
-
-		resp, err := gw.CreateShare(ctx, createShareRequest)
-		if err != nil {
-			handleError(ctx, err, http.StatusInternalServerError, w)
-			return
-		}
-		if resp.Status.Code != rpcv1beta1.Code_CODE_OK {
-			handleRpcStatus(ctx, resp.Status, w)
-			return
-		}
-
-		lgPerm, err := s.shareToLibregraphPerm(ctx, &ShareOrLink{
-			shareType: "share",
-			share:     resp.GetShare(),
-			ID:        resp.GetShare().GetId().GetOpaqueId(),
-		})
-		if err != nil || lgPerm == nil {
-			log.Error().Err(err).Any("share", resp.GetShare()).Err(err).Any("lgPerm", lgPerm).Msg("error converting created share to permissions")
-			handleError(ctx, err, http.StatusInternalServerError, w)
-			return
-		}
-
-		response = append(response, lgPerm)
-
 	}
+	log.Debug().Any("response", response).Msg("created shares successfully")
 
 	_ = json.NewEncoder(w).Encode(&ListResponse{
 		Value: response,
@@ -324,7 +437,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lgPerm, err := s.shareToLibregraphPerm(ctx, &ShareOrLink{
+	lgPerm, err := s.shareToLibregraphPerm(ctx, &GenericShare{
 		shareType: "link",
 		ID:        resp.GetShare().GetId().GetOpaqueId(),
 		link:      resp.GetShare(),
@@ -491,13 +604,13 @@ func (s *svc) cs3GranteeToSharePointIdentitySet(ctx context.Context, grantee *pr
 	return p, nil
 }
 
-func groupByResourceID(shares []*gateway.ShareResourceInfo, publicShares []*gateway.PublicShareResourceInfo) (map[string][]*ShareOrLink, map[string]*provider.ResourceInfo) {
-	grouped := make(map[string][]*ShareOrLink, len(shares)+len(publicShares)) // at most we have the sum of both lists
+func groupByResourceID(shares []*gateway.ShareResourceInfo, publicShares []*gateway.PublicShareResourceInfo) (map[string][]*GenericShare, map[string]*provider.ResourceInfo) {
+	grouped := make(map[string][]*GenericShare, len(shares)+len(publicShares)) // at most we have the sum of both lists
 	infos := make(map[string]*provider.ResourceInfo, len(shares)+len(publicShares))
 
 	for _, s := range shares {
 		id := spaces.ResourceIdToString(s.Share.ResourceId)
-		grouped[id] = append(grouped[id], &ShareOrLink{
+		grouped[id] = append(grouped[id], &GenericShare{
 			shareType: "share",
 			ID:        s.Share.Id.OpaqueId,
 			share:     s.Share,
@@ -507,7 +620,7 @@ func groupByResourceID(shares []*gateway.ShareResourceInfo, publicShares []*gate
 
 	for _, s := range publicShares {
 		id := spaces.ResourceIdToString(s.PublicShare.ResourceId)
-		grouped[id] = append(grouped[id], &ShareOrLink{
+		grouped[id] = append(grouped[id], &GenericShare{
 			shareType: "link",
 			ID:        s.PublicShare.Id.OpaqueId,
 			link:      s.PublicShare,
@@ -564,7 +677,7 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceInfo, shares []*ShareOrLink) (*libregraph.DriveItem, error) {
+func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceInfo, shares []*GenericShare) (*libregraph.DriveItem, error) {
 	relativePath, err := spaces.PathRelativeToSpaceRoot(info)
 	if err != nil {
 		return nil, err
@@ -612,7 +725,7 @@ func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceIn
 	return d, nil
 }
 
-func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*ShareOrLink) ([]libregraph.Permission, error) {
+func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*GenericShare) ([]libregraph.Permission, error) {
 	permissions := make([]libregraph.Permission, 0, len(shares))
 
 	for _, e := range shares {

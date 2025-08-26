@@ -170,9 +170,10 @@ func mapToLibregraphUsers(users []*userpb.User, selection []UserSelectableProper
 			continue
 		}
 		lgUser := libregraph.User{}
+		var id string = u.Id.OpaqueId + "@" + u.Id.Idp
 		if len(selection) == 0 {
 			lgUser = libregraph.User{
-				Id:                       &u.Id.OpaqueId,
+				Id:                       &id,
 				Mail:                     &u.Mail,
 				OnPremisesSamAccountName: &u.Username,
 				DisplayName:              &u.DisplayName,

@@ -25,6 +25,7 @@ import (
 	"errors"
 	"slices"
 
+	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -472,5 +473,24 @@ func UnifiedRoleIDToDefinition(unifiedRoleID string) (*libregraph.UnifiedRoleDef
 		return NewViewerUnifiedRole(), true
 	default:
 		return nil, false
+	}
+}
+
+func UnifiedRoleToOCMPermissions(unifiedRoleID string) (*provider.ResourcePermissions, appprovider.ViewMode) {
+	switch unifiedRoleID {
+	case UnifiedRoleViewerID:
+		return conversions.NewViewerRole().CS3ResourcePermissions(), appprovider.ViewMode_VIEW_MODE_READ_ONLY
+	case UnifiedRoleSpaceViewerID:
+		return conversions.NewViewerRole().CS3ResourcePermissions(), appprovider.ViewMode_VIEW_MODE_READ_ONLY
+	case UnifiedRoleEditorID:
+		return conversions.NewEditorRole().CS3ResourcePermissions(), appprovider.ViewMode_VIEW_MODE_READ_WRITE
+	case UnifiedRoleSpaceEditorID:
+		return conversions.NewEditorRole().CS3ResourcePermissions(), appprovider.ViewMode_VIEW_MODE_READ_WRITE
+	case UnifiedRoleFileEditorID:
+		return conversions.NewEditorRole().CS3ResourcePermissions(), appprovider.ViewMode_VIEW_MODE_READ_WRITE
+	case UnifiedRoleEditorLiteID:
+		return conversions.NewEditorRole().CS3ResourcePermissions(), appprovider.ViewMode_VIEW_MODE_READ_WRITE
+	default:
+		return nil, 0
 	}
 }
