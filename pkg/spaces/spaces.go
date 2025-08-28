@@ -23,6 +23,7 @@ type SpaceType string
 const (
 	SpaceTypeHome    SpaceType = "personal"
 	SpaceTypeProject SpaceType = "project"
+	SpaceTypePublic  SpaceType = "public"
 )
 
 func (t SpaceType) AsString() string { return string(t) }
