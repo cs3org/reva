@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -61,6 +62,11 @@ type config struct {
 	Drivers       map[string]map[string]any `mapstructure:"drivers"`
 	UserSpace     string                    `mapstructure:"user_space" validate:"required"`
 	MachineSecret string                    `mapstructure:"machine_secret" validate:"required"`
+	// Provide a list of public spaces, where we map
+	// name:
+	//  - path: <path>
+	//  - description: <description>
+	PublicSpaces map[string]map[string]string `mapstructure:"public_spaces"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -136,6 +142,12 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
 		}
 		sp = append(sp, projects...)
+
+		publicSpaces, err := s.getPublicSpaces(ctx)
+		if err != nil {
+			return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
+		}
+		sp = append(sp, publicSpaces...)
 	}
 
 	for _, filter := range filters {
@@ -197,6 +209,13 @@ func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, space
 			return nil, err
 		}
 		sp = append(sp, projects...)
+	case spaces.SpaceTypePublic:
+		publicSpaces, err := s.getPublicSpaces(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		sp = append(sp, publicSpaces...)
 	}
 
 	return sp, nil
@@ -317,6 +336,51 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 			RemainingBytes: quota.TotalBytes - quota.UsedBytes,
 		},
 	}, nil
+}
+
+func (s *service) getPublicSpaces(ctx context.Context) ([]*provider.StorageSpace, error) {
+	log := appctx.GetLogger(ctx)
+	publicSpaces := make([]*provider.StorageSpace, 0)
+	for spaceName, content := range s.c.PublicSpaces {
+		path, ok := content["path"]
+		if !ok {
+			log.Error().Msgf("No `path` found for public space %s, ignoring this space", spaceName)
+			continue
+		}
+
+		statRes, err := s.gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
+			Path: path,
+		}})
+		if err != nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+			log.Error().Err(err).Any("Status", statRes.Status).Msgf("Failed to stat path %s for public space %s, ignoring this space", path, spaceName)
+			continue
+		}
+
+		spaceID := spaces.EncodeSpaceID(path)
+		space := &provider.StorageSpace{
+			SpaceType: "public",
+			Root:      statRes.Info.Id,
+			Id: &provider.StorageSpaceId{
+				OpaqueId: spaceID,
+			},
+			RootInfo:        statRes.Info,
+			Mtime:           statRes.Info.Mtime,
+			Name:            spaceName,
+			HasTrashedItems: false,
+			Quota: &provider.Quota{
+				// 1 Exabyte
+				QuotaMaxBytes:  uint64(math.Pow10(18)),
+				RemainingBytes: uint64(math.Pow10(18)) - statRes.Info.Size,
+			},
+		}
+
+		if description, ok := content["description"]; ok {
+			space.Description = description
+		}
+
+		publicSpaces = append(publicSpaces, space)
+	}
+	return publicSpaces, nil
 }
 
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
