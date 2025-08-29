@@ -131,6 +131,33 @@ func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err erro
 		Int("target_nobody_gid", o.NobodyGID).
 		Msg("nceph: privilege verification details")
 
+	// Verify that privilege testing properly restored original fsuid/fsgid
+	finalFsUID := setfsuidSafe(-1)
+	finalFsGID := setfsgidSafe(-1)
+	
+	log.Info().
+		Int("original_fsuid", privResult.CurrentFsUID).
+		Int("final_fsuid", finalFsUID).
+		Int("original_fsgid", privResult.CurrentFsGID).
+		Int("final_fsgid", finalFsGID).
+		Bool("fsuid_restored", finalFsUID == privResult.CurrentFsUID).
+		Bool("fsgid_restored", finalFsGID == privResult.CurrentFsGID).
+		Msg("nceph: privilege verification restoration status")
+	
+	if finalFsUID != privResult.CurrentFsUID {
+		log.Error().
+			Int("expected_fsuid", privResult.CurrentFsUID).
+			Int("actual_fsuid", finalFsUID).
+			Msg("nceph: CRITICAL - privilege verification failed to restore original fsuid - this will cause permission issues")
+	}
+	
+	if finalFsGID != privResult.CurrentFsGID {
+		log.Error().
+			Int("expected_fsgid", privResult.CurrentFsGID).
+			Int("actual_fsgid", finalFsGID).
+			Msg("nceph: CRITICAL - privilege verification failed to restore original fsgid - this will cause permission issues")
+	}
+
 	if !privResult.HasSufficientPrivileges() {
 		if privResult.HasPartialPrivileges() {
 			log.Warn().

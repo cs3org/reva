@@ -74,16 +74,26 @@ func VerifyPrivileges(nobodyUID, nobodyGID int) *PrivilegeVerificationResult {
 	result.CanChangeUID = true
 
 	for _, uid := range testUIDs {
-		oldUID := setfsuidSafe(uid)
-		actualUID := setfsuidSafe(-1) // Get current value without changing
+		originalFsuid := setfsuidSafe(-1) // Get current fsuid before test
+		oldUID := setfsuidSafe(uid)       // Change to test UID
+		actualUID := setfsuidSafe(-1)     // Get current value without changing
 
-		// Restore original value
+		// Restore original value IMMEDIATELY
 		setfsuidSafe(oldUID)
+		finalUID := setfsuidSafe(-1) // Verify restoration
 
 		result.TestedUIDs = append(result.TestedUIDs, uid)
 		if actualUID != uid {
 			// If we couldn't change to this UID, we don't have full privileges
 			result.CanChangeUID = false
+		}
+		
+		// Log verbose information about privilege test and restoration
+		if originalFsuid != finalUID {
+			// This should not happen - log a warning
+			result.ErrorMessages = append(result.ErrorMessages, 
+				fmt.Sprintf("UID restoration failed: original=%d, final=%d after testing UID %d", 
+					originalFsuid, finalUID, uid))
 		}
 	}
 
@@ -103,16 +113,26 @@ func VerifyPrivileges(nobodyUID, nobodyGID int) *PrivilegeVerificationResult {
 	result.CanChangeGID = true
 
 	for _, gid := range testGIDs {
-		oldGID := setfsgidSafe(gid)
-		actualGID := setfsgidSafe(-1) // Get current value without changing
+		originalFsgid := setfsgidSafe(-1) // Get current fsgid before test
+		oldGID := setfsgidSafe(gid)       // Change to test GID
+		actualGID := setfsgidSafe(-1)     // Get current value without changing
 
-		// Restore original value
+		// Restore original value IMMEDIATELY
 		setfsgidSafe(oldGID)
+		finalGID := setfsgidSafe(-1) // Verify restoration
 
 		result.TestedGIDs = append(result.TestedGIDs, gid)
 		if actualGID != gid {
 			// If we couldn't change to this GID, we don't have full privileges
 			result.CanChangeGID = false
+		}
+		
+		// Log verbose information about privilege test and restoration
+		if originalFsgid != finalGID {
+			// This should not happen - log a warning
+			result.ErrorMessages = append(result.ErrorMessages, 
+				fmt.Sprintf("GID restoration failed: original=%d, final=%d after testing GID %d", 
+					originalFsgid, finalGID, gid))
 		}
 	}
 
