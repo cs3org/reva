@@ -112,27 +112,60 @@ func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err erro
 
 	// Log privilege verification results
 	log := appctx.GetLogger(ctx)
+	
+	// Always log basic privilege status first
+	log.Info().
+		Int("current_uid", privResult.CurrentUID).
+		Int("current_gid", privResult.CurrentGID).
+		Int("current_fsuid", privResult.CurrentFsUID).
+		Int("current_fsgid", privResult.CurrentFsGID).
+		Bool("can_change_uid", privResult.CanChangeUID).
+		Bool("can_change_gid", privResult.CanChangeGID).
+		Msg("nceph: privilege verification status")
+
+	// Log detailed test information
+	log.Info().
+		Interface("tested_uids", privResult.TestedUIDs).
+		Interface("tested_gids", privResult.TestedGIDs).
+		Int("target_nobody_uid", o.NobodyUID).
+		Int("target_nobody_gid", o.NobodyGID).
+		Msg("nceph: privilege verification details")
+
 	if !privResult.HasSufficientPrivileges() {
 		if privResult.HasPartialPrivileges() {
 			log.Warn().
 				Bool("can_change_uid", privResult.CanChangeUID).
 				Bool("can_change_gid", privResult.CanChangeGID).
-				Str("recommendations", fmt.Sprintf("%v", privResult.Recommendations)).
-				Msg("nceph: partial privileges detected - some operations may not work correctly")
+				Interface("error_messages", privResult.ErrorMessages).
+				Interface("recommendations", privResult.Recommendations).
+				Str("impact", "some per-user operations may not work correctly").
+				Msg("nceph: partial privileges detected")
 		} else {
 			log.Error().
 				Int("current_uid", privResult.CurrentUID).
 				Int("current_gid", privResult.CurrentGID).
-				Str("errors", fmt.Sprintf("%v", privResult.ErrorMessages)).
-				Str("recommendations", fmt.Sprintf("%v", privResult.Recommendations)).
-				Msg("nceph: insufficient privileges for setfsuid/setfsgid - per-user thread isolation will not work")
+				Int("current_fsuid", privResult.CurrentFsUID).
+				Int("current_fsgid", privResult.CurrentFsGID).
+				Interface("tested_uids", privResult.TestedUIDs).
+				Interface("tested_gids", privResult.TestedGIDs).
+				Interface("error_messages", privResult.ErrorMessages).
+				Interface("recommendations", privResult.Recommendations).
+				Str("impact", "per-user thread isolation will not work - all operations will run as current user").
+				Msg("nceph: insufficient privileges for setfsuid/setfsgid")
 		}
 	} else {
 		log.Info().
 			Bool("can_change_uid", privResult.CanChangeUID).
 			Bool("can_change_gid", privResult.CanChangeGID).
+			Int("current_uid", privResult.CurrentUID).
+			Int("current_gid", privResult.CurrentGID).
+			Int("current_fsuid", privResult.CurrentFsUID).
+			Int("current_fsgid", privResult.CurrentFsGID).
 			Int("nobody_uid", o.NobodyUID).
 			Int("nobody_gid", o.NobodyGID).
+			Interface("tested_uids", privResult.TestedUIDs).
+			Interface("tested_gids", privResult.TestedGIDs).
+			Str("capability", "full per-user thread isolation available").
 			Msg("nceph: sufficient privileges verified for per-user thread isolation")
 	}
 
