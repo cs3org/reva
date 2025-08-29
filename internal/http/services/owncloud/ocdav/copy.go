@@ -83,7 +83,7 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 	}
 
 	// For the destination, we still need to handle this ourselves
-	if s.c.SpacesEnabled {
+	if s.c.SpacesEnabled && ns != "/public" {
 		dstSpaceID, dstRelPath := router.ShiftPath(dst)
 		_, spaceRoot, ok := spaces.DecodeStorageSpaceID(dstSpaceID)
 		if !ok {
