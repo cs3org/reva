@@ -209,6 +209,15 @@ func (fs *ncephfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (st
 		}
 	}
 
+	// Remove nceph root prefix to make path relative to nceph filesystem root
+	if fs.conf.Root != "" && fs.conf.Root != "/" {
+		cephRootTrimmedPath := path
+		path = strings.TrimPrefix(path, fs.conf.Root)
+		if cephRootTrimmedPath != path {
+			log.Info().Str("nceph_root", fs.conf.Root).Str("ceph_root_trimmed_path", cephRootTrimmedPath).Str("final_trimmed_path", path).Msg("nceph: Removed nceph root prefix from path")
+		}
+	}
+
 	// Ensure path starts with /
 	if path != "" && !strings.HasPrefix(path, "/") {
 		path = "/" + path
