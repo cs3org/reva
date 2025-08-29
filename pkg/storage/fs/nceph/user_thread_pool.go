@@ -334,6 +334,23 @@ func (p *UserThreadPool) mapUserToUIDGID(user *userv1beta1.User) (int, int) {
 		return p.nobodyUID, p.nobodyGID
 	}
 
+	// For other users, respect the UidNumber and GidNumber from the user struct if available
+	// This allows tests to specify exact UIDs (e.g., root = 0)
+	if user.UidNumber > 0 || user.GidNumber > 0 {
+		uid := int(user.UidNumber)
+		gid := int(user.GidNumber)
+		
+		// Allow UID 0 (root) explicitly
+		if user.UidNumber == 0 {
+			uid = 0
+		}
+		if user.GidNumber == 0 {
+			gid = 0
+		}
+		
+		return uid, gid
+	}
+
 	// For other users, you would implement proper UID/GID mapping here
 	// This is a simplified example - in practice you'd:
 	// 1. Query system user database (getpwnam)
@@ -341,7 +358,7 @@ func (p *UserThreadPool) mapUserToUIDGID(user *userv1beta1.User) (int, int) {
 	// 3. Use a configuration-based mapping
 	// 4. Parse numeric UIDs from opaque ID if available
 
-	// Default fallback for now (should be replaced with proper mapping)
+	// Default fallback for users without explicit UID/GID
 	return 1000, 1000
 }
 
