@@ -334,21 +334,14 @@ func (p *UserThreadPool) mapUserToUIDGID(user *userv1beta1.User) (int, int) {
 		return p.nobodyUID, p.nobodyGID
 	}
 
-	// For other users, respect the UidNumber and GidNumber from the user struct if available
-	// This allows tests to specify exact UIDs (e.g., root = 0)
-	if user.UidNumber > 0 || user.GidNumber > 0 {
-		uid := int(user.UidNumber)
-		gid := int(user.GidNumber)
-		
-		// Allow UID 0 (root) explicitly
-		if user.UidNumber == 0 {
-			uid = 0
-		}
-		if user.GidNumber == 0 {
-			gid = 0
-		}
-		
-		return uid, gid
+	// Handle root user specially - check by username for explicit root
+	if user.Username == "root" && user.UidNumber == 0 && user.GidNumber == 0 {
+		return 0, 0
+	}
+
+	// For other users with non-zero UID/GID, use those values
+	if user.UidNumber > 0 && user.GidNumber > 0 {
+		return int(user.UidNumber), int(user.GidNumber)
 	}
 
 	// For other users, you would implement proper UID/GID mapping here
