@@ -385,7 +385,7 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, finalurl, nil)
 	if err != nil {
-		log.Error().Str("func", "PUTFile").Str("url", finalurl).Str("err", err.Error()).Msg("can't create request")
+		log.Error().Str("func", "PUTFile").Str("url", finalurl).Str("app", app).Str("err", err.Error()).Msg("can't create request")
 		return err
 	}
 
@@ -411,7 +411,7 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 		}
 
 		// Execute the request. I don't like that there is no explicit timeout or buffer control on the input stream
-		log.Debug().Str("func", "PUTFile").Msg("sending req")
+		log.Debug().Str("func", "PUTFile").Any("headers", req.Header).Msg("sending req")
 
 		// c.doReq sets headers such as remoteuser and x-gateway-authorization
 		// we don't want those when using a token (i.e. ?authz=), so in this case

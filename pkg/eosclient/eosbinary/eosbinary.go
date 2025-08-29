@@ -740,7 +740,7 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 	if auth.Token != "" {
 		args[3] += "?authz=" + auth.Token
 	} else if auth.Role.UID != "" && auth.Role.GID != "" {
-		args = append(args, fmt.Sprintf("-OSeos.ruid=%s&eos.rgid=%s&%s=%s_read", auth.Role.UID, auth.Role.GID, eosclient.EosAppHeader, eosclient.EosAppPrefix))
+		args = append(args, fmt.Sprintf("-OSeos.ruid=%s&eos.rgid=%s&%s=%s_read", auth.Role.UID, auth.Role.GID, eosclient.EosAppParam, eosclient.EosAppPrefix))
 	}
 
 	_, _, err := c.executeXRDCopy(ctx, args)
@@ -784,7 +784,7 @@ func (c *Client) writeFile(ctx context.Context, auth eosclient.Authorization, pa
 		if app == "" {
 			app = fmt.Sprintf("%s_write", eosclient.EosAppPrefix)
 		}
-		options += fmt.Sprintf("&eos.ruid=%s&eos.rgid=%s&%s=%s", auth.Role.UID, auth.Role.GID, eosclient.EosAppHeader, app)
+		options += fmt.Sprintf("&eos.ruid=%s&eos.rgid=%s&%s=%s", auth.Role.UID, auth.Role.GID, eosclient.EosAppParam, app)
 	} else {
 		return errors.New("No authentication provided")
 	}
