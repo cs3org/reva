@@ -1723,6 +1723,7 @@ func (fs *Eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relative
 }
 
 func (fs *Eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	// ListStorageSpaces is implemented in the spacesregistry
 	return nil, errtypes.NotSupported("list storage spaces")
 }
 
