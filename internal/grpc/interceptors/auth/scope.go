@@ -253,12 +253,15 @@ func resolveUserShare(ctx context.Context, ref *provider.Reference, scope *authp
 }
 
 func checkCacheForNestedResource(ctx context.Context, ref *provider.Reference, resource *provider.ResourceId, client gateway.GatewayAPIClient, mgr token.Manager) error {
+
+	log := appctx.GetLogger(ctx)
 	// Check if this ref is cached
 	key := resourceid.OwnCloudResourceIDWrap(resource) + scopeDelimiter + getRefKey(ref)
 	if _, err := scopeExpansionCache.Get(key); err == nil {
 		return nil
 	}
 
+	log.Info().Any("ref", ref).Any("resource", resource).Msgf("checkCacheForNestedResource")
 	if ok, err := checkIfNestedResource(ctx, ref, resource, client, mgr); err == nil && ok {
 		_ = scopeExpansionCache.SetWithExpire(key, nil, scopeCacheExpiration*time.Second)
 		return nil
@@ -275,9 +278,13 @@ func isRelativePathOrEmpty(path string) bool {
 }
 
 func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent *provider.ResourceId, client gateway.GatewayAPIClient, mgr token.Manager) (bool, error) {
+	log := appctx.GetLogger(ctx)
+
 	// Since the resource ID is obtained from the scope, the current token
 	// has access to it.
 	statResponse, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: parent}})
+	log.Info().Any("ref", ref).Any("parent", &provider.Reference{ResourceId: parent}).Any("res", statResponse).Any("err", err).Msg("FindMe")
+
 	if err != nil {
 		return false, err
 	}
@@ -288,6 +295,8 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 
 	childPath := ref.GetPath()
 	if isRelativePathOrEmpty(childPath) {
+		log.Info().Msg("isRelativePathOrEmpty")
+
 		// We mint a token as the owner of the public share and try to stat the reference
 		// TODO(ishank011): We need to find a better alternative to this
 
@@ -315,6 +324,8 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 		}
 		childPath = statResponse.Info.Path
 	}
+
+	log.Info().Str("child", childPath).Str("parent", parentPath).Msg(" strings.HasPrefix")
 
 	return strings.HasPrefix(childPath, parentPath), nil
 }
