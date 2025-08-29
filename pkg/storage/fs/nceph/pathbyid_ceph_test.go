@@ -6,7 +6,9 @@ import (
 	"os"
 	"testing"
 
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -67,6 +69,20 @@ func TestGetPathByIDIntegration(t *testing.T) {
 
 	// Initialize nceph with ceph configuration
 	ctx := ContextWithTestLogger(t)
+	
+	// Add a root user to the context for integration testing
+	// This ensures that operations run with proper privileges
+	user := &userv1beta1.User{
+		Id: &userv1beta1.UserId{
+			OpaqueId: "root",
+			Idp:      "local",
+		},
+		Username:  "root",
+		UidNumber: 0,  // Root UID
+		GidNumber: 0,  // Root GID
+	}
+	ctx = appctx.ContextSetUser(ctx, user)
+	
 	fs, err := New(ctx, config)
 	require.NoError(t, err, "Failed to create nceph filesystem with Ceph configuration")
 	require.NotNil(t, fs)
@@ -158,6 +174,20 @@ func TestGetPathByIDWithCreatedFiles(t *testing.T) {
 
 	// Initialize nceph filesystem with Ceph configuration
 	ctx := ContextWithTestLogger(t)
+	
+	// Add a root user to the context for integration testing
+	// This ensures that file operations run with proper privileges
+	user := &userv1beta1.User{
+		Id: &userv1beta1.UserId{
+			OpaqueId: "root",
+			Idp:      "local",
+		},
+		Username:  "root",
+		UidNumber: 0,  // Root UID
+		GidNumber: 0,  // Root GID
+	}
+	ctx = appctx.ContextSetUser(ctx, user)
+	
 	fs, err := New(ctx, config)
 	require.NoError(t, err, "Failed to create nceph filesystem with Ceph configuration")
 	require.NotNil(t, fs)
