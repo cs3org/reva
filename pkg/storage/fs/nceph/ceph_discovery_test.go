@@ -80,7 +80,7 @@ cephminiflax.cern.ch:6789:/volumes/_nogroup/rasmus	/mnt/miniflax	ceph	name=mds-a
 		assert.Equal(t, "/mnt/miniflax", mountInfo.LocalMountPoint)
 		assert.Equal(t, "mds-admin", mountInfo.ClientName)
 
-		t.Logf("✅ Auto-discovered configuration:")
+		t.Logf("Auto-discovered configuration:")
 		t.Logf("   Monitor Host: %s", mountInfo.MonitorHost)
 		t.Logf("   Ceph Volume Path: %s", mountInfo.CephVolumePath)
 		t.Logf("   Local Mount Point: %s", mountInfo.LocalMountPoint)
@@ -98,12 +98,12 @@ cephminiflax.cern.ch:6789:/volumes/_nogroup/rasmus	/mnt/miniflax	ceph	name=mds-a
 
 		// Note: This test would fail in the actual New() function because
 		// it tries to read /etc/fstab, but it demonstrates the concept
-		t.Logf("📖 Example configuration with auto-discovery enabled:")
+		t.Logf("Example configuration with auto-discovery enabled:")
 		for key, value := range testConfig {
 			t.Logf("   %s: %v", key, value)
 		}
 
-		t.Logf("📖 With auto-discovery, the system would:")
+		t.Logf("With auto-discovery, the system would:")
 		t.Logf("   1. Read monitor host from %s", cephConfigFile)
 		t.Logf("   2. Find matching Ceph mount in /etc/fstab")
 		t.Logf("   3. Extract Ceph volume path as common denominator")
@@ -238,7 +238,7 @@ fsid = test-cluster`,
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tc.expectedMonHost, monHost)
-				t.Logf("✅ Extracted monitor host: %s", monHost)
+				t.Logf("Extracted monitor host: %s", monHost)
 			}
 		})
 	}

@@ -20,8 +20,8 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 	// Log current process info
 	currentUID := os.Getuid()
 	currentGID := os.Getgid()
-	t.Logf("🔍 Process info: running as UID=%d, GID=%d", currentUID, currentGID)
-	t.Logf("🔍 Test directory: %s", tempDir)
+	t.Logf("Process info: running as UID=%d, GID=%d", currentUID, currentGID)
+	t.Logf("Test directory: %s", tempDir)
 
 	// Create a test file in the simulated mount point
 	testFileName := "myfile.txt"
@@ -39,7 +39,7 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 
 	// Log file permissions
 	if info, err := os.Stat(testFilePath); err == nil {
-		t.Logf("🔍 Test file permissions: %s (size: %d bytes)", info.Mode(), info.Size())
+		t.Logf("Test file permissions: %s (size: %d bytes)", info.Mode(), info.Size())
 	}
 
 	// Create test filesystem with your fstab entry concept
@@ -56,7 +56,7 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 		// Use root (0) as the test user since we're running as root and created files as root
 		testUID := int64(currentUID)
 		testGID := int64(currentGID)
-		t.Logf("🔍 Setting user context: UID=%d, GID=%d", testUID, testGID)
+		t.Logf("Setting user context: UID=%d, GID=%d", testUID, testGID)
 
 		user := &userv1beta1.User{
 			Id: &userv1beta1.UserId{
@@ -74,7 +74,7 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 			Path: "/myfile.txt",
 		}
 
-		t.Logf("🔍 About to call GetMD with:")
+		t.Logf("About to call GetMD with:")
 		t.Logf("   - Reference path: %s", ref.Path)
 		t.Logf("   - Expected filesystem path: %s", filepath.Join(tempDir, "myfile.txt"))
 		t.Logf("   - User context: UID=%d, GID=%d", testUID, testGID)
@@ -82,12 +82,12 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 		// Call GetMD
 		resourceInfo, err := fs.GetMD(ctx, ref, nil)
 		if err != nil {
-			t.Logf("❌ GetMD failed with error: %v", err)
+			t.Logf("GetMD failed with error: %v", err)
 			// Let's check if the file exists and what its permissions are
 			if info, statErr := os.Stat(filepath.Join(tempDir, "myfile.txt")); statErr == nil {
-				t.Logf("🔍 File exists with mode %s, size %d", info.Mode(), info.Size())
+				t.Logf("File exists with mode %s, size %d", info.Mode(), info.Size())
 			} else {
-				t.Logf("🔍 File stat failed: %v", statErr)
+				t.Logf("File stat failed: %v", statErr)
 			}
 		}
 		require.NoError(t, err, "GetMD should succeed")
@@ -97,7 +97,7 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 		assert.Equal(t, "/myfile.txt", resourceInfo.Path, "ResourceInfo.Path should be the external path")
 		assert.Equal(t, uint64(11), resourceInfo.Size, "File size should be 11 bytes")
 
-		t.Logf("✅ Full GetMD operation test:")
+		t.Logf("Full GetMD operation test:")
 		t.Logf("   User request: GetMD(%s)", ref.Path)
 		t.Logf("   Filesystem accesses: %s/%s", tempDir, testFileName)
 		t.Logf("   ResourceInfo.Path: %s", resourceInfo.Path)
@@ -110,7 +110,7 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 		// Use the same user context as the first test
 		testUID := int64(currentUID)
 		testGID := int64(currentGID)
-		t.Logf("🔍 Setting user context for nested test: UID=%d, GID=%d", testUID, testGID)
+		t.Logf("Setting user context for nested test: UID=%d, GID=%d", testUID, testGID)
 
 		user := &userv1beta1.User{
 			Id: &userv1beta1.UserId{
@@ -142,7 +142,7 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 		err = os.Chmod(nestedFile, 0666)
 		require.NoError(t, err, "Failed to set permissions on nested file")
 
-		t.Logf("🔍 Created nested structure:")
+		t.Logf("Created nested structure:")
 		t.Logf("   - %s (mode: %v)", filepath.Join(tempDir, "documents"), "0777")
 		t.Logf("   - %s (mode: %v)", nestedDir, "0777")
 		t.Logf("   - %s (mode: %v)", nestedFile, "0666")
@@ -152,14 +152,14 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 			Path: "/documents/project/report.pdf",
 		}
 
-		t.Logf("🔍 About to call GetMD for nested path:")
+		t.Logf("About to call GetMD for nested path:")
 		t.Logf("   - Reference path: %s", ref.Path)
 		t.Logf("   - Expected filesystem path: %s", nestedFile)
 
 		// Call GetMD
 		resourceInfo, err := fs.GetMD(ctx, ref, nil)
 		if err != nil {
-			t.Logf("❌ GetMD failed for nested path: %v", err)
+			t.Logf("GetMD failed for nested path: %v", err)
 		}
 		require.NoError(t, err, "GetMD should succeed for nested path")
 		require.NotNil(t, resourceInfo, "ResourceInfo should not be nil")
@@ -168,7 +168,7 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 		assert.Equal(t, "/documents/project/report.pdf", resourceInfo.Path, "ResourceInfo.Path should be the external path")
 		assert.Equal(t, uint64(16), resourceInfo.Size, "File size should be 16 bytes")
 
-		t.Logf("✅ Nested path GetMD operation test:")
+		t.Logf("Nested path GetMD operation test:")
 		t.Logf("   User request: GetMD(%s)", ref.Path)
 		t.Logf("   Filesystem accesses: %s", nestedFile)
 		t.Logf("   ResourceInfo.Path: %s", resourceInfo.Path)
@@ -181,7 +181,7 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 		// Use the same user context
 		testUID := int64(currentUID)
 		testGID := int64(currentGID)
-		t.Logf("🔍 Setting user context for root directory test: UID=%d, GID=%d", testUID, testGID)
+		t.Logf("Setting user context for root directory test: UID=%d, GID=%d", testUID, testGID)
 
 		user := &userv1beta1.User{
 			Id: &userv1beta1.UserId{
@@ -199,14 +199,14 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 			Path: "/",
 		}
 
-		t.Logf("🔍 About to call GetMD for root directory:")
+		t.Logf("About to call GetMD for root directory:")
 		t.Logf("   - Reference path: %s", ref.Path)
 		t.Logf("   - Expected filesystem path: %s", tempDir)
 
 		// Call GetMD
 		resourceInfo, err := fs.GetMD(ctx, ref, nil)
 		if err != nil {
-			t.Logf("❌ GetMD failed for root directory: %v", err)
+			t.Logf("GetMD failed for root directory: %v", err)
 		}
 		require.NoError(t, err, "GetMD should succeed for root directory")
 		require.NotNil(t, resourceInfo, "ResourceInfo should not be nil")
@@ -215,7 +215,7 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 		assert.Equal(t, "/", resourceInfo.Path, "ResourceInfo.Path should be root path")
 		assert.Equal(t, provider.ResourceType_RESOURCE_TYPE_CONTAINER, resourceInfo.Type, "Root should be a container")
 
-		t.Logf("✅ Root directory GetMD operation test:")
+		t.Logf("Root directory GetMD operation test:")
 		t.Logf("   User request: GetMD(%s)", ref.Path)
 		t.Logf("   Filesystem accesses: %s", tempDir)
 		t.Logf("   ResourceInfo.Path: %s", resourceInfo.Path)
@@ -231,8 +231,8 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 	// Log current process info
 	currentUID := os.Getuid()
 	currentGID := os.Getgid()
-	t.Logf("🔍 ListFolder test - Process info: running as UID=%d, GID=%d", currentUID, currentGID)
-	t.Logf("🔍 Test directory: %s", tempDir)
+	t.Logf("ListFolder test - Process info: running as UID=%d, GID=%d", currentUID, currentGID)
+	t.Logf("Test directory: %s", tempDir)
 
 	// Make the test directory accessible by everyone
 	err := os.Chmod(tempDir, 0777)
@@ -286,7 +286,7 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 	err = os.Chmod(nestedFile, 0666)
 	require.NoError(t, err, "Failed to set permissions on nested.doc")
 
-	t.Logf("🔍 Created test structure with permissions:")
+	t.Logf("Created test structure with permissions:")
 	t.Logf("   - %s (mode: 0777)", tempDir)
 	t.Logf("   - %s (mode: 0777)", fooDir)
 	t.Logf("   - %s (mode: 0666)", barFile)
@@ -307,7 +307,7 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 		// Use consistent user context
 		testUID := int64(currentUID)
 		testGID := int64(currentGID)
-		t.Logf("🔍 ListFolder test - Setting user context: UID=%d, GID=%d", testUID, testGID)
+		t.Logf("ListFolder test - Setting user context: UID=%d, GID=%d", testUID, testGID)
 
 		user := &userv1beta1.User{
 			Id: &userv1beta1.UserId{
@@ -325,14 +325,14 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 			Path: "/foo",
 		}
 
-		t.Logf("🔍 About to call ListFolder:")
+		t.Logf("About to call ListFolder:")
 		t.Logf("   - Reference path: %s", ref.Path)
 		t.Logf("   - Expected filesystem path: %s", fooDir)
 
 		// Call ListFolder
 		entries, err := fs.ListFolder(ctx, ref, []string{})
 		if err != nil {
-			t.Logf("❌ ListFolder failed: %v", err)
+			t.Logf("ListFolder failed: %v", err)
 		}
 		require.NoError(t, err, "ListFolder should succeed")
 		require.Len(t, entries, 3, "Should find 3 entries (2 files + 1 directory)")
@@ -359,11 +359,11 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 			assert.True(t, found, "Should find entry for %s", expected.path)
 			if found {
 				assert.Equal(t, expected.expectedType, entry.Type, "%s should have correct type", expected.description)
-				t.Logf("✅ Found entry: %s (type: %s)", entry.Path, entry.Type)
+				t.Logf("Found entry: %s (type: %s)", entry.Path, entry.Type)
 			}
 		}
 
-		t.Logf("✅ Full ListFolder operation test:")
+		t.Logf("Full ListFolder operation test:")
 		t.Logf("   User request: ListFolder(%s)", ref.Path)
 		t.Logf("   Filesystem accesses: %s", fooDir)
 		t.Logf("   Found %d entries with correct external paths", len(entries))
@@ -375,7 +375,7 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 		// Use consistent user context
 		testUID := int64(currentUID)
 		testGID := int64(currentGID)
-		t.Logf("🔍 ListFolder nested test - Setting user context: UID=%d, GID=%d", testUID, testGID)
+		t.Logf("ListFolder nested test - Setting user context: UID=%d, GID=%d", testUID, testGID)
 
 		user := &userv1beta1.User{
 			Id: &userv1beta1.UserId{
@@ -393,14 +393,14 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 			Path: "/foo/subdir",
 		}
 
-		t.Logf("🔍 About to call ListFolder for nested subdir:")
+		t.Logf("About to call ListFolder for nested subdir:")
 		t.Logf("   - Reference path: %s", ref.Path)
 		t.Logf("   - Expected filesystem path: %s", subdirPath)
 
 		// Call ListFolder
 		entries, err := fs.ListFolder(ctx, ref, []string{})
 		if err != nil {
-			t.Logf("❌ ListFolder failed for nested subdir: %v", err)
+			t.Logf("ListFolder failed for nested subdir: %v", err)
 		}
 		require.NoError(t, err, "ListFolder should succeed for nested directory")
 		require.Len(t, entries, 1, "Should find 1 entry in subdir")
@@ -411,7 +411,7 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 		assert.Equal(t, provider.ResourceType_RESOURCE_TYPE_FILE, entry.Type, "Should be a file")
 		assert.Equal(t, uint64(15), entry.Size, "File size should be 15 bytes")
 
-		t.Logf("✅ Nested directory ListFolder test:")
+		t.Logf("Nested directory ListFolder test:")
 		t.Logf("   User request: ListFolder(%s)", ref.Path)
 		t.Logf("   Filesystem accesses: %s", subdirPath)
 		t.Logf("   Found entry: %s", entry.Path)
@@ -423,7 +423,7 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 		// Use consistent user context
 		testUID := int64(currentUID)
 		testGID := int64(currentGID)
-		t.Logf("🔍 ListFolder root test - Setting user context: UID=%d, GID=%d", testUID, testGID)
+		t.Logf("ListFolder root test - Setting user context: UID=%d, GID=%d", testUID, testGID)
 
 		user := &userv1beta1.User{
 			Id: &userv1beta1.UserId{
@@ -441,14 +441,14 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 			Path: "/",
 		}
 
-		t.Logf("🔍 About to call ListFolder for root directory:")
+		t.Logf("About to call ListFolder for root directory:")
 		t.Logf("   - Reference path: %s", ref.Path)
 		t.Logf("   - Expected filesystem path: %s", tempDir)
 
 		// Call ListFolder
 		entries, err := fs.ListFolder(ctx, ref, []string{})
 		if err != nil {
-			t.Logf("❌ ListFolder failed for root directory: %v", err)
+			t.Logf("ListFolder failed for root directory: %v", err)
 		}
 		require.NoError(t, err, "ListFolder should succeed for root directory")
 		require.Greater(t, len(entries), 0, "Root directory should have at least one entry")
@@ -465,7 +465,7 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 		require.NotNil(t, fooEntry, "Should find /foo directory in root listing")
 		assert.Equal(t, provider.ResourceType_RESOURCE_TYPE_CONTAINER, fooEntry.Type, "/foo should be a directory")
 
-		t.Logf("✅ Root directory ListFolder test:")
+		t.Logf("Root directory ListFolder test:")
 		t.Logf("   User request: ListFolder(%s)", ref.Path)
 		t.Logf("   Filesystem accesses: %s", tempDir)
 		t.Logf("   Found /foo entry with correct external path")

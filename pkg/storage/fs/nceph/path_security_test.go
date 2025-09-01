@@ -53,7 +53,7 @@ func TestPathSecurityValidation(t *testing.T) {
 			t.Run("reject_"+sanitizeTestName(path), func(t *testing.T) {
 				err := fs.validatePathWithinBounds(ctx, path, "test")
 				assert.Error(t, err, "Should reject malicious path: %s", path)
-				t.Logf("✅ Correctly rejected: %s", path)
+				t.Logf("Correctly rejected: %s", path)
 			})
 		}
 	})
@@ -71,7 +71,7 @@ func TestPathSecurityValidation(t *testing.T) {
 			t.Run("reject_outside_"+sanitizeTestName(path), func(t *testing.T) {
 				err := fs.validatePathWithinBounds(ctx, path, "test")
 				assert.Error(t, err, "Should reject path outside volume bounds: %s", path)
-				t.Logf("✅ Correctly rejected path outside bounds: %s", path)
+				t.Logf("Correctly rejected path outside bounds: %s", path)
 			})
 		}
 	})
@@ -100,7 +100,7 @@ func TestPathSecurityValidation(t *testing.T) {
 		}
 	})
 
-	t.Log("✅ Path security validation tests completed")
+	t.Log("Path security validation tests completed")
 	t.Log("The validatePathWithinBounds function correctly:")
 	t.Log("  1. Allows legitimate paths within volume bounds")
 	t.Log("  2. Rejects path traversal attempts")

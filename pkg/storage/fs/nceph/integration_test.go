@@ -26,7 +26,7 @@ func TestIntegrationWithRealCeph(t *testing.T) {
 	// Use our standard test logger
 	ctx := ContextWithTestLogger(t)
 
-	t.Logf("🔍 Integration test using real Ceph mount from NCEPH_FSTAB_ENTRY: %s", fstabEntry)
+	t.Logf("Integration test using real Ceph mount from NCEPH_FSTAB_ENTRY: %s", fstabEntry)
 
 	// Create filesystem for integration testing (no overrides)
 	config := map[string]interface{}{
@@ -46,7 +46,7 @@ func TestIntegrationWithRealCeph(t *testing.T) {
 	}
 	ctx = appctx.ContextSetUser(ctx, user)
 
-	t.Log("🔍 Testing GetMD against real Ceph mount:")
+	t.Log("Testing GetMD against real Ceph mount:")
 
 	// Test GetMD on root directory (should work with any mount)
 	ref := &provider.Reference{Path: "/"}
@@ -54,18 +54,18 @@ func TestIntegrationWithRealCeph(t *testing.T) {
 	require.NoError(t, err, "GetMD should succeed on real mount")
 	require.NotNil(t, resourceInfo, "ResourceInfo should not be nil")
 
-	t.Logf("✅ Integration GetMD successful:")
+	t.Logf("Integration GetMD successful:")
 	t.Logf("   - Requested path: %s", ref.Path)
 	t.Logf("   - Result path: %s", resourceInfo.Path)
 	t.Logf("   - Resource type: %s", resourceInfo.Type)
 
-	t.Log("🔍 Testing ListFolder against real Ceph mount:")
+	t.Log("Testing ListFolder against real Ceph mount:")
 
 	// Test ListFolder on root directory
 	entries, err := fs.ListFolder(ctx, ref, nil)
 	require.NoError(t, err, "ListFolder should succeed on real mount")
 
-	t.Logf("✅ Integration ListFolder successful:")
+	t.Logf("Integration ListFolder successful:")
 	t.Logf("   - Requested path: %s", ref.Path)
 	t.Logf("   - Found %d entries", len(entries))
 	for i, entry := range entries {

@@ -51,7 +51,7 @@ func TestEnvironmentVariableChroot(t *testing.T) {
 		// Verify it's using tempDir1 by checking it can access test1.txt
 		assert.Equal(t, tempDir1, fs.chrootDir, "Should use tempDir1 as chroot directory")
 
-		t.Logf("✅ Without environment variable:")
+		t.Logf("Without environment variable:")
 		t.Logf("   Chroot directory: %s", fs.chrootDir)
 		t.Logf("   Local mount point: %s", fs.localMountPoint)
 	})
@@ -75,7 +75,7 @@ func TestEnvironmentVariableChroot(t *testing.T) {
 		// Verify it's using tempDir2 (from environment variable) instead of tempDir1
 		assert.Equal(t, tempDir2, ncephFS.chrootDir, "Should use tempDir2 from environment variable")
 
-		t.Logf("✅ With environment variable override:")
+		t.Logf("With environment variable override:")
 		t.Logf("   Environment variable: NCEPH_TEST_CHROOT_DIR=%s", tempDir2)
 		t.Logf("   Chroot directory: %s", ncephFS.chrootDir)
 		t.Logf("   Original local mount point: (empty in local mode)")
@@ -102,17 +102,17 @@ func TestEnvironmentVariableChroot(t *testing.T) {
 		assert.Equal(t, tempDir2, ncephFS.chrootDir, "Environment variable should override fstab-derived chroot")
 		assert.Equal(t, "/mnt/different_mount", ncephFS.localMountPoint, "Should still parse local mount point from fstab")
 
-		t.Logf("✅ Environment variable precedence test:")
+		t.Logf("Environment variable precedence test:")
 		t.Logf("   Fstab local mount: /mnt/different_mount")
 		t.Logf("   Environment override: %s", tempDir2)
 		t.Logf("   Actual chroot directory: %s", ncephFS.chrootDir)
-		t.Logf("   ✅ Environment variable takes precedence!")
+		t.Logf("   Environment variable takes precedence!")
 	})
 }
 
 // TestEnvironmentVariableDocumentation provides documentation for the environment variable feature
 func TestEnvironmentVariableDocumentation(t *testing.T) {
-	t.Log("📖 NCEPH_TEST_CHROOT_DIR Environment Variable Documentation:")
+	t.Log("NCEPH_TEST_CHROOT_DIR Environment Variable Documentation:")
 	t.Log("")
 	t.Log("Purpose:")
 	t.Log("  - Allows overriding the chroot directory for testing purposes")

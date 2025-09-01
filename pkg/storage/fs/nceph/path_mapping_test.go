@@ -71,7 +71,7 @@ func TestPathMapping(t *testing.T) {
 			}
 
 			assert.Equal(t, tc.expectedUserPath, userPath, tc.description)
-			t.Logf("✅ %s: %s → %s", tc.name, tc.inputPath, userPath)
+			t.Logf("%s: %s → %s", tc.name, tc.inputPath, userPath)
 		})
 	}
 }

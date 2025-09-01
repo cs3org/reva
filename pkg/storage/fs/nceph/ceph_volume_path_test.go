@@ -94,7 +94,7 @@ func TestCephVolumePathMapping(t *testing.T) {
 				assert.Equal(t, tc.expectedUserPath, actualUserPath,
 					"%s: Ceph volume path '%s' should convert to user path '%s'",
 					tc.description, tc.cephVolumePath, tc.expectedUserPath)
-				t.Logf("✅ Volume→User: %s → %s", tc.cephVolumePath, actualUserPath)
+				t.Logf("Volume→User: %s → %s", tc.cephVolumePath, actualUserPath)
 			})
 
 			// Test: User path -> Ceph volume path conversion
@@ -104,7 +104,7 @@ func TestCephVolumePathMapping(t *testing.T) {
 				assert.Equal(t, tc.expectedCephVolPath, actualCephVolPath,
 					"%s: User path '%s' should convert to Ceph volume path '%s'",
 					tc.description, tc.userPath, tc.expectedCephVolPath)
-				t.Logf("✅ User→Volume: %s → %s", tc.userPath, actualCephVolPath)
+				t.Logf("User→Volume: %s → %s", tc.userPath, actualCephVolPath)
 			})
 
 			// Test: Round-trip conversion preserves original paths
@@ -115,7 +115,7 @@ func TestCephVolumePathMapping(t *testing.T) {
 				assert.Equal(t, tc.userPath, finalUserPath,
 					"%s: Round-trip should preserve user path: %s → %s → %s",
 					tc.description, tc.userPath, cephVolPath, finalUserPath)
-				t.Logf("✅ Round-trip: %s → %s → %s", tc.userPath, cephVolPath, finalUserPath)
+				t.Logf("Round-trip: %s → %s → %s", tc.userPath, cephVolPath, finalUserPath)
 			})
 		})
 	}
@@ -147,7 +147,7 @@ func TestCephVolumePathConcept(t *testing.T) {
 	ncephFS := NewForTesting(t, ctx, config, "", tempDir)
 
 	// Document the concept with clear examples
-	t.Log("📖 Current NCeph Path Mapping Concept (Simplified):")
+	t.Log("Current NCeph Path Mapping Concept (Simplified):")
 	t.Log("   1. All operations use chroot-relative paths within the jail")
 	t.Log("   2. External user paths map to chroot-relative paths")
 	t.Log("   3. No separate Ceph volume coordinates (removed for simplicity)")
@@ -159,7 +159,7 @@ func TestCephVolumePathConcept(t *testing.T) {
 	chrootPath := ncephFS.toChroot(externalUserPath)
 	backToExternal := ncephFS.fromChroot(chrootPath)
 
-	t.Logf("📁 Current Implementation - Path conversion:")
+	t.Logf("Current Implementation - Path conversion:")
 	t.Logf("   External User Path:      %s", externalUserPath)
 	t.Logf("   Chroot-relative Path:    %s", chrootPath)
 	t.Logf("   Back to External:        %s", backToExternal)
@@ -174,7 +174,7 @@ func TestCephVolumePathConcept(t *testing.T) {
 	chrootRootPath := ncephFS.toChroot(externalRootPath)
 	backToExternalRoot := ncephFS.fromChroot(chrootRootPath)
 
-	t.Logf("📁 Root directory conversion:")
+	t.Logf("Root directory conversion:")
 	t.Logf("   External User Path:      %s", externalRootPath)
 	t.Logf("   Chroot-relative Path:    %s", chrootRootPath)
 	t.Logf("   Back to External:        %s", backToExternalRoot)
@@ -182,5 +182,5 @@ func TestCephVolumePathConcept(t *testing.T) {
 	assert.Equal(t, ".", chrootRootPath)
 	assert.Equal(t, externalRootPath, backToExternalRoot)
 
-	t.Log("✅ Simplified path conversion concept validated successfully")
+	t.Log("Simplified path conversion concept validated successfully")
 }

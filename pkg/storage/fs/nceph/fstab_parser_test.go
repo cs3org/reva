@@ -25,7 +25,7 @@ func TestFstabParserWithRealExample(t *testing.T) {
 	assert.Equal(t, "/etc/ceph/ceph.conf", mountInfo.ConfigFile, "Config file should be extracted correctly")
 	assert.Equal(t, "/etc/ceph/ceph.client.mds-admin.keyring", mountInfo.KeyringFile, "Keyring file should be constructed correctly")
 
-	t.Logf("✅ Successfully parsed real fstab entry:")
+	t.Logf("Successfully parsed real fstab entry:")
 	t.Logf("   Monitor Host: %s", mountInfo.MonitorHost)
 	t.Logf("   Ceph Volume Path: %s", mountInfo.CephVolumePath)
 	t.Logf("   Local Mount Point: %s", mountInfo.LocalMountPoint)

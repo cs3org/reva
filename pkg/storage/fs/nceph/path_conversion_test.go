@@ -38,7 +38,7 @@ func TestPathConversionWithSpecificFstab(t *testing.T) {
 		resultPath := fs.fromChroot(chrootPath)
 		assert.Equal(t, "/myfile.txt", resultPath, "fromChroot should restore external path")
 
-		t.Logf("✅ Path conversion chain:")
+		t.Logf("Path conversion chain:")
 		t.Logf("   User request: %s", externalPath)
 		t.Logf("   Chroot path: %s (used with rootFS)", chrootPath)
 		t.Logf("   Actual filesystem: %s/%s (simulating /mnt/miniflax/%s)", tempDir, chrootPath, chrootPath)

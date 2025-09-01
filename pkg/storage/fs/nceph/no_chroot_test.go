@@ -35,6 +35,6 @@ func TestNoChrootDirectoryError(t *testing.T) {
 	assert.Contains(t, err.Error(), "no chroot directory available", "Error should mention missing chroot directory")
 	assert.Contains(t, err.Error(), "NCEPH_TEST_CHROOT_DIR", "Error should mention the environment variable option")
 
-	t.Logf("✅ Properly handles case with no chroot directory")
+	t.Logf("Properly handles case with no chroot directory")
 	t.Logf("   Error: %s", err.Error())
 }

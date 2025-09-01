@@ -79,7 +79,7 @@ func TestNobodyUserFallback(t *testing.T) {
 		t.Errorf("Expected thread pool nobody GID %d, got %d", customNobodyGID, ncephFS.threadPool.nobodyGID)
 	}
 
-	t.Logf("✅ Nobody user configuration applied correctly: UID=%d, GID=%d", customNobodyUID, customNobodyGID)
+	t.Logf("Nobody user configuration applied correctly: UID=%d, GID=%d", customNobodyUID, customNobodyGID)
 }
 
 func TestNobodyUserMapping(t *testing.T) {
@@ -135,7 +135,7 @@ func TestNobodyUserMapping(t *testing.T) {
 		t.Errorf("Expected nobody user to map to GID %d, got %d", expectedGID, gid)
 	}
 
-	t.Logf("✅ Nobody user mapping works correctly: UID=%d, GID=%d", uid, gid)
+	t.Logf("Nobody user mapping works correctly: UID=%d, GID=%d", uid, gid)
 
 	// Test mapping of regular user (should use default)
 	regularUser := &userv1beta1.User{
@@ -160,7 +160,7 @@ func TestNobodyUserMapping(t *testing.T) {
 		t.Errorf("Expected regular user to map to GID %d, got %d", expectedGID, gid)
 	}
 
-	t.Logf("✅ Regular user mapping works correctly: UID=%d, GID=%d", uid, gid)
+	t.Logf("Regular user mapping works correctly: UID=%d, GID=%d", uid, gid)
 }
 
 func TestNobodyUserOperations(t *testing.T) {
@@ -243,7 +243,7 @@ func TestNobodyUserOperations(t *testing.T) {
 		t.Fatal("Directory was not created")
 	}
 
-	t.Logf("✅ Directory creation with nobody user fallback works correctly")
+	t.Logf("Directory creation with nobody user fallback works correctly")
 
 	// Test file operations with nobody user
 	ref = &provider.Reference{Path: "test-nobody-dir/testfile.txt"}
@@ -254,7 +254,7 @@ func TestNobodyUserOperations(t *testing.T) {
 		t.Fatalf("Expected file not found error, but got resource info: %v", ri)
 	}
 
-	t.Logf("✅ File operations with nobody user fallback work correctly")
+	t.Logf("File operations with nobody user fallback work correctly")
 
 	// Test with context that has a regular user
 	user := &userv1beta1.User{
@@ -281,5 +281,5 @@ func TestNobodyUserOperations(t *testing.T) {
 		t.Fatal("Directory was not created")
 	}
 
-	t.Logf("✅ Operations with regular user work correctly alongside nobody fallback")
+	t.Logf("Operations with regular user work correctly alongside nobody fallback")
 }

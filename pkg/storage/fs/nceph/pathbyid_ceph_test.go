@@ -97,7 +97,7 @@ func TestCephRootConfiguration(t *testing.T) {
 		// The new simplified approach doesn't have a separate ceph_root config
 		// The chroot directory is determined from the fstab entry's local mount point
 		// This test now just validates that the configuration works correctly
-		t.Log("✅ Simplified configuration: chroot directory is derived from fstab entry")
+		t.Log("Simplified configuration: chroot directory is derived from fstab entry")
 	})
 
 	// Test with auto-discovered configuration
@@ -190,7 +190,7 @@ func TestGetPathByIDWithCreatedFiles(t *testing.T) {
 			require.NoError(t, err, "Failed to create file %s", tc.path)
 		}
 
-		t.Logf("✅ Successfully created %s", tc.name)
+		t.Logf("Successfully created %s", tc.name)
 	}
 
 	// Step 2: Get metadata for each created item and test GetPathByID round-trip
@@ -228,25 +228,25 @@ func TestGetPathByIDWithCreatedFiles(t *testing.T) {
 			// The retrieved path should match our expected path or be a normalized version
 			expectedPath := tc.path
 			if retrievedPath == expectedPath {
-				t.Logf("✅ Perfect match: GetPathByID returned exact expected path")
+				t.Logf("Perfect match: GetPathByID returned exact expected path")
 			} else if strings.HasSuffix(retrievedPath, expectedPath) {
-				t.Logf("✅ Suffix match: GetPathByID returned normalized path ending with expected suffix")
+				t.Logf("Suffix match: GetPathByID returned normalized path ending with expected suffix")
 			} else {
-				t.Logf("⚠️  Path difference: expected '%s', got '%s'", expectedPath, retrievedPath)
+				t.Logf("Path difference: expected '%s', got '%s'", expectedPath, retrievedPath)
 				// Verify that at least the filename/directory name matches
 				expectedBase := filepath.Base(expectedPath)
 				retrievedBase := filepath.Base(retrievedPath)
 				assert.Equal(t, expectedBase, retrievedBase,
 					"At minimum, the filename/directory name should match for %s", tc.name)
-				t.Logf("✅ At least the filename matches: '%s'", expectedBase)
+				t.Logf("At least the filename matches: '%s'", expectedBase)
 			}
 
-			t.Logf("✅ Round-trip successful: %s created → inode %s → path '%s'",
+			t.Logf("Round-trip successful: %s created → inode %s → path '%s'",
 				tc.name, inode, retrievedPath)
 		})
 	}
 
-	t.Log("✅ All round-trip tests completed successfully")
+	t.Log("All round-trip tests completed successfully")
 	t.Log("This confirms that:")
 	t.Log("  1. Files and directories can be created in the Ceph filesystem via nceph")
 	t.Log("  2. Inodes can be extracted from file metadata")
@@ -298,7 +298,7 @@ func TestGetPathByIDSecurityValidation(t *testing.T) {
 		require.NoError(t, err, "Legitimate GetPathByID should succeed")
 		require.NotEmpty(t, retrievedPath, "Retrieved path should not be empty")
 
-		t.Logf("✅ Legitimate path retrieval successful: %s", retrievedPath)
+		t.Logf("Legitimate path retrieval successful: %s", retrievedPath)
 
 		// Verify the path matches our expectation
 		assert.True(t, strings.HasSuffix(retrievedPath, testPath) || retrievedPath == testPath,
@@ -323,7 +323,7 @@ func TestGetPathByIDSecurityValidation(t *testing.T) {
 			t.Run("reject_"+strings.ReplaceAll(badPath, "/", "_"), func(t *testing.T) {
 				err := fs.validatePathWithinBounds(ctx, badPath, "security_test")
 				assert.Error(t, err, "Should reject malicious path: %s", badPath)
-				t.Logf("✅ Correctly rejected malicious path: %s", badPath)
+				t.Logf("Correctly rejected malicious path: %s", badPath)
 			})
 		}
 	})
@@ -338,14 +338,14 @@ func TestGetPathByIDSecurityValidation(t *testing.T) {
 		expectedPath := testPath
 
 		if retrievedPath == expectedPath {
-			t.Logf("✅ Perfect consistency: retrieved path exactly matches expected path")
+			t.Logf("Perfect consistency: retrieved path exactly matches expected path")
 		} else if strings.HasSuffix(retrievedPath, expectedPath) {
-			t.Logf("✅ Acceptable consistency: retrieved path ends with expected path")
+			t.Logf("Acceptable consistency: retrieved path ends with expected path")
 			t.Logf("   Expected: %s", expectedPath)
 			t.Logf("   Retrieved: %s", retrievedPath)
 		} else {
 			// This could indicate a security issue or unexpected path manipulation
-			t.Errorf("❌ Path consistency issue: retrieved path doesn't match expected pattern")
+			t.Errorf("Path consistency issue: retrieved path doesn't match expected pattern")
 			t.Errorf("   Expected: %s", expectedPath)
 			t.Errorf("   Retrieved: %s", retrievedPath)
 		}
@@ -377,12 +377,12 @@ func TestGetPathByIDSecurityValidation(t *testing.T) {
 				cephVolumePath, fs.cephVolumePath)
 		}
 
-		t.Logf("✅ Mount boundary enforcement verified")
+		t.Logf("Mount boundary enforcement verified")
 		t.Logf("   User path: %s", retrievedPath)
 		t.Logf("   Ceph volume path: %s", cephVolumePath)
 	})
 
-	t.Log("✅ All security validation tests completed successfully")
+	t.Log("All security validation tests completed successfully")
 	t.Log("This confirms that GetPathByID:")
 	t.Log("  1. Properly validates paths for traversal attacks")
 	t.Log("  2. Enforces mount boundary restrictions")

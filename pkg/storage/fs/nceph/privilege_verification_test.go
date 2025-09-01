@@ -83,15 +83,15 @@ func TestPrivilegeVerification(t *testing.T) {
 	// For non-root users, we expect insufficient privileges
 	if result.CurrentUID != 0 {
 		if result.HasSufficientPrivileges() {
-			t.Logf("✅ Unexpected: Non-root user has sufficient privileges (may be running with capabilities)")
+			t.Logf("Unexpected: Non-root user has sufficient privileges (may be running with capabilities)")
 		} else {
-			t.Logf("✅ Expected: Non-root user has insufficient privileges")
+			t.Logf("Expected: Non-root user has insufficient privileges")
 		}
 	} else {
 		if result.HasSufficientPrivileges() {
-			t.Logf("✅ Expected: Root user has sufficient privileges")
+			t.Logf("Expected: Root user has sufficient privileges")
 		} else {
-			t.Errorf("❌ Unexpected: Root user should have sufficient privileges")
+			t.Errorf("Unexpected: Root user should have sufficient privileges")
 		}
 	}
 }
@@ -138,7 +138,7 @@ func TestThreadPoolPrivilegeVerification(t *testing.T) {
 		t.Errorf("Expected custom nobody GID %d to be tested, tested GIDs: %v", 99999, privResult.TestedGIDs)
 	}
 
-	t.Logf("✅ Thread pool initialization includes privilege verification")
+	t.Logf("Thread pool initialization includes privilege verification")
 	t.Logf("Privilege status: %s", func() string {
 		if privResult.HasSufficientPrivileges() {
 			return "SUFFICIENT"
@@ -180,7 +180,7 @@ func TestNCephPrivilegeVerificationIntegration(t *testing.T) {
 	}
 	defer fs.Shutdown(ctx)
 
-	t.Logf("✅ NCeph filesystem created successfully with privilege verification")
+	t.Logf("NCeph filesystem created successfully with privilege verification")
 
 	// The New() function should have logged the privilege verification results
 	// In a real scenario, you'd check the logs, but for this test we just verify
@@ -196,23 +196,23 @@ func TestPrivilegeVerificationEdgeCases(t *testing.T) {
 
 	// Should be able to "change" to the same UID/GID (no actual change)
 	if !result.CanChangeUID {
-		t.Logf("ℹ️  Cannot change to same UID %d (this may be expected)", currentUID)
+		t.Logf("Cannot change to same UID %d (this may be expected)", currentUID)
 	}
 
 	if !result.CanChangeGID {
-		t.Logf("ℹ️  Cannot change to same GID %d (this may be expected)", currentGID)
+		t.Logf("Cannot change to same GID %d (this may be expected)", currentGID)
 	}
 
 	// Test with root UID/GID (if we're not root, this should fail)
 	if currentUID != 0 {
 		rootResult := VerifyPrivileges(0, 0)
 		if rootResult.CanChangeUID {
-			t.Logf("⚠️  Unexpected: Non-root user can change to root UID")
+			t.Logf("Unexpected: Non-root user can change to root UID")
 		}
 		if rootResult.CanChangeGID {
-			t.Logf("⚠️  Unexpected: Non-root user can change to root GID")
+			t.Logf("Unexpected: Non-root user can change to root GID")
 		}
 	}
 
-	t.Logf("✅ Edge case testing completed")
+	t.Logf("Edge case testing completed")
 }
