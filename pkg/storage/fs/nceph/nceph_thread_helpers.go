@@ -22,6 +22,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"path/filepath"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -59,6 +60,32 @@ func (fs *ncephfs) logOperation(ctx context.Context, operation, path string) {
 		Int("uid", uid).
 		Int("thread_id", threadID).
 		Msg("nceph operation")
+}
+
+// logOperationWithPaths creates a debug log entry with both received and ceph volume paths
+func (fs *ncephfs) logOperationWithPaths(ctx context.Context, operation, receivedPath, chrootPath string) {
+	username, uid, threadID := fs.getUserInfo(ctx)
+
+	// Calculate the full filesystem path
+	var fullPath string
+	if chrootPath == "." {
+		fullPath = fs.chrootDir
+	} else {
+		fullPath = filepath.Join(fs.chrootDir, chrootPath)
+	}
+
+	log := appctx.GetLogger(ctx)
+	log.Info().
+		Str("operation", operation).
+		Str("received_path", receivedPath).
+		Str("chroot_path", chrootPath).
+		Str("full_filesystem_path", fullPath).
+		Str("ceph_volume_path", fs.cephVolumePath).
+		Str("local_mount_point", fs.localMountPoint).
+		Str("username", username).
+		Int("uid", uid).
+		Int("thread_id", threadID).
+		Msg("nceph operation with path details")
 }
 
 // logOperationError creates an error log entry with consistent user and thread context

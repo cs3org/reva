@@ -419,12 +419,20 @@ func (fs *ncephfs) CreateHome(ctx context.Context) error {
 }
 
 func (fs *ncephfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
+	// Capture the original received path for logging
+	var receivedPath string
+	if ref != nil && ref.Path != "" {
+		receivedPath = ref.Path
+	} else if ref != nil && ref.ResourceId != nil {
+		receivedPath = fmt.Sprintf("ResourceId{StorageId:%s, OpaqueId:%s}", ref.ResourceId.StorageId, ref.ResourceId.OpaqueId)
+	}
+
 	path, err := fs.resolveRef(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	fs.logOperation(ctx, "CreateDir", path)
+	fs.logOperationWithPaths(ctx, "CreateDir", receivedPath, path)
 
 	// Execute directory creation on user's thread with correct UID
 	err = fs.createDirectoryAsUser(ctx, path, os.FileMode(fs.conf.DirPerms))
@@ -438,12 +446,20 @@ func (fs *ncephfs) CreateDir(ctx context.Context, ref *provider.Reference) error
 }
 
 func (fs *ncephfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
+	// Capture the original received path for logging
+	var receivedPath string
+	if ref != nil && ref.Path != "" {
+		receivedPath = ref.Path
+	} else if ref != nil && ref.ResourceId != nil {
+		receivedPath = fmt.Sprintf("ResourceId{StorageId:%s, OpaqueId:%s}", ref.ResourceId.StorageId, ref.ResourceId.OpaqueId)
+	}
+
 	path, err := fs.resolveRef(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	fs.logOperation(ctx, "Delete", path)
+	fs.logOperationWithPaths(ctx, "Delete", receivedPath, path)
 
 	// Execute stat and delete operations on user's thread with correct UID
 	info, err := fs.statAsUser(ctx, path)
@@ -472,6 +488,19 @@ func (fs *ncephfs) Delete(ctx context.Context, ref *provider.Reference) (err err
 }
 
 func (fs *ncephfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
+	// Capture the original received paths for logging
+	var oldReceivedPath, newReceivedPath string
+	if oldRef != nil && oldRef.Path != "" {
+		oldReceivedPath = oldRef.Path
+	} else if oldRef != nil && oldRef.ResourceId != nil {
+		oldReceivedPath = fmt.Sprintf("ResourceId{StorageId:%s, OpaqueId:%s}", oldRef.ResourceId.StorageId, oldRef.ResourceId.OpaqueId)
+	}
+	if newRef != nil && newRef.Path != "" {
+		newReceivedPath = newRef.Path
+	} else if newRef != nil && newRef.ResourceId != nil {
+		newReceivedPath = fmt.Sprintf("ResourceId{StorageId:%s, OpaqueId:%s}", newRef.ResourceId.StorageId, newRef.ResourceId.OpaqueId)
+	}
+
 	oldPath, err := fs.resolveRef(ctx, oldRef)
 	if err != nil {
 		wrappedErr := errors.Wrap(err, "nceph: failed to resolve old path")
@@ -485,7 +514,7 @@ func (fs *ncephfs) Move(ctx context.Context, oldRef, newRef *provider.Reference)
 		return wrappedErr
 	}
 
-	fs.logOperation(ctx, "Move", fmt.Sprintf("%s -> %s", oldPath, newPath))
+	fs.logOperationWithPaths(ctx, "Move", fmt.Sprintf("%s -> %s", oldReceivedPath, newReceivedPath), fmt.Sprintf("%s -> %s", oldPath, newPath))
 
 	// oldPath and newPath are already chroot-relative from resolveRef
 	// Create parent directory if needed and execute move on user's thread with correct UID
@@ -516,6 +545,15 @@ func (fs *ncephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []
 	}
 
 	log := appctx.GetLogger(ctx)
+	
+	// Capture the original received path for logging
+	var receivedPath string
+	if ref.Path != "" {
+		receivedPath = ref.Path
+	} else if ref.ResourceId != nil {
+		receivedPath = fmt.Sprintf("ResourceId{StorageId:%s, OpaqueId:%s}", ref.ResourceId.StorageId, ref.ResourceId.OpaqueId)
+	}
+	
 	path, err := fs.resolveRef(ctx, ref)
 	if err != nil {
 		wrappedErr := errors.Wrap(err, "nceph: failed to resolve reference")
@@ -523,7 +561,7 @@ func (fs *ncephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []
 		return nil, wrappedErr
 	}
 
-	fs.logOperation(ctx, "GetMD", path)
+	fs.logOperationWithPaths(ctx, "GetMD", receivedPath, path)
 
 	// path is already chroot-relative from resolveRef
 	// Execute stat operation on user's thread with correct UID
@@ -558,6 +596,15 @@ func (fs *ncephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKe
 	}
 
 	log := appctx.GetLogger(ctx)
+	
+	// Capture the original received path for logging
+	var receivedPath string
+	if ref.Path != "" {
+		receivedPath = ref.Path
+	} else if ref.ResourceId != nil {
+		receivedPath = fmt.Sprintf("ResourceId{StorageId:%s, OpaqueId:%s}", ref.ResourceId.StorageId, ref.ResourceId.OpaqueId)
+	}
+	
 	path, err := fs.resolveRef(ctx, ref)
 	if err != nil {
 		wrappedErr := errors.Wrap(err, "nceph: failed to resolve reference")
@@ -565,7 +612,7 @@ func (fs *ncephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKe
 		return nil, wrappedErr
 	}
 
-	fs.logOperation(ctx, "ListFolder", path)
+	fs.logOperationWithPaths(ctx, "ListFolder", receivedPath, path)
 
 	// Execute directory listing on user's thread with correct UID
 	entries, err := fs.readDirectoryAsUser(ctx, path)
@@ -595,6 +642,14 @@ func (fs *ncephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKe
 }
 
 func (fs *ncephfs) Download(ctx context.Context, ref *provider.Reference) (rc io.ReadCloser, err error) {
+	// Capture the original received path for logging
+	var receivedPath string
+	if ref != nil && ref.Path != "" {
+		receivedPath = ref.Path
+	} else if ref != nil && ref.ResourceId != nil {
+		receivedPath = fmt.Sprintf("ResourceId{StorageId:%s, OpaqueId:%s}", ref.ResourceId.StorageId, ref.ResourceId.OpaqueId)
+	}
+
 	path, err := fs.resolveRef(ctx, ref)
 	if err != nil {
 		wrappedErr := errors.Wrap(err, "nceph: error resolving ref")
@@ -602,7 +657,7 @@ func (fs *ncephfs) Download(ctx context.Context, ref *provider.Reference) (rc io
 		return nil, wrappedErr
 	}
 
-	fs.logOperation(ctx, "Download", path)
+	fs.logOperationWithPaths(ctx, "Download", receivedPath, path)
 
 	// Execute file open on user's thread with correct UID
 	file, err := fs.openFileAsUser(ctx, path)
@@ -617,6 +672,14 @@ func (fs *ncephfs) Download(ctx context.Context, ref *provider.Reference) (rc io
 
 // Upload handles file uploads to the local filesystem
 func (fs *ncephfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, metadata map[string]string) error {
+	// Capture the original received path for logging
+	var receivedPath string
+	if ref != nil && ref.Path != "" {
+		receivedPath = ref.Path
+	} else if ref != nil && ref.ResourceId != nil {
+		receivedPath = fmt.Sprintf("ResourceId{StorageId:%s, OpaqueId:%s}", ref.ResourceId.StorageId, ref.ResourceId.OpaqueId)
+	}
+
 	path, err := fs.resolveRef(ctx, ref)
 	if err != nil {
 		wrappedErr := errors.Wrap(err, "nceph: error resolving reference")
@@ -624,7 +687,7 @@ func (fs *ncephfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 		return wrappedErr
 	}
 
-	fs.logOperation(ctx, "Upload", path)
+	fs.logOperationWithPaths(ctx, "Upload", receivedPath, path)
 
 	// Create parent directory if needed and execute upload on user's thread with correct UID
 	parentDir := filepath.Dir(path)
