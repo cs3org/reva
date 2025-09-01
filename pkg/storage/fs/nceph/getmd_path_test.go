@@ -6,7 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -32,6 +34,18 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 	t.Run("GetMD_for_myfile_txt", func(t *testing.T) {
 		ctx := context.Background()
 		
+		// Add a user context to avoid permission issues
+		user := &userv1beta1.User{
+			Id: &userv1beta1.UserId{
+				OpaqueId: "testuser",
+				Idp:      "local",
+			},
+			Username:  "testuser",
+			UidNumber: int64(os.Getuid()), // Use current user's UID to avoid permission issues
+			GidNumber: int64(os.Getgid()), // Use current user's GID to avoid permission issues
+		}
+		ctx = appctx.ContextSetUser(ctx, user)
+		
 		// User requests GetMD for /myfile.txt
 		ref := &provider.Reference{
 			Path: "/myfile.txt",
@@ -55,6 +69,18 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 
 	t.Run("GetMD_for_nested_path", func(t *testing.T) {
 		ctx := context.Background()
+		
+		// Add a user context to avoid permission issues
+		user := &userv1beta1.User{
+			Id: &userv1beta1.UserId{
+				OpaqueId: "testuser",
+				Idp:      "local",
+			},
+			Username:  "testuser",
+			UidNumber: int64(os.Getuid()), // Use current user's UID to avoid permission issues
+			GidNumber: int64(os.Getgid()), // Use current user's GID to avoid permission issues
+		}
+		ctx = appctx.ContextSetUser(ctx, user)
 		
 		// Create nested directory structure
 		nestedDir := filepath.Join(tempDir, "documents", "project")
@@ -88,6 +114,18 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 
 	t.Run("GetMD_for_root_directory", func(t *testing.T) {
 		ctx := context.Background()
+		
+		// Add a user context to avoid permission issues
+		user := &userv1beta1.User{
+			Id: &userv1beta1.UserId{
+				OpaqueId: "testuser",
+				Idp:      "local",
+			},
+			Username:  "testuser",
+			UidNumber: int64(os.Getuid()), // Use current user's UID to avoid permission issues
+			GidNumber: int64(os.Getgid()), // Use current user's GID to avoid permission issues
+		}
+		ctx = appctx.ContextSetUser(ctx, user)
 		
 		// User requests GetMD for / (root directory)
 		ref := &provider.Reference{
@@ -154,6 +192,18 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 	t.Run("ListFolder_for_foo_directory", func(t *testing.T) {
 		ctx := context.Background()
 		
+		// Add a user context to avoid permission issues
+		user := &userv1beta1.User{
+			Id: &userv1beta1.UserId{
+				OpaqueId: "testuser",
+				Idp:      "local",
+			},
+			Username:  "testuser",
+			UidNumber: int64(os.Getuid()), // Use current user's UID to avoid permission issues
+			GidNumber: int64(os.Getgid()), // Use current user's GID to avoid permission issues
+		}
+		ctx = appctx.ContextSetUser(ctx, user)
+		
 		// User requests ListFolder for /foo
 		ref := &provider.Reference{
 			Path: "/foo",
@@ -199,6 +249,18 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 	t.Run("ListFolder_for_nested_subdir", func(t *testing.T) {
 		ctx := context.Background()
 		
+		// Add a user context to avoid permission issues
+		user := &userv1beta1.User{
+			Id: &userv1beta1.UserId{
+				OpaqueId: "testuser",
+				Idp:      "local",
+			},
+			Username:  "testuser",
+			UidNumber: int64(os.Getuid()), // Use current user's UID to avoid permission issues
+			GidNumber: int64(os.Getgid()), // Use current user's GID to avoid permission issues
+		}
+		ctx = appctx.ContextSetUser(ctx, user)
+		
 		// User requests ListFolder for /foo/subdir
 		ref := &provider.Reference{
 			Path: "/foo/subdir",
@@ -223,6 +285,18 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 
 	t.Run("ListFolder_for_root_directory", func(t *testing.T) {
 		ctx := context.Background()
+		
+		// Add a user context to avoid permission issues
+		user := &userv1beta1.User{
+			Id: &userv1beta1.UserId{
+				OpaqueId: "testuser",
+				Idp:      "local",
+			},
+			Username:  "testuser",
+			UidNumber: int64(os.Getuid()), // Use current user's UID to avoid permission issues
+			GidNumber: int64(os.Getgid()), // Use current user's GID to avoid permission issues
+		}
+		ctx = appctx.ContextSetUser(ctx, user)
 		
 		// User requests ListFolder for / (root directory)
 		ref := &provider.Reference{
