@@ -4,20 +4,32 @@
 // specifically focusing on metadata operations (GetMD) performance.
 //
 // Available benchmarks:
-// - BenchmarkGetMD_SingleFile: Tests GetMD performance on a single file
-// - BenchmarkGetMD_MultipleFiles: Tests GetMD performance across different numbers of files
-// - BenchmarkGetMD_NestedDirectories: Tests GetMD performance at different directory depths
-// - BenchmarkGetMD_WithMetadataKeys: Tests GetMD performance with different metadata key sets
-// - BenchmarkGetMD_DirectoryOperations: Tests GetMD performance on directories with varying content
+// - BenchmarkGetMD_SingleFile: Tests GetMD performance on a single file (local disk)
+// - BenchmarkGetMD_MultipleFiles: Tests GetMD performance across different numbers of files (local disk)
+// - BenchmarkGetMD_NestedDirectories: Tests GetMD performance at different directory depths (local disk)
+// - BenchmarkGetMD_WithMetadataKeys: Tests GetMD performance with different metadata key sets (local disk)
+// - BenchmarkGetMD_DirectoryOperations: Tests GetMD performance on directories with varying content (local disk)
+//
+// Ceph Integration Benchmarks (with --tags ceph):
+// - BenchmarkGetMD_SingleFile_Ceph: Same as above but on real CephFS
+// - BenchmarkGetMD_MultipleFiles_Ceph: Same as above but on real CephFS
+// - BenchmarkGetMD_NestedDirectories_Ceph: Same as above but on real CephFS
+// - BenchmarkGetMD_WithMetadataKeys_Ceph: Same as above but on real CephFS
+// - BenchmarkGetMD_DirectoryOperations_Ceph: Same as above but on real CephFS
 //
 // Usage examples:
+//   # Local disk benchmarks (default)
 //   go test -bench=BenchmarkGetMD_SingleFile ./pkg/storage/fs/nceph
-//   go test -bench=BenchmarkGetMD_MultipleFiles ./pkg/storage/fs/nceph
-//   go test -bench=BenchmarkGetMD_ ./pkg/storage/fs/nceph  # Run all GetMD benchmarks
+//   go test -bench=BenchmarkGetMD_ ./pkg/storage/fs/nceph  # Run all local benchmarks
+//
+//   # Real CephFS benchmarks (requires NCEPH_FSTAB_ENTRY)
+//   go test --tags ceph -bench=BenchmarkGetMD_SingleFile_Ceph ./pkg/storage/fs/nceph
+//   go test --tags ceph -bench=BenchmarkGetMD_.*_Ceph ./pkg/storage/fs/nceph  # Run all Ceph benchmarks
 //
 // Environment variables:
 //   NCEPH_TEST_DIR: Base directory for benchmark tests (default: temp directory)
 //   NCEPH_TEST_PRESERVE: Set to "true" to preserve test directories after benchmarks
+//   NCEPH_FSTAB_ENTRY: Required for Ceph benchmarks - Complete fstab entry for CephFS mount
 
 package nceph
 
