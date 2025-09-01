@@ -236,24 +236,24 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 }
 
 func (fs *Eosfs) userIDcacheWarmup() {
-	if !fs.conf.EnableHome {
-		time.Sleep(2 * time.Second)
-		ctx := context.Background()
-		paths := []string{fs.wrap(ctx, "/")}
 
-		for i := 0; i < fs.conf.UserIDCacheWarmupDepth; i++ {
-			var newPaths []string
-			for _, fn := range paths {
-				if eosFileInfos, err := fs.c.List(ctx, utils.GetEmptyAuth(), fn); err == nil {
-					for _, f := range eosFileInfos {
-						_, _ = fs.getUserIDGateway(ctx, strconv.FormatUint(f.UID, 10))
-						newPaths = append(newPaths, f.File)
-					}
+	time.Sleep(2 * time.Second)
+	ctx := context.Background()
+	paths := []string{fs.wrap(ctx, "/")}
+
+	for i := 0; i < fs.conf.UserIDCacheWarmupDepth; i++ {
+		var newPaths []string
+		for _, fn := range paths {
+			if eosFileInfos, err := fs.c.List(ctx, utils.GetEmptyAuth(), fn); err == nil {
+				for _, f := range eosFileInfos {
+					_, _ = fs.getUserIDGateway(ctx, strconv.FormatUint(f.UID, 10))
+					newPaths = append(newPaths, f.File)
 				}
 			}
-			paths = newPaths
 		}
+		paths = newPaths
 	}
+
 }
 
 func (fs *Eosfs) ListWithRegex(ctx context.Context, path, regex string, depth uint, user *userpb.User) ([]*provider.ResourceInfo, error) {
@@ -285,35 +285,8 @@ func (fs *Eosfs) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (fs *Eosfs) getLayout(ctx context.Context) (layout string) {
-	if fs.conf.EnableHome {
-		u := appctx.ContextMustGetUser(ctx)
-		layout = templates.WithUser(u, fs.conf.UserLayout)
-	}
-	return
-}
-
-func (fs *Eosfs) getInternalHome(ctx context.Context) string {
-	log := appctx.GetLogger(ctx)
-	log.Info().Msgf("get internal home: %+v", fs.conf.EnableHome)
-	if !fs.conf.EnableHome {
-		// TODO(lopresti): this is to be removed as we always want to support home,
-		// cf. https://github.com/cs3org/reva/pull/4940
-		return "/"
-	}
-
-	u := appctx.ContextMustGetUser(ctx)
-	relativeHome := templates.WithUser(u, fs.conf.UserLayout)
-	log.Info().Msgf("get internal home: %+v", relativeHome)
-	return relativeHome
-}
-
 func (fs *Eosfs) wrap(ctx context.Context, fn string) (internal string) {
-	if fs.conf.EnableHome {
-		internal = path.Join(fs.conf.Namespace, fs.getInternalHome(ctx), fn)
-	} else {
-		internal = path.Join(fs.conf.Namespace, fn)
-	}
+	internal = path.Join(fs.conf.Namespace, fn)
 	log := appctx.GetLogger(ctx)
 	log.Debug().Msg("eosfs: wrap external=" + fn + " internal=" + internal)
 	return
@@ -321,12 +294,11 @@ func (fs *Eosfs) wrap(ctx context.Context, fn string) (internal string) {
 
 func (fs *Eosfs) unwrap(ctx context.Context, internal string) (string, error) {
 	log := appctx.GetLogger(ctx)
-	layout := fs.getLayout(ctx)
 	ns, err := fs.getNsMatch(internal, []string{fs.conf.Namespace})
 	if err != nil {
 		return "", err
 	}
-	external, err := fs.unwrapInternal(ctx, ns, internal, layout)
+	external, err := fs.unwrapInternal(ctx, ns, internal, "")
 	if err != nil {
 		return "", err
 	}
@@ -1294,12 +1266,7 @@ func (fs *Eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (totalby
 }
 
 func (fs *Eosfs) GetHome(ctx context.Context) (string, error) {
-	if !fs.conf.EnableHome {
-		return "", errtypes.NotSupported("eosfs: get home not supported")
-	}
-
-	// eos drive for homes assumes root(/) points to the user home.
-	return "/", nil
+	return "", errtypes.NotSupported("eosfs: get home not supported")
 }
 
 func (fs *Eosfs) createNominalHome(ctx context.Context) error {
@@ -1491,32 +1458,20 @@ func (fs *Eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]
 	var fn string
 	var err error
 
-	if !fs.conf.EnableHome {
-		// We need to access the revisions for a non-home reference.
-		// We'll get the owner of the particular resource and impersonate them
-		// if we have access to it.
-		md, err := fs.GetMD(ctx, ref, nil)
+	md, err := fs.GetMD(ctx, ref, nil)
+	if err != nil {
+		return nil, err
+	}
+	fn = fs.wrap(ctx, md.Path)
+
+	if md.PermissionSet.ListFileVersions {
+		user := appctx.ContextMustGetUser(ctx)
+		auth, err = fs.getEOSToken(ctx, user, fn)
 		if err != nil {
 			return nil, err
-		}
-		fn = fs.wrap(ctx, md.Path)
-
-		if md.PermissionSet.ListFileVersions {
-			user := appctx.ContextMustGetUser(ctx)
-			auth, err = fs.getEOSToken(ctx, user, fn)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to list revisions")
 		}
 	} else {
-		var userAuth eosclient.Authorization
-		fn, userAuth, err = fs.resolveRefAndGetAuth(ctx, ref)
-		if err != nil {
-			return nil, err
-		}
-		auth = utils.GetUserOrDaemonAuth(userAuth)
+		return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to list revisions")
 	}
 
 	eosRevisions, err := fs.c.ListVersions(ctx, auth, fn)
@@ -1537,31 +1492,22 @@ func (fs *Eosfs) DownloadRevision(ctx context.Context, ref *provider.Reference, 
 	var fn string
 	var err error
 
-	if !fs.conf.EnableHome {
-		// We need to access the revisions for a non-home reference.
-		// We'll get the owner of the particular resource and impersonate them
-		// if we have access to it.
-		md, err := fs.GetMD(ctx, ref, nil)
+	md, err := fs.GetMD(ctx, ref, nil)
+	if err != nil {
+		return nil, err
+	}
+	fn = fs.wrap(ctx, md.Path)
+
+	if md.PermissionSet.InitiateFileDownload {
+		user := appctx.ContextMustGetUser(ctx)
+		auth, err = fs.getEOSToken(ctx, user, fn)
 		if err != nil {
 			return nil, err
-		}
-		fn = fs.wrap(ctx, md.Path)
-
-		if md.PermissionSet.InitiateFileDownload {
-			user := appctx.ContextMustGetUser(ctx)
-			auth, err = fs.getEOSToken(ctx, user, fn)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to download revisions")
 		}
 	} else {
-		fn, auth, err = fs.resolveRefAndGetAuth(ctx, ref)
-		if err != nil {
-			return nil, err
-		}
+		return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to download revisions")
 	}
+
 	return fs.c.ReadVersion(ctx, auth, fn, revisionKey)
 }
 
@@ -1571,30 +1517,20 @@ func (fs *Eosfs) RestoreRevision(ctx context.Context, ref *provider.Reference, r
 	var fn string
 	var err error
 
-	if !fs.conf.EnableHome {
-		// We need to access the revisions for a non-home reference.
-		// We'll get the owner of the particular resource and impersonate them
-		// if we have access to it.
-		md, err := fs.GetMD(ctx, ref, nil)
+	md, err := fs.GetMD(ctx, ref, nil)
+	if err != nil {
+		return err
+	}
+	fn = fs.wrap(ctx, md.Path)
+
+	if md.PermissionSet.RestoreFileVersion {
+		user := appctx.ContextMustGetUser(ctx)
+		auth, err = fs.getEOSToken(ctx, user, fn)
 		if err != nil {
 			return err
-		}
-		fn = fs.wrap(ctx, md.Path)
-
-		if md.PermissionSet.RestoreFileVersion {
-			user := appctx.ContextMustGetUser(ctx)
-			auth, err = fs.getEOSToken(ctx, user, fn)
-			if err != nil {
-				return err
-			}
-		} else {
-			return errtypes.PermissionDenied("eosfs: user doesn't have permissions to restore revisions")
 		}
 	} else {
-		fn, auth, err = fs.resolveRefAndGetAuth(ctx, ref)
-		if err != nil {
-			return err
-		}
+		return errtypes.PermissionDenied("eosfs: user doesn't have permissions to restore revisions")
 	}
 
 	log.Debug().Any("auth", auth).Any("file", fn).Any("revision", revisionKey).Msg("eosfs RestoreRevision")
@@ -1621,7 +1557,7 @@ func (fs *Eosfs) EmptyRecycle(ctx context.Context) error {
 func (fs *Eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath string, from, to *types.Timestamp) ([]*provider.RecycleItem, error) {
 	var auth eosclient.Authorization
 
-	if !fs.conf.EnableHome && fs.conf.AllowPathRecycleOperations && basePath != "/" {
+	if fs.conf.AllowPathRecycleOperations && basePath != "/" {
 		// We need to access the recycle bin for a non-home reference.
 		// We'll get the owner of the particular resource and impersonate them
 		// if we have access to it.
@@ -1691,7 +1627,7 @@ func (fs *Eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 func (fs *Eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
 	var auth eosclient.Authorization
 
-	if !fs.conf.EnableHome && fs.conf.AllowPathRecycleOperations && basePath != "/" {
+	if fs.conf.AllowPathRecycleOperations && basePath != "/" {
 		// We need to access the recycle bin for a non-home reference.
 		// We'll get the owner of the particular resource and impersonate them
 		// if we have access to it.

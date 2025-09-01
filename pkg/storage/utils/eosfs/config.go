@@ -75,9 +75,6 @@ type Config struct {
 	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
 	UseKeytab bool `mapstructure:"use_keytab"`
 
-	// TODO: what does this do??
-	EnableHome bool `mapstructure:"enable_home"`
-
 	// EnableHome enables the creation of home directories.
 	EnableHomeCreation bool `mapstructure:"enable_home_creation"`
 
@@ -126,7 +123,6 @@ type Config struct {
 	// Whether to allow recycle operations on base paths.
 	// If set to true, we'll look up the owner of the passed path and perform
 	// operations on that user's recycle bin.
-	// Only considered when EnableHome is false.
 	AllowPathRecycleOperations bool `mapstructure:"allow_path_recycle_operations"`
 
 	// HTTP connections to EOS: max number of idle conns
