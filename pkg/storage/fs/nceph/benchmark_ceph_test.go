@@ -33,6 +33,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -322,22 +323,45 @@ func requireCephIntegrationForBenchmark(b *testing.B) {
 
 // setupCephBenchmark creates a CephFS-based filesystem and test directory for benchmarks
 func setupCephBenchmark(b *testing.B, prefix string) (*ncephfs, string, func()) {
-	// Create test directory on CephFS
-	testDir, cleanup := getBenchmarkTestDir(b, prefix)
+	// Get fstab entry from environment
+	fstabEntry := os.Getenv("NCEPH_FSTAB_ENTRY")
+	if fstabEntry == "" {
+		b.Skip("NCEPH_FSTAB_ENTRY environment variable not set")
+	}
+
+	// Parse the mount point from fstab entry
+	// Format: "server:port:/path /mnt/point ceph options"
+	parts := strings.Fields(fstabEntry)
+	if len(parts) < 3 {
+		b.Fatalf("Invalid fstab entry format: %s", fstabEntry)
+	}
+	mountPoint := parts[1] // /mnt/miniflax
+
+	// Create test directory on the mounted CephFS
+	testDir := filepath.Join(mountPoint, "benchmark-tests", prefix)
+	err := os.MkdirAll(testDir, 0755)
+	if err != nil {
+		b.Fatalf("Failed to create test directory on CephFS mount %s: %v", testDir, err)
+	}
 
 	// Create filesystem instance using real CephFS integration
 	config := map[string]interface{}{
+		"fstabentry": fstabEntry,
 		// Don't set allow_local_mode - use real CephFS
-	}
-	
-	// Get fstab entry from environment
-	if fstabEntry := os.Getenv("NCEPH_FSTAB_ENTRY"); fstabEntry != "" {
-		config["fstabentry"] = fstabEntry
 	}
 
 	// Create the filesystem using integration helper
 	ctx := contextWithBenchmarkLogger(b)
 	fs := createNcephFSForCephBenchmark(b, ctx, config)
+
+	// Cleanup function
+	cleanup := func() {
+		if os.Getenv("NCEPH_TEST_PRESERVE") != "true" {
+			if err := os.RemoveAll(testDir); err != nil {
+				b.Logf("Warning: failed to remove test dir %s: %v", testDir, err)
+			}
+		}
+	}
 
 	return fs, testDir, cleanup
 }
