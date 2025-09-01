@@ -14,20 +14,22 @@ import (
 
 // TestIntegrationWithRealCeph demonstrates integration testing against a real Ceph mount
 func TestIntegrationWithRealCeph(t *testing.T) {
-	// Skip if NCEPH_FSTAB_ENTRY is not set or looks like a dummy entry
+	// This test requires a real NCEPH_FSTAB_ENTRY pointing to an actual Ceph mount
 	fstabEntry := os.Getenv("NCEPH_FSTAB_ENTRY")
 	if fstabEntry == "" {
-		t.Skip("Skipping integration test: NCEPH_FSTAB_ENTRY not set")
+		t.Skip("Skipping integration test: NCEPH_FSTAB_ENTRY not set. Set it to a real Ceph fstab entry to run integration tests.")
 	}
+	
+	// Skip dummy entries used for unit tests
 	if fstabEntry == "dummy@cluster:/ /tmp/test ceph defaults" {
-		t.Skip("Skipping integration test: NCEPH_FSTAB_ENTRY appears to be a dummy entry for unit tests")
+		t.Skip("Skipping integration test: NCEPH_FSTAB_ENTRY appears to be a dummy entry for unit tests. Use a real Ceph fstab entry for integration tests.")
 	}
 
 	// Enable info-level logging to see the path details
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger().Level(zerolog.InfoLevel)
 	ctx := logger.WithContext(context.Background())
 
-	t.Logf("🔍 Integration test using NCEPH_FSTAB_ENTRY: %s", fstabEntry)
+	t.Logf("🔍 Integration test using real Ceph mount from NCEPH_FSTAB_ENTRY: %s", fstabEntry)
 
 	// Create filesystem for integration testing (no overrides)
 	config := map[string]interface{}{
