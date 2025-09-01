@@ -31,8 +31,8 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/go-chi/chi/v5"
@@ -118,14 +118,14 @@ func (s *svc) createLocalShare(ctx context.Context, gw gateway.GatewayAPIClient,
 	if err != nil {
 		return nil, err
 	}
-	if resp.Status.Code != rpcv1beta1.Code_CODE_OK {
+	if resp.Status.Code != rpc.Code_CODE_OK {
 		return nil, errors.New("failed to create share: " + resp.Status.Message)
 	}
 
 	return resp, nil
 }
 
-func (s *svc) createOCMShare(ctx context.Context, gw gateway.GatewayAPIClient, resourceId *provider.ResourceId, path string, owner *userpb.UserId, resourceType provider.ResourceType, recipientType string, recipientID string, idp string, exp *types.Timestamp, role string) (*ocm.CreateOCMShareResponse, error) {
+func (s *svc) createOCMShare(ctx context.Context, gw gateway.GatewayAPIClient, resourceId *provider.ResourceId, recipientID string, idp string, role string) (*ocm.CreateOCMShareResponse, error) {
 	recipientProviderInfo, err := gw.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
 		Domain: idp,
 	})
@@ -133,7 +133,7 @@ func (s *svc) createOCMShare(ctx context.Context, gw gateway.GatewayAPIClient, r
 	if err != nil {
 		return nil, errors.New("error sending a grpc get invite by domain info request" + recipientProviderInfo.Status.Message)
 	}
-	if recipientProviderInfo.Status.Code != rpcv1beta1.Code_CODE_OK {
+	if recipientProviderInfo.Status.Code != rpc.Code_CODE_OK {
 		return nil, errors.New("error sending a grpc get invite by domain info request" + recipientProviderInfo.Status.Message)
 	}
 
@@ -146,6 +146,7 @@ func (s *svc) createOCMShare(ctx context.Context, gw gateway.GatewayAPIClient, r
 				UserId: &userpb.UserId{
 					Idp:      idp,
 					OpaqueId: recipientID,
+					Type:     userpb.UserType_USER_TYPE_FEDERATED,
 				},
 			},
 		},
@@ -160,21 +161,22 @@ func (s *svc) createOCMShare(ctx context.Context, gw gateway.GatewayAPIClient, r
 		return nil, err
 	}
 
-	if resp.Status.Code != rpcv1beta1.Code_CODE_OK {
-		return nil, errors.New("failed to create share: " + resp.Status.Message)
+	if resp.Status.Code != rpc.Code_CODE_OK {
+		return nil, errors.New("failed to create remote share: " + resp.Status.Message)
 	}
 	return resp, nil
 }
 
-func (s *svc) extractUsernameAndIdp(recipientID string) (string, string) {
+func (s *svc) decomposeOCMAddress(recipientID string) (string, string) {
 	var username, idp string
 	if strings.Contains(recipientID, "@") {
 		// split the string into a user and an idp
 		parts := strings.SplitN(recipientID, "@", 2)
 		username = parts[0]
 		idp = parts[1]
+		return username, idp
 	}
-	return username, idp
+	return "", ""
 }
 
 func (s *svc) share(w http.ResponseWriter, r *http.Request) {
@@ -212,7 +214,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
 	}
-	if statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+	if statRes.Status.Code != rpc.Code_CODE_OK {
 		handleRpcStatus(ctx, statRes.Status, fmt.Sprintf("ocgraph: failed to stat resource '%s' passed to share", resourceID), w)
 		return
 	}
@@ -270,7 +272,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 		case "user", "group":
 			resp, err := s.createLocalShare(ctx, gw, storageID, itemID, path, owner, statRes.Info.Type, *recipient.LibreGraphRecipientType, *recipient.ObjectId, exp, requestedPerms)
 			if err != nil {
-				log.Error().Err(err).Msg("failed to create share")
+				log.Error().Err(err).Msg("")
 				handleError(ctx, err, http.StatusInternalServerError, w)
 				return
 			}
@@ -288,10 +290,14 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 			}
 			response = append(response, lgPerm)
 		case "remote":
-			username, idp := s.extractUsernameAndIdp(*recipient.ObjectId)
-			resp, err := s.createOCMShare(ctx, gw, resourceId, path, owner, statRes.Info.Type, *recipient.LibreGraphRecipientType, username, idp, exp, roles[0])
+			username, idp := s.decomposeOCMAddress(*recipient.ObjectId)
+			if username == "" || idp == "" {
+				handleError(ctx, errors.New("invalid remote recipient address, must be user@idp"), http.StatusBadRequest, w)
+				return
+			}
+			resp, err := s.createOCMShare(ctx, gw, resourceId, username, idp, roles[0])
 			if err != nil {
-				log.Error().Err(err).Msg("failed to create remote share")
+				log.Error().Err(err).Msg("")
 				handleError(ctx, err, http.StatusInternalServerError, w)
 				return
 			}
@@ -313,56 +319,6 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 			}
 			response = append(response, lgPerm)
 		}
-
-		grantee, err := s.toGrantee(ctx, *recipient.LibreGraphRecipientType, *recipient.ObjectId)
-		if err != nil {
-			log.Error().Err(err).Msg("invalid recipient type passed")
-			handleError(ctx, err, http.StatusBadRequest, w)
-			return
-		}
-
-		createShareRequest := &collaborationv1beta1.CreateShareRequest{
-			ResourceInfo: &provider.ResourceInfo{
-				Id: &provider.ResourceId{
-					StorageId: storageID,
-					OpaqueId:  itemID,
-				},
-				Path:  path,
-				Owner: owner,
-				Type:  statRes.Info.Type,
-			},
-			Grant: &collaborationv1beta1.ShareGrant{
-				Grantee:    grantee,
-				Expiration: exp,
-				Permissions: &collaborationv1beta1.SharePermissions{
-					Permissions: requestedPerms,
-				},
-			},
-		}
-
-		resp, err := gw.CreateShare(ctx, createShareRequest)
-		if err != nil {
-			handleError(ctx, err, http.StatusInternalServerError, w)
-			return
-		}
-		if resp.Status.Code != rpcv1beta1.Code_CODE_OK {
-			handleRpcStatus(ctx, resp.Status, fmt.Sprintf("ocgraph: failed to create share: %+v", createShareRequest), w)
-			return
-		}
-
-		lgPerm, err := s.shareToLibregraphPerm(ctx, &ShareOrLink{
-			shareType: "share",
-			share:     resp.GetShare(),
-			ID:        resp.GetShare().GetId().GetOpaqueId(),
-		})
-		if err != nil || lgPerm == nil {
-			log.Error().Err(err).Any("share", resp.GetShare()).Err(err).Any("lgPerm", lgPerm).Msg("error converting created share to permissions")
-			handleError(ctx, err, http.StatusInternalServerError, w)
-			return
-		}
-
-		response = append(response, lgPerm)
-
 	}
 	log.Debug().Any("response", response).Msg("created shares successfully")
 
@@ -406,7 +362,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
 	}
-	if statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+	if statRes.Status.Code != rpc.Code_CODE_OK {
 		handleRpcStatus(ctx, statRes.Status, fmt.Sprintf("ocgraph: failed to stat resource '%s' passed to createLink", resourceID), w)
 		return
 	}
@@ -463,7 +419,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
 	}
-	if resp.Status.Code != rpcv1beta1.Code_CODE_OK {
+	if resp.Status.Code != rpc.Code_CODE_OK {
 		handleRpcStatus(ctx, resp.Status, "ocgraph: failed to create public share", w)
 		return
 	}

@@ -8,8 +8,8 @@ import (
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	group "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -160,12 +160,14 @@ func (s *svc) buildGrantedToForOCMShare(ctx context.Context, grantee *provider.G
 			DisplayName: u.DisplayName,
 		})
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
-		return nil, errors.New("Groups are not supported in OCM shares")
+		return nil, errors.New("Groups are currently not supported in OCM shares")
 	}
 
 	return grantedTo, nil
 }
 
+// The user must exist, otherwise an error is returned, this representation is used to show who
+// created the share in the LibreGraph API.
 func (s *svc) buildInvitation(ctx context.Context, creator *user.UserId) (*libregraph.SharingInvitation, error) {
 	u, err := s.getUserInfo(ctx, creator)
 	if err != nil {
@@ -377,7 +379,7 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.Rece
 	return d, nil
 }
 
-func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceInfo, shares []*ShareOrLink) (*libregraph.DriveItem, error) {
+func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceInfo, shares []*GenericShare) (*libregraph.DriveItem, error) {
 	relativePath, err := spaces.PathRelativeToSpaceRoot(info)
 	if err != nil {
 		return nil, err
@@ -426,7 +428,7 @@ func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceIn
 	return d, nil
 }
 
-func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*ShareOrLink) ([]libregraph.Permission, error) {
+func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*GenericShare) ([]libregraph.Permission, error) {
 	permissions := make([]libregraph.Permission, 0, len(shares))
 
 	for _, e := range shares {
@@ -491,7 +493,7 @@ func (s *svc) toGrantee(ctx context.Context, recipientType string, id string) (*
 
 	switch recipientType {
 	case "user":
-		userRes, err := gw.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+		userRes, err := gw.GetUserByClaim(ctx, &user.GetUserByClaimRequest{
 			Claim:                  "username",
 			Value:                  id,
 			SkipFetchingUserGroups: true,
@@ -504,7 +506,7 @@ func (s *svc) toGrantee(ctx context.Context, recipientType string, id string) (*
 			Id:   &provider.Grantee_UserId{UserId: userRes.User.GetId()},
 		}, nil
 	case "group":
-		groupRes, err := gw.GetGroupByClaim(ctx, &grouppb.GetGroupByClaimRequest{
+		groupRes, err := gw.GetGroupByClaim(ctx, &group.GetGroupByClaimRequest{
 			Claim:               "group_name",
 			Value:               id,
 			SkipFetchingMembers: true,
