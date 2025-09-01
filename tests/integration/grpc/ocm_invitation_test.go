@@ -370,7 +370,7 @@ var _ = Describe("ocm invitation workflow", func() {
 			}
 
 			generateToken := func(revaToken, domain string) (*generateInviteResponse, int) {
-				req, err := http.NewRequestWithContext(context.TODO(), http.MethodGet, fmt.Sprintf("http://%s/sciencemesh/generate-invite", domain), nil)
+				req, err := http.NewRequestWithContext(context.TODO(), http.MethodPost, fmt.Sprintf("http://%s/sciencemesh/generate-invite", domain), nil)
 				Expect(err).ToNot(HaveOccurred())
 				req.Header.Set("x-access-token", revaToken)
 
