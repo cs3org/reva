@@ -10,6 +10,7 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	linkv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -20,11 +21,12 @@ import (
 	"github.com/pkg/errors"
 )
 
-type ShareOrLink struct {
-	shareType string // "share" or "link"
+type GenericShare struct {
+	shareType string // "share", "link" or "ocmshare"
 	ID        string
 	link      *linkv1beta1.PublicShare
 	share     *collaborationv1beta1.Share
+	ocmshare  *ocm.Share
 }
 
 func (s *svc) getDrivePermissions(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +49,7 @@ func (s *svc) getDrivePermissions(w http.ResponseWriter, r *http.Request) {
 	s.writePermissions(ctx, w, actions, roles, perms)
 }
 
-func (s *svc) getShareOrLink(ctx context.Context, shareID string, resourceId *providerpb.ResourceId) (*ShareOrLink, error) {
+func (s *svc) getShareOrLink(ctx context.Context, shareID string, resourceId *providerpb.ResourceId) (*GenericShare, error) {
 	log := appctx.GetLogger(ctx)
 	// Next, we need to determine if it is a link or a permission update request
 	// we try to get a share, if this succeeds, it's a share, otherwise we assume it's a link
@@ -72,7 +74,7 @@ func (s *svc) getShareOrLink(ctx context.Context, shareID string, resourceId *pr
 			log.Error().Str("share-id", shareID).Str("resource-id", resourceId.String()).Msg("share does not match resource id")
 			return nil, errtypes.BadRequest("share id does not match resource id")
 		}
-		return &ShareOrLink{
+		return &GenericShare{
 			shareType: "share",
 			ID:        shareID,
 			share:     share.Share,
@@ -95,7 +97,7 @@ func (s *svc) getShareOrLink(ctx context.Context, shareID string, resourceId *pr
 			return nil, errtypes.BadRequest("share id does not match resource id")
 
 		}
-		return &ShareOrLink{
+		return &GenericShare{
 			shareType: "link",
 			ID:        shareID,
 			link:      link.Share,
@@ -242,7 +244,7 @@ func (s *svc) updateLinkPermissions(ctx context.Context, w http.ResponseWriter, 
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		lgPerm, err = s.shareToLibregraphPerm(ctx, &ShareOrLink{
+		lgPerm, err = s.shareToLibregraphPerm(ctx, &GenericShare{
 			shareType: "link",
 			ID:        uRes.GetShare().GetId().GetOpaqueId(),
 			link:      uRes.GetShare(),
@@ -303,7 +305,7 @@ func (s *svc) updateSharePermissions(ctx context.Context, w http.ResponseWriter,
 		return
 	}
 
-	lgPerm, err = s.shareToLibregraphPerm(ctx, &ShareOrLink{
+	lgPerm, err = s.shareToLibregraphPerm(ctx, &GenericShare{
 		shareType: "share",
 		ID:        res.GetShare().GetId().GetOpaqueId(),
 		share:     res.GetShare(),
@@ -378,7 +380,7 @@ func (s *svc) updateLinkPassword(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	lgPerm, err := s.shareToLibregraphPerm(ctx, &ShareOrLink{
+	lgPerm, err := s.shareToLibregraphPerm(ctx, &GenericShare{
 		shareType: "link",
 		ID:        res.GetShare().GetId().GetOpaqueId(),
 		link:      res.GetShare(),
@@ -508,7 +510,7 @@ func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *providerpb.
 		return nil, nil, nil, err
 	}
 	for _, share := range shares.GetShares() {
-		sharePerms, err := s.shareToLibregraphPerm(ctx, &ShareOrLink{
+		sharePerms, err := s.shareToLibregraphPerm(ctx, &GenericShare{
 			shareType: "share",
 			ID:        share.GetId().GetOpaqueId(),
 			share:     share,
@@ -536,7 +538,7 @@ func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *providerpb.
 	}
 
 	for _, link := range links.Share {
-		linkPerms, err := s.shareToLibregraphPerm(ctx, &ShareOrLink{
+		linkPerms, err := s.shareToLibregraphPerm(ctx, &GenericShare{
 			shareType: "link",
 			ID:        link.GetId().GetOpaqueId(),
 			link:      link,
