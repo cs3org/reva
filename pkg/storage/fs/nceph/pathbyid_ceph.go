@@ -154,7 +154,7 @@ func newCephAdminConn(ctx context.Context, o *Options) (*CephAdminConn, error) {
 		}
 		return newCephAdminConnFromFstab(ctx, o, mountInfo)
 	}
-	
+
 	// For backward compatibility or if no fstab entry, return error
 	return nil, fmt.Errorf("no fstab entry provided for ceph admin connection")
 }
@@ -196,6 +196,16 @@ func (fs *ncephfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (st
 
 	log.Info().Str("raw_path", path).Msg("nceph: Successfully extracted path from inode dump")
 
+	// SECURITY CHECK: Validate the raw path is within expected bounds before processing
+	if err := fs.validatePathWithinBounds(ctx, path, "GetPathByID"); err != nil {
+		log.Error().
+			Str("raw_path", path).
+			Int64("inode", inode).
+			Err(err).
+			Msg("nceph: SECURITY: Path validation failed - rejecting potentially malicious path")
+		return "", err
+	}
+
 	// Simplified path normalization: Convert to Ceph volume path (common denominator)
 	// The path returned by dump inode is already in Ceph volume coordinates
 	cephVolumePath := path
@@ -204,13 +214,25 @@ func (fs *ncephfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (st
 	// Convert from Ceph volume path to user-relative path by removing the configured prefix
 	userRelativePath := fs.convertCephVolumePathToUserPath(ctx, cephVolumePath)
 
+	// SECURITY CHECK: Validate the final user path is also within bounds
+	// This ensures that the conversion process didn't somehow escape the boundaries
+	if err := fs.validatePathWithinBounds(ctx, cephVolumePath, "GetPathByID-final"); err != nil {
+		log.Error().
+			Str("ceph_volume_path", cephVolumePath).
+			Str("user_relative_path", userRelativePath).
+			Int64("inode", inode).
+			Err(err).
+			Msg("nceph: SECURITY: Final path validation failed - conversion may have escaped bounds")
+		return "", err
+	}
+
 	log.Info().
 		Str("ceph_volume_path", cephVolumePath).
 		Str("user_relative_path", userRelativePath).
 		Int64("inode", inode).
 		Str("active_mds", activeMDS).
-		Msg("nceph: Successfully resolved path by ID using simplified Ceph volume path logic")
-	
+		Msg("nceph: Successfully resolved path by ID with security validation")
+
 	return userRelativePath, nil
 }
 

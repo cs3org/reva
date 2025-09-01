@@ -16,7 +16,7 @@ func TestEnvironmentVariableChroot(t *testing.T) {
 	// Create two temporary directories for testing
 	tempDir1, cleanup1 := GetTestDir(t, "envvar-test-1")
 	defer cleanup1()
-	
+
 	tempDir2, cleanup2 := GetTestDir(t, "envvar-test-2")
 	defer cleanup2()
 
@@ -47,10 +47,10 @@ func TestEnvironmentVariableChroot(t *testing.T) {
 
 		// CreateNcephFSForTesting should use the provided localMountPoint (tempDir1)
 		fs := CreateNcephFSForTesting(t, ContextWithTestLogger(t), config, "/volumes/test", tempDir1)
-		
+
 		// Verify it's using tempDir1 by checking it can access test1.txt
 		assert.Equal(t, tempDir1, fs.chrootDir, "Should use tempDir1 as chroot directory")
-		
+
 		t.Logf("✅ Without environment variable:")
 		t.Logf("   Chroot directory: %s", fs.chrootDir)
 		t.Logf("   Local mount point: %s", fs.localMountPoint)
@@ -69,12 +69,12 @@ func TestEnvironmentVariableChroot(t *testing.T) {
 		// Create filesystem - the environment variable should override the localMountPoint parameter
 		fs, err := New(ContextWithTestLogger(t), config)
 		require.NoError(t, err, "New should succeed with environment variable override")
-		
+
 		ncephFS := fs.(*ncephfs)
-		
+
 		// Verify it's using tempDir2 (from environment variable) instead of tempDir1
 		assert.Equal(t, tempDir2, ncephFS.chrootDir, "Should use tempDir2 from environment variable")
-		
+
 		t.Logf("✅ With environment variable override:")
 		t.Logf("   Environment variable: NCEPH_TEST_CHROOT_DIR=%s", tempDir2)
 		t.Logf("   Chroot directory: %s", ncephFS.chrootDir)
@@ -89,19 +89,19 @@ func TestEnvironmentVariableChroot(t *testing.T) {
 		// Even with a fstab entry that would normally determine the chroot,
 		// the environment variable should take precedence
 		config := map[string]interface{}{
-			"fstabentry": "cephminiflax.cern.ch:6789:/volumes/_nogroup/admin /mnt/different_mount ceph defaults,name=admin,secretfile=/etc/ceph/ceph.client.admin.key,conf=/etc/ceph/ceph.conf 0 2",
+			"fstabentry":       "cephminiflax.cern.ch:6789:/volumes/_nogroup/admin /mnt/different_mount ceph defaults,name=admin,secretfile=/etc/ceph/ceph.client.admin.key,conf=/etc/ceph/ceph.conf 0 2",
 			"allow_local_mode": true,
 		}
 
 		fs, err := New(ContextWithTestLogger(t), config)
 		require.NoError(t, err, "New should succeed")
-		
+
 		ncephFS := fs.(*ncephfs)
-		
+
 		// Environment variable should override everything
 		assert.Equal(t, tempDir2, ncephFS.chrootDir, "Environment variable should override fstab-derived chroot")
 		assert.Equal(t, "/mnt/different_mount", ncephFS.localMountPoint, "Should still parse local mount point from fstab")
-		
+
 		t.Logf("✅ Environment variable precedence test:")
 		t.Logf("   Fstab local mount: /mnt/different_mount")
 		t.Logf("   Environment override: %s", tempDir2)

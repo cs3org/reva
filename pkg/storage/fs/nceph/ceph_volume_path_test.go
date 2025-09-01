@@ -12,7 +12,7 @@ func TestCephVolumePathMapping(t *testing.T) {
 	// 1. Ceph volume paths (RADOS canonical form) - the common denominator
 	// 2. Local filesystem paths (where Ceph is mounted locally)
 	// 3. User-relative paths (what users see, relative to Root)
-	
+
 	testCases := []struct {
 		name                string
 		cephVolumePrefix    string // The Ceph volume path prefix (RADOS canonical)
@@ -34,7 +34,7 @@ func TestCephVolumePathMapping(t *testing.T) {
 			description:         "Maps test case from the issue: removes full test directory prefix",
 		},
 		{
-			name:                "production_user_directory", 
+			name:                "production_user_directory",
 			cephVolumePrefix:    "/volumes/cephfs/app",
 			localMountPrefix:    "/mnt/cephfs",
 			cephVolumePath:      "/volumes/cephfs/app/users/alice/documents/report.pdf",
@@ -48,7 +48,7 @@ func TestCephVolumePathMapping(t *testing.T) {
 			cephVolumePrefix:    "/", // Use "/" instead of empty string to avoid defaulting
 			localMountPrefix:    "/mnt/cephfs",
 			cephVolumePath:      "/direct_file.txt",
-			expectedUserPath:    "/direct_file.txt", 
+			expectedUserPath:    "/direct_file.txt",
 			userPath:            "/direct_file.txt",
 			expectedCephVolPath: "/direct_file.txt",
 			description:         "Direct access to Ceph volume root with root mount",
@@ -79,7 +79,7 @@ func TestCephVolumePathMapping(t *testing.T) {
 				// For testing, use tempDir as the mount point
 				localMountPrefix = tempDir
 			}
-			
+
 			config := map[string]interface{}{
 				"chroot_dir": localMountPrefix, // Use the local mount point as chroot dir for this test
 			}
@@ -87,12 +87,12 @@ func TestCephVolumePathMapping(t *testing.T) {
 			ctx := ContextWithTestLogger(t)
 			ncephFS := NewForTesting(t, ctx, config, tc.cephVolumePrefix, localMountPrefix)
 
-			// Test: Ceph volume path -> User path conversion 
+			// Test: Ceph volume path -> User path conversion
 			// (Converting FROM common denominator TO user view)
 			t.Run("volume_to_user", func(t *testing.T) {
 				actualUserPath := ncephFS.convertCephVolumePathToUserPath(ctx, tc.cephVolumePath)
-				assert.Equal(t, tc.expectedUserPath, actualUserPath, 
-					"%s: Ceph volume path '%s' should convert to user path '%s'", 
+				assert.Equal(t, tc.expectedUserPath, actualUserPath,
+					"%s: Ceph volume path '%s' should convert to user path '%s'",
 					tc.description, tc.cephVolumePath, tc.expectedUserPath)
 				t.Logf("✅ Volume→User: %s → %s", tc.cephVolumePath, actualUserPath)
 			})
@@ -102,7 +102,7 @@ func TestCephVolumePathMapping(t *testing.T) {
 			t.Run("user_to_volume", func(t *testing.T) {
 				actualCephVolPath := ncephFS.convertUserPathToCephVolumePath(ctx, tc.userPath)
 				assert.Equal(t, tc.expectedCephVolPath, actualCephVolPath,
-					"%s: User path '%s' should convert to Ceph volume path '%s'", 
+					"%s: User path '%s' should convert to Ceph volume path '%s'",
 					tc.description, tc.userPath, tc.expectedCephVolPath)
 				t.Logf("✅ User→Volume: %s → %s", tc.userPath, actualCephVolPath)
 			})
@@ -113,7 +113,7 @@ func TestCephVolumePathMapping(t *testing.T) {
 				cephVolPath := ncephFS.convertUserPathToCephVolumePath(ctx, tc.userPath)
 				finalUserPath := ncephFS.convertCephVolumePathToUserPath(ctx, cephVolPath)
 				assert.Equal(t, tc.userPath, finalUserPath,
-					"%s: Round-trip should preserve user path: %s → %s → %s", 
+					"%s: Round-trip should preserve user path: %s → %s → %s",
 					tc.description, tc.userPath, cephVolPath, finalUserPath)
 				t.Logf("✅ Round-trip: %s → %s → %s", tc.userPath, cephVolPath, finalUserPath)
 			})
@@ -124,7 +124,7 @@ func TestCephVolumePathMapping(t *testing.T) {
 func TestCephVolumePathConcept(t *testing.T) {
 	// Test to document and validate the current simplified concept:
 	// "Chroot-relative paths are used for all operations within the jail"
-	
+
 	tempDir, cleanup := GetTestDir(t, "ceph-volume-concept")
 	defer cleanup()
 

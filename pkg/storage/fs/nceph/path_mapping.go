@@ -20,17 +20,81 @@ package nceph
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 )
+
+// validatePathWithinBounds ensures that the given path is within the allowed mount bounds
+// and rejects any path traversal attempts that could escape the chroot jail.
+func (fs *ncephfs) validatePathWithinBounds(ctx context.Context, path string, operation string) error {
+	log := appctx.GetLogger(ctx)
+
+	// Clean the path to resolve any .. or . components
+	cleanPath := filepath.Clean(path)
+
+	log.Debug().
+		Str("original_path", path).
+		Str("clean_path", cleanPath).
+		Str("operation", operation).
+		Msg("nceph: Validating path bounds")
+
+	// Check if the path escapes the bounds through .. traversal
+	if strings.Contains(cleanPath, "..") {
+		log.Error().
+			Str("path", path).
+			Str("clean_path", cleanPath).
+			Str("operation", operation).
+			Msg("nceph: SECURITY: Path contains .. traversal after cleaning - potential escape attempt")
+		return errtypes.PermissionDenied("nceph: path traversal not allowed")
+	}
+
+	// Ensure the path is within the configured Ceph volume bounds
+	if fs.cephVolumePath != "" && fs.cephVolumePath != "/" {
+		if !strings.HasPrefix(cleanPath, fs.cephVolumePath) {
+			log.Error().
+				Str("path", cleanPath).
+				Str("ceph_volume_prefix", fs.cephVolumePath).
+				Str("operation", operation).
+				Msg("nceph: SECURITY: Path is outside configured Ceph volume bounds")
+			return errtypes.PermissionDenied("nceph: path outside configured volume bounds")
+		}
+	}
+
+	// Additional check: ensure the path when converted to local filesystem stays within chroot
+	localPath := cleanPath
+	if fs.cephVolumePath != "" && fs.localMountPoint != "" && fs.cephVolumePath != fs.localMountPoint {
+		localPath = strings.Replace(cleanPath, fs.cephVolumePath, fs.localMountPoint, 1)
+	}
+
+	if fs.chrootDir != "" && fs.chrootDir != "/" {
+		if !strings.HasPrefix(localPath, fs.chrootDir) {
+			log.Error().
+				Str("path", cleanPath).
+				Str("local_path", localPath).
+				Str("chroot_dir", fs.chrootDir).
+				Str("operation", operation).
+				Msg("nceph: SECURITY: Path would escape chroot bounds")
+			return errtypes.PermissionDenied("nceph: path outside chroot bounds")
+		}
+	}
+
+	log.Debug().
+		Str("path", cleanPath).
+		Str("operation", operation).
+		Msg("nceph: Path validation passed - within bounds")
+
+	return nil
+}
 
 // convertCephVolumePathToUserPath converts a Ceph volume path (RADOS canonical form)
 // to a user-relative path by mapping it through the local filesystem and trimming chrootDir.
 // This uses the auto-discovered mapping from fstab to convert between coordinate systems.
 func (fs *ncephfs) convertCephVolumePathToUserPath(ctx context.Context, cephVolumePath string) string {
 	log := appctx.GetLogger(ctx)
-	
+
 	// Step 1: Convert Ceph volume path to local filesystem path using fstab mapping
 	// Map from RADOS coordinates to local filesystem coordinates
 	// Example: /volumes/cephfs/app/users/alice/file.txt -> /mnt/cephfs/users/alice/file.txt
@@ -39,7 +103,7 @@ func (fs *ncephfs) convertCephVolumePathToUserPath(ctx context.Context, cephVolu
 		// Use the auto-discovered mapping from fstab
 		// Replace the Ceph volume prefix with the local mount point prefix
 		localPath = strings.Replace(cephVolumePath, fs.cephVolumePath, fs.localMountPoint, 1)
-		
+
 		log.Debug().
 			Str("ceph_volume_path", cephVolumePath).
 			Str("ceph_volume_prefix", fs.cephVolumePath).
@@ -47,7 +111,7 @@ func (fs *ncephfs) convertCephVolumePathToUserPath(ctx context.Context, cephVolu
 			Str("local_filesystem_path", localPath).
 			Msg("nceph: Mapped Ceph volume path to local filesystem path using fstab mapping")
 	}
-	
+
 	// Step 2: Convert local filesystem path to user-relative path
 	// Trim the chrootDir prefix to get the user-visible path
 	// Example: /mnt/cephfs/users/alice/file.txt -> /users/alice/file.txt (if chrootDir = /mnt/cephfs)
@@ -55,7 +119,7 @@ func (fs *ncephfs) convertCephVolumePathToUserPath(ctx context.Context, cephVolu
 	if fs.chrootDir != "" && fs.chrootDir != "/" {
 		originalPath := userPath
 		userPath = strings.TrimPrefix(userPath, fs.chrootDir)
-		
+
 		if originalPath != userPath {
 			log.Debug().
 				Str("chroot_dir", fs.chrootDir).
@@ -69,7 +133,7 @@ func (fs *ncephfs) convertCephVolumePathToUserPath(ctx context.Context, cephVolu
 				Msg("nceph: Local filesystem path does not contain chrootDir prefix - no trimming needed")
 		}
 	}
-	
+
 	// Ensure the user path starts with / for consistency
 	if userPath != "" && !strings.HasPrefix(userPath, "/") {
 		userPath = "/" + userPath
@@ -77,7 +141,7 @@ func (fs *ncephfs) convertCephVolumePathToUserPath(ctx context.Context, cephVolu
 			Str("user_path", userPath).
 			Msg("nceph: Added leading slash to user-relative path")
 	}
-	
+
 	return userPath
 }
 
@@ -85,7 +149,7 @@ func (fs *ncephfs) convertCephVolumePathToUserPath(ctx context.Context, cephVolu
 // This uses the auto-discovered mapping from fstab to convert between coordinate systems.
 func (fs *ncephfs) convertUserPathToCephVolumePath(ctx context.Context, userPath string) string {
 	log := appctx.GetLogger(ctx)
-	
+
 	// Step 1: Convert user-relative path to local filesystem path
 	// Add the chrootDir prefix to get the full local filesystem path
 	// Example: /users/alice/file.txt -> /mnt/cephfs/users/alice/file.txt
@@ -97,14 +161,14 @@ func (fs *ncephfs) convertUserPathToCephVolumePath(ctx context.Context, userPath
 		} else {
 			localPath = fs.chrootDir + "/" + userPath
 		}
-		
+
 		log.Debug().
 			Str("user_path", userPath).
 			Str("chroot_dir", fs.chrootDir).
 			Str("local_filesystem_path", localPath).
 			Msg("nceph: Converted user-relative path to local filesystem path")
 	}
-	
+
 	// Step 2: Convert local filesystem path to Ceph volume path using fstab mapping
 	// Map from local filesystem coordinates to RADOS coordinates
 	// Example: /mnt/cephfs/users/alice/file.txt -> /volumes/cephfs/app/users/alice/file.txt
@@ -128,7 +192,7 @@ func (fs *ncephfs) convertUserPathToCephVolumePath(ctx context.Context, userPath
 			// Normal case: replace local mount point prefix with Ceph volume prefix
 			cephVolumePath = strings.Replace(localPath, fs.localMountPoint, fs.cephVolumePath, 1)
 		}
-		
+
 		log.Debug().
 			Str("local_filesystem_path", localPath).
 			Str("local_mount_point", fs.localMountPoint).
@@ -136,6 +200,6 @@ func (fs *ncephfs) convertUserPathToCephVolumePath(ctx context.Context, userPath
 			Str("ceph_volume_path", cephVolumePath).
 			Msg("nceph: Converted local filesystem path to Ceph volume path using fstab mapping")
 	}
-	
+
 	return cephVolumePath
 }

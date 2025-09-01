@@ -251,4 +251,141 @@ func TestGetPathByIDWithCreatedFiles(t *testing.T) {
 	t.Log("  1. Files and directories can be created in the Ceph filesystem via nceph")
 	t.Log("  2. Inodes can be extracted from file metadata")
 	t.Log("  3. GetPathByID can successfully resolve inodes to paths via Ceph admin connection")
+	t.Log("  4. All returned paths are within the expected mount boundaries")
+}
+
+func TestGetPathByIDSecurityValidation(t *testing.T) {
+	// This test ensures that GetPathByID properly validates paths and rejects traversal attacks
+	RequireCephIntegration(t)
+
+	ctx := ContextWithTestLogger(t)
+	fs := CreateNcephFSForIntegration(t, ctx, nil)
+
+	// Add a root user to the context for integration testing
+	user := &userv1beta1.User{
+		Id: &userv1beta1.UserId{
+			OpaqueId: "root",
+			Idp:      "local",
+		},
+		Username:  "root",
+		UidNumber: 0,
+		GidNumber: 0,
+	}
+	ctx = appctx.ContextSetUser(ctx, user)
+
+	require.NotNil(t, fs.cephAdminConn, "Ceph admin connection is required for this test")
+
+	t.Log("Testing GetPathByID security validation and path bounds checking...")
+
+	// Create a legitimate test file within bounds
+	testPath := "/security_test_file.txt"
+	err := fs.TouchFile(ctx, &provider.Reference{Path: testPath})
+	require.NoError(t, err, "Failed to create test file for security validation")
+
+	// Get the metadata to extract the inode
+	md, err := fs.GetMD(ctx, &provider.Reference{Path: testPath}, nil)
+	require.NoError(t, err, "Failed to get metadata for security test file")
+	require.NotNil(t, md, "Metadata should not be nil")
+
+	inode := md.Id.OpaqueId
+	require.NotEmpty(t, inode, "Inode should not be empty")
+
+	t.Logf("Created test file with inode %s for security validation", inode)
+
+	// Test 1: Legitimate GetPathByID should work
+	t.Run("legitimate_path_retrieval", func(t *testing.T) {
+		retrievedPath, err := fs.GetPathByID(ctx, &provider.ResourceId{OpaqueId: inode})
+		require.NoError(t, err, "Legitimate GetPathByID should succeed")
+		require.NotEmpty(t, retrievedPath, "Retrieved path should not be empty")
+
+		t.Logf("✅ Legitimate path retrieval successful: %s", retrievedPath)
+
+		// Verify the path matches our expectation
+		assert.True(t, strings.HasSuffix(retrievedPath, testPath) || retrievedPath == testPath,
+			"Retrieved path should match expected path (got: %s, expected suffix: %s)", retrievedPath, testPath)
+
+		// Verify the path is within mount bounds
+		err = fs.validatePathWithinBounds(ctx, retrievedPath, "test")
+		assert.NoError(t, err, "Retrieved path should be within configured bounds")
+	})
+
+	// Test 2: Verify that validatePathWithinBounds rejects malicious paths
+	t.Run("path_validation_rejects_traversal", func(t *testing.T) {
+		maliciousPaths := []string{
+			"../../etc/passwd",
+			"/../../root/.ssh/id_rsa",
+			"../../../etc/shadow",
+			"/var/../../etc/hosts",
+			fs.cephVolumePath + "/../../../secret",
+		}
+
+		for _, badPath := range maliciousPaths {
+			t.Run("reject_"+strings.ReplaceAll(badPath, "/", "_"), func(t *testing.T) {
+				err := fs.validatePathWithinBounds(ctx, badPath, "security_test")
+				assert.Error(t, err, "Should reject malicious path: %s", badPath)
+				t.Logf("✅ Correctly rejected malicious path: %s", badPath)
+			})
+		}
+	})
+
+	// Test 3: Verify the returned path is exactly what we expect
+	t.Run("path_consistency_check", func(t *testing.T) {
+		retrievedPath, err := fs.GetPathByID(ctx, &provider.ResourceId{OpaqueId: inode})
+		require.NoError(t, err, "GetPathByID should succeed for consistency check")
+
+		// The retrieved path should be the same as the original path we created
+		// This ensures no path manipulation occurred during the round-trip
+		expectedPath := testPath
+
+		if retrievedPath == expectedPath {
+			t.Logf("✅ Perfect consistency: retrieved path exactly matches expected path")
+		} else if strings.HasSuffix(retrievedPath, expectedPath) {
+			t.Logf("✅ Acceptable consistency: retrieved path ends with expected path")
+			t.Logf("   Expected: %s", expectedPath)
+			t.Logf("   Retrieved: %s", retrievedPath)
+		} else {
+			// This could indicate a security issue or unexpected path manipulation
+			t.Errorf("❌ Path consistency issue: retrieved path doesn't match expected pattern")
+			t.Errorf("   Expected: %s", expectedPath)
+			t.Errorf("   Retrieved: %s", retrievedPath)
+		}
+
+		// Additional check: ensure no path components have been altered
+		expectedBase := filepath.Base(expectedPath)
+		retrievedBase := filepath.Base(retrievedPath)
+		assert.Equal(t, expectedBase, retrievedBase,
+			"Filename should be identical (expected: %s, got: %s)", expectedBase, retrievedBase)
+	})
+
+	// Test 4: Verify mount boundary enforcement
+	t.Run("mount_boundary_enforcement", func(t *testing.T) {
+		t.Logf("Mount configuration:")
+		t.Logf("  Ceph volume path: %s", fs.cephVolumePath)
+		t.Logf("  Local mount point: %s", fs.localMountPoint)
+		t.Logf("  Chroot directory: %s", fs.chrootDir)
+
+		retrievedPath, err := fs.GetPathByID(ctx, &provider.ResourceId{OpaqueId: inode})
+		require.NoError(t, err, "GetPathByID should succeed for boundary check")
+
+		// Convert the user path back to the full Ceph volume path for validation
+		cephVolumePath := fs.convertUserPathToCephVolumePath(ctx, retrievedPath)
+
+		// Ensure the Ceph volume path is within the configured volume bounds
+		if fs.cephVolumePath != "" && fs.cephVolumePath != "/" {
+			assert.True(t, strings.HasPrefix(cephVolumePath, fs.cephVolumePath),
+				"Ceph volume path should be within configured bounds (path: %s, bounds: %s)",
+				cephVolumePath, fs.cephVolumePath)
+		}
+
+		t.Logf("✅ Mount boundary enforcement verified")
+		t.Logf("   User path: %s", retrievedPath)
+		t.Logf("   Ceph volume path: %s", cephVolumePath)
+	})
+
+	t.Log("✅ All security validation tests completed successfully")
+	t.Log("This confirms that GetPathByID:")
+	t.Log("  1. Properly validates paths for traversal attacks")
+	t.Log("  2. Enforces mount boundary restrictions")
+	t.Log("  3. Returns consistent and expected paths")
+	t.Log("  4. Rejects potentially malicious path patterns")
 }

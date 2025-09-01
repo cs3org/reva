@@ -87,12 +87,12 @@ func VerifyPrivileges(nobodyUID, nobodyGID int) *PrivilegeVerificationResult {
 			// If we couldn't change to this UID, we don't have full privileges
 			result.CanChangeUID = false
 		}
-		
+
 		// Log verbose information about privilege test and restoration
 		if originalFsuid != finalUID {
 			// This should not happen - log a warning
-			result.ErrorMessages = append(result.ErrorMessages, 
-				fmt.Sprintf("UID restoration failed: original=%d, final=%d after testing UID %d", 
+			result.ErrorMessages = append(result.ErrorMessages,
+				fmt.Sprintf("UID restoration failed: original=%d, final=%d after testing UID %d",
 					originalFsuid, finalUID, uid))
 		}
 	}
@@ -126,12 +126,12 @@ func VerifyPrivileges(nobodyUID, nobodyGID int) *PrivilegeVerificationResult {
 			// If we couldn't change to this GID, we don't have full privileges
 			result.CanChangeGID = false
 		}
-		
+
 		// Log verbose information about privilege test and restoration
 		if originalFsgid != finalGID {
 			// This should not happen - log a warning
-			result.ErrorMessages = append(result.ErrorMessages, 
-				fmt.Sprintf("GID restoration failed: original=%d, final=%d after testing GID %d", 
+			result.ErrorMessages = append(result.ErrorMessages,
+				fmt.Sprintf("GID restoration failed: original=%d, final=%d after testing GID %d",
 					originalFsgid, finalGID, gid))
 		}
 	}

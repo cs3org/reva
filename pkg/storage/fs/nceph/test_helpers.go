@@ -38,18 +38,18 @@ func CreateNcephFSForTesting(t *testing.T, ctx context.Context, config map[strin
 	require.NoError(t, err, "failed to create ncephfs for unit testing")
 
 	ncephFS := fs.(*ncephfs)
-	
+
 	// Override the discovered paths for unit tests
 	ncephFS.cephVolumePath = cephVolumePath
 	ncephFS.localMountPoint = localMountPoint
-	
+
 	return ncephFS
 }
 
 func NewForTesting(t *testing.T, ctx context.Context, config map[string]interface{}, cephVolumePath string, localMountPoint string) *ncephfs {
 	var originalChrootDir string
 	var needsRestore bool
-	
+
 	// Only override chroot if localMountPoint is provided (unit tests)
 	if localMountPoint != "" {
 		// This is a unit test - override the chroot directory
@@ -58,7 +58,7 @@ func NewForTesting(t *testing.T, ctx context.Context, config map[string]interfac
 		needsRestore = true
 	}
 	// If localMountPoint is empty, this is an integration test - let it use the real mount point from fstab
-	
+
 	defer func() {
 		if needsRestore {
 			if originalChrootDir == "" {
@@ -74,7 +74,7 @@ func NewForTesting(t *testing.T, ctx context.Context, config map[string]interfac
 	for k, v := range config {
 		testConfig[k] = v
 	}
-	
+
 	// For unit tests, enable local mode
 	if localMountPoint != "" {
 		testConfig["allow_local_mode"] = true
@@ -85,13 +85,13 @@ func NewForTesting(t *testing.T, ctx context.Context, config map[string]interfac
 	require.NoError(t, err, "failed to create ncephfs for testing")
 
 	ncephFS := fs.(*ncephfs)
-	
+
 	// Override the discovered paths only for unit tests
 	if localMountPoint != "" {
 		ncephFS.cephVolumePath = cephVolumePath
 		ncephFS.localMountPoint = localMountPoint
 	}
-	
+
 	return ncephFS
 }
 
@@ -103,7 +103,7 @@ func CreateNcephFSForIntegration(t *testing.T, ctx context.Context, config map[s
 	for k, v := range config {
 		testConfig[k] = v
 	}
-	
+
 	// Integration tests require a real fstab entry
 	if config == nil || config["fstabentry"] == nil {
 		// Try to get from environment if not provided in config
@@ -111,7 +111,7 @@ func CreateNcephFSForIntegration(t *testing.T, ctx context.Context, config map[s
 			testConfig["fstabentry"] = fstabEntry
 		}
 	}
-	
+
 	// Do NOT set allow_local_mode for integration tests
 
 	// Create the filesystem using the standard New function with real fstab entry

@@ -51,13 +51,13 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 
 	t.Run("GetMD_for_myfile_txt", func(t *testing.T) {
 		ctx := ContextWithTestLogger(t)
-		
+
 		// Add a user context to avoid permission issues
 		// Use root (0) as the test user since we're running as root and created files as root
 		testUID := int64(currentUID)
 		testGID := int64(currentGID)
 		t.Logf("🔍 Setting user context: UID=%d, GID=%d", testUID, testGID)
-		
+
 		user := &userv1beta1.User{
 			Id: &userv1beta1.UserId{
 				OpaqueId: "testuser",
@@ -68,7 +68,7 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 			GidNumber: testGID,
 		}
 		ctx = appctx.ContextSetUser(ctx, user)
-		
+
 		// User requests GetMD for /myfile.txt
 		ref := &provider.Reference{
 			Path: "/myfile.txt",
@@ -96,7 +96,7 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 		// Verify the path in the result is the external path
 		assert.Equal(t, "/myfile.txt", resourceInfo.Path, "ResourceInfo.Path should be the external path")
 		assert.Equal(t, uint64(11), resourceInfo.Size, "File size should be 11 bytes")
-		
+
 		t.Logf("✅ Full GetMD operation test:")
 		t.Logf("   User request: GetMD(%s)", ref.Path)
 		t.Logf("   Filesystem accesses: %s/%s", tempDir, testFileName)
@@ -106,12 +106,12 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 
 	t.Run("GetMD_for_nested_path", func(t *testing.T) {
 		ctx := ContextWithTestLogger(t)
-		
+
 		// Use the same user context as the first test
 		testUID := int64(currentUID)
 		testGID := int64(currentGID)
 		t.Logf("🔍 Setting user context for nested test: UID=%d, GID=%d", testUID, testGID)
-		
+
 		user := &userv1beta1.User{
 			Id: &userv1beta1.UserId{
 				OpaqueId: "testuser",
@@ -122,29 +122,29 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 			GidNumber: testGID,
 		}
 		ctx = appctx.ContextSetUser(ctx, user)
-		
+
 		// Create nested directory structure
 		nestedDir := filepath.Join(tempDir, "documents", "project")
 		err := os.MkdirAll(nestedDir, 0755)
 		require.NoError(t, err, "Failed to create nested directory")
-		
+
 		// Make the nested directories accessible
 		err = os.Chmod(filepath.Join(tempDir, "documents"), 0777)
 		require.NoError(t, err, "Failed to set permissions on documents directory")
 		err = os.Chmod(nestedDir, 0777)
 		require.NoError(t, err, "Failed to set permissions on project directory")
-		
+
 		nestedFile := filepath.Join(nestedDir, "report.pdf")
 		err = os.WriteFile(nestedFile, []byte("PDF content here"), 0644)
 		require.NoError(t, err, "Failed to create nested test file")
-		
+
 		// Make the nested file readable
 		err = os.Chmod(nestedFile, 0666)
 		require.NoError(t, err, "Failed to set permissions on nested file")
 
 		t.Logf("🔍 Created nested structure:")
 		t.Logf("   - %s (mode: %v)", filepath.Join(tempDir, "documents"), "0777")
-		t.Logf("   - %s (mode: %v)", nestedDir, "0777")  
+		t.Logf("   - %s (mode: %v)", nestedDir, "0777")
 		t.Logf("   - %s (mode: %v)", nestedFile, "0666")
 
 		// User requests GetMD for /documents/project/report.pdf
@@ -167,7 +167,7 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 		// Verify the path in the result is the external path
 		assert.Equal(t, "/documents/project/report.pdf", resourceInfo.Path, "ResourceInfo.Path should be the external path")
 		assert.Equal(t, uint64(16), resourceInfo.Size, "File size should be 16 bytes")
-		
+
 		t.Logf("✅ Nested path GetMD operation test:")
 		t.Logf("   User request: GetMD(%s)", ref.Path)
 		t.Logf("   Filesystem accesses: %s", nestedFile)
@@ -177,12 +177,12 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 
 	t.Run("GetMD_for_root_directory", func(t *testing.T) {
 		ctx := ContextWithTestLogger(t)
-		
+
 		// Use the same user context
 		testUID := int64(currentUID)
 		testGID := int64(currentGID)
 		t.Logf("🔍 Setting user context for root directory test: UID=%d, GID=%d", testUID, testGID)
-		
+
 		user := &userv1beta1.User{
 			Id: &userv1beta1.UserId{
 				OpaqueId: "testuser",
@@ -214,7 +214,7 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 		// Verify the path in the result is the external path
 		assert.Equal(t, "/", resourceInfo.Path, "ResourceInfo.Path should be root path")
 		assert.Equal(t, provider.ResourceType_RESOURCE_TYPE_CONTAINER, resourceInfo.Type, "Root should be a container")
-		
+
 		t.Logf("✅ Root directory GetMD operation test:")
 		t.Logf("   User request: GetMD(%s)", ref.Path)
 		t.Logf("   Filesystem accesses: %s", tempDir)
@@ -303,12 +303,12 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 
 	t.Run("ListFolder_for_foo_directory", func(t *testing.T) {
 		ctx := ContextWithTestLogger(t)
-		
+
 		// Use consistent user context
 		testUID := int64(currentUID)
 		testGID := int64(currentGID)
 		t.Logf("🔍 ListFolder test - Setting user context: UID=%d, GID=%d", testUID, testGID)
-		
+
 		user := &userv1beta1.User{
 			Id: &userv1beta1.UserId{
 				OpaqueId: "testuser",
@@ -319,7 +319,7 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 			GidNumber: testGID,
 		}
 		ctx = appctx.ContextSetUser(ctx, user)
-		
+
 		// User requests ListFolder for /foo
 		ref := &provider.Reference{
 			Path: "/foo",
@@ -371,12 +371,12 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 
 	t.Run("ListFolder_for_nested_subdir", func(t *testing.T) {
 		ctx := ContextWithTestLogger(t)
-		
+
 		// Use consistent user context
 		testUID := int64(currentUID)
 		testGID := int64(currentGID)
 		t.Logf("🔍 ListFolder nested test - Setting user context: UID=%d, GID=%d", testUID, testGID)
-		
+
 		user := &userv1beta1.User{
 			Id: &userv1beta1.UserId{
 				OpaqueId: "testuser",
@@ -387,7 +387,7 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 			GidNumber: testGID,
 		}
 		ctx = appctx.ContextSetUser(ctx, user)
-		
+
 		// User requests ListFolder for /foo/subdir
 		ref := &provider.Reference{
 			Path: "/foo/subdir",
@@ -419,12 +419,12 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 
 	t.Run("ListFolder_for_root_directory", func(t *testing.T) {
 		ctx := ContextWithTestLogger(t)
-		
+
 		// Use consistent user context
 		testUID := int64(currentUID)
 		testGID := int64(currentGID)
 		t.Logf("🔍 ListFolder root test - Setting user context: UID=%d, GID=%d", testUID, testGID)
-		
+
 		user := &userv1beta1.User{
 			Id: &userv1beta1.UserId{
 				OpaqueId: "testuser",
@@ -435,7 +435,7 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 			GidNumber: testGID,
 		}
 		ctx = appctx.ContextSetUser(ctx, user)
-		
+
 		// User requests ListFolder for / (root directory)
 		ref := &provider.Reference{
 			Path: "/",

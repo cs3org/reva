@@ -40,7 +40,7 @@ func TestGetCephConfigHelper(t *testing.T) {
 		}()
 
 		config := GetCephConfig()
-		
+
 		// Should return empty config when no fstab entry is provided
 		assert.Empty(t, config, "Config should be empty when no NCEPH_FSTAB_ENTRY is set")
 		assert.NotContains(t, config, "fstab_entry", "Should not contain fstab_entry when none is set")
@@ -50,7 +50,7 @@ func TestGetCephConfigHelper(t *testing.T) {
 	t.Run("with_fstab_entry", func(t *testing.T) {
 		// Set a test fstab entry
 		testFstabEntry := "cephfs.cephfs /mnt/cephfs ceph defaults,name=admin,secretfile=/etc/ceph/ceph.client.admin.keyring,conf=/etc/ceph/ceph.conf 0 2"
-		
+
 		originalFstabEntry := os.Getenv("NCEPH_FSTAB_ENTRY")
 		os.Setenv("NCEPH_FSTAB_ENTRY", testFstabEntry)
 		defer func() {
@@ -62,7 +62,7 @@ func TestGetCephConfigHelper(t *testing.T) {
 		}()
 
 		config := GetCephConfig()
-		
+
 		// Should have fstab_entry field when environment variable is set
 		assert.Contains(t, config, "fstab_entry")
 		assert.Equal(t, testFstabEntry, config["fstab_entry"])

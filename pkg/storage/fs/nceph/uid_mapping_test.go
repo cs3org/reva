@@ -101,8 +101,8 @@ func TestUIDMapping(t *testing.T) {
 				Idp:      "local",
 			},
 			Username:  "nouid", // Not "root", so should get defaults despite UID 0
-			UidNumber: 0, 
-			GidNumber: 0, 
+			UidNumber: 0,
+			GidNumber: 0,
 		}
 
 		uid, gid := ncephFS.threadPool.mapUserToUIDGID(userWithoutUID)

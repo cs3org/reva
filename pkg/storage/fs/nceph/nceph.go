@@ -55,13 +55,13 @@ const (
 
 // ncephfs is a local filesystem implementation that provides a ceph-like interface
 type ncephfs struct {
-	conf              *Options
-	cephAdminConn     *CephAdminConn  // Only used for GetPathByID (defined in build-tag files)
-	rootFS            *os.Root        // Chrooted filesystem root using os.Root
-	threadPool        *UserThreadPool // Pool of per-user threads with dedicated UIDs
-	cephVolumePath    string          // Auto-discovered Ceph volume path (RADOS canonical form)
-	localMountPoint   string          // Auto-discovered local mount point (where Ceph is mounted locally), see fstab
-	chrootDir         string          // The local mount point (see fstab), but configurable for unit tests
+	conf            *Options
+	cephAdminConn   *CephAdminConn  // Only used for GetPathByID (defined in build-tag files)
+	rootFS          *os.Root        // Chrooted filesystem root using os.Root
+	threadPool      *UserThreadPool // Pool of per-user threads with dedicated UIDs
+	cephVolumePath  string          // Auto-discovered Ceph volume path (RADOS canonical form)
+	localMountPoint string          // Auto-discovered local mount point (where Ceph is mounted locally), see fstab
+	chrootDir       string          // The local mount point (see fstab), but configurable for unit tests
 }
 
 func init() {
@@ -98,7 +98,7 @@ func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 	if o.FstabEntry != "" {
 		// Parse Ceph configuration from fstab entry
 		log.Info().Str("fstab_entry", o.FstabEntry).Msg("nceph: Parsing Ceph configuration from fstab entry")
-		
+
 		mountInfo, err := ParseFstabEntry(ctx, o.FstabEntry)
 		if err != nil {
 			log.Error().Err(err).Msg("nceph: Failed to parse fstab entry")
@@ -108,7 +108,7 @@ func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 		// Store discovered values
 		discoveredCephVolumePath = mountInfo.CephVolumePath
 		discoveredLocalMountPoint = mountInfo.LocalMountPoint
-		
+
 		log.Info().
 			Str("ceph_volume_path", mountInfo.CephVolumePath).
 			Str("local_mount_point", mountInfo.LocalMountPoint).
@@ -122,10 +122,10 @@ func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 		discoveredCephVolumePath = ""
 		discoveredLocalMountPoint = ""
 	}
-	
+
 	// Use discovered local mount point as chroot directory
 	chrootDir := discoveredLocalMountPoint
-	
+
 	// Override chroot directory from environment variable for testing (does not pollute Options)
 	if testChrootDir := os.Getenv("NCEPH_TEST_CHROOT_DIR"); testChrootDir != "" {
 		log.Info().
@@ -134,12 +134,12 @@ func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 			Msg("nceph: Overriding chroot directory from NCEPH_TEST_CHROOT_DIR environment variable")
 		chrootDir = testChrootDir
 	}
-	
+
 	// Validate that we have a chroot directory
 	if chrootDir == "" {
 		return nil, errors.New("nceph: no chroot directory available (either provide fstabentry or set NCEPH_TEST_CHROOT_DIR for testing)")
 	}
-	
+
 	log.Info().
 		Str("ceph_volume_path", discoveredCephVolumePath).
 		Str("chroot_dir", chrootDir).
@@ -181,7 +181,7 @@ func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 
 	// Log privilege verification results
 	// Reuse the logger from auto-discovery above
-	
+
 	// Always log basic privilege status first
 	log.Info().
 		Int("current_uid", privResult.CurrentUID).
@@ -203,7 +203,7 @@ func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 	// Verify that privilege testing properly restored original fsuid/fsgid
 	finalFsUID := setfsuidSafe(-1)
 	finalFsGID := setfsgidSafe(-1)
-	
+
 	log.Info().
 		Int("original_fsuid", privResult.CurrentFsUID).
 		Int("final_fsuid", finalFsUID).
@@ -212,14 +212,14 @@ func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 		Bool("fsuid_restored", finalFsUID == privResult.CurrentFsUID).
 		Bool("fsgid_restored", finalFsGID == privResult.CurrentFsGID).
 		Msg("nceph: privilege verification restoration status")
-	
+
 	if finalFsUID != privResult.CurrentFsUID {
 		log.Error().
 			Int("expected_fsuid", privResult.CurrentFsUID).
 			Int("actual_fsuid", finalFsUID).
 			Msg("nceph: CRITICAL - privilege verification failed to restore original fsuid - this will cause permission issues")
 	}
-	
+
 	if finalFsGID != privResult.CurrentFsGID {
 		log.Error().
 			Int("expected_fsgid", privResult.CurrentFsGID).
@@ -545,7 +545,7 @@ func (fs *ncephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []
 	}
 
 	log := appctx.GetLogger(ctx)
-	
+
 	// Capture the original received path for logging
 	var receivedPath string
 	if ref.Path != "" {
@@ -553,7 +553,7 @@ func (fs *ncephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []
 	} else if ref.ResourceId != nil {
 		receivedPath = fmt.Sprintf("ResourceId{StorageId:%s, OpaqueId:%s}", ref.ResourceId.StorageId, ref.ResourceId.OpaqueId)
 	}
-	
+
 	path, err := fs.resolveRef(ctx, ref)
 	if err != nil {
 		wrappedErr := errors.Wrap(err, "nceph: failed to resolve reference")
@@ -596,7 +596,7 @@ func (fs *ncephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKe
 	}
 
 	log := appctx.GetLogger(ctx)
-	
+
 	// Capture the original received path for logging
 	var receivedPath string
 	if ref.Path != "" {
@@ -604,7 +604,7 @@ func (fs *ncephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKe
 	} else if ref.ResourceId != nil {
 		receivedPath = fmt.Sprintf("ResourceId{StorageId:%s, OpaqueId:%s}", ref.ResourceId.StorageId, ref.ResourceId.OpaqueId)
 	}
-	
+
 	path, err := fs.resolveRef(ctx, ref)
 	if err != nil {
 		wrappedErr := errors.Wrap(err, "nceph: failed to resolve reference")

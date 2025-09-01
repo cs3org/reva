@@ -31,16 +31,16 @@ import (
 
 // CephMountInfo represents information discovered from system configuration
 type CephMountInfo struct {
-	MonitorHost      string // e.g., "cephminiflax.cern.ch:6789"
-	CephVolumePath   string // e.g., "/volumes/_nogroup/rasmus"
-	LocalMountPoint  string // e.g., "/mnt/miniflax"
-	ClientName       string // e.g., "mds-admin"
+	MonitorHost     string // e.g., "cephminiflax.cern.ch:6789"
+	CephVolumePath  string // e.g., "/volumes/_nogroup/rasmus"
+	LocalMountPoint string // e.g., "/mnt/miniflax"
+	ClientName      string // e.g., "mds-admin"
 }
 
 // DiscoverCephMountInfo attempts to auto-discover Ceph mount configuration from system files
 func DiscoverCephMountInfo(ctx context.Context, cephConfigFile string) (*CephMountInfo, error) {
 	log := appctx.GetLogger(ctx)
-	
+
 	log.Info().
 		Str("ceph_config", cephConfigFile).
 		Msg("nceph: Auto-discovering Ceph mount configuration from system files")
@@ -77,7 +77,7 @@ func DiscoverCephMountInfo(ctx context.Context, cephConfigFile string) (*CephMou
 // extractMonitorHostFromConfig extracts the monitor host from a Ceph config file
 func extractMonitorHostFromConfig(ctx context.Context, configFile string) (string, error) {
 	log := appctx.GetLogger(ctx)
-	
+
 	file, err := os.Open(configFile)
 	if err != nil {
 		return "", fmt.Errorf("failed to open Ceph config file %s: %w", configFile, err)
@@ -86,21 +86,21 @@ func extractMonitorHostFromConfig(ctx context.Context, configFile string) (strin
 
 	scanner := bufio.NewScanner(file)
 	inGlobalSection := false
-	
+
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		
+
 		// Skip empty lines and comments
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		
+
 		// Check for section headers
 		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
 			inGlobalSection = (line == "[global]")
 			continue
 		}
-		
+
 		// Look for mon host in global section
 		if inGlobalSection && strings.HasPrefix(line, "mon host") {
 			// Parse "mon host = cephminiflax.cern.ch:6789"
@@ -126,7 +126,7 @@ func extractMonitorHostFromConfig(ctx context.Context, configFile string) (strin
 // findCephMountInFstab searches fstab for a Ceph mount matching the given monitor host
 func findCephMountInFstab(ctx context.Context, monitorHost string) (*CephMountInfo, error) {
 	log := appctx.GetLogger(ctx)
-	
+
 	const fstabPath = "/etc/fstab"
 	file, err := os.Open(fstabPath)
 	if err != nil {
@@ -142,7 +142,7 @@ func findCephMountInFstab(ctx context.Context, monitorHost string) (*CephMountIn
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		
+
 		// Skip empty lines and comments
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -166,7 +166,7 @@ func findCephMountInFstab(ctx context.Context, monitorHost string) (*CephMountIn
 			if extractedMonitorHost == monitorHost {
 				// Extract client name from options (e.g., "name=mds-admin")
 				clientName := extractClientNameFromOptions(options)
-				
+
 				mountInfo := &CephMountInfo{
 					MonitorHost:     extractedMonitorHost,
 					CephVolumePath:  cephVolumePath,

@@ -189,19 +189,19 @@ func GetTestSubDir(t *testing.T, baseDir, subDirName string) string {
 func RequireCephIntegration(t *testing.T) {
 	// Integration tests run automatically when ceph build tag is used and NCEPH_FSTAB_ENTRY is set
 	fstabEntry := os.Getenv("NCEPH_FSTAB_ENTRY")
-	
+
 	if fstabEntry == "" {
 		t.Skip("Ceph integration tests require NCEPH_FSTAB_ENTRY environment variable to be set.")
 		return
 	}
-	
+
 	// Fstab entry is provided - validate it, fail test if invalid
 	ctx := context.Background()
 	_, err := ParseFstabEntry(ctx, fstabEntry)
 	if err != nil {
 		t.Fatalf("Ceph integration test failed: invalid NCEPH_FSTAB_ENTRY format: %s, error: %v", fstabEntry, err)
 	}
-	
+
 	t.Logf("Valid fstab entry found: %s", fstabEntry)
 }
 

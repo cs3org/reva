@@ -15,7 +15,7 @@ import (
 func TestCephAutoDiscovery(t *testing.T) {
 	// Create temporary files to simulate Ceph config and fstab
 	tempDir := t.TempDir()
-	
+
 	// Create mock Ceph config file
 	cephConfigFile := filepath.Join(tempDir, "ceph.conf")
 	cephConfigContent := `[global]
@@ -51,7 +51,7 @@ cephminiflax.cern.ch:6789:/volumes/_nogroup/rasmus	/mnt/miniflax	ceph	name=mds-a
 	// Test 2: Parse fstab entry (using a helper function)
 	t.Run("parse_fstab_entry", func(t *testing.T) {
 		ctx := ContextWithTestLogger(t)
-		
+
 		// Write mock fstab to a temp file
 		mockFstabFile := filepath.Join(tempDir, "fstab")
 		err := os.WriteFile(mockFstabFile, []byte(mockFstabContent), 0644)
@@ -60,7 +60,7 @@ cephminiflax.cern.ch:6789:/volumes/_nogroup/rasmus	/mnt/miniflax	ceph	name=mds-a
 		// Test parsing by temporarily replacing the fstab path
 		mountInfo, err := parseFstabFile(ctx, mockFstabFile, "cephminiflax.cern.ch:6789")
 		require.NoError(t, err)
-		
+
 		assert.Equal(t, "cephminiflax.cern.ch:6789", mountInfo.MonitorHost)
 		assert.Equal(t, "/volumes/_nogroup/rasmus", mountInfo.CephVolumePath)
 		assert.Equal(t, "/mnt/miniflax", mountInfo.LocalMountPoint)
@@ -70,16 +70,16 @@ cephminiflax.cern.ch:6789:/volumes/_nogroup/rasmus	/mnt/miniflax	ceph	name=mds-a
 	// Test 3: Complete auto-discovery integration
 	t.Run("complete_autodiscovery", func(t *testing.T) {
 		ctx := ContextWithTestLogger(t)
-		
+
 		// Mock the fstab reading by creating a custom discover function
 		mountInfo, err := testDiscoverCephMountInfo(ctx, cephConfigFile, mockFstabContent)
 		require.NoError(t, err)
-		
+
 		assert.Equal(t, "cephminiflax.cern.ch:6789", mountInfo.MonitorHost)
 		assert.Equal(t, "/volumes/_nogroup/rasmus", mountInfo.CephVolumePath)
 		assert.Equal(t, "/mnt/miniflax", mountInfo.LocalMountPoint)
 		assert.Equal(t, "mds-admin", mountInfo.ClientName)
-		
+
 		t.Logf("✅ Auto-discovered configuration:")
 		t.Logf("   Monitor Host: %s", mountInfo.MonitorHost)
 		t.Logf("   Ceph Volume Path: %s", mountInfo.CephVolumePath)
@@ -95,14 +95,14 @@ cephminiflax.cern.ch:6789:/volumes/_nogroup/rasmus	/mnt/miniflax	ceph	name=mds-a
 			"auto_discovery": true,
 			"ceph_config":    cephConfigFile,
 		}
-		
+
 		// Note: This test would fail in the actual New() function because
 		// it tries to read /etc/fstab, but it demonstrates the concept
 		t.Logf("📖 Example configuration with auto-discovery enabled:")
 		for key, value := range testConfig {
 			t.Logf("   %s: %v", key, value)
 		}
-		
+
 		t.Logf("📖 With auto-discovery, the system would:")
 		t.Logf("   1. Read monitor host from %s", cephConfigFile)
 		t.Logf("   2. Find matching Ceph mount in /etc/fstab")
@@ -135,7 +135,7 @@ func parseFstabFile(ctx context.Context, fstabFile, monitorHost string) (*CephMo
 // parseFstabContent parses fstab content string (helper for testing)
 func parseFstabContent(ctx context.Context, fstabContent, monitorHost string) (*CephMountInfo, error) {
 	lines := strings.Split(fstabContent, "\n")
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -153,14 +153,14 @@ func parseFstabContent(ctx context.Context, fstabContent, monitorHost string) (*
 					extractedMonitorHost := parts[0] + ":" + parts[1]
 					cephVolumePath := parts[2]
 					localMountPoint := fields[1]
-					
+
 					// Extract client name from options
 					options := ""
 					if len(fields) > 3 {
 						options = fields[3]
 					}
 					clientName := extractClientNameFromOptions(options)
-					
+
 					if extractedMonitorHost == monitorHost {
 						return &CephMountInfo{
 							MonitorHost:     extractedMonitorHost,
@@ -180,10 +180,10 @@ func parseFstabContent(ctx context.Context, fstabContent, monitorHost string) (*
 func TestCephConfigParsing(t *testing.T) {
 	// Test various Ceph config file formats
 	testCases := []struct {
-		name           string
-		configContent  string
+		name            string
+		configContent   string
 		expectedMonHost string
-		shouldError    bool
+		shouldError     bool
 	}{
 		{
 			name: "standard_config",

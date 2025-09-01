@@ -56,10 +56,10 @@ func ParseFstabEntry(ctx context.Context, fstabLine string) (*FstabMountInfo, er
 		return nil, errors.New("invalid fstab entry: expected at least 4 fields")
 	}
 
-	device := fields[0]       // e.g., "cephminiflax.cern.ch:6789:/volumes/_nogroup/rasmus"
-	mountPoint := fields[1]   // e.g., "/mnt/miniflax"
-	fsType := fields[2]       // e.g., "ceph"
-	options := fields[3]      // e.g., "name=mds-admin,secretfile=/etc/ceph/miniflax.mds-admin.secret,..."
+	device := fields[0]     // e.g., "cephminiflax.cern.ch:6789:/volumes/_nogroup/rasmus"
+	mountPoint := fields[1] // e.g., "/mnt/miniflax"
+	fsType := fields[2]     // e.g., "ceph"
+	options := fields[3]    // e.g., "name=mds-admin,secretfile=/etc/ceph/miniflax.mds-admin.secret,..."
 
 	// Verify this is a Ceph mount
 	if fsType != "ceph" {
@@ -104,11 +104,11 @@ func ParseFstabEntry(ctx context.Context, fstabLine string) (*FstabMountInfo, er
 	// From: /etc/ceph/miniflax.mds-admin.secret
 	// Derive keyring and config files
 	var configFile, keyringFile string
-	
+
 	// Try to extract hostname from secret file path for pattern-based derivation
 	secretBasename := filepath.Base(secretFile)
 	parts := strings.Split(secretBasename, ".")
-	
+
 	if len(parts) >= 3 {
 		// Pattern: ceph.client.mds-admin.key -> hostname might be derivable
 		hostname := parts[0] // First part might be hostname

@@ -17,7 +17,7 @@ func TestIntegrationWithRealCeph(t *testing.T) {
 	if fstabEntry == "" {
 		t.Skip("Skipping integration test: NCEPH_FSTAB_ENTRY not set. Set it to a real Ceph fstab entry to run integration tests.")
 	}
-	
+
 	// Skip dummy entries used for unit tests
 	if fstabEntry == "dummy@cluster:/ /tmp/test ceph defaults" {
 		t.Skip("Skipping integration test: NCEPH_FSTAB_ENTRY appears to be a dummy entry for unit tests. Use a real Ceph fstab entry for integration tests.")
