@@ -153,12 +153,14 @@ func (s *svc) buildGrantedToForOCMShare(ctx context.Context, grantee *provider.G
 			DisplayName: u.DisplayName,
 		})
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
-		return nil, errors.New("Groups are not supported in OCM shares")
+		return nil, errors.New("Groups are currently not supported in OCM shares")
 	}
 
 	return grantedTo, nil
 }
 
+// The user must exist, otherwise an error is returned, this representation is used to show who
+// created the share in the LibreGraph API.
 func (s *svc) buildInvitation(ctx context.Context, creator *user.UserId) (*libregraph.SharingInvitation, error) {
 	u, err := s.getUserInfo(ctx, creator)
 	if err != nil {
