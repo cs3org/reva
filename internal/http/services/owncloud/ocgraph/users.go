@@ -260,7 +260,7 @@ func mapToLibregraphUsers(users []*userpb.User, selection []UserSelectableProper
 		lgUser := libregraph.User{}
 		var id string = u.Id.OpaqueId
 
-		// If the user is federated, include the IdP in the ID
+		// For federated users, form their OCM address by appending @IdP to the OpaqueId
 		if u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
 			id = id + "@" + u.Id.Idp
 		}
