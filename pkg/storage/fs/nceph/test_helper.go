@@ -20,7 +20,6 @@ package nceph
 
 import (
 	"context"
-	"flag"
 	"os"
 	"path/filepath"
 	"testing"
@@ -145,12 +144,9 @@ func GetTestSubDir(t *testing.T, baseDir, subDirName string) string {
 	return subDir
 }
 
-var (
-	cephIntegration = flag.Bool("ceph-integration", false, "Enable Ceph integration tests (requires valid Ceph configuration)")
-)
-
-// RequireCephIntegration checks if Ceph integration tests are enabled and configuration is valid.
-// If not, it skips the test. If the integration flag is set but configuration is invalid, it fails the test.
+// RequireCephIntegration checks if Ceph integration configuration is valid.
+// Integration tests run automatically when the ceph build tag is used and NCEPH_FSTAB_ENTRY is set.
+// If NCEPH_FSTAB_ENTRY is not set, the test is skipped.
 //
 // Usage:
 //
@@ -159,19 +155,24 @@ var (
 //	    // ... rest of test
 //	}
 //
-// Run with: go test -tags ceph -ceph-integration -v
-// Or set environment variable: NCEPH_ENABLE_INTEGRATION=true go test -tags ceph -v
+// Run with: go test -tags ceph -v (requires NCEPH_FSTAB_ENTRY to be set)
 func RequireCephIntegration(t *testing.T) {
-	// Check both flag and environment variable
-	envEnabled := os.Getenv("NCEPH_ENABLE_INTEGRATION") == "true"
-	if !*cephIntegration && !envEnabled {
-		t.Skip("Ceph integration tests disabled. Use -ceph-integration flag or set NCEPH_ENABLE_INTEGRATION=true to enable.")
+	// Integration tests run automatically when ceph build tag is used and NCEPH_FSTAB_ENTRY is set
+	fstabEntry := os.Getenv("NCEPH_FSTAB_ENTRY")
+	
+	if fstabEntry == "" {
+		t.Skip("Ceph integration tests require NCEPH_FSTAB_ENTRY environment variable to be set.")
+		return
 	}
-
-	// Check for required Ceph configuration
-	if !ValidateCephConfig(t) {
-		t.Fatal("Ceph integration tests enabled but invalid configuration. Please set NCEPH_FSTAB_ENTRY environment variable.")
+	
+	// Fstab entry is provided - validate it, fail test if invalid
+	ctx := context.Background()
+	_, err := ParseFstabEntry(ctx, fstabEntry)
+	if err != nil {
+		t.Fatalf("Ceph integration test failed: invalid NCEPH_FSTAB_ENTRY format: %s, error: %v", fstabEntry, err)
 	}
+	
+	t.Logf("Valid fstab entry found: %s", fstabEntry)
 }
 
 // ValidateCephConfig checks if the required Ceph configuration is available.

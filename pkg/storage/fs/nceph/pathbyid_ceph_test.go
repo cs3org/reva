@@ -3,7 +3,6 @@
 package nceph
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -58,23 +57,9 @@ func TestGetPathByIDIntegration(t *testing.T) {
 	// It should fail for ANY error - connection issues, privilege issues, etc.
 	RequireCephIntegration(t)
 
-	// Create test directory (configurable via NCEPH_TEST_DIR environment variable)
-	tempDir, cleanup := GetTestDir(t, "nceph-pathbyid-test")
-	defer cleanup()
-
-	// Set environment variable to use tempDir as chroot
-	originalChrootDir := os.Getenv("NCEPH_TEST_CHROOT_DIR")
-	os.Setenv("NCEPH_TEST_CHROOT_DIR", tempDir)
-	defer func() {
-		if originalChrootDir == "" {
-			os.Unsetenv("NCEPH_TEST_CHROOT_DIR")
-		} else {
-			os.Setenv("NCEPH_TEST_CHROOT_DIR", originalChrootDir)
-		}
-	}()
-
-	// Initialize nceph with ceph configuration
+	// Use the integration helper to get nceph FS with real fstab config
 	ctx := ContextWithTestLogger(t)
+	fs := CreateNcephFSForIntegration(t, nil)
 
 	// Add a root user to the context for integration testing
 	// This ensures that operations run with proper privileges
@@ -89,19 +74,9 @@ func TestGetPathByIDIntegration(t *testing.T) {
 	}
 	ctx = appctx.ContextSetUser(ctx, user)
 
-	// Get fstab entry from environment and pass in config
-	cephConfig := GetCephConfig()
-	config := map[string]interface{}{
-		"fstabentry": cephConfig["fstab_entry"].(string),
-	}
-	
-	fs, err := New(ctx, config)
-	require.NoError(t, err, "Failed to create nceph filesystem with Ceph configuration")
-	require.NotNil(t, fs)
-
 	// Test GetPathByID - this should work without any errors
 	// If it fails for any reason (connection, privileges, file not found, etc.), the test fails
-	_, err = fs.GetPathByID(ctx, &provider.ResourceId{OpaqueId: "1"})
+	_, err := fs.GetPathByID(ctx, &provider.ResourceId{OpaqueId: "1"})
 
 	if err != nil {
 		// ANY error is a test failure - we expect GetPathByID to work properly
@@ -170,23 +145,9 @@ func TestGetPathByIDWithCreatedFiles(t *testing.T) {
 	// extracts their inodes, and then queries them via the admin connection using GetPathByID
 	RequireCephIntegration(t)
 
-	// Create test directory for the integration test
-	tempDir, cleanup := GetTestDir(t, "nceph-pathbyid-roundtrip")
-	defer cleanup()
-
-	// Set environment variable to use tempDir as chroot
-	originalChrootDir := os.Getenv("NCEPH_TEST_CHROOT_DIR")
-	os.Setenv("NCEPH_TEST_CHROOT_DIR", tempDir)
-	defer func() {
-		if originalChrootDir == "" {
-			os.Unsetenv("NCEPH_TEST_CHROOT_DIR")
-		} else {
-			os.Setenv("NCEPH_TEST_CHROOT_DIR", originalChrootDir)
-		}
-	}()
-
-	// Initialize nceph filesystem with Ceph configuration
+	// Use the integration helper to get nceph FS with real fstab config
 	ctx := ContextWithTestLogger(t)
+	fs := CreateNcephFSForIntegration(t, nil)
 
 	// Add a root user to the context for integration testing
 	// This ensures that file operations run with proper privileges
@@ -201,18 +162,8 @@ func TestGetPathByIDWithCreatedFiles(t *testing.T) {
 	}
 	ctx = appctx.ContextSetUser(ctx, user)
 
-	// Get fstab entry from environment and pass in config  
-	cephConfig := GetCephConfig()
-	config := map[string]interface{}{
-		"fstabentry": cephConfig["fstab_entry"].(string),
-	}
-	
-	fs, err := New(ctx, config)
-	require.NoError(t, err, "Failed to create nceph filesystem with Ceph configuration")
-	require.NotNil(t, fs)
-
 	// Ensure we have a working Ceph admin connection for GetPathByID
-	require.NotNil(t, fs.(*ncephfs).cephAdminConn, "Ceph admin connection is required for this test")
+	require.NotNil(t, fs.cephAdminConn, "Ceph admin connection is required for this test")
 
 	// Test cases - create files and directories that we'll query by inode
 	testCases := []struct {
