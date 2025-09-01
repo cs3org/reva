@@ -34,7 +34,8 @@ func init() {
 	global.Register("sciencemesh", New)
 }
 
-// New returns a new sciencemesh service.
+// New returns a new sciencemesh service, which serves as the backend for the ScienceMesh web app
+// to handle OCM related requests for local users.
 func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
@@ -95,10 +96,6 @@ func (s *svc) routerInit() error {
 	if err := providersHandler.init(s.conf); err != nil {
 		return err
 	}
-	sharesHandler := new(sharesHandler)
-	if err := sharesHandler.init(s.conf); err != nil {
-		return err
-	}
 
 	appsHandler := new(appsHandler)
 	if err := appsHandler.init(s.conf); err != nil {
@@ -111,7 +108,6 @@ func (s *svc) routerInit() error {
 	s.router.Get("/find-accepted-users", tokenHandler.FindAccepted)
 	s.router.Delete("/delete-accepted-user", tokenHandler.DeleteAccepted)
 	s.router.Get("/list-providers", providersHandler.ListProviders)
-	s.router.Post("/create-share", sharesHandler.CreateShare)
 	s.router.Post("/open-in-app", appsHandler.OpenInApp)
 	return nil
 }
