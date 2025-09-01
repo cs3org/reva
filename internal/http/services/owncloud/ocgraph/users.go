@@ -30,14 +30,22 @@ import (
 
 	"github.com/CiscoM31/godata"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	preferencesv1beta1 "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 )
 
 type UserSelectableProperty string
+
+const (
+	languageKey   = "lang"
+	preferencesNS = "core"
+)
 
 const (
 	propUserId                           UserSelectableProperty = "id"
@@ -69,6 +77,73 @@ func (s *svc) getMe(w http.ResponseWriter, r *http.Request) {
 		OnPremisesSamAccountName: user.Username,
 		Id:                       &user.Id.OpaqueId,
 	}
+
+	gw, err := s.getClient()
+	if err == nil {
+		lang, err := gw.GetKey(r.Context(), &preferencesv1beta1.GetKeyRequest{
+			Key: &preferencesv1beta1.PreferenceKey{
+				Key:       languageKey,
+				Namespace: preferencesNS,
+			},
+		})
+		if err == nil && lang.Status != nil && lang.Status.Code == rpcv1beta1.Code_CODE_OK {
+			me.PreferredLanguage = libregraph.PtrString(lang.Val)
+		} else {
+			log.Warn().Err(err).Any("Status", lang.Status).Msg("Failed to fetch language for user")
+		}
+	}
+	_ = json.NewEncoder(w).Encode(me)
+}
+
+func (s *svc) patchMe(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	update := &libregraph.UserUpdate{}
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(update); err != nil {
+		log.Error().Err(err).Interface("Body", r.Body).Msg("failed unmarshalling request body")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if update.PreferredLanguage == nil || *update.PreferredLanguage == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Must set preferredLanguage"))
+
+		return
+	}
+
+	user := appctx.ContextMustGetUser(r.Context())
+	me := &libregraph.User{
+		DisplayName:              user.DisplayName,
+		Mail:                     &user.Mail,
+		OnPremisesSamAccountName: user.Username,
+		Id:                       &user.Id.OpaqueId,
+		PreferredLanguage:        update.PreferredLanguage,
+	}
+
+	gw, err := s.getClient()
+	if err != nil {
+		handleError(ctx, err, http.StatusInternalServerError, w)
+	}
+
+	res, err := gw.SetKey(ctx, &preferencesv1beta1.SetKeyRequest{
+		Key: &preferencesv1beta1.PreferenceKey{
+			Key:       languageKey,
+			Namespace: preferencesNS,
+		},
+		Val: *update.PreferredLanguage,
+	})
+
+	if err != nil {
+		handleError(ctx, err, http.StatusInternalServerError, w)
+	}
+	if res.Status != nil && res.Status.Code != rpc.Code_CODE_OK {
+		handleRpcStatus(ctx, res.Status, "Failed to set preference key in gateway", w)
+	}
+
 	_ = json.NewEncoder(w).Encode(me)
 }
 
