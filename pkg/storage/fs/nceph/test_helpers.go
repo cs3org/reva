@@ -3,8 +3,11 @@ package nceph
 import (
 	"context"
 	"os"
+	"os/user"
+	"strconv"
 	"testing"
 
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/stretchr/testify/require"
 )
 
@@ -44,6 +47,28 @@ func CreateNcephFSForTesting(t *testing.T, ctx context.Context, config map[strin
 	ncephFS.localMountPoint = localMountPoint
 
 	return ncephFS
+}
+
+// GetCurrentTestUser returns the current user information for use in tests
+func GetCurrentTestUser(t *testing.T) *userv1beta1.User {
+	currentUser, err := user.Current()
+	require.NoError(t, err, "failed to get current user")
+	
+	uid, err := strconv.Atoi(currentUser.Uid)
+	require.NoError(t, err, "failed to parse current user UID")
+	
+	gid, err := strconv.Atoi(currentUser.Gid)
+	require.NoError(t, err, "failed to parse current user GID")
+
+	return &userv1beta1.User{
+		Id: &userv1beta1.UserId{
+			OpaqueId: currentUser.Username,
+			Idp:      "local",
+		},
+		Username:  currentUser.Username,
+		UidNumber: int64(uid),
+		GidNumber: int64(gid),
+	}
 }
 
 func NewForTesting(t *testing.T, ctx context.Context, config map[string]interface{}, cephVolumePath string, localMountPoint string) *ncephfs {
