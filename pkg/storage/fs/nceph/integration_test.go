@@ -1,14 +1,12 @@
 package nceph
 
 import (
-	"context"
 	"os"
 	"testing"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,9 +23,8 @@ func TestIntegrationWithRealCeph(t *testing.T) {
 		t.Skip("Skipping integration test: NCEPH_FSTAB_ENTRY appears to be a dummy entry for unit tests. Use a real Ceph fstab entry for integration tests.")
 	}
 
-	// Enable info-level logging to see the path details
-	logger := zerolog.New(os.Stdout).With().Timestamp().Logger().Level(zerolog.InfoLevel)
-	ctx := logger.WithContext(context.Background())
+	// Use our standard test logger
+	ctx := ContextWithTestLogger(t)
 
 	t.Logf("🔍 Integration test using real Ceph mount from NCEPH_FSTAB_ENTRY: %s", fstabEntry)
 
@@ -35,7 +32,7 @@ func TestIntegrationWithRealCeph(t *testing.T) {
 	config := map[string]interface{}{
 		// No allow_local_mode - this should use the real Ceph mount
 	}
-	fs := CreateNcephFSForIntegration(t, config)
+	fs := CreateNcephFSForIntegration(t, ctx, config)
 
 	// Set user context
 	user := &userv1beta1.User{

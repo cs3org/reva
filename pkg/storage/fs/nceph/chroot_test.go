@@ -19,7 +19,6 @@
 package nceph
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -54,7 +53,7 @@ func TestChrootJail(t *testing.T) {
 	}()
 
 	// Initialize nceph with local mode and environment variable chroot
-	ctx := context.Background()
+	ctx := ContextWithTestLogger(t)
 	config := map[string]interface{}{
 		"uploads":          ".uploads",
 		"allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
@@ -128,7 +127,7 @@ func TestBasicFileOperations(t *testing.T) {
 	}()
 
 	// Initialize nceph
-	ctx := context.Background()
+	ctx := ContextWithTestLogger(t)
 	config := map[string]interface{}{
 		"uploads":          ".uploads",
 		"allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
@@ -188,7 +187,7 @@ func TestGetPathByIDNotSupported(t *testing.T) {
 	}()
 
 	// Initialize nceph without ceph configuration
-	ctx := context.Background()
+	ctx := ContextWithTestLogger(t)
 	config := map[string]interface{}{
 		"uploads":          ".uploads",
 		"allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)

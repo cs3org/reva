@@ -19,7 +19,7 @@ func TestPathConversionWithSpecificFstab(t *testing.T) {
 		"allow_local_mode": true,
 	}
 	
-	fs := CreateNcephFSForTesting(t, "/volumes/_nogroup/rasmus", tempDir, config)
+	fs := CreateNcephFSForTesting(t, ContextWithTestLogger(t), config, "/volumes/_nogroup/rasmus", tempDir)
 	
 	// Test the path conversion for your specific example
 	t.Run("user_request_myfile", func(t *testing.T) {

@@ -1,7 +1,6 @@
 package nceph
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -47,7 +46,7 @@ func TestEnvironmentVariableChroot(t *testing.T) {
 		}
 
 		// CreateNcephFSForTesting should use the provided localMountPoint (tempDir1)
-		fs := CreateNcephFSForTesting(t, "/volumes/test", tempDir1, config)
+		fs := CreateNcephFSForTesting(t, ContextWithTestLogger(t), config, "/volumes/test", tempDir1)
 		
 		// Verify it's using tempDir1 by checking it can access test1.txt
 		assert.Equal(t, tempDir1, fs.chrootDir, "Should use tempDir1 as chroot directory")
@@ -68,7 +67,7 @@ func TestEnvironmentVariableChroot(t *testing.T) {
 		}
 
 		// Create filesystem - the environment variable should override the localMountPoint parameter
-		fs, err := New(context.Background(), config)
+		fs, err := New(ContextWithTestLogger(t), config)
 		require.NoError(t, err, "New should succeed with environment variable override")
 		
 		ncephFS := fs.(*ncephfs)
@@ -94,7 +93,7 @@ func TestEnvironmentVariableChroot(t *testing.T) {
 			"allow_local_mode": true,
 		}
 
-		fs, err := New(context.Background(), config)
+		fs, err := New(ContextWithTestLogger(t), config)
 		require.NoError(t, err, "New should succeed")
 		
 		ncephFS := fs.(*ncephfs)

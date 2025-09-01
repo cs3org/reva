@@ -59,7 +59,7 @@ func TestGetPathByIDIntegration(t *testing.T) {
 
 	// Use the integration helper to get nceph FS with real fstab config
 	ctx := ContextWithTestLogger(t)
-	fs := CreateNcephFSForIntegration(t, nil)
+	fs := CreateNcephFSForIntegration(t, ctx, nil)
 
 	// Add a root user to the context for integration testing
 	// This ensures that operations run with proper privileges
@@ -147,7 +147,7 @@ func TestGetPathByIDWithCreatedFiles(t *testing.T) {
 
 	// Use the integration helper to get nceph FS with real fstab config
 	ctx := ContextWithTestLogger(t)
-	fs := CreateNcephFSForIntegration(t, nil)
+	fs := CreateNcephFSForIntegration(t, ctx, nil)
 
 	// Add a root user to the context for integration testing
 	// This ensures that file operations run with proper privileges

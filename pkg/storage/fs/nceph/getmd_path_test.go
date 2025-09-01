@@ -1,7 +1,6 @@
 package nceph
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -48,10 +47,10 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 		"allow_local_mode": true,
 	}
 
-	fs := CreateNcephFSForTesting(t, "/volumes/_nogroup/rasmus", tempDir, config)
+	fs := CreateNcephFSForTesting(t, ContextWithTestLogger(t), config, "/volumes/_nogroup/rasmus", tempDir)
 
 	t.Run("GetMD_for_myfile_txt", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := ContextWithTestLogger(t)
 		
 		// Add a user context to avoid permission issues
 		// Use root (0) as the test user since we're running as root and created files as root
@@ -106,7 +105,7 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 	})
 
 	t.Run("GetMD_for_nested_path", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := ContextWithTestLogger(t)
 		
 		// Use the same user context as the first test
 		testUID := int64(currentUID)
@@ -177,7 +176,7 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 	})
 
 	t.Run("GetMD_for_root_directory", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := ContextWithTestLogger(t)
 		
 		// Use the same user context
 		testUID := int64(currentUID)
@@ -300,10 +299,10 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 		"allow_local_mode": true,
 	}
 
-	fs := CreateNcephFSForTesting(t, "/volumes/_nogroup/rasmus", tempDir, config)
+	fs := CreateNcephFSForTesting(t, ContextWithTestLogger(t), config, "/volumes/_nogroup/rasmus", tempDir)
 
 	t.Run("ListFolder_for_foo_directory", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := ContextWithTestLogger(t)
 		
 		// Use consistent user context
 		testUID := int64(currentUID)
@@ -371,7 +370,7 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 	})
 
 	t.Run("ListFolder_for_nested_subdir", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := ContextWithTestLogger(t)
 		
 		// Use consistent user context
 		testUID := int64(currentUID)
@@ -419,7 +418,7 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 	})
 
 	t.Run("ListFolder_for_root_directory", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := ContextWithTestLogger(t)
 		
 		// Use consistent user context
 		testUID := int64(currentUID)

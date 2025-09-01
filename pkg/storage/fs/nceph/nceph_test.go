@@ -19,7 +19,6 @@
 package nceph
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -51,7 +50,7 @@ func TestNCeph_BasicOperations(t *testing.T) {
 		"allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}
 
-	ctx := context.Background()
+	ctx := ContextWithTestLogger(t)
 
 	// Add a test user to the context
 	user := &userv1beta1.User{

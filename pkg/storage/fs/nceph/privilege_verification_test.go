@@ -21,7 +21,6 @@
 package nceph
 
 import (
-	"context"
 	"os"
 	"testing"
 )
@@ -174,11 +173,12 @@ func TestNCephPrivilegeVerificationIntegration(t *testing.T) {
 	}
 
 	// Capture log output during initialization (logs will show privilege status)
-	fs, err := New(context.Background(), config)
+	ctx := ContextWithTestLogger(t)
+	fs, err := New(ctx, config)
 	if err != nil {
 		t.Fatalf("Failed to create nceph filesystem: %v", err)
 	}
-	defer fs.Shutdown(context.Background())
+	defer fs.Shutdown(ctx)
 
 	t.Logf("✅ NCeph filesystem created successfully with privilege verification")
 

@@ -1,7 +1,6 @@
 package nceph
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,7 +8,7 @@ import (
 )
 
 func TestFstabParserWithRealExample(t *testing.T) {
-	ctx := context.Background()
+	ctx := ContextWithTestLogger(t)
 	
 	// Test with the real fstab entry you provided
 	fstabEntry := "cephminiflax.cern.ch:6789:/volumes/_nogroup/rasmus /mnt/miniflax ceph defaults,name=mds-admin,secretfile=/etc/ceph/ceph.client.mds-admin.key,conf=/etc/ceph/ceph.conf,_netdev 0 2"
@@ -37,7 +36,7 @@ func TestFstabParserWithRealExample(t *testing.T) {
 }
 
 func TestFstabParserMinimalValidation(t *testing.T) {
-	ctx := context.Background()
+	ctx := ContextWithTestLogger(t)
 	
 	tests := []struct {
 		name        string

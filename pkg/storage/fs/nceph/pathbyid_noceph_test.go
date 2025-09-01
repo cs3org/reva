@@ -3,7 +3,6 @@
 package nceph
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -29,7 +28,7 @@ func TestGetPathByIDWithoutCeph(t *testing.T) {
 	}()
 
 	// Initialize nceph without ceph configuration
-	ctx := context.Background()
+	ctx := ContextWithTestLogger(t)
 	config := map[string]interface{}{
 		"allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}
@@ -47,7 +46,7 @@ func TestGetPathByIDWithoutCeph(t *testing.T) {
 }
 
 func TestCephAdminConnWithoutCeph(t *testing.T) {
-	ctx := context.Background()
+	ctx := ContextWithTestLogger(t)
 
 	// Test that newCephAdminConn returns NotSupported when ceph is not enabled
 	config := &Options{

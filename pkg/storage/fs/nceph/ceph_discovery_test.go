@@ -42,7 +42,7 @@ cephminiflax.cern.ch:6789:/volumes/_nogroup/rasmus	/mnt/miniflax	ceph	name=mds-a
 
 	// Test 1: Extract monitor host from config
 	t.Run("extract_monitor_host", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := ContextWithTestLogger(t)
 		monitorHost, err := extractMonitorHostFromConfig(ctx, cephConfigFile)
 		require.NoError(t, err)
 		assert.Equal(t, "cephminiflax.cern.ch:6789", monitorHost)
@@ -50,7 +50,7 @@ cephminiflax.cern.ch:6789:/volumes/_nogroup/rasmus	/mnt/miniflax	ceph	name=mds-a
 
 	// Test 2: Parse fstab entry (using a helper function)
 	t.Run("parse_fstab_entry", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := ContextWithTestLogger(t)
 		
 		// Write mock fstab to a temp file
 		mockFstabFile := filepath.Join(tempDir, "fstab")
@@ -230,7 +230,7 @@ fsid = test-cluster`,
 			require.NoError(t, err)
 
 			// Test parsing
-			ctx := context.Background()
+			ctx := ContextWithTestLogger(t)
 			monHost, err := extractMonitorHostFromConfig(ctx, tempFile)
 
 			if tc.shouldError {

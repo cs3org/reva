@@ -1,7 +1,6 @@
 package nceph
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -26,7 +25,7 @@ func TestUIDMapping(t *testing.T) {
 		}
 	}()
 
-	ctx := context.Background()
+	ctx := ContextWithTestLogger(t)
 
 	// Create a minimal nceph filesystem for testing UID mapping
 	config := map[string]interface{}{

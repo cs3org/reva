@@ -1,7 +1,6 @@
 package nceph
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -25,7 +24,7 @@ func TestNoChrootDirectoryError(t *testing.T) {
 		"allow_local_mode": true, // Local mode but no chroot source
 	}
 
-	ctx := context.Background()
+	ctx := ContextWithTestLogger(t)
 	fs, err := New(ctx, config)
 	
 	// Should fail with appropriate error

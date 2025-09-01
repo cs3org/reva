@@ -19,15 +19,12 @@
 package nceph
 
 import (
-	"context"
 	"os"
 	"testing"
-	"time"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
 
@@ -44,12 +41,7 @@ func TestDebugLogging(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create context with debug logging enabled
-	ctx := context.Background()
-	
-	// Set up debug logger 
-	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}).
-		Level(zerolog.DebugLevel).With().Timestamp().Logger()
-	ctx = appctx.WithLogger(ctx, &logger)
+	ctx := ContextWithTestLogger(t)
 
 	// Add a test user to the context
 	user := &userv1beta1.User{

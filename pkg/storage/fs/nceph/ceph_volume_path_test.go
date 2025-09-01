@@ -1,7 +1,6 @@
 package nceph
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -85,7 +84,7 @@ func TestCephVolumePathMapping(t *testing.T) {
 				"chroot_dir": localMountPrefix, // Use the local mount point as chroot dir for this test
 			}
 
-			ctx := context.Background()
+			ctx := ContextWithTestLogger(t)
 			ncephFS := NewForTesting(t, ctx, config, tc.cephVolumePrefix, localMountPrefix)
 
 			// Test: Ceph volume path -> User path conversion 
@@ -144,7 +143,7 @@ func TestCephVolumePathConcept(t *testing.T) {
 		"allow_local_mode": true, // Allow local mode for tests
 	}
 
-	ctx := context.Background()
+	ctx := ContextWithTestLogger(t)
 	ncephFS := NewForTesting(t, ctx, config, "", tempDir)
 
 	// Document the concept with clear examples

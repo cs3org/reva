@@ -15,7 +15,6 @@
 package nceph
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -44,7 +43,7 @@ func TestPathTranslation(t *testing.T) {
 	}()
 
 	// Create test context with user
-	ctx := context.Background()
+	ctx := ContextWithTestLogger(t)
 	user := &userv1beta1.User{
 		Id:          &userv1beta1.UserId{OpaqueId: "testuser"},
 		Username:    "testuser",

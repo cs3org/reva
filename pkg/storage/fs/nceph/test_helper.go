@@ -22,6 +22,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -115,16 +116,45 @@ func SetupTestDir(t *testing.T, prefix string, uid, gid int) (string, func()) {
 }
 
 // ContextWithTestLogger creates a context with a configured logger for testing.
-// This ensures that debug logs are visible during test runs.
+// The log level can be controlled with NCEPH_TEST_LOG_LEVEL environment variable.
+// Valid values: debug, info, warn, error, fatal, panic, disabled
+// Default: error (quiet tests - only errors and above are shown)
 //
 // Usage:
 //
 //	ctx := ContextWithTestLogger(t)
 //	fs, err := newCephAdminConn(ctx, config)
+//
+// To see verbose logs during testing:
+//
+//	NCEPH_TEST_LOG_LEVEL=debug go test -tags ceph -v ./pkg/storage/fs/nceph/
 func ContextWithTestLogger(t *testing.T) context.Context {
+	// Determine log level from environment variable
+	logLevel := zerolog.ErrorLevel // Default: only show errors and above (quiet tests)
+	if envLevel := os.Getenv("NCEPH_TEST_LOG_LEVEL"); envLevel != "" {
+		switch strings.ToLower(envLevel) {
+		case "debug":
+			logLevel = zerolog.DebugLevel
+		case "info":
+			logLevel = zerolog.InfoLevel
+		case "warn", "warning":
+			logLevel = zerolog.WarnLevel
+		case "error":
+			logLevel = zerolog.ErrorLevel
+		case "fatal":
+			logLevel = zerolog.FatalLevel
+		case "panic":
+			logLevel = zerolog.PanicLevel
+		case "disabled", "off", "none":
+			logLevel = zerolog.Disabled
+		default:
+			t.Logf("Warning: Unknown NCEPH_TEST_LOG_LEVEL '%s', using 'error' level", envLevel)
+		}
+	}
+
 	// Create a logger that outputs to the test log
 	logger := zerolog.New(zerolog.NewTestWriter(t)).
-		Level(zerolog.DebugLevel).
+		Level(logLevel).
 		With().
 		Timestamp().
 		Logger()

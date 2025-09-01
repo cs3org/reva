@@ -19,7 +19,6 @@
 package nceph
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -55,11 +54,12 @@ func TestNobodyUserFallback(t *testing.T) {
 		"allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}
 
-	fs, err := New(context.Background(), config)
+	ctx := ContextWithTestLogger(t)
+	fs, err := New(ctx, config)
 	if err != nil {
 		t.Fatalf("Failed to create nceph filesystem: %v", err)
 	}
-	defer fs.Shutdown(context.Background())
+	defer fs.Shutdown(ctx)
 
 	ncephFS := fs.(*ncephfs)
 
@@ -103,11 +103,12 @@ func TestNobodyUserMapping(t *testing.T) {
 		"allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}
 
-	fs, err := New(context.Background(), config)
+	ctx := ContextWithTestLogger(t)
+	fs, err := New(ctx, config)
 	if err != nil {
 		t.Fatalf("Failed to create nceph filesystem: %v", err)
 	}
-	defer fs.Shutdown(context.Background())
+	defer fs.Shutdown(ctx)
 
 	ncephFS := fs.(*ncephfs)
 
@@ -213,14 +214,15 @@ func TestNobodyUserOperations(t *testing.T) {
 		"allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}
 
-	fs, err := New(context.Background(), config)
+	testCtx := ContextWithTestLogger(t)
+	fs, err := New(testCtx, config)
 	if err != nil {
 		t.Fatalf("Failed to create nceph filesystem: %v", err)
 	}
-	defer fs.Shutdown(context.Background())
+	defer fs.Shutdown(testCtx)
 
 	// Create context without user (should trigger nobody user fallback)
-	ctx := context.Background()
+	ctx := ContextWithTestLogger(t)
 
 	// Verify no user is in context
 	_, ok := appctx.ContextGetUser(ctx)
