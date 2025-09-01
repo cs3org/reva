@@ -32,6 +32,17 @@ func TestPathTranslation(t *testing.T) {
 	tmpDir, cleanup := SetupTestDir(t, "nceph-path-test", 1000, 1000)
 	defer cleanup()
 
+	// Set environment variable to use tmpDir as chroot
+	originalChrootDir := os.Getenv("NCEPH_TEST_CHROOT_DIR")
+	os.Setenv("NCEPH_TEST_CHROOT_DIR", tmpDir)
+	defer func() {
+		if originalChrootDir == "" {
+			os.Unsetenv("NCEPH_TEST_CHROOT_DIR")
+		} else {
+			os.Setenv("NCEPH_TEST_CHROOT_DIR", originalChrootDir)
+		}
+	}()
+
 	// Create test context with user
 	ctx := context.Background()
 	user := &userv1beta1.User{
@@ -41,11 +52,11 @@ func TestPathTranslation(t *testing.T) {
 	}
 	ctx = appctx.ContextSetUser(ctx, user)
 
-	// Create filesystem with tmpDir as root
+	// Create filesystem with environment variable chroot
 	fs, err := New(ctx, map[string]interface{}{
-		"root":     tmpDir,
-		"dataTx":   false,
-		"ceph_cfg": "",
+		"dataTx":           false,
+		"ceph_cfg":         "",
+		"allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	})
 	require.NoError(t, err)
 	require.NotNil(t, fs)

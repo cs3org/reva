@@ -34,14 +34,25 @@ func TestNobodyUserFallback(t *testing.T) {
 	tempDir, cleanup := GetTestDir(t, "nceph-nobody-test")
 	defer cleanup()
 
+	// Set environment variable to use tempDir as chroot
+	originalChrootDir := os.Getenv("NCEPH_TEST_CHROOT_DIR")
+	os.Setenv("NCEPH_TEST_CHROOT_DIR", tempDir)
+	defer func() {
+		if originalChrootDir == "" {
+			os.Unsetenv("NCEPH_TEST_CHROOT_DIR")
+		} else {
+			os.Setenv("NCEPH_TEST_CHROOT_DIR", originalChrootDir)
+		}
+	}()
+
 	// Create nceph filesystem with custom nobody UID/GID
 	customNobodyUID := 99999
 	customNobodyGID := 99999
 
 	config := map[string]interface{}{
-		"root":       tempDir,
-		"nobody_uid": customNobodyUID,
-		"nobody_gid": customNobodyGID,
+		"nobody_uid":       customNobodyUID,
+		"nobody_gid":       customNobodyGID,
+		"allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}
 
 	fs, err := New(context.Background(), config)
@@ -76,9 +87,20 @@ func TestNobodyUserMapping(t *testing.T) {
 	tempDir, cleanup := GetTestDir(t, "nceph-nobody-mapping-test")
 	defer cleanup()
 
+	// Set environment variable to use tempDir as chroot
+	originalChrootDir := os.Getenv("NCEPH_TEST_CHROOT_DIR")
+	os.Setenv("NCEPH_TEST_CHROOT_DIR", tempDir)
+	defer func() {
+		if originalChrootDir == "" {
+			os.Unsetenv("NCEPH_TEST_CHROOT_DIR")
+		} else {
+			os.Setenv("NCEPH_TEST_CHROOT_DIR", originalChrootDir)
+		}
+	}()
+
 	// Create nceph filesystem with default configuration
 	config := map[string]interface{}{
-		"root": tempDir,
+		"allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}
 
 	fs, err := New(context.Background(), config)
@@ -175,9 +197,20 @@ func TestNobodyUserOperations(t *testing.T) {
 		t.Logf("Successfully set up directory for nobody user (65534:65534) with write access for all users")
 	}
 
+	// Set environment variable to use tempDir as chroot
+	originalChrootDir := os.Getenv("NCEPH_TEST_CHROOT_DIR")
+	os.Setenv("NCEPH_TEST_CHROOT_DIR", tempDir)
+	defer func() {
+		if originalChrootDir == "" {
+			os.Unsetenv("NCEPH_TEST_CHROOT_DIR")
+		} else {
+			os.Setenv("NCEPH_TEST_CHROOT_DIR", originalChrootDir)
+		}
+	}()
+
 	// Create nceph filesystem
 	config := map[string]interface{}{
-		"root": tempDir,
+		"allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}
 
 	fs, err := New(context.Background(), config)

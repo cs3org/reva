@@ -23,6 +23,7 @@ package nceph
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -63,47 +64,45 @@ func mustMarshal(v interface{}) []byte {
 	return data
 }
 
-// newCephAdminConn creates a new CephAdminConn with rados and admin mount connections
-func newCephAdminConn(ctx context.Context, o *Options) (*CephAdminConn, error) {
+// newCephAdminConnFromFstab creates a new CephAdminConn using parsed fstab information
+func newCephAdminConnFromFstab(ctx context.Context, o *Options, mountInfo *FstabMountInfo) (*CephAdminConn, error) {
 	logger := appctx.GetLogger(ctx)
 
 	logger.Info().
-		Str("ceph_config", o.CephConfig).
-		Str("ceph_client_id", o.CephClientID).
-		Str("ceph_keyring", o.CephKeyring).
-		Str("ceph_root", o.CephRoot).
-		Msg("creating new ceph admin connection")
+		Str("client_name", mountInfo.ClientName).
+		Str("config_file", mountInfo.ConfigFile).
+		Str("keyring_file", mountInfo.KeyringFile).
+		Str("local_mount_point", mountInfo.LocalMountPoint).
+		Msg("creating new ceph admin connection from fstab info")
 
-	// Create RADOS connection
-	logger.Info().Str("client_id", o.CephClientID).Msg("creating rados connection with user")
-	conn, err := rados2.NewConnWithUser(o.CephClientID)
+	// Create RADOS connection with the client name from fstab
+	logger.Info().Str("client_name", mountInfo.ClientName).Msg("creating rados connection with user")
+	conn, err := rados2.NewConnWithUser(mountInfo.ClientName)
 	if err != nil {
-		logger.Error().Err(err).Str("client_id", o.CephClientID).Msg("failed to create rados connection with user")
+		logger.Error().Err(err).Str("client_name", mountInfo.ClientName).Msg("failed to create rados connection with user")
 		return nil, err
 	}
 	logger.Info().Msg("successfully created rados connection")
 
-	logger.Info().Msg("successfully created rados connection")
-
-	// Read config from the ceph config file
-	logger.Info().Str("config_file", o.CephConfig).Msg("reading ceph config file")
-	err = conn.ReadConfigFile(o.CephConfig)
+	// Read config from the ceph config file parsed from fstab
+	logger.Info().Str("config_file", mountInfo.ConfigFile).Msg("reading ceph config file")
+	err = conn.ReadConfigFile(mountInfo.ConfigFile)
 	if err != nil {
-		logger.Error().Err(err).Str("config_file", o.CephConfig).Msg("failed to read ceph config")
+		logger.Error().Err(err).Str("config_file", mountInfo.ConfigFile).Msg("failed to read ceph config")
 		conn.Shutdown()
 		return nil, err
 	}
-	logger.Info().Str("config_file", o.CephConfig).Msg("successfully read ceph config file")
+	logger.Info().Str("config_file", mountInfo.ConfigFile).Msg("successfully read ceph config file")
 
-	// Set keyring for authentication
-	logger.Info().Str("keyring_file", o.CephKeyring).Msg("setting keyring for authentication")
-	err = conn.SetConfigOption("keyring", o.CephKeyring)
+	// Set keyring for authentication from fstab info
+	logger.Info().Str("keyring_file", mountInfo.KeyringFile).Msg("setting keyring for authentication")
+	err = conn.SetConfigOption("keyring", mountInfo.KeyringFile)
 	if err != nil {
-		logger.Error().Err(err).Str("keyring_file", o.CephKeyring).Msg("failed to set keyring config")
+		logger.Error().Err(err).Str("keyring_file", mountInfo.KeyringFile).Msg("failed to set keyring config")
 		conn.Shutdown()
 		return nil, err
 	}
-	logger.Info().Str("keyring_file", o.CephKeyring).Msg("successfully set keyring for authentication")
+	logger.Info().Str("keyring_file", mountInfo.KeyringFile).Msg("successfully set keyring for authentication")
 
 	// Connect to RADOS
 	logger.Info().Msg("connecting to rados cluster")
@@ -125,35 +124,17 @@ func newCephAdminConn(ctx context.Context, o *Options) (*CephAdminConn, error) {
 	}
 	logger.Info().Msg("successfully created ceph admin mount from rados connection")
 
-	// Mount the filesystem with appropriate root path
-	if o.CephRoot != "" && o.CephRoot != "/" {
-		logger.Info().Str("ceph_root", o.CephRoot).Msg("attempting to mount ceph filesystem with custom root")
-		err = adminMount.MountWithRoot(o.CephRoot)
-		if err != nil {
-			logger.Error().Err(err).Str("ceph_root", o.CephRoot).Msg("failed to mount ceph filesystem with custom root - trying default mount")
-			// Fallback to default mount
-			err = adminMount.Mount()
-			if err != nil {
-				logger.Error().Err(err).Msg("failed to mount ceph filesystem at default root")
-				adminMount.Release()
-				conn.Shutdown()
-				return nil, err
-			}
-			logger.Info().Msg("successfully mounted ceph filesystem at default root (fallback from custom root)")
-		} else {
-			logger.Info().Str("ceph_root", o.CephRoot).Msg("successfully mounted ceph filesystem with custom root")
-		}
-	} else {
-		logger.Info().Msg("mounting ceph filesystem at default root")
-		err = adminMount.Mount()
-		if err != nil {
-			logger.Error().Err(err).Msg("failed to mount ceph filesystem at default root")
-			adminMount.Release()
-			conn.Shutdown()
-			return nil, err
-		}
-		logger.Info().Msg("successfully mounted ceph filesystem at default root")
+	// Mount the filesystem at default root
+	// Path trimming will be handled by convertCephVolumePathToUserPath using chrootDir
+	logger.Info().Msg("mounting ceph filesystem at default root")
+	err = adminMount.Mount()
+	if err != nil {
+		logger.Error().Err(err).Msg("failed to mount ceph filesystem at default root")
+		adminMount.Release()
+		conn.Shutdown()
+		return nil, err
 	}
+	logger.Info().Msg("successfully mounted ceph filesystem at default root")
 
 	logger.Info().Msg("ceph admin connection created successfully")
 
@@ -161,6 +142,21 @@ func newCephAdminConn(ctx context.Context, o *Options) (*CephAdminConn, error) {
 		radosConn:  conn,
 		adminMount: adminMount,
 	}, nil
+}
+
+// newCephAdminConn creates a new CephAdminConn with rados and admin mount connections
+func newCephAdminConn(ctx context.Context, o *Options) (*CephAdminConn, error) {
+	// If we have a fstab entry, parse it and use the new function
+	if o.FstabEntry != "" {
+		mountInfo, err := ParseFstabEntry(ctx, o.FstabEntry)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse fstab entry: %w", err)
+		}
+		return newCephAdminConnFromFstab(ctx, o, mountInfo)
+	}
+	
+	// For backward compatibility or if no fstab entry, return error
+	return nil, fmt.Errorf("no fstab entry provided for ceph admin connection")
 }
 
 func (fs *ncephfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
@@ -200,32 +196,22 @@ func (fs *ncephfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (st
 
 	log.Info().Str("raw_path", path).Msg("nceph: Successfully extracted path from inode dump")
 
-	// Remove ceph root prefix if configured
-	originalPath := path
-	if fs.conf.CephRoot != "" {
-		path = strings.TrimPrefix(path, fs.conf.CephRoot)
-		if originalPath != path {
-			log.Info().Str("ceph_root", fs.conf.CephRoot).Str("original_path", originalPath).Str("trimmed_path", path).Msg("nceph: Removed CephRoot prefix from path")
-		}
-	}
+	// Simplified path normalization: Convert to Ceph volume path (common denominator)
+	// The path returned by dump inode is already in Ceph volume coordinates
+	cephVolumePath := path
+	log.Info().Str("ceph_volume_path", cephVolumePath).Msg("nceph: Using Ceph volume path as common denominator")
 
-	// Remove nceph root prefix to make path relative to nceph filesystem root
-	if fs.conf.Root != "" && fs.conf.Root != "/" {
-		cephRootTrimmedPath := path
-		path = strings.TrimPrefix(path, fs.conf.Root)
-		if cephRootTrimmedPath != path {
-			log.Info().Str("nceph_root", fs.conf.Root).Str("ceph_root_trimmed_path", cephRootTrimmedPath).Str("final_trimmed_path", path).Msg("nceph: Removed nceph root prefix from path")
-		}
-	}
+	// Convert from Ceph volume path to user-relative path by removing the configured prefix
+	userRelativePath := fs.convertCephVolumePathToUserPath(ctx, cephVolumePath)
 
-	// Ensure path starts with /
-	if path != "" && !strings.HasPrefix(path, "/") {
-		path = "/" + path
-		log.Info().Str("final_path", path).Msg("nceph: Added leading slash to path")
-	}
-
-	log.Info().Str("final_path", path).Int64("inode", inode).Str("active_mds", activeMDS).Msg("nceph: Successfully resolved path by ID using MdsCommand dump inode")
-	return path, nil
+	log.Info().
+		Str("ceph_volume_path", cephVolumePath).
+		Str("user_relative_path", userRelativePath).
+		Int64("inode", inode).
+		Str("active_mds", activeMDS).
+		Msg("nceph: Successfully resolved path by ID using simplified Ceph volume path logic")
+	
+	return userRelativePath, nil
 }
 
 // dumpInode uses the dump inode command to get inode information

@@ -170,124 +170,53 @@ func RequireCephIntegration(t *testing.T) {
 
 	// Check for required Ceph configuration
 	if !ValidateCephConfig(t) {
-		t.Fatal("Ceph integration tests enabled but invalid configuration. Please set NCEPH_CEPH_CONFIG, NCEPH_CEPH_CLIENT_ID, NCEPH_CEPH_KEYRING, and optionally NCEPH_CEPH_ROOT environment variables or ensure /etc/ceph/ceph.conf exists.")
+		t.Fatal("Ceph integration tests enabled but invalid configuration. Please set NCEPH_FSTAB_ENTRY environment variable.")
 	}
 }
 
 // ValidateCephConfig checks if the required Ceph configuration is available.
 // It returns true if configuration appears to be valid, false otherwise.
 func ValidateCephConfig(t *testing.T) bool {
-	// Check environment variables first
-	cephConfig := os.Getenv("NCEPH_CEPH_CONFIG")
-	cephClientID := os.Getenv("NCEPH_CEPH_CLIENT_ID")
-	cephKeyring := os.Getenv("NCEPH_CEPH_KEYRING")
-
-	if cephConfig != "" && cephClientID != "" && cephKeyring != "" {
-		// Verify files exist
-		if _, err := os.Stat(cephConfig); err != nil {
-			t.Logf("Ceph config file not found: %s", cephConfig)
-			return false
+	// Check for fstab entry - this is the only supported way now
+	fstabEntry := os.Getenv("NCEPH_FSTAB_ENTRY")
+	if fstabEntry != "" {
+		// Try to parse it to see if it's valid
+		ctx := context.Background()
+		_, err := ParseFstabEntry(ctx, fstabEntry)
+		if err == nil {
+			t.Logf("Valid fstab entry found: %s", fstabEntry)
+			return true
 		}
-		if _, err := os.Stat(cephKeyring); err != nil {
-			t.Logf("Ceph keyring file not found: %s", cephKeyring)
-			return false
-		}
-		return true
+		t.Logf("Invalid fstab entry format: %s, error: %v", fstabEntry, err)
+		return false
 	}
 
-	// Fallback to default locations
-	defaultConfig := "/etc/ceph/ceph.conf"
-	defaultKeyring := "/etc/ceph/ceph.client.admin.keyring"
-
-	configExists := false
-	keyringExists := false
-
-	if _, err := os.Stat(defaultConfig); err == nil {
-		configExists = true
-	}
-	if _, err := os.Stat(defaultKeyring); err == nil {
-		keyringExists = true
-	}
-
-	if !configExists {
-		t.Logf("Default Ceph config not found at %s and NCEPH_CEPH_CONFIG not set", defaultConfig)
-	}
-	if !keyringExists {
-		t.Logf("Default Ceph keyring not found at %s and NCEPH_CEPH_KEYRING not set", defaultKeyring)
-	}
-
-	return configExists && keyringExists
+	t.Log("No fstab entry found. Please set NCEPH_FSTAB_ENTRY environment variable.")
+	return false
 }
 
 // GetCephConfig returns the Ceph configuration to use for tests.
-// It checks environment variables first, then falls back to defaults.
+// It only uses the NCEPH_FSTAB_ENTRY environment variable now.
 //
 // Environment variables:
-//   - NCEPH_TEST_DIR: Base directory for test files (local filesystem root)
-//   - NCEPH_CEPH_CONFIG: Path to Ceph configuration file (default: /etc/ceph/ceph.conf)
-//   - NCEPH_CEPH_CLIENT_ID: Ceph client ID (default: admin)
-//   - NCEPH_CEPH_KEYRING: Path to Ceph keyring file (default: /etc/ceph/ceph.client.admin.keyring)
-//   - NCEPH_CEPH_ROOT: APPLICATION-LEVEL mount root for MountWithRoot (default: /)
-//
-// Important: NCEPH_CEPH_ROOT is NOT a Ceph configuration directive. It does not go in
-// /etc/ceph/ceph.conf. It is an application-level parameter that determines what path
-// to pass to the go-ceph MountWithRoot() function.
+//   - NCEPH_FSTAB_ENTRY: Complete fstab entry (required for integration tests)
+//   - NCEPH_TEST_CHROOT_DIR: Override chroot directory for testing (optional)
 //
 // Usage:
 //
-//	export NCEPH_CEPH_ROOT="/volumes/cephfs"  # App-level mount root
+//	export NCEPH_FSTAB_ENTRY="cephfs.cephfs /mnt/cephfs ceph defaults,name=admin,secretfile=/etc/ceph/ceph.client.admin.keyring,conf=/etc/ceph/ceph.conf 0 2"
 //	go test -tags ceph -ceph-integration -v
 func GetCephConfig() map[string]interface{} {
 	config := map[string]interface{}{}
 
-	// Get base test directory
-	if baseDir := os.Getenv("NCEPH_TEST_DIR"); baseDir != "" {
-		config["root"] = baseDir
+	// Get fstab entry - this is the only supported way now
+	fstabEntry := os.Getenv("NCEPH_FSTAB_ENTRY")
+	if fstabEntry != "" {
+		config["fstab_entry"] = fstabEntry
+		return config
 	}
 
-	// Get Ceph configuration
-	cephConfig := os.Getenv("NCEPH_CEPH_CONFIG")
-	if cephConfig == "" {
-		cephConfig = "/etc/ceph/ceph.conf"
-	}
-	config["ceph_config"] = cephConfig
-
-	cephClientID := os.Getenv("NCEPH_CEPH_CLIENT_ID")
-	if cephClientID == "" {
-		cephClientID = "admin"
-	}
-	config["ceph_client_id"] = cephClientID
-
-	cephKeyring := os.Getenv("NCEPH_CEPH_KEYRING")
-	if cephKeyring == "" {
-		cephKeyring = "/etc/ceph/ceph.client.admin.keyring"
-	}
-	config["ceph_keyring"] = cephKeyring
-
-	// Get Ceph filesystem mount root (APPLICATION-LEVEL parameter for MountWithRoot)
-	// This is NOT a Ceph config directive - it's only used by our Go application
-	cephRoot := os.Getenv("NCEPH_CEPH_ROOT")
-	if cephRoot == "" {
-		cephRoot = "/" // Default to root of Ceph filesystem
-	}
-	config["ceph_root"] = cephRoot
-
-	return config
-}
-
-// GetCephConfigWithRoot returns Ceph configuration with a specific mount root.
-// This is a convenience function for tests that need to override the mount root.
-//
-// Note: The cephRoot parameter is application-level only. It is NOT a Ceph configuration
-// directive and does not go in /etc/ceph/ceph.conf. It determines what path to pass
-// to the go-ceph MountWithRoot() function.
-//
-// Usage:
-//
-//	config := GetCephConfigWithRoot("/volumes/test_data")
-//	fs, err := New(ctx, config)
-func GetCephConfigWithRoot(cephRoot string) map[string]interface{} {
-	config := GetCephConfig()
-	config["ceph_root"] = cephRoot
+	// If no fstab entry is provided, return empty config
+	// The integration tests will fail gracefully with proper error message
 	return config
 }

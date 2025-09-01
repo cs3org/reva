@@ -43,7 +43,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/storage"
 	"github.com/cs3org/reva/v3/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/v3/pkg/utils"
-	"github.com/cs3org/reva/v3/pkg/utils/cfg"
+	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
@@ -55,46 +55,115 @@ const (
 
 // ncephfs is a local filesystem implementation that provides a ceph-like interface
 type ncephfs struct {
-	conf          *Options
-	cephAdminConn *CephAdminConn  // Only used for GetPathByID (defined in build-tag files)
-	rootFS        *os.Root        // Chrooted filesystem root using os.Root
-	threadPool    *UserThreadPool // Pool of per-user threads with dedicated UIDs
+	conf              *Options
+	cephAdminConn     *CephAdminConn  // Only used for GetPathByID (defined in build-tag files)
+	rootFS            *os.Root        // Chrooted filesystem root using os.Root
+	threadPool        *UserThreadPool // Pool of per-user threads with dedicated UIDs
+	cephVolumePath    string          // Auto-discovered Ceph volume path (RADOS canonical form)
+	localMountPoint   string          // Auto-discovered local mount point (where Ceph is mounted locally), see fstab
+	chrootDir         string          // The local mount point (see fstab), but configurable for unit tests
 }
 
 func init() {
 	registry.Register("nceph", New)
 }
 
+func parseOptions(m map[string]interface{}) (Options, error) {
+	var o Options
+	if err := mapstructure.Decode(m, &o); err != nil {
+		return o, errors.Wrap(err, "error decoding conf")
+	}
+	o.ApplyDefaults()
+	return o, nil
+}
+
 // New returns an implementation of the storage.FS interface that talks to
 // the local filesystem using os.Root operations instead of libcephfs.
-func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err error) {
-	var o Options
-	if err := cfg.Decode(m, &o); err != nil {
+func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
+	o, err := parseOptions(m)
+	if err != nil {
 		return nil, err
 	}
 
-	// Apply defaults
-	o.ApplyDefaults()
-
-	// Ensure root directory exists and get absolute path
-	absRoot, err := filepath.Abs(o.Root)
-	if err != nil {
-		return nil, errors.Wrap(err, "nceph: failed to get absolute path for root")
+	// FstabEntry is now required since manual configuration has been removed
+	// However, for testing purposes, AllowLocalMode can bypass this requirement
+	if o.FstabEntry == "" && !o.AllowLocalMode {
+		return nil, errors.New("nceph: fstabentry must be provided (manual configuration has been removed)")
 	}
 
-	// Create a chrooted filesystem using os.OpenRoot to jail all operations to the root
-	rootFS, err := os.OpenRoot(absRoot)
+	log := appctx.GetLogger(ctx)
+	var discoveredCephVolumePath string
+	var discoveredLocalMountPoint string
+
+	if o.FstabEntry != "" {
+		// Parse Ceph configuration from fstab entry
+		log.Info().Str("fstab_entry", o.FstabEntry).Msg("nceph: Parsing Ceph configuration from fstab entry")
+		
+		mountInfo, err := ParseFstabEntry(ctx, o.FstabEntry)
+		if err != nil {
+			log.Error().Err(err).Msg("nceph: Failed to parse fstab entry")
+			return nil, errors.Wrap(err, "nceph: failed to parse fstab entry")
+		}
+
+		// Store discovered values
+		discoveredCephVolumePath = mountInfo.CephVolumePath
+		discoveredLocalMountPoint = mountInfo.LocalMountPoint
+		
+		log.Info().
+			Str("ceph_volume_path", mountInfo.CephVolumePath).
+			Str("local_mount_point", mountInfo.LocalMountPoint).
+			Str("monitor_host", mountInfo.MonitorHost).
+			Str("client_name", mountInfo.ClientName).
+			Msg("nceph: Successfully parsed fstab entry")
+
+	} else if o.AllowLocalMode {
+		// Local mode for testing - no Ceph configuration
+		log.Info().Msg("nceph: Running in local mode (Ceph features disabled)")
+		discoveredCephVolumePath = ""
+		discoveredLocalMountPoint = ""
+	}
+	
+	// Use discovered local mount point as chroot directory
+	chrootDir := discoveredLocalMountPoint
+	
+	// Override chroot directory from environment variable for testing (does not pollute Options)
+	if testChrootDir := os.Getenv("NCEPH_TEST_CHROOT_DIR"); testChrootDir != "" {
+		log.Info().
+			Str("original_chroot_dir", chrootDir).
+			Str("override_chroot_dir", testChrootDir).
+			Msg("nceph: Overriding chroot directory from NCEPH_TEST_CHROOT_DIR environment variable")
+		chrootDir = testChrootDir
+	}
+	
+	// Validate that we have a chroot directory
+	if chrootDir == "" {
+		return nil, errors.New("nceph: no chroot directory available (either provide fstabentry or set NCEPH_TEST_CHROOT_DIR for testing)")
+	}
+	
+	log.Info().
+		Str("ceph_volume_path", discoveredCephVolumePath).
+		Str("chroot_dir", chrootDir).
+		Msg("nceph: Configuration applied")
+
+	// Ensure chroot directory exists and get absolute path
+	absChrootDir, err := filepath.Abs(chrootDir)
+	if err != nil {
+		return nil, errors.Wrap(err, "nceph: failed to get absolute path for chroot directory")
+	}
+
+	// Create a chrooted filesystem using os.OpenRoot to jail all operations to the local mount point
+	rootFS, err := os.OpenRoot(absChrootDir)
 	if err != nil {
 		return nil, errors.Wrap(err, "nceph: failed to create chroot jail with os.OpenRoot")
 	}
 
-	// Initialize ceph admin connection if ceph config is provided
+	// Initialize ceph admin connection if fstab entry was parsed successfully
 	var cephAdminConn *CephAdminConn
-	if o.CephConfig != "" && o.CephClientID != "" && o.CephKeyring != "" {
+	if o.FstabEntry != "" && discoveredCephVolumePath != "" {
+		// Use the updated newCephAdminConn which will parse the fstab entry internally
 		cephAdminConn, err = newCephAdminConn(ctx, &o)
 		if err != nil {
 			// Log warning but continue - GetPathByID will not work but other operations will
-			log := appctx.GetLogger(ctx)
 			log.Warn().Err(err).Msg("nceph: failed to create ceph admin connection, GetPathByID will not work")
 		}
 	}
@@ -111,7 +180,7 @@ func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err erro
 	}
 
 	// Log privilege verification results
-	log := appctx.GetLogger(ctx)
+	// Reuse the logger from auto-discovery above
 	
 	// Always log basic privilege status first
 	log.Info().
@@ -197,10 +266,13 @@ func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err erro
 	}
 
 	return &ncephfs{
-		conf:          &o,
-		cephAdminConn: cephAdminConn,
-		rootFS:        rootFS,
-		threadPool:    threadPool,
+		conf:            &o,
+		cephAdminConn:   cephAdminConn,
+		rootFS:          rootFS,
+		threadPool:      threadPool,
+		cephVolumePath:  discoveredCephVolumePath,
+		localMountPoint: discoveredLocalMountPoint,
+		chrootDir:       chrootDir,
 	}, nil
 }
 
@@ -242,9 +314,9 @@ func (fs *ncephfs) fileAsResourceInfo(path string, info os.FileInfo, mdKeys []st
 		// For symlinks, we need to get the absolute filesystem path to read the link
 		var absPath string
 		if path == "." {
-			absPath = fs.conf.Root
+			absPath = fs.chrootDir
 		} else {
-			absPath = filepath.Join(fs.conf.Root, path)
+			absPath = filepath.Join(fs.chrootDir, path)
 		}
 		if linkTarget, err := os.Readlink(absPath); err == nil {
 			target = linkTarget

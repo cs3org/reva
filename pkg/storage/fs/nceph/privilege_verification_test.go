@@ -155,11 +155,22 @@ func TestNCephPrivilegeVerificationIntegration(t *testing.T) {
 	tempDir, cleanup := GetTestDir(t, "nceph-privilege-test")
 	defer cleanup()
 
+	// Set environment variable to use tempDir as chroot
+	originalChrootDir := os.Getenv("NCEPH_TEST_CHROOT_DIR")
+	os.Setenv("NCEPH_TEST_CHROOT_DIR", tempDir)
+	defer func() {
+		if originalChrootDir == "" {
+			os.Unsetenv("NCEPH_TEST_CHROOT_DIR")
+		} else {
+			os.Setenv("NCEPH_TEST_CHROOT_DIR", originalChrootDir)
+		}
+	}()
+
 	// Create nceph filesystem - this should trigger privilege verification
 	config := map[string]interface{}{
-		"root":       tempDir,
-		"nobody_uid": 65534,
-		"nobody_gid": 65534,
+		"nobody_uid":       65534,
+		"nobody_gid":       65534,
+		"allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}
 
 	// Capture log output during initialization (logs will show privilege status)

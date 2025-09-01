@@ -42,12 +42,22 @@ func TestChrootJail(t *testing.T) {
 	}
 	defer os.Remove(outsideFile)
 
-	// Initialize nceph with the temp directory as root
+	// Set environment variable to use tempDir as chroot
+	originalChrootDir := os.Getenv("NCEPH_TEST_CHROOT_DIR")
+	os.Setenv("NCEPH_TEST_CHROOT_DIR", tempDir)
+	defer func() {
+		if originalChrootDir == "" {
+			os.Unsetenv("NCEPH_TEST_CHROOT_DIR")
+		} else {
+			os.Setenv("NCEPH_TEST_CHROOT_DIR", originalChrootDir)
+		}
+	}()
+
+	// Initialize nceph with local mode and environment variable chroot
 	ctx := context.Background()
 	config := map[string]interface{}{
-		"root":        tempDir,
-		"user_layout": "{{.Username}}",
-		"uploads":     ".uploads",
+		"uploads":          ".uploads",
+		"allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}
 
 	storage, err := New(ctx, config)
@@ -106,12 +116,22 @@ func TestBasicFileOperations(t *testing.T) {
 	tempDir, cleanup := GetTestDir(t, "nceph-ops-test")
 	defer cleanup()
 
+	// Set environment variable to use tempDir as chroot
+	originalChrootDir := os.Getenv("NCEPH_TEST_CHROOT_DIR")
+	os.Setenv("NCEPH_TEST_CHROOT_DIR", tempDir)
+	defer func() {
+		if originalChrootDir == "" {
+			os.Unsetenv("NCEPH_TEST_CHROOT_DIR")
+		} else {
+			os.Setenv("NCEPH_TEST_CHROOT_DIR", originalChrootDir)
+		}
+	}()
+
 	// Initialize nceph
 	ctx := context.Background()
 	config := map[string]interface{}{
-		"root":        tempDir,
-		"user_layout": "{{.Username}}",
-		"uploads":     ".uploads",
+		"uploads":          ".uploads",
+		"allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}
 
 	storage, err := New(ctx, config)
@@ -156,12 +176,22 @@ func TestGetPathByIDNotSupported(t *testing.T) {
 	tempDir, cleanup := GetTestDir(t, "nceph-pathbyid-test")
 	defer cleanup()
 
+	// Set environment variable to use tempDir as chroot
+	originalChrootDir := os.Getenv("NCEPH_TEST_CHROOT_DIR")
+	os.Setenv("NCEPH_TEST_CHROOT_DIR", tempDir)
+	defer func() {
+		if originalChrootDir == "" {
+			os.Unsetenv("NCEPH_TEST_CHROOT_DIR")
+		} else {
+			os.Setenv("NCEPH_TEST_CHROOT_DIR", originalChrootDir)
+		}
+	}()
+
 	// Initialize nceph without ceph configuration
 	ctx := context.Background()
 	config := map[string]interface{}{
-		"root":        tempDir,
-		"user_layout": "{{.Username}}",
-		"uploads":     ".uploads",
+		"uploads":          ".uploads",
+		"allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}
 
 	storage, err := New(ctx, config)

@@ -4,6 +4,7 @@ package nceph
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -16,10 +17,21 @@ func TestGetPathByIDWithoutCeph(t *testing.T) {
 	tempDir, cleanup := GetTestDir(t, "nceph-noceph-test")
 	defer cleanup()
 
+	// Set environment variable to use tempDir as chroot
+	originalChrootDir := os.Getenv("NCEPH_TEST_CHROOT_DIR")
+	os.Setenv("NCEPH_TEST_CHROOT_DIR", tempDir)
+	defer func() {
+		if originalChrootDir == "" {
+			os.Unsetenv("NCEPH_TEST_CHROOT_DIR")
+		} else {
+			os.Setenv("NCEPH_TEST_CHROOT_DIR", originalChrootDir)
+		}
+	}()
+
 	// Initialize nceph without ceph configuration
 	ctx := context.Background()
 	config := map[string]interface{}{
-		"root": tempDir,
+		"allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}
 
 	fs, err := New(ctx, config)
@@ -39,9 +51,7 @@ func TestCephAdminConnWithoutCeph(t *testing.T) {
 
 	// Test that newCephAdminConn returns NotSupported when ceph is not enabled
 	config := &Options{
-		CephConfig:   "/etc/ceph/ceph.conf",
-		CephClientID: "admin",
-		CephKeyring:  "/etc/ceph/ceph.client.admin.keyring",
+		FstabEntry: "cephfs.cephfs /mnt/cephfs ceph defaults,name=admin,secretfile=/etc/ceph/ceph.client.admin.keyring,conf=/etc/ceph/ceph.conf 0 2",
 	}
 
 	_, err := newCephAdminConn(ctx, config)

@@ -20,6 +20,7 @@ package nceph
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -34,10 +35,20 @@ func TestNCeph_BasicOperations(t *testing.T) {
 	tmpDir, cleanup := SetupTestDir(t, "nceph_test", 1000, 1000)
 	defer cleanup()
 
+	// Set environment variable to use tmpDir as chroot
+	originalChrootDir := os.Getenv("NCEPH_TEST_CHROOT_DIR")
+	os.Setenv("NCEPH_TEST_CHROOT_DIR", tmpDir)
+	defer func() {
+		if originalChrootDir == "" {
+			os.Unsetenv("NCEPH_TEST_CHROOT_DIR")
+		} else {
+			os.Setenv("NCEPH_TEST_CHROOT_DIR", originalChrootDir)
+		}
+	}()
+
 	// Create nceph instance
 	config := map[string]interface{}{
-		"root":        tmpDir,
-		"user_layout": "{{.Username}}",
+		"allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}
 
 	ctx := context.Background()

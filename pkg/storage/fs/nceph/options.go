@@ -20,7 +20,6 @@ package nceph
 
 // Options for the nceph module
 type Options struct {
-	Root           string `mapstructure:"root"`
 	UploadFolder   string `mapstructure:"uploads"`
 	DirPerms       uint32 `mapstructure:"dir_perms"`
 	FilePerms      uint32 `mapstructure:"file_perms"`
@@ -30,22 +29,16 @@ type Options struct {
 	NobodyUID int `mapstructure:"nobody_uid"`
 	NobodyGID int `mapstructure:"nobody_gid"`
 
-	// Ceph configuration for GetPathByID operations
-	CephConfig   string `mapstructure:"ceph_config"`    // Path to /etc/ceph/ceph.conf
-	CephClientID string `mapstructure:"ceph_client_id"` // Ceph client ID (from keyring)
-	CephKeyring  string `mapstructure:"ceph_keyring"`   // Path to keyring file
-	CephRoot     string `mapstructure:"ceph_root"`      // Application-level: mount root for MountWithRoot() (NOT a Ceph config directive)
+	// Simplified Ceph configuration - just paste the fstab entry
+	FstabEntry string `mapstructure:"fstabentry"` // Complete fstab line for Ceph mount
+
+	// Testing/development option - allows running without Ceph configuration for local filesystem tests
+	AllowLocalMode bool `mapstructure:"allow_local_mode"` // Bypass fstab parsing requirement for tests
 
 	HiddenDirs map[string]bool
 }
 
 func (c *Options) ApplyDefaults() {
-	if c.Root == "" {
-		c.Root = "/mnt/cephfs/"
-	} else {
-		c.Root = addLeadingSlash(c.Root) //force absolute path in case leading "/" is omitted
-	}
-
 	if c.UploadFolder == "" {
 		c.UploadFolder = ".uploads"
 	}
@@ -59,28 +52,8 @@ func (c *Options) ApplyDefaults() {
 		c.NobodyGID = 65534
 	}
 
-	// Ceph defaults for GetPathByID operations
-	if c.CephConfig == "" {
-		c.CephConfig = "/etc/ceph/ceph.conf"
-	} else {
-		c.CephConfig = addLeadingSlash(c.CephConfig)
-	}
-
-	if c.CephClientID == "" {
-		c.CephClientID = "admin"
-	}
-
-	if c.CephKeyring == "" {
-		c.CephKeyring = "/etc/ceph/keyring"
-	} else {
-		c.CephKeyring = addLeadingSlash(c.CephKeyring)
-	}
-
-	if c.CephRoot == "" {
-		c.CephRoot = "/cephfs"
-	} else {
-		c.CephRoot = addLeadingSlash(c.CephRoot)
-	}
+	// No Ceph defaults needed - everything is extracted from the fstab entry
+	// Chroot directory defaults will be set from fstab parsing (local mount point)
 
 	c.HiddenDirs = map[string]bool{
 		".":                                true,

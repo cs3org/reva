@@ -2,6 +2,7 @@ package nceph
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -14,14 +15,24 @@ func TestUIDMapping(t *testing.T) {
 	tempDir, cleanup := GetTestDir(t, "nceph-uid-mapping")
 	defer cleanup()
 
+	// Set environment variable to use tempDir as chroot
+	originalChrootDir := os.Getenv("NCEPH_TEST_CHROOT_DIR")
+	os.Setenv("NCEPH_TEST_CHROOT_DIR", tempDir)
+	defer func() {
+		if originalChrootDir == "" {
+			os.Unsetenv("NCEPH_TEST_CHROOT_DIR")
+		} else {
+			os.Setenv("NCEPH_TEST_CHROOT_DIR", originalChrootDir)
+		}
+	}()
+
 	ctx := context.Background()
 
 	// Create a minimal nceph filesystem for testing UID mapping
 	config := map[string]interface{}{
-		"root":         tempDir,
-		"user_layout":  "{{.Username}}",
-		"nobody_uid":   65534,
-		"nobody_gid":   65534,
+		"nobody_uid":       65534,
+		"nobody_gid":       65534,
+		"allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}
 
 	fs, err := New(ctx, config)
