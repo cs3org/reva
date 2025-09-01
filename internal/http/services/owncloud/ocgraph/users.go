@@ -258,9 +258,15 @@ func mapToLibregraphUsers(users []*userpb.User, selection []UserSelectableProper
 			continue
 		}
 		lgUser := libregraph.User{}
+		var id string = u.Id.OpaqueId
+
+		// If the user is federated, include the IdP in the ID
+		if u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
+			id = id + "@" + u.Id.Idp
+		}
 		if len(selection) == 0 {
 			lgUser = libregraph.User{
-				Id:                       &u.Id.OpaqueId,
+				Id:                       &id,
 				Mail:                     &u.Mail,
 				OnPremisesSamAccountName: u.Username,
 				DisplayName:              u.DisplayName,
