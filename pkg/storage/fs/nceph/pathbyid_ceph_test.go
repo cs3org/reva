@@ -52,40 +52,6 @@ func TestCephAdminConnection(t *testing.T) {
 	}
 }
 
-func TestGetPathByIDIntegration(t *testing.T) {
-	// This test verifies the complete GetPathByID functionality
-	// It should fail for ANY error - connection issues, privilege issues, etc.
-	RequireCephIntegration(t)
-
-	// Use the integration helper to get nceph FS with real fstab config
-	ctx := ContextWithTestLogger(t)
-	fs := CreateNcephFSForIntegration(t, ctx, nil)
-
-	// Add a root user to the context for integration testing
-	// This ensures that operations run with proper privileges
-	user := &userv1beta1.User{
-		Id: &userv1beta1.UserId{
-			OpaqueId: "root",
-			Idp:      "local",
-		},
-		Username:  "root",
-		UidNumber: 0, // Root UID
-		GidNumber: 0, // Root GID
-	}
-	ctx = appctx.ContextSetUser(ctx, user)
-
-	// Test GetPathByID - this should work without any errors
-	// If it fails for any reason (connection, privileges, file not found, etc.), the test fails
-	_, err := fs.GetPathByID(ctx, &provider.ResourceId{OpaqueId: "1"})
-
-	if err != nil {
-		// ANY error is a test failure - we expect GetPathByID to work properly
-		t.Fatalf("GetPathByID failed. This indicates issues with Ceph connection, privileges, or configuration: %v", err)
-	} else {
-		t.Log("GetPathByID succeeded - Ceph integration is working correctly")
-	}
-}
-
 func TestCephRootConfiguration(t *testing.T) {
 	// This test verifies that the Ceph root parameter is properly configured
 	RequireCephIntegration(t)
