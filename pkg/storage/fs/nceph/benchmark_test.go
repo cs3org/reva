@@ -786,6 +786,250 @@ func benchmarkUploadDirectories(b *testing.B, depth int) {
 	}
 }
 
+// BenchmarkMultiUser_ThreadIsolation benchmarks thread isolation across multiple users
+func BenchmarkMultiUser_ThreadIsolation(b *testing.B) {
+	// Test with different user/thread combinations
+	testCases := []struct {
+		name       string
+		userCount  int
+		threadCount int
+	}{
+		{"10Users_10Threads", 10, 10},
+		{"50Users_50Threads", 50, 50},
+		{"100Users_100Threads", 100, 100},
+	}
+	
+	for _, tc := range testCases {
+		b.Run(tc.name, func(b *testing.B) {
+			benchmarkMultiUserThreadIsolation(b, tc.userCount, tc.threadCount)
+		})
+	}
+}
+
+func benchmarkMultiUserThreadIsolation(b *testing.B, userCount, threadCount int) {
+	// Create test directory
+	tempDir, cleanup := getBenchmarkTestDir(b, fmt.Sprintf("benchmark-multiuser-%d-%d", userCount, threadCount))
+	defer cleanup()
+
+	// Create filesystem instance
+	config := map[string]interface{}{
+		"allow_local_mode": true,
+	}
+	ctx := contextWithBenchmarkLogger(b)
+	fs := createNcephFSForBenchmark(b, ctx, config, "/volumes/_nogroup/benchmark", tempDir)
+
+	// Create large test file content (1MB per file to keep threads busy)
+	fileSize := int64(1024 * 1024)
+	testData := make([]byte, fileSize)
+	for i := range testData {
+		testData[i] = byte(i % 256)
+	}
+
+	// Pre-create test files for each user
+	b.Log("Setting up test files for users...")
+	userContexts := make([]context.Context, userCount)
+	for userID := 0; userID < userCount; userID++ {
+		// Create unique user context
+		user := &userv1beta1.User{
+			Id: &userv1beta1.UserId{
+				OpaqueId: fmt.Sprintf("user_%d", userID),
+				Idp:      "local",
+			},
+			Username:  fmt.Sprintf("testuser_%d", userID),
+			UidNumber: int64(1000 + userID),
+			GidNumber: int64(1000 + userID),
+		}
+		userContexts[userID] = appctx.ContextSetUser(ctx, user)
+
+		// Create test file for this user
+		fileName := fmt.Sprintf("/user_%d_testfile.txt", userID)
+		ref := &provider.Reference{Path: fileName}
+		reader := bytes.NewReader(testData)
+		err := fs.Upload(userContexts[userID], ref, io.NopCloser(reader), nil)
+		require.NoError(b, err, "Failed to create test file for user %d", userID)
+	}
+
+	// Reset timer and run benchmark
+	b.ResetTimer()
+	b.ReportAllocs()
+	b.SetBytes(int64(userCount) * fileSize) // Total data processed per iteration
+
+	// Run the actual benchmark
+	for i := 0; i < b.N; i++ {
+		// Use channels to coordinate goroutines
+		done := make(chan bool, threadCount)
+		errorChan := make(chan error, threadCount)
+
+		// Launch concurrent threads for different users
+		for threadID := 0; threadID < threadCount; threadID++ {
+			go func(tID int) {
+				// Each thread picks a user (round-robin)
+				userID := tID % userCount
+				userCtx := userContexts[userID]
+				
+				// Perform multiple operations as this user to keep the thread busy
+				fileName := fmt.Sprintf("/user_%d_testfile.txt", userID)
+				ref := &provider.Reference{Path: fileName}
+				
+				// Read the file multiple times to simulate sustained user activity
+				for readCount := 0; readCount < 5; readCount++ {
+					_, err := fs.GetMD(userCtx, ref, nil)
+					if err != nil {
+						errorChan <- fmt.Errorf("user %d thread %d read %d failed: %w", userID, tID, readCount, err)
+						return
+					}
+				}
+				
+				// Also test file operations specific to this user
+				tempFileName := fmt.Sprintf("/user_%d_thread_%d_temp.txt", userID, tID)
+				tempRef := &provider.Reference{Path: tempFileName}
+				
+				// Upload a small file
+				smallData := []byte(fmt.Sprintf("Thread %d data for user %d", tID, userID))
+				reader := bytes.NewReader(smallData)
+				err := fs.Upload(userCtx, tempRef, io.NopCloser(reader), nil)
+				if err != nil {
+					errorChan <- fmt.Errorf("user %d thread %d upload failed: %w", userID, tID, err)
+					return
+				}
+				
+				// Read it back
+				_, err = fs.GetMD(userCtx, tempRef, nil)
+				if err != nil {
+					errorChan <- fmt.Errorf("user %d thread %d read temp file failed: %w", userID, tID, err)
+					return
+				}
+				
+				// Clean up temp file
+				err = fs.Delete(userCtx, tempRef)
+				if err != nil {
+					errorChan <- fmt.Errorf("user %d thread %d delete failed: %w", userID, tID, err)
+					return
+				}
+				
+				done <- true
+			}(threadID)
+		}
+
+		// Wait for all threads to complete
+		completedThreads := 0
+		for completedThreads < threadCount {
+			select {
+			case <-done:
+				completedThreads++
+			case err := <-errorChan:
+				b.Fatalf("Thread isolation test failed: %v", err)
+			}
+		}
+	}
+}
+
+// BenchmarkMultiUser_ConcurrentReads benchmarks concurrent read operations by multiple users
+func BenchmarkMultiUser_ConcurrentReads(b *testing.B) {
+	// Test scenarios with different user patterns
+	testCases := []struct {
+		name       string
+		userCount  int
+		readsPerUser int
+	}{
+		{"20Users_5Reads", 20, 5},
+		{"50Users_10Reads", 50, 10},
+		{"100Users_20Reads", 100, 20},
+	}
+	
+	for _, tc := range testCases {
+		b.Run(tc.name, func(b *testing.B) {
+			benchmarkMultiUserConcurrentReads(b, tc.userCount, tc.readsPerUser)
+		})
+	}
+}
+
+func benchmarkMultiUserConcurrentReads(b *testing.B, userCount, readsPerUser int) {
+	// Create test directory
+	tempDir, cleanup := getBenchmarkTestDir(b, fmt.Sprintf("benchmark-concurrent-reads-%d-%d", userCount, readsPerUser))
+	defer cleanup()
+
+	// Create filesystem instance
+	config := map[string]interface{}{
+		"allow_local_mode": true,
+	}
+	ctx := contextWithBenchmarkLogger(b)
+	fs := createNcephFSForBenchmark(b, ctx, config, "/volumes/_nogroup/benchmark", tempDir)
+
+	// Create test files for each user
+	fileSize := int64(512 * 1024) // 512KB per file
+	testData := make([]byte, fileSize)
+	for i := range testData {
+		testData[i] = byte(i % 256)
+	}
+
+	// Setup: create files and user contexts
+	userContexts := make([]context.Context, userCount)
+	fileRefs := make([]*provider.Reference, userCount)
+	
+	for userID := 0; userID < userCount; userID++ {
+		// Create unique user context
+		user := &userv1beta1.User{
+			Id: &userv1beta1.UserId{
+				OpaqueId: fmt.Sprintf("concurrent_user_%d", userID),
+				Idp:      "local",
+			},
+			Username:  fmt.Sprintf("concurrentuser_%d", userID),
+			UidNumber: int64(2000 + userID),
+			GidNumber: int64(2000 + userID),
+		}
+		userContexts[userID] = appctx.ContextSetUser(ctx, user)
+
+		// Create test file for this user
+		fileName := fmt.Sprintf("/concurrent_user_%d_file.txt", userID)
+		fileRefs[userID] = &provider.Reference{Path: fileName}
+		reader := bytes.NewReader(testData)
+		err := fs.Upload(userContexts[userID], fileRefs[userID], io.NopCloser(reader), nil)
+		require.NoError(b, err, "Failed to create test file for concurrent user %d", userID)
+	}
+
+	// Reset timer and run benchmark
+	b.ResetTimer()
+	b.ReportAllocs()
+	b.SetBytes(int64(userCount * readsPerUser) * fileSize)
+
+	for i := 0; i < b.N; i++ {
+		// Create worker pool
+		jobs := make(chan int, userCount*readsPerUser)
+		results := make(chan error, userCount*readsPerUser)
+		
+		// Start workers (limit concurrent workers to avoid resource exhaustion)
+		workerCount := min(50, userCount)
+		for w := 0; w < workerCount; w++ {
+			go func() {
+				for jobID := range jobs {
+					userID := jobID % userCount
+					userCtx := userContexts[userID]
+					ref := fileRefs[userID]
+					
+					_, err := fs.GetMD(userCtx, ref, nil)
+					results <- err
+				}
+			}()
+		}
+
+		// Send jobs
+		totalJobs := userCount * readsPerUser
+		for j := 0; j < totalJobs; j++ {
+			jobs <- j
+		}
+		close(jobs)
+
+		// Collect results
+		for j := 0; j < totalJobs; j++ {
+			err := <-results
+			if err != nil {
+				b.Fatalf("Concurrent read failed for job %d: %v", j, err)
+			}
+		}
+	}
+}
+
 // Helper function for min (Go 1.21+)
 func min(a, b int) int {
 	if a < b {
