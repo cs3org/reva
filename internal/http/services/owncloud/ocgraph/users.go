@@ -94,13 +94,20 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 		log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("must pass a search string of at least length 3 to list users")
 	}
 	queryVal := strings.Trim(req.Query.Search.RawValue, "\"")
-
 	log.Debug().Str("Query", queryVal).Str("orderBy", req.Query.OrderBy.RawValue).Any("select", getUserSelectionFromRequest(req.Query.Select)).Msg("Listing users in libregraph API")
 
-	users, err := gw.FindUsers(ctx, &userpb.FindUsersRequest{
+	filters, err := generateUserFilters(req)
+	if err != nil {
+		handleError(ctx, err, http.StatusBadRequest, w)
+		return
+	}
+	request := &userpb.FindUsersRequest{
 		SkipFetchingUserGroups: true,
-		Filter:                 queryVal,
-	})
+		Query:                  queryVal,
+		Filter:                 filters,
+	}
+
+	users, err := gw.FindUsers(ctx, request)
 	if err != nil {
 		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
@@ -233,4 +240,62 @@ func sortUsers(ctx context.Context, users []libregraph.User, sortKey string) ([]
 		})
 	}
 	return users, nil
+}
+
+func generateUserFilters(request *godata.GoDataRequest) ([]*userpb.Filter, error) {
+	var filters []*userpb.Filter
+	if request.Query.Filter != nil {
+		if request.Query.Filter.Tree.Token.Value == "eq" {
+			switch strings.ToLower(request.Query.Filter.Tree.Children[0].Token.Value) {
+			case "usertype":
+				ut := strings.Trim(request.Query.Filter.Tree.Children[1].Token.Value, "'")
+				userType := UserType(ut)
+				if userType == nil {
+					return nil, errors.Errorf("unknown usertype: %s", ut)
+				}
+
+				filter := &userpb.Filter{
+					Type: userpb.Filter_TYPE_USERTYPE,
+					Term: &userpb.Filter_Usertype{
+						Usertype: *userType,
+					},
+				}
+				filters = append(filters, filter)
+
+			}
+		} else {
+			err := errors.Errorf("unsupported filter operand: %s", request.Query.Filter.Tree.Token.Value)
+			return nil, err
+		}
+	}
+	return filters, nil
+}
+
+func UserType(userType string) *userpb.UserType {
+	var ut userpb.UserType
+	switch strings.ToLower(userType) {
+	case "invalid":
+		ut = userpb.UserType_USER_TYPE_INVALID
+	case "primary":
+		ut = userpb.UserType_USER_TYPE_PRIMARY
+	case "secondary":
+		ut = userpb.UserType_USER_TYPE_SECONDARY
+	case "service":
+		ut = userpb.UserType_USER_TYPE_SERVICE
+	case "application":
+		ut = userpb.UserType_USER_TYPE_APPLICATION
+	case "guest":
+		ut = userpb.UserType_USER_TYPE_GUEST
+	case "federated":
+		ut = userpb.UserType_USER_TYPE_FEDERATED
+	case "lightweight":
+		ut = userpb.UserType_USER_TYPE_LIGHTWEIGHT
+	case "space_owner":
+		ut = userpb.UserType_USER_TYPE_SPACE_OWNER
+
+	default:
+		return nil
+
+	}
+	return &ut
 }
