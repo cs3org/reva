@@ -201,7 +201,7 @@ var _ = Describe("Nextcloud", func() {
 			um, called, teardown := setUpNextcloudServer()
 			defer teardown()
 
-			users, err := um.FindUsers(ctx, "some-query", false)
+			users, err := um.FindUsers(ctx, "some-query", nil, false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(users)).To(Equal(1))
 

@@ -140,9 +140,9 @@ func (s *service) GetUserByClaim(ctx context.Context, req *userpb.GetUserByClaim
 
 func (s *service) FindUsers(ctx context.Context, req *userpb.FindUsersRequest) (*userpb.FindUsersResponse, error) {
 	log := appctx.GetLogger(ctx)
-	users, err := s.usermgr.FindUsers(ctx, req.Filter, req.SkipFetchingUserGroups)
+	users, err := s.usermgr.FindUsers(ctx, req.Query, req.Filter, req.SkipFetchingUserGroups)
 	if err != nil {
-		log.Error().Err(err).Str("query", req.Filter).Msg("Failed to find users")
+		log.Error().Err(err).Str("query", req.Query).Msg("Failed to find users")
 		err = errors.Wrap(err, "userprovidersvc: error finding users")
 		res := &userpb.FindUsersResponse{
 			Status: status.NewInternal(ctx, err, "error finding users"),
