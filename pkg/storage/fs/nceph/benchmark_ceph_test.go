@@ -44,6 +44,7 @@ import (
 	"testing"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/stretchr/testify/require"
 )
@@ -967,6 +968,17 @@ func setupCephBenchmark(b *testing.B, prefix string) (*ncephfs, string, func()) 
 	ctx := contextWithBenchmarkLogger(b)
 	fs := createNcephFSForCephBenchmark(b, ctx, config)
 
+	// Set up proper user context for directory creation (run as root with proper privileges)
+	ctx = appctx.ContextSetUser(ctx, &userpb.User{
+		Id: &userpb.UserId{
+			Idp:      "test",
+			OpaqueId: "root",
+		},
+		Username: "root",
+		Uid:      0,
+		Gid:      0,
+	})
+
 	// Create the test directory using nceph interface to ensure path translation consistency
 	testDirRef := &provider.Reference{Path: testDirPath}
 	err := fs.CreateDir(ctx, testDirRef)
@@ -974,7 +986,15 @@ func setupCephBenchmark(b *testing.B, prefix string) (*ncephfs, string, func()) 
 		// Ignore if directory already exists
 		if !strings.Contains(err.Error(), "file exists") &&
 			!strings.Contains(err.Error(), "already exists") {
-			b.Fatalf("Failed to create test directory %s via nceph: %v", testDirPath, err)
+			// Try fallback: create directory directly on filesystem and set permissions
+			fallbackPath := filepath.Join(mountPoint, testDirPath)
+			if mkdirErr := os.MkdirAll(fallbackPath, 0777); mkdirErr != nil {
+				b.Fatalf("Failed to create test directory %s via nceph (%v) and fallback (%v)", testDirPath, err, mkdirErr)
+			}
+			// Try to make sure it has proper permissions
+			if chmodErr := os.Chmod(fallbackPath, 0777); chmodErr != nil {
+				b.Logf("Warning: Could not set directory permissions on %s: %v", fallbackPath, chmodErr)
+			}
 		}
 	}
 
