@@ -38,6 +38,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -68,7 +69,13 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shares := make([]*libregraph.DriveItem, 0, len(resShares.ShareInfos))
+	// include ocm shares in the response
+	listRes, err := gw.ListReceivedOCMShares(ctx, &ocm.ListReceivedOCMSharesRequest{})
+	if err != nil {
+		handleError(ctx, err, http.StatusInternalServerError, w)
+	}
+
+	shares := make([]*libregraph.DriveItem, 0, len(resShares.ShareInfos)+len(listRes.Shares))
 	for _, share := range resShares.ShareInfos {
 		drive, err := s.cs3ReceivedShareToDriveItem(ctx, share)
 		if err != nil {
@@ -76,6 +83,16 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		} else {
 			shares = append(shares, drive)
 		}
+	}
+
+	for _, share := range listRes.Shares {
+		drive, err := s.OCMReceivedShareToDriveItem(ctx, share)
+		if err != nil {
+			log.Error().Err(err).Any("share", share).Msg("error parsing received share, ignoring")
+		} else {
+			shares = append(shares, drive)
+		}
+		log.Debug().Any("share", share).Msg("processing received ocm share")
 	}
 
 	if err := json.NewEncoder(w).Encode(map[string]any{
@@ -437,6 +454,114 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 
 func encodeSpaceIDForShareJail(res *provider.ResourceInfo) string {
 	return spaces.EncodeResourceID(res.Id)
+}
+
+func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare *ocm.ReceivedShare) (*libregraph.DriveItem, error) {
+
+	createdTime := utils.TSToTime(receivedOCMShare.Ctime)
+
+	creator, err := s.getUserByID(ctx, receivedOCMShare.Creator)
+	if err != nil {
+		return nil, err
+	}
+
+	grantee, err := s.cs3GranteeToSharePointIdentitySet(ctx, receivedOCMShare.Grantee)
+	if err != nil {
+		return nil, err
+	}
+
+	var webdav_uri string = ""
+	var webapp_uri string = ""
+	var shared_secret string = ""
+
+	for _, p := range receivedOCMShare.Protocols {
+		if p.GetWebdavOptions() != nil {
+			webdav_uri = p.GetWebdavOptions().GetUri()
+			shared_secret = p.GetWebdavOptions().GetSharedSecret()
+			log.Debug().Str("webdav_uri", webdav_uri).Str("shared_secret", shared_secret).Msg("processing webdav options")
+		} else if p.GetWebappOptions() != nil {
+			webapp_uri = p.GetWebappOptions().GetUri()
+			shared_secret = p.GetWebappOptions().GetSharedSecret()
+			log.Debug().Str("webapp_uri", webapp_uri).Str("shared_secret", shared_secret).Msg("processing webapp options")
+		} else {
+			log.Debug().Any("protocol", p).Msg("unknown access method, skipping")
+		}
+	}
+
+	// using mtime as a makeshift etag
+	var etag string = receivedOCMShare.Mtime.String()
+
+	roles := make([]string, 0, 1)
+	role := CS3ResourcePermissionsToUnifiedRole(ctx, receivedOCMShare.Protocols[0].GetWebdavOptions().GetPermissions().Permissions)
+	if role != nil {
+		roles = append(roles, *role.Id)
+	}
+
+	d := &libregraph.DriveItem{
+		// Doesn't exist for OCM shares
+		//UIHidden:          libregraph.PtrBool(rsi.ReceivedShare.Hidden),
+		ClientSynchronize: libregraph.PtrBool(true),
+		CreatedBy: &libregraph.IdentitySet{
+			User: &libregraph.Identity{
+				DisplayName:        creator.DisplayName,
+				Id:                 libregraph.PtrString(creator.Id.OpaqueId),
+				LibreGraphUserType: libregraph.PtrString("Federated"),
+			},
+		},
+
+		ETag:                 &etag,
+		Id:                   libregraph.PtrString(receivedOCMShare.Id.OpaqueId),
+		LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(receivedOCMShare.Mtime)),
+		Name:                 libregraph.PtrString(receivedOCMShare.Name),
+		ParentReference: &libregraph.ItemReference{
+			DriveId:   libregraph.PtrString(spaces.ConcatStorageSpaceID(ShareJailID, ShareJailID)),
+			DriveType: libregraph.PtrString("virtual"),
+			Id:        libregraph.PtrString(spaces.EncodeResourceID(&provider.ResourceId{OpaqueId: ShareJailID, StorageId: ShareJailID, SpaceId: ShareJailID})),
+		},
+		RemoteItem: &libregraph.RemoteItem{
+			CreatedBy: &libregraph.IdentitySet{
+				User: &libregraph.Identity{
+					DisplayName:        creator.DisplayName,
+					Id:                 libregraph.PtrString(creator.Id.OpaqueId),
+					LibreGraphUserType: libregraph.PtrString("Federated"),
+				},
+			},
+			ETag:                 &etag,
+			Id:                   libregraph.PtrString(receivedOCMShare.RemoteShareId),
+			LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(receivedOCMShare.Mtime)),
+			Name:                 libregraph.PtrString(receivedOCMShare.Name),
+			Path:                 libregraph.PtrString(webdav_uri),
+			WebUrl:               libregraph.PtrString(webapp_uri),
+			WebDavUrl:            libregraph.PtrString(webdav_uri),
+			// ParentReference: &libregraph.ItemReference{
+			// 	DriveId:   libregraph.PtrString(spaces.EncodeResourceID(share.ResourceInfo.ParentId)),
+			// 	DriveType: nil, // FIXME: no way to know it unless we hardcode it
+			// },
+			Permissions: []libregraph.Permission{
+				{
+					CreatedDateTime: *libregraph.NewNullableTime(&createdTime),
+					GrantedToV2:     grantee,
+					Invitation: &libregraph.SharingInvitation{
+						InvitedBy: &libregraph.IdentitySet{
+							User: &libregraph.Identity{
+								DisplayName:        creator.DisplayName,
+								Id:                 libregraph.PtrString(creator.Id.OpaqueId),
+								LibreGraphUserType: libregraph.PtrString("Federated"),
+							},
+						},
+					},
+					Roles: roles,
+				},
+			},
+			Size: libregraph.PtrInt64(int64(0) /* TODO no size in OCM shares */),
+		},
+		Size: libregraph.PtrInt64(int64(0) /* TODO no size in OCM shares */),
+	}
+
+	if receivedOCMShare.ResourceType == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		d.Folder = libregraph.NewFolder()
+	}
+	return d, nil
 }
 
 func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.ReceivedShareResourceInfo) (*libregraph.DriveItem, error) {

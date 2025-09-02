@@ -41,15 +41,16 @@ type tokenStatInfoKey struct{}
 
 // DavHandler routes to the different sub handlers.
 type DavHandler struct {
-	AvatarsHandler      *AvatarsHandler
-	FilesHandler        *WebDavHandler
-	FilesHomeHandler    *WebDavHandler
-	MetaHandler         *MetaHandler
-	TrashbinHandler     *TrashbinHandler
-	SpacesHandler       *WebDavHandler
-	PublicFolderHandler *WebDavHandler
-	PublicFileHandler   *PublicFileHandler
-	OCMSharesHandler    *WebDavHandler
+	AvatarsHandler           *AvatarsHandler
+	FilesHandler             *WebDavHandler
+	FilesHomeHandler         *WebDavHandler
+	MetaHandler              *MetaHandler
+	TrashbinHandler          *TrashbinHandler
+	SpacesHandler            *WebDavHandler
+	PublicFolderHandler      *WebDavHandler
+	PublicFileHandler        *PublicFileHandler
+	OCMSharesHandler         *WebDavHandler
+	OCMReceivedSharesHandler *WebDavHandler
 }
 
 const (
@@ -99,6 +100,11 @@ func (h *DavHandler) init(c *Config) error {
 		return err
 	}
 
+	h.OCMReceivedSharesHandler = new(WebDavHandler)
+	if err := h.OCMReceivedSharesHandler.init(c.OCMReceivedNameSpace, false); err != nil {
+		return err
+	}
+
 	return h.TrashbinHandler.init(c)
 }
 
@@ -111,6 +117,8 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
+
+		log.Debug().Str("method", r.Method).Str("path", r.URL.Path).Msg("dav request")
 
 		// if there is no file in the request url we assume the request url is: "/remote.php/dav/files"
 		// https://github.com/owncloud/core/blob/18475dac812064b21dabcc50f25ef3ffe55691a5/tests/acceptance/features/apiWebdavOperations/propfind.feature
@@ -144,7 +152,10 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
-
+		if strings.Contains(r.URL.Path, "ocm-share") {
+			head = "spaces/ocm-share"
+		}
+		log.Debug().Str("head", head).Str("path", r.URL.Path).Msg("dav request")
 		switch head {
 		case "avatars":
 			h.AvatarsHandler.Handler(s).ServeHTTP(w, r)
@@ -182,6 +193,11 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 			h.TrashbinHandler.Handler(s).ServeHTTP(w, r)
+		case "spaces/ocm-share":
+			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "spaces/ocm-share")
+			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			r = r.WithContext(ctx)
+			h.OCMReceivedSharesHandler.Handler(s).ServeHTTP(w, r)
 		case "spaces":
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "spaces")
 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
