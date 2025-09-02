@@ -102,6 +102,7 @@ func benchmarkGetMDMultipleFilesCeph(b *testing.B, fileCount int) {
 
 	// Create multiple test files on CephFS
 	fileRefs := make([]*provider.Reference, fileCount)
+	testDirName := filepath.Base(testDir)
 	for i := 0; i < fileCount; i++ {
 		fileName := fmt.Sprintf("file_%04d.txt", i)
 		filePath := filepath.Join(testDir, fileName)
@@ -110,7 +111,9 @@ func benchmarkGetMDMultipleFilesCeph(b *testing.B, fileCount int) {
 		err := os.WriteFile(filePath, []byte(content), 0644)
 		require.NoError(b, err, "Failed to create test file %d on CephFS", i)
 		
-		fileRefs[i] = &provider.Reference{Path: "/" + fileName}
+		// Use the correct path relative to the ncephfs root
+		relativePath := "/benchmark-tests/" + testDirName + "/" + fileName
+		fileRefs[i] = &provider.Reference{Path: relativePath}
 	}
 
 	// Set user context
@@ -180,8 +183,9 @@ func benchmarkGetMDNestedDirectoriesCeph(b *testing.B, depth int) {
 	user := getBenchmarkTestUser(b)
 	ctx := appctx.ContextSetUser(contextWithBenchmarkLogger(b), user)
 
-	// Build reference path
-	refPath := "/" + filepath.Join(append(pathSegments, fileName)...)
+	// Build reference path - use correct path relative to ncephfs root
+	testDirName := filepath.Base(testDir)
+	refPath := "/benchmark-tests/" + testDirName + "/" + filepath.Join(append(pathSegments, fileName)...)
 	ref := &provider.Reference{Path: refPath}
 
 	// Warm up
@@ -237,8 +241,10 @@ func benchmarkGetMDWithMetadataKeysCeph(b *testing.B, mdKeys []string) {
 	user := getBenchmarkTestUser(b)
 	ctx := appctx.ContextSetUser(contextWithBenchmarkLogger(b), user)
 
-	// File reference
-	ref := &provider.Reference{Path: "/metadata_test.txt"}
+	// File reference - use correct path relative to ncephfs root
+	testDirName := filepath.Base(testDir)
+	relativePath := "/benchmark-tests/" + testDirName + "/metadata_test.txt"
+	ref := &provider.Reference{Path: relativePath}
 
 	// Warm up
 	_, err = fs.GetMD(ctx, ref, mdKeys)
@@ -295,8 +301,10 @@ func benchmarkGetMDDirectoryOperationsCeph(b *testing.B, fileCount int) {
 	user := getBenchmarkTestUser(b)
 	ctx := appctx.ContextSetUser(contextWithBenchmarkLogger(b), user)
 
-	// Directory reference
-	ref := &provider.Reference{Path: "/test_directory"}
+	// Directory reference - use correct path relative to ncephfs root
+	testDirName := filepath.Base(testDir)
+	relativePath := "/benchmark-tests/" + testDirName + "/test_directory"
+	ref := &provider.Reference{Path: relativePath}
 
 	// Warm up
 	_, err = fs.GetMD(ctx, ref, nil)
