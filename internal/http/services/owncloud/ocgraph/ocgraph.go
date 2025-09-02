@@ -41,10 +41,12 @@ func init() {
 }
 
 type config struct {
-	GatewaySvc string `mapstructure:"gatewaysvc"  validate:"required"`
-	WebDavBase string `mapstructure:"webdav_base"`
-	WebBase    string `mapstructure:"web_base"`
-	BaseURL    string `mapstructure:"base_url"    validate:"required"`
+	GatewaySvc                 string `mapstructure:"gatewaysvc"  validate:"required"`
+	WebDavBase                 string `mapstructure:"webdav_base"`
+	WebBase                    string `mapstructure:"web_base"`
+	BaseURL                    string `mapstructure:"base_url"    validate:"required"`
+	PubRWLinkMaxExpiration     int64  `mapstructure:"pub_rw_link_max_expiration"`
+	PubRWLinkDefaultExpiration int64  `mapstructure:"pub_rw_link_default_expiration"`
 }
 
 func (c *config) ApplyDefaults() {

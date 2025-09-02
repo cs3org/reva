@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"time"
 
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	linkv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/spaces"
@@ -140,7 +142,7 @@ func (s *svc) updateDrivePermissions(w http.ResponseWriter, r *http.Request) {
 	if shareOrLink.shareType == "share" {
 		s.updateSharePermissions(ctx, w, shareOrLink.share, permission, resourceID)
 	} else {
-		s.updateLinkPermissions(ctx, w, &linkv1beta1.PublicShareId{OpaqueId: shareOrLink.ID}, permission, resourceID)
+		s.updateLinkPermissions(ctx, w, shareOrLink.link, permission, resourceID)
 	}
 }
 
@@ -190,7 +192,7 @@ func (s *svc) deleteDrivePermissions(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *svc) updateLinkPermissions(ctx context.Context, w http.ResponseWriter, linkId *linkv1beta1.PublicShareId, permission *libregraph.Permission, resourceId *providerpb.ResourceId) {
+func (s *svc) updateLinkPermissions(ctx context.Context, w http.ResponseWriter, link *linkv1beta1.PublicShare, permission *libregraph.Permission, resourceId *providerpb.ResourceId) {
 	log := appctx.GetLogger(ctx)
 
 	gw, err := s.getClient()
@@ -211,7 +213,7 @@ func (s *svc) updateLinkPermissions(ctx context.Context, w http.ResponseWriter, 
 		return
 	}
 
-	updates, err := s.getLinkUpdates(ctx, permission, statRes.Info.Type)
+	updates, err := s.getLinkUpdates(ctx, link, permission, statRes.Info.Type)
 	if err != nil {
 		log.Error().Err(err).Msg("nothing provided to update")
 		w.WriteHeader(http.StatusBadRequest)
@@ -225,7 +227,7 @@ func (s *svc) updateLinkPermissions(ctx context.Context, w http.ResponseWriter, 
 		uRes, err = gw.UpdatePublicShare(ctx, &linkv1beta1.UpdatePublicShareRequest{
 			Ref: &linkv1beta1.PublicShareReference{
 				Spec: &linkv1beta1.PublicShareReference_Id{
-					Id: linkId,
+					Id: link.Id,
 				},
 			},
 			Update: update,
@@ -565,13 +567,36 @@ func (s *svc) writePermissions(ctx context.Context, w http.ResponseWriter, actio
 	}
 }
 
-func (s *svc) getLinkUpdates(ctx context.Context, permission *libregraph.Permission, resourceType providerpb.ResourceType) ([]*linkv1beta1.UpdatePublicShareRequest_Update, error) {
+func (s *svc) getLinkUpdates(ctx context.Context, link *linkv1beta1.PublicShare, permission *libregraph.Permission, resourceType providerpb.ResourceType) ([]*linkv1beta1.UpdatePublicShareRequest_Update, error) {
 	updates := []*linkv1beta1.UpdatePublicShareRequest_Update{}
+
+	defaultExpirationDefined := time.Second * time.Duration(s.c.PubRWLinkDefaultExpiration)
+	maxExpirationDefined := time.Second * time.Duration(s.c.PubRWLinkMaxExpiration)
+	endOfDay := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 23, 59, 59, 0, time.Now().Location())
+	defaultExpiration := endOfDay.Add(defaultExpirationDefined)
+	maxExpiration := endOfDay.Add(maxExpirationDefined)
+
+	isExpirationEnforced := maxExpirationDefined > 0
+	isEditorLink := false
+	if permission.Link != nil && permission.Link.Type != nil {
+		isEditorLink = permission.Link.GetType() == libregraph.EDIT
+	} else if link.Permissions != nil {
+		isEditorLink = conversions.RoleFromResourcePermissions(link.Permissions.Permissions).Name == conversions.RoleEditor
+	}
+
 	if permission.ExpirationDateTime.IsSet() {
+		finalExpiration := permission.ExpirationDateTime
+		if isEditorLink && isExpirationEnforced {
+			if permission.ExpirationDateTime.Get() == nil {
+				finalExpiration.Set(&defaultExpiration)
+			} else if permission.ExpirationDateTime.Get().After(maxExpiration) {
+				finalExpiration.Set(&maxExpiration)
+			}
+		}
 		updates = append(updates, &linkv1beta1.UpdatePublicShareRequest_Update{
 			Type: linkv1beta1.UpdatePublicShareRequest_Update_TYPE_EXPIRATION,
 			Grant: &linkv1beta1.Grant{
-				Expiration: nullableTimeToCs3Timestamp(permission.ExpirationDateTime),
+				Expiration: nullableTimeToCs3Timestamp(finalExpiration),
 			},
 		})
 	}
@@ -589,6 +614,22 @@ func (s *svc) getLinkUpdates(ctx context.Context, permission *libregraph.Permiss
 		if err != nil {
 			return nil, errors.Wrap(err, "error converting link type to permissions")
 		}
+
+		finalExpiration := libregraph.NullableTime{}
+		if isEditorLink && isExpirationEnforced {
+			if !permission.ExpirationDateTime.IsSet() && link.Expiration == nil {
+				finalExpiration.Set(&defaultExpiration)
+			} else if permission.ExpirationDateTime.IsSet() {
+				if permission.ExpirationDateTime.Get() != nil && permission.ExpirationDateTime.Get().After(maxExpiration) {
+					finalExpiration.Set(&maxExpiration)
+				}
+			} else if link.Expiration != nil {
+				if endOfDay.Add(time.Second * time.Duration(link.Expiration.Seconds)).After(maxExpiration) {
+					finalExpiration.Set(&maxExpiration)
+				}
+			}
+		}
+
 		updates = append(updates, &linkv1beta1.UpdatePublicShareRequest_Update{
 			Type: linkv1beta1.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
 			Grant: &linkv1beta1.Grant{
@@ -597,6 +638,14 @@ func (s *svc) getLinkUpdates(ctx context.Context, permission *libregraph.Permiss
 				},
 			},
 		})
+		if finalExpiration.IsSet() {
+			updates = append(updates, &linkv1beta1.UpdatePublicShareRequest_Update{
+				Type: linkv1beta1.UpdatePublicShareRequest_Update_TYPE_EXPIRATION,
+				Grant: &linkv1beta1.Grant{
+					Expiration: nullableTimeToCs3Timestamp(finalExpiration),
+				},
+			})
+		}
 	}
 	if len(updates) == 0 {
 		return nil, errors.New("body contained nothing to update")
