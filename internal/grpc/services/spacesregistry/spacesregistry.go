@@ -209,6 +209,11 @@ func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, space
 			return nil, err
 		}
 		sp = append(sp, projects...)
+
+		// We also want public spaces when you search for projects, because this filtering
+		// happens in the front-end
+		fallthrough
+
 	case spaces.SpaceTypePublic:
 		publicSpaces, err := s.getPublicSpaces(ctx)
 		if err != nil {
