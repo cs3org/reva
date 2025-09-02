@@ -698,7 +698,7 @@ func benchmarkMultiUserThreadIsolationCeph(b *testing.B, userCount, threadCount 
 	userContexts := make([]context.Context, userCount)
 	for userID := 0; userID < userCount; userID++ {
 		// Create unique user context
-		user := &getBenchmarkTestUser(b)
+		user := getBenchmarkTestUser(b)
 		user.Id.OpaqueId = fmt.Sprintf("ceph_user_%d", userID)
 		user.Username = fmt.Sprintf("cephtestuser_%d", userID)
 		user.UidNumber = int64(3000 + userID)
