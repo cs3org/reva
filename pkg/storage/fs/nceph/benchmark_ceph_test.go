@@ -50,7 +50,7 @@ func BenchmarkGetMD_SingleFile_Ceph(b *testing.B) {
 	fs, testDir, cleanup := setupCephBenchmark(b, "benchmark-getmd-single-ceph")
 	defer cleanup()
 
-	// Create test file on CephFS
+	// Create test file on CephFS mount
 	testFile := filepath.Join(testDir, "benchmark_file.txt")
 	err := os.WriteFile(testFile, []byte("benchmark test content on ceph"), 0644)
 	require.NoError(b, err, "Failed to create test file on CephFS")
@@ -59,8 +59,10 @@ func BenchmarkGetMD_SingleFile_Ceph(b *testing.B) {
 	user := getBenchmarkTestUser(b)
 	ctx := appctx.ContextSetUser(contextWithBenchmarkLogger(b), user)
 
-	// File reference
-	ref := &provider.Reference{Path: "/benchmark_file.txt"}
+	// File reference - use the path relative to the benchmark test directory
+	// The ncephfs should see this as a file in its configured volume
+	relativePath := "/benchmark-tests/" + filepath.Base(testDir) + "/benchmark_file.txt"
+	ref := &provider.Reference{Path: relativePath}
 
 	// Warm up - ensure everything works
 	_, err = fs.GetMD(ctx, ref, nil)
