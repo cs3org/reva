@@ -908,9 +908,16 @@ func setupCephBenchmark(b *testing.B, prefix string) (*ncephfs, string, func()) 
 
 	// Create test directory on the mounted CephFS
 	testDir := filepath.Join(mountPoint, "benchmark-tests", prefix)
-	err := os.MkdirAll(testDir, 0755)
+	err := os.MkdirAll(testDir, 0777)
 	if err != nil {
 		b.Fatalf("Failed to create test directory on CephFS mount %s: %v", testDir, err)
+	}
+
+	// Ensure test directory has proper permissions for all users (world-writable)
+	// This is necessary when running as root with UID switching
+	err = os.Chmod(testDir, 0777)
+	if err != nil {
+		b.Fatalf("Failed to set permissions on CephFS test directory %s: %v", testDir, err)
 	}
 
 	// Create filesystem instance using real CephFS integration
