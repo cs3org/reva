@@ -968,7 +968,8 @@ func setupCephBenchmark(b *testing.B, prefix string) (*ncephfs, string, func()) 
 	fs := createNcephFSForCephBenchmark(b, ctx, config)
 
 	// Create the test directory using nceph interface to ensure path translation consistency
-	err := fs.CreateDir(ctx, testDirPath)
+	testDirRef := &provider.Reference{Path: testDirPath}
+	err := fs.CreateDir(ctx, testDirRef)
 	if err != nil {
 		// Ignore if directory already exists
 		if !strings.Contains(err.Error(), "file exists") &&
@@ -981,7 +982,7 @@ func setupCephBenchmark(b *testing.B, prefix string) (*ncephfs, string, func()) 
 	cleanup := func() {
 		if os.Getenv("NCEPH_TEST_PRESERVE") != "true" {
 			// Try to remove via nceph first (proper cleanup)
-			err := fs.Delete(ctx, testDirPath)
+			err := fs.Delete(ctx, testDirRef)
 			if err != nil {
 				b.Logf("Warning: failed to cleanup test directory %s via nceph: %v", testDirPath, err)
 				// Fallback to direct removal on mount point if we can determine it
