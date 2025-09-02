@@ -11,6 +11,8 @@
 // - BenchmarkGetMD_NestedDirectories_Ceph: Tests GetMD performance at different directory depths on CephFS
 // - BenchmarkGetMD_WithMetadataKeys_Ceph: Tests GetMD performance with different metadata key sets on CephFS
 // - BenchmarkGetMD_DirectoryOperations_Ceph: Tests GetMD performance on CephFS directories with varying content
+// - BenchmarkListFolder_Ceph: Tests ListFolder performance on CephFS directories with varying numbers of files
+// - BenchmarkListFolder_NestedDirectories_Ceph: Tests ListFolder performance on nested directory structures on CephFS
 //
 // Prerequisites:
 //   - NCEPH_FSTAB_ENTRY environment variable must be set with a valid CephFS fstab entry
@@ -318,6 +320,136 @@ func benchmarkGetMDDirectoryOperationsCeph(b *testing.B, fileCount int) {
 		_, err := fs.GetMD(ctx, ref, nil)
 		if err != nil {
 			b.Fatal("GetMD failed for directory during CephFS benchmark:", err)
+		}
+	}
+}
+
+// BenchmarkListFolder_Ceph benchmarks ListFolder operations on directories with different numbers of files on CephFS
+func BenchmarkListFolder_Ceph(b *testing.B) {
+	// Test with different file counts
+	fileCounts := []int{0, 10, 50, 100, 500, 1000}
+	
+	for _, fileCount := range fileCounts {
+		b.Run(fmt.Sprintf("Files_%d", fileCount), func(b *testing.B) {
+			benchmarkListFolderCeph(b, fileCount)
+		})
+	}
+}
+
+func benchmarkListFolderCeph(b *testing.B, fileCount int) {
+	// Check for Ceph integration requirements
+	requireCephIntegrationForBenchmark(b)
+
+	// Create Ceph-based filesystem and test directory
+	fs, testDir, cleanup := setupCephBenchmark(b, fmt.Sprintf("benchmark-list-%d-ceph", fileCount))
+	defer cleanup()
+
+	// Create test directory with files on CephFS
+	listDir := filepath.Join(testDir, "list_test_dir")
+	err := os.MkdirAll(listDir, 0755)
+	require.NoError(b, err, "Failed to create list test directory on CephFS")
+
+	// Create files in the directory
+	for i := 0; i < fileCount; i++ {
+		fileName := fmt.Sprintf("file_%04d.txt", i)
+		filePath := filepath.Join(listDir, fileName)
+		content := fmt.Sprintf("Content for file %d on CephFS", i)
+		
+		err := os.WriteFile(filePath, []byte(content), 0644)
+		require.NoError(b, err, "Failed to create test file %d on CephFS", i)
+	}
+
+	// Set user context
+	user := getBenchmarkTestUser(b)
+	ctx := appctx.ContextSetUser(contextWithBenchmarkLogger(b), user)
+
+	// Directory reference - use correct path relative to ncephfs root
+	testDirName := filepath.Base(testDir)
+	relativePath := "/benchmark-tests/" + testDirName + "/list_test_dir"
+	ref := &provider.Reference{Path: relativePath}
+
+	// Warm up - ensure everything works
+	_, err = fs.ListFolder(ctx, ref, nil)
+	require.NoError(b, err, "Warmup ListFolder failed on CephFS")
+
+	// Reset timer and run benchmark
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_, err := fs.ListFolder(ctx, ref, nil)
+		if err != nil {
+			b.Fatal("ListFolder failed during CephFS benchmark:", err)
+		}
+	}
+}
+
+// BenchmarkListFolder_NestedDirectories_Ceph benchmarks ListFolder operations on directories with nested subdirectories on CephFS
+func BenchmarkListFolder_NestedDirectories_Ceph(b *testing.B) {
+	// Test with different nesting depths
+	depths := []int{1, 3, 5, 10}
+	
+	for _, depth := range depths {
+		b.Run(fmt.Sprintf("Depth_%d", depth), func(b *testing.B) {
+			benchmarkListFolderNestedCeph(b, depth)
+		})
+	}
+}
+
+func benchmarkListFolderNestedCeph(b *testing.B, depth int) {
+	// Check for Ceph integration requirements
+	requireCephIntegrationForBenchmark(b)
+
+	// Create Ceph-based filesystem and test directory
+	fs, testDir, cleanup := setupCephBenchmark(b, fmt.Sprintf("benchmark-list-nested-%d-ceph", depth))
+	defer cleanup()
+
+	// Create main test directory
+	mainDir := filepath.Join(testDir, "nested_list_test")
+	err := os.MkdirAll(mainDir, 0755)
+	require.NoError(b, err, "Failed to create main test directory on CephFS")
+
+	// Create nested directory structure with files at each level
+	currentDir := mainDir
+	for i := 0; i < depth; i++ {
+		// Create subdirectory
+		subDir := fmt.Sprintf("level_%d", i)
+		currentDir = filepath.Join(currentDir, subDir)
+		err := os.MkdirAll(currentDir, 0755)
+		require.NoError(b, err, "Failed to create directory at level %d on CephFS", i)
+
+		// Create a few files at this level
+		for j := 0; j < 3; j++ {
+			fileName := fmt.Sprintf("file_level%d_%d.txt", i, j)
+			filePath := filepath.Join(currentDir, fileName)
+			content := fmt.Sprintf("Content at level %d, file %d on CephFS", i, j)
+			
+			err := os.WriteFile(filePath, []byte(content), 0644)
+			require.NoError(b, err, "Failed to create file at level %d on CephFS", i)
+		}
+	}
+
+	// Set user context
+	user := getBenchmarkTestUser(b)
+	ctx := appctx.ContextSetUser(contextWithBenchmarkLogger(b), user)
+
+	// Directory reference for the main directory - use correct path relative to ncephfs root
+	testDirName := filepath.Base(testDir)
+	relativePath := "/benchmark-tests/" + testDirName + "/nested_list_test"
+	ref := &provider.Reference{Path: relativePath}
+
+	// Warm up
+	_, err = fs.ListFolder(ctx, ref, nil)
+	require.NoError(b, err, "Warmup ListFolder failed for nested directories on CephFS")
+
+	// Reset timer and run benchmark
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_, err := fs.ListFolder(ctx, ref, nil)
+		if err != nil {
+			b.Fatal("ListFolder failed during nested CephFS benchmark:", err)
 		}
 	}
 }

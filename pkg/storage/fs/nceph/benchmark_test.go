@@ -1,7 +1,7 @@
 // Package nceph benchmarks
 //
 // This file contains benchmark tests for the nceph (Next CephFS) storage package,
-// specifically focusing on metadata operations (GetMD) performance.
+// specifically focusing on metadata operations (GetMD) and directory listing (ListFolder) performance.
 //
 // Available benchmarks:
 // - BenchmarkGetMD_SingleFile: Tests GetMD performance on a single file (local disk)
@@ -9,6 +9,8 @@
 // - BenchmarkGetMD_NestedDirectories: Tests GetMD performance at different directory depths (local disk)
 // - BenchmarkGetMD_WithMetadataKeys: Tests GetMD performance with different metadata key sets (local disk)
 // - BenchmarkGetMD_DirectoryOperations: Tests GetMD performance on directories with varying content (local disk)
+// - BenchmarkListContainer: Tests ListFolder performance on directories with different numbers of files (local disk)
+// - BenchmarkListContainer_NestedDirectories: Tests ListFolder performance on nested directory structures (local disk)
 //
 // Ceph Integration Benchmarks (with --tags ceph):
 // - BenchmarkGetMD_SingleFile_Ceph: Same as above but on real CephFS
@@ -16,6 +18,8 @@
 // - BenchmarkGetMD_NestedDirectories_Ceph: Same as above but on real CephFS
 // - BenchmarkGetMD_WithMetadataKeys_Ceph: Same as above but on real CephFS
 // - BenchmarkGetMD_DirectoryOperations_Ceph: Same as above but on real CephFS
+// - BenchmarkListFolder_Ceph: Same as ListContainer but on real CephFS
+// - BenchmarkListFolder_NestedDirectories_Ceph: Same as ListContainer_NestedDirectories but on real CephFS
 //
 // Usage examples:
 //   # Local disk benchmarks (default)
@@ -434,6 +438,140 @@ func benchmarkGetMDConcurrent(b *testing.B, concurrency int) {
 	})
 }
 */
+
+// BenchmarkListContainer benchmarks ListContainer operations on directories with different numbers of files
+func BenchmarkListContainer(b *testing.B) {
+	// Test with different file counts
+	fileCounts := []int{0, 10, 50, 100, 500, 1000}
+	
+	for _, fileCount := range fileCounts {
+		b.Run(fmt.Sprintf("Files_%d", fileCount), func(b *testing.B) {
+			benchmarkListContainer(b, fileCount)
+		})
+	}
+}
+
+func benchmarkListContainer(b *testing.B, fileCount int) {
+	// Create test directory
+	tempDir, cleanup := getBenchmarkTestDir(b, fmt.Sprintf("benchmark-list-%d", fileCount))
+	defer cleanup()
+
+	// Create filesystem instance
+	config := map[string]interface{}{
+		"allow_local_mode": true,
+	}
+	ctx := contextWithBenchmarkLogger(b)
+	fs := createNcephFSForBenchmark(b, ctx, config, "/volumes/_nogroup/benchmark", tempDir)
+
+	// Create test directory with files
+	testDir := filepath.Join(tempDir, "list_test_dir")
+	err := os.MkdirAll(testDir, 0755)
+	require.NoError(b, err, "Failed to create test directory")
+
+	// Create files in the directory
+	for i := 0; i < fileCount; i++ {
+		fileName := fmt.Sprintf("file_%04d.txt", i)
+		filePath := filepath.Join(testDir, fileName)
+		content := fmt.Sprintf("Content for file %d", i)
+		
+		err := os.WriteFile(filePath, []byte(content), 0644)
+		require.NoError(b, err, "Failed to create test file %d", i)
+	}
+
+	// Set user context
+	user := getBenchmarkTestUser(b)
+	ctx = appctx.ContextSetUser(ctx, user)
+
+	// Directory reference
+	ref := &provider.Reference{Path: "/list_test_dir"}
+
+	// Warm up - ensure everything works
+	_, err = fs.ListFolder(ctx, ref, nil)
+	require.NoError(b, err, "Warmup ListFolder failed")
+
+	// Reset timer and run benchmark
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_, err := fs.ListFolder(ctx, ref, nil)
+		if err != nil {
+			b.Fatal("ListFolder failed during benchmark:", err)
+		}
+	}
+}
+
+// BenchmarkListContainer_NestedDirectories benchmarks ListContainer operations on directories with nested subdirectories
+func BenchmarkListContainer_NestedDirectories(b *testing.B) {
+	// Test with different nesting depths
+	depths := []int{1, 3, 5, 10}
+	
+	for _, depth := range depths {
+		b.Run(fmt.Sprintf("Depth_%d", depth), func(b *testing.B) {
+			benchmarkListContainerNested(b, depth)
+		})
+	}
+}
+
+func benchmarkListContainerNested(b *testing.B, depth int) {
+	// Create test directory
+	tempDir, cleanup := getBenchmarkTestDir(b, fmt.Sprintf("benchmark-list-nested-%d", depth))
+	defer cleanup()
+
+	// Create filesystem instance
+	config := map[string]interface{}{
+		"allow_local_mode": true,
+	}
+	ctx := contextWithBenchmarkLogger(b)
+	fs := createNcephFSForBenchmark(b, ctx, config, "/volumes/_nogroup/benchmark", tempDir)
+
+	// Create main test directory
+	testDir := filepath.Join(tempDir, "nested_list_test")
+	err := os.MkdirAll(testDir, 0755)
+	require.NoError(b, err, "Failed to create main test directory")
+
+	// Create nested directory structure with files at each level
+	currentDir := testDir
+	for i := 0; i < depth; i++ {
+		// Create subdirectory
+		subDir := fmt.Sprintf("level_%d", i)
+		currentDir = filepath.Join(currentDir, subDir)
+		err := os.MkdirAll(currentDir, 0755)
+		require.NoError(b, err, "Failed to create directory at level %d", i)
+
+		// Create a few files at this level
+		for j := 0; j < 3; j++ {
+			fileName := fmt.Sprintf("file_level%d_%d.txt", i, j)
+			filePath := filepath.Join(currentDir, fileName)
+			content := fmt.Sprintf("Content at level %d, file %d", i, j)
+			
+			err := os.WriteFile(filePath, []byte(content), 0644)
+			require.NoError(b, err, "Failed to create file at level %d", i)
+		}
+	}
+
+	// Set user context
+	user := getBenchmarkTestUser(b)
+	ctx = appctx.ContextSetUser(ctx, user)
+
+	// Directory reference for the main directory
+	ref := &provider.Reference{Path: "/nested_list_test"}
+
+	// Warm up
+	_, err = fs.ListFolder(ctx, ref, nil)
+	require.NoError(b, err, "Warmup ListFolder failed for nested directories")
+
+	// Reset timer and run benchmark
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_, err := fs.ListFolder(ctx, ref, nil)
+		if err != nil {
+			b.Fatal("ListFolder failed during nested benchmark:", err)
+		}
+	}
+}
 
 // Helper function for min (Go 1.21+)
 func min(a, b int) int {
