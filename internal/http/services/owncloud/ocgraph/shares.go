@@ -70,7 +70,13 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		handleRpcStatus(ctx, resShares.Status, "ocgraph: failed to perform ListExistingReceivedShares ", w)
 	}
 
-	shares := make([]*libregraph.DriveItem, 0, len(resShares.ShareInfos))
+	// include ocm shares in the response
+	listRes, err := gw.ListReceivedOCMShares(ctx, &ocm.ListReceivedOCMSharesRequest{})
+	if err != nil {
+		handleError(ctx, err, http.StatusInternalServerError, w)
+	}
+
+	shares := make([]*libregraph.DriveItem, 0, len(resShares.ShareInfos)+len(listRes.Shares))
 	for _, share := range resShares.ShareInfos {
 		drive, err := s.cs3ReceivedShareToDriveItem(ctx, share)
 		if err != nil {
@@ -78,6 +84,16 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		} else {
 			shares = append(shares, drive)
 		}
+	}
+
+	for _, share := range listRes.Shares {
+		drive, err := s.OCMReceivedShareToDriveItem(ctx, share)
+		if err != nil {
+			log.Error().Err(err).Any("share", share).Msg("error parsing received share, ignoring")
+		} else {
+			shares = append(shares, drive)
+		}
+		log.Debug().Any("share", share).Msg("processing received ocm share")
 	}
 
 	if err := json.NewEncoder(w).Encode(map[string]any{

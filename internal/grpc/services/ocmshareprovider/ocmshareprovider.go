@@ -413,6 +413,8 @@ func (s *service) GetOCMShare(ctx context.Context, req *ocm.GetOCMShareRequest) 
 }
 
 func (s *service) GetOCMShareByToken(ctx context.Context, req *ocm.GetOCMShareByTokenRequest) (*ocm.GetOCMShareByTokenResponse, error) {
+	log := appctx.GetLogger(ctx)
+	log.Debug().Str("token", req.Token).Msg("getting ocm share by token")
 	ocmshare, err := s.repo.GetShare(ctx, nil, &ocm.ShareReference{
 		Spec: &ocm.ShareReference_Token{
 			Token: req.Token,

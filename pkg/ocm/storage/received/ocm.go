@@ -152,16 +152,17 @@ func getWebDAVProtocol(protocols []*ocmpb.Protocol) (*ocmpb.WebDAVProtocol, bool
 func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*gowebdav.Client, *ocmpb.ReceivedShare, string, error) {
 	log := appctx.GetLogger(ctx)
 	id, rel := shareInfoFromReference(ref)
-
+	log.Info().Interface("shareID", id).Str("rel", rel).Msg("accessing OCM share")
 	// check first if we have a cached webdav client
-	if entry, err := d.ccache.Get(id.OpaqueId); err == nil {
-		cc := entry.(*cachedClient)
-		log.Info().Interface("share", cc.share).Str("rel", rel).Msg("accessing OCM share via cached client")
-		return cc.client, cc.share, rel, nil
-	}
+	// if entry, err := d.ccache.Get(id.OpaqueId); err == nil {
+	// 	cc := entry.(*cachedClient)
+	// 	log.Info().Interface("share", cc.share).Str("rel", rel).Msg("accessing OCM share via cached client")
+	// 	return cc.client, cc.share, rel, nil
+	// }
 
 	// we don't, build a webdav client
 	share, endpoint, secret, err := d.getWebDAVFromShare(ctx, id)
+	log.Info().Str("endpoint", endpoint).Str("secret", secret).Interface("share", share).Err(err).Msg("got OCM share info")
 	if err != nil {
 		return nil, nil, "", err
 	}
@@ -191,6 +192,8 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 }
 
 func (d *driver) CreateDir(ctx context.Context, ref *provider.Reference) error {
+	log := appctx.GetLogger(ctx)
+	log.Info().Interface("ref", ref).Msg("CreateDir")
 	client, _, rel, err := d.webdavClient(ctx, ref)
 	if err != nil {
 		return err
@@ -268,7 +271,14 @@ func convertStatToResourceInfo(f fs.FileInfo, share *ocmpb.ReceivedShare, relPat
 }
 
 func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string) (*provider.ResourceInfo, error) {
+	log := appctx.GetLogger(ctx)
+	log.Info().Interface("ref", ref).Msg("GetMD")
+	log.Info().Any("ref", ref).Msg("GetMD Reference")
 	client, share, rel, err := d.webdavClient(ctx, ref)
+	log.Info().Msg("webdav client obtained")
+	log.Info().Any("client", client).Msg("webdav client")
+	log.Info().Any("share", share).Msg("webdav share")
+	log.Info().Str("rel", rel).Msg("webdav rel")
 	if err != nil {
 		return nil, err
 	}

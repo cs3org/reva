@@ -102,6 +102,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 			}
 
 			err := fs.Upload(ctx, ref, r.Body, metadata)
+			sublog.Debug().Any("ref", ref).Any("body", r.Body).Any("metadata", metadata).Msg("Upload finished")
 			switch v := err.(type) {
 			case nil:
 				w.WriteHeader(http.StatusOK)

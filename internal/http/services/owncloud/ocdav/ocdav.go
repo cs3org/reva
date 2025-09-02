@@ -112,11 +112,12 @@ type Config struct {
 	// Example: if WebdavNamespace is /users/{{substr 0 1 .Username}}/{{.Username}}
 	// and received path is /docs the internal path will be:
 	// /users/<first char of username>/<username>/docs
-	WebdavNamespace string `mapstructure:"webdav_namespace"`
-	OCMNamespace    string `mapstructure:"ocm_namespace"`
-	GatewaySvc      string `mapstructure:"gatewaysvc"`
-	Timeout         int64  `mapstructure:"timeout"`
-	Insecure        bool   `docs:"false;Whether to skip certificate checks when sending requests." mapstructure:"insecure"`
+	WebdavNamespace      string `mapstructure:"webdav_namespace"`
+	OCMNamespace         string `mapstructure:"ocm_namespace"`
+	OCMReceivedNameSpace string `mapstructure:"ocm_received_namespace"`
+	GatewaySvc           string `mapstructure:"gatewaysvc"`
+	Timeout              int64  `mapstructure:"timeout"`
+	Insecure             bool   `docs:"false;Whether to skip certificate checks when sending requests." mapstructure:"insecure"`
 	// If true, HTTP COPY will expect the HTTP-TPC (third-party copy) headers
 	EnableHTTPTpc bool `mapstructure:"enable_http_tpc"`
 	// The authentication scheme to use for the tpc push call when userinfo part is specified in the Destination header uri. Default value is 'bearer'.

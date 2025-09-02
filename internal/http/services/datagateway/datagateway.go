@@ -291,7 +291,9 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-
+	log.Debug().Str("method", r.Method).Str("url", r.URL.String()).Msg("doPut")
+	log.Debug().Any("header", r.Header).Msg("doPut headers")
+	log.Debug().Str("content-length", r.Header.Get("Content-Length")).Msg("doPut content length")
 	claims, err := s.verify(ctx, r)
 	if err != nil {
 		err = errors.Wrap(err, "datagateway: error validating transfer token")

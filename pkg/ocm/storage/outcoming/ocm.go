@@ -161,6 +161,8 @@ func (d *driver) shareAndRelativePathFromRef(ctx context.Context, ref *provider.
 }
 
 func (d *driver) translateOCMShareResourceToCS3Ref(ctx context.Context, resID *provider.ResourceId, rel string) (*provider.Reference, error) {
+	log := appctx.GetLogger(ctx)
+	log.Debug().Interface("resID", resID).Str("rel", rel).Msg("translateOCMShareResourceToCS3Ref")
 	info, err := d.stat(ctx, &provider.Reference{ResourceId: resID})
 	if err != nil {
 		return nil, err
@@ -277,9 +279,12 @@ func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string)
 	if err != nil {
 		return nil, errors.Wrap(err, "Error from ocmoutcoming::shareAndRelativePathFromRef")
 	}
+	log := appctx.GetLogger(ctx)
+	log.Info().Interface("ref", ref).Str("rel", rel).Str("share", share.String()).Msg("GetMD on OCM share")
 
 	var info *provider.ResourceInfo
 	if err := d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
+		log.Debug().Interface("ref", newRef).Msg("GetMD on OCM share")
 		info, err = d.stat(ctx, newRef)
 		if err != nil {
 			// we do not wrap this as we'd mask the original error code
@@ -289,6 +294,7 @@ func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string)
 	}); err != nil {
 		return nil, err
 	}
+	log.Debug().Interface("info", info).Msg("GetMD on OCM share")
 
 	return info, nil
 }
@@ -398,6 +404,7 @@ func getUploadProtocol(protocols []*gateway.FileUploadProtocol, protocol string)
 }
 
 func (d *driver) Upload(ctx context.Context, ref *provider.Reference, content io.ReadCloser, metadata map[string]string) error {
+	log := appctx.GetLogger(ctx)
 	share, rel, err := d.shareAndRelativePathFromRef(ctx, ref)
 	if err != nil {
 		return err
@@ -434,6 +441,9 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, content io
 		if lockholder := metadata["lockholder"]; lockholder != "" {
 			httpReq.Header.Set(ocdav.HeaderLockHolder, lockholder)
 		}
+		httpReq.Header.Set("Content-Length", metadata["Content-Length"])
+		httpReq.Header.Set("Upload-Length", metadata["Content-Length"])
+		log.Debug().Any("http header", httpReq.Header).Msg("Upload headers")
 
 		httpRes, err := httpclient.New().Do(httpReq)
 		if err != nil {

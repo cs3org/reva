@@ -75,6 +75,10 @@ func DecodeSpaceID(spaceId string) (string, error) {
 	return string(res), nil
 }
 
+func EncodeOCMShareID(ShareID string) string {
+	return fmt.Sprintf("ocm-received$%s", base32.StdEncoding.EncodeToString([]byte("/ocm-received/"+ShareID)))
+}
+
 // EncodeResourceID encodes the provided resource ID as a string,
 // in the format <storage_id>$<space_id>!<item_id>.
 // If space_id or opaque_id is not set on the ResourceId,

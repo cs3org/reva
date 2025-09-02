@@ -112,6 +112,8 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
 
+		log.Debug().Str("method", r.Method).Str("path", r.URL.Path).Msg("dav request")
+
 		// if there is no file in the request url we assume the request url is: "/remote.php/dav/files"
 		// https://github.com/owncloud/core/blob/18475dac812064b21dabcc50f25ef3ffe55691a5/tests/acceptance/features/apiWebdavOperations/propfind.feature
 		if r.URL.Path == "/files" {
@@ -144,7 +146,10 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
-
+		if strings.Contains(r.URL.Path, "ocm-share") {
+			head = "spaces/ocm-share"
+		}
+		log.Debug().Str("head", head).Str("path", r.URL.Path).Msg("dav request")
 		switch head {
 		case "avatars":
 			h.AvatarsHandler.Handler(s).ServeHTTP(w, r)
