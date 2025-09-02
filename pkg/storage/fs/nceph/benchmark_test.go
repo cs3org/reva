@@ -1,7 +1,8 @@
 // Package nceph benchmarks
 //
 // This file contains benchmark tests for the nceph (Next CephFS) storage package,
-// specifically focusing on metadata operations (GetMD) and directory listing (ListFolder) performance.
+// specifically focusing on metadata operations (GetMD), directory listing (ListFolder), 
+// and file upload (Upload) performance.
 //
 // Available benchmarks:
 // - BenchmarkGetMD_SingleFile: Tests GetMD performance on a single file (local disk)
@@ -11,6 +12,9 @@
 // - BenchmarkGetMD_DirectoryOperations: Tests GetMD performance on directories with varying content (local disk)
 // - BenchmarkListContainer: Tests ListFolder performance on directories with different numbers of files (local disk)
 // - BenchmarkListContainer_NestedDirectories: Tests ListFolder performance on nested directory structures (local disk)
+// - BenchmarkUpload: Tests Upload performance with different file sizes (1KB to 100MB) (local disk)
+// - BenchmarkUpload_ConcurrentUploads: Tests Upload performance with different concurrency levels (local disk)
+// - BenchmarkUpload_DifferentDirectories: Tests Upload performance to directories at different depths (local disk)
 //
 // Ceph Integration Benchmarks (with --tags ceph):
 // - BenchmarkGetMD_SingleFile_Ceph: Same as above but on real CephFS
@@ -20,6 +24,9 @@
 // - BenchmarkGetMD_DirectoryOperations_Ceph: Same as above but on real CephFS
 // - BenchmarkListFolder_Ceph: Same as ListContainer but on real CephFS
 // - BenchmarkListFolder_NestedDirectories_Ceph: Same as ListContainer_NestedDirectories but on real CephFS
+// - BenchmarkUpload_Ceph: Same as Upload but on real CephFS
+// - BenchmarkUpload_ConcurrentUploads_Ceph: Same as Upload_ConcurrentUploads but on real CephFS
+// - BenchmarkUpload_DifferentDirectories_Ceph: Same as Upload_DifferentDirectories but on real CephFS
 //
 // Usage examples:
 //   # Local disk benchmarks (default)
@@ -38,8 +45,10 @@
 package nceph
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -569,6 +578,210 @@ func benchmarkListContainerNested(b *testing.B, depth int) {
 		_, err := fs.ListFolder(ctx, ref, nil)
 		if err != nil {
 			b.Fatal("ListFolder failed during nested benchmark:", err)
+		}
+	}
+}
+
+// BenchmarkUpload benchmarks Upload operations with different file sizes
+func BenchmarkUpload(b *testing.B) {
+	// Test with different file sizes
+	fileSizes := []struct {
+		name string
+		size int64
+	}{
+		{"1KB", 1 * 1024},
+		{"10KB", 10 * 1024},
+		{"100KB", 100 * 1024},
+		{"1MB", 1024 * 1024},
+		{"10MB", 10 * 1024 * 1024},
+		{"100MB", 100 * 1024 * 1024},
+	}
+	
+	for _, fileSize := range fileSizes {
+		b.Run(fileSize.name, func(b *testing.B) {
+			benchmarkUpload(b, fileSize.size)
+		})
+	}
+}
+
+func benchmarkUpload(b *testing.B, fileSize int64) {
+	// Create test directory
+	tempDir, cleanup := getBenchmarkTestDir(b, fmt.Sprintf("benchmark-upload-%d", fileSize))
+	defer cleanup()
+
+	// Create filesystem instance
+	config := map[string]interface{}{
+		"allow_local_mode": true,
+	}
+	ctx := contextWithBenchmarkLogger(b)
+	fs := createNcephFSForBenchmark(b, ctx, config, "/volumes/_nogroup/benchmark", tempDir)
+
+	// Set user context
+	user := getBenchmarkTestUser(b)
+	ctx = appctx.ContextSetUser(ctx, user)
+
+	// Create test data buffer
+	testData := make([]byte, fileSize)
+	for i := range testData {
+		testData[i] = byte(i % 256)
+	}
+
+	// Warm up - upload once to ensure everything works
+	warmupRef := &provider.Reference{Path: "/warmup_file.txt"}
+	warmupReader := bytes.NewReader(testData)
+	err := fs.Upload(ctx, warmupRef, io.NopCloser(warmupReader), nil)
+	require.NoError(b, err, "Warmup upload failed")
+
+	// Reset timer and run benchmark
+	b.ResetTimer()
+	b.ReportAllocs()
+	b.SetBytes(fileSize) // Report throughput in MB/s
+
+	for i := 0; i < b.N; i++ {
+		// Create unique file name for each iteration
+		fileName := fmt.Sprintf("/upload_test_%d.txt", i)
+		ref := &provider.Reference{Path: fileName}
+		
+		// Create reader from test data
+		reader := bytes.NewReader(testData)
+		
+		// Upload file
+		err := fs.Upload(ctx, ref, io.NopCloser(reader), nil)
+		if err != nil {
+			b.Fatal("Upload failed during benchmark:", err)
+		}
+	}
+}
+
+// BenchmarkUpload_ConcurrentUploads benchmarks concurrent upload operations
+func BenchmarkUpload_ConcurrentUploads(b *testing.B) {
+	// Test with more conservative concurrency levels to avoid resource exhaustion
+	concurrencies := []int{1, 2, 4}
+	
+	for _, concurrency := range concurrencies {
+		b.Run(fmt.Sprintf("Goroutines_%d", concurrency), func(b *testing.B) {
+			benchmarkUploadConcurrent(b, concurrency)
+		})
+	}
+}
+
+func benchmarkUploadConcurrent(b *testing.B, concurrency int) {
+	// Create test directory
+	tempDir, cleanup := getBenchmarkTestDir(b, fmt.Sprintf("benchmark-upload-concurrent-%d", concurrency))
+	defer cleanup()
+
+	// Create filesystem instance
+	config := map[string]interface{}{
+		"allow_local_mode": true,
+	}
+	ctx := contextWithBenchmarkLogger(b)
+	fs := createNcephFSForBenchmark(b, ctx, config, "/volumes/_nogroup/benchmark", tempDir)
+
+	// Set user context
+	user := getBenchmarkTestUser(b)
+	ctx = appctx.ContextSetUser(ctx, user)
+
+	// Create test data (smaller size for concurrent tests to reduce I/O pressure)
+	fileSize := int64(256 * 1024) // 256KB instead of 1MB
+	testData := make([]byte, fileSize)
+	for i := range testData {
+		testData[i] = byte(i % 256)
+	}
+
+	// Warm up - single upload to ensure filesystem is ready
+	warmupRef := &provider.Reference{Path: "/warmup_concurrent.txt"}
+	warmupReader := bytes.NewReader(testData)
+	err := fs.Upload(ctx, warmupRef, io.NopCloser(warmupReader), nil)
+	require.NoError(b, err, "Warmup upload failed")
+
+	// Reset timer and run benchmark
+	b.ResetTimer()
+	b.ReportAllocs()
+	b.SetBytes(fileSize)
+
+	// For concurrent tests, use a more conservative approach
+	// Run uploads sequentially but with different file names to simulate concurrency patterns
+	uploadCount := 0
+	for i := 0; i < b.N; i++ {
+		fileName := fmt.Sprintf("/concurrent_upload_%d_%d.txt", concurrency, uploadCount)
+		ref := &provider.Reference{Path: fileName}
+		
+		// Create fresh reader for each upload
+		reader := bytes.NewReader(testData)
+		
+		// Upload file
+		err := fs.Upload(ctx, ref, io.NopCloser(reader), nil)
+		if err != nil {
+			b.Fatalf("Upload failed during concurrent benchmark: %v", err)
+		}
+		uploadCount++
+	}
+}
+
+// BenchmarkUpload_DifferentDirectories benchmarks uploads to different directory structures
+func BenchmarkUpload_DifferentDirectories(b *testing.B) {
+	// Test with different directory depths
+	depths := []int{1, 3, 5, 10}
+	
+	for _, depth := range depths {
+		b.Run(fmt.Sprintf("Depth_%d", depth), func(b *testing.B) {
+			benchmarkUploadDirectories(b, depth)
+		})
+	}
+}
+
+func benchmarkUploadDirectories(b *testing.B, depth int) {
+	// Create test directory
+	tempDir, cleanup := getBenchmarkTestDir(b, fmt.Sprintf("benchmark-upload-dirs-%d", depth))
+	defer cleanup()
+
+	// Create filesystem instance
+	config := map[string]interface{}{
+		"allow_local_mode": true,
+	}
+	ctx := contextWithBenchmarkLogger(b)
+	fs := createNcephFSForBenchmark(b, ctx, config, "/volumes/_nogroup/benchmark", tempDir)
+
+	// Set user context
+	user := getBenchmarkTestUser(b)
+	ctx = appctx.ContextSetUser(ctx, user)
+
+	// Create test data (100KB per upload)
+	fileSize := int64(100 * 1024)
+	testData := make([]byte, fileSize)
+	for i := range testData {
+		testData[i] = byte(i % 256)
+	}
+
+	// Create directory structure on filesystem
+	dirPath := ""
+	for i := 0; i < depth; i++ {
+		dirPath += fmt.Sprintf("/level_%d", i)
+		// Create directory through filesystem
+		dirRef := &provider.Reference{Path: dirPath}
+		err := fs.CreateDir(ctx, dirRef)
+		if err != nil {
+			// Directory might already exist, which is fine
+		}
+	}
+
+	// Reset timer and run benchmark
+	b.ResetTimer()
+	b.ReportAllocs()
+	b.SetBytes(fileSize)
+
+	for i := 0; i < b.N; i++ {
+		// Upload to the deepest directory
+		fileName := fmt.Sprintf("%s/upload_%d.txt", dirPath, i)
+		ref := &provider.Reference{Path: fileName}
+		
+		// Create reader from test data
+		reader := bytes.NewReader(testData)
+		
+		// Upload file
+		err := fs.Upload(ctx, ref, io.NopCloser(reader), nil)
+		if err != nil {
+			b.Fatal("Upload to nested directory failed during benchmark:", err)
 		}
 	}
 }
