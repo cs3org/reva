@@ -950,6 +950,12 @@ func BenchmarkMultiUser_ThreadIsolationVerification(b *testing.B) {
 }
 
 func benchmarkMultiUserThreadIsolationVerification(b *testing.B, userCount, threadCount int) {
+	// Check if we have privileges for UID/GID switching - if not, skip this verification benchmark
+	privilegeResult := VerifyPrivileges(65534, 65534) // Default nobody UID/GID
+	if !privilegeResult.HasSufficientPrivileges() {
+		b.Skipf("Skipping thread isolation verification: insufficient privileges for UID/GID switching. Run as root or with appropriate capabilities to enable verification.")
+	}
+
 	// Create test directory
 	tempDir, cleanup := getBenchmarkTestDir(b, fmt.Sprintf("benchmark-verified-isolation-%d-%d", userCount, threadCount))
 	defer cleanup()
