@@ -42,6 +42,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/cs3org/reva/v3/pkg/utils/list"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
@@ -182,6 +183,7 @@ func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, space
 			sp = append(sp, space)
 		}
 	case spaces.SpaceTypeProject:
+		log.Debug().Msg("Listing spaces by type project")
 		resp, err := s.projects.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{})
 		if err != nil {
 			return nil, err
@@ -235,12 +237,14 @@ func (s *service) decorateProjects(ctx context.Context, projects []*provider.Sto
 		ownerCtx = metadata.AppendToOutgoingContext(ownerCtx, appctx.TokenHeader, token)
 		ownerCtx = appctx.ContextSetUser(ownerCtx, owner)
 
+		log.Debug().Msgf("Fetching quota for project %s", proj.Name)
 		quota, err := s.gw.GetQuota(ownerCtx, &gateway.GetQuotaRequest{
 			Ref: &provider.Reference{
 				Path: proj.RootInfo.Path,
 			},
 		})
 		if err != nil {
+			log.Err(err).Msgf("Failed to fetch quota for project %s", proj.Name)
 			return err
 		}
 		proj.Quota = &provider.Quota{
