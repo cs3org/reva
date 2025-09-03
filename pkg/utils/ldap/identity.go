@@ -214,17 +214,7 @@ func (i *Identity) GetLDAPUserByFilter(ctx context.Context, lc ldap.Client, filt
 	searchRequest := ldap.NewSearchRequest(
 		i.User.BaseDN, i.User.scopeVal, ldap.NeverDerefAliases, 1, 0, false,
 		filter,
-		[]string{
-			i.User.Schema.DisplayName,
-			i.User.Schema.ID,
-			i.User.Schema.TenantID,
-			i.User.Schema.Mail,
-			i.User.Schema.Username,
-			i.User.Schema.UIDNumber,
-			i.User.Schema.GIDNumber,
-			i.User.EnabledProperty,
-			i.User.UserTypeProperty,
-		},
+		i.getUserLDAPAttrTypes(),
 		nil,
 	)
 
@@ -265,15 +255,7 @@ func (i *Identity) GetLDAPUserByDN(ctx context.Context, lc ldap.Client, dn strin
 	searchRequest := ldap.NewSearchRequest(
 		dn, i.User.scopeVal, ldap.NeverDerefAliases, 1, 0, false,
 		filter,
-		[]string{
-			i.User.Schema.DisplayName,
-			i.User.Schema.ID,
-			i.User.Schema.Mail,
-			i.User.Schema.Username,
-			i.User.Schema.UIDNumber,
-			i.User.Schema.GIDNumber,
-			i.User.EnabledProperty,
-		},
+		i.getUserLDAPAttrTypes(),
 		nil,
 	)
 	setLDAPSearchSpanAttributes(span, searchRequest)
@@ -304,16 +286,7 @@ func (i *Identity) GetLDAPUsers(ctx context.Context, lc ldap.Client, query, tena
 		i.User.BaseDN,
 		i.User.scopeVal, ldap.NeverDerefAliases, 0, 0, false,
 		filter,
-		[]string{
-			i.User.Schema.ID,
-			i.User.Schema.Username,
-			i.User.Schema.Mail,
-			i.User.Schema.DisplayName,
-			i.User.Schema.UIDNumber,
-			i.User.Schema.GIDNumber,
-			i.User.EnabledProperty,
-			i.User.UserTypeProperty,
-		},
+		i.getUserLDAPAttrTypes(),
 		nil,
 	)
 	setLDAPSearchSpanAttributes(span, searchRequest)
@@ -793,6 +766,34 @@ func (i *Identity) GetUserType(userEntry *ldap.Entry) identityUser.UserType {
 	}
 }
 
+func (i *Identity) getUserLDAPAttrTypes() []string {
+	// The are the attributes we request unconditionally when looking up users
+	// as they are needed to populate a user object
+	attrs := []string{
+		i.User.Schema.ID,
+		i.User.Schema.Username,
+		i.User.Schema.Mail,
+		i.User.Schema.DisplayName,
+	}
+
+	// Only add optional attributes if they are configured
+	if i.User.Schema.UIDNumber != "" {
+		attrs = append(attrs, i.User.Schema.UIDNumber)
+	}
+	if i.User.Schema.GIDNumber != "" {
+		attrs = append(attrs, i.User.Schema.GIDNumber)
+	}
+	if i.User.Schema.TenantID != "" {
+		attrs = append(attrs, i.User.Schema.TenantID)
+	}
+	if i.User.EnabledProperty != "" {
+		attrs = append(attrs, i.User.EnabledProperty)
+	}
+	if i.User.UserTypeProperty != "" {
+		attrs = append(attrs, i.User.UserTypeProperty)
+	}
+	return attrs
+}
 func setLDAPSearchSpanAttributes(span trace.Span, request *ldap.SearchRequest) {
 	span.SetAttributes(
 		attribute.String("ldap.basedn", request.BaseDN),
