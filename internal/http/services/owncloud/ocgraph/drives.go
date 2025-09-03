@@ -90,8 +90,7 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if res.Status.Code != rpcv1beta1.Code_CODE_OK {
-			log.Error().Int("code", int(res.Status.Code)).Str("message", res.Status.Message).Msg("error listing storage spaces")
-			handleRpcStatus(ctx, res.Status, w)
+			handleRpcStatus(ctx, res.Status, fmt.Sprintf("ocgraph: Failed to list storage spaces with filters: '%+v", filters), w)
 			return
 		}
 
@@ -140,46 +139,6 @@ func (s *svc) getDrivesForShares(ctx context.Context, gw gateway.GatewayAPIClien
 
 func libregraphShareID(shareID *collaborationv1beta1.ShareId) string {
 	return fmt.Sprintf("%s$%s!%s", ShareJailID, ShareJailID, shareID.OpaqueId)
-}
-
-func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libregraph.Drive {
-	// the prefix of the remote_item.id and rootid
-	spacePath, _ := spaces.ResourceToSpacePath(rsi.ResourceInfo)
-	resourceRelativePath, _ := spaces.PathRelativeToSpaceRoot(rsi.ResourceInfo)
-
-	return &libregraph.Drive{
-		Id:         libregraph.PtrString(libregraphShareID(rsi.ReceivedShare.Share.Id)),
-		DriveType:  libregraph.PtrString("mountpoint"),
-		DriveAlias: libregraph.PtrString(rsi.ReceivedShare.Share.Id.OpaqueId), // this is not used, but must not be the same alias as the drive item
-		Name:       filepath.Base(rsi.ResourceInfo.Path),
-		WebUrl:     libregraph.PtrString(fullURL(s.c.WebBase, rsi.ResourceInfo.Path)),
-		Quota: &libregraph.Quota{
-			Total:     libregraph.PtrInt64(24154390300000),
-			Used:      libregraph.PtrInt64(3141592),
-			Remaining: libregraph.PtrInt64(24154387158408),
-		},
-		Root: &libregraph.DriveItem{
-			Id:        libregraph.PtrString(fmt.Sprintf("%s$%s!%s", ShareJailID, ShareJailID, rsi.ReceivedShare.Share.Id.OpaqueId)),
-			WebDavUrl: libregraph.PtrString(fullURL(s.c.WebDavBase, rsi.ResourceInfo.Path)),
-			RemoteItem: &libregraph.RemoteItem{
-				// Drive Alias does not contain the first '/'
-				DriveAlias: libregraph.PtrString(spacePath[1:]),
-				ETag:       libregraph.PtrString(rsi.ResourceInfo.Etag),
-				Folder:     &libregraph.Folder{},
-				// The Id must correspond to the id in the OCS response, for the time being
-				// It is in the form <something>!<something-else>
-				Id:                   libregraph.PtrString(spaces.EncodeResourceID(rsi.ResourceInfo.Id)),
-				LastModifiedDateTime: libregraph.PtrTime(time.Unix(int64(rsi.ResourceInfo.Mtime.Seconds), int64(rsi.ResourceInfo.Mtime.Nanos))),
-				Name:                 libregraph.PtrString(filepath.Base(rsi.ResourceInfo.Path)),
-				Path:                 libregraph.PtrString(resourceRelativePath),
-				// RootId must have the same token before ! as Id
-				// the second part for the time being is not used
-				RootId: libregraph.PtrString(fmt.Sprintf("%s$%s!unused_root_id", rsi.ResourceInfo.Id.StorageId, rsi.ResourceInfo.Id.SpaceId)),
-				Size:   libregraph.PtrInt64(int64(rsi.ResourceInfo.Size)),
-			},
-		},
-		Special: []libregraph.DriveItem{},
-	}
 }
 
 func generateCs3StorageSpaceFilters(request *godata.GoDataRequest) ([]*provider.ListStorageSpacesRequest_Filter, error) {
@@ -315,8 +274,7 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if shareRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-			log.Error().Int("code", int(shareRes.Status.Code)).Str("message", shareRes.Status.Message).Msg("error getting received share")
-			handleRpcStatus(ctx, shareRes.Status, w)
+			handleRpcStatus(ctx, shareRes.Status, fmt.Sprintf("ocgraph: Failed to get received share with ID '%s'", shareID(spaceID)), w)
 			return
 		}
 
@@ -331,8 +289,7 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if stat.Status.Code != rpcv1beta1.Code_CODE_OK {
-			log.Error().Interface("stat.Status", stat.Status).Msg("error statting received share")
-			handleRpcStatus(ctx, shareRes.Status, w)
+			handleRpcStatus(ctx, shareRes.Status, fmt.Sprintf("ocgraph: Failed to stat received share with ID '%s' and resourceID '%v'", shareID(spaceID), shareRes.Share.Share.ResourceId), w)
 			return
 		}
 
@@ -361,8 +318,7 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if listRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-			log.Error().Int("code", int(listRes.Status.Code)).Str("message", listRes.Status.Message).Msg("error getting space by id")
-			handleRpcStatus(ctx, listRes.Status, w)
+			handleRpcStatus(ctx, listRes.Status, fmt.Sprintf("ocgraph: failed to fetch storage space with id %s", spaceID), w)
 			return
 		}
 

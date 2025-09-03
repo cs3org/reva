@@ -106,7 +106,7 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if users.Status.Code != rpcv1beta1.Code_CODE_OK {
-		handleRpcStatus(ctx, users.Status, w)
+		handleRpcStatus(ctx, users.Status, "ocgraph FindUsers request failed", w)
 		return
 	}
 

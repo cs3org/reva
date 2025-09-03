@@ -24,6 +24,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -92,7 +93,7 @@ func (s *svc) listGroups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if groups.Status.Code != rpcv1beta1.Code_CODE_OK {
-		handleRpcStatus(ctx, groups.Status, w)
+		handleRpcStatus(ctx, groups.Status, fmt.Sprintf("ocgraph: failed to find groups matching query: '%s'", queryVal), w)
 		return
 	}
 

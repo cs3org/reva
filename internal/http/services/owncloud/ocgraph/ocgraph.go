@@ -160,9 +160,9 @@ func handleError(ctx context.Context, err error, status int, w http.ResponseWrit
 	w.Write([]byte("Error: " + err.Error()))
 }
 
-func handleRpcStatus(ctx context.Context, status *rpcv1beta1.Status, w http.ResponseWriter) {
+func handleRpcStatus(ctx context.Context, status *rpcv1beta1.Status, msg string, w http.ResponseWriter) {
 	log := appctx.GetLogger(ctx)
-	log.Error().Str("Status", status.String()).Msg("Failed to contact gateway in listUsers")
+	log.Error().Str("Status", status.String()).Msg(msg)
 
 	w.Header().Set("x-request-id", trace.Get(ctx))
 
