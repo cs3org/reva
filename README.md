@@ -8,11 +8,7 @@ REVA is an interoperability platform. It connects storage, sync and share platfo
 
 ## Installation
 
-Head to [Documentation](https://reva.link) for documentation or [download](https://github.com/opencloud-eu/reva/releases) to get the latest available release.
-
-## Documentation & Support
-
-Read the [getting started guide](https://reva.link/docs/getting-started/) and the other feature guides.
+[Download](https://github.com/opencloud-eu/reva/releases) to get the latest available release.
 
 ## Build and run it yourself
 
@@ -36,8 +32,6 @@ $ cp examples/storage-references/providers.demo.json /etc/revad/ocm-providers.js
 $ cmd/revad/revad -dev-dir examples/storage-references
 
 ```
-
-You can also read the [build from sources guide](https://reva.link/docs/getting-started/build-reva/) and the [setup tutorial](https://github.com/opencloud-eu/reva/blob/main/docs/content/en/docs/tutorials/setup-tutorial.md).
 
 ## Run tests
 
@@ -130,10 +124,6 @@ The 1.x versions are developed in the [https://github.com/cs3org/reva](https://g
 ### 2.x versions
 
 The `main` branch of this repository is used to develop the next version of this project. The edge branch is based on a new concept named "Spaces" and a new set of the CS3APIs are being implemented, making it **not compatible** with `main` branch. Releases from `main` are tagged as _2.x.x_ versions following [semver](https://semver.org/).
-
-## Plugin development
-
-Checkout the [Tutorials](https://reva.link/docs/tutorials/).
 
 ## License
 
