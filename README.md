@@ -22,17 +22,6 @@ $ cd reva
 $ make build
 ```
 
-#### Run
-
-```
-$ mkdir -p /etc/revad
-$ cp examples/storage-references/users.demo.json /etc/revad/users.json
-$ cp examples/storage-references/groups.demo.json /etc/revad/groups.json
-$ cp examples/storage-references/providers.demo.json /etc/revad/ocm-providers.json
-$ cmd/revad/revad -dev-dir examples/storage-references
-
-```
-
 ## Run tests
 
 Reva's codebase continuously undergoes testing at various levels.
