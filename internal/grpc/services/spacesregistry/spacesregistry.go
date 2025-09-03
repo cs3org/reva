@@ -210,8 +210,8 @@ func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, space
 		}
 		sp = append(sp, projects...)
 
-		// We also want public spaces when you search for projects, because this filtering
-		// happens in the front-end
+		// For now, we also return public spaces when you query for projects
+		// as the front-end will filter these
 		fallthrough
 
 	case spaces.SpaceTypePublic:
@@ -309,7 +309,7 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 		return nil, err
 	}
 	if stat.Status.Code != rpcv1beta1.Code_CODE_OK {
-		return nil, fmt.Errorf("Failed to stat %s: got status %s with message: %s", home, stat.Status.GetCode().String(), stat.Status.GetMessage())
+		return nil, fmt.Errorf("failed to stat %s: got status %s with message: %s", home, stat.Status.GetCode().String(), stat.Status.GetMessage())
 	}
 
 	quota, err := s.gw.GetQuota(ctx, &gateway.GetQuotaRequest{
@@ -322,7 +322,7 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 	}
 
 	if stat.Info == nil || stat.Info.Id == nil || stat.Info.Id.StorageId == "" {
-		return nil, errors.New("Received an invalid storageID")
+		return nil, errors.New("received an invalid storageID")
 	}
 
 	return &provider.StorageSpace{
@@ -361,9 +361,9 @@ func (s *service) getPublicSpaces(ctx context.Context) ([]*provider.StorageSpace
 			continue
 		}
 
-		spaceID := spaces.EncodeSpaceID(path)
+		spaceID := spaces.EncodeStorageSpaceID(statRes.Info.Id.StorageId, path)
 		space := &provider.StorageSpace{
-			SpaceType: "public",
+			SpaceType: spaces.SpaceTypePublic.AsString(),
 			Root:      statRes.Info.Id,
 			Id: &provider.StorageSpaceId{
 				OpaqueId: spaceID,
