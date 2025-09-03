@@ -974,45 +974,43 @@ func setupCephBenchmark(b *testing.B, prefix string) (*ncephfs, string, func()) 
 			Idp:      "test",
 			OpaqueId: "root",
 		},
-		Username: "root",
-		Uid:      0,
-		Gid:      0,
+		Username:  "root",
+		UidNumber: 0,
+		GidNumber: 0,
 	})
 
-	// Create the test directory using nceph interface to ensure path translation consistency
+	// Create the test directory: prioritize direct filesystem access, then verify via nceph
 	testDirRef := &provider.Reference{Path: testDirPath}
-	err := fs.CreateDir(ctx, testDirRef)
-	if err != nil {
-		// Ignore if directory already exists
-		if !strings.Contains(err.Error(), "file exists") &&
-			!strings.Contains(err.Error(), "already exists") {
-			// Try fallback: create directory directly on filesystem and set permissions
-			fallbackPath := filepath.Join(mountPoint, testDirPath)
-			if mkdirErr := os.MkdirAll(fallbackPath, 0777); mkdirErr != nil {
-				b.Fatalf("Failed to create test directory %s via nceph (%v) and fallback (%v)", testDirPath, err, mkdirErr)
-			}
-			// Try to make sure it has proper permissions
-			if chmodErr := os.Chmod(fallbackPath, 0777); chmodErr != nil {
-				b.Logf("Warning: Could not set directory permissions on %s: %v", fallbackPath, chmodErr)
-			}
+	fallbackPath := filepath.Join(mountPoint, testDirPath)
+	
+	// First, ensure directory exists via direct filesystem access (more reliable)
+	if mkdirErr := os.MkdirAll(fallbackPath, 0777); mkdirErr != nil && !os.IsExist(mkdirErr) {
+		b.Fatalf("Failed to create test directory via direct filesystem access: %s -> %s: %v", testDirPath, fallbackPath, mkdirErr)
+	}
+	
+	// Set proper permissions
+	if chmodErr := os.Chmod(fallbackPath, 0777); chmodErr != nil {
+		b.Logf("Warning: Could not set directory permissions on %s: %v", fallbackPath, chmodErr)
+	}
+	
+	// Verify the directory is accessible via nceph (optional - don't fail if this doesn't work)
+	if err := fs.CreateDir(ctx, testDirRef); err != nil {
+		if !strings.Contains(err.Error(), "file exists") && !strings.Contains(err.Error(), "already exists") {
+			b.Logf("Note: Directory creation via nceph interface failed (using direct filesystem access): %v", err)
 		}
 	}
 
-	// Cleanup function to remove test directory via nceph (with fallback to direct removal)
+	// Cleanup function: use direct filesystem access for reliability
 	cleanup := func() {
 		if os.Getenv("NCEPH_TEST_PRESERVE") != "true" {
-			// Try to remove via nceph first (proper cleanup)
-			err := fs.Delete(ctx, testDirRef)
-			if err != nil {
-				b.Logf("Warning: failed to cleanup test directory %s via nceph: %v", testDirPath, err)
-				// Fallback to direct removal on mount point if we can determine it
-				if mountPoint != "" {
-					testDir := filepath.Join(mountPoint, testDirPath)
-					err := os.RemoveAll(testDir)
-					if err != nil {
-						b.Logf("Warning: failed to cleanup test directory %s directly: %v", testDir, err)
-					}
-				}
+			// Use direct filesystem removal (more reliable)
+			if err := os.RemoveAll(fallbackPath); err != nil {
+				b.Logf("Warning: failed to cleanup test directory %s: %v", fallbackPath, err)
+			}
+			
+			// Also try to remove via nceph (optional cleanup)
+			if err := fs.Delete(ctx, testDirRef); err != nil {
+				b.Logf("Note: nceph cleanup also failed (expected if directory was removed directly): %v", err)
 			}
 		}
 	}
