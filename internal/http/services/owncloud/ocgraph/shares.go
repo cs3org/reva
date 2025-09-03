@@ -23,15 +23,14 @@ package ocgraph
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
-	"path"
-	"path/filepath"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
@@ -42,7 +41,6 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/spaces"
-	"github.com/cs3org/reva/v3/pkg/utils"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 )
 
@@ -62,6 +60,10 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		log.Error().Err(err).Msg("error getting received shares")
 		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
+	}
+
+	if resShares.Status == nil || resShares.Status.Code != rpc.Code_CODE_OK {
+		handleRpcStatus(ctx, resShares.Status, w)
 	}
 
 	shares := make([]*libregraph.DriveItem, 0, len(resShares.ShareInfos))
@@ -118,7 +120,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
 	}
-	if statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+	if statRes.Status.Code != rpc.Code_CODE_OK {
 		handleRpcStatus(ctx, statRes.Status, w)
 		return
 	}
@@ -203,7 +205,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 			handleError(ctx, err, http.StatusInternalServerError, w)
 			return
 		}
-		if resp.Status.Code != rpcv1beta1.Code_CODE_OK {
+		if resp.Status.Code != rpc.Code_CODE_OK {
 			handleRpcStatus(ctx, resp.Status, w)
 			return
 		}
@@ -263,7 +265,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
 	}
-	if statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+	if statRes.Status.Code != rpc.Code_CODE_OK {
 		handleRpcStatus(ctx, statRes.Status, w)
 		return
 	}
@@ -320,7 +322,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
 	}
-	if resp.Status.Code != rpcv1beta1.Code_CODE_OK {
+	if resp.Status.Code != rpc.Code_CODE_OK {
 		handleRpcStatus(ctx, resp.Status, w)
 		return
 	}
@@ -342,99 +344,6 @@ func encodeSpaceIDForShareJail(res *provider.ResourceInfo) string {
 	return spaces.EncodeResourceID(res.Id)
 }
 
-func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.ReceivedShareResourceInfo) (*libregraph.DriveItem, error) {
-	createdTime := utils.TSToTime(rsi.ReceivedShare.Share.Ctime)
-
-	creator, err := s.getUserByID(ctx, rsi.ReceivedShare.Share.Creator)
-	if err != nil {
-		return nil, err
-	}
-
-	grantee, err := s.cs3GranteeToSharePointIdentitySet(ctx, rsi.ReceivedShare.Share.Grantee)
-	if err != nil {
-		return nil, err
-	}
-
-	relativePath, err := spaces.PathRelativeToSpaceRoot(rsi.ResourceInfo)
-	if err != nil {
-		return nil, err
-	}
-
-	roles := make([]string, 0, 1)
-	role := CS3ResourcePermissionsToUnifiedRole(ctx, rsi.ResourceInfo.PermissionSet)
-	if role != nil {
-		roles = append(roles, *role.Id)
-	}
-
-	d := &libregraph.DriveItem{
-		UIHidden:          libregraph.PtrBool(rsi.ReceivedShare.Hidden),
-		ClientSynchronize: libregraph.PtrBool(true),
-		CreatedBy: &libregraph.IdentitySet{
-			User: &libregraph.Identity{
-				DisplayName: creator.DisplayName,
-				Id:          libregraph.PtrString(creator.Id.OpaqueId),
-			},
-		},
-		ETag:                 &rsi.ResourceInfo.Etag,
-		Id:                   libregraph.PtrString(libregraphShareID(rsi.ReceivedShare.Share.Id)),
-		LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(rsi.ResourceInfo.Mtime)),
-		Name:                 libregraph.PtrString(rsi.ResourceInfo.Name),
-		ParentReference: &libregraph.ItemReference{
-			DriveId:   libregraph.PtrString(spaces.ConcatStorageSpaceID(ShareJailID, ShareJailID)),
-			DriveType: libregraph.PtrString("virtual"),
-			Id:        libregraph.PtrString(spaces.EncodeResourceID(&provider.ResourceId{OpaqueId: ShareJailID, StorageId: ShareJailID, SpaceId: ShareJailID})),
-		},
-		RemoteItem: &libregraph.RemoteItem{
-			CreatedBy: &libregraph.IdentitySet{
-				User: &libregraph.Identity{
-					DisplayName: creator.DisplayName,
-					Id:          libregraph.PtrString(creator.Id.OpaqueId),
-				},
-			},
-			ETag: &rsi.ResourceInfo.Etag,
-			File: &libregraph.OpenGraphFile{
-				MimeType: &rsi.ResourceInfo.MimeType,
-			},
-			Id:                   libregraph.PtrString(encodeSpaceIDForShareJail(rsi.ResourceInfo)),
-			LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(rsi.ResourceInfo.Mtime)),
-			Name:                 libregraph.PtrString(rsi.ResourceInfo.Name),
-			Path:                 libregraph.PtrString(relativePath),
-			WebUrl:               libregraph.PtrString(filepath.Join(s.c.WebBase, rsi.ResourceInfo.Path)),
-			// ParentReference: &libregraph.ItemReference{
-			// 	DriveId:   libregraph.PtrString(spaces.EncodeResourceID(share.ResourceInfo.ParentId)),
-			// 	DriveType: nil, // FIXME: no way to know it unless we hardcode it
-			// },
-			Permissions: []libregraph.Permission{
-				{
-					CreatedDateTime: *libregraph.NewNullableTime(&createdTime),
-					GrantedToV2:     grantee,
-					Invitation: &libregraph.SharingInvitation{
-						InvitedBy: &libregraph.IdentitySet{
-							User: &libregraph.Identity{
-								DisplayName: creator.DisplayName,
-								Id:          libregraph.PtrString(creator.Id.OpaqueId),
-							},
-						},
-					},
-					Roles: roles,
-				},
-			},
-			Size: libregraph.PtrInt64(int64(rsi.ResourceInfo.Size)),
-		},
-		Size: libregraph.PtrInt64(int64(rsi.ResourceInfo.Size)),
-	}
-
-	if rsi.ResourceInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		d.Folder = libregraph.NewFolder()
-	} else {
-		d.File = &libregraph.OpenGraphFile{
-			MimeType: &rsi.ResourceInfo.MimeType,
-		}
-	}
-
-	return d, nil
-}
-
 func (s *svc) getUserByID(ctx context.Context, u *userpb.UserId) (*userpb.User, error) {
 	client, err := s.getClient()
 	if err != nil {
@@ -442,55 +351,47 @@ func (s *svc) getUserByID(ctx context.Context, u *userpb.UserId) (*userpb.User, 
 	}
 
 	res, err := client.GetUser(ctx, &userpb.GetUserRequest{
-		UserId: u,
+		UserId:                 u,
+		SkipFetchingUserGroups: true,
 	})
 	if err != nil {
 		return nil, err
+	}
+	if res.Status == nil {
+		return nil, errors.New("Did not get status from getUserByID")
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return nil, fmt.Errorf("failed to get user by ID, with code %s and message %s", res.Status.Code, res.Status.Message)
 	}
 
 	return res.User, nil
 }
 
 func (s *svc) getGroupByID(ctx context.Context, g *grouppb.GroupId) (*grouppb.Group, error) {
+	if g == nil {
+		return nil, fmt.Errorf("must pass a non-nil group id to getGroupByID")
+	}
+
 	client, err := s.getClient()
 	if err != nil {
 		return nil, err
 	}
 
 	res, err := client.GetGroup(ctx, &grouppb.GetGroupRequest{
-		GroupId: g,
+		GroupId:             g,
+		SkipFetchingMembers: true,
 	})
 	if err != nil {
 		return nil, err
 	}
-
-	return res.Group, nil
-}
-
-func (s *svc) cs3GranteeToSharePointIdentitySet(ctx context.Context, grantee *provider.Grantee) (*libregraph.SharePointIdentitySet, error) {
-	p := &libregraph.SharePointIdentitySet{}
-
-	if u := grantee.GetUserId(); u != nil {
-		user, err := s.getUserByID(ctx, u)
-		if err != nil {
-			return nil, err
-		}
-		p.User = &libregraph.Identity{
-			DisplayName: user.DisplayName,
-			Id:          libregraph.PtrString(u.OpaqueId),
-		}
-	} else if g := grantee.GetGroupId(); g != nil {
-		group, err := s.getGroupByID(ctx, g)
-		if err != nil {
-			return nil, err
-		}
-		p.Group = &libregraph.Identity{
-			DisplayName: group.DisplayName,
-			Id:          libregraph.PtrString(g.OpaqueId),
-		}
+	if res.Status == nil {
+		return nil, errors.New("Did not get status from getGroupByID")
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return nil, fmt.Errorf("failed to get group by ID, with code %s and message %s", res.Status.Code, res.Status.Message)
 	}
 
-	return p, nil
+	return res.Group, nil
 }
 
 func groupByResourceID(shares []*gateway.ShareResourceInfo, publicShares []*gateway.PublicShareResourceInfo) (map[string][]*ShareOrLink, map[string]*provider.ResourceInfo) {
@@ -563,149 +464,5 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 		log.Error().Err(err).Msg("error marshalling shares as json")
 		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
-	}
-}
-
-func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceInfo, shares []*ShareOrLink) (*libregraph.DriveItem, error) {
-	relativePath, err := spaces.PathRelativeToSpaceRoot(info)
-	if err != nil {
-		return nil, err
-	}
-
-	parentRelativePath := path.Dir(relativePath)
-	if parentRelativePath == "." {
-		parentRelativePath = ""
-	}
-
-	permissions, err := s.cs3sharesToPermissions(ctx, shares)
-	if err != nil {
-		return nil, err
-	}
-
-	if info.ParentId.SpaceId == "" {
-		info.ParentId.SpaceId = spaces.PathToSpaceID(info.Path)
-	}
-
-	d := &libregraph.DriveItem{
-		ETag:                 libregraph.PtrString(info.Etag),
-		Id:                   libregraph.PtrString(spaces.EncodeResourceID(info.Id)),
-		LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(info.Mtime)),
-		Name:                 libregraph.PtrString(info.Name),
-		ParentReference: &libregraph.ItemReference{
-			DriveId: libregraph.PtrString(spaces.ConcatStorageSpaceID(info.ParentId.StorageId, info.ParentId.SpaceId)),
-			// DriveType: libregraph.PtrString(info.Space.SpaceType),
-			Id:   libregraph.PtrString(spaces.EncodeResourceID(info.ParentId)),
-			Name: libregraph.PtrString(path.Base(relativePath)),
-			Path: libregraph.PtrString(parentRelativePath),
-		},
-		WebUrl:      libregraph.PtrString(filepath.Join(s.c.WebBase, info.Path)),
-		Permissions: permissions,
-
-		Size: libregraph.PtrInt64(int64(info.Size)),
-	}
-
-	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		d.Folder = libregraph.NewFolder()
-	} else {
-		d.File = &libregraph.OpenGraphFile{
-			MimeType: &info.MimeType,
-		}
-	}
-
-	return d, nil
-}
-
-func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*ShareOrLink) ([]libregraph.Permission, error) {
-	permissions := make([]libregraph.Permission, 0, len(shares))
-
-	for _, e := range shares {
-		if e.share != nil {
-			createdTime := utils.TSToTime(e.share.Ctime)
-
-			creator, err := s.getUserByID(ctx, e.share.Creator)
-			if err != nil {
-				return nil, err
-			}
-
-			grantee, err := s.cs3GranteeToSharePointIdentitySet(ctx, e.share.Grantee)
-			if err != nil {
-				return nil, err
-			}
-
-			roles := make([]string, 0, 1)
-			role := CS3ResourcePermissionsToUnifiedRole(ctx, e.share.Permissions.Permissions)
-			if role != nil {
-				roles = append(roles, *role.Id)
-			}
-			permissions = append(permissions, libregraph.Permission{
-				CreatedDateTime: *libregraph.NewNullableTime(&createdTime),
-				GrantedToV2:     grantee,
-				Invitation: &libregraph.SharingInvitation{
-					InvitedBy: &libregraph.IdentitySet{
-						User: &libregraph.Identity{
-							DisplayName: creator.DisplayName,
-							Id:          libregraph.PtrString(creator.Id.OpaqueId),
-						},
-					},
-				},
-				Roles: roles,
-			})
-		} else if e.link != nil {
-			createdTime := utils.TSToTime(e.link.Ctime)
-			linktype, _ := SharingLinkTypeFromCS3Permissions(ctx, e.link.Permissions)
-
-			permissions = append(permissions, libregraph.Permission{
-				CreatedDateTime: *libregraph.NewNullableTime(&createdTime),
-				HasPassword:     libregraph.PtrBool(e.link.PasswordProtected),
-				Id:              libregraph.PtrString(e.link.Token),
-				Link: &libregraph.SharingLink{
-					LibreGraphDisplayName: libregraph.PtrString(e.link.DisplayName),
-					LibreGraphQuickLink:   libregraph.PtrBool(e.link.Quicklink),
-					PreventsDownload:      libregraph.PtrBool(false),
-					Type:                  linktype,
-					// WebUrl:                libregraph.PtrString(""),
-				},
-			})
-		}
-	}
-
-	return permissions, nil
-}
-
-func (s *svc) toGrantee(ctx context.Context, recipientType string, id string) (*provider.Grantee, error) {
-	gw, err := s.getClient()
-	if err != nil {
-		return nil, err
-	}
-
-	switch recipientType {
-	case "user":
-		userRes, err := gw.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
-			Claim:                  "username",
-			Value:                  id,
-			SkipFetchingUserGroups: true,
-		})
-		if err != nil || userRes.Status == nil || userRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-			return nil, errors.New("failed to fetch sharee data")
-		}
-		return &provider.Grantee{
-			Type: provider.GranteeType_GRANTEE_TYPE_USER,
-			Id:   &provider.Grantee_UserId{UserId: userRes.User.GetId()},
-		}, nil
-	case "group":
-		groupRes, err := gw.GetGroupByClaim(ctx, &grouppb.GetGroupByClaimRequest{
-			Claim:               "group_name",
-			Value:               id,
-			SkipFetchingMembers: true,
-		})
-		if err != nil || groupRes.Status == nil || groupRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-			return nil, errors.New("failed to fetch sharee data")
-		}
-		return &provider.Grantee{
-			Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
-			Id:   &provider.Grantee_GroupId{GroupId: groupRes.Group.GetId()},
-		}, nil
-	default:
-		return nil, errors.New(recipientType + " is not a valid granteetype")
 	}
 }
