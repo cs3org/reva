@@ -58,8 +58,11 @@ func BenchmarkGetMD_SingleFile_Ceph(b *testing.B) {
 	fs, testDir, cleanup := setupCephBenchmark(b, "benchmark-getmd-single-ceph")
 	defer cleanup()
 
-	// Create test file on CephFS mount
-	testFile := filepath.Join(testDir, "benchmark_file.txt")
+	// Get mount point for file creation
+	mountPoint := getMountPointFromFstab(b)
+
+	// Create test file on CephFS mount using the actual filesystem path
+	testFile := filepath.Join(mountPoint, testDir, "benchmark_file.txt")
 	err := os.WriteFile(testFile, []byte("benchmark test content on ceph"), 0644)
 	require.NoError(b, err, "Failed to create test file on CephFS")
 
@@ -108,12 +111,15 @@ func benchmarkGetMDMultipleFilesCeph(b *testing.B, fileCount int) {
 	fs, testDir, cleanup := setupCephBenchmark(b, fmt.Sprintf("benchmark-getmd-%d-ceph", fileCount))
 	defer cleanup()
 
+	// Get mount point for file creation
+	mountPoint := getMountPointFromFstab(b)
+
 	// Create multiple test files on CephFS
 	fileRefs := make([]*provider.Reference, fileCount)
 	testDirName := filepath.Base(testDir)
 	for i := 0; i < fileCount; i++ {
 		fileName := fmt.Sprintf("file_%04d.txt", i)
-		filePath := filepath.Join(testDir, fileName)
+		filePath := filepath.Join(mountPoint, testDir, fileName)
 		content := fmt.Sprintf("Content for file %d on CephFS", i)
 		
 		err := os.WriteFile(filePath, []byte(content), 0644)
@@ -240,8 +246,9 @@ func benchmarkGetMDWithMetadataKeysCeph(b *testing.B, mdKeys []string) {
 	fs, testDir, cleanup := setupCephBenchmark(b, "benchmark-metadata-keys-ceph")
 	defer cleanup()
 
-	// Create test file on CephFS
-	testFile := filepath.Join(testDir, "metadata_test.txt")
+	// Get mount point and create test file on CephFS
+	mountPoint := getMountPointFromFstab(b)
+	testFile := filepath.Join(mountPoint, testDir, "metadata_test.txt")
 	err := os.WriteFile(testFile, []byte("metadata benchmark content with some data on ceph"), 0644)
 	require.NoError(b, err, "Failed to create test file on CephFS")
 
@@ -290,8 +297,9 @@ func benchmarkGetMDDirectoryOperationsCeph(b *testing.B, fileCount int) {
 	fs, testDir, cleanup := setupCephBenchmark(b, fmt.Sprintf("benchmark-dir-%d-ceph", fileCount))
 	defer cleanup()
 
-	// Create subdirectory with files on CephFS
-	subDir := filepath.Join(testDir, "test_directory")
+	// Get mount point and create subdirectory with files on CephFS
+	mountPoint := getMountPointFromFstab(b)
+	subDir := filepath.Join(mountPoint, testDir, "test_directory")
 	err := os.MkdirAll(subDir, 0755)
 	require.NoError(b, err, "Failed to create subdirectory on CephFS")
 
@@ -350,8 +358,9 @@ func benchmarkListFolderCeph(b *testing.B, fileCount int) {
 	fs, testDir, cleanup := setupCephBenchmark(b, fmt.Sprintf("benchmark-list-%d-ceph", fileCount))
 	defer cleanup()
 
-	// Create test directory with files on CephFS
-	listDir := filepath.Join(testDir, "list_test_dir")
+	// Get mount point and create test directory with files on CephFS
+	mountPoint := getMountPointFromFstab(b)
+	listDir := filepath.Join(mountPoint, testDir, "list_test_dir")
 	err := os.MkdirAll(listDir, 0755)
 	require.NoError(b, err, "Failed to create list test directory on CephFS")
 
@@ -410,8 +419,9 @@ func benchmarkListFolderNestedCeph(b *testing.B, depth int) {
 	fs, testDir, cleanup := setupCephBenchmark(b, fmt.Sprintf("benchmark-list-nested-%d-ceph", depth))
 	defer cleanup()
 
-	// Create main test directory
-	mainDir := filepath.Join(testDir, "nested_list_test")
+	// Get mount point and create main test directory
+	mountPoint := getMountPointFromFstab(b)
+	mainDir := filepath.Join(mountPoint, testDir, "nested_list_test")
 	err := os.MkdirAll(mainDir, 0755)
 	require.NoError(b, err, "Failed to create main test directory on CephFS")
 
@@ -937,6 +947,20 @@ func requireCephIntegrationForBenchmark(b *testing.B) {
 	if os.Getenv("NCEPH_FSTAB_ENTRY") == "" {
 		b.Skip("NCEPH_FSTAB_ENTRY not set - skipping Ceph integration benchmark")
 	}
+}
+
+// getMountPointFromFstab extracts the mount point from the fstab entry
+func getMountPointFromFstab(b *testing.B) string {
+	fstabEntry := os.Getenv("NCEPH_FSTAB_ENTRY")
+	if fstabEntry == "" {
+		b.Fatal("NCEPH_FSTAB_ENTRY environment variable not set")
+	}
+	
+	parts := strings.Fields(fstabEntry)
+	if len(parts) < 3 {
+		b.Fatalf("Invalid fstab entry format: %s", fstabEntry)
+	}
+	return parts[1] // /mnt/miniflax
 }
 
 // setupCephBenchmark creates a CephFS-based filesystem and test directory for benchmarks
