@@ -152,7 +152,8 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, token) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
 
 	// create home directory
-	if _, err = s.createHomeCache.Get(res.User.Id.OpaqueId); err != nil {
+	// This is not necessary when you sign in with the 'machine' type
+	if _, err = s.createHomeCache.Get(res.User.Id.OpaqueId); req.Type != "machine" && err != nil {
 		statRes, err := s.Stat(ctx, &storageprovider.StatRequest{
 			Ref: &storageprovider.Reference{
 				Path: s.getHome(ctx),
