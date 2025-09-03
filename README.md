@@ -17,7 +17,7 @@ You need to have [Go](https://golang.org/doc/install) (version 1.16 or higher), 
 #### Build
 
 ```
-$ git clone -b edge https://github.com/opencloud-eu/reva
+$ git clone -b main https://github.com/opencloud-eu/reva
 $ cd reva
 $ make build
 ```
@@ -106,24 +106,7 @@ NB: This will work better on Linux than on MacOS because of issues with static l
 
 ### Acceptance tests (ownCloud legacy)
 
-See [Running Acceptance Tests](https://github.com/opencloud-eu/reva/tree/edge/tests/acceptance).
-
-## Daily releases
-
-On every commit on the main branch (including merged Pull Requests) a new release will be created and
-available at [daily releases](https://reva-releases.web.cern.ch/reva-releases).
-
-## Major versions
-
-There are currently two major versions in active development.
-
-### 1.x versions
-
-The 1.x versions are developed in the [https://github.com/cs3org/reva](https://github.com/cs3org/reva) repository.
-
-### 2.x versions
-
-The `main` branch of this repository is used to develop the next version of this project. The edge branch is based on a new concept named "Spaces" and a new set of the CS3APIs are being implemented, making it **not compatible** with `main` branch. Releases from `main` are tagged as _2.x.x_ versions following [semver](https://semver.org/).
+See [Running Acceptance Tests](https://github.com/opencloud-eu/reva/tree/main/tests/acceptance).
 
 ## License
 
