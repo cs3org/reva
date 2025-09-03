@@ -45,9 +45,9 @@ Reva's codebase continuously undergoes testing at various levels.
 
 To understand which tests exist, you can have a look at the [Makefile](https://github.com/opencloud-eu/reva/blob/main/Makefile).
 
-The tests run by CERN's instance of [Drone CI/CD](https://docs.drone.io/) are defined in the [.drone.star](https://github.com/opencloud-eu/reva/blob/main/.drone.star) file.
+The tests run by OpenCloud's instance of [Woodpecker CI/CD](https://woodpecker-ci.org/) are defined in the [.woodpecker](https://github.com/opencloud-eu/reva/tree/main/.woodpecker) folder.
 
-NB: The [tests/oc-integration-tests/drone](https://github.com/opencloud-eu/reva/tree/main/tests/oc-integration-tests/drone) and [tests/oc-integration-tests/local](https://github.com/opencloud-eu/reva/tree/main/tests/oc-integration-tests/local) folders contain the configuration fixtures that are used to start up the Reva instance to test (on drone CI/CD or on your local system, respectively), for both these acceptance tests ("ownCloud legacy integration tests") and the Litmus tests.
+NB: The [tests/oc-integration-tests/ci](https://github.com/opencloud-eu/reva/tree/main/tests/oc-integration-tests/ci) and [tests/oc-integration-tests/local](https://github.com/opencloud-eu/reva/tree/main/tests/oc-integration-tests/local) folders contain the configuration fixtures that are used to start up the Reva instance to test (on CI/CD or on your local system, respectively), for both these acceptance tests ("ownCloud legacy integration tests") and the Litmus tests.
 
 ### Unit tests
 
