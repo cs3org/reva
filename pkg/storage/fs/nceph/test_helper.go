@@ -174,9 +174,9 @@ func GetTestSubDir(t *testing.T, baseDir, subDirName string) string {
 	return subDir
 }
 
-// RequireCephIntegration checks if Ceph integration configuration is valid.
+// RequireCephIntegration checks if Ceph integration configuration is valid and Ceph is accessible.
 // Integration tests run automatically when the ceph build tag is used and NCEPH_FSTAB_ENTRY is set.
-// If NCEPH_FSTAB_ENTRY is not set, the test is skipped.
+// If NCEPH_FSTAB_ENTRY is not set or Ceph is not accessible, the test is skipped.
 //
 // Usage:
 //
@@ -185,7 +185,7 @@ func GetTestSubDir(t *testing.T, baseDir, subDirName string) string {
 //	    // ... rest of test
 //	}
 //
-// Run with: go test -tags ceph -v (requires NCEPH_FSTAB_ENTRY to be set)
+// Run with: go test -tags ceph -v (requires NCEPH_FSTAB_ENTRY to be set and Ceph accessible)
 func RequireCephIntegration(t *testing.T) {
 	// Integration tests run automatically when ceph build tag is used and NCEPH_FSTAB_ENTRY is set
 	fstabEntry := os.Getenv("NCEPH_FSTAB_ENTRY")
@@ -197,12 +197,30 @@ func RequireCephIntegration(t *testing.T) {
 
 	// Fstab entry is provided - validate it, fail test if invalid
 	ctx := context.Background()
-	_, err := ParseFstabEntry(ctx, fstabEntry)
+	mountInfo, err := ParseFstabEntry(ctx, fstabEntry)
 	if err != nil {
 		t.Fatalf("Ceph integration test failed: invalid NCEPH_FSTAB_ENTRY format: %s, error: %v", fstabEntry, err)
 	}
 
-	t.Logf("Valid fstab entry found: %s", fstabEntry)
+	// Check if Ceph is actually accessible
+	if !isCephAccessible(mountInfo) {
+		t.Skip("Ceph cluster is not accessible - skipping integration test")
+		return
+	}
+
+	t.Logf("Valid fstab entry found and Ceph accessible: %s", fstabEntry)
+}
+
+// isCephAccessible tests if Ceph cluster is actually accessible by checking the mount point
+func isCephAccessible(mountInfo *FstabMountInfo) bool {
+	// Check if mount point exists and is accessible
+	if _, err := os.Stat(mountInfo.LocalMountPoint); os.IsNotExist(err) {
+		return false
+	}
+
+	// Try to read the directory to test actual accessibility
+	_, err := os.ReadDir(mountInfo.LocalMountPoint)
+	return err == nil
 }
 
 // ValidateCephConfig checks if the required Ceph configuration is available.

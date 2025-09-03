@@ -947,9 +947,37 @@ func max(a, b int) int {
 
 // requireCephIntegrationForBenchmark checks if Ceph integration is available for benchmarks
 func requireCephIntegrationForBenchmark(b *testing.B) {
-	if os.Getenv("NCEPH_FSTAB_ENTRY") == "" {
+	fstabEntry := os.Getenv("NCEPH_FSTAB_ENTRY")
+	if fstabEntry == "" {
 		b.Skip("NCEPH_FSTAB_ENTRY not set - skipping Ceph integration benchmark")
+		return
 	}
+
+	// Validate fstab entry format
+	ctx := context.Background()
+	mountInfo, err := ParseFstabEntry(ctx, fstabEntry)
+	if err != nil {
+		b.Skipf("Invalid NCEPH_FSTAB_ENTRY format: %s, error: %v - skipping benchmark", fstabEntry, err)
+		return
+	}
+
+	// Check if Ceph is actually accessible
+	if !isCephAccessibleForBenchmark(mountInfo) {
+		b.Skip("Ceph cluster is not accessible - skipping integration benchmark")
+		return
+	}
+}
+
+// isCephAccessibleForBenchmark tests if Ceph cluster is actually accessible for benchmarks
+func isCephAccessibleForBenchmark(mountInfo *FstabMountInfo) bool {
+	// Check if mount point exists and is accessible
+	if _, err := os.Stat(mountInfo.LocalMountPoint); os.IsNotExist(err) {
+		return false
+	}
+
+	// Try to read the directory to test actual accessibility
+	_, err := os.ReadDir(mountInfo.LocalMountPoint)
+	return err == nil
 }
 
 // getMountPointFromFstab extracts the mount point from the fstab entry
