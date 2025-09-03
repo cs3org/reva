@@ -174,8 +174,11 @@ func benchmarkGetMDNestedDirectoriesCeph(b *testing.B, depth int) {
 	fs, testDir, cleanup := setupCephBenchmark(b, fmt.Sprintf("benchmark-nested-%d-ceph", depth))
 	defer cleanup()
 
+	// Get mount point for file creation
+	mountPoint := getMountPointFromFstab(b)
+
 	// Create nested directory structure on CephFS
-	currentDir := testDir
+	currentDir := filepath.Join(mountPoint, testDir)  // Start with full filesystem path
 	pathSegments := []string{}
 	
 	for i := 0; i < depth; i++ {
