@@ -31,6 +31,7 @@ import (
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
@@ -63,7 +64,7 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if resShares.Status == nil || resShares.Status.Code != rpc.Code_CODE_OK {
-		handleRpcStatus(ctx, resShares.Status, w)
+		handleRpcStatus(ctx, resShares.Status, "ocgraph: failed to perform ListExistingReceivedShares ", w)
 	}
 
 	shares := make([]*libregraph.DriveItem, 0, len(resShares.ShareInfos))
@@ -120,8 +121,8 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
 	}
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		handleRpcStatus(ctx, statRes.Status, w)
+	if statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+		handleRpcStatus(ctx, statRes.Status, fmt.Sprintf("ocgraph: failed to stat resource '%s' passed to share", resourceID), w)
 		return
 	}
 	path := statRes.Info.Path
@@ -205,8 +206,8 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 			handleError(ctx, err, http.StatusInternalServerError, w)
 			return
 		}
-		if resp.Status.Code != rpc.Code_CODE_OK {
-			handleRpcStatus(ctx, resp.Status, w)
+		if resp.Status.Code != rpcv1beta1.Code_CODE_OK {
+			handleRpcStatus(ctx, resp.Status, fmt.Sprintf("ocgraph: failed to create share: %+v", createShareRequest), w)
 			return
 		}
 
@@ -265,8 +266,8 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
 	}
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		handleRpcStatus(ctx, statRes.Status, w)
+	if statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+		handleRpcStatus(ctx, statRes.Status, fmt.Sprintf("ocgraph: failed to stat resource '%s' passed to createLink", resourceID), w)
 		return
 	}
 
@@ -322,8 +323,8 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
 	}
-	if resp.Status.Code != rpc.Code_CODE_OK {
-		handleRpcStatus(ctx, resp.Status, w)
+	if resp.Status.Code != rpcv1beta1.Code_CODE_OK {
+		handleRpcStatus(ctx, resp.Status, "ocgraph: failed to create public share", w)
 		return
 	}
 
