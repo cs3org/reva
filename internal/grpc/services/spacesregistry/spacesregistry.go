@@ -23,11 +23,14 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	cachereg "github.com/cs3org/reva/v3/pkg/share/cache/registry"
+
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
@@ -37,6 +40,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/share/cache"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/templates"
@@ -65,7 +69,10 @@ type config struct {
 	// name:
 	//  - path: <path>
 	//  - description: <description>
-	PublicSpaces map[string]map[string]string `mapstructure:"public_spaces"`
+	PublicSpaces             map[string]map[string]string      `mapstructure:"public_spaces"`
+	ResourceInfoCacheDrivers map[string]map[string]interface{} `mapstructure:"resource_info_caches"`
+	ResourceInfoCacheDriver  string                            `mapstructure:"resource_info_cache_type"`
+	ResourceInfoCacheTTL     int                               `mapstructure:"resource_info_cache_ttl"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -75,9 +82,11 @@ func (c *config) ApplyDefaults() {
 }
 
 type service struct {
-	c        *config
-	projects projects.Catalogue
-	gw       gateway.GatewayAPIClient
+	c                    *config
+	projects             projects.Catalogue
+	gw                   gateway.GatewayAPIClient
+	resourceInfoCache    cache.ResourceInfoCache
+	resourceInfoCacheTTL time.Duration
 }
 
 func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
@@ -100,7 +109,21 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 		projects: s,
 		gw:       client,
 	}
+
+	ricache, err := getCacheManager(&c)
+	if err == nil {
+		svc.resourceInfoCache = ricache
+		svc.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
+	}
+
 	return &svc, nil
+}
+
+func getCacheManager(c *config) (cache.ResourceInfoCache, error) {
+	if f, ok := cachereg.NewFuncs[c.ResourceInfoCacheDriver]; ok {
+		return f(c.ResourceInfoCacheDrivers[c.ResourceInfoCacheDriver])
+	}
+	return nil, fmt.Errorf("driver not found: %s", c.ResourceInfoCacheDriver)
 }
 
 func getSpacesDriver(ctx context.Context, driver string, cfg map[string]map[string]any) (projects.Catalogue, error) {
@@ -349,29 +372,40 @@ func (s *service) getPublicSpaces(ctx context.Context) ([]*provider.StorageSpace
 			continue
 		}
 
-		statRes, err := s.gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
-			Path: path,
-		}})
-		if err != nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-			log.Error().Err(err).Any("Status", statRes.Status).Msgf("Failed to stat path %s for public space %s, ignoring this space", path, spaceName)
+		var resourceInfo *provider.ResourceInfo
+		if res, err := s.resourceInfoCache.Get(path); err == nil && res != nil {
+			resourceInfo = res
+		} else {
+			statRes, err := s.gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
+				Path: path,
+			}})
+			if err != nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+				log.Error().Err(err).Any("Status", statRes.Status).Msgf("Failed to stat path %s for public space %s, ignoring this space", path, spaceName)
+			} else {
+				resourceInfo = statRes.Info
+				s.resourceInfoCache.Set(path, resourceInfo)
+			}
+		}
+
+		if resourceInfo == nil {
 			continue
 		}
 
-		spaceID := spaces.EncodeStorageSpaceID(statRes.Info.Id.StorageId, path)
+		spaceID := spaces.EncodeStorageSpaceID(resourceInfo.Id.StorageId, path)
 		space := &provider.StorageSpace{
 			SpaceType: spaces.SpaceTypePublic.AsString(),
-			Root:      statRes.Info.Id,
+			Root:      resourceInfo.Id,
 			Id: &provider.StorageSpaceId{
 				OpaqueId: spaceID,
 			},
-			RootInfo:        statRes.Info,
-			Mtime:           statRes.Info.Mtime,
+			RootInfo:        resourceInfo,
+			Mtime:           resourceInfo.Mtime,
 			Name:            spaceName,
 			HasTrashedItems: false,
 			Quota: &provider.Quota{
 				// 1 Exabyte
 				QuotaMaxBytes:  uint64(math.Pow10(18)),
-				RemainingBytes: uint64(math.Pow10(18)) - statRes.Info.Size,
+				RemainingBytes: uint64(math.Pow10(18)) - resourceInfo.Size,
 			},
 		}
 
