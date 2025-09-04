@@ -24,6 +24,7 @@ Refer to [Ceph fstab configuration](https://docs.ceph.com/en/reef/cephfs/mount-u
 ```bash
 ceph-mon.example.com:6789:/volumes/shared /mnt/cephfs ceph defaults,name=admin,secretfile=/etc/ceph/ceph.client.admin.key,conf=/etc/ceph/ceph.conf 0 2
 ```
+
 This entry must be configured in your Reva config as the `fstabentry` parameter.
 
 ## Quick Start
@@ -56,7 +57,6 @@ There are 2 major testing scenarios:
 ```bash
 # Unit tests (no CephFS required)
 go test ./pkg/storage/fs/cephmount -v
-```
 
 # Integration tests (requires valid CephFS mount)
 ```bash
@@ -69,6 +69,7 @@ like the privilege verification ones may be skipped due to lack of permsissions 
 forked processes.
 
 # Benchmarks
+
 ```
 bash
 go test ./pkg/storage/fs/cephmount -bench "Benchmark.*" -v
@@ -86,6 +87,7 @@ root = "/tmp/testing"
 ```
 
 **Never use `testing_allow_local_mode` in production!**
+
 **Fucntions that require conversion between file ID (inode) and and path will always require 
 access to the MDS  and therefore having a valid Ceph configuration. The tests handle this transparently, skipping any tests necessary**.
 
