@@ -70,11 +70,12 @@ forked processes.
 
 # Benchmarks
 
-```
-bash
+```bash
 go test ./pkg/storage/fs/cephmount -bench "Benchmark.*" -v
 go test -tags ceph ./pkg/storage/fs/cephmount -bench "BenchmarkCeph.*" -v
 ```
+
+Use `benchstat` to compare if needed.
 
 ## Development Mode
 
@@ -88,6 +89,6 @@ root = "/tmp/testing"
 
 **Never use `testing_allow_local_mode` in production!**
 
-**Fucntions that require conversion between file ID (inode) and and path will always require 
+**Functions that require conversion between file ID (inode) and and path will always require 
 access to the MDS  and therefore having a valid Ceph configuration. The tests handle this transparently, skipping any tests necessary**.
 
