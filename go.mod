@@ -75,7 +75,7 @@ require (
 	github.com/sethvargo/go-password v0.3.1
 	github.com/shamaton/msgpack/v2 v2.2.3
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/studio-b12/gowebdav v0.9.0
 	github.com/test-go/testify v1.1.4
 	github.com/thanhpk/randstr v1.0.6
