@@ -114,20 +114,20 @@ func TestUserManager(t *testing.T) {
 	}
 
 	// positive test GetUserByClaim by mail
-	resUserByEmail, _ := manager.GetUserByClaim(ctx, "mail", "einstein@example.org", false)
+	resUserByEmail, _ := manager.GetUserByClaim(ctx, "mail", "einstein@example.org", "", false)
 	if !proto.Equal(resUserByEmail, userEinstein) {
 		t.Fatalf("user differs: expected=%v got=%v", userEinstein, resUserByEmail)
 	}
 
 	// negative test GetUserByClaim by mail
 	expectedErr = errtypes.NotFound("abc@example.com")
-	_, err = manager.GetUserByClaim(ctx, "mail", "abc@example.com", false)
+	_, err = manager.GetUserByClaim(ctx, "mail", "abc@example.com", "", false)
 	if !reflect.DeepEqual(err, expectedErr) {
 		t.Fatalf("user not found error differs: expected='%v' got='%v'", expectedErr, err)
 	}
 
 	// positive test GetUserByClaim by mail without groups
-	resUserByEmailWithoutGroups, _ := manager.GetUserByClaim(ctx, "mail", "einstein@example.org", true)
+	resUserByEmailWithoutGroups, _ := manager.GetUserByClaim(ctx, "mail", "einstein@example.org", "", true)
 	if !proto.Equal(resUserByEmailWithoutGroups, userEinsteinWithoutGroups) {
 		t.Fatalf("user differs: expected=%v got=%v", userEinsteinWithoutGroups, resUserByEmailWithoutGroups)
 	}

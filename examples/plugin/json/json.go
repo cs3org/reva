@@ -82,6 +82,9 @@ func (m *Manager) Configure(ml map[string]interface{}) error {
 
 // GetUser returns the user based on the uid.
 func (m *Manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
+	if uid.GetTenantId() != "" {
+		return nil, errtypes.NotSupported("tenant filter not supported")
+	}
 	for _, u := range m.users {
 		if (u.Id.GetOpaqueId() == uid.OpaqueId || u.Username == uid.OpaqueId) && (uid.Idp == "" || uid.Idp == u.Id.GetIdp()) {
 			user := *u
@@ -95,7 +98,10 @@ func (m *Manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingG
 }
 
 // GetUserByClaim returns user based on the claim
-func (m *Manager) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
+func (m *Manager) GetUserByClaim(ctx context.Context, claim, value, tenantID string, skipFetchingGroups bool) (*userpb.User, error) {
+	if tenantID != "" {
+		return nil, errtypes.NotSupported("tenant filter not supported")
+	}
 	for _, u := range m.users {
 		if userClaim, err := extractClaim(u, claim); err == nil && value == userClaim {
 			user := *u

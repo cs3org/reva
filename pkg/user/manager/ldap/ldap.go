@@ -114,7 +114,7 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingG
 		return nil, errtypes.NotFound("idp mismatch")
 	}
 
-	userEntry, err := m.c.LDAPIdentity.GetLDAPUserByID(ctx, m.ldapClient, uid.OpaqueId)
+	userEntry, err := m.c.LDAPIdentity.GetLDAPUserByID(ctx, m.ldapClient, uid)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +141,7 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingG
 
 // GetUserByClaim implements the user.Manager interface. Looks up a user by
 // claim ('mail', 'username', 'userid') and returns the user.
-func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
+func (m *manager) GetUserByClaim(ctx context.Context, claim, value, tenantID string, skipFetchingGroups bool) (*userpb.User, error) {
 	log := appctx.GetLogger(ctx)
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "GetUserByClaim")
 	defer span.End()
@@ -152,7 +152,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipF
 		attribute.Bool("parameter.skipFetchingGroups", skipFetchingGroups),
 	)
 	log.Debug().Str("claim", claim).Str("value", value).Msg("GetUserByClaim")
-	userEntry, err := m.c.LDAPIdentity.GetLDAPUserByAttribute(ctx, m.ldapClient, claim, value)
+	userEntry, err := m.c.LDAPIdentity.GetLDAPUserByAttribute(ctx, m.ldapClient, claim, value, tenantID)
 	if err != nil {
 		log.Debug().Err(err).Msg("GetUserByClaim")
 		return nil, err
@@ -228,7 +228,7 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 		log.Debug().Str("useridp", uid.Idp).Str("configured idp", m.c.Idp).Msg("IDP mismatch")
 		return nil, errtypes.NotFound("idp mismatch")
 	}
-	userEntry, err := m.c.LDAPIdentity.GetLDAPUserByID(ctx, m.ldapClient, uid.OpaqueId)
+	userEntry, err := m.c.LDAPIdentity.GetLDAPUserByID(ctx, m.ldapClient, uid)
 	if err != nil {
 		log.Debug().Err(err).Interface("userid", uid).Msg("Failed to lookup user")
 		return []string{}, err
