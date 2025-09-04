@@ -14,7 +14,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.14.1
 	github.com/creasty/defaults v1.8.0
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20250626104136-a0b31b323c48
+	github.com/cs3org/go-cs3apis v0.0.0-20250811135935-5147e5c98678
 	github.com/dgraph-io/ristretto v0.2.0
 	github.com/dolthub/go-mysql-server v0.14.0
 	github.com/glpatcern/go-mime v0.0.0-20221026162842-2a8d71ad17a9
@@ -25,7 +25,7 @@ require (
 	github.com/go-playground/validator/v10 v10.27.0
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/gofrs/uuid v4.4.0+incompatible
-	github.com/golang-jwt/jwt/v5 v5.2.3
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/golang/protobuf v1.5.4
 	github.com/gomodule/redigo v1.9.2
 	github.com/google/uuid v1.6.0
@@ -41,7 +41,7 @@ require (
 	github.com/nats-io/nats.go v1.43.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.38.0
-	github.com/owncloud/libre-graph-api-go v1.0.5-0.20240425090020-dba6d1507c38
+	github.com/owncloud/libre-graph-api-go v1.0.5-0.20250217093259-fa3804be6c27
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/xattr v0.4.12
 	github.com/prometheus/client_golang v1.22.0
@@ -54,15 +54,16 @@ require (
 	github.com/tus/tusd v1.13.0
 	github.com/wk8/go-ordered-map v1.0.0
 	go.opencensus.io v0.24.0
-	go.step.sm/crypto v0.67.0
-	golang.org/x/crypto v0.40.0
+	go.step.sm/crypto v0.70.0
+	golang.org/x/crypto v0.41.0
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/sync v0.16.0
-	golang.org/x/sys v0.34.0
-	golang.org/x/term v0.33.0
-	google.golang.org/genproto v0.0.0-20250505200425-f936aa4a68b2
+	golang.org/x/sys v0.35.0
+	golang.org/x/term v0.34.0
+	google.golang.org/genproto v0.0.0-20250603155806-513f23925822
 	google.golang.org/grpc v1.74.2
 	google.golang.org/protobuf v1.36.7
+	gorm.io/datatypes v1.2.6
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.30.1
@@ -132,11 +133,11 @@ require (
 	go.mongodb.org/mongo-driver v1.17.3 // indirect
 	go.opentelemetry.io/otel v1.36.0 // indirect
 	go.opentelemetry.io/otel/trace v1.36.0 // indirect
-	golang.org/x/mod v0.25.0 // indirect
-	golang.org/x/net v0.41.0 // indirect
-	golang.org/x/text v0.27.0 // indirect
-	golang.org/x/tools v0.34.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250603155806-513f23925822 // indirect
+	golang.org/x/mod v0.26.0 // indirect
+	golang.org/x/net v0.43.0 // indirect
+	golang.org/x/text v0.28.0 // indirect
+	golang.org/x/tools v0.35.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250804133106-a7a43d27e69b // indirect
 	gopkg.in/src-d/go-errors.v1 v1.0.0 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

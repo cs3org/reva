@@ -42,6 +42,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/cs3org/reva/v3/pkg/utils/list"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
@@ -172,7 +173,8 @@ func isFilterByID(filters []*provider.ListStorageSpacesRequest_Filter) (string, 
 func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, spaceType spaces.SpaceType) ([]*provider.StorageSpace, error) {
 	sp := []*provider.StorageSpace{}
 
-	if spaceType == spaces.SpaceTypeHome {
+	switch spaceType {
+	case spaces.SpaceTypeHome:
 		space, err := s.userSpace(ctx, user)
 		if err != nil {
 			return nil, err
@@ -180,11 +182,17 @@ func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, space
 		if space != nil {
 			sp = append(sp, space)
 		}
-	} else if spaceType == spaces.SpaceTypeProject {
-		projects, err := s.projects.ListProjects(ctx, user)
+	case spaces.SpaceTypeProject:
+		log.Debug().Msg("Listing spaces by type project")
+		resp, err := s.projects.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{})
 		if err != nil {
 			return nil, err
 		}
+		if resp.Status.Code != rpcv1beta1.Code_CODE_OK {
+			return nil, fmt.Errorf("%s: %s", resp.Status.Code.String(), resp.Status.Message)
+		}
+
+		projects := resp.StorageSpaces
 		if err := s.decorateProjects(ctx, projects); err != nil {
 			return nil, err
 		}
@@ -196,7 +204,7 @@ func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, space
 
 func (s *service) decorateProjects(ctx context.Context, projects []*provider.StorageSpace) error {
 	for _, proj := range projects {
-		// ADD QUOTA
+		// Add quota
 
 		// To get the quota for a project, we cannot do the request
 		// on behalf of the current logged user, because the project
@@ -204,6 +212,11 @@ func (s *service) decorateProjects(ctx context.Context, projects []*provider.Sto
 		// logged in user.
 		// We need then to impersonate the owner and ask the quota
 		// on behalf of him.
+
+		// This is no longer necessary for the new project quota nodes,
+		// but we need to keep it here until we migrate all of the old
+		// project quota nodes
+		// See CERNBOX-3995
 
 		authRes, err := s.gw.Authenticate(ctx, &gateway.AuthenticateRequest{
 			Type:         "machine",
@@ -220,16 +233,18 @@ func (s *service) decorateProjects(ctx context.Context, projects []*provider.Sto
 		token := authRes.Token
 		owner := authRes.User
 
-		ownerCtx := appctx.ContextSetToken(context.TODO(), token)
+		ownerCtx := appctx.ContextSetToken(context.Background(), token)
 		ownerCtx = metadata.AppendToOutgoingContext(ownerCtx, appctx.TokenHeader, token)
 		ownerCtx = appctx.ContextSetUser(ownerCtx, owner)
 
+		log.Debug().Msgf("Fetching quota for project %s", proj.Name)
 		quota, err := s.gw.GetQuota(ownerCtx, &gateway.GetQuotaRequest{
 			Ref: &provider.Reference{
 				Path: proj.RootInfo.Path,
 			},
 		})
 		if err != nil {
+			log.Err(err).Msgf("Failed to fetch quota for project %s", proj.Name)
 			return err
 		}
 		proj.Quota = &provider.Quota{
@@ -237,7 +252,7 @@ func (s *service) decorateProjects(ctx context.Context, projects []*provider.Sto
 			RemainingBytes: quota.TotalBytes - quota.UsedBytes,
 		}
 
-		// ADD LAST ACTIVITY
+		// Add mtime of space
 		statRes, err := s.gw.Stat(ctx, &provider.StatRequest{
 			Ref: &provider.Reference{
 				Path: proj.RootInfo.Path,
@@ -305,7 +320,7 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 }
 
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
-	return nil, errors.New("not yet implemented")
+	return s.projects.UpdateStorageSpace(ctx, req)
 }
 
 func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {

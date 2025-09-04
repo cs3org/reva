@@ -103,6 +103,7 @@ func (s *svc) initRouter() {
 		})
 		r.Route("/drives", func(r chi.Router) {
 			r.Get("/{space-id}", s.getSpace)
+			r.Patch("/{space-id}", s.patchSpace)
 		})
 		r.Route("/users", func(r chi.Router) {
 			r.Get("/", s.listUsers)
@@ -111,6 +112,7 @@ func (s *svc) initRouter() {
 			r.Get("/", s.listGroups)
 		})
 	})
+
 	s.router.Route("/v1beta1", func(r chi.Router) {
 		r.Route("/me", func(r chi.Router) {
 			r.Route("/drives", func(r chi.Router) {
@@ -151,14 +153,16 @@ func (s *svc) Close() error { return nil }
 func (s *svc) Unprotected() []string { return nil }
 
 func handleError(ctx context.Context, err error, status int, w http.ResponseWriter) {
+	log := appctx.GetLogger(ctx)
+	log.Error().Err(err).Msg("ocgraph error")
 	w.Header().Set("x-request-id", trace.Get(ctx))
 	w.WriteHeader(status)
 	w.Write([]byte("Error: " + err.Error()))
 }
 
-func handleRpcStatus(ctx context.Context, status *rpcv1beta1.Status, w http.ResponseWriter) {
+func handleRpcStatus(ctx context.Context, status *rpcv1beta1.Status, msg string, w http.ResponseWriter) {
 	log := appctx.GetLogger(ctx)
-	log.Error().Str("Status", status.String()).Msg("Failed to contact gateway in listUsers")
+	log.Error().Str("Status", status.String()).Msg(msg)
 
 	w.Header().Set("x-request-id", trace.Get(ctx))
 

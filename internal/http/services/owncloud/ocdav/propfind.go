@@ -72,9 +72,18 @@ const (
 // ns is the namespace that is prefixed to the path in the cs3 namespace.
 func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
-	fn := path.Join(ns, r.URL.Path)
 
-	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
+	fn := path.Join(ns, r.URL.Path)
+	ref := &provider.Reference{}
+
+	// We check if the PROPFIND was made to a resource ID instead of a path
+	if r, ok := requestWasMadeToResourceId(ctx, fn); ok {
+		ref = r
+	} else {
+		ref.Path = fn
+	}
+
+	sublog := appctx.GetLogger(ctx).With().Any("ref", ref).Logger()
 
 	pf, status, err := readPropfind(r.Body)
 	if err != nil {
@@ -82,8 +91,6 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 		w.WriteHeader(status)
 		return
 	}
-
-	ref := &provider.Reference{Path: fn}
 
 	parentInfo, resourceInfos, ok := s.getResourceInfos(ctx, w, r, pf, ref, false, sublog)
 	if !ok {
@@ -91,52 +98,6 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 		return
 	}
 	s.propfindResponse(ctx, w, r, ns, pf, parentInfo, resourceInfos, sublog)
-}
-
-func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx := r.Context()
-
-	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()
-
-	pf, status, err := readPropfind(r.Body)
-	if err != nil {
-		sublog.Debug().Err(err).Msg("error reading propfind request")
-		w.WriteHeader(status)
-		return
-	}
-
-	// retrieve a specific storage space
-	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
-	if err != nil {
-		sublog.Error().Err(err).Msg("error sending a grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if rpcStatus.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, rpcStatus)
-		return
-	}
-
-	parentInfo, resourceInfos, ok := s.getResourceInfos(ctx, w, r, pf, ref, true, sublog)
-	if !ok {
-		// getResourceInfos handles responses in case of an error so we can just return here.
-		return
-	}
-
-	// parentInfo Path is the name but we need /
-	if r.URL.Path != "" {
-		parentInfo.Path = r.URL.Path
-	} else {
-		parentInfo.Path = "/"
-	}
-
-	// prefix space id to paths
-	for i := range resourceInfos {
-		resourceInfos[i].Path = path.Join("/", spaceID, resourceInfos[i].Path)
-	}
-
-	s.propfindResponse(ctx, w, r, "", pf, parentInfo, resourceInfos, sublog)
 }
 
 func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf propfindXML, parentInfo *provider.ResourceInfo, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {

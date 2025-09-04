@@ -28,6 +28,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"google.golang.org/protobuf/proto"
 )
@@ -230,7 +231,7 @@ func NewUnifiedRoleFromID(id string) (*libregraph.UnifiedRoleDefinition, error) 
 
 // GetApplicableRoleDefinitionsForActions returns a list of role definitions
 // that match the provided actions and constraints
-func GetApplicableRoleDefinitionsForActions(actions []string) []*libregraph.UnifiedRoleDefinition {
+func GetApplicableRoleDefinitionsForActions(actions []string, resource *provider.ResourceInfo) []*libregraph.UnifiedRoleDefinition {
 	builtin := GetBuiltinRoleDefinitionList()
 	definitions := make([]*libregraph.UnifiedRoleDefinition, 0, len(builtin))
 
@@ -242,6 +243,12 @@ func GetApplicableRoleDefinitionsForActions(actions []string) []*libregraph.Unif
 			for i, action := range permission.GetAllowedResourceActions() {
 				if !slices.Contains(actions, action) {
 					break
+				}
+				condition, err := RoleConditionFromResourceType(resource)
+				if err == nil {
+					if condition != permission.GetCondition() {
+						break
+					}
 				}
 				if i == len(permission.GetAllowedResourceActions())-1 {
 					definitionMatch = true
@@ -260,6 +267,25 @@ func GetApplicableRoleDefinitionsForActions(actions []string) []*libregraph.Unif
 	}
 
 	return definitions
+}
+
+func RoleConditionFromResourceType(ri *provider.ResourceInfo) (string, error) {
+	relPath, err := spaces.PathRelativeToSpaceRoot(ri)
+	if err != nil {
+		return "", err
+	}
+	switch {
+	// As of this moment, ResourceInfo doesn't have a .Space.Root.Id or any info in .Space
+	// Therefore, instead of comparing the ID sent with the space root, we compare its relative path
+	case relPath == ".":
+		return UnifiedRoleConditionDrive, nil
+	case ri.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER:
+		return UnifiedRoleConditionFolder, nil
+	case ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE:
+		return UnifiedRoleConditionFile, nil
+	default:
+		return "", errors.New("unknown resource type")
+	}
 }
 
 // PermissionsToCS3ResourcePermissions converts the provided libregraph UnifiedRolePermissions to a cs3 ResourcePermissions

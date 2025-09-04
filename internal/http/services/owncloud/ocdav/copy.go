@@ -33,7 +33,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/datagateway"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
-	"github.com/cs3org/reva/v3/pkg/utils"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/rs/zerolog"
 )
 
@@ -48,6 +48,8 @@ type intermediateDirRefFunc func() (*provider.Reference, *rpc.Status, error)
 
 func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
 	if s.c.EnableHTTPTpc {
 		if r.Header.Get("Source") != "" {
 			// HTTP Third-Party Copy Pull mode
@@ -61,7 +63,6 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 	}
 
 	// Local copy: in this case Destination is mandatory
-	src := path.Join(ns, r.URL.Path)
 	dst, err := extractDestination(r)
 	if err != nil {
 		appctx.GetLogger(ctx).Warn().Msg("HTTP COPY: failed to extract destination")
@@ -69,6 +70,10 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 		return
 	}
 
+	// Handle source
+	// The source is part of the request URL, so the space head has already been taken care of
+	// by the handler
+	src := path.Join(ns, r.URL.Path)
 	for _, r := range nameRules {
 		if !r.Test(dst) {
 			appctx.GetLogger(ctx).Warn().Msgf("HTTP COPY: destination %s failed validation", dst)
@@ -77,18 +82,32 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 		}
 	}
 
-	dst = path.Join(ns, dst)
+	// For the destination, we still need to handle this ourselves
+	if s.c.SpacesEnabled && ns != "/public" {
+		dstSpaceID, dstRelPath := router.ShiftPath(dst)
+		_, spaceRoot, ok := spaces.DecodeStorageSpaceID(dstSpaceID)
+		if !ok {
+			appctx.GetLogger(ctx).Warn().Str("dstSpaceID", dstSpaceID).Msg("handlePathCopy: Failed to parse destination space ID")
+		}
+		dst = path.Join(spaceRoot, dstRelPath)
+	} else {
+		dst = path.Join(ns, dst)
+	}
 
-	sublog := appctx.GetLogger(ctx).With().Str("src", src).Str("dst", dst).Logger()
+	srcRef := &provider.Reference{
+		Path: src,
+	}
+	dstRef := &provider.Reference{
+		Path: dst,
+	}
 
-	srcRef := &provider.Reference{Path: src}
+	sublog := log.With().Any("src", srcRef).Any("dst", dstRef).Logger()
 
 	// check dst exists
-	dstRef := &provider.Reference{Path: dst}
-
 	intermediateDirRefFunc := func() (*provider.Reference, *rpc.Status, error) {
-		intermediateDir := path.Dir(dst)
-		ref := &provider.Reference{Path: intermediateDir}
+		ref := &provider.Reference{
+			Path: path.Dir(dstRef.Path),
+		}
 		return ref, &rpc.Status{Code: rpc.Code_CODE_OK}, nil
 	}
 
@@ -267,222 +286,6 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 		defer httpUploadRes.Body.Close()
 		if httpUploadRes.StatusCode != http.StatusOK {
 			log.Error().Any("status", httpUploadRes.StatusCode).Msg("executePathCopy: failed to do upload to data server")
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx := r.Context()
-	dst, err := extractDestination(r)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Str("destination", dst).Logger()
-
-	// retrieve a specific storage space
-	srcRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
-	if err != nil {
-		sublog.Error().Err(err).Msg("error sending a grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
-		return
-	}
-
-	dstSpaceID, dstRelPath := router.ShiftPath(dst)
-
-	// retrieve a specific storage space
-	dstRef, status, err := s.lookUpStorageSpaceReference(ctx, dstSpaceID, dstRelPath)
-	if err != nil {
-		sublog.Error().Err(err).Msg("error sending a grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
-		return
-	}
-
-	intermediateDirRefFunc := func() (*provider.Reference, *rpc.Status, error) {
-		intermediateDir := path.Dir(dstRelPath)
-		return s.lookUpStorageSpaceReference(ctx, dstSpaceID, intermediateDir)
-	}
-
-	cp := s.prepareCopy(ctx, w, r, srcRef, dstRef, intermediateDirRefFunc, &sublog)
-	if cp == nil {
-		return
-	}
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	err = s.executeSpacesCopy(ctx, w, client, cp)
-	if err != nil {
-		sublog.Error().Err(err).Str("depth", cp.depth).Msg("error descending directory")
-		w.WriteHeader(http.StatusInternalServerError)
-	}
-	w.WriteHeader(cp.successCode)
-}
-
-func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, client gateway.GatewayAPIClient, cp *copy) error {
-	log := appctx.GetLogger(ctx)
-	log.Debug().Interface("src", cp.sourceInfo).Interface("dst", cp.destination).Msg("descending")
-
-	if cp.sourceInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		// create dir
-		createReq := &provider.CreateContainerRequest{
-			Ref: cp.destination,
-		}
-		createRes, err := client.CreateContainer(ctx, createReq)
-		if err != nil {
-			log.Error().Err(err).Msg("error performing create container grpc request")
-			return err
-		}
-		if createRes.Status.Code != rpc.Code_CODE_OK {
-			if createRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
-				w.WriteHeader(http.StatusForbidden)
-				// TODO path could be empty or relative...
-				m := fmt.Sprintf("Permission denied to create %v", createReq.Ref.Path)
-				b, err := Marshal(exception{
-					code:    SabredavPermissionDenied,
-					message: m,
-				}, "")
-				HandleWebdavError(log, w, b, err)
-			}
-			return nil
-		}
-
-		// TODO: also copy properties: https://tools.ietf.org/html/rfc4918#section-9.8.2
-
-		if cp.depth != "infinity" {
-			return nil
-		}
-
-		// descend for children
-		listReq := &provider.ListContainerRequest{Ref: &provider.Reference{ResourceId: cp.sourceInfo.Id, Path: "."}}
-		res, err := client.ListContainer(ctx, listReq)
-		if err != nil {
-			return err
-		}
-		if res.Status.Code != rpc.Code_CODE_OK {
-			w.WriteHeader(http.StatusInternalServerError)
-			return nil
-		}
-
-		for i := range res.Infos {
-			childRef := &provider.Reference{
-				ResourceId: cp.destination.ResourceId,
-				Path:       utils.MakeRelativePath(path.Join(cp.destination.Path, res.Infos[i].Path)),
-			}
-			err := s.executeSpacesCopy(ctx, w, client, &copy{sourceInfo: res.Infos[i], destination: childRef, depth: cp.depth, successCode: cp.successCode})
-			if err != nil {
-				return err
-			}
-		}
-	} else {
-		// copy file
-		// 1. get download url
-		dReq := &provider.InitiateFileDownloadRequest{Ref: &provider.Reference{ResourceId: cp.sourceInfo.Id, Path: "."}}
-		dRes, err := client.InitiateFileDownload(ctx, dReq)
-		if err != nil {
-			return err
-		}
-
-		if dRes.Status.Code != rpc.Code_CODE_OK {
-			return fmt.Errorf("status code %d", dRes.Status.Code)
-		}
-
-		var downloadEP, downloadToken string
-		for _, p := range dRes.Protocols {
-			if p.Protocol == "spaces" {
-				downloadEP, downloadToken = p.DownloadEndpoint, p.Token
-			}
-		}
-		// 2. get upload url
-		uReq := &provider.InitiateFileUploadRequest{
-			Ref: cp.destination,
-			Opaque: &typespb.Opaque{
-				Map: map[string]*typespb.OpaqueEntry{
-					HeaderUploadLength: {
-						Decoder: "plain",
-						// TODO: handle case where size is not known in advance
-						Value: []byte(strconv.FormatUint(cp.sourceInfo.GetSize(), 10)),
-					},
-				},
-			},
-		}
-
-		uRes, err := client.InitiateFileUpload(ctx, uReq)
-		if err != nil {
-			return err
-		}
-
-		if uRes.Status.Code != rpc.Code_CODE_OK {
-			if uRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
-				w.WriteHeader(http.StatusForbidden)
-				// TODO path can be empty or relative
-				m := fmt.Sprintf("Permissions denied to create %v", uReq.Ref.Path)
-				b, err := Marshal(exception{
-					code:    SabredavPermissionDenied,
-					message: m,
-				}, "")
-				HandleWebdavError(log, w, b, err)
-				return nil
-			}
-			HandleErrorStatus(log, w, uRes.Status)
-			return nil
-		}
-
-		var uploadEP, uploadToken string
-		for _, p := range uRes.Protocols {
-			if p.Protocol == "simple" {
-				uploadEP, uploadToken = p.UploadEndpoint, p.Token
-			}
-		}
-
-		// 3. do download
-		httpDownloadReq, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadEP, nil)
-		if err != nil {
-			return err
-		}
-		if downloadToken != "" {
-			httpDownloadReq.Header.Set(datagateway.TokenTransportHeader, downloadToken)
-		}
-
-		httpDownloadRes, err := s.client.Do(httpDownloadReq)
-		if err != nil {
-			return err
-		}
-		defer httpDownloadRes.Body.Close()
-		if httpDownloadRes.StatusCode != http.StatusOK {
-			return fmt.Errorf("status code %d", httpDownloadRes.StatusCode)
-		}
-
-		// 4. do upload
-
-		httpUploadReq, err := http.NewRequestWithContext(ctx, http.MethodPut, uploadEP, httpDownloadRes.Body)
-		if err != nil {
-			return err
-		}
-		httpUploadReq.Header.Set(datagateway.TokenTransportHeader, uploadToken)
-
-		httpUploadRes, err := s.client.Do(httpUploadReq)
-		if err != nil {
-			return err
-		}
-		defer httpUploadRes.Body.Close()
-		if httpUploadRes.StatusCode != http.StatusOK {
 			return err
 		}
 	}

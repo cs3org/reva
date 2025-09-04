@@ -111,11 +111,18 @@ func isContentRange(r *http.Request) bool {
 
 func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
+
 	fn := path.Join(ns, r.URL.Path)
+	ref := &provider.Reference{}
 
-	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
+	// We check if the PUT was made to a resource ID instead of a path
+	if r, ok := requestWasMadeToResourceId(ctx, fn); ok {
+		ref = r
+	} else {
+		ref.Path = fn
+	}
 
-	ref := &provider.Reference{Path: fn}
+	sublog := appctx.GetLogger(ctx).With().Any("ref", ref).Logger()
 
 	s.handlePut(ctx, w, r, ref, sublog)
 }

@@ -529,10 +529,10 @@ func (fs *Eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 
 func (fs *Eosfs) EncodeAppName(a string) string {
 	// this function returns the string to be used as EOS "app" tag, both in uploads and when handling locks;
-	// note that the GET (and PUT) operations in eosbinary.go and eoshttp.go use a `reva_eosclient::read`
-	// (resp. `write`) tag when no locks are involved.
+	// note that the GET (and PUT) operations in eosbinary.go and eoshttp.go use a `read`
+	// (resp. `write`) app name when no locks are involved.
 	r := strings.NewReplacer(" ", "_")
-	return "reva_eosclient::app_" + strings.ToLower(r.Replace(a))
+	return eosclient.EosAppPrefix + "_" + strings.ToLower(r.Replace(a))
 }
 
 func (fs *Eosfs) getLockPayloads(ctx context.Context, path string) (string, string, error) {
@@ -1274,14 +1274,17 @@ func (fs *Eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (totalby
 		return 0, 0, errors.Wrap(err, "eosfs: no user in ctx")
 	}
 	// lightweight accounts don't have quota nodes, so we're passing an empty string as path
-	auth, err := fs.getUserAuth(ctx, u, "")
+	userAuth, err := fs.getUserAuth(ctx, u, "")
 	if err != nil {
 		return 0, 0, err
 	}
-
 	cboxAuth := utils.GetEmptyAuth()
 
-	qi, err := fs.c.GetQuota(ctx, auth.Role.UID, cboxAuth, fs.conf.QuotaNode)
+	if ref.Path != fs.conf.QuotaNode && ref.Path != "" {
+		ref.Path = fs.wrap(ctx, ref.Path)
+	}
+
+	qi, err := fs.c.GetQuota(ctx, userAuth, cboxAuth, ref.Path)
 	if err != nil {
 		err := errors.Wrap(err, "eosfs: error getting quota")
 		return 0, 0, err

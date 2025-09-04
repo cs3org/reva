@@ -36,8 +36,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/logger"
 )
 
-const EOS_APP_HEADER = "eos.app"
-
 // HTTPOptions to configure the Client.
 type HTTPOptions struct {
 
@@ -276,7 +274,7 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 		return nil, err
 	}
 	// similar to eosbinary.go::Read()
-	req.Header.Set(EOS_APP_HEADER, "reva_eosclient::read")
+	req.Header.Set(eosclient.EosAppHeader, fmt.Sprintf("%s_read", eosclient.EosAppPrefix))
 
 	ntries := 0
 	nredirs := 0
@@ -387,13 +385,15 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, finalurl, nil)
 	if err != nil {
-		log.Error().Str("func", "PUTFile").Str("url", finalurl).Str("err", err.Error()).Msg("can't create request")
+		log.Error().Str("func", "PUTFile").Str("url", finalurl).Str("app", app).Str("err", err.Error()).Msg("can't create request")
 		return err
 	}
 
-	if app != "" {
-		req.Header.Set(EOS_APP_HEADER, app)
+	// prepare the app tag: if given (e.g. when file is locked), use it, else tag the traffic as write
+	if app == "" {
+		app = fmt.Sprintf("%s_write", eosclient.EosAppPrefix)
 	}
+	req.Header.Set(eosclient.EosAppHeader, app)
 	req.Close = true
 
 	ntries := 0
@@ -411,7 +411,7 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 		}
 
 		// Execute the request. I don't like that there is no explicit timeout or buffer control on the input stream
-		log.Debug().Str("func", "PUTFile").Msg("sending req")
+		log.Debug().Str("func", "PUTFile").Any("headers", req.Header).Msg("sending req")
 
 		// c.doReq sets headers such as remoteuser and x-gateway-authorization
 		// we don't want those when using a token (i.e. ?authz=), so in this case

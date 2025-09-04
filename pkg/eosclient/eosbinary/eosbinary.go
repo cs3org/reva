@@ -241,9 +241,6 @@ func (c *Client) executeEOS(ctx context.Context, cmdArgs []string, auth eosclien
 		cmd.Env = append(cmd.Env, "KRB5CCNAME=FILE:/dev/null") // do not try to use krb
 	}
 
-	// add application label
-	// cmd.Args = append(cmd.Args, "-a", "reva_eosclient::meta")
-
 	cmd.Args = append(cmd.Args, cmdArgs...)
 
 	t := trace.Get(ctx)
@@ -635,8 +632,15 @@ func deserializeAttribute(attrStr string) (*eosclient.Attribute, error) {
 }
 
 // GetQuota gets the quota of a user on the quota node defined by path.
-func (c *Client) GetQuota(ctx context.Context, username string, rootAuth eosclient.Authorization, path string) (*eosclient.QuotaInfo, error) {
-	args := []string{"quota", "ls", "-u", username, "-m"}
+func (c *Client) GetQuota(ctx context.Context, user eosclient.Authorization, rootAuth eosclient.Authorization, path string) (*eosclient.QuotaInfo, error) {
+	var args []string
+	// NewStyle project quota
+	if user.Role.GID == "99" {
+		args = []string{"quota", "ls", "-g", "99", "-p", path}
+	} else {
+		// Old style quota
+		args = []string{"quota", "ls", "-u", user.Role.UID, "-m"}
+	}
 	stdout, _, err := c.executeEOS(ctx, args, rootAuth)
 	if err != nil {
 		return nil, err
@@ -736,7 +740,7 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 	if auth.Token != "" {
 		args[3] += "?authz=" + auth.Token
 	} else if auth.Role.UID != "" && auth.Role.GID != "" {
-		args = append(args, fmt.Sprintf("-OSeos.ruid=%s&eos.rgid=%s&eos.app=reva_eosclient::read", auth.Role.UID, auth.Role.GID))
+		args = append(args, fmt.Sprintf("-OSeos.ruid=%s&eos.rgid=%s&%s=%s_read", auth.Role.UID, auth.Role.GID, eosclient.EosAppParam, eosclient.EosAppPrefix))
 	}
 
 	_, _, err := c.executeXRDCopy(ctx, args)
@@ -776,7 +780,11 @@ func (c *Client) writeFile(ctx context.Context, auth eosclient.Authorization, pa
 	if auth.Token != "" {
 		args[4] += "?authz=" + auth.Token
 	} else if auth.Role.UID != "" && auth.Role.GID != "" {
-		options += fmt.Sprintf("&eos.ruid=%s&eos.rgid=%s", auth.Role.UID, auth.Role.GID)
+		// prepare the app tag: if given (e.g. when file is locked), use it, else tag the traffic as write
+		if app == "" {
+			app = fmt.Sprintf("%s_write", eosclient.EosAppPrefix)
+		}
+		options += fmt.Sprintf("&eos.ruid=%s&eos.rgid=%s&%s=%s", auth.Role.UID, auth.Role.GID, eosclient.EosAppParam, app)
 	} else {
 		return errors.New("No authentication provided")
 	}

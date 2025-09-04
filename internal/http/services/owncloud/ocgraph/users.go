@@ -64,9 +64,9 @@ func (s UserSelectableProperty) Valid() bool {
 func (s *svc) getMe(w http.ResponseWriter, r *http.Request) {
 	user := appctx.ContextMustGetUser(r.Context())
 	me := &libregraph.User{
-		DisplayName:              &user.DisplayName,
+		DisplayName:              user.DisplayName,
 		Mail:                     &user.Mail,
-		OnPremisesSamAccountName: &user.Username,
+		OnPremisesSamAccountName: user.Username,
 		Id:                       &user.Id.OpaqueId,
 	}
 	_ = json.NewEncoder(w).Encode(me)
@@ -106,7 +106,7 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if users.Status.Code != rpcv1beta1.Code_CODE_OK {
-		handleRpcStatus(ctx, users.Status, w)
+		handleRpcStatus(ctx, users.Status, "ocgraph FindUsers request failed", w)
 		return
 	}
 
@@ -174,8 +174,8 @@ func mapToLibregraphUsers(users []*userpb.User, selection []UserSelectableProper
 			lgUser = libregraph.User{
 				Id:                       &u.Id.OpaqueId,
 				Mail:                     &u.Mail,
-				OnPremisesSamAccountName: &u.Username,
-				DisplayName:              &u.DisplayName,
+				OnPremisesSamAccountName: u.Username,
+				DisplayName:              u.DisplayName,
 			}
 		} else {
 			for _, prop := range selection {
@@ -197,11 +197,11 @@ func appendPropToLgUser(u *userpb.User, lgUser libregraph.User, prop UserSelecta
 	case propUserId:
 		lgUser.Id = &u.Id.OpaqueId
 	case propUserDisplayName:
-		lgUser.DisplayName = &u.DisplayName
+		lgUser.DisplayName = u.DisplayName
 	case propUserMail:
 		lgUser.Mail = &u.Mail
 	case propUserOnPremisesSamAccountName:
-		lgUser.OnPremisesSamAccountName = &u.Username
+		lgUser.OnPremisesSamAccountName = u.Username
 	}
 	return lgUser
 }
@@ -217,7 +217,7 @@ func sortUsers(ctx context.Context, users []libregraph.User, sortKey string) ([]
 	switch UserSelectableProperty(sortKey) {
 	case propUserDisplayName:
 		slices.SortFunc(users, func(a, b libregraph.User) int {
-			return cmp.Compare(*a.DisplayName, *b.DisplayName)
+			return cmp.Compare(a.DisplayName, b.DisplayName)
 		})
 	case propUserId:
 		slices.SortFunc(users, func(a, b libregraph.User) int {
@@ -229,7 +229,7 @@ func sortUsers(ctx context.Context, users []libregraph.User, sortKey string) ([]
 		})
 	case propUserOnPremisesSamAccountName:
 		slices.SortFunc(users, func(a, b libregraph.User) int {
-			return cmp.Compare(*a.OnPremisesSamAccountName, *b.OnPremisesSamAccountName)
+			return cmp.Compare(a.OnPremisesSamAccountName, b.OnPremisesSamAccountName)
 		})
 	}
 	return users, nil
