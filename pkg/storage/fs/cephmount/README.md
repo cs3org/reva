@@ -59,7 +59,6 @@ There are 2 major testing scenarios:
 go test ./pkg/storage/fs/cephmount -v
 
 # Integration tests (requires valid CephFS mount)
-```bash
 export CEPHMOUNT_FSTAB_ENTRY="your-fstab-entry-here"
 go test -tags ceph ./pkg/storage/fs/cephmount -v
 ```
