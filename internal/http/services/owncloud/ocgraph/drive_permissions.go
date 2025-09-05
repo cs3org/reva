@@ -7,9 +7,11 @@ import (
 	"net/url"
 	"time"
 
+	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	linkv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -477,6 +479,8 @@ func (s *svc) getRootDrivePermissions(w http.ResponseWriter, r *http.Request) {
 
 func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *providerpb.Reference) (actions []string, roles []*libregraph.UnifiedRoleDefinition, perms []*libregraph.Permission, err error) {
 	log := appctx.GetLogger(ctx)
+
+	log.Info().Any("ref", ref).Msg("FindMe - get permissions by cs3 reference")
 	gw, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
@@ -492,22 +496,10 @@ func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *providerpb.
 	}
 
 	perms = make([]*libregraph.Permission, 0)
+	shares, err := s.getSharesForResource(ctx, gw, statRes.Info)
+	// TODO: error handling?
 
-	shares, err := gw.ListShares(ctx, &collaborationv1beta1.ListSharesRequest{
-		Filters: []*collaborationv1beta1.Filter{
-			{
-				Type: collaborationv1beta1.Filter_TYPE_RESOURCE_ID,
-				Term: &collaborationv1beta1.Filter_ResourceId{
-					ResourceId: statRes.Info.GetId(),
-				},
-			},
-		},
-	})
-	if err != nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-		log.Error().Interface("ref", ref).Int("code", int(statRes.Status.Code)).Str("message", statRes.Status.Message).Msg("error getting shares for resource")
-		return nil, nil, nil, err
-	}
-	for _, share := range shares.GetShares() {
+	for _, share := range shares {
 		sharePerms, err := s.shareToLibregraphPerm(ctx, &ShareOrLink{
 			shareType: "share",
 			ID:        share.GetId().GetOpaqueId(),
@@ -520,22 +512,12 @@ func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *providerpb.
 		}
 	}
 
-	links, err := gw.ListPublicShares(ctx, &linkv1beta1.ListPublicSharesRequest{
-		Filters: []*linkv1beta1.ListPublicSharesRequest_Filter{
-			{
-				Type: linkv1beta1.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID,
-				Term: &linkv1beta1.ListPublicSharesRequest_Filter_ResourceId{
-					ResourceId: statRes.Info.GetId(),
-				},
-			},
-		},
+	links, err := s.getPublicSharesForResource(ctx, gw, &providerpb.Reference{
+		ResourceId: statRes.Info.Id,
 	})
-	if err != nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-		log.Error().Interface("ref", ref).Int("code", int(statRes.Status.Code)).Str("message", statRes.Status.Message).Msg("error getting links for resource")
-		return nil, nil, nil, err
-	}
+	// TODO: error handling?
 
-	for _, link := range links.Share {
+	for _, link := range links {
 		linkPerms, err := s.shareToLibregraphPerm(ctx, &ShareOrLink{
 			shareType: "link",
 			ID:        link.GetId().GetOpaqueId(),
@@ -552,6 +534,84 @@ func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *providerpb.
 	roles = GetApplicableRoleDefinitionsForActions(actions, statRes.Info)
 
 	return actions, roles, perms, nil
+}
+
+func (s *svc) getSharesForResource(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ri *provider.ResourceInfo) ([]*collaborationv1beta1.Share, error) {
+	log := appctx.GetLogger(ctx)
+	user, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return nil, errors.New("no user provided")
+	}
+
+	req := &collaborationv1beta1.ListSharesRequest{
+		Filters: []*collaborationv1beta1.Filter{
+			{
+				Type: collaborationv1beta1.Filter_TYPE_RESOURCE_ID,
+				Term: &collaborationv1beta1.Filter_ResourceId{
+					ResourceId: ri.Id, //ri. ResourceId,
+				},
+			},
+		},
+	}
+
+	// If we are not in a project, or a project where
+	// the user is not an admin, we filter for shares belonging to the user
+	if !s.userHasAdminAccessToProject(ctx, ri) {
+		req.Filters = append(req.Filters, &collaborationv1beta1.Filter{
+			Type: collaborationv1beta1.Filter_TYPE_CREATOR,
+			Term: &collaborationv1beta1.Filter_Creator{
+				Creator: user.Id,
+			},
+		})
+	}
+
+	shareRes, err := gw.ListShares(ctx, req)
+
+	log.Info().Any("shareRes", shareRes).Err(err).Msg("FindMe - get permissions by cs3 reference - result")
+
+	if err != nil {
+		return nil, err
+	}
+	if shareRes.Status != nil && shareRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+		log.Error().Interface("ref", ri.Id).Int("code", int(shareRes.Status.Code)).Str("message", shareRes.Status.Message).Msg("error getting shares for resource")
+		return nil, err
+	}
+
+	log.Info().Any("ref", ri.Id).Any("user", user).Any("Shares", shareRes.Shares).Msg("FindMe - get permissions by cs3 reference")
+
+	return shareRes.Shares, nil
+}
+
+func (s *svc) getPublicSharesForResource(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ref *provider.Reference) ([]*linkv1beta1.PublicShare, error) {
+	log := appctx.GetLogger(ctx)
+
+	linksRes, err := gw.ListPublicShares(ctx, &linkv1beta1.ListPublicSharesRequest{
+		Filters: []*linkv1beta1.ListPublicSharesRequest_Filter{
+			{
+				Type: linkv1beta1.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID,
+				Term: &linkv1beta1.ListPublicSharesRequest_Filter_ResourceId{
+					ResourceId: ref.ResourceId,
+				},
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if linksRes.Status != nil || linksRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+		log.Error().Interface("ref", ref).Int("code", int(linksRes.Status.Code)).Str("message", linksRes.Status.Message).Msg("error getting links for resource")
+		return nil, err
+	}
+
+	return linksRes.Share, nil
+}
+
+func (s *svc) userHasAdminAccessToProject(ctx context.Context, ri *provider.ResourceInfo) bool {
+	if ri.Space.SpaceType != spaces.SpaceTypeProject.AsString() {
+		return false
+	}
+	// TODO: check permissions / role
+	return true
 }
 
 func (s *svc) writePermissions(ctx context.Context, w http.ResponseWriter, actions []string, roles []*libregraph.UnifiedRoleDefinition, perms []*libregraph.Permission) {
