@@ -248,12 +248,12 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		}
 	case int(conversions.ShareTypePublicLink):
 		// public links default to read only
-		if _, _, err := h.extractPermissions(w, r, statRes.Info, conversions.NewReaderRole()); err == nil {
+		if _, _, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
 			h.createPublicLinkShare(w, r, statRes.Info)
 		}
 	case int(conversions.ShareTypeFederatedCloudShare):
 		// federated shares default to read only
-		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewReaderRole()); err == nil {
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
 			h.createFederatedCloudShare(w, r, statRes.Info, role, val)
 		}
 	case int(conversions.ShareTypeSpaceMembership):

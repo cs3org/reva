@@ -128,7 +128,7 @@ func TestListProjects(t *testing.T) {
 					SpaceType: spaces.SpaceTypeProject.AsString(),
 					RootInfo: &provider.ResourceInfo{
 						Path:          "/path/to/project",
-						PermissionSet: conversions.NewReaderRole().CS3ResourcePermissions(),
+						PermissionSet: conversions.NewViewerRole().CS3ResourcePermissions(),
 					},
 				},
 			},

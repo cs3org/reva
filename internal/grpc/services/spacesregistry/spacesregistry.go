@@ -46,7 +46,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
-	"github.com/cs3org/reva/v3/pkg/utils/list"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -154,13 +153,13 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 
 	sp := []*provider.StorageSpace{}
 	if countTypeFilters(filters) == 0 {
-		homes, err := s.listSpacesByType(ctx, user, spaces.SpaceTypeHome)
+		homes, err := s.listSpacesByType(ctx, req, user, spaces.SpaceTypeHome)
 		if err != nil {
 			return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
 		}
 		sp = append(sp, homes...)
 
-		projects, err := s.listSpacesByType(ctx, user, spaces.SpaceTypeProject)
+		projects, err := s.listSpacesByType(ctx, req, user, spaces.SpaceTypeProject)
 		if err != nil {
 			return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
 		}
@@ -171,41 +170,25 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
 		}
 		sp = append(sp, publicSpaces...)
-	}
-
-	for _, filter := range filters {
-		switch filter.Type {
-		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
-			spaces, err := s.listSpacesByType(ctx, user, spaces.SpaceType(filter.Term.(*provider.ListStorageSpacesRequest_Filter_SpaceType).SpaceType))
-			if err != nil {
-				return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
+	} else {
+		// Here, we only check for the SpaceType filter
+		// Other filters are handled at the driver level
+		for _, filter := range filters {
+			switch filter.Type {
+			case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
+				spaces, err := s.listSpacesByType(ctx, req, user, spaces.SpaceType(filter.Term.(*provider.ListStorageSpacesRequest_Filter_SpaceType).SpaceType))
+				if err != nil {
+					return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
+				}
+				sp = append(sp, spaces...)
 			}
-			sp = append(sp, spaces...)
-		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-		default:
-			return nil, errtypes.NotSupported("filter not supported")
 		}
-	}
-
-	// TODO: we should filter at the driver level.
-	// for now let's do it here. optimizations later :)
-	if id, ok := isFilterByID(req.Filters); ok {
-		sp = list.Filter(sp, func(s *provider.StorageSpace) bool { return s.Id.OpaqueId == id })
 	}
 
 	return &provider.ListStorageSpacesResponse{Status: status.NewOK(ctx), StorageSpaces: sp}, nil
 }
 
-func isFilterByID(filters []*provider.ListStorageSpacesRequest_Filter) (string, bool) {
-	for _, f := range filters {
-		if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
-			return f.Term.(*provider.ListStorageSpacesRequest_Filter_Id).Id.OpaqueId, true
-		}
-	}
-	return "", false
-}
-
-func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, spaceType spaces.SpaceType) ([]*provider.StorageSpace, error) {
+func (s *service) listSpacesByType(ctx context.Context, req *provider.ListStorageSpacesRequest, user *userpb.User, spaceType spaces.SpaceType) ([]*provider.StorageSpace, error) {
 	sp := []*provider.StorageSpace{}
 
 	switch spaceType {
@@ -219,7 +202,9 @@ func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, space
 		}
 	case spaces.SpaceTypeProject:
 		log.Debug().Msg("Listing spaces by type project")
-		resp, err := s.projects.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{})
+		resp, err := s.projects.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{
+			Filters: req.Filters,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -235,7 +220,19 @@ func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, space
 
 		// For now, we also return public spaces when you query for projects
 		// as the front-end will filter these
-		fallthrough
+		// but only if the request was not made with an ID-filter,
+		// as that would mean the requestor is looking for a specific space
+		//
+		// Having a `fallthrough` here would've been nice, but Go does
+		// not allow conditional fallthroughs
+		if _, isFilterById := isFilterByID(req.Filters); !isFilterById {
+			publicSpaces, err := s.getPublicSpaces(ctx)
+			if err != nil {
+				return nil, err
+			}
+
+			sp = append(sp, publicSpaces...)
+		}
 
 	case spaces.SpaceTypePublic:
 		publicSpaces, err := s.getPublicSpaces(ctx)
@@ -310,21 +307,21 @@ func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpa
 	}
 
 	// Add mtime of space
-	var resourceInfo *provider.ResourceInfo
-	if res, err := s.resourceInfoCache.Get(proj.RootInfo.Path); err == nil && res != nil {
-		resourceInfo = res
-	} else {
-		statRes, err := s.gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
-			Path: proj.RootInfo.Path,
-		}})
-		if err != nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-			return fmt.Errorf("failed to stat path %s for project %s", proj.RootInfo.Path, proj.Name)
-		}
-		resourceInfo = statRes.Info
-		s.resourceInfoCache.Set(proj.RootInfo.Path, resourceInfo)
-	}
+	// var resourceInfo *provider.ResourceInfo
+	// if res, err := s.resourceInfoCache.Get(proj.RootInfo.Path); err == nil && res != nil {
+	// 	resourceInfo = res
+	// } else {
+	// 	statRes, err := s.gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
+	// 		Path: proj.RootInfo.Path,
+	// 	}})
+	// 	if err != nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+	// 		return fmt.Errorf("failed to stat path %s for project %s", proj.RootInfo.Path, proj.Name)
+	// 	}
+	// 	resourceInfo = statRes.Info
+	// 	s.resourceInfoCache.Set(proj.RootInfo.Path, resourceInfo)
+	// }
 
-	proj.Mtime = resourceInfo.Mtime
+	// proj.Mtime = resourceInfo.Mtime
 	return nil
 }
 
@@ -374,6 +371,7 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 			QuotaMaxBytes:  quota.TotalBytes,
 			RemainingBytes: quota.TotalBytes - quota.UsedBytes,
 		},
+		PermissionSet: conversions.NewManagerRole().CS3ResourcePermissions(),
 	}, nil
 }
 
@@ -440,6 +438,15 @@ func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateSt
 func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
 	// As for the creation, the deletion of a space is implemented externally for now
 	return nil, errors.New("not supported")
+}
+
+func isFilterByID(filters []*provider.ListStorageSpacesRequest_Filter) (string, bool) {
+	for _, f := range filters {
+		if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
+			return f.Term.(*provider.ListStorageSpacesRequest_Filter_Id).Id.OpaqueId, true
+		}
+	}
+	return "", false
 }
 
 func (s *service) Register(ss *grpc.Server) {

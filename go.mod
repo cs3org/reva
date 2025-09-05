@@ -14,7 +14,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.15.0
 	github.com/creasty/defaults v1.8.0
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20250902085700-00cd04c8e01c
+	github.com/cs3org/go-cs3apis v0.0.0-20250908152307-4ca807afe54e
 	github.com/dgraph-io/ristretto v0.2.0
 	github.com/dolthub/go-mysql-server v0.14.0
 	github.com/glpatcern/go-mime v0.0.0-20221026162842-2a8d71ad17a9
