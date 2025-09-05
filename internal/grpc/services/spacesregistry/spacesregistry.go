@@ -250,70 +250,79 @@ func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, space
 }
 
 func (s *service) decorateProjects(ctx context.Context, projects []*provider.StorageSpace) error {
+	log := appctx.GetLogger(ctx)
 	for _, proj := range projects {
-		// Add quota
-
-		// To get the quota for a project, we cannot do the request
-		// on behalf of the current logged user, because the project
-		// is owned by an other account, in general different from the
-		// logged in user.
-		// We need then to impersonate the owner and ask the quota
-		// on behalf of him.
-
-		// This is no longer necessary for the new project quota nodes,
-		// but we need to keep it here until we migrate all of the old
-		// project quota nodes
-		// See CERNBOX-3995
-
-		authRes, err := s.gw.Authenticate(ctx, &gateway.AuthenticateRequest{
-			Type:         "machine",
-			ClientId:     proj.Owner.Id.OpaqueId,
-			ClientSecret: s.c.MachineSecret,
-		})
+		err := s.decorateProject(ctx, proj)
 		if err != nil {
-			return err
+			log.Warn().Err(err).Msgf("Failed to decorate project %s", proj.Name)
 		}
-		if authRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-			return errors.New(authRes.Status.Message)
-		}
-
-		token := authRes.Token
-		owner := authRes.User
-
-		ownerCtx := appctx.ContextSetToken(context.Background(), token)
-		ownerCtx = metadata.AppendToOutgoingContext(ownerCtx, appctx.TokenHeader, token)
-		ownerCtx = appctx.ContextSetUser(ownerCtx, owner)
-
-		log.Debug().Msgf("Fetching quota for project %s", proj.Name)
-		quota, err := s.gw.GetQuota(ownerCtx, &gateway.GetQuotaRequest{
-			Ref: &provider.Reference{
-				Path: proj.RootInfo.Path,
-			},
-		})
-		if err != nil {
-			log.Err(err).Msgf("Failed to fetch quota for project %s", proj.Name)
-			return err
-		}
-		proj.Quota = &provider.Quota{
-			QuotaMaxBytes:  quota.TotalBytes,
-			RemainingBytes: quota.TotalBytes - quota.UsedBytes,
-		}
-
-		// Add mtime of space
-		statRes, err := s.gw.Stat(ctx, &provider.StatRequest{
-			Ref: &provider.Reference{
-				Path: proj.RootInfo.Path,
-			},
-		})
-		if err != nil {
-			return err
-		}
-		if statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-			return errors.New(statRes.Status.Message)
-		}
-
-		proj.Mtime = statRes.Info.Mtime
 	}
+	return nil
+}
+
+func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpace) error {
+	// Add quota
+
+	// To get the quota for a project, we cannot do the request
+	// on behalf of the current logged user, because the project
+	// is owned by an other account, in general different from the
+	// logged in user.
+	// We need then to impersonate the owner and ask the quota
+	// on behalf of him.
+
+	// This is no longer necessary for the new project quota nodes,
+	// but we need to keep it here until we migrate all of the old
+	// project quota nodes
+	// See CERNBOX-3995
+
+	authRes, err := s.gw.Authenticate(ctx, &gateway.AuthenticateRequest{
+		Type:         "machine",
+		ClientId:     proj.Owner.Id.OpaqueId,
+		ClientSecret: s.c.MachineSecret,
+	})
+	if err != nil {
+		return err
+	}
+	if authRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return errors.New(authRes.Status.Message)
+	}
+
+	token := authRes.Token
+	owner := authRes.User
+
+	ownerCtx := appctx.ContextSetToken(context.Background(), token)
+	ownerCtx = metadata.AppendToOutgoingContext(ownerCtx, appctx.TokenHeader, token)
+	ownerCtx = appctx.ContextSetUser(ownerCtx, owner)
+
+	log.Debug().Msgf("Fetching quota for project %s", proj.Name)
+	quota, err := s.gw.GetQuota(ownerCtx, &gateway.GetQuotaRequest{
+		Ref: &provider.Reference{
+			Path: proj.RootInfo.Path,
+		},
+	})
+	if err != nil {
+		log.Err(err).Msgf("Failed to fetch quota for project %s", proj.Name)
+		return err
+	}
+	proj.Quota = &provider.Quota{
+		QuotaMaxBytes:  quota.TotalBytes,
+		RemainingBytes: quota.TotalBytes - quota.UsedBytes,
+	}
+
+	// Add mtime of space
+	statRes, err := s.gw.Stat(ctx, &provider.StatRequest{
+		Ref: &provider.Reference{
+			Path: proj.RootInfo.Path,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return errors.New(statRes.Status.Message)
+	}
+
+	proj.Mtime = statRes.Info.Mtime
 	return nil
 }
 
