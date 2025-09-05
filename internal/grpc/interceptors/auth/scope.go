@@ -29,6 +29,7 @@ import (
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -112,6 +113,11 @@ func checkLightweightScope(ctx context.Context, req interface{}, tokenScope map[
 	}
 
 	switch r := req.(type) {
+	// No matter the role, because preferences are scoped to the user
+	case *preferences.GetKeyRequest:
+		return true
+	case *preferences.SetKeyRequest:
+		return true
 	// Viewer role
 	case *registry.GetStorageProvidersRequest:
 		return true

@@ -30,9 +30,8 @@ import (
 
 	"github.com/CiscoM31/godata"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	preferencesv1beta1 "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
+	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	libregraph "github.com/owncloud/libre-graph-api-go"
@@ -80,16 +79,20 @@ func (s *svc) getMe(w http.ResponseWriter, r *http.Request) {
 
 	gw, err := s.getClient()
 	if err == nil {
-		lang, err := gw.GetKey(r.Context(), &preferencesv1beta1.GetKeyRequest{
-			Key: &preferencesv1beta1.PreferenceKey{
+		lang, err := gw.GetKey(r.Context(), &preferences.GetKeyRequest{
+			Key: &preferences.PreferenceKey{
 				Key:       languageKey,
 				Namespace: preferencesNS,
 			},
 		})
-		if err == nil && lang.Status != nil && lang.Status.Code == rpcv1beta1.Code_CODE_OK {
+		if err == nil && lang.Status != nil && lang.Status.Code == rpc.Code_CODE_OK {
 			me.PreferredLanguage = libregraph.PtrString(lang.Val)
 		} else {
-			log.Warn().Err(err).Any("Status", lang.Status).Msg("Failed to fetch language for user")
+			if lang != nil {
+				log.Warn().Err(err).Any("Status", lang.Status).Msg("Failed to fetch language for user")
+			} else {
+				log.Warn().Err(err).Msg("Failed to fetch language for user")
+			}
 		}
 	}
 	_ = json.NewEncoder(w).Encode(me)
@@ -127,10 +130,11 @@ func (s *svc) patchMe(w http.ResponseWriter, r *http.Request) {
 	gw, err := s.getClient()
 	if err != nil {
 		handleError(ctx, err, http.StatusInternalServerError, w)
+		return
 	}
 
-	res, err := gw.SetKey(ctx, &preferencesv1beta1.SetKeyRequest{
-		Key: &preferencesv1beta1.PreferenceKey{
+	res, err := gw.SetKey(ctx, &preferences.SetKeyRequest{
+		Key: &preferences.PreferenceKey{
 			Key:       languageKey,
 			Namespace: preferencesNS,
 		},
@@ -139,9 +143,11 @@ func (s *svc) patchMe(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		handleError(ctx, err, http.StatusInternalServerError, w)
+		return
 	}
-	if res.Status != nil && res.Status.Code != rpc.Code_CODE_OK {
+	if res != nil && res.Status != nil && res.Status.Code != rpc.Code_CODE_OK {
 		handleRpcStatus(ctx, res.Status, "Failed to set preference key in gateway", w)
+		return
 	}
 
 	_ = json.NewEncoder(w).Encode(me)
@@ -187,7 +193,7 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
 	}
-	if users.Status.Code != rpcv1beta1.Code_CODE_OK {
+	if users.Status.Code != rpc.Code_CODE_OK {
 		handleRpcStatus(ctx, users.Status, "ocgraph FindUsers request failed", w)
 		return
 	}
@@ -218,7 +224,7 @@ func (s *svc) getUserInfo(ctx context.Context, id *userpb.UserId) (*userpb.User,
 	if err != nil {
 		return nil, err
 	}
-	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+	if res.Status.Code != rpc.Code_CODE_OK {
 		return nil, errors.New(res.Status.Message)
 	}
 
