@@ -1,0 +1,9 @@
+Enhancement: Add OCM CreateShare to LibreGraph implementation 
+
+- LinkOrShare has been changed to include OCMShares and renamed
+- Web app now sends a POST request instead of a GET for OCM invite generation, this has been reflected in the backend.
+- Adds the IDP to the user id when returned if user is of type federated.
+- Cleaned up dead code since the /sciencemesh/create-share is no longer used.
+- Conversions now take OCM shares into account as well.
+
+https://github.com/cs3org/reva/pull/5286/

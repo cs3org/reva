@@ -25,7 +25,6 @@ import (
 	_ "github.com/cs3org/reva/v3/internal/http/services/datagateway"
 	_ "github.com/cs3org/reva/v3/internal/http/services/dataprovider"
 	_ "github.com/cs3org/reva/v3/internal/http/services/experimental/overleaf"
-	_ "github.com/cs3org/reva/v3/internal/http/services/experimental/sciencemesh"
 	_ "github.com/cs3org/reva/v3/internal/http/services/helloworld"
 	_ "github.com/cs3org/reva/v3/internal/http/services/metrics"
 	_ "github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
@@ -38,6 +37,7 @@ import (
 	_ "github.com/cs3org/reva/v3/internal/http/services/pprof"
 	_ "github.com/cs3org/reva/v3/internal/http/services/preferences"
 	_ "github.com/cs3org/reva/v3/internal/http/services/prometheus"
+	_ "github.com/cs3org/reva/v3/internal/http/services/sciencemesh"
 	_ "github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	// Add your own service here.
 )
