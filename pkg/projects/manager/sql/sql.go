@@ -70,6 +70,7 @@ const cacheKey = "projects/projectsListCache"
 // Project represents a project in the DB.
 type Project struct {
 	gorm.Model
+	SpaceID   string `gorm:"size:255;uniqueIndex:i_space_id"`
 	StorageID string `gorm:"size:255"`
 	Path      string
 	Name      string `gorm:"size:255;uniqueIndex:i_name_archived_at"`
@@ -153,7 +154,7 @@ func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
 }
 
 func (m *mgr) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
-	var fetchedProjects []*Project
+	log := appctx.GetLogger(ctx)
 
 	user, ok := appctx.ContextGetUser(ctx)
 	if !ok {
@@ -165,21 +166,51 @@ func (m *mgr) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 		}, nil
 	}
 
-	if res, err := m.cache.Get(cacheKey); err == nil && res != nil {
-		fetchedProjects = res.([]*Project)
-	} else {
-		query := m.db.Model(&Project{}).Where("archived_at is null")
-		res := query.Find(&fetchedProjects)
-		if res.Error != nil {
-			return nil, res.Error
+	var fetchedProjects []*Project
+	// if res, err := m.cache.Get(cacheKey); len(req.Filters) == 0 && err == nil && res != nil {
+	// 	fetchedProjects = res.([]*Project)
+	// } else {
+	// 	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	// 	sql := db.ToSQL(func(tx *gorm.DB) *gorm.DB {
+	// 		q := tx.Model(&Project{}).Where("archived_at is null").Find(&fetchedProjects)
+	// 		q = m.appendFiltersToQuery(ctx, q, req.Filters)
+	// 		return q
+	// 	})
+	// 	log.Info().Any("filters", req.Filters).Str("SQL", sql).Msg("FindMe3")
+
+	// 	query := m.db.Model(&Project{}).Where("archived_at is null")
+	// 	query = m.appendFiltersToQuery(ctquery, req.Filters)
+
+	// 	res := query.Find(&fetchedProjects)
+	// 	if res.Error != nil {
+	// 		return nil, res.Error
+	// 	}
+	// 	m.cache.Set(cacheKey, fetchedProjects)
+	// }
+
+	query := m.db.Model(&Project{}).Where("archived_at is null")
+	if len(req.GetFilters()) > 0 {
+		filter := req.GetFilters()[0]
+		if filter.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
+			query = query.Where("space_id = ?", filter.GetId().OpaqueId)
+			log.Info().Msg("FindMe - added space_id to query")
 		}
-		m.cache.Set(cacheKey, fetchedProjects)
 	}
+
+	res := query.Find(&fetchedProjects)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+
+	log.Info().Any("projects", fetchedProjects).Msg("FindMe - result")
 
 	projects := []*provider.StorageSpace{}
 	for _, p := range fetchedProjects {
 		if perms, ok := projectBelongsToUser(user, p); ok {
+			//log.Info().Msgf("FindMe2 - project %s ListGrants? %t", p.Name, perms.ListGrants)
 			projects = append(projects, projectToStorageSpace(p, perms))
+		} else {
+			log.Error().Msgf("FindMe - User does not have access to project %s - has %d groups", p.Name, len(user.Groups))
 		}
 	}
 
@@ -314,8 +345,51 @@ func projectToStorageSpace(p *Project, perms *provider.ResourcePermissions) *pro
 			Path:          p.Path,
 			PermissionSet: perms,
 		},
-		Description: p.Description,
-		ThumbnailId: p.ThumbnailPath,
-		ReadmeId:    p.ReadmePath,
+		Description:   p.Description,
+		ThumbnailId:   p.ThumbnailPath,
+		ReadmeId:      p.ReadmePath,
+		PermissionSet: perms,
 	}
+}
+
+func (m *mgr) appendFiltersToQuery(ctx context.Context, query *gorm.DB, filters []*provider.ListStorageSpacesRequest_Filter) *gorm.DB {
+	// We want to chain filters of different types with AND
+	// and filters of the same type with OR
+	// Therefore, we group them by type
+	groupedFilters := m.GroupFiltersByType(filters)
+
+	for filtertype, filters := range groupedFilters {
+		switch filtertype {
+		case provider.ListStorageSpacesRequest_Filter_TYPE_PATH:
+			innerQuery := m.db
+			for i, filter := range filters {
+				if i == 0 {
+					innerQuery = innerQuery.Where("path = ?", filter.GetPath())
+				} else {
+					innerQuery = innerQuery.Or("path = ?", filter.GetPath())
+				}
+			}
+			query = query.Where(innerQuery)
+		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
+			innerQuery := m.db
+			for i, filter := range filters {
+				if i == 0 {
+					innerQuery = innerQuery.Where("space_id = ?", filter.GetId().OpaqueId)
+				} else {
+					innerQuery = innerQuery.Or("space_id = ?", filter.GetId().OpaqueId)
+				}
+			}
+			query = query.Where(innerQuery)
+		}
+	}
+	return query
+}
+
+// GroupFiltersByType groups the given filters and returns a map using the filter type as the key.
+func (m *mgr) GroupFiltersByType(filters []*provider.ListStorageSpacesRequest_Filter) map[provider.ListStorageSpacesRequest_Filter_Type][]*provider.ListStorageSpacesRequest_Filter {
+	grouped := make(map[provider.ListStorageSpacesRequest_Filter_Type][]*provider.ListStorageSpacesRequest_Filter)
+	for _, f := range filters {
+		grouped[f.Type] = append(grouped[f.Type], f)
+	}
+	return grouped
 }

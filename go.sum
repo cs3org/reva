@@ -897,6 +897,12 @@ github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e h1:tqSPWQeueWTKnJVMJff
 github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e/go.mod h1:XJEZ3/EQuI3BXTp/6DUzFr850vlxq11I6satRtz0YQ4=
 github.com/cs3org/go-cs3apis v0.0.0-20250902085700-00cd04c8e01c h1:LwCysopto1uLelEkfXFEk5jOqrphw8CRGRdAej1Km/8=
 github.com/cs3org/go-cs3apis v0.0.0-20250902085700-00cd04c8e01c/go.mod h1:DedpcqXl193qF/08Y04IO0PpxyyMu8+GrkD6kWK2MEQ=
+github.com/cs3org/go-cs3apis v0.0.0-20250908101802-cebd640521ba h1:E9kpTupCWD6IbppIPvIx1QAbfiilhhl/4q5onqndF6s=
+github.com/cs3org/go-cs3apis v0.0.0-20250908101802-cebd640521ba/go.mod h1:DedpcqXl193qF/08Y04IO0PpxyyMu8+GrkD6kWK2MEQ=
+github.com/cs3org/go-cs3apis v0.0.0-20250908131828-2f5e9a361154 h1:kly4UEZ+7ygUa9L8OJlgbkEkf/nuDZ+SbaYsPxMFAW0=
+github.com/cs3org/go-cs3apis v0.0.0-20250908131828-2f5e9a361154/go.mod h1:DedpcqXl193qF/08Y04IO0PpxyyMu8+GrkD6kWK2MEQ=
+github.com/cs3org/go-cs3apis v0.0.0-20250908152307-4ca807afe54e h1:fC/BWMVWNFlSbzvSp2xTaH0qpJiq7ScRrOsCzpgi1xI=
+github.com/cs3org/go-cs3apis v0.0.0-20250908152307-4ca807afe54e/go.mod h1:DedpcqXl193qF/08Y04IO0PpxyyMu8+GrkD6kWK2MEQ=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

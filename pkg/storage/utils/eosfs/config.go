@@ -169,4 +169,6 @@ type Config struct {
 	// AllowInsecure determines whether EOS can fall back to no TLS
 	// Default is false
 	AllowInsecure bool `mapstructure:"allow_insecure"`
+
+	ProvidesSpaceType string `docs:"nil;Defines which type of spaces this storage provider provides (e.g. home, project, ...)."  mapstructure:"provides_space_type"`
 }
