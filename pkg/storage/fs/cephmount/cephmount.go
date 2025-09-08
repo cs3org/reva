@@ -636,7 +636,26 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 		}
 
 		files = append(files, ri)
+		
+		// Debug log each entry being returned
+		log.Debug().
+			Str("operation", "ListFolder").
+			Str("entry_path", ri.Path).
+			Str("entry_name", entry.Name()).
+			Str("entry_type", ri.Type.String()).
+			Uint64("entry_size", ri.Size).
+			Str("entry_id", ri.Id.OpaqueId).
+			Str("filesystem_path", filepath.Join(path, entry.Name())).
+			Msg("cephmount ListFolder returning entry")
 	}
+
+	// Debug log summary of all entries returned
+	log.Debug().
+		Str("operation", "ListFolder").
+		Str("requested_path", receivedPath).
+		Str("filesystem_path", path).
+		Int("total_entries", len(files)).
+		Msg("cephmount ListFolder operation completed")
 
 	return files, nil
 }
