@@ -623,7 +623,7 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 	}
 
 	// Debug log what entries were found from filesystem
-	log.Debug().
+	log.Info().
 		Str("operation", "ListFolder").
 		Str("filesystem_path", path).
 		Int("raw_entries_found", len(entries)).
@@ -631,7 +631,7 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 	
 	// Log individual raw entries if there are any
 	for i, entry := range entries {
-		log.Debug().
+		log.Info().
 			Str("operation", "ListFolder").
 			Int("entry_index", i).
 			Str("entry_name", entry.Name()).
@@ -642,7 +642,7 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 
 	for _, entry := range entries {
 		if fs.conf.HiddenDirs[entry.Name()] {
-			log.Debug().
+			log.Info().
 				Str("operation", "ListFolder").
 				Str("entry_name", entry.Name()).
 				Str("reason", "hidden_directory").
@@ -653,7 +653,7 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 		ri, err := fs.fileAsResourceInfo(filepath.Join(path, entry.Name()), entry, mdKeys)
 		if ri == nil || err != nil {
 			if err != nil {
-				log.Debug().
+				log.Info().
 					Str("operation", "ListFolder").
 					Str("entry_name", entry.Name()).
 					Str("reason", "fileAsResourceInfo_error").
@@ -661,7 +661,7 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 					Any("resourceInfo", ri).
 					Msg("cephmount ListFolder skipping entry")
 			} else {
-				log.Debug().
+				log.Info().
 					Str("operation", "ListFolder").
 					Str("entry_name", entry.Name()).
 					Str("reason", "fileAsResourceInfo_returned_nil").
@@ -673,7 +673,7 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 		files = append(files, ri)
 		
 		// Debug log each entry being returned
-		log.Debug().
+		log.Info().
 			Str("operation", "ListFolder").
 			Str("entry_path", ri.Path).
 			Str("entry_name", entry.Name()).
@@ -685,7 +685,7 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 	}
 
 	// Debug log summary of all entries returned
-	log.Debug().
+	log.Info().
 		Str("operation", "ListFolder").
 		Str("requested_path", receivedPath).
 		Str("filesystem_path", path).
