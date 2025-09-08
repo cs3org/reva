@@ -614,13 +614,36 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 
 	fs.logOperationWithPaths(ctx, "ListFolder", receivedPath, path)
 
+	// INFO: About to call readDirectoryAsUser
+	log.Info().
+		Str("operation", "ListFolder").
+		Str("chroot_path", path).
+		Str("full_filesystem_path", filepath.Join(fs.chrootDir, path)).
+		Msg("cephmount ListFolder about to call readDirectoryAsUser")
+
 	// Execute directory listing on user's thread with correct UID
 	entries, err := fs.readDirectoryAsUser(ctx, path)
 	if err != nil {
+		// INFO: readDirectoryAsUser failed
+		log.Info().
+			Str("operation", "ListFolder").
+			Str("chroot_path", path).
+			Str("full_filesystem_path", filepath.Join(fs.chrootDir, path)).
+			Err(err).
+			Msg("cephmount ListFolder readDirectoryAsUser failed")
+		
 		wrappedErr := errors.Wrap(err, "cephmount: failed to read directory")
 		fs.logOperationError(ctx, "ListFolder", path, wrappedErr)
 		return nil, wrappedErr
 	}
+
+	// INFO: readDirectoryAsUser succeeded
+	log.Info().
+		Str("operation", "ListFolder").
+		Str("chroot_path", path).
+		Str("full_filesystem_path", filepath.Join(fs.chrootDir, path)).
+		Int("entries_returned", len(entries)).
+		Msg("cephmount ListFolder readDirectoryAsUser succeeded")
 
 	// Debug log what entries were found from filesystem
 	log.Info().
