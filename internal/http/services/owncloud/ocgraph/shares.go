@@ -292,7 +292,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 		case "remote":
 			username, idp := s.decomposeOCMAddress(*recipient.ObjectId)
 			if username == "" || idp == "" {
-				handleError(ctx, errors.New("invalid remote recipient address, must be user@idp"), http.StatusBadRequest, w)
+				handleError(ctx, errors.New("invalid remote recipient address, must be remote_user_id@remote_ocm_fqdn"), http.StatusBadRequest, w)
 				return
 			}
 			resp, err := s.createOCMShare(ctx, gw, resourceId, username, idp, roles[0])
