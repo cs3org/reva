@@ -105,7 +105,10 @@ func (s *server) Stop() error {
 		s.log.Info().Msgf("gracefully stopping %s:%s reva %s server", s.srv.Network(), s.srv.Address(), s.protocol)
 		if err := s.srv.GracefulStop(); err != nil {
 			s.log.Error().Err(err).Msgf("error gracefully stopping reva %s server", s.protocol)
-			s.srv.Stop()
+			err := s.srv.Stop()
+			if err != nil {
+				s.log.Error().Err(err).Msgf("error stopping reva %s server", s.protocol)
+			}
 		}
 		close(done)
 	}()
