@@ -622,15 +622,50 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 		return nil, wrappedErr
 	}
 
+	// Debug log what entries were found from filesystem
+	log.Debug().
+		Str("operation", "ListFolder").
+		Str("filesystem_path", path).
+		Int("raw_entries_found", len(entries)).
+		Msg("cephmount ListFolder raw directory read completed")
+	
+	// Log individual raw entries if there are any
+	for i, entry := range entries {
+		log.Debug().
+			Str("operation", "ListFolder").
+			Int("entry_index", i).
+			Str("entry_name", entry.Name()).
+			Bool("is_dir", entry.IsDir()).
+			Str("filesystem_path", path).
+			Msg("cephmount ListFolder found raw directory entry")
+	}
+
 	for _, entry := range entries {
 		if fs.conf.HiddenDirs[entry.Name()] {
+			log.Debug().
+				Str("operation", "ListFolder").
+				Str("entry_name", entry.Name()).
+				Str("reason", "hidden_directory").
+				Msg("cephmount ListFolder skipping entry")
 			continue
 		}
 
 		ri, err := fs.fileAsResourceInfo(filepath.Join(path, entry.Name()), entry, mdKeys)
 		if ri == nil || err != nil {
 			if err != nil {
-				log.Debug().Any("resourceInfo", ri).Err(err).Msg("fileAsResourceInfo returned error")
+				log.Debug().
+					Str("operation", "ListFolder").
+					Str("entry_name", entry.Name()).
+					Str("reason", "fileAsResourceInfo_error").
+					Err(err).
+					Any("resourceInfo", ri).
+					Msg("cephmount ListFolder skipping entry")
+			} else {
+				log.Debug().
+					Str("operation", "ListFolder").
+					Str("entry_name", entry.Name()).
+					Str("reason", "fileAsResourceInfo_returned_nil").
+					Msg("cephmount ListFolder skipping entry")
 			}
 			continue
 		}
