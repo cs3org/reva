@@ -73,7 +73,8 @@ func (s *svc) handleOCMShare(ctx context.Context, share *GenericShare) (*libregr
 		return nil, err
 	}
 
-	// OCM shares only has one access method implemented, so we can safely use the first one here
+	// Here we assume that the OCM shares offered by us always contain both `webdav` and `webapp` access methods with
+	// identical permissions, therefore we use the first one here (`webdav`) to generate the libregraph representation
 	unifiedRoleDefinition, role := CS3ResourcePermissionsToUnifiedRole(ctx, share.ocmshare.AccessMethods[0].GetWebdavOptions().Permissions), ""
 	if unifiedRoleDefinition != nil {
 		role = *unifiedRoleDefinition.Id
