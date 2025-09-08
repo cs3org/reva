@@ -30,14 +30,21 @@ import (
 
 	"github.com/CiscoM31/godata"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 )
 
 type UserSelectableProperty string
+
+const (
+	languageKey   = "lang"
+	preferencesNS = "core"
+)
 
 const (
 	propUserId                           UserSelectableProperty = "id"
@@ -69,6 +76,80 @@ func (s *svc) getMe(w http.ResponseWriter, r *http.Request) {
 		OnPremisesSamAccountName: user.Username,
 		Id:                       &user.Id.OpaqueId,
 	}
+
+	gw, err := s.getClient()
+	if err == nil {
+		lang, err := gw.GetKey(r.Context(), &preferences.GetKeyRequest{
+			Key: &preferences.PreferenceKey{
+				Key:       languageKey,
+				Namespace: preferencesNS,
+			},
+		})
+		if err == nil && lang.Status != nil && lang.Status.Code == rpc.Code_CODE_OK {
+			me.PreferredLanguage = libregraph.PtrString(lang.Val)
+		} else {
+			if lang != nil {
+				log.Warn().Err(err).Any("Status", lang.Status).Msg("Failed to fetch language for user")
+			} else {
+				log.Warn().Err(err).Msg("Failed to fetch language for user")
+			}
+		}
+	}
+	_ = json.NewEncoder(w).Encode(me)
+}
+
+func (s *svc) patchMe(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	update := &libregraph.UserUpdate{}
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(update); err != nil {
+		log.Error().Err(err).Interface("Body", r.Body).Msg("failed unmarshalling request body")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if update.PreferredLanguage == nil || *update.PreferredLanguage == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Must set preferredLanguage"))
+
+		return
+	}
+
+	user := appctx.ContextMustGetUser(r.Context())
+	me := &libregraph.User{
+		DisplayName:              user.DisplayName,
+		Mail:                     &user.Mail,
+		OnPremisesSamAccountName: user.Username,
+		Id:                       &user.Id.OpaqueId,
+		PreferredLanguage:        update.PreferredLanguage,
+	}
+
+	gw, err := s.getClient()
+	if err != nil {
+		handleError(ctx, err, http.StatusInternalServerError, w)
+		return
+	}
+
+	res, err := gw.SetKey(ctx, &preferences.SetKeyRequest{
+		Key: &preferences.PreferenceKey{
+			Key:       languageKey,
+			Namespace: preferencesNS,
+		},
+		Val: *update.PreferredLanguage,
+	})
+
+	if err != nil {
+		handleError(ctx, err, http.StatusInternalServerError, w)
+		return
+	}
+	if res != nil && res.Status != nil && res.Status.Code != rpc.Code_CODE_OK {
+		handleRpcStatus(ctx, res.Status, "Failed to set preference key in gateway", w)
+		return
+	}
+
 	_ = json.NewEncoder(w).Encode(me)
 }
 
@@ -94,18 +175,25 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 		log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("must pass a search string of at least length 3 to list users")
 	}
 	queryVal := strings.Trim(req.Query.Search.RawValue, "\"")
-
 	log.Debug().Str("Query", queryVal).Str("orderBy", req.Query.OrderBy.RawValue).Any("select", getUserSelectionFromRequest(req.Query.Select)).Msg("Listing users in libregraph API")
 
-	users, err := gw.FindUsers(ctx, &userpb.FindUsersRequest{
+	filters, err := generateUserFilters(req)
+	if err != nil {
+		handleError(ctx, err, http.StatusBadRequest, w)
+		return
+	}
+	request := &userpb.FindUsersRequest{
 		SkipFetchingUserGroups: true,
-		Filter:                 queryVal,
-	})
+		Query:                  queryVal,
+		Filter:                 filters,
+	}
+
+	users, err := gw.FindUsers(ctx, request)
 	if err != nil {
 		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
 	}
-	if users.Status.Code != rpcv1beta1.Code_CODE_OK {
+	if users.Status.Code != rpc.Code_CODE_OK {
 		handleRpcStatus(ctx, users.Status, "ocgraph FindUsers request failed", w)
 		return
 	}
@@ -136,7 +224,7 @@ func (s *svc) getUserInfo(ctx context.Context, id *userpb.UserId) (*userpb.User,
 	if err != nil {
 		return nil, err
 	}
-	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+	if res.Status.Code != rpc.Code_CODE_OK {
 		return nil, errors.New(res.Status.Message)
 	}
 
@@ -170,9 +258,15 @@ func mapToLibregraphUsers(users []*userpb.User, selection []UserSelectableProper
 			continue
 		}
 		lgUser := libregraph.User{}
+		var id string = u.Id.OpaqueId
+
+		// For federated users, form their OCM address by appending @IdP to the OpaqueId
+		if u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
+			id = id + "@" + u.Id.Idp
+		}
 		if len(selection) == 0 {
 			lgUser = libregraph.User{
-				Id:                       &u.Id.OpaqueId,
+				Id:                       &id,
 				Mail:                     &u.Mail,
 				OnPremisesSamAccountName: u.Username,
 				DisplayName:              u.DisplayName,
@@ -233,4 +327,62 @@ func sortUsers(ctx context.Context, users []libregraph.User, sortKey string) ([]
 		})
 	}
 	return users, nil
+}
+
+func generateUserFilters(request *godata.GoDataRequest) ([]*userpb.Filter, error) {
+	var filters []*userpb.Filter
+	if request.Query.Filter != nil {
+		if request.Query.Filter.Tree.Token.Value == "eq" {
+			switch strings.ToLower(request.Query.Filter.Tree.Children[0].Token.Value) {
+			case "usertype":
+				ut := strings.Trim(request.Query.Filter.Tree.Children[1].Token.Value, "'")
+				userType := UserType(ut)
+				if userType == nil {
+					return nil, errors.Errorf("unknown usertype: %s", ut)
+				}
+
+				filter := &userpb.Filter{
+					Type: userpb.Filter_TYPE_USERTYPE,
+					Term: &userpb.Filter_Usertype{
+						Usertype: *userType,
+					},
+				}
+				filters = append(filters, filter)
+
+			}
+		} else {
+			err := errors.Errorf("unsupported filter operand: %s", request.Query.Filter.Tree.Token.Value)
+			return nil, err
+		}
+	}
+	return filters, nil
+}
+
+func UserType(userType string) *userpb.UserType {
+	var ut userpb.UserType
+	switch strings.ToLower(userType) {
+	case "invalid":
+		ut = userpb.UserType_USER_TYPE_INVALID
+	case "primary":
+		ut = userpb.UserType_USER_TYPE_PRIMARY
+	case "secondary":
+		ut = userpb.UserType_USER_TYPE_SECONDARY
+	case "service":
+		ut = userpb.UserType_USER_TYPE_SERVICE
+	case "application":
+		ut = userpb.UserType_USER_TYPE_APPLICATION
+	case "guest":
+		ut = userpb.UserType_USER_TYPE_GUEST
+	case "federated":
+		ut = userpb.UserType_USER_TYPE_FEDERATED
+	case "lightweight":
+		ut = userpb.UserType_USER_TYPE_LIGHTWEIGHT
+	case "space_owner":
+		ut = userpb.UserType_USER_TYPE_SPACE_OWNER
+
+	default:
+		return nil
+
+	}
+	return &ut
 }

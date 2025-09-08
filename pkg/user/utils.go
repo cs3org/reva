@@ -31,3 +31,16 @@ func HasUploaderRole(user *userpb.User) bool {
 	}
 	return string(publicShare.Value) == "uploader"
 }
+
+func DoesUserFulfillFilterCriteria(user *userpb.User, filter *userpb.Filter) bool {
+	if filter == nil {
+		return true
+	}
+
+	switch filter.Type {
+	case userpb.Filter_TYPE_USERTYPE:
+		return user.Id.Type == filter.GetUsertype()
+	default:
+		return true
+	}
+}

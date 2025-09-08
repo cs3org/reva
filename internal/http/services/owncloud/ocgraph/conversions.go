@@ -8,12 +8,10 @@ import (
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-
+	group "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/pkg/spaces"
@@ -22,86 +20,170 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (s *svc) shareToLibregraphPerm(ctx context.Context, share *ShareOrLink) (*libregraph.Permission, error) {
+func (s *svc) shareToLibregraphPerm(ctx context.Context, share *GenericShare) (*libregraph.Permission, error) {
 	if share == nil {
 		return nil, errors.New("share is nil")
 	}
 
+	switch share.shareType {
+	case "share":
+		return s.handleRegularShare(ctx, share)
+	case "ocmshare":
+		return s.handleOCMShare(ctx, share)
+	default:
+		return s.handleLinkShare(ctx, share)
+	}
+}
+
+func (s *svc) handleRegularShare(ctx context.Context, share *GenericShare) (*libregraph.Permission, error) {
+	grantedTo, err := s.buildGrantedToForRegularShare(ctx, share.share.GetGrantee())
+	if err != nil {
+		return nil, err
+	}
+
+	invitation, err := s.buildInvitation(ctx, share.share.Creator)
+	if err != nil {
+		return nil, err
+	}
+
+	unifiedRoleDefinition, role := CS3ResourcePermissionsToUnifiedRole(ctx, share.share.Permissions.Permissions), ""
+	if unifiedRoleDefinition != nil {
+		role = *unifiedRoleDefinition.Id
+	}
+
+	perm := &libregraph.Permission{
+		Id:                 libregraph.PtrString(share.ID),
+		ExpirationDateTime: *cs3TimestampToNullableTime(share.share.Expiration),
+		CreatedDateTime:    *cs3TimestampToNullableTime(share.share.GetCtime()),
+		GrantedToV2:        grantedTo,
+		Invitation:         invitation,
+		Roles:              []string{role},
+	}
+	return perm, nil
+}
+
+func (s *svc) handleOCMShare(ctx context.Context, share *GenericShare) (*libregraph.Permission, error) {
+	grantedTo, err := s.buildGrantedToForOCMShare(ctx, share.ocmshare.GetGrantee())
+	if err != nil {
+		return nil, err
+	}
+
+	invitation, err := s.buildInvitation(ctx, share.ocmshare.Creator)
+	if err != nil {
+		return nil, err
+	}
+
+	// Here we assume that the OCM shares offered by us always contain both `webdav` and `webapp` access methods with
+	// identical permissions, therefore we use the first one here (`webdav`) to generate the libregraph representation
+	unifiedRoleDefinition, role := CS3ResourcePermissionsToUnifiedRole(ctx, share.ocmshare.AccessMethods[0].GetWebdavOptions().Permissions), ""
+	if unifiedRoleDefinition != nil {
+		role = *unifiedRoleDefinition.Id
+	}
+
+	perm := &libregraph.Permission{
+		Id:                 libregraph.PtrString(share.ID),
+		ExpirationDateTime: *cs3TimestampToNullableTime(share.ocmshare.Expiration),
+		CreatedDateTime:    *cs3TimestampToNullableTime(share.ocmshare.GetCtime()),
+		GrantedToV2:        grantedTo,
+		Invitation:         invitation,
+		Roles:              []string{role},
+	}
+	return perm, nil
+}
+
+func (s *svc) handleLinkShare(ctx context.Context, share *GenericShare) (*libregraph.Permission, error) {
 	nilTime := libregraph.NewNullableTime(nil)
 	nilTime.Unset()
 
-	if share.shareType == "share" {
-		grantedTo := libregraph.NewSharePointIdentitySet()
-		grantee := share.share.GetGrantee()
-		switch grantee.Type {
-		case provider.GranteeType_GRANTEE_TYPE_USER:
-			u, err := s.getUserInfo(ctx, grantee.GetUserId())
-			if err != nil {
-				return nil, errors.New("Failed to fetch user info")
-			}
-			grantedTo.SetUser(libregraph.Identity{
-				Id:          libregraph.PtrString(grantee.GetUserId().OpaqueId),
-				DisplayName: u.DisplayName,
-			})
-		case provider.GranteeType_GRANTEE_TYPE_GROUP:
-			g, err := s.getGroupInfo(ctx, grantee.GetGroupId())
-			if err != nil {
-				return nil, errors.New("Failed to fetch user info")
-			}
-			grantedTo.SetGroup(libregraph.Identity{
-				Id:          libregraph.PtrString(grantee.GetGroupId().OpaqueId),
-				DisplayName: g.DisplayName,
-			})
-		}
-		u, err := s.getUserInfo(ctx, share.share.Creator)
+	lt, actions := SharingLinkTypeFromCS3Permissions(ctx, share.link.GetPermissions())
+
+	var expTime libregraph.NullableTime
+	if share.link.GetExpiration() != nil {
+		expTime = *libregraph.NewNullableTime(libregraph.PtrTime(time.Unix(int64(share.link.GetExpiration().Seconds), 0)))
+	} else {
+		expTime = *nilTime
+	}
+
+	perm := &libregraph.Permission{
+		Id:                 libregraph.PtrString(share.ID),
+		ExpirationDateTime: expTime,
+		HasPassword:        libregraph.PtrBool(share.link.GetPasswordProtected()),
+		CreatedDateTime:    *libregraph.NewNullableTime(libregraph.PtrTime(time.Unix(int64(share.link.GetCtime().Seconds), 0))),
+		Link: &libregraph.SharingLink{
+			Type:                  lt,
+			LibreGraphDisplayName: libregraph.PtrString(share.link.GetDisplayName()),
+			LibreGraphQuickLink:   libregraph.PtrBool(share.link.GetQuicklink()),
+			WebUrl:                libregraph.PtrString(path.Join(s.c.BaseURL, "s", share.link.GetToken())),
+		},
+		LibreGraphPermissionsActions: actions,
+	}
+	return perm, nil
+}
+
+func (s *svc) buildGrantedToForRegularShare(ctx context.Context, grantee *provider.Grantee) (*libregraph.SharePointIdentitySet, error) {
+	grantedTo := libregraph.NewSharePointIdentitySet()
+
+	switch grantee.Type {
+	case provider.GranteeType_GRANTEE_TYPE_USER:
+		u, err := s.getUserInfo(ctx, grantee.GetUserId())
 		if err != nil {
 			return nil, errors.New("Failed to fetch user info")
 		}
-		invitation := libregraph.NewSharingInvitation()
-		idSet := *libregraph.NewIdentitySet()
-		idSet.SetUser(libregraph.Identity{
-			Id:          libregraph.PtrString(share.share.Creator.OpaqueId),
+		grantedTo.SetUser(libregraph.Identity{
+			Id:          libregraph.PtrString(grantee.GetUserId().OpaqueId),
 			DisplayName: u.DisplayName,
 		})
-		invitation.SetInvitedBy(idSet)
-
-		unifiedRoleDefinition, role := CS3ResourcePermissionsToUnifiedRole(ctx, share.share.Permissions.Permissions), ""
-		if unifiedRoleDefinition != nil {
-			role = *unifiedRoleDefinition.Id
+	case provider.GranteeType_GRANTEE_TYPE_GROUP:
+		g, err := s.getGroupInfo(ctx, grantee.GetGroupId())
+		if err != nil {
+			return nil, errors.New("Failed to fetch group info")
 		}
-
-		perm := &libregraph.Permission{
-			Id:                 libregraph.PtrString(share.ID),
-			ExpirationDateTime: *cs3TimestampToNullableTime(share.share.Expiration),
-			CreatedDateTime:    *cs3TimestampToNullableTime(share.share.GetCtime()),
-			GrantedToV2:        grantedTo,
-			Invitation:         invitation,
-			Roles:              []string{role},
-		}
-		return perm, nil
-	} else {
-		lt, actions := SharingLinkTypeFromCS3Permissions(ctx, share.link.GetPermissions())
-		var expTime libregraph.NullableTime
-		if share.link.GetExpiration() != nil {
-			expTime = *libregraph.NewNullableTime(libregraph.PtrTime(time.Unix(int64(share.link.GetExpiration().Seconds), 0)))
-		} else {
-			expTime = *nilTime
-		}
-		perm := &libregraph.Permission{
-			Id:                 libregraph.PtrString(share.ID),
-			ExpirationDateTime: expTime,
-			HasPassword:        libregraph.PtrBool(share.link.GetPasswordProtected()),
-			CreatedDateTime:    *libregraph.NewNullableTime(libregraph.PtrTime(time.Unix(int64(share.link.GetCtime().Seconds), 0))),
-			Link: &libregraph.SharingLink{
-				Type:                  lt,
-				LibreGraphDisplayName: libregraph.PtrString(share.link.GetDisplayName()),
-				LibreGraphQuickLink:   libregraph.PtrBool(share.link.GetQuicklink()),
-				WebUrl:                libregraph.PtrString(path.Join(s.c.BaseURL, "s", share.link.GetToken())),
-			},
-			LibreGraphPermissionsActions: actions,
-		}
-		return perm, nil
+		grantedTo.SetGroup(libregraph.Identity{
+			Id:          libregraph.PtrString(grantee.GetGroupId().OpaqueId),
+			DisplayName: g.DisplayName,
+		})
 	}
+
+	return grantedTo, nil
+}
+
+func (s *svc) buildGrantedToForOCMShare(ctx context.Context, grantee *provider.Grantee) (*libregraph.SharePointIdentitySet, error) {
+	grantedTo := libregraph.NewSharePointIdentitySet()
+
+	switch grantee.Type {
+	case provider.GranteeType_GRANTEE_TYPE_USER:
+		u, err := s.getUserInfo(ctx, grantee.GetUserId())
+		if err != nil {
+			return nil, errors.New("Failed to fetch user info")
+		}
+		grantedTo.SetUser(libregraph.Identity{
+			Id:          libregraph.PtrString(grantee.GetUserId().OpaqueId),
+			DisplayName: u.DisplayName,
+		})
+	case provider.GranteeType_GRANTEE_TYPE_GROUP:
+		return nil, errors.New("Groups are currently not supported in OCM shares")
+	}
+
+	return grantedTo, nil
+}
+
+// The user must exist, otherwise an error is returned, this representation is used to show who
+// created the share in the LibreGraph API.
+func (s *svc) buildInvitation(ctx context.Context, creator *user.UserId) (*libregraph.SharingInvitation, error) {
+	u, err := s.getUserInfo(ctx, creator)
+	if err != nil {
+		return nil, errors.New("Failed to fetch user info")
+	}
+
+	invitation := libregraph.NewSharingInvitation()
+	idSet := *libregraph.NewIdentitySet()
+	idSet.SetUser(libregraph.Identity{
+		Id:          libregraph.PtrString(creator.OpaqueId),
+		DisplayName: u.DisplayName,
+	})
+	invitation.SetInvitedBy(idSet)
+
+	return invitation, nil
 }
 
 func (s *svc) lgPermToCS3Perm(ctx context.Context, lgPerm *libregraph.Permission, resourceType provider.ResourceType) (*provider.ResourcePermissions, error) {
@@ -298,7 +380,7 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.Rece
 	return d, nil
 }
 
-func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceInfo, shares []*ShareOrLink) (*libregraph.DriveItem, error) {
+func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceInfo, shares []*GenericShare) (*libregraph.DriveItem, error) {
 	relativePath, err := spaces.PathRelativeToSpaceRoot(info)
 	if err != nil {
 		return nil, err
@@ -347,7 +429,7 @@ func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceIn
 	return d, nil
 }
 
-func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*ShareOrLink) ([]libregraph.Permission, error) {
+func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*GenericShare) ([]libregraph.Permission, error) {
 	permissions := make([]libregraph.Permission, 0, len(shares))
 
 	for _, e := range shares {
@@ -412,7 +494,7 @@ func (s *svc) toGrantee(ctx context.Context, recipientType string, id string) (*
 
 	switch recipientType {
 	case "user":
-		userRes, err := gw.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+		userRes, err := gw.GetUserByClaim(ctx, &user.GetUserByClaimRequest{
 			Claim:                  "username",
 			Value:                  id,
 			SkipFetchingUserGroups: true,
@@ -425,7 +507,7 @@ func (s *svc) toGrantee(ctx context.Context, recipientType string, id string) (*
 			Id:   &provider.Grantee_UserId{UserId: userRes.User.GetId()},
 		}, nil
 	case "group":
-		groupRes, err := gw.GetGroupByClaim(ctx, &grouppb.GetGroupByClaimRequest{
+		groupRes, err := gw.GetGroupByClaim(ctx, &group.GetGroupByClaimRequest{
 			Claim:               "group_name",
 			Value:               id,
 			SkipFetchingMembers: true,

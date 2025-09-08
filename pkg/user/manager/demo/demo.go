@@ -100,15 +100,26 @@ func userContains(u *userpb.User, query string) bool {
 	return strings.Contains(u.Username, query) || strings.Contains(u.DisplayName, query) || strings.Contains(u.Mail, query) || strings.Contains(u.Id.OpaqueId, query)
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
+func (m *manager) FindUsers(ctx context.Context, query string, filters []*userpb.Filter, skipFetchingGroups bool) ([]*userpb.User, error) {
 	users := []*userpb.User{}
 	for _, u := range m.catalog {
 		if userContains(u, query) {
-			user := proto.Clone(u).(*userpb.User)
+			usr := proto.Clone(u).(*userpb.User)
 			if skipFetchingGroups {
-				user.Groups = nil
+				usr.Groups = nil
 			}
-			users = append(users, user)
+
+			filterOk := true
+			for _, filter := range filters {
+				if !user.DoesUserFulfillFilterCriteria(usr, filter) {
+					filterOk = false
+					break
+				}
+			}
+
+			if filterOk {
+				users = append(users, usr)
+			}
 		}
 	}
 	return users, nil

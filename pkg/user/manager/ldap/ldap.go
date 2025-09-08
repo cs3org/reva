@@ -304,7 +304,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipF
 	return u, nil
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
+func (m *manager) FindUsers(ctx context.Context, query string, filters []*userpb.Filter, skipFetchingGroups bool) ([]*userpb.User, error) {
 	l, err := utils.GetLDAPConnection(&m.c.LDAPConn)
 	if err != nil {
 		return nil, err
@@ -358,7 +358,7 @@ func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroup
 				return nil, err
 			}
 		}
-		user := &userpb.User{
+		u := &userpb.User{
 			Id:          id,
 			Username:    entry.GetEqualFoldAttributeValue(m.c.Schema.CN),
 			Groups:      groups,
@@ -367,7 +367,18 @@ func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroup
 			GidNumber:   gidNumber,
 			UidNumber:   uidNumber,
 		}
-		users = append(users, user)
+
+		filterOk := true
+		for _, filter := range filters {
+			if !user.DoesUserFulfillFilterCriteria(u, filter) {
+				filterOk = false
+				break
+			}
+		}
+
+		if filterOk {
+			users = append(users, u)
+		}
 	}
 
 	return users, nil

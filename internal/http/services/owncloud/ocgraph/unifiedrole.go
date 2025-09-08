@@ -25,6 +25,7 @@ import (
 	"errors"
 	"slices"
 
+	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -499,4 +500,20 @@ func UnifiedRoleIDToDefinition(unifiedRoleID string) (*libregraph.UnifiedRoleDef
 	default:
 		return nil, false
 	}
+}
+
+func UnifiedRoleToOCMPermissions(unifiedRoleID string) (*provider.ResourcePermissions, appprovider.ViewMode) {
+	definition, exists := UnifiedRoleIDToDefinition(unifiedRoleID)
+	if !exists {
+		return nil, 0
+	}
+
+	permissions := PermissionsToCS3ResourcePermissions(definition.GetRolePermissions())
+
+	// Determine view mode based on role type
+	if unifiedRoleID == UnifiedRoleViewerID || unifiedRoleID == UnifiedRoleSpaceViewerID {
+		return permissions, appprovider.ViewMode_VIEW_MODE_READ_ONLY
+	}
+	// If it's not a viewer role, we assume it's an editor role, manager role is not implemented.
+	return permissions, appprovider.ViewMode_VIEW_MODE_READ_WRITE
 }

@@ -63,7 +63,7 @@ func (s *svc) GetUserByClaim(ctx context.Context, req *user.GetUserByClaimReques
 }
 
 func (s *svc) FindUsers(ctx context.Context, req *user.FindUsersRequest) (*user.FindUsersResponse, error) {
-	if strings.HasPrefix(req.Filter, "sm:") {
+	if strings.HasPrefix(req.Query, "sm:") {
 		c, err := pool.GetOCMInviteManagerClient(pool.Endpoint(s.c.OCMInviteManagerEndpoint))
 		if err != nil {
 			return &user.FindUsersResponse{
@@ -71,7 +71,7 @@ func (s *svc) FindUsers(ctx context.Context, req *user.FindUsersRequest) (*user.
 			}, nil
 		}
 
-		term := strings.TrimPrefix(req.Filter, "sm:")
+		term := strings.TrimPrefix(req.Query, "sm:")
 
 		res, err := c.FindAcceptedUsers(ctx, &invitepb.FindAcceptedUsersRequest{
 			Filter: term,

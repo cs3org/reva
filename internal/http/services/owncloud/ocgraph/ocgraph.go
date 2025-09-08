@@ -41,10 +41,12 @@ func init() {
 }
 
 type config struct {
-	GatewaySvc string `mapstructure:"gatewaysvc"  validate:"required"`
-	WebDavBase string `mapstructure:"webdav_base"`
-	WebBase    string `mapstructure:"web_base"`
-	BaseURL    string `mapstructure:"base_url"    validate:"required"`
+	GatewaySvc                 string `mapstructure:"gatewaysvc"  validate:"required"`
+	WebDavBase                 string `mapstructure:"webdav_base"`
+	WebBase                    string `mapstructure:"web_base"`
+	BaseURL                    string `mapstructure:"base_url"    validate:"required"`
+	PubRWLinkMaxExpiration     int64  `mapstructure:"pub_rw_link_max_expiration"`
+	PubRWLinkDefaultExpiration int64  `mapstructure:"pub_rw_link_default_expiration"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -100,6 +102,7 @@ func (s *svc) initRouter() {
 	s.router.Route("/v1.0", func(r chi.Router) {
 		r.Route("/me", func(r chi.Router) {
 			r.Get("/", s.getMe)
+			r.Patch("/", s.patchMe)
 		})
 		r.Route("/drives", func(r chi.Router) {
 			r.Get("/{space-id}", s.getSpace)

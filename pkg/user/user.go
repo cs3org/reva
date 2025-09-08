@@ -35,5 +35,5 @@ type Manager interface {
 	// GetUserGroups returns the groups a user identified by a uid belongs to.
 	GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error)
 	// FindUsers returns all the user objects which match a query parameter.
-	FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error)
+	FindUsers(ctx context.Context, query string, filters []*userpb.Filter, skipFetchingGroups bool) ([]*userpb.User, error)
 }

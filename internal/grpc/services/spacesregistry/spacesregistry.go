@@ -22,11 +22,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	cachereg "github.com/cs3org/reva/v3/pkg/share/cache/registry"
+
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
@@ -36,6 +40,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/share/cache"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/templates"
@@ -61,6 +66,14 @@ type config struct {
 	Drivers       map[string]map[string]any `mapstructure:"drivers"`
 	UserSpace     string                    `mapstructure:"user_space" validate:"required"`
 	MachineSecret string                    `mapstructure:"machine_secret" validate:"required"`
+	// Provide a list of public spaces, where we map
+	// name:
+	//  - path: <path>
+	//  - description: <description>
+	PublicSpaces             map[string]map[string]string      `mapstructure:"public_spaces"`
+	ResourceInfoCacheDrivers map[string]map[string]interface{} `mapstructure:"resource_info_caches"`
+	ResourceInfoCacheDriver  string                            `mapstructure:"resource_info_cache_type"`
+	ResourceInfoCacheTTL     int                               `mapstructure:"resource_info_cache_ttl"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -70,9 +83,11 @@ func (c *config) ApplyDefaults() {
 }
 
 type service struct {
-	c        *config
-	projects projects.Catalogue
-	gw       gateway.GatewayAPIClient
+	c                    *config
+	projects             projects.Catalogue
+	gw                   gateway.GatewayAPIClient
+	resourceInfoCache    cache.ResourceInfoCache
+	resourceInfoCacheTTL time.Duration
 }
 
 func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
@@ -95,7 +110,21 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 		projects: s,
 		gw:       client,
 	}
+
+	ricache, err := getCacheManager(&c)
+	if err == nil {
+		svc.resourceInfoCache = ricache
+		svc.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
+	}
+
 	return &svc, nil
+}
+
+func getCacheManager(c *config) (cache.ResourceInfoCache, error) {
+	if f, ok := cachereg.NewFuncs[c.ResourceInfoCacheDriver]; ok {
+		return f(c.ResourceInfoCacheDrivers[c.ResourceInfoCacheDriver])
+	}
+	return nil, fmt.Errorf("driver not found: %s", c.ResourceInfoCacheDriver)
 }
 
 func getSpacesDriver(ctx context.Context, driver string, cfg map[string]map[string]any) (projects.Catalogue, error) {
@@ -136,6 +165,12 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
 		}
 		sp = append(sp, projects...)
+
+		publicSpaces, err := s.getPublicSpaces(ctx)
+		if err != nil {
+			return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
+		}
+		sp = append(sp, publicSpaces...)
 	}
 
 	for _, filter := range filters {
@@ -197,76 +232,99 @@ func (s *service) listSpacesByType(ctx context.Context, user *userpb.User, space
 			return nil, err
 		}
 		sp = append(sp, projects...)
+
+		// For now, we also return public spaces when you query for projects
+		// as the front-end will filter these
+		fallthrough
+
+	case spaces.SpaceTypePublic:
+		publicSpaces, err := s.getPublicSpaces(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		sp = append(sp, publicSpaces...)
 	}
 
 	return sp, nil
 }
 
 func (s *service) decorateProjects(ctx context.Context, projects []*provider.StorageSpace) error {
+	log := appctx.GetLogger(ctx)
 	for _, proj := range projects {
-		// Add quota
-
-		// To get the quota for a project, we cannot do the request
-		// on behalf of the current logged user, because the project
-		// is owned by an other account, in general different from the
-		// logged in user.
-		// We need then to impersonate the owner and ask the quota
-		// on behalf of him.
-
-		// This is no longer necessary for the new project quota nodes,
-		// but we need to keep it here until we migrate all of the old
-		// project quota nodes
-		// See CERNBOX-3995
-
-		authRes, err := s.gw.Authenticate(ctx, &gateway.AuthenticateRequest{
-			Type:         "machine",
-			ClientId:     proj.Owner.Id.OpaqueId,
-			ClientSecret: s.c.MachineSecret,
-		})
+		err := s.decorateProject(ctx, proj)
 		if err != nil {
-			return err
+			log.Warn().Err(err).Msgf("Failed to decorate project %s", proj.Name)
 		}
-		if authRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-			return errors.New(authRes.Status.Message)
-		}
-
-		token := authRes.Token
-		owner := authRes.User
-
-		ownerCtx := appctx.ContextSetToken(context.Background(), token)
-		ownerCtx = metadata.AppendToOutgoingContext(ownerCtx, appctx.TokenHeader, token)
-		ownerCtx = appctx.ContextSetUser(ownerCtx, owner)
-
-		log.Debug().Msgf("Fetching quota for project %s", proj.Name)
-		quota, err := s.gw.GetQuota(ownerCtx, &gateway.GetQuotaRequest{
-			Ref: &provider.Reference{
-				Path: proj.RootInfo.Path,
-			},
-		})
-		if err != nil {
-			log.Err(err).Msgf("Failed to fetch quota for project %s", proj.Name)
-			return err
-		}
-		proj.Quota = &provider.Quota{
-			QuotaMaxBytes:  quota.TotalBytes,
-			RemainingBytes: quota.TotalBytes - quota.UsedBytes,
-		}
-
-		// Add mtime of space
-		statRes, err := s.gw.Stat(ctx, &provider.StatRequest{
-			Ref: &provider.Reference{
-				Path: proj.RootInfo.Path,
-			},
-		})
-		if err != nil {
-			return err
-		}
-		if statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-			return errors.New(statRes.Status.Message)
-		}
-
-		proj.Mtime = statRes.Info.Mtime
 	}
+	return nil
+}
+
+func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpace) error {
+	// Add quota
+
+	// To get the quota for a project, we cannot do the request
+	// on behalf of the current logged user, because the project
+	// is owned by an other account, in general different from the
+	// logged in user.
+	// We need then to impersonate the owner and ask the quota
+	// on behalf of him.
+
+	// This is no longer necessary for the new project quota nodes,
+	// but we need to keep it here until we migrate all of the old
+	// project quota nodes
+	// See CERNBOX-3995
+
+	authRes, err := s.gw.Authenticate(ctx, &gateway.AuthenticateRequest{
+		Type:         "machine",
+		ClientId:     proj.Owner.Id.OpaqueId,
+		ClientSecret: s.c.MachineSecret,
+	})
+	if err != nil {
+		return err
+	}
+	if authRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return errors.New(authRes.Status.Message)
+	}
+
+	token := authRes.Token
+	owner := authRes.User
+
+	ownerCtx := appctx.ContextSetToken(context.Background(), token)
+	ownerCtx = metadata.AppendToOutgoingContext(ownerCtx, appctx.TokenHeader, token)
+	ownerCtx = appctx.ContextSetUser(ownerCtx, owner)
+
+	log.Debug().Msgf("Fetching quota for project %s", proj.Name)
+	quota, err := s.gw.GetQuota(ownerCtx, &gateway.GetQuotaRequest{
+		Ref: &provider.Reference{
+			Path: proj.RootInfo.Path,
+		},
+	})
+	if err != nil {
+		log.Err(err).Msgf("Failed to fetch quota for project %s", proj.Name)
+		return err
+	}
+	proj.Quota = &provider.Quota{
+		QuotaMaxBytes:  quota.TotalBytes,
+		RemainingBytes: quota.TotalBytes - quota.UsedBytes,
+	}
+
+	// Add mtime of space
+	var resourceInfo *provider.ResourceInfo
+	if res, err := s.resourceInfoCache.Get(proj.RootInfo.Path); err == nil && res != nil {
+		resourceInfo = res
+	} else {
+		statRes, err := s.gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
+			Path: proj.RootInfo.Path,
+		}})
+		if err != nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+			return fmt.Errorf("failed to stat path %s for project %s", proj.RootInfo.Path, proj.Name)
+		}
+		resourceInfo = statRes.Info
+		s.resourceInfoCache.Set(proj.RootInfo.Path, resourceInfo)
+	}
+
+	proj.Mtime = resourceInfo.Mtime
 	return nil
 }
 
@@ -285,7 +343,7 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 		return nil, err
 	}
 	if stat.Status.Code != rpcv1beta1.Code_CODE_OK {
-		return nil, fmt.Errorf("Failed to stat %s: got status %s with message: %s", home, stat.Status.GetCode().String(), stat.Status.GetMessage())
+		return nil, fmt.Errorf("failed to stat %s: got status %s with message: %s", home, stat.Status.GetCode().String(), stat.Status.GetMessage())
 	}
 
 	quota, err := s.gw.GetQuota(ctx, &gateway.GetQuotaRequest{
@@ -298,7 +356,7 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 	}
 
 	if stat.Info == nil || stat.Info.Id == nil || stat.Info.Id.StorageId == "" {
-		return nil, errors.New("Received an invalid storageID")
+		return nil, errors.New("received an invalid storageID")
 	}
 
 	return &provider.StorageSpace{
@@ -317,6 +375,62 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 			RemainingBytes: quota.TotalBytes - quota.UsedBytes,
 		},
 	}, nil
+}
+
+func (s *service) getPublicSpaces(ctx context.Context) ([]*provider.StorageSpace, error) {
+	log := appctx.GetLogger(ctx)
+	publicSpaces := make([]*provider.StorageSpace, 0)
+	for spaceName, content := range s.c.PublicSpaces {
+		path, ok := content["path"]
+		if !ok {
+			log.Error().Msgf("No `path` found for public space %s, ignoring this space", spaceName)
+			continue
+		}
+
+		var resourceInfo *provider.ResourceInfo
+		if res, err := s.resourceInfoCache.Get(path); err == nil && res != nil {
+			resourceInfo = res
+		} else {
+			statRes, err := s.gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
+				Path: path,
+			}})
+			if err != nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+				log.Error().Err(err).Any("Status", statRes.Status).Msgf("Failed to stat path %s for public space %s, ignoring this space", path, spaceName)
+			} else {
+				resourceInfo = statRes.Info
+				s.resourceInfoCache.Set(path, resourceInfo)
+			}
+		}
+
+		if resourceInfo == nil {
+			continue
+		}
+
+		spaceID := spaces.EncodeStorageSpaceID(resourceInfo.Id.StorageId, path)
+		space := &provider.StorageSpace{
+			SpaceType: spaces.SpaceTypePublic.AsString(),
+			Root:      resourceInfo.Id,
+			Id: &provider.StorageSpaceId{
+				OpaqueId: spaceID,
+			},
+			RootInfo:        resourceInfo,
+			Mtime:           resourceInfo.Mtime,
+			Name:            spaceName,
+			HasTrashedItems: false,
+			Quota: &provider.Quota{
+				// 1 Exabyte
+				QuotaMaxBytes:  uint64(math.Pow10(18)),
+				RemainingBytes: uint64(math.Pow10(18)) - resourceInfo.Size,
+			},
+		}
+
+		if description, ok := content["description"]; ok {
+			space.Description = description
+		}
+
+		publicSpaces = append(publicSpaces, space)
+	}
+	return publicSpaces, nil
 }
 
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
