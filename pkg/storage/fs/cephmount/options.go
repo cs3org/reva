@@ -16,66 +16,44 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-//go:build ceph
+package cephmount
 
-package cephfs
-
-import (
-	"github.com/cs3org/reva/v3/pkg/sharedconf"
-)
-
-// Options for the cephfs module
+// Options for the cephmount module
 type Options struct {
-	ClientID       string `mapstructure:"client_id"`
-	Config         string `mapstructure:"config"`
-	GatewaySvc     string `mapstructure:"gatewaysvc"`
-	IndexPool      string `mapstructure:"index_pool"`
-	Keyring        string `mapstructure:"keyring"`
-	Root           string `mapstructure:"root"`
 	UploadFolder   string `mapstructure:"uploads"`
-	UserLayout     string `mapstructure:"user_layout"`
 	DirPerms       uint32 `mapstructure:"dir_perms"`
 	FilePerms      uint32 `mapstructure:"file_perms"`
 	UserQuotaBytes uint64 `mapstructure:"user_quota_bytes"`
-	HiddenDirs     map[string]bool
+
+	// Nobody user/group for fallback operations (instead of root)
+	NobodyUID int `mapstructure:"nobody_uid"`
+	NobodyGID int `mapstructure:"nobody_gid"`
+
+	// Simplified Ceph configuration - just paste the fstab entry
+	FstabEntry string `mapstructure:"fstabentry"` // Complete fstab line for Ceph mount
+
+	// Testing-only option - allows running without Ceph configuration for local filesystem tests
+	TestingAllowLocalMode bool `mapstructure:"testing_allow_local_mode"` // Bypass fstab parsing requirement for tests only
+
+	HiddenDirs map[string]bool
 }
 
 func (c *Options) ApplyDefaults() {
-	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
-
-	if c.IndexPool == "" {
-		c.IndexPool = "path_index"
-	}
-
-	if c.Config == "" {
-		c.Config = "/etc/ceph/ceph.conf"
-	} else {
-		c.Config = addLeadingSlash(c.Config) //force absolute path in case leading "/" is omitted
-	}
-
-	if c.ClientID == "" {
-		c.ClientID = "admin"
-	}
-
-	if c.Keyring == "" {
-		c.Keyring = "/etc/ceph/keyring"
-	} else {
-		c.Keyring = addLeadingSlash(c.Keyring)
-	}
-
-	if c.Root == "" {
-		c.Root = "/cephfs"
-	} else {
-		c.Root = addLeadingSlash(c.Root)
-	}
-
 	if c.UploadFolder == "" {
 		c.UploadFolder = ".uploads"
 	}
 
-	if c.UserLayout == "" {
-		c.UserLayout = "{{.Username}}"
+	// Nobody user/group defaults (commonly 65534 on Linux systems)
+	if c.NobodyUID == 0 {
+		c.NobodyUID = 65534
 	}
+
+	if c.NobodyGID == 0 {
+		c.NobodyGID = 65534
+	}
+
+	// No Ceph defaults needed - everything is extracted from the fstab entry
+	// Chroot directory defaults will be set from fstab parsing (local mount point)
 
 	c.HiddenDirs = map[string]bool{
 		".":                                true,
@@ -92,6 +70,23 @@ func (c *Options) ApplyDefaults() {
 	}
 
 	if c.UserQuotaBytes == 0 {
-		c.UserQuotaBytes = 50000000000
+		c.UserQuotaBytes = 50000000000 // 50GB default
 	}
+}
+
+var dirPermDefault = uint32(0755)
+var filePermDefault = uint32(0644)
+
+func addLeadingSlash(path string) string {
+	if path[0] != '/' {
+		return "/" + path
+	}
+	return path
+}
+
+func removeLeadingSlash(path string) string {
+	if path[0] == '/' {
+		return path[1:]
+	}
+	return path
 }

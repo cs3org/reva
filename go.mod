@@ -43,6 +43,7 @@ require (
 	github.com/onsi/gomega v1.38.0
 	github.com/owncloud/libre-graph-api-go v1.0.5-0.20250217093259-fa3804be6c27
 	github.com/pkg/errors v0.9.1
+	github.com/pkg/xattr v0.4.12
 	github.com/prometheus/client_golang v1.23.2
 	github.com/rs/cors v1.11.1
 	github.com/rs/zerolog v1.34.0
@@ -143,9 +144,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-go 1.24.0
-
-toolchain go1.24.2
+go 1.25
 
 replace (
 	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
