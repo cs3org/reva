@@ -27,6 +27,7 @@ import (
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"google.golang.org/protobuf/proto"
 )
 
 var ctx = context.Background()
@@ -112,13 +113,13 @@ func TestUserManager(t *testing.T) {
 
 	// positive test GetGroup
 	resGroup, _ := manager.GetGroup(ctx, gid, false)
-	if !reflect.DeepEqual(resGroup, group) {
+	if !proto.Equal(resGroup, group) {
 		t.Fatalf("group differs: expected=%v got=%v", group, resGroup)
 	}
 
 	// positive test GetGroup without members
 	resGroupWithoutMembers, _ := manager.GetGroup(ctx, gid, true)
-	if !reflect.DeepEqual(resGroupWithoutMembers, groupWithoutMembers) {
+	if !proto.Equal(resGroupWithoutMembers, groupWithoutMembers) {
 		t.Fatalf("group differs: expected=%v got=%v", groupWithoutMembers, resGroupWithoutMembers)
 	}
 
@@ -131,7 +132,7 @@ func TestUserManager(t *testing.T) {
 
 	// positive test GetGroupByClaim by mail
 	resGroupByEmail, _ := manager.GetGroupByClaim(ctx, "mail", "sailing-lovers@example.org", false)
-	if !reflect.DeepEqual(resGroupByEmail, group) {
+	if !proto.Equal(resGroupByEmail, group) {
 		t.Fatalf("group differs: expected=%v got=%v", group, resGroupByEmail)
 	}
 
@@ -144,8 +145,13 @@ func TestUserManager(t *testing.T) {
 
 	// test GetMembers
 	resMembers, _ := manager.GetMembers(ctx, gid)
-	if !reflect.DeepEqual(resMembers, members) {
-		t.Fatalf("members differ: expected=%v got=%v", members, resMembers)
+	if len(resMembers) != len(members) {
+		t.Fatalf("members length differ: expected=%d got=%d", len(members), len(resMembers))
+	}
+	for i, member := range members {
+		if !proto.Equal(resMembers[i], member) {
+			t.Fatalf("member %d differs: expected=%v got=%v", i, member, resMembers[i])
+		}
 	}
 
 	// positive test HasMember
@@ -165,7 +171,7 @@ func TestUserManager(t *testing.T) {
 	if len(resFind) != 1 {
 		t.Fatalf("too many groups found: expected=%d got=%d", 1, len(resFind))
 	}
-	if !reflect.DeepEqual(resFind[0].GroupName, "sailing-lovers") {
+	if resFind[0].GroupName != "sailing-lovers" {
 		t.Fatalf("group differ: expected=%v got=%v", "sailing-lovers", resFind[0].GroupName)
 	}
 }
