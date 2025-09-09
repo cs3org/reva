@@ -52,6 +52,7 @@ var _ = Describe("user providers", func() {
 			Id: &userpb.UserId{
 				Idp:      existingIdp,
 				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+				TenantId: "c239389d-c249-499d-ae80-07558429769a",
 				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 		}

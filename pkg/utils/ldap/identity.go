@@ -185,7 +185,7 @@ func (i *Identity) Setup() error {
 
 // GetLDAPUserByID looks up a user by the supplied Id. Returns the corresponding
 // ldap.Entry
-func (i *Identity) GetLDAPUserByID(ctx context.Context, lc ldap.Client, id string) (*ldap.Entry, error) {
+func (i *Identity) GetLDAPUserByID(ctx context.Context, lc ldap.Client, id *identityUser.UserId) (*ldap.Entry, error) {
 	var filter string
 	var err error
 	if filter, err = i.getUserFilter(id); err != nil {
@@ -196,10 +196,10 @@ func (i *Identity) GetLDAPUserByID(ctx context.Context, lc ldap.Client, id strin
 
 // GetLDAPUserByAttribute looks up a single user by attribute (can be "mail",
 // "uid", "gid", "username" or "userid"). Returns the corresponding ldap.Entry
-func (i *Identity) GetLDAPUserByAttribute(ctx context.Context, lc ldap.Client, attribute, value string) (*ldap.Entry, error) {
+func (i *Identity) GetLDAPUserByAttribute(ctx context.Context, lc ldap.Client, attribute, value, tenantID string) (*ldap.Entry, error) {
 	var filter string
 	var err error
-	if filter, err = i.getUserAttributeFilter(attribute, value); err != nil {
+	if filter, err = i.getUserAttributeFilter(attribute, value, tenantID); err != nil {
 		return nil, err
 	}
 	return i.GetLDAPUserByFilter(ctx, lc, filter)
@@ -214,17 +214,7 @@ func (i *Identity) GetLDAPUserByFilter(ctx context.Context, lc ldap.Client, filt
 	searchRequest := ldap.NewSearchRequest(
 		i.User.BaseDN, i.User.scopeVal, ldap.NeverDerefAliases, 1, 0, false,
 		filter,
-		[]string{
-			i.User.Schema.DisplayName,
-			i.User.Schema.ID,
-			i.User.Schema.TenantID,
-			i.User.Schema.Mail,
-			i.User.Schema.Username,
-			i.User.Schema.UIDNumber,
-			i.User.Schema.GIDNumber,
-			i.User.EnabledProperty,
-			i.User.UserTypeProperty,
-		},
+		i.getUserLDAPAttrTypes(),
 		nil,
 	)
 
@@ -265,15 +255,7 @@ func (i *Identity) GetLDAPUserByDN(ctx context.Context, lc ldap.Client, dn strin
 	searchRequest := ldap.NewSearchRequest(
 		dn, i.User.scopeVal, ldap.NeverDerefAliases, 1, 0, false,
 		filter,
-		[]string{
-			i.User.Schema.DisplayName,
-			i.User.Schema.ID,
-			i.User.Schema.Mail,
-			i.User.Schema.Username,
-			i.User.Schema.UIDNumber,
-			i.User.Schema.GIDNumber,
-			i.User.EnabledProperty,
-		},
+		i.getUserLDAPAttrTypes(),
 		nil,
 	)
 	setLDAPSearchSpanAttributes(span, searchRequest)
@@ -304,16 +286,7 @@ func (i *Identity) GetLDAPUsers(ctx context.Context, lc ldap.Client, query, tena
 		i.User.BaseDN,
 		i.User.scopeVal, ldap.NeverDerefAliases, 0, 0, false,
 		filter,
-		[]string{
-			i.User.Schema.ID,
-			i.User.Schema.Username,
-			i.User.Schema.Mail,
-			i.User.Schema.DisplayName,
-			i.User.Schema.UIDNumber,
-			i.User.Schema.GIDNumber,
-			i.User.EnabledProperty,
-			i.User.UserTypeProperty,
-		},
+		i.getUserLDAPAttrTypes(),
 		nil,
 	)
 	setLDAPSearchSpanAttributes(span, searchRequest)
@@ -536,7 +509,7 @@ func (i *Identity) GetLDAPGroupMembers(ctx context.Context, lc ldap.Client, grou
 		var e *ldap.Entry
 		var err error
 		if strings.ToLower(i.Group.Objectclass) == "posixgroup" {
-			e, err = i.GetLDAPUserByAttribute(ctx, lc, "username", member)
+			e, err = i.GetLDAPUserByAttribute(ctx, lc, "username", member, "")
 		} else {
 			e, err = i.GetLDAPUserByDN(ctx, lc, member)
 		}
@@ -558,28 +531,28 @@ func filterEscapeBinaryUUID(value uuid.UUID) string {
 	return filtered
 }
 
-func (i *Identity) getUserFilter(uid string) (string, error) {
+func (i *Identity) getUserFilter(uid *identityUser.UserId) (string, error) {
 	var escapedUUID string
 	if i.User.Schema.IDIsOctetString {
-		id, err := uuid.Parse(uid)
+		id, err := uuid.Parse(uid.GetOpaqueId())
 		if err != nil {
 			err := errors.Wrap(err, fmt.Sprintf("error parsing OpaqueID '%s' as UUID", uid))
 			return "", err
 		}
 		escapedUUID = filterEscapeBinaryUUID(id)
 	} else {
-		escapedUUID = ldap.EscapeFilter(uid)
+		escapedUUID = ldap.EscapeFilter(uid.GetOpaqueId())
 	}
-
-	return fmt.Sprintf("(&%s(objectclass=%s)(%s=%s))",
+	return fmt.Sprintf("(&%s(objectclass=%s)%s(%s=%s))",
 		i.User.Filter,
 		i.User.Objectclass,
+		i.tenantFilter(uid.GetTenantId()),
 		i.User.Schema.ID,
 		escapedUUID,
 	), nil
 }
 
-func (i *Identity) getUserAttributeFilter(attribute, value string) (string, error) {
+func (i *Identity) getUserAttributeFilter(attribute, value, tenantID string) (string, error) {
 	switch attribute {
 	case "mail":
 		attribute = i.User.Schema.Mail
@@ -606,15 +579,22 @@ func (i *Identity) getUserAttributeFilter(attribute, value string) (string, erro
 	} else {
 		value = ldap.EscapeFilter(value)
 	}
-	return fmt.Sprintf("(&%s(objectclass=%s)(%s=%s)%s)",
+	return fmt.Sprintf("(&%s(objectclass=%s)(%s=%s)%s%s)",
 		i.User.Filter,
 		i.User.Objectclass,
 		attribute,
 		value,
+		i.tenantFilter(tenantID),
 		i.disabledFilter(),
 	), nil
 }
 
+func (i *Identity) tenantFilter(tenantID string) string {
+	if tenantID != "" && i.User.Schema.TenantID != "" {
+		return fmt.Sprintf("(%s=%s)", i.User.Schema.TenantID, ldap.EscapeFilter(tenantID))
+	}
+	return ""
+}
 func (i *Identity) disabledFilter() string {
 	if i.User.DisableMechanism == "attribute" {
 		return fmt.Sprintf("(!(%s=FALSE))", i.User.EnabledProperty)
@@ -645,14 +625,10 @@ func (i *Identity) getUserFindFilter(query, tenantID string) string {
 	// substring search for UUID is not possible
 	filter = fmt.Sprintf("(|%s(%s=%s))", filter, i.User.Schema.ID, ldap.EscapeFilter(query))
 
-	if tenantID != "" {
-		// If a tenant ID is provided, we AND a filter for the tenant ID
-		filter = fmt.Sprintf("(&%s(%s=%s))", filter, i.User.Schema.TenantID, ldap.EscapeFilter(tenantID))
-	}
-
-	return fmt.Sprintf("(&%s(objectclass=%s)%s)",
+	return fmt.Sprintf("(&%s(objectclass=%s)%s%s)",
 		i.User.Filter,
 		i.User.Objectclass,
+		i.tenantFilter(tenantID),
 		filter,
 	)
 }
@@ -793,6 +769,34 @@ func (i *Identity) GetUserType(userEntry *ldap.Entry) identityUser.UserType {
 	}
 }
 
+func (i *Identity) getUserLDAPAttrTypes() []string {
+	// The are the attributes we request unconditionally when looking up users
+	// as they are needed to populate a user object
+	attrs := []string{
+		i.User.Schema.ID,
+		i.User.Schema.Username,
+		i.User.Schema.Mail,
+		i.User.Schema.DisplayName,
+	}
+
+	// Only add optional attributes if they are configured
+	if i.User.Schema.UIDNumber != "" {
+		attrs = append(attrs, i.User.Schema.UIDNumber)
+	}
+	if i.User.Schema.GIDNumber != "" {
+		attrs = append(attrs, i.User.Schema.GIDNumber)
+	}
+	if i.User.Schema.TenantID != "" {
+		attrs = append(attrs, i.User.Schema.TenantID)
+	}
+	if i.User.EnabledProperty != "" {
+		attrs = append(attrs, i.User.EnabledProperty)
+	}
+	if i.User.UserTypeProperty != "" {
+		attrs = append(attrs, i.User.UserTypeProperty)
+	}
+	return attrs
+}
 func setLDAPSearchSpanAttributes(span trace.Span, request *ldap.SearchRequest) {
 	span.SetAttributes(
 		attribute.String("ldap.basedn", request.BaseDN),
