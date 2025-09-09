@@ -615,7 +615,7 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 	fs.logOperationWithPaths(ctx, "ListFolder", receivedPath, path)
 
 	// INFO: About to call readDirectoryAsUser
-	log.Info().
+	log.Debug().
 		Str("operation", "ListFolder").
 		Str("chroot_path", path).
 		Str("full_filesystem_path", filepath.Join(fs.chrootDir, path)).
@@ -625,7 +625,7 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 	entries, err := fs.readDirectoryAsUser(ctx, path)
 	if err != nil {
 		// INFO: readDirectoryAsUser failed
-		log.Info().
+		log.Debug().
 			Str("operation", "ListFolder").
 			Str("chroot_path", path).
 			Str("full_filesystem_path", filepath.Join(fs.chrootDir, path)).
@@ -638,7 +638,7 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 	}
 
 	// INFO: readDirectoryAsUser succeeded
-	log.Info().
+	log.Debug().
 		Str("operation", "ListFolder").
 		Str("chroot_path", path).
 		Str("full_filesystem_path", filepath.Join(fs.chrootDir, path)).
@@ -646,7 +646,7 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 		Msg("cephmount ListFolder readDirectoryAsUser succeeded")
 
 	// Debug log what entries were found from filesystem
-	log.Info().
+	log.Debug().
 		Str("operation", "ListFolder").
 		Str("filesystem_path", path).
 		Int("raw_entries_found", len(entries)).
@@ -654,7 +654,7 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 	
 	// Log individual raw entries if there are any
 	for i, entry := range entries {
-		log.Info().
+		log.Trace().
 			Str("operation", "ListFolder").
 			Int("entry_index", i).
 			Str("entry_name", entry.Name()).
@@ -665,7 +665,7 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 
 	for _, entry := range entries {
 		if fs.conf.HiddenDirs[entry.Name()] {
-			log.Info().
+			log.Debug().
 				Str("operation", "ListFolder").
 				Str("entry_name", entry.Name()).
 				Str("reason", "hidden_directory").
@@ -676,7 +676,7 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 		ri, err := fs.fileAsResourceInfo(filepath.Join(path, entry.Name()), entry, mdKeys)
 		if ri == nil || err != nil {
 			if err != nil {
-				log.Info().
+				log.Debug().
 					Str("operation", "ListFolder").
 					Str("entry_name", entry.Name()).
 					Str("reason", "fileAsResourceInfo_error").
@@ -684,7 +684,7 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 					Any("resourceInfo", ri).
 					Msg("cephmount ListFolder skipping entry")
 			} else {
-				log.Info().
+				log.Debug().
 					Str("operation", "ListFolder").
 					Str("entry_name", entry.Name()).
 					Str("reason", "fileAsResourceInfo_returned_nil").
@@ -696,19 +696,22 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 		files = append(files, ri)
 		
 		// Debug log each entry being returned
-		log.Info().
+		log.Trace().
 			Str("operation", "ListFolder").
 			Str("entry_path", ri.Path).
 			Str("entry_name", entry.Name()).
 			Str("entry_type", ri.Type.String()).
 			Uint64("entry_size", ri.Size).
 			Str("entry_id", ri.Id.OpaqueId).
+			Str("storage_id", ri.Id.StorageId).
 			Str("filesystem_path", filepath.Join(path, entry.Name())).
-			Msg("cephmount ListFolder returning entry")
+			Str("chroot_path_input", filepath.Join(path, entry.Name())).
+			Str("fromChroot_output", fs.fromChroot(filepath.Join(path, entry.Name()))).
+			Msg("cephmount ListFolder returning entry - PATH DEBUG")
 	}
 
 	// Debug log summary of all entries returned
-	log.Info().
+	log.Debug().
 		Str("operation", "ListFolder").
 		Str("requested_path", receivedPath).
 		Str("filesystem_path", path).
