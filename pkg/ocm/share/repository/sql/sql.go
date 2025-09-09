@@ -38,6 +38,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
+	"google.golang.org/protobuf/proto"
 )
 
 func init() {
@@ -801,7 +802,7 @@ func (m *mgr) translateUpdateFieldMask(share *ocm.ReceivedShare, fieldMask *fiel
 		params []any
 	)
 
-	newShare := *share
+	newShare := proto.Clone(share).(*ocm.ReceivedShare)
 
 	for _, mask := range fieldMask.Paths {
 		switch mask {
@@ -822,5 +823,5 @@ func (m *mgr) translateUpdateFieldMask(share *ocm.ReceivedShare, fieldMask *fiel
 		Seconds: uint64(now),
 	}
 
-	return query.String(), params, &newShare, nil
+	return query.String(), params, newShare, nil
 }

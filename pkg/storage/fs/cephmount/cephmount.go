@@ -631,7 +631,7 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 			Str("full_filesystem_path", filepath.Join(fs.chrootDir, path)).
 			Err(err).
 			Msg("cephmount ListFolder readDirectoryAsUser failed")
-		
+
 		wrappedErr := errors.Wrap(err, "cephmount: failed to read directory")
 		fs.logOperationError(ctx, "ListFolder", path, wrappedErr)
 		return nil, wrappedErr
@@ -651,7 +651,7 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 		Str("filesystem_path", path).
 		Int("raw_entries_found", len(entries)).
 		Msg("cephmount ListFolder raw directory read completed")
-	
+
 	// Log individual raw entries if there are any
 	for i, entry := range entries {
 		log.Trace().
@@ -694,7 +694,7 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 		}
 
 		files = append(files, ri)
-		
+
 		// Debug log each entry being returned
 		log.Trace().
 			Str("operation", "ListFolder").
