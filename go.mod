@@ -146,8 +146,6 @@ require (
 
 go 1.25
 
-toolchain go1.24.2
-
 replace (
 	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
 	github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
