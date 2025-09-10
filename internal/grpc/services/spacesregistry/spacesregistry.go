@@ -120,10 +120,11 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 }
 
 func getCacheManager(c *config) (cache.ResourceInfoCache, error) {
-	if f, ok := cachereg.NewFuncs[c.ResourceInfoCacheDriver]; ok {
-		return f(c.ResourceInfoCacheDrivers[c.ResourceInfoCacheDriver])
+	factory, err := cachereg.GetCacheFunc[cache.ResourceInfoCache]("memory")
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("driver not found: %s", c.ResourceInfoCacheDriver)
+	return factory(c.ResourceInfoCacheDrivers[c.ResourceInfoCacheDriver])
 }
 
 func getSpacesDriver(ctx context.Context, driver string, cfg map[string]map[string]any) (projects.Catalogue, error) {

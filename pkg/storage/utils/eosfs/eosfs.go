@@ -44,6 +44,8 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/share/cache"
+	cachereg "github.com/cs3org/reva/v3/pkg/share/cache/registry"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 
 	"github.com/cs3org/reva/v3/pkg/eosclient"
@@ -140,12 +142,14 @@ func (c *Config) ApplyDefaults() {
 }
 
 type Eosfs struct {
-	c              eosclient.EOSClient
-	conf           *Config
-	chunkHandler   *chunking.ChunkHandler
-	singleUserAuth eosclient.Authorization
-	userIDCache    *ttlcache.Cache
-	tokenCache     gcache.Cache
+	c                 eosclient.EOSClient
+	conf              *Config
+	chunkHandler      *chunking.ChunkHandler
+	singleUserAuth    eosclient.Authorization
+	userIDCache       *ttlcache.Cache
+	tokenCache        gcache.Cache
+	spaceInfoCache    cache.SpaceInfoCache
+	spaceInfoCacheTTL time.Duration
 }
 
 // NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance.
@@ -231,6 +235,12 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 			_, _ = eosfs.getUserIDGateway(context.Background(), key)
 		}
 	})
+
+	sicache, err := getCacheManager(c)
+	if err == nil {
+		eosfs.spaceInfoCache = sicache
+		eosfs.spaceInfoCacheTTL = time.Second * time.Duration(c.SpaceInfoCacheTTL)
+	}
 
 	go eosfs.userIDcacheWarmup()
 
@@ -2261,4 +2271,12 @@ func parseAndSetFavoriteAttr(ctx context.Context, attrs map[string]string) {
 
 func (fs *Eosfs) getGatewayClient() (gateway.GatewayAPIClient, error) {
 	return pool.GetGatewayServiceClient(pool.Endpoint(fs.conf.GatewaySvc))
+}
+
+func getCacheManager(c *Config) (cache.SpaceInfoCache, error) {
+	factory, err := cachereg.GetCacheFunc[cache.SpaceInfoCache]("memory")
+	if err != nil {
+		return nil, err
+	}
+	return factory(c.SpaceInfoCacheDrivers[c.SpaceInfoCacheDriver])
 }
