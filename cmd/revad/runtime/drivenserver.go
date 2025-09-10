@@ -45,16 +45,18 @@ type server struct {
 // Returns nil if no http server is configured in the config file.
 // The GracefulShutdownTimeout set to default 20 seconds and can be overridden in the core config.
 // Logging a fatal error and exit with code 1 if the http server cannot be created.
-func NewDrivenHTTPServerWithOptions(mainConf map[string]interface{}, opts ...Option) RevaDrivenServer {
+func NewDrivenHTTPServerWithOptions(mainConf map[string]interface{}, opts ...Option) *server {
 	if !isEnabledHTTP(mainConf) {
 		return nil
 	}
 	options := newOptions(opts...)
-	if srv := newServer(HTTP, mainConf, options); srv != nil {
-		return srv
+	var srv *server
+	var err error
+	if srv, err = newServer(HTTP, mainConf, options); err != nil {
+		options.Logger.Fatal().Err(err).Msg("failed to create http server")
 	}
-	options.Logger.Fatal().Msg("nothing to do, no http enabled_services declared in config")
-	return nil
+	return srv
+
 }
 
 // NewDrivenGRPCServerWithOptions runs a revad server w/o watcher with the given config file and options.
@@ -62,16 +64,17 @@ func NewDrivenHTTPServerWithOptions(mainConf map[string]interface{}, opts ...Opt
 // Returns nil if no grpc server is configured in the config file.
 // The GracefulShutdownTimeout set to default 20 seconds and can be overridden in the core config.
 // Logging a fatal error and exit with code 1 if the grpc server cannot be created.
-func NewDrivenGRPCServerWithOptions(mainConf map[string]interface{}, opts ...Option) RevaDrivenServer {
+func NewDrivenGRPCServerWithOptions(mainConf map[string]interface{}, opts ...Option) *server {
 	if !isEnabledGRPC(mainConf) {
 		return nil
 	}
 	options := newOptions(opts...)
-	if srv := newServer(GRPC, mainConf, options); srv != nil {
-		return srv
+	var srv *server
+	var err error
+	if srv, err = newServer(GRPC, mainConf, options); err != nil {
+		options.Logger.Fatal().Err(err).Msg("failed to create grpc server")
 	}
-	options.Logger.Fatal().Msg("nothing to do, no grpc enabled_services declared in config")
-	return nil
+	return srv
 }
 
 // Start starts the reva server, listening on the configured address and network.
@@ -128,54 +131,50 @@ func (s *server) Stop() error {
 }
 
 // newServer runs a revad server w/o watcher with the given config file and options.
-func newServer(protocol int, mainConf map[string]interface{}, options Options) RevaDrivenServer {
+func newServer(protocol int, mainConf map[string]interface{}, options Options) (*server, error) {
 	parseSharedConfOrDie(mainConf["shared"])
 	coreConf := parseCoreConfOrDie(mainConf["core"])
-	log := options.Logger
 
 	if err := registry.Init(options.Registry); err != nil {
-		log.Fatal().Err(err).Msg("failed to initialize registry client")
-		return nil
+		return nil, err
 	}
 
 	host, _ := os.Hostname()
-	log.Info().Msgf("host info: %s", host)
+	loggerWithHost := options.Logger.With().Str("host.name", host).Logger()
+
+	srv := &server{
+		log: &loggerWithHost,
+	}
 
 	// Only initialize tracing if we didn't get a tracer provider.
 	if options.TraceProvider == nil {
-		log.Debug().Msg("no pre-existing tracer given, initializing tracing")
+		srv.log.Debug().Msg("no pre-existing tracer given, initializing tracing")
 		options.TraceProvider = initTracing(coreConf)
 	}
-	initCPUCount(coreConf, log)
+	initCPUCount(coreConf, srv.log)
 
-	gracefulShutdownTimeout := 20 * time.Second
+	srv.gracefulShutdownTimeout = 20 * time.Second
 	if coreConf.GracefulShutdownTimeout > 0 {
-		gracefulShutdownTimeout = time.Duration(coreConf.GracefulShutdownTimeout) * time.Second
+		srv.gracefulShutdownTimeout = time.Duration(coreConf.GracefulShutdownTimeout) * time.Second
 	}
 
-	srv := &server{
-		log:                     options.Logger,
-		gracefulShutdownTimeout: gracefulShutdownTimeout,
-	}
 	switch protocol {
 	case HTTP:
-		s, err := getHTTPServer(mainConf["http"], options.Logger, options.TraceProvider)
+		s, err := getHTTPServer(mainConf["http"], srv.log, options.TraceProvider)
 		if err != nil {
-			options.Logger.Fatal().Err(err).Msg("error creating http server")
-			return nil
+			return nil, err
 		}
 		srv.srv = s
 		srv.protocol = "http"
-		return srv
+		return srv, nil
 	case GRPC:
-		s, err := getGRPCServer(mainConf["grpc"], options.Logger, options.TraceProvider)
+		s, err := getGRPCServer(mainConf["grpc"], srv.log, options.TraceProvider)
 		if err != nil {
-			options.Logger.Fatal().Err(err).Msg("error creating grpc server")
-			return nil
+			return nil, err
 		}
 		srv.srv = s
 		srv.protocol = "grpc"
-		return srv
+		return srv, nil
 	}
-	return nil
+	return nil, fmt.Errorf("unknown protocol: %d", protocol)
 }
