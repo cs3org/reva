@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2025 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,15 +24,24 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
+type Cacheable = any
+
 // Warmup is the interface to implement cache warmup strategies.
-type Warmup interface {
-	GetResourceInfos() ([]*provider.ResourceInfo, error)
+type GenericWarmup[T Cacheable] interface {
+	GetInfos() ([]T, error)
 }
 
-// ResourceInfoCache is the interface to implement caches for resource infos.
-type ResourceInfoCache interface {
-	Get(key string) (*provider.ResourceInfo, error)
-	GetKeys(keys []string) ([]*provider.ResourceInfo, error)
-	Set(key string, info *provider.ResourceInfo) error
-	SetWithExpire(key string, info *provider.ResourceInfo, expiration time.Duration) error
+type GenericCache[T Cacheable] interface {
+	Get(key string) (T, error)
+	GetKeys(keys []string) ([]T, error)
+	Set(key string, info T) error
+	SetWithExpire(key string, info T, expiration time.Duration) error
 }
+
+// ResourceInfo cache
+type WarmupResourceInfo = GenericWarmup[*provider.ResourceInfo]
+type ResourceInfoCache = GenericCache[*provider.ResourceInfo]
+
+// Space cache
+// We don't need to warm up this one
+type SpaceInfoCache = GenericCache[*provider.StorageSpace]

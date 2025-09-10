@@ -18,17 +18,24 @@
 
 package registry
 
-import "github.com/cs3org/reva/v3/pkg/share/cache"
+import "fmt"
 
-// NewFunc is the function that cache implementations
-// should register at init time.
-type NewFunc func(map[string]interface{}) (cache.ResourceInfoCache, error)
+type CacheFunc[T any] func(map[string]interface{}) (T, error)
 
-// NewFuncs is a map containing all the registered cache implementations.
-var NewFuncs = map[string]NewFunc{}
+var registry = map[string]any{}
 
-// Register registers a new cache function.
-// Not safe for concurrent use. Safe for use from package init.
-func Register(name string, f NewFunc) {
-	NewFuncs[name] = f
+func Register[T any](name string, f CacheFunc[T]) {
+	registry[name] = f
+}
+
+func GetCacheFunc[T any](name string) (CacheFunc[T], error) {
+	f, ok := registry[name]
+	if !ok {
+		return nil, fmt.Errorf("driver not found: %s", name)
+	}
+	cf, ok := f.(CacheFunc[T])
+	if !ok {
+		return nil, fmt.Errorf("driver found but type mismatch for %s", name)
+	}
+	return cf, nil
 }

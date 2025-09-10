@@ -97,7 +97,7 @@ type userIdentifiers struct {
 	Mail        string
 }
 
-func getCacheWarmupManager(c *config.Config) (cache.Warmup, error) {
+func getCacheWarmupManager(c *config.Config) (cache.WarmupResourceInfo, error) {
 	if f, ok := warmupreg.NewFuncs[c.CacheWarmupDriver]; ok {
 		return f(c.CacheWarmupDrivers[c.CacheWarmupDriver])
 	}
@@ -105,10 +105,11 @@ func getCacheWarmupManager(c *config.Config) (cache.Warmup, error) {
 }
 
 func getCacheManager(c *config.Config) (cache.ResourceInfoCache, error) {
-	if f, ok := cachereg.NewFuncs[c.ResourceInfoCacheDriver]; ok {
-		return f(c.ResourceInfoCacheDrivers[c.ResourceInfoCacheDriver])
+	factory, err := cachereg.GetCacheFunc[cache.ResourceInfoCache]("memory")
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("driver not found: %s", c.ResourceInfoCacheDriver)
+	return factory(c.ResourceInfoCacheDrivers[c.ResourceInfoCacheDriver])
 }
 
 // Init initializes this and any contained handlers.
@@ -144,9 +145,9 @@ func (h *Handler) Init(c *config.Config, l *zerolog.Logger) {
 	}
 }
 
-func (h *Handler) startCacheWarmup(c cache.Warmup) {
+func (h *Handler) startCacheWarmup(c cache.WarmupResourceInfo) {
 	time.Sleep(2 * time.Second)
-	infos, err := c.GetResourceInfos()
+	infos, err := c.GetInfos()
 	if err != nil {
 		return
 	}
