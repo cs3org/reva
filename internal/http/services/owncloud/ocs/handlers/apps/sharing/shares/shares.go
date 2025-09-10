@@ -238,12 +238,12 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	switch shareType {
 	case int(conversions.ShareTypeUser):
 		// user collaborations default to collab
-		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewCollaboratorRole()); err == nil {
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewManagerRole()); err == nil {
 			h.createUserShare(w, r, statRes.Info, role, val)
 		}
 	case int(conversions.ShareTypeGroup):
 		// group collaborations default to collab
-		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewCollaboratorRole()); err == nil {
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewManagerRole()); err == nil {
 			h.createGroupShare(w, r, statRes.Info, role, val)
 		}
 	case int(conversions.ShareTypePublicLink):
