@@ -43,8 +43,6 @@ const (
 	RoleEditor = "editor"
 	// RoleFileEditor grants editor permission on a single file.
 	RoleFileEditor = "file-editor"
-	// RoleCollaborator grants editor+resharing permissions on a resource.
-	RoleCollaborator = "coowner"
 	// RoleUploader grants uploader permission to upload onto a resource.
 	RoleUploader = "uploader"
 	// RoleManager grants manager permissions on a resource. Semantically equivalent to co-owner.
@@ -125,8 +123,6 @@ func RoleFromName(name string) *Role {
 		return NewEditorRole()
 	case RoleFileEditor:
 		return NewFileEditorRole()
-	case RoleCollaborator:
-		return NewCollaboratorRole()
 	case RoleUploader:
 		return NewUploaderRole()
 	case RoleManager:
@@ -212,34 +208,6 @@ func NewFileEditorRole() *Role {
 	}
 }
 
-// NewCollaboratorRole creates a collaborator role.
-func NewCollaboratorRole() *Role {
-	return &Role{
-		Name: RoleCollaborator,
-		cS3ResourcePermissions: &provider.ResourcePermissions{
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-			ListGrants:           true,
-			ListContainer:        true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			InitiateFileUpload:   true,
-			RestoreFileVersion:   true,
-			RestoreRecycleItem:   true,
-			CreateContainer:      true,
-			Delete:               true,
-			Move:                 true,
-			PurgeRecycle:         true,
-			AddGrant:             true,
-			UpdateGrant:          true,
-			RemoveGrant:          true,
-		},
-		ocsPermissions: PermissionAll,
-	}
-}
-
 // NewUploaderRole creates an uploader role.
 func NewUploaderRole() *Role {
 	return &Role{
@@ -294,7 +262,7 @@ func RoleFromOCSPermissions(p Permissions) *Role {
 	if p.Contain(PermissionRead) {
 		if p.Contain(PermissionWrite) && p.Contain(PermissionCreate) && p.Contain(PermissionDelete) {
 			if p.Contain(PermissionShare) {
-				return NewCollaboratorRole()
+				return NewManagerRole()
 			}
 			return NewEditorRole()
 		}
@@ -361,7 +329,7 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 			if r.ocsPermissions.Contain(PermissionCreate) && r.ocsPermissions.Contain(PermissionDelete) {
 				r.Name = RoleEditor
 				if r.ocsPermissions.Contain(PermissionShare) {
-					r.Name = RoleCollaborator
+					r.Name = RoleManager
 				}
 			}
 			return r // file-editor, editor or collaborator
