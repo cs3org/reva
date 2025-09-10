@@ -297,9 +297,6 @@ func (w *Watcher) TrapSignals() {
 	}
 }
 
-// TODO: Ideally this would call exit() but properly return an error. The
-// exit() is problematic (i.e. racey) especiaily when orchestrating multiple
-// reva services from some external runtime (like in the "opencloud server" case
 func gracefulShutdown(w *Watcher) {
 	defer w.Clean()
 	w.log.Info().Int("Timeout", w.gracefulShutdownTimeout).Msg("preparing for a graceful shutdown with deadline")
