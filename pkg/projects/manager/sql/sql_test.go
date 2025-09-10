@@ -97,6 +97,7 @@ func TestListProjects(t *testing.T) {
 						Path:          "/path/to/project",
 						PermissionSet: conversions.NewManagerRole().CS3ResourcePermissions(),
 					},
+					PermissionSet: conversions.NewManagerRole().CS3ResourcePermissions(),
 				},
 			},
 		},
@@ -128,8 +129,9 @@ func TestListProjects(t *testing.T) {
 					SpaceType: spaces.SpaceTypeProject.AsString(),
 					RootInfo: &provider.ResourceInfo{
 						Path:          "/path/to/project",
-						PermissionSet: conversions.NewReaderRole().CS3ResourcePermissions(),
+						PermissionSet: conversions.NewViewerRole().CS3ResourcePermissions(),
 					},
+					PermissionSet: conversions.NewViewerRole().CS3ResourcePermissions(),
 				},
 			},
 		},
@@ -163,6 +165,7 @@ func TestListProjects(t *testing.T) {
 						Path:          "/path/to/project",
 						PermissionSet: conversions.NewEditorRole().CS3ResourcePermissions(),
 					},
+					PermissionSet: conversions.NewEditorRole().CS3ResourcePermissions(),
 				},
 			},
 		},
@@ -196,6 +199,7 @@ func TestListProjects(t *testing.T) {
 						Path:          "/path/to/project",
 						PermissionSet: conversions.NewManagerRole().CS3ResourcePermissions(),
 					},
+					PermissionSet: conversions.NewManagerRole().CS3ResourcePermissions(),
 				},
 			},
 		},
@@ -229,6 +233,7 @@ func TestListProjects(t *testing.T) {
 						Path:          "/path/to/project",
 						PermissionSet: conversions.NewManagerRole().CS3ResourcePermissions(),
 					},
+					PermissionSet: conversions.NewManagerRole().CS3ResourcePermissions(),
 				},
 			},
 		},
@@ -275,7 +280,7 @@ func TestListProjects(t *testing.T) {
 			}
 
 			if !reflect.DeepEqual(got.StorageSpaces, tt.expected) {
-				t.Fatalf("projects' list do not match. got=%#v expected=%#v", got.StorageSpaces, tt.expected)
+				t.Fatalf("projects' list do not match. got=%+v expected=%+v", got.StorageSpaces, tt.expected)
 			}
 
 			err = teardown(t)

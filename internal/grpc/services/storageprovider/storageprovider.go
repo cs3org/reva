@@ -31,6 +31,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -40,7 +41,9 @@ import (
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/storage"
 	"github.com/cs3org/reva/v3/pkg/storage/fs/registry"
@@ -69,6 +72,7 @@ type config struct {
 	ExposeDataServer                bool                              `docs:"false;Whether to expose data server."                                                                         mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
 	AvailableXS                     map[string]uint32                 `docs:"nil;List of available checksums."                                                                             mapstructure:"available_checksums"`
 	CustomMimeTypesJSON             string                            `docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types." mapstructure:"custom_mime_types_json"`
+	GatewaySvc                      string                            `mapstructure:"gatewaysvc"`
 	MinimunAllowedPathLevelForShare int                               `mapstructure:"minimum_allowed_path_level_for_share"`
 }
 
@@ -98,6 +102,7 @@ func (c *config) ApplyDefaults() {
 	if len(c.AvailableXS) == 0 {
 		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
 	}
+	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
 type FSWithListRegexSuport interface {
@@ -773,12 +778,12 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 }
 
 func (s *service) addSpaceInfo(ri *provider.ResourceInfo) {
-	space := spaces.PathToSpaceID(ri.Path)
-	ri.Id.SpaceId = space
+	spaceID := spaces.PathToSpaceID(ri.Path)
+	ri.Id.SpaceId = spaceID
 	if ri.ParentId == nil {
 		ri.ParentId = &provider.ResourceId{}
 	}
-	ri.ParentId.SpaceId = space
+	ri.ParentId.SpaceId = spaceID
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
@@ -1662,4 +1667,8 @@ func (v descendingMtime) Less(i, j int) bool {
 
 func (v descendingMtime) Swap(i, j int) {
 	v[i], v[j] = v[j], v[i]
+}
+
+func (s *service) getClient() (gateway.GatewayAPIClient, error) {
+	return pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
 }

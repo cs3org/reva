@@ -43,8 +43,6 @@ const (
 	RoleEditor = "editor"
 	// RoleFileEditor grants editor permission on a single file.
 	RoleFileEditor = "file-editor"
-	// RoleCollaborator grants editor+resharing permissions on a resource.
-	RoleCollaborator = "coowner"
 	// RoleUploader grants uploader permission to upload onto a resource.
 	RoleUploader = "uploader"
 	// RoleManager grants manager permissions on a resource. Semantically equivalent to co-owner.
@@ -68,27 +66,6 @@ func (r *Role) OCSPermissions() Permissions {
 }
 
 // WebDAVPermissions returns the webdav permissions used in propfinds, eg. "WCKDNVR"
-/*
-	from https://github.com/owncloud/core/blob/10715e2b1c85fc3855a38d2b1fe4426b5e3efbad/apps/dav/lib/Files/PublicFiles/SharedNodeTrait.php#L196-L215
-
-		$p = '';
-		if ($node->isDeletable() && $this->checkSharePermissions(Constants::PERMISSION_DELETE)) {
-			$p .= 'D';
-		}
-		if ($node->isUpdateable() && $this->checkSharePermissions(Constants::PERMISSION_UPDATE)) {
-			$p .= 'NV'; // Renameable, Moveable
-		}
-		if ($node->getType() === \OCP\Files\FileInfo::TYPE_FILE) {
-			if ($node->isUpdateable() && $this->checkSharePermissions(Constants::PERMISSION_UPDATE)) {
-				$p .= 'W';
-			}
-		} else {
-			if ($node->isCreatable() && $this->checkSharePermissions(Constants::PERMISSION_CREATE)) {
-				$p .= 'CK';
-			}
-		}
-
-*/
 // D = delete
 // NV = update (renameable moveable)
 // W = update (files only)
@@ -141,13 +118,11 @@ func RoleFromName(name string) *Role {
 	case RoleViewer:
 		return NewViewerRole()
 	case RoleReader:
-		return NewReaderRole()
+		return NewViewerRole()
 	case RoleEditor:
 		return NewEditorRole()
 	case RoleFileEditor:
 		return NewFileEditorRole()
-	case RoleCollaborator:
-		return NewCollaboratorRole()
 	case RoleUploader:
 		return NewUploaderRole()
 	case RoleManager:
@@ -182,25 +157,6 @@ func NewViewerRole() *Role {
 		cS3ResourcePermissions: &provider.ResourcePermissions{
 			GetPath:              true,
 			InitiateFileDownload: true,
-			ListGrants:           true,
-			ListContainer:        true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-		},
-		ocsPermissions: PermissionRead,
-	}
-}
-
-// NewReaderRole creates a reader role.
-func NewReaderRole() *Role {
-	return &Role{
-		Name: RoleViewer,
-		cS3ResourcePermissions: &provider.ResourcePermissions{
-			// read
-			GetPath:              true,
-			InitiateFileDownload: true,
-			ListGrants:           true,
 			ListContainer:        true,
 			ListFileVersions:     true,
 			ListRecycle:          true,
@@ -217,7 +173,6 @@ func NewEditorRole() *Role {
 		cS3ResourcePermissions: &provider.ResourcePermissions{
 			GetPath:              true,
 			InitiateFileDownload: true,
-			ListGrants:           true,
 			ListContainer:        true,
 			ListFileVersions:     true,
 			ListRecycle:          true,
@@ -241,7 +196,6 @@ func NewFileEditorRole() *Role {
 		cS3ResourcePermissions: &provider.ResourcePermissions{
 			GetPath:              true,
 			InitiateFileDownload: true,
-			ListGrants:           true,
 			ListContainer:        true,
 			ListFileVersions:     true,
 			ListRecycle:          true,
@@ -251,34 +205,6 @@ func NewFileEditorRole() *Role {
 			RestoreRecycleItem:   true,
 		},
 		ocsPermissions: PermissionRead | PermissionWrite,
-	}
-}
-
-// NewCollaboratorRole creates a collaborator role.
-func NewCollaboratorRole() *Role {
-	return &Role{
-		Name: RoleCollaborator,
-		cS3ResourcePermissions: &provider.ResourcePermissions{
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-			ListGrants:           true,
-			ListContainer:        true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			InitiateFileUpload:   true,
-			RestoreFileVersion:   true,
-			RestoreRecycleItem:   true,
-			CreateContainer:      true,
-			Delete:               true,
-			Move:                 true,
-			PurgeRecycle:         true,
-			AddGrant:             true,
-			UpdateGrant:          true,
-			RemoveGrant:          true,
-		},
-		ocsPermissions: PermissionAll,
 	}
 }
 
@@ -322,6 +248,7 @@ func NewManagerRole() *Role {
 			AddGrant:    true, // managers can add users to the space
 			RemoveGrant: true, // managers can remove users from the space
 			UpdateGrant: true,
+			DenyGrant:   true,
 		},
 		ocsPermissions: PermissionAll,
 	}
@@ -335,7 +262,7 @@ func RoleFromOCSPermissions(p Permissions) *Role {
 	if p.Contain(PermissionRead) {
 		if p.Contain(PermissionWrite) && p.Contain(PermissionCreate) && p.Contain(PermissionDelete) {
 			if p.Contain(PermissionShare) {
-				return NewCollaboratorRole()
+				return NewManagerRole()
 			}
 			return NewEditorRole()
 		}
@@ -346,56 +273,7 @@ func RoleFromOCSPermissions(p Permissions) *Role {
 	if p == PermissionCreate {
 		return NewUploaderRole()
 	}
-	// legacy
-	return NewLegacyRoleFromOCSPermissions(p)
-}
-
-// NewLegacyRoleFromOCSPermissions tries to map a legacy combination of ocs permissions to cs3 resource permissions as a legacy role.
-func NewLegacyRoleFromOCSPermissions(p Permissions) *Role {
-	r := &Role{
-		Name:                   RoleLegacy, // TODO custom role?
-		ocsPermissions:         p,
-		cS3ResourcePermissions: &provider.ResourcePermissions{},
-	}
-	if p.Contain(PermissionRead) {
-		r.cS3ResourcePermissions.ListContainer = true
-		r.cS3ResourcePermissions.ListGrants = true
-		r.cS3ResourcePermissions.ListFileVersions = true
-		r.cS3ResourcePermissions.ListRecycle = true
-		r.cS3ResourcePermissions.Stat = true
-		r.cS3ResourcePermissions.GetPath = true
-		r.cS3ResourcePermissions.InitiateFileDownload = true
-	}
-	if p.Contain(PermissionWrite) {
-		r.cS3ResourcePermissions.InitiateFileUpload = true
-		r.cS3ResourcePermissions.RestoreFileVersion = true
-		r.cS3ResourcePermissions.RestoreRecycleItem = true
-	}
-	if p.Contain(PermissionCreate) {
-		r.cS3ResourcePermissions.Stat = true
-		r.cS3ResourcePermissions.ListContainer = true
-		r.cS3ResourcePermissions.CreateContainer = true
-		// FIXME permissions mismatch: double check ocs create vs update file
-		// - if the file exists the ocs api needs to check update permission,
-		// - if the file does not exist  the ocs api needs to check update permission
-		r.cS3ResourcePermissions.InitiateFileUpload = true
-		if p.Contain(PermissionWrite) {
-			r.cS3ResourcePermissions.Move = true // TODO move only when create and write?
-		}
-	}
-	if p.Contain(PermissionDelete) {
-		r.cS3ResourcePermissions.Delete = true
-		r.cS3ResourcePermissions.PurgeRecycle = true
-	}
-	if p.Contain(PermissionShare) {
-		r.cS3ResourcePermissions.AddGrant = true
-		r.cS3ResourcePermissions.RemoveGrant = true // TODO when are you able to unshare / delete
-		r.cS3ResourcePermissions.UpdateGrant = true
-	}
-	if p.Contain(PermissionDeny) {
-		r.cS3ResourcePermissions.DenyGrant = true
-	}
-	return r
+	return NewDeniedRole()
 }
 
 // RoleFromResourcePermissions tries to map cs3 resource permissions to a role.
@@ -414,7 +292,6 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 		return r
 	}
 	if rp.ListContainer &&
-		rp.ListGrants &&
 		rp.ListFileVersions &&
 		rp.ListRecycle &&
 		rp.Stat &&
@@ -452,7 +329,7 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 			if r.ocsPermissions.Contain(PermissionCreate) && r.ocsPermissions.Contain(PermissionDelete) {
 				r.Name = RoleEditor
 				if r.ocsPermissions.Contain(PermissionShare) {
-					r.Name = RoleCollaborator
+					r.Name = RoleManager
 				}
 			}
 			return r // file-editor, editor or collaborator
