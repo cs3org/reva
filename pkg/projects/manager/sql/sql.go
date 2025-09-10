@@ -154,8 +154,6 @@ func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
 }
 
 func (m *mgr) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	user, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		return &provider.ListStorageSpacesResponse{
@@ -167,50 +165,28 @@ func (m *mgr) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 	}
 
 	var fetchedProjects []*Project
-	// if res, err := m.cache.Get(cacheKey); len(req.Filters) == 0 && err == nil && res != nil {
-	// 	fetchedProjects = res.([]*Project)
-	// } else {
-	// 	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	// 	sql := db.ToSQL(func(tx *gorm.DB) *gorm.DB {
-	// 		q := tx.Model(&Project{}).Where("archived_at is null").Find(&fetchedProjects)
-	// 		q = m.appendFiltersToQuery(ctx, q, req.Filters)
-	// 		return q
-	// 	})
-	// 	log.Info().Any("filters", req.Filters).Str("SQL", sql).Msg("FindMe3")
+	// If there is a filter other than SpaceType, we don't cache
+	shouldCache := !containsDriverLevelFilters(req.Filters)
+	if res, err := m.cache.Get(cacheKey); shouldCache && err == nil && res != nil {
+		fetchedProjects = res.([]*Project)
+	} else {
+		query := m.db.Model(&Project{}).Where("archived_at is null")
+		query = m.appendFiltersToQuery(ctx, query, req.Filters)
 
-	// 	query := m.db.Model(&Project{}).Where("archived_at is null")
-	// 	query = m.appendFiltersToQuery(ctquery, req.Filters)
+		res := query.Find(&fetchedProjects)
+		if res.Error != nil {
+			return nil, res.Error
+		}
 
-	// 	res := query.Find(&fetchedProjects)
-	// 	if res.Error != nil {
-	// 		return nil, res.Error
-	// 	}
-	// 	m.cache.Set(cacheKey, fetchedProjects)
-	// }
-
-	query := m.db.Model(&Project{}).Where("archived_at is null")
-	if len(req.GetFilters()) > 0 {
-		filter := req.GetFilters()[0]
-		if filter.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
-			query = query.Where("space_id = ?", filter.GetId().OpaqueId)
-			log.Info().Msg("FindMe - added space_id to query")
+		if shouldCache {
+			m.cache.Set(cacheKey, fetchedProjects)
 		}
 	}
-
-	res := query.Find(&fetchedProjects)
-	if res.Error != nil {
-		return nil, res.Error
-	}
-
-	log.Info().Any("projects", fetchedProjects).Msg("FindMe - result")
 
 	projects := []*provider.StorageSpace{}
 	for _, p := range fetchedProjects {
 		if perms, ok := projectBelongsToUser(user, p); ok {
-			//log.Info().Msgf("FindMe2 - project %s ListGrants? %t", p.Name, perms.ListGrants)
 			projects = append(projects, projectToStorageSpace(p, perms))
-		} else {
-			log.Error().Msgf("FindMe - User does not have access to project %s - has %d groups", p.Name, len(user.Groups))
 		}
 	}
 
@@ -392,4 +368,15 @@ func (m *mgr) GroupFiltersByType(filters []*provider.ListStorageSpacesRequest_Fi
 		grouped[f.Type] = append(grouped[f.Type], f)
 	}
 	return grouped
+}
+
+// Does the provided filter list contain filters that should be handled by the driver?
+// All filters should be handled by the driver, except for the SpaceType
+func containsDriverLevelFilters(filters []*provider.ListStorageSpacesRequest_Filter) bool {
+	for _, f := range filters {
+		if f.Type != provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE {
+			return true
+		}
+	}
+	return false
 }
