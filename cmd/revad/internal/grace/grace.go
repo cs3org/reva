@@ -306,7 +306,7 @@ func gracefulShutdown(w *Watcher) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			w.log.Info().Msgf("fd to %s:%s gracefully closed", s.Network(), s.Address())
+			w.log.Info().Str("network.transport", s.Network()).Str("network.local.address", s.Address()).Msg("fd gracefully closed")
 			err := s.GracefulStop()
 			if err != nil {
 				w.log.Error().Err(err).Msg("error stopping server")
@@ -324,7 +324,7 @@ func gracefulShutdown(w *Watcher) {
 	case <-time.After(time.Duration(w.gracefulShutdownTimeout) * time.Second):
 		w.log.Info().Msg("graceful shutdown timeout reached. running hard shutdown")
 		for _, s := range w.ss {
-			w.log.Info().Msgf("fd to %s:%s abruptly closed", s.Network(), s.Address())
+			w.log.Info().Str("network.transport", s.Network()).Str("network.local.address", s.Address()).Msg("fd abruptly closed")
 			err := s.Stop()
 			if err != nil {
 				w.log.Error().Err(err).Msg("error stopping server")
