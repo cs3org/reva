@@ -89,11 +89,11 @@ func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 	return d, nil
 }
 
-func (d *driver) resolveToken(ctx context.Context, token string) (*ocmv1beta1.Share, error) {
+func (d *driver) resolveShare(ctx context.Context, shareId string) (*ocmv1beta1.Share, error) {
 	shareRes, err := d.gateway.GetOCMShare(ctx, &ocmv1beta1.GetOCMShareRequest{
 		Ref: &ocmv1beta1.ShareReference{
-			Spec: &ocmv1beta1.ShareReference_Token{
-				Token: token,
+			Spec: &ocmv1beta1.ShareReference_Id{
+				Id: shareId,
 			},
 		},
 	})
@@ -102,7 +102,7 @@ func (d *driver) resolveToken(ctx context.Context, token string) (*ocmv1beta1.Sh
 	case err != nil:
 		return nil, err
 	case shareRes.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
-		return nil, errtypes.NotFound(token)
+		return nil, errtypes.NotFound(shareId)
 	case shareRes.Status.Code != rpcv1beta1.Code_CODE_OK:
 		return nil, errtypes.InternalError(shareRes.Status.Message)
 	}
@@ -133,16 +133,16 @@ func makeRelative(path string) string {
 
 func (d *driver) shareAndRelativePathFromRef(ctx context.Context, ref *provider.Reference) (*ocmv1beta1.Share, string, error) {
 	var (
-		token string
+		shareId string
 		path  string
 	)
 	if ref.ResourceId == nil {
-		// path is of type /token/<rel-path>
-		token, path = router.ShiftPath(ref.Path)
+		// path is of type /shareId/rel-path
+		shareId, path = router.ShiftPath(ref.Path)
 	} else {
-		// opaque id is of type token:rel.path
+		// opaque id is of type shareId:rel-path
 		s := strings.SplitN(ref.ResourceId.OpaqueId, ":", 2)
-		token = s[0]
+		shareId = s[0]
 		if len(s) == 2 {
 			path = s[1]
 		}
@@ -151,9 +151,9 @@ func (d *driver) shareAndRelativePathFromRef(ctx context.Context, ref *provider.
 	path = makeRelative(path)
 
 	log := appctx.GetLogger(ctx)
-	log.Info().Interface("ref", ref).Str("path", path).Str("token", token).Msg("Accessing OCM share")
+	log.Info().Interface("ref", ref).Str("path", path).Str("shareId", shareId).Msg("Accessing OCM share")
 
-	share, err := d.resolveToken(ctx, token)
+	share, err := d.resolveShare(ctx, shareId)
 	if err != nil {
 		return nil, "", err
 	}
@@ -322,10 +322,10 @@ func getPermissionsFromShare(share *ocmv1beta1.Share) *provider.ResourcePermissi
 func fixResourceInfo(info, shareInfo *provider.ResourceInfo, share *ocmv1beta1.Share, perms *provider.ResourcePermissions) {
 	// fix path
 	relPath := makeRelative(strings.TrimPrefix(info.Path, shareInfo.Path))
-	info.Path = filepath.Join("/", share.Token, relPath)
+	info.Path = filepath.Join("/", share.ShareID.OpaqueId, relPath)
 
-	// to enable collaborative apps, the fileid must be the same
-	// of the proxied storage
+	// to enable collaborative apps, we keep the original fileid
+	// as exposed by the proxied storage
 
 	// fix permissions
 	info.PermissionSet = perms

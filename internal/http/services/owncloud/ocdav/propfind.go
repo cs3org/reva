@@ -476,7 +476,7 @@ func (s *svc) newPropRaw(key, val string) *propertyXML {
 // Note that the path on `md.Path` must also be set, and must be a path relative to the space root.
 func spaceHref(ctx context.Context, baseURI string, md *provider.ResourceInfo) (string, error) {
 	if ocm, _ := ctx.Value(ctxOCM).(bool); ocm {
-		// /<token>/ was injected in front of the OCM path for the routing to work, we now remove it (see internal/http/services/owncloud/ocdav/dav.go)
+		// /<shareId>/ was injected in front of the OCM path for the routing to work, we now remove it (see internal/http/services/owncloud/ocdav/dav.go)
 		_, md.Path = router.ShiftPath(md.Path)
 	}
 
@@ -561,7 +561,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		md.Path = strings.TrimPrefix(md.Path, ns)
 
 		if ocm, _ := ctx.Value(ctxOCM).(bool); ocm {
-			// /<token>/ was injected in front of the OCM path for the routing to work, we now remove it (see internal/http/services/owncloud/ocdav/dav.go)
+			// /<shareId>/ was injected in front of the OCM path for the routing to work, we now remove it (see internal/http/services/owncloud/ocdav/dav.go)
 			_, md.Path = router.ShiftPath(md.Path)
 		}
 		ref = path.Join(baseURI, md.Path)

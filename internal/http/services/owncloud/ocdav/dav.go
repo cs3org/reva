@@ -243,33 +243,27 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				return
 			}
 
-			var token, ocmshare string
+			var token, ocmshareid, relPath string
 			// OCM v1.1+ (OCIS et al.).
 			bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 			if bearer != "" {
 				// Bearer token is the shared secret, path is /{shareId}/path/to/resource.
-				// Here we're keeping the simpler public-share model, where the internal routing is done via the token,
-				// therefore we strip the shareId and reinject the token.
-				// TODO(lopresti) We should instead perform a lookup via shareId and leave the token just for auth.
-				var relPath string
 				token = bearer
-				ocmshare, relPath = router.ShiftPath(r.URL.Path)
-				r.URL.Path = filepath.Join("/", token, relPath)
+				ocmshareid, relPath = router.ShiftPath(r.URL.Path)
 			} else {
 				username, _, ok := r.BasicAuth()
 				if ok {
 					// OCM v1.0 (OC10 and Nextcloud) uses basic auth for carrying the shared secret,
 					// and does not pass the shareId.
 					token = username
-					r.URL.Path = filepath.Join("/", token, r.URL.Path)
+					relPath = r.URL.Path
 				} else {
 					// compatibility for ScienceMesh: no auth, shared secret is the first element
-					// of the path, the shareId is not given. Leave the URL as is.
-					token = strings.Split(r.URL.Path, "/")[1]
+					token, relPath = router.ShiftPath(r.URL.Path)
 				}
 			}
 
-			authRes, err := handleOCMAuth(ctx, c, ocmshare, token)
+			authRes, err := handleOCMAuth(ctx, c, ocmshareid, token)
 			switch {
 			case err != nil:
 				log.Error().Err(err).Msg("error during OCM authentication")
@@ -291,6 +285,10 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
+
+			// now rewrite the URL to have the form /<shareId>/relative/path in all cases
+			ocmShares, err := GetOCMSharesFromScopes(authRes.GetScopes())
+			r.URL.Path = filepath.Join("/", ocmShares[0].Share.GetId().GetOpaqueId(), relPath)
 
 			ctx = appctx.ContextSetToken(ctx, authRes.Token)
 			ctx = appctx.ContextSetUser(ctx, authRes.User)
