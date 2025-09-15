@@ -1,4 +1,4 @@
-Bugfix: skip missing routes in dynamic router.
+Bugfix: skip missing routes in dynamic router
 
 Skip missing routes from logic.
 
