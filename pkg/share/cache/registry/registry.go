@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2025 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,9 @@
 
 package registry
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type CacheFunc[T any] func(map[string]interface{}) (T, error)
 

@@ -161,10 +161,12 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		sp = append(sp, homes...)
 
 		projects, err := s.listSpacesByType(ctx, req, user, spaces.SpaceTypeProject)
-		if err != nil {
-			return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
+		if projects != nil {
+			sp = append(sp, projects...)
 		}
-		sp = append(sp, projects...)
+		if err != nil {
+			return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error()), StorageSpaces: sp}, nil
+		}
 
 		publicSpaces, err := s.getPublicSpaces(ctx)
 		if err != nil {
@@ -229,7 +231,8 @@ func (s *service) listSpacesByType(ctx context.Context, req *provider.ListStorag
 		if _, isFilterById := isFilterByID(req.Filters); !isFilterById {
 			publicSpaces, err := s.getPublicSpaces(ctx)
 			if err != nil {
-				return nil, err
+				log.Error().Err(err).Msgf("Failed to get public spaces in call to listSpacesByType with type project")
+				return sp, err
 			}
 
 			sp = append(sp, publicSpaces...)
@@ -308,21 +311,21 @@ func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpa
 	}
 
 	// Add mtime of space
-	// var resourceInfo *provider.ResourceInfo
-	// if res, err := s.resourceInfoCache.Get(proj.RootInfo.Path); err == nil && res != nil {
-	// 	resourceInfo = res
-	// } else {
-	// 	statRes, err := s.gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
-	// 		Path: proj.RootInfo.Path,
-	// 	}})
-	// 	if err != nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-	// 		return fmt.Errorf("failed to stat path %s for project %s", proj.RootInfo.Path, proj.Name)
-	// 	}
-	// 	resourceInfo = statRes.Info
-	// 	s.resourceInfoCache.Set(proj.RootInfo.Path, resourceInfo)
-	// }
+	var resourceInfo *provider.ResourceInfo
+	if res, err := s.resourceInfoCache.Get(proj.RootInfo.Path); err == nil && res != nil {
+		resourceInfo = res
+	} else {
+		statRes, err := s.gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
+			Path: proj.RootInfo.Path,
+		}})
+		if err != nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+			return fmt.Errorf("failed to stat path %s for project %s", proj.RootInfo.Path, proj.Name)
+		}
+		resourceInfo = statRes.Info
+		s.resourceInfoCache.Set(proj.RootInfo.Path, resourceInfo)
+	}
 
-	// proj.Mtime = resourceInfo.Mtime
+	proj.Mtime = resourceInfo.Mtime
 	return nil
 }
 

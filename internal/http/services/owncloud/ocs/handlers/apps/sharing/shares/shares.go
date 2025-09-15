@@ -1006,7 +1006,6 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 
-				log.Debug().Msgf("share: %+v", data)
 				output <- data
 			}
 		}(timeoutContext, client, input, output, &wg)
@@ -1238,7 +1237,6 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.Gateway
 	}
 
 	if idIf, err := h.userIdentifierCache.Get(id); err == nil {
-		log.Debug().Msg("cache hit")
 		return idIf.(*userIdentifiers)
 	}
 

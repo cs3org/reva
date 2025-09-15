@@ -36,7 +36,6 @@ import (
 
 	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/bluele/gcache"
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -44,9 +43,6 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/share/cache"
-	cachereg "github.com/cs3org/reva/v3/pkg/share/cache/registry"
-	"github.com/cs3org/reva/v3/pkg/spaces"
 
 	"github.com/cs3org/reva/v3/pkg/eosclient"
 	"github.com/cs3org/reva/v3/pkg/eosclient/eosbinary"
@@ -142,14 +138,12 @@ func (c *Config) ApplyDefaults() {
 }
 
 type Eosfs struct {
-	c                 eosclient.EOSClient
-	conf              *Config
-	chunkHandler      *chunking.ChunkHandler
-	singleUserAuth    eosclient.Authorization
-	userIDCache       *ttlcache.Cache
-	tokenCache        gcache.Cache
-	spaceInfoCache    cache.SpaceInfoCache
-	spaceInfoCacheTTL time.Duration
+	c              eosclient.EOSClient
+	conf           *Config
+	chunkHandler   *chunking.ChunkHandler
+	singleUserAuth eosclient.Authorization
+	userIDCache    *ttlcache.Cache
+	tokenCache     gcache.Cache
 }
 
 // NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance.
@@ -235,12 +229,6 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 			_, _ = eosfs.getUserIDGateway(context.Background(), key)
 		}
 	})
-
-	sicache, err := getCacheManager(c)
-	if err == nil {
-		eosfs.spaceInfoCache = sicache
-		eosfs.spaceInfoCacheTTL = time.Second * time.Duration(c.SpaceInfoCacheTTL)
-	}
 
 	go eosfs.userIDcacheWarmup()
 
@@ -1996,65 +1984,7 @@ func (fs *Eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		}
 	}
 
-	fs.appendSpaceInfo(ctx, info)
-
 	return info, nil
-}
-
-func (fs *Eosfs) appendSpaceInfo(ctx context.Context, ri *provider.ResourceInfo) {
-	log := appctx.GetLogger(ctx)
-
-	path := fs.wrap(ctx, ri.Path)
-	spaceID := spaces.PathToSpaceID(path)
-
-	gw, err := fs.getGatewayClient()
-	if err != nil {
-		ri.Space = &provider.StorageSpace{
-			Id: &provider.StorageSpaceId{
-				OpaqueId: spaceID,
-			},
-			SpaceType: fs.conf.ProvidesSpaceType,
-		}
-		return
-	}
-
-	request := &provider.ListStorageSpacesRequest{
-		Filters: []*provider.ListStorageSpacesRequest_Filter{
-			&provider.ListStorageSpacesRequest_Filter{
-				Type: provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
-				Term: &provider.ListStorageSpacesRequest_Filter_SpaceType{
-					SpaceType: spaces.SpaceTypeProject.AsString(),
-				},
-			},
-		},
-	}
-
-	if fs.conf.ProvidesSpaceType == spaces.SpaceTypeProject.AsString() {
-		request.Filters = append(request.Filters, &provider.ListStorageSpacesRequest_Filter{
-			Type: provider.ListStorageSpacesRequest_Filter_TYPE_ID,
-			Term: &provider.ListStorageSpacesRequest_Filter_Id{
-				Id: &provider.StorageSpaceId{
-					OpaqueId: spaceID,
-				},
-			},
-		})
-	}
-
-	spacesResp, err := gw.ListStorageSpaces(ctx, request)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to list storage spaces")
-		return
-	}
-	if spacesResp.Status == nil || spacesResp.Status.Code != rpc.Code_CODE_OK || len(spacesResp.StorageSpaces) != 1 {
-		log.Error().Any("Status", spacesResp.Status).Int("found?", len(spacesResp.StorageSpaces)).Msgf("Failed to list storage spaces for %s", spaceID)
-		return
-	}
-	space := spacesResp.StorageSpaces[0]
-	ri.Space = space
-}
-
-func (fs *Eosfs) fetchSpace(spaceType spaces.SpaceType) {
-
 }
 
 func getResourceType(isDir bool) provider.ResourceType {
@@ -2267,16 +2197,4 @@ func parseAndSetFavoriteAttr(ctx context.Context, attrs map[string]string) {
 
 	// Delete the favorite attr from the response
 	delete(attrs, eosclient.FavoritesKey)
-}
-
-func (fs *Eosfs) getGatewayClient() (gateway.GatewayAPIClient, error) {
-	return pool.GetGatewayServiceClient(pool.Endpoint(fs.conf.GatewaySvc))
-}
-
-func getCacheManager(c *Config) (cache.SpaceInfoCache, error) {
-	factory, err := cachereg.GetCacheFunc[cache.SpaceInfoCache]("memory")
-	if err != nil {
-		return nil, err
-	}
-	return factory(c.SpaceInfoCacheDrivers[c.SpaceInfoCacheDriver])
 }

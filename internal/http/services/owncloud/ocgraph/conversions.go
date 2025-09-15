@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -527,9 +528,11 @@ func (s *svc) toGrantee(ctx context.Context, recipientType string, id string) (*
 func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libregraph.Drive {
 	// the prefix of the remote_item.id and rootid
 	spacePath, _ := spaces.ResourceToSpacePath(rsi.ResourceInfo)
+	// Drive Alias does not contain the first '/'
+	driveAlias := strings.TrimPrefix(spacePath, "/")
 	resourceRelativePath, _ := spaces.PathRelativeToSpaceRoot(rsi.ResourceInfo)
 
-	return &libregraph.Drive{
+	drive := &libregraph.Drive{
 		Id:         libregraph.PtrString(libregraphShareID(rsi.ReceivedShare.Share.Id)),
 		DriveType:  libregraph.PtrString("mountpoint"),
 		DriveAlias: libregraph.PtrString(rsi.ReceivedShare.Share.Id.OpaqueId), // this is not used, but must not be the same alias as the drive item
@@ -544,8 +547,7 @@ func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libre
 			Id:        libregraph.PtrString(fmt.Sprintf("%s$%s!%s", ShareJailID, ShareJailID, rsi.ReceivedShare.Share.Id.OpaqueId)),
 			WebDavUrl: libregraph.PtrString(fullURL(s.c.WebDavBase, rsi.ResourceInfo.Path)),
 			RemoteItem: &libregraph.RemoteItem{
-				// Drive Alias does not contain the first '/'
-				DriveAlias: libregraph.PtrString(spacePath[1:]),
+				DriveAlias: nil,
 				ETag:       libregraph.PtrString(rsi.ResourceInfo.Etag),
 				Folder:     &libregraph.Folder{},
 				// The Id must correspond to the id in the OCS response, for the time being
@@ -562,4 +564,10 @@ func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libre
 		},
 		Special: []libregraph.DriveItem{},
 	}
+
+	if spacePath != "" {
+		drive.Root.RemoteItem.DriveAlias = libregraph.PtrString(driveAlias)
+	}
+
+	return drive
 }
