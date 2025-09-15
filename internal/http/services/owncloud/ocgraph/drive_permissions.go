@@ -13,6 +13,7 @@ import (
 	linkv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
@@ -489,6 +490,15 @@ func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *provider.Re
 
 	statRes, err := gw.Stat(ctx, &provider.StatRequest{
 		Ref: ref,
+		Opaque: &typesv1beta1.Opaque{
+			Map: map[string]*typesv1beta1.OpaqueEntry{
+				// defined in internal/grpc/storageprovider
+				"add_space_info": &typesv1beta1.OpaqueEntry{
+					Decoder: "plain",
+					Value:   []byte("true"),
+				},
+			},
+		},
 	})
 	if err != nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
 		log.Error().Interface("ref", ref).Int("code", int(statRes.Status.Code)).Str("message", statRes.Status.Message).Msg("error statting resource")
@@ -496,7 +506,9 @@ func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *provider.Re
 	}
 	perms = make([]*libregraph.Permission, 0)
 	shares, err := s.getSharesForResource(ctx, gw, statRes.Info)
-	// TODO: error handling?
+	if err != nil {
+		return nil, nil, nil, errors.Wrap(err, "failed to get shares for resource")
+	}
 
 	for _, share := range shares {
 		sharePerms, err := s.shareToLibregraphPerm(ctx, &GenericShare{
@@ -512,7 +524,9 @@ func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *provider.Re
 	}
 
 	links, err := s.getPublicSharesForResource(ctx, gw, statRes.Info)
-	// TODO: error handling?
+	if err != nil {
+		return nil, nil, nil, errors.Wrap(err, "failed to get public shares for resource")
+	}
 
 	for _, link := range links {
 		linkPerms, err := s.shareToLibregraphPerm(ctx, &GenericShare{
@@ -608,7 +622,7 @@ func (s *svc) getPublicSharesForResource(ctx context.Context, gw gatewayv1beta1.
 	if err != nil {
 		return nil, err
 	}
-	if linksRes.Status != nil || linksRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+	if linksRes.Status != nil && linksRes.Status.Code != rpcv1beta1.Code_CODE_OK {
 		log.Error().Interface("ref", ri.Id).Int("code", int(linksRes.Status.Code)).Str("message", linksRes.Status.Message).Msg("error getting links for resource")
 		return nil, err
 	}

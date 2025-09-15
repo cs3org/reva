@@ -308,21 +308,21 @@ func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpa
 	}
 
 	// Add mtime of space
-	// var resourceInfo *provider.ResourceInfo
-	// if res, err := s.resourceInfoCache.Get(proj.RootInfo.Path); err == nil && res != nil {
-	// 	resourceInfo = res
-	// } else {
-	// 	statRes, err := s.gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
-	// 		Path: proj.RootInfo.Path,
-	// 	}})
-	// 	if err != nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-	// 		return fmt.Errorf("failed to stat path %s for project %s", proj.RootInfo.Path, proj.Name)
-	// 	}
-	// 	resourceInfo = statRes.Info
-	// 	s.resourceInfoCache.Set(proj.RootInfo.Path, resourceInfo)
-	// }
+	var resourceInfo *provider.ResourceInfo
+	if res, err := s.resourceInfoCache.Get(proj.RootInfo.Path); err == nil && res != nil {
+		resourceInfo = res
+	} else {
+		statRes, err := s.gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
+			Path: proj.RootInfo.Path,
+		}})
+		if err != nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+			return fmt.Errorf("failed to stat path %s for project %s", proj.RootInfo.Path, proj.Name)
+		}
+		resourceInfo = statRes.Info
+		s.resourceInfoCache.Set(proj.RootInfo.Path, resourceInfo)
+	}
 
-	// proj.Mtime = resourceInfo.Mtime
+	proj.Mtime = resourceInfo.Mtime
 	return nil
 }
 
