@@ -121,8 +121,9 @@ func initRoutingTree(ctx context.Context, dbUsername, dbPassword, dbHost string,
 		}
 		if _, ok := rules[m]; !ok {
 			missingRules = append(missingRules, m)
+		} else {
+			rs[p] = m
 		}
-		rs[p] = m
 	}
 
 	if len(missingRules) != 0 {
