@@ -217,13 +217,10 @@ func (d *dynamic) FindProviders(ctx context.Context, ref *provider.Reference) ([
 				Address:      address,
 			})
 		} else {
-			err := errtypes.InternalError("storage provider address not configured for mountID " + p.ProviderId)
-			l.Error().Err(err).Send()
-			return nil, err
+			l.Error().Str("mount", p.ProviderId).Msg("Storage provider address not configured for mount, skipping")
 		}
 	}
 
-	l.Debug().Msgf("resolved storage providers %+v", providers)
-
+	l.Debug().Msgf("resolved storage providers %+v for the given ref", providers)
 	return providers, nil
 }
