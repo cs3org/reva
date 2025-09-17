@@ -42,7 +42,7 @@ type EOSClient interface {
 	GetAttr(ctx context.Context, auth Authorization, key, path string) (*Attribute, error)
 	GetAttrs(ctx context.Context, auth Authorization, path string) ([]*Attribute, error)
 	GetQuota(ctx context.Context, user Authorization, rootAuth Authorization, path string) (*QuotaInfo, error)
-	SetQuota(ctx context.Context, rooAuth Authorization, info *SetQuotaInfo) error
+	SetQuota(ctx context.Context, user Authorization, rootAuth Authorization, info *SetQuotaInfo) error
 	Touch(ctx context.Context, auth Authorization, path string) error
 	Chown(ctx context.Context, auth, chownauth Authorization, path string) error
 	Chmod(ctx context.Context, auth Authorization, mode, path string) error
@@ -169,3 +169,6 @@ const EosAppHeader = "X-EOS-APP"
 // and EOS would anyway prefix our traffic as such: this is critical for
 // apps locking to work correctly!
 const EosAppPrefix = "http/reva"
+
+// ProjectQuotaGID is the special GID used for EOS project quotas.
+const ProjectQuotaGID = "99"
