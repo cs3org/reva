@@ -294,7 +294,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 			}
 			share := resp.GetShare()
 			lgPerm, err := s.shareToLibregraphPerm(ctx, &GenericShare{
-				shareType: "share",
+				shareType: ShareTypeShare,
 				share:     share,
 				ID:        share.GetId().GetOpaqueId(),
 			})
@@ -324,7 +324,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			lgPerm, err := s.shareToLibregraphPerm(ctx, &GenericShare{
-				shareType: "ocmshare",
+				shareType: ShareTypeOCMShare,
 				ocmshare:  ocmshare,
 				ID:        ocmshare.GetId().GetOpaqueId(),
 			})
@@ -441,7 +441,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lgPerm, err := s.shareToLibregraphPerm(ctx, &GenericShare{
-		shareType: "link",
+		shareType: ShareTypeLink,
 		ID:        resp.GetShare().GetId().GetOpaqueId(),
 		link:      resp.GetShare(),
 	})
@@ -514,7 +514,7 @@ func groupByResourceID(shares []*gateway.ShareResourceInfo, publicShares []*gate
 	for _, s := range shares {
 		id := spaces.ResourceIdToString(s.Share.ResourceId)
 		grouped[id] = append(grouped[id], &GenericShare{
-			shareType: "share",
+			shareType: ShareTypeShare,
 			ID:        s.Share.Id.OpaqueId,
 			share:     s.Share,
 		})
@@ -524,7 +524,7 @@ func groupByResourceID(shares []*gateway.ShareResourceInfo, publicShares []*gate
 	for _, s := range publicShares {
 		id := spaces.ResourceIdToString(s.PublicShare.ResourceId)
 		grouped[id] = append(grouped[id], &GenericShare{
-			shareType: "link",
+			shareType: ShareTypeLink,
 			ID:        s.PublicShare.Id.OpaqueId,
 			link:      s.PublicShare,
 		})
