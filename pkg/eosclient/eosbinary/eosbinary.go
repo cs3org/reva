@@ -654,7 +654,7 @@ func (c *Client) SetQuota(ctx context.Context, user eosclient.Authorization, roo
 	maxFiles := fmt.Sprintf("%d", info.MaxFiles)
 	var args []string
 	if user.Role.GID == eosclient.ProjectQuotaGID {
-		// NewStyle project quota
+		// new style project quota: we set a group quota on the space itself
 		args = []string{"quota", "set", "-g", user.Role.GID, "-p", info.QuotaNode, "-v", maxBytes, "-i", maxFiles}
 	} else {
 		args = []string{"quota", "set", "-u", user.Role.UID, "-p", info.QuotaNode, "-v", maxBytes, "-i", maxFiles}
