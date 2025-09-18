@@ -49,7 +49,7 @@ func (s *svc) getDrivePermissions(w http.ResponseWriter, r *http.Request) {
 	s.writePermissions(ctx, w, actions, roles, perms)
 }
 
-func (s *svc) getShareOrLink(ctx context.Context, shareID string, resourceId *providerpb.ResourceId) (*GenericShare, error) {
+func (s *svc) getGenericShare(ctx context.Context, shareID string, resourceId *providerpb.ResourceId) (*GenericShare, error) {
 	log := appctx.GetLogger(ctx)
 	// Next, we need to determine if it is a link or a permission update request
 	// we try to get a share, if this succeeds, it's a share, otherwise we assume it's a link
@@ -103,6 +103,27 @@ func (s *svc) getShareOrLink(ctx context.Context, shareID string, resourceId *pr
 			link:      link.Share,
 		}, nil
 	}
+	ocm_share, err := gw.GetOCMShare(ctx, &ocm.GetOCMShareRequest{
+		Ref: &ocm.ShareReference{
+			Spec: &ocm.ShareReference_Id{
+				Id: &ocm.ShareId{
+					OpaqueId: shareID,
+				},
+			},
+		},
+	})
+	if err == nil && ocm_share != nil && ocm_share.Status.Code == rpcv1beta1.Code_CODE_OK {
+		if ocm_share.Share.ResourceId.StorageId != resourceId.StorageId || ocm_share.Share.ResourceId.OpaqueId != resourceId.OpaqueId {
+			log.Error().Str("share-id", shareID).Str("resource-id", resourceId.String()).Msg("ocm share does not match resource id")
+			return nil, errtypes.BadRequest("share id does not match resource id")
+
+		}
+		return &GenericShare{
+			shareType: "ocmshare",
+			ID:        shareID,
+			ocmshare:  ocm_share.Share,
+		}, nil
+	}
 
 	return nil, err
 }
@@ -124,7 +145,7 @@ func (s *svc) updateDrivePermissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shareOrLink, err := s.getShareOrLink(ctx, shareID, resourceID)
+	genericShare, err := s.getGenericShare(ctx, shareID, resourceID)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -141,10 +162,12 @@ func (s *svc) updateDrivePermissions(w http.ResponseWriter, r *http.Request) {
 
 	permission.Id = libregraph.PtrString(shareID)
 
-	if shareOrLink.shareType == "share" {
-		s.updateSharePermissions(ctx, w, shareOrLink.share, permission, resourceID)
+	if genericShare.shareType == "share" {
+		s.updateSharePermissions(ctx, w, genericShare.share, permission, resourceID)
+	} else if genericShare.shareType == "ocmshare" {
+		s.updateOCMSharePermissions(ctx, w, genericShare.ocmshare, permission, resourceID)
 	} else {
-		s.updateLinkPermissions(ctx, w, shareOrLink.link, permission, resourceID)
+		s.updateLinkPermissions(ctx, w, genericShare.link, permission, resourceID)
 	}
 }
 
@@ -181,7 +204,7 @@ func (s *svc) deleteDrivePermissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shareOrLink, err := s.getShareOrLink(ctx, shareID, resourceID)
+	shareOrLink, err := s.getGenericShare(ctx, shareID, resourceID)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -318,6 +341,69 @@ func (s *svc) updateSharePermissions(ctx context.Context, w http.ResponseWriter,
 	_ = json.NewEncoder(w).Encode(lgPerm)
 }
 
+func (s *svc) updateOCMSharePermissions(ctx context.Context, w http.ResponseWriter, ocmshare *ocm.Share, lgPerm *libregraph.Permission, resourceId *providerpb.ResourceId) {
+	log := appctx.GetLogger(ctx)
+
+	gw, err := s.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	statRes, err := gw.Stat(ctx, &providerpb.StatRequest{
+		Ref: &providerpb.Reference{
+			ResourceId: resourceId,
+		},
+	})
+	if err != nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+		log.Error().Err(err).Msg("Failed to stat resource")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	OCMShareRequest, err := s.getOCMShareUpdateRequest(ctx, lgPerm, statRes.Info.Type, ocmshare.Id.OpaqueId)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	res, err := gw.UpdateOCMShare(ctx, OCMShareRequest)
+	if err != nil {
+		log.Error().Err(err).Msg("error updating public share")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+		log.Error().Interface("response", res).Msg("error updating public share")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	resp, err := gw.GetOCMShare(ctx, &ocm.GetOCMShareRequest{
+		Ref: &ocm.ShareReference{
+			Spec: &ocm.ShareReference_Id{
+				Id: &ocm.ShareId{
+					OpaqueId: ocmshare.Id.OpaqueId,
+				},
+			},
+		},
+	})
+
+	lgPerm, err = s.shareToLibregraphPerm(ctx, &GenericShare{
+		shareType: "ocmshare",
+		ID:        resp.GetShare().GetId().GetOpaqueId(),
+		ocmshare:  resp.GetShare(),
+	})
+	if err != nil || lgPerm == nil {
+		log.Error().Err(err).Any("link", resp.GetShare()).Err(err).Any("lgPerm", lgPerm).Msg("error converting created link to permissions")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(lgPerm)
+}
+
 func (s *svc) updateLinkPassword(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
@@ -335,7 +421,7 @@ func (s *svc) updateLinkPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shareOrLink, err := s.getShareOrLink(ctx, shareID, resourceID)
+	shareOrLink, err := s.getGenericShare(ctx, shareID, resourceID)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -701,4 +787,63 @@ func (s *svc) getShareUpdate(ctx context.Context, permission *libregraph.Permiss
 			},
 		},
 	}, nil
+}
+
+func (s *svc) getOCMShareUpdateRequest(ctx context.Context, permission *libregraph.Permission, resourceType providerpb.ResourceType, id string) (*ocm.UpdateOCMShareRequest, error) {
+
+	perms, err := s.lgPermToCS3Perm(ctx, permission, resourceType)
+	if err != nil || perms == nil {
+		return nil, errors.New("Failed to extract permissions")
+	}
+
+	unifiedRole := CS3ResourcePermissionsToUnifiedRole(ctx, perms)
+	if unifiedRole == nil {
+		return nil, errors.New("Failed to map permissions to role")
+	}
+
+	permissions, viewmode := UnifiedRoleToOCMPermissions(*unifiedRole.Id)
+	if permissions == nil {
+		return nil, errors.New("Failed to map role to ocm permissions")
+	}
+	shareRequest := &ocm.UpdateOCMShareRequest{
+		Ref: &ocm.ShareReference{
+			Spec: &ocm.ShareReference_Id{
+				Id: &ocm.ShareId{
+					OpaqueId: id,
+				},
+			},
+		},
+	}
+	if permission.ExpirationDateTime.IsSet() {
+		shareRequest.Field = append(shareRequest.Field, &ocm.UpdateOCMShareRequest_UpdateField{
+			Field: &ocm.UpdateOCMShareRequest_UpdateField_Expiration{
+				Expiration: nullableTimeToCs3Timestamp(permission.ExpirationDateTime),
+			},
+		})
+	}
+
+	shareRequest.Field = append(shareRequest.Field, &ocm.UpdateOCMShareRequest_UpdateField{
+		Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+			AccessMethods: &ocm.AccessMethod{
+				Term: &ocm.AccessMethod_WebdavOptions{
+					WebdavOptions: &ocm.WebDAVAccessMethod{
+						Permissions:  permissions,
+						Requirements: []string{},
+					},
+				},
+			},
+		},
+	})
+	shareRequest.Field = append(shareRequest.Field, &ocm.UpdateOCMShareRequest_UpdateField{
+		Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+			AccessMethods: &ocm.AccessMethod{
+				Term: &ocm.AccessMethod_WebappOptions{
+					WebappOptions: &ocm.WebappAccessMethod{
+						ViewMode: viewmode,
+					},
+				},
+			},
+		},
+	})
+	return shareRequest, nil
 }
