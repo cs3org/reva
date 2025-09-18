@@ -12,6 +12,7 @@ import (
 	group "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
@@ -19,6 +20,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/utils"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 )
 
 func (s *svc) shareToLibregraphPerm(ctx context.Context, share *GenericShare) (*libregraph.Permission, error) {
@@ -427,6 +429,109 @@ func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceIn
 		}
 	}
 
+	return d, nil
+}
+
+func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare *ocm.ReceivedShare) (*libregraph.DriveItem, error) {
+
+	createdTime := utils.TSToTime(receivedOCMShare.Ctime)
+
+	creator, err := s.getUserByID(ctx, receivedOCMShare.Creator)
+	if err != nil {
+		return nil, err
+	}
+
+	grantee, err := s.cs3GranteeToSharePointIdentitySet(ctx, receivedOCMShare.Grantee)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debug().Interface("receivedOCMShare", receivedOCMShare).Msg("processing received OCM share")
+
+	var webdav_uri, webapp_uri, shared_secret string
+
+	for _, p := range receivedOCMShare.Protocols {
+		if p.GetWebdavOptions() != nil {
+			webdav_uri = p.GetWebdavOptions().GetUri()
+			shared_secret = p.GetWebdavOptions().GetSharedSecret()
+			log.Debug().Str("webdav_uri", webdav_uri).Str("shared_secret", shared_secret).Msg("processing webdav options")
+			break
+		} else if p.GetWebappOptions() != nil {
+			webapp_uri = p.GetWebappOptions().GetUri()
+			shared_secret = p.GetWebappOptions().GetSharedSecret()
+			log.Debug().Str("webapp_uri", webapp_uri).Str("shared_secret", shared_secret).Msg("processing webapp options")
+			break
+		} else {
+			log.Debug().Any("protocol", p).Msg("unknown access method, skipping")
+		}
+	}
+
+	// using mtime as a makeshift etag
+	etag := receivedOCMShare.Mtime.String()
+
+	roles := make([]string, 0, 1)
+	role := CS3ResourcePermissionsToUnifiedRole(ctx, receivedOCMShare.Protocols[0].GetWebdavOptions().GetPermissions().Permissions)
+	if role != nil {
+		roles = append(roles, *role.Id)
+	}
+	d := &libregraph.DriveItem{
+		// Doesn't exist for OCM shares
+		//UIHidden:          libregraph.PtrBool(rsi.ReceivedShare.Hidden),
+		ClientSynchronize: libregraph.PtrBool(true),
+		CreatedBy: &libregraph.IdentitySet{
+			User: &libregraph.Identity{
+				DisplayName:        creator.DisplayName,
+				Id:                 libregraph.PtrString(creator.Id.OpaqueId),
+				LibreGraphUserType: libregraph.PtrString("Federated"),
+			},
+		},
+
+		ETag:                 &etag,
+		Id:                   libregraph.PtrString(receivedOCMShare.Id.OpaqueId),
+		LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(receivedOCMShare.Mtime)),
+		Name:                 libregraph.PtrString(receivedOCMShare.Name),
+		ParentReference: &libregraph.ItemReference{
+			DriveId:   libregraph.PtrString(spaces.ConcatStorageSpaceID(ShareJailID, ShareJailID)),
+			DriveType: libregraph.PtrString("virtual"),
+			Id:        libregraph.PtrString(spaces.EncodeResourceID(&provider.ResourceId{OpaqueId: ShareJailID, StorageId: ShareJailID, SpaceId: ShareJailID})),
+		},
+		RemoteItem: &libregraph.RemoteItem{
+			CreatedBy: &libregraph.IdentitySet{
+				User: &libregraph.Identity{
+					DisplayName:        creator.DisplayName,
+					Id:                 libregraph.PtrString(creator.Id.OpaqueId),
+					LibreGraphUserType: libregraph.PtrString("Federated"),
+				},
+			},
+			ETag:                 &etag,
+			Id:                   libregraph.PtrString(spaces.EncodeOCMShareID(receivedOCMShare.Id.OpaqueId)),
+			LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(receivedOCMShare.Mtime)),
+			WebUrl:               libregraph.PtrString(s.c.WebBase + "/ocm-share/" + receivedOCMShare.Name),
+			Name:                 libregraph.PtrString(receivedOCMShare.Name),
+			Permissions: []libregraph.Permission{
+				{
+					CreatedDateTime: *libregraph.NewNullableTime(&createdTime),
+					GrantedToV2:     grantee,
+					Invitation: &libregraph.SharingInvitation{
+						InvitedBy: &libregraph.IdentitySet{
+							User: &libregraph.Identity{
+								DisplayName:        creator.DisplayName,
+								Id:                 libregraph.PtrString(creator.Id.OpaqueId),
+								LibreGraphUserType: libregraph.PtrString("Federated"),
+							},
+						},
+					},
+					Roles: roles,
+				},
+			},
+			Size: libregraph.PtrInt64(int64(0) /* TODO no size in OCM shares */),
+		},
+		Size: libregraph.PtrInt64(int64(0) /* TODO no size in OCM shares */),
+	}
+
+	if receivedOCMShare.ResourceType == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		d.Folder = libregraph.NewFolder()
+	}
 	return d, nil
 }
 
