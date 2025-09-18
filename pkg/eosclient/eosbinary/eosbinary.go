@@ -635,8 +635,8 @@ func deserializeAttribute(attrStr string) (*eosclient.Attribute, error) {
 func (c *Client) GetQuota(ctx context.Context, user eosclient.Authorization, rootAuth eosclient.Authorization, path string) (*eosclient.QuotaInfo, error) {
 	var args []string
 	// NewStyle project quota
-	if user.Role.GID == "99" {
-		args = []string{"quota", "ls", "-g", "99", "-p", path}
+	if user.Role.GID == eosclient.ProjectQuotaGID {
+		args = []string{"quota", "ls", "-g", user.Role.GID, "-p", path}
 	} else {
 		// Old style quota
 		args = []string{"quota", "ls", "-u", user.Role.UID, "-m"}
@@ -649,10 +649,16 @@ func (c *Client) GetQuota(ctx context.Context, user eosclient.Authorization, roo
 }
 
 // SetQuota sets the quota of a user on the quota node defined by path.
-func (c *Client) SetQuota(ctx context.Context, rootAuth eosclient.Authorization, info *eosclient.SetQuotaInfo) error {
+func (c *Client) SetQuota(ctx context.Context, user eosclient.Authorization, rootAuth eosclient.Authorization, info *eosclient.SetQuotaInfo) error {
 	maxBytes := fmt.Sprintf("%d", info.MaxBytes)
 	maxFiles := fmt.Sprintf("%d", info.MaxFiles)
-	args := []string{"quota", "set", "-u", info.Username, "-p", info.QuotaNode, "-v", maxBytes, "-i", maxFiles}
+	var args []string
+	if user.Role.GID == eosclient.ProjectQuotaGID {
+		// new style project quota: we set a group quota on the space itself
+		args = []string{"quota", "set", "-g", user.Role.GID, "-p", info.QuotaNode, "-v", maxBytes, "-i", maxFiles}
+	} else {
+		args = []string{"quota", "set", "-u", user.Role.UID, "-p", info.QuotaNode, "-v", maxBytes, "-i", maxFiles}
+	}
 	_, _, err := c.executeEOS(ctx, args, rootAuth)
 	if err != nil {
 		return err
