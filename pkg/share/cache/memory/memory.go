@@ -29,14 +29,16 @@ import (
 )
 
 func init() {
-	registry.Register("memory", New)
+	registry.Register("memory", New[*provider.ResourceInfo])
+	registry.Register("memory_space", New[*provider.StorageSpace])
+
 }
 
 type config struct {
 	CacheSize int `mapstructure:"cache_size"`
 }
 
-type manager struct {
+type manager[T cache.Cacheable] struct {
 	cache gcache.Cache
 }
 
@@ -47,38 +49,39 @@ func (c *config) ApplyDefaults() {
 }
 
 // New returns an implementation of a resource info cache that stores the objects in memory.
-func New(m map[string]interface{}) (cache.ResourceInfoCache, error) {
+func New[T cache.Cacheable](m map[string]any) (cache.GenericCache[T], error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	return &manager{
+	return &manager[T]{
 		cache: gcache.New(c.CacheSize).LFU().Build(),
 	}, nil
 }
 
-func (m *manager) Get(key string) (*provider.ResourceInfo, error) {
+func (m *manager[T]) Get(key string) (T, error) {
+	var zero T
 	infoIf, err := m.cache.Get(key)
 	if err != nil {
-		return nil, err
+		return zero, err
 	}
-	return infoIf.(*provider.ResourceInfo), nil
+	return infoIf.(T), nil
 }
 
-func (m *manager) GetKeys(keys []string) ([]*provider.ResourceInfo, error) {
-	infos := make([]*provider.ResourceInfo, len(keys))
+func (m *manager[T]) GetKeys(keys []string) ([]T, error) {
+	infos := make([]T, len(keys))
 	for i, key := range keys {
 		if infoIf, err := m.cache.Get(key); err == nil {
-			infos[i] = infoIf.(*provider.ResourceInfo)
+			infos[i] = infoIf.(T)
 		}
 	}
 	return infos, nil
 }
 
-func (m *manager) Set(key string, info *provider.ResourceInfo) error {
+func (m *manager[T]) Set(key string, info T) error {
 	return m.cache.Set(key, info)
 }
 
-func (m *manager) SetWithExpire(key string, info *provider.ResourceInfo, expiration time.Duration) error {
+func (m *manager[T]) SetWithExpire(key string, info T, expiration time.Duration) error {
 	return m.cache.SetWithExpire(key, info, expiration)
 }

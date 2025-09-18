@@ -238,8 +238,9 @@ func getTokenManager(manager string, m map[string]map[string]interface{}) (token
 }
 
 func getCacheManager(c *config) (cache.ResourceInfoCache, error) {
-	if f, ok := cachereg.NewFuncs[c.ResourceInfoCacheDriver]; ok {
-		return f(c.ResourceInfoCacheDrivers[c.ResourceInfoCacheDriver])
+	factory, err := cachereg.GetCacheFunc[cache.ResourceInfoCache]("memory")
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("driver not found: %s", c.ResourceInfoCacheDriver)
+	return factory(c.ResourceInfoCacheDrivers[c.ResourceInfoCacheDriver])
 }

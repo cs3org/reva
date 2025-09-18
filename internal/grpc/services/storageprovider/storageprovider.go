@@ -29,18 +29,25 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	cachereg "github.com/cs3org/reva/v3/pkg/share/cache/registry"
+
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/mime"
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
+	"github.com/cs3org/reva/v3/pkg/share/cache"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/storage"
 	"github.com/cs3org/reva/v3/pkg/storage/fs/registry"
@@ -48,6 +55,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 )
 
@@ -60,6 +68,8 @@ func init() {
 	})
 }
 
+const addSpaceInfoKey = "add_space_info"
+
 type config struct {
 	MountPath                       string                            `docs:"/;The path where the file system would be mounted."                                                           mapstructure:"mount_path"`
 	MountID                         string                            `docs:"-;The ID of the mounted file system."                                                                         mapstructure:"mount_id"`
@@ -69,7 +79,12 @@ type config struct {
 	ExposeDataServer                bool                              `docs:"false;Whether to expose data server."                                                                         mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
 	AvailableXS                     map[string]uint32                 `docs:"nil;List of available checksums."                                                                             mapstructure:"available_checksums"`
 	CustomMimeTypesJSON             string                            `docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types." mapstructure:"custom_mime_types_json"`
+	GatewaySvc                      string                            `mapstructure:"gatewaysvc"`
 	MinimunAllowedPathLevelForShare int                               `mapstructure:"minimum_allowed_path_level_for_share"`
+	SpaceInfoCacheDriver            string                            `mapstructure:"space_info_cache_type"`
+	SpaceInfoCacheTTL               int                               `mapstructure:"space_info_cache_ttl"`
+	SpaceInfoCacheDrivers           map[string]map[string]interface{} `mapstructure:"space_info_caches"`
+	ProvidesSpaceType               string                            `docs:"nil;Defines which type of spaces this storage provider provides (e.g. home, project, ...)."  mapstructure:"provides_space_type"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -94,10 +109,15 @@ func (c *config) ApplyDefaults() {
 		}
 	}
 
+	if c.SpaceInfoCacheDriver == "" {
+		c.SpaceInfoCacheDriver = "memory_space"
+	}
+
 	// set sane defaults
 	if len(c.AvailableXS) == 0 {
 		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
 	}
+	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
 type FSWithListRegexSuport interface {
@@ -111,6 +131,8 @@ type service struct {
 	mountPath, mountID string
 	dataServerURL      *url.URL
 	availableXS        []*provider.ResourceChecksumPriority
+	spaceInfoCache     cache.SpaceInfoCache
+	spaceInfoCacheTTL  time.Duration
 }
 
 func (s *service) Close() error {
@@ -206,6 +228,14 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 		mountID:       mountID,
 		dataServerURL: u,
 		availableXS:   xsTypes,
+	}
+
+	sicache, err := getCacheManager(&c)
+	if err == nil {
+		service.spaceInfoCache = sicache
+		service.spaceInfoCacheTTL = time.Second * time.Duration(c.SpaceInfoCacheTTL)
+	} else {
+		log.Error().Err(err).Msgf("Failed to initialize space info cache")
 	}
 
 	return service, nil
@@ -772,13 +802,40 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	return res, nil
 }
 
-func (s *service) addSpaceInfo(ri *provider.ResourceInfo) {
-	space := spaces.PathToSpaceID(ri.Path)
-	ri.Id.SpaceId = space
+func (s *service) addSpaceInfo(ctx context.Context, ri *provider.ResourceInfo, withFetch bool) {
+	log := appctx.GetLogger(ctx)
+
+	spaceID := spaces.PathToSpaceID(ri.Path)
 	if ri.ParentId == nil {
 		ri.ParentId = &provider.ResourceId{}
 	}
-	ri.ParentId.SpaceId = space
+	ri.ParentId.SpaceId = spaceID
+	ri.Id.SpaceId = spaceID
+
+	if s.spaceInfoCache != nil {
+		if space, err := s.spaceInfoCache.Get(spaceID); space != nil && err == nil {
+			ri.Space = space
+			return
+		}
+	}
+
+	if withFetch {
+		space, err := s.fetchSpace(ctx, spaceID)
+		if err != nil {
+			log.Error().Err(err)
+			ri.Space = &provider.StorageSpace{
+				Id: &provider.StorageSpaceId{
+					OpaqueId: spaceID,
+				},
+				SpaceType: s.conf.ProvidesSpaceType,
+			}
+		} else {
+			ri.Space = space
+			if s.spaceInfoCache != nil {
+				s.spaceInfoCache.Set(spaceID, space)
+			}
+		}
+	}
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
@@ -815,9 +872,13 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			Status: status.NewInternal(ctx, err, "error wrapping path"),
 		}, nil
 	}
+
 	s.fixPermissions(md)
 	s.stripNonUtf8Metadata(ctx, md)
-	s.addSpaceInfo(md)
+
+	_, shouldAddFullSpaceInfo := req.Opaque.GetMap()[addSpaceInfoKey]
+	s.addSpaceInfo(ctx, md, shouldAddFullSpaceInfo)
+
 	res := &provider.StatResponse{
 		Status: status.NewOK(ctx),
 		Info:   md,
@@ -1021,7 +1082,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		}
 		s.fixPermissions(md)
 		s.stripNonUtf8Metadata(ctx, md)
-		s.addSpaceInfo(md)
+		s.addSpaceInfo(ctx, md, false)
 		infos = append(infos, md)
 	}
 	res := &provider.ListContainerResponse{
@@ -1662,4 +1723,58 @@ func (v descendingMtime) Less(i, j int) bool {
 
 func (v descendingMtime) Swap(i, j int) {
 	v[i], v[j] = v[j], v[i]
+}
+
+func (s *service) getClient() (gateway.GatewayAPIClient, error) {
+	return pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+}
+
+func getCacheManager(c *config) (cache.SpaceInfoCache, error) {
+	factory, err := cachereg.GetCacheFunc[cache.SpaceInfoCache](c.SpaceInfoCacheDriver)
+	if err != nil {
+		return nil, err
+	}
+	return factory(c.SpaceInfoCacheDrivers[c.SpaceInfoCacheDriver])
+}
+
+func (s *service) fetchSpace(ctx context.Context, spaceID string) (*provider.StorageSpace, error) {
+	gw, err := s.getGatewayClient()
+
+	request := &provider.ListStorageSpacesRequest{
+		Filters: []*provider.ListStorageSpacesRequest_Filter{
+			&provider.ListStorageSpacesRequest_Filter{
+				Type: provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+				Term: &provider.ListStorageSpacesRequest_Filter_SpaceType{
+					SpaceType: spaces.SpaceTypeProject.AsString(),
+				},
+			},
+		},
+	}
+
+	if s.conf.ProvidesSpaceType == spaces.SpaceTypeProject.AsString() {
+		request.Filters = append(request.Filters, &provider.ListStorageSpacesRequest_Filter{
+			Type: provider.ListStorageSpacesRequest_Filter_TYPE_ID,
+			Term: &provider.ListStorageSpacesRequest_Filter_Id{
+				Id: &provider.StorageSpaceId{
+					OpaqueId: spaceID,
+				},
+			},
+		})
+	}
+
+	spacesResp, err := gw.ListStorageSpaces(ctx, request)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to list storage spaces")
+		return nil, err
+	}
+	if spacesResp.Status == nil || spacesResp.Status.Code != rpc.Code_CODE_OK || len(spacesResp.StorageSpaces) != 1 {
+		log.Error().Any("Status", spacesResp.Status).Int("found?", len(spacesResp.StorageSpaces)).Msgf("Failed to list storage spaces for %s", spaceID)
+		return nil, fmt.Errorf("Failed to list storage spaces for %s", spaceID)
+	}
+	space := spacesResp.StorageSpaces[0]
+	return space, nil
+}
+
+func (s *service) getGatewayClient() (gateway.GatewayAPIClient, error) {
+	return pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
 }
