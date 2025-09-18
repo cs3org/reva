@@ -89,7 +89,7 @@ func (c *Client) GetQuota(ctx context.Context, user eosclient.Authorization, roo
 }
 
 // SetQuota sets the quota of a user on the quota node defined by path.
-func (c *Client) SetQuota(ctx context.Context, rootAuth eosclient.Authorization, info *eosclient.SetQuotaInfo) error {
+func (c *Client) SetQuota(ctx context.Context, user eosclient.Authorization, rootAuth eosclient.Authorization, info *eosclient.SetQuotaInfo) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "SetQuota").Str("info:", fmt.Sprintf("%#v", info)).Msg("")
 
@@ -110,9 +110,16 @@ func (c *Client) SetQuota(ctx context.Context, rootAuth eosclient.Authorization,
 		return err
 	}
 
-	// We set a quota for a user, not a group!
-	msg.Id.Uid = uidInt
-	msg.Id.Gid = 0
+	if user.Role.GID == eosclient.ProjectQuotaGID {
+		// new style project quota: we set a group quota on the space itself
+		msg.Id.Uid = 0
+		projectGID, _ := strconv.ParseUint(eosclient.ProjectQuotaGID, 10, 64)
+		msg.Id.Gid = projectGID
+	} else {
+		// We set a quota for a user, not a group!
+		msg.Id.Uid = uidInt
+		msg.Id.Gid = 0
+	}
 	msg.Id.Username = info.Username
 	msg.Id.Trace = trace.Get(ctx)
 	msg.Op = erpc.QUOTAOP_SET
