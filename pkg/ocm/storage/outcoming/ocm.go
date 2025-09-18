@@ -434,6 +434,8 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, content io
 		if lockholder := metadata["lockholder"]; lockholder != "" {
 			httpReq.Header.Set(ocdav.HeaderLockHolder, lockholder)
 		}
+		httpReq.Header.Set("Content-Length", metadata["Content-Length"])
+		httpReq.Header.Set("Upload-Length", metadata["Content-Length"])
 
 		httpRes, err := httpclient.New().Do(httpReq)
 		if err != nil {
