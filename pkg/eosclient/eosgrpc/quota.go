@@ -111,7 +111,7 @@ func (c *Client) SetQuota(ctx context.Context, user eosclient.Authorization, roo
 	}
 
 	if user.Role.GID == eosclient.ProjectQuotaGID {
-		// We set a quota for a group, not a user!
+		// new style project quota: we set a group quota on the space itself
 		msg.Id.Uid = 0
 		projectGID, _ := strconv.ParseUint(eosclient.ProjectQuotaGID, 10, 64)
 		msg.Id.Gid = projectGID
