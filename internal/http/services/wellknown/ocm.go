@@ -80,7 +80,7 @@ func (c *OcmProviderConfig) ApplyDefaults() {
 		c.WebappRoot += "/"
 	}
 	if c.InviteAcceptDialog == "" {
-		c.InviteAcceptDialog = "/sciencemesh-app/invitations"
+		c.InviteAcceptDialog = "/open-cloud-mesh/invitations"
 	}
 }
 
