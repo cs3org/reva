@@ -17,7 +17,7 @@ require (
 	github.com/cheggaaa/pb/v3 v3.1.7
 	github.com/coreos/go-oidc/v3 v3.15.0
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20250725064958-2d9caef4db2a
+	github.com/cs3org/go-cs3apis v0.0.0-20250908152307-4ca807afe54e
 	github.com/dgraph-io/ristretto v0.2.0
 	github.com/emvi/iso-639-1 v1.1.1
 	github.com/eventials/go-tus v0.0.0-20220610120217-05d0564bb571
@@ -60,7 +60,6 @@ require (
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/ginkgo/v2 v2.25.2
 	github.com/onsi/gomega v1.38.2
-	github.com/opencloud-eu/opencloud v1.1.0
 	github.com/pablodz/inotifywaitgo v0.0.9
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/xattr v0.4.12
@@ -188,6 +187,7 @@ require (
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
+	github.com/opencloud-eu/opencloud v1.1.0 // indirect
 	github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
