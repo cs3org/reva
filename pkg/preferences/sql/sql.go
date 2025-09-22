@@ -22,10 +22,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/preferences"
 	"github.com/cs3org/reva/v3/pkg/preferences/registry"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	"gorm.io/driver/mysql"
@@ -38,18 +40,16 @@ func init() {
 	registry.Register("sql", New)
 }
 
-type config struct {
-	DBUsername string `mapstructure:"db_username"`
-	DBPassword string `mapstructure:"db_password"`
-	DBHost     string `mapstructure:"db_host"`
-	DBPort     int    `mapstructure:"db_port"`
-	DBName     string `mapstructure:"db_name"`
-	Engine     string `mapstructure:"engine"` // mysql | sqlite
+type Config struct {
+	config.Database `mapstructure:",squash"`
+}
 
+func (c *Config) ApplyDefaults() {
+	c.Database = sharedconf.GetDBInfo(c.Database)
 }
 
 type mgr struct {
-	c  *config
+	c  *Config
 	db *gorm.DB
 }
 
@@ -63,10 +63,11 @@ type Preference struct {
 
 // New returns an instance of the cbox sql preferences manager.
 func New(ctx context.Context, m map[string]interface{}) (preferences.Manager, error) {
-	var c config
+	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
+	c.ApplyDefaults()
 
 	var db *gorm.DB
 	var err error

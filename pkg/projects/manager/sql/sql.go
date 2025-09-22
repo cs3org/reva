@@ -28,10 +28,12 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/projects"
 	"github.com/cs3org/reva/v3/pkg/projects/manager/registry"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
@@ -45,15 +47,10 @@ func init() {
 	registry.Register("sql", New)
 }
 
-// Config is the configuration to use for the mysql driver
+// Config is the configuration to use for the sql driver
 // implementing the projects.Catalogue interface.
 type Config struct {
-	Engine     string `mapstructure:"engine"` // mysql | sqlite
-	DBUsername string `mapstructure:"db_username"`
-	DBPassword string `mapstructure:"db_password"`
-	DBHost     string `mapstructure:"db_host"`
-	DBPort     int    `mapstructure:"db_port"`
-	DBName     string `mapstructure:"db_name"`
+	config.Database `mapstructure:",squash"`
 	// CacheTTL (seconds) determines how long the list of projects will be stored in a cache
 	// before a new database query is executed. The default, 0, corresponds to 60 seconds.
 	CacheTTL int `mapstructure:"cache_ttl"`
@@ -127,7 +124,7 @@ func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
 		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	}
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to connect to Projects database")
+		return nil, errors.Wrap(err, "Failed to connect to Projects database using engine "+c.Engine)
 	}
 
 	// Migrate schemas
@@ -150,6 +147,10 @@ func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
 		cache: cache,
 	}
 	return mgr, nil
+}
+
+func (c *Config) ApplyDefaults() {
+	c.Database = sharedconf.GetDBInfo(c.Database)
 }
 
 func (m *mgr) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
