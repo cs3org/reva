@@ -275,7 +275,7 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 	tokenWriter.WriteToken(token, w)
 
 	// validate token
-	u, tokenScope, err := tokenManager.DismantleToken(r.Context(), token)
+	_, tokenScope, err := tokenManager.DismantleToken(r.Context(), token)
 	if err != nil {
 		logError(isUnprotectedEndpoint, log, err, "error dismantling token", http.StatusUnauthorized, w)
 		return nil, err
@@ -293,7 +293,7 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 		return nil, err
 	}
 
-	return ctxWithUserInfo(ctx, r, u, token), nil
+	return ctxWithUserInfo(ctx, r, res.User, token), nil
 }
 
 func ctxWithUserInfo(ctx context.Context, r *http.Request, user *userpb.User, token string) context.Context {
