@@ -406,6 +406,8 @@ func (c *Client) list(ctx context.Context, auth eosclient.Authorization, dpath s
 		// we can return its inode instead
 		if eosclient.IsVersionFolder(myitem.File) {
 			versionFolders[myitem.File] = myitem
+		} else {
+			mylst = append(mylst, myitem)
 		}
 
 		if ownerAuth == nil {
@@ -417,7 +419,6 @@ func (c *Client) list(ctx context.Context, auth eosclient.Authorization, dpath s
 			}
 		}
 
-		mylst = append(mylst, myitem)
 	}
 
 	log.Info().Any("resp-list", mylst).Msg("FindRequest raw response")
