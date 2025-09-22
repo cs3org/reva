@@ -20,6 +20,7 @@ package eosclient
 
 import (
 	"fmt"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -69,7 +70,8 @@ func (a *Attribute) GetKey() string {
 }
 
 func GetVersionFolder(p string) string {
-	return path.Join(path.Dir(p), versionPrefix+path.Base(p))
+	folder := path.Join(path.Dir(p), versionPrefix+path.Base(p))
+	return path.Clean(folder) + string(os.PathSeparator)
 }
 
 func IsVersionFolder(p string) bool {

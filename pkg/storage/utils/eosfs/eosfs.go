@@ -1491,33 +1491,34 @@ func (fs *Eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]
 	var fn string
 	var err error
 
-	if !fs.conf.EnableHome {
-		// We need to access the revisions for a non-home reference.
-		// We'll get the owner of the particular resource and impersonate them
-		// if we have access to it.
-		md, err := fs.GetMD(ctx, ref, nil)
+	//if fs.conf.Pro {
+	// We need to access the revisions for a non-home reference.
+	// We'll get the owner of the particular resource and impersonate them
+	// if we have access to it.
+	md, err := fs.GetMD(ctx, ref, nil)
+	if err != nil {
+		return nil, err
+	}
+	fn = fs.wrap(ctx, md.Path)
+	versionFolder := eosclient.GetVersionFolder(fn)
+
+	if md.PermissionSet.ListFileVersions {
+		user := appctx.ContextMustGetUser(ctx)
+		auth, err = fs.getEOSToken(ctx, user, versionFolder)
 		if err != nil {
 			return nil, err
-		}
-		fn = fs.wrap(ctx, md.Path)
-
-		if md.PermissionSet.ListFileVersions {
-			user := appctx.ContextMustGetUser(ctx)
-			auth, err = fs.getEOSToken(ctx, user, fn)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to list revisions")
 		}
 	} else {
-		var userAuth eosclient.Authorization
-		fn, userAuth, err = fs.resolveRefAndGetAuth(ctx, ref)
-		if err != nil {
-			return nil, err
-		}
-		auth = utils.GetUserOrDaemonAuth(userAuth)
+		return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to list revisions")
 	}
+	// } else {
+	// var userAuth eosclient.Authorization
+	// fn, userAuth, err = fs.resolveRefAndGetAuth(ctx, ref)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// auth = utils.GetUserOrDaemonAuth(userAuth)
+	// }
 
 	eosRevisions, err := fs.c.ListVersions(ctx, auth, fn)
 	if err != nil {
