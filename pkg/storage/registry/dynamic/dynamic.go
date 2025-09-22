@@ -27,8 +27,10 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/storage"
 	"github.com/cs3org/reva/v3/pkg/storage/registry/dynamic/rewriter"
 	"github.com/cs3org/reva/v3/pkg/storage/registry/dynamic/routingtree"
@@ -44,7 +46,7 @@ func init() {
 }
 
 type dynamic struct {
-	c       *config
+	c       *Config
 	log     *zerolog.Logger
 	aliases map[string]string
 	r       map[string]string
@@ -52,25 +54,26 @@ type dynamic struct {
 	ur      *rewriter.UserRewriter
 }
 
-type config struct {
-	Rules      map[string]string `docs:"nil;A map from mountID to provider address"                          mapstructure:"rules"`
-	Rewrites   map[string]string `docs:"nil;A map from a path to an template alias to use when resolving"    mapstructure:"rewrites"`
-	IDAliases  map[string]string `docs:"nil;A map containing storageID aliases, can contain simple brackets" mapstructure:"aliases"`
-	HomePath   string            `mapstructure:"home_path"`
-	DBUsername string            `mapstructure:"db_username"`
-	DBPassword string            `mapstructure:"db_password"`
-	DBHost     string            `mapstructure:"db_host"`
-	DBPort     int               `mapstructure:"db_port"`
-	DBName     string            `mapstructure:"db_name"`
+type Config struct {
+	Rules           map[string]string `docs:"nil;A map from mountID to provider address"                          mapstructure:"rules"`
+	Rewrites        map[string]string `docs:"nil;A map from a path to an template alias to use when resolving"    mapstructure:"rewrites"`
+	IDAliases       map[string]string `docs:"nil;A map containing storageID aliases, can contain simple brackets" mapstructure:"aliases"`
+	HomePath        string            `mapstructure:"home_path"`
+	config.Database `mapstructure:",squash"`
+}
+
+func (c *Config) ApplyDefaults() {
+	c.Database = sharedconf.GetDBInfo(c.Database)
 }
 
 // New returns an implementation of the storage.Registry interface that
 // redirects requests to corresponding storage drivers.
 func New(ctx context.Context, m map[string]interface{}) (storage.Registry, error) {
-	var c config
+	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
+	c.ApplyDefaults()
 
 	log := appctx.GetLogger(ctx)
 	annotatedLog := log.With().Str("storageregistry", "dynamic").Logger()

@@ -37,7 +37,7 @@ import (
 func setupSuite(tb testing.TB) (projects_catalogue.Catalogue, error, func(tb testing.TB) error) {
 	ctx := context.Background()
 	dbName := "test_db.sqlite"
-	cfg := map[string]interface{}{
+	cfg := map[string]any{
 		"engine":  "sqlite",
 		"db_name": dbName,
 	}

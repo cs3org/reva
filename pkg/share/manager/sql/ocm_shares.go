@@ -44,14 +44,14 @@ import (
 )
 
 type mgr struct {
-	c  *config
+	c  *Config
 	db *gorm.DB
 }
 
 func NewOCMShareManager(ctx context.Context, m map[string]interface{}) (share.Repository, error) {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("config", m).Msg("creating OCM share manager")
-	var c config
+	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
