@@ -215,16 +215,17 @@ func (s *svc) deleteDrivePermissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shareOrLink, err := s.getGenericShare(ctx, shareID, resourceID)
+	genericShare, err := s.getGenericShare(ctx, shareID, resourceID)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	if shareOrLink.shareType == ShareTypeShare {
-		s.deleteSharePermissions(ctx, w, r, &collaborationv1beta1.ShareId{OpaqueId: shareOrLink.ID})
-	} else {
-		s.deleteLinkPermissions(ctx, w, r, &linkv1beta1.PublicShareId{OpaqueId: shareOrLink.ID})
+	switch genericShare.shareType {
+	case ShareTypeShare, ShareTypeOCMShare:
+		s.deleteSharePermissions(ctx, w, r, genericShare)
+	default:
+		s.deleteLinkPermissions(ctx, w, r, &linkv1beta1.PublicShareId{OpaqueId: genericShare.ID})
 	}
 }
 
@@ -498,7 +499,7 @@ func (s *svc) deleteLinkPermissions(ctx context.Context, w http.ResponseWriter, 
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *svc) deleteSharePermissions(ctx context.Context, w http.ResponseWriter, r *http.Request, shareId *collaborationv1beta1.ShareId) {
+func (s *svc) deleteSharePermissions(ctx context.Context, w http.ResponseWriter, r *http.Request, genericShare *GenericShare) {
 	log := appctx.GetLogger(ctx)
 
 	gw, err := s.getClient()
@@ -507,21 +508,44 @@ func (s *svc) deleteSharePermissions(ctx context.Context, w http.ResponseWriter,
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	res, err := gw.RemoveShare(ctx, &collaborationv1beta1.RemoveShareRequest{
-		Ref: &collaborationv1beta1.ShareReference{
-			Spec: &collaborationv1beta1.ShareReference_Id{
-				Id: shareId,
+	var res_ocm *ocm.RemoveOCMShareResponse
+	var res *collaborationv1beta1.RemoveShareResponse
+	err = nil
+	switch genericShare.shareType {
+	case ShareTypeShare:
+		res, err = gw.RemoveShare(ctx, &collaborationv1beta1.RemoveShareRequest{
+			Ref: &collaborationv1beta1.ShareReference{
+				Spec: &collaborationv1beta1.ShareReference_Id{
+					Id: &collaborationv1beta1.ShareId{
+						OpaqueId: genericShare.ID,
+					},
+				},
 			},
-		},
-	})
+		})
+	case ShareTypeOCMShare:
+		res_ocm, err = gw.RemoveOCMShare(ctx, &ocm.RemoveOCMShareRequest{
+			Ref: &ocm.ShareReference{
+				Spec: &ocm.ShareReference_Id{
+					Id: &ocm.ShareId{
+						OpaqueId: genericShare.ID,
+					},
+				},
+			},
+		})
+	}
+
 	if err != nil {
 		log.Error().Err(err).Msg("error removing share")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+	if genericShare.shareType == ShareTypeShare && res.Status.Code != rpcv1beta1.Code_CODE_OK {
 		log.Error().Interface("response", res).Msg("error removing share")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	} else if genericShare.shareType == ShareTypeOCMShare && res_ocm.Status.Code != rpcv1beta1.Code_CODE_OK {
+		log.Error().Interface("response", res_ocm).Msg("error removing ocm share")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
