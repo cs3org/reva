@@ -29,9 +29,9 @@ func (s *svc) shareToLibregraphPerm(ctx context.Context, share *GenericShare) (*
 	}
 
 	switch share.shareType {
-	case "share":
+	case ShareTypeShare:
 		return s.handleRegularShare(ctx, share)
-	case "ocmshare":
+	case ShareTypeOCMShare:
 		return s.handleOCMShare(ctx, share)
 	default:
 		return s.handleLinkShare(ctx, share)
