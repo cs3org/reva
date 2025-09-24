@@ -889,7 +889,7 @@ func (s *svc) getShareUpdate(ctx context.Context, permission *libregraph.Permiss
 	}, nil
 }
 
-func (s *svc) getOCMShareUpdateRequest(ctx context.Context, permission *libregraph.Permission, resourceType providerpb.ResourceType, id string) (*ocm.UpdateOCMShareRequest, error) {
+func (s *svc) getOCMShareUpdateRequest(ctx context.Context, permission *libregraph.Permission, resourceType provider.ResourceType, id string) (*ocm.UpdateOCMShareRequest, error) {
 
 	perms, err := s.lgPermToCS3Perm(ctx, permission, resourceType)
 	if err != nil || perms == nil {
