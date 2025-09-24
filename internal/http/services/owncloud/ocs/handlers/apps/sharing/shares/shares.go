@@ -97,7 +97,7 @@ type userIdentifiers struct {
 	Mail        string
 }
 
-func getCacheWarmupManager(c *config.Config) (cache.Warmup, error) {
+func getCacheWarmupManager(c *config.Config) (cache.WarmupResourceInfo, error) {
 	if f, ok := warmupreg.NewFuncs[c.CacheWarmupDriver]; ok {
 		return f(c.CacheWarmupDrivers[c.CacheWarmupDriver])
 	}
@@ -105,10 +105,11 @@ func getCacheWarmupManager(c *config.Config) (cache.Warmup, error) {
 }
 
 func getCacheManager(c *config.Config) (cache.ResourceInfoCache, error) {
-	if f, ok := cachereg.NewFuncs[c.ResourceInfoCacheDriver]; ok {
-		return f(c.ResourceInfoCacheDrivers[c.ResourceInfoCacheDriver])
+	factory, err := cachereg.GetCacheFunc[cache.ResourceInfoCache]("memory")
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("driver not found: %s", c.ResourceInfoCacheDriver)
+	return factory(c.ResourceInfoCacheDrivers[c.ResourceInfoCacheDriver])
 }
 
 // Init initializes this and any contained handlers.
@@ -144,9 +145,9 @@ func (h *Handler) Init(c *config.Config, l *zerolog.Logger) {
 	}
 }
 
-func (h *Handler) startCacheWarmup(c cache.Warmup) {
+func (h *Handler) startCacheWarmup(c cache.WarmupResourceInfo) {
 	time.Sleep(2 * time.Second)
-	infos, err := c.GetResourceInfos()
+	infos, err := c.GetInfos()
 	if err != nil {
 		return
 	}
@@ -238,22 +239,22 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	switch shareType {
 	case int(conversions.ShareTypeUser):
 		// user collaborations default to collab
-		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewCollaboratorRole()); err == nil {
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewManagerRole()); err == nil {
 			h.createUserShare(w, r, statRes.Info, role, val)
 		}
 	case int(conversions.ShareTypeGroup):
 		// group collaborations default to collab
-		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewCollaboratorRole()); err == nil {
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewManagerRole()); err == nil {
 			h.createGroupShare(w, r, statRes.Info, role, val)
 		}
 	case int(conversions.ShareTypePublicLink):
 		// public links default to read only
-		if _, _, err := h.extractPermissions(w, r, statRes.Info, conversions.NewReaderRole()); err == nil {
+		if _, _, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
 			h.createPublicLinkShare(w, r, statRes.Info)
 		}
 	case int(conversions.ShareTypeFederatedCloudShare):
 		// federated shares default to read only
-		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewReaderRole()); err == nil {
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
 			h.createFederatedCloudShare(w, r, statRes.Info, role, val)
 		}
 	case int(conversions.ShareTypeSpaceMembership):
@@ -1005,7 +1006,6 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 
-				log.Debug().Msgf("share: %+v", data)
 				output <- data
 			}
 		}(timeoutContext, client, input, output, &wg)
@@ -1237,7 +1237,6 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.Gateway
 	}
 
 	if idIf, err := h.userIdentifierCache.Get(id); err == nil {
-		log.Debug().Msg("cache hit")
 		return idIf.(*userIdentifiers)
 	}
 

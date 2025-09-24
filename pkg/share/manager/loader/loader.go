@@ -22,5 +22,6 @@ import (
 	// Load core share manager drivers.
 	_ "github.com/cs3org/reva/v3/pkg/share/manager/json"
 	_ "github.com/cs3org/reva/v3/pkg/share/manager/memory"
+	_ "github.com/cs3org/reva/v3/pkg/share/manager/sql"
 	// Add your own here.
 )
