@@ -30,7 +30,6 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v3"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	conversions "github.com/cs3org/reva/v3/pkg/cbox/utils"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
@@ -49,13 +48,6 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pkg/errors"
 )
-
-func (ShareMgr) RevaPlugin() reva.PluginInfo {
-	return reva.PluginInfo{
-		ID:  "grpc.services.usershareprovider.drivers.sql",
-		New: NewShareManager,
-	}
-}
 
 type ShareMgr struct {
 	c  *config

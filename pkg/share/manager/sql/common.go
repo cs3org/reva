@@ -3,7 +3,8 @@ package sql
 import (
 	"fmt"
 
-	"github.com/cs3org/reva/v3"
+	publicshareregistry "github.com/cs3org/reva/v3/pkg/publicshare/manager/registry"
+	shareregistry "github.com/cs3org/reva/v3/pkg/share/manager/registry"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/sqlite"
@@ -29,8 +30,8 @@ type config struct {
 }
 
 func init() {
-	reva.RegisterPlugin(ShareMgr{})
-	reva.RegisterPlugin(PublicShareMgr{})
+	shareregistry.Register("sql", NewShareManager)
+	publicshareregistry.Register("sql", NewPublicShareManager)
 }
 
 func getDb(c config) (*gorm.DB, error) {
