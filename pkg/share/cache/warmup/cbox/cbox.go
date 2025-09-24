@@ -71,7 +71,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns an implementation of cache warmup that connects to the cbox share db and stats resources on EOS.
-func New(m map[string]interface{}) (cache.Warmup, error) {
+func New(m map[string]interface{}) (cache.WarmupResourceInfo, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -87,7 +87,7 @@ func New(m map[string]interface{}) (cache.Warmup, error) {
 	}, nil
 }
 
-func (m *manager) GetResourceInfos() ([]*provider.ResourceInfo, error) {
+func (m *manager) GetInfos() ([]*provider.ResourceInfo, error) {
 	query := "select coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source FROM oc_share WHERE (orphan = 0 or orphan IS NULL)"
 	rows, err := m.db.Query(query)
 	if err != nil {

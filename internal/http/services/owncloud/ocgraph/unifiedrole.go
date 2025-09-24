@@ -470,13 +470,12 @@ func GetBuiltinRoleDefinitionList() []*libregraph.UnifiedRoleDefinition {
 }
 
 var ocsRoleUnifiedRole = map[string]*libregraph.UnifiedRoleDefinition{
-	conversions.RoleViewer:       NewViewerUnifiedRole(),
-	conversions.RoleReader:       NewViewerUnifiedRole(),
-	conversions.RoleEditor:       NewEditorUnifiedRole(),
-	conversions.RoleFileEditor:   NewFileEditorUnifiedRole(),
-	conversions.RoleCollaborator: NewManagerUnifiedRole(),
-	conversions.RoleUploader:     NewUploaderUnifiedRole(),
-	conversions.RoleManager:      NewManagerUnifiedRole(),
+	conversions.RoleViewer:     NewViewerUnifiedRole(),
+	conversions.RoleReader:     NewViewerUnifiedRole(),
+	conversions.RoleEditor:     NewEditorUnifiedRole(),
+	conversions.RoleFileEditor: NewFileEditorUnifiedRole(),
+	conversions.RoleUploader:   NewUploaderUnifiedRole(),
+	conversions.RoleManager:    NewManagerUnifiedRole(),
 }
 
 func UnifiedRoleIDToDefinition(unifiedRoleID string) (*libregraph.UnifiedRoleDefinition, bool) {

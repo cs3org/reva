@@ -31,7 +31,8 @@ import (
 )
 
 func init() {
-	registry.Register("redis", New)
+	registry.Register("redis", New[*provider.ResourceInfo])
+	registry.Register("redis_space", New[*provider.StorageSpace])
 }
 
 type config struct {
@@ -40,7 +41,7 @@ type config struct {
 	RedisPassword string `mapstructure:"redis_password"`
 }
 
-type manager struct {
+type manager[T cache.Cacheable] struct {
 	redisPool *redis.Pool
 }
 
@@ -51,7 +52,7 @@ func (c *config) ApplyDefaults() {
 }
 
 // New returns an implementation of a resource info cache that stores the objects in a redis cluster.
-func New(m map[string]interface{}) (cache.ResourceInfoCache, error) {
+func New[T cache.Cacheable](m map[string]interface{}) (cache.GenericCache[T], error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -84,32 +85,33 @@ func New(m map[string]interface{}) (cache.ResourceInfoCache, error) {
 		},
 	}
 
-	return &manager{
+	return &manager[T]{
 		redisPool: pool,
 	}, nil
 }
 
-func (m *manager) Get(key string) (*provider.ResourceInfo, error) {
+func (m *manager[T]) Get(key string) (T, error) {
 	infos, err := m.getVals([]string{key})
 	if err != nil {
-		return nil, err
+		var zero T
+		return zero, err
 	}
 	return infos[0], nil
 }
 
-func (m *manager) GetKeys(keys []string) ([]*provider.ResourceInfo, error) {
+func (m *manager[T]) GetKeys(keys []string) ([]T, error) {
 	return m.getVals(keys)
 }
 
-func (m *manager) Set(key string, info *provider.ResourceInfo) error {
+func (m *manager[T]) Set(key string, info T) error {
 	return m.setVal(key, info, -1)
 }
 
-func (m *manager) SetWithExpire(key string, info *provider.ResourceInfo, expiration time.Duration) error {
+func (m *manager[T]) SetWithExpire(key string, info T, expiration time.Duration) error {
 	return m.setVal(key, info, int(expiration.Seconds()))
 }
 
-func (m *manager) setVal(key string, info *provider.ResourceInfo, expiration int) error {
+func (m *manager[T]) setVal(key string, info T, expiration int) error {
 	conn := m.redisPool.Get()
 	defer conn.Close()
 	if conn != nil {
@@ -131,7 +133,7 @@ func (m *manager) setVal(key string, info *provider.ResourceInfo, expiration int
 	return errors.New("cache: unable to get connection from redis pool")
 }
 
-func (m *manager) getVals(keys []string) ([]*provider.ResourceInfo, error) {
+func (m *manager[T]) getVals(keys []string) ([]T, error) {
 	conn := m.redisPool.Get()
 	defer conn.Close()
 
@@ -141,11 +143,12 @@ func (m *manager) getVals(keys []string) ([]*provider.ResourceInfo, error) {
 			return nil, err
 		}
 
-		infos := make([]*provider.ResourceInfo, len(keys))
+		var zero T
+		infos := make([]T, len(keys))
 		for i, v := range vals {
 			if v != "" {
 				if err = json.Unmarshal([]byte(v), &infos[i]); err != nil {
-					infos[i] = nil
+					infos[i] = zero
 				}
 			}
 		}

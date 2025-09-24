@@ -544,13 +544,37 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shares, err := gw.ListExistingShares(ctx, &collaborationv1beta1.ListSharesRequest{})
+	user, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		handleError(ctx, fmt.Errorf("No user in context"), http.StatusUnauthorized, w)
+		return
+	}
+
+	shares, err := gw.ListExistingShares(ctx, &collaborationv1beta1.ListSharesRequest{
+		Filters: []*collaborationv1beta1.Filter{
+			{
+				Type: collaborationv1beta1.Filter_TYPE_CREATOR,
+				Term: &collaborationv1beta1.Filter_Creator{
+					Creator: user.Id,
+				},
+			},
+		},
+	})
 	if err != nil {
 		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
 	}
 
-	publicShares, err := gw.ListExistingPublicShares(ctx, &link.ListPublicSharesRequest{})
+	publicShares, err := gw.ListExistingPublicShares(ctx, &link.ListPublicSharesRequest{
+		Filters: []*link.ListPublicSharesRequest_Filter{
+			{
+				Type: link.ListPublicSharesRequest_Filter_TYPE_CREATOR,
+				Term: &link.ListPublicSharesRequest_Filter_Creator{
+					Creator: user.Id,
+				},
+			},
+		},
+	})
 	if err != nil {
 		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
