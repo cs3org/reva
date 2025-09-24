@@ -28,7 +28,6 @@ import (
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v3"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	conversions "github.com/cs3org/reva/v3/pkg/cbox/utils"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
@@ -53,13 +52,6 @@ type PublicShareMgr struct {
 type ExpiryRange struct {
 	From time.Time
 	To   time.Time
-}
-
-func (PublicShareMgr) RevaPlugin() reva.PluginInfo {
-	return reva.PluginInfo{
-		ID:  "grpc.services.publicshareprovider.drivers.sql",
-		New: NewPublicShareManager,
-	}
 }
 
 func NewPublicShareManager(ctx context.Context, m map[string]interface{}) (publicshare.Manager, error) {
