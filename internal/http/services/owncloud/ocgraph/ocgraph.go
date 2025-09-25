@@ -42,6 +42,7 @@ func init() {
 
 type config struct {
 	GatewaySvc                 string `mapstructure:"gatewaysvc"  validate:"required"`
+	OCMEnabled                 bool   `mapstructure:"ocm_enabled"`
 	WebDavBase                 string `mapstructure:"webdav_base"`
 	WebBase                    string `mapstructure:"web_base"`
 	BaseURL                    string `mapstructure:"base_url"    validate:"required"`
@@ -165,6 +166,12 @@ func handleError(ctx context.Context, err error, status int, w http.ResponseWrit
 
 func handleRpcStatus(ctx context.Context, status *rpcv1beta1.Status, msg string, w http.ResponseWriter) {
 	log := appctx.GetLogger(ctx)
+	if status == nil {
+		log.Error().Str("Status", "nil").Msg(msg)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	log.Error().Str("Status", status.String()).Msg(msg)
 
 	w.Header().Set("x-request-id", trace.Get(ctx))
