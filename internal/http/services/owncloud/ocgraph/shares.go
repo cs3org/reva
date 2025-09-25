@@ -59,25 +59,19 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resShares, err := gw.ListExistingReceivedShares(ctx, &collaborationv1beta1.ListReceivedSharesRequest{})
+	recvSharesResp, err := gw.ListExistingReceivedShares(ctx, &collaborationv1beta1.ListReceivedSharesRequest{})
 	if err != nil {
 		log.Error().Err(err).Msg("error getting received shares")
 		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
 	}
 
-	if resShares.Status == nil || resShares.Status.Code != rpc.Code_CODE_OK {
-		handleRpcStatus(ctx, resShares.Status, "ocgraph: failed to perform ListExistingReceivedShares ", w)
+	if recvSharesResp.Status == nil || recvSharesResp.Status.Code != rpc.Code_CODE_OK {
+		handleRpcStatus(ctx, recvSharesResp.Status, "ocgraph: failed to perform ListExistingReceivedShares ", w)
 	}
 
-	// include ocm shares in the response
-	listRes, err := gw.ListReceivedOCMShares(ctx, &ocm.ListReceivedOCMSharesRequest{})
-	if err != nil {
-		handleError(ctx, err, http.StatusInternalServerError, w)
-	}
-
-	shares := make([]*libregraph.DriveItem, 0, len(resShares.ShareInfos)+len(listRes.Shares))
-	for _, share := range resShares.ShareInfos {
+	shares := make([]*libregraph.DriveItem, 0)
+	for _, share := range recvSharesResp.ShareInfos {
 		drive, err := s.cs3ReceivedShareToDriveItem(ctx, share)
 		if err != nil {
 			log.Error().Err(err).Any("share", share).Msg("error parsing received share, ignoring")
@@ -86,14 +80,28 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	for _, share := range listRes.Shares {
-		drive, err := s.OCMReceivedShareToDriveItem(ctx, share)
+	if s.c.OCMEnabled {
+		// include ocm shares in the response
+		ocmShareResp, err := gw.ListReceivedOCMShares(ctx, &ocm.ListReceivedOCMSharesRequest{})
 		if err != nil {
-			log.Error().Err(err).Any("share", share).Msg("error parsing received share, ignoring")
-		} else {
-			shares = append(shares, drive)
+			//handleError(ctx, err, http.StatusInternalServerError, w)
+			log.Fatal().Err(err).Msg("ListReceivedOCMShares returned error - user will not be able to see their OCM shares")
 		}
-		log.Debug().Any("share", share).Msg("processing received ocm share")
+		if ocmShareResp != nil {
+			if ocmShareResp.Status == nil || ocmShareResp.Status.Code != rpc.Code_CODE_OK {
+				handleRpcStatus(ctx, ocmShareResp.Status, "ocgraph: failed to perform ListReceivedOCMShares ", w)
+			}
+
+			for _, share := range ocmShareResp.Shares {
+				drive, err := s.OCMReceivedShareToDriveItem(ctx, share)
+				if err != nil {
+					log.Error().Err(err).Any("share", share).Msg("error parsing received share, ignoring")
+				} else {
+					shares = append(shares, drive)
+				}
+				log.Debug().Any("share", share).Msg("processing received ocm share")
+			}
+		}
 	}
 
 	if err := json.NewEncoder(w).Encode(map[string]any{

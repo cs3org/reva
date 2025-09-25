@@ -154,7 +154,7 @@ func (s *svc) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceivedOC
 
 	res, err := c.ListReceivedOCMShares(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling ListReceivedShares")
+		return nil, errors.Wrap(err, "gateway: error calling ListReceivedOCMShares")
 	}
 
 	return res, nil
