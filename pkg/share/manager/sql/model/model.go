@@ -99,6 +99,95 @@ type ShareState struct {
 	Alias  string `gorm:"size:64"`
 }
 
+// OCM Shares - uses BaseModel to share common ShareID with other share types
+type OcmShares struct {
+	BaseModel
+	Token        string             `gorm:"size:255;not null;uniqueIndex"`
+	FileidPrefix string             `gorm:"size:64;not null;uniqueIndex:idx_fileid_source_share_with"`
+	ItemSource   string             `gorm:"size:64;not null;uniqueIndex:idx_fileid_source_share_with"`
+	Name         string             `gorm:"type:text;not null"`
+	ShareWith    string             `gorm:"size:255;not null;uniqueIndex:idx_fileid_source_share_with"`
+	Owner        string             `gorm:"size:255;not null;uniqueIndex:idx_fileid_source_share_with"`
+	Initiator    string             `gorm:"type:text;not null"`
+	Ctime        time.Time          `gorm:"not null"`
+	Mtime        time.Time          `gorm:"not null"`
+	Expiration   datatypes.NullTime `gorm:"default:null"`
+	Type         uint8              `gorm:"not null"`
+}
+
+// OCM Shares Access Methods
+type OcmSharesAccessMethods struct {
+	gorm.Model
+	OcmShareID uint      `gorm:"not null;uniqueIndex:idx_ocm_share_method"`
+	OcmShare   OcmShares `gorm:"constraint:OnDelete:CASCADE;foreignKey:OcmShareID;references:Id"`
+	Type       uint8     `gorm:"not null;uniqueIndex:idx_ocm_share_method"`
+}
+
+// WebDAV Access Method
+type OcmAccessMethodWebdav struct {
+	OcmAccessMethodID uint                   `gorm:"primaryKey;not null"`
+	AccessMethod      OcmSharesAccessMethods `gorm:"constraint:OnDelete:CASCADE;foreignKey:OcmAccessMethodID;references:ID"`
+	Permissions       uint32                 `gorm:"not null"`
+}
+
+// WebApp Access Method
+type OcmAccessMethodWebapp struct {
+	OcmAccessMethodID uint                   `gorm:"primaryKey;not null"`
+	AccessMethod      OcmSharesAccessMethods `gorm:"constraint:OnDelete:CASCADE;foreignKey:OcmAccessMethodID;references:ID"`
+	ViewMode          uint32                 `gorm:"not null"`
+}
+
+// OCM Received Shares
+type OcmReceivedShares struct {
+	gorm.Model
+	Name         string             `gorm:"size:255;not null"`
+	FileidPrefix string             `gorm:"size:255;not null"`
+	ItemSource   string             `gorm:"size:255;not null"`
+	ItemType     uint8              `gorm:"not null"`
+	ShareWith    string             `gorm:"size:255;not null"`
+	Owner        string             `gorm:"size:255;not null"`
+	Initiator    string             `gorm:"size:255;not null"`
+	Ctime        time.Time          `gorm:"not null"`
+	Mtime        time.Time          `gorm:"not null"`
+	Expiration   datatypes.NullTime `gorm:"default:null"`
+	Type         uint8              `gorm:"not null"`
+	State        uint8              `gorm:"not null"`
+}
+
+// OCM Received Share Protocols
+type OcmReceivedShareProtocols struct {
+	gorm.Model
+	OcmReceivedShareID uint              `gorm:"not null;uniqueIndex:idx_received_share_protocol"`
+	OcmReceivedShare   OcmReceivedShares `gorm:"constraint:OnDelete:CASCADE;foreignKey:OcmReceivedShareID;references:ID"`
+	Type               uint8             `gorm:"not null;uniqueIndex:idx_received_share_protocol"`
+}
+
+// WebDAV Protocol
+type OcmProtocolWebdav struct {
+	OcmProtocolID uint                      `gorm:"primaryKey;not null"`
+	Protocol      OcmReceivedShareProtocols `gorm:"constraint:OnDelete:CASCADE;foreignKey:OcmProtocolID;references:ID"`
+	Uri           string                    `gorm:"size:255;not null"`
+	SharedSecret  string                    `gorm:"type:text;not null"`
+	Permissions   uint32                    `gorm:"not null"`
+}
+
+// WebApp Protocol
+type OcmProtocolWebapp struct {
+	OcmProtocolID uint                      `gorm:"primaryKey;not null"`
+	Protocol      OcmReceivedShareProtocols `gorm:"constraint:OnDelete:CASCADE;foreignKey:OcmProtocolID;references:ID"`
+	UriTemplate   string                    `gorm:"size:255;not null"`
+	ViewMode      uint32                    `gorm:"not null"`
+}
+
+// Transfer Protocol
+type OcmProtocolTransfer struct {
+	OcmProtocolID uint                      `gorm:"primaryKey;not null"`
+	Protocol      OcmReceivedShareProtocols `gorm:"constraint:OnDelete:CASCADE;foreignKey:OcmProtocolID;references:ID"`
+	SourceUri     string                    `gorm:"size:255;not null"`
+	SharedSecret  string                    `gorm:"size:255;not null"`
+	Size          uint32                    `gorm:"not null"`
+}
+
 func (s *Share) AsCS3Share(granteeType userpb.UserType) *collaboration.Share {
 	creationTs := &typespb.Timestamp{
 		Seconds: uint64(s.CreatedAt.Unix()),
