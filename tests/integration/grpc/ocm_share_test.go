@@ -204,7 +204,7 @@ var _ = Describe("ocm share", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(createShareRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
-				By("marie access the share")
+				By("marie list the share she received")
 				listRes, err := cesnetgw.ListReceivedOCMShares(ctxMarie, &ocmv1beta1.ListReceivedOCMSharesRequest{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -218,6 +218,7 @@ var _ = Describe("ocm share", func() {
 				webdav, ok := protocol.Term.(*ocmv1beta1.Protocol_WebdavOptions)
 				Expect(ok).To(BeTrue())
 
+				By("marie access the share via bearer token")
 				webdavClient := gowebdav.NewClient(webdav.WebdavOptions.Uri, "", "")
 				webdavClient.SetHeader("Authorization", "Bearer "+webdav.WebdavOptions.SharedSecret)
 				d, err := webdavClient.Read(".")
@@ -226,6 +227,26 @@ var _ = Describe("ocm share", func() {
 
 				err = webdavClient.Write(".", []byte("will-never-be-written"), 0)
 				Expect(err).To(HaveOccurred())
+
+				By("marie access the share via legacy basic auth (ocm v1.0)")
+				webdavClient := gowebdav.NewClient(webdav.WebdavOptions.Uri, "", "")
+				webdavClient.SetHeader("Authorization", "Basic "+webdav.WebdavOptions.SharedSecret+":")
+				d, err := webdavClient.Read(".")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(d).To(Equal([]byte("test")))
+
+				By("marie access the share via legacy sciencemesh mode")
+				sm_url := path.Join(path.Dir(webdav.WebdavOptions.Uri), webdav.WebdavOptions.SharedSecret)
+				webdavClient := gowebdav.NewClient(sm_url, "", "")
+				d, err := webdavClient.Read(".")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(d).To(Equal([]byte("test")))
+
+				webdavClient := gowebdav.NewClient(webdav.WebdavOptions.Uri, "", "")
+				webdavClient.SetHeader("Authorization", "Basic "+webdav.WebdavOptions.SharedSecret+":")
+				d, err := webdavClient.Read(".")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(d).To(Equal([]byte("test")))
 
 				By("marie access the share using the ocm mount")
 				ref := &provider.Reference{Path: ocmPath(share.Id, "")}
@@ -553,7 +574,7 @@ var _ = Describe("ocm share", func() {
 					},
 				})
 
-				// create a new file
+				By("marie can create a file")
 				newFile := &provider.Reference{Path: ocmPath(share.Id, "dir/new-file")}
 				Expect(helpers.UploadGateway(ctxMarie, cesnetgw, newFile, []byte("uploaded-from-ocm-mount"))).To(Succeed())
 				Expect(helpers.SameContentWebDAV(webdavClient, fileToShare.Path, helpers.Folder{
@@ -574,7 +595,7 @@ var _ = Describe("ocm share", func() {
 					},
 				}))
 
-				// create a new directory
+				By("marie can create a folder")
 				newDir := &provider.Reference{Path: ocmPath(share.Id, "dir/new-dir")}
 				createDirRes, err := cesnetgw.CreateContainer(ctxMarie, &provider.CreateContainerRequest{
 					Ref: newDir,

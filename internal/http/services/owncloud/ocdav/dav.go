@@ -30,6 +30,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
@@ -243,33 +244,30 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				return
 			}
 
-			var token, ocmshare string
+			var token, ocmshareid, relPath, mode string
 			// OCM v1.1+ (OCIS et al.).
 			bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 			if bearer != "" {
 				// Bearer token is the shared secret, path is /{shareId}/path/to/resource.
-				// Here we're keeping the simpler public-share model, where the internal routing is done via the token,
-				// therefore we strip the shareId and reinject the token.
-				// TODO(lopresti) We should instead perform a lookup via shareId and leave the token just for auth.
-				var relPath string
 				token = bearer
-				ocmshare, relPath = router.ShiftPath(r.URL.Path)
-				r.URL.Path = filepath.Join("/", token, relPath)
+				ocmshareid, relPath = router.ShiftPath(r.URL.Path)
+				mode = "bearer"
 			} else {
 				username, _, ok := r.BasicAuth()
 				if ok {
 					// OCM v1.0 (OC10 and Nextcloud) uses basic auth for carrying the shared secret,
 					// and does not pass the shareId.
 					token = username
-					r.URL.Path = filepath.Join("/", token, r.URL.Path)
+					relPath = r.URL.Path
+					mode = "legacy v1.0"
 				} else {
 					// compatibility for ScienceMesh: no auth, shared secret is the first element
-					// of the path, the shareId is not given. Leave the URL as is.
-					token = strings.Split(r.URL.Path, "/")[1]
+					token, relPath = router.ShiftPath(r.URL.Path)
+					mode = "legacy sciencemesh"
 				}
 			}
 
-			authRes, err := handleOCMAuth(ctx, c, ocmshare, token)
+			authRes, err := handleOCMAuth(ctx, c, ocmshareid, token)
 			switch {
 			case err != nil:
 				log.Error().Err(err).Msg("error during OCM authentication")
@@ -292,12 +290,16 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				return
 			}
 
+			// now rewrite the URL to have the form /<shareId>/relative/path in all cases
+			ocmShares, err := scope.GetOCMSharesFromScopes(authRes.TokenScope)
+			r.URL.Path = filepath.Join("/", ocmShares[0].Share.GetId().GetOpaqueId(), relPath)
+
 			ctx = appctx.ContextSetToken(ctx, authRes.Token)
 			ctx = appctx.ContextSetUser(ctx, authRes.User)
 			ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, authRes.Token)
 			ctx = context.WithValue(ctx, ctxOCM, true)
 
-			log.Debug().Str("token", token).Interface("user", authRes.User).Msg("OCM user authenticated")
+			log.Info().Str("token", token).Interface("user", authRes.User).Str("mode", mode).Msg("Remote OCM user authenticated")
 
 			r = r.WithContext(ctx)
 			h.OCMSharesHandler.Handler(s).ServeHTTP(w, r)
