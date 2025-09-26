@@ -622,30 +622,32 @@ func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *provider.Re
 		}
 	}
 
-	ocm_shares, err := gw.ListOCMShares(ctx, &ocm.ListOCMSharesRequest{
-		Filters: []*ocm.ListOCMSharesRequest_Filter{
-			{
-				Type: ocm.ListOCMSharesRequest_Filter_TYPE_RESOURCE_ID,
-				Term: &ocm.ListOCMSharesRequest_Filter_ResourceId{
-					ResourceId: statRes.Info.GetId(),
+	if s.c.OCMEnabled {
+		ocm_shares, err := gw.ListOCMShares(ctx, &ocm.ListOCMSharesRequest{
+			Filters: []*ocm.ListOCMSharesRequest_Filter{
+				{
+					Type: ocm.ListOCMSharesRequest_Filter_TYPE_RESOURCE_ID,
+					Term: &ocm.ListOCMSharesRequest_Filter_ResourceId{
+						ResourceId: statRes.Info.GetId(),
+					},
 				},
 			},
-		},
-	})
-	if err != nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-		log.Error().Interface("ref", ref).Int("code", int(statRes.Status.Code)).Str("message", statRes.Status.Message).Msg("error getting ocm shares for resource")
-		return nil, nil, nil, err
-	}
-	for _, ocm_share := range ocm_shares.GetShares() {
-		ocmSharePerms, err := s.shareToLibregraphPerm(ctx, &GenericShare{
-			shareType: ShareTypeOCMShare,
-			ID:        ocm_share.GetId().GetOpaqueId(),
-			ocmshare:  ocm_share,
 		})
-		if err == nil {
-			perms = append(perms, ocmSharePerms)
-		} else {
-			log.Error().Err(err).Any("ocm_share", ocm_share).Msg("error converting ocm share to libregraph permission")
+		if err != nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+			log.Error().Interface("ref", ref).Int("code", int(statRes.Status.Code)).Str("message", statRes.Status.Message).Msg("error getting ocm shares for resource")
+			return nil, nil, nil, err
+		}
+		for _, ocm_share := range ocm_shares.GetShares() {
+			ocmSharePerms, err := s.shareToLibregraphPerm(ctx, &GenericShare{
+				shareType: ShareTypeOCMShare,
+				ID:        ocm_share.GetId().GetOpaqueId(),
+				ocmshare:  ocm_share,
+			})
+			if err == nil {
+				perms = append(perms, ocmSharePerms)
+			} else {
+				log.Error().Err(err).Any("ocm_share", ocm_share).Msg("error converting ocm share to libregraph permission")
+			}
 		}
 	}
 
