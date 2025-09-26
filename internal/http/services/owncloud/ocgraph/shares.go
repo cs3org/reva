@@ -651,7 +651,6 @@ func (s *svc) updateReceivedShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Now let's decode the body
 	// Now we decode the request body
 	req := &libregraph.DriveItem{}
 	dec := json.NewDecoder(r.Body)
