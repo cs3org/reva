@@ -131,6 +131,7 @@ func (s *svc) initRouter() {
 		r.Route("/drives/{space-id}", func(r chi.Router) {
 			r.Get("/root/permissions", s.getRootDrivePermissions)
 			r.Route("/items/{resource-id}", func(r chi.Router) {
+				r.Patch("/", s.updateReceivedShare)
 				r.Post("/invite", s.share)
 				r.Post("/createLink", s.createLink)
 				r.Route("/permissions", func(r chi.Router) {
