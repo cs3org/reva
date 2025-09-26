@@ -37,8 +37,9 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
-	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
@@ -59,7 +60,7 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	recvSharesResp, err := gw.ListExistingReceivedShares(ctx, &collaborationv1beta1.ListReceivedSharesRequest{})
+	recvSharesResp, err := gw.ListExistingReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
 	if err != nil {
 		log.Error().Err(err).Msg("error getting received shares")
 		handleError(ctx, err, http.StatusInternalServerError, w)
@@ -113,13 +114,13 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *svc) createLocalShare(ctx context.Context, gw gateway.GatewayAPIClient, storageID, itemID, path string, owner *userpb.UserId, resourceType provider.ResourceType, recipientType string, recipientID string, exp *types.Timestamp, requestedPerms *provider.ResourcePermissions) (*collaborationv1beta1.CreateShareResponse, error) {
+func (s *svc) createLocalShare(ctx context.Context, gw gateway.GatewayAPIClient, storageID, itemID, path string, owner *userpb.UserId, resourceType provider.ResourceType, recipientType string, recipientID string, exp *types.Timestamp, requestedPerms *provider.ResourcePermissions) (*collaboration.CreateShareResponse, error) {
 	grantee, err := s.toGrantee(ctx, recipientType, recipientID)
 	if err != nil {
 		return nil, err
 	}
 
-	createShareRequest := &collaborationv1beta1.CreateShareRequest{
+	createShareRequest := &collaboration.CreateShareRequest{
 		ResourceInfo: &provider.ResourceInfo{
 			Id: &provider.ResourceId{
 				StorageId: storageID,
@@ -129,10 +130,10 @@ func (s *svc) createLocalShare(ctx context.Context, gw gateway.GatewayAPIClient,
 			Owner: owner,
 			Type:  resourceType,
 		},
-		Grant: &collaborationv1beta1.ShareGrant{
+		Grant: &collaboration.ShareGrant{
 			Grantee:    grantee,
 			Expiration: exp,
-			Permissions: &collaborationv1beta1.SharePermissions{
+			Permissions: &collaboration.SharePermissions{
 				Permissions: requestedPerms,
 			},
 		},
@@ -558,11 +559,11 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shares, err := gw.ListExistingShares(ctx, &collaborationv1beta1.ListSharesRequest{
-		Filters: []*collaborationv1beta1.Filter{
+	shares, err := gw.ListExistingShares(ctx, &collaboration.ListSharesRequest{
+		Filters: []*collaboration.Filter{
 			{
-				Type: collaborationv1beta1.Filter_TYPE_CREATOR,
-				Term: &collaborationv1beta1.Filter_Creator{
+				Type: collaboration.Filter_TYPE_CREATOR,
+				Term: &collaboration.Filter_Creator{
 					Creator: user.Id,
 				},
 			},
@@ -607,6 +608,113 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 		"value": shareDrives,
 	}); err != nil {
 		log.Error().Err(err).Msg("error marshalling shares as json")
+		handleError(ctx, err, http.StatusInternalServerError, w)
+		return
+	}
+}
+
+func (s *svc) updateReceivedShare(w http.ResponseWriter, r *http.Request) {
+	// :(
+	shareJailID := "a0ca6a90-a365-4782-871e-d44447bbc668"
+
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	gw, err := s.getClient()
+	if err != nil {
+		handleError(ctx, err, http.StatusInternalServerError, w)
+		return
+	}
+
+	// We extract the ShareID from the request
+	// Which is wrapped in some ugly form with the ShareJail unfortunately ...
+	spaceID := chi.URLParam(r, "space-id")
+	spaceID, _ = url.QueryUnescape(spaceID)
+
+	if spaceID != fmt.Sprintf("%s$%s", shareJailID, shareJailID) {
+		handleError(ctx, fmt.Errorf("spaceID for this share not found"), http.StatusNotFound, w)
+		return
+	}
+
+	resourceID := chi.URLParam(r, "resource-id")
+	resourceID, _ = url.QueryUnescape(resourceID)
+
+	parts := strings.Split(resourceID, "!")
+	if len(parts) != 2 {
+		handleError(ctx, fmt.Errorf("Invalid resource ID"), http.StatusBadRequest, w)
+		return
+	}
+
+	spaceID, shareID := parts[0], parts[1]
+	if spaceID != fmt.Sprintf("%s$%s", shareJailID, shareJailID) {
+		handleError(ctx, fmt.Errorf("spaceID for this share not found"), http.StatusNotFound, w)
+		return
+	}
+
+	// Now let's decode the body
+	// Now we decode the request body
+	req := &libregraph.DriveItem{}
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err = dec.Decode(req); err != nil {
+		log.Error().Err(err).Interface("Body", r.Body).Msg("failed unmarshalling request body")
+		handleError(ctx, err, http.StatusBadRequest, w)
+		return
+	}
+
+	if req.UIHidden == nil {
+		handleError(ctx, fmt.Errorf("Must provide @UI.Hidden when updating received share"), http.StatusBadRequest, w)
+		return
+	}
+
+	shareRequest := &collaboration.UpdateReceivedShareRequest{
+		Share: &collaboration.ReceivedShare{
+			Share: &collaboration.Share{Id: &collaboration.ShareId{OpaqueId: shareID}},
+		},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
+	}
+	if *req.UIHidden {
+		shareRequest.Share.State = collaboration.ShareState_SHARE_STATE_REJECTED
+	} else {
+		shareRequest.Share.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
+	}
+
+	shareRes, err := gw.UpdateReceivedShare(ctx, shareRequest)
+	if err != nil {
+		handleError(ctx, err, http.StatusInternalServerError, w)
+		return
+	}
+	if shareRes.Status == nil || shareRes.Status.Code != rpc.Code_CODE_OK {
+		handleRpcStatus(ctx, shareRes.Status, "ocgraph: failed to update received share", w)
+		return
+	}
+
+	// We also need the ResourceInfo to turn this into a DriveItem for the response
+	statRes, err := gw.Stat(ctx, &provider.StatRequest{
+		Ref: &provider.Reference{
+			ResourceId: shareRes.Share.Share.ResourceId,
+		},
+	})
+	if err != nil {
+		handleError(ctx, err, http.StatusInternalServerError, w)
+		return
+	}
+	if statRes.Status == nil || statRes.Status.Code != rpc.Code_CODE_OK {
+		handleRpcStatus(ctx, statRes.Status, "ocgraph: failed to stat resource behind received share", w)
+		return
+	}
+
+	drive, err := s.cs3ReceivedShareToDriveItem(ctx, &gateway.ReceivedShareResourceInfo{
+		ReceivedShare: shareRes.Share,
+		ResourceInfo:  statRes.Info,
+	})
+	if err != nil {
+		handleError(ctx, fmt.Errorf("Error converting ReceivedShare to DriveItem"), http.StatusInternalServerError, w)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(drive); err != nil {
+		log.Error().Err(err).Msg("error marshalling ReceivedShare as json")
 		handleError(ctx, err, http.StatusInternalServerError, w)
 		return
 	}
