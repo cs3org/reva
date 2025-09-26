@@ -91,7 +91,7 @@ var _ = Describe("Tree", func() {
 				})
 
 				It("also removes the lock file", func() {
-					_, err := os.Stat(n.LockFilePath())
+					_, err := os.Stat(n.LockFilePaths()[0])
 					Expect(err).To(HaveOccurred())
 				})
 			})

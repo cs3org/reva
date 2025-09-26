@@ -121,6 +121,21 @@ var _ = Describe("Tree", func() {
 				}).ProbeEvery(200 * time.Millisecond).Should(Succeed())
 			})
 
+			It("does not ignore .lock files", func() {
+				_, err := os.Create(root + "/Composer.lock")
+				Expect(err).ToNot(HaveOccurred())
+
+				Consistently(func(g Gomega) {
+					n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+						ResourceId: env.SpaceRootRes,
+						Path:       subtree + "/Composer.lock",
+					})
+					g.Expect(err).ToNot(HaveOccurred())
+					g.Expect(n.Exists).To(BeFalse())
+					g.Expect(n.ID).To(BeEmpty())
+				}).ProbeEvery(200 * time.Millisecond).Should(Succeed())
+			})
+
 			It("handles new files which are still being written", func() {
 				f, err := os.Create(root + "/file.txt")
 				Expect(err).ToNot(HaveOccurred())

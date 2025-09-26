@@ -98,13 +98,13 @@ var _ = Describe("Node locks", func() {
 
 	Describe("SetLock for a user", func() {
 		It("sets the lock", func() {
-			_, err := os.Stat(n.LockFilePath())
+			_, err := os.Stat(n.LockFilePaths()[0])
 			Expect(err).To(HaveOccurred())
 
 			err = n.SetLock(env.Ctx, lockByUser)
 			Expect(err).ToNot(HaveOccurred())
 
-			_, err = os.Stat(n.LockFilePath())
+			_, err = os.Stat(n.LockFilePaths()[0])
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -121,13 +121,13 @@ var _ = Describe("Node locks", func() {
 
 	Describe("SetLock for an app", func() {
 		It("sets the lock", func() {
-			_, err := os.Stat(n.LockFilePath())
+			_, err := os.Stat(n.LockFilePaths()[0])
 			Expect(err).To(HaveOccurred())
 
 			err = n.SetLock(env.Ctx, lockByApp)
 			Expect(err).ToNot(HaveOccurred())
 
-			_, err = os.Stat(n.LockFilePath())
+			_, err = os.Stat(n.LockFilePaths()[0])
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -252,7 +252,7 @@ var _ = Describe("Node locks", func() {
 				err := n.Unlock(env.Ctx, lockByUser)
 				Expect(err).ToNot(HaveOccurred())
 
-				_, err = os.Stat(n.LockFilePath())
+				_, err = os.Stat(n.LockFilePaths()[0])
 				Expect(err).To(HaveOccurred())
 			})
 
@@ -374,7 +374,7 @@ var _ = Describe("Node locks", func() {
 				err := n.Unlock(env.Ctx, lockByApp)
 				Expect(err).ToNot(HaveOccurred())
 
-				_, err = os.Stat(n.LockFilePath())
+				_, err = os.Stat(n.LockFilePaths()[0])
 				Expect(err).To(HaveOccurred())
 			})
 

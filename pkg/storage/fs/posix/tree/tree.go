@@ -572,8 +572,11 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) error {
 	}
 
 	// Remove lock file if it exists
-	if err := os.Remove(n.LockFilePath()); err != nil {
-		t.log.Error().Err(err).Str("path", n.LockFilePath()).Msg("could not remove lock file")
+	paths := n.LockFilePaths()
+	for _, lockFilePath := range paths {
+		if err := os.Remove(lockFilePath); err != nil && !os.IsNotExist(err) {
+			t.log.Error().Err(err).Str("path", lockFilePath).Msg("could not remove lock file")
+		}
 	}
 
 	err := t.trashbin.MoveToTrash(ctx, n, path)
@@ -737,7 +740,7 @@ func (t *Tree) isInternal(path string) bool {
 }
 
 func isLockFile(path string) bool {
-	return strings.HasSuffix(path, ".lock") || strings.HasSuffix(path, ".flock") || strings.HasSuffix(path, ".mlock")
+	return strings.HasSuffix(path, ".flock") || strings.HasSuffix(path, ".mlock")
 }
 
 func isTrash(path string) bool {
