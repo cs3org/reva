@@ -26,7 +26,6 @@ import (
 
 	"github.com/alitto/pond/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -129,7 +128,7 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 
 	// if we need to commit the share, we need the resource it points to.
 	var share *collaboration.Share
-	if s.c.CommitShareToStorageGrant || s.c.CommitShareToStorageRef {
+	if s.c.CommitShareToStorageGrant {
 		getShareReq := &collaboration.GetShareRequest{
 			Ref: req.Ref,
 		}
@@ -154,7 +153,7 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 	}
 
 	// if we don't need to commit we return earlier
-	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
+	if !s.c.CommitShareToStorageGrant {
 		return res, nil
 	}
 
@@ -304,7 +303,7 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 	}
 
 	// if we don't need to commit we return earlier
-	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
+	if !s.c.CommitShareToStorageGrant {
 		return res, nil
 	}
 
@@ -484,55 +483,6 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 		}, nil
 	}
 
-	// error failing to update share state.
-	if res.Status.Code != rpc.Code_CODE_OK {
-		return res, nil
-	}
-
-	// if we don't need to create/delete references then we return early.
-	if !s.c.CommitShareToStorageRef ||
-		appctx.ContextMustGetUser(ctx).Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT ||
-		appctx.ContextMustGetUser(ctx).Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
-		return res, nil
-	}
-
-	// check if we have a resource id in the update response that we can use to update references
-	if res.GetShare().GetShare().GetResourceId() == nil {
-		log.Err(err).Msg("gateway: UpdateReceivedShare must return a ResourceId")
-		return &collaboration.UpdateReceivedShareResponse{
-			Status: &rpc.Status{
-				Code: rpc.Code_CODE_INTERNAL,
-			},
-		}, nil
-	}
-
-	// properties are updated in the order they appear in the field mask
-	// when an error occurs the request ends and no further fields are updated
-	for i := range req.UpdateMask.Paths {
-		switch req.UpdateMask.Paths[i] {
-		case "state":
-			switch req.GetShare().GetState() {
-			case collaboration.ShareState_SHARE_STATE_ACCEPTED:
-				rpcStatus := s.createReference(ctx, res.GetShare().GetShare().GetResourceId())
-				if rpcStatus.Code != rpc.Code_CODE_OK {
-					return &collaboration.UpdateReceivedShareResponse{Status: rpcStatus}, nil
-				}
-			case collaboration.ShareState_SHARE_STATE_REJECTED:
-				rpcStatus := s.removeReference(ctx, res.GetShare().GetShare().ResourceId)
-				if rpcStatus.Code != rpc.Code_CODE_OK && rpcStatus.Code != rpc.Code_CODE_NOT_FOUND {
-					return &collaboration.UpdateReceivedShareResponse{Status: rpcStatus}, nil
-				}
-			}
-		case "mount_point":
-			// TODO(labkode): implementing updating mount point
-			err = errtypes.NotSupported("gateway: update of mount point is not yet implemented")
-			return &collaboration.UpdateReceivedShareResponse{
-				Status: status.NewUnimplemented(ctx, err, "error updating received share"),
-			}, nil
-		default:
-			return nil, errtypes.NotSupported("updating " + req.UpdateMask.Paths[i] + " is not supported")
-		}
-	}
 	return res, nil
 }
 
