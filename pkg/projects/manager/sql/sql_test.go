@@ -268,7 +268,7 @@ func TestListProjects(t *testing.T) {
 				t.Fatalf("not expected error while creating projects driver: %+v", err)
 			}
 
-			catmgr := catalogue.(*mgr)
+			catmgr := catalogue.(*ProjectsManager)
 			for _, proj := range tt.projects {
 				catmgr.db.Create(&proj)
 			}
