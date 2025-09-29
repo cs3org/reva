@@ -359,6 +359,9 @@ func isLockModificationAllowed(ctx context.Context, oldLock *provider.Lock, newL
 
 }
 
+// openAndMigrateLockFile opens the lock file for a node, migrating any legacy lock files if found
+// This is needed to support the transition to the new lock file scheme in the posix driver.
+// Once this transition period is over the migration code can be removed again.
 func openAndMigrateLockFile(ctx context.Context, n *Node, flag int, perm os.FileMode) (*os.File, error) {
 	lockfilePaths := n.LockFilePaths()
 
