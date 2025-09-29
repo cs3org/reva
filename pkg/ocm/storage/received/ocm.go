@@ -173,25 +173,27 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 	// use the secret as bearer authentication according to OCM v1.1+
 	c := gowebdav.NewClient(endpoint, "", "")
 	c.SetHeader("Authorization", "Bearer "+secret)
-	// The OCM v1.0 basic auth does not currently work - fix in future PR?
-	// Some operations (Touch, CreateDir) should fail on this stat and reverting to OCM v1.0 basic auth makes these operations fail,
-	// we need to include a better check to see if the authentication works than just stating and seeing if there is an error.
-	// A ticket has been created for this and it will be addressed https://its.cern.ch/jira/browse/CERNBOX-4068.
-
-	// _, err = c.Stat(rel)
-	// if err != nil {
-	// 	// if we got an error, try to use OCM v1.0 basic auth
-	// 	log.Info().Str("endpoint", endpoint).Interface("share", share).Str("rel", rel).Str("secret", secret).Err(err).Msg("falling back to OCM v1.0 access")
-	// 	c.SetHeader("Authorization", "Basic "+secret+":")
-	// } else {
-	// 	log.Info().Str("endpoint", endpoint).Interface("share", share).Str("rel", rel).Str("secret", secret).Msg("using OCM v1.1 access")
-	// }
+	_, err = c.Stat(id.OpaqueId)
+	if err != nil {
+		// if we got an error, try to use OCM v1.0 basic auth
+		c = gowebdav.NewClient(endpoint, secret, "")
+		_, err = c.Stat(id.OpaqueId)
+		if err != nil {
+			// now we give up
+			log.Error().Err(err).Str("endpoint", endpoint).Interface("share", share).Str("secret", secret).Msg("failed accessing OCM share both via bearer token and in legacy mode")
+			return nil, nil, "", errtypes.InternalError("error accessing OCM share: " + err.Error())
+		}
+		log.Info().Str("endpoint", endpoint).Interface("share", share).Str("secret", secret).Err(err).Msg("falling back to OCM v1.0 access")
+	} else {
+		log.Info().Str("endpoint", endpoint).Interface("share", share).Str("secret", secret).Msg("using OCM bearer access")
+	}
 
 	// add to cache and return
 	d.ccache.SetWithTTL(id.OpaqueId, &cachedClient{
 		client: c,
 		share:  share,
 	}, time.Hour)
+
 	return c, share, rel, nil
 }
 

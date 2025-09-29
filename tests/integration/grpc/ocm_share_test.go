@@ -22,7 +22,7 @@ import (
 	"context"
 	"io"
 	"net/http"
-        "net/url"
+	"net/url"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -231,15 +231,15 @@ var _ = Describe("ocm share", func() {
 				Expect(err).To(HaveOccurred())
 
 				By("marie can access the share via legacy basic auth (OCM v1.0)")
-                                legacyUrl, _ := url.Parse(webdav.WebdavOptions.Uri)
-                                legacyUrl.Path = path.Dir(legacyUrl.Path)
+				legacyUrl, _ := url.Parse(webdav.WebdavOptions.Uri)
+				legacyUrl.Path = path.Dir(legacyUrl.Path)
 				webdavClient = gowebdav.NewClient(legacyUrl.String(), webdav.WebdavOptions.SharedSecret, "")
 				d2, err := webdavClient.Read(".")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(d2).To(Equal([]byte("test")))
 
 				By("marie can access the share via legacy sciencemesh mode")
-                                legacyUrl.Path = path.Join(legacyUrl.Path, webdav.WebdavOptions.SharedSecret)
+				legacyUrl.Path = path.Join(legacyUrl.Path, webdav.WebdavOptions.SharedSecret)
 				webdavClient = gowebdav.NewClient(legacyUrl.String(), "", "")
 				d3, err := webdavClient.Read(".")
 				Expect(err).ToNot(HaveOccurred())
