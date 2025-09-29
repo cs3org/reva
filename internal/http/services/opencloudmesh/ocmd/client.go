@@ -124,12 +124,12 @@ func (c *OCMClient) discover(ctx context.Context, url string) ([]byte, error) {
 }
 
 // NewShare sends a new OCM share to the remote system.
+// https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1shares/post
 func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRequest) (*NewShareResponse, error) {
 	url, err := url.JoinPath(endpoint, "shares")
 	if err != nil {
 		return nil, err
 	}
-
 	body, err := r.toJSON()
 	if err != nil {
 		return nil, err
@@ -145,7 +145,7 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, errors.Wrap(err, "error doing request")
+		return nil, errors.Wrap(err, "error sending request")
 	}
 	defer resp.Body.Close()
 
@@ -171,21 +171,20 @@ func (c *OCMClient) parseNewShareResponse(r *http.Response) (*NewShareResponse, 
 	return nil, errtypes.InternalError(string(body))
 }
 
-// InviteAccepted informs the remote end that the invitation was accepted to start sharing
+// InviteAccepted informs the remote end that the invitation was accepted
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1invite-accepted/post
 func (c *OCMClient) InviteAccepted(ctx context.Context, endpoint string, r *InviteAcceptedRequest) (*RemoteUser, error) {
 	url, err := url.JoinPath(endpoint, "invite-accepted")
 	if err != nil {
 		return nil, err
 	}
-
 	body, err := r.toJSON()
 	if err != nil {
 		return nil, err
 	}
+
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("url", url).Str("payload", string(body)).Msg("Sending OCM invite-accepted")
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating request")
@@ -194,7 +193,7 @@ func (c *OCMClient) InviteAccepted(ctx context.Context, endpoint string, r *Invi
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, errors.Wrap(err, "error doing request")
+		return nil, errors.Wrap(err, "error sending request")
 	}
 	defer resp.Body.Close()
 
@@ -222,4 +221,10 @@ func (c *OCMClient) parseInviteAcceptedResponse(r *http.Response) (*RemoteUser, 
 		return nil, errors.Wrap(err, "error decoding response body")
 	}
 	return nil, errtypes.InternalError(string(body))
+}
+
+// NewNotification sends a notification to the remote end. Not implemented for now.
+// https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1notifications/post
+func (c *OCMClient) NewNotification(ctx context.Context, endpoint string, r *InviteAcceptedRequest) (*RemoteUser, error) {
+	return nil, errtypes.NotSupported("not implemented")
 }
