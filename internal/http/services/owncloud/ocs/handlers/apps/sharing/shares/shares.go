@@ -1051,9 +1051,22 @@ func findMatch(shareJailInfos []*provider.ResourceInfo, id *provider.ResourceId)
 func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 	shares := make([]*conversions.ShareData, 0)
 
-	log := appctx.GetLogger(r.Context())
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+	user, ok := appctx.ContextGetUser(ctx)
 
-	filters := []*collaboration.Filter{}
+	if !ok {
+		return
+	}
+
+	filters := []*collaboration.Filter{
+		&collaboration.Filter{
+			Type: collaboration.Filter_TYPE_CREATOR,
+			Term: &collaboration.Filter_Creator{
+				Creator: user.Id,
+			},
+		},
+	}
 	linkFilters := []*link.ListPublicSharesRequest_Filter{}
 	var e error
 
