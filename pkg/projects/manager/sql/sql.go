@@ -59,7 +59,7 @@ type Config struct {
 	CacheTTL int `mapstructure:"cache_ttl"`
 }
 
-type mgr struct {
+type ProjectsManager struct {
 	c     *Config
 	db    *gorm.DB
 	cache *ttlcache.Cache
@@ -145,7 +145,7 @@ func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
 	cache.SetTTL(time.Duration(c.CacheTTL))
 	// Even if we get a hit, of course we just want to refresh every 60 seconds
 	cache.SkipTTLExtensionOnHit(true)
-	mgr := &mgr{
+	mgr := &ProjectsManager{
 		c:     &c,
 		db:    db,
 		cache: cache,
@@ -153,7 +153,7 @@ func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
 	return mgr, nil
 }
 
-func (m *mgr) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
+func (m *ProjectsManager) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 	user, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		return &provider.ListStorageSpacesResponse{
@@ -183,36 +183,30 @@ func (m *mgr) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 		}
 	}
 
-	projects := []*provider.StorageSpace{}
+	projs := []*provider.StorageSpace{}
 	for _, p := range fetchedProjects {
 		if perms, ok := projectBelongsToUser(user, p); ok {
-			projects = append(projects, projectToStorageSpace(p, perms))
+			projs = append(projs, projectToStorageSpace(p, perms))
 		}
 	}
 
 	return &provider.ListStorageSpacesResponse{
-		StorageSpaces: projects,
+		StorageSpaces: projs,
 		Status: &rpcv1beta1.Status{
 			Code: rpcv1beta1.Code_CODE_OK,
 		},
 	}, nil
 }
 
-func (m *mgr) GetStorageSpace(ctx context.Context, name string) (*provider.StorageSpace, error) {
-	log := appctx.GetLogger(ctx)
-	fetchedProject := &Project{}
-
+func (m *ProjectsManager) GetStorageSpace(ctx context.Context, name string) (*provider.StorageSpace, error) {
 	user, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		return nil, errors.New("must provide a user for fetching storage spaces")
 	}
 
-	query := m.db.Model(&Project{}).Where("name = ?", name).Where("archived_at is null")
-	res := query.First(fetchedProject)
-	if res.Error != nil {
-		log.Error().Err(res.Error).Msg("GetStorageSpace: database error")
-
-		return nil, res.Error
+	fetchedProject, err := m.GetProject(ctx, name)
+	if err != nil {
+		return nil, err
 	}
 
 	if perms, ok := projectBelongsToUser(user, fetchedProject); ok {
@@ -221,7 +215,7 @@ func (m *mgr) GetStorageSpace(ctx context.Context, name string) (*provider.Stora
 	return nil, fmt.Errorf("no project named %s belonging to which user has access was found", name)
 }
 
-func (m *mgr) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+func (m *ProjectsManager) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	log := appctx.GetLogger(ctx)
 	if req == nil || req.StorageSpace == nil || req.StorageSpace.Id == nil || req.StorageSpace.Name == "" {
 		log.Error().Msg("UpdateStorageSpace called without valid request")
@@ -281,12 +275,27 @@ func (m *mgr) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 	}, nil
 }
 
-func (m *mgr) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+func (m *ProjectsManager) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	return nil, errors.New("Unsupported")
 }
 
-func (m *mgr) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
+func (m *ProjectsManager) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
 	return nil, errors.New("Unsupported")
+}
+
+func (m *ProjectsManager) GetProject(ctx context.Context, name string) (*Project, error) {
+	log := appctx.GetLogger(ctx)
+	fetchedProject := &Project{}
+
+	query := m.db.Model(&Project{}).Where("name = ?", name).Where("archived_at is null")
+	res := query.First(fetchedProject)
+	if res.Error != nil {
+		log.Error().Err(res.Error).Msg("GetStorageSpace: database error")
+
+		return nil, res.Error
+	}
+
+	return fetchedProject, nil
 }
 
 func projectBelongsToUser(user *userpb.User, p *Project) (*provider.ResourcePermissions, bool) {
@@ -328,7 +337,7 @@ func projectToStorageSpace(p *Project, perms *provider.ResourcePermissions) *pro
 	}
 }
 
-func (m *mgr) appendFiltersToQuery(ctx context.Context, query *gorm.DB, filters []*provider.ListStorageSpacesRequest_Filter) *gorm.DB {
+func (m *ProjectsManager) appendFiltersToQuery(ctx context.Context, query *gorm.DB, filters []*provider.ListStorageSpacesRequest_Filter) *gorm.DB {
 	// We want to chain filters of different types with AND
 	// and filters of the same type with OR
 	// Therefore, we group them by type
@@ -362,7 +371,7 @@ func (m *mgr) appendFiltersToQuery(ctx context.Context, query *gorm.DB, filters 
 }
 
 // GroupFiltersByType groups the given filters and returns a map using the filter type as the key.
-func (m *mgr) GroupFiltersByType(filters []*provider.ListStorageSpacesRequest_Filter) map[provider.ListStorageSpacesRequest_Filter_Type][]*provider.ListStorageSpacesRequest_Filter {
+func (m *ProjectsManager) GroupFiltersByType(filters []*provider.ListStorageSpacesRequest_Filter) map[provider.ListStorageSpacesRequest_Filter_Type][]*provider.ListStorageSpacesRequest_Filter {
 	grouped := make(map[provider.ListStorageSpacesRequest_Filter_Type][]*provider.ListStorageSpacesRequest_Filter)
 	for _, f := range filters {
 		grouped[f.Type] = append(grouped[f.Type], f)
