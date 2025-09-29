@@ -364,10 +364,26 @@ func openAndMigrateLockFile(ctx context.Context, n *Node, flag int, perm os.File
 
 	// check for legacy lock files and migrate them
 	for i := 1; i < len(lockfilePaths); i++ {
-		_, err := os.Stat(lockfilePaths[i])
+		fi, err := os.Stat(lockfilePaths[i])
 		if err == nil {
+			if fi.Size() == 0 {
+				// this is not a lock file of ours. ignore
+				continue
+			}
+
+			f, err := os.Open(lockfilePaths[i])
+			if err != nil {
+				continue
+			}
+			defer f.Close()
+			readLock := &provider.Lock{}
+			if err := json.NewDecoder(f).Decode(readLock); err != nil {
+				// this is not a lock file of ours. ignore
+				continue
+			}
+
 			// legacy lock file found, move it to the new location
-			err := os.MkdirAll(filepath.Dir(lockfilePaths[0]), 0700)
+			err = os.MkdirAll(filepath.Dir(lockfilePaths[0]), 0700)
 			if err != nil {
 				return nil, errors.Wrap(err, "Decomposedfs: could not create lock file directory")
 			}
