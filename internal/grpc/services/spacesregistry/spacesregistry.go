@@ -429,6 +429,9 @@ func (s *service) getPublicSpaces(ctx context.Context) ([]*provider.StorageSpace
 		if description, ok := content["description"]; ok {
 			space.Description = description
 		}
+		if thumbnailPath, ok := content["thumbnail_path"]; ok {
+			space.ThumbnailId = thumbnailPath
+		}
 
 		publicSpaces = append(publicSpaces, space)
 	}
