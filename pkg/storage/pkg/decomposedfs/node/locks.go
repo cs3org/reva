@@ -374,10 +374,8 @@ func openAndMigrateLockFile(ctx context.Context, n *Node, flag int, perm os.File
 			if err := os.Rename(lockfilePaths[i], lockfilePaths[0]); err != nil {
 				return nil, errors.Wrap(err, "Decomposedfs: could not migrate lock file")
 			}
-		} else {
-			if !errors.Is(err, fs.ErrNotExist) {
-				return nil, errors.Wrap(err, "Decomposedfs: could not stat legacy lock file")
-			}
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return nil, errors.Wrap(err, "Decomposedfs: could not stat legacy lock file")
 		}
 	}
 
