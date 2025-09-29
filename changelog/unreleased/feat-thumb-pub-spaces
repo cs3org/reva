@@ -1,0 +1,5 @@
+Enhancement: Add support for thumbnails in Public spaces
+
+To be configured with an extra thumbnail_path property in the public_space map.
+
+https://github.com/cs3org/reva/pull/5331
