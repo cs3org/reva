@@ -20,6 +20,7 @@ package gateway
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
@@ -28,6 +29,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
@@ -126,9 +128,8 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		}, nil
 	}
 	*/
-	scope := res.TokenScope
 
-	token, err = s.tokenmgr.MintToken(ctx, u, scope)
+	token, err = s.tokenmgr.MintToken(ctx, u, res.TokenScope)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error in MintToken")
 		res := &gateway.AuthenticateResponse{
@@ -137,11 +138,27 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		return res, nil
 	}
 
+	jsonScope, err := json.Marshal(res.TokenScope)
+	if err != nil {
+		err = errors.Wrap(err, "authsvc: error marshalling token scope after auth")
+		return &gateway.AuthenticateResponse{
+			Status: status.NewUnauthenticated(ctx, err, "error marshalling access token scope"),
+		}, nil
+	}
+
 	if scope, ok := res.TokenScope["user"]; s.c.DisableHomeCreationOnLogin || !ok || scope.Role != authpb.Role_ROLE_OWNER || res.User.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
 		gwRes := &gateway.AuthenticateResponse{
 			Status: status.NewOK(ctx),
 			User:   res.User,
 			Token:  token,
+			Opaque: &types.Opaque{
+				Map: map[string]*types.OpaqueEntry{
+					"scopes": {
+						Decoder: "json",
+						Value:   jsonScope,
+					},
+				},
+			},
 		}
 		return gwRes, nil
 	}
