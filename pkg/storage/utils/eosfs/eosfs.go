@@ -43,6 +43,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 
 	"github.com/cs3org/reva/v3/pkg/eosclient"
 	"github.com/cs3org/reva/v3/pkg/eosclient/eosbinary"
@@ -1491,32 +1492,20 @@ func (fs *Eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]
 	var fn string
 	var err error
 
-	if !fs.conf.EnableHome {
-		// We need to access the revisions for a non-home reference.
-		// We'll get the owner of the particular resource and impersonate them
-		// if we have access to it.
-		md, err := fs.GetMD(ctx, ref, nil)
+	md, err := fs.GetMD(ctx, ref, nil)
+	if err != nil {
+		return nil, err
+	}
+	fn = fs.wrap(ctx, md.Path)
+
+	if md.PermissionSet.ListFileVersions {
+		versionFolder := eosclient.GetVersionFolder(fn)
+		auth, err = fs.getOwnerAuth(ctx, versionFolder)
 		if err != nil {
 			return nil, err
-		}
-		fn = fs.wrap(ctx, md.Path)
-
-		if md.PermissionSet.ListFileVersions {
-			user := appctx.ContextMustGetUser(ctx)
-			auth, err = fs.getEOSToken(ctx, user, fn)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to list revisions")
 		}
 	} else {
-		var userAuth eosclient.Authorization
-		fn, userAuth, err = fs.resolveRefAndGetAuth(ctx, ref)
-		if err != nil {
-			return nil, err
-		}
-		auth = utils.GetUserOrDaemonAuth(userAuth)
+		return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to list revisions")
 	}
 
 	eosRevisions, err := fs.c.ListVersions(ctx, auth, fn)
@@ -1537,31 +1526,23 @@ func (fs *Eosfs) DownloadRevision(ctx context.Context, ref *provider.Reference, 
 	var fn string
 	var err error
 
-	if !fs.conf.EnableHome {
-		// We need to access the revisions for a non-home reference.
-		// We'll get the owner of the particular resource and impersonate them
-		// if we have access to it.
-		md, err := fs.GetMD(ctx, ref, nil)
+	md, err := fs.GetMD(ctx, ref, nil)
+	if err != nil {
+		return nil, err
+	}
+	fn = fs.wrap(ctx, md.Path)
+
+	if md.PermissionSet.InitiateFileDownload {
+		versionFolder := eosclient.GetVersionFolder(fn)
+
+		auth, err = fs.getOwnerAuth(ctx, versionFolder)
 		if err != nil {
 			return nil, err
-		}
-		fn = fs.wrap(ctx, md.Path)
-
-		if md.PermissionSet.InitiateFileDownload {
-			user := appctx.ContextMustGetUser(ctx)
-			auth, err = fs.getEOSToken(ctx, user, fn)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to download revisions")
 		}
 	} else {
-		fn, auth, err = fs.resolveRefAndGetAuth(ctx, ref)
-		if err != nil {
-			return nil, err
-		}
+		return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to download revisions")
 	}
+
 	return fs.c.ReadVersion(ctx, auth, fn, revisionKey)
 }
 
@@ -1571,30 +1552,19 @@ func (fs *Eosfs) RestoreRevision(ctx context.Context, ref *provider.Reference, r
 	var fn string
 	var err error
 
-	if !fs.conf.EnableHome {
-		// We need to access the revisions for a non-home reference.
-		// We'll get the owner of the particular resource and impersonate them
-		// if we have access to it.
-		md, err := fs.GetMD(ctx, ref, nil)
+	md, err := fs.GetMD(ctx, ref, nil)
+	if err != nil {
+		return err
+	}
+	fn = fs.wrap(ctx, md.Path)
+
+	if md.PermissionSet.RestoreFileVersion {
+		auth, err = fs.getOwnerAuth(ctx, fn)
 		if err != nil {
 			return err
-		}
-		fn = fs.wrap(ctx, md.Path)
-
-		if md.PermissionSet.RestoreFileVersion {
-			user := appctx.ContextMustGetUser(ctx)
-			auth, err = fs.getEOSToken(ctx, user, fn)
-			if err != nil {
-				return err
-			}
-		} else {
-			return errtypes.PermissionDenied("eosfs: user doesn't have permissions to restore revisions")
 		}
 	} else {
-		fn, auth, err = fs.resolveRefAndGetAuth(ctx, ref)
-		if err != nil {
-			return err
-		}
+		return errtypes.PermissionDenied("eosfs: user doesn't have permissions to restore revisions")
 	}
 
 	log.Debug().Any("auth", auth).Any("file", fn).Any("revision", revisionKey).Msg("eosfs RestoreRevision")
@@ -1940,7 +1910,9 @@ func (fs *Eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 	parseAndSetFavoriteAttr(ctx, filteredAttrs)
 
 	info := &provider.ResourceInfo{
-		Id:            &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.Inode)},
+		Id: &provider.ResourceId{
+			OpaqueId: fmt.Sprintf("%d", eosFileInfo.Inode),
+			SpaceId:  spaces.PathToSpaceID(p)},
 		Path:          p,
 		Name:          path.Base(p),
 		Owner:         owner,
@@ -2088,7 +2060,7 @@ func (fs *Eosfs) getUserAuth(ctx context.Context, u *userpb.User, fn string) (eo
 	return fs.extractUIDAndGID(u)
 }
 
-// Generate an EOS token that acts on behalf of the owner of the file `fn`
+// Generate an EOS token that acts on behalf of the owner of the file or folder `fn`
 func (fs *Eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eosclient.Authorization, error) {
 	if fn == "" {
 		return eosclient.Authorization{}, errtypes.BadRequest("eosfs: path cannot be empty")
@@ -2106,7 +2078,9 @@ func (fs *Eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eo
 		},
 	}
 
-	perm := "rwx"
+	// For files, the "x" bit cannot be set, so we initialize without
+	// and if it's a directory, we add `x` later
+	perm := "rw"
 	for _, e := range info.SysACL.Entries {
 		if e.Type == acl.TypeLightweight && e.Qualifier == u.Id.OpaqueId {
 			perm = e.Permissions
@@ -2126,6 +2100,7 @@ func (fs *Eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eo
 	if info.IsDir {
 		// EOS expects directories to have a trailing slash when generating tokens
 		fn = path.Clean(fn) + "/"
+		perm = perm + "x"
 	}
 	tkn, err := fs.c.GenerateToken(ctx, auth, fn, &acl.Entry{Permissions: perm})
 	if err != nil {
@@ -2136,6 +2111,27 @@ func (fs *Eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eo
 	_ = fs.tokenCache.SetWithExpire(key, tkn, time.Second*time.Duration(fs.conf.TokenExpiry))
 
 	return eosclient.Authorization{Token: tkn}, nil
+}
+
+// // Returns an Authorization wich assumes the role of the owner of the file `fn`
+func (fs *Eosfs) getOwnerAuth(ctx context.Context, fn string) (eosclient.Authorization, error) {
+	if fn == "" {
+		return eosclient.Authorization{}, errtypes.BadRequest("eosfs: path cannot be empty")
+	}
+
+	daemonAuth, _ := fs.getDaemonAuth(ctx)
+	info, err := fs.c.GetFileInfoByPath(ctx, daemonAuth, fn)
+	if err != nil {
+		return eosclient.Authorization{}, err
+	}
+	auth := eosclient.Authorization{
+		Role: eosclient.Role{
+			UID: strconv.FormatUint(info.UID, 10),
+			GID: strconv.FormatUint(info.GID, 10),
+		},
+	}
+
+	return auth, nil
 }
 
 // Returns an eosclient.Authorization object with the uid/gid of the daemon user

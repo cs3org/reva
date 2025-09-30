@@ -59,7 +59,7 @@ func (c *Client) RollbackToVersion(ctx context.Context, auth eosclient.Authoriza
 	if resp.GetError() != nil {
 		log.Info().Str("func", "RollbackToVersion").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
 	}
-	return err
+	return nil
 }
 
 // ReadVersion reads the version for the given file.
