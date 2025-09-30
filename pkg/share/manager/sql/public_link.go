@@ -249,8 +249,7 @@ func (m *PublicShareMgr) GetPublicShare(ctx context.Context, u *user.User, ref *
 
 // List public shares that match the given filters
 func (m *PublicShareMgr) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error) {
-
-	links, err := m.ListPublicLinks(u, filters, nil, false)
+	links, err := m.ListPublicLinks(nil, filters, nil, false)
 
 	if err != nil {
 		return nil, err
@@ -306,7 +305,6 @@ func (m *PublicShareMgr) GetPublicShareByToken(ctx context.Context, token string
 // Exported functions below are not part of the CS3-defined API, but are used by cernboxcop
 
 // List public links in the CERN-specific format. Used in cernboxcop.
-
 func (m *PublicShareMgr) ListPublicLinks(u *user.User, filters []*link.ListPublicSharesRequest_Filter, expiry *ExpiryRange, remove_orphan bool) ([]model.PublicLink, error) {
 
 	query := m.db.Model(&model.PublicLink{})

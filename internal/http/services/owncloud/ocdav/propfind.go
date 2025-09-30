@@ -101,12 +101,30 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 }
 
 func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf propfindXML, parentInfo *provider.ResourceInfo, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
+	user, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
 	linkFilters := make([]*link.ListPublicSharesRequest_Filter, 0, len(resourceInfos))
 	shareFilters := make([]*collaboration.Filter, 0, len(resourceInfos))
 	for i := range resourceInfos {
 		linkFilters = append(linkFilters, publicshare.ResourceIDFilter(resourceInfos[i].Id))
 		shareFilters = append(shareFilters, share.ResourceIDFilter(resourceInfos[i].Id))
 	}
+	linkFilters = append(linkFilters, &link.ListPublicSharesRequest_Filter{
+		Type: link.ListPublicSharesRequest_Filter_TYPE_CREATOR,
+		Term: &link.ListPublicSharesRequest_Filter_Creator{
+			Creator: user.Id,
+		},
+	})
+	shareFilters = append(shareFilters, &collaboration.Filter{
+		Type: collaboration.Filter_TYPE_CREATOR,
+		Term: &collaboration.Filter_Creator{
+			Creator: user.Id,
+		},
+	})
 
 	client, err := s.getClient()
 	if err != nil {
