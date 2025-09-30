@@ -1739,6 +1739,7 @@ func getCacheManager(c *config) (cache.SpaceInfoCache, error) {
 
 func (s *service) fetchSpace(ctx context.Context, spaceID string) (*provider.StorageSpace, error) {
 	gw, err := s.getGatewayClient()
+	log := appctx.GetLogger(ctx)
 
 	request := &provider.ListStorageSpacesRequest{
 		Filters: []*provider.ListStorageSpacesRequest_Filter{

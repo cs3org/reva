@@ -1067,7 +1067,14 @@ func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 	}
-	linkFilters := []*link.ListPublicSharesRequest_Filter{}
+	linkFilters := []*link.ListPublicSharesRequest_Filter{
+		&link.ListPublicSharesRequest_Filter{
+			Type: link.ListPublicSharesRequest_Filter_TYPE_CREATOR,
+			Term: &link.ListPublicSharesRequest_Filter_Creator{
+				Creator: user.Id,
+			},
+		},
+	}
 	var e error
 
 	// shared with others

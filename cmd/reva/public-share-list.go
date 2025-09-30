@@ -20,6 +20,7 @@ package main
 
 import (
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -29,6 +30,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/publicshare"
 	"github.com/jedib0t/go-pretty/table"
 )
@@ -49,8 +51,21 @@ func publicShareListCommand() *command {
 		if err != nil {
 			return err
 		}
+		user, ok := appctx.ContextGetUser(ctx)
+		if !ok {
+			return errors.New("Must be authenticated to list public shares")
+		}
 
-		shareRequest := &link.ListPublicSharesRequest{}
+		shareRequest := &link.ListPublicSharesRequest{
+			Filters: []*link.ListPublicSharesRequest_Filter{
+				{
+					Type: link.ListPublicSharesRequest_Filter_TYPE_CREATOR,
+					Term: &link.ListPublicSharesRequest_Filter_Creator{
+						Creator: user.Id,
+					},
+				},
+			},
+		}
 		if *resID != "" {
 			// check split by colon (:)
 			tokens := strings.Split(*resID, ":")
