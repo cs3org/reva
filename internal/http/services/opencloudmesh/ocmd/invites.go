@@ -56,11 +56,11 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(ctx)
 
 	req, err := getAcceptInviteRequest(r)
+	log.Info().Any("req", req).Str("Remote", r.RemoteAddr).Err(err).Msg("OCM /invite-accepted request received")
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "missing parameters in request", err)
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
 		return
 	}
-	log.Info().Any("req", req).Msg("OCM /invite-accepted request received")
 
 	if req.Token == "" || req.UserID == "" || req.RecipientProvider == "" {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "token, userID and recipientProvider must not be null", nil)
@@ -81,7 +81,6 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 	}
-
 	providerAllowedResp, err := h.gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
 		Provider: &providerInfo,
 	})

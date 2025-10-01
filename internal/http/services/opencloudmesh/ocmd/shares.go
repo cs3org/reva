@@ -69,7 +69,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	req, err := getCreateShareRequest(r)
-	log.Info().Any("req", req).Msg("OCM /shares request received")
+	log.Info().Any("req", req).Str("Remote", r.RemoteAddr).Err(err).Msg("OCM /shares request received")
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
 		return
