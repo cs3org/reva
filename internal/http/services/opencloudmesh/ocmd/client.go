@@ -19,6 +19,7 @@
 package ocmd
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -135,8 +136,8 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 	}
 
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("url", url).Msgf("Sending OCM share: %s", body)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
+	log.Info().Str("url", url).Str("payload", string(body)).Msg("Sending OCM share")
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating request")
 	}
@@ -182,8 +183,10 @@ func (c *OCMClient) InviteAccepted(ctx context.Context, endpoint string, r *Invi
 	if err != nil {
 		return nil, err
 	}
+	log := appctx.GetLogger(ctx)
+	log.Info().Str("url", url).Str("payload", string(body)).Msg("Sending OCM invite-accepted")
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating request")
 	}
