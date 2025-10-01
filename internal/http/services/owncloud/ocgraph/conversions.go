@@ -544,12 +544,14 @@ func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*GenericShare
 
 			creator, err := s.getUserByID(ctx, e.share.Creator)
 			if err != nil {
-				return nil, err
+				log.Error().Err(err).Msg("Failed to convert cs3 share to permission in ocgraph - ignoring this share")
+				continue
 			}
 
 			grantee, err := s.cs3GranteeToSharePointIdentitySet(ctx, e.share.Grantee)
 			if err != nil {
-				return nil, err
+				log.Error().Err(err).Msg("Failed to convert cs3 share to permission in ocgraph - ignoring this share")
+				continue
 			}
 
 			roles := make([]string, 0, 1)
