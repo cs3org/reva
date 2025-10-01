@@ -20,6 +20,7 @@ package auth
 
 import (
 	"context"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -164,9 +165,10 @@ func checkLightweightScope(ctx context.Context, req interface{}, tokenScope map[
 			Delete: true,
 		})
 	case *provider.MoveRequest:
+		destinationParent := path.Dir(r.Destination.Path)
 		return hasPermissions(ctx, client, r.Source, &provider.ResourcePermissions{
 			InitiateFileDownload: true,
-		}) && hasPermissions(ctx, client, r.Destination, &provider.ResourcePermissions{
+		}) && hasPermissions(ctx, client, &provider.Reference{Path: destinationParent}, &provider.ResourcePermissions{
 			InitiateFileUpload: true,
 		})
 	case *provider.InitiateFileUploadRequest:
