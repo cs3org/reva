@@ -120,6 +120,9 @@ func (s *svc) handleLinkShare(ctx context.Context, share *GenericShare) (*libreg
 		},
 		LibreGraphPermissionsActions: actions,
 	}
+	if share.link.NotifyUploads {
+		perm.LibreGraphPermissionsActions = append(perm.LibreGraphPermissionsActions, "notifyUploads")
+	}
 	return perm, nil
 }
 
@@ -238,7 +241,7 @@ func LinkTypeToPermissions(lt libregraph.SharingLinkType, resourceType provider.
 		}
 		return NewFolderEditLinkPermissionSet().GetPermissions()
 	case libregraph.UPLOAD:
-		return NewFolderUploadLinkPermissionSet().GetPermissions()
+		return NewFolderDropLinkPermissionSet().GetPermissions()
 	case libregraph.CREATE_ONLY:
 		if resourceType == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 			return NewFolderDropLinkPermissionSet().GetPermissions()
@@ -573,10 +576,11 @@ func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*GenericShare
 				Roles: roles,
 			})
 		} else if e.link != nil {
+			// TODO(jgeens): can this be deduplicated with handleLinkShare?
 			createdTime := utils.TSToTime(e.link.Ctime)
 			linktype, _ := SharingLinkTypeFromCS3Permissions(ctx, e.link.Permissions)
 
-			permissions = append(permissions, libregraph.Permission{
+			permisison := libregraph.Permission{
 				CreatedDateTime: *libregraph.NewNullableTime(&createdTime),
 				HasPassword:     libregraph.PtrBool(e.link.PasswordProtected),
 				Id:              libregraph.PtrString(e.link.Token),
@@ -585,9 +589,14 @@ func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*GenericShare
 					LibreGraphQuickLink:   libregraph.PtrBool(e.link.Quicklink),
 					PreventsDownload:      libregraph.PtrBool(false),
 					Type:                  linktype,
-					// WebUrl:                libregraph.PtrString(""),
 				},
-			})
+			}
+			if e.link.NotifyUploads {
+				permisison.LibreGraphPermissionsActions = append(permisison.LibreGraphPermissionsActions, "notifyUploads")
+			}
+
+			permissions = append(permissions, permisison)
+
 		}
 	}
 

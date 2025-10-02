@@ -58,12 +58,14 @@ func SharingLinkTypeFromCS3Permissions(ctx context.Context, permissions *linkv1b
 
 	var lt libregraph.SharingLinkType
 
-	if grants.PermissionsEqual(permissions.GetPermissions(), conversions.NewViewerRole().CS3ResourcePermissions()) {
+	if grants.PermissionsEqual(permissions.GetPermissions(), NewViewLinkPermissionSet().GetPermissions()) {
 		lt = libregraph.VIEW
-	} else if grants.PermissionsEqual(permissions.GetPermissions(), conversions.NewEditorRole().CS3ResourcePermissions()) ||
-		grants.PermissionsEqual(permissions.GetPermissions(), conversions.NewFileEditorRole().CS3ResourcePermissions()) {
+	} else if grants.PermissionsEqual(permissions.GetPermissions(), NewFolderEditLinkPermissionSet().GetPermissions()) ||
+		grants.PermissionsEqual(permissions.GetPermissions(), NewFileEditLinkPermissionSet().GetPermissions()) {
 		lt = libregraph.EDIT
-	} else if grants.PermissionsEqual(permissions.GetPermissions(), conversions.NewUploaderRole().CS3ResourcePermissions()) {
+	} else if grants.PermissionsEqual(permissions.GetPermissions(), NewFolderDropLinkPermissionSet().GetPermissions()) {
+		lt = libregraph.CREATE_ONLY
+	} else if grants.PermissionsEqual(permissions.GetPermissions(), NewFolderDropLinkPermissionSet().GetPermissions()) {
 		lt = libregraph.UPLOAD
 	} else {
 		return nil, CS3ResourcePermissionsToLibregraphActions(permissions.GetPermissions())
@@ -93,7 +95,7 @@ func CS3ResourcePermissionsFromSharingLink(linkType libregraph.SharingLinkType, 
 		if info == provider.ResourceType_RESOURCE_TYPE_FILE {
 			return nil, errors.New(NoPermissionMatchError)
 		}
-		return NewFolderUploadLinkPermissionSet().GetPermissions(), nil
+		return NewFolderDropLinkPermissionSet().GetPermissions(), nil
 	case libregraph.INTERNAL:
 		return NewInternalLinkPermissionSet().GetPermissions(), nil
 	default:
@@ -112,87 +114,32 @@ func NewInternalLinkPermissionSet() *LinkType {
 // NewViewLinkPermissionSet creates cs3 permissions for the view link type
 func NewViewLinkPermissionSet() *LinkType {
 	return &LinkType{
-		Permissions: &provider.ResourcePermissions{
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-			ListContainer:        true,
-			// why is this needed?
-			ListRecycle: true,
-			Stat:        true,
-		},
-		linkType: libregraph.VIEW,
+		Permissions: conversions.NewViewerRole().CS3ResourcePermissions(),
+		linkType:    libregraph.VIEW,
 	}
 }
 
 // NewFileEditLinkPermissionSet creates cs3 permissions for the file edit link type
 func NewFileEditLinkPermissionSet() *LinkType {
 	return &LinkType{
-		Permissions: &provider.ResourcePermissions{
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-			InitiateFileUpload:   true,
-			ListContainer:        true,
-			// why is this needed?
-			ListRecycle: true,
-			// why is this needed?
-			RestoreRecycleItem: true,
-			Stat:               true,
-		},
-		linkType: libregraph.EDIT,
+		Permissions: conversions.NewFileEditorRole().CS3ResourcePermissions(),
+		linkType:    libregraph.EDIT,
 	}
 }
 
 // NewFolderEditLinkPermissionSet creates cs3 permissions for the folder edit link type
 func NewFolderEditLinkPermissionSet() *LinkType {
 	return &LinkType{
-		Permissions: &provider.ResourcePermissions{
-			CreateContainer:      true,
-			Delete:               true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-			InitiateFileUpload:   true,
-			ListContainer:        true,
-			// why is this needed?
-			ListRecycle: true,
-			Move:        true,
-			// why is this needed?
-			RestoreRecycleItem: true,
-			Stat:               true,
-		},
-		linkType: libregraph.EDIT,
+		Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
+		linkType:    libregraph.EDIT,
 	}
 }
 
 // NewFolderDropLinkPermissionSet creates cs3 permissions for the folder createOnly link type
 func NewFolderDropLinkPermissionSet() *LinkType {
 	return &LinkType{
-		Permissions: &provider.ResourcePermissions{
-			Stat:               true,
-			GetPath:            true,
-			CreateContainer:    true,
-			InitiateFileUpload: true,
-		},
-		linkType: libregraph.CREATE_ONLY,
-	}
-}
-
-// NewFolderUploadLinkPermissionSet creates cs3 permissions for the folder upload link type
-func NewFolderUploadLinkPermissionSet() *LinkType {
-	return &LinkType{
-		Permissions: &provider.ResourcePermissions{
-			CreateContainer:      true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-			InitiateFileUpload:   true,
-			ListContainer:        true,
-			ListRecycle:          true,
-			Stat:                 true,
-		},
-		linkType: libregraph.UPLOAD,
+		Permissions: conversions.NewUploaderRole().CS3ResourcePermissions(),
+		linkType:    libregraph.CREATE_ONLY,
 	}
 }
 
@@ -201,7 +148,6 @@ func GetAvailableLinkTypes() []*LinkType {
 	return []*LinkType{
 		NewInternalLinkPermissionSet(),
 		NewViewLinkPermissionSet(),
-		NewFolderUploadLinkPermissionSet(),
 		NewFileEditLinkPermissionSet(),
 		NewFolderEditLinkPermissionSet(),
 		NewFolderDropLinkPermissionSet(),

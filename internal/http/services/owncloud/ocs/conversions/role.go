@@ -216,7 +216,6 @@ func NewUploaderRole() *Role {
 			Stat:               true,
 			ListContainer:      true,
 			GetPath:            true,
-			CreateContainer:    true,
 			InitiateFileUpload: true,
 		},
 		ocsPermissions: PermissionCreate,
@@ -306,7 +305,6 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 	}
 	if rp.ListContainer &&
 		rp.Stat &&
-		rp.CreateContainer &&
 		rp.InitiateFileUpload {
 		r.ocsPermissions |= PermissionCreate
 	}
