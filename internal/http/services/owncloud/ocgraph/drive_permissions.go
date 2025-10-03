@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"slices"
 	"time"
 
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -171,6 +172,7 @@ func (s *svc) updateDrivePermissions(w http.ResponseWriter, r *http.Request) {
 	if err := dec.Decode(permission); err != nil {
 		log.Error().Err(err).Interface("Body", r.Body).Msg("failed unmarshalling request body")
 		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Failed unmarshalling request body"))
 		return
 	}
 
@@ -256,6 +258,7 @@ func (s *svc) updateLinkPermissions(ctx context.Context, w http.ResponseWriter, 
 	if err != nil {
 		log.Error().Err(err).Msg("nothing provided to update")
 		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Nothing provided to udpate"))
 		return
 	}
 
@@ -861,6 +864,14 @@ func (s *svc) getLinkUpdates(ctx context.Context, link *linkv1beta1.PublicShare,
 				Grant: &linkv1beta1.Grant{
 					Expiration: nullableTimeToCs3Timestamp(finalExpiration),
 				},
+			})
+		}
+	}
+	if len(permission.LibreGraphPermissionsActions) > 0 {
+		if slices.Contains(permission.LibreGraphPermissionsActions, "notifyUploads") {
+			updates = append(updates, &linkv1beta1.UpdatePublicShareRequest_Update{
+				Type:          linkv1beta1.UpdatePublicShareRequest_Update_TYPE_NOTIFYUPLOADS,
+				NotifyUploads: true,
 			})
 		}
 	}
