@@ -124,6 +124,7 @@ func (s *svc) Handler() http.Handler {
 
 func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
 	if err != nil {
@@ -150,6 +151,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 
 	parentContainerRef, err := s.extractReference(ctx, parentContainerID)
 	if err != nil {
+		log.Warn().Err(err).Msgf("failed to handle request to /app/new")
 		writeError(w, r, appErrorInvalidParameter, "invalid parent container ID", nil)
 		return
 	}
@@ -316,13 +318,9 @@ func (s *svc) extractReference(ctx context.Context, id string) (*provider.Resour
 		return parentContainerRef, nil
 	}
 	// Option three
-	_, spaceID, ok := spaces.DecodeStorageSpaceID(id)
+	_, spaceRoot, ok := spaces.DecodeStorageSpaceID(id)
 	if !ok {
 		return nil, errors.New("failed to decode ID")
-	}
-	spaceRoot, err := spaces.DecodeSpaceID(spaceID)
-	if err != nil {
-		return nil, err
 	}
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
 	if err != nil {
