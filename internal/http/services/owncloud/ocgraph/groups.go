@@ -81,6 +81,12 @@ func (s *svc) listGroups(w http.ResponseWriter, r *http.Request) {
 		log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("must pass a search string of at least length 3 to list groups")
 	}
 	queryVal := strings.Trim(req.Query.Search.RawValue, "\"")
+	queryVal = strings.ReplaceAll(queryVal, "*", "")
+
+	if len(queryVal) < 3 {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Search query must contain at least three valid characters"))
+	}
 
 	log.Debug().Str("Query", queryVal).Str("orderBy", req.Query.OrderBy.RawValue).Any("select", getGroupSelectionFromRequest(req.Query.Select)).Msg("Listing groups in libregraph API")
 
