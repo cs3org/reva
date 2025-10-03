@@ -270,10 +270,10 @@ func (fs *Eosfs) ListWithRegex(ctx context.Context, path, regex string, depth ui
 	resourceInfos := []*provider.ResourceInfo{}
 
 	for _, eosFileInfo := range eosFileInfos {
+		// filter out sys folders
 
-		// Remove the hidden folders in the topmost directory
 		finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo)
-		if err == nil {
+		if err == nil && !eosclient.IsVersionFolder(finfo.Path) {
 			resourceInfos = append(resourceInfos, finfo)
 		}
 	}
