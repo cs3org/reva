@@ -33,7 +33,7 @@ import (
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	storagepb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/datagateway"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocdav"
@@ -148,15 +148,10 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parentContainerRef, ok := spaces.ParseResourceID(parentContainerID)
-	if !ok {
-		// If this fails, client might be non-spaces
-		var err error
-		parentContainerRef, err = spaces.ResourceIdFromString(parentContainerID)
-		if err != nil {
-			writeError(w, r, appErrorInvalidParameter, "invalid parent container ID", nil)
-			return
-		}
+	parentContainerRef, err := s.extractReference(ctx, parentContainerID)
+	if err != nil {
+		writeError(w, r, appErrorInvalidParameter, "invalid parent container ID", nil)
+		return
 	}
 
 	filename := r.Form.Get("filename")
@@ -171,8 +166,8 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	statParentContainerReq := &storagepb.StatRequest{
-		Ref: &storagepb.Reference{
+	statParentContainerReq := &provider.StatRequest{
+		Ref: &provider.Reference{
 			ResourceId: parentContainerRef,
 		},
 	}
@@ -187,16 +182,16 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if parentContainer.Info.Type != storagepb.ResourceType_RESOURCE_TYPE_CONTAINER {
+	if parentContainer.Info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		writeError(w, r, appErrorInvalidParameter, "the parent container id does not point to a container", nil)
 		return
 	}
 
-	fileRef := &storagepb.Reference{
+	fileRef := &provider.Reference{
 		Path: path.Join(parentContainer.Info.Path, utils.MakeRelativePath(filename)),
 	}
 
-	statFileReq := &storagepb.StatRequest{
+	statFileReq := &provider.StatRequest{
 		Ref: fileRef,
 	}
 	statFileRes, err := client.Stat(ctx, statFileReq)
@@ -215,7 +210,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create empty file via storageprovider
-	createReq := &storagepb.InitiateFileUploadRequest{
+	createReq := &provider.InitiateFileUploadRequest{
 		Ref: fileRef,
 		Opaque: &typespb.Opaque{
 			Map: map[string]*typespb.OpaqueEntry{
@@ -283,7 +278,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if statRes.Info.Type != storagepb.ResourceType_RESOURCE_TYPE_FILE {
+	if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
 		writeError(w, r, appErrorInvalidParameter, "the given file id does not point to a file", nil)
 		return
 	}
@@ -303,6 +298,52 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, appErrorServerError, "error writing JSON response", err)
 		return
 	}
+}
+
+// The ID can be in three formats:
+// 1. full space id (storage$space!inode)
+// 2. pre-spaces id (storage!inode)
+// 3. space root (storage$space)
+func (s *svc) extractReference(ctx context.Context, id string) (*provider.ResourceId, error) {
+	// Check option one
+	parentContainerRef, ok := spaces.ParseResourceID(id)
+	if ok {
+		return parentContainerRef, nil
+	}
+	// Option two
+	parentContainerRef, err := spaces.ResourceIdFromString(id)
+	if err == nil {
+		return parentContainerRef, nil
+	}
+	// Option three
+	_, spaceID, ok := spaces.DecodeStorageSpaceID(id)
+	if !ok {
+		return nil, errors.New("failed to decode ID")
+	}
+	spaceRoot, err := spaces.DecodeSpaceID(spaceID)
+	if err != nil {
+		return nil, err
+	}
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	if err != nil {
+		return nil, err
+	}
+
+	statRes, err := client.Stat(ctx, &provider.StatRequest{
+		Ref: &provider.Reference{
+			Path: spaceRoot,
+		},
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if statRes.Status == nil || statRes.Status.Code != rpc.Code_CODE_OK {
+		return nil, errors.New("failed to decode ID: failed to stat space root")
+	}
+
+	return statRes.Info.Id, nil
 }
 
 func (s *svc) handleList(w http.ResponseWriter, r *http.Request) {
@@ -353,7 +394,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 
 	fileID := r.Form.Get("file_id")
 
-	var fileRef storagepb.Reference
+	var fileRef provider.Reference
 	if fileID == "" {
 		path := r.Form.Get("path")
 		if path == "" {
@@ -374,7 +415,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		fileRef.ResourceId = resourceID
 	}
 
-	statRes, err := client.Stat(ctx, &storagepb.StatRequest{Ref: &fileRef})
+	statRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &fileRef})
 	if err != nil {
 		writeError(w, r, appErrorServerError, "Internal error accessing the file, please try again later", err)
 		return
@@ -388,7 +429,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if statRes.Info.Type != storagepb.ResourceType_RESOURCE_TYPE_FILE && statRes.Info.Type != storagepb.ResourceType_RESOURCE_TYPE_CONTAINER {
+	if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_FILE && statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		writeError(w, r, appErrorInvalidParameter, "the given file id does not point to a file or a container", nil)
 		return
 	}
@@ -482,7 +523,7 @@ func (s *svc) handleNotify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fileID := r.Form.Get("file_id")
-	var fileRef storagepb.Reference
+	var fileRef provider.Reference
 	if fileID == "" {
 		path := r.Form.Get("path")
 		if path == "" {
@@ -540,7 +581,7 @@ func filterAppsByUserAgent(mimeTypes []*appregistry.MimeTypeInfo, userAgent stri
 	return res
 }
 
-func resolveViewMode(res *storagepb.ResourceInfo, vm string) gateway.OpenInAppRequest_ViewMode {
+func resolveViewMode(res *provider.ResourceInfo, vm string) gateway.OpenInAppRequest_ViewMode {
 	var viewMode gateway.OpenInAppRequest_ViewMode
 	if vm != "" {
 		viewMode = utils.GetViewMode(vm)
