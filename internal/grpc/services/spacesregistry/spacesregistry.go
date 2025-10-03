@@ -184,8 +184,18 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 					return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
 				}
 				sp = append(sp, spaces...)
+			case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
+				// In the case of filtering for an ID, we also check if this matches the user's home
+				homes, err := s.listSpacesByType(ctx, req, user, spaces.SpaceTypeHome)
+				if err == nil && len(homes) == 1 {
+					home := homes[0]
+					if home.Id.OpaqueId == filter.GetId().OpaqueId {
+						sp = append(sp, home)
+					}
+				}
 			}
 		}
+
 	}
 
 	return &provider.ListStorageSpacesResponse{Status: status.NewOK(ctx), StorageSpaces: sp}, nil
