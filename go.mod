@@ -58,7 +58,7 @@ require (
 	github.com/nats-io/nats-server/v2 v2.12.0
 	github.com/nats-io/nats.go v1.46.1
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/ginkgo/v2 v2.25.3
+	github.com/onsi/ginkgo/v2 v2.26.0
 	github.com/onsi/gomega v1.38.2
 	github.com/opencloud-eu/opencloud v1.1.0
 	github.com/pablodz/inotifywaitgo v0.0.9
