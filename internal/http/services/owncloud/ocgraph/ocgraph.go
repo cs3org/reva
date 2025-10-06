@@ -26,8 +26,6 @@ import (
 	"path"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
@@ -156,35 +154,3 @@ func (s *svc) Prefix() string { return "graph" }
 func (s *svc) Close() error { return nil }
 
 func (s *svc) Unprotected() []string { return nil }
-
-func handleError(ctx context.Context, err error, status int, w http.ResponseWriter) {
-	log := appctx.GetLogger(ctx)
-	log.Error().Err(err).Msg("ocgraph error")
-	w.Header().Set("x-request-id", trace.Get(ctx))
-	w.WriteHeader(status)
-	w.Write([]byte("Error: " + err.Error()))
-}
-
-func handleRpcStatus(ctx context.Context, status *rpcv1beta1.Status, msg string, w http.ResponseWriter) {
-	log := appctx.GetLogger(ctx)
-	if status == nil {
-		log.Error().Str("Status", "nil").Msg(msg)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	log.Error().Str("Status", status.String()).Msg(msg)
-
-	w.Header().Set("x-request-id", trace.Get(ctx))
-
-	switch status.Code {
-	case rpcv1beta1.Code_CODE_NOT_FOUND:
-		w.WriteHeader(http.StatusNotFound)
-	case rpcv1beta1.Code_CODE_PERMISSION_DENIED:
-		w.WriteHeader(http.StatusForbidden)
-	case rpcv1beta1.Code_CODE_UNAUTHENTICATED:
-		w.WriteHeader(http.StatusUnauthorized)
-	default:
-		w.WriteHeader(http.StatusInternalServerError)
-	}
-}

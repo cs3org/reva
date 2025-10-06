@@ -56,14 +56,14 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 	gw, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 
 	recvSharesResp, err := gw.ListExistingReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
 	if err != nil {
 		log.Error().Err(err).Msg("error getting received shares")
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 
@@ -85,7 +85,7 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		// include ocm shares in the response
 		ocmShareResp, err := gw.ListReceivedOCMShares(ctx, &ocm.ListReceivedOCMSharesRequest{})
 		if err != nil {
-			//handleError(ctx, err, http.StatusInternalServerError, w)
+			//handleError(ctx, err, w)
 			log.Fatal().Err(err).Msg("ListReceivedOCMShares returned error - user will not be able to see their OCM shares")
 		} else if ocmShareResp != nil {
 			if ocmShareResp.Status == nil || ocmShareResp.Status.Code != rpc.Code_CODE_OK {
@@ -108,7 +108,7 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		"value": shares,
 	}); err != nil {
 		log.Error().Err(err).Msg("error marshalling shares as json")
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 }
@@ -210,7 +210,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 	gw, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting gateway client")
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 
@@ -220,7 +220,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 	storageID, _, itemID, ok := spaces.DecodeResourceID(resourceID)
 	if !ok {
 		log.Error().Str("resource-id", resourceID).Msg("resource id cannot be decoded")
-		handleError(ctx, errors.New("error decoding resource id"), http.StatusBadRequest, w)
+		handleBadRequest(ctx, errors.New("error decoding resource id"), w)
 		return
 	}
 	var resourceId *provider.ResourceId = &provider.ResourceId{
@@ -235,7 +235,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	if err != nil {
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 	if statRes.Status.Code != rpc.Code_CODE_OK {
@@ -251,19 +251,19 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 	dec.DisallowUnknownFields()
 	if err = dec.Decode(invite); err != nil {
 		log.Error().Err(err).Interface("Body", r.Body).Msg("failed unmarshalling request body")
-		handleError(ctx, err, http.StatusBadRequest, w)
+		handleBadRequest(ctx, err, w)
 		return
 	}
 
 	// From this, we first extract the requested role, which we translate into permissions
 	roles := invite.Roles
 	if len(roles) != 1 {
-		handleError(ctx, errors.New("exactly one role is expected"), http.StatusBadRequest, w)
+		handleBadRequest(ctx, errors.New("exactly one role is expected"), w)
 		return
 	}
 	role, ok := UnifiedRoleIDToDefinition(roles[0])
 	if !ok {
-		handleError(ctx, errors.New("invalid role"), http.StatusBadRequest, w)
+		handleBadRequest(ctx, errors.New("invalid role"), w)
 		return
 	}
 	requestedPerms := PermissionsToCS3ResourcePermissions(role.RolePermissions)
@@ -278,7 +278,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 
 	// Check that the user has share permissions
 	if !conversions.RoleFromResourcePermissions(statRes.Info.PermissionSet).OCSPermissions().Contain(conversions.PermissionShare) {
-		handleError(ctx, errors.New("user does not have share permissions"), http.StatusUnauthorized, w)
+		handleCustomError(ctx, errors.New("user does not have share permissions"), http.StatusUnauthorized, w)
 		return
 	}
 
@@ -289,7 +289,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 	for _, recipient := range invite.Recipients {
 		// We check if the sharee exists
 		if recipient.ObjectId == nil {
-			handleError(ctx, errors.New("missing recipient data"), http.StatusBadRequest, w)
+			handleBadRequest(ctx, errors.New("missing recipient data"), w)
 		}
 		// If the recipient is a user or a group, we create a local share
 		switch *recipient.LibreGraphRecipientType {
@@ -297,7 +297,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 			resp, err := s.createLocalShare(ctx, gw, storageID, itemID, path, owner, statRes.Info.Type, *recipient.LibreGraphRecipientType, *recipient.ObjectId, exp, requestedPerms)
 			if err != nil {
 				log.Error().Err(err).Msg("")
-				handleError(ctx, err, http.StatusInternalServerError, w)
+				handleError(ctx, err, w)
 				return
 			}
 			share := resp.GetShare()
@@ -309,26 +309,26 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 
 			if err != nil || lgPerm == nil {
 				log.Error().Err(err).Any("share", share).Err(err).Any("lgPerm", lgPerm).Msg("error converting created share to permissions")
-				handleError(ctx, err, http.StatusInternalServerError, w)
+				handleError(ctx, err, w)
 				return
 			}
 			response = append(response, lgPerm)
 		case "remote":
 			username, idp := s.decomposeOCMAddress(*recipient.ObjectId)
 			if username == "" || idp == "" {
-				handleError(ctx, errors.New("invalid remote recipient address, must be remote_user_id@remote_ocm_fqdn"), http.StatusBadRequest, w)
+				handleBadRequest(ctx, errors.New("invalid remote recipient address, must be remote_user_id@remote_ocm_fqdn"), w)
 				return
 			}
 			resp, err := s.createOCMShare(ctx, gw, resourceId, username, idp, roles[0])
 			if err != nil {
 				log.Error().Err(err).Msg("")
-				handleError(ctx, err, http.StatusInternalServerError, w)
+				handleError(ctx, err, w)
 				return
 			}
 			ocmshare := resp.GetShare()
 			if ocmshare == nil {
 				log.Error().Any("response", resp).Msg("share is nil")
-				handleError(ctx, errors.New("share is nil"), http.StatusInternalServerError, w)
+				handleCustomError(ctx, errors.New("share is nil"), http.StatusInternalServerError, w)
 				return
 			}
 			lgPerm, err := s.shareToLibregraphPerm(ctx, &GenericShare{
@@ -338,7 +338,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 			})
 			if err != nil || lgPerm == nil {
 				log.Error().Err(err).Any("ocmshare", ocmshare).Err(err).Any("lgPerm", lgPerm).Msg("error converting created share to permissions")
-				handleError(ctx, err, http.StatusInternalServerError, w)
+				handleError(ctx, err, w)
 				return
 			}
 			response = append(response, lgPerm)
@@ -359,7 +359,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 	gw, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting gateway client")
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 
@@ -369,7 +369,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 	storageID, _, itemID, ok := spaces.DecodeResourceID(resourceID)
 	if !ok {
 		log.Error().Str("resource-id", resourceID).Msg("resource id cannot be decoded")
-		handleError(ctx, errors.New("error decoding resource id"), http.StatusBadRequest, w)
+		handleBadRequest(ctx, errors.New("error decoding resource id"), w)
 		return
 	}
 
@@ -383,7 +383,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	if err != nil {
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 	if statRes.Status.Code != rpc.Code_CODE_OK {
@@ -397,7 +397,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 	dec.DisallowUnknownFields()
 	if err = dec.Decode(linkRequest); err != nil {
 		log.Error().Err(err).Interface("Body", r.Body).Msg("failed unmarshalling request body")
-		handleError(ctx, err, http.StatusBadRequest, w)
+		handleBadRequest(ctx, err, w)
 		return
 	}
 
@@ -417,13 +417,13 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 
 	// Check that the user has share permissions
 	if !conversions.RoleFromResourcePermissions(statRes.Info.PermissionSet).OCSPermissions().Contain(conversions.PermissionShare) {
-		handleError(ctx, errors.New("user does not have the necessary permissions"), http.StatusUnauthorized, w)
+		handleCustomError(ctx, errors.New("user does not have the necessary permissions"), http.StatusUnauthorized, w)
 		return
 	}
 
 	if linkRequest.Type == nil {
 		log.Error().Err(err).Interface("Body", r.Body).Msg("failed unmarshalling request body")
-		handleError(ctx, errors.New("must pass a link type"), http.StatusBadRequest, w)
+		handleBadRequest(ctx, errors.New("must pass a link type"), w)
 		return
 	}
 
@@ -440,7 +440,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := gw.CreatePublicShare(ctx, req)
 	if err != nil {
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 	if resp.Status.Code != rpc.Code_CODE_OK {
@@ -455,7 +455,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil || lgPerm == nil {
 		log.Error().Err(err).Any("link", resp.GetShare()).Err(err).Any("lgPerm", lgPerm).Msg("error converting created link to permissions")
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 	_ = json.NewEncoder(w).Encode(lgPerm)
@@ -548,13 +548,13 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 
 	gw, err := s.getClient()
 	if err != nil {
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 
 	user, ok := appctx.ContextGetUser(ctx)
 	if !ok {
-		handleError(ctx, fmt.Errorf("No user in context"), http.StatusUnauthorized, w)
+		handleCustomError(ctx, fmt.Errorf("No user in context"), http.StatusUnauthorized, w)
 		return
 	}
 
@@ -569,7 +569,7 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	if err != nil {
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 
@@ -584,7 +584,7 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	if err != nil {
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 
@@ -597,7 +597,7 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 		drive, err := s.cs3ShareToDriveItem(ctx, info, shares)
 		if err != nil {
 			log.Error().Err(err).Msg("error getting received shares")
-			handleError(ctx, err, http.StatusInternalServerError, w)
+			handleError(ctx, err, w)
 			return
 		}
 		shareDrives = append(shareDrives, drive)
@@ -607,7 +607,7 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 		"value": shareDrives,
 	}); err != nil {
 		log.Error().Err(err).Msg("error marshalling shares as json")
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 }
@@ -621,7 +621,7 @@ func (s *svc) updateReceivedShare(w http.ResponseWriter, r *http.Request) {
 
 	gw, err := s.getClient()
 	if err != nil {
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 
@@ -631,7 +631,7 @@ func (s *svc) updateReceivedShare(w http.ResponseWriter, r *http.Request) {
 	spaceID, _ = url.QueryUnescape(spaceID)
 
 	if spaceID != fmt.Sprintf("%s$%s", shareJailID, shareJailID) {
-		handleError(ctx, fmt.Errorf("spaceID for this share not found"), http.StatusNotFound, w)
+		handleCustomError(ctx, fmt.Errorf("spaceID for this share not found"), http.StatusNotFound, w)
 		return
 	}
 
@@ -640,13 +640,13 @@ func (s *svc) updateReceivedShare(w http.ResponseWriter, r *http.Request) {
 
 	parts := strings.Split(resourceID, "!")
 	if len(parts) != 2 {
-		handleError(ctx, fmt.Errorf("Invalid resource ID"), http.StatusBadRequest, w)
+		handleBadRequest(ctx, fmt.Errorf("Invalid resource ID"), w)
 		return
 	}
 
 	spaceID, shareID := parts[0], parts[1]
 	if spaceID != fmt.Sprintf("%s$%s", shareJailID, shareJailID) {
-		handleError(ctx, fmt.Errorf("spaceID for this share not found"), http.StatusNotFound, w)
+		handleCustomError(ctx, fmt.Errorf("spaceID for this share not found"), http.StatusNotFound, w)
 		return
 	}
 
@@ -656,12 +656,12 @@ func (s *svc) updateReceivedShare(w http.ResponseWriter, r *http.Request) {
 	dec.DisallowUnknownFields()
 	if err = dec.Decode(req); err != nil {
 		log.Error().Err(err).Interface("Body", r.Body).Msg("failed unmarshalling request body")
-		handleError(ctx, err, http.StatusBadRequest, w)
+		handleBadRequest(ctx, err, w)
 		return
 	}
 
 	if req.UIHidden == nil {
-		handleError(ctx, fmt.Errorf("Must provide @UI.Hidden when updating received share"), http.StatusBadRequest, w)
+		handleBadRequest(ctx, fmt.Errorf("Must provide @UI.Hidden when updating received share"), w)
 		return
 	}
 
@@ -679,7 +679,7 @@ func (s *svc) updateReceivedShare(w http.ResponseWriter, r *http.Request) {
 
 	shareRes, err := gw.UpdateReceivedShare(ctx, shareRequest)
 	if err != nil {
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 	if shareRes.Status == nil || shareRes.Status.Code != rpc.Code_CODE_OK {
@@ -694,7 +694,7 @@ func (s *svc) updateReceivedShare(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	if err != nil {
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 	if statRes.Status == nil || statRes.Status.Code != rpc.Code_CODE_OK {
@@ -707,13 +707,13 @@ func (s *svc) updateReceivedShare(w http.ResponseWriter, r *http.Request) {
 		ResourceInfo:  statRes.Info,
 	})
 	if err != nil {
-		handleError(ctx, fmt.Errorf("Error converting ReceivedShare to DriveItem"), http.StatusInternalServerError, w)
+		handleCustomError(ctx, fmt.Errorf("Error converting ReceivedShare to DriveItem"), http.StatusInternalServerError, w)
 		return
 	}
 
 	if err := json.NewEncoder(w).Encode(drive); err != nil {
 		log.Error().Err(err).Msg("error marshalling ReceivedShare as json")
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 }

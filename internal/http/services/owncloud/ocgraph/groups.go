@@ -66,14 +66,14 @@ func (s *svc) listGroups(w http.ResponseWriter, r *http.Request) {
 	gw, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting gateway client")
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 
 	req, err := godata.ParseRequest(ctx, r.URL.Path, r.URL.Query())
 	if err != nil {
 		log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("could not get groups: query error")
-		handleError(ctx, err, http.StatusBadRequest, w)
+		handleBadRequest(ctx, err, w)
 		return
 	}
 
@@ -89,7 +89,7 @@ func (s *svc) listGroups(w http.ResponseWriter, r *http.Request) {
 		Filter:              queryVal,
 	})
 	if err != nil {
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 	if groups.Status.Code != rpcv1beta1.Code_CODE_OK {
@@ -102,7 +102,7 @@ func (s *svc) listGroups(w http.ResponseWriter, r *http.Request) {
 	if req.Query.OrderBy.RawValue != "" {
 		lgGroups, err = sortGroups(ctx, lgGroups, req.Query.OrderBy.RawValue)
 		if err != nil {
-			handleError(ctx, err, http.StatusBadRequest, w)
+			handleBadRequest(ctx, err, w)
 			return
 		}
 	}
