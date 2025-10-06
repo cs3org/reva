@@ -804,7 +804,13 @@ func (s *svc) getLinkUpdates(ctx context.Context, link *linkv1beta1.PublicShare,
 		isEditorLink = conversions.RoleFromResourcePermissions(link.Permissions.Permissions).Name == conversions.RoleEditor
 	}
 
+	// CHeck for update of expiration
 	if permission.ExpirationDateTime.IsSet() {
+		// If the expiration is before yesterday, it is invalid
+		if exp := permission.ExpirationDateTime.Get(); exp.Before(time.Now().AddDate(0, 0, -1)) {
+			return nil, errtypes.BadRequest("links cannot expire in the past")
+		}
+		// For editor links, a default expiration is set
 		finalExpiration := permission.ExpirationDateTime
 		if isEditorLink && isExpirationEnforced {
 			if permission.ExpirationDateTime.Get() == nil {
@@ -820,6 +826,7 @@ func (s *svc) getLinkUpdates(ctx context.Context, link *linkv1beta1.PublicShare,
 			},
 		})
 	}
+	// Check for update of link name
 	if permission.Link != nil && permission.Link.LibreGraphDisplayName != nil {
 		if permission.Link.LibreGraphDisplayName == nil || *permission.Link.LibreGraphDisplayName == "" {
 			return nil, errtypes.BadRequest("Link name cannot be empty")
@@ -829,6 +836,9 @@ func (s *svc) getLinkUpdates(ctx context.Context, link *linkv1beta1.PublicShare,
 			DisplayName: *permission.Link.LibreGraphDisplayName,
 		})
 	}
+
+	// Check for update of link type
+	// For specific link types, this also implies setting an expiration
 	if permission.Link != nil && permission.Link.Type != nil {
 		permissions, err := CS3ResourcePermissionsFromSharingLink(permission.Link.GetType(), resourceType)
 		if err != nil {
@@ -844,7 +854,7 @@ func (s *svc) getLinkUpdates(ctx context.Context, link *linkv1beta1.PublicShare,
 					finalExpiration.Set(&maxExpiration)
 				}
 			} else if link.Expiration != nil {
-				if endOfDay.Add(time.Second * time.Duration(link.Expiration.Seconds)).After(maxExpiration) {
+				if time.Unix(int64(link.Expiration.GetSeconds()), 0).After(maxExpiration) {
 					finalExpiration.Set(&maxExpiration)
 				}
 			}
@@ -867,6 +877,8 @@ func (s *svc) getLinkUpdates(ctx context.Context, link *linkv1beta1.PublicShare,
 			})
 		}
 	}
+
+	// Check for setting NotifyUploads
 	if len(permission.LibreGraphPermissionsActions) > 0 {
 		if slices.Contains(permission.LibreGraphPermissionsActions, "notifyUploads") {
 			updates = append(updates, &linkv1beta1.UpdatePublicShareRequest_Update{
