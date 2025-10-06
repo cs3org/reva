@@ -810,7 +810,7 @@ func (s *svc) getLinkUpdates(ctx context.Context, link *linkv1beta1.PublicShare,
 		if exp := permission.ExpirationDateTime.Get(); exp.Before(time.Now().AddDate(0, 0, -1)) {
 			return nil, errtypes.BadRequest("links cannot expire in the past")
 		}
-		// For editor links, a max expiration is defined
+		// For editor links, a default expiration is set
 		finalExpiration := permission.ExpirationDateTime
 		if isEditorLink && isExpirationEnforced {
 			if permission.ExpirationDateTime.Get() == nil {
@@ -854,7 +854,7 @@ func (s *svc) getLinkUpdates(ctx context.Context, link *linkv1beta1.PublicShare,
 					finalExpiration.Set(&maxExpiration)
 				}
 			} else if link.Expiration != nil {
-				if endOfDay.Add(time.Second * time.Duration(link.Expiration.Seconds)).After(maxExpiration) {
+				if time.Unix(int64(link.Expiration.GetSeconds()), 0).After(maxExpiration) {
 					finalExpiration.Set(&maxExpiration)
 				}
 			}
