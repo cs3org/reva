@@ -54,14 +54,14 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 	gw, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 
 	odataReq, err := godata.ParseRequest(r.Context(), r.URL.Path, r.URL.Query())
 	if err != nil {
 		log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("could not get drives: query error")
-		handleError(ctx, err, http.StatusBadRequest, w)
+		handleBadRequest(ctx, err, w)
 		return
 	}
 
@@ -70,14 +70,14 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 		spaces, err = s.getDrivesForShares(ctx, gw)
 		if err != nil {
 			log.Error().Err(err).Msg("error getting share spaces")
-			handleError(ctx, err, http.StatusInternalServerError, w)
+			handleError(ctx, err, w)
 			return
 		}
 	} else {
 		filters, err := generateCs3StorageSpaceFilters(odataReq)
 		if err != nil {
 			log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("could not get drives: error parsing filters")
-			handleError(ctx, err, http.StatusInternalServerError, w)
+			handleError(ctx, err, w)
 			return
 		}
 
@@ -86,7 +86,7 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			log.Error().Err(err).Msg("error listing storage spaces")
-			handleError(ctx, err, http.StatusInternalServerError, w)
+			handleError(ctx, err, w)
 			return
 		}
 		if res.Status.Code != rpcv1beta1.Code_CODE_OK {
@@ -104,7 +104,7 @@ func (s *svc) listMySpaces(w http.ResponseWriter, r *http.Request) {
 		"value": spaces,
 	}); err != nil {
 		log.Error().Err(err).Msg("error marshalling spaces as json")
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 }
@@ -251,7 +251,7 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 	gw, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 
@@ -270,7 +270,7 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			log.Error().Err(err).Msg("error getting received share")
-			handleError(ctx, err, http.StatusInternalServerError, w)
+			handleError(ctx, err, w)
 			return
 		}
 		if shareRes.Status.Code != rpcv1beta1.Code_CODE_OK {
@@ -285,7 +285,7 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			log.Error().Err(err).Msg("error statting received share")
-			handleError(ctx, err, http.StatusInternalServerError, w)
+			handleError(ctx, err, w)
 			return
 		}
 		if stat.Status.Code != rpcv1beta1.Code_CODE_OK {
@@ -314,7 +314,7 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			log.Error().Err(err).Msg("error getting space by id")
-			handleError(ctx, err, http.StatusInternalServerError, w)
+			handleError(ctx, err, w)
 			return
 		}
 		if listRes.Status.Code != rpcv1beta1.Code_CODE_OK {
@@ -331,7 +331,7 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	handleError(ctx, errors.New("space not found"), http.StatusNotFound, w)
+	handleCustomError(ctx, errors.New("space not found"), http.StatusNotFound, w)
 }
 
 func (s *svc) patchSpace(w http.ResponseWriter, r *http.Request) {
@@ -348,14 +348,14 @@ func (s *svc) patchSpace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if update.Name == nil {
-		handleError(ctx, errors.New("patching a space requires the space name"), http.StatusBadRequest, w)
+		handleBadRequest(ctx, errors.New("patching a space requires the space name"), w)
 		return
 	}
 
 	gw, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 
@@ -371,13 +371,13 @@ func (s *svc) patchSpace(w http.ResponseWriter, r *http.Request) {
 	if len(update.Special) > 0 {
 		updateData := update.Special[0]
 		if updateData.Id == nil || updateData.SpecialFolder == nil {
-			handleError(ctx, errors.New("Unsupported update type"), http.StatusBadRequest, w)
+			handleBadRequest(ctx, errors.New("Unsupported update type"), w)
 			return
 		}
 
 		storage, _, id, ok := spaces.DecodeResourceID(*updateData.Id)
 		if !ok {
-			handleError(ctx, errors.New("ID not in an understandable format"), http.StatusBadRequest, w)
+			handleBadRequest(ctx, errors.New("ID not in an understandable format"), w)
 			return
 		}
 
@@ -392,7 +392,7 @@ func (s *svc) patchSpace(w http.ResponseWriter, r *http.Request) {
 
 		if err != nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
 			log.Error().Err(err).Any("res", statRes.Status).Msg("error statting provided special resource")
-			handleError(ctx, err, http.StatusInternalServerError, w)
+			handleError(ctx, err, w)
 			return
 		}
 
@@ -416,7 +416,7 @@ func (s *svc) patchSpace(w http.ResponseWriter, r *http.Request) {
 				},
 			}
 		default:
-			handleError(ctx, errors.New("Unsupported update type"), http.StatusBadRequest, w)
+			handleBadRequest(ctx, errors.New("Unsupported update type"), w)
 			return
 		}
 	} else if update.Description != nil {
@@ -426,7 +426,7 @@ func (s *svc) patchSpace(w http.ResponseWriter, r *http.Request) {
 			},
 		}
 	} else {
-		handleError(ctx, errors.New("Unsupported update type"), http.StatusBadRequest, w)
+		handleBadRequest(ctx, errors.New("Unsupported update type"), w)
 		return
 	}
 
@@ -434,13 +434,13 @@ func (s *svc) patchSpace(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to call gateway UpdateStorageSpace")
-		handleError(ctx, errors.New("failed to update storage space"), http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 
 	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
 		log.Error().Interface("response", res).Msg("error updating public share")
-		handleError(ctx, errors.New("failed to update storage space"), http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 

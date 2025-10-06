@@ -129,7 +129,7 @@ func (s *svc) patchMe(w http.ResponseWriter, r *http.Request) {
 
 	gw, err := s.getClient()
 	if err != nil {
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 
@@ -142,7 +142,7 @@ func (s *svc) patchMe(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 	if res != nil && res.Status != nil && res.Status.Code != rpc.Code_CODE_OK {
@@ -160,14 +160,14 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 	gw, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting gateway client")
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 
 	req, err := godata.ParseRequest(ctx, r.URL.Path, r.URL.Query())
 	if err != nil {
 		log.Debug().Err(err).Interface("query", r.URL.Query()).Msg("could not get users: query error")
-		handleError(ctx, err, http.StatusBadRequest, w)
+		handleBadRequest(ctx, err, w)
 		return
 	}
 
@@ -179,7 +179,7 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 
 	filters, err := generateUserFilters(req)
 	if err != nil {
-		handleError(ctx, err, http.StatusBadRequest, w)
+		handleBadRequest(ctx, err, w)
 		return
 	}
 	request := &userpb.FindUsersRequest{
@@ -190,7 +190,7 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 
 	users, err := gw.FindUsers(ctx, request)
 	if err != nil {
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 	if users.Status.Code != rpc.Code_CODE_OK {
@@ -203,7 +203,7 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 	if req.Query.OrderBy.RawValue != "" {
 		lgUsers, err = sortUsers(ctx, lgUsers, req.Query.OrderBy.RawValue)
 		if err != nil {
-			handleError(ctx, err, http.StatusBadRequest, w)
+			handleBadRequest(ctx, err, w)
 			return
 		}
 	}

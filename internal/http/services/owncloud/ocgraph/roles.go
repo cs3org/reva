@@ -33,7 +33,7 @@ func (s *svc) getRoleDefinitions(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(GetBuiltinRoleDefinitionList()); err != nil {
 		log := appctx.GetLogger(r.Context())
 		log.Error().Err(err).Msg("error marshalling roles as json")
-		handleError(ctx, err, http.StatusInternalServerError, w)
+		handleError(ctx, err, w)
 		return
 	}
 }

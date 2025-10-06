@@ -357,6 +357,12 @@ func (s *svc) ListExistingReceivedShares(ctx context.Context, req *collaboration
 		}, nil
 	}
 
+	if rshares.Status == nil || rshares.Status.Code != rpc.Code_CODE_OK {
+		return &gateway.ListExistingReceivedSharesResponse{
+			Status: rshares.Status,
+		}, nil
+	}
+
 	sharesCh := make(chan *gateway.ReceivedShareResourceInfo, len(rshares.Shares))
 	pool := pond.NewPool(50)
 	for _, rs := range rshares.Shares {
