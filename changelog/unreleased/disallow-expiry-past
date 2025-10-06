@@ -1,0 +1,3 @@
+Bugfix: disallow setting link expiry in the past
+
+https://github.com/cs3org/reva/pull/5346
