@@ -46,6 +46,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/spaces"
+	"github.com/cs3org/reva/v3/pkg/utils"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 )
 
@@ -60,8 +61,14 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	u, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		handleCustomError(ctx, errors.New("No valid authorization found"), http.StatusUnauthorized, w)
+		return
+	}
+
 	recvSharesResp, err := gw.ListExistingReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
-	if err != nil {
+	if err != nil || recvSharesResp == nil {
 		log.Error().Err(err).Msg("error getting received shares")
 		handleError(ctx, err, w)
 		return
@@ -69,6 +76,7 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 
 	if recvSharesResp.Status == nil || recvSharesResp.Status.Code != rpc.Code_CODE_OK {
 		handleRpcStatus(ctx, recvSharesResp.Status, "ocgraph: failed to perform ListExistingReceivedShares ", w)
+		return
 	}
 
 	shares := make([]*libregraph.DriveItem, 0)
@@ -81,11 +89,11 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if s.c.OCMEnabled {
+	if s.c.OCMEnabled && !utils.IsLightweightUser(u) {
 		// include ocm shares in the response
 		ocmShareResp, err := gw.ListReceivedOCMShares(ctx, &ocm.ListReceivedOCMSharesRequest{})
 		if err != nil {
-			//handleError(ctx, err, w)
+			handleError(ctx, err, w)
 			log.Fatal().Err(err).Msg("ListReceivedOCMShares returned error - user will not be able to see their OCM shares")
 		} else if ocmShareResp != nil {
 			if ocmShareResp.Status == nil || ocmShareResp.Status.Code != rpc.Code_CODE_OK {
@@ -556,6 +564,10 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		handleCustomError(ctx, fmt.Errorf("No user in context"), http.StatusUnauthorized, w)
 		return
+	}
+
+	if utils.IsLightweightUser(user) {
+		handleCustomError(ctx, errors.New("external accounts do not have permission to share"), http.StatusUnauthorized, w)
 	}
 
 	shares, err := gw.ListExistingShares(ctx, &collaboration.ListSharesRequest{
