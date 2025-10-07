@@ -1,0 +1,17 @@
+[grpc]
+address = "{{grpc_address}}"
+
+[shared]
+multi_tenant_enabled = true
+
+[grpc.services.storageprovider]
+driver = "decomposed"
+
+[grpc.services.storageprovider.drivers.decomposed]
+root = "{{root}}/storage"
+treetime_accounting = true
+treesize_accounting = true
+permissionssvc = "{{permissions_address}}"
+
+[grpc.services.storageprovider.drivers.decomposed.filemetadatacache]
+cache_store = "noop"
