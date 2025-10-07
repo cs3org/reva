@@ -227,6 +227,7 @@ var _ = Describe("ocm share", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(d1).To(Equal([]byte("test")))
 
+				By("marie cannot upload to the share")
 				err = webdavClient.Write(".", []byte("will-never-be-written"), 0)
 				Expect(err).To(HaveOccurred())
 
@@ -237,13 +238,6 @@ var _ = Describe("ocm share", func() {
 				d2, err := webdavClient.Read(".")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(d2).To(Equal([]byte("test")))
-
-				By("marie can access the share via legacy sciencemesh mode")
-				legacyUrl.Path = path.Join(legacyUrl.Path, webdav.WebdavOptions.SharedSecret)
-				webdavClient = gowebdav.NewClient(legacyUrl.String(), "", "")
-				d3, err := webdavClient.Read(".")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(d3).To(Equal([]byte("test")))
 
 				By("marie can access the share using the ocm mount")
 				ref := &provider.Reference{Path: ocmPath(share.Id, "")}
@@ -266,6 +260,7 @@ var _ = Describe("ocm share", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(data).To(Equal([]byte("test")))
 
+				By("marie cannot upload to the ocm mount")
 				Expect(helpers.UploadGateway(ctxMarie, cesnetgw, ref, []byte("will-never-be-written"))).ToNot(Succeed())
 			})
 		})

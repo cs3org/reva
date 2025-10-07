@@ -248,7 +248,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				return
 			}
 
-			var token, ocmshare string
+			var token, ocmshare, mode string
 			// OCM v1.1+ (OCIS et al.).
 			if strings.Index(r.Header.Get("Authorization"), "Bearer") != -1 {
 				// Bearer token is the shared secret, path is /{shareId}/path/to/resource.
@@ -259,39 +259,42 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				token = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 				ocmshare, relPath = router.ShiftPath(r.URL.Path)
 				r.URL.Path = filepath.Join("/", token, relPath)
+				mode = "bearer"
 			} else {
 				username, _, ok := r.BasicAuth()
 				if ok {
 					// OCM v1.0 (OC10 and Nextcloud) uses basic auth for carrying the shared secret,
-					// and does not pass the shareId.
+					// and may not pass the shareId.
 					token = username
 					r.URL.Path = filepath.Join("/", token, r.URL.Path)
+					mode = "legacy"
 				} else {
-					// compatibility for ScienceMesh: no auth, shared secret is the first element
-					// of the path, the shareId is not given. Leave the URL as is.
-					token = strings.Split(r.URL.Path, "/")[1]
+					log.Info().Any("url", r.URL.Path).Any("headers", r.Header).Msg("unauthenticated remote OCM access")
+					w.WriteHeader(http.StatusUnauthorized)
+					return
 				}
 			}
 
 			authRes, err := handleOCMAuth(ctx, c, ocmshare, token)
 			switch {
 			case err != nil:
-				log.Error().Err(err).Msg("error during OCM authentication")
+				log.Info().Err(err).Str("mode", mode).Msg("error authenticating remote OCM access")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			case authRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
-				log.Debug().Str("token", token).Msg("permission denied with OCM token")
-				fallthrough
+				log.Info().Str("token", token).Str("mode", mode).Msg("permission denied in remote OCM access")
+				w.WriteHeader(http.StatusUnauthorized)
+				return
 			case authRes.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
-				log.Debug().Str("token", token).Msg("unauthorized OCM token")
+				log.Info().Str("token", token).Str("mode", mode).Msg("unauthorized token in remote OCM access")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			case authRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
-				log.Debug().Str("token", token).Msg("OCM token not found")
-				w.WriteHeader(http.StatusNotFound)
+				log.Info().Str("token", token).Str("mode", mode).Msg("invalid token in remote OCM access")
+				w.WriteHeader(http.StatusUnauthorized)
 				return
 			case authRes.Status.Code != rpc.Code_CODE_OK:
-				log.Error().Str("token", token).Interface("status", authRes.Status).Msg("grpc auth request failed")
+				log.Error().Str("token", token).Str("mode", mode).Interface("status", authRes.Status).Msg("grpc auth request failed in remote OCM access")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -301,7 +304,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, authRes.Token)
 			ctx = context.WithValue(ctx, ctxOCM, true)
 
-			log.Debug().Str("token", token).Interface("user", authRes.User).Msg("OCM user authenticated")
+			log.Info().Str("token", token).Str("mode", mode).Interface("user", authRes.User).Msg("remote OCM access authenticated")
 
 			r = r.WithContext(ctx)
 			h.OCMSharesHandler.Handler(s).ServeHTTP(w, r)

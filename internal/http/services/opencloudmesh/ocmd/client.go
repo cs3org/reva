@@ -112,7 +112,7 @@ func (c *OCMClient) discover(ctx context.Context, url string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		log.Warn().Str("sender", url).Any("response", resp).Int("status", resp.StatusCode).Msg("discovery returned")
+		log.Warn().Str("sender", url).Int("status", resp.StatusCode).Msg("discovery returned")
 		return nil, errtypes.BadRequest("Remote does not offer a valid OCM discovery endpoint")
 	}
 
@@ -149,7 +149,14 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 	}
 	defer resp.Body.Close()
 
-	return c.parseNewShareResponse(resp)
+	log.Info().Any("status", resp.Status).Msg("remote OCM server responded")
+	sresp, err := c.parseNewShareResponse(resp)
+	if sresp != nil {
+		log.Info().Any("status", resp.Status).Any("shareResponse", sresp).Msg("remote OCM server responded")
+	} else {
+		log.Info().Err(err).Str("status", resp.Status).Msg("error in remote OCM server response")
+	}
+	return sresp, err
 }
 
 func (c *OCMClient) parseNewShareResponse(r *http.Response) (*NewShareResponse, error) {
@@ -197,7 +204,13 @@ func (c *OCMClient) InviteAccepted(ctx context.Context, endpoint string, r *Invi
 	}
 	defer resp.Body.Close()
 
-	return c.parseInviteAcceptedResponse(resp)
+	u, err := c.parseInviteAcceptedResponse(resp)
+	if u != nil {
+		log.Info().Any("status", resp.Status).Any("remoteUser", u).Msg("remote OCM server responded")
+	} else {
+		log.Info().Err(err).Str("status", resp.Status).Msg("error in remote OCM server response")
+	}
+	return u, err
 }
 
 func (c *OCMClient) parseInviteAcceptedResponse(r *http.Response) (*RemoteUser, error) {
