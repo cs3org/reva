@@ -158,7 +158,7 @@ func PathToSpaceID(path string) string {
 func spacesLevel(path string) int {
 	if strings.HasPrefix(path, "/eos/user") || strings.HasPrefix(path, "/eos/project") {
 		return 5
-	} else if strings.HasPrefix(path, "/winspaces") {
+	} else if strings.HasPrefix(path, "/winspaces") || strings.HasPrefix(path, "/eos/media") || strings.HasPrefix(path, "/eos/atlas") {
 		// e.g. /winspaces/c/copstest-doyle
 		return 4
 	} else {
