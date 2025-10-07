@@ -3,6 +3,7 @@ package sql
 import (
 	"fmt"
 
+	ocmshareregistry "github.com/cs3org/reva/v3/pkg/ocm/share/repository/registry"
 	publicshareregistry "github.com/cs3org/reva/v3/pkg/publicshare/manager/registry"
 	shareregistry "github.com/cs3org/reva/v3/pkg/share/manager/registry"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
@@ -32,6 +33,7 @@ type config struct {
 func init() {
 	shareregistry.Register("sql", NewShareManager)
 	publicshareregistry.Register("sql", NewPublicShareManager)
+	ocmshareregistry.Register("sql", NewOCMShareManager)
 }
 
 func getDb(c config) (*gorm.DB, error) {

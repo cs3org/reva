@@ -32,6 +32,8 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
+
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/protobuf/proto"
@@ -179,19 +181,19 @@ func createShareTables(ctx *sql.Context, initData []*ocm.Share) map[string]*memo
 		if share.Expiration != nil {
 			expiration = share.Expiration.Seconds
 		}
-		must(tableShares.Insert(ctx, sql.NewRow(mustInt(share.Id.OpaqueId), share.Token, share.ResourceId.StorageId, share.ResourceId.OpaqueId, share.Name, fmt.Sprintf("%s@%s", shareWith.OpaqueId, shareWith.Idp), share.Owner.OpaqueId, share.Creator.OpaqueId, share.Ctime.Seconds, share.Mtime.Seconds, expiration, int8(ShareTypeUser))))
+		must(tableShares.Insert(ctx, sql.NewRow(mustInt(share.Id.OpaqueId), share.Token, share.ResourceId.StorageId, share.ResourceId.OpaqueId, share.Name, fmt.Sprintf("%s@%s", shareWith.OpaqueId, shareWith.Idp), share.Owner.OpaqueId, share.Creator.OpaqueId, share.Ctime.Seconds, share.Mtime.Seconds, expiration, int8(model.ShareTypeUser))))
 
 		for _, m := range share.AccessMethods {
 			i := id()
 			switch am := m.Term.(type) {
 			case *ocm.AccessMethod_WebdavOptions:
-				must(accessMethods.Insert(ctx, sql.NewRow(i, mustInt(share.Id.OpaqueId), int8(WebDAVAccessMethod))))
+				must(accessMethods.Insert(ctx, sql.NewRow(i, mustInt(share.Id.OpaqueId), int8(model.WebDAVAccessMethod))))
 				must(webdav.Insert(ctx, sql.NewRow(i, int64(conversions.RoleFromResourcePermissions(am.WebdavOptions.GetPermissions()).OCSPermissions()))))
 			case *ocm.AccessMethod_WebappOptions:
-				must(accessMethods.Insert(ctx, sql.NewRow(i, mustInt(share.Id.OpaqueId), int8(WebappAccessMethod))))
+				must(accessMethods.Insert(ctx, sql.NewRow(i, mustInt(share.Id.OpaqueId), int8(model.WebappAccessMethod))))
 				must(webapp.Insert(ctx, sql.NewRow(i, int8(am.WebappOptions.ViewMode))))
 			case *ocm.AccessMethod_TransferOptions:
-				must(accessMethods.Insert(ctx, sql.NewRow(i, mustInt(share.Id.OpaqueId), int8(TransferAccessMethod))))
+				must(accessMethods.Insert(ctx, sql.NewRow(i, mustInt(share.Id.OpaqueId), int8(model.TransferAccessMethod))))
 			}
 		}
 	}
@@ -281,13 +283,13 @@ func createReceivedShareTables(ctx *sql.Context, initData []*ocm.ReceivedShare) 
 			i := id()
 			switch prot := p.Term.(type) {
 			case *ocm.Protocol_WebdavOptions:
-				must(protocols.Insert(ctx, sql.NewRow(i, mustInt(share.Id.OpaqueId), int8(WebDAVProtocol))))
+				must(protocols.Insert(ctx, sql.NewRow(i, mustInt(share.Id.OpaqueId), int8(model.WebDAVProtocol))))
 				must(webdav.Insert(ctx, sql.NewRow(i, prot.WebdavOptions.Uri, prot.WebdavOptions.SharedSecret, int64(conversions.RoleFromResourcePermissions(prot.WebdavOptions.Permissions.Permissions).OCSPermissions()))))
 			case *ocm.Protocol_WebappOptions:
-				must(protocols.Insert(ctx, sql.NewRow(i, mustInt(share.Id.OpaqueId), int8(WebappProtocol))))
+				must(protocols.Insert(ctx, sql.NewRow(i, mustInt(share.Id.OpaqueId), int8(model.WebappProtocol))))
 				must(webapp.Insert(ctx, sql.NewRow(i, prot.WebappOptions.Uri, int8(prot.WebappOptions.ViewMode))))
 			case *ocm.Protocol_TransferOptions:
-				must(protocols.Insert(ctx, sql.NewRow(i, mustInt(share.Id.OpaqueId), int8(TransferProtocol))))
+				must(protocols.Insert(ctx, sql.NewRow(i, mustInt(share.Id.OpaqueId), int8(model.TransferProtocol))))
 				must(transfer.Insert(ctx, sql.NewRow(i, prot.TransferOptions.SourceUri, prot.TransferOptions.SharedSecret, int64(prot.TransferOptions.Size))))
 			}
 		}
@@ -615,7 +617,7 @@ func TestGetShare(t *testing.T) {
 			_, port, cleanup := startDatabase(ctx, tables)
 			t.Cleanup(cleanup)
 
-			r, err := New(context.Background(), map[string]interface{}{
+			r, err := NewOCMShareManager(context.Background(), map[string]interface{}{
 				"db_username": "root",
 				"db_password": "",
 				"db_address":  fmt.Sprintf("%s:%d", address, port),
@@ -640,7 +642,7 @@ func TestGetShare(t *testing.T) {
 	}
 }
 
-func TestListShares(t *testing.T) {
+func TestListOCMShares(t *testing.T) {
 	tests := []struct {
 		description string
 		shares      []*ocm.Share
@@ -1054,7 +1056,7 @@ func TestListShares(t *testing.T) {
 			_, port, cleanup := startDatabase(ctx, tables)
 			t.Cleanup(cleanup)
 
-			r, err := New(context.Background(), map[string]interface{}{
+			r, err := NewOCMShareManager(context.Background(), map[string]interface{}{
 				"db_username": "root",
 				"db_password": "",
 				"db_address":  fmt.Sprintf("%s:%d", address, port),
@@ -1246,7 +1248,7 @@ func TestStoreShare(t *testing.T) {
 			engine, port, cleanup := startDatabase(ctx, tables)
 			t.Cleanup(cleanup)
 
-			r, err := New(context.Background(), map[string]interface{}{
+			r, err := NewOCMShareManager(context.Background(), map[string]interface{}{
 				"db_username": "root",
 				"db_password": "",
 				"db_address":  fmt.Sprintf("%s:%d", address, port),
@@ -1269,7 +1271,7 @@ func TestStoreShare(t *testing.T) {
 	}
 }
 
-func TestUpdateShare(t *testing.T) {
+func TestUpdateOCMShare(t *testing.T) {
 	fixedTime := time.Date(2023, time.December, 12, 12, 12, 0, 0, time.UTC)
 
 	tests := []struct {
@@ -1517,7 +1519,7 @@ func TestUpdateShare(t *testing.T) {
 			engine, port, cleanup := startDatabase(ctx, tables)
 			t.Cleanup(cleanup)
 
-			r, err := NewFromConfig(ctx,
+			r, err := NewOCMShareManager(ctx,
 				&config{
 					DBUsername: "root",
 					DBPassword: "",
@@ -1687,7 +1689,7 @@ func TestGetReceivedShare(t *testing.T) {
 			_, port, cleanup := startDatabase(ctx, tables)
 			t.Cleanup(cleanup)
 
-			r, err := New(context.Background(), map[string]interface{}{
+			r, err := NewOCMShareManager(context.Background(), map[string]interface{}{
 				"db_username": "root",
 				"db_password": "",
 				"db_address":  fmt.Sprintf("%s:%d", address, port),
@@ -1712,7 +1714,7 @@ func TestGetReceivedShare(t *testing.T) {
 	}
 }
 
-func TestUpdateReceivedShare(t *testing.T) {
+func TestUpdateReceivedOCMShare(t *testing.T) {
 	fixedTime := time.Date(2024, 12, 12, 12, 12, 0, 0, time.UTC)
 
 	tests := []struct {
@@ -1753,7 +1755,7 @@ func TestUpdateReceivedShare(t *testing.T) {
 			},
 			mask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
 			expected: storeReceivedShareExpected{
-				shares:    []sql.Row{{int64(1), "file-name", "1-remote", int8(0), "marie", "einstein@cernbox", "einstein@cernbox", uint64(1670859468), uint64(fixedTime.Unix()), uint64(0), int8(ShareTypeUser), int8(ShareStateAccepted)}},
+				shares:    []sql.Row{{int64(1), "file-name", "1-remote", int8(0), "marie", "einstein@cernbox", "einstein@cernbox", uint64(1670859468), uint64(fixedTime.Unix()), uint64(0), int8(model.ShareTypeUser), int8(model.ShareStateAccepted)}},
 				protocols: []sql.Row{{int64(1), int64(1), int8(0)}},
 				webdav:    []sql.Row{{int64(1), "webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", int64(15)}},
 				webapp:    []sql.Row{},
@@ -1799,7 +1801,7 @@ func TestUpdateReceivedShare(t *testing.T) {
 			engine, port, cleanup := startDatabase(ctx, tables)
 			t.Cleanup(cleanup)
 
-			r, err := NewFromConfig(ctx, &config{
+			r, err := NewOCMShareManager(ctx, &config{
 				DBUsername: "root",
 				DBPassword: "",
 				DBAddress:  fmt.Sprintf("%s:%d", address, port),
@@ -2041,7 +2043,7 @@ func TestListReceviedShares(t *testing.T) {
 			_, port, cleanup := startDatabase(ctx, tables)
 			t.Cleanup(cleanup)
 
-			r, err := New(context.Background(), map[string]interface{}{
+			r, err := NewOCMShareManager(context.Background(), map[string]interface{}{
 				"db_username": "root",
 				"db_password": "",
 				"db_address":  fmt.Sprintf("%s:%d", address, port),
@@ -2109,7 +2111,7 @@ func TestStoreReceivedShare(t *testing.T) {
 				},
 			},
 			expected: storeReceivedShareExpected{
-				shares:    []sql.Row{{int64(1), "file-name", "1-remote", int8(1), "marie", "einstein@cernbox", "einstein@cernbox", uint64(1670859468), uint64(1670859468), nil, int8(ShareTypeUser), int8(ShareStateAccepted)}},
+				shares:    []sql.Row{{int64(1), "file-name", "1-remote", int8(1), "marie", "einstein@cernbox", "einstein@cernbox", uint64(1670859468), uint64(1670859468), nil, int8(model.ShareTypeUser), int8(model.ShareStateAccepted)}},
 				protocols: []sql.Row{{int64(1), int64(1), int8(0)}},
 				webdav:    []sql.Row{{int64(1), "webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", int64(15)}},
 				webapp:    []sql.Row{},
@@ -2159,14 +2161,14 @@ func TestStoreReceivedShare(t *testing.T) {
 			},
 			expected: storeReceivedShareExpected{
 				shares: []sql.Row{
-					{int64(1), "file-name", "1-remote", int8(0), "marie", "einstein@cernbox", "einstein@cernbox", uint64(1670859468), uint64(1670859468), uint64(0), int8(ShareTypeUser), int8(ShareStateAccepted)},
-					{int64(2), "file-name", "2-remote", int8(1), "richard", "marie@cernbox", "marie@cernbox", uint64(1670859468), uint64(1670859468), nil, int8(ShareTypeUser), int8(ShareStatePending)},
+					{int64(1), "file-name", "1-remote", int8(0), "marie", "einstein@cernbox", "einstein@cernbox", uint64(1670859468), uint64(1670859468), uint64(0), int8(model.ShareTypeUser), int8(model.ShareStateAccepted)},
+					{int64(2), "file-name", "2-remote", int8(1), "richard", "marie@cernbox", "marie@cernbox", uint64(1670859468), uint64(1670859468), nil, int8(model.ShareTypeUser), int8(model.ShareStatePending)},
 				},
 				protocols: []sql.Row{
-					{int64(1), int64(1), int8(WebDAVProtocol)},
-					{int64(2), int64(2), int8(WebDAVProtocol)},
-					{int64(3), int64(2), int8(TransferProtocol)},
-					{int64(4), int64(2), int8(WebappProtocol)},
+					{int64(1), int64(1), int8(model.WebDAVProtocol)},
+					{int64(2), int64(2), int8(model.WebDAVProtocol)},
+					{int64(3), int64(2), int8(model.TransferProtocol)},
+					{int64(4), int64(2), int8(model.WebappProtocol)},
 				},
 				webdav: []sql.Row{
 					{int64(1), "webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", int64(15)},
@@ -2189,7 +2191,7 @@ func TestStoreReceivedShare(t *testing.T) {
 			engine, port, cleanup := startDatabase(ctx, tables)
 			t.Cleanup(cleanup)
 
-			r, err := New(context.Background(), map[string]interface{}{
+			r, err := NewOCMShareManager(context.Background(), map[string]interface{}{
 				"db_username": "root",
 				"db_password": "",
 				"db_address":  fmt.Sprintf("%s:%d", address, port),
