@@ -385,6 +385,13 @@ func (i *Identity) GetLDAPUserGroups(ctx context.Context, lc ldap.Client, userEn
 	sr, err := lc.Search(searchRequest)
 	if err != nil {
 		log.Debug().Str("backend", "ldap").Err(err).Str("filter", filter).Msg("Error looking up group memberships")
+		var lerr *ldap.Error
+		if errors.As(err, &lerr) && lerr.ResultCode == ldap.LDAPResultNoSuchObject {
+			// Don't error out if the search base doesn't exist. We are probably just
+			// not having any groups in LDAP
+			return []string{}, nil
+		}
+
 		span.SetAttributes(attribute.String("ldap.error", err.Error()))
 		span.SetStatus(codes.Error, "")
 		return []string{}, err
