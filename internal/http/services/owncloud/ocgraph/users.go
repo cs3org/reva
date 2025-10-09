@@ -36,7 +36,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 )
 
 type UserSelectableProperty string
@@ -69,6 +68,8 @@ func (s UserSelectableProperty) Valid() bool {
 
 // https://owncloud.dev/apis/http/graph/users/#reading-users
 func (s *svc) getMe(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 	user := appctx.ContextMustGetUser(r.Context())
 	me := &libregraph.User{
 		DisplayName:              user.DisplayName,
@@ -89,9 +90,9 @@ func (s *svc) getMe(w http.ResponseWriter, r *http.Request) {
 			me.PreferredLanguage = libregraph.PtrString(lang.Val)
 		} else {
 			if lang != nil {
-				log.Warn().Err(err).Any("Status", lang.Status).Msg("Failed to fetch language for user")
+				log.Debug().Err(err).Any("Status", lang.Status).Msg("Failed to fetch language for user")
 			} else {
-				log.Warn().Err(err).Msg("Failed to fetch language for user")
+				log.Debug().Err(err).Msg("Failed to fetch language for user")
 			}
 		}
 	}

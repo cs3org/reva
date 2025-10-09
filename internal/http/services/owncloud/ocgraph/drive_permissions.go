@@ -804,10 +804,10 @@ func (s *svc) getLinkUpdates(ctx context.Context, link *linkv1beta1.PublicShare,
 		isEditorLink = conversions.RoleFromResourcePermissions(link.Permissions.Permissions).Name == conversions.RoleEditor
 	}
 
-	// CHeck for update of expiration
+	// Check for update of expiration
 	if permission.ExpirationDateTime.IsSet() {
 		// If the expiration is before yesterday, it is invalid
-		if exp := permission.ExpirationDateTime.Get(); exp.Before(time.Now().AddDate(0, 0, -1)) {
+		if exp := permission.ExpirationDateTime.Get(); exp != nil && exp.Before(time.Now().AddDate(0, 0, -1)) {
 			return nil, errtypes.BadRequest("links cannot expire in the past")
 		}
 		// For editor links, a default expiration is set
