@@ -180,7 +180,8 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	if h.exposeRecipientDisplayName {
 		response["recipientDisplayName"] = userRes.User.DisplayName
 	}
-
+	log.Debug().Any("response", response).Msg("Created OCM share response")
+	log.Debug().Any("header", r.Header).Msg("Created OCM share header")
 	_ = json.NewEncoder(w).Encode(response)
 	w.WriteHeader(http.StatusCreated)
 }
