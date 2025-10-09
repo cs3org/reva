@@ -334,7 +334,9 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 		// And get an error code (if error) that is worth propagating
 		e := c.getRespError(resp, err)
 		if e != nil {
-			resp.Body.Close()
+			if resp != nil && resp.Body != nil {
+				resp.Body.Close()
+			}
 
 			if os.IsTimeout(e) {
 				ntries++

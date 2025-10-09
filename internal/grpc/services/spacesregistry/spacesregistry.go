@@ -214,7 +214,6 @@ func (s *service) listSpacesByType(ctx context.Context, req *provider.ListStorag
 			sp = append(sp, space)
 		}
 	case spaces.SpaceTypeProject:
-		log.Debug().Msg("Listing spaces by type project")
 		resp, err := s.projects.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{
 			Filters: req.Filters,
 		})
@@ -272,6 +271,7 @@ func (s *service) decorateProjects(ctx context.Context, projects []*provider.Sto
 }
 
 func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpace) error {
+	log := appctx.GetLogger(ctx)
 	// Add quota
 
 	// To get the quota for a project, we cannot do the request
