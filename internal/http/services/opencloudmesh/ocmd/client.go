@@ -143,6 +143,7 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.client.Do(req)
+	log.Debug().Any("response", resp.StatusCode).Msg("response from ParseNewShareResponse")
 	if err != nil {
 		return nil, errors.Wrap(err, "error doing request")
 	}
@@ -164,6 +165,7 @@ func (c *OCMClient) parseNewShareResponse(r *http.Response) (*NewShareResponse, 
 	}
 
 	body, err := io.ReadAll(r.Body)
+
 	if err != nil {
 		return nil, errors.Wrap(err, "error decoding response body")
 	}
