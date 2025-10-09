@@ -176,13 +176,11 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]any{}
-
 	if h.exposeRecipientDisplayName {
 		response["recipientDisplayName"] = userRes.User.DisplayName
 	}
-
-	_ = json.NewEncoder(w).Encode(response)
 	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func getUserIDFromOCMUser(user string) (*userpb.UserId, error) {
