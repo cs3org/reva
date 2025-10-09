@@ -153,12 +153,18 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	filters := req.Filters
 
 	sp := []*provider.StorageSpace{}
-	if countTypeFilters(filters) == 0 {
+	// List all spaces, or look for a specific space
+	// -> we go over all the types
+	if id, byId := isFilterByID(filters); countTypeFilters(filters) == 0 || countTypeFilters(filters) == 1 && byId {
+		log.Debug().Bool("filterByID", byId).Str("id", id).Msg("ListStorageSpaces: going over all possible space types")
 		homes, err := s.listSpacesByType(ctx, req, user, spaces.SpaceTypeHome)
 		if err != nil {
 			return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
 		}
 		sp = append(sp, homes...)
+		if byId && len(homes) == 1 {
+			return &provider.ListStorageSpacesResponse{Status: status.NewOK(ctx), StorageSpaces: sp}, nil
+		}
 
 		projects, err := s.listSpacesByType(ctx, req, user, spaces.SpaceTypeProject)
 		if projects != nil {
@@ -167,8 +173,11 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		if err != nil {
 			return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error()), StorageSpaces: sp}, nil
 		}
+		if byId && len(projects) == 1 {
+			return &provider.ListStorageSpacesResponse{Status: status.NewOK(ctx), StorageSpaces: sp}, nil
+		}
 
-		publicSpaces, err := s.getPublicSpaces(ctx)
+		publicSpaces, err := s.listSpacesByType(ctx, req, user, spaces.SpaceTypePublic)
 		if err != nil {
 			return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
 		}
@@ -179,20 +188,13 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		for _, filter := range filters {
 			switch filter.Type {
 			case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
+				id, byId := isFilterByID(filters)
+				log.Debug().Bool("filterByID", byId).Str("id", id).Msgf("ListStorageSpaces: listing type %s", filter.Term.(*provider.ListStorageSpacesRequest_Filter_SpaceType).SpaceType)
 				spaces, err := s.listSpacesByType(ctx, req, user, spaces.SpaceType(filter.Term.(*provider.ListStorageSpacesRequest_Filter_SpaceType).SpaceType))
 				if err != nil {
 					return &provider.ListStorageSpacesResponse{Status: status.NewInternal(ctx, err, err.Error())}, nil
 				}
 				sp = append(sp, spaces...)
-			case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-				// In the case of filtering for an ID, we also check if this matches the user's home
-				homes, err := s.listSpacesByType(ctx, req, user, spaces.SpaceTypeHome)
-				if err == nil && len(homes) == 1 {
-					home := homes[0]
-					if home.Id.OpaqueId == filter.GetId().OpaqueId {
-						sp = append(sp, home)
-					}
-				}
 			}
 		}
 
@@ -211,7 +213,13 @@ func (s *service) listSpacesByType(ctx context.Context, req *provider.ListStorag
 			return nil, err
 		}
 		if space != nil {
-			sp = append(sp, space)
+			if id, byId := isFilterByID(req.Filters); byId {
+				if space.Id.OpaqueId == id {
+					sp = append(sp, space)
+				}
+			} else {
+				sp = append(sp, space)
+			}
 		}
 	case spaces.SpaceTypeProject:
 		resp, err := s.projects.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{
@@ -238,7 +246,7 @@ func (s *service) listSpacesByType(ctx context.Context, req *provider.ListStorag
 		// Having a `fallthrough` here would've been nice, but Go does
 		// not allow conditional fallthroughs
 		if _, isFilterById := isFilterByID(req.Filters); !isFilterById {
-			publicSpaces, err := s.getPublicSpaces(ctx)
+			publicSpaces, err := s.getAllPublicSpaces(ctx)
 			if err != nil {
 				log.Error().Err(err).Msgf("Failed to get public spaces in call to listSpacesByType with type project")
 				return sp, err
@@ -248,12 +256,19 @@ func (s *service) listSpacesByType(ctx context.Context, req *provider.ListStorag
 		}
 
 	case spaces.SpaceTypePublic:
-		publicSpaces, err := s.getPublicSpaces(ctx)
+		publicSpaces, err := s.getAllPublicSpaces(ctx)
 		if err != nil {
 			return nil, err
 		}
-
-		sp = append(sp, publicSpaces...)
+		if id, byId := isFilterByID(req.Filters); byId {
+			for _, space := range publicSpaces {
+				if space.Id.OpaqueId == id {
+					sp = append(sp, space)
+				}
+			}
+		} else {
+			sp = append(sp, publicSpaces...)
+		}
 	}
 
 	return sp, nil
@@ -389,7 +404,7 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 	}, nil
 }
 
-func (s *service) getPublicSpaces(ctx context.Context) ([]*provider.StorageSpace, error) {
+func (s *service) getAllPublicSpaces(ctx context.Context) ([]*provider.StorageSpace, error) {
 	log := appctx.GetLogger(ctx)
 	publicSpaces := make([]*provider.StorageSpace, 0)
 	for spaceName, content := range s.c.PublicSpaces {

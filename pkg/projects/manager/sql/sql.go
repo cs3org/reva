@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
@@ -358,10 +359,18 @@ func (m *ProjectsManager) appendFiltersToQuery(ctx context.Context, query *gorm.
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
 			innerQuery := m.db
 			for i, filter := range filters {
+				// ID could be both normal SpaceID and StorageSpaceID
+				id := filter.GetId().OpaqueId
+				if strings.Contains(id, "$") {
+					parts := strings.Split(id, "$")
+					if len(parts) == 2 {
+						id = parts[1]
+					}
+				}
 				if i == 0 {
-					innerQuery = innerQuery.Where("space_id = ?", filter.GetId().OpaqueId)
+					innerQuery = innerQuery.Where("space_id = ?", id)
 				} else {
-					innerQuery = innerQuery.Or("space_id = ?", filter.GetId().OpaqueId)
+					innerQuery = innerQuery.Or("space_id = ?", id)
 				}
 			}
 			query = query.Where(innerQuery)
