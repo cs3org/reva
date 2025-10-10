@@ -312,6 +312,7 @@ func (s *svc) getSpace(w http.ResponseWriter, r *http.Request) {
 				},
 			},
 		})
+
 		if err != nil {
 			log.Error().Err(err).Msg("error getting space by id")
 			handleError(ctx, err, w)
