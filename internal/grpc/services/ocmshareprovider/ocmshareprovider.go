@@ -256,6 +256,7 @@ func (s *service) getProtocols(ctx context.Context, share *ocm.Share) ocmd.Proto
 }
 
 func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest) (*ocm.CreateOCMShareResponse, error) {
+	log := appctx.GetLogger(ctx)
 	statRes, err := s.gateway.Stat(ctx, &providerpb.StatRequest{
 		Ref: &providerpb.Reference{
 			ResourceId: req.ResourceId,
@@ -344,6 +345,15 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 
 	newShareRes, err := s.client.NewShare(ctx, ocmEndpoint, newShareReq)
 	if err != nil {
+		// if the request doesn't succeed we need to roll back the share creation
+		delErr := s.repo.DeleteShare(ctx, user, &ocm.ShareReference{
+			Spec: &ocm.ShareReference_Id{
+				Id: ocmshare.Id,
+			},
+		})
+		if delErr != nil {
+			log.Error().Err(delErr).Msg("error rolling back share after failed remote share creation")
+		}
 		switch {
 		case errors.Is(err, ocmd.ErrInvalidParameters):
 			return &ocm.CreateOCMShareResponse{
