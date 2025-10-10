@@ -439,11 +439,6 @@ func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare 
 
 	createdTime := utils.TSToTime(receivedOCMShare.Ctime)
 
-	creator, err := s.getUserByID(ctx, receivedOCMShare.Creator)
-	if err != nil {
-		return nil, err
-	}
-
 	grantee, err := s.cs3GranteeToSharePointIdentitySet(ctx, receivedOCMShare.Grantee)
 	if err != nil {
 		return nil, err
@@ -478,13 +473,12 @@ func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare 
 		roles = append(roles, *role.Id)
 	}
 	d := &libregraph.DriveItem{
-		// Doesn't exist for OCM shares
-		//UIHidden:          libregraph.PtrBool(rsi.ReceivedShare.Hidden),
-		ClientSynchronize: libregraph.PtrBool(true),
+		UIHidden:          libregraph.PtrBool(false), // Doesn't exist for OCM shares
+		ClientSynchronize: libregraph.PtrBool(false),
 		CreatedBy: &libregraph.IdentitySet{
 			User: &libregraph.Identity{
-				DisplayName:        creator.DisplayName,
-				Id:                 libregraph.PtrString(creator.Id.OpaqueId),
+				DisplayName:        receivedOCMShare.Creator.OpaqueId,
+				Id:                 libregraph.PtrString(receivedOCMShare.Creator.OpaqueId),
 				LibreGraphUserType: libregraph.PtrString("Federated"),
 			},
 		},
@@ -501,8 +495,8 @@ func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare 
 		RemoteItem: &libregraph.RemoteItem{
 			CreatedBy: &libregraph.IdentitySet{
 				User: &libregraph.Identity{
-					DisplayName:        creator.DisplayName,
-					Id:                 libregraph.PtrString(creator.Id.OpaqueId),
+					DisplayName:        receivedOCMShare.Creator.OpaqueId,
+					Id:                 libregraph.PtrString(receivedOCMShare.Creator.OpaqueId),
 					LibreGraphUserType: libregraph.PtrString("Federated"),
 				},
 			},
@@ -518,8 +512,8 @@ func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare 
 					Invitation: &libregraph.SharingInvitation{
 						InvitedBy: &libregraph.IdentitySet{
 							User: &libregraph.Identity{
-								DisplayName:        creator.DisplayName,
-								Id:                 libregraph.PtrString(creator.Id.OpaqueId),
+								DisplayName:        receivedOCMShare.Creator.OpaqueId,
+								Id:                 libregraph.PtrString(receivedOCMShare.Creator.OpaqueId),
 								LibreGraphUserType: libregraph.PtrString("Federated"),
 							},
 						},
