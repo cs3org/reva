@@ -20,7 +20,6 @@ package gateway
 
 import (
 	"context"
-	"strings"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
@@ -63,7 +62,7 @@ func (s *svc) GetUserByClaim(ctx context.Context, req *user.GetUserByClaimReques
 }
 
 func (s *svc) FindUsers(ctx context.Context, req *user.FindUsersRequest) (*user.FindUsersResponse, error) {
-	if strings.HasPrefix(req.Query, "sm:") {
+	if s.c.OCMEnabled {
 		c, err := pool.GetOCMInviteManagerClient(pool.Endpoint(s.c.OCMInviteManagerEndpoint))
 		if err != nil {
 			return &user.FindUsersResponse{
@@ -71,10 +70,8 @@ func (s *svc) FindUsers(ctx context.Context, req *user.FindUsersRequest) (*user.
 			}, nil
 		}
 
-		term := strings.TrimPrefix(req.Query, "sm:")
-
 		res, err := c.FindAcceptedUsers(ctx, &invitepb.FindAcceptedUsersRequest{
-			Filter: term,
+			Filter: req.Query,
 		})
 		if err != nil {
 			return nil, errors.Wrap(err, "gateway: error calling FindAcceptedUsers")
