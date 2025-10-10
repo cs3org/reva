@@ -149,7 +149,6 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 	}
 	defer resp.Body.Close()
 
-	log.Info().Any("status", resp.Status).Msg("remote OCM server responded")
 	sresp, err := c.parseNewShareResponse(resp)
 	if sresp != nil {
 		log.Info().Any("status", resp.Status).Any("shareResponse", sresp).Msg("remote OCM server responded")
