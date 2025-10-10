@@ -78,6 +78,7 @@ type config struct {
 	ResourceInfoCacheTTL     int                               `mapstructure:"resource_info_cache_ttl"`
 	ResourceInfoCacheDrivers map[string]map[string]interface{} `mapstructure:"resource_info_caches"`
 	HomeLayout               string                            `mapstructure:"home_layout"`
+	OCMEnabled               bool                              `mapstructure:"ocm_enabled"`
 }
 
 // sets defaults.
