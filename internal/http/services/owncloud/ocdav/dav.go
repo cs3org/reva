@@ -269,9 +269,9 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 					r.URL.Path = filepath.Join("/", token, r.URL.Path)
 					mode = "legacy"
 				} else {
-					// compatibility for ScienceMesh: no auth, shared secret is the first element
-					// of the path, the shareId is not given. Leave the URL as is.
-					token = strings.Split(r.URL.Path, "/")[1]
+					log.Info().Any("url", r.URL.Path).Any("headers", r.Header).Msg("unauthenticated remote OCM access")
+					w.WriteHeader(http.StatusUnauthorized)
+					return
 				}
 			}
 
