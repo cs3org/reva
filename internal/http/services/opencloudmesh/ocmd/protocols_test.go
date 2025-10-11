@@ -164,7 +164,6 @@ func TestMarshalProtocol(t *testing.T) {
 				"webdav": map[string]any{
 					"sharedSecret": "secret",
 					"permissions":  []any{"read"},
-					"requirements": []any{},
 					"uri":          "http://example.org",
 				},
 			},

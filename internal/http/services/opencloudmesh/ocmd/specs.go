@@ -98,7 +98,7 @@ type Protocol interface {
 type WebDAV struct {
 	SharedSecret string   `json:"sharedSecret" validate:"required"`
 	Permissions  []string `json:"permissions"  validate:"required,dive,required,oneof=read write share"`
-	Requirements []string `json:"requirements"`
+	Requirements []string `json:"requirements,omitempty"`
 	URI          string   `json:"uri"          validate:"required"`
 }
 
