@@ -20,13 +20,13 @@ package grpc_test
 
 import (
 	"context"
+	"encoding/base64"
 	"io"
 	"net/http"
 	"net/url"
 	"path"
 	"path/filepath"
 	"strconv"
-	"encoding/base64"
 
 	gatewaypb "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -224,7 +224,7 @@ var _ = Describe("ocm share", func() {
 				By("marie can access the share via bearer token")
 				webdavClient := gowebdav.NewClient(webdav.WebdavOptions.Uri, "", "")
 				webdavClient.SetHeader("Authorization", "Bearer "+webdav.WebdavOptions.SharedSecret)
-				d1, err := webdavClient.Read(".")
+				d1, err := webdavClient.Read("")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(d1).To(Equal([]byte("test")))
 
@@ -237,7 +237,7 @@ var _ = Describe("ocm share", func() {
 				legacyUrl.Path = path.Dir(legacyUrl.Path)
 				webdavClient = gowebdav.NewClient(legacyUrl.String(), "", "")
 				webdavClient.SetHeader("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(webdav.WebdavOptions.SharedSecret+":")))
-				d2, err := webdavClient.Read(".")
+				d2, err := webdavClient.Read("")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(d2).To(Equal([]byte("test")))
 
