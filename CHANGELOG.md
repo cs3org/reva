@@ -1,5 +1,45 @@
 # Changelog
 
+## [2.39.0](https://github.com/opencloud-eu/reva/releases/tag/v2.39.0) - 2025-10-13
+
+### ❤️ Thanks to all contributors! ❤️
+
+@AlexAndBear, @aduffeck, @cheneyveron, @micbar, @rhafer
+
+### ✨ Features
+
+- feat(multi-tenancy): Introduce global config flag [[#360](https://github.com/opencloud-eu/reva/pull/360)]
+
+### 📈 Enhancement
+
+- Store tenant id as an attribute on Spaces [[#372](https://github.com/opencloud-eu/reva/pull/372)]
+- chore: add CheckForUpdates capability [[#357](https://github.com/opencloud-eu/reva/pull/357)]
+
+### 🐛 Bug Fixes
+
+- Allow users service to work without groups in LDAP [[#374](https://github.com/opencloud-eu/reva/pull/374)]
+- Support multiple lockfile paths while posixfs transitions to new scheme [[#363](https://github.com/opencloud-eu/reva/pull/363)]
+- fix: Use hash if filename too long during assimilate [[#352](https://github.com/opencloud-eu/reva/pull/352)]
+- fix: make MacOS Finder happy [[#354](https://github.com/opencloud-eu/reva/pull/354)]
+
+### 📦️ Dependencies
+
+- chore(deps): bump github.com/coreos/go-oidc/v3 from 3.15.0 to 3.16.0 [[#371](https://github.com/opencloud-eu/reva/pull/371)]
+- chore(deps): bump github.com/go-playground/validator/v10 from 10.27.0 to 10.28.0 [[#370](https://github.com/opencloud-eu/reva/pull/370)]
+- chore(deps): bump github.com/onsi/ginkgo/v2 from 2.25.3 to 2.26.0 [[#369](https://github.com/opencloud-eu/reva/pull/369)]
+- chore(deps): bump google.golang.org/protobuf from 1.36.9 to 1.36.10 [[#368](https://github.com/opencloud-eu/reva/pull/368)]
+- chore(deps): bump github.com/go-ldap/ldap/v3 from 3.4.11 to 3.4.12 [[#367](https://github.com/opencloud-eu/reva/pull/367)]
+- chore(deps): bump github.com/nats-io/nats.go from 1.46.0 to 1.46.1 [[#366](https://github.com/opencloud-eu/reva/pull/366)]
+- Bump github.com/nats-io/nats-server/v2 from 2.11.9 to 2.12.0 [[#365](https://github.com/opencloud-eu/reva/pull/365)]
+- Bump golang.org/x/crypto from 0.41.0 to 0.42.0 [[#361](https://github.com/opencloud-eu/reva/pull/361)]
+- Bump go.etcd.io/etcd/client/v3 from 3.6.4 to 3.6.5 [[#362](https://github.com/opencloud-eu/reva/pull/362)]
+- Bump github.com/go-chi/chi/v5 from 5.2.2 to 5.2.3 [[#358](https://github.com/opencloud-eu/reva/pull/358)]
+- Bump google.golang.org/grpc from 1.75.0 to 1.75.1 [[#359](https://github.com/opencloud-eu/reva/pull/359)]
+- Bump github.com/nats-io/nats.go from 1.45.0 to 1.46.0 [[#356](https://github.com/opencloud-eu/reva/pull/356)]
+- Bump google.golang.org/protobuf from 1.36.8 to 1.36.9 [[#355](https://github.com/opencloud-eu/reva/pull/355)]
+- Bump github.com/prometheus/client_golang from 1.23.0 to 1.23.2 [[#349](https://github.com/opencloud-eu/reva/pull/349)]
+- Bump github.com/onsi/ginkgo/v2 from 2.25.2 to 2.25.3 [[#348](https://github.com/opencloud-eu/reva/pull/348)]
+
 ## [2.38.0](https://github.com/opencloud-eu/reva/releases/tag/v2.38.0) - 2025-09-18
 
 ### ❤️ Thanks to all contributors! ❤️
