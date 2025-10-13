@@ -116,7 +116,7 @@ func (s *svc) handleLinkShare(ctx context.Context, share *GenericShare) (*libreg
 			Type:                  lt,
 			LibreGraphDisplayName: libregraph.PtrString(share.link.GetDisplayName()),
 			LibreGraphQuickLink:   libregraph.PtrBool(share.link.GetQuicklink()),
-			WebUrl:                libregraph.PtrString(path.Join(s.c.BaseURL, "s", share.link.GetToken())),
+			WebUrl:                libregraph.PtrString(fmt.Sprintf("%s/s/%s", s.c.BaseURL, share.link.GetToken())),
 		},
 		LibreGraphPermissionsActions: actions,
 	}
@@ -350,7 +350,7 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.Rece
 			LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(rsi.ResourceInfo.Mtime)),
 			Name:                 libregraph.PtrString(rsi.ResourceInfo.Name),
 			Path:                 libregraph.PtrString(relativePath),
-			WebUrl:               libregraph.PtrString(filepath.Join(s.c.WebBase, rsi.ResourceInfo.Path)),
+			WebUrl:               libregraph.PtrString(fmt.Sprintf("%s/%s", s.c.WebBase, rsi.ResourceInfo.Path)),
 			// ParentReference: &libregraph.ItemReference{
 			// 	DriveId:   libregraph.PtrString(spaces.EncodeResourceID(share.ResourceInfo.ParentId)),
 			// 	DriveType: nil, // FIXME: no way to know it unless we hardcode it
