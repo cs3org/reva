@@ -58,8 +58,8 @@ require (
 	golang.org/x/crypto v0.42.0
 	golang.org/x/oauth2 v0.32.0
 	golang.org/x/sync v0.17.0
-	golang.org/x/sys v0.36.0
-	golang.org/x/term v0.35.0
+	golang.org/x/sys v0.37.0
+	golang.org/x/term v0.36.0
 	google.golang.org/genproto v0.0.0-20250603155806-513f23925822
 	google.golang.org/grpc v1.76.0
 	google.golang.org/protobuf v1.36.9
