@@ -1,6 +1,25 @@
+// Copyright 2018-2025 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
 package model
 
 import (
+	"database/sql"
 	"strconv"
 	"time"
 
@@ -15,6 +34,65 @@ import (
 
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
+)
+
+// AccessMethod is method granted by the sharer to access
+// the shared resource.
+type AccessMethod int
+
+const (
+	// WebDAVAccessMethod indicates an access using WebDAV to the share.
+	WebDAVAccessMethod AccessMethod = iota
+	// WebappAccessMethod indicates an access using a collaborative
+	// application to the share.
+	WebappAccessMethod
+	// TransferAccessMethod indicates a share for a transfer.
+	TransferAccessMethod
+)
+
+// ShareState is the state of the share.
+type OcmShareState int
+
+const (
+	// ShareTypeUser is used for a share to an user.
+	ShareTypeUser ShareType = iota
+	// ShareTypeGroup is used for a share to a group.
+	ShareTypeGroup
+)
+
+// ShareType is the type of the share.
+type ShareType int
+
+const (
+	// ShareStatePending is the state for a pending share.
+	ShareStatePending OcmShareState = iota
+	// ShareStateAccepted is the share for an accepted share.
+	ShareStateAccepted
+	// ShareStateRejected is the share for a rejected share.
+	ShareStateRejected
+)
+
+// ItemType is the type of the shares resource.
+type OcmItemType int
+
+const (
+	// ItemTypeFile is used when the shared resource is a file.
+	OcmItemTypeFile OcmItemType = iota
+	// ItemTypeFolder is used when the shared resource is a folder.
+	OcmItemTypeFolder
+)
+
+// Protocol is the protocol the recipient of the share
+// uses to access the shared resource.
+type Protocol int
+
+const (
+	// WebDAVProtocol is the WebDav protocol.
+	WebDAVProtocol Protocol = iota
+	// WebappProtocol is the Webapp protocol.
+	WebappProtocol
+	// TransferProtocol is the Transfer protocol.
+	TransferProtocol
 )
 
 type ItemType string
@@ -97,6 +175,72 @@ type ShareState struct {
 	Synced bool
 	Hidden bool
 	Alias  string `gorm:"size:64"`
+}
+
+type OcmShare struct {
+	// The fields of the base model had to be copied since we need an index on DeletedAt + unique constraints
+	// Id has to be called Id and not ID, otherwise the foreign key will not work
+	// ID is a special field in GORM, which it uses as the default Primary Key
+	Id        uint    `gorm:"primaryKey;not null;autoIncrement:false"`
+	ShareId   ShareID `gorm:"foreignKey:Id;references:ID;constraint:OnDelete:CASCADE"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	// Needs to be indexed because shares that are deleted need to be unique so we can add a new share after it was deleted
+	DeletedAt     gorm.DeletedAt          `gorm:"index;uniqueIndex:idx_fileid_source_share_with_deletedat"`
+	Token         string                  `gorm:"size:255;not null;uniqueIndex"`
+	FileidPrefix  string                  `gorm:"size:64;not null;uniqueIndex:idx_fileid_source_share_with_deletedat"`
+	ItemSource    string                  `gorm:"size:64;not null;uniqueIndex:idx_fileid_source_share_with_deletedat"`
+	Name          string                  `gorm:"type:text;not null"`
+	ShareWith     string                  `gorm:"size:255;not null;uniqueIndex:idx_fileid_source_share_with_deletedat"`
+	Owner         string                  `gorm:"size:255;not null;uniqueIndex:idx_fileid_source_share_with_deletedat"`
+	Initiator     string                  `gorm:"type:text;not null"`
+	Ctime         uint64                  `gorm:"not null"`
+	Mtime         uint64                  `gorm:"not null"`
+	Expiration    sql.NullInt64           `gorm:"default:null"`
+	Type          ShareType               `gorm:"not null"`
+	AccessMethods []OcmSharesAccessMethod `gorm:"constraint:OnDelete:CASCADE;"`
+}
+
+// OCM Shares Access Methods
+type OcmSharesAccessMethod struct {
+	gorm.Model
+	OcmShareID uint `gorm:"not null;uniqueIndex:idx_ocm_share_method"`
+	//OcmShare   OcmShare     `gorm:"constraint:OnDelete:CASCADE;foreignKey:OcmShareID;references:Id"`
+	Type AccessMethod `gorm:"not null;uniqueIndex:idx_ocm_share_method"`
+	// WebDAV and WebApp fields
+	Permissions int `gorm:"default:null"`
+}
+
+// OCM Received Shares
+type OcmReceivedShare struct {
+	gorm.Model
+	RemoteShareID string        `gorm:"not null"`
+	Name          string        `gorm:"size:255;not null"`
+	FileidPrefix  string        `gorm:"size:255;not null"`
+	ItemSource    string        `gorm:"size:255;not null"`
+	ItemType      OcmItemType   `gorm:"not null"`
+	ShareWith     string        `gorm:"size:255;not null"`
+	Owner         string        `gorm:"size:255;not null"`
+	Initiator     string        `gorm:"size:255;not null"`
+	Ctime         uint64        `gorm:"not null"`
+	Mtime         uint64        `gorm:"not null"`
+	Expiration    sql.NullInt64 `gorm:"default:null"`
+	Type          ShareType     `gorm:"not null"`
+	State         OcmShareState `gorm:"not null"`
+}
+
+// OCM Received Share Protocols
+type OcmReceivedShareProtocol struct {
+	gorm.Model
+	OcmReceivedShareID uint             `gorm:"not null;uniqueIndex:idx_received_share_protocol"`
+	OcmReceivedShare   OcmReceivedShare `gorm:"constraint:OnDelete:CASCADE;foreignKey:OcmReceivedShareID;references:ID"`
+	Type               Protocol         `gorm:"not null;uniqueIndex:idx_received_share_protocol"`
+	Uri                string           `gorm:"size:255"`
+	SharedSecret       string           `gorm:"type:text;not null"`
+	// WebDAV and WebApp Protocol fields
+	Permissions int `gorm:"default:null"`
+	// Transfer Protocol fields
+	Size uint64 `gorm:"default:null"`
 }
 
 func (s *Share) AsCS3Share(granteeType userpb.UserType) *collaboration.Share {

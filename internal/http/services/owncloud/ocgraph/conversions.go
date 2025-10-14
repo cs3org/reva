@@ -465,17 +465,17 @@ func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare 
 	log.Debug().Interface("receivedOCMShare", receivedOCMShare).Msg("processing received OCM share")
 
 	var webdav_uri, webapp_uri, shared_secret string
+	var permissions *provider.ResourcePermissions
 	for _, p := range receivedOCMShare.Protocols {
 		if p.GetWebdavOptions() != nil {
 			webdav_uri = p.GetWebdavOptions().GetUri()
 			shared_secret = p.GetWebdavOptions().GetSharedSecret()
+			permissions = p.GetWebdavOptions().GetPermissions().Permissions
 			log.Debug().Str("webdav_uri", webdav_uri).Str("shared_secret", shared_secret).Msg("processing webdav options")
-			break
 		} else if p.GetWebappOptions() != nil {
 			webapp_uri = p.GetWebappOptions().GetUri()
 			shared_secret = p.GetWebappOptions().GetSharedSecret()
 			log.Debug().Str("webapp_uri", webapp_uri).Str("shared_secret", shared_secret).Msg("processing webapp options")
-			break
 		} else {
 			log.Debug().Any("protocol", p).Msg("unknown access method, skipping")
 		}
@@ -485,7 +485,7 @@ func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare 
 	etag := receivedOCMShare.Mtime.String()
 
 	roles := make([]string, 0, 1)
-	role := CS3ResourcePermissionsToUnifiedRole(ctx, receivedOCMShare.Protocols[0].GetWebdavOptions().GetPermissions().Permissions)
+	role := CS3ResourcePermissionsToUnifiedRole(ctx, permissions)
 	if role != nil {
 		roles = append(roles, *role.Id)
 	}
