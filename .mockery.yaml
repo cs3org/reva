@@ -35,6 +35,9 @@ packages:
     github.com/opencloud-eu/reva/v2/pkg/storage/registry/spaces:
         interfaces:
             StorageProviderClient:
+    github.com/opencloud-eu/reva/v2/pkg/storage/pkg/decomposedfs/metadata:
+      interfaces:
+        Backend:
     github.com/opencloud-eu/reva/v2/pkg/storage/utils/decomposedfs/permissions:
         interfaces:
             PermissionsChecker:
