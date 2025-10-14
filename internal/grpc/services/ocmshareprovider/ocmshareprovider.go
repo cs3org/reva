@@ -313,6 +313,8 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 			Status: status.NewInternal(ctx, err, err.Error()),
 		}, nil
 	}
+	log.Debug().Any("share_id", ocmshare.Id).Msg("HERE SHARE ID")
+	log.Debug().Any("share_id.OpaqueId", ocmshare.Id.OpaqueId).Msg("HERE SHARE ID OPAQUE")
 
 	ocmEndpoint, err := getOCMEndpoint(req.RecipientMeshProvider)
 	if err != nil {
@@ -320,7 +322,6 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 			Status: status.NewInvalidArg(ctx, "the selected provider does not have an OCM endpoint"),
 		}, nil
 	}
-
 	newShareReq := &ocmd.NewShareRequest{
 		ShareWith:  formatOCMUser(req.Grantee.GetUserId()),
 		Name:       ocmshare.Name,
