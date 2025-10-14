@@ -529,9 +529,9 @@ func (s *svc) getGroupByID(ctx context.Context, g *grouppb.GroupId) (*grouppb.Gr
 	return res.Group, nil
 }
 
-func groupByResourceID(shares []*gateway.ShareResourceInfo, publicShares []*gateway.PublicShareResourceInfo) (map[string][]*GenericShare, map[string]*provider.ResourceInfo) {
-	grouped := make(map[string][]*GenericShare, len(shares)+len(publicShares)) // at most we have the sum of both lists
-	infos := make(map[string]*provider.ResourceInfo, len(shares)+len(publicShares))
+func groupByResourceID(shares []*gateway.ShareResourceInfo, publicShares []*gateway.PublicShareResourceInfo, ocmShares []*gateway.OCMShareResourceInfo) (map[string][]*GenericShare, map[string]*provider.ResourceInfo) {
+	grouped := make(map[string][]*GenericShare, len(shares)+len(publicShares)+len(ocmShares)) // at most we have the sum of all three lists
+	infos := make(map[string]*provider.ResourceInfo, len(shares)+len(publicShares)+len(ocmShares))
 
 	for _, s := range shares {
 		id := spaces.ResourceIdToString(s.Share.ResourceId)
@@ -551,6 +551,18 @@ func groupByResourceID(shares []*gateway.ShareResourceInfo, publicShares []*gate
 			link:      s.PublicShare,
 		})
 		infos[id] = s.ResourceInfo
+	}
+
+	if len(ocmShares) > 0 {
+		for _, s := range ocmShares {
+			id := spaces.ResourceIdToString(s.OcmShare.ResourceId)
+			grouped[id] = append(grouped[id], &GenericShare{
+				shareType: ShareTypeOCMShare,
+				ID:        s.OcmShare.Id.OpaqueId,
+				ocmshare:  s.OcmShare,
+			})
+			infos[id] = s.ResourceInfo
+		}
 	}
 
 	return grouped, infos
@@ -605,8 +617,38 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 		handleError(ctx, err, w)
 		return
 	}
+	var OCMShares *gateway.ListExistingOCMSharesResponse
+	if s.c.OCMEnabled && !utils.IsLightweightUser(user) {
+		// include ocm shares in the response
+		OCMShares, err = gw.ListExistingOCMShares(ctx, &ocm.ListOCMSharesRequest{
+			Filters: []*ocm.ListOCMSharesRequest_Filter{
+				{
+					Type: ocm.ListOCMSharesRequest_Filter_TYPE_CREATOR,
+					Term: &ocm.ListOCMSharesRequest_Filter_Creator{
+						Creator: user.Id,
+					},
+				},
+			},
+		})
+		if err != nil {
+			handleError(ctx, err, w)
+			log.Fatal().Err(err).Msg("ListOCMShares returned error - user will not be able to see their OCM shares")
+		} else if OCMShares != nil {
+			if OCMShares.Status == nil || OCMShares.Status.Code != rpc.Code_CODE_OK {
+				handleRpcStatus(ctx, OCMShares.Status, "ocgraph: failed to perform ListOCMShares ", w)
+			}
+		}
+	}
 
-	grouped, infos := groupByResourceID(shares.ShareInfos, publicShares.ShareInfos)
+	grouped, infos := groupByResourceID(
+		shares.ShareInfos,
+		publicShares.ShareInfos,
+		func() []*gateway.OCMShareResourceInfo {
+			if OCMShares == nil {
+				return []*gateway.OCMShareResourceInfo{}
+			}
+			return OCMShares.ShareInfos
+		}())
 
 	// convert to libregraph share drives
 	shareDrives := make([]*libregraph.DriveItem, 0, len(grouped))

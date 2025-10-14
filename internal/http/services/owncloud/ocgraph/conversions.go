@@ -288,6 +288,20 @@ func (s *svc) cs3GranteeToSharePointIdentitySet(ctx context.Context, grantee *pr
 	return p, nil
 }
 
+func (s *svc) ocmGranteeToSharePointIdentitySet(ctx context.Context, grantee *provider.Grantee) (*libregraph.SharePointIdentitySet, error) {
+	p := &libregraph.SharePointIdentitySet{}
+	if grantee == nil {
+		return p, nil
+	}
+
+	p.User = &libregraph.Identity{
+		DisplayName:        grantee.GetUserId().OpaqueId + "@" + grantee.GetUserId().Idp,
+		Id:                 libregraph.PtrString(grantee.GetUserId().OpaqueId),
+		LibreGraphUserType: libregraph.PtrString("Federated"),
+	}
+	return p, nil
+}
+
 func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.ReceivedShareResourceInfo) (*libregraph.DriveItem, error) {
 	if rsi.ReceivedShare == nil || rsi.ResourceInfo == nil || rsi.ReceivedShare.Share == nil {
 		return nil, errors.New("cannot convert nil share into libregraph drive")
@@ -587,6 +601,54 @@ func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*GenericShare
 
 			permissions = append(permissions, permisison)
 
+		} else if e.ocmshare != nil {
+			createdTime := utils.TSToTime(e.ocmshare.Ctime)
+
+			creator, err := s.getUserByID(ctx, e.ocmshare.Creator)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to convert cs3 ocm share to permission in ocgraph - ignoring this share")
+				continue
+			}
+
+			grantee, err := s.ocmGranteeToSharePointIdentitySet(ctx, e.ocmshare.Grantee)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to convert cs3 ocm share to permission in ocgraph - ignoring this share")
+				continue
+			}
+			roles := make([]string, 0, 1)
+			if len(e.ocmshare.AccessMethods) == 0 {
+				log.Warn().Msg("Found an OCM share without access methods in cs3sharesToPermissions - ignoring this share")
+				continue
+			}
+			// Go through the different access methods to find the webdav permissions
+			// We assume that all access methods have the same permissions, so we break
+			// after the first match
+			// TODO(rwelande): maybe in the future we want to show different permissions for
+			// different access methods
+			for _, am := range e.ocmshare.AccessMethods {
+				if am.GetWebdavOptions() != nil && am.GetWebdavOptions().GetPermissions() != nil {
+					role := CS3ResourcePermissionsToUnifiedRole(ctx, am.GetWebdavOptions().GetPermissions())
+					if role != nil {
+						roles = append(roles, *role.Id)
+					}
+					break
+				}
+			}
+			permissions = append(permissions, libregraph.Permission{
+				CreatedDateTime: *libregraph.NewNullableTime(&createdTime),
+				GrantedToV2:     grantee,
+				Invitation: &libregraph.SharingInvitation{
+					InvitedBy: &libregraph.IdentitySet{
+						User: &libregraph.Identity{
+							DisplayName: creator.DisplayName,
+							Id:          libregraph.PtrString(creator.Id.OpaqueId),
+						},
+					},
+				},
+				Roles: roles,
+			})
+		} else {
+			log.Warn().Msg("Found a nil share in cs3sharesToPermissions - ignoring this share")
 		}
 	}
 
