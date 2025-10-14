@@ -3,6 +3,7 @@ package ocgraph
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"path"
 	"path/filepath"
 	"strings"
@@ -107,6 +108,8 @@ func (s *svc) handleLinkShare(ctx context.Context, share *GenericShare) (*libreg
 		expTime = *nilTime
 	}
 
+	webUrl, _ := url.JoinPath(s.c.BaseURL, "/s", share.link.GetToken())
+
 	perm := &libregraph.Permission{
 		Id:                 libregraph.PtrString(share.ID),
 		ExpirationDateTime: expTime,
@@ -116,7 +119,7 @@ func (s *svc) handleLinkShare(ctx context.Context, share *GenericShare) (*libreg
 			Type:                  lt,
 			LibreGraphDisplayName: libregraph.PtrString(share.link.GetDisplayName()),
 			LibreGraphQuickLink:   libregraph.PtrBool(share.link.GetQuicklink()),
-			WebUrl:                libregraph.PtrString(fmt.Sprintf("%s/s/%s", s.c.BaseURL, share.link.GetToken())),
+			WebUrl:                libregraph.PtrString(webUrl),
 		},
 		LibreGraphPermissionsActions: actions,
 	}
@@ -317,6 +320,8 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.Rece
 		roles = append(roles, *role.Id)
 	}
 
+	webUrl, _ := url.JoinPath(s.c.WebBase, rsi.ResourceInfo.Path)
+
 	d := &libregraph.DriveItem{
 		UIHidden:          libregraph.PtrBool(rsi.ReceivedShare.Hidden),
 		ClientSynchronize: libregraph.PtrBool(true),
@@ -350,7 +355,7 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.Rece
 			LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(rsi.ResourceInfo.Mtime)),
 			Name:                 libregraph.PtrString(rsi.ResourceInfo.Name),
 			Path:                 libregraph.PtrString(relativePath),
-			WebUrl:               libregraph.PtrString(fmt.Sprintf("%s/%s", s.c.WebBase, rsi.ResourceInfo.Path)),
+			WebUrl:               libregraph.PtrString(webUrl),
 			// ParentReference: &libregraph.ItemReference{
 			// 	DriveId:   libregraph.PtrString(spaces.EncodeResourceID(share.ResourceInfo.ParentId)),
 			// 	DriveType: nil, // FIXME: no way to know it unless we hardcode it
@@ -405,6 +410,7 @@ func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceIn
 	if info.ParentId.SpaceId == "" {
 		info.ParentId.SpaceId = spaces.PathToSpaceID(info.Path)
 	}
+	webUrl, _ := url.JoinPath(s.c.WebBase, info.Path)
 
 	d := &libregraph.DriveItem{
 		ETag:                 libregraph.PtrString(info.Etag),
@@ -418,7 +424,7 @@ func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceIn
 			Name: libregraph.PtrString(path.Base(relativePath)),
 			Path: libregraph.PtrString(parentRelativePath),
 		},
-		WebUrl:      libregraph.PtrString(filepath.Join(s.c.WebBase, info.Path)),
+		WebUrl:      libregraph.PtrString(webUrl),
 		Permissions: permissions,
 
 		Size: libregraph.PtrInt64(int64(info.Size)),
