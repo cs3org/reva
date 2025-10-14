@@ -23,7 +23,7 @@ package ocgraph
 import (
 	"context"
 	"net/http"
-	"path"
+	"net/url"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
@@ -52,11 +52,11 @@ func (c *config) ApplyDefaults() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 
 	if c.WebBase == "" {
-		c.WebBase = path.Join(c.BaseURL, "/files/spaces")
+		c.WebBase, _ = url.JoinPath(c.BaseURL, "/files/spaces")
 	}
 
 	if c.WebDavBase == "" {
-		c.WebDavBase = path.Join(c.BaseURL, "/remote.php/dav/spaces")
+		c.WebDavBase, _ = url.JoinPath(c.BaseURL, "/remote.php/dav/spaces")
 	}
 }
 
