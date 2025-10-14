@@ -322,14 +322,12 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 		// get provided destination path
 		transferDestinationPath, err := s.getTransferDestinationPath(ctx, req)
 		if err != nil {
-			if err != nil {
-				log.Err(err).Msg("gateway: error calling UpdateReceivedShare")
-				return &ocm.UpdateReceivedOCMShareResponse{
-					Status: &rpc.Status{
-						Code: rpc.Code_CODE_INTERNAL,
-					},
-				}, err
-			}
+			log.Err(err).Msg("gateway: error calling UpdateReceivedShare")
+			return &ocm.UpdateReceivedOCMShareResponse{
+				Status: &rpc.Status{
+					Code: rpc.Code_CODE_INTERNAL,
+				},
+			}, err
 		}
 
 		error := s.handleTransfer(ctx, share, transferDestinationPath)

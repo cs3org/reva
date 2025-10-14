@@ -183,10 +183,15 @@ func (s *svc) listUsers(w http.ResponseWriter, r *http.Request) {
 		handleBadRequest(ctx, err, w)
 		return
 	}
+	filters = append(filters, &userpb.Filter{
+		Type: userpb.Filter_TYPE_QUERY,
+		Term: &userpb.Filter_Query{
+			Query: queryVal,
+		},
+	})
 	request := &userpb.FindUsersRequest{
 		SkipFetchingUserGroups: true,
-		Query:                  queryVal,
-		Filter:                 filters,
+		Filters:                filters,
 	}
 
 	users, err := gw.FindUsers(ctx, request)
