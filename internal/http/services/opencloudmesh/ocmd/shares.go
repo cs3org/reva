@@ -188,6 +188,7 @@ func getUserIDFromOCMUser(user string) (*userpb.UserId, error) {
 	if err != nil {
 		return nil, err
 	}
+	idp = strings.TrimPrefix(idp, "https://") // strip off leading scheme if present (despite being not OCM compliant). This is the case in Nextcloud and oCIS
 	return &userpb.UserId{
 		OpaqueId: id,
 		Idp:      idp,
