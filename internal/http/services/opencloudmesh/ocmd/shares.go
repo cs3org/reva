@@ -20,6 +20,7 @@ package ocmd
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"mime"
@@ -45,6 +46,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/go-playground/validator/v10"
+	"github.com/studio-b12/gowebdav"
 )
 
 var validate = validator.New()
@@ -138,10 +140,23 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	protocols, err := getAndResolveProtocols(ctx, req.Protocols, owner.Idp)
-	if err != nil {
+	protocols, legacy, err := getAndResolveProtocols(ctx, req.Protocols, owner.Idp)
+	if err != nil || len(protocols) == 0 {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with protocols payload", err)
 		return
+	}
+
+	if legacy && req.ResourceType == "file" {
+		// in case of legacy OCM v1.0 shares, we have to PROPFIND the remote resource to check the type,
+		// because remote systems such as Nextcloud may send "file" even if the resource is a folder.
+		c := gowebdav.NewClient(protocols[0].GetWebdavOptions().Uri, "", "")
+		c.SetHeader("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(protocols[0].GetWebdavOptions().SharedSecret+":")))
+		target, err := c.Stat("")
+		if err != nil {
+			log.Info().Err(err).Str("endpoint", protocols[0].GetWebdavOptions().Uri).Msg("error stating remote resource, assuming file")
+		} else if target.IsDir() {
+			req.ResourceType = "folder"
+		}
 	}
 
 	createShareReq := &ocmcore.CreateOCMCoreShareRequest{
@@ -246,8 +261,9 @@ func getOCMShareType(t string) ocm.ShareType {
 	}
 }
 
-func getAndResolveProtocols(ctx context.Context, p Protocols, ownerServer string) ([]*ocm.Protocol, error) {
-	protos := make([]*ocm.Protocol, 0, len(p))
+func getAndResolveProtocols(ctx context.Context, p Protocols, ownerServer string) (protos []*ocm.Protocol, legacy bool, err error) {
+	protos = make([]*ocm.Protocol, 0, len(p))
+	legacy = false
 	for _, data := range p {
 		var uri string
 		ocmProto := data.ToOCMProtocol()
@@ -258,7 +274,7 @@ func getAndResolveProtocols(ctx context.Context, p Protocols, ownerServer string
 			reqs := ocmProto.GetWebdavOptions().Requirements
 			if len(reqs) > 0 {
 				// we currently do not support any kind of requirement
-				return nil, errtypes.BadRequest(fmt.Sprintf("incoming OCM share with requirements %+v not supported at this endpoint", reqs))
+				return nil, false, errtypes.BadRequest(fmt.Sprintf("incoming OCM share with requirements %+v not supported at this endpoint", reqs))
 			}
 		case "webapp":
 			uri = ocmProto.GetWebappOptions().Uri
@@ -273,13 +289,17 @@ func getAndResolveProtocols(ctx context.Context, p Protocols, ownerServer string
 		// otherwise use as endpoint the owner's server from the payload
 		remoteRoot, err := discoverOcmRoot(ctx, ownerServer, protocolName)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if strings.HasPrefix(uri, "/") {
 			// only take the host from remoteRoot and append the absolute uri
 			u, _ := url.Parse(remoteRoot)
 			u.Path = uri
 			uri = u.String()
+		} else if uri == "" {
+			// case of an OCM v1.0 share with no uri, use root
+			uri = remoteRoot
+			legacy = true
 		} else {
 			// relative uri
 			uri, _ = url.JoinPath(remoteRoot, uri)
@@ -294,7 +314,7 @@ func getAndResolveProtocols(ctx context.Context, p Protocols, ownerServer string
 		protos = append(protos, ocmProto)
 	}
 
-	return protos, nil
+	return protos, legacy, nil
 }
 
 func discoverOcmRoot(ctx context.Context, ownerServer string, proto string) (string, error) {
