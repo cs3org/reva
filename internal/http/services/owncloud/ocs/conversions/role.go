@@ -291,16 +291,12 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 		return r
 	}
 	if rp.ListContainer &&
-		rp.ListFileVersions &&
-		rp.ListRecycle &&
 		rp.Stat &&
 		rp.GetPath &&
 		rp.InitiateFileDownload {
 		r.ocsPermissions |= PermissionRead
 	}
-	if rp.InitiateFileUpload &&
-		rp.RestoreFileVersion &&
-		rp.RestoreRecycleItem {
+	if rp.InitiateFileUpload {
 		r.ocsPermissions |= PermissionWrite
 	}
 	if rp.ListContainer &&
@@ -308,8 +304,7 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 		rp.InitiateFileUpload {
 		r.ocsPermissions |= PermissionCreate
 	}
-	if rp.Delete &&
-		rp.PurgeRecycle {
+	if rp.Delete {
 		r.ocsPermissions |= PermissionDelete
 	}
 	if rp.AddGrant &&
