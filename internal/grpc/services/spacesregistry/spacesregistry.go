@@ -233,7 +233,7 @@ func (s *service) listSpacesByType(ctx context.Context, req *provider.ListStorag
 		}
 
 		projects := resp.StorageSpaces
-		if err := s.decorateProjects(ctx, projects); err != nil {
+		if projects, err = s.decorateProjects(ctx, projects); err != nil {
 			return nil, err
 		}
 		sp = append(sp, projects...)
@@ -274,15 +274,20 @@ func (s *service) listSpacesByType(ctx context.Context, req *provider.ListStorag
 	return sp, nil
 }
 
-func (s *service) decorateProjects(ctx context.Context, projects []*provider.StorageSpace) error {
+func (s *service) decorateProjects(ctx context.Context, projects []*provider.StorageSpace) ([]*provider.StorageSpace, error) {
 	log := appctx.GetLogger(ctx)
+	filtered := []*provider.StorageSpace{}
 	for _, proj := range projects {
-		err := s.decorateProject(ctx, proj)
+		timeout, cancel := context.WithTimeout(ctx, time.Second * 10)
+		defer cancel()
+		err := s.decorateProject(timeout, proj)
 		if err != nil {
-			log.Warn().Err(err).Msgf("Failed to decorate project %s", proj.Name)
+			log.Warn().Err(err).Msgf("Failed to decorate project %s, skipping it", proj.Name)
+			continue
 		}
+		filtered = append(filtered, proj)
 	}
-	return nil
+	return filtered, nil
 }
 
 func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpace) error {
