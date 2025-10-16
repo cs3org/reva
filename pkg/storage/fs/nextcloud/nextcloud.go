@@ -334,7 +334,10 @@ func (nc *StorageDriver) Upload(ctx context.Context, ref *provider.Reference, r 
 }
 
 // Download as defined in the storage.FS interface.
-func (nc *StorageDriver) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
+func (nc *StorageDriver) Download(ctx context.Context, ref *provider.Reference, ranges []storage.Range) (io.ReadCloser, error) {
+	if len(ranges) > 0 {
+		return nil, errtypes.NotSupported("Download with ranges is not supported with this storage driver")
+	}
 	req, err := nc.prepareRequest(ctx, http.MethodGet, filepath.Join("/Download", ref.Path), nil)
 	if err != nil {
 		return nil, err

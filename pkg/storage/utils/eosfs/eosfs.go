@@ -1478,13 +1478,13 @@ func (fs *Eosfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) e
 	return fs.c.Rename(ctx, auth, oldFn, newFn)
 }
 
-func (fs *Eosfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
+func (fs *Eosfs) Download(ctx context.Context, ref *provider.Reference, ranges []storage.Range) (io.ReadCloser, error) {
 	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
 
-	return fs.c.Read(ctx, auth, fn)
+	return fs.c.Read(ctx, auth, fn, ranges)
 }
 
 func (fs *Eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {

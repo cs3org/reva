@@ -334,7 +334,10 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 	return client.WriteStream(rel, r, 0)
 }
 
-func (d *driver) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
+func (d *driver) Download(ctx context.Context, ref *provider.Reference, ranges []storage.Range) (io.ReadCloser, error) {
+	if len(ranges) > 0 {
+		return nil, errtypes.NotSupported("Download with ranges is not supported with this storage driver")
+	}
 	client, _, rel, err := d.webdavClient(ctx, ref)
 	if err != nil {
 		return nil, err

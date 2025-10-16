@@ -1065,7 +1065,10 @@ func (fs *localfs) listShareFolderRoot(ctx context.Context, home string, mdKeys 
 	return finfos, nil
 }
 
-func (fs *localfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
+func (fs *localfs) Download(ctx context.Context, ref *provider.Reference, ranges []storage.Range) (io.ReadCloser, error) {
+	if len(ranges) > 0 {
+		return nil, errtypes.NotSupported("Download with ranges is not supported with this storage driver")
+	}
 	fn, err := fs.resolve(ctx, ref)
 	log := appctx.GetLogger(ctx)
 

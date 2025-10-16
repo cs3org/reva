@@ -30,10 +30,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/eosclient"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/logger"
+	"github.com/cs3org/reva/v3/pkg/storage"
 )
 
 // HTTPOptions to configure the Client.
@@ -210,7 +212,7 @@ func (c *EOSHTTPClient) getRespError(rsp *http.Response, err error) error {
 	}
 
 	switch rsp.StatusCode {
-	case 0, http.StatusOK, http.StatusCreated:
+	case 0, http.StatusOK, http.StatusCreated, http.StatusPartialContent:
 		return nil
 	case http.StatusForbidden:
 		return errtypes.PermissionDenied(rspdesc(rsp))
@@ -257,7 +259,7 @@ func (c *EOSHTTPClient) buildFullURL(urlpath string, auth eosclient.Authorizatio
 }
 
 // GETFile does an entire GET to download a full file. Returns a stream to read the content from.
-func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eosclient.Authorization, urlpath string, stream io.WriteCloser) (io.ReadCloser, error) {
+func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eosclient.Authorization, urlpath string, stream io.WriteCloser, ranges []storage.Range) (io.ReadCloser, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "GETFile").Str("remoteuser", remoteuser).Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", urlpath).Msg("")
 
@@ -275,6 +277,17 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 	}
 	// similar to eosbinary.go::Read()
 	req.Header.Set(eosclient.EosAppHeader, fmt.Sprintf("%s_read", eosclient.EosAppPrefix))
+	rangeHeader := ""
+	if len(ranges) > 0 {
+		var parts []string
+		for _, r := range ranges {
+			end := r.Start + r.Length - 1
+			parts = append(parts, fmt.Sprintf("%d-%d", r.Start, end))
+		}
+		rangeHeader = "bytes=" + strings.Join(parts, ",")
+		req.Header.Set(ocdav.HeaderRange, rangeHeader)
+		log.Info().Str("header", rangeHeader).Msg("Setting range header in request to EOS")
+	}
 
 	ntries := 0
 	nredirs := 0
@@ -306,7 +319,9 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 		// Let's support redirections... and if we retry we have to retry at the same FST, avoid going back to the MGM
 		if resp != nil && (resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusTemporaryRedirect) {
 			// io.Copy(ioutil.Discard, resp.Body)
-			resp.Body.Close()
+			if resp.Body != nil {
+				resp.Body.Close()
+			}
 
 			loc, err := resp.Location()
 			if err != nil {
@@ -320,6 +335,9 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 			if err != nil {
 				log.Error().Str("func", "GETFile").Str("url", loc.String()).Str("err", err.Error()).Msg("can't create redirected request")
 				return nil, err
+			}
+			if rangeHeader != "" {
+				req.Header.Set(ocdav.HeaderRange, rangeHeader)
 			}
 
 			req.Close = true
@@ -448,7 +466,7 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 
 			log.Debug().Str("func", "PUTFile").Str("location", loc.String()).Msg("redirection")
 			nredirs++
-			if (resp != nil) && (resp.Body != nil) {
+			if resp.Body != nil {
 				resp.Body.Close()
 			}
 			resp = nil
@@ -478,7 +496,7 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 			return errtypes.NotFound(fmt.Sprintf("url: %s", finalurl))
 		}
 
-		if (resp != nil) && (resp.Body != nil) {
+		if resp.Body != nil {
 			resp.Body.Close()
 		}
 		return nil

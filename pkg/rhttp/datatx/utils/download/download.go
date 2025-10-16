@@ -81,35 +81,15 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 		handleError(w, &sublog, err, "stat")
 		return
 	}
+	size = int64(md.Size)
 	mimeType := md.MimeType
+	code := http.StatusOK
 
-	if versionKey := r.URL.Query().Get("version_key"); versionKey != "" {
-		// the request is for a version file
-		stat, err := statRevision(ctx, fs, ref, versionKey)
-		if err != nil {
-			handleError(w, &sublog, err, "stat revision")
-			return
-		}
-		size = int64(stat.Size)
-		content, err = fs.DownloadRevision(ctx, ref, versionKey)
-		if err != nil {
-			handleError(w, &sublog, err, "download revision")
-			return
-		}
-	} else {
-		size = int64(md.Size)
-		content, err = fs.Download(ctx, ref)
-		if err != nil {
-			handleError(w, &sublog, err, "download")
-			return
-		}
-	}
-	defer content.Close()
-
-	var ranges []HTTPRange
+	var ranges []storage.Range
 
 	if r.Header.Get("Range") != "" {
 		ranges, err = ParseRange(r.Header.Get("Range"), size)
+
 		if err != nil {
 			if err == ErrNoOverlap {
 				w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", size))
@@ -128,74 +108,96 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 		}
 	}
 
-	code := http.StatusOK
-	sendSize := size
-	var sendContent io.Reader = content
+	var sendSize int64 = 0
+	if versionKey := r.URL.Query().Get("version_key"); versionKey != "" {
+		// the request is for a version file
+		stat, err := statRevision(ctx, fs, ref, versionKey)
+		if err != nil {
+			handleError(w, &sublog, err, "stat revision")
+			return
+		}
+		size = int64(stat.Size)
+		content, err = fs.DownloadRevision(ctx, ref, versionKey)
+		if err != nil {
+			handleError(w, &sublog, err, "download revision")
+			return
+		}
+	} else {
+		// If our FS supports it, and the client has request one or multiple
+		// byte ranges, then we honour this request
 
-	var s io.Seeker
-	if s, ok = content.(io.Seeker); ok {
-		// tell clients they can send range requests
-		w.Header().Set("Accept-Ranges", "bytes")
-	}
+		// Check if any ranges were requested
+		if len(ranges) > 0 {
+			// tell clients they can send range  (in case of a HEAD reqeuest)
+			w.Header().Set("Accept-Ranges", "bytes")
 
-	// If we want to adhere to the Range request, the content must be seekable
-	// If the storage provider does not support seeking the content,
-	// we ignore the Range request
-	if s != nil && len(ranges) > 0 {
-		sublog.Debug().Int64("start", ranges[0].Start).Int64("length", ranges[0].Length).Msg("range request")
-
-		switch {
-		case len(ranges) == 1:
-			// RFC 7233, Section 4.1:
-			// "If a single part is being transferred, the server
-			// generating the 206 response MUST generate a
-			// Content-Range header field, describing what range
-			// of the selected representation is enclosed, and a
-			// payload consisting of the range.
-			// ...
-			// A server MUST NOT generate a multipart response to
-			// a request for a single range, since a client that
-			// does not request multiple parts might not support
-			// multipart responses."
-			ra := ranges[0]
-			if _, err := s.Seek(ra.Start, io.SeekStart); err != nil {
-				sublog.Error().Err(err).Int64("start", ra.Start).Int64("length", ra.Length).Msg("content is not seekable")
-				w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
-				return
-			}
-			sendSize = ra.Length
-			code = http.StatusPartialContent
-			w.Header().Set("Content-Range", ra.ContentRange(size))
-		case len(ranges) > 1:
-			sendSize = RangesMIMESize(ranges, mimeType, size)
-			code = http.StatusPartialContent
-
-			pr, pw := io.Pipe()
-			mw := multipart.NewWriter(pw)
-			w.Header().Set("Content-Type", "multipart/byteranges; boundary="+mw.Boundary())
-			sendContent = pr
-			defer pr.Close() // cause writing goroutine to fail and exit if CopyN doesn't finish.
-			go func() {
-				for _, ra := range ranges {
-					part, err := mw.CreatePart(ra.MimeHeader(mimeType, size))
-					if err != nil {
-						_ = pw.CloseWithError(err) // CloseWithError always returns nil
-						return
-					}
-					if _, err := s.Seek(ra.Start, io.SeekStart); err != nil {
-						_ = pw.CloseWithError(err) // CloseWithError always returns nil
-						return
-					}
-					if _, err := io.CopyN(part, content, ra.Length); err != nil {
-						_ = pw.CloseWithError(err) // CloseWithError always returns nil
-						return
-					}
+			switch {
+			case len(ranges) == 1:
+				// RFC 7233, Section 4.1:
+				// "If a single part is being transferred, the server
+				// generating the 206 response MUST generate a
+				// Content-Range header field, describing what range
+				// of the selected representation is enclosed, and a
+				// payload consisting of the range.
+				// ...
+				// A server MUST NOT generate a multipart response to
+				// a request for a single range, since a client that
+				// does not request multiple parts might not support
+				// multipart responses."
+				//ra := ranges[0]
+				if content, err = fs.Download(ctx, ref, ranges); err != nil {
+					sublog.Error().Err(err).Any("Ranges", ranges).Msg("content is not seekable")
+					w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+					return
 				}
-				mw.Close()
-				pw.Close()
-			}()
+				sendSize = ranges[0].Length
+				code = http.StatusPartialContent
+				w.Header().Set("Content-Range", ranges[0].ContentRange(size))
+			case len(ranges) > 1:
+				rangedContent, err := fs.Download(ctx, ref, ranges)
+				if err != nil {
+					sublog.Error().Err(err).Any("Ranges", ranges).Msg("content is not seekable")
+					w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+					return
+				}
+				sendSize = RangesMIMESize(ranges, mimeType, size)
+				code = http.StatusPartialContent
+
+				pr, pw := io.Pipe()
+				mw := multipart.NewWriter(pw)
+				w.Header().Set("Content-Type", "multipart/byteranges; boundary="+mw.Boundary())
+				content = pr
+				defer pr.Close() // cause writing goroutine to fail and exit if CopyN doesn't finish.
+				go func() {
+					for _, ra := range ranges {
+						// If we have multiple ranges, we split up into parts
+						part, err := mw.CreatePart(ra.MimeHeader(mimeType, size))
+						if err != nil {
+							_ = pw.CloseWithError(err) // CloseWithError always returns nil
+							return
+						}
+						// For every range, we can just copy the next `len` bytes, since the
+						// FS has already only sent the requested ranges
+						if _, err := io.CopyN(part, rangedContent, ra.Length); err != nil {
+							_ = pw.CloseWithError(err) // CloseWithError always returns nil
+							return
+						}
+					}
+					mw.Close()
+					pw.Close()
+				}()
+			}
+		} else {
+			sendSize = int64(md.Size)
+			content, err = fs.Download(ctx, ref, nil)
+		}
+
+		if err != nil {
+			handleError(w, &sublog, err, "download")
+			return
 		}
 	}
+	defer content.Close()
 
 	if w.Header().Get("Content-Encoding") == "" {
 		w.Header().Set("Content-Length", strconv.FormatInt(sendSize, 10))
@@ -205,7 +207,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 
 	if r.Method != http.MethodHead {
 		var c int64
-		c, err = io.CopyN(w, sendContent, sendSize)
+		c, err = io.CopyN(w, content, sendSize)
 		if err != nil {
 			sublog.Error().Err(err).Msg("error copying data to response")
 			return
