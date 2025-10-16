@@ -73,6 +73,7 @@ type config struct {
 	ResourceInfoCacheDrivers map[string]map[string]interface{} `mapstructure:"resource_info_caches"`
 	ResourceInfoCacheDriver  string                            `mapstructure:"resource_info_cache_type"`
 	ResourceInfoCacheTTL     int                               `mapstructure:"resource_info_cache_ttl"`
+	TimeoutSkipSpaces        int                               `mapstructure:"timeout_skip_spaces"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -87,6 +88,7 @@ type service struct {
 	gw                   gateway.GatewayAPIClient
 	resourceInfoCache    cache.ResourceInfoCache
 	resourceInfoCacheTTL time.Duration
+	timeoutSkipSpaces    time.Duration
 }
 
 func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
@@ -114,6 +116,12 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	if err == nil {
 		svc.resourceInfoCache = ricache
 		svc.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
+	}
+
+	// set default timeout to decorate spaces (usually quota + stat call on the underlying storage).
+	svc.timeoutSkipSpaces = time.Second * time.Duration(c.TimeoutSkipSpaces)
+	if svc.timeoutSkipSpaces == 0 {
+		svc.timeoutSkipSpaces = time.Second * time.Duration(3) // 3 seconds.
 	}
 
 	return &svc, nil
@@ -278,7 +286,7 @@ func (s *service) decorateProjects(ctx context.Context, projects []*provider.Sto
 	log := appctx.GetLogger(ctx)
 	filtered := []*provider.StorageSpace{}
 	for _, proj := range projects {
-		timeout, cancel := context.WithTimeout(ctx, time.Second * 10)
+		timeout, cancel := context.WithTimeout(ctx, s.timeoutSkipSpaces)
 		defer cancel()
 		err := s.decorateProject(timeout, proj)
 		if err != nil {
