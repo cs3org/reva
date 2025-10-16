@@ -73,6 +73,7 @@ type config struct {
 	ResourceInfoCacheDrivers map[string]map[string]interface{} `mapstructure:"resource_info_caches"`
 	ResourceInfoCacheDriver  string                            `mapstructure:"resource_info_cache_type"`
 	ResourceInfoCacheTTL     int                               `mapstructure:"resource_info_cache_ttl"`
+	TimeoutSkipSpaces        int                               `mapstructure:"space_resolution_timeout" docs:"nil;Timeout to resolve a space with stat: if it does not respond within the given time (defaults to 3 secs), it is skipped"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -87,6 +88,7 @@ type service struct {
 	gw                   gateway.GatewayAPIClient
 	resourceInfoCache    cache.ResourceInfoCache
 	resourceInfoCacheTTL time.Duration
+	timeoutSkipSpaces    time.Duration
 }
 
 func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
@@ -114,6 +116,12 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	if err == nil {
 		svc.resourceInfoCache = ricache
 		svc.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
+	}
+
+	// set default timeout to decorate spaces (usually quota + stat call on the underlying storage).
+	svc.timeoutSkipSpaces = time.Second * time.Duration(c.TimeoutSkipSpaces)
+	if svc.timeoutSkipSpaces == 0 {
+		svc.timeoutSkipSpaces = time.Second * time.Duration(3) // 3 seconds.
 	}
 
 	return &svc, nil
@@ -233,7 +241,7 @@ func (s *service) listSpacesByType(ctx context.Context, req *provider.ListStorag
 		}
 
 		projects := resp.StorageSpaces
-		if err := s.decorateProjects(ctx, projects); err != nil {
+		if projects, err = s.decorateProjects(ctx, projects); err != nil {
 			return nil, err
 		}
 		sp = append(sp, projects...)
@@ -274,15 +282,20 @@ func (s *service) listSpacesByType(ctx context.Context, req *provider.ListStorag
 	return sp, nil
 }
 
-func (s *service) decorateProjects(ctx context.Context, projects []*provider.StorageSpace) error {
+func (s *service) decorateProjects(ctx context.Context, projects []*provider.StorageSpace) ([]*provider.StorageSpace, error) {
 	log := appctx.GetLogger(ctx)
+	filtered := []*provider.StorageSpace{}
 	for _, proj := range projects {
-		err := s.decorateProject(ctx, proj)
+		timeout, cancel := context.WithTimeout(ctx, s.timeoutSkipSpaces)
+		defer cancel()
+		err := s.decorateProject(timeout, proj)
 		if err != nil {
-			log.Warn().Err(err).Msgf("Failed to decorate project %s", proj.Name)
+			log.Warn().Err(err).Msgf("Failed to decorate project %s, skipping it", proj.Name)
+			continue
 		}
+		filtered = append(filtered, proj)
 	}
-	return nil
+	return filtered, nil
 }
 
 func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpace) error {
@@ -316,7 +329,7 @@ func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpa
 	token := authRes.Token
 	owner := authRes.User
 
-	ownerCtx := appctx.ContextSetToken(context.Background(), token)
+	ownerCtx := appctx.ContextSetToken(ctx, token)
 	ownerCtx = metadata.AppendToOutgoingContext(ownerCtx, appctx.TokenHeader, token)
 	ownerCtx = appctx.ContextSetUser(ownerCtx, owner)
 
