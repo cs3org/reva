@@ -73,7 +73,7 @@ type config struct {
 	ResourceInfoCacheDrivers map[string]map[string]interface{} `mapstructure:"resource_info_caches"`
 	ResourceInfoCacheDriver  string                            `mapstructure:"resource_info_cache_type"`
 	ResourceInfoCacheTTL     int                               `mapstructure:"resource_info_cache_ttl"`
-	TimeoutSkipSpaces        int                               `mapstructure:"timeout_skip_spaces"`
+	TimeoutSkipSpaces        int                               `mapstructure:"space_resolution_timeout" docs:"nil;Timeout to resolve a space with stat: if it does not respond within the given time (defaults to 3 secs), it is skipped"`
 }
 
 func (c *config) ApplyDefaults() {
