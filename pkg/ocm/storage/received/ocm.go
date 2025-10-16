@@ -20,6 +20,7 @@ package ocm
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"io/fs"
@@ -171,27 +172,31 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 	}
 
 	// use the secret as bearer authentication according to OCM v1.1+
-	c := gowebdav.NewClient(endpoint, "", "")
+	var c *gowebdav.Client
+	c = gowebdav.NewClient(endpoint, "", "")
 	c.SetHeader("Authorization", "Bearer "+secret)
-	// The OCM v1.0 basic auth does not currently work - fix in future PR?
-	// Some operations (Touch, CreateDir) should fail on this stat and reverting to OCM v1.0 basic auth makes these operations fail,
-	// we need to include a better check to see if the authentication works than just stating and seeing if there is an error.
-	// A ticket has been created for this and it will be addressed https://its.cern.ch/jira/browse/CERNBOX-4068.
-
-	// _, err = c.Stat(rel)
-	// if err != nil {
-	// 	// if we got an error, try to use OCM v1.0 basic auth
-	// 	log.Info().Str("endpoint", endpoint).Interface("share", share).Str("rel", rel).Str("secret", secret).Err(err).Msg("falling back to OCM v1.0 access")
-	// 	c.SetHeader("Authorization", "Basic "+secret+":")
-	// } else {
-	// 	log.Info().Str("endpoint", endpoint).Interface("share", share).Str("rel", rel).Str("secret", secret).Msg("using OCM v1.1 access")
-	// }
+	_, err = c.Stat("")
+	if err != nil {
+		// if we got an error, try to use OCM v1.0 basic auth: we have to explicitly generate the Basic auth header, as gowebdav seems to not do it if the username is set and password is empty
+		c = gowebdav.NewClient(endpoint, "", "") // reinstantiate to be able to set a fresh auth header
+		c.SetHeader("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(secret+":")))
+		_, err2 := c.Stat("")
+		if err2 != nil {
+			// now we give up
+			log.Info().Any("former_error", err).Err(err2).Str("endpoint", endpoint).Any("share", share).Str("secret", secret).Msg("failed accessing OCM share")
+			return nil, nil, "", errtypes.InvalidCredentials("error accessing OCM share: " + err2.Error())
+		}
+		log.Info().Str("endpoint", endpoint).Any("share", share).Str("mode", "legacy").Msg("access to remote OCM share succeeded")
+	} else {
+		log.Info().Str("endpoint", endpoint).Any("share", share).Str("mode", "bearer").Msg("access to remote OCM share succeeded")
+	}
 
 	// add to cache and return
 	d.ccache.SetWithTTL(id.OpaqueId, &cachedClient{
 		client: c,
 		share:  share,
 	}, time.Hour)
+
 	return c, share, rel, nil
 }
 

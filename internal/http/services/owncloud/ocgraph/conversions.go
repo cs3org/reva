@@ -161,13 +161,9 @@ func (s *svc) buildGrantedToForOCMShare(ctx context.Context, grantee *provider.G
 
 	switch grantee.Type {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
-		u, err := s.getUserInfo(ctx, grantee.GetUserId())
-		if err != nil {
-			return nil, errors.New("Failed to fetch user info")
-		}
 		grantedTo.SetUser(libregraph.Identity{
 			Id:          libregraph.PtrString(grantee.GetUserId().OpaqueId),
-			DisplayName: u.DisplayName,
+			DisplayName: grantee.GetUserId().OpaqueId + "@" + grantee.GetUserId().Idp,
 		})
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
 		return nil, errors.New("Groups are currently not supported in OCM shares")
@@ -442,13 +438,7 @@ func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceIn
 }
 
 func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare *ocm.ReceivedShare) (*libregraph.DriveItem, error) {
-
 	createdTime := utils.TSToTime(receivedOCMShare.Ctime)
-
-	creator, err := s.getUserByID(ctx, receivedOCMShare.Creator)
-	if err != nil {
-		return nil, err
-	}
 
 	grantee, err := s.cs3GranteeToSharePointIdentitySet(ctx, receivedOCMShare.Grantee)
 	if err != nil {
@@ -458,7 +448,6 @@ func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare 
 	log.Debug().Interface("receivedOCMShare", receivedOCMShare).Msg("processing received OCM share")
 
 	var webdav_uri, webapp_uri, shared_secret string
-
 	for _, p := range receivedOCMShare.Protocols {
 		if p.GetWebdavOptions() != nil {
 			webdav_uri = p.GetWebdavOptions().GetUri()
@@ -483,16 +472,19 @@ func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare 
 	if role != nil {
 		roles = append(roles, *role.Id)
 	}
+
+	// TODO(lopresti) we need a proper display name here, which should come from shares.go
+	lgOCMUser := &libregraph.Identity{
+		DisplayName:        receivedOCMShare.Creator.OpaqueId + "@" + receivedOCMShare.Creator.Idp,
+		Id:                 libregraph.PtrString(receivedOCMShare.Creator.OpaqueId),
+		LibreGraphUserType: libregraph.PtrString("Federated"),
+	}
+
 	d := &libregraph.DriveItem{
-		// Doesn't exist for OCM shares
-		//UIHidden:          libregraph.PtrBool(rsi.ReceivedShare.Hidden),
-		ClientSynchronize: libregraph.PtrBool(true),
+		UIHidden:          libregraph.PtrBool(false), // Doesn't exist for OCM shares
+		ClientSynchronize: libregraph.PtrBool(false),
 		CreatedBy: &libregraph.IdentitySet{
-			User: &libregraph.Identity{
-				DisplayName:        creator.DisplayName,
-				Id:                 libregraph.PtrString(creator.Id.OpaqueId),
-				LibreGraphUserType: libregraph.PtrString("Federated"),
-			},
+			User: lgOCMUser,
 		},
 
 		ETag:                 &etag,
@@ -506,11 +498,7 @@ func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare 
 		},
 		RemoteItem: &libregraph.RemoteItem{
 			CreatedBy: &libregraph.IdentitySet{
-				User: &libregraph.Identity{
-					DisplayName:        creator.DisplayName,
-					Id:                 libregraph.PtrString(creator.Id.OpaqueId),
-					LibreGraphUserType: libregraph.PtrString("Federated"),
-				},
+				User: lgOCMUser,
 			},
 			ETag:                 &etag,
 			Id:                   libregraph.PtrString(spaces.EncodeOCMShareID(receivedOCMShare.Id.OpaqueId)),
@@ -523,19 +511,15 @@ func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare 
 					GrantedToV2:     grantee,
 					Invitation: &libregraph.SharingInvitation{
 						InvitedBy: &libregraph.IdentitySet{
-							User: &libregraph.Identity{
-								DisplayName:        creator.DisplayName,
-								Id:                 libregraph.PtrString(creator.Id.OpaqueId),
-								LibreGraphUserType: libregraph.PtrString("Federated"),
-							},
+							User: lgOCMUser,
 						},
 					},
 					Roles: roles,
 				},
 			},
-			Size: libregraph.PtrInt64(int64(0) /* TODO no size in OCM shares */),
+			Size: libregraph.PtrInt64(int64(0)), // OCM shares do not have a size
 		},
-		Size: libregraph.PtrInt64(int64(0) /* TODO no size in OCM shares */),
+		Size: libregraph.PtrInt64(int64(0)),
 	}
 
 	if receivedOCMShare.ResourceType == provider.ResourceType_RESOURCE_TYPE_CONTAINER {

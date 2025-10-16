@@ -19,11 +19,9 @@
 package ocmd
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"reflect"
 	"strings"
 
@@ -53,12 +51,8 @@ type RemoteUser struct {
 	Name   string `json:"name"`
 }
 
-func (r *InviteAcceptedRequest) toJSON() (io.Reader, error) {
-	var b bytes.Buffer
-	if err := json.NewEncoder(&b).Encode(r); err != nil {
-		return nil, err
-	}
-	return &b, nil
+func (r *InviteAcceptedRequest) toJSON() ([]byte, error) {
+	return json.Marshal(&r)
 }
 
 // NewShareRequest contains the payload of an OCM /share request.
@@ -79,12 +73,8 @@ type NewShareRequest struct {
 	Protocols         Protocols `json:"protocol"          validate:"required"`
 }
 
-func (r *NewShareRequest) toJSON() (io.Reader, error) {
-	var b bytes.Buffer
-	if err := json.NewEncoder(&b).Encode(r); err != nil {
-		return nil, err
-	}
-	return &b, nil
+func (r *NewShareRequest) toJSON() ([]byte, error) {
+	return json.Marshal(&r)
 }
 
 // NewShareResponse is the response returned when creating a new share.
@@ -108,7 +98,7 @@ type Protocol interface {
 type WebDAV struct {
 	SharedSecret string   `json:"sharedSecret" validate:"required"`
 	Permissions  []string `json:"permissions"  validate:"required,dive,required,oneof=read write share"`
-	Requirements []string `json:"requirements"`
+	Requirements []string `json:"requirements,omitempty"`
 	URI          string   `json:"uri"          validate:"required"`
 }
 
