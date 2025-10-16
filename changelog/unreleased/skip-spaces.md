@@ -1,4 +1,4 @@
-Bugfix: Skip spaces that are not available.
+Bugfix: Skip spaces that are not available
 
 Skip spaces that are not available when listing them.
 This avoids WebUI hanging when one of them is not reachable.
