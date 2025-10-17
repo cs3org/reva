@@ -360,7 +360,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 				Path: "some/file/path.txt",
 			}
-			reader, err := nc.Download(ctx, ref)
+			reader, err := nc.Download(ctx, ref, nil)
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `GET /apps/sciencemesh/~tester/api/storage/Download/some/file/path.txt `)
 			defer reader.Close()

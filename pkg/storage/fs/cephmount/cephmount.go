@@ -721,7 +721,11 @@ func (fs *cephmountfs) ListFolder(ctx context.Context, ref *provider.Reference, 
 	return files, nil
 }
 
-func (fs *cephmountfs) Download(ctx context.Context, ref *provider.Reference) (rc io.ReadCloser, err error) {
+func (fs *cephmountfs) Download(ctx context.Context, ref *provider.Reference, ranges []storage.Range) (rc io.ReadCloser, err error) {
+	if len(ranges) > 0 {
+		return nil, errtypes.NotSupported("Download with ranges is not supported with this storage driver")
+	}
+
 	// Capture the original received path for logging
 	var receivedPath string
 	if ref != nil && ref.Path != "" {

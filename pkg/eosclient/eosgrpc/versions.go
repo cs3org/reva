@@ -68,5 +68,5 @@ func (c *Client) ReadVersion(ctx context.Context, auth eosclient.Authorization, 
 	log.Info().Str("func", "ReadVersion").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("p", p).Str("version", version).Msg("")
 
 	versionFile := path.Join(eosclient.GetVersionFolder(p), version)
-	return c.Read(ctx, auth, versionFile)
+	return c.Read(ctx, auth, versionFile, nil)
 }

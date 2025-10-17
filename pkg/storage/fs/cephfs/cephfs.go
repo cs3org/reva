@@ -275,7 +275,10 @@ func (fs *cephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 	return files, getRevaError(ctx, err)
 }
 
-func (fs *cephfs) Download(ctx context.Context, ref *provider.Reference) (rc io.ReadCloser, err error) {
+func (fs *cephfs) Download(ctx context.Context, ref *provider.Reference, ranges []storage.Range) (rc io.ReadCloser, err error) {
+	if len(ranges) > 0 {
+		return nil, errtypes.NotSupported("Download with ranges is not supported with this storage driver")
+	}
 	var path string
 	user := fs.makeUser(ctx)
 	if path, err = user.resolveRef(ref); err != nil {

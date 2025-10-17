@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/storage"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/acl"
 )
 
@@ -51,7 +52,7 @@ type EOSClient interface {
 	Rename(ctx context.Context, auth Authorization, oldPath, newPath string) error
 	List(ctx context.Context, auth Authorization, path string) ([]*FileInfo, error)
 	ListWithRegex(ctx context.Context, auth Authorization, path string, depth uint, regex string) ([]*FileInfo, error)
-	Read(ctx context.Context, auth Authorization, path string) (io.ReadCloser, error)
+	Read(ctx context.Context, auth Authorization, path string, ranges []storage.Range) (io.ReadCloser, error)
 	Write(ctx context.Context, auth Authorization, path string, stream io.ReadCloser, length int64, app string, disableVersioning bool) error
 	ListDeletedEntries(ctx context.Context, auth Authorization, maxentries int, from, to time.Time) ([]*DeletedEntry, error)
 	RestoreDeletedEntry(ctx context.Context, auth Authorization, key string) error

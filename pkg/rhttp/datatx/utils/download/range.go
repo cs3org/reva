@@ -20,11 +20,12 @@ package download
 
 import (
 	"errors"
-	"fmt"
 	"mime/multipart"
 	"net/textproto"
 	"strconv"
 	"strings"
+
+	"github.com/cs3org/reva/v3/pkg/storage"
 )
 
 // taken from https://golang.org/src/net/http/fs.go
@@ -39,27 +40,9 @@ var ErrSeeker = errors.New("seeker can't seek")
 // all of the byte-range-spec values is greater than the content size.
 var ErrNoOverlap = errors.New("invalid range: failed to overlap")
 
-// HTTPRange specifies the byte range to be sent to the client.
-type HTTPRange struct {
-	Start, Length int64
-}
-
-// ContentRange formats a Range header string as per RFC 7233.
-func (r HTTPRange) ContentRange(size int64) string {
-	return fmt.Sprintf("bytes %d-%d/%d", r.Start, r.Start+r.Length-1, size)
-}
-
-// MimeHeader creates range relevant MimeHeaders.
-func (r HTTPRange) MimeHeader(contentType string, size int64) textproto.MIMEHeader {
-	return textproto.MIMEHeader{
-		"Content-Range": {r.ContentRange(size)},
-		"Content-Type":  {contentType},
-	}
-}
-
 // ParseRange parses a Range header string as per RFC 7233.
 // errNoOverlap is returned if none of the ranges overlap.
-func ParseRange(s string, size int64) ([]HTTPRange, error) {
+func ParseRange(s string, size int64) ([]storage.Range, error) {
 	if s == "" {
 		return nil, nil // header not present
 	}
@@ -70,7 +53,7 @@ func ParseRange(s string, size int64) ([]HTTPRange, error) {
 		// range unit it does not understand
 		return nil, nil
 	}
-	ranges := []HTTPRange{}
+	ranges := []storage.Range{}
 	noOverlap := false
 	for _, ra := range strings.Split(s[len(b):], ",") {
 		ra = textproto.TrimString(ra)
@@ -82,7 +65,7 @@ func ParseRange(s string, size int64) ([]HTTPRange, error) {
 			return nil, nil
 		}
 		start, end := textproto.TrimString(ra[:i]), textproto.TrimString(ra[i+1:])
-		var r HTTPRange
+		var r storage.Range
 		if start == "" {
 			// If no start is specified, end specifies the
 			// range start relative to the end of the file.
@@ -140,7 +123,7 @@ func (w *countingWriter) Write(p []byte) (n int, err error) {
 
 // RangesMIMESize returns the number of bytes it takes to encode the
 // provided ranges as a multipart response.
-func RangesMIMESize(ranges []HTTPRange, contentType string, contentSize int64) (encSize int64) {
+func RangesMIMESize(ranges []storage.Range, contentType string, contentSize int64) (encSize int64) {
 	var w countingWriter
 	mw := multipart.NewWriter(&w)
 	for _, ra := range ranges {
@@ -155,7 +138,7 @@ func RangesMIMESize(ranges []HTTPRange, contentType string, contentSize int64) (
 }
 
 // SumRangesSize adds up the length of all ranges.
-func SumRangesSize(ranges []HTTPRange) (size int64) {
+func SumRangesSize(ranges []storage.Range) (size int64) {
 	for _, ra := range ranges {
 		size += ra.Length
 	}

@@ -20,7 +20,9 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"net/textproto"
 	"net/url"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -40,7 +42,7 @@ type FS interface {
 	ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error)
 	InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error)
 	Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, metadata map[string]string) error
-	Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
+	Download(ctx context.Context, ref *provider.Reference, ranges []Range) (io.ReadCloser, error)
 	ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
 	DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error)
 	RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error
@@ -66,6 +68,24 @@ type FS interface {
 	ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error)
 	CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error)
 	UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error)
+}
+
+// Should probably find a better place to put these, though not sure where
+type Range struct {
+	Start, Length int64
+}
+
+// ContentRange formats a Range header string as per RFC 7233.
+func (r Range) ContentRange(size int64) string {
+	return fmt.Sprintf("bytes %d-%d/%d", r.Start, r.Start+r.Length-1, size)
+}
+
+// MimeHeader creates range relevant MimeHeaders.
+func (r Range) MimeHeader(contentType string, size int64) textproto.MIMEHeader {
+	return textproto.MIMEHeader{
+		"Content-Range": {r.ContentRange(size)},
+		"Content-Type":  {contentType},
+	}
 }
 
 // Registry is the interface that storage registries implement

@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/eosclient"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/storage"
 	"github.com/cs3org/reva/v3/pkg/trace"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/google/uuid"
@@ -269,9 +270,9 @@ func (c *Client) initMDRequest(ctx context.Context, auth eosclient.Authorization
 //
 // Let's consider this experimental for the moment, maybe I'll like to add a config
 // parameter to choose between the two behaviours.
-func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path string) (io.ReadCloser, error) {
+func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path string, ranges []storage.Range) (io.ReadCloser, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "Read").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
+	log.Info().Str("func", "Read").Any("Ranges", ranges).Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	var localTarget string
 	var err error
@@ -296,7 +297,7 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 		}
 	}
 
-	bodystream, err := c.httpcl.GETFile(ctx, u.Username, auth, path, localfile)
+	bodystream, err := c.httpcl.GETFile(ctx, u.Username, auth, path, localfile, ranges)
 	if err != nil {
 		log.Error().Str("func", "Read").Str("path", path).Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("err", err.Error()).Msg("")
 		return nil, errtypes.InternalError(fmt.Sprintf("can't GET local cache file '%s'", localTarget))

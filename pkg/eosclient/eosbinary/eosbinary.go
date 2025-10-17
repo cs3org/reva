@@ -34,6 +34,7 @@ import (
 
 	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/storage"
 
 	"github.com/cs3org/reva/v3/pkg/eosclient"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
@@ -735,7 +736,10 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, path st
 }
 
 // Read reads a file from the mgm.
-func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path string) (io.ReadCloser, error) {
+func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path string, ranges []storage.Range) (io.ReadCloser, error) {
+	if len(ranges) > 0 {
+		return nil, errtypes.NotSupported("Download with ranges is not supported with this storage driver")
+	}
 	rand := "eosread-" + uuid.New().String()
 	localTarget := fmt.Sprintf("%s/%s", c.opt.CacheDirectory, rand)
 	defer os.RemoveAll(localTarget)
@@ -866,7 +870,7 @@ func (c *Client) RollbackToVersion(ctx context.Context, auth eosclient.Authoriza
 // ReadVersion reads the version for the given file.
 func (c *Client) ReadVersion(ctx context.Context, auth eosclient.Authorization, p, version string) (io.ReadCloser, error) {
 	versionFile := path.Join(eosclient.GetVersionFolder(p), version)
-	return c.Read(ctx, auth, versionFile)
+	return c.Read(ctx, auth, versionFile, nil)
 }
 
 // GenerateToken returns a token on behalf of the resource owner to be used by lightweight accounts.
