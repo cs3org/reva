@@ -53,6 +53,8 @@ const (
 	UnifiedRoleSecureViewerID = "aa97fe03-7980-45ac-9e50-b325749fd7e6"
 	// UnifiedRoleUploaderID Unified role uploader id.
 	UnifiedRoleUploaderID = "bf483fbf-5998-4afd-b593-e0f5ab823695"
+	// UnfiedRoleDenyAccessID Unified role deny access id.
+	UnfiedRoleDenyAccessID = "5d3754fa-a6a6-4985-b0af-dd1359e5d616"
 
 	// UnifiedRoleConditionDrive defines constraint that matches a Driveroot/Spaceroot
 	UnifiedRoleConditionDrive = "exists @Resource.Root"
@@ -217,6 +219,26 @@ func NewUploaderUnifiedRole() *libregraph.UnifiedRoleDefinition {
 	}
 }
 
+func NewAccessDeniedUnifiedRole() *libregraph.UnifiedRoleDefinition {
+	r := conversions.NewDeniedRole()
+	return &libregraph.UnifiedRoleDefinition{
+		Id:          proto.String(UnfiedRoleDenyAccessID),
+		Description: proto.String("Remove all permissions."),
+		DisplayName: displayName(r),
+		RolePermissions: []libregraph.UnifiedRolePermission{
+			{
+				AllowedResourceActions: convert(r),
+				Condition:              proto.String(UnifiedRoleConditionFolder),
+			},
+			{
+				AllowedResourceActions: convert(r),
+				Condition:              proto.String(UnifiedRoleConditionDrive),
+			},
+		},
+		LibreGraphWeight: proto.Int32(0),
+	}
+}
+
 // NewUnifiedRoleFromID returns a unified role definition from the provided id
 func NewUnifiedRoleFromID(id string) (*libregraph.UnifiedRoleDefinition, error) {
 	for _, definition := range GetBuiltinRoleDefinitionList() {
@@ -265,6 +287,9 @@ func GetApplicableRoleDefinitionsForActions(actions []string, resource *provider
 			definitions = append(definitions, definition)
 		}
 
+	}
+	if resource.Space.SpaceType == string(spaces.SpaceTypeProject) {
+		definitions = append(definitions, NewAccessDeniedUnifiedRole())
 	}
 
 	return definitions
@@ -435,6 +460,8 @@ func displayName(role *conversions.Role) *string {
 		displayName = canEdit
 	case conversions.RoleManager:
 		displayName = "Can manage"
+	case conversions.RoleDenied:
+		displayName = "Deny access"
 	default:
 		return nil
 	}
@@ -466,6 +493,7 @@ func GetBuiltinRoleDefinitionList() []*libregraph.UnifiedRoleDefinition {
 		NewManagerUnifiedRole(),
 		NewSpaceEditorUnifiedRole(),
 		NewSpaceViewerUnifiedRole(),
+		NewAccessDeniedUnifiedRole(),
 	}
 }
 
@@ -476,6 +504,7 @@ var ocsRoleUnifiedRole = map[string]*libregraph.UnifiedRoleDefinition{
 	conversions.RoleFileEditor: NewFileEditorUnifiedRole(),
 	conversions.RoleUploader:   NewUploaderUnifiedRole(),
 	conversions.RoleManager:    NewManagerUnifiedRole(),
+	conversions.RoleDenied:     NewAccessDeniedUnifiedRole(),
 }
 
 func UnifiedRoleIDToDefinition(unifiedRoleID string) (*libregraph.UnifiedRoleDefinition, bool) {
@@ -496,6 +525,8 @@ func UnifiedRoleIDToDefinition(unifiedRoleID string) (*libregraph.UnifiedRoleDef
 		return NewManagerUnifiedRole(), true
 	case UnifiedRoleSecureViewerID:
 		return NewViewerUnifiedRole(), true
+	case UnfiedRoleDenyAccessID:
+		return NewAccessDeniedUnifiedRole(), true
 	default:
 		return nil, false
 	}
