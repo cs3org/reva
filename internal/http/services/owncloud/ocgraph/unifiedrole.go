@@ -223,7 +223,7 @@ func NewAccessDeniedUnifiedRole() *libregraph.UnifiedRoleDefinition {
 	r := conversions.NewDeniedRole()
 	return &libregraph.UnifiedRoleDefinition{
 		Id:          proto.String(UnfiedRoleDenyAccessID),
-		Description: proto.String("Deny access."),
+		Description: proto.String("Remove all permissions."),
 		DisplayName: displayName(r),
 		RolePermissions: []libregraph.UnifiedRolePermission{
 			{
@@ -504,6 +504,7 @@ var ocsRoleUnifiedRole = map[string]*libregraph.UnifiedRoleDefinition{
 	conversions.RoleFileEditor: NewFileEditorUnifiedRole(),
 	conversions.RoleUploader:   NewUploaderUnifiedRole(),
 	conversions.RoleManager:    NewManagerUnifiedRole(),
+	conversions.RoleDenied:     NewAccessDeniedUnifiedRole(),
 }
 
 func UnifiedRoleIDToDefinition(unifiedRoleID string) (*libregraph.UnifiedRoleDefinition, bool) {
@@ -524,6 +525,8 @@ func UnifiedRoleIDToDefinition(unifiedRoleID string) (*libregraph.UnifiedRoleDef
 		return NewManagerUnifiedRole(), true
 	case UnifiedRoleSecureViewerID:
 		return NewViewerUnifiedRole(), true
+	case UnfiedRoleDenyAccessID:
+		return NewAccessDeniedUnifiedRole(), true
 	default:
 		return nil, false
 	}
