@@ -124,7 +124,7 @@ type BaseModel struct {
 	// Id has to be called Id and not ID, otherwise the foreign key will not work
 	// ID is a special field in GORM, which it uses as the default Primary Key
 	Id        uint    `gorm:"primaryKey;not null;autoIncrement:false"`
-	ShareId   ShareID `gorm:"foreignKey:Id;references:ID;constraint:OnDelete:CASCADE"` //;references:ID
+	ShareId   ShareID `gorm:"foreignKey:Id;references:ID;constraint:OnDelete:CASCADE"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt gorm.DeletedAt `gorm:"index"`
@@ -177,32 +177,38 @@ type ShareState struct {
 	Alias  string `gorm:"size:64"`
 }
 
-// OCM Shares - uses BaseModel to share common ShareID with other share types
 type OcmShare struct {
-	BaseModel
-	Token        string        `gorm:"size:255;not null;uniqueIndex"`
-	FileidPrefix string        `gorm:"size:64;not null;uniqueIndex:idx_fileid_source_share_with"`
-	ItemSource   string        `gorm:"size:64;not null;uniqueIndex:idx_fileid_source_share_with"`
-	Name         string        `gorm:"type:text;not null"`
-	ShareWith    string        `gorm:"size:255;not null;uniqueIndex:idx_fileid_source_share_with"`
-	Owner        string        `gorm:"size:255;not null;uniqueIndex:idx_fileid_source_share_with"`
-	Initiator    string        `gorm:"type:text;not null"`
-	Ctime        uint64        `gorm:"not null"`
-	Mtime        uint64        `gorm:"not null"`
-	Expiration   sql.NullInt64 `gorm:"default:null"`
-	Type         ShareType     `gorm:"not null"`
+	// The fields of the base model had to be copied since we need an index on DeletedAt + unique constraints
+	// Id has to be called Id and not ID, otherwise the foreign key will not work
+	// ID is a special field in GORM, which it uses as the default Primary Key
+	Id        uint    `gorm:"primaryKey;not null;autoIncrement:false"`
+	ShareId   ShareID `gorm:"foreignKey:Id;references:ID;constraint:OnDelete:CASCADE"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	// Needs to be indexed because shares that are deleted need to be unique so we can add a new share after it was deleted
+	DeletedAt     gorm.DeletedAt          `gorm:"index;uniqueIndex:idx_fileid_source_share_with_deletedat"`
+	Token         string                  `gorm:"size:255;not null;uniqueIndex"`
+	FileidPrefix  string                  `gorm:"size:64;not null;uniqueIndex:idx_fileid_source_share_with_deletedat"`
+	ItemSource    string                  `gorm:"size:64;not null;uniqueIndex:idx_fileid_source_share_with_deletedat"`
+	Name          string                  `gorm:"type:text;not null"`
+	ShareWith     string                  `gorm:"size:255;not null;uniqueIndex:idx_fileid_source_share_with_deletedat"`
+	Owner         string                  `gorm:"size:255;not null;uniqueIndex:idx_fileid_source_share_with_deletedat"`
+	Initiator     string                  `gorm:"type:text;not null"`
+	Ctime         uint64                  `gorm:"not null"`
+	Mtime         uint64                  `gorm:"not null"`
+	Expiration    sql.NullInt64           `gorm:"default:null"`
+	Type          ShareType               `gorm:"not null"`
+	AccessMethods []OcmSharesAccessMethod `gorm:"constraint:OnDelete:CASCADE;"`
 }
 
 // OCM Shares Access Methods
 type OcmSharesAccessMethod struct {
 	gorm.Model
-	OcmShareID uint         `gorm:"not null;uniqueIndex:idx_ocm_share_method"`
-	OcmShare   OcmShare     `gorm:"constraint:OnDelete:CASCADE;foreignKey:OcmShareID;references:Id"`
-	Type       AccessMethod `gorm:"not null;uniqueIndex:idx_ocm_share_method"`
-	// WebDAV fields
+	OcmShareID uint `gorm:"not null;uniqueIndex:idx_ocm_share_method"`
+	//OcmShare   OcmShare     `gorm:"constraint:OnDelete:CASCADE;foreignKey:OcmShareID;references:Id"`
+	Type AccessMethod `gorm:"not null;uniqueIndex:idx_ocm_share_method"`
+	// WebDAV and WebApp fields
 	Permissions int `gorm:"default:null"`
-	// WebApp fields
-	ViewMode int `gorm:"default:null"`
 }
 
 // OCM Received Shares

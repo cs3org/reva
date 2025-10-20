@@ -161,7 +161,7 @@ func convertToCS3AccessMethod(m *model.OcmSharesAccessMethod) *ocm.AccessMethod 
 			conversions.RoleFromOCSPermissions(conversions.Permissions(m.Permissions)).CS3ResourcePermissions(),
 			[]string{}) // TODO persist requirements
 	case model.WebappAccessMethod:
-		return share.NewWebappAccessMethod(appprovider.ViewMode(m.ViewMode))
+		return share.NewWebappAccessMethod(appprovider.ViewMode(m.Permissions))
 	case model.TransferAccessMethod:
 		return share.NewTransferAccessMethod()
 	}
