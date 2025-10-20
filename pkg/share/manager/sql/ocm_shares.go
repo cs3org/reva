@@ -82,7 +82,11 @@ func formatUserID(u *userpb.UserId) string {
 
 func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share) (*ocm.Share, error) {
 
-	m.db.Transaction(func(tx *gorm.DB) error {
+	id, err := createID(m.db)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create id for OCM share")
+	}
+	err = m.db.Transaction(func(tx *gorm.DB) error {
 
 		share := &model.OcmShare{
 			Token:        s.Token,
@@ -100,15 +104,8 @@ func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share) (*ocm.Share, error) 
 			share.Expiration.Int64 = int64(s.Expiration.Seconds)
 			share.Expiration.Valid = true
 		}
-
-		id, err := createID(m.db)
-		if err != nil {
-			return errors.Wrap(err, "failed to create id for OCM share")
-		}
-		share.BaseModel = model.BaseModel{
-			Id:      id,
-			ShareId: model.ShareID{ID: id},
-		}
+		share.Id = id
+		share.ShareId = model.ShareID{ID: id}
 		if err := tx.Create(share).Error; err != nil {
 			return errors.Wrap(err, "failed to create OCM share")
 		}
@@ -128,9 +125,12 @@ func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share) (*ocm.Share, error) 
 				}
 			}
 		}
-		s.Id = &ocm.ShareId{OpaqueId: strconv.FormatInt(int64(share.Id), 10)}
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	s.Id = &ocm.ShareId{OpaqueId: strconv.FormatInt(int64(id), 10)}
 	return s, nil
 }
 
@@ -150,9 +150,9 @@ func storeWebDAVAccessMethod(tx *gorm.DB, shareID uint, o *ocm.AccessMethod_Webd
 
 func storeWebappAccessMethod(tx *gorm.DB, shareID uint, o *ocm.AccessMethod_WebappOptions) error {
 	accessMethod := &model.OcmSharesAccessMethod{
-		OcmShareID: uint(shareID),
-		Type:       model.WebappAccessMethod,
-		ViewMode:   int(o.WebappOptions.ViewMode),
+		OcmShareID:  uint(shareID),
+		Type:        model.WebappAccessMethod,
+		Permissions: int(o.WebappOptions.ViewMode),
 	}
 
 	err := tx.Create(accessMethod).Error
