@@ -64,6 +64,18 @@ func (s *svc) GetUserByClaim(ctx context.Context, req *user.GetUserByClaimReques
 }
 
 func (s *svc) FindUsers(ctx context.Context, req *user.FindUsersRequest) (*user.FindUsersResponse, error) {
+	c, err := pool.GetUserProviderServiceClient(pool.Endpoint(s.c.UserProviderEndpoint))
+	if err != nil {
+		return &user.FindUsersResponse{
+			Status: status.NewInternal(ctx, err, "error getting auth client"),
+		}, nil
+	}
+
+	res, err := c.FindUsers(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling FindUsers")
+	}
+
 	if s.c.OCMEnabled {
 		c, err := pool.GetOCMInviteManagerClient(pool.Endpoint(s.c.OCMInviteManagerEndpoint))
 		if err != nil {
@@ -76,7 +88,7 @@ func (s *svc) FindUsers(ctx context.Context, req *user.FindUsersRequest) (*user.
 		if idx < 0 {
 			return nil, errtypes.BadRequest("Must pass a filter with Filter_TYPE_QUERY to FindUsers")
 		}
-		res, err := c.FindAcceptedUsers(ctx, &invitepb.FindAcceptedUsersRequest{
+		ocm_res, err := c.FindAcceptedUsers(ctx, &invitepb.FindAcceptedUsersRequest{
 			Filter: req.Filters[idx].GetQuery(),
 		})
 		if err != nil {
@@ -88,23 +100,7 @@ func (s *svc) FindUsers(ctx context.Context, req *user.FindUsersRequest) (*user.
 				Status: status.NewInternal(ctx, errors.New(res.Status.Message), res.Status.Message),
 			}, nil
 		}
-
-		return &user.FindUsersResponse{
-			Status: status.NewOK(ctx),
-			Users:  res.AcceptedUsers,
-		}, nil
-	}
-
-	c, err := pool.GetUserProviderServiceClient(pool.Endpoint(s.c.UserProviderEndpoint))
-	if err != nil {
-		return &user.FindUsersResponse{
-			Status: status.NewInternal(ctx, err, "error getting auth client"),
-		}, nil
-	}
-
-	res, err := c.FindUsers(ctx, req)
-	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling FindUsers")
+		res.Users = append(res.Users, ocm_res.AcceptedUsers...)
 	}
 
 	return res, nil
