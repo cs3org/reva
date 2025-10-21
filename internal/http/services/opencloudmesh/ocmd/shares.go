@@ -213,12 +213,21 @@ func getUserIDFromOCMUser(user string) (*userpb.UserId, error) {
 }
 
 func getIDAndMeshProvider(user string) (string, string, error) {
-	// the user is in the form of dimitri@apiwise.nl
-	split := strings.Split(user, "@")
-	if len(split) < 2 {
+	last := strings.LastIndex(user, "@")
+	if last == -1 {
 		return "", "", errors.New("not in the form <id>@<provider>")
 	}
-	return strings.Join(split[:len(split)-1], "@"), split[len(split)-1], nil
+
+	id, provider := user[:last], user[last+1:]
+
+	if id == "" {
+		return "", "", errors.New("id cannot be empty")
+	}
+	if provider == "" {
+		return "", "", errors.New("provider cannot be empty")
+	}
+
+	return id, provider, nil
 }
 
 func getCreateShareRequest(r *http.Request) (*NewShareRequest, error) {
