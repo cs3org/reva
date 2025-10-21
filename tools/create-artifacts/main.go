@@ -40,7 +40,7 @@ var (
 
 	binaries = []string{"reva", "revad"}
 	archs    = []string{"386", "amd64"}
-	oses     = []string{"linux", "darwin"}
+	oses     = []string{"linux"}
 )
 
 func init() {
