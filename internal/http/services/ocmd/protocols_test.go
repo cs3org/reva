@@ -49,12 +49,22 @@ func TestUnmarshalProtocol(t *testing.T) {
 			err: "protocol unsupported not recognised",
 		},
 		{
+			raw: `{"name":"multi","options":{},"webdav":{"sharedSecret":"secret","permissions":["read","write"],"uri":"http://example.org"}}`,
+			expected: []Protocol{
+				&WebDAV{
+					SharedSecret: "secret",
+					Permissions:  []string{"read", "write"},
+					URI:          "http://example.org",
+				},
+			},
+		},
+		{
 			raw: `{"name":"multi","options":{},"webdav":{"sharedSecret":"secret","permissions":["read","write"],"url":"http://example.org"}}`,
 			expected: []Protocol{
 				&WebDAV{
 					SharedSecret: "secret",
 					Permissions:  []string{"read", "write"},
-					URL:          "http://example.org",
+					URI:          "http://example.org",
 				},
 			},
 		},
@@ -82,7 +92,25 @@ func TestUnmarshalProtocol(t *testing.T) {
 				&WebDAV{
 					SharedSecret: "secret",
 					Permissions:  []string{"read", "write"},
-					URL:          "http://example.org",
+					URI:          "http://example.org",
+				},
+				&Webapp{
+					URITemplate: "http://example.org/{test}",
+				},
+				&Datatx{
+					SharedSecret: "secret",
+					SourceURI:    "http://example.org",
+					Size:         10,
+				},
+			},
+		},
+		{
+			raw: `{"name":"multi","options":{},"webdav":{"sharedSecret":"secret","permissions":["read","write"],"uri":"http://example.org"},"webapp":{"uriTemplate":"http://example.org/{test}"},"datatx":{"sharedSecret":"secret","srcUri":"http://example.org","size":10}}`,
+			expected: []Protocol{
+				&WebDAV{
+					SharedSecret: "secret",
+					Permissions:  []string{"read", "write"},
+					URI:          "http://example.org",
 				},
 				&Webapp{
 					URITemplate: "http://example.org/{test}",
@@ -145,7 +173,7 @@ func TestMarshalProtocol(t *testing.T) {
 				&WebDAV{
 					SharedSecret: "secret",
 					Permissions:  []string{"read"},
-					URL:          "http://example.org",
+					URI:          "http://example.org",
 				},
 			},
 			expected: map[string]any{
@@ -154,7 +182,7 @@ func TestMarshalProtocol(t *testing.T) {
 				"webdav": map[string]any{
 					"sharedSecret": "secret",
 					"permissions":  []any{"read"},
-					"url":          "http://example.org",
+					"uri":          "http://example.org",
 				},
 			},
 		},
@@ -197,7 +225,7 @@ func TestMarshalProtocol(t *testing.T) {
 				&WebDAV{
 					SharedSecret: "secret",
 					Permissions:  []string{"read"},
-					URL:          "http://example.org",
+					URI:          "http://example.org",
 				},
 				&Webapp{
 					URITemplate: "http://example.org",
@@ -215,7 +243,7 @@ func TestMarshalProtocol(t *testing.T) {
 				"webdav": map[string]any{
 					"sharedSecret": "secret",
 					"permissions":  []any{"read"},
-					"url":          "http://example.org",
+					"uri":          "http://example.org",
 				},
 				"webapp": map[string]any{
 					"uriTemplate": "http://example.org",
