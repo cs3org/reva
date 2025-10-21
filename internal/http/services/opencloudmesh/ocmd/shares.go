@@ -212,12 +212,17 @@ func getUserIDFromOCMUser(user string) (*userpb.UserId, error) {
 	}, nil
 }
 
-func getIDAndMeshProvider(user string) (id, provider string, err error) {
+func getIDAndMeshProvider(user string) (string, string, error) {
 	last := strings.LastIndex(user, "@")
 	if last == -1 {
 		return "", "", errors.New("not in the form <id>@<provider>")
 	}
-	return user[:last], user[last+1:], nil
+
+	id, provider := user[:last], user[last+1:]
+	if provider == "" {
+		return "", "", errors.New("provider cannot be empty")
+	}
+	return id, provider, nil
 }
 
 func getCreateShareRequest(r *http.Request) (*NewShareRequest, error) {
