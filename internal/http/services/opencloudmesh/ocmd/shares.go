@@ -219,9 +219,14 @@ func getIDAndMeshProvider(user string) (string, string, error) {
 	}
 
 	id, provider := user[:last], user[last+1:]
+
+	if id == "" {
+		return "", "", errors.New("id cannot be empty")
+	}
 	if provider == "" {
 		return "", "", errors.New("provider cannot be empty")
 	}
+
 	return id, provider, nil
 }
 
