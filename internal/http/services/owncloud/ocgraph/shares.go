@@ -81,6 +81,10 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 
 	shares := make([]*libregraph.DriveItem, 0)
 	for _, share := range recvSharesResp.ShareInfos {
+		role := CS3ResourcePermissionsToUnifiedRole(ctx, share.ResourceInfo.PermissionSet)
+		if role != nil && *role.Id == UnifiedRoleDenyAccessID {
+			continue
+		}
 		drive, err := s.cs3ReceivedShareToDriveItem(ctx, share)
 		if err != nil {
 			log.Error().Err(err).Any("share", share).Msg("error parsing received share, ignoring")
