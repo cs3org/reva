@@ -53,8 +53,8 @@ const (
 	UnifiedRoleSecureViewerID = "aa97fe03-7980-45ac-9e50-b325749fd7e6"
 	// UnifiedRoleUploaderID Unified role uploader id.
 	UnifiedRoleUploaderID = "bf483fbf-5998-4afd-b593-e0f5ab823695"
-	// UnfiedRoleDenyAccessID Unified role deny access id.
-	UnfiedRoleDenyAccessID = "5d3754fa-a6a6-4985-b0af-dd1359e5d616"
+	// UnifiedRoleDenyAccessID Unified role deny access id.
+	UnifiedRoleDenyAccessID = "5d3754fa-a6a6-4985-b0af-dd1359e5d616"
 
 	// UnifiedRoleConditionDrive defines constraint that matches a Driveroot/Spaceroot
 	UnifiedRoleConditionDrive = "exists @Resource.Root"
@@ -222,7 +222,7 @@ func NewUploaderUnifiedRole() *libregraph.UnifiedRoleDefinition {
 func NewAccessDeniedUnifiedRole() *libregraph.UnifiedRoleDefinition {
 	r := conversions.NewDeniedRole()
 	return &libregraph.UnifiedRoleDefinition{
-		Id:          proto.String(UnfiedRoleDenyAccessID),
+		Id:          proto.String(UnifiedRoleDenyAccessID),
 		Description: proto.String("Remove all permissions."),
 		DisplayName: displayName(r),
 		RolePermissions: []libregraph.UnifiedRolePermission{
@@ -525,7 +525,7 @@ func UnifiedRoleIDToDefinition(unifiedRoleID string) (*libregraph.UnifiedRoleDef
 		return NewManagerUnifiedRole(), true
 	case UnifiedRoleSecureViewerID:
 		return NewViewerUnifiedRole(), true
-	case UnfiedRoleDenyAccessID:
+	case UnifiedRoleDenyAccessID:
 		return NewAccessDeniedUnifiedRole(), true
 	default:
 		return nil, false
