@@ -4,7 +4,9 @@
   "description": "Hugo theme for technical documentation.",
   "main": "none.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "_mkdir:hugo-mod": "mkdirp themes/github.com/FortAwesome/Font-Awesome themes/github.com/twbs/bootstrap",
+    "postinstall": "npm run _mkdir:hugo-mod"
   },
   "repository": {
     "type": "git",
@@ -22,6 +24,9 @@
     "postcss-cli": "^8.3.1"
   },
   "dependencies": {
-    "hugo-extended": "^0.124.1"
+    "@fortawesome/fontawesome-free": "6.5.2",
+    "bootstrap": "5.3.3",
+    "hugo-extended": "^0.142.0",
+    "mkdirp": "^3.0.1"
   }
 }
