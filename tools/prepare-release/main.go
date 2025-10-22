@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -43,6 +44,30 @@ func init() {
 		fmt.Fprintf(os.Stderr, "missing version: use -version flag\n")
 		os.Exit(1)
 	}
+}
+
+// calculateWeight generates a weight value based on semantic version
+// Lower weight = higher in the list (newer versions first)
+// Formula: 1000000 - (major*100 + minor*10 + patch)
+// This ensures v3.3.0 (weight 999670) comes before v3.2.2 (weight 999678)
+func calculateWeight(ver string) int {
+	// Remove 'v' prefix if present
+	ver = strings.TrimPrefix(ver, "v")
+
+	parts := strings.Split(ver, ".")
+	if len(parts) < 3 {
+		// Default weight for malformed versions
+		return 999999
+	}
+
+	major, _ := strconv.Atoi(parts[0])
+	minor, _ := strconv.Atoi(parts[1])
+	patch, _ := strconv.Atoi(parts[2])
+
+	// Calculate weight: higher version = lower weight
+	weight := 1000000 - (major*100 + minor*10 + patch)
+
+	return weight
 }
 
 func main() {
@@ -112,8 +137,9 @@ func main() {
 	run(cmd)
 
 	// Generate changelog also in the documentation
-	if err := os.MkdirAll(fmt.Sprintf("docs/content/en/changelog/%s", *version), 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "error creating changelog/%s: %s", *version, err)
+	// Updated path to docs/content/en/docs/changelog
+	if err := os.MkdirAll(fmt.Sprintf("docs/content/en/docs/changelog/%s", *version), 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "error creating docs/changelog/%s: %s", *version, err)
 		os.RemoveAll(tmp)
 		os.Exit(1)
 	}
@@ -125,19 +151,22 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Calculate weight based on semantic version
+	weight := calculateWeight(*version)
+
 	releaseDocs := fmt.Sprintf(`
 ---
 title: "v%s"
 linkTitle: "v%s"
-weight: 40
+weight: %d
 description: >
   Changelog for Reva v%s (%s)
 ---
 
-`, *version, *version, *version, date)
+`, *version, *version, weight, *version, date)
 
 	releaseDocs += string(data)
-	if err := os.WriteFile(fmt.Sprintf("docs/content/en/changelog/%s/_index.md", *version), []byte(releaseDocs), 0644); err != nil {
+	if err := os.WriteFile(fmt.Sprintf("docs/content/en/docs/changelog/%s/_index.md", *version), []byte(releaseDocs), 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "error writing docs release file _index.md: %s", err)
 		os.Exit(1)
 	}
@@ -147,7 +176,7 @@ description: >
 		"CHANGELOG.md",
 		"VERSION",
 		"RELEASE_DATE",
-		"docs/content/en/changelog",
+		"docs/content/en/docs/changelog",
 	)
 
 	if *commit {
