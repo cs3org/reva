@@ -16,7 +16,16 @@ defaultContentLanguageInSubdir = false
 # Useful when translating.
 enableMissingTranslationPlaceholders = true
 
-disableKinds = ["taxonomy", "taxonomyTerm"]
+disableKinds = ["taxonomy"]
+
+# Markup configuration
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+
+# Ignore warnings about raw HTML
+ignoreLogs = ['warning-goldmark-raw-html']
 
 # Highlighting config
 pygmentsCodeFences = true
@@ -83,8 +92,9 @@ github_subdir = "docs"
 # Google Custom Search Engine ID. Remove or comment out to disable search.
 # gcs_engine_id = "010913146518163072247:tinkle2veql"
 
-# Enable Algolia DocSearch
-algolia_docsearch = true
+# Enable Algolia DocSearch - using the new params.search.algolia format
+[params.search]
+[params.search.algolia]
 
 # User interface configuration
 [params.ui]
@@ -97,8 +107,8 @@ sidebar_search_disable = true
 
 #  Set to false if you don't want to display a logo (/assets/icons/logo.svg) in the top nav bar
 navbar_logo = true
-# Set to true to disable the About link in the site footer
-footer_about_disable = true
+# Set to false to enable the About link in the site footer
+footer_about_enable = false
 
 # Adds a H2 section titled "Feedback" to the bottom of each doc. The responses are sent to Google Analytics as events.
 # This feature depends on [services.googleAnalytics] and will be disabled if "services.googleAnalytics.id" is not set.

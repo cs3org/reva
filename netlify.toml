@@ -1,8 +1,16 @@
 [build]
   publish = "docs/public"
-  command = "git submodule update -f --init --recursive && cd docs/ && npm install postcss-cli && cd themes/docsy && npm run _mkdir:hugo-mod && cd ../../ && hugo --gc --minify || echo Ignoring failed Hugo build"
+  command = "git submodule update -f --init --recursive && cd docs/ && npm install && cd themes/docsy && npm install && cd ../../ && hugo --gc --minify"
   ignore = "git diff --quiet HEAD^ HEAD docs/"
 
 [build.environment]
-  HUGO_VERSION = "0.124.1"
+  HUGO_VERSION = "0.142.0"
   HUGO_ENV = "production"
+  HUGO_ENABLEGITINFO = "true"
+  NODE_VERSION = "18"
+
+[context.deploy-preview]
+  command = "git submodule update -f --init --recursive && cd docs/ && npm install && cd themes/docsy && npm install && cd ../../ && hugo --gc --minify --buildFuture"
+
+[context.branch-deploy]
+  command = "git submodule update -f --init --recursive && cd docs/ && npm install && cd themes/docsy && npm install && cd ../../ && hugo --gc --minify"

@@ -5,14 +5,17 @@ linkTitle = "reva"
 +++
 
 {{< blocks/cover title="" image_anchor="auto" height="auto" color="primary" >}}
- <div class="mx-auto">
+ <div class="mx-auto text-center">
+	<img src="/logo.svg" alt="Reva Logo" style="max-width: 300px; margin-bottom: 2rem;" />
+	<h2>Bridge the gap between Cloud Storages and Application Providers</h2>
+	<div class="mt-4">
 	<a class="btn btn-lg btn-primary mr-3 mb-4" href="{{< relref "/docs" >}}">
 		Learn More <i class="fas fa-arrow-alt-circle-right ml-2"></i>
 	</a>
 	<a class="btn btn-lg btn-warning mr-3 mb-4" href="https://github.com/cs3org/reva/releases">
 		Download <i class="fab fa-github ml-2 "></i>
 	</a>
-	<h2>Bridge the gap between Cloud Storages and Application Providers</h2>
+	</div>
 
 	{{< blocks/link-down color="info" >}}
 </div>
@@ -28,21 +31,33 @@ and scalable way. In order to do that, it leverages the **CS3 APIs**.
 
 {{< blocks/section color="dark" >}}
 
-{{% blocks/feature icon="fa-cubes" title="Modularity" color="primary" %}}
+<div class="container">
+<div class="row justify-content-center">
+
+{{% blocks/feature icon="fa-cubes" title="Modularity" %}}
 Almost any component of Reva can be swapped with your own components very easily: from HTTP middlewares and storage
 adapters to gRPC interceptors and more. You only need to know **Go**!
 {{% /blocks/feature %}}
 
-{{% blocks/feature icon="fab fa-github" title="Always Open Source" color="primary" %}}
+{{% blocks/feature icon="fab fa-github" title="Always Open Source" %}}
 Reva is developed on **GitHub** by multiple contributors who believe in the project. New contributors are always welcome to join!
 Take a look at the **Community** page to reach us.
 {{% /blocks/feature %}}
 
 
-{{% blocks/feature icon="fas fa-project-diagram" title="Inter-operability" color="primary"%}}
+{{% blocks/feature icon="fas fa-project-diagram" title="Inter-operability" %}}
 Using the **CS3 APIs** built on gRPC and Protocol Buffers, anyone can develop a component outside the 
 Reva core in any language: polyglot inter-operability!
 {{% /blocks/feature %}}
+
+</div>
+</div>
+
+<style>
+.td-box--dark .fa, .td-box--dark .fas, .td-box--dark .fab {
+  color: #ffffff !important;
+}
+</style>
 
 {{< /blocks/section>}}
 
