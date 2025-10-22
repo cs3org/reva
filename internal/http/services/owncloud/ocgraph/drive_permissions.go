@@ -3,6 +3,7 @@ package ocgraph
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"slices"
@@ -602,9 +603,12 @@ func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *provider.Re
 			},
 		},
 	})
-	if err != nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-		log.Error().Interface("ref", ref).Int("code", int(statRes.Status.Code)).Str("message", statRes.Status.Message).Msg("error statting resource")
+	if err != nil {
+		log.Error().Err(err).Interface("ref", ref).Msg("error statting resource")
 		return nil, nil, nil, err
+	} else if statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+		log.Error().Interface("ref", ref).Int("code", int(statRes.Status.Code)).Str("message", statRes.Status.Message).Msg("error statting resource")
+		return nil, nil, nil, fmt.Errorf("failed to stat: code %d with message %s", statRes.Status.Code, statRes.Status.Message)
 	}
 	perms = make([]*libregraph.Permission, 0)
 	shares, err := s.getSharesForResource(ctx, gw, statRes.Info)
