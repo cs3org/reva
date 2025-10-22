@@ -16,7 +16,16 @@ defaultContentLanguageInSubdir = false
 # Useful when translating.
 enableMissingTranslationPlaceholders = true
 
-disableKinds = ["taxonomy", "taxonomyTerm"]
+disableKinds = ["taxonomy"]
+
+# Markup configuration
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+
+# Ignore warnings about raw HTML
+ignoreLogs = ['warning-goldmark-raw-html']
 
 # Highlighting config
 pygmentsCodeFences = true
