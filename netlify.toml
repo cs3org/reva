@@ -7,6 +7,7 @@
   HUGO_VERSION = "0.142.0"
   HUGO_ENV = "production"
   HUGO_ENABLEGITINFO = "true"
+  NODE_VERSION = "18"
 
 [context.deploy-preview]
   command = "git submodule update -f --init --recursive && cd docs/ && npm install && cd themes/docsy && npm install && cd ../../ && hugo --gc --minify --buildFuture"

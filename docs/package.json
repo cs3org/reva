@@ -25,8 +25,8 @@
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "6.5.2",
+    "@popperjs/core": "^2.11.8",
     "bootstrap": "5.3.3",
-    "hugo-extended": "^0.142.0",
     "mkdirp": "^3.0.1"
   }
 }
