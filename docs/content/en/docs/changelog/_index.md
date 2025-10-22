@@ -3,7 +3,7 @@ title: "Changelog"
 linkTitle: "Changelog"
 weight: 50
 description: >
-  Release notes and changelog for all Reva versions
+  Release notes and changelog for Reva v3.0.0 and later
 cascade:
   - type: "docs"
 ---
@@ -11,4 +11,4 @@ cascade:
 {{< cardpane >}}
 {{< /cardpane >}}
 
-This section contains the changelog for all Reva releases, with the most recent versions listed first.
+This section contains the changelog for Reva releases v3.0.0 and later, with the most recent versions listed first.
