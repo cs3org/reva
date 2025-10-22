@@ -6,7 +6,7 @@ description: >
   Configuration for the nextcloud service
 ---
 
-## Configuration
+# _struct: ShareManagerConfig_
 
 {{% dir name="endpoint" type="string" default="" %}}
 The Nextcloud backend endpoint for user check [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/ocm/share/repository/nextcloud/nextcloud.go#L63)

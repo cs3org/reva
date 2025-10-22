@@ -8,15 +8,15 @@
   <p class="mb-0"></p>
 </div>
 
-<section class="row td-box td-box--4 td-box--gradient td-box--height-auto linkbox">
-<div class="col-xs-12 col-sm-6 col-md-6 col-lg-6">
+<section class="row td-box td-box--4 td-box--gradient td-box--height-auto linkbox justify-content-center">
+<div class="col-xs-12 col-sm-6 col-md-6 col-lg-5">
 <h2>Learn and Connect</h2>		
 <p>Using or want to use {{ .Site.Title }}? Find out more here:
 {{ with index $links "user"}}
 {{ template "community-links-list"  . }}
 {{ end }}
 </div>
-<div class="col-xs-12 col-sm-6 col-md-6 col-lg-6">
+<div class="col-xs-12 col-sm-6 col-md-6 col-lg-5">
 <h2>Develop and Contribute</h2>
 <p>If you want to get more involved by contributing to {{ .Site.Title }}, join us here:
 {{ with index $links "developer"}}

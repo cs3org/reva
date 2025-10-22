@@ -6,7 +6,7 @@ description: >
   Configuration for the wellknown service
 ---
 
-## Configuration
+# _struct: OcmProviderConfig_
 
 {{% dir name="ocm_prefix" type="string" default="ocm" %}}
 The prefix URL where the OCM API is served. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L33)

@@ -6,7 +6,7 @@ description: >
   Configuration for the mentix service
 ---
 
-## Configuration
+# _struct: config_
 
 {{% dir name="insecure" type="bool" default=false %}}
 Whether to skip certificate checks when sending requests. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/ocm/provider/authorizer/mentix/mentix.go#L81)

@@ -6,7 +6,7 @@ description: >
   Configuration for the dataprovider service
 ---
 
-## Configuration
+# _struct: config_
 
 {{% dir name="prefix" type="string" default="data" %}}
 The prefix to be used for this HTTP service [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L40)

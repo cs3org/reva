@@ -6,7 +6,7 @@ description: >
   Configuration for the notificationhelper service
 ---
 
-## Configuration
+# _struct: Config_
 
 {{% dir name="nats_address" type="string" default="" %}}
 The NATS server address. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/notification/notificationhelper/notificationhelper.go#L47)

@@ -6,7 +6,7 @@ description: >
   Configuration for the storageprovider service
 ---
 
-## Configuration
+# _struct: config_
 
 {{% dir name="mount_path" type="string" default="/" %}}
 The path where the file system would be mounted. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L74)

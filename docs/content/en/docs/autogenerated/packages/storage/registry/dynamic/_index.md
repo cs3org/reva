@@ -6,7 +6,7 @@ description: >
   Configuration for the dynamic service
 ---
 
-## Configuration
+# _struct: config_
 
 {{% dir name="rules" type="map[string]string" default=nil %}}
 A map from mountID to provider address [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/registry/dynamic/dynamic.go#L56)

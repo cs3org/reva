@@ -6,7 +6,7 @@ description: >
   Configuration for the localhome service
 ---
 
-## Configuration
+# _struct: config_
 
 {{% dir name="root" type="string" default="/var/tmp/reva/" %}}
 Path of root directory for user storage. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/localhome/localhome.go#L36)

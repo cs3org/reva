@@ -6,7 +6,7 @@ description: >
   Configuration for the permissions service
 ---
 
-## Configuration
+# _struct: config_
 
 {{% dir name="driver" type="string" default="localhome" %}}
 The permission driver to be used. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/permissions/permissions.go#L46)

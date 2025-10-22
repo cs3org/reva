@@ -6,7 +6,7 @@ description: >
   Configuration for the nextcloud service
 ---
 
-## Configuration
+# _struct: AuthManagerConfig_
 
 {{% dir name="endpoint" type="string" default="" %}}
 The Nextcloud backend endpoint for user check [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/nextcloud/nextcloud.go#L55)

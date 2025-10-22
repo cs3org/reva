@@ -6,7 +6,7 @@ description: >
   Configuration for the notifications service
 ---
 
-## Configuration
+# _struct: config_
 
 {{% dir name="nats_address" type="string" default="" %}}
 The NATS server address. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/serverless/services/notifications/notifications.go#L47)

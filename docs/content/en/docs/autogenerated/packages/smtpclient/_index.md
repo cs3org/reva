@@ -6,7 +6,7 @@ description: >
   Configuration for the smtpclient service
 ---
 
-## Configuration
+# _struct: SMTPCredentials_
 
 {{% dir name="sender_login" type="string" default="" %}}
 The login to be used by sender. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/smtpclient/smtpclient.go#L37)

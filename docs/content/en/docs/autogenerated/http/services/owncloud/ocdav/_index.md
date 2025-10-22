@@ -6,7 +6,7 @@ description: >
   Configuration for the ocdav service
 ---
 
-## Configuration
+# _struct: Config_
 
 {{% dir name="insecure" type="bool" default=false %}}
 Whether to skip certificate checks when sending requests. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/owncloud/ocdav/ocdav.go#L119)

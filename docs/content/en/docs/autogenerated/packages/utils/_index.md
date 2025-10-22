@@ -6,7 +6,7 @@ description: >
   Configuration for the utils service
 ---
 
-## Configuration
+# _struct: LDAPConn_
 
 {{% dir name="insecure" type="bool" default=false %}}
 Whether to skip certificate checks when sending requests. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/utils/ldap.go#L36)

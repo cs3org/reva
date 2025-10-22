@@ -6,7 +6,7 @@ description: >
   Configuration for the appprovider service
 ---
 
-## Configuration
+# _struct: config_
 
 {{% dir name="mime_types" type="[]string" default=nil %}}
 A list of mime types supported by this app. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/appprovider/appprovider.go#L68)

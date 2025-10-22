@@ -6,7 +6,7 @@ description: >
   Configuration for the wopi service
 ---
 
-## Configuration
+# _struct: config_
 
 {{% dir name="mime_types" type="[]string" default=nil %}}
 Inherited from the appprovider. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L79)

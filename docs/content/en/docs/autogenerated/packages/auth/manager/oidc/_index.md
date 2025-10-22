@@ -6,7 +6,7 @@ description: >
   Configuration for the oidc service
 ---
 
-## Configuration
+# _struct: config_
 
 {{% dir name="insecure" type="bool" default=false %}}
 Whether to skip certificate checks when sending requests. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidc/oidc.go#L65)

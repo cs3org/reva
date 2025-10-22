@@ -6,7 +6,7 @@ description: >
   Configuration for the ocmshareprovider service
 ---
 
-## Configuration
+# _struct: config_
 
 {{% dir name="provider_domain" type="string" default="The same domain registered in the provider authorizer" %}}
  [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/ocmshareprovider/ocmshareprovider.go#L73)

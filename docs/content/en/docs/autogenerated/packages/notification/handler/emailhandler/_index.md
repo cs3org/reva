@@ -6,7 +6,7 @@ description: >
   Configuration for the emailhandler service
 ---
 
-## Configuration
+# _struct: config_
 
 {{% dir name="smtp_server" type="string" default="" %}}
 The hostname and port of the SMTP server. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/notification/handler/emailhandler/emailhandler.go#L46)

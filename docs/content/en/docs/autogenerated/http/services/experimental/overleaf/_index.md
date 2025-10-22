@@ -6,7 +6,7 @@ description: >
   Configuration for the overleaf service
 ---
 
-## Configuration
+# _struct: config_
 
 {{% dir name="app_name" type="string" default="" %}}
 The App user-friendly name. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/experimental/overleaf/overleaf.go#L58)
