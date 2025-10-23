@@ -462,7 +462,6 @@ func (s *service) getAllPublicSpaces(ctx context.Context) ([]*provider.StorageSp
 				QuotaMaxBytes:  uint64(math.Pow10(18)),
 				RemainingBytes: uint64(math.Pow10(18)) - resourceInfo.Size,
 			},
-			PermissionSet: resourceInfo.PermissionSet,
 		}
 
 		if description, ok := content["description"]; ok {
