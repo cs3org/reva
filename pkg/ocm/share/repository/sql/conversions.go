@@ -21,13 +21,13 @@ package sql
 import (
 	"database/sql"
 	"strconv"
-	"strings"
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 )
@@ -176,19 +176,8 @@ type dbProtocol struct {
 	TransferSize         *int
 }
 
-func convertFederatedUserID(s string) *userpb.UserId {
-	split := strings.Split(s, "@")
-	if len(split) < 2 {
-		panic("not in the form <id>@<provider>")
-	}
-	return &userpb.UserId{
-		OpaqueId: split[0],
-		Idp:      split[1],
-		Type:     userpb.UserType_USER_TYPE_FEDERATED,
-	}
-}
-
 func convertToCS3OCMShare(s *dbShare, am []*ocm.AccessMethod) *ocm.Share {
+	granteeUserId, _ := ocmd.GetUserIdFromOCMAddress(s.ShareWith)
 	share := &ocm.Share{
 		Id: &ocm.ShareId{
 			OpaqueId: strconv.Itoa(s.ID),
@@ -202,7 +191,7 @@ func convertToCS3OCMShare(s *dbShare, am []*ocm.AccessMethod) *ocm.Share {
 		Grantee: &provider.Grantee{
 			Type: provider.GranteeType_GRANTEE_TYPE_USER,
 			Id: &provider.Grantee_UserId{
-				UserId: convertFederatedUserID(s.ShareWith),
+				UserId: granteeUserId,
 			},
 		},
 		Owner: &userpb.UserId{
@@ -229,6 +218,8 @@ func convertToCS3OCMShare(s *dbShare, am []*ocm.AccessMethod) *ocm.Share {
 }
 
 func convertToCS3OCMReceivedShare(s *dbReceivedShare, p []*ocm.Protocol) *ocm.ReceivedShare {
+	ownerUserId, _ := ocmd.GetUserIdFromOCMAddress(s.Owner)
+	creatorUserId, _ := ocmd.GetUserIdFromOCMAddress(s.Initiator)
 	share := &ocm.ReceivedShare{
 		Id: &ocm.ShareId{
 			OpaqueId: strconv.Itoa(s.ID),
@@ -243,8 +234,8 @@ func convertToCS3OCMReceivedShare(s *dbReceivedShare, p []*ocm.Protocol) *ocm.Re
 				},
 			},
 		},
-		Owner:   convertFederatedUserID(s.Owner),
-		Creator: convertFederatedUserID(s.Initiator),
+		Owner:   ownerUserId,
+		Creator: creatorUserId,
 		Ctime: &types.Timestamp{
 			Seconds: uint64(s.Ctime),
 		},
