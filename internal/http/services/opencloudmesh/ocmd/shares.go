@@ -128,13 +128,13 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	owner, err := getUserIDFromOCMUser(req.Owner)
+	owner, err := GetUserIDFromOCMUser(req.Owner)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with remote owner", err)
 		return
 	}
 
-	sender, err := getUserIDFromOCMUser(req.Sender)
+	sender, err := GetUserIDFromOCMUser(req.Sender)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with remote sender", err)
 		return
@@ -198,36 +198,35 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(response)
 }
 
-func getUserIDFromOCMUser(user string) (*userpb.UserId, error) {
+func GetUserIDFromOCMUser(user string) (*userpb.UserId, error) {
 	id, idp, err := getIDAndMeshProvider(user)
 	if err != nil {
 		return nil, err
 	}
-	idp = strings.TrimPrefix(idp, "https://") // strip off leading scheme if present (despite being not OCM compliant). This is the case in Nextcloud and oCIS
 	return &userpb.UserId{
 		OpaqueId: id,
 		Idp:      idp,
-		// the remote user is a federated account for the local reva
+		// a remote user is a federated account for the local system
 		Type: userpb.UserType_USER_TYPE_FEDERATED,
 	}, nil
 }
 
-func getIDAndMeshProvider(user string) (string, string, error) {
+func getIDAndMeshProvider(user string) (id string, idp string, err error) {
 	last := strings.LastIndex(user, "@")
 	if last == -1 {
 		return "", "", errors.New("not in the form <id>@<provider>")
 	}
 
-	id, provider := user[:last], user[last+1:]
-
+	id, idp = user[:last], user[last+1:]
 	if id == "" {
 		return "", "", errors.New("id cannot be empty")
 	}
-	if provider == "" {
+	if idp == "" {
 		return "", "", errors.New("provider cannot be empty")
 	}
+	idp = strings.TrimPrefix(idp, "https://") // strip off leading scheme if present (despite being not OCM compliant). This is the case in Nextcloud and oCIS
 
-	return id, provider, nil
+	return id, idp, nil
 }
 
 func getCreateShareRequest(r *http.Request) (*NewShareRequest, error) {

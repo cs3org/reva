@@ -253,7 +253,10 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL s
 }
 
 func formatRemoteUser(u *userpb.UserId) string {
-	return fmt.Sprintf("%s@%s", u.OpaqueId, u.Idp)
+	if u != nil {
+		return fmt.Sprintf("%s@%s", u.OpaqueId, u.Idp)
+	}
+	return "Federated User"
 }
 
 func webdavInfo(protocols []*ocm.Protocol) (*ocm.WebDAVProtocol, bool) {

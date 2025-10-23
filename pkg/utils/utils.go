@@ -436,6 +436,15 @@ func IsLightweightUser(u *userpb.User) bool {
 		u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT
 }
 
+// PrintOCMUserId returns a composed user id for federated users good for display purposes
+func PrintOCMUserId(u *userpb.UserId) string {
+	opaque := u.OpaqueId
+	if len(opaque) > 10 {
+		opaque = opaque[:8] + "..."
+	}
+	return opaque + " at " + u.Idp
+}
+
 // Cast casts a value `v` to the value `to`.
 // `v` is expected to be the underlying type of `to`.
 // For example, if the type A is defined as func()
