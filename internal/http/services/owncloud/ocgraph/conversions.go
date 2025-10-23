@@ -12,16 +12,18 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	group "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 )
 
 func (s *svc) shareToLibregraphPerm(ctx context.Context, share *GenericShare) (*libregraph.Permission, error) {
@@ -162,8 +164,8 @@ func (s *svc) buildGrantedToForOCMShare(ctx context.Context, grantee *provider.G
 	switch grantee.Type {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
 		grantedTo.SetUser(libregraph.Identity{
-			Id:          libregraph.PtrString(grantee.GetUserId().OpaqueId),
-			DisplayName: grantee.GetUserId().OpaqueId + "@" + grantee.GetUserId().Idp,
+			DisplayName: s.getDisplayNameForOCMUser(ctx, grantee.GetUserId()),
+			Id:          libregraph.PtrString(utils.PrintOCMUserId(grantee.GetUserId())),
 		})
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
 		return nil, errors.New("Groups are currently not supported in OCM shares")
@@ -295,8 +297,8 @@ func (s *svc) ocmGranteeToSharePointIdentitySet(ctx context.Context, grantee *pr
 	}
 
 	p.User = &libregraph.Identity{
-		DisplayName:        grantee.GetUserId().OpaqueId + "@" + grantee.GetUserId().Idp,
-		Id:                 libregraph.PtrString(grantee.GetUserId().OpaqueId),
+		DisplayName:        s.getDisplayNameForOCMUser(ctx, grantee.GetUserId()),
+		Id:                 libregraph.PtrString(utils.PrintOCMUserId(grantee.GetUserId())),
 		LibreGraphUserType: libregraph.PtrString("Federated"),
 	}
 	return p, nil
@@ -459,6 +461,7 @@ func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare 
 		return nil, err
 	}
 
+	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("receivedOCMShare", receivedOCMShare).Msg("processing received OCM share")
 
 	var webdav_uri, webapp_uri, shared_secret string
@@ -487,10 +490,9 @@ func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare 
 		roles = append(roles, *role.Id)
 	}
 
-	// TODO(lopresti) we need a proper display name here, which should come from shares.go
 	lgOCMUser := &libregraph.Identity{
-		DisplayName:        receivedOCMShare.Creator.OpaqueId + "@" + receivedOCMShare.Creator.Idp,
-		Id:                 libregraph.PtrString(receivedOCMShare.Creator.OpaqueId),
+		DisplayName:        s.getDisplayNameForOCMUser(ctx, receivedOCMShare.Creator),
+		Id:                 libregraph.PtrString(utils.PrintOCMUserId(receivedOCMShare.Creator)),
 		LibreGraphUserType: libregraph.PtrString("Federated"),
 	}
 
@@ -542,7 +544,28 @@ func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare 
 	return d, nil
 }
 
+func (s *svc) getDisplayNameForOCMUser(ctx context.Context, userId *userpb.UserId) string {
+	log := appctx.GetLogger(ctx)
+	gw, err := s.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("getDisplayNameForOCMUser: failed to get grpc gateway")
+		return "Federated User"
+	}
+
+	remoteUserRes, err := gw.GetAcceptedUser(ctx, &invitepb.GetAcceptedUserRequest{
+		RemoteUserId: userId,
+	})
+	if err != nil || remoteUserRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+		log.Error().Err(err).Any("response", remoteUserRes).Any("remoteUser", userId).Msg("failed to fetch OCM user")
+		return "Federated User at " + userId.Idp
+	}
+
+	log.Debug().Any("remoteUser", remoteUserRes.RemoteUser).Msg("found OCM user")
+	return remoteUserRes.RemoteUser.DisplayName
+}
+
 func (s *svc) cs3sharesToPermissions(ctx context.Context, shares []*GenericShare) ([]libregraph.Permission, error) {
+	log := appctx.GetLogger(ctx)
 	permissions := make([]libregraph.Permission, 0, len(shares))
 
 	for _, e := range shares {
