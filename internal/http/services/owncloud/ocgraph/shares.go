@@ -206,15 +206,14 @@ func (s *svc) createOCMShare(ctx context.Context, gw gateway.GatewayAPIClient, r
 }
 
 func (s *svc) decomposeOCMAddress(recipientID string) (string, string) {
-	var username, idp string
-	if strings.Contains(recipientID, "@") {
-		// split the string into a user and an idp
-		parts := strings.SplitN(recipientID, "@", 2)
-		username = parts[0]
-		idp = parts[1]
-		return username, idp
+	last := strings.LastIndex(recipientID, "@")
+	if last == -1 {
+		return "", ""
 	}
-	return "", ""
+
+	username, idp := recipientID[:last], recipientID[last+1:]
+
+	return username, idp
 }
 
 func (s *svc) share(w http.ResponseWriter, r *http.Request) {
