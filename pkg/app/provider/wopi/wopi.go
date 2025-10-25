@@ -194,9 +194,9 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 			log.Warn().Interface("resId", resource.Id).Interface("path", resource.Path).Err(pathErr).Msg("wopi: failed to extract relative path from public link scope")
 		}
 	case ocmrole:
-		// OCM users have no username: use displayname@Idp
+		// build a username for OCM users as "userid at idp"
 		ut = ocm
-		q.Add("username", u.DisplayName+" @ "+u.Id.Idp)
+		q.Add("username", utils.PrintOCMUserId(u.Id))
 		// and resolve the folder
 		rPath, pathErr = getPathForExternalLink(ctx, scopes, resource, ocmLinkURLPrefix)
 		if pathErr != nil {
