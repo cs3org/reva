@@ -69,6 +69,7 @@ type config struct {
 	SubjectTemplate  string                      `mapstructure:"subject_template"`
 	BodyTemplatePath string                      `mapstructure:"body_template_path"`
 	OCMMountPoint    string                      `mapstructure:"ocm_mount_point"`
+	FederationsFile  string                      `mapstructure:"federations_file"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -77,6 +78,9 @@ func (c *config) ApplyDefaults() {
 	}
 	if c.OCMMountPoint == "" {
 		c.OCMMountPoint = "/ocm"
+	}
+	if c.FederationsFile == "" {
+		c.FederationsFile = "/etc/revad/federations.json"
 	}
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
@@ -102,6 +106,11 @@ func (s *svc) routerInit() error {
 		return err
 	}
 
+	wayfHandler := new(wayfHandler)
+	if err := wayfHandler.init(s.conf); err != nil {
+		return err
+	}
+
 	s.router.Post("/generate-invite", tokenHandler.Generate)
 	s.router.Get("/list-invite", tokenHandler.ListInvite)
 	s.router.Post("/accept-invite", tokenHandler.AcceptInvite)
@@ -109,6 +118,8 @@ func (s *svc) routerInit() error {
 	s.router.Delete("/delete-accepted-user", tokenHandler.DeleteAccepted)
 	s.router.Get("/list-providers", providersHandler.ListProviders)
 	s.router.Post("/open-in-app", appsHandler.OpenInApp)
+	s.router.Get("/federations", wayfHandler.GetFederations)
+	s.router.Post("/discover", wayfHandler.DiscoverProvider)
 	return nil
 }
 
@@ -117,7 +128,7 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Unprotected() []string {
-	return nil
+	return []string{"/federations", "/discover"}
 }
 
 func (s *svc) Handler() http.Handler {
