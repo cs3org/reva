@@ -215,7 +215,7 @@ func getUserIDFromOCMUser(user string) (*userpb.UserId, error) {
 func getIDAndMeshProvider(user string) (string, string, error) {
 	last := strings.LastIndex(user, "@")
 	if last == -1 {
-		return "", "", errors.New("not in the form <id>@<provider>")
+		return "", "", fmt.Errorf("%s not in the form <id>@<provider>", user)
 	}
 
 	id, provider := user[:last], user[last+1:]
