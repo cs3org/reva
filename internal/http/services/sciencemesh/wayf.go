@@ -106,7 +106,7 @@ func (h *wayfHandler) init(c *config) error {
 
 	for _, fed := range fileData {
 		log.Debug().Str("federation", fed.Federation).Int("servers_count", len(fed.Servers)).Msg("Processing federation")
-		validServers := []FederationServer{}
+		var validServers []FederationServer
 
 		for _, srv := range fed.Servers {
 			if srv.DisplayName == "" || srv.URL == "" {
