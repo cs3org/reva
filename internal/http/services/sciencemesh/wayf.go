@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -33,8 +34,30 @@ import (
 )
 
 type wayfHandler struct {
-	directoryServices []ocmd.DirectoryService
-	ocmClient         *ocmd.OCMClient
+	federations []Federation
+}
+
+type Federation struct {
+	Federation string             `json:"federation"`
+	Servers    []FederationServer `json:"servers"`
+}
+
+// FederationServer represents a single provider with discovery info
+type FederationServer struct {
+	DisplayName        string `json:"displayName"`
+	URL                string `json:"url"`
+	InviteAcceptDialog string `json:"inviteAcceptDialog,omitempty"`
+}
+
+// federationFile is the on-disk structure without inviteAcceptDialog
+type federationFile struct {
+	Federation string                 `json:"federation"`
+	Servers    []federationServerFile `json:"servers"`
+}
+
+type federationServerFile struct {
+	DisplayName string `json:"displayName"`
+	URL         string `json:"url"`
 }
 
 type DiscoverRequest struct {
@@ -45,78 +68,62 @@ type DiscoverResponse struct {
 	InviteAcceptDialog string `json:"inviteAcceptDialog"`
 }
 
-// makeAbsoluteURL takes a base URL and a path/URL and returns an absolute URL.
-// If dialogURL is already absolute (has scheme and host), it returns it as-is.
-// Otherwise, it joins the dialogURL with the baseURL to create an absolute URL.
-func makeAbsoluteURL(baseURL, dialogURL string) (string, error) {
-	if dialogURL == "" {
-		return "", nil
-	}
-
-	parsed, err := url.Parse(dialogURL)
-	if err == nil && parsed.Scheme != "" && parsed.Host != "" {
-		return dialogURL, nil
-	}
-
-	return url.JoinPath(baseURL, dialogURL)
-}
-
 func (h *wayfHandler) init(c *config) error {
 	log := appctx.GetLogger(context.Background())
 
-	// Create OCM client for discovery from config
-	h.ocmClient = ocmd.NewClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure)
-	log.Debug().
-		Int("timeout_seconds", c.OCMClientTimeout).
-		Bool("insecure", c.OCMClientInsecure).
-		Msg("Created OCM client for discovery")
+	log.Debug().Str("file", c.FederationsFile).Msg("Initializing WAYF handler with federations file")
 
-	urls := strings.Fields(c.DirectoryServiceURLs)
-	if len(urls) == 0 {
-		log.Info().Msg("No directory service URLs configured, starting with empty list")
-		h.directoryServices = []ocmd.DirectoryService{}
-		return nil
+	data, err := os.ReadFile(c.FederationsFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			log.Warn().Str("file", c.FederationsFile).Msg("Federations file not found, starting with empty list")
+			h.federations = []Federation{}
+			return nil
+		}
+		log.Error().Err(err).Str("file", c.FederationsFile).Msg("Failed to read federations file")
+		return err
 	}
 
-	log.Debug().Int("url_count", len(urls)).Strs("urls", urls).Msg("Initializing WAYF handler with directory service URLs")
+	var fileData []federationFile
+	if err := json.Unmarshal(data, &fileData); err != nil {
+		log.Error().Err(err).Str("file", c.FederationsFile).Msg("Failed to parse federations file")
+		return err
+	}
+
+	log.Debug().Int("federations_count", len(fileData)).Msg("Loaded federations from file")
+
+	// Create OCM client for discovery
+	ocmClient := ocmd.NewClient(10*time.Second, false)
+	log.Debug().Msg("Created OCM client for discovery")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	h.directoryServices = []ocmd.DirectoryService{}
+	// Discover each server and populate inviteAcceptDialog
+	h.federations = []Federation{}
 	discoveryErrors := 0
 	validServersCount := 0
-	fetchErrors := 0
 
-	for _, directoryURL := range urls {
-		log.Debug().Str("url", directoryURL).Msg("Fetching directory service")
+	for _, fed := range fileData {
+		log.Debug().Str("federation", fed.Federation).Int("servers_count", len(fed.Servers)).Msg("Processing federation")
+		var validServers []FederationServer
 
-		directoryService, err := h.ocmClient.GetDirectoryService(ctx, directoryURL)
-		if err != nil {
-			log.Info().Err(err).Str("url", directoryURL).Msg("Failed to fetch directory service, skipping")
-			fetchErrors++
-			continue
-		}
-
-		log.Debug().Str("federation", directoryService.Federation).Int("servers_count", len(directoryService.Servers)).Msg("Processing directory service")
-
-		var validServers []ocmd.DirectoryServiceServer
-		for _, srv := range directoryService.Servers {
+		for _, srv := range fed.Servers {
 			if srv.DisplayName == "" || srv.URL == "" {
-				log.Debug().Str("federation", directoryService.Federation).
+				log.Warn().Str("federation", fed.Federation).
 					Str("displayName", srv.DisplayName).
 					Str("url", srv.URL).
 					Msg("Skipping server with missing displayName or url")
 				continue
 			}
 
-			log.Debug().Str("federation", directoryService.Federation).Str("server", srv.DisplayName).Str("url", srv.URL).Msg("Discovering server")
+			log.Debug().Str("federation", fed.Federation).Str("server", srv.DisplayName).Str("url", srv.URL).Msg("Discovering server")
 
 			// Discover inviteAcceptDialog from OCM endpoint
-			disco, err := h.ocmClient.Discover(ctx, srv.URL)
+			disco, err := ocmClient.Discover(ctx, srv.URL)
 			if err != nil {
-				log.Debug().Err(err).
-					Str("federation", directoryService.Federation).
+				log.Warn().Err(err).
+					Str("federation", fed.Federation).
 					Str("server", srv.DisplayName).
 					Str("url", srv.URL).
 					Msg("Failed to discover server, skipping")
@@ -126,24 +133,22 @@ func (h *wayfHandler) init(c *config) error {
 
 			inviteDialog := disco.InviteAcceptDialog
 
-			if inviteDialog != "" {
-				absoluteURL, err := makeAbsoluteURL(srv.URL, inviteDialog)
-				if err != nil {
-					log.Debug().Err(err).
-						Str("federation", directoryService.Federation).
-						Str("server", srv.DisplayName).
+			// If it's a relative path (starts with /), make it absolute
+			if inviteDialog != "" && inviteDialog[0] == '/' {
+				baseURL, parseErr := url.Parse(srv.URL)
+				if parseErr == nil {
+					inviteDialog = baseURL.Scheme + "://" + baseURL.Host + inviteDialog
+					log.Debug().Str("original", disco.InviteAcceptDialog).Str("converted", inviteDialog).Msg("Converted relative path to absolute")
+				} else {
+					log.Warn().Err(parseErr).
 						Str("url", srv.URL).
 						Str("inviteDialog", disco.InviteAcceptDialog).
-						Msg("Failed to construct absolute URL, skipping server")
+						Msg("Failed to parse server URL for relative path conversion")
 					continue
 				}
-				if absoluteURL != inviteDialog {
-					log.Debug().Str("original", inviteDialog).Str("absolute", absoluteURL).Msg("Converted to absolute URL")
-				}
-				inviteDialog = absoluteURL
 			}
 
-			validServers = append(validServers, ocmd.DirectoryServiceServer{
+			validServers = append(validServers, FederationServer{
 				DisplayName:        srv.DisplayName,
 				URL:                srv.URL,
 				InviteAcceptDialog: inviteDialog,
@@ -151,28 +156,27 @@ func (h *wayfHandler) init(c *config) error {
 			validServersCount++
 
 			log.Debug().
-				Str("federation", directoryService.Federation).
+				Str("federation", fed.Federation).
 				Str("server", srv.DisplayName).
 				Str("inviteAcceptDialog", inviteDialog).
 				Msg("Successfully discovered server")
 		}
 
 		if len(validServers) > 0 {
-			h.directoryServices = append(h.directoryServices, ocmd.DirectoryService{
-				Federation: directoryService.Federation,
+			h.federations = append(h.federations, Federation{
+				Federation: fed.Federation,
 				Servers:    validServers,
 			})
-			log.Debug().Str("federation", directoryService.Federation).Int("valid_servers", len(validServers)).Msg("Added directory service with valid servers")
+			log.Debug().Str("federation", fed.Federation).Int("valid_servers", len(validServers)).Msg("Added federation with valid servers")
 		} else {
-			log.Info().Str("federation", directoryService.Federation).
-				Msg("Directory service has no valid servers, skipping entirely")
+			log.Warn().Str("federation", fed.Federation).
+				Msg("Federation has no valid servers, skipping entirely")
 		}
 	}
 
 	log.Info().
-		Int("directory_services", len(h.directoryServices)).
+		Int("federations", len(h.federations)).
 		Int("valid_servers", validServersCount).
-		Int("fetch_errors", fetchErrors).
 		Int("discovery_errors", discoveryErrors).
 		Msg("WAYF handler initialization completed")
 
@@ -183,7 +187,7 @@ func (h *wayfHandler) GetFederations(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
-	if err := json.NewEncoder(w).Encode(h.directoryServices); err != nil {
+	if err := json.NewEncoder(w).Encode(h.federations); err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error encoding response", err)
 		return
 	}
@@ -215,29 +219,22 @@ func (h *wayfHandler) DiscoverProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Create OCM client with timeout
+	ocmClient := ocmd.NewClient(10*time.Second, false)
+
 	log.Debug().Str("domain", domain).Msg("Attempting OCM discovery")
-	disco, err := h.ocmClient.Discover(ctx, domain)
+	disco, err := ocmClient.Discover(ctx, domain)
 	if err != nil {
-		log.Info().Err(err).Str("domain", domain).Msg("Discovery failed")
+		log.Warn().Err(err).Str("domain", domain).Msg("Discovery failed")
 		reqres.WriteError(w, r, reqres.APIErrorNotFound,
 			fmt.Sprintf("Provider at '%s' does not support OCM discovery", req.Domain), err)
 		return
 	}
 
 	inviteDialog := disco.InviteAcceptDialog
-
-	if inviteDialog == "" {
-		log.Info().Str("domain", domain).Msg("Provider does not provide invite accept dialog")
-		reqres.WriteError(w, r, reqres.APIErrorNotFound,
-			fmt.Sprintf("Provider at '%s' does not provide an invite accept dialog", req.Domain), nil)
-		return
-	}
-
-	inviteDialog, err = makeAbsoluteURL(domain, inviteDialog)
-	if err != nil {
-		log.Info().Err(err).Str("domain", domain).Str("inviteDialog", disco.InviteAcceptDialog).Msg("Failed to construct invite accept dialog URL")
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "Failed to construct invite accept dialog URL", err)
-		return
+	if inviteDialog != "" && inviteDialog[0] == '/' {
+		baseURL, _ := url.Parse(domain)
+		inviteDialog = baseURL.Scheme + "://" + baseURL.Host + inviteDialog
 	}
 
 	response := DiscoverResponse{
