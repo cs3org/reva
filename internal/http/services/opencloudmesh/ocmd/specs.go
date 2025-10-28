@@ -25,6 +25,7 @@ import (
 	"reflect"
 	"strings"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ocmshare "github.com/cs3org/reva/v3/pkg/ocm/share"
@@ -228,4 +229,29 @@ func GetProtocolName(p Protocol) string {
 	n := reflect.TypeOf(p).String()
 	s := strings.Split(n, ".")
 	return strings.ToLower(s[len(s)-1])
+}
+
+// GetUserIdFromOCMAddress parses an OCM address identifier in the form <id>@<provider>
+// according to the specifications, see https://github.com/cs3org/OCM-API/blob/develop/IETF-RFC.md#terms
+func GetUserIdFromOCMAddress(user string) (*userpb.UserId, error) {
+	last := strings.LastIndex(user, "@")
+	if last == -1 {
+		return nil, errors.New("not in the form <id>@<provider>")
+	}
+
+	id, idp := user[:last], user[last+1:]
+	if id == "" {
+		return nil, errors.New("id cannot be empty")
+	}
+	if idp == "" {
+		return nil, errors.New("provider cannot be empty")
+	}
+	idp = strings.TrimPrefix(idp, "https://") // strip off leading scheme if present (despite being not OCM compliant). This is the case in Nextcloud and oCIS
+
+	return &userpb.UserId{
+		OpaqueId: id,
+		Idp:      idp,
+		// a remote user is a federated account for the local system
+		Type: userpb.UserType_USER_TYPE_FEDERATED,
+	}, nil
 }

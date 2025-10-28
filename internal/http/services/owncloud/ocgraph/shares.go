@@ -42,6 +42,7 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
@@ -163,16 +164,12 @@ func (s *svc) createLocalShare(ctx context.Context, gw gateway.GatewayAPIClient,
 	return resp, nil
 }
 
-func (s *svc) createOCMShare(ctx context.Context, gw gateway.GatewayAPIClient, resourceId *provider.ResourceId, recipientID string, idp string, role string) (*ocm.CreateOCMShareResponse, error) {
+func (s *svc) createOCMShare(ctx context.Context, gw gateway.GatewayAPIClient, resourceId *provider.ResourceId, recipientID *userpb.UserId, role string) (*ocm.CreateOCMShareResponse, error) {
 	recipientProviderInfo, err := gw.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
-		Domain: idp,
+		Domain: recipientID.Idp,
 	})
-
-	if err != nil {
-		return nil, errors.New("error sending a grpc get invite by domain info request" + recipientProviderInfo.Status.Message)
-	}
-	if recipientProviderInfo.Status.Code != rpc.Code_CODE_OK {
-		return nil, errors.New("error sending a grpc get invite by domain info request" + recipientProviderInfo.Status.Message)
+	if err != nil || recipientProviderInfo.Status.Code != rpc.Code_CODE_OK {
+		return nil, errors.New("error sending a grpc GetInfoByDomain request" + recipientProviderInfo.Status.Message)
 	}
 
 	perm, viewMode := UnifiedRoleToOCMPermissions(role)
@@ -181,11 +178,7 @@ func (s *svc) createOCMShare(ctx context.Context, gw gateway.GatewayAPIClient, r
 		Grantee: &provider.Grantee{
 			Type: provider.GranteeType_GRANTEE_TYPE_USER,
 			Id: &provider.Grantee_UserId{
-				UserId: &userpb.UserId{
-					Idp:      idp,
-					OpaqueId: recipientID,
-					Type:     userpb.UserType_USER_TYPE_FEDERATED,
-				},
+				UserId: recipientID,
 			},
 		},
 		RecipientMeshProvider: recipientProviderInfo.ProviderInfo,
@@ -203,18 +196,6 @@ func (s *svc) createOCMShare(ctx context.Context, gw gateway.GatewayAPIClient, r
 		return nil, errors.New("failed to create remote share: " + resp.Status.Message)
 	}
 	return resp, nil
-}
-
-func (s *svc) decomposeOCMAddress(recipientID string) (string, string) {
-	var username, idp string
-	if strings.Contains(recipientID, "@") {
-		// split the string into a user and an idp
-		parts := strings.SplitN(recipientID, "@", 2)
-		username = parts[0]
-		idp = parts[1]
-		return username, idp
-	}
-	return "", ""
 }
 
 func (s *svc) share(w http.ResponseWriter, r *http.Request) {
@@ -328,12 +309,12 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 			}
 			response = append(response, lgPerm)
 		case "remote":
-			username, idp := s.decomposeOCMAddress(*recipient.ObjectId)
-			if username == "" || idp == "" {
+			ocmUser, err := ocmd.GetUserIdFromOCMAddress(*recipient.ObjectId)
+			if err != nil {
 				handleBadRequest(ctx, errors.New("invalid remote recipient address, must be remote_user_id@remote_ocm_fqdn"), w)
 				return
 			}
-			resp, err := s.createOCMShare(ctx, gw, resourceId, username, idp, roles[0])
+			resp, err := s.createOCMShare(ctx, gw, resourceId, ocmUser, roles[0])
 			if err != nil {
 				log.Error().Err(err).Msg("")
 				handleError(ctx, err, w)
@@ -529,9 +510,9 @@ func (s *svc) getGroupByID(ctx context.Context, g *grouppb.GroupId) (*grouppb.Gr
 	return res.Group, nil
 }
 
-func groupByResourceID(shares []*gateway.ShareResourceInfo, publicShares []*gateway.PublicShareResourceInfo) (map[string][]*GenericShare, map[string]*provider.ResourceInfo) {
-	grouped := make(map[string][]*GenericShare, len(shares)+len(publicShares)) // at most we have the sum of both lists
-	infos := make(map[string]*provider.ResourceInfo, len(shares)+len(publicShares))
+func groupByResourceID(shares []*gateway.ShareResourceInfo, publicShares []*gateway.PublicShareResourceInfo, ocmShares []*gateway.OCMShareResourceInfo) (map[string][]*GenericShare, map[string]*provider.ResourceInfo) {
+	grouped := make(map[string][]*GenericShare, len(shares)+len(publicShares)+len(ocmShares)) // at most we have the sum of all three lists
+	infos := make(map[string]*provider.ResourceInfo, len(shares)+len(publicShares)+len(ocmShares))
 
 	for _, s := range shares {
 		id := spaces.ResourceIdToString(s.Share.ResourceId)
@@ -551,6 +532,18 @@ func groupByResourceID(shares []*gateway.ShareResourceInfo, publicShares []*gate
 			link:      s.PublicShare,
 		})
 		infos[id] = s.ResourceInfo
+	}
+
+	if len(ocmShares) > 0 {
+		for _, s := range ocmShares {
+			id := spaces.ResourceIdToString(s.OcmShare.ResourceId)
+			grouped[id] = append(grouped[id], &GenericShare{
+				shareType: ShareTypeOCMShare,
+				ID:        s.OcmShare.Id.OpaqueId,
+				ocmshare:  s.OcmShare,
+			})
+			infos[id] = s.ResourceInfo
+		}
 	}
 
 	return grouped, infos
@@ -605,8 +598,38 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 		handleError(ctx, err, w)
 		return
 	}
+	var OCMShares *gateway.ListExistingOCMSharesResponse
+	if s.c.OCMEnabled && !utils.IsLightweightUser(user) {
+		// include ocm shares in the response
+		OCMShares, err = gw.ListExistingOCMShares(ctx, &ocm.ListOCMSharesRequest{
+			Filters: []*ocm.ListOCMSharesRequest_Filter{
+				{
+					Type: ocm.ListOCMSharesRequest_Filter_TYPE_CREATOR,
+					Term: &ocm.ListOCMSharesRequest_Filter_Creator{
+						Creator: user.Id,
+					},
+				},
+			},
+		})
+		if err != nil {
+			handleError(ctx, err, w)
+			log.Fatal().Err(err).Msg("ListOCMShares returned error - user will not be able to see their OCM shares")
+		} else if OCMShares != nil {
+			if OCMShares.Status == nil || OCMShares.Status.Code != rpc.Code_CODE_OK {
+				handleRpcStatus(ctx, OCMShares.Status, "ocgraph: failed to perform ListOCMShares ", w)
+			}
+		}
+	}
 
-	grouped, infos := groupByResourceID(shares.ShareInfos, publicShares.ShareInfos)
+	grouped, infos := groupByResourceID(
+		shares.ShareInfos,
+		publicShares.ShareInfos,
+		func() []*gateway.OCMShareResourceInfo {
+			if OCMShares == nil {
+				return []*gateway.OCMShareResourceInfo{}
+			}
+			return OCMShares.ShareInfos
+		}())
 
 	// convert to libregraph share drives
 	shareDrives := make([]*libregraph.DriveItem, 0, len(grouped))

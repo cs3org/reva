@@ -209,7 +209,15 @@ var _ = Describe("user providers", func() {
 
 	var assertFindUsersResponses = func() {
 		It("finds users by email", func() {
-			res, err := serviceClient.FindUsers(ctx, &userpb.FindUsersRequest{Query: "marie@example.org"})
+			res, err := serviceClient.FindUsers(ctx, &userpb.FindUsersRequest{
+				Filters: []*userpb.Filter{
+					&userpb.Filter{
+						Type: userpb.Filter_TYPE_QUERY,
+						Term: &userpb.Filter_Query{
+							Query: "marie@example.org",
+						},
+					},
+				}})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(res.Users)).To(Equal(1))
 			user := res.Users[0]
@@ -217,7 +225,15 @@ var _ = Describe("user providers", func() {
 		})
 
 		It("finds users by displayname", func() {
-			res, err := serviceClient.FindUsers(ctx, &userpb.FindUsersRequest{Query: "Marie Curie"})
+			res, err := serviceClient.FindUsers(ctx, &userpb.FindUsersRequest{
+				Filters: []*userpb.Filter{
+					&userpb.Filter{
+						Type: userpb.Filter_TYPE_QUERY,
+						Term: &userpb.Filter_Query{
+							Query: "Marie Curie",
+						},
+					},
+				}})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(res.Users)).To(Equal(1))
 			user := res.Users[0]
@@ -225,7 +241,15 @@ var _ = Describe("user providers", func() {
 		})
 
 		It("finds users by username", func() {
-			res, err := serviceClient.FindUsers(ctx, &userpb.FindUsersRequest{Query: "marie"})
+			res, err := serviceClient.FindUsers(ctx, &userpb.FindUsersRequest{
+				Filters: []*userpb.Filter{
+					&userpb.Filter{
+						Type: userpb.Filter_TYPE_QUERY,
+						Term: &userpb.Filter_Query{
+							Query: "marie",
+						},
+					},
+				}})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(res.Users)).To(Equal(1))
 			user := res.Users[0]
@@ -233,7 +257,15 @@ var _ = Describe("user providers", func() {
 		})
 
 		It("finds users by id", func() {
-			res, err := serviceClient.FindUsers(ctx, &userpb.FindUsersRequest{Query: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c"})
+			res, err := serviceClient.FindUsers(ctx, &userpb.FindUsersRequest{
+				Filters: []*userpb.Filter{
+					&userpb.Filter{
+						Type: userpb.Filter_TYPE_QUERY,
+						Term: &userpb.Filter_Query{
+							Query: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+						},
+					},
+				}})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(res.Users)).To(Equal(1))
 			user := res.Users[0]

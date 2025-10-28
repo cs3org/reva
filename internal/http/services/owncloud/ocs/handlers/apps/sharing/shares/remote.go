@@ -22,7 +22,6 @@ import (
 	"context"
 	"net/http"
 	"path/filepath"
-	"strings"
 
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -31,6 +30,7 @@ import (
 	providerpb "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	ocmd "github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
@@ -268,10 +268,7 @@ func (h *Handler) mapUserIdsFederatedShare(ctx context.Context, gw gatewayv1beta
 	}
 }
 
-func (h *Handler) mustGetRemoteUser(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, id string) *userIdentifiers {
-	s := strings.SplitN(id, "@", 2)
-	opaqueID, idp := s[0], s[1]
-
+func (h *Handler) mustGetRemoteUser(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ocmAddress string) *userIdentifiers {
 	user := appctx.ContextMustGetUser(ctx)
 	d, err := utils.MarshalProtoV1ToJSON(user.Id)
 	if err != nil {
@@ -287,11 +284,12 @@ func (h *Handler) mustGetRemoteUser(ctx context.Context, gw gatewayv1beta1.Gatew
 		},
 	}
 
+	remoteUserId, err := ocmd.GetUserIdFromOCMAddress(ocmAddress)
+	if err != nil {
+		return &userIdentifiers{}
+	}
 	userRes, err := gw.GetAcceptedUser(ctx, &invitepb.GetAcceptedUserRequest{
-		RemoteUserId: &userpb.UserId{
-			Idp:      idp,
-			OpaqueId: opaqueID,
-		},
+		RemoteUserId: remoteUserId,
 		Opaque: o,
 	})
 	if err != nil {
