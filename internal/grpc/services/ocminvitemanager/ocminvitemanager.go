@@ -308,6 +308,7 @@ func (s *service) GetAcceptedUser(ctx context.Context, req *invitepb.GetAccepted
 	}
 
 	logger.Info().Msgf("GetAcceptedUser %s at %s", user.Id.OpaqueId, user.Id.Idp)
+	logger.Debug().Any("req", req.RemoteUserId.Idp).Any("user", req.RemoteUserId.OpaqueId).Msg("GetAcceptedUser request")
 	remoteUser, err := s.repo.GetRemoteUser(ctx, user.GetId(), req.GetRemoteUserId())
 	if err != nil {
 		return &invitepb.GetAcceptedUserResponse{
