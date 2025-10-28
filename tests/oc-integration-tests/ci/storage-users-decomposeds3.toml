@@ -8,6 +8,9 @@
 jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:19000"
 
+[log]
+level = "error"
+
 [grpc]
 address = "0.0.0.0:11000"
 

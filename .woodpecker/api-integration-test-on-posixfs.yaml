@@ -97,6 +97,7 @@ services:
       LDAP_ORGANISATION: "example"
       LDAP_ADMIN_PASSWORD: "admin"
       LDAP_TLS_VERIFY_CLIENT: "never"
+      LDAP_LOG_LEVEL: "0"
       HOSTNAME: "ldap"
   redis:
     image: *redis_image

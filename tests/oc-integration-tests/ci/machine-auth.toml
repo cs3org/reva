@@ -1,6 +1,9 @@
 [shared]
 jwt_secret = "Pive-Fumkiu4"
 
+[log]
+level = "error"
+
 # This users.toml config file will start a reva service that:
 # - handles "machine" type authentication
 [grpc]

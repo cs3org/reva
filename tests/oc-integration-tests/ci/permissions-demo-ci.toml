@@ -3,6 +3,9 @@
 [shared]
 jwt_secret = "Pive-Fumkiu4"
 
+[log]
+level = "error"
+
 [grpc]
 address = "0.0.0.0:10000"
 
