@@ -209,7 +209,7 @@ func (m *ShareMgr) UpdateShare(ctx context.Context, ref *collaboration.ShareRefe
 }
 
 func (m *ShareMgr) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
-	shares, err := m.ListModelShares(nil, filters, false)
+	shares, err := m.ListModelShares(nil, filters, false, "")
 	if err != nil {
 		return nil, err
 	}
@@ -348,19 +348,21 @@ func (m *ShareMgr) UpdateReceivedShare(ctx context.Context, recvShare *collabora
 // Exported functions below are not part of the CS3-defined API, but are used by cernboxcop
 
 // Used by cernboxcop, to include listings with orphans (which cannot be represented in the CS3 Shares)
-func (m *ShareMgr) ListModelShares(u *user.User, filters []*collaboration.Filter, remove_orphan bool) ([]model.Share, error) {
+func (m *ShareMgr) ListModelShares(u *user.User, filters []*collaboration.Filter, remove_orphan bool, pathPattern string) ([]model.Share, error) {
 	query := m.db.Model(&model.Share{})
 	if remove_orphan {
 		query = query.Where("orphan = ?", false)
 	}
 
-	if u != nil {
-		uid := conversions.FormatUserID(u.Id)
-		query = query.Where("uid_owner = ? or uid_initiator = ?", uid, uid)
-	}
+	// No longer filtering by uid_owner or uid_initiator
 
-	// Append filters
-	m.appendShareFiltersToQuery(query, filters)
+	// Add path filter if provided
+	if pathPattern != "" {
+		query = query.Where("initial_path LIKE ?", pathPattern+"%")
+	} else {
+		// Only append collaboration filters if no path pattern is provided
+		m.appendShareFiltersToQuery(query, filters)
+	}
 
 	var shares []model.Share
 	res := query.Find(&shares)
