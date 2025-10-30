@@ -174,6 +174,7 @@ func versionKey(req *provider.InitiateFileDownloadRequest) string {
 }
 
 func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
+	log := appctx.GetLogger(ctx)
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &gateway.InitiateFileUploadResponse{
@@ -203,6 +204,8 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 			UploadEndpoint:     storageRes.Protocols[p].UploadEndpoint,
 			AvailableChecksums: storageRes.Protocols[p].AvailableChecksums,
 		}
+		log.Debug().Any("upload protocol", storageRes.Protocols[p]).Msg("FINDME: initiate upload protocol")
+		log.Debug().Any("expose", storageRes.Protocols[p].Expose).Msg("FINDME: initiate upload protocol")
 
 		if !storageRes.Protocols[p].Expose {
 			// sign the upload location and pass it to the data gateway
@@ -216,6 +219,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 			// TODO(labkode): calculate signature of the whole request? we only sign the URI now. Maybe worth https://tools.ietf.org/html/draft-cavage-http-signatures-11
 			target := u.String()
 			token, err := s.sign(ctx, target, "")
+			log.Debug().Any("target", target).Any("token", token).Msg("FINDME: initiate upload protocol")
 			if err != nil {
 				return &gateway.InitiateFileUploadResponse{
 					Status: status.NewInternal(ctx, err, "error creating signature for upload"),
@@ -224,6 +228,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 
 			protocols[p].UploadEndpoint = s.c.DataGatewayEndpoint
 			protocols[p].Token = token
+			log.Debug().Any("new endpoints", protocols[p].UploadEndpoint).Any("protocol", protocols[p]).Msg("FINDME: initiate upload protocol")
 		}
 	}
 
