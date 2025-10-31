@@ -129,7 +129,7 @@ func (h *wkocmHandler) init(c *OcmProviderConfig) {
 		Protocols:  rtProtos,         // expose the protocols as per configuration
 	}}
 	// for now, we hardcoded the capabilities, as this is currently only advisory
-	d.Capabilities = []string{"invites", "webdav-uri", "protocol-object"}
+	d.Capabilities = []string{"invites", "webdav-uri", "protocol-object", "invite-wayf"}
 	d.InviteAcceptDialog, _ = url.JoinPath(c.Endpoint, c.InviteAcceptDialog)
 	h.data = d
 }
