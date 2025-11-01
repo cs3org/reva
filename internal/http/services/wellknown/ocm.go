@@ -134,7 +134,7 @@ func (h *wkocmHandler) init(c *OcmProviderConfig) {
 	h.data = d
 }
 
-// This handler implements the OCM discovery endpoint specified in
+// Ocm handles the OCM discovery endpoint specified in
 // https://cs3org.github.io/OCM-API/docs.html?repo=OCM-API&user=cs3org#/paths/~1ocm-provider/get
 func (h *wkocmHandler) Ocm(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())

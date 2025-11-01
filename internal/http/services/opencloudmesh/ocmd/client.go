@@ -82,7 +82,7 @@ func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*wellknown.O
 		body, err = c.discover(ctx, remoteurl)
 		if err != nil || len(body) == 0 {
 			log.Warn().Err(err).Str("sender", remoteurl).Str("response", string(body)).Msg("invalid or empty response")
-			return nil, errtypes.BadRequest("Invalid response on OCM discovery")
+			return nil, errtypes.InternalError("Invalid response on OCM discovery")
 		}
 	}
 
@@ -90,7 +90,7 @@ func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*wellknown.O
 	err = json.Unmarshal(body, &disco)
 	if err != nil {
 		log.Warn().Err(err).Str("sender", remoteurl).Str("response", string(body)).Msg("malformed response")
-		return nil, errtypes.BadRequest("Invalid payload on OCM discovery")
+		return nil, errtypes.InternalError("Invalid payload on OCM discovery")
 	}
 
 	log.Debug().Str("sender", remoteurl).Any("response", disco).Msg("discovery response")
@@ -110,10 +110,15 @@ func (c *OCMClient) discover(ctx context.Context, url string) ([]byte, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "error doing OCM discovery request")
 	}
-	defer resp.Body.Close()
+	defer func(body io.ReadCloser) {
+		err := body.Close()
+		if err != nil {
+			log.Warn().Err(err).Msg("error closing response body")
+		}
+	}(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		log.Warn().Str("sender", url).Int("status", resp.StatusCode).Msg("discovery returned")
-		return nil, errtypes.BadRequest("Remote does not offer a valid OCM discovery endpoint")
+		return nil, errtypes.InternalError("Remote does not offer a valid OCM discovery endpoint")
 	}
 
 	body, err := io.ReadAll(resp.Body)
