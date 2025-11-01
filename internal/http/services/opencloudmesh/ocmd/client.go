@@ -63,34 +63,34 @@ var ErrResponseTooLarge = errors.New("response exceeds maximum allowed size")
 // ClientSecurityConfig holds all security configuration options for the OCM client.
 type ClientSecurityConfig struct {
 	// Response limits
-	MaxDiscoveryResponseBytes int64
-	MaxShareResponseBytes     int64
-	MaxErrorResponseBytes     int64
-	MaxResponseHeaderBytes    int64
+	MaxDiscoveryResponseBytes int64 `mapstructure:"max_discovery_response_bytes"`
+	MaxShareResponseBytes     int64 `mapstructure:"max_share_response_bytes"`
+	MaxErrorResponseBytes     int64 `mapstructure:"max_error_response_bytes"`
+	MaxResponseHeaderBytes    int64 `mapstructure:"max_response_header_bytes"`
 
 	// Timeouts
-	ConnectionTimeout     time.Duration
-	TLSHandshakeTimeout   time.Duration
-	ResponseHeaderTimeout time.Duration
-	IdleConnTimeout       time.Duration
-	OverallTimeout        time.Duration
+	ConnectionTimeout     time.Duration `mapstructure:"connection_timeout"`
+	TLSHandshakeTimeout   time.Duration `mapstructure:"tls_handshake_timeout"`
+	ResponseHeaderTimeout time.Duration `mapstructure:"response_header_timeout"`
+	IdleConnTimeout       time.Duration `mapstructure:"idle_conn_timeout"`
+	OverallTimeout        time.Duration `mapstructure:"overall_timeout"`
 
 	// Redirect control
-	MaxRedirects               int
-	ValidateRedirectTargets    bool
-	AllowRedirectsToPrivateIPs bool
+	MaxRedirects               int  `mapstructure:"max_redirects"`
+	ValidateRedirectTargets    bool `mapstructure:"validate_redirect_targets"`
+	AllowRedirectsToPrivateIPs bool `mapstructure:"allow_redirects_to_private_ips"`
 
 	// SSRF prevention
-	BlockPrivateIPs  bool
-	BlockLinkLocal   bool
-	BlockLoopback    bool
-	AllowedSchemes   []string
-	AllowedPorts     []int
-	ValidateIPAtDial bool
+	BlockPrivateIPs  bool     `mapstructure:"block_private_ips"`
+	BlockLinkLocal   bool     `mapstructure:"block_link_local"`
+	BlockLoopback    bool     `mapstructure:"block_loopback"`
+	AllowedSchemes   []string `mapstructure:"allowed_schemes"`
+	AllowedPorts     []int    `mapstructure:"allowed_ports"`
+	ValidateIPAtDial bool     `mapstructure:"validate_ip_at_dial"`
 
 	// TLS
-	MinTLSVersion      uint16
-	InsecureSkipVerify bool
+	MinTLSVersion      uint16 `mapstructure:"min_tls_version"`
+	InsecureSkipVerify bool   `mapstructure:"insecure_skip_verify"`
 }
 
 // ApplyDefaults sets default values for unset configuration options.
