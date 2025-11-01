@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -34,31 +33,8 @@ import (
 )
 
 type wayfHandler struct {
-	federations []Federation
-	ocmClient   *ocmd.OCMClient
-}
-
-type Federation struct {
-	Federation string             `json:"federation"`
-	Servers    []FederationServer `json:"servers"`
-}
-
-// FederationServer represents a single provider with discovery info
-type FederationServer struct {
-	DisplayName        string `json:"displayName"`
-	URL                string `json:"url"`
-	InviteAcceptDialog string `json:"inviteAcceptDialog,omitempty"`
-}
-
-// federationFile is the on-disk structure without inviteAcceptDialog
-type federationFile struct {
-	Federation string                 `json:"federation"`
-	Servers    []federationServerFile `json:"servers"`
-}
-
-type federationServerFile struct {
-	DisplayName string `json:"displayName"`
-	URL         string `json:"url"`
+	directoryServices []ocmd.DirectoryService
+	ocmClient         *ocmd.OCMClient
 }
 
 type DiscoverRequest struct {
@@ -79,55 +55,52 @@ func (h *wayfHandler) init(c *config) error {
 		Bool("insecure", c.OCMClientInsecure).
 		Msg("Created OCM client for discovery")
 
-	log.Debug().Str("file", c.FederationsFile).Msg("Initializing WAYF handler with federations file")
-
-	data, err := os.ReadFile(c.FederationsFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			log.Warn().Str("file", c.FederationsFile).Msg("Federations file not found, starting with empty list")
-			h.federations = []Federation{}
-			return nil
-		}
-		log.Error().Err(err).Str("file", c.FederationsFile).Msg("Failed to read federations file")
-		return err
+	urls := strings.Fields(c.DirectoryServiceURLs)
+	if len(urls) == 0 {
+		log.Info().Msg("No directory service URLs configured, starting with empty list")
+		h.directoryServices = []ocmd.DirectoryService{}
+		return nil
 	}
 
-	var fileData []federationFile
-	if err := json.Unmarshal(data, &fileData); err != nil {
-		log.Error().Err(err).Str("file", c.FederationsFile).Msg("Failed to parse federations file")
-		return err
-	}
-
-	log.Debug().Int("federations_count", len(fileData)).Msg("Loaded federations from file")
+	log.Debug().Int("url_count", len(urls)).Strs("urls", urls).Msg("Initializing WAYF handler with directory service URLs")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	// Discover each server and populate inviteAcceptDialog
-	h.federations = []Federation{}
+	h.directoryServices = []ocmd.DirectoryService{}
 	discoveryErrors := 0
 	validServersCount := 0
+	fetchErrors := 0
 
-	for _, fed := range fileData {
-		log.Debug().Str("federation", fed.Federation).Int("servers_count", len(fed.Servers)).Msg("Processing federation")
-		var validServers []FederationServer
+	for _, directoryURL := range urls {
+		log.Debug().Str("url", directoryURL).Msg("Fetching directory service")
 
-		for _, srv := range fed.Servers {
+		directoryService, err := h.ocmClient.GetDirectoryService(ctx, directoryURL)
+		if err != nil {
+			log.Warn().Err(err).Str("url", directoryURL).Msg("Failed to fetch directory service, skipping")
+			fetchErrors++
+			continue
+		}
+
+		log.Debug().Str("federation", directoryService.Federation).Int("servers_count", len(directoryService.Servers)).Msg("Processing directory service")
+
+		var validServers []ocmd.DirectoryServiceServer
+		for _, srv := range directoryService.Servers {
 			if srv.DisplayName == "" || srv.URL == "" {
-				log.Debug().Str("federation", fed.Federation).
+				log.Debug().Str("federation", directoryService.Federation).
 					Str("displayName", srv.DisplayName).
 					Str("url", srv.URL).
 					Msg("Skipping server with missing displayName or url")
 				continue
 			}
 
-			log.Debug().Str("federation", fed.Federation).Str("server", srv.DisplayName).Str("url", srv.URL).Msg("Discovering server")
+			log.Debug().Str("federation", directoryService.Federation).Str("server", srv.DisplayName).Str("url", srv.URL).Msg("Discovering server")
 
 			// Discover inviteAcceptDialog from OCM endpoint
 			disco, err := h.ocmClient.Discover(ctx, srv.URL)
 			if err != nil {
 				log.Warn().Err(err).
-					Str("federation", fed.Federation).
+					Str("federation", directoryService.Federation).
 					Str("server", srv.DisplayName).
 					Str("url", srv.URL).
 					Msg("Failed to discover server, skipping")
@@ -152,7 +125,7 @@ func (h *wayfHandler) init(c *config) error {
 				}
 			}
 
-			validServers = append(validServers, FederationServer{
+			validServers = append(validServers, ocmd.DirectoryServiceServer{
 				DisplayName:        srv.DisplayName,
 				URL:                srv.URL,
 				InviteAcceptDialog: inviteDialog,
@@ -160,27 +133,28 @@ func (h *wayfHandler) init(c *config) error {
 			validServersCount++
 
 			log.Debug().
-				Str("federation", fed.Federation).
+				Str("federation", directoryService.Federation).
 				Str("server", srv.DisplayName).
 				Str("inviteAcceptDialog", inviteDialog).
 				Msg("Successfully discovered server")
 		}
 
 		if len(validServers) > 0 {
-			h.federations = append(h.federations, Federation{
-				Federation: fed.Federation,
+			h.directoryServices = append(h.directoryServices, ocmd.DirectoryService{
+				Federation: directoryService.Federation,
 				Servers:    validServers,
 			})
-			log.Debug().Str("federation", fed.Federation).Int("valid_servers", len(validServers)).Msg("Added federation with valid servers")
+			log.Debug().Str("federation", directoryService.Federation).Int("valid_servers", len(validServers)).Msg("Added directory service with valid servers")
 		} else {
-			log.Warn().Str("federation", fed.Federation).
-				Msg("Federation has no valid servers, skipping entirely")
+			log.Warn().Str("federation", directoryService.Federation).
+				Msg("Directory service has no valid servers, skipping entirely")
 		}
 	}
 
 	log.Info().
-		Int("federations", len(h.federations)).
+		Int("directory_services", len(h.directoryServices)).
 		Int("valid_servers", validServersCount).
+		Int("fetch_errors", fetchErrors).
 		Int("discovery_errors", discoveryErrors).
 		Msg("WAYF handler initialization completed")
 
@@ -191,7 +165,7 @@ func (h *wayfHandler) GetFederations(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
-	if err := json.NewEncoder(w).Encode(h.federations); err != nil {
+	if err := json.NewEncoder(w).Encode(h.directoryServices); err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error encoding response", err)
 		return
 	}
