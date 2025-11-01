@@ -245,3 +245,29 @@ func (c *OCMClient) parseInviteAcceptedResponse(r *http.Response) (*RemoteUser, 
 func (c *OCMClient) NewNotification(ctx context.Context, endpoint string, r *InviteAcceptedRequest) (*RemoteUser, error) {
 	return nil, errtypes.NotSupported("not implemented")
 }
+
+// GetDirectoryService fetches a directory service listing from the given URL per OCM spec Appendix C.
+func (c *OCMClient) GetDirectoryService(ctx context.Context, directoryURL string) (*DirectoryService, error) {
+	log := appctx.GetLogger(ctx)
+
+	// TODO(@MahdiBaghbani): the discover() should be changed into a generic function that can be used to fetch any OCM endpoint. I'll do it in the security PR to minimize conflicts.
+	body, err := c.discover(ctx, directoryURL)
+	if err != nil {
+		return nil, errors.Wrap(err, "error fetching directory service")
+	}
+
+	var dirService DirectoryService
+	if err := json.Unmarshal(body, &dirService); err != nil {
+		log.Warn().Err(err).Str("url", directoryURL).Str("response", string(body)).Msg("malformed directory service response")
+		return nil, errors.Wrap(err, "invalid directory service payload")
+	}
+
+	// Validate required fields
+	if dirService.Federation == "" {
+		return nil, errtypes.InternalError("directory service missing required 'federation' field")
+	}
+	// Servers can be empty array, that's valid
+
+	log.Debug().Str("url", directoryURL).Str("federation", dirService.Federation).Int("servers", len(dirService.Servers)).Msg("fetched directory service")
+	return &dirService, nil
+}
