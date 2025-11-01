@@ -35,6 +35,7 @@ import (
 
 type wayfHandler struct {
 	federations []Federation
+	ocmClient   *ocmd.OCMClient
 }
 
 type Federation struct {
@@ -71,6 +72,13 @@ type DiscoverResponse struct {
 func (h *wayfHandler) init(c *config) error {
 	log := appctx.GetLogger(context.Background())
 
+	// Create OCM client for discovery from config
+	h.ocmClient = ocmd.NewClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure)
+	log.Debug().
+		Int("timeout_seconds", c.OCMClientTimeout).
+		Bool("insecure", c.OCMClientInsecure).
+		Msg("Created OCM client for discovery")
+
 	log.Debug().Str("file", c.FederationsFile).Msg("Initializing WAYF handler with federations file")
 
 	data, err := os.ReadFile(c.FederationsFile)
@@ -91,10 +99,6 @@ func (h *wayfHandler) init(c *config) error {
 	}
 
 	log.Debug().Int("federations_count", len(fileData)).Msg("Loaded federations from file")
-
-	// Create OCM client for discovery
-	ocmClient := ocmd.NewClient(10*time.Second, false)
-	log.Debug().Msg("Created OCM client for discovery")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -120,7 +124,7 @@ func (h *wayfHandler) init(c *config) error {
 			log.Debug().Str("federation", fed.Federation).Str("server", srv.DisplayName).Str("url", srv.URL).Msg("Discovering server")
 
 			// Discover inviteAcceptDialog from OCM endpoint
-			disco, err := ocmClient.Discover(ctx, srv.URL)
+			disco, err := h.ocmClient.Discover(ctx, srv.URL)
 			if err != nil {
 				log.Warn().Err(err).
 					Str("federation", fed.Federation).
@@ -219,11 +223,8 @@ func (h *wayfHandler) DiscoverProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create OCM client with timeout
-	ocmClient := ocmd.NewClient(10*time.Second, false)
-
 	log.Debug().Str("domain", domain).Msg("Attempting OCM discovery")
-	disco, err := ocmClient.Discover(ctx, domain)
+	disco, err := h.ocmClient.Discover(ctx, domain)
 	if err != nil {
 		log.Warn().Err(err).Str("domain", domain).Msg("Discovery failed")
 		reqres.WriteError(w, r, reqres.APIErrorNotFound,
