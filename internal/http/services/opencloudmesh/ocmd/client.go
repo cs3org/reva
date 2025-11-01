@@ -23,6 +23,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -368,12 +369,12 @@ func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*wellknown.O
 	defer cancel()
 
 	remoteurl, _ := url.JoinPath(endpoint, "/.well-known/ocm")
-	body, err := c.discover(ctx, remoteurl)
+	body, err := c.fetchGETEndpoint(ctx, remoteurl, c.cfg.MaxDiscoveryResponseBytes, "discovery endpoint")
 	if err != nil || len(body) == 0 {
 		log.Debug().Err(err).Str("sender", remoteurl).Str("response", string(body)).Msg("invalid or empty response, falling back to legacy discovery")
 		remoteurl, _ := url.JoinPath(endpoint, "/ocm-provider") // legacy discovery endpoint
 
-		body, err = c.discover(ctx, remoteurl)
+		body, err = c.fetchGETEndpoint(ctx, remoteurl, c.cfg.MaxDiscoveryResponseBytes, "legacy discovery endpoint")
 		if err != nil || len(body) == 0 {
 			log.Warn().Err(err).Str("sender", remoteurl).Str("response", string(body)).Msg("invalid or empty response")
 			return nil, errtypes.InternalError("Invalid response on OCM discovery")
@@ -391,18 +392,19 @@ func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*wellknown.O
 	return &disco, nil
 }
 
-func (c *OCMClient) discover(ctx context.Context, urlStr string) ([]byte, error) {
+// fetchGETEndpoint performs a GET request to an OCM endpoint with configurable response size limits.
+func (c *OCMClient) fetchGETEndpoint(ctx context.Context, urlStr string, maxResponseBytes int64, errorContext string) ([]byte, error) {
 	log := appctx.GetLogger(ctx)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
 	if err != nil {
-		return nil, errors.Wrap(err, "error creating OCM discovery request")
+		return nil, errors.Wrapf(err, "error creating OCM GET request for %s", errorContext)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, errors.Wrap(err, "error doing OCM discovery request")
+		return nil, errors.Wrapf(err, "error performing OCM GET request for %s", errorContext)
 	}
 	defer func(body io.ReadCloser) {
 		err := body.Close()
@@ -411,17 +413,17 @@ func (c *OCMClient) discover(ctx context.Context, urlStr string) ([]byte, error)
 		}
 	}(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		log.Warn().Str("sender", urlStr).Int("status", resp.StatusCode).Msg("discovery returned")
-		return nil, errtypes.InternalError("Remote does not offer a valid OCM discovery endpoint")
+		log.Warn().Str("url", urlStr).Int("status", resp.StatusCode).Str("context", errorContext).Msg("OCM endpoint returned non-OK status")
+		return nil, errtypes.InternalError(fmt.Sprintf("Remote OCM endpoint (%s) returned status %d", errorContext, resp.StatusCode))
 	}
 
-	limitedBody := io.LimitReader(resp.Body, c.cfg.MaxShareResponseBytes+1)
+	limitedBody := io.LimitReader(resp.Body, maxResponseBytes+1)
 	body, err := io.ReadAll(limitedBody)
 	if err != nil {
-		return nil, errors.Wrap(err, "malformed remote OCM discovery")
+		return nil, errors.Wrapf(err, "error reading response body for %s", errorContext)
 	}
 	// TODO(@MahdiBaghbani): @glpatcern so this would be only 1 byte bigger, should we tolerate it?
-	if int64(len(body)) > c.cfg.MaxShareResponseBytes {
+	if int64(len(body)) > maxResponseBytes {
 		return nil, ErrResponseTooLarge
 	}
 
@@ -623,8 +625,18 @@ func (c *OCMClient) NewNotification(ctx context.Context, endpoint string, r *Inv
 func (c *OCMClient) GetDirectoryService(ctx context.Context, directoryURL string) (*DirectoryService, error) {
 	log := appctx.GetLogger(ctx)
 
-	// TODO(@MahdiBaghbani): the discover() should be changed into a generic function that can be used to fetch any OCM endpoint. I'll do it in the security PR to minimize conflicts.
-	body, err := c.discover(ctx, directoryURL)
+	endpointURL, err := url.Parse(directoryURL)
+	if err != nil {
+		return nil, errors.Wrapf(ErrURLValidationFailed, "invalid directory service URL: %w", err)
+	}
+	if err := validateURL(endpointURL, c.cfg); err != nil {
+		return nil, errors.Wrapf(err, "directory service URL validation failed")
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, c.cfg.OverallTimeout)
+	defer cancel()
+
+	body, err := c.fetchGETEndpoint(ctx, directoryURL, c.cfg.MaxDiscoveryResponseBytes, "directory service")
 	if err != nil {
 		return nil, errors.Wrap(err, "error fetching directory service")
 	}
