@@ -280,7 +280,7 @@ func validateURL(u *url.URL, cfg *ClientSecurityConfig) error {
 
 	ips, err := net.LookupIP(host)
 	if err != nil {
-		return errors.Wrapf(ErrURLValidationFailed, "DNS resolution failed: %w", err)
+		return errors.Wrapf(ErrURLValidationFailed, "DNS resolution failed: %v", err)
 	}
 
 	for _, ip := range ips {
@@ -359,7 +359,7 @@ func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*wellknown.O
 
 	endpointURL, err := url.Parse(endpoint)
 	if err != nil {
-		return nil, errors.Wrapf(ErrURLValidationFailed, "invalid endpoint URL: %w", err)
+		return nil, errors.Wrapf(ErrURLValidationFailed, "invalid endpoint URL: %v", err)
 	}
 	if err := validateURL(endpointURL, c.cfg); err != nil {
 		return nil, errors.Wrapf(err, "endpoint URL validation failed")
@@ -437,7 +437,7 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 
 	endpointURL, err := url.Parse(endpoint)
 	if err != nil {
-		return nil, errors.Wrapf(ErrURLValidationFailed, "invalid endpoint URL: %w", err)
+		return nil, errors.Wrapf(ErrURLValidationFailed, "invalid endpoint URL: %v", err)
 	}
 	if err := validateURL(endpointURL, c.cfg); err != nil {
 		return nil, errors.Wrapf(err, "endpoint URL validation failed")
@@ -528,7 +528,7 @@ func (c *OCMClient) InviteAccepted(ctx context.Context, endpoint string, r *Invi
 
 	endpointURL, err := url.Parse(endpoint)
 	if err != nil {
-		return nil, errors.Wrapf(ErrURLValidationFailed, "invalid endpoint URL: %w", err)
+		return nil, errors.Wrapf(ErrURLValidationFailed, "invalid endpoint URL: %v", err)
 	}
 	if err := validateURL(endpointURL, c.cfg); err != nil {
 		return nil, errors.Wrapf(err, "endpoint URL validation failed")
@@ -627,7 +627,7 @@ func (c *OCMClient) GetDirectoryService(ctx context.Context, directoryURL string
 
 	endpointURL, err := url.Parse(directoryURL)
 	if err != nil {
-		return nil, errors.Wrapf(ErrURLValidationFailed, "invalid directory service URL: %w", err)
+		return nil, errors.Wrapf(ErrURLValidationFailed, "invalid directory service URL: %v", err)
 	}
 	if err := validateURL(endpointURL, c.cfg); err != nil {
 		return nil, errors.Wrapf(err, "directory service URL validation failed")
