@@ -110,7 +110,7 @@ func (h *wayfHandler) init(c *config) error {
 
 		for _, srv := range fed.Servers {
 			if srv.DisplayName == "" || srv.URL == "" {
-				log.Warn().Str("federation", fed.Federation).
+				log.Debug().Str("federation", fed.Federation).
 					Str("displayName", srv.DisplayName).
 					Str("url", srv.URL).
 					Msg("Skipping server with missing displayName or url")
