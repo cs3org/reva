@@ -77,7 +77,7 @@ func (h *wayfHandler) init(c *config) error {
 
 		directoryService, err := h.ocmClient.GetDirectoryService(ctx, directoryURL)
 		if err != nil {
-			log.Warn().Err(err).Str("url", directoryURL).Msg("Failed to fetch directory service, skipping")
+			log.Info().Err(err).Str("url", directoryURL).Msg("Failed to fetch directory service, skipping")
 			fetchErrors++
 			continue
 		}
@@ -99,7 +99,7 @@ func (h *wayfHandler) init(c *config) error {
 			// Discover inviteAcceptDialog from OCM endpoint
 			disco, err := h.ocmClient.Discover(ctx, srv.URL)
 			if err != nil {
-				log.Warn().Err(err).
+				log.Debug().Err(err).
 					Str("federation", directoryService.Federation).
 					Str("server", srv.DisplayName).
 					Str("url", srv.URL).
@@ -117,7 +117,7 @@ func (h *wayfHandler) init(c *config) error {
 					inviteDialog = baseURL.Scheme + "://" + baseURL.Host + inviteDialog
 					log.Debug().Str("original", disco.InviteAcceptDialog).Str("converted", inviteDialog).Msg("Converted relative path to absolute")
 				} else {
-					log.Warn().Err(parseErr).
+					log.Debug().Err(parseErr).
 						Str("url", srv.URL).
 						Str("inviteDialog", disco.InviteAcceptDialog).
 						Msg("Failed to parse server URL for relative path conversion")
@@ -146,7 +146,7 @@ func (h *wayfHandler) init(c *config) error {
 			})
 			log.Debug().Str("federation", directoryService.Federation).Int("valid_servers", len(validServers)).Msg("Added directory service with valid servers")
 		} else {
-			log.Warn().Str("federation", directoryService.Federation).
+			log.Info().Str("federation", directoryService.Federation).
 				Msg("Directory service has no valid servers, skipping entirely")
 		}
 	}
@@ -200,7 +200,7 @@ func (h *wayfHandler) DiscoverProvider(w http.ResponseWriter, r *http.Request) {
 	log.Debug().Str("domain", domain).Msg("Attempting OCM discovery")
 	disco, err := h.ocmClient.Discover(ctx, domain)
 	if err != nil {
-		log.Warn().Err(err).Str("domain", domain).Msg("Discovery failed")
+		log.Info().Err(err).Str("domain", domain).Msg("Discovery failed")
 		reqres.WriteError(w, r, reqres.APIErrorNotFound,
 			fmt.Sprintf("Provider at '%s' does not support OCM discovery", req.Domain), err)
 		return
