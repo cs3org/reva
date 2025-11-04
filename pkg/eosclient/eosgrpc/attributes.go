@@ -83,7 +83,11 @@ func (c *Client) setEOSAttr(ctx context.Context, auth eosclient.Authorization, a
 	}
 
 	if resp.GetError() != nil {
-		log.Error().Str("func", "setAttr").Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative result")
+		if resp.GetError().Code == 0 {
+			log.Info().Str("func", "setAttr").Str("path", path).Str("errmsg", resp.GetError().Msg).Msg("EOS operation succeeded")
+		} else {
+			log.Error().Str("func", "setAttr").Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS non-zero result")
+		}
 	}
 
 	return err
@@ -173,7 +177,11 @@ func (c *Client) unsetEOSAttr(ctx context.Context, auth eosclient.Authorization,
 	}
 
 	if resp.GetError() != nil {
-		log.Error().Str("func", "UnsetAttr").Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
+		if resp.GetError().Code == 0 {
+			log.Info().Str("func", "UnsetAttr").Str("path", path).Str("errmsg", resp.GetError().Msg).Msg("EOS operation succeeded")
+		} else {
+			log.Error().Str("func", "UnsetAttr").Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS non-zero result")
+		}
 	}
 	return err
 }
