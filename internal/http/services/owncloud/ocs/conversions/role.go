@@ -296,11 +296,7 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 		rp.InitiateFileDownload {
 		r.ocsPermissions |= PermissionRead
 	}
-	if rp.InitiateFileUpload {
-		r.ocsPermissions |= PermissionWrite
-	}
-	if rp.ListContainer &&
-		rp.Stat &&
+	if rp.Stat &&
 		rp.InitiateFileUpload {
 		r.ocsPermissions |= PermissionCreate
 	}
@@ -317,8 +313,9 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 	}
 
 	if r.ocsPermissions.Contain(PermissionRead) {
-		if r.ocsPermissions.Contain(PermissionWrite) {
+		if r.ocsPermissions.Contain(PermissionCreate) {
 			r.Name = RoleFileEditor
+			r.ocsPermissions |= PermissionWrite
 			if r.ocsPermissions.Contain(PermissionCreate) && r.ocsPermissions.Contain(PermissionDelete) {
 				r.Name = RoleEditor
 				if r.ocsPermissions.Contain(PermissionShare) {
