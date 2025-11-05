@@ -727,6 +727,20 @@ func (t *Tree) isIndex(path string) bool {
 }
 
 func (t *Tree) isTemporary(path string) bool {
+	if filepath.IsAbs(path) {
+		tmpDirPattern := filepath.Join(t.options.Root, "*", "*", blobstore.TMPDir)
+		isTempDir, err := filepath.Match(tmpDirPattern, path)
+		if err != nil {
+			t.log.Error().Err(err).Str("pattern", tmpDirPattern).Str("path", path).Msg("error matching temporary path")
+			return false
+		}
+		isTempParentDir, err := filepath.Match(tmpDirPattern, filepath.Dir(path))
+		if err != nil {
+			t.log.Error().Err(err).Str("pattern", tmpDirPattern).Str("path", filepath.Dir(path)).Msg("error matching temporary path")
+			return false
+		}
+		return isTempDir || isTempParentDir
+	}
 	return path == blobstore.TMPDir || filepath.Dir(path) == blobstore.TMPDir
 }
 
