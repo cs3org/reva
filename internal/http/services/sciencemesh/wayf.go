@@ -45,6 +45,22 @@ type DiscoverResponse struct {
 	InviteAcceptDialog string `json:"inviteAcceptDialog"`
 }
 
+// makeAbsoluteURL takes a base URL and a path/URL and returns an absolute URL.
+// If dialogURL is already absolute (has scheme and host), it returns it as-is.
+// Otherwise, it joins the dialogURL with the baseURL to create an absolute URL.
+func makeAbsoluteURL(baseURL, dialogURL string) (string, error) {
+	if dialogURL == "" {
+		return "", nil
+	}
+
+	parsed, err := url.Parse(dialogURL)
+	if err == nil && parsed.Scheme != "" && parsed.Host != "" {
+		return dialogURL, nil
+	}
+
+	return url.JoinPath(baseURL, dialogURL)
+}
+
 func (h *wayfHandler) init(c *config) error {
 	log := appctx.GetLogger(context.Background())
 
@@ -110,19 +126,21 @@ func (h *wayfHandler) init(c *config) error {
 
 			inviteDialog := disco.InviteAcceptDialog
 
-			// If it's a relative path (starts with /), make it absolute
-			if inviteDialog != "" && inviteDialog[0] == '/' {
-				baseURL, parseErr := url.Parse(srv.URL)
-				if parseErr == nil {
-					inviteDialog = baseURL.Scheme + "://" + baseURL.Host + inviteDialog
-					log.Debug().Str("original", disco.InviteAcceptDialog).Str("converted", inviteDialog).Msg("Converted relative path to absolute")
-				} else {
-					log.Debug().Err(parseErr).
+			if inviteDialog != "" {
+				absoluteURL, err := makeAbsoluteURL(srv.URL, inviteDialog)
+				if err != nil {
+					log.Debug().Err(err).
+						Str("federation", directoryService.Federation).
+						Str("server", srv.DisplayName).
 						Str("url", srv.URL).
 						Str("inviteDialog", disco.InviteAcceptDialog).
-						Msg("Failed to parse server URL for relative path conversion")
+						Msg("Failed to construct absolute URL, skipping server")
 					continue
 				}
+				if absoluteURL != inviteDialog {
+					log.Debug().Str("original", inviteDialog).Str("absolute", absoluteURL).Msg("Converted to absolute URL")
+				}
+				inviteDialog = absoluteURL
 			}
 
 			validServers = append(validServers, ocmd.DirectoryServiceServer{
@@ -207,9 +225,19 @@ func (h *wayfHandler) DiscoverProvider(w http.ResponseWriter, r *http.Request) {
 	}
 
 	inviteDialog := disco.InviteAcceptDialog
-	if inviteDialog != "" && inviteDialog[0] == '/' {
-		baseURL, _ := url.Parse(domain)
-		inviteDialog = baseURL.Scheme + "://" + baseURL.Host + inviteDialog
+
+	if inviteDialog == "" {
+		log.Info().Str("domain", domain).Msg("Provider does not provide invite accept dialog")
+		reqres.WriteError(w, r, reqres.APIErrorNotFound,
+			fmt.Sprintf("Provider at '%s' does not provide an invite accept dialog", req.Domain), nil)
+		return
+	}
+
+	inviteDialog, err = makeAbsoluteURL(domain, inviteDialog)
+	if err != nil {
+		log.Info().Err(err).Str("domain", domain).Str("inviteDialog", disco.InviteAcceptDialog).Msg("Failed to construct invite accept dialog URL")
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "Failed to construct invite accept dialog URL", err)
+		return
 	}
 
 	response := DiscoverResponse{
