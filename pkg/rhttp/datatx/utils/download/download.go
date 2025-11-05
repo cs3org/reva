@@ -89,7 +89,6 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 
 	if r.Header.Get("Range") != "" {
 		ranges, err = ParseRange(r.Header.Get("Range"), size)
-
 		if err != nil {
 			if err == ErrNoOverlap {
 				w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", size))
@@ -116,7 +115,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 			handleError(w, &sublog, err, "stat revision")
 			return
 		}
-		size = int64(stat.Size)
+		sendSize = int64(stat.Size)
 		content, err = fs.DownloadRevision(ctx, ref, versionKey)
 		if err != nil {
 			handleError(w, &sublog, err, "download revision")
@@ -144,7 +143,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 				// a request for a single range, since a client that
 				// does not request multiple parts might not support
 				// multipart responses."
-				//ra := ranges[0]
+				// ra := ranges[0]
 				if content, err = fs.Download(ctx, ref, ranges); err != nil {
 					sublog.Error().Err(err).Any("Ranges", ranges).Msg("content is not seekable")
 					w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
