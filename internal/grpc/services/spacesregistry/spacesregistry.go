@@ -159,6 +159,7 @@ func countTypeFilters(filters []*provider.ListStorageSpacesRequest_Filter) (coun
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 	user := appctx.ContextMustGetUser(ctx)
 	filters := req.Filters
+	log := appctx.GetLogger(ctx)
 
 	sp := []*provider.StorageSpace{}
 	// List all spaces, or look for a specific space

@@ -34,7 +34,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/eosclient"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"github.com/cs3org/reva/v3/pkg/logger"
 	"github.com/cs3org/reva/v3/pkg/storage"
 )
 
@@ -139,16 +138,11 @@ type EOSHTTPClient struct {
 
 // NewEOSHTTPClient creates a new client with the given options.
 func NewEOSHTTPClient(opt *HTTPOptions) (*EOSHTTPClient, error) {
-	log := logger.New().With().Int("pid", os.Getpid()).Logger()
-	log.Debug().Str("func", "New").Str("Creating new eoshttp client. opt: ", "'"+fmt.Sprintf("%#v", opt)+"' ").Msg("")
-
 	if opt == nil {
-		log.Debug().Str("opt is nil, error creating http client ", "").Msg("")
 		return nil, errtypes.InternalError("HTTPOptions is nil")
 	}
 
 	opt.init()
-
 	t := &http.Transport{
 		MaxIdleConns:        opt.MaxIdleConns,
 		MaxConnsPerHost:     opt.MaxConnsPerHost,
