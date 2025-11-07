@@ -299,7 +299,7 @@ func isTokenValid(token *invitepb.InviteToken) bool {
 }
 
 func (s *service) GetAcceptedUser(ctx context.Context, req *invitepb.GetAcceptedUserRequest) (*invitepb.GetAcceptedUserResponse, error) {
-	logger := appctx.GetLogger(ctx)
+	log := appctx.GetLogger(ctx)
 	user, ok := getUserFilter(ctx, req)
 	if !ok {
 		return &invitepb.GetAcceptedUserResponse{
@@ -307,11 +307,11 @@ func (s *service) GetAcceptedUser(ctx context.Context, req *invitepb.GetAccepted
 		}, nil
 	}
 
-	logger.Info().Msgf("GetAcceptedUser %s at %s", user.Id.OpaqueId, user.Id.Idp)
 	remoteUser, err := s.repo.GetRemoteUser(ctx, user.GetId(), req.GetRemoteUserId())
 	if err != nil {
+		log.Error().Err(err).Str("initiator", user.Id.OpaqueId).Any("remoteUser", req.GetRemoteUserId()).Msg("failed to look for OCM user")
 		return &invitepb.GetAcceptedUserResponse{
-			Status: status.NewInternal(ctx, err, "error fetching remote user details"),
+			Status: status.NewStatusFromErrType(ctx, "error fetching remote user details", err),
 		}, nil
 	}
 

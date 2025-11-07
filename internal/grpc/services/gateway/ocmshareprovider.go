@@ -25,11 +25,14 @@ import (
 	"path"
 	"strings"
 
+	"github.com/alitto/pond/v2"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
 
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
@@ -124,6 +127,78 @@ func (s *svc) ListOCMShares(ctx context.Context, req *ocm.ListOCMSharesRequest) 
 	}
 
 	return res, nil
+}
+
+func (s *svc) ListExistingOCMShares(ctx context.Context, req *ocm.ListOCMSharesRequest) (*gateway.ListExistingOCMSharesResponse, error) {
+	shares, err := s.ListOCMShares(ctx, req)
+	if err != nil {
+		err := errors.Wrap(err, "gateway: error calling ListExistingShares")
+		return &gateway.ListExistingOCMSharesResponse{
+			Status: status.NewInternal(ctx, err, "error listing shares"),
+		}, nil
+	}
+
+	sharesCh := make(chan *gateway.OCMShareResourceInfo, len(shares.Shares))
+	pool := pond.NewPool(50)
+
+	for _, share := range shares.Shares {
+		share := share
+		pool.SubmitErr(func() error {
+			key := resourceid.OwnCloudResourceIDWrap(share.ResourceId)
+			var resourceInfo *provider.ResourceInfo
+			if res, err := s.resourceInfoCache.Get(key); err == nil && res != nil {
+				resourceInfo = res
+			} else {
+				stat, err := s.Stat(ctx, &provider.StatRequest{
+					Ref: &provider.Reference{
+						ResourceId: share.ResourceId,
+					},
+				})
+				if err != nil {
+					return err
+				}
+				if stat.Status.Code != rpc.Code_CODE_OK {
+					return errors.New("An error occurred: " + stat.Status.Message)
+				}
+				resourceInfo = stat.Info
+				if s.resourceInfoCacheTTL > 0 {
+					_ = s.resourceInfoCache.SetWithExpire(key, resourceInfo, s.resourceInfoCacheTTL)
+				}
+			}
+
+			sharesCh <- &gateway.OCMShareResourceInfo{
+				ResourceInfo: resourceInfo,
+				OcmShare:     share,
+			}
+
+			return nil
+		})
+	}
+	// Collect all share resource infos
+	sris := make([]*gateway.OCMShareResourceInfo, 0, len(shares.Shares))
+	done := make(chan struct{})
+	go func() {
+		for s := range sharesCh {
+			sris = append(sris, s)
+		}
+		done <- struct{}{}
+	}()
+	err = pool.Stop().Wait()
+	close(sharesCh)
+	<-done
+	close(done)
+
+	if err != nil {
+		return &gateway.ListExistingOCMSharesResponse{
+			ShareInfos: sris,
+			Status:     status.NewInternal(ctx, err, "An error occured listing existing shares"),
+		}, err
+	}
+
+	return &gateway.ListExistingOCMSharesResponse{
+		ShareInfos: sris,
+		Status:     status.NewOK(ctx),
+	}, nil
 }
 
 func (s *svc) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareRequest) (*ocm.UpdateOCMShareResponse, error) {
@@ -247,14 +322,12 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 		// get provided destination path
 		transferDestinationPath, err := s.getTransferDestinationPath(ctx, req)
 		if err != nil {
-			if err != nil {
-				log.Err(err).Msg("gateway: error calling UpdateReceivedShare")
-				return &ocm.UpdateReceivedOCMShareResponse{
-					Status: &rpc.Status{
-						Code: rpc.Code_CODE_INTERNAL,
-					},
-				}, err
-			}
+			log.Err(err).Msg("gateway: error calling UpdateReceivedShare")
+			return &ocm.UpdateReceivedOCMShareResponse{
+				Status: &rpc.Status{
+					Code: rpc.Code_CODE_INTERNAL,
+				},
+			}, err
 		}
 
 		error := s.handleTransfer(ctx, share, transferDestinationPath)

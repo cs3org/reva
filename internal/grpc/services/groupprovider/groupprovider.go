@@ -21,6 +21,7 @@ package groupprovider
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -136,7 +137,11 @@ func (s *service) GetGroupByClaim(ctx context.Context, req *grouppb.GetGroupByCl
 }
 
 func (s *service) FindGroups(ctx context.Context, req *grouppb.FindGroupsRequest) (*grouppb.FindGroupsResponse, error) {
-	groups, err := s.groupmgr.FindGroups(ctx, req.Filter, req.SkipFetchingMembers)
+	idx := slices.IndexFunc(req.Filters, func(f *grouppb.Filter) bool { return f != nil && f.Type == grouppb.Filter_TYPE_QUERY })
+	if idx < 0 {
+		return nil, errtypes.BadRequest("Must pass a filter with Filter_TYPE_QUERY to FindUsers")
+	}
+	groups, err := s.groupmgr.FindGroups(ctx, req.Filters[idx].GetQuery(), req.SkipFetchingMembers)
 	if err != nil {
 		err = errors.Wrap(err, "groupprovidersvc: error finding groups")
 		return &grouppb.FindGroupsResponse{

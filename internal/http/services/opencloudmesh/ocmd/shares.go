@@ -77,27 +77,28 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, meshProvider, err := getIDAndMeshProvider(req.Sender)
-	log.Debug().Msgf("Determined Mesh Provider '%s' from req.Sender '%s'", meshProvider, req.Sender)
+	sender, err := GetUserIdFromOCMAddress(req.Sender)
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with remote sender", err)
 		return
 	}
 
+	// TODO(lopresti) here we extract the client IP from the request, but in case
+	// of a proxied request we should rather extract it from X-Forwarded-For or similar headers,
+	// or remove this logic altogether and rely on signed requests as per OCM standard
 	clientIP, err := utils.GetClientIP(r)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, fmt.Sprintf("error retrieving client IP from request: %s", r.RemoteAddr), err)
 		return
 	}
 	providerInfo := ocmprovider.ProviderInfo{
-		Domain: meshProvider,
+		Domain: sender.Idp,
 		Services: []*ocmprovider.Service{
 			{
 				Host: clientIP,
 			},
 		},
 	}
-
 	providerAllowedResp, err := h.gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
 		Provider: &providerInfo,
 	})
@@ -110,14 +111,14 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shareWith, _, err := getIDAndMeshProvider(req.ShareWith)
+	shareWith, err := GetUserIdFromOCMAddress(req.ShareWith)
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with mesh provider", err)
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with shareWith user", err)
 		return
 	}
 
 	userRes, err := h.gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
-		UserId: &userpb.UserId{OpaqueId: shareWith}, SkipFetchingUserGroups: true,
+		UserId: &userpb.UserId{OpaqueId: shareWith.OpaqueId}, SkipFetchingUserGroups: true,
 	})
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error searching recipient", err)
@@ -128,15 +129,9 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	owner, err := getUserIDFromOCMUser(req.Owner)
+	owner, err := GetUserIdFromOCMAddress(req.Owner)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with remote owner", err)
-		return
-	}
-
-	sender, err := getUserIDFromOCMUser(req.Sender)
-	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with remote sender", err)
 		return
 	}
 
@@ -196,38 +191,6 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(response)
-}
-
-func getUserIDFromOCMUser(user string) (*userpb.UserId, error) {
-	id, idp, err := getIDAndMeshProvider(user)
-	if err != nil {
-		return nil, err
-	}
-	idp = strings.TrimPrefix(idp, "https://") // strip off leading scheme if present (despite being not OCM compliant). This is the case in Nextcloud and oCIS
-	return &userpb.UserId{
-		OpaqueId: id,
-		Idp:      idp,
-		// the remote user is a federated account for the local reva
-		Type: userpb.UserType_USER_TYPE_FEDERATED,
-	}, nil
-}
-
-func getIDAndMeshProvider(user string) (string, string, error) {
-	last := strings.LastIndex(user, "@")
-	if last == -1 {
-		return "", "", errors.New("not in the form <id>@<provider>")
-	}
-
-	id, provider := user[:last], user[last+1:]
-
-	if id == "" {
-		return "", "", errors.New("id cannot be empty")
-	}
-	if provider == "" {
-		return "", "", errors.New("provider cannot be empty")
-	}
-
-	return id, provider, nil
 }
 
 func getCreateShareRequest(r *http.Request) (*NewShareRequest, error) {
