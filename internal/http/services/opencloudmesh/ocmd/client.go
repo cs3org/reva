@@ -82,7 +82,7 @@ func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*wellknown.O
 		body, err = c.discover(ctx, remoteurl)
 		if err != nil || len(body) == 0 {
 			log.Warn().Err(err).Str("sender", remoteurl).Str("response", string(body)).Msg("invalid or empty response")
-			return nil, errtypes.BadRequest("Invalid response on OCM discovery")
+			return nil, errtypes.InternalError("Invalid response on OCM discovery")
 		}
 	}
 
@@ -90,7 +90,7 @@ func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*wellknown.O
 	err = json.Unmarshal(body, &disco)
 	if err != nil {
 		log.Warn().Err(err).Str("sender", remoteurl).Str("response", string(body)).Msg("malformed response")
-		return nil, errtypes.BadRequest("Invalid payload on OCM discovery")
+		return nil, errtypes.InternalError("Invalid payload on OCM discovery")
 	}
 
 	log.Debug().Str("sender", remoteurl).Any("response", disco).Msg("discovery response")
@@ -110,10 +110,15 @@ func (c *OCMClient) discover(ctx context.Context, url string) ([]byte, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "error doing OCM discovery request")
 	}
-	defer resp.Body.Close()
+	defer func(body io.ReadCloser) {
+		err := body.Close()
+		if err != nil {
+			log.Warn().Err(err).Msg("error closing response body")
+		}
+	}(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		log.Warn().Str("sender", url).Int("status", resp.StatusCode).Msg("discovery returned")
-		return nil, errtypes.BadRequest("Remote does not offer a valid OCM discovery endpoint")
+		return nil, errtypes.InternalError("Remote does not offer a valid OCM discovery endpoint")
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -239,4 +244,30 @@ func (c *OCMClient) parseInviteAcceptedResponse(r *http.Response) (*RemoteUser, 
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1notifications/post
 func (c *OCMClient) NewNotification(ctx context.Context, endpoint string, r *InviteAcceptedRequest) (*RemoteUser, error) {
 	return nil, errtypes.NotSupported("not implemented")
+}
+
+// GetDirectoryService fetches a directory service listing from the given URL per OCM spec Appendix C.
+func (c *OCMClient) GetDirectoryService(ctx context.Context, directoryURL string) (*DirectoryService, error) {
+	log := appctx.GetLogger(ctx)
+
+	// TODO(@MahdiBaghbani): the discover() should be changed into a generic function that can be used to fetch any OCM endpoint. I'll do it in the security PR to minimize conflicts.
+	body, err := c.discover(ctx, directoryURL)
+	if err != nil {
+		return nil, errors.Wrap(err, "error fetching directory service")
+	}
+
+	var dirService DirectoryService
+	if err := json.Unmarshal(body, &dirService); err != nil {
+		log.Warn().Err(err).Str("url", directoryURL).Str("response", string(body)).Msg("malformed directory service response")
+		return nil, errors.Wrap(err, "invalid directory service payload")
+	}
+
+	// Validate required fields
+	if dirService.Federation == "" {
+		return nil, errtypes.InternalError("directory service missing required 'federation' field")
+	}
+	// Servers can be empty array, that's valid
+
+	log.Debug().Str("url", directoryURL).Str("federation", dirService.Federation).Int("servers", len(dirService.Servers)).Msg("fetched directory service")
+	return &dirService, nil
 }

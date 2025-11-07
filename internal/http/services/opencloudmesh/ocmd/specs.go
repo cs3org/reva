@@ -56,6 +56,20 @@ func (r *InviteAcceptedRequest) toJSON() ([]byte, error) {
 	return json.Marshal(&r)
 }
 
+// DirectoryService represents a directory service listing per OCM spec Appendix C.
+type DirectoryService struct {
+	Federation string                   `json:"federation"`
+	Servers    []DirectoryServiceServer `json:"servers"`
+}
+
+// DirectoryServiceServer represents a single OCM server in a directory service.
+type DirectoryServiceServer struct {
+	DisplayName string `json:"displayName"`
+	URL         string `json:"url"`
+	// Added after discovery, not in raw response
+	InviteAcceptDialog string `json:"inviteAcceptDialog,omitempty"`
+}
+
 // NewShareRequest contains the payload of an OCM /share request.
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1shares/post
 type NewShareRequest struct {
