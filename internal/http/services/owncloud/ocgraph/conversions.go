@@ -552,15 +552,32 @@ func (s *svc) getDisplayNameForOCMUser(ctx context.Context, userId *userpb.UserI
 		return "Federated User"
 	}
 
+	// Pass the current user as opaque parameter. It seems the getUserFilter in internal/grpc/services/ocminvitemanager/ocminvitemanager.og
+	// is not able to return the current user and this way we can force it.
+	// TODO(lopresti) here we want a GetRemoteUser CS3 API that only requires the invitee's id
+	user := appctx.ContextMustGetUser(ctx)
+	userFilter, err := utils.MarshalProtoV1ToJSON(user.Id)
+	if err != nil {
+		log.Error().Err(err).Msg("getDisplayNameForOCMUser: failed to marshal current user id to json")
+		return "Federated User"
+	}
+
 	remoteUserRes, err := gw.GetAcceptedUser(ctx, &invitepb.GetAcceptedUserRequest{
 		RemoteUserId: userId,
+		Opaque: &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				"user-filter": {
+					Decoder: "json",
+					Value:   userFilter,
+				},
+			},
+		},
 	})
 	if err != nil || remoteUserRes.Status.Code != rpcv1beta1.Code_CODE_OK {
 		log.Error().Err(err).Any("response", remoteUserRes).Any("remoteUser", userId).Msg("failed to fetch OCM user")
-		return "Federated User at " + userId.Idp
+		return "Federated User"
 	}
 
-	log.Debug().Any("remoteUser", remoteUserRes.RemoteUser).Msg("found OCM user")
 	return remoteUserRes.RemoteUser.DisplayName
 }
 

@@ -442,7 +442,7 @@ func PrintOCMUserId(u *userpb.UserId) string {
 	if len(opaque) > 10 {
 		opaque = opaque[:8] + "..."
 	}
-	return opaque + " at " + u.Idp
+	return opaque + " on " + u.Idp
 }
 
 // Cast casts a value `v` to the value `to`.
