@@ -30,23 +30,23 @@ import (
 const OCMAPIVersion = "1.2.0"
 
 type OcmProviderConfig struct {
-	OCMPrefix          string `docs:"ocm;The prefix URL where the OCM API is served."                                            mapstructure:"ocm_prefix"`
-	Endpoint           string `docs:"This host's full URL. If it's not configured, it is assumed OCM is not available."          mapstructure:"endpoint"`
-	Provider           string `docs:"reva;A friendly name that defines this service."                                            mapstructure:"provider"`
-	WebdavRoot         string `docs:"/remote.php/dav/ocm;The root URL of the WebDAV endpoint to serve OCM shares."               mapstructure:"webdav_root"`
-	WebappRoot         string `docs:"/external/sciencemesh;The root URL to serve Web apps via OCM."                              mapstructure:"webapp_root"`
+	OCMPrefix          string `docs:"ocm;The prefix URL where the OCM API is served."                                          mapstructure:"ocm_prefix"`
+	Endpoint           string `docs:"This host's full URL. If it's not configured, it is assumed OCM is not available."        mapstructure:"endpoint"`
+	Provider           string `docs:"reva;A friendly name that defines this service."                                          mapstructure:"provider"`
+	WebdavRoot         string `docs:"/remote.php/dav/ocm;The root URL of the WebDAV endpoint to serve OCM shares."             mapstructure:"webdav_root"`
+	WebappRoot         string `docs:"/external/sciencemesh;The root URL to serve Web apps via OCM."                            mapstructure:"webapp_root"`
 	InviteAcceptDialog string `docs:"/open-cloud-mesh/accept-invite;The frontend URL where to land when receiving an invitation" mapstructure:"invite_accept_dialog"`
-	EnableWebapp       bool   `docs:"false;Whether web apps are enabled in OCM shares."                                          mapstructure:"enable_webapp"`
-	EnableDatatx       bool   `docs:"false;Whether data transfers are enabled in OCM shares."                                    mapstructure:"enable_datatx"`
+	EnableWebapp       bool   `docs:"false;Whether web apps are enabled in OCM shares."                                        mapstructure:"enable_webapp"`
+	EnableDatatx       bool   `docs:"false;Whether data transfers are enabled in OCM shares."                                  mapstructure:"enable_datatx"`
 }
 
 type OcmDiscoveryData struct {
-	Enabled            bool            `json:"enabled"            xml:"enabled"`
-	APIVersion         string          `json:"apiVersion"         xml:"apiVersion"`
-	Endpoint           string          `json:"endPoint"           xml:"endPoint"`
-	Provider           string          `json:"provider"           xml:"provider"`
-	ResourceTypes      []resourceTypes `json:"resourceTypes"      xml:"resourceTypes"`
-	Capabilities       []string        `json:"capabilities"       xml:"capabilities"`
+	Enabled            bool            `json:"enabled"       xml:"enabled"`
+	APIVersion         string          `json:"apiVersion"    xml:"apiVersion"`
+	Endpoint           string          `json:"endPoint"      xml:"endPoint"`
+	Provider           string          `json:"provider"      xml:"provider"`
+	ResourceTypes      []resourceTypes `json:"resourceTypes" xml:"resourceTypes"`
+	Capabilities       []string        `json:"capabilities"  xml:"capabilities"`
 	InviteAcceptDialog string          `json:"inviteAcceptDialog" xml:"inviteAcceptDialog"`
 }
 
