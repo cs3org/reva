@@ -38,6 +38,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/protobuf/proto"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -303,6 +304,10 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*oc
 				if err := storeTransferProtocol(tx, int64(receivedShare.ID), r); err != nil {
 					return err
 				}
+			case *ocm.Protocol_EmbeddedOptions:
+				if err := storeEmbeddedProtocol(tx, int64(receivedShare.ID), r); err != nil {
+					return err
+				}
 			}
 		}
 
@@ -338,6 +343,17 @@ func storeWebappProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_WebappOptio
 		Permissions:        viewModeToInt(o.WebappOptions.ViewMode),
 	}
 
+	if err := tx.Create(protocol).Error; err != nil {
+		return err
+	}
+	return nil
+}
+func storeEmbeddedProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_EmbeddedOptions) error {
+	protocol := &model.OcmReceivedShareProtocol{
+		OcmReceivedShareID: uint(shareID),
+		Type:               model.EmbeddedProtocol,
+		Payload:            datatypes.JSON([]byte(o.EmbeddedOptions.Payload)),
+	}
 	if err := tx.Create(protocol).Error; err != nil {
 		return err
 	}

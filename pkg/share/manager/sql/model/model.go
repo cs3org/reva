@@ -93,6 +93,8 @@ const (
 	WebappProtocol
 	// TransferProtocol is the Transfer protocol.
 	TransferProtocol
+	// EmbeddedProtocol is the Embedded protocol.
+	EmbeddedProtocol
 )
 
 type ItemType string
@@ -102,6 +104,7 @@ const (
 	ItemTypeFolder    ItemType = "folder"
 	ItemTypeReference ItemType = "reference"
 	ItemTypeSymlink   ItemType = "symlink"
+	ItemTypeEmbedded  ItemType = "embedded"
 )
 
 func (i ItemType) String() string {
@@ -241,6 +244,8 @@ type OcmReceivedShareProtocol struct {
 	Permissions int `gorm:"default:null"`
 	// Transfer Protocol fields
 	Size uint64 `gorm:"default:null"`
+	// JSON field for the embedded protocol payload
+	Payload datatypes.JSON `gorm:"type:json;default:null"`
 }
 
 func (s *Share) AsCS3Share(granteeType userpb.UserType) *collaboration.Share {
