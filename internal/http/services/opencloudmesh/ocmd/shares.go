@@ -70,6 +70,7 @@ func (h *sharesHandler) init(c *config) error {
 func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
+	log.Debug().Msg("OCM /shares request received")
 	req, err := getCreateShareRequest(r)
 	log.Info().Any("req", req).Str("Remote", r.RemoteAddr).Err(err).Msg("OCM /shares request received")
 	if err != nil {
@@ -134,7 +135,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with remote owner", err)
 		return
 	}
-
+	log.Debug().Any("protocols", req.Protocols).Msg("FINDMEEEE")
 	protocols, legacy, err := getAndResolveProtocols(ctx, req.Protocols, owner.Idp)
 	if err != nil || len(protocols) == 0 {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with protocols payload", err)
@@ -216,6 +217,8 @@ func getResourceTypeFromOCMRequest(t string) providerpb.ResourceType {
 		return providerpb.ResourceType_RESOURCE_TYPE_FILE
 	case "folder":
 		return providerpb.ResourceType_RESOURCE_TYPE_CONTAINER
+	case "payload":
+		return providerpb.ResourceType_RESOURCE_TYPE_CONTAINER
 	default:
 		return providerpb.ResourceType_RESOURCE_TYPE_INVALID
 	}
@@ -236,7 +239,10 @@ func getOCMShareType(t string) ocm.ShareType {
 func getAndResolveProtocols(ctx context.Context, p Protocols, ownerServer string) (protos []*ocm.Protocol, legacy bool, err error) {
 	protos = make([]*ocm.Protocol, 0, len(p))
 	legacy = false
+	log := appctx.GetLogger(ctx)
+	log.Debug().Int("num_protocols", len(p)).Msg("resolving OCM share protocols")
 	for _, data := range p {
+		log.Debug().Interface("protocol", data).Msg("resolving OCM share protocol")
 		var uri string
 		ocmProto := data.ToOCMProtocol()
 		protocolName := GetProtocolName(data)
@@ -250,6 +256,9 @@ func getAndResolveProtocols(ctx context.Context, p Protocols, ownerServer string
 			}
 		case "webapp":
 			uri = ocmProto.GetWebappOptions().Uri
+		case "embedded":
+			protos = append(protos, ocmProto)
+			continue
 		}
 
 		// If the `uri` contains a hostname, use it as is

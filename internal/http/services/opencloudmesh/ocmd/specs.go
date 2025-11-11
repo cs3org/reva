@@ -83,7 +83,7 @@ type NewShareRequest struct {
 	SenderDisplayName string    `json:"senderDisplayName"`                                      // dispay name of the user who wants to share the resource
 	Code              string    `json:"code"`                                                   // nonce to be exchanged for a bearer token (not implemented for now)
 	ShareType         string    `json:"shareType"         validate:"required,oneof=user group"` // recipient share type (user or group)
-	ResourceType      string    `json:"resourceType"      validate:"required,oneof=file folder"`
+	ResourceType      string    `json:"resourceType"      validate:"required,oneof=file folder ro-crate"`
 	Expiration        uint64    `json:"expiration"`
 	Protocols         Protocols `json:"protocol"          validate:"required"`
 }
@@ -163,10 +163,21 @@ func (w *Datatx) ToOCMProtocol() *ocm.Protocol {
 	return ocmshare.NewTransferProtocol(w.SourceURI, w.SharedSecret, w.Size)
 }
 
+// Embedded contains the parameters for the Embedded protocol.
+type Embedded struct {
+	Payload json.RawMessage `json:"payload" validate:"required"`
+}
+
+// ToOCMProtocol convert the protocol to a ocm Protocol struct.
+func (w *Embedded) ToOCMProtocol() *ocm.Protocol {
+	return ocmshare.NewEmbeddedProtocol(string(w.Payload))
+}
+
 var protocolImpl = map[string]reflect.Type{
-	"webdav": reflect.TypeOf(WebDAV{}),
-	"webapp": reflect.TypeOf(Webapp{}),
-	"datatx": reflect.TypeOf(Datatx{}),
+	"webdav":   reflect.TypeOf(WebDAV{}),
+	"webapp":   reflect.TypeOf(Webapp{}),
+	"datatx":   reflect.TypeOf(Datatx{}),
+	"embedded": reflect.TypeOf(Embedded{}),
 }
 
 // UnmarshalJSON implements the Unmarshaler interface.
