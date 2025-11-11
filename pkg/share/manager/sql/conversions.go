@@ -195,6 +195,8 @@ func convertToCS3Protocol(p *model.OcmReceivedShareProtocol) *ocm.Protocol {
 		return share.NewWebappProtocol(p.Uri, appprovider.ViewMode(p.Permissions))
 	case model.TransferProtocol:
 		return share.NewTransferProtocol(p.Uri, p.SharedSecret, uint64(p.Size))
+	case model.EmbeddedProtocol:
+		return share.NewEmbeddedProtocol(string(p.Payload))
 	}
 	return nil
 }

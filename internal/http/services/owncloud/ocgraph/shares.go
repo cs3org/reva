@@ -106,6 +106,7 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 			}
 
 			for _, share := range ocmShareResp.Shares {
+				log.Debug().Any("share", share).Msg("processing received ocm share")
 				// TODO(lopresti): we should retrieve the remote user and pass it to OCMReceivedShareToDriveItem
 				// remoteUser, err := gw.GetAcceptedUser(ctx, &ocm.GetAcceptedUserRequest{...})
 				drive, err := s.OCMReceivedShareToDriveItem(ctx, share)
