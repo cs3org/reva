@@ -53,7 +53,7 @@ type config struct {
 	OCMShareProviderEndpoint      string `mapstructure:"ocmshareprovidersvc"`
 	OCMInviteManagerEndpoint      string `mapstructure:"ocminvitemanagersvc"`
 	OCMProviderAuthorizerEndpoint string `mapstructure:"ocmproviderauthorizersvc"`
-	OCMCoreEndpoint               string `mapstructure:"ocmcoresvc"`
+	OCMIncomingEndpoint           string `mapstructure:"ocmincomingsvc"`
 	UserProviderEndpoint          string `mapstructure:"userprovidersvc"`
 	GroupProviderEndpoint         string `mapstructure:"groupprovidersvc"`
 	DataTxEndpoint                string `mapstructure:"datatx"`
@@ -105,7 +105,7 @@ func (c *config) ApplyDefaults() {
 	c.OCMShareProviderEndpoint = sharedconf.GetGatewaySVC(c.OCMShareProviderEndpoint)
 	c.OCMInviteManagerEndpoint = sharedconf.GetGatewaySVC(c.OCMInviteManagerEndpoint)
 	c.OCMProviderAuthorizerEndpoint = sharedconf.GetGatewaySVC(c.OCMProviderAuthorizerEndpoint)
-	c.OCMCoreEndpoint = sharedconf.GetGatewaySVC(c.OCMCoreEndpoint)
+	c.OCMIncomingEndpoint = sharedconf.GetGatewaySVC(c.OCMIncomingEndpoint)
 	c.UserProviderEndpoint = sharedconf.GetGatewaySVC(c.UserProviderEndpoint)
 	c.GroupProviderEndpoint = sharedconf.GetGatewaySVC(c.GroupProviderEndpoint)
 	c.DataTxEndpoint = sharedconf.GetGatewaySVC(c.DataTxEndpoint)
@@ -200,7 +200,7 @@ func (s *svc) UnprotectedEndpoints() []string {
 		"/cs3.gateway.v1beta1.GatewayAPI/Authenticate",
 		"/cs3.gateway.v1beta1.GatewayAPI/GetAuthProvider",
 		"/cs3.gateway.v1beta1.GatewayAPI/ListAuthProviders",
-		"/cs3.gateway.v1beta1.GatewayAPI/CreateOCMCoreShare",
+		"/cs3.gateway.v1beta1.GatewayAPI/CreateOCMIncomingShare",
 		"/cs3.gateway.v1beta1.GatewayAPI/AcceptInvite",
 		"/cs3.gateway.v1beta1.GatewayAPI/GetAcceptedUser",
 		"/cs3.gateway.v1beta1.GatewayAPI/IsProviderAllowed",
@@ -217,7 +217,7 @@ func (s *svc) UnprotectedEndpoints() []string {
 		"/cs3.auth.provider.v1beta1.ProviderAPI/Authenticate",
 		"/cs3.auth.registry.v1beta1.RegistryAPI/GetAuthProvider",
 		"/cs3.auth.registry.v1beta1.RegistryAPI/ListAuthProviders",
-		"/cs3.ocm.core.v1beta1.OcmCoreAPI/CreateOCMCoreShare",
+		"/cs3.ocm.incoming.v1beta1.OcmIncomingAPI/CreateOCMIncomingShare",
 		"/cs3.ocm.invite.v1beta1.InviteAPI/AcceptInvite",
 		"/cs3.ocm.invite.v1beta1.InviteAPI/GetAcceptedUser",
 		"/cs3.ocm.provider.v1beta1.ProviderAPI/IsProviderAllowed",

@@ -35,7 +35,7 @@ import (
 	"github.com/pkg/errors"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
+	ocmincoming "github.com/cs3org/go-cs3apis/cs3/ocm/incoming/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 
@@ -154,7 +154,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	createShareReq := &ocmcore.CreateOCMCoreShareRequest{
+	createShareReq := &ocmincoming.CreateOCMIncomingShareRequest{
 		Description:  req.Description,
 		Name:         req.Name,
 		ResourceId:   req.ProviderID,
@@ -172,8 +172,8 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	log.Info().Any("req", createShareReq).Msg("CreateOCMCoreShare payload")
-	createShareResp, err := h.gatewayClient.CreateOCMCoreShare(ctx, createShareReq)
+	log.Info().Any("req", createShareReq).Msg("CreateOCMIncomingShare payload")
+	createShareResp, err := h.gatewayClient.CreateOCMIncomingShare(ctx, createShareReq)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error creating ocm share", err)
 		return

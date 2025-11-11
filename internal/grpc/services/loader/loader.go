@@ -29,7 +29,7 @@ import (
 	_ "github.com/cs3org/reva/v3/internal/grpc/services/gateway"
 	_ "github.com/cs3org/reva/v3/internal/grpc/services/groupprovider"
 	_ "github.com/cs3org/reva/v3/internal/grpc/services/helloworld"
-	_ "github.com/cs3org/reva/v3/internal/grpc/services/ocmcore"
+	_ "github.com/cs3org/reva/v3/internal/grpc/services/ocmincoming"
 	_ "github.com/cs3org/reva/v3/internal/grpc/services/ocminvitemanager"
 	_ "github.com/cs3org/reva/v3/internal/grpc/services/ocmproviderauthorizer"
 	_ "github.com/cs3org/reva/v3/internal/grpc/services/ocmshareprovider"
