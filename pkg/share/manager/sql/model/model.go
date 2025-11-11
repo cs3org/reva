@@ -50,8 +50,8 @@ const (
 	TransferAccessMethod
 )
 
-// ShareState is the state of the share.
-type OcmShareState int
+// ShareType is the type of the share.
+type ShareType int
 
 const (
 	// ShareTypeUser is used for a share to an user.
@@ -60,8 +60,8 @@ const (
 	ShareTypeGroup
 )
 
-// ShareType is the type of the share.
-type ShareType int
+// ShareState is the state of the share.
+type OcmShareState int
 
 const (
 	// ShareStatePending is the state for a pending share.
@@ -93,6 +93,8 @@ const (
 	WebappProtocol
 	// TransferProtocol is the Transfer protocol.
 	TransferProtocol
+	// EmbeddedProtocol is the Embedded protocol.
+	EmbeddedProtocol
 )
 
 type ItemType string
@@ -102,6 +104,7 @@ const (
 	ItemTypeFolder    ItemType = "folder"
 	ItemTypeReference ItemType = "reference"
 	ItemTypeSymlink   ItemType = "symlink"
+	ItemTypeEmbedded  ItemType = "embedded"
 )
 
 func (i ItemType) String() string {
@@ -216,8 +219,6 @@ type OcmReceivedShare struct {
 	gorm.Model
 	RemoteShareID string        `gorm:"not null"`
 	Name          string        `gorm:"size:255;not null"`
-	FileidPrefix  string        `gorm:"size:255;not null"`
-	ItemSource    string        `gorm:"size:255;not null"`
 	ItemType      OcmItemType   `gorm:"not null"`
 	ShareWith     string        `gorm:"size:255;not null"`
 	Owner         string        `gorm:"size:255;not null"`
@@ -241,6 +242,8 @@ type OcmReceivedShareProtocol struct {
 	Permissions int `gorm:"default:null"`
 	// Transfer Protocol fields
 	Size uint64 `gorm:"default:null"`
+	// JSON field for the embedded protocol payload
+	Payload datatypes.JSON `gorm:"type:json;default:null"`
 }
 
 func (s *Share) AsCS3Share(granteeType userpb.UserType) *collaboration.Share {
