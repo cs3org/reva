@@ -957,7 +957,8 @@ func (fs *cephmountfs) GetQuota(ctx context.Context, ref *provider.Reference) (t
 		Msg("cephmount GetQuota resolved home path")
 
 	// Get max quota from extended attributes or use default
-	maxQuotaData, err := xattr.Get(homePath, "user.quota.max_bytes")
+	fullHomePath := filepath.Join(fs.chrootDir, homePath)
+	maxQuotaData, err := xattr.Get(fullHomePath, "user.quota.max_bytes")
 	if err != nil {
 		log.Debug().Msg("cephmount: user.quota.max_bytes xattr not set, using default")
 		total = fs.conf.UserQuotaBytes
@@ -966,7 +967,7 @@ func (fs *cephmountfs) GetQuota(ctx context.Context, ref *provider.Reference) (t
 	}
 
 	// Get used quota from extended attributes or use default
-	usedQuotaData, err := xattr.Get(homePath, "ceph.dir.rbytes")
+	usedQuotaData, err := xattr.Get(fullHomePath, "ceph.dir.rbytes")
 	if err != nil {
 		log.Debug().Msg("cephmount: ceph.dir.rbytes xattr not set, using 0")
 	} else {
@@ -1022,11 +1023,12 @@ func (fs *cephmountfs) SetArbitraryMetadata(ctx context.Context, ref *provider.R
 
 	fs.logOperation(ctx, "SetArbitraryMetadata", path)
 
+	fullPath := filepath.Join(fs.chrootDir, path)
 	for k, v := range md.Metadata {
 		if !strings.HasPrefix(k, xattrUserNs) {
 			k = xattrUserNs + k
 		}
-		if err := xattr.Set(path, k, []byte(v)); err != nil {
+		if err := xattr.Set(fullPath, k, []byte(v)); err != nil {
 			wrappedErr := errors.Wrap(err, "cephmount: failed to set xattr")
 			fs.logOperationError(ctx, "SetArbitraryMetadata", path, wrappedErr)
 			return wrappedErr
@@ -1046,11 +1048,12 @@ func (fs *cephmountfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider
 
 	fs.logOperation(ctx, "UnsetArbitraryMetadata", path)
 
+	fullPath := filepath.Join(fs.chrootDir, path)
 	for _, key := range keys {
 		if !strings.HasPrefix(key, xattrUserNs) {
 			key = xattrUserNs + key
 		}
-		if err := xattr.Remove(path, key); err != nil {
+		if err := xattr.Remove(fullPath, key); err != nil {
 			// Ignore if the attribute doesn't exist
 			if !strings.Contains(err.Error(), "no such attribute") {
 				wrappedErr := errors.Wrap(err, "cephmount: failed to remove xattr")
@@ -1181,7 +1184,8 @@ func (fs *cephmountfs) GetLock(ctx context.Context, ref *provider.Reference) (*p
 	fs.logOperation(ctx, "GetLock", path)
 
 	// Try to read lock metadata
-	buf, err := xattr.Get(path, xattrLock)
+	fullPath := filepath.Join(fs.chrootDir, path)
+	buf, err := xattr.Get(fullPath, xattrLock)
 	if err != nil {
 		if strings.Contains(err.Error(), "no such attribute") {
 			return nil, errtypes.NotFound("file was not locked")
