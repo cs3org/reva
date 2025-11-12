@@ -27,6 +27,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"os/user"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -331,9 +332,11 @@ func (fs *cephmountfs) fileAsResourceInfo(path string, info os.FileInfo, mdKeys 
 
 	// Create resource ID using inode number
 	resourceId := &provider.ResourceId{
-		StorageId: "cephmount",
+		//StorageId: "cephmount",
 		OpaqueId:  strconv.FormatUint(stat.Ino, 10),
 	}
+
+	owner, _ := user.LookupId(fmt.Sprint(stat.Uid))
 
 	ri := &provider.ResourceInfo{
 		Type:     resourceType,
@@ -342,7 +345,7 @@ func (fs *cephmountfs) fileAsResourceInfo(path string, info os.FileInfo, mdKeys 
 		Size:     size,
 		Mtime:    &typepb.Timestamp{Seconds: uint64(info.ModTime().Unix())},
 		Path:     fs.fromChroot(path),                   // Convert chroot path back to external path
-		Owner:    &userv1beta1.UserId{OpaqueId: "root"}, // Default owner
+		Owner:    &userv1beta1.UserId{OpaqueId: owner.Username}, 
 		PermissionSet: &provider.ResourcePermissions{
 			AddGrant:             true,
 			CreateContainer:      true,
@@ -947,21 +950,29 @@ func (fs *cephmountfs) GetQuota(ctx context.Context, ref *provider.Reference) (t
 		return 0, 0, errors.Wrap(err, "cephmount: error resolving home path")
 	}
 
-	// Get quota from extended attributes or use default
-	quotaData, err := xattr.Get(homePath, "user.quota.max_bytes")
+	// log homepath
+	log.Debug().Str("operation", "GetQuota").
+		Str("home_path", homePath).
+		Str("full_filesystem_path", filepath.Join(fs.chrootDir, homePath)).
+		Msg("cephmount GetQuota resolved home path")
+
+	// Get max quota from extended attributes or use default
+	maxQuotaData, err := xattr.Get(homePath, "user.quota.max_bytes")
 	if err != nil {
-		log.Debug().Msg("cephmount: user quota bytes not set, using default")
+		log.Debug().Msg("cephmount: user.quota.max_bytes xattr not set, using default")
 		total = fs.conf.UserQuotaBytes
 	} else {
-		total, _ = strconv.ParseUint(string(quotaData), 10, 64)
+		total, _ = strconv.ParseUint(string(maxQuotaData), 10, 64)
 	}
 
-	// Calculate used space by walking the directory
-	used, err = fs.calculateDirectorySize(homePath)
+	// Get used quota from extended attributes or use default
+	usedQuotaData, err := xattr.Get(homePath, "ceph.dir.rbytes")
 	if err != nil {
-		log.Debug().Err(err).Msg("failed to calculate directory size")
-		used = 0
+		log.Debug().Msg("cephmount: ceph.dir.rbytes xattr not set, using 0")
+	} else {
+		used, _ = strconv.ParseUint(string(usedQuotaData), 10, 64)
 	}
+
 
 	return total, used, nil
 }

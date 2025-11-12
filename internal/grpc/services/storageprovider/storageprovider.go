@@ -811,6 +811,8 @@ func (s *service) addSpaceInfo(ctx context.Context, ri *provider.ResourceInfo, w
 	}
 	ri.ParentId.SpaceId = spaceID
 	ri.Id.SpaceId = spaceID
+	log.Debug().Any("path", ri.Path).Any("spaceID", spaceID).Msg("addSpaceInfo")
+
 
 	if s.spaceInfoCache != nil {
 		if space, err := s.spaceInfoCache.Get(spaceID); space != nil && err == nil {
@@ -1763,6 +1765,7 @@ func (s *service) fetchSpace(ctx context.Context, spaceID string) (*provider.Sto
 		})
 	}
 
+	log.Debug().Any("spaceid", spaceID).Any("request", request).Msg("luffy")
 	spacesResp, err := gw.ListStorageSpaces(ctx, request)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to list storage spaces")
