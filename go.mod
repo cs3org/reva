@@ -69,6 +69,7 @@ require (
 	github.com/rogpeppe/go-internal v1.14.1
 	github.com/rs/cors v1.11.1
 	github.com/rs/zerolog v1.34.0
+	github.com/samber/slog-zerolog/v2 v2.9.0
 	github.com/segmentio/kafka-go v0.4.49
 	github.com/sercand/kuberesolver/v5 v5.1.1
 	github.com/sethvargo/go-diceware v0.5.0
@@ -207,6 +208,8 @@ require (
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sagikazarmark/locafero v0.7.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
+	github.com/samber/lo v1.51.0 // indirect
+	github.com/samber/slog-common v0.19.0 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/shurcooL/httpfs v0.0.0-20230704072500-f1e31cf0ba5c // indirect
 	github.com/shurcooL/vfsgen v0.0.0-20230704071429-0000e147ea92 // indirect
@@ -269,3 +272,5 @@ tool (
 )
 
 replace github.com/go-micro/plugins/v4/store/nats-js-kv => github.com/opencloud-eu/go-micro-plugins/v4/store/nats-js-kv v0.0.0-20250512152754-23325793059a
+replace github.com/pablodz/inotifywaitgo => github.com/opencloud-eu/inotifywaitgo
+
