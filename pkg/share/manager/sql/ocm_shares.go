@@ -62,7 +62,7 @@ func NewOCMShareManager(ctx context.Context, m map[string]any) (share.Repository
 		return nil, err
 	}
 
-	err = db.AutoMigrate(&model.OcmShare{}, &model.OcmSharesAccessMethod{},
+	err = db.AutoMigrate(&model.OcmShare{}, &model.OcmShareProtocol{},
 		&model.OcmReceivedShare{}, &model.OcmReceivedShareProtocol{})
 	if err != nil {
 		log.Debug().Err(err).Msg("error migrating database")
@@ -89,16 +89,16 @@ func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share) (*ocm.Share, error) 
 	err = m.db.Transaction(func(tx *gorm.DB) error {
 
 		share := &model.OcmShare{
-			Token:        s.Token,
-			FileidPrefix: s.ResourceId.StorageId,
-			ItemSource:   s.ResourceId.OpaqueId,
-			Name:         s.Name,
-			ShareWith:    formatUserID(s.Grantee.GetUserId()),
-			Owner:        s.Owner.OpaqueId,
-			Initiator:    s.Creator.OpaqueId,
-			Ctime:        s.Ctime.Seconds,
-			Mtime:        s.Mtime.Seconds,
-			Type:         convertFromCS3OCMShareType(s.ShareType),
+			Token:     s.Token,
+			StorageId: s.ResourceId.StorageId,
+			FileId:    s.ResourceId.OpaqueId,
+			Name:      s.Name,
+			ShareWith: formatUserID(s.Grantee.GetUserId()),
+			Owner:     s.Owner.OpaqueId,
+			Initiator: s.Creator.OpaqueId,
+			Ctime:     s.Ctime.Seconds,
+			Mtime:     s.Mtime.Seconds,
+			Type:      convertFromCS3OCMShareType(s.ShareType),
 		}
 		if s.Expiration != nil {
 			share.Expiration.Int64 = int64(s.Expiration.Seconds)
@@ -135,9 +135,9 @@ func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share) (*ocm.Share, error) 
 }
 
 func storeWebDAVAccessMethod(tx *gorm.DB, shareID uint, o *ocm.AccessMethod_WebdavOptions) error {
-	accessMethod := &model.OcmSharesAccessMethod{
+	accessMethod := &model.OcmShareProtocol{
 		OcmShareID:  uint(shareID),
-		Type:        model.WebDAVAccessMethod,
+		Type:        model.WebDAVProtocol,
 		Permissions: utils.SharePermToInt(o.WebdavOptions.Permissions),
 	}
 
@@ -149,9 +149,9 @@ func storeWebDAVAccessMethod(tx *gorm.DB, shareID uint, o *ocm.AccessMethod_Webd
 }
 
 func storeWebappAccessMethod(tx *gorm.DB, shareID uint, o *ocm.AccessMethod_WebappOptions) error {
-	accessMethod := &model.OcmSharesAccessMethod{
+	accessMethod := &model.OcmShareProtocol{
 		OcmShareID:  uint(shareID),
-		Type:        model.WebappAccessMethod,
+		Type:        model.WebappProtocol,
 		Permissions: viewModeToInt(o.WebappOptions.ViewMode),
 	}
 
@@ -163,9 +163,9 @@ func storeWebappAccessMethod(tx *gorm.DB, shareID uint, o *ocm.AccessMethod_Weba
 }
 
 func storeTransferAccessMethod(tx *gorm.DB, shareID uint, o *ocm.AccessMethod_TransferOptions) error {
-	accessMethod := &model.OcmSharesAccessMethod{
+	accessMethod := &model.OcmShareProtocol{
 		OcmShareID: uint(shareID),
-		Type:       model.TransferAccessMethod,
+		Type:       model.TransferProtocol,
 	}
 
 	err := tx.Create(accessMethod).Error
@@ -480,7 +480,7 @@ func (m *mgr) getByID(ctx context.Context, user *userpb.User, id *ocm.ShareId) (
 func (m *mgr) getByKey(ctx context.Context, user *userpb.User, key *ocm.ShareKey) (*ocm.Share, error) {
 	var shareModel model.OcmShare
 	if err := m.db.WithContext(ctx).
-		Where("owner = ? AND fileid_prefix = ? AND item_source = ? AND share_with = ? AND (initiator = ? OR owner = ?)",
+		Where("owner = ? AND storage_id = ? AND file_id = ? AND share_with = ? AND (initiator = ? OR owner = ?)",
 			key.Owner.OpaqueId, key.ResourceId.StorageId, key.ResourceId.OpaqueId, formatUserID(key.Grantee.GetUserId()), user.Id.OpaqueId, user.Id.OpaqueId).
 		First(&shareModel).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -525,15 +525,15 @@ func (m *mgr) getByToken(ctx context.Context, token string) (*ocm.Share, error) 
 }
 
 func (m *mgr) getAccessMethods(ctx context.Context, id int) ([]*ocm.AccessMethod, error) {
-	var accessMethodModels []model.OcmSharesAccessMethod
+	var modelAMs []model.OcmShareProtocol
 	if err := m.db.WithContext(ctx).
 		Where("ocm_share_id = ?", id).
-		Find(&accessMethodModels).Error; err != nil {
+		Find(&modelAMs).Error; err != nil {
 		return nil, err
 	}
 
 	var methods []*ocm.AccessMethod
-	for _, am := range accessMethodModels {
+	for _, am := range modelAMs {
 		methods = append(methods, convertToCS3AccessMethod(&am))
 	}
 
@@ -562,7 +562,7 @@ func (m *mgr) deleteByID(ctx context.Context, user *userpb.User, id *ocm.ShareId
 
 func (m *mgr) deleteByKey(ctx context.Context, user *userpb.User, key *ocm.ShareKey) error {
 	result := m.db.WithContext(ctx).
-		Where("owner = ? AND fileid_prefix = ? AND item_source = ? AND share_with = ? AND (initiator = ? OR owner = ?)",
+		Where("owner = ? AND storage_id = ? AND file_id = ? AND share_with = ? AND (initiator = ? OR owner = ?)",
 			key.Owner.OpaqueId, key.ResourceId.StorageId, key.ResourceId.OpaqueId, formatUserID(key.Grantee.GetUserId()), user.Id.OpaqueId, user.Id.OpaqueId).
 		Delete(&model.OcmShare{})
 
@@ -591,14 +591,14 @@ func (m *mgr) queriesUpdatesOnShare(ctx context.Context, id *ocm.ShareId, f ...*
 			switch t := u.AccessMethods.Term.(type) {
 			case *ocm.AccessMethod_WebdavOptions:
 				accessMethodUpdates = append(accessMethodUpdates, func(tx *gorm.DB) error {
-					return tx.Model(&model.OcmSharesAccessMethod{}).
-						Where("ocm_share_id = ? AND type = ?", id.OpaqueId, model.WebDAVAccessMethod).
+					return tx.Model(&model.OcmShareProtocol{}).
+						Where("ocm_share_id = ? AND type = ?", id.OpaqueId, model.WebDAVProtocol).
 						Update("permissions", int(conversions.RoleFromResourcePermissions(t.WebdavOptions.Permissions).OCSPermissions())).Error
 				})
 			case *ocm.AccessMethod_WebappOptions:
 				accessMethodUpdates = append(accessMethodUpdates, func(tx *gorm.DB) error {
-					return tx.Model(&model.OcmSharesAccessMethod{}).
-						Where("ocm_share_id = ? AND type = ?", id.OpaqueId, model.WebappAccessMethod).
+					return tx.Model(&model.OcmShareProtocol{}).
+						Where("ocm_share_id = ? AND type = ?", id.OpaqueId, model.WebappProtocol).
 						Update("permissions", int(t.WebappOptions.ViewMode)).Error
 				})
 			}
@@ -675,13 +675,13 @@ func translateFilters(filters []*ocm.ListOCMSharesRequest_Filter) (string, []any
 		for n, f := range lst {
 			switch filter := f.Term.(type) {
 			case *ocm.ListOCMSharesRequest_Filter_ResourceId:
-				filterQuery.WriteString("fileid_prefix=? AND item_source=?")
+				filterQuery.WriteString("storage_id = ? AND file_id = ?")
 				params = append(params, filter.ResourceId.StorageId, filter.ResourceId.OpaqueId)
 			case *ocm.ListOCMSharesRequest_Filter_Creator:
-				filterQuery.WriteString("initiator=?")
+				filterQuery.WriteString("initiator = ?")
 				params = append(params, filter.Creator.OpaqueId)
 			case *ocm.ListOCMSharesRequest_Filter_Owner:
-				filterQuery.WriteString("owner=?")
+				filterQuery.WriteString("owner = ?")
 				params = append(params, filter.Owner.OpaqueId)
 			default:
 				return "", nil, errtypes.BadRequest("unknown filter")
@@ -714,7 +714,7 @@ func (m *mgr) getAccessMethodsIds(ctx context.Context, ids []any) (map[string][]
 		return methods, nil
 	}
 
-	var accessMethodModels []model.OcmSharesAccessMethod
+	var accessMethodModels []model.OcmShareProtocol
 	if err := m.db.WithContext(ctx).
 		Where("ocm_share_id IN ?", ids).
 		Find(&accessMethodModels).Error; err != nil {

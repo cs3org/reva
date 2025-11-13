@@ -36,65 +36,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// AccessMethod is method granted by the sharer to access
-// the shared resource.
-type AccessMethod int
-
-const (
-	// WebDAVAccessMethod indicates an access using WebDAV to the share.
-	WebDAVAccessMethod AccessMethod = iota
-	// WebappAccessMethod indicates an access using a collaborative
-	// application to the share.
-	WebappAccessMethod
-	// TransferAccessMethod indicates a share for a transfer.
-	TransferAccessMethod
-)
-
-// ShareState is the state of the share.
-type OcmShareState int
-
-const (
-	// ShareTypeUser is used for a share to an user.
-	ShareTypeUser ShareType = iota
-	// ShareTypeGroup is used for a share to a group.
-	ShareTypeGroup
-)
-
-// ShareType is the type of the share.
-type ShareType int
-
-const (
-	// ShareStatePending is the state for a pending share.
-	ShareStatePending OcmShareState = iota
-	// ShareStateAccepted is the share for an accepted share.
-	ShareStateAccepted
-	// ShareStateRejected is the share for a rejected share.
-	ShareStateRejected
-)
-
-// ItemType is the type of the shares resource.
-type OcmItemType int
-
-const (
-	// ItemTypeFile is used when the shared resource is a file.
-	OcmItemTypeFile OcmItemType = iota
-	// ItemTypeFolder is used when the shared resource is a folder.
-	OcmItemTypeFolder
-)
-
-// Protocol is the protocol the recipient of the share
-// uses to access the shared resource.
-type Protocol int
-
-const (
-	// WebDAVProtocol is the WebDav protocol.
-	WebDAVProtocol Protocol = iota
-	// WebappProtocol is the Webapp protocol.
-	WebappProtocol
-	// TransferProtocol is the Transfer protocol.
-	TransferProtocol
-)
-
+// ItemType is the type of the shared resource.
 type ItemType string
 
 const (
@@ -108,18 +50,55 @@ func (i ItemType) String() string {
 	return string(i)
 }
 
+// For OCM shares, OcmShareType is the type of the recipient.
+type OcmShareType int
+
+const (
+	// OcmShareTypeUser is used for a share to an user.
+	OcmShareTypeUser OcmShareType = iota
+	// OcmShareTypeGroup is used for a share to a group.
+	OcmShareTypeGroup
+)
+
+// For OCM shares, OcmShareState is their state.
+type OcmShareState int
+
+const (
+	// OcmShareStatePending is the state for a pending share.
+	OcmShareStatePending OcmShareState = iota
+	// OcmShareStateAccepted is the share for an accepted share.
+	OcmShareStateAccepted
+	// OcmShareStateRejected is the share for a rejected share.
+	OcmShareStateRejected
+)
+
+// OcmProtocol is the protocol used by the recipient of an OCM share
+// (both incoming and outgoing) to access the shared resource.
+type OcmProtocol int
+
+const (
+	// WebDAVProtocol is the OCM `webdav` protocol.
+	WebDAVProtocol OcmProtocol = iota
+	// WebappProtocol is the OCM `webapp` protocol.
+	WebappProtocol
+	// TransferProtocol is the OCM `datatx` protocol.
+	TransferProtocol
+)
+
 // ShareID only contains IDs of shares and public links. This is because the Web UI requires
 // that shares and public links do not share an ID, so we need a shared table to make sure
 // that there are no duplicates.
 // This is implemented by having ShareID have an ID that is auto-increment, and shares and
 // public links will have their ID be a foreign key to ShareID
 // When creating a new share, we will then first create an ID entry and use this for the ID
-
 type ShareID struct {
 	ID uint `gorm:"primarykey"`
 }
 
-// We cannot use gorm.Model, because we want our ID to be a foreign key to ShareID
+// This is the base model for all share types. We cannot use gorm.Model, because we want our ID
+// to be a foreign key to ShareID, but we incorporate the date fields from gorm.
+// The DeletedAt field is included in multiple unique indexes to allow soft deletion while
+// maintaining uniqueness constraints.
 type BaseModel struct {
 	// Id has to be called Id and not ID, otherwise the foreign key will not work
 	// ID is a special field in GORM, which it uses as the default Primary Key
@@ -127,45 +106,47 @@ type BaseModel struct {
 	ShareId   ShareID `gorm:"foreignKey:Id;references:ID;constraint:OnDelete:CASCADE"` //;references:ID
 	CreatedAt time.Time
 	UpdatedAt time.Time
-	DeletedAt gorm.DeletedAt `gorm:"index"`
+	DeletedAt gorm.DeletedAt `gorm:"uniqueIndex:u_share;uniqueIndex:u_link;uniqueIndex:u_ocmshare"`
 }
 
-// ProtoShare contains fields that are shared between PublicLinks and Shares.
-// Unfortunately, because these are shared, we cannot name our indexes
-// because then two indexes with the same name would be created
+// ProtoShare contains fields that are common between PublicLinks and Shares.
 type ProtoShare struct {
-	// Including gorm.Model will embed a number of gorm-default fields
 	BaseModel
 	UIDOwner     string   `gorm:"size:64"`
-	UIDInitiator string   `gorm:"size:64;index"`
+	UIDInitiator string   `gorm:"size:64"`
 	ItemType     ItemType `gorm:"size:16;index"` // file | folder | reference | symlink
 	InitialPath  string
-	Inode        string `gorm:"size:32;index"`
-	Instance     string `gorm:"size:32;index"`
-	Permissions  uint8
+	Inode        string `gorm:"size:32;uniqueIndex:u_share;uniqueIndex:u_link"`
+	Instance     string `gorm:"size:32;uniqueIndex:u_share;uniqueIndex:u_link"`
+	Permissions  uint8  `gorm:"uniqueIndex:u_share;uniqueIndex:u_link"`
 	Orphan       bool
 	Expiration   datatypes.NullTime
 }
 
+// Share is a regular share between users or groups. The unique index ensures that there
+// can only be one share per (inode, instance, permissions, recipient) tuple, unless the share is deleted.
 type Share struct {
 	ProtoShare
-	ShareWith         string `gorm:"size:255;index:i_share_with"` // 255 because this can be a lw account, which are mapped from email addresses / ...
+	ShareWith         string `gorm:"size:255;uniqueIndex:u_share"` // 255 because this can be an external account, which has a long representation
 	SharedWithIsGroup bool
 	Description       string `gorm:"size:1024"`
 }
 
+// PublicLink is a public link share. We create a "non-enforcing" unique index here to please GORM:
+// there can only be one public link per (token, inode, instance, permissions) tuple, unless the link is deleted.
+// It is "non-enforcing" because the token is already unique by itself.
 type PublicLink struct {
 	ProtoShare
 	// Current tokens are only 16 chars long, but old tokens used to be 32 characters
-	Token                        string `gorm:"uniqueIndex:i_token;size:32"`
+	Token                        string `gorm:"uniqueIndex:i_token;uniqueIndex:u_link;size:32"`
 	Quicklink                    bool
 	NotifyUploads                bool
 	NotifyUploadsExtraRecipients string
 	Password                     string `gorm:"size:255"`
-	// Users can give a name to a share
-	LinkName string `gorm:"size:512"`
+	LinkName                     string `gorm:"size:512"` // Users can give a name to a share
 }
 
+// ShareState represents the state of a share for a specific recipient.
 type ShareState struct {
 	gorm.Model
 	ShareID uint  `gorm:"uniqueIndex:i_shareid_user"`       // Define the foreign key field
@@ -177,64 +158,54 @@ type ShareState struct {
 	Alias  string `gorm:"size:64"`
 }
 
+// OcmShare represents an OCM share for a remote user. The unique index ensures that there
+// can only be one share per (storageId, fileId, shareWith, owner) tuple, unless the share is deleted.
 type OcmShare struct {
-	// The fields of the base model had to be copied since we need an index on DeletedAt + unique constraints
-	// Id has to be called Id and not ID, otherwise the foreign key will not work
-	// ID is a special field in GORM, which it uses as the default Primary Key
-	Id        uint    `gorm:"primaryKey;not null;autoIncrement:false"`
-	ShareId   ShareID `gorm:"foreignKey:Id;references:ID;constraint:OnDelete:CASCADE"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	// Needs to be indexed because shares that are deleted need to be unique so we can add a new share after it was deleted
-	DeletedAt     gorm.DeletedAt          `gorm:"index;uniqueIndex:idx_fileid_source_share_with_deletedat"`
-	Token         string                  `gorm:"size:255;not null;uniqueIndex"`
-	FileidPrefix  string                  `gorm:"size:64;not null;uniqueIndex:idx_fileid_source_share_with_deletedat"`
-	ItemSource    string                  `gorm:"size:64;not null;uniqueIndex:idx_fileid_source_share_with_deletedat"`
-	Name          string                  `gorm:"type:text;not null"`
-	ShareWith     string                  `gorm:"size:255;not null;uniqueIndex:idx_fileid_source_share_with_deletedat"`
-	Owner         string                  `gorm:"size:255;not null;uniqueIndex:idx_fileid_source_share_with_deletedat"`
-	Initiator     string                  `gorm:"type:text;not null"`
-	Ctime         uint64                  `gorm:"not null"`
-	Mtime         uint64                  `gorm:"not null"`
-	Expiration    sql.NullInt64           `gorm:"default:null"`
-	Type          ShareType               `gorm:"not null"`
-	AccessMethods []OcmSharesAccessMethod `gorm:"constraint:OnDelete:CASCADE;"`
+	BaseModel
+	Token      string             `gorm:"size:255;not null;uniqueIndex:i_ocmshare_token"`
+	StorageId  string             `gorm:"size:64;not null;uniqueIndex:u_ocmshare"`
+	FileId     string             `gorm:"size:64;not null;uniqueIndex:u_ocmshare"`
+	Name       string             `gorm:"type:text;not null"`
+	ShareWith  string             `gorm:"size:255;not null;uniqueIndex:u_ocmshare"`
+	Owner      string             `gorm:"size:255;not null;uniqueIndex:u_ocmshare"`
+	Initiator  string             `gorm:"type:text;not null"`
+	Ctime      uint64             `gorm:"not null"`
+	Mtime      uint64             `gorm:"not null"`
+	Expiration sql.NullInt64      `gorm:"default:null"`
+	Type       OcmShareType       `gorm:"not null"`
+	Protocols  []OcmShareProtocol `gorm:"constraint:OnDelete:CASCADE;"`
 }
 
-// OCM Shares Access Methods
-type OcmSharesAccessMethod struct {
+// OcmShareProtocol represents the protocol used to access an OCM share, named AccessMethod in the OCM CS3 APIs.
+type OcmShareProtocol struct {
 	gorm.Model
-	OcmShareID uint `gorm:"not null;uniqueIndex:idx_ocm_share_method"`
-	//OcmShare   OcmShare     `gorm:"constraint:OnDelete:CASCADE;foreignKey:OcmShareID;references:Id"`
-	Type AccessMethod `gorm:"not null;uniqueIndex:idx_ocm_share_method"`
-	// WebDAV and WebApp fields
-	Permissions int `gorm:"default:null"`
+	OcmShareID  uint        `gorm:"not null;uniqueIndex:u_ocm_share_protocol"`
+	Type        OcmProtocol `gorm:"not null;uniqueIndex:u_ocm_share_protocol"`
+	Permissions int         `gorm:"default:null"`
 }
 
-// OCM Received Shares
+// OcmReceivedShare represents an OCM share received from a remote user.
 type OcmReceivedShare struct {
 	gorm.Model
-	RemoteShareID string        `gorm:"not null"`
+	RemoteShareID string        `gorm:"index:i_ocmrecshare_remoteshareid;not null"`
 	Name          string        `gorm:"size:255;not null"`
-	FileidPrefix  string        `gorm:"size:255;not null"`
-	ItemSource    string        `gorm:"size:255;not null"`
-	ItemType      OcmItemType   `gorm:"not null"`
+	ItemType      ItemType      `gorm:"size:16;not null"`
 	ShareWith     string        `gorm:"size:255;not null"`
-	Owner         string        `gorm:"size:255;not null"`
-	Initiator     string        `gorm:"size:255;not null"`
+	Owner         string        `gorm:"index:i_ocmrecshare_owner;size:255;not null"`
+	Initiator     string        `gorm:"index:i_ocmrecshare_initiator;size:255;not null"`
 	Ctime         uint64        `gorm:"not null"`
 	Mtime         uint64        `gorm:"not null"`
 	Expiration    sql.NullInt64 `gorm:"default:null"`
-	Type          ShareType     `gorm:"not null"`
-	State         OcmShareState `gorm:"not null"`
+	Type          OcmShareType  `gorm:"index:i_ocmrecshare_type;not null"`
+	State         OcmShareState `gorm:"index:i_ocmrecshare_state;not null"`
 }
 
-// OCM Received Share Protocols
+// OcmReceivedShareProtocol represents the protocol used to access an OCM share received from a remote user.
 type OcmReceivedShareProtocol struct {
 	gorm.Model
-	OcmReceivedShareID uint             `gorm:"not null;uniqueIndex:idx_received_share_protocol"`
+	OcmReceivedShareID uint             `gorm:"not null;uniqueIndex:u_ocmrecshare_protocol"`
 	OcmReceivedShare   OcmReceivedShare `gorm:"constraint:OnDelete:CASCADE;foreignKey:OcmReceivedShareID;references:ID"`
-	Type               Protocol         `gorm:"not null;uniqueIndex:idx_received_share_protocol"`
+	Type               OcmProtocol      `gorm:"not null;uniqueIndex:u_ocmrecshare_protocol"`
 	Uri                string           `gorm:"size:255"`
 	SharedSecret       string           `gorm:"type:text;not null"`
 	// WebDAV and WebApp Protocol fields
