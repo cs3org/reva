@@ -20,16 +20,19 @@ package ocdav
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"path"
 	"path/filepath"
 	"strings"
 
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
@@ -248,17 +251,12 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				return
 			}
 
-			var token, ocmshare, mode string
+			var token, ocmshareid, relPath, mode string
 			// OCM v1.1+ (OCIS et al.).
 			if strings.Index(r.Header.Get("Authorization"), "Bearer") != -1 {
 				// Bearer token is the shared secret, path is /{shareId}/path/to/resource.
-				// Here we're keeping the simpler public-share model, where the internal routing is done via the token,
-				// therefore we strip the shareId and reinject the token.
-				// TODO(lopresti) We should instead perform a lookup via shareId and leave the token just for auth.
-				var relPath string
 				token = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-				ocmshare, relPath = router.ShiftPath(r.URL.Path)
-				r.URL.Path = filepath.Join("/", token, relPath)
+				ocmshareid, relPath = router.ShiftPath(r.URL.Path)
 				mode = "bearer"
 			} else {
 				username, _, ok := r.BasicAuth()
@@ -266,7 +264,6 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 					// OCM v1.0 (OC10 and Nextcloud) uses basic auth for carrying the shared secret,
 					// and does not pass the shareId
 					token = username
-					r.URL.Path = filepath.Join("/", token, r.URL.Path)
 					mode = "legacy"
 				} else {
 					log.Info().Any("url", r.URL.Path).Any("headers", r.Header).Msg("unauthenticated remote OCM access")
@@ -275,7 +272,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				}
 			}
 
-			authRes, err := handleOCMAuth(ctx, c, ocmshare, token)
+			authRes, err := handleOCMAuth(ctx, c, ocmshareid, token)
 			switch {
 			case err != nil:
 				log.Info().Err(err).Str("mode", mode).Msg("error authenticating remote OCM access")
@@ -298,6 +295,16 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
+
+			// now rewrite the URL to have the form /<shareId>/relative/path in all cases:
+			var scopes map[string]*authpb.Scope
+			if err := json.Unmarshal(authRes.Opaque.Map["scopes"].Value, &scopes); err != nil {
+				log.Error().Str("token", token).Interface("authRes", authRes).Msg("Failed to unmarshal scopes from OCM auth response")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			ocmShares, _ := scope.GetOCMSharesFromScopes(scopes)
+			r.URL.Path = filepath.Join("/", ocmShares[0].GetId().GetOpaqueId(), relPath)
 
 			ctx = appctx.ContextSetToken(ctx, authRes.Token)
 			ctx = appctx.ContextSetUser(ctx, authRes.User)
