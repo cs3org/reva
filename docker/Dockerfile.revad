@@ -16,7 +16,7 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
-FROM golang:1.25.1-alpine as builder
+FROM golang:1.25.4-alpine as builder
 
 WORKDIR /home/reva
 COPY . .
