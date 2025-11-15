@@ -12,7 +12,7 @@ userprovidersvc = "{{grpc_address}}"
 ocminvitemanagersvc = "{{grpc_address}}"
 ocmproviderauthorizersvc = "{{grpc_address}}"
 ocmshareprovidersvc = "{{grpc_address}}"
-ocmcoresvc = "{{grpc_address}}"
+ocmincomingsvc = "{{grpc_address}}"
 datagateway = "http://{{cesnethttp_address}}/datagateway"
 
 [grpc.services.authregistry]
@@ -43,10 +43,10 @@ provider_domain = "cesnet.cz"
 [grpc.services.ocmshareprovider.drivers.json]
 file = "{{ocm_share_cesnet_file}}"
 
-[grpc.services.ocmcore]
+[grpc.services.ocmincoming]
 driver = "json"
 
-[grpc.services.ocmcore.drivers.json]
+[grpc.services.ocmincoming.drivers.json]
 file = "{{ocm_share_cesnet_file}}"
 
 [grpc.services.authprovider]
