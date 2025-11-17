@@ -299,7 +299,7 @@ func (fs *Eosfs) unwrap(ctx context.Context, internal string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	external, err := fs.unwrapInternal(ctx, ns, internal, "")
+	external, err := fs.unwrapInternal(ctx, ns, internal)
 	if err != nil {
 		return "", err
 	}
@@ -323,14 +323,13 @@ func (fs *Eosfs) getNsMatch(internal string, nss []string) (string, error) {
 	return match, nil
 }
 
-func (fs *Eosfs) unwrapInternal(ctx context.Context, ns, np, layout string) (string, error) {
-	trim := path.Join(ns, layout)
+func (fs *Eosfs) unwrapInternal(ctx context.Context, ns, np string) (string, error) {
 
-	if !strings.HasPrefix(np, trim) {
-		return "", errtypes.NotFound(fmt.Sprintf("eosfs: path is outside the directory of the logged-in user: internal=%s trim=%s namespace=%+v", np, trim, ns))
+	if !strings.HasPrefix(np, ns) {
+		return "", errtypes.NotFound(fmt.Sprintf("eosfs: path is outside the directory of the logged-in user: internal=%s namespace=%+v", np, ns))
 	}
 
-	external := strings.TrimPrefix(np, trim)
+	external := strings.TrimPrefix(np, ns)
 
 	if external == "" {
 		external = "/"
