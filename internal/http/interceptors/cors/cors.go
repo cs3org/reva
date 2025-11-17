@@ -104,12 +104,16 @@ func New(m map[string]interface{}) (global.Middleware, int, error) {
 			"Upload-Checksum",
 			"Upload-Offset",
 			"X-HTTP-Method-Override",
+			"Range",
 		}
 	}
 
 	if len(conf.ExposedHeaders) == 0 {
 		conf.ExposedHeaders = []string{
 			"Location",
+			"Content-Range",
+			"Content-Length",
+			"Accept-Ranges",
 		}
 	}
 
