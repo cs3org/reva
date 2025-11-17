@@ -11,6 +11,9 @@
 # Visual Studio Code
 .vscode
 
+# Zed
+.zed
+
 # GoLand
 .idea
 
