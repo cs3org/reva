@@ -162,9 +162,8 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 	return u, nil
 }
 
-// getVirtualHome returns the virtual home path for the current user
-// (e.g., "/home/einstein") when VirtualHomeTemplate is configured.
-// Returns empty string if VirtualHomeTemplate is not set.
+// getVirtualHome returns the virtual home path for the current user when
+// VirtualHomeTemplate is configured (e.g., "/home/einstein").
 func (fs *localfs) getVirtualHome(ctx context.Context) (string, error) {
 	if fs.conf.VirtualHomeTemplate == "" {
 		return "", nil
@@ -182,13 +181,17 @@ func (fs *localfs) wrap(ctx context.Context, p string) string {
 	// With this p can't break out of its parent folder
 	p = path.Join("/", p)
 	
-	// Strip virtual home prefix if configured (e.g., "/home/einstein/file.txt" -> "/file.txt")
-	// This allows exposing paths in a virtual namespace (e.g., /home/username/)
-	// while storing them in a different filesystem layout (e.g., /revalocalstorage/data/username/)
+	// Strip virtual home prefix when configured. This allows exposing paths under
+	// a virtual namespace (e.g., /home/username/) while storing them in a flat
+	// per-user layout on disk (e.g., /revalocalstorage/data/username/).
 	if virtualHome, err := fs.getVirtualHome(ctx); err == nil && virtualHome != "" {
-		if strings.HasPrefix(p, virtualHome+"/") {
+		if p == virtualHome {
+			p = "/"
+		} else if strings.HasPrefix(p, virtualHome+"/") {
 			p = strings.TrimPrefix(p, virtualHome)
-		} else if p == virtualHome {
+		} else if strings.HasPrefix(virtualHome, p+"/") {
+			// Parent of virtual home, e.g. /home when virtual home is /home/einstein
+			// Maps shared namespace root to user root (e.g., /home -> /)
 			p = "/"
 		}
 	}
@@ -266,9 +269,9 @@ func (fs *localfs) unwrap(ctx context.Context, np string) string {
 		external = "/"
 	}
 	
-	// Add virtual home prefix if configured (e.g., "/file.txt" -> "/home/einstein/file.txt")
-	// This exposes paths in the virtual namespace expected by Spaces/Graph
-	// while the filesystem stores them in a flat per-user layout
+	// Add virtual home prefix when configured. This ensures paths exposed to
+	// callers include the virtual namespace (e.g., /home/username/) expected
+	// by the Spaces API and Graph services.
 	if virtualHome, err := fs.getVirtualHome(ctx); err == nil && virtualHome != "" {
 		if external == "/" {
 			external = virtualHome
