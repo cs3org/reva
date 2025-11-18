@@ -45,7 +45,7 @@ import (
 )
 
 type PublicShareMgr struct {
-	c  *config
+	c  *Config
 	db *gorm.DB
 }
 
@@ -54,11 +54,12 @@ type ExpiryRange struct {
 	To   time.Time
 }
 
-func NewPublicShareManager(ctx context.Context, m map[string]interface{}) (publicshare.Manager, error) {
-	var c config
+func NewPublicShareManager(ctx context.Context, m map[string]any) (publicshare.Manager, error) {
+	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
+	c.ApplyDefaults()
 
 	db, err := getDb(c)
 	if err != nil {

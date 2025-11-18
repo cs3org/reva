@@ -37,7 +37,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	revashare "github.com/cs3org/reva/v3/pkg/share"
 	"github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
-	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"google.golang.org/genproto/protobuf/field_mask"
@@ -50,19 +49,16 @@ import (
 )
 
 type ShareMgr struct {
-	c  *config
+	c  *Config
 	db *gorm.DB
 }
 
-func (c *config) ApplyDefaults() {
-	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
-}
-
-func NewShareManager(ctx context.Context, m map[string]interface{}) (revashare.Manager, error) {
-	var c config
+func NewShareManager(ctx context.Context, m map[string]any) (revashare.Manager, error) {
+	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
+	c.ApplyDefaults()
 
 	db, err := getDb(c)
 	if err != nil {
