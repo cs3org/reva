@@ -14,8 +14,10 @@ This last case handles scenarios where the gateway sends paths like /home/Test.t
 instead of /home/einstein/Test.txt, extracting the virtual home parent directory
 and stripping it to get the user-relative path.
 
+Unwrap adds the virtual home prefix back (e.g., /file -> /home/file) to enable
+correct space-based WebDAV routing, ensuring the UI can construct proper URLs.
+
 The localhome wrapper now correctly passes VirtualHomeTemplate through to localfs.
-Unwrap returns storage-relative paths to prevent double-pathing in the web UI.
 
 When VirtualHomeTemplate is empty (default), behavior is unchanged, ensuring
 backward compatibility with EOS and existing deployments.

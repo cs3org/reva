@@ -279,6 +279,11 @@ func (fs *localfs) unwrap(ctx context.Context, np string) string {
 		external = "/"
 	}
 	
+	// Add virtual home prefix for space-based routing
+	if virtualHome, err := fs.getVirtualHome(ctx); err == nil && virtualHome != "" {
+		external = path.Join(virtualHome, external)
+	}
+	
 	return external
 }
 
