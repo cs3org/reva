@@ -269,17 +269,6 @@ func (fs *localfs) unwrap(ctx context.Context, np string) string {
 		external = "/"
 	}
 	
-	// Add virtual home prefix when configured. This ensures paths exposed to
-	// callers include the virtual namespace (e.g., /home/username/) expected
-	// by the Spaces API and Graph services.
-	if virtualHome, err := fs.getVirtualHome(ctx); err == nil && virtualHome != "" {
-		if external == "/" {
-			external = virtualHome
-		} else {
-			external = path.Join(virtualHome, external)
-		}
-	}
-	
 	return external
 }
 
