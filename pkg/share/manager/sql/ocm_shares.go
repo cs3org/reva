@@ -245,7 +245,7 @@ func (m *mgr) ListShares(ctx context.Context, user *userpb.User, filters []*ocm.
 		ids = append(ids, s.Id)
 	}
 
-	am, err := m.getAccessMethodsIds(ctx, ids)
+	am, err := m.getAccessMethodsByIds(ctx, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -371,7 +371,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context, user *userpb.User) ([]*ocm
 		shares = append(shares, share)
 		ids = append(ids, s.ID)
 	}
-	p, err := m.getProtocolsIds(ctx, ids)
+	p, err := m.getProtocolsByIds(ctx, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -708,44 +708,44 @@ func groupFiltersByType(filters []*ocm.ListOCMSharesRequest_Filter) map[ocm.List
 	return m
 }
 
-func (m *mgr) getAccessMethodsIds(ctx context.Context, ids []any) (map[string][]*ocm.AccessMethod, error) {
+func (m *mgr) getAccessMethodsByIds(ctx context.Context, ids []any) (map[string][]*ocm.AccessMethod, error) {
 	methods := make(map[string][]*ocm.AccessMethod)
 	if len(ids) == 0 {
 		return methods, nil
 	}
 
-	var accessMethodModels []model.OcmShareProtocol
+	var mProtos []model.OcmShareProtocol
 	if err := m.db.WithContext(ctx).
 		Where("ocm_share_id IN ?", ids).
-		Find(&accessMethodModels).Error; err != nil {
+		Find(&mProtos).Error; err != nil {
 		return nil, err
 	}
 
-	for _, am := range accessMethodModels {
-		shareID := fmt.Sprintf("%d", am.OcmShareID)
-		method := convertToCS3AccessMethod(&am)
+	for _, p := range mProtos {
+		method := convertToCS3AccessMethod(&p)
+		shareID := strconv.FormatUint(uint64(p.OcmShareID), 10)
 		methods[shareID] = append(methods[shareID], method)
 	}
 
 	return methods, nil
 }
 
-func (m *mgr) getProtocolsIds(ctx context.Context, ids []any) (map[string][]*ocm.Protocol, error) {
+func (m *mgr) getProtocolsByIds(ctx context.Context, ids []any) (map[string][]*ocm.Protocol, error) {
 	protocols := make(map[string][]*ocm.Protocol)
 	if len(ids) == 0 {
 		return protocols, nil
 	}
 
-	var protocolModels []model.OcmReceivedShareProtocol
+	var mrProtos []model.OcmReceivedShareProtocol
 	if err := m.db.WithContext(ctx).
 		Where("ocm_received_share_id IN ?", ids).
-		Find(&protocolModels).Error; err != nil {
+		Find(&mrProtos).Error; err != nil {
 		return nil, err
 	}
 
-	for _, p := range protocolModels {
-		shareID := fmt.Sprintf("%d", p.OcmReceivedShareID)
+	for _, p := range mrProtos {
 		protocol := convertToCS3Protocol(&p)
+		shareID := strconv.FormatUint(uint64(p.OcmReceivedShareID), 10)
 		protocols[shareID] = append(protocols[shareID], protocol)
 	}
 
