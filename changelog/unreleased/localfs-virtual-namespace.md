@@ -7,6 +7,7 @@ each file as its own space instead of extracting the correct space root.
 
 The implementation handles parent paths (/home) by mapping them to the authenticated
 user's root, enabling spaces registry to stat shared namespace roots correctly.
+The localhome wrapper now passes VirtualHomeTemplate through to localfs.
 
 When VirtualHomeTemplate is empty (default), the original behavior is preserved,
 ensuring backward compatibility with EOS and existing deployments.
