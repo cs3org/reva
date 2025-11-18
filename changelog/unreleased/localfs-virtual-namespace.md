@@ -1,17 +1,21 @@
-Bugfix: Fix localhome space path handling with mount_path stripping
+Bugfix: Fix localhome virtual namespace path handling for spaces
 
-Added optional VirtualHomeTemplate config to localfs driver, allowing localhome
-to correctly handle paths when the gateway strips a mount_path prefix. This enables
-localhome to expose user homes at /home/<user> (via gateway mount_path="/home")
-while storing files in a flat per-user layout on disk.
+Added optional VirtualHomeTemplate config to localfs driver, enabling localhome
+to correctly handle paths when exposing user homes through a virtual namespace
+(e.g., /home/<user>) while storing files in a flat per-user layout on disk.
 
-The driver strips the virtual namespace prefix from incoming paths (e.g., /<user>/file
-becomes /file) before prepending the user_layout, and returns storage-relative paths
-(e.g., /file) instead of adding the virtual prefix back in unwrap().
+The driver intelligently strips virtual namespace prefixes from incoming paths:
 
-The localhome wrapper now passes VirtualHomeTemplate through to localfs.
-Parent path handling (e.g., /home when virtual home is /home/einstein) maps to
-the authenticated user's root for shared namespace stats.
+- Full paths: /home/einstein/file -> /file
+- Parent paths: /home -> / (when virtual home is /home/einstein)
+- Gateway-stripped paths: /home/file -> /file (when gateway omits username)
+
+This last case handles scenarios where the gateway sends paths like /home/Test.txt
+instead of /home/einstein/Test.txt, extracting the virtual home parent directory
+and stripping it to get the user-relative path.
+
+The localhome wrapper now correctly passes VirtualHomeTemplate through to localfs.
+Unwrap returns storage-relative paths to prevent double-pathing in the web UI.
 
 When VirtualHomeTemplate is empty (default), behavior is unchanged, ensuring
 backward compatibility with EOS and existing deployments.

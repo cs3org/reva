@@ -186,13 +186,23 @@ func (fs *localfs) wrap(ctx context.Context, p string) string {
 	// per-user layout on disk (e.g., /revalocalstorage/data/username/).
 	if virtualHome, err := fs.getVirtualHome(ctx); err == nil && virtualHome != "" {
 		if p == virtualHome {
+			// Exact match: /home/einstein -> /
 			p = "/"
 		} else if strings.HasPrefix(p, virtualHome+"/") {
+			// Full path: /home/einstein/Test.txt -> /Test.txt
 			p = strings.TrimPrefix(p, virtualHome)
 		} else if strings.HasPrefix(virtualHome, p+"/") {
-			// Parent of virtual home, e.g. /home when virtual home is /home/einstein
-			// Maps shared namespace root to user root (e.g., /home -> /)
+			// Parent of virtual home: /home -> / (when virtual home is /home/einstein)
 			p = "/"
+		} else {
+			// Handle paths like /home/Test.txt when virtual home is /home/einstein.
+			// The gateway may send paths without the username component.
+			// Extract parent dir from virtual home and strip it if path starts with it.
+			virtualHomeParent := path.Dir(virtualHome)
+			if virtualHomeParent != "/" && virtualHomeParent != "." && strings.HasPrefix(p, virtualHomeParent+"/") {
+				// Path like /home/Test.txt with virtual home /home/einstein -> /Test.txt
+				p = strings.TrimPrefix(p, virtualHomeParent)
+			}
 		}
 	}
 	
