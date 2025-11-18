@@ -96,9 +96,8 @@ type ShareID struct {
 }
 
 // This is the base model for all share types. We cannot use gorm.Model, because we want our ID
-// to be a foreign key to ShareID, but we incorporate the date fields from gorm.
-// The DeletedAt field is included in multiple unique indexes to allow soft deletion while
-// maintaining uniqueness constraints.
+// to be a foreign key to ShareID, but we incorporate the date fields from gorm. This struct
+// does not declare any unique indexes as it is embedded by others.
 type BaseModel struct {
 	// Id has to be called Id and not ID, otherwise the foreign key will not work
 	// ID is a special field in GORM, which it uses as the default Primary Key
@@ -106,39 +105,44 @@ type BaseModel struct {
 	ShareId   ShareID `gorm:"foreignKey:Id;references:ID;constraint:OnDelete:CASCADE"` //;references:ID
 	CreatedAt time.Time
 	UpdatedAt time.Time
-	DeletedAt gorm.DeletedAt `gorm:"uniqueIndex:u_share;uniqueIndex:u_link;uniqueIndex:u_ocmshare"`
+	DeletedAt gorm.DeletedAt `gorm:"index"`
 }
 
 // ProtoShare contains fields that are common between PublicLinks and Shares.
+// We also define some indexes for performance reasons.
 type ProtoShare struct {
 	BaseModel
 	UIDOwner     string   `gorm:"size:64"`
-	UIDInitiator string   `gorm:"size:64"`
+	UIDInitiator string   `gorm:"size:64;index"`
 	ItemType     ItemType `gorm:"size:16;index"` // file | folder | reference | symlink
 	InitialPath  string
-	Inode        string `gorm:"size:32;uniqueIndex:u_share;uniqueIndex:u_link"`
-	Instance     string `gorm:"size:32;uniqueIndex:u_share;uniqueIndex:u_link"`
-	Permissions  uint8  `gorm:"uniqueIndex:u_share;uniqueIndex:u_link"`
+	Inode        string `gorm:"size:32;index"`
+	Instance     string `gorm:"size:32;index"`
+	Permissions  uint8
 	Orphan       bool
 	Expiration   datatypes.NullTime
 }
 
 // Share is a regular share between users or groups. The unique index ensures that there
-// can only be one share per (inode, instance, permissions, recipient) tuple, unless the share is deleted.
+// can only be one share per (inode, instance, permissions, recipient) tuple, unless the share is deleted:
+// for that, we redeclare the corresponding fields for GORM to define the unique index.
 type Share struct {
 	ProtoShare
-	ShareWith         string `gorm:"size:255;uniqueIndex:u_share"` // 255 because this can be an external account, which has a long representation
+	DeletedAt         gorm.DeletedAt `gorm:"uniqueIndex:u_share"`
+	Inode             string         `gorm:"size:32;uniqueIndex:u_share"`
+	Instance          string         `gorm:"size:32;uniqueIndex:u_share"`
+	Permissions       uint8          `gorm:"uniqueIndex:u_share"`
+	ShareWith         string         `gorm:"size:255;uniqueIndex:u_share"` // 255 because this can be an external account, which has a long representation
 	SharedWithIsGroup bool
 	Description       string `gorm:"size:1024"`
 }
 
-// PublicLink is a public link share. We create a "non-enforcing" unique index here to please GORM:
-// there can only be one public link per (token, inode, instance, permissions) tuple, unless the link is deleted.
-// It is "non-enforcing" because the token is already unique by itself.
+// PublicLink is a public link share.
+// TODO(lopresti) We could enforce a unique index on (UIDInitiator, Inode, Permissions, DeleteAt) but for now web allows
+// the creation of multiple links (with or without different names), so we only enforce a unique constraint on the token.
 type PublicLink struct {
 	ProtoShare
-	// Current tokens are only 16 chars long, but old tokens used to be 32 characters
-	Token                        string `gorm:"uniqueIndex:i_token;uniqueIndex:u_link;size:32"`
+	Token                        string `gorm:"uniqueIndex:u_link_token;size:32"` // Current tokens are only 16 chars long, but old tokens used to be 32 characters
 	Quicklink                    bool
 	NotifyUploads                bool
 	NotifyUploadsExtraRecipients string
@@ -149,20 +153,21 @@ type PublicLink struct {
 // ShareState represents the state of a share for a specific recipient.
 type ShareState struct {
 	gorm.Model
-	ShareID uint  `gorm:"uniqueIndex:i_shareid_user"`       // Define the foreign key field
-	Share   Share `gorm:"foreignKey:ShareID;references:Id"` // Define the association
-	// Can not be uid because of lw accs
-	User   string `gorm:"uniqueIndex:i_shareid_user;size:255"`
-	Synced bool
-	Hidden bool
-	Alias  string `gorm:"size:64"`
+	ShareID uint   `gorm:"uniqueIndex:i_shareid_user"`          // Define the foreign key field
+	Share   Share  `gorm:"foreignKey:ShareID;references:Id"`    // Define the association
+	User    string `gorm:"uniqueIndex:i_shareid_user;size:255"` // Can not be uid because of lw accounts
+	Synced  bool
+	Hidden  bool
+	Alias   string `gorm:"size:64"`
 }
 
 // OcmShare represents an OCM share for a remote user. The unique index ensures that there
-// can only be one share per (storageId, fileId, shareWith, owner) tuple, unless the share is deleted.
+// can only be one share per (storageId, fileId, shareWith, owner) tuple, unless the share is deleted:
+// for that, we redeclare the DeletedAt as in Share. In addition, tokens must be unique.
 type OcmShare struct {
 	BaseModel
-	Token      string             `gorm:"size:255;not null;uniqueIndex:i_ocmshare_token"`
+	DeletedAt  gorm.DeletedAt     `gorm:"uniqueIndex:u_ocmshare"`
+	Token      string             `gorm:"size:255;not null;uniqueIndex:u_ocmshare_token"`
 	StorageId  string             `gorm:"size:64;not null;uniqueIndex:u_ocmshare"`
 	FileId     string             `gorm:"size:64;not null;uniqueIndex:u_ocmshare"`
 	Name       string             `gorm:"type:text;not null"`
