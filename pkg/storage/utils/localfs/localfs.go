@@ -50,17 +50,18 @@ import (
 
 // Config holds the configuration details for the local fs.
 type Config struct {
-	Root                string `mapstructure:"root"`
-	DisableHome         bool   `mapstructure:"disable_home"`
-	UserLayout          string `mapstructure:"user_layout"`
-	ShareFolder         string `mapstructure:"share_folder"`
-	DataTransfersFolder string `mapstructure:"data_transfers_folder"`
-	Uploads             string `mapstructure:"uploads"`
-	DataDirectory       string `mapstructure:"data_directory"`
-	RecycleBin          string `mapstructure:"recycle_bin"`
-	Versions            string `mapstructure:"versions"`
-	Shadow              string `mapstructure:"shadow"`
-	References          string `mapstructure:"references"`
+	Root                 string `mapstructure:"root"`
+	DisableHome          bool   `mapstructure:"disable_home"`
+	UserLayout           string `mapstructure:"user_layout"`
+	VirtualHomeTemplate  string `mapstructure:"virtual_home_template"`
+	ShareFolder          string `mapstructure:"share_folder"`
+	DataTransfersFolder  string `mapstructure:"data_transfers_folder"`
+	Uploads              string `mapstructure:"uploads"`
+	DataDirectory        string `mapstructure:"data_directory"`
+	RecycleBin           string `mapstructure:"recycle_bin"`
+	Versions             string `mapstructure:"versions"`
+	Shadow               string `mapstructure:"shadow"`
+	References           string `mapstructure:"references"`
 }
 
 func (c *Config) ApplyDefaults() {
@@ -161,11 +162,37 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 	return u, nil
 }
 
+// getVirtualHome returns the virtual home path for the current user
+// (e.g., "/home/einstein") when VirtualHomeTemplate is configured.
+// Returns empty string if VirtualHomeTemplate is not set.
+func (fs *localfs) getVirtualHome(ctx context.Context) (string, error) {
+	if fs.conf.VirtualHomeTemplate == "" {
+		return "", nil
+	}
+	u, err := getUser(ctx)
+	if err != nil {
+		return "", err
+	}
+	return templates.WithUser(u, fs.conf.VirtualHomeTemplate), nil
+}
+
 func (fs *localfs) wrap(ctx context.Context, p string) string {
 	log := appctx.GetLogger(ctx)
 	// This is to prevent path traversal.
 	// With this p can't break out of its parent folder
 	p = path.Join("/", p)
+	
+	// Strip virtual home prefix if configured (e.g., "/home/einstein/file.txt" -> "/file.txt")
+	// This allows exposing paths in a virtual namespace (e.g., /home/username/)
+	// while storing them in a different filesystem layout (e.g., /revalocalstorage/data/username/)
+	if virtualHome, err := fs.getVirtualHome(ctx); err == nil && virtualHome != "" {
+		if strings.HasPrefix(p, virtualHome+"/") {
+			p = strings.TrimPrefix(p, virtualHome)
+		} else if p == virtualHome {
+			p = "/"
+		}
+	}
+	
 	var internal string
 	if !fs.conf.DisableHome {
 		layout, err := fs.GetHome(ctx)
@@ -238,6 +265,18 @@ func (fs *localfs) unwrap(ctx context.Context, np string) string {
 	if external == "" {
 		external = "/"
 	}
+	
+	// Add virtual home prefix if configured (e.g., "/file.txt" -> "/home/einstein/file.txt")
+	// This exposes paths in the virtual namespace expected by Spaces/Graph
+	// while the filesystem stores them in a flat per-user layout
+	if virtualHome, err := fs.getVirtualHome(ctx); err == nil && virtualHome != "" {
+		if external == "/" {
+			external = virtualHome
+		} else {
+			external = path.Join(virtualHome, external)
+		}
+	}
+	
 	return external
 }
 
