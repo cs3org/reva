@@ -17,9 +17,10 @@ The last two cases handle gateway routing edge cases where prefixes are stripped
 differently depending on whether the WebDAV layer uses space IDs or the "home"
 alias for URL construction.
 
-Unwrap adds the virtual home prefix back (e.g., /file -> /home/einstein/file) to
-enable correct space-based WebDAV routing, ensuring PathToSpaceID() derives the
-correct space identifier and the UI can construct proper URLs with space IDs.
+The normalize() function adds the virtual home prefix only to the Path field of
+ResourceInfo (e.g., /file -> /home/einstein/file), enabling PathToSpaceID() to
+derive the correct space identifier. The OpaqueId field remains storage-relative
+(e.g., fileid-einstein%2Ffile) to ensure resource IDs can be properly decoded.
 
 The localhome wrapper now correctly passes VirtualHomeTemplate through to localfs.
 

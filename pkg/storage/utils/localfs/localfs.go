@@ -316,11 +316,6 @@ func (fs *localfs) unwrap(ctx context.Context, np string) string {
 		external = "/"
 	}
 	
-	// Add virtual home prefix for space-based routing
-	if virtualHome, err := fs.getVirtualHome(ctx); err == nil && virtualHome != "" {
-		external = path.Join(virtualHome, external)
-	}
-	
 	return external
 }
 
@@ -435,12 +430,21 @@ func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string, mdK
 	}
 
 	// A fileid is constructed like `fileid-url_encoded_path`. See GetPathByID for the inverse conversion
+	// OpaqueId uses storage-relative path (e.g., einstein/Test.txt)
+	opaqueID := "fileid-" + url.QueryEscape(path.Join(layout, fp))
+	
+	// Path field needs virtual home prefix for space-based routing (PathToSpaceID)
+	virtualPath := fp
+	if virtualHome, err := fs.getVirtualHome(ctx); err == nil && virtualHome != "" {
+		virtualPath = path.Join(virtualHome, fp)
+	}
+
 	md := &provider.ResourceInfo{
-		Id:            &provider.ResourceId{OpaqueId: "fileid-" + url.QueryEscape(path.Join(layout, fp))},
-		Path:          fp,
+		Id:            &provider.ResourceId{OpaqueId: opaqueID},
+		Path:          virtualPath,
 		Type:          getResourceType(fi.IsDir()),
 		Etag:          calcEtag(ctx, fi),
-		MimeType:      mime.Detect(fi.IsDir(), fp),
+		MimeType:      mime.Detect(fi.IsDir(), virtualPath),
 		Size:          uint64(fi.Size()),
 		PermissionSet: fs.permissionSet(ctx, owner.Id),
 		Mtime: &types.Timestamp{
