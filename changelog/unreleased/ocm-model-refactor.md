@@ -17,5 +17,6 @@ some fields for better consistency:
 * The `(FileIdPrefix, ItemSource)` tuple is now
   `(StorageId, FileId)` in `OcmShare`, and it was
   removed from `OcmReceivedShare` as unused
+* `Alias` and `Hidden` were added in `OcmReceivedShare`
 
 https://github.com/cs3org/reva/pull/5402
