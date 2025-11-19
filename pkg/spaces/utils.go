@@ -84,12 +84,21 @@ func EncodeOCMShareID(ShareID string) string {
 // If space_id or opaque_id is not set on the ResourceId,
 // then this part will not be encoded
 func EncodeResourceID(r *provider.ResourceId) string {
+	var encoded string
 	if r.SpaceId == "" {
-		return fmt.Sprintf("%s!%s", r.StorageId, r.OpaqueId)
+		encoded = fmt.Sprintf("%s!%s", r.StorageId, r.OpaqueId)
+		fmt.Fprintf(os.Stderr, "[DEBUG] EncodeResourceID: storage=%q, space=(empty), opaque=%q -> %q\n", 
+			r.StorageId, r.OpaqueId, encoded)
 	} else if r.OpaqueId == "" {
-		return fmt.Sprintf("%s$%s", r.StorageId, r.SpaceId)
+		encoded = fmt.Sprintf("%s$%s", r.StorageId, r.SpaceId)
+		fmt.Fprintf(os.Stderr, "[DEBUG] EncodeResourceID: storage=%q, space=%q, opaque=(empty) -> %q\n", 
+			r.StorageId, r.SpaceId, encoded)
+	} else {
+		encoded = fmt.Sprintf("%s$%s!%s", r.StorageId, r.SpaceId, r.OpaqueId)
+		fmt.Fprintf(os.Stderr, "[DEBUG] EncodeResourceID: storage=%q, space=%q, opaque=%q -> %q\n", 
+			r.StorageId, r.SpaceId, r.OpaqueId, encoded)
 	}
-	return fmt.Sprintf("%s$%s!%s", r.StorageId, r.SpaceId, r.OpaqueId)
+	return encoded
 }
 
 // Decode resourceID returns the components of the space ID.
@@ -142,11 +151,23 @@ func EncodeResourceInfo(info *provider.ResourceInfo) (spaceId string, err error)
 // of this full path will be returned.
 func PathToSpaceID(path string) string {
 	paths := strings.Split(path, string(os.PathSeparator))
-	if len(paths) < spacesLevel(path) {
-		return EncodeSpaceID(path)
+	level := spacesLevel(path)
+	var spacesPath string
+	var spaceID string
+	
+	if len(paths) < level {
+		spacesPath = path
+		spaceID = EncodeSpaceID(path)
+	} else {
+		spacesPath = strings.Join(paths[:level], string(os.PathSeparator))
+		spaceID = EncodeSpaceID(spacesPath)
 	}
-	spacesPath := strings.Join(paths[:spacesLevel(path)], string(os.PathSeparator))
-	return EncodeSpaceID(spacesPath)
+	
+	// Debug logging
+	fmt.Fprintf(os.Stderr, "[DEBUG] PathToSpaceID: input=%q, level=%d, paths=%d, spacesPath=%q, spaceID=%q\n", 
+		path, level, len(paths), spacesPath, spaceID)
+	
+	return spaceID
 }
 
 // TODO: for now, we hardcoded this. But this will not be necessary anymore

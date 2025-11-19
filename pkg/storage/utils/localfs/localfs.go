@@ -301,6 +301,7 @@ func (fs *localfs) wrapVersions(ctx context.Context, p string) string {
 }
 
 func (fs *localfs) unwrap(ctx context.Context, np string) string {
+	log := appctx.GetLogger(ctx)
 	ns := fs.getNsMatch(np, []string{fs.conf.DataDirectory, fs.conf.References, fs.conf.RecycleBin, fs.conf.Versions})
 	var external string
 	if !fs.conf.DisableHome {
@@ -315,6 +316,12 @@ func (fs *localfs) unwrap(ctx context.Context, np string) string {
 	if external == "" {
 		external = "/"
 	}
+	
+	log.Debug().
+		Str("internal_path", np).
+		Str("namespace", ns).
+		Str("external_path", external).
+		Msg("localfs: unwrap")
 	
 	return external
 }
@@ -435,9 +442,17 @@ func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string, mdK
 	
 	// Path field needs virtual home prefix for space-based routing (PathToSpaceID)
 	virtualPath := fp
-	if virtualHome, err := fs.getVirtualHome(ctx); err == nil && virtualHome != "" {
+	virtualHome, vhErr := fs.getVirtualHome(ctx)
+	if vhErr == nil && virtualHome != "" {
 		virtualPath = path.Join(virtualHome, fp)
 	}
+	
+	log.Debug().
+		Str("storage_relative", fp).
+		Str("virtual_home", virtualHome).
+		Str("final_path", virtualPath).
+		Str("opaque_id", opaqueID).
+		Msg("localfs: normalize paths")
 
 	md := &provider.ResourceInfo{
 		Id:            &provider.ResourceId{OpaqueId: opaqueID},
