@@ -31,6 +31,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/interceptors/auth/credential/registry"
+	signedurlregistry "github.com/cs3org/reva/v3/internal/http/interceptors/auth/signed_url/registry"
 	tokenregistry "github.com/cs3org/reva/v3/internal/http/interceptors/auth/token/registry"
 	tokenwriterregistry "github.com/cs3org/reva/v3/internal/http/interceptors/auth/tokenwriter/registry"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -62,12 +63,15 @@ type config struct {
 	CredentialsByUserAgent map[string]string         `mapstructure:"credentials_by_user_agent"`
 	CredentialChain        []string                  `mapstructure:"credential_chain"`
 	CredentialStrategies   map[string]map[string]any `mapstructure:"credential_strategies"`
+	SignedURLChain         []string                  `mapstructure:"signed_url_chain"`
+	SignedURLStrategies    map[string]map[string]any `mapstructure:"signed_url_strategies"`
 	TokenStrategyChain     []string                  `mapstructure:"token_strategy_chain"`
 	TokenStrategies        map[string]map[string]any `mapstructure:"token_strategies"`
 	TokenManager           string                    `mapstructure:"token_manager"`
 	TokenManagers          map[string]map[string]any `mapstructure:"token_managers"`
 	TokenWriter            string                    `mapstructure:"token_writer"`
 	TokenWriters           map[string]map[string]any `mapstructure:"token_writers"`
+	MachineSecret          string                    `mapstructure:"machine_secret" docs:"nil;Secret used for the gateway to authenticate a user when using a signed URL"`
 }
 
 func parseConfig(m map[string]any) (*config, error) {
@@ -125,6 +129,20 @@ func New(m map[string]any, unprotected []string) (global.Middleware, error) {
 		credChain[key] = credStrategy
 	}
 
+	signedUrlChain := make([]auth.SignedURLStrategy, 0, len(conf.SignedURLChain))
+	for _, strategy := range conf.SignedURLChain {
+		f, ok := signedurlregistry.NewSignedURLFuncs[strategy]
+		if !ok {
+			return nil, fmt.Errorf("signed_url strategy not found")
+		}
+
+		signedURLStrategy, err := f(conf.SignedURLStrategies[strategy])
+		if err != nil {
+			return nil, err
+		}
+		signedUrlChain = append(signedUrlChain, signedURLStrategy)
+	}
+
 	tokenStrategyChain := make([]auth.TokenStrategy, 0, len(conf.TokenStrategyChain))
 	for _, strategy := range conf.TokenStrategyChain {
 		g, ok := tokenregistry.NewTokenFuncs[strategy]
@@ -173,7 +191,7 @@ func New(m map[string]any, unprotected []string) (global.Middleware, error) {
 			if utils.Skip(r.URL.Path, unprotected) {
 				log.Info().Interface("unprotected", unprotected).Msg("skipping auth check for: " + r.URL.Path)
 			} else {
-				ctx, err := authenticateUser(w, r, conf, tokenStrategyChain, tokenManager, tokenWriter, credChain, false)
+				ctx, err := authenticateUser(w, r, conf, signedUrlChain, tokenStrategyChain, tokenManager, tokenWriter, credChain, false)
 				if err != nil {
 					return
 				}
@@ -186,7 +204,7 @@ func New(m map[string]any, unprotected []string) (global.Middleware, error) {
 	return chain, nil
 }
 
-func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, tokenStrategies []auth.TokenStrategy, tokenManager token.Manager, tokenWriter auth.TokenWriter, credChain map[string]auth.CredentialStrategy, isUnprotectedEndpoint bool) (context.Context, error) {
+func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, signedURLStrategies []auth.SignedURLStrategy, tokenStrategies []auth.TokenStrategy, tokenManager token.Manager, tokenWriter auth.TokenWriter, credChain map[string]auth.CredentialStrategy, isUnprotectedEndpoint bool) (context.Context, error) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	w.Header().Set("x-request-id", trace.Get(ctx))
@@ -200,7 +218,28 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 		return nil, err
 	}
 
-	// reva token or auth token can be passed using the same tecnique (for example bearer)
+	// First of all, let's see if the URL is signed
+	for _, signedURLStrategy := range signedURLStrategies {
+		r, valid := signedURLStrategy.Authenticate(r)
+		if valid {
+			u := appctx.ContextMustGetUser(r.Context())
+
+			authResp, err := client.Authenticate(ctx, &gateway.AuthenticateRequest{
+				Type:         "machine",
+				ClientId:     u.Id.OpaqueId,
+				ClientSecret: conf.MachineSecret,
+			})
+			if err != nil {
+				return nil, err
+			}
+			if authResp.Status.Code != rpc.Code_CODE_OK {
+				return nil, fmt.Errorf("Failed to authenticate to gateway with machine auth for signed URL: %s", authResp.Status.String())
+			}
+			return ctxWithUserInfo(ctx, r, authResp.GetUser(), authResp.Token), nil
+		}
+	}
+
+	// reva token or auth token can be passed using the same technique (for example bearer)
 	// before validating it against an auth provider, we can check directly if it's a reva
 	// token and if not try to use it for authenticating the user.
 	for _, tokenStrategy := range tokenStrategies {
