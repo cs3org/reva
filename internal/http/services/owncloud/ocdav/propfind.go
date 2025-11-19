@@ -90,6 +90,28 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 		w.WriteHeader(status)
 		return
 	}
+	
+	// Debug: log PROPFIND request details
+	requestType := "unknown"
+	if pf.Allprop != nil {
+		requestType = "allprop"
+	} else if pf.Propname != nil {
+		requestType = "propname"
+	} else if len(pf.Prop) > 0 {
+		requestType = "specific properties"
+		propNames := make([]string, len(pf.Prop))
+		for i, prop := range pf.Prop {
+			propNames[i] = prop.Local
+		}
+		sublog.Debug().
+			Str("request_type", requestType).
+			Strs("requested_properties", propNames).
+			Msg("propfind: request details")
+	}
+	sublog.Debug().
+		Str("request_type", requestType).
+		Bool("spaces_enabled", s.c.SpacesEnabled).
+		Msg("propfind: request configuration")
 
 	parentInfo, resourceInfos, ok := s.getResourceInfos(ctx, w, r, pf, ref, false, sublog)
 	if !ok {
@@ -482,6 +504,39 @@ func (s *svc) multistatusResponse(ctx context.Context, pf *propfindXML, mds []*p
 		if err != nil {
 			return "", err
 		}
+		
+		// Debug: log the response for this resource
+		log.Debug().
+			Int("index", i).
+			Str("href", res.Href).
+			Int("num_propstats", len(res.Propstat)).
+			Msg("propfind: response created for resource")
+		
+		// Debug: log properties in the response
+		for j, propstat := range res.Propstat {
+			propCount := len(propstat.Prop)
+			log.Debug().
+				Int("resource_index", i).
+				Int("propstat_index", j).
+				Int("prop_count", propCount).
+				Str("status", propstat.Status).
+				Msg("propfind: propstat details")
+			
+			// Log specific properties we care about
+			for k, prop := range propstat.Prop {
+				if prop.XMLName.Local == "fileid" || prop.XMLName.Local == "id" {
+					log.Debug().
+						Int("resource_index", i).
+						Int("propstat_index", j).
+						Int("prop_index", k).
+						Str("prop_name", prop.XMLName.Local).
+						Str("prop_namespace", prop.XMLName.Space).
+						Str("prop_value", string(prop.InnerXML)).
+						Msg("propfind: ID property value in response")
+				}
+			}
+		}
+		
 		responses = append(responses, res)
 	}
 	responsesXML, err := xml.Marshal(&responses)
@@ -492,6 +547,10 @@ func (s *svc) multistatusResponse(ctx context.Context, pf *propfindXML, mds []*p
 	msg := `<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:" `
 	msg += `xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns">`
 	msg += string(responsesXML) + `</d:multistatus>`
+	
+	// Debug: log the full XML response
+	log.Debug().Str("xml_response", msg).Msg("propfind: full XML multistatus response")
+	
 	return msg, nil
 }
 
@@ -605,11 +664,17 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	spacesEnabled := s.c.SpacesEnabled
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
+	sublog.Debug().
+		Str("base_uri", baseURI).
+		Bool("spaces_enabled", spacesEnabled).
+		Msg("propfind: mdToPropResponse - constructing href")
+	
 	var ref string
 	var err error
 	if spacesEnabled {
 		ref, err = spaceHref(ctx, baseURI, md)
 		if err != nil {
+			sublog.Error().Err(err).Msg("propfind: spaceHref failed")
 			pxml := propstatXML{
 				Status: "HTTP/1.1 400 Bad Request",
 				Prop:   []*propertyXML{},
@@ -621,6 +686,9 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			}, err
 
 		}
+		sublog.Debug().
+			Str("href", ref).
+			Msg("propfind: spaceHref result")
 	} else {
 		md.Path = strings.TrimPrefix(md.Path, ns)
 
@@ -629,10 +697,18 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			_, md.Path = router.ShiftPath(md.Path)
 		}
 		ref = path.Join(baseURI, md.Path)
+		sublog.Debug().
+			Str("href", ref).
+			Msg("propfind: non-spaces href constructed")
 	}
 	if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ref += "/"
 	}
+
+	sublog.Debug().
+		Str("final_href", ref).
+		Str("encoded_href", encodePath(ref)).
+		Msg("propfind: final href for response")
 
 	response := responseXML{
 		Href:     encodePath(ref),
@@ -692,6 +768,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 
 	// when allprops has been requested
 	if pf.Allprop != nil {
+		sublog.Debug().Msg("propfind: allprop mode - returning all properties")
 		// return all known properties
 		if md.Id != nil {
 			if spacesEnabled {
@@ -700,13 +777,19 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					Str("space_id", md.Id.SpaceId).
 					Str("opaque_id", md.Id.OpaqueId).
 					Str("path", md.Path).
-					Msg("propfind: encoding resource ID")
+					Msg("propfind: encoding resource ID (allprop, spaces enabled)")
 				id := spaces.EncodeResourceID(md.Id)
+				sublog.Debug().
+					Str("encoded_id", id).
+					Msg("propfind: allprop - setting oc:id and oc:fileid")
 				propstatOK.Prop = append(propstatOK.Prop,
 					s.newProp("oc:id", id),
 					s.newProp("oc:fileid", id))
 			} else {
 				id := spaces.ResourceIdToString(md.Id)
+				sublog.Debug().
+					Str("encoded_id", id).
+					Msg("propfind: allprop - setting oc:id and oc:fileid (non-spaces)")
 				propstatOK.Prop = append(propstatOK.Prop,
 					s.newProp("oc:id", id),
 					s.newProp("oc:fileid", id))
@@ -809,6 +892,10 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		// TODO return other properties ... but how do we put them in a namespace?
 	} else {
 		// otherwise return only the requested properties
+		sublog.Debug().
+			Int("num_requested_props", len(pf.Prop)).
+			Msg("propfind: specific properties requested")
+		
 		for i := range pf.Prop {
 			switch pf.Prop[i].Space {
 			case _nsOwncloud:
@@ -817,6 +904,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				// I tested the desktop client and phoenix to annotate which properties are requestted, see below cases
 				case "fileid": // phoenix only
 					if md.Id == nil {
+						sublog.Debug().Msg("propfind: fileid requested but md.Id is nil")
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
 					} else if spacesEnabled {
 						sublog.Debug().
@@ -824,17 +912,28 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 							Str("space_id", md.Id.SpaceId).
 							Str("opaque_id", md.Id.OpaqueId).
 							Str("path", md.Path).
-							Msg("propfind: encoding fileid property")
+							Msg("propfind: encoding fileid property (specific, spaces enabled)")
 						// If our client uses spaces, we try to use the spaces-encoded file id (storage$base32(spacePath)!inode)
 						fileId, err := spaces.EncodeResourceInfo(md)
 						if err != nil {
-							sublog.Error().Err(err).Any("md", md).Msg("Failed to encode file id")
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", spaces.EncodeResourceID(md.Id)))
+							sublog.Error().Err(err).Any("md", md).Msg("Failed to encode file id with EncodeResourceInfo")
+							fallbackId := spaces.EncodeResourceID(md.Id)
+							sublog.Debug().
+								Str("fallback_id", fallbackId).
+								Msg("propfind: using EncodeResourceID fallback for fileid")
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", fallbackId))
 						} else {
+							sublog.Debug().
+								Str("encoded_fileid", fileId).
+								Msg("propfind: specific property - setting oc:fileid from EncodeResourceInfo")
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", fileId))
 						}
 					} else {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", spaces.ResourceIdToString(md.Id)))
+						encodedId := spaces.ResourceIdToString(md.Id)
+						sublog.Debug().
+							Str("encoded_fileid", encodedId).
+							Msg("propfind: specific property - setting oc:fileid (non-spaces)")
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", encodedId))
 					}
 
 				case "id": // desktop client only
