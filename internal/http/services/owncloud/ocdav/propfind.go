@@ -101,6 +101,22 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 }
 
 func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf propfindXML, parentInfo *provider.ResourceInfo, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
+	log.Debug().
+		Int("total_resourceInfos", len(resourceInfos)).
+		Str("parent_storage_id", parentInfo.Id.StorageId).
+		Str("parent_space_id", parentInfo.Id.SpaceId).
+		Str("parent_opaque_id", parentInfo.Id.OpaqueId).
+		Str("parent_path", parentInfo.Path).
+		Msg("propfind: propfindResponse entry")
+	for i, info := range resourceInfos {
+		log.Debug().
+			Int("index", i).
+			Str("storage_id", info.Id.StorageId).
+			Str("space_id", info.Id.SpaceId).
+			Str("opaque_id", info.Id.OpaqueId).
+			Str("path", info.Path).
+			Msg("propfind: resourceInfo in propfindResponse")
+	}
 	user, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -268,6 +284,12 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 	}
 
 	parentInfo := res.Info
+	log.Debug().
+		Str("storage_id", parentInfo.Id.StorageId).
+		Str("space_id", parentInfo.Id.SpaceId).
+		Str("opaque_id", parentInfo.Id.OpaqueId).
+		Str("path", parentInfo.Path).
+		Msg("propfind: received parentInfo from Stat")
 	resourceInfos := []*provider.ResourceInfo{parentInfo}
 
 	switch {
@@ -319,6 +341,16 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		if res.Status.Code != rpc.Code_CODE_OK {
 			HandleErrorStatus(&log, w, res.Status)
 			return nil, nil, false
+		}
+		log.Debug().Int("count", len(res.Infos)).Msg("propfind: received children from ListContainer")
+		for i, info := range res.Infos {
+			log.Debug().
+				Int("index", i).
+				Str("storage_id", info.Id.StorageId).
+				Str("space_id", info.Id.SpaceId).
+				Str("opaque_id", info.Id.OpaqueId).
+				Str("path", info.Path).
+				Msg("propfind: child resource from ListContainer")
 		}
 		resourceInfos = append(resourceInfos, res.Infos...)
 
@@ -436,8 +468,17 @@ func readPropfind(r io.Reader) (pf propfindXML, status int, err error) {
 }
 
 func (s *svc) multistatusResponse(ctx context.Context, pf *propfindXML, mds []*provider.ResourceInfo, ns string, usershares, linkshares map[string]struct{}) (string, error) {
+	log := appctx.GetLogger(ctx)
+	log.Debug().Int("total_resources", len(mds)).Msg("propfind: building multistatus response")
 	responses := make([]*responseXML, 0, len(mds))
 	for i := range mds {
+		log.Debug().
+			Int("index", i).
+			Str("storage_id", mds[i].Id.StorageId).
+			Str("space_id", mds[i].Id.SpaceId).
+			Str("opaque_id", mds[i].Id.OpaqueId).
+			Str("path", mds[i].Path).
+			Msg("propfind: processing resource for response")
 		res, err := s.mdToPropResponse(ctx, pf, mds[i], ns, usershares, linkshares)
 		if err != nil {
 			return "", err
@@ -555,6 +596,12 @@ func (s *svc) isOpenable(path string) bool {
 // prefixing it with the baseURI.
 func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string, usershares, linkshares map[string]struct{}) (*responseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
+	sublog.Debug().
+		Str("storage_id", md.Id.StorageId).
+		Str("space_id", md.Id.SpaceId).
+		Str("opaque_id", md.Id.OpaqueId).
+		Str("path", md.Path).
+		Msg("propfind: mdToPropResponse entry")
 
 	spacesEnabled := s.c.SpacesEnabled
 
@@ -649,6 +696,12 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		// return all known properties
 		if md.Id != nil {
 			if spacesEnabled {
+				sublog.Debug().
+					Str("storage_id", md.Id.StorageId).
+					Str("space_id", md.Id.SpaceId).
+					Str("opaque_id", md.Id.OpaqueId).
+					Str("path", md.Path).
+					Msg("propfind: encoding resource ID")
 				id := spaces.EncodeResourceID(md.Id)
 				propstatOK.Prop = append(propstatOK.Prop,
 					s.newProp("oc:id", id),
@@ -662,6 +715,11 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		}
 
 		if md.ParentId != nil {
+			sublog.Debug().
+				Str("parent_storage_id", md.ParentId.StorageId).
+				Str("parent_space_id", md.ParentId.SpaceId).
+				Str("parent_opaque_id", md.ParentId.OpaqueId).
+				Msg("propfind: encoding parent resource ID")
 			id := spaces.EncodeResourceID(md.ParentId)
 			propstatOK.Prop = append(propstatOK.Prop,
 				s.newProp("oc:file-parent", id),
