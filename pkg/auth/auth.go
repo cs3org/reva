@@ -62,3 +62,7 @@ type Registry interface {
 	ListProviders(ctx context.Context) ([]*registry.ProviderInfo, error)
 	GetProvider(ctx context.Context, authType string) (*registry.ProviderInfo, error)
 }
+
+type SignedURLStrategy interface {
+	Authenticate(r *http.Request) (*http.Request, bool)
+}

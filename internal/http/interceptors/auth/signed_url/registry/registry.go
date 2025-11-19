@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2025 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,15 +22,15 @@ import (
 	"github.com/cs3org/reva/v3/pkg/auth"
 )
 
-// NewCredentialFunc is the function that credential strategies
+// NewSignedURLFunc is the function that signed_url strategies
 // should register at init time.
-type NewCredentialFunc func(map[string]any) (auth.CredentialStrategy, error)
+type NewSignedURLFunc func(map[string]any) (auth.SignedURLStrategy, error)
 
 // NewCredentialFuncs is a map containing all the registered auth strategies.
-var NewCredentialFuncs = map[string]NewCredentialFunc{}
+var NewSignedURLFuncs = map[string]NewSignedURLFunc{}
 
-// Register registers a new auth strategy  new function.
+// Register registers a new signed_url strategy  new function.
 // Not safe for concurrent use. Safe for use from package init.
-func Register(name string, f NewCredentialFunc) {
-	NewCredentialFuncs[name] = f
+func Register(name string, f NewSignedURLFunc) {
+	NewSignedURLFuncs[name] = f
 }
