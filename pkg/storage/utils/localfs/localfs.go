@@ -418,6 +418,7 @@ func (fs *localfs) permissionSet(ctx context.Context, owner *userpb.UserId) *pro
 }
 
 func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string, mdKeys []string) (*provider.ResourceInfo, error) {
+	log := appctx.GetLogger(ctx)
 	fp := fs.unwrap(ctx, path.Join("/", fn))
 	owner, err := getUser(ctx)
 	if err != nil {
