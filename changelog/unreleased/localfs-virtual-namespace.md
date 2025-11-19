@@ -4,18 +4,22 @@ Added optional VirtualHomeTemplate config to localfs driver, enabling localhome
 to correctly handle paths when exposing user homes through a virtual namespace
 (e.g., /home/<user>) while storing files in a flat per-user layout on disk.
 
-The driver intelligently strips virtual namespace prefixes from incoming paths:
+The wrap() function uses a clean switch statement with named predicates to
+handle five path transformation patterns:
 
-- Full paths: /home/einstein/file -> /file
-- Parent paths: /home -> / (when virtual home is /home/einstein)
-- Gateway-stripped paths: /home/file -> /file (when gateway omits username)
+- Exact match: /home/einstein -> /
+- Full path: /home/einstein/file -> /file  
+- Parent path: /home -> / (when virtual home is /home/einstein)
+- Gateway-stripped parent: /home/file -> /file (gateway omits username)
+- Gateway-stripped username: /einstein/file -> /file (WebDAV "home" alias)
 
-This last case handles scenarios where the gateway sends paths like /home/Test.txt
-instead of /home/einstein/Test.txt, extracting the virtual home parent directory
-and stripping it to get the user-relative path.
+The last two cases handle gateway routing edge cases where prefixes are stripped
+differently depending on whether the WebDAV layer uses space IDs or the "home"
+alias for URL construction.
 
-Unwrap adds the virtual home prefix back (e.g., /file -> /home/file) to enable
-correct space-based WebDAV routing, ensuring the UI can construct proper URLs.
+Unwrap adds the virtual home prefix back (e.g., /file -> /home/einstein/file) to
+enable correct space-based WebDAV routing, ensuring PathToSpaceID() derives the
+correct space identifier and the UI can construct proper URLs with space IDs.
 
 The localhome wrapper now correctly passes VirtualHomeTemplate through to localfs.
 

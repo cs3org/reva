@@ -177,35 +177,16 @@ func (fs *localfs) getVirtualHome(ctx context.Context) (string, error) {
 
 func (fs *localfs) wrap(ctx context.Context, p string) string {
 	log := appctx.GetLogger(ctx)
-	// This is to prevent path traversal.
-	// With this p can't break out of its parent folder
+	// Prevent path traversal attacks
 	p = path.Join("/", p)
 	
-	// Strip virtual home prefix when configured. This allows exposing paths under
-	// a virtual namespace (e.g., /home/username/) while storing them in a flat
-	// per-user layout on disk (e.g., /revalocalstorage/data/username/).
+	// Strip virtual home prefix to map virtual namespace to flat per-user storage.
+	// Example: /home/einstein/file.txt -> /file.txt (stored as data/einstein/file.txt)
 	if virtualHome, err := fs.getVirtualHome(ctx); err == nil && virtualHome != "" {
-		if p == virtualHome {
-			// Exact match: /home/einstein -> /
-			p = "/"
-		} else if strings.HasPrefix(p, virtualHome+"/") {
-			// Full path: /home/einstein/Test.txt -> /Test.txt
-			p = strings.TrimPrefix(p, virtualHome)
-		} else if strings.HasPrefix(virtualHome, p+"/") {
-			// Parent of virtual home: /home -> / (when virtual home is /home/einstein)
-			p = "/"
-		} else {
-			// Handle paths like /home/Test.txt when virtual home is /home/einstein.
-			// The gateway may send paths without the username component.
-			// Extract parent dir from virtual home and strip it if path starts with it.
-			virtualHomeParent := path.Dir(virtualHome)
-			if virtualHomeParent != "/" && virtualHomeParent != "." && strings.HasPrefix(p, virtualHomeParent+"/") {
-				// Path like /home/Test.txt with virtual home /home/einstein -> /Test.txt
-				p = strings.TrimPrefix(p, virtualHomeParent)
-			}
-		}
+		p = fs.stripVirtualHomePrefix(p, virtualHome)
 	}
 	
+	// Apply user layout and data directory
 	var internal string
 	if !fs.conf.DisableHome {
 		layout, err := fs.GetHome(ctx)
@@ -218,6 +199,62 @@ func (fs *localfs) wrap(ctx context.Context, p string) string {
 	}
 	log.Debug().Str("old", p).Str("wrapped", internal).Msg("localfs: wrap")
 	return internal
+}
+
+// stripVirtualHomePrefix removes the virtual namespace prefix from incoming paths.
+// Handles multiple path patterns caused by gateway routing behavior.
+func (fs *localfs) stripVirtualHomePrefix(p, virtualHome string) string {
+	virtualHomeParent := path.Dir(virtualHome)
+	virtualHomeBase := path.Base(virtualHome)
+	
+	switch {
+	case isExactVirtualHome(p, virtualHome):
+		// /home/einstein -> /
+		return "/"
+		
+	case isFullVirtualPath(p, virtualHome):
+		// /home/einstein/Test.txt -> /Test.txt
+		return strings.TrimPrefix(p, virtualHome)
+		
+	case isParentOfVirtualHome(p, virtualHome):
+		// /home -> / (when virtual home is /home/einstein)
+		return "/"
+		
+	case isGatewayStrippedParent(p, virtualHomeParent):
+		// /home/Test.txt -> /Test.txt (gateway omits username)
+		return strings.TrimPrefix(p, virtualHomeParent)
+		
+	case isGatewayStrippedUsername(p, virtualHomeBase):
+		// /einstein/Test.txt -> /Test.txt (WebDAV "home" alias strips /home)
+		return strings.TrimPrefix(p, "/"+virtualHomeBase)
+		
+	default:
+		return p
+	}
+}
+
+// Path pattern predicates for virtual home stripping
+
+func isExactVirtualHome(p, virtualHome string) bool {
+	return p == virtualHome
+}
+
+func isFullVirtualPath(p, virtualHome string) bool {
+	return strings.HasPrefix(p, virtualHome+"/")
+}
+
+func isParentOfVirtualHome(p, virtualHome string) bool {
+	return strings.HasPrefix(virtualHome, p+"/")
+}
+
+func isGatewayStrippedParent(p, virtualHomeParent string) bool {
+	return virtualHomeParent != "/" && virtualHomeParent != "." && 
+		strings.HasPrefix(p, virtualHomeParent+"/")
+}
+
+func isGatewayStrippedUsername(p, virtualHomeBase string) bool {
+	return virtualHomeBase != "/" && virtualHomeBase != "." && 
+		strings.HasPrefix(p, "/"+virtualHomeBase+"/")
 }
 
 func (fs *localfs) wrapReferences(ctx context.Context, p string) string {
