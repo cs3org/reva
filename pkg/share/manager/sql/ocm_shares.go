@@ -89,16 +89,16 @@ func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share) (*ocm.Share, error) 
 	err = m.db.Transaction(func(tx *gorm.DB) error {
 
 		share := &model.OcmShare{
-			Token:     s.Token,
-			StorageId: s.ResourceId.StorageId,
-			FileId:    s.ResourceId.OpaqueId,
-			Name:      s.Name,
-			ShareWith: formatUserID(s.Grantee.GetUserId()),
-			Owner:     s.Owner.OpaqueId,
-			Initiator: s.Creator.OpaqueId,
-			Ctime:     s.Ctime.Seconds,
-			Mtime:     s.Mtime.Seconds,
-			Type:      convertFromCS3OCMShareType(s.ShareType),
+			Token:         s.Token,
+			StorageId:     s.ResourceId.StorageId,
+			FileId:        s.ResourceId.OpaqueId,
+			Name:          s.Name,
+			ShareWith:     formatUserID(s.Grantee.GetUserId()),
+			Owner:         s.Owner.OpaqueId,
+			Initiator:     s.Creator.OpaqueId,
+			Ctime:         s.Ctime.Seconds,
+			Mtime:         s.Mtime.Seconds,
+			RecipientType: convertFromCS3OCMShareType(s.ShareType),
 		}
 		if s.Expiration != nil {
 			share.Expiration.Int64 = int64(s.Expiration.Seconds)
@@ -271,7 +271,7 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*oc
 			Initiator:     formatUserID(s.Creator),
 			Ctime:         s.Ctime.Seconds,
 			Mtime:         s.Mtime.Seconds,
-			Type:          convertFromCS3OCMShareType(s.ShareType),
+			RecipientType: convertFromCS3OCMShareType(s.ShareType),
 			State:         convertFromCS3OCMShareState(s.State),
 		}
 

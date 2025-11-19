@@ -7,6 +7,8 @@ some fields for better consistency:
   `Ocm`, and `AccessMethod` and `Protocol` were
   consolidated into `OcmProtocol`
 * ItemType is used in OCM shares as well
+* `Type` has been renamed to `RecipientType` with
+  type `OcmShareType`, and converted both ways
 * Unique index constraints have been created as follows:
   * For `Shares` on `(inode, instance, permissions, recipient, deletedAt)`
   * For `OcmShares` on `(storageId, fileId, shareWith, owner, deletedAt)`

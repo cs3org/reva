@@ -42,6 +42,16 @@ func convertFromCS3OCMShareType(shareType ocm.ShareType) model.OcmShareType {
 	return -1
 }
 
+func convertToCS3OCMShareType(recipientType model.OcmShareType) ocm.ShareType {
+	switch recipientType {
+	case model.OcmShareTypeUser:
+		return ocm.ShareType_SHARE_TYPE_USER
+	case model.OcmShareTypeGroup:
+		return ocm.ShareType_SHARE_TYPE_GROUP
+	}
+	return ocm.ShareType_SHARE_TYPE_INVALID
+}
+
 func convertFromCS3OCMShareState(shareState ocm.ShareState) model.OcmShareState {
 	switch shareState {
 	case ocm.ShareState_SHARE_STATE_ACCEPTED:
@@ -96,7 +106,7 @@ func convertToCS3OCMShare(s *model.OcmShare, am []*ocm.AccessMethod) *ocm.Share 
 		Mtime: &types.Timestamp{
 			Seconds: uint64(s.Mtime),
 		},
-		ShareType:     ocm.ShareType_SHARE_TYPE_USER,
+		ShareType:     convertToCS3OCMShareType(s.RecipientType),
 		AccessMethods: am,
 	}
 	if s.Expiration.Valid {
@@ -133,7 +143,7 @@ func convertToCS3OCMReceivedShare(s *model.OcmReceivedShare, p []*ocm.Protocol) 
 			Seconds: uint64(s.Mtime),
 		},
 		ResourceType: convertToCS3ResourceType(s.ItemType),
-		ShareType:    ocm.ShareType_SHARE_TYPE_USER,
+		ShareType:    convertToCS3OCMShareType(s.RecipientType),
 		State:        convertToCS3OCMShareState(s.State),
 		Protocols:    p,
 	}
