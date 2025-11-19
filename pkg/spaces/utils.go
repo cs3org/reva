@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -89,6 +90,10 @@ func EncodeResourceID(r *provider.ResourceId) string {
 		encoded = fmt.Sprintf("%s!%s", r.StorageId, r.OpaqueId)
 		fmt.Fprintf(os.Stderr, "[DEBUG] EncodeResourceID: storage=%q, space=(empty), opaque=%q -> %q\n", 
 			r.StorageId, r.OpaqueId, encoded)
+		fmt.Fprintf(os.Stderr, "[DEBUG] EncodeResourceID STACK (space empty):\n")
+		buf := make([]byte, 4096)
+		n := runtime.Stack(buf, false)
+		fmt.Fprintf(os.Stderr, "%s\n", buf[:n])
 	} else if r.OpaqueId == "" {
 		encoded = fmt.Sprintf("%s$%s", r.StorageId, r.SpaceId)
 		fmt.Fprintf(os.Stderr, "[DEBUG] EncodeResourceID: storage=%q, space=%q, opaque=(empty) -> %q\n", 
