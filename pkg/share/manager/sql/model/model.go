@@ -153,9 +153,9 @@ type PublicLink struct {
 // ShareState represents the state of a share for a specific recipient.
 type ShareState struct {
 	gorm.Model
-	ShareID uint   `gorm:"uniqueIndex:i_shareid_user"`          // Define the foreign key field
+	ShareID uint   `gorm:"uniqueIndex:u_shareid_user"`          // Define the foreign key field
 	Share   Share  `gorm:"foreignKey:ShareID;references:Id"`    // Define the association
-	User    string `gorm:"uniqueIndex:i_shareid_user;size:255"` // Can not be uid because of lw accounts
+	User    string `gorm:"uniqueIndex:u_shareid_user;size:255"` // Can not be uid because of lw accounts
 	Synced  bool
 	Hidden  bool
 	Alias   string `gorm:"size:64"`
@@ -203,6 +203,8 @@ type OcmReceivedShare struct {
 	Expiration    sql.NullInt64 `gorm:"default:null"`
 	Type          OcmShareType  `gorm:"index:i_ocmrecshare_type;not null"`
 	State         OcmShareState `gorm:"index:i_ocmrecshare_state;not null"`
+	Alias         string        `gorm:"size:64"`
+	Hidden        bool
 }
 
 // OcmReceivedShareProtocol represents the protocol used to access an OCM share received from a remote user.
