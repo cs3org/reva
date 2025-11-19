@@ -51,7 +51,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -820,10 +819,16 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					if md.Id == nil {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
 					} else if spacesEnabled {
+						sublog.Debug().
+							Str("storage_id", md.Id.StorageId).
+							Str("space_id", md.Id.SpaceId).
+							Str("opaque_id", md.Id.OpaqueId).
+							Str("path", md.Path).
+							Msg("propfind: encoding fileid property")
 						// If our client uses spaces, we try to use the spaces-encoded file id (storage$base32(spacePath)!inode)
 						fileId, err := spaces.EncodeResourceInfo(md)
 						if err != nil {
-							log.Error().Err(err).Any("md", md).Msg("Failed to encode file id")
+							sublog.Error().Err(err).Any("md", md).Msg("Failed to encode file id")
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", spaces.EncodeResourceID(md.Id)))
 						} else {
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", fileId))
@@ -834,6 +839,12 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 
 				case "id": // desktop client only
 					if md.Id != nil {
+						sublog.Debug().
+							Str("storage_id", md.Id.StorageId).
+							Str("space_id", md.Id.SpaceId).
+							Str("opaque_id", md.Id.OpaqueId).
+							Str("path", md.Path).
+							Msg("propfind: encoding id property")
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:id", spaces.EncodeResourceID(md.Id)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:id", ""))
@@ -841,6 +852,11 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "file-parent":
 					if md.ParentId != nil {
 						if spacesEnabled {
+							sublog.Debug().
+								Str("parent_storage_id", md.ParentId.StorageId).
+								Str("parent_space_id", md.ParentId.SpaceId).
+								Str("parent_opaque_id", md.ParentId.OpaqueId).
+								Msg("propfind: encoding file-parent property")
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:file-parent", spaces.EncodeResourceID(md.ParentId)))
 						} else {
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:file-parent", spaces.ResourceIdToString(md.ParentId)))

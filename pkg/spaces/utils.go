@@ -110,23 +110,36 @@ func EncodeResourceID(r *provider.ResourceId) string {
 // The resource ID is expected to be in the form of <storage_id>$base32(<path>)!<item_id>.
 func DecodeResourceID(raw string) (storageID, spacePath, itemID string, ok bool) {
 	// The input is expected to be in the form of <storage_id>$base32(<path>)!<item_id>
+	fmt.Fprintf(os.Stderr, "[DEBUG] DecodeResourceID: raw=%q\n", raw)
+	
 	s := strings.SplitN(raw, "!", 2)
 	if len(s) != 2 {
+		fmt.Fprintf(os.Stderr, "[DEBUG] DecodeResourceID: FAILED split (expected '!') raw=%q\n", raw)
 		return "", "", "", false
 	}
 	itemID = s[1]
 	storageID, spacePath, ok = DecodeStorageSpaceID(s[0])
+	
+	fmt.Fprintf(os.Stderr, "[DEBUG] DecodeResourceID: storageID=%q, spacePath=%q, itemID=%q, ok=%t\n",
+		storageID, spacePath, itemID, ok)
+	
 	return storageID, spacePath, itemID, ok
 }
 
 // ParseResourceID converts the encoded resource id in a CS3API ResourceId.
 func ParseResourceID(raw string) (*provider.ResourceId, bool) {
+	fmt.Fprintf(os.Stderr, "[DEBUG] ParseResourceID: raw=%q\n", raw)
+	
 	storageID, path, itemID, ok := DecodeResourceID(raw)
 	if !ok {
+		fmt.Fprintf(os.Stderr, "[DEBUG] ParseResourceID: FAILED decode raw=%q\n", raw)
 		return nil, false
 	}
 
 	spaceID := PathToSpaceID(path)
+
+	fmt.Fprintf(os.Stderr, "[DEBUG] ParseResourceID: storageID=%q, spaceID=%q (from path=%q), itemID=%q\n",
+		storageID, spaceID, path, itemID)
 
 	return &provider.ResourceId{
 		StorageId: storageID,
@@ -141,11 +154,19 @@ func ParseResourceID(raw string) (*provider.ResourceId, bool) {
 // If no path or space_id is set, an error will be returned
 func EncodeResourceInfo(info *provider.ResourceInfo) (spaceId string, err error) {
 	if info.Id.SpaceId != "" {
-		return fmt.Sprintf("%s$%s!%s", info.Id.StorageId, info.Id.SpaceId, info.Id.OpaqueId), nil
+		result := fmt.Sprintf("%s$%s!%s", info.Id.StorageId, info.Id.SpaceId, info.Id.OpaqueId)
+		fmt.Fprintf(os.Stderr, "[DEBUG] EncodeResourceInfo: using existing spaceID=%q -> %q\n",
+			info.Id.SpaceId, result)
+		return result, nil
 	} else if info.Path != "" {
 		encodedPath := PathToSpaceID(info.Path)
-		return fmt.Sprintf("%s$%s!%s", info.Id.StorageId, encodedPath, info.Id.OpaqueId), nil
+		result := fmt.Sprintf("%s$%s!%s", info.Id.StorageId, encodedPath, info.Id.OpaqueId)
+		fmt.Fprintf(os.Stderr, "[DEBUG] EncodeResourceInfo: FALLBACK deriving spaceID from path=%q -> spaceID=%q -> %q\n",
+			info.Path, encodedPath, result)
+		return result, nil
 	} else {
+		fmt.Fprintf(os.Stderr, "[DEBUG] EncodeResourceInfo: FAILED no spaceID or path storageID=%q opaqueID=%q\n",
+			info.Id.StorageId, info.Id.OpaqueId)
 		return "", errors.New("resourceInfo must contain a spaceID or a path")
 	}
 }
