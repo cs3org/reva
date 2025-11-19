@@ -300,6 +300,8 @@ func isTokenValid(token *invitepb.InviteToken) bool {
 
 func (s *service) GetAcceptedUser(ctx context.Context, req *invitepb.GetAcceptedUserRequest) (*invitepb.GetAcceptedUserResponse, error) {
 	log := appctx.GetLogger(ctx)
+	// TODO(lopresti): here we extract an opaque field to get the initiator of the invite, whereas we should implement
+	// a GetRemoteUser() call in the repository that only takes the remoteUserId no matter the initiator.
 	user, ok := getUserFilter(ctx, req)
 	if !ok {
 		return &invitepb.GetAcceptedUserResponse{
