@@ -166,19 +166,19 @@ type ShareState struct {
 // for that, we redeclare the DeletedAt as in Share. In addition, tokens must be unique.
 type OcmShare struct {
 	BaseModel
-	DeletedAt  gorm.DeletedAt     `gorm:"uniqueIndex:u_ocmshare"`
-	Token      string             `gorm:"size:255;not null;uniqueIndex:u_ocmshare_token"`
-	StorageId  string             `gorm:"size:64;not null;uniqueIndex:u_ocmshare"`
-	FileId     string             `gorm:"size:64;not null;uniqueIndex:u_ocmshare"`
-	Name       string             `gorm:"type:text;not null"`
-	ShareWith  string             `gorm:"size:255;not null;uniqueIndex:u_ocmshare"`
-	Owner      string             `gorm:"size:255;not null;uniqueIndex:u_ocmshare"`
-	Initiator  string             `gorm:"type:text;not null"`
-	Ctime      uint64             `gorm:"not null"`
-	Mtime      uint64             `gorm:"not null"`
-	Expiration sql.NullInt64      `gorm:"default:null"`
-	Type       OcmShareType       `gorm:"not null"`
-	Protocols  []OcmShareProtocol `gorm:"constraint:OnDelete:CASCADE;"`
+	DeletedAt     gorm.DeletedAt     `gorm:"uniqueIndex:u_ocmshare"`
+	Token         string             `gorm:"size:255;not null;uniqueIndex:u_ocmshare_token"`
+	StorageId     string             `gorm:"size:64;not null;uniqueIndex:u_ocmshare"`
+	FileId        string             `gorm:"size:64;not null;uniqueIndex:u_ocmshare"`
+	Name          string             `gorm:"type:text;not null"`
+	ShareWith     string             `gorm:"size:255;not null;uniqueIndex:u_ocmshare"`
+	Owner         string             `gorm:"size:255;not null;uniqueIndex:u_ocmshare"`
+	Initiator     string             `gorm:"type:text;not null"`
+	Ctime         uint64             `gorm:"not null"`
+	Mtime         uint64             `gorm:"not null"`
+	Expiration    sql.NullInt64      `gorm:"default:null"`
+	RecipientType OcmShareType       `gorm:"not null"`
+	Protocols     []OcmShareProtocol `gorm:"constraint:OnDelete:CASCADE;"`
 }
 
 // OcmShareProtocol represents the protocol used to access an OCM share, named AccessMethod in the OCM CS3 APIs.
@@ -201,7 +201,7 @@ type OcmReceivedShare struct {
 	Ctime         uint64        `gorm:"not null"`
 	Mtime         uint64        `gorm:"not null"`
 	Expiration    sql.NullInt64 `gorm:"default:null"`
-	Type          OcmShareType  `gorm:"index:i_ocmrecshare_type;not null"`
+	RecipientType OcmShareType  `gorm:"index:i_ocmrecshare_type;not null"`
 	State         OcmShareState `gorm:"index:i_ocmrecshare_state;not null"`
 	Alias         string        `gorm:"size:64"`
 	Hidden        bool
