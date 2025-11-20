@@ -661,11 +661,17 @@ func (s *svc) isOpenable(path string) bool {
 // prefixing it with the baseURI.
 func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string, usershares, linkshares map[string]struct{}) (*responseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
-	sublog.Debug().
-		Str("storage_id", md.Id.StorageId).
-		Str("space_id", md.Id.SpaceId).
-		Str("opaque_id", md.Id.OpaqueId).
-		Str("path", md.Path).
+	
+	logger := sublog.Debug()
+	if md.Id != nil {
+		logger = logger.
+			Str("storage_id", md.Id.StorageId).
+			Str("space_id", md.Id.SpaceId).
+			Str("opaque_id", md.Id.OpaqueId)
+	} else {
+		logger = logger.Str("id", "<nil>")
+	}
+	logger.Str("path", md.Path).
 		Msg("propfind: mdToPropResponse entry")
 
 	spacesEnabled := s.c.SpacesEnabled
