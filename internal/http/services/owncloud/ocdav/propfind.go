@@ -493,13 +493,20 @@ func (s *svc) multistatusResponse(ctx context.Context, pf *propfindXML, mds []*p
 	log.Debug().Int("total_resources", len(mds)).Msg("propfind: building multistatus response")
 	responses := make([]*responseXML, 0, len(mds))
 	for i := range mds {
-		log.Debug().
-			Int("index", i).
-			Str("storage_id", mds[i].Id.StorageId).
-			Str("space_id", mds[i].Id.SpaceId).
-			Str("opaque_id", mds[i].Id.OpaqueId).
-			Str("path", mds[i].Path).
+		logger := log.Debug().Int("index", i)
+		
+		if mds[i].Id != nil {
+			logger = logger.
+				Str("storage_id", mds[i].Id.StorageId).
+				Str("space_id", mds[i].Id.SpaceId).
+				Str("opaque_id", mds[i].Id.OpaqueId)
+		} else {
+			logger = logger.Str("id", "<nil>")
+		}
+		
+		logger.Str("path", mds[i].Path).
 			Msg("propfind: processing resource for response")
+		
 		res, err := s.mdToPropResponse(ctx, pf, mds[i], ns, usershares, linkshares)
 		if err != nil {
 			return "", err
