@@ -28,7 +28,7 @@ func TestUIDMapping(t *testing.T) {
 	ctx := ContextWithTestLogger(t)
 
 	// Create a minimal cephmount filesystem for testing UID mapping
-	config := map[string]interface{}{
+	config := map[string]any{
 		"nobody_uid":               65534,
 		"nobody_gid":               65534,
 		"testing_allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)

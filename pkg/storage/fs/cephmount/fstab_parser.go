@@ -83,12 +83,12 @@ func ParseFstabEntry(ctx context.Context, fstabLine string) (*FstabMountInfo, er
 
 	// Parse mount options to extract client name and secret file
 	var clientName, secretFile string
-	optionList := strings.Split(options, ",")
-	for _, option := range optionList {
-		if strings.HasPrefix(option, "name=") {
-			clientName = strings.TrimPrefix(option, "name=")
-		} else if strings.HasPrefix(option, "secretfile=") {
-			secretFile = strings.TrimPrefix(option, "secretfile=")
+	optionList := strings.SplitSeq(options, ",")
+	for option := range optionList {
+		if after, ok := strings.CutPrefix(option, "name="); ok {
+			clientName = after
+		} else if after, ok := strings.CutPrefix(option, "secretfile="); ok {
+			secretFile = after
 		}
 	}
 

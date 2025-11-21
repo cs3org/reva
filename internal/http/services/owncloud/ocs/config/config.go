@@ -25,31 +25,31 @@ import (
 
 // Config holds the config options that need to be passed down to all ocs handlers.
 type Config struct {
-	Prefix                     string                            `mapstructure:"prefix"`
-	Config                     data.ConfigData                   `mapstructure:"config"`
-	Capabilities               data.CapabilitiesData             `mapstructure:"capabilities"`
-	GatewaySvc                 string                            `mapstructure:"gatewaysvc"`
-	StorageregistrySvc         string                            `mapstructure:"storage_registry_svc"`
-	DefaultUploadProtocol      string                            `mapstructure:"default_upload_protocol"`
-	UserAgentChunkingMap       map[string]string                 `mapstructure:"user_agent_chunking_map"`
-	GroupBasedCapabilities     map[string][]string               `mapstructure:"group_based_capabilities"`
-	SharePrefix                string                            `mapstructure:"share_prefix"`
-	HomeNamespace              string                            `mapstructure:"home_namespace"`
-	AdditionalInfoAttribute    string                            `mapstructure:"additional_info_attribute"`
-	CacheWarmupDriver          string                            `mapstructure:"cache_warmup_driver"`
-	CacheWarmupDrivers         map[string]map[string]interface{} `mapstructure:"cache_warmup_drivers"`
-	ResourceInfoCacheDriver    string                            `mapstructure:"resource_info_cache_type"`
-	ResourceInfoCacheTTL       int                               `mapstructure:"resource_info_cache_ttl"`
-	ResourceInfoCacheDrivers   map[string]map[string]interface{} `mapstructure:"resource_info_caches"`
-	UserIdentifierCacheTTL     int                               `mapstructure:"user_identifier_cache_ttl"`
-	AllowedLanguages           []string                          `mapstructure:"allowed_languages"`
-	OCMMountPoint              string                            `mapstructure:"ocm_mount_point"`
-	ListOCMShares              bool                              `mapstructure:"list_ocm_shares"`
-	Notifications              map[string]interface{}            `mapstructure:"notifications"`
-	EnableSpaces               bool                              `mapstructure:"enable_spaces"`
-	SigningKey                 string                            `mapstructure:"signing_key"`
-	PubRWLinkMaxExpiration     int64                             `mapstructure:"pub_rw_link_max_expiration"`
-	PubRWLinkDefaultExpiration int64                             `mapstructure:"pub_rw_link_default_expiration"`
+	Prefix                     string                    `mapstructure:"prefix"`
+	Config                     data.ConfigData           `mapstructure:"config"`
+	Capabilities               data.CapabilitiesData     `mapstructure:"capabilities"`
+	GatewaySvc                 string                    `mapstructure:"gatewaysvc"`
+	StorageregistrySvc         string                    `mapstructure:"storage_registry_svc"`
+	DefaultUploadProtocol      string                    `mapstructure:"default_upload_protocol"`
+	UserAgentChunkingMap       map[string]string         `mapstructure:"user_agent_chunking_map"`
+	GroupBasedCapabilities     map[string][]string       `mapstructure:"group_based_capabilities"`
+	SharePrefix                string                    `mapstructure:"share_prefix"`
+	HomeNamespace              string                    `mapstructure:"home_namespace"`
+	AdditionalInfoAttribute    string                    `mapstructure:"additional_info_attribute"`
+	CacheWarmupDriver          string                    `mapstructure:"cache_warmup_driver"`
+	CacheWarmupDrivers         map[string]map[string]any `mapstructure:"cache_warmup_drivers"`
+	ResourceInfoCacheDriver    string                    `mapstructure:"resource_info_cache_type"`
+	ResourceInfoCacheTTL       int                       `mapstructure:"resource_info_cache_ttl"`
+	ResourceInfoCacheDrivers   map[string]map[string]any `mapstructure:"resource_info_caches"`
+	UserIdentifierCacheTTL     int                       `mapstructure:"user_identifier_cache_ttl"`
+	AllowedLanguages           []string                  `mapstructure:"allowed_languages"`
+	OCMMountPoint              string                    `mapstructure:"ocm_mount_point"`
+	ListOCMShares              bool                      `mapstructure:"list_ocm_shares"`
+	Notifications              map[string]any            `mapstructure:"notifications"`
+	EnableSpaces               bool                      `mapstructure:"enable_spaces"`
+	SigningKey                 string                    `mapstructure:"signing_key"`
+	PubRWLinkMaxExpiration     int64                     `mapstructure:"pub_rw_link_max_expiration"`
+	PubRWLinkDefaultExpiration int64                     `mapstructure:"pub_rw_link_default_expiration"`
 }
 
 // Init sets sane defaults.

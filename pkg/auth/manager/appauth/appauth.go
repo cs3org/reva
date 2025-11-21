@@ -47,7 +47,7 @@ func (m *manager) ApplyDefaults() {
 }
 
 // New returns a new auth Manager.
-func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
+func New(ctx context.Context, m map[string]any) (auth.Manager, error) {
 	mgr := &manager{}
 	err := mgr.Configure(m)
 	if err != nil {
@@ -56,7 +56,7 @@ func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 	return mgr, nil
 }
 
-func (m *manager) Configure(ml map[string]interface{}) error {
+func (m *manager) Configure(ml map[string]any) error {
 	err := cfg.Decode(ml, m)
 	return errors.Wrap(err, "appauth: error decoding config")
 }

@@ -46,13 +46,13 @@ import (
 
 type provider struct {
 	m    sync.Mutex
-	conn map[string]interface{}
+	conn map[string]any
 }
 
 func newProvider() provider {
 	return provider{
 		sync.Mutex{},
-		make(map[string]interface{}),
+		make(map[string]any),
 	}
 }
 

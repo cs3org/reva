@@ -24,7 +24,7 @@ import (
 
 // NewCredentialFunc is the function that credential strategies
 // should register at init time.
-type NewCredentialFunc func(map[string]interface{}) (auth.CredentialStrategy, error)
+type NewCredentialFunc func(map[string]any) (auth.CredentialStrategy, error)
 
 // NewCredentialFuncs is a map containing all the registered auth strategies.
 var NewCredentialFuncs = map[string]NewCredentialFunc{}

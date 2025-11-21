@@ -65,7 +65,7 @@ func (i InvalidNotificationError) Error() string {
 }
 
 // Send is the method run when a notification is triggered.
-func (n *Notification) Send(sender string, templateData map[string]interface{}) error {
+func (n *Notification) Send(sender string, templateData map[string]any) error {
 	subject, err := n.Template.RenderSubject(templateData)
 	if err != nil {
 		return err

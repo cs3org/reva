@@ -175,7 +175,7 @@ func TestFindProviders(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.TODO()
 
-			registry, err := New(ctx, map[string]interface{}{
+			registry, err := New(ctx, map[string]any{
 				"mime_types": tt.mimeTypes,
 				"providers":  tt.regProviders,
 			})
@@ -474,7 +474,7 @@ func TestFindProvidersWithPriority(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.TODO()
 
-			registry, err := New(ctx, map[string]interface{}{
+			registry, err := New(ctx, map[string]any{
 				"mime_types": tt.mimeTypes,
 			})
 			if err != nil {
@@ -763,7 +763,7 @@ func TestAddProvider(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.TODO()
 
-			registry, err := New(ctx, map[string]interface{}{
+			registry, err := New(ctx, map[string]any{
 				"providers":  tt.initProviders,
 				"mime_types": tt.mimeTypes,
 			})
@@ -1014,7 +1014,7 @@ func TestListSupportedMimeTypes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.TODO()
 
-			registry, err := New(ctx, map[string]interface{}{
+			registry, err := New(ctx, map[string]any{
 				"mime_types": tt.mimeTypes,
 			})
 			if err != nil {
@@ -1141,7 +1141,7 @@ func TestSetDefaultProviderForMimeType(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.TODO()
 
-			registry, err := New(ctx, map[string]interface{}{
+			registry, err := New(ctx, map[string]any{
 				"providers":  tt.initProviders,
 				"mime_types": tt.mimeTypes,
 			})
@@ -1180,7 +1180,7 @@ func mimeTypesEquals(l1, l2 []*registrypb.MimeTypeInfo) bool {
 		return false
 	}
 
-	for i := 0; i < len(l1); i++ {
+	for i := range l1 {
 		if !equalsMimeTypeInfo(l1[i], l2[i]) {
 			return false
 		}

@@ -143,8 +143,8 @@ func getGroupSelectionFromRequest(selQuery *godata.GoDataSelectQuery) []GroupSel
 		return nil
 	}
 	selection := []GroupSelectableProperty{}
-	items := strings.Split(selQuery.RawValue, ",")
-	for _, item := range items {
+	items := strings.SplitSeq(selQuery.RawValue, ",")
+	for item := range items {
 		prop := GroupSelectableProperty(item)
 		if prop.Valid() {
 			selection = append(selection, prop)

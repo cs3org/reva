@@ -28,7 +28,7 @@ import (
 )
 
 // Verifier is the function signature which every scope verifier should implement.
-type Verifier func(context.Context, *authpb.Scope, interface{}, *zerolog.Logger) (bool, error)
+type Verifier func(context.Context, *authpb.Scope, any, *zerolog.Logger) (bool, error)
 
 var supportedScopes = map[string]Verifier{
 	"user":          userScope,
@@ -42,7 +42,7 @@ var supportedScopes = map[string]Verifier{
 
 // VerifyScope is the function to be called when dismantling tokens to check if
 // the token has access to a particular resource.
-func VerifyScope(ctx context.Context, scopeMap map[string]*authpb.Scope, resource interface{}) (bool, error) {
+func VerifyScope(ctx context.Context, scopeMap map[string]*authpb.Scope, resource any) (bool, error) {
 	logger := appctx.GetLogger(ctx)
 	for k, scope := range scopeMap {
 		for s, f := range supportedScopes {

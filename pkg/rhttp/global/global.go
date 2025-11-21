@@ -27,7 +27,7 @@ import (
 var NewMiddlewares = map[string]NewMiddleware{}
 
 // NewMiddleware is the function that HTTP middlewares need to register at init time.
-type NewMiddleware func(conf map[string]interface{}) (Middleware, int, error)
+type NewMiddleware func(conf map[string]any) (Middleware, int, error)
 
 // RegisterMiddleware registers a new HTTP middleware and its new function.
 func RegisterMiddleware(name string, n NewMiddleware) {
@@ -46,7 +46,7 @@ func Register(name string, newFunc NewService) {
 }
 
 // NewService is the function that HTTP services need to register at init time.
-type NewService func(context.Context, map[string]interface{}) (Service, error)
+type NewService func(context.Context, map[string]any) (Service, error)
 
 // Service represents a HTTP service.
 type Service interface {

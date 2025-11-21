@@ -70,7 +70,7 @@ func TestCreateTokenCollision(t *testing.T) {
 		Opaque:       nil,
 	}
 
-	for i := 0; i < 1000000; i++ {
+	for range 1000000 {
 		token := CreateToken(24*time.Hour, user.GetId(), "")
 
 		if token == nil {

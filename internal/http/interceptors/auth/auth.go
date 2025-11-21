@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -57,19 +58,19 @@ type config struct {
 	Priority   int    `mapstructure:"priority"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
 	// TODO(jdf): Realm is optional, will be filled with request host if not given?
-	Realm                  string                            `mapstructure:"realm"`
-	CredentialsByUserAgent map[string]string                 `mapstructure:"credentials_by_user_agent"`
-	CredentialChain        []string                          `mapstructure:"credential_chain"`
-	CredentialStrategies   map[string]map[string]interface{} `mapstructure:"credential_strategies"`
-	TokenStrategyChain     []string                          `mapstructure:"token_strategy_chain"`
-	TokenStrategies        map[string]map[string]interface{} `mapstructure:"token_strategies"`
-	TokenManager           string                            `mapstructure:"token_manager"`
-	TokenManagers          map[string]map[string]interface{} `mapstructure:"token_managers"`
-	TokenWriter            string                            `mapstructure:"token_writer"`
-	TokenWriters           map[string]map[string]interface{} `mapstructure:"token_writers"`
+	Realm                  string                    `mapstructure:"realm"`
+	CredentialsByUserAgent map[string]string         `mapstructure:"credentials_by_user_agent"`
+	CredentialChain        []string                  `mapstructure:"credential_chain"`
+	CredentialStrategies   map[string]map[string]any `mapstructure:"credential_strategies"`
+	TokenStrategyChain     []string                  `mapstructure:"token_strategy_chain"`
+	TokenStrategies        map[string]map[string]any `mapstructure:"token_strategies"`
+	TokenManager           string                    `mapstructure:"token_manager"`
+	TokenManagers          map[string]map[string]any `mapstructure:"token_managers"`
+	TokenWriter            string                    `mapstructure:"token_writer"`
+	TokenWriters           map[string]map[string]any `mapstructure:"token_writers"`
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
+func parseConfig(m map[string]any) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
@@ -79,7 +80,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns a new middleware with defined priority.
-func New(m map[string]interface{}, unprotected []string) (global.Middleware, error) {
+func New(m map[string]any, unprotected []string) (global.Middleware, error) {
 	conf, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -356,10 +357,8 @@ func getCredsForUserAgent(ua string, uam map[string]string, creds []string) []st
 
 	for u, cred := range uam {
 		if strings.Contains(ua, u) {
-			for _, v := range creds {
-				if v == cred {
-					return []string{cred}
-				}
+			if slices.Contains(creds, cred) {
+				return []string{cred}
 			}
 			return creds
 		}

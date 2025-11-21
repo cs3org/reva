@@ -26,7 +26,7 @@ import (
 
 // NewFunc is the function that permission managers
 // should register at init time.
-type NewFunc func(context.Context, map[string]interface{}) (permission.Manager, error)
+type NewFunc func(context.Context, map[string]any) (permission.Manager, error)
 
 // NewFuncs is a map containing all the registered share managers.
 var NewFuncs = map[string]NewFunc{}

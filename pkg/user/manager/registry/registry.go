@@ -26,7 +26,7 @@ import (
 
 // NewFunc is the function that user managers
 // should register at init time.
-type NewFunc func(context.Context, map[string]interface{}) (user.Manager, error)
+type NewFunc func(context.Context, map[string]any) (user.Manager, error)
 
 // NewFuncs is a map containing all the registered user managers.
 var NewFuncs = map[string]NewFunc{}

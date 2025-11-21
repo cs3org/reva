@@ -68,7 +68,7 @@ func (c *config) ApplyDefaults() {
 }
 
 // New creates a sql repository for ocm tokens and users.
-func New(ctx context.Context, m map[string]interface{}) (invite.Repository, error) {
+func New(ctx context.Context, m map[string]any) (invite.Repository, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

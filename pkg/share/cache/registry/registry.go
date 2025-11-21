@@ -22,7 +22,7 @@ import (
 	"fmt"
 )
 
-type CacheFunc[T any] func(map[string]interface{}) (T, error)
+type CacheFunc[T any] func(map[string]any) (T, error)
 
 var registry = map[string]any{}
 

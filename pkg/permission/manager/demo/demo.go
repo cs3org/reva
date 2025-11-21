@@ -31,7 +31,7 @@ func init() {
 }
 
 // New returns a new demo permission manager.
-func New(_ context.Context, _ map[string]interface{}) (permission.Manager, error) {
+func New(_ context.Context, _ map[string]any) (permission.Manager, error) {
 	return manager{}, nil
 }
 

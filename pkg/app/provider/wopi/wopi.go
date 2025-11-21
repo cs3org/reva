@@ -108,7 +108,7 @@ type wopiProvider struct {
 
 // New returns an implementation of the app.Provider interface that
 // connects to an application in the backend.
-func New(ctx context.Context, m map[string]interface{}) (app.Provider, error) {
+func New(ctx context.Context, m map[string]any) (app.Provider, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -296,7 +296,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		return nil, errors.New(sbody)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	err = json.Unmarshal(body, &result)
 	if err != nil {
 		return nil, err
@@ -326,7 +326,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	// we decide whether the request method is POST or GET
 	var formParams map[string]string
 	method := http.MethodGet
-	if form, ok := result["form-parameters"].(map[string]interface{}); ok {
+	if form, ok := result["form-parameters"].(map[string]any); ok {
 		if tkn, ok := form["access_token"].(string); ok {
 			formParams = map[string]string{
 				"access_token":     tkn,
@@ -442,7 +442,7 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 
 func (p *wopiProvider) getAccessTokenTTL(ctx context.Context) (string, error) {
 	tkn := appctx.ContextMustGetToken(ctx)
-	token, err := jwt.ParseWithClaims(tkn, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tkn, &jwt.RegisteredClaims{}, func(token *jwt.Token) (any, error) {
 		return []byte(p.conf.JWTSecret), nil
 	})
 	if err != nil {

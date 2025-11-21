@@ -41,8 +41,8 @@ func init() {
 }
 
 type config struct {
-	AuthManager  string                            `mapstructure:"auth_manager"`
-	AuthManagers map[string]map[string]interface{} `mapstructure:"auth_managers"`
+	AuthManager  string                    `mapstructure:"auth_manager"`
+	AuthManagers map[string]map[string]any `mapstructure:"auth_managers"`
 	blockedUsers []string
 }
 
@@ -59,7 +59,7 @@ type service struct {
 	blockedUsers user.BlockedUsers
 }
 
-func getAuthManager(ctx context.Context, manager string, m map[string]map[string]interface{}) (auth.Manager, error) {
+func getAuthManager(ctx context.Context, manager string, m map[string]map[string]any) (auth.Manager, error) {
 	if manager == "" {
 		return nil, errtypes.InternalError("authsvc: driver not configured for auth manager")
 	}
@@ -71,7 +71,7 @@ func getAuthManager(ctx context.Context, manager string, m map[string]map[string
 }
 
 // New returns a new AuthProviderServiceServer.
-func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

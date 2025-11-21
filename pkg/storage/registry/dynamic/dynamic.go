@@ -68,7 +68,7 @@ func (c *Config) ApplyDefaults() {
 
 // New returns an implementation of the storage.Registry interface that
 // redirects requests to corresponding storage drivers.
-func New(ctx context.Context, m map[string]interface{}) (storage.Registry, error) {
+func New(ctx context.Context, m map[string]any) (storage.Registry, error) {
 	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

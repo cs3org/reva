@@ -69,7 +69,7 @@ func (r *Registry) GetService(name string) (registry.Service, error) {
 }
 
 // New returns an implementation of the Registry interface.
-func New(m map[string]interface{}) registry.Registry {
+func New(m map[string]any) registry.Registry {
 	// c, err := registry.ParseConfig(m)
 	// if err != nil {
 	//	return nil

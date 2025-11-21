@@ -48,7 +48,7 @@ type manager struct {
 	conf *config
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
+func parseConfig(m map[string]any) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
@@ -58,7 +58,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns a datatx manager implementation that relies on HTTP PUT/GET.
-func New(ctx context.Context, m map[string]interface{}) (datatx.DataTX, error) {
+func New(ctx context.Context, m map[string]any) (datatx.DataTX, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

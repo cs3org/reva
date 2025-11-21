@@ -47,7 +47,7 @@ type config struct {
 }
 
 // New creates a new CORS middleware.
-func New(m map[string]interface{}) (global.Middleware, int, error) {
+func New(m map[string]any) (global.Middleware, int, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, 0, err

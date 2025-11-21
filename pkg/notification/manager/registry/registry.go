@@ -28,7 +28,7 @@ import (
 
 // NewFunc is the function that notification managers
 // should register at init time.
-type NewFunc func(context.Context, map[string]interface{}) (notification.Manager, error)
+type NewFunc func(context.Context, map[string]any) (notification.Manager, error)
 
 // NewFuncs is a map containing all the registered notification managers.
 var NewFuncs = map[string]NewFunc{}
