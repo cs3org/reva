@@ -33,7 +33,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func shareScope(_ context.Context, scope *authpb.Scope, resource interface{}, logger *zerolog.Logger) (bool, error) {
+func shareScope(_ context.Context, scope *authpb.Scope, resource any, logger *zerolog.Logger) (bool, error) {
 	var share collaboration.Share
 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
 	if err != nil {

@@ -58,8 +58,8 @@ func TestPathMapping(t *testing.T) {
 			// Convert Ceph volume path to local mount point path
 			if tc.cephVolumePath != "/" {
 				// Remove the Ceph volume path prefix and add local mount point prefix
-				if strings.HasPrefix(userPath, tc.cephVolumePath) {
-					relativePath := strings.TrimPrefix(userPath, tc.cephVolumePath)
+				if after, ok := strings.CutPrefix(userPath, tc.cephVolumePath); ok {
+					relativePath := after
 					if !strings.HasPrefix(relativePath, "/") {
 						relativePath = "/" + relativePath
 					}

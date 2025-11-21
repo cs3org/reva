@@ -33,7 +33,7 @@ import (
 // NewUnary returns a new unary interceptor
 // that logs grpc calls.
 func NewUnary() grpc.UnaryServerInterceptor {
-	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	interceptor := func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		start := time.Now()
 		res, err := handler(ctx, req)
 		code := status.Code(err)
@@ -74,7 +74,7 @@ func NewUnary() grpc.UnaryServerInterceptor {
 // NewStream returns a new server stream interceptor
 // that adds trace information to the request.
 func NewStream() grpc.StreamServerInterceptor {
-	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	interceptor := func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := ss.Context()
 		start := time.Now()
 		err := handler(srv, ss)

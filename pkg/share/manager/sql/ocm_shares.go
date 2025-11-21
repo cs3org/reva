@@ -48,7 +48,7 @@ type mgr struct {
 	db *gorm.DB
 }
 
-func NewOCMShareManager(ctx context.Context, m map[string]interface{}) (share.Repository, error) {
+func NewOCMShareManager(ctx context.Context, m map[string]any) (share.Repository, error) {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("config", m).Msg("creating OCM share manager")
 	var c Config
@@ -425,8 +425,8 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm
 	return updatedShare, nil
 }
 
-func (m *mgr) translateUpdateFieldMask(share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (map[string]interface{}, *ocm.ReceivedShare, error) {
-	updates := make(map[string]interface{})
+func (m *mgr) translateUpdateFieldMask(share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (map[string]any, *ocm.ReceivedShare, error) {
+	updates := make(map[string]any)
 	newShare := proto.Clone(share).(*ocm.ReceivedShare)
 
 	for _, mask := range fieldMask.Paths {
@@ -576,15 +576,15 @@ func (m *mgr) deleteByKey(ctx context.Context, user *userpb.User, key *ocm.Share
 	return nil
 }
 
-func (m *mgr) queriesUpdatesOnShare(ctx context.Context, id *ocm.ShareId, f ...*ocm.UpdateOCMShareRequest_UpdateField) (map[string]interface{}, []func(*gorm.DB) error, error) {
-	var updates map[string]interface{}
+func (m *mgr) queriesUpdatesOnShare(ctx context.Context, id *ocm.ShareId, f ...*ocm.UpdateOCMShareRequest_UpdateField) (map[string]any, []func(*gorm.DB) error, error) {
+	var updates map[string]any
 	var accessMethodUpdates []func(*gorm.DB) error
 
 	for _, field := range f {
 		switch u := field.Field.(type) {
 		case *ocm.UpdateOCMShareRequest_UpdateField_Expiration:
 			if updates == nil {
-				updates = make(map[string]interface{})
+				updates = make(map[string]any)
 			}
 			updates["expiration"] = u.Expiration.Seconds
 		case *ocm.UpdateOCMShareRequest_UpdateField_AccessMethods:
@@ -620,7 +620,7 @@ func (m *mgr) updateShareByID(ctx context.Context, user *userpb.User, id *ocm.Sh
 	}
 
 	if updates == nil {
-		updates = make(map[string]interface{})
+		updates = make(map[string]any)
 	}
 
 	now := time.Now().Unix()

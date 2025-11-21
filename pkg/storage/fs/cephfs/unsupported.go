@@ -34,6 +34,6 @@ func init() {
 
 // New returns an implementation to of the storage.FS interface that talk to
 // a ceph filesystem.
-func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
+func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	return nil, errors.New("cephfs: revad was compiled without CephFS support")
 }

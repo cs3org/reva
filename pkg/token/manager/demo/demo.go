@@ -36,7 +36,7 @@ func init() {
 }
 
 // New returns a new token manager.
-func New(m map[string]interface{}) (token.Manager, error) {
+func New(m map[string]any) (token.Manager, error) {
 	mngr := manager{}
 	return &mngr, nil
 }

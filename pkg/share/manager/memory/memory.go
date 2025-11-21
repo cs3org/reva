@@ -45,7 +45,7 @@ func init() {
 }
 
 // New returns a new manager.
-func New(ctx context.Context, c map[string]interface{}) (share.Manager, error) {
+func New(ctx context.Context, c map[string]any) (share.Manager, error) {
 	state := map[string]map[*collaboration.ShareId]collaboration.ShareState{}
 	return &manager{
 		shareState: state,

@@ -138,7 +138,6 @@ func (s *svc) ListExistingPublicShares(ctx context.Context, req *link.ListPublic
 	sharesCh := make(chan *gateway.PublicShareResourceInfo, len(shares.Share))
 	pool := pond.NewPool(50)
 	for _, share := range shares.Share {
-		share := share
 
 		pool.SubmitErr(func() error {
 			key := resourceid.OwnCloudResourceIDWrap(share.ResourceId)

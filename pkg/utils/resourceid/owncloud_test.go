@@ -26,7 +26,7 @@ import (
 )
 
 func BenchmarkWrap(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = wrap("storageid", "opaqueid")
 	}
 }
@@ -50,7 +50,7 @@ func TestWrapResourceID(t *testing.T) {
 }
 
 func BenchmarkUnwrap(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = unwrap("storageid" + idDelimiter + "opaqueid")
 	}
 }

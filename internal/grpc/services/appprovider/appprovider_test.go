@@ -29,38 +29,38 @@ import (
 func Test_parseConfig(t *testing.T) {
 	tests := []struct {
 		name    string
-		m       map[string]interface{}
+		m       map[string]any
 		want    *config
-		wantErr interface{}
+		wantErr any
 	}{
 		{
 			name: "all configurations set for demo driver",
-			m: map[string]interface{}{
+			m: map[string]any{
 				"Driver":  "demo",
-				"Drivers": map[string]map[string]interface{}{"demo": {"a": "b", "c": "d"}},
+				"Drivers": map[string]map[string]any{"demo": {"a": "b", "c": "d"}},
 			},
 			want: &config{
 				Driver:  "demo",
-				Drivers: map[string]map[string]interface{}{"demo": {"a": "b", "c": "d"}},
+				Drivers: map[string]map[string]any{"demo": {"a": "b", "c": "d"}},
 			},
 			wantErr: nil,
 		},
 		{
 			name: "all configurations set for wopi driver",
 			// Note that the wopi driver is not loaded by this unit test, therefore those properties are just a non-validated example
-			m: map[string]interface{}{
+			m: map[string]any{
 				"Driver":  "wopi",
-				"Drivers": map[string]map[string]interface{}{"wopi": {"iop_secret": "very-secret", "wopi_url": "https://my.wopi:9871"}},
+				"Drivers": map[string]map[string]any{"wopi": {"iop_secret": "very-secret", "wopi_url": "https://my.wopi:9871"}},
 			},
 			want: &config{
 				Driver:  "wopi",
-				Drivers: map[string]map[string]interface{}{"wopi": {"iop_secret": "very-secret", "wopi_url": "https://my.wopi:9871"}},
+				Drivers: map[string]map[string]any{"wopi": {"iop_secret": "very-secret", "wopi_url": "https://my.wopi:9871"}},
 			},
 			wantErr: nil,
 		},
 		{
 			name: "wrong type of setting",
-			m:    map[string]interface{}{"Driver": 123, "NonExistentField": 456},
+			m:    map[string]any{"Driver": 123, "NonExistentField": 456},
 			want: nil,
 			wantErr: &mapstructure.Error{
 				Errors: []string{
@@ -70,10 +70,10 @@ func Test_parseConfig(t *testing.T) {
 		},
 		{
 			name: "undefined settings type",
-			m:    map[string]interface{}{"Not-Defined": 123},
+			m:    map[string]any{"Not-Defined": 123},
 			want: &config{
 				Driver:  "demo",
-				Drivers: map[string]map[string]interface{}(nil),
+				Drivers: map[string]map[string]any(nil),
 			},
 			wantErr: nil,
 		},

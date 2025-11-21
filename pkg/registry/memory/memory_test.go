@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	in    = make(map[string]interface{})
+	in    = make(map[string]any)
 	reg   = New(in)
 	node1 = node{
 		id:      uuid.New().String(),

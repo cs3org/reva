@@ -55,7 +55,7 @@ func (c *config) ApplyDefaults() {
 }
 
 // New returns a group manager implementation that reads a json file to provide group metadata.
-func New(ctx context.Context, m map[string]interface{}) (group.Manager, error) {
+func New(ctx context.Context, m map[string]any) (group.Manager, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

@@ -66,7 +66,7 @@ func init() {
 	global.Register("overleaf", New)
 }
 
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	var conf config
 	if err := cfg.Decode(m, &conf); err != nil {
 		return nil, err
@@ -187,7 +187,7 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tokenManager, err := jwt.New(map[string]interface{}{
+	tokenManager, err := jwt.New(map[string]any{
 		"secret": sharedconf.GetJWTSecret(s.conf.JWTSecret),
 	})
 	if err != nil {

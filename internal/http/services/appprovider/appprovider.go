@@ -76,7 +76,7 @@ type svc struct {
 }
 
 // New returns a new ocmd object.
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -286,7 +286,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 	}
 
 	js, err := json.Marshal(
-		map[string]interface{}{
+		map[string]any{
 			"file_id": spaces.EncodeResourceID(statRes.Info.Id),
 		},
 	)
@@ -363,7 +363,7 @@ func (s *svc) handleList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res := filterAppsByUserAgent(listRes.MimeTypes, r.UserAgent())
-	js, err := json.Marshal(map[string]interface{}{"mime-types": res})
+	js, err := json.Marshal(map[string]any{"mime-types": res})
 	if err != nil {
 		writeError(w, r, appErrorServerError, "error marshalling JSON response", err)
 		return
@@ -483,7 +483,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 
 	// recreate the structure to be able to marshal the AppUrl.Target as a string
 	js, err := json.Marshal(
-		map[string]interface{}{
+		map[string]any{
 			"app_url":         openRes.AppUrl.AppUrl,
 			"method":          openRes.AppUrl.Method,
 			"form_parameters": openRes.AppUrl.FormParameters,

@@ -37,7 +37,7 @@ Granted this is not a lot on it's own but when a user has tens or hundreds of pa
 then this method alone will cost a huge amount of time.
 */
 func BenchmarkEncodePath(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = encodePath("/some/path/Folder %^*(#1)")
 	}
 }

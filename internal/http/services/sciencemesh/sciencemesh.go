@@ -36,7 +36,7 @@ func init() {
 
 // New returns a new sciencemesh service, which serves as the backend for the ScienceMesh web app
 // to handle OCM related requests for local users.
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

@@ -81,7 +81,7 @@ func (s *service) Register(ss *grpc.Server) {
 }
 
 // New creates a new IsPublic Storage Provider service.
-func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -728,8 +728,8 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 }
 
 func (s *service) trimMountPrefix(fn string) (string, error) {
-	if strings.HasPrefix(fn, s.mountPath) {
-		return path.Join("/", strings.TrimPrefix(fn, s.mountPath)), nil
+	if after, ok := strings.CutPrefix(fn, s.mountPath); ok {
+		return path.Join("/", after), nil
 	}
 	return "", errors.Errorf("path=%q does not belong to this storage provider mount path=%q"+fn, s.mountPath)
 }

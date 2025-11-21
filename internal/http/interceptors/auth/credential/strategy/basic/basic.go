@@ -34,7 +34,7 @@ type strategy struct{}
 
 // New returns a new auth strategy that checks for basic auth.
 // See https://tools.ietf.org/html/rfc7617
-func New(m map[string]interface{}) (auth.CredentialStrategy, error) {
+func New(m map[string]any) (auth.CredentialStrategy, error) {
 	return &strategy{}, nil
 }
 

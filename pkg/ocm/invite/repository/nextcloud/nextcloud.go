@@ -74,7 +74,7 @@ type apiOCMUser struct {
 }
 
 // New returns a new invite manager object.
-func New(ctx context.Context, m map[string]interface{}) (invite.Repository, error) {
+func New(ctx context.Context, m map[string]any) (invite.Repository, error) {
 	config, err := parseConfig(m)
 	if err != nil {
 		return nil, errors.Wrap(err, "error parsing config for nextcloud invite repository")
@@ -94,7 +94,7 @@ func New(ctx context.Context, m map[string]interface{}) (invite.Repository, erro
 	return client, nil
 }
 
-func parseConfig(c map[string]interface{}) (*config, error) {
+func parseConfig(c map[string]any) (*config, error) {
 	var conf config
 	if err := mapstructure.Decode(c, &conf); err != nil {
 		return nil, err

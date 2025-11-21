@@ -87,7 +87,7 @@ var ldapDefaults = attributes{
 }
 
 // New returns a group manager implementation that connects to a LDAP server to provide group metadata.
-func New(ctx context.Context, m map[string]interface{}) (group.Manager, error) {
+func New(ctx context.Context, m map[string]any) (group.Manager, error) {
 	var c config
 	c.Schema = ldapDefaults
 	if err := cfg.Decode(m, &c); err != nil {

@@ -26,7 +26,7 @@ import (
 
 // NewFunc is the function that datatx implementations
 // should register at init time.
-type NewFunc func(context.Context, map[string]interface{}) (datatx.Manager, error)
+type NewFunc func(context.Context, map[string]any) (datatx.Manager, error)
 
 // NewFuncs is a map containing all the registered datatx backends.
 var NewFuncs = map[string]NewFunc{}

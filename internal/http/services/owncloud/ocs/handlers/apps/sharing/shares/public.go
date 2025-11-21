@@ -221,7 +221,7 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 	input := make(chan *link.PublicShare, len(res.Share))
 	output := make(chan *conversions.ShareData, len(res.Share))
 
-	for i := 0; i < workers; i++ {
+	for range workers {
 		wg.Add(1)
 		go func(ctx context.Context, client gateway.GatewayAPIClient, input chan *link.PublicShare, output chan *conversions.ShareData, wg *sync.WaitGroup) {
 			defer wg.Done()

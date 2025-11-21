@@ -61,7 +61,7 @@ type manager struct {
 	db   *sql.DB
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
+func parseConfig(m map[string]any) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
@@ -71,7 +71,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns an implementation of cache warmup that connects to the cbox share db and stats resources on EOS.
-func New(m map[string]interface{}) (cache.WarmupResourceInfo, error) {
+func New(m map[string]any) (cache.WarmupResourceInfo, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -95,7 +95,7 @@ func (m *manager) GetInfos() ([]*provider.ResourceInfo, error) {
 	}
 	defer rows.Close()
 
-	tokenManager, err := jwt.New(map[string]interface{}{
+	tokenManager, err := jwt.New(map[string]any{
 		"secret": m.conf.JWTSecret,
 	})
 	if err != nil {

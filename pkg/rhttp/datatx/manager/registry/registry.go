@@ -26,7 +26,7 @@ import (
 
 // NewFunc is the function that data transfer implementations
 // should register at init time.
-type NewFunc func(context.Context, map[string]interface{}) (datatx.DataTX, error)
+type NewFunc func(context.Context, map[string]any) (datatx.DataTX, error)
 
 // NewFuncs is a map containing all the registered data transfers.
 var NewFuncs = map[string]NewFunc{}

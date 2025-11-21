@@ -87,7 +87,7 @@ var ldapDefaults = attributes{
 }
 
 // New returns an auth manager implementation that connects to a LDAP server to validate the user.
-func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
+func New(ctx context.Context, m map[string]any) (auth.Manager, error) {
 	manager := &mgr{}
 	err := manager.Configure(m)
 	if err != nil {
@@ -110,7 +110,7 @@ func (c *config) ApplyDefaults() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
-func (am *mgr) Configure(m map[string]interface{}) error {
+func (am *mgr) Configure(m map[string]any) error {
 	var c config
 	c.Schema = ldapDefaults
 	if err := cfg.Decode(m, &c); err != nil {

@@ -26,7 +26,7 @@ import (
 
 // NewFunc is the function that share repositories
 // should register at init time.
-type NewFunc func(context.Context, map[string]interface{}) (share.Repository, error)
+type NewFunc func(context.Context, map[string]any) (share.Repository, error)
 
 // NewFuncs is a map containing all the registered share repositories.
 var NewFuncs = map[string]NewFunc{}

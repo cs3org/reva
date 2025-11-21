@@ -66,7 +66,7 @@ func (c *config) ApplyDefaults() {
 }
 
 // New returns a new invite manager object.
-func New(ctx context.Context, m map[string]interface{}) (invite.Repository, error) {
+func New(ctx context.Context, m map[string]any) (invite.Repository, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

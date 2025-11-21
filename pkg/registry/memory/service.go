@@ -21,13 +21,13 @@ package memory
 import "github.com/cs3org/reva/v3/pkg/registry"
 
 // NewService creates a new memory registry.Service.
-func NewService(name string, nodes []interface{}) registry.Service {
+func NewService(name string, nodes []any) registry.Service {
 	n := make([]node, 0)
-	for i := 0; i < len(nodes); i++ {
+	for i := range nodes {
 		n = append(n, node{
 			// explicit type conversions because types are not exported to prevent from circular dependencies until released.
-			id:      nodes[i].(map[string]interface{})["id"].(string),
-			address: nodes[i].(map[string]interface{})["address"].(string),
+			id:      nodes[i].(map[string]any)["id"].(string),
+			address: nodes[i].(map[string]any)["address"].(string),
 			//metadata: nodes[i].(map[string]interface{})["metadata"].(map[string]string),
 		})
 	}

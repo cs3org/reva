@@ -17,7 +17,7 @@ func TestPathSecurityValidation(t *testing.T) {
 	tempDir, cleanup := GetTestDir(t, "security-validation-test")
 	defer cleanup()
 
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true,
 	}
 

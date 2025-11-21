@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 
 	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -160,12 +161,7 @@ func (h *Handler) updateLanguage(ctx context.Context, lang string) error {
 }
 
 func (h *Handler) isLanguageAllowed(lang string) bool {
-	for _, l := range h.allowedLanguages {
-		if l == lang {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(h.allowedLanguages, lang)
 }
 
 func parseUpdateSelfRequest(r *http.Request) (updateSelfRequest, error) {

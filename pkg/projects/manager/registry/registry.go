@@ -26,7 +26,7 @@ import (
 
 // NewFunc is the function that the projects' catalogues implementations
 // should register at init time.
-type NewFunc func(context.Context, map[string]interface{}) (projects.Catalogue, error)
+type NewFunc func(context.Context, map[string]any) (projects.Catalogue, error)
 
 // NewFuncs is a map containing all the registered projects' catalogues.
 var NewFuncs = map[string]NewFunc{}

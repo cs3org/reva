@@ -22,6 +22,7 @@ package cephmount
 
 import (
 	"os"
+	"slices"
 	"testing"
 )
 
@@ -114,21 +115,9 @@ func TestThreadPoolPrivilegeVerification(t *testing.T) {
 	}
 
 	// Verify the result includes our custom nobody UID/GID in tests
-	foundNobodyUID := false
-	for _, uid := range privResult.TestedUIDs {
-		if uid == 99999 {
-			foundNobodyUID = true
-			break
-		}
-	}
+	foundNobodyUID := slices.Contains(privResult.TestedUIDs, 99999)
 
-	foundNobodyGID := false
-	for _, gid := range privResult.TestedGIDs {
-		if gid == 99999 {
-			foundNobodyGID = true
-			break
-		}
-	}
+	foundNobodyGID := slices.Contains(privResult.TestedGIDs, 99999)
 
 	if !foundNobodyUID {
 		t.Errorf("Expected custom nobody UID %d to be tested, tested UIDs: %v", 99999, privResult.TestedUIDs)
@@ -166,7 +155,7 @@ func TestCephMountPrivilegeVerificationIntegration(t *testing.T) {
 	}()
 
 	// Create cephmount filesystem - this should trigger privilege verification
-	config := map[string]interface{}{
+	config := map[string]any{
 		"nobody_uid":               65534,
 		"nobody_gid":               65534,
 		"testing_allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)

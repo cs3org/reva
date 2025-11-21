@@ -73,7 +73,7 @@ var _ = Describe("storage providers", func() {
 		ctx = context.Background()
 
 		// Add auth token
-		tokenManager, err := jwt.New(map[string]interface{}{"secret": "changemeplease"})
+		tokenManager, err := jwt.New(map[string]any{"secret": "changemeplease"})
 		Expect(err).ToNot(HaveOccurred())
 		scope, err := scope.AddOwnerScope(nil)
 		Expect(err).ToNot(HaveOccurred())

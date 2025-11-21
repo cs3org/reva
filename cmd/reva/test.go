@@ -45,7 +45,7 @@ var testCommand = func() *command {
 
 		start = time.Now()
 
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 
 			b, err := executeCommand(uploadCommand(), "-protocol", "simple", "/tmp/1MFile", "/home/testperf/file-"+strconv.FormatInt(int64(i), 10))
 
@@ -60,7 +60,7 @@ var testCommand = func() *command {
 
 		start = time.Now()
 
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 
 			b, err := executeCommand(downloadCommand(), "/home/testperf/file-"+strconv.FormatInt(int64(i), 10), "/tmp/1Mdeleteme")
 
@@ -75,7 +75,7 @@ var testCommand = func() *command {
 
 		start = time.Now()
 
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 
 			b, err := executeCommand(rmCommand(), "/home/testperf/file-"+strconv.FormatInt(int64(i), 10))
 

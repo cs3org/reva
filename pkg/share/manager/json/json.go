@@ -46,7 +46,7 @@ func init() {
 }
 
 // New returns a new mgr.
-func New(ctx context.Context, m map[string]interface{}) (share.Manager, error) {
+func New(ctx context.Context, m map[string]any) (share.Manager, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

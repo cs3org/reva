@@ -201,7 +201,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 	}
 
 	if _, ok := db[s.Id.GetOpaqueId()]; !ok {
-		db[s.Id.GetOpaqueId()] = map[string]interface{}{
+		db[s.Id.GetOpaqueId()] = map[string]any{
 			"share":    string(encShare),
 			"password": ps.Password,
 		}
@@ -278,9 +278,9 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 		return nil, err
 	}
 
-	data, ok := db[share.Id.OpaqueId].(map[string]interface{})
+	data, ok := db[share.Id.OpaqueId].(map[string]any)
 	if !ok {
-		data = map[string]interface{}{}
+		data = map[string]any{}
 	}
 
 	if ok && passwordChanged {
@@ -323,8 +323,8 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	}
 
 	for _, v := range db {
-		d := v.(map[string]interface{})["share"]
-		passDB := v.(map[string]interface{})["password"].(string)
+		d := v.(map[string]any)["share"]
+		passDB := v.(map[string]any)["password"].(string)
 
 		var ps link.PublicShare
 		if err := utils.UnmarshalJSONToProtoV1([]byte(d.(string)), &ps); err != nil {
@@ -364,7 +364,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 
 	for _, v := range db {
 		var local publicShare
-		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]interface{})["share"].(string)), local.PublicShare); err != nil {
+		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]any)["share"].(string)), local.PublicShare); err != nil {
 			return nil, err
 		}
 
@@ -403,7 +403,7 @@ func (m *manager) cleanupExpiredShares() {
 	db, _ := m.readDB()
 
 	for _, v := range db {
-		d := v.(map[string]interface{})["share"]
+		d := v.(map[string]any)["share"]
 
 		var ps link.PublicShare
 		_ = utils.UnmarshalJSONToProtoV1([]byte(d.(string)), &ps)
@@ -479,12 +479,12 @@ func (m *manager) getByToken(ctx context.Context, token string) (*link.PublicSha
 
 	for _, v := range db {
 		var local link.PublicShare
-		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]interface{})["share"].(string)), &local); err != nil {
+		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]any)["share"].(string)), &local); err != nil {
 			return nil, "", err
 		}
 
 		if local.Token == token {
-			passDB := v.(map[string]interface{})["password"].(string)
+			passDB := v.(map[string]any)["password"].(string)
 			return &local, passDB, nil
 		}
 	}
@@ -503,9 +503,9 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 	defer m.mutex.Unlock()
 
 	for _, v := range db {
-		passDB := v.(map[string]interface{})["password"].(string)
+		passDB := v.(map[string]any)["password"].(string)
 		var local link.PublicShare
-		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]interface{})["share"].(string)), &local); err != nil {
+		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]any)["share"].(string)), &local); err != nil {
 			return nil, err
 		}
 
@@ -538,8 +538,8 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 	return nil, errtypes.NotFound(fmt.Sprintf("share with token: `%v` not found", token))
 }
 
-func (m *manager) readDB() (map[string]interface{}, error) {
-	db := map[string]interface{}{}
+func (m *manager) readDB() (map[string]any, error) {
+	db := map[string]any{}
 	readBytes, err := os.ReadFile(m.file)
 	if err != nil {
 		return nil, err
@@ -550,7 +550,7 @@ func (m *manager) readDB() (map[string]interface{}, error) {
 	return db, nil
 }
 
-func (m *manager) writeDB(db map[string]interface{}) error {
+func (m *manager) writeDB(db map[string]any) error {
 	dbAsJSON, err := json.Marshal(db)
 	if err != nil {
 		return err

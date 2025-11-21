@@ -202,7 +202,7 @@ func excludeOptions(args []string) ([]string, bool) {
 	filtered := make([]string, 0, l)
 
 	var skipNextArg bool
-	for i := 0; i < len(args); i++ {
+	for i := range args {
 		if skipNextArg {
 			skipNextArg = false
 			continue

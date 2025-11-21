@@ -43,8 +43,8 @@ func init() {
 }
 
 type config struct {
-	Driver  string                            `docs:"localhome;The permission driver to be used." mapstructure:"driver"`
-	Drivers map[string]map[string]interface{} `docs:"url:pkg/permission/permission.go"            mapstructure:"drivers"`
+	Driver  string                    `docs:"localhome;The permission driver to be used." mapstructure:"driver"`
+	Drivers map[string]map[string]any `docs:"url:pkg/permission/permission.go"            mapstructure:"drivers"`
 }
 
 type service struct {
@@ -52,7 +52,7 @@ type service struct {
 }
 
 // New returns a new PermissionsServiceServer.
-func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

@@ -121,7 +121,7 @@ var _ = Describe("ocm share", func() {
 	)
 
 	JustBeforeEach(func() {
-		tokenManager, err := jwt.New(map[string]interface{}{"secret": "changemeplease"})
+		tokenManager, err := jwt.New(map[string]any{"secret": "changemeplease"})
 		Expect(err).ToNot(HaveOccurred())
 		ctxEinstein = ctxWithAuthToken(tokenManager, einstein)
 		ctxMarie = ctxWithAuthToken(tokenManager, marie)

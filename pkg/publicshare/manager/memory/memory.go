@@ -43,7 +43,7 @@ func init() {
 }
 
 // New returns a new memory manager.
-func New(_ context.Context, c map[string]interface{}) (publicshare.Manager, error) {
+func New(_ context.Context, c map[string]any) (publicshare.Manager, error) {
 	return &manager{
 		shares: sync.Map{},
 	}, nil
@@ -173,7 +173,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error) {
 	// TODO(refs) filter out expired shares
 	shares := []*link.PublicShare{}
-	m.shares.Range(func(k, v interface{}) bool {
+	m.shares.Range(func(k, v any) bool {
 		s := v.(*link.PublicShare)
 
 		// Skip if the share isn't created by the current user
@@ -234,7 +234,7 @@ func randString(n int) string {
 
 func (m *manager) getPublicShareByTokenID(ctx context.Context, targetID *link.PublicShareId) (*link.PublicShare, error) {
 	var found *link.PublicShare
-	m.shares.Range(func(k, v interface{}) bool {
+	m.shares.Range(func(k, v any) bool {
 		id := v.(*link.PublicShare).GetId()
 		if targetID.String() == id.String() {
 			found = v.(*link.PublicShare)

@@ -40,10 +40,10 @@ var UnaryInterceptors = map[string]NewUnaryInterceptor{}
 var StreamInterceptors = map[string]NewStreamInterceptor{}
 
 // NewUnaryInterceptor is the type that unary interceptors need to register.
-type NewUnaryInterceptor func(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error)
+type NewUnaryInterceptor func(m map[string]any) (grpc.UnaryServerInterceptor, int, error)
 
 // NewStreamInterceptor is the type that stream interceptors need to register.
-type NewStreamInterceptor func(m map[string]interface{}) (grpc.StreamServerInterceptor, int, error)
+type NewStreamInterceptor func(m map[string]any) (grpc.StreamServerInterceptor, int, error)
 
 // RegisterUnaryInterceptor registers a new unary interceptor.
 func RegisterUnaryInterceptor(name string, newFunc NewUnaryInterceptor) {

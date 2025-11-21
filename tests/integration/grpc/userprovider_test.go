@@ -56,7 +56,7 @@ var _ = Describe("user providers", func() {
 				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 		}
-		tokenManager, err := jwt.New(map[string]interface{}{"secret": "changemeplease"})
+		tokenManager, err := jwt.New(map[string]any{"secret": "changemeplease"})
 		Expect(err).ToNot(HaveOccurred())
 		scope, err := scope.AddOwnerScope(nil)
 		Expect(err).ToNot(HaveOccurred())

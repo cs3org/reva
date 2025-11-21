@@ -54,7 +54,7 @@ func TestChrootJail(t *testing.T) {
 
 	// Initialize cephmount with local mode and environment variable chroot
 	ctx := ContextWithTestLogger(t)
-	config := map[string]interface{}{
+	config := map[string]any{
 		"uploads":                  ".uploads",
 		"testing_allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}
@@ -128,7 +128,7 @@ func TestBasicFileOperations(t *testing.T) {
 
 	// Initialize cephmount
 	ctx := ContextWithTestLogger(t)
-	config := map[string]interface{}{
+	config := map[string]any{
 		"uploads":                  ".uploads",
 		"testing_allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}
@@ -188,7 +188,7 @@ func TestGetPathByIDNotSupported(t *testing.T) {
 
 	// Initialize cephmount without ceph configuration
 	ctx := ContextWithTestLogger(t)
-	config := map[string]interface{}{
+	config := map[string]any{
 		"uploads":                  ".uploads",
 		"testing_allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}

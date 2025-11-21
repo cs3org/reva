@@ -29,7 +29,7 @@ func TestGetPathByIDWithoutCeph(t *testing.T) {
 
 	// Initialize cephmount without ceph configuration
 	ctx := ContextWithTestLogger(t)
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}
 

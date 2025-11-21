@@ -20,7 +20,7 @@ func TestNoChrootDirectoryError(t *testing.T) {
 	}()
 
 	// Try to create filesystem without fstabentry and without environment variable
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true, // Local mode but no chroot source
 	}
 

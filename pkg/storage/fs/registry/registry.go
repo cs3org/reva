@@ -26,7 +26,7 @@ import (
 
 // NewFunc is the function that storage implementations
 // should register at init time.
-type NewFunc func(context.Context, map[string]interface{}) (storage.FS, error)
+type NewFunc func(context.Context, map[string]any) (storage.FS, error)
 
 // NewFuncs is a map containing all the registered storage backends.
 var NewFuncs = map[string]NewFunc{}

@@ -29,7 +29,7 @@ func TestIntegrationWithRealCeph(t *testing.T) {
 	t.Logf("Integration test using real Ceph mount from CEPHMOUNT_FSTAB_ENTRY: %s", fstabEntry)
 
 	// Create filesystem for integration testing (no overrides)
-	config := map[string]interface{}{
+	config := map[string]any{
 		// No testing_allow_local_mode - this should use the real Ceph mount
 	}
 	fs := CreateCephMountFSForIntegration(t, ctx, config)

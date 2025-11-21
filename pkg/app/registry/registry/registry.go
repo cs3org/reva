@@ -26,7 +26,7 @@ import (
 
 // NewFunc is the function that app provider implementations
 // should register to at init time.
-type NewFunc func(context.Context, map[string]interface{}) (app.Registry, error)
+type NewFunc func(context.Context, map[string]any) (app.Registry, error)
 
 // NewFuncs is a map containing all the registered app registry backends.
 var NewFuncs = map[string]NewFunc{}

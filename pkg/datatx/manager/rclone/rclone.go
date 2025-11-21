@@ -48,7 +48,7 @@ func init() {
 	registry.Register("rclone", New)
 }
 
-func (c *config) init(m map[string]interface{}) {
+func (c *config) init(m map[string]any) {
 	// set sane defaults
 	if c.JobStatusCheckInterval == 0 {
 		c.JobStatusCheckInterval = 2000
@@ -59,16 +59,16 @@ func (c *config) init(m map[string]interface{}) {
 }
 
 type config struct {
-	Endpoint                  string                            `mapstructure:"endpoint"`
-	AuthUser                  string                            `mapstructure:"auth_user"` // rclone basicauth user
-	AuthPass                  string                            `mapstructure:"auth_pass"` // rclone basicauth pass
-	AuthHeader                string                            `mapstructure:"auth_header"`
-	JobStatusCheckInterval    int                               `mapstructure:"job_status_check_interval"`
-	JobTimeout                int                               `mapstructure:"job_timeout"`
-	Insecure                  bool                              `mapstructure:"insecure"`
-	RemoveTransferJobOnCancel bool                              `mapstructure:"remove_transfer_job_on_cancel"`
-	StorageDriver             string                            `mapstructure:"storagedriver"`
-	StorageDrivers            map[string]map[string]interface{} `mapstructure:"storagedrivers"`
+	Endpoint                  string                    `mapstructure:"endpoint"`
+	AuthUser                  string                    `mapstructure:"auth_user"` // rclone basicauth user
+	AuthPass                  string                    `mapstructure:"auth_pass"` // rclone basicauth pass
+	AuthHeader                string                    `mapstructure:"auth_header"`
+	JobStatusCheckInterval    int                       `mapstructure:"job_status_check_interval"`
+	JobTimeout                int                       `mapstructure:"job_timeout"`
+	Insecure                  bool                      `mapstructure:"insecure"`
+	RemoveTransferJobOnCancel bool                      `mapstructure:"remove_transfer_job_on_cancel"`
+	StorageDriver             string                    `mapstructure:"storagedriver"`
+	StorageDrivers            map[string]map[string]any `mapstructure:"storagedrivers"`
 }
 
 type rclone struct {
@@ -78,10 +78,10 @@ type rclone struct {
 }
 
 type rcloneHTTPErrorRes struct {
-	Error  string                 `json:"error"`
-	Input  map[string]interface{} `json:"input"`
-	Path   string                 `json:"path"`
-	Status int                    `json:"status"`
+	Error  string         `json:"error"`
+	Input  map[string]any `json:"input"`
+	Path   string         `json:"path"`
+	Status int            `json:"status"`
 }
 
 // txEndStatuses final statuses that cannot be changed anymore.
@@ -103,7 +103,7 @@ type endpoint struct {
 }
 
 // New returns a new rclone driver.
-func New(ctx context.Context, m map[string]interface{}) (txdriver.Manager, error) {
+func New(ctx context.Context, m map[string]any) (txdriver.Manager, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -125,7 +125,7 @@ func New(ctx context.Context, m map[string]interface{}) (txdriver.Manager, error
 	}, nil
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
+func parseConfig(m map[string]any) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")

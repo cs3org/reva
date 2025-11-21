@@ -43,8 +43,8 @@ func init() {
 }
 
 type config struct {
-	Driver  string                            `mapstructure:"driver"`
-	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
+	Driver  string                    `mapstructure:"driver"`
+	Drivers map[string]map[string]any `mapstructure:"drivers"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -66,7 +66,7 @@ func getPreferencesManager(ctx context.Context, c *config) (preferences.Manager,
 }
 
 // New returns a new PreferencesServiceServer.
-func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

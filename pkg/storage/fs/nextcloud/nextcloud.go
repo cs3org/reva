@@ -95,7 +95,7 @@ type MDFromEFSS struct {
 
 // New returns an implementation to of the storage.FS interface that talks to
 // a Nextcloud instance over http.
-func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
+func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	var c StorageDriverConfig
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -465,12 +465,12 @@ func (nc *StorageDriver) ListGrants(ctx context.Context, ref *provider.Reference
 
 	grants := make([]*provider.Grant, len(respMapArr))
 	for i := 0; i < len(respMapArr); i++ {
-		granteeMap := respMapArr[i]["grantee"].(map[string]interface{})
-		granteeIDMap := granteeMap["Id"].(map[string]interface{})
-		granteeIDUserIDMap := granteeIDMap["UserId"].(map[string]interface{})
+		granteeMap := respMapArr[i]["grantee"].(map[string]any)
+		granteeIDMap := granteeMap["Id"].(map[string]any)
+		granteeIDUserIDMap := granteeIDMap["UserId"].(map[string]any)
 
 		// if (granteeMap["Id"])
-		permsMap := respMapArr[i]["permissions"].(map[string]interface{})
+		permsMap := respMapArr[i]["permissions"].(map[string]any)
 		grants[i] = &provider.Grant{
 			Grantee: &provider.Grantee{
 				Type: provider.GranteeType_GRANTEE_TYPE_USER, // FIXME: support groups too
