@@ -455,3 +455,12 @@ func handleOCMAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, ocmsh
 		ClientSecret: token,
 	})
 }
+
+func isSpacesRequest(ctx context.Context, ns string, r *http.Request) bool {
+	log := appctx.GetLogger(ctx)
+	ref := path.Join(ns, r.URL.Path)
+	head, _ := router.ShiftPath(ref)
+	_, _, _, isSpaces := spaces.DecodeResourceID(head)
+	log.Info().Msgf("FindMe - request to %s (%s) in ns %s is spaces? %t", head, ref, ns, isSpaces)
+	return isSpaces
+}
