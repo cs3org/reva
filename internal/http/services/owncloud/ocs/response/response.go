@@ -46,9 +46,9 @@ type Response struct {
 
 // Payload combines response metadata and data.
 type Payload struct {
-	XMLName struct{}    `json:"-"              xml:"ocs"`
-	Meta    Meta        `json:"meta"           xml:"meta"`
-	Data    interface{} `json:"data,omitempty" xml:"data,omitempty"`
+	XMLName struct{} `json:"-"              xml:"ocs"`
+	Meta    Meta     `json:"meta"           xml:"meta"`
+	Data    any      `json:"data,omitempty" xml:"data,omitempty"`
 }
 
 var (
@@ -127,7 +127,7 @@ var MetaNotFound = Meta{Status: "error", StatusCode: 998, Message: "Not Found"}
 var MetaUnknownError = Meta{Status: "error", StatusCode: 999, Message: "Unknown Error"}
 
 // WriteOCSSuccess handles writing successful ocs response data.
-func WriteOCSSuccess(w http.ResponseWriter, r *http.Request, d interface{}) {
+func WriteOCSSuccess(w http.ResponseWriter, r *http.Request, d any) {
 	WriteOCSData(w, r, MetaOK, d, nil)
 }
 
@@ -137,7 +137,7 @@ func WriteOCSError(w http.ResponseWriter, r *http.Request, c int, m string, err 
 }
 
 // WriteOCSData handles writing ocs data in json and xml.
-func WriteOCSData(w http.ResponseWriter, r *http.Request, m Meta, d interface{}, err error) {
+func WriteOCSData(w http.ResponseWriter, r *http.Request, m Meta, d any, err error) {
 	ctx := r.Context()
 	w.Header().Set("x-request-id", trace.Get(ctx))
 	WriteOCSResponse(w, r, Response{

@@ -43,7 +43,7 @@ func TestRealPathConversionWithGetMD(t *testing.T) {
 	}
 
 	// Create test filesystem with your fstab entry concept
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true,
 	}
 
@@ -295,7 +295,7 @@ func TestRealPathConversionWithListFolder(t *testing.T) {
 	t.Logf("   - %s (mode: 0666)", nestedFile)
 
 	// Create test filesystem
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true,
 	}
 

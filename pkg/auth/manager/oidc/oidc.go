@@ -97,7 +97,7 @@ func (c *config) ApplyDefaults() {
 }
 
 // New returns an auth manager implementation that verifies the oidc token and obtains the user claims.
-func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
+func New(ctx context.Context, m map[string]any) (auth.Manager, error) {
 	manager := &mgr{
 		providers: make(map[string]*oidc.Provider),
 	}
@@ -108,7 +108,7 @@ func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 	return manager, nil
 }
 
-func (am *mgr) Configure(m map[string]interface{}) error {
+func (am *mgr) Configure(m map[string]any) error {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return errors.Wrap(err, "oidc: error decoding config")

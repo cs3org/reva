@@ -64,7 +64,7 @@ type config struct {
 
 // New returns an implementation to of the app.Provider interface that
 // connects to an application in the backend.
-func New(ctx context.Context, m map[string]interface{}) (app.Provider, error) {
+func New(ctx context.Context, m map[string]any) (app.Provider, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

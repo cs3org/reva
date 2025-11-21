@@ -62,7 +62,7 @@ type Preference struct {
 }
 
 // New returns an instance of the cbox sql preferences manager.
-func New(ctx context.Context, m map[string]interface{}) (preferences.Manager, error) {
+func New(ctx context.Context, m map[string]any) (preferences.Manager, error) {
 	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

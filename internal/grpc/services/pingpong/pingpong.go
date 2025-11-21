@@ -51,7 +51,7 @@ func (c *conf) ApplyDefaults() {
 	}
 }
 
-func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	var c conf
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

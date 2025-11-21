@@ -29,7 +29,7 @@ import (
 // NewUnary returns a new unary interceptor that adds
 // the useragent to the context.
 func NewUnary() grpc.UnaryServerInterceptor {
-	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	interceptor := func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if md, ok := metadata.FromIncomingContext(ctx); ok {
 			if lst, ok := md[appctx.UserAgentHeader]; ok && len(lst) != 0 {
 				ctx = metadata.AppendToOutgoingContext(ctx, appctx.UserAgentHeader, lst[0])
@@ -43,7 +43,7 @@ func NewUnary() grpc.UnaryServerInterceptor {
 // NewStream returns a new server stream interceptor
 // that adds the user agent to the context.
 func NewStream() grpc.StreamServerInterceptor {
-	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	interceptor := func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := ss.Context()
 		if md, ok := metadata.FromIncomingContext(ctx); ok {
 			if lst, ok := md[appctx.UserAgentHeader]; ok && len(lst) != 0 {

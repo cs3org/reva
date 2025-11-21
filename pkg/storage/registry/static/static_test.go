@@ -35,10 +35,10 @@ var _ = Describe("Static", func() {
 
 	totalProviders, rootProviders, eosProviders := 33, 31, 29
 
-	handler, err := static.New(context.Background(), map[string]interface{}{
+	handler, err := static.New(context.Background(), map[string]any{
 		"home_provider": "/home",
-		"rules": map[string]interface{}{
-			"/home": map[string]interface{}{
+		"rules": map[string]any{
+			"/home": map[string]any{
 				"mapping": "/home-{{substr 0 1 .Id.OpaqueId}}",
 				"aliases": map[string]string{
 					"/home-[a-fg-o]": "home-00-home",
@@ -46,7 +46,7 @@ var _ = Describe("Static", func() {
 					"/home-[v-z]":    "home-02-home",
 				},
 			},
-			"/MyShares": map[string]interface{}{
+			"/MyShares": map[string]any{
 				"mapping": "/MyShares-{{substr 0 1 .Id.OpaqueId}}",
 				"aliases": map[string]string{
 					"/MyShares-[a-fg-o]": "home-00-shares",
@@ -54,28 +54,28 @@ var _ = Describe("Static", func() {
 					"/MyShares-[v-z]":    "home-02-shares",
 				},
 			},
-			"/eos/user/[a-fg-o]": map[string]interface{}{
+			"/eos/user/[a-fg-o]": map[string]any{
 				"address": "home-00-eos",
 			},
-			"/eos/user/[pqrstu]": map[string]interface{}{
+			"/eos/user/[pqrstu]": map[string]any{
 				"address": "home-01-eos",
 			},
-			"/eos/user/[v-z]": map[string]interface{}{
+			"/eos/user/[v-z]": map[string]any{
 				"address": "home-02-eos",
 			},
-			"/eos/project": map[string]interface{}{
+			"/eos/project": map[string]any{
 				"address": "project-00",
 			},
-			"/eos/media": map[string]interface{}{
+			"/eos/media": map[string]any{
 				"address": "media-00",
 			},
-			"123e4567-e89b-12d3-a456-426655440000": map[string]interface{}{
+			"123e4567-e89b-12d3-a456-426655440000": map[string]any{
 				"address": "home-00-home",
 			},
-			"123e4567-e89b-12d3-a456-426655440001": map[string]interface{}{
+			"123e4567-e89b-12d3-a456-426655440001": map[string]any{
 				"address": "home-01-home",
 			},
-			"/eos/": map[string]interface{}{
+			"/eos/": map[string]any{
 				"address": "unspecific-rule-that-should-never-been-hit",
 			},
 		},

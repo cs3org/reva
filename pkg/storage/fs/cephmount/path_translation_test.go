@@ -52,7 +52,7 @@ func TestPathTranslation(t *testing.T) {
 	ctx = appctx.ContextSetUser(ctx, user)
 
 	// Create filesystem with environment variable chroot
-	fs, err := New(ctx, map[string]interface{}{
+	fs, err := New(ctx, map[string]any{
 		"dataTx":                   false,
 		"ceph_cfg":                 "",
 		"testing_allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)

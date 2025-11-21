@@ -18,17 +18,15 @@
 
 package maps
 
+import "maps"
+
 // Merge returns a map containing the keys and values from both maps.
 // If the two maps share a set of keys, the result map will contain
 // only the value of the second map.
 func Merge[K comparable, T any](m, n map[K]T) map[K]T {
 	r := make(map[K]T, len(m)+len(n))
-	for k, v := range m {
-		r[k] = v
-	}
-	for k, v := range n {
-		r[k] = v
-	}
+	maps.Copy(r, m)
+	maps.Copy(r, n)
 	return r
 }
 

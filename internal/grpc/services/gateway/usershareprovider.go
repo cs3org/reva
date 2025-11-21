@@ -229,7 +229,6 @@ func (s *svc) ListExistingShares(ctx context.Context, req *collaboration.ListSha
 	pool := pond.NewPool(50)
 
 	for _, share := range shares.Shares {
-		share := share
 		pool.SubmitErr(func() error {
 			key := resourceid.OwnCloudResourceIDWrap(share.ResourceId)
 			var resourceInfo *provider.ResourceInfo
@@ -366,7 +365,6 @@ func (s *svc) ListExistingReceivedShares(ctx context.Context, req *collaboration
 	sharesCh := make(chan *gateway.ReceivedShareResourceInfo, len(rshares.Shares))
 	pool := pond.NewPool(50)
 	for _, rs := range rshares.Shares {
-		rs := rs
 		pool.SubmitErr(func() error {
 			if rs.State == collaboration.ShareState_SHARE_STATE_INVALID {
 				return errors.New("Invalid Share State")

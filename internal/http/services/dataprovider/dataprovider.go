@@ -37,12 +37,12 @@ func init() {
 }
 
 type config struct {
-	Prefix   string                            `docs:"data;The prefix to be used for this HTTP service"                                          mapstructure:"prefix"`
-	Driver   string                            `docs:"localhome;The storage driver to be used."                                                  mapstructure:"driver"`
-	Drivers  map[string]map[string]interface{} `docs:"url:pkg/storage/fs/localhome/localhome.go;The configuration for the storage driver"        mapstructure:"drivers"`
-	DataTXs  map[string]map[string]interface{} `docs:"url:pkg/rhttp/datatx/manager/simple/simple.go;The configuration for the data tx protocols" mapstructure:"data_txs"`
-	Timeout  int64                             `mapstructure:"timeout"`
-	Insecure bool                              `docs:"false;Whether to skip certificate checks when sending requests."                           mapstructure:"insecure"`
+	Prefix   string                    `docs:"data;The prefix to be used for this HTTP service"                                          mapstructure:"prefix"`
+	Driver   string                    `docs:"localhome;The storage driver to be used."                                                  mapstructure:"driver"`
+	Drivers  map[string]map[string]any `docs:"url:pkg/storage/fs/localhome/localhome.go;The configuration for the storage driver"        mapstructure:"drivers"`
+	DataTXs  map[string]map[string]any `docs:"url:pkg/rhttp/datatx/manager/simple/simple.go;The configuration for the data tx protocols" mapstructure:"data_txs"`
+	Timeout  int64                     `mapstructure:"timeout"`
+	Insecure bool                      `docs:"false;Whether to skip certificate checks when sending requests."                           mapstructure:"insecure"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -62,7 +62,7 @@ type svc struct {
 }
 
 // New returns a new datasvc.
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -97,12 +97,12 @@ func getFS(ctx context.Context, c *config) (storage.FS, error) {
 
 func getDataTXs(ctx context.Context, c *config, fs storage.FS) (map[string]http.Handler, error) {
 	if c.DataTXs == nil {
-		c.DataTXs = make(map[string]map[string]interface{})
+		c.DataTXs = make(map[string]map[string]any)
 	}
 	if len(c.DataTXs) == 0 {
-		c.DataTXs["simple"] = make(map[string]interface{})
-		c.DataTXs["spaces"] = make(map[string]interface{})
-		c.DataTXs["tus"] = make(map[string]interface{})
+		c.DataTXs["simple"] = make(map[string]any)
+		c.DataTXs["spaces"] = make(map[string]any)
+		c.DataTXs["tus"] = make(map[string]any)
 	}
 
 	txs := make(map[string]http.Handler)

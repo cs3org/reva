@@ -142,7 +142,6 @@ func (s *svc) ListExistingOCMShares(ctx context.Context, req *ocm.ListOCMSharesR
 	pool := pond.NewPool(50)
 
 	for _, share := range shares.Shares {
-		share := share
 		pool.SubmitErr(func() error {
 			key := resourceid.OwnCloudResourceIDWrap(share.ResourceId)
 			var resourceInfo *provider.ResourceInfo

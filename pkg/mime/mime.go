@@ -68,7 +68,7 @@ func Detect(isDir bool, fn string) string {
 func GetFileExts(mime string) []string {
 	var found []string
 	// first look in our cache
-	mimes.Range(func(e, m interface{}) bool {
+	mimes.Range(func(e, m any) bool {
 		if m.(string) == mime {
 			found = append(found, e.(string))
 		}

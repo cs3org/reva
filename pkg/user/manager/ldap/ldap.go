@@ -89,7 +89,7 @@ var ldapDefaults = attributes{
 	GIDNumber:   "gidNumber",
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
+func parseConfig(m map[string]any) (*config, error) {
 	c := config{
 		Schema: ldapDefaults,
 	}
@@ -115,7 +115,7 @@ func (c *config) ApplyDefaults() {
 }
 
 // New returns a user manager implementation that connects to a LDAP server to provide user metadata.
-func New(ctx context.Context, m map[string]interface{}) (user.Manager, error) {
+func New(ctx context.Context, m map[string]any) (user.Manager, error) {
 	mgr := &manager{}
 	err := mgr.Configure(m)
 	if err != nil {
@@ -124,7 +124,7 @@ func New(ctx context.Context, m map[string]interface{}) (user.Manager, error) {
 	return mgr, nil
 }
 
-func (m *manager) Configure(ml map[string]interface{}) error {
+func (m *manager) Configure(ml map[string]any) error {
 	var c config
 	c.Schema = ldapDefaults
 	if err := cfg.Decode(ml, &c); err != nil {

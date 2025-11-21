@@ -53,7 +53,7 @@ type mgr struct {
 }
 
 // New returns an instance of the cbox sql favorites manager.
-func New(m map[string]interface{}) (favorite.Manager, error) {
+func New(m map[string]any) (favorite.Manager, error) {
 	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -108,7 +108,7 @@ func (m *mgr) SetFavorite(ctx context.Context, userID *user.UserId, resourceInfo
 	}
 
 	query = `INSERT INTO cbox_metadata SET item_type=?, uid=?, fileid_prefix=?, fileid=?, tag_key="fav"`
-	vals := []interface{}{utils.ResourceTypeToItemInt(resourceInfo.Type), user.Id.OpaqueId, resourceInfo.Id.StorageId, resourceInfo.Id.OpaqueId}
+	vals := []any{utils.ResourceTypeToItemInt(resourceInfo.Type), user.Id.OpaqueId, resourceInfo.Id.StorageId, resourceInfo.Id.OpaqueId}
 	stmt, err := m.db.Prepare(query)
 	if err != nil {
 		return err

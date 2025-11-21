@@ -56,7 +56,7 @@ func (c *config) ApplyDefaults() {
 }
 
 // New returns a json storage driver.
-func New(ctx context.Context, m map[string]interface{}) (repository.Repository, error) {
+func New(ctx context.Context, m map[string]any) (repository.Repository, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

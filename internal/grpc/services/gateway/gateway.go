@@ -67,18 +67,18 @@ type config struct {
 	TransferExpires               int64  `mapstructure:"transfer_expires"`
 	TokenManager                  string `mapstructure:"token_manager"`
 	// ShareFolder is the location where to create shares in the recipient's storage provider.
-	ShareFolder              string                            `mapstructure:"share_folder"`
-	DataTransfersFolder      string                            `mapstructure:"data_transfers_folder"`
-	HomeMapping              string                            `mapstructure:"home_mapping"`
-	TokenManagers            map[string]map[string]interface{} `mapstructure:"token_managers"`
-	EtagCacheTTL             int                               `mapstructure:"etag_cache_ttl"`
-	AllowedUserAgents        map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
-	CreateHomeCacheTTL       int                               `mapstructure:"create_home_cache_ttl"`
-	ResourceInfoCacheDriver  string                            `mapstructure:"resource_info_cache_type"`
-	ResourceInfoCacheTTL     int                               `mapstructure:"resource_info_cache_ttl"`
-	ResourceInfoCacheDrivers map[string]map[string]interface{} `mapstructure:"resource_info_caches"`
-	HomeLayout               string                            `mapstructure:"home_layout"`
-	OCMEnabled               bool                              `mapstructure:"ocm_enabled"`
+	ShareFolder              string                    `mapstructure:"share_folder"`
+	DataTransfersFolder      string                    `mapstructure:"data_transfers_folder"`
+	HomeMapping              string                    `mapstructure:"home_mapping"`
+	TokenManagers            map[string]map[string]any `mapstructure:"token_managers"`
+	EtagCacheTTL             int                       `mapstructure:"etag_cache_ttl"`
+	AllowedUserAgents        map[string][]string       `mapstructure:"allowed_user_agents"` // map[path][]user-agent
+	CreateHomeCacheTTL       int                       `mapstructure:"create_home_cache_ttl"`
+	ResourceInfoCacheDriver  string                    `mapstructure:"resource_info_cache_type"`
+	ResourceInfoCacheTTL     int                       `mapstructure:"resource_info_cache_ttl"`
+	ResourceInfoCacheDrivers map[string]map[string]any `mapstructure:"resource_info_caches"`
+	HomeLayout               string                    `mapstructure:"home_layout"`
+	OCMEnabled               bool                      `mapstructure:"ocm_enabled"`
 }
 
 // sets defaults.
@@ -140,7 +140,7 @@ type svc struct {
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
 // The gateway is responsible for high-level controls: rate-limiting, coordination between svcs
 // like sharing and storage acls, asynchronous transactions, ...
-func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -230,7 +230,7 @@ func (s *svc) UnprotectedEndpoints() []string {
 	}
 }
 
-func getTokenManager(manager string, m map[string]map[string]interface{}) (token.Manager, error) {
+func getTokenManager(manager string, m map[string]map[string]any) (token.Manager, error) {
 	if f, ok := registry.NewFuncs[manager]; ok {
 		return f(m[manager])
 	}

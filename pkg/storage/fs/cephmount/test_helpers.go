@@ -2,6 +2,7 @@ package cephmount
 
 import (
 	"context"
+	"maps"
 	"os"
 	"os/user"
 	"strconv"
@@ -14,12 +15,10 @@ import (
 // CreateCephMountFSForTesting creates an cephmountfs instance for unit tests.
 // Unit tests use synthetic configuration and temporary directories.
 // The CEPHMOUNT_FSTAB_ENTRY environment variable is ignored for unit tests.
-func CreateCephMountFSForTesting(t *testing.T, ctx context.Context, config map[string]interface{}, cephVolumePath string, localMountPoint string) *cephmountfs {
+func CreateCephMountFSForTesting(t *testing.T, ctx context.Context, config map[string]any, cephVolumePath string, localMountPoint string) *cephmountfs {
 	// Create a copy of the config to avoid modifying the original
-	testConfig := make(map[string]interface{})
-	for k, v := range config {
-		testConfig[k] = v
-	}
+	testConfig := make(map[string]any)
+	maps.Copy(testConfig, config)
 	// Unit tests always use local mode and ignore real fstab entries
 	testConfig["testing_allow_local_mode"] = true
 	// Don't set fstabentry for unit tests - they should be isolated
@@ -71,7 +70,7 @@ func GetCurrentTestUser(t *testing.T) *userv1beta1.User {
 	}
 }
 
-func NewForTesting(t *testing.T, ctx context.Context, config map[string]interface{}, cephVolumePath string, localMountPoint string) *cephmountfs {
+func NewForTesting(t *testing.T, ctx context.Context, config map[string]any, cephVolumePath string, localMountPoint string) *cephmountfs {
 	var originalChrootDir string
 	var needsRestore bool
 
@@ -95,10 +94,8 @@ func NewForTesting(t *testing.T, ctx context.Context, config map[string]interfac
 	}()
 
 	// Build test configuration
-	testConfig := make(map[string]interface{})
-	for k, v := range config {
-		testConfig[k] = v
-	}
+	testConfig := make(map[string]any)
+	maps.Copy(testConfig, config)
 
 	// For unit tests, enable local mode
 	if localMountPoint != "" {
@@ -122,12 +119,10 @@ func NewForTesting(t *testing.T, ctx context.Context, config map[string]interfac
 
 // CreateCephMountFSForIntegration creates an cephmountfs instance for integration tests.
 // Integration tests use the real fstab entry from CEPHMOUNT_FSTAB_ENTRY environment variable.
-func CreateCephMountFSForIntegration(t *testing.T, ctx context.Context, config map[string]interface{}) *cephmountfs {
+func CreateCephMountFSForIntegration(t *testing.T, ctx context.Context, config map[string]any) *cephmountfs {
 	// Create a copy of the config to avoid modifying the original
-	testConfig := make(map[string]interface{})
-	for k, v := range config {
-		testConfig[k] = v
-	}
+	testConfig := make(map[string]any)
+	maps.Copy(testConfig, config)
 
 	// Integration tests require a real fstab entry
 	if config == nil || config["fstabentry"] == nil {

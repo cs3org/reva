@@ -48,7 +48,7 @@ type mgr struct {
 }
 
 // NewMysql returns an instance of the sql notifications manager.
-func NewMysql(ctx context.Context, m map[string]interface{}) (notification.Manager, error) {
+func NewMysql(ctx context.Context, m map[string]any) (notification.Manager, error) {
 	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

@@ -36,7 +36,7 @@ type strategy struct {
 }
 
 // New returns a new token writer strategy that stores token in a header.
-func New(m map[string]interface{}) (auth.TokenWriter, error) {
+func New(m map[string]any) (auth.TokenWriter, error) {
 	return &strategy{header: appctx.TokenHeader}, nil
 }
 

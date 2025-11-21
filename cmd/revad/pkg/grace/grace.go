@@ -182,7 +182,7 @@ func (w *Watcher) WritePID() error {
 
 	// If we get here, then the pidfile didn't exist or we are in graceful reload and thus we overwrite
 	// or the pid in it doesn't belong to the user running this app.
-	err := os.WriteFile(w.pidFile, []byte(fmt.Sprintf("%d", os.Getpid())), 0664)
+	err := os.WriteFile(w.pidFile, fmt.Appendf(nil, "%d", os.Getpid()), 0664)
 	if err != nil {
 		return err
 	}
@@ -220,9 +220,9 @@ func (i *inherited) Addr() net.Addr {
 func inheritedListeners() map[string]net.Listener {
 	lns := make(map[string]net.Listener)
 	for _, val := range os.Environ() {
-		if strings.HasPrefix(val, revaEnvPrefix) {
+		if after, ok := strings.CutPrefix(val, revaEnvPrefix); ok {
 			// env variable is of type REVA_FD_<svcname>=<fd>
-			env := strings.TrimPrefix(val, revaEnvPrefix)
+			env := after
 			s := strings.Split(env, "=")
 			if len(s) != 2 {
 				continue

@@ -20,6 +20,7 @@ package share
 
 import (
 	"context"
+	"slices"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -100,10 +101,8 @@ func IsGrantedToUser(share *collaboration.Share, user *userv1beta1.User) bool {
 	}
 	if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 		// check if any of the user's group is the grantee of the share
-		for _, g := range user.Groups {
-			if g == share.Grantee.GetGroupId().OpaqueId {
-				return true
-			}
+		if slices.Contains(user.Groups, share.Grantee.GetGroupId().OpaqueId) {
+			return true
 		}
 	}
 	return false

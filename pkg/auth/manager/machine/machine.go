@@ -20,6 +20,7 @@ package machine
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
@@ -57,13 +58,13 @@ func (m *manager) ApplyDefaults() {
 }
 
 // Configure parses the map conf.
-func (m *manager) Configure(conf map[string]interface{}) error {
+func (m *manager) Configure(conf map[string]any) error {
 	err := cfg.Decode(conf, m)
 	return errors.Wrap(err, "machine: error decoding config")
 }
 
 // New creates a new manager for the 'machine' authentication.
-func New(ctx context.Context, conf map[string]interface{}) (auth.Manager, error) {
+func New(ctx context.Context, conf map[string]any) (auth.Manager, error) {
 	m := &manager{}
 	err := m.Configure(conf)
 	if err != nil {
@@ -111,18 +112,9 @@ func (m *manager) Authenticate(ctx context.Context, user, secret string) (*userp
 	return userResponse.GetUser(), scope, nil
 }
 
-func contains(lst []string, s string) bool {
-	for _, e := range lst {
-		if e == s {
-			return true
-		}
-	}
-	return false
-}
-
 func parseUser(user string) (string, string) {
 	s := strings.SplitN(user, ":", 2)
-	if len(s) == 2 && contains(claims, s[0]) {
+	if len(s) == 2 && slices.Contains(claims, s[0]) {
 		return s[0], s[1]
 	}
 	return "username", user

@@ -48,7 +48,7 @@ func TestNobodyUserFallback(t *testing.T) {
 	customNobodyUID := 99999
 	customNobodyGID := 99999
 
-	config := map[string]interface{}{
+	config := map[string]any{
 		"nobody_uid":               customNobodyUID,
 		"nobody_gid":               customNobodyGID,
 		"testing_allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
@@ -99,7 +99,7 @@ func TestNobodyUserMapping(t *testing.T) {
 	}()
 
 	// Create cephmount filesystem with default configuration
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}
 
@@ -210,7 +210,7 @@ func TestNobodyUserOperations(t *testing.T) {
 	}()
 
 	// Create cephmount filesystem
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}
 
