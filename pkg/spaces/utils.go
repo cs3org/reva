@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -84,35 +85,61 @@ func EncodeOCMShareID(ShareID string) string {
 // If space_id or opaque_id is not set on the ResourceId,
 // then this part will not be encoded
 func EncodeResourceID(r *provider.ResourceId) string {
+	var encoded string
 	if r.SpaceId == "" {
-		return fmt.Sprintf("%s!%s", r.StorageId, r.OpaqueId)
+		encoded = fmt.Sprintf("%s!%s", r.StorageId, r.OpaqueId)
+		fmt.Fprintf(os.Stderr, "[DEBUG] EncodeResourceID: storage=%q, space=(empty), opaque=%q -> %q\n", 
+			r.StorageId, r.OpaqueId, encoded)
+		fmt.Fprintf(os.Stderr, "[DEBUG] EncodeResourceID STACK (space empty):\n")
+		buf := make([]byte, 4096)
+		n := runtime.Stack(buf, false)
+		fmt.Fprintf(os.Stderr, "%s\n", buf[:n])
 	} else if r.OpaqueId == "" {
-		return fmt.Sprintf("%s$%s", r.StorageId, r.SpaceId)
+		encoded = fmt.Sprintf("%s$%s", r.StorageId, r.SpaceId)
+		fmt.Fprintf(os.Stderr, "[DEBUG] EncodeResourceID: storage=%q, space=%q, opaque=(empty) -> %q\n", 
+			r.StorageId, r.SpaceId, encoded)
+	} else {
+		encoded = fmt.Sprintf("%s$%s!%s", r.StorageId, r.SpaceId, r.OpaqueId)
+		fmt.Fprintf(os.Stderr, "[DEBUG] EncodeResourceID: storage=%q, space=%q, opaque=%q -> %q\n", 
+			r.StorageId, r.SpaceId, r.OpaqueId, encoded)
 	}
-	return fmt.Sprintf("%s$%s!%s", r.StorageId, r.SpaceId, r.OpaqueId)
+	return encoded
 }
 
 // Decode resourceID returns the components of the space ID.
 // The resource ID is expected to be in the form of <storage_id>$base32(<path>)!<item_id>.
 func DecodeResourceID(raw string) (storageID, spacePath, itemID string, ok bool) {
 	// The input is expected to be in the form of <storage_id>$base32(<path>)!<item_id>
+	fmt.Fprintf(os.Stderr, "[DEBUG] DecodeResourceID: raw=%q\n", raw)
+	
 	s := strings.SplitN(raw, "!", 2)
 	if len(s) != 2 {
+		fmt.Fprintf(os.Stderr, "[DEBUG] DecodeResourceID: FAILED split (expected '!') raw=%q\n", raw)
 		return "", "", "", false
 	}
 	itemID = s[1]
 	storageID, spacePath, ok = DecodeStorageSpaceID(s[0])
+	
+	fmt.Fprintf(os.Stderr, "[DEBUG] DecodeResourceID: storageID=%q, spacePath=%q, itemID=%q, ok=%t\n",
+		storageID, spacePath, itemID, ok)
+	
 	return storageID, spacePath, itemID, ok
 }
 
 // ParseResourceID converts the encoded resource id in a CS3API ResourceId.
 func ParseResourceID(raw string) (*provider.ResourceId, bool) {
+	fmt.Fprintf(os.Stderr, "[DEBUG] ParseResourceID: raw=%q\n", raw)
+	
 	storageID, path, itemID, ok := DecodeResourceID(raw)
 	if !ok {
+		fmt.Fprintf(os.Stderr, "[DEBUG] ParseResourceID: FAILED decode raw=%q\n", raw)
 		return nil, false
 	}
 
 	spaceID := PathToSpaceID(path)
+
+	fmt.Fprintf(os.Stderr, "[DEBUG] ParseResourceID: storageID=%q, spaceID=%q (from path=%q), itemID=%q\n",
+		storageID, spaceID, path, itemID)
 
 	return &provider.ResourceId{
 		StorageId: storageID,
@@ -127,11 +154,19 @@ func ParseResourceID(raw string) (*provider.ResourceId, bool) {
 // If no path or space_id is set, an error will be returned
 func EncodeResourceInfo(info *provider.ResourceInfo) (spaceId string, err error) {
 	if info.Id.SpaceId != "" {
-		return fmt.Sprintf("%s$%s!%s", info.Id.StorageId, info.Id.SpaceId, info.Id.OpaqueId), nil
+		result := fmt.Sprintf("%s$%s!%s", info.Id.StorageId, info.Id.SpaceId, info.Id.OpaqueId)
+		fmt.Fprintf(os.Stderr, "[DEBUG] EncodeResourceInfo: using existing spaceID=%q -> %q\n",
+			info.Id.SpaceId, result)
+		return result, nil
 	} else if info.Path != "" {
 		encodedPath := PathToSpaceID(info.Path)
-		return fmt.Sprintf("%s$%s!%s", info.Id.StorageId, encodedPath, info.Id.OpaqueId), nil
+		result := fmt.Sprintf("%s$%s!%s", info.Id.StorageId, encodedPath, info.Id.OpaqueId)
+		fmt.Fprintf(os.Stderr, "[DEBUG] EncodeResourceInfo: FALLBACK deriving spaceID from path=%q -> spaceID=%q -> %q\n",
+			info.Path, encodedPath, result)
+		return result, nil
 	} else {
+		fmt.Fprintf(os.Stderr, "[DEBUG] EncodeResourceInfo: FAILED no spaceID or path storageID=%q opaqueID=%q\n",
+			info.Id.StorageId, info.Id.OpaqueId)
 		return "", errors.New("resourceInfo must contain a spaceID or a path")
 	}
 }
@@ -142,11 +177,23 @@ func EncodeResourceInfo(info *provider.ResourceInfo) (spaceId string, err error)
 // of this full path will be returned.
 func PathToSpaceID(path string) string {
 	paths := strings.Split(path, string(os.PathSeparator))
-	if len(paths) < spacesLevel(path) {
-		return EncodeSpaceID(path)
+	level := spacesLevel(path)
+	var spacesPath string
+	var spaceID string
+	
+	if len(paths) < level {
+		spacesPath = path
+		spaceID = EncodeSpaceID(path)
+	} else {
+		spacesPath = strings.Join(paths[:level], string(os.PathSeparator))
+		spaceID = EncodeSpaceID(spacesPath)
 	}
-	spacesPath := strings.Join(paths[:spacesLevel(path)], string(os.PathSeparator))
-	return EncodeSpaceID(spacesPath)
+	
+	// Debug logging
+	fmt.Fprintf(os.Stderr, "[DEBUG] PathToSpaceID: input=%q, level=%d, paths=%d, spacesPath=%q, spaceID=%q\n", 
+		path, level, len(paths), spacesPath, spaceID)
+	
+	return spaceID
 }
 
 // TODO: for now, we hardcoded this. But this will not be necessary anymore

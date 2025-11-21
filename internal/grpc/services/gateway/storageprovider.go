@@ -477,6 +477,13 @@ func (s *svc) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provide
 
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
 	log := appctx.GetLogger(ctx)
+	
+	log.Debug().
+		Str("path", req.Ref.GetPath()).
+		Str("storage_id", req.Ref.GetResourceId().GetStorageId()).
+		Str("opaque_id", req.Ref.GetResourceId().GetOpaqueId()).
+		Msg("gateway: Stat request")
+	
 	providers, err := s.findProviders(ctx, req.Ref)
 	if err != nil {
 		return &provider.StatResponse{
@@ -485,8 +492,17 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	}
 	providers = getUniqueProviders(providers)
 
+	log.Debug().
+		Int("num_providers", len(providers)).
+		Msg("gateway: found storage providers")
+
 	resPath := req.Ref.GetPath()
 	if len(providers) == 1 && (utils.IsRelativeReference(req.Ref) || resPath == "" || strings.HasPrefix(resPath, providers[0].ProviderPath)) {
+		log.Debug().
+			Str("provider_address", providers[0].Address).
+			Str("provider_path", providers[0].ProviderPath).
+			Msg("gateway: routing Stat to storage provider")
+		
 		c, err := s.getStorageProviderClient(ctx, providers[0])
 		if err != nil {
 			return &provider.StatResponse{
@@ -498,6 +514,14 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			log.Error().Err(err).Msg("Failed to stat " + resPath)
 			return rsp, err
 		}
+		
+		log.Debug().
+			Str("storage_id", rsp.Info.Id.StorageId).
+			Str("space_id", rsp.Info.Id.SpaceId).
+			Str("opaque_id", rsp.Info.Id.OpaqueId).
+			Str("path", rsp.Info.Path).
+			Msg("gateway: Stat response from storage provider")
+		
 		return rsp, nil
 	}
 

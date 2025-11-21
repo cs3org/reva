@@ -50,17 +50,18 @@ import (
 
 // Config holds the configuration details for the local fs.
 type Config struct {
-	Root                string `mapstructure:"root"`
-	DisableHome         bool   `mapstructure:"disable_home"`
-	UserLayout          string `mapstructure:"user_layout"`
-	ShareFolder         string `mapstructure:"share_folder"`
-	DataTransfersFolder string `mapstructure:"data_transfers_folder"`
-	Uploads             string `mapstructure:"uploads"`
-	DataDirectory       string `mapstructure:"data_directory"`
-	RecycleBin          string `mapstructure:"recycle_bin"`
-	Versions            string `mapstructure:"versions"`
-	Shadow              string `mapstructure:"shadow"`
-	References          string `mapstructure:"references"`
+	Root                 string `mapstructure:"root"`
+	DisableHome          bool   `mapstructure:"disable_home"`
+	UserLayout           string `mapstructure:"user_layout"`
+	VirtualHomeTemplate  string `mapstructure:"virtual_home_template"`
+	ShareFolder          string `mapstructure:"share_folder"`
+	DataTransfersFolder  string `mapstructure:"data_transfers_folder"`
+	Uploads              string `mapstructure:"uploads"`
+	DataDirectory        string `mapstructure:"data_directory"`
+	RecycleBin           string `mapstructure:"recycle_bin"`
+	Versions             string `mapstructure:"versions"`
+	Shadow               string `mapstructure:"shadow"`
+	References           string `mapstructure:"references"`
 }
 
 func (c *Config) ApplyDefaults() {
@@ -161,11 +162,31 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 	return u, nil
 }
 
+// getVirtualHome returns the virtual home path for the current user when
+// VirtualHomeTemplate is configured (e.g., "/home/einstein").
+func (fs *localfs) getVirtualHome(ctx context.Context) (string, error) {
+	if fs.conf.VirtualHomeTemplate == "" {
+		return "", nil
+	}
+	u, err := getUser(ctx)
+	if err != nil {
+		return "", err
+	}
+	return templates.WithUser(u, fs.conf.VirtualHomeTemplate), nil
+}
+
 func (fs *localfs) wrap(ctx context.Context, p string) string {
 	log := appctx.GetLogger(ctx)
-	// This is to prevent path traversal.
-	// With this p can't break out of its parent folder
+	// Prevent path traversal attacks
 	p = path.Join("/", p)
+	
+	// Strip virtual home prefix to map virtual namespace to flat per-user storage.
+	// Example: /home/einstein/file.txt -> /file.txt (stored as data/einstein/file.txt)
+	if virtualHome, err := fs.getVirtualHome(ctx); err == nil && virtualHome != "" {
+		p = fs.stripVirtualHomePrefix(p, virtualHome)
+	}
+	
+	// Apply user layout and data directory
 	var internal string
 	if !fs.conf.DisableHome {
 		layout, err := fs.GetHome(ctx)
@@ -178,6 +199,62 @@ func (fs *localfs) wrap(ctx context.Context, p string) string {
 	}
 	log.Debug().Str("old", p).Str("wrapped", internal).Msg("localfs: wrap")
 	return internal
+}
+
+// stripVirtualHomePrefix removes the virtual namespace prefix from incoming paths.
+// Handles multiple path patterns caused by gateway routing behavior.
+func (fs *localfs) stripVirtualHomePrefix(p, virtualHome string) string {
+	virtualHomeParent := path.Dir(virtualHome)
+	virtualHomeBase := path.Base(virtualHome)
+	
+	switch {
+	case isExactVirtualHome(p, virtualHome):
+		// /home/einstein -> /
+		return "/"
+		
+	case isFullVirtualPath(p, virtualHome):
+		// /home/einstein/Test.txt -> /Test.txt
+		return strings.TrimPrefix(p, virtualHome)
+		
+	case isParentOfVirtualHome(p, virtualHome):
+		// /home -> / (when virtual home is /home/einstein)
+		return "/"
+		
+	case isGatewayStrippedParent(p, virtualHomeParent):
+		// /home/Test.txt -> /Test.txt (gateway omits username)
+		return strings.TrimPrefix(p, virtualHomeParent)
+		
+	case isGatewayStrippedUsername(p, virtualHomeBase):
+		// /einstein/Test.txt -> /Test.txt (WebDAV "home" alias strips /home)
+		return strings.TrimPrefix(p, "/"+virtualHomeBase)
+		
+	default:
+		return p
+	}
+}
+
+// Path pattern predicates for virtual home stripping
+
+func isExactVirtualHome(p, virtualHome string) bool {
+	return p == virtualHome
+}
+
+func isFullVirtualPath(p, virtualHome string) bool {
+	return strings.HasPrefix(p, virtualHome+"/")
+}
+
+func isParentOfVirtualHome(p, virtualHome string) bool {
+	return strings.HasPrefix(virtualHome, p+"/")
+}
+
+func isGatewayStrippedParent(p, virtualHomeParent string) bool {
+	return virtualHomeParent != "/" && virtualHomeParent != "." && 
+		strings.HasPrefix(p, virtualHomeParent+"/")
+}
+
+func isGatewayStrippedUsername(p, virtualHomeBase string) bool {
+	return virtualHomeBase != "/" && virtualHomeBase != "." && 
+		strings.HasPrefix(p, "/"+virtualHomeBase+"/")
 }
 
 func (fs *localfs) wrapReferences(ctx context.Context, p string) string {
@@ -224,6 +301,7 @@ func (fs *localfs) wrapVersions(ctx context.Context, p string) string {
 }
 
 func (fs *localfs) unwrap(ctx context.Context, np string) string {
+	log := appctx.GetLogger(ctx)
 	ns := fs.getNsMatch(np, []string{fs.conf.DataDirectory, fs.conf.References, fs.conf.RecycleBin, fs.conf.Versions})
 	var external string
 	if !fs.conf.DisableHome {
@@ -238,6 +316,13 @@ func (fs *localfs) unwrap(ctx context.Context, np string) string {
 	if external == "" {
 		external = "/"
 	}
+	
+	log.Debug().
+		Str("internal_path", np).
+		Str("namespace", ns).
+		Str("external_path", external).
+		Msg("localfs: unwrap")
+	
 	return external
 }
 
@@ -333,6 +418,7 @@ func (fs *localfs) permissionSet(ctx context.Context, owner *userpb.UserId) *pro
 }
 
 func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string, mdKeys []string) (*provider.ResourceInfo, error) {
+	log := appctx.GetLogger(ctx)
 	fp := fs.unwrap(ctx, path.Join("/", fn))
 	owner, err := getUser(ctx)
 	if err != nil {
@@ -352,12 +438,29 @@ func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string, mdK
 	}
 
 	// A fileid is constructed like `fileid-url_encoded_path`. See GetPathByID for the inverse conversion
+	// OpaqueId uses storage-relative path (e.g., einstein/Test.txt)
+	opaqueID := "fileid-" + url.QueryEscape(path.Join(layout, fp))
+	
+	// Path field needs virtual home prefix for space-based routing (PathToSpaceID)
+	virtualPath := fp
+	virtualHome, vhErr := fs.getVirtualHome(ctx)
+	if vhErr == nil && virtualHome != "" {
+		virtualPath = path.Join(virtualHome, fp)
+	}
+	
+	log.Debug().
+		Str("storage_relative", fp).
+		Str("virtual_home", virtualHome).
+		Str("final_path", virtualPath).
+		Str("opaque_id", opaqueID).
+		Msg("localfs: normalize paths")
+
 	md := &provider.ResourceInfo{
-		Id:            &provider.ResourceId{OpaqueId: "fileid-" + url.QueryEscape(path.Join(layout, fp))},
-		Path:          fp,
+		Id:            &provider.ResourceId{OpaqueId: opaqueID},
+		Path:          virtualPath,
 		Type:          getResourceType(fi.IsDir()),
 		Etag:          calcEtag(ctx, fi),
-		MimeType:      mime.Detect(fi.IsDir(), fp),
+		MimeType:      mime.Detect(fi.IsDir(), virtualPath),
 		Size:          uint64(fi.Size()),
 		PermissionSet: fs.permissionSet(ctx, owner.Id),
 		Mtime: &types.Timestamp{
