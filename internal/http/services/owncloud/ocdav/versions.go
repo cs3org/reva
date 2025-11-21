@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"path"
 	"path/filepath"
 
@@ -204,7 +205,35 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		infos = append(infos, vi)
 	}
 
-	propRes, err := s.multistatusResponse(ctx, &pf, infos, "", nil, nil)
+	baseURI := ctx.Value(ctxKeyBaseURI).(string)
+	URLPath := r.URL.Path
+	if ctxPath := ctx.Value(ctxKeyIncomingURL); ctxPath != nil {
+		URLPath = ctxPath.(string)
+	}
+	href, err := url.JoinPath(baseURI, URLPath)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error formatting propfind")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	// storageSpaceID := spaces.ConcatStorageSpaceID(md.Id.StorageId, md.Id.SpaceId)
+	// _, spacePath, ok := spaces.DecodeStorageSpaceID(storageSpaceID)
+	// if !ok {
+	// 	return "", errors.New("Failed to decode space ID")
+	// }
+
+	// relativePath, err := filepath.Rel(spacePath, md.Path)
+	// if err != nil {
+	// 	return "", errors.Wrapf(err, "failed to calculate path relative to space root: %v", spacePath)
+	// }
+
+	// // When requesting for versions, the request URL is baseURI=/remote.php/dav/meta/<resource-id>
+	// // When listing other resources, its value is baseURI=/remote.php/dav/spaces.
+	// // Because of this, a different response is expected, without the storageSpaceID.
+	// if md.Id.StorageId == "versions" {
+	// 	return path.Join(baseURI, relativePath), nil
+	// }
+	propRes, err := s.multistatusResponse(ctx, &pf, infos, "", href, nil, nil)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)

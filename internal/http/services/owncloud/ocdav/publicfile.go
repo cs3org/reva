@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"net/http"
+	"net/url"
 	"path"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -177,7 +178,18 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 	}
 	infos := s.getPublicFileInfos(onContainer, depth == "0", tokenStatInfo)
 
-	propRes, err := s.multistatusResponse(ctx, &pf, infos, ns, nil, nil)
+	linkToken, _ := ctx.Value(ctxPublicLink).(string)
+	baseURI := ctx.Value(ctxKeyBaseURI).(string)
+
+	_, relativePath := router.ShiftPath(pathRes.Path)
+	_, relativePath = router.ShiftPath(relativePath)
+	href, err := url.JoinPath(baseURI, linkToken, relativePath)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error formatting propfind")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	propRes, err := s.multistatusResponse(ctx, &pf, infos, ns, href, nil, nil)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)

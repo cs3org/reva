@@ -242,6 +242,11 @@ func (s *svc) Handler() http.Handler {
 		// always starts with /
 		base := path.Join("/", s.Prefix())
 
+		// We store the actual incoming URL
+		ctx = context.WithValue(ctx, ctxKeyIncomingURL, r.URL.Path)
+		r = r.WithContext(ctx)
+		log.Info().Msgf("FindMe - Handling path %s in dav handler", r.URL.Path)
+
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
