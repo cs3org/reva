@@ -61,14 +61,14 @@ type service struct {
 }
 
 type config struct {
-	Driver              string                            `mapstructure:"driver"`
-	Drivers             map[string]map[string]interface{} `mapstructure:"drivers"`
-	AppProviderURL      string                            `mapstructure:"app_provider_url"`
-	GatewaySvc          string                            `mapstructure:"gatewaysvc"`
-	MimeTypes           []string                          `docs:"nil;A list of mime types supported by this app."                                                              mapstructure:"mime_types"`
-	CustomMimeTypesJSON string                            `docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types." mapstructure:"custom_mime_types_json"`
-	Priority            uint64                            `mapstructure:"priority"`
-	Language            string                            `mapstructure:"language"`
+	Driver              string                    `mapstructure:"driver"`
+	Drivers             map[string]map[string]any `mapstructure:"drivers"`
+	AppProviderURL      string                    `mapstructure:"app_provider_url"`
+	GatewaySvc          string                    `mapstructure:"gatewaysvc"`
+	MimeTypes           []string                  `docs:"nil;A list of mime types supported by this app."                                                              mapstructure:"mime_types"`
+	CustomMimeTypesJSON string                    `docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types." mapstructure:"custom_mime_types_json"`
+	Priority            uint64                    `mapstructure:"priority"`
+	Language            string                    `mapstructure:"language"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -80,7 +80,7 @@ func (c *config) ApplyDefaults() {
 }
 
 // New creates a new AppProviderService.
-func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -197,7 +197,7 @@ func getProvider(ctx context.Context, c *config) (app.Provider, error) {
 		if c.MimeTypes != nil {
 			// share the mime_types config entry to the drivers
 			if driverConf == nil {
-				driverConf = make(map[string]interface{})
+				driverConf = make(map[string]any)
 			}
 			driverConf["mime_types"] = c.MimeTypes
 		}

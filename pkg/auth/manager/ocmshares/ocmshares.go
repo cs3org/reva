@@ -59,7 +59,7 @@ func (c *config) ApplyDefaults() {
 }
 
 // New creates a new ocmshares authentication manager.
-func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
+func New(ctx context.Context, m map[string]any) (auth.Manager, error) {
 	var mgr manager
 	if err := mgr.Configure(m); err != nil {
 		return nil, err
@@ -73,7 +73,7 @@ func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 	return &mgr, nil
 }
 
-func (m *manager) Configure(ml map[string]interface{}) error {
+func (m *manager) Configure(ml map[string]any) error {
 	var c config
 	if err := cfg.Decode(ml, &c); err != nil {
 		return errors.Wrap(err, "ocmshares: error decoding config")

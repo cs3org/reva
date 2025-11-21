@@ -62,7 +62,7 @@ func (c *config) ApplyDefaults() {
 
 // ListResponse is used for proper marshalling of Graph list responses
 type ListResponse struct {
-	Value interface{} `json:"value,omitempty"`
+	Value any `json:"value,omitempty"`
 }
 
 type svc struct {
@@ -70,7 +70,7 @@ type svc struct {
 	router *chi.Mux
 }
 
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

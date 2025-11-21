@@ -22,7 +22,7 @@ import "github.com/cs3org/reva/v3/pkg/token"
 
 // NewFunc is the function that token managers
 // should register at init time.
-type NewFunc func(map[string]interface{}) (token.Manager, error)
+type NewFunc func(map[string]any) (token.Manager, error)
 
 // NewFuncs is a map containing all the registered token managers.
 var NewFuncs = map[string]NewFunc{}

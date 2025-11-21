@@ -26,7 +26,7 @@ import (
 
 // NewFunc is the function that application auth implementations
 // should register at init time.
-type NewFunc func(context.Context, map[string]interface{}) (appauth.Manager, error)
+type NewFunc func(context.Context, map[string]any) (appauth.Manager, error)
 
 // NewFuncs is a map containing all the registered application auth managers.
 var NewFuncs = map[string]NewFunc{}

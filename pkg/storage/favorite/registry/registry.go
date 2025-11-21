@@ -22,7 +22,7 @@ import "github.com/cs3org/reva/v3/pkg/storage/favorite"
 
 // NewFunc is the function that favorite storage implementations
 // should register at init time.
-type NewFunc func(map[string]interface{}) (favorite.Manager, error)
+type NewFunc func(map[string]any) (favorite.Manager, error)
 
 // NewFuncs is a map containing all the registered favorite storage implementations.
 var NewFuncs = map[string]NewFunc{}

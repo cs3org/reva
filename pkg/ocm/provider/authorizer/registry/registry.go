@@ -26,7 +26,7 @@ import (
 
 // NewFunc is the function that provider authorizers
 // should register at init time.
-type NewFunc func(context.Context, map[string]interface{}) (provider.Authorizer, error)
+type NewFunc func(context.Context, map[string]any) (provider.Authorizer, error)
 
 // NewFuncs is a map containing all the registered provider authorizers.
 var NewFuncs = map[string]NewFunc{}

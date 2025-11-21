@@ -64,7 +64,7 @@ type manager struct {
 }
 
 // New returns an implementation of the app.Registry interface.
-func New(ctx context.Context, m map[string]interface{}) (app.Registry, error) {
+func New(ctx context.Context, m map[string]any) (app.Registry, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -321,7 +321,7 @@ func providersEquals(l1, l2 []*registrypb.ProviderInfo) bool {
 		return false
 	}
 
-	for i := 0; i < len(l1); i++ {
+	for i := range l1 {
 		if !equalsProviderInfo(l1[i], l2[i]) {
 			return false
 		}
@@ -348,11 +348,11 @@ func (h providerHeap) Swap(i, j int) {
 	h[i], h[j] = h[j], h[i]
 }
 
-func (h *providerHeap) Push(x interface{}) {
+func (h *providerHeap) Push(x any) {
 	*h = append(*h, x.(providerWithPriority))
 }
 
-func (h *providerHeap) Pop() interface{} {
+func (h *providerHeap) Pop() any {
 	last := len(*h) - 1
 	x := (*h)[last]
 	*h = (*h)[:last]

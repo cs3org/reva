@@ -349,7 +349,7 @@ func LocalGroupIDToString(groupID *grouppb.GroupId) string {
 }
 
 // GetUserManager returns a connection to a user share manager.
-func GetUserManager(ctx context.Context, manager string, m map[string]map[string]interface{}) (user.Manager, error) {
+func GetUserManager(ctx context.Context, manager string, m map[string]map[string]any) (user.Manager, error) {
 	if f, ok := usermgr.NewFuncs[manager]; ok {
 		return f(ctx, m[manager])
 	}
@@ -358,7 +358,7 @@ func GetUserManager(ctx context.Context, manager string, m map[string]map[string
 }
 
 // GetPublicShareManager returns a connection to a public share manager.
-func GetPublicShareManager(ctx context.Context, manager string, m map[string]map[string]interface{}) (publicshare.Manager, error) {
+func GetPublicShareManager(ctx context.Context, manager string, m map[string]map[string]any) (publicshare.Manager, error) {
 	if f, ok := publicsharemgr.NewFuncs[manager]; ok {
 		return f(ctx, m[manager])
 	}

@@ -223,7 +223,7 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 	}
 
 	eosfs.userIDCache.SetCacheSizeLimit(c.UserIDCacheSize)
-	eosfs.userIDCache.SetExpirationReasonCallback(func(key string, reason ttlcache.EvictionReason, value interface{}) {
+	eosfs.userIDCache.SetExpirationReasonCallback(func(key string, reason ttlcache.EvictionReason, value any) {
 		// We only set those keys with TTL which we weren't able to retrieve the last time
 		// For those keys, try to contact the userprovider service again when they expire
 		if reason == ttlcache.Expired {

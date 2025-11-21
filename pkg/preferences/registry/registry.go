@@ -26,7 +26,7 @@ import (
 
 // NewFunc is the function that preferences implementations
 // should register at init time.
-type NewFunc func(context.Context, map[string]interface{}) (preferences.Manager, error)
+type NewFunc func(context.Context, map[string]any) (preferences.Manager, error)
 
 // NewFuncs is a map containing all the registered preferences implementations.
 var NewFuncs = map[string]NewFunc{}

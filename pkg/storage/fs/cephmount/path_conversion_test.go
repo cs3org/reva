@@ -15,7 +15,7 @@ func TestPathConversionWithSpecificFstab(t *testing.T) {
 	fstabEntry := "cephminiflax.cern.ch:6789:/volumes/_nogroup/rasmus /mnt/miniflax ceph name=mds-admin,secretfile=/etc/ceph/miniflax.mds-admin.secret,x-systemd.device-timeout=30,x-systemd.mount-timeout=30,noatime,_netdev,wsync 0 2"
 
 	// Create test filesystem with local mode (using tempDir instead of /mnt/miniflax)
-	config := map[string]interface{}{
+	config := map[string]any{
 		"fstabentry":               fstabEntry,
 		"testing_allow_local_mode": true,
 	}

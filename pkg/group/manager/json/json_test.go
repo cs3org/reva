@@ -56,7 +56,7 @@ func TestUserManager(t *testing.T) {
 	}
 
 	// get manager
-	input := map[string]interface{}{
+	input := map[string]any{
 		"groups": file.Name(),
 	}
 	_, err = New(context.Background(), input)
@@ -84,7 +84,7 @@ func TestUserManager(t *testing.T) {
 	}
 
 	// get manager - positive test
-	input = map[string]interface{}{
+	input = map[string]any{
 		"groups": file.Name(),
 	}
 	manager, _ := New(context.Background(), input)

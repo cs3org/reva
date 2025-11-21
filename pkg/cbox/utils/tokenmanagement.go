@@ -58,7 +58,7 @@ type config struct {
 }
 
 // InitAPITokenManager initializes a new APITokenManager.
-func InitAPITokenManager(conf map[string]interface{}) (*APITokenManager, error) {
+func InitAPITokenManager(conf map[string]any) (*APITokenManager, error) {
 	c := &config{}
 	if err := mapstructure.Decode(conf, c); err != nil {
 		return nil, err
@@ -119,7 +119,7 @@ func (a *APITokenManager) getAPIToken(ctx context.Context) (string, time.Time, e
 		return "", time.Time{}, errors.New("rest: get token endpoint returned " + httpRes.Status)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	err = json.Unmarshal(body, &result)
 	if err != nil {
 		return "", time.Time{}, err

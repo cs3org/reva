@@ -123,15 +123,15 @@ type Config struct {
 	// Possible values:
 	// "bearer"				results in header: Authorization: Bearer ...token...
 	// "x-access-token":	results in header: X-Access-Token: ...token...
-	HTTPTpcPushAuthHeader        string                            `mapstructure:"http_tpc_push_auth_header"`
-	PublicURL                    string                            `mapstructure:"public_url"`
-	FavoriteStorageDriver        string                            `mapstructure:"favorite_storage_driver"`
-	FavoriteStorageDrivers       map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
-	PublicLinkDownload           *ConfigPublicLinkDownload         `mapstructure:"publiclink_download"`
-	DisabledOpenInAppPaths       []string                          `mapstructure:"disabled_open_in_app_paths"`
-	Notifications                map[string]interface{}            `docs:"nil; settings for the notification helper" mapstructure:"notifications"`
-	MyOfficeFilesAllowedProjects []string                          `mapstructure:"my_office_files_projects"`
-	SpacesEnabled                bool                              `mapstructure:"spaces_enabled"`
+	HTTPTpcPushAuthHeader        string                    `mapstructure:"http_tpc_push_auth_header"`
+	PublicURL                    string                    `mapstructure:"public_url"`
+	FavoriteStorageDriver        string                    `mapstructure:"favorite_storage_driver"`
+	FavoriteStorageDrivers       map[string]map[string]any `mapstructure:"favorite_storage_drivers"`
+	PublicLinkDownload           *ConfigPublicLinkDownload `mapstructure:"publiclink_download"`
+	DisabledOpenInAppPaths       []string                  `mapstructure:"disabled_open_in_app_paths"`
+	Notifications                map[string]any            `docs:"nil; settings for the notification helper" mapstructure:"notifications"`
+	MyOfficeFilesAllowedProjects []string                  `mapstructure:"my_office_files_projects"`
+	SpacesEnabled                bool                      `mapstructure:"spaces_enabled"`
 }
 
 func (c *Config) ApplyDefaults() {
@@ -169,7 +169,7 @@ func getFavoritesManager(c *Config) (favorite.Manager, error) {
 }
 
 // New returns a new ocdav.
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

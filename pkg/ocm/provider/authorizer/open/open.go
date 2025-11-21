@@ -38,7 +38,7 @@ func init() {
 }
 
 // New returns a new authorizer object.
-func New(ctx context.Context, m map[string]interface{}) (provider.Authorizer, error) {
+func New(ctx context.Context, m map[string]any) (provider.Authorizer, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

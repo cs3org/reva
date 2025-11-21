@@ -23,6 +23,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path"
@@ -1057,9 +1058,7 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 			if ok {
 				fi.Inode = vf.Inode
 				fi.SysACL.Entries = append(fi.SysACL.Entries, vf.SysACL.Entries...)
-				for k, v := range vf.Attrs {
-					fi.Attrs[k] = v
-				}
+				maps.Copy(fi.Attrs, vf.Attrs)
 			} else if err := c.CreateDir(ctx, *ownerAuth, versionFolderPath); err == nil { // Create the version folder if it doesn't exist
 				if md, err := c.getRawFileInfoByPath(ctx, auth, versionFolderPath); err == nil {
 					fi.Inode = md.Inode

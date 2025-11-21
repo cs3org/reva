@@ -38,7 +38,7 @@ type File struct {
 
 // Dir struct represents a test dir, where each
 // key is the resource (Dir or File) name.
-type Dir map[string]interface{}
+type Dir map[string]any
 
 // CleanerFunc is a function to call after creating a TestDir.
 type CleanerFunc func()
@@ -81,7 +81,7 @@ func NewFile(path, content string) error {
 	return nil
 }
 
-func newTestDirFileRecursive(p string, res interface{}) error {
+func newTestDirFileRecursive(p string, res any) error {
 	switch r := res.(type) {
 	case Dir:
 		err := os.MkdirAll(p, 0755)

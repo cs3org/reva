@@ -56,7 +56,7 @@ func (c *config) ApplyDefaults() {
 }
 
 // New returns a new auth Manager.
-func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
+func New(ctx context.Context, m map[string]any) (auth.Manager, error) {
 	mgr := &manager{}
 	err := mgr.Configure(m)
 	if err != nil {
@@ -65,7 +65,7 @@ func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 	return mgr, nil
 }
 
-func (m *manager) Configure(ml map[string]interface{}) error {
+func (m *manager) Configure(ml map[string]any) error {
 	var c config
 	if err := cfg.Decode(ml, &c); err != nil {
 		return errors.Wrap(err, "publicshares: error decoding config")
@@ -83,15 +83,15 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 	log := appctx.GetLogger(ctx)
 
 	var auth *link.PublicShareAuthentication
-	if strings.HasPrefix(secret, "password|") {
-		secret = strings.TrimPrefix(secret, "password|")
+	if after, ok := strings.CutPrefix(secret, "password|"); ok {
+		secret = after
 		auth = &link.PublicShareAuthentication{
 			Spec: &link.PublicShareAuthentication_Password{
 				Password: secret,
 			},
 		}
-	} else if strings.HasPrefix(secret, "signature|") {
-		secret = strings.TrimPrefix(secret, "signature|")
+	} else if after, ok := strings.CutPrefix(secret, "signature|"); ok {
+		secret = after
 		parts := strings.Split(secret, "|")
 		sig, expiration := parts[0], parts[1]
 		exp, _ := time.Parse(time.RFC3339, expiration)

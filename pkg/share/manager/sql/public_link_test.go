@@ -18,7 +18,7 @@ import (
 func setupSuiteLinks(tb testing.TB) (publicshare.Manager, error, func(tb testing.TB)) {
 	ctx := context.Background()
 	dbName := "test_db.sqlite"
-	cfg := map[string]interface{}{
+	cfg := map[string]any{
 		"engine":  "sqlite",
 		"db_name": dbName,
 	}

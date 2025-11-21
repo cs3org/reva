@@ -41,7 +41,7 @@ func TestEnvironmentVariableChroot(t *testing.T) {
 		}()
 
 		// Standard config without fstab (local mode)
-		config := map[string]interface{}{
+		config := map[string]any{
 			"testing_allow_local_mode": true,
 		}
 
@@ -62,7 +62,7 @@ func TestEnvironmentVariableChroot(t *testing.T) {
 		defer os.Unsetenv("CEPHMOUNT_TEST_CHROOT_DIR")
 
 		// Same config as before
-		config := map[string]interface{}{
+		config := map[string]any{
 			"testing_allow_local_mode": true,
 		}
 
@@ -88,7 +88,7 @@ func TestEnvironmentVariableChroot(t *testing.T) {
 
 		// Even with a fstab entry that would normally determine the chroot,
 		// the environment variable should take precedence
-		config := map[string]interface{}{
+		config := map[string]any{
 			"fstabentry":               "cephminiflax.cern.ch:6789:/volumes/_nogroup/admin /mnt/different_mount ceph defaults,name=admin,secretfile=/etc/ceph/ceph.client.admin.key,conf=/etc/ceph/ceph.conf 0 2",
 			"testing_allow_local_mode": true,
 		}

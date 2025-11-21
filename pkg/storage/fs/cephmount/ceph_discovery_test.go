@@ -90,7 +90,7 @@ cephminiflax.cern.ch:6789:/volumes/_nogroup/rasmus	/mnt/miniflax	ceph	name=mds-a
 	// Test 4: Test auto-discovery with cephmount configuration
 	t.Run("cephmount_with_autodiscovery", func(t *testing.T) {
 		// This test shows how auto-discovery would work with cephmount configuration
-		testConfig := map[string]interface{}{
+		testConfig := map[string]any{
 			"root":           tempDir,
 			"auto_discovery": true,
 			"ceph_config":    cephConfigFile,
@@ -134,9 +134,9 @@ func parseFstabFile(ctx context.Context, fstabFile, monitorHost string) (*CephMo
 
 // parseFstabContent parses fstab content string (helper for testing)
 func parseFstabContent(ctx context.Context, fstabContent, monitorHost string) (*CephMountInfo, error) {
-	lines := strings.Split(fstabContent, "\n")
+	lines := strings.SplitSeq(fstabContent, "\n")
 
-	for _, line := range lines {
+	for line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue

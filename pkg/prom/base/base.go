@@ -31,7 +31,7 @@ func init() {
 }
 
 // New returns a prometheus collector.
-func New(_ context.Context, m map[string]interface{}) ([]prometheus.Collector, error) {
+func New(_ context.Context, m map[string]any) ([]prometheus.Collector, error) {
 	return []prometheus.Collector{
 		collectors.NewBuildInfoCollector(),
 		collectors.NewGoCollector(),

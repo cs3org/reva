@@ -52,7 +52,7 @@ func (c *config) ApplyDefaults() {
 }
 
 // New returns an implementation of a resource info cache that stores the objects in a redis cluster.
-func New[T cache.Cacheable](m map[string]interface{}) (cache.GenericCache[T], error) {
+func New[T cache.Cacheable](m map[string]any) (cache.GenericCache[T], error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -120,7 +120,7 @@ func (m *manager[T]) setVal(key string, info T, expiration int) error {
 			return err
 		}
 
-		args := []interface{}{key, encodedInfo}
+		args := []any{key, encodedInfo}
 		if expiration != -1 {
 			args = append(args, "EX", expiration)
 		}

@@ -47,7 +47,7 @@ func (c *config) ApplyDefaults() {
 
 // New returns an implementation to of the storage.FS interface that talks to
 // a local filesystem with user homes disabled.
-func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
+func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

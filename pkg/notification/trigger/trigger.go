@@ -27,7 +27,7 @@ type Trigger struct {
 	Notification *notification.Notification
 	Ref          string
 	Sender       string
-	TemplateData map[string]interface{}
+	TemplateData map[string]any
 }
 
 // Send is the method run when a notification is triggered.

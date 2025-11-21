@@ -26,7 +26,7 @@ import (
 
 // NewFunc is the function that group managers
 // should register at init time.
-type NewFunc func(context.Context, map[string]interface{}) (group.Manager, error)
+type NewFunc func(context.Context, map[string]any) (group.Manager, error)
 
 // NewFuncs is a map containing all the registered group managers.
 var NewFuncs = map[string]NewFunc{}

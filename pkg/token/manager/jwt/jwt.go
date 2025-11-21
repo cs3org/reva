@@ -65,7 +65,7 @@ func (c *config) ApplyDefaults() {
 }
 
 // New returns an implementation of the token manager that uses JWT as tokens.
-func New(m map[string]interface{}) (token.Manager, error) {
+func New(m map[string]any) (token.Manager, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -118,7 +118,7 @@ func setTime(t time.Time, hour, min, sec int) time.Time {
 }
 
 func (m *manager) DismantleToken(ctx context.Context, tkn string) (*user.User, map[string]*auth.Scope, error) {
-	token, err := jwt.ParseWithClaims(tkn, &claims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tkn, &claims{}, func(token *jwt.Token) (any, error) {
 		return []byte(m.conf.Secret), nil
 	})
 

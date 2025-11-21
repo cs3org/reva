@@ -230,14 +230,14 @@ type UserThread struct {
 // ThreadRequest represents a request to execute on a user thread
 type ThreadRequest struct {
 	ID       string
-	Function func() (interface{}, error)
+	Function func() (any, error)
 	Context  context.Context
 }
 
 // ThreadResponse represents the response from a user thread
 type ThreadResponse struct {
 	ID     string
-	Result interface{}
+	Result any
 	Error  error
 }
 
@@ -356,7 +356,7 @@ func (p *UserThreadPool) mapUserToUIDGID(user *userv1beta1.User) (int, int) {
 }
 
 // ExecuteOnUserThread executes a function on the appropriate user thread
-func (p *UserThreadPool) ExecuteOnUserThread(ctx context.Context, user *userv1beta1.User, fn func() (interface{}, error)) (interface{}, error) {
+func (p *UserThreadPool) ExecuteOnUserThread(ctx context.Context, user *userv1beta1.User, fn func() (any, error)) (any, error) {
 	thread, err := p.GetOrCreateUserThread(ctx, user)
 	if err != nil {
 		return nil, err
@@ -471,7 +471,7 @@ func (ut *UserThread) run() {
 }
 
 // Execute executes a function on this user thread
-func (ut *UserThread) Execute(ctx context.Context, fn func() (interface{}, error)) (interface{}, error) {
+func (ut *UserThread) Execute(ctx context.Context, fn func() (any, error)) (any, error) {
 	if !ut.active {
 		return nil, syscall.EINVAL
 	}
@@ -523,11 +523,11 @@ func (ut *UserThread) shutdown() {
 }
 
 // GetStats returns statistics about the thread
-func (ut *UserThread) GetStats() map[string]interface{} {
+func (ut *UserThread) GetStats() map[string]any {
 	ut.mu.RLock()
 	defer ut.mu.RUnlock()
 
-	return map[string]interface{}{
+	return map[string]any{
 		"uid":        ut.uid,
 		"gid":        ut.gid,
 		"username":   ut.username,

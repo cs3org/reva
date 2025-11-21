@@ -60,7 +60,7 @@ type jsonManager struct {
 }
 
 // New returns a new mgr.
-func New(ctx context.Context, m map[string]interface{}) (appauth.Manager, error) {
+func New(ctx context.Context, m map[string]any) (appauth.Manager, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

@@ -398,7 +398,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		_, shareFileName := filepath.Split(ref.Path)
 
 		if f, ok := m["eos"]; ok {
-			eosOpaque := make(map[string]interface{})
+			eosOpaque := make(map[string]any)
 			switch f.Decoder {
 			case "json":
 				_ = json.Unmarshal(f.Value, &eosOpaque)
@@ -417,7 +417,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 		trg := &trigger.Trigger{
 			Ref: l.Id.OpaqueId,
-			TemplateData: map[string]interface{}{
+			TemplateData: map[string]any{
 				"path":     path,
 				"folder":   folder,
 				"fileName": shareFileName,

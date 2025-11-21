@@ -69,7 +69,7 @@ func (s *svc) Handler() http.Handler {
 }
 
 // New returns a new metrics service.
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	var c config.Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

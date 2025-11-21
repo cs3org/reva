@@ -52,7 +52,7 @@ func getContext(ctx context.Context) context.Context {
 // NewUnary returns a new unary interceptor that adds
 // trace information for the request.
 func NewUnary() grpc.UnaryServerInterceptor {
-	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	interceptor := func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		ctx = getContext(ctx)
 		return handler(ctx, req)
 	}
@@ -62,7 +62,7 @@ func NewUnary() grpc.UnaryServerInterceptor {
 // NewStream returns a new server stream interceptor
 // that adds trace information to the request.
 func NewStream() grpc.StreamServerInterceptor {
-	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	interceptor := func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := getContext(ss.Context())
 		wrapped := newWrappedServerStream(ctx, ss)
 		return handler(srv, wrapped)

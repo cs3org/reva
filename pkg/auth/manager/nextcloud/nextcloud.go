@@ -65,7 +65,7 @@ type Action struct {
 }
 
 // New returns an auth manager implementation that verifies against a Nextcloud backend.
-func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
+func New(ctx context.Context, m map[string]any) (auth.Manager, error) {
 	var c AuthManagerConfig
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, errors.Wrap(err, "nextcloud: error decoding config")
@@ -99,7 +99,7 @@ func NewAuthManager(c *AuthManagerConfig) (*Manager, error) {
 }
 
 // Configure method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/auth/auth.go#L32-L35
-func (am *Manager) Configure(ml map[string]interface{}) error {
+func (am *Manager) Configure(ml map[string]any) error {
 	return nil
 }
 

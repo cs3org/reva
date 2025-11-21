@@ -35,7 +35,7 @@ type strategy struct{}
 
 // New returns a new auth strategy that checks "Bearer" OAuth Access Tokens
 // See https://tools.ietf.org/html/rfc6750#section-6.1
-func New(m map[string]interface{}) (auth.CredentialStrategy, error) {
+func New(m map[string]any) (auth.CredentialStrategy, error) {
 	return &strategy{}, nil
 }
 

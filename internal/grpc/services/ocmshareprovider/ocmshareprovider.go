@@ -65,14 +65,14 @@ func init() {
 }
 
 type config struct {
-	Driver         string                            `mapstructure:"driver"`
-	Drivers        map[string]map[string]interface{} `mapstructure:"drivers"`
-	ClientTimeout  int                               `mapstructure:"client_timeout"`
-	ClientInsecure bool                              `mapstructure:"client_insecure"`
-	GatewaySVC     string                            `mapstructure:"gatewaysvc"                                    validate:"required"`
-	ProviderDomain string                            `docs:"The same domain registered in the provider authorizer" mapstructure:"provider_domain" validate:"required"`
-	WebDAVEndpoint string                            `mapstructure:"webdav_endpoint"                               validate:"required"`
-	WebappTemplate string                            `mapstructure:"webapp_template"                               validate:"required"`
+	Driver         string                    `mapstructure:"driver"`
+	Drivers        map[string]map[string]any `mapstructure:"drivers"`
+	ClientTimeout  int                       `mapstructure:"client_timeout"`
+	ClientInsecure bool                      `mapstructure:"client_insecure"`
+	GatewaySVC     string                    `mapstructure:"gatewaysvc"                                    validate:"required"`
+	ProviderDomain string                    `docs:"The same domain registered in the provider authorizer" mapstructure:"provider_domain" validate:"required"`
+	WebDAVEndpoint string                    `mapstructure:"webdav_endpoint"                               validate:"required"`
+	WebappTemplate string                    `mapstructure:"webapp_template"                               validate:"required"`
 }
 
 type service struct {
@@ -107,7 +107,7 @@ func getShareRepository(ctx context.Context, c *config) (share.Repository, error
 }
 
 // New creates a new ocm share provider svc.
-func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

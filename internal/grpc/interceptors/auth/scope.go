@@ -53,7 +53,7 @@ const (
 	scopeCacheExpiration = 3600
 )
 
-func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[string]*authpb.Scope, user *userpb.User, gatewayAddr string, mgr token.Manager) error {
+func expandAndVerifyScope(ctx context.Context, req any, tokenScope map[string]*authpb.Scope, user *userpb.User, gatewayAddr string, mgr token.Manager) error {
 	log := appctx.GetLogger(ctx)
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(gatewayAddr))
 	if err != nil {
@@ -108,7 +108,7 @@ func hasLightweightScope(tokenScope map[string]*authpb.Scope) bool {
 	return false
 }
 
-func checkLightweightScope(ctx context.Context, req interface{}, tokenScope map[string]*authpb.Scope, client gateway.GatewayAPIClient) bool {
+func checkLightweightScope(ctx context.Context, req any, tokenScope map[string]*authpb.Scope, client gateway.GatewayAPIClient) bool {
 	if !hasLightweightScope(tokenScope) {
 		return false
 	}
@@ -327,7 +327,7 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 	return strings.HasPrefix(childPath, parentPath), nil
 }
 
-func extractRefForReaderRole(req interface{}) (*provider.Reference, bool) {
+func extractRefForReaderRole(req any) (*provider.Reference, bool) {
 	switch v := req.(type) {
 	// Read requests
 	case *provider.GetPathRequest:
@@ -355,7 +355,7 @@ func extractRefForReaderRole(req interface{}) (*provider.Reference, bool) {
 	return nil, false
 }
 
-func extractRefForUploaderRole(req interface{}) (*provider.Reference, bool) {
+func extractRefForUploaderRole(req any) (*provider.Reference, bool) {
 	switch v := req.(type) {
 	// Write Requests
 	case *provider.GetPathRequest:
@@ -375,7 +375,7 @@ func extractRefForUploaderRole(req interface{}) (*provider.Reference, bool) {
 	return nil, false
 }
 
-func extractRefForEditorRole(req interface{}) (*provider.Reference, bool) {
+func extractRefForEditorRole(req any) (*provider.Reference, bool) {
 	switch v := req.(type) {
 	// Remaining edit Requests
 	case *provider.GetPathRequest:
@@ -399,7 +399,7 @@ func extractRefForEditorRole(req interface{}) (*provider.Reference, bool) {
 	return nil, false
 }
 
-func extractRef(req interface{}, tokenScope map[string]*authpb.Scope) (*provider.Reference, bool) {
+func extractRef(req any, tokenScope map[string]*authpb.Scope) (*provider.Reference, bool) {
 	var readPerm, uploadPerm, editPerm bool
 	for _, v := range tokenScope {
 		if v.Role == authpb.Role_ROLE_OWNER || v.Role == authpb.Role_ROLE_EDITOR || v.Role == authpb.Role_ROLE_VIEWER {

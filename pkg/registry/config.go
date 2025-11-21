@@ -39,7 +39,7 @@ type node struct {
 }
 
 // ParseConfig translates Config file values into a Config struct for consumers.
-func ParseConfig(m map[string]interface{}) (*Config, error) {
+func ParseConfig(m map[string]any) (*Config, error) {
 	c := &Config{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		return nil, err

@@ -108,7 +108,6 @@ var _ = Describe("Routing Tree", func() {
 
 	Context("resolving providers", func() {
 		for r, ps := range leaf {
-			r := r
 			ps := ps
 			When("passed an existing leaf route: "+r, func() {
 				It("should return the correct provider", func() {
@@ -127,7 +126,6 @@ var _ = Describe("Routing Tree", func() {
 		})
 
 		for nl, ps := range nonLeaf {
-			nl := nl
 			ps := ps
 			When("passed an existing non-leaf route: "+nl, func() {
 				It("should return the correct providers", func() {
@@ -139,7 +137,6 @@ var _ = Describe("Routing Tree", func() {
 		}
 
 		for r, wp := range deepRoutes {
-			r := r
 			wp := wp
 			When("passed a deep route: "+r, func() {
 				It("should return the correct providers", func() {
@@ -151,7 +148,6 @@ var _ = Describe("Routing Tree", func() {
 		}
 
 		for _, r := range badRoutes {
-			r := r
 			When("passed a bad route: "+r, func() {
 				It("should return an error", func() {
 					p, err = t.Resolve(r)

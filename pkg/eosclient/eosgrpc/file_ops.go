@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"strconv"
 
 	erpc "github.com/cern-eos/go-eosgrpc"
@@ -441,9 +442,7 @@ func (c *Client) list(ctx context.Context, auth eosclient.Authorization, dpath s
 				if vf.SysACL != nil {
 					fi.SysACL.Entries = append(fi.SysACL.Entries, vf.SysACL.Entries...)
 				}
-				for k, v := range vf.Attrs {
-					fi.Attrs[k] = v
-				}
+				maps.Copy(fi.Attrs, vf.Attrs)
 			} else if err := c.CreateDir(ctx, *ownerAuth, versionFolderPath); err == nil {
 				// Create the version folder if it doesn't exist
 				if md, err := c.GetFileInfoByPath(ctx, auth, versionFolderPath); err == nil {

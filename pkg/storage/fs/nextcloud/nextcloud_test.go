@@ -75,7 +75,7 @@ func checkCalled(called *[]string, expected string) {
 var _ = Describe("Nextcloud", func() {
 	var (
 		ctx     context.Context
-		options map[string]interface{}
+		options map[string]any
 		tmpRoot string
 		user    = &userpb.User{
 			Id: &userpb.UserId{
@@ -90,7 +90,7 @@ var _ = Describe("Nextcloud", func() {
 	BeforeEach(func() {
 		var err error
 
-		options = map[string]interface{}{
+		options = map[string]any{
 			"endpoint":  "http://mock.com/apps/sciencemesh/",
 			"mock_http": true,
 		}
@@ -98,7 +98,7 @@ var _ = Describe("Nextcloud", func() {
 		ctx = context.Background()
 
 		// Add auth token
-		tokenManager, err := jwt.New(map[string]interface{}{"secret": "changemeplease"})
+		tokenManager, err := jwt.New(map[string]any{"secret": "changemeplease"})
 		Expect(err).ToNot(HaveOccurred())
 		scope, err := scope.AddOwnerScope(nil)
 		Expect(err).ToNot(HaveOccurred())

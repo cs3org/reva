@@ -34,7 +34,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func resourceinfoScope(_ context.Context, scope *authpb.Scope, resource interface{}, logger *zerolog.Logger) (bool, error) {
+func resourceinfoScope(_ context.Context, scope *authpb.Scope, resource any, logger *zerolog.Logger) (bool, error) {
 	var r provider.ResourceInfo
 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &r)
 	if err != nil {

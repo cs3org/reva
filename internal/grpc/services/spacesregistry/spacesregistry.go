@@ -69,11 +69,11 @@ type config struct {
 	// name:
 	//  - path: <path>
 	//  - description: <description>
-	PublicSpaces             map[string]map[string]string      `mapstructure:"public_spaces"`
-	ResourceInfoCacheDrivers map[string]map[string]interface{} `mapstructure:"resource_info_caches"`
-	ResourceInfoCacheDriver  string                            `mapstructure:"resource_info_cache_type"`
-	ResourceInfoCacheTTL     int                               `mapstructure:"resource_info_cache_ttl"`
-	TimeoutSkipSpaces        int                               `mapstructure:"space_resolution_timeout" docs:"nil;Timeout to resolve a space with stat: if it does not respond within the given time (defaults to 3 secs), it is skipped"`
+	PublicSpaces             map[string]map[string]string `mapstructure:"public_spaces"`
+	ResourceInfoCacheDrivers map[string]map[string]any    `mapstructure:"resource_info_caches"`
+	ResourceInfoCacheDriver  string                       `mapstructure:"resource_info_cache_type"`
+	ResourceInfoCacheTTL     int                          `mapstructure:"resource_info_cache_ttl"`
+	TimeoutSkipSpaces        int                          `mapstructure:"space_resolution_timeout" docs:"nil;Timeout to resolve a space with stat: if it does not respond within the given time (defaults to 3 secs), it is skipped"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -91,7 +91,7 @@ type service struct {
 	timeoutSkipSpaces    time.Duration
 }
 
-func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

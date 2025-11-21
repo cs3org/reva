@@ -49,6 +49,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -80,7 +81,7 @@ func BenchmarkGetMD_SingleFile(b *testing.B) {
 	require.NoError(b, err, "Failed to set directory permissions")
 
 	// Create filesystem instance
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true,
 	}
 	fs := createCephMountFSForBenchmark(b, contextWithBenchmarkLogger(b), config, "/volumes/_nogroup/benchmark", tempDir)
@@ -97,10 +98,10 @@ func BenchmarkGetMD_SingleFile(b *testing.B) {
 	require.NoError(b, err, "Warmup GetMD failed")
 
 	// Reset timer and run benchmark
-	b.ResetTimer()
+
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := fs.GetMD(ctx, ref, nil)
 		if err != nil {
 			b.Fatal("GetMD failed during benchmark:", err)
@@ -127,7 +128,7 @@ func benchmarkGetMDMultipleFiles(b *testing.B, fileCount int) {
 
 	// Create multiple test files
 	fileRefs := make([]*provider.Reference, fileCount)
-	for i := 0; i < fileCount; i++ {
+	for i := range fileCount {
 		fileName := fmt.Sprintf("file_%04d.txt", i)
 		filePath := filepath.Join(tempDir, fileName)
 		content := fmt.Sprintf("Content for file %d", i)
@@ -146,7 +147,7 @@ func benchmarkGetMDMultipleFiles(b *testing.B, fileCount int) {
 	require.NoError(b, err, "Failed to set directory permissions")
 
 	// Create filesystem instance
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true,
 	}
 	fs := createCephMountFSForBenchmark(b, contextWithBenchmarkLogger(b), config, "/volumes/_nogroup/benchmark", tempDir)
@@ -162,10 +163,10 @@ func benchmarkGetMDMultipleFiles(b *testing.B, fileCount int) {
 	}
 
 	// Reset timer and run benchmark
-	b.ResetTimer()
+
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		// Get metadata for random file
 		fileIndex := i % fileCount
 		_, err := fs.GetMD(ctx, fileRefs[fileIndex], nil)
@@ -196,7 +197,7 @@ func benchmarkGetMDNestedDirectories(b *testing.B, depth int) {
 	currentDir := tempDir
 	pathSegments := []string{}
 
-	for i := 0; i < depth; i++ {
+	for i := range depth {
 		dirName := fmt.Sprintf("level_%d", i)
 		currentDir = filepath.Join(currentDir, dirName)
 		pathSegments = append(pathSegments, dirName)
@@ -215,7 +216,7 @@ func benchmarkGetMDNestedDirectories(b *testing.B, depth int) {
 	require.NoError(b, err, "Failed to set permissions on deep file")
 
 	// Create filesystem instance
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true,
 	}
 	fs := createCephMountFSForBenchmark(b, contextWithBenchmarkLogger(b), config, "/volumes/_nogroup/benchmark", tempDir)
@@ -233,10 +234,10 @@ func benchmarkGetMDNestedDirectories(b *testing.B, depth int) {
 	require.NoError(b, err, "Warmup GetMD failed for nested file")
 
 	// Reset timer and run benchmark
-	b.ResetTimer()
+
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := fs.GetMD(ctx, ref, nil)
 		if err != nil {
 			b.Fatal("GetMD failed for nested file during benchmark:", err)
@@ -280,7 +281,7 @@ func benchmarkGetMDWithMetadataKeys(b *testing.B, mdKeys []string) {
 	require.NoError(b, err, "Failed to set directory permissions")
 
 	// Create filesystem instance
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true,
 	}
 	fs := createCephMountFSForBenchmark(b, contextWithBenchmarkLogger(b), config, "/volumes/_nogroup/benchmark", tempDir)
@@ -297,10 +298,10 @@ func benchmarkGetMDWithMetadataKeys(b *testing.B, mdKeys []string) {
 	require.NoError(b, err, "Warmup GetMD failed")
 
 	// Reset timer and run benchmark
-	b.ResetTimer()
+
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := fs.GetMD(ctx, ref, mdKeys)
 		if err != nil {
 			b.Fatal("GetMD failed during benchmark:", err)
@@ -331,7 +332,7 @@ func benchmarkGetMDDirectoryOperations(b *testing.B, fileCount int) {
 	require.NoError(b, err, "Failed to create subdirectory")
 
 	// Create files in subdirectory
-	for i := 0; i < fileCount; i++ {
+	for i := range fileCount {
 		fileName := fmt.Sprintf("file_%04d.txt", i)
 		filePath := filepath.Join(subDir, fileName)
 		content := fmt.Sprintf("File %d content", i)
@@ -345,7 +346,7 @@ func benchmarkGetMDDirectoryOperations(b *testing.B, fileCount int) {
 	require.NoError(b, err, "Failed to set root directory permissions")
 
 	// Create filesystem instance
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true,
 	}
 	fs := createCephMountFSForBenchmark(b, contextWithBenchmarkLogger(b), config, "/volumes/_nogroup/benchmark", tempDir)
@@ -362,10 +363,10 @@ func benchmarkGetMDDirectoryOperations(b *testing.B, fileCount int) {
 	require.NoError(b, err, "Warmup GetMD failed for directory")
 
 	// Reset timer and run benchmark
-	b.ResetTimer()
+
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := fs.GetMD(ctx, ref, nil)
 		if err != nil {
 			b.Fatal("GetMD failed for directory during benchmark:", err)
@@ -467,7 +468,7 @@ func benchmarkListContainer(b *testing.B, fileCount int) {
 	defer cleanup()
 
 	// Create filesystem instance
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true,
 	}
 	ctx := contextWithBenchmarkLogger(b)
@@ -479,7 +480,7 @@ func benchmarkListContainer(b *testing.B, fileCount int) {
 	require.NoError(b, err, "Failed to create test directory")
 
 	// Create files in the directory
-	for i := 0; i < fileCount; i++ {
+	for i := range fileCount {
 		fileName := fmt.Sprintf("file_%04d.txt", i)
 		filePath := filepath.Join(testDir, fileName)
 		content := fmt.Sprintf("Content for file %d", i)
@@ -500,10 +501,10 @@ func benchmarkListContainer(b *testing.B, fileCount int) {
 	require.NoError(b, err, "Warmup ListFolder failed")
 
 	// Reset timer and run benchmark
-	b.ResetTimer()
+
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := fs.ListFolder(ctx, ref, nil)
 		if err != nil {
 			b.Fatal("ListFolder failed during benchmark:", err)
@@ -529,7 +530,7 @@ func benchmarkListContainerNested(b *testing.B, depth int) {
 	defer cleanup()
 
 	// Create filesystem instance
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true,
 	}
 	ctx := contextWithBenchmarkLogger(b)
@@ -542,7 +543,7 @@ func benchmarkListContainerNested(b *testing.B, depth int) {
 
 	// Create nested directory structure with files at each level
 	currentDir := testDir
-	for i := 0; i < depth; i++ {
+	for i := range depth {
 		// Create subdirectory
 		subDir := fmt.Sprintf("level_%d", i)
 		currentDir = filepath.Join(currentDir, subDir)
@@ -550,7 +551,7 @@ func benchmarkListContainerNested(b *testing.B, depth int) {
 		require.NoError(b, err, "Failed to create directory at level %d", i)
 
 		// Create a few files at this level
-		for j := 0; j < 3; j++ {
+		for j := range 3 {
 			fileName := fmt.Sprintf("file_level%d_%d.txt", i, j)
 			filePath := filepath.Join(currentDir, fileName)
 			content := fmt.Sprintf("Content at level %d, file %d", i, j)
@@ -572,10 +573,10 @@ func benchmarkListContainerNested(b *testing.B, depth int) {
 	require.NoError(b, err, "Warmup ListFolder failed for nested directories")
 
 	// Reset timer and run benchmark
-	b.ResetTimer()
+
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := fs.ListFolder(ctx, ref, nil)
 		if err != nil {
 			b.Fatal("ListFolder failed during nested benchmark:", err)
@@ -611,7 +612,7 @@ func benchmarkUpload(b *testing.B, fileSize int64) {
 	defer cleanup()
 
 	// Create filesystem instance
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true,
 	}
 	ctx := contextWithBenchmarkLogger(b)
@@ -634,11 +635,11 @@ func benchmarkUpload(b *testing.B, fileSize int64) {
 	require.NoError(b, err, "Warmup upload failed")
 
 	// Reset timer and run benchmark
-	b.ResetTimer()
+
 	b.ReportAllocs()
 	b.SetBytes(fileSize) // Report throughput in MB/s
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		// Create unique file name for each iteration
 		fileName := fmt.Sprintf("/upload_test_%d.txt", i)
 		ref := &provider.Reference{Path: fileName}
@@ -672,7 +673,7 @@ func benchmarkUploadConcurrent(b *testing.B, concurrency int) {
 	defer cleanup()
 
 	// Create filesystem instance
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true,
 	}
 	ctx := contextWithBenchmarkLogger(b)
@@ -696,14 +697,14 @@ func benchmarkUploadConcurrent(b *testing.B, concurrency int) {
 	require.NoError(b, err, "Warmup upload failed")
 
 	// Reset timer and run benchmark
-	b.ResetTimer()
+
 	b.ReportAllocs()
 	b.SetBytes(fileSize)
 
 	// For concurrent tests, use a more conservative approach
 	// Run uploads sequentially but with different file names to simulate concurrency patterns
 	uploadCount := 0
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		fileName := fmt.Sprintf("/concurrent_upload_%d_%d.txt", concurrency, uploadCount)
 		ref := &provider.Reference{Path: fileName}
 
@@ -737,7 +738,7 @@ func benchmarkUploadDirectories(b *testing.B, depth int) {
 	defer cleanup()
 
 	// Create filesystem instance
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true,
 	}
 	ctx := contextWithBenchmarkLogger(b)
@@ -756,7 +757,7 @@ func benchmarkUploadDirectories(b *testing.B, depth int) {
 
 	// Create directory structure on filesystem
 	dirPath := ""
-	for i := 0; i < depth; i++ {
+	for i := range depth {
 		dirPath += fmt.Sprintf("/level_%d", i)
 		// Create directory through filesystem
 		dirRef := &provider.Reference{Path: dirPath}
@@ -767,11 +768,11 @@ func benchmarkUploadDirectories(b *testing.B, depth int) {
 	}
 
 	// Reset timer and run benchmark
-	b.ResetTimer()
+
 	b.ReportAllocs()
 	b.SetBytes(fileSize)
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		// Upload to the deepest directory
 		fileName := fmt.Sprintf("%s/upload_%d.txt", dirPath, i)
 		ref := &provider.Reference{Path: fileName}
@@ -818,7 +819,7 @@ func benchmarkMultiUserThreadIsolation(b *testing.B, userCount, threadCount int)
 	require.NoError(b, err, "Failed to set permissions on test directory")
 
 	// Create filesystem instance
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true,
 	}
 	ctx := contextWithBenchmarkLogger(b)
@@ -834,7 +835,7 @@ func benchmarkMultiUserThreadIsolation(b *testing.B, userCount, threadCount int)
 	// Pre-create test files for each user
 	b.Log("Setting up test files for users...")
 	userContexts := make([]context.Context, userCount)
-	for userID := 0; userID < userCount; userID++ {
+	for userID := range userCount {
 		// Create unique user context
 		user := &userv1beta1.User{
 			Id: &userv1beta1.UserId{
@@ -856,18 +857,18 @@ func benchmarkMultiUserThreadIsolation(b *testing.B, userCount, threadCount int)
 	}
 
 	// Reset timer and run benchmark
-	b.ResetTimer()
+
 	b.ReportAllocs()
 	b.SetBytes(int64(userCount) * fileSize) // Total data processed per iteration
 
 	// Run the actual benchmark
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		// Use channels to coordinate goroutines
 		done := make(chan bool, threadCount)
 		errorChan := make(chan error, threadCount)
 
 		// Launch concurrent threads for different users
-		for threadID := 0; threadID < threadCount; threadID++ {
+		for threadID := range threadCount {
 			go func(tID int) {
 				// Each thread picks a user (round-robin)
 				userID := tID % userCount
@@ -878,7 +879,7 @@ func benchmarkMultiUserThreadIsolation(b *testing.B, userCount, threadCount int)
 				ref := &provider.Reference{Path: fileName}
 
 				// Read the file multiple times to simulate sustained user activity
-				for readCount := 0; readCount < 5; readCount++ {
+				for readCount := range 5 {
 					_, err := fs.GetMD(userCtx, ref, nil)
 					if err != nil {
 						errorChan <- fmt.Errorf("user %d thread %d read %d failed: %w", userID, tID, readCount, err)
@@ -891,7 +892,7 @@ func benchmarkMultiUserThreadIsolation(b *testing.B, userCount, threadCount int)
 				tempRef := &provider.Reference{Path: tempFileName}
 
 				// Upload a small file
-				smallData := []byte(fmt.Sprintf("Thread %d data for user %d", tID, userID))
+				smallData := fmt.Appendf(nil, "Thread %d data for user %d", tID, userID)
 				reader := bytes.NewReader(smallData)
 				err := fs.Upload(userCtx, tempRef, io.NopCloser(reader), nil)
 				if err != nil {
@@ -966,7 +967,7 @@ func benchmarkMultiUserThreadIsolationVerification(b *testing.B, userCount, thre
 	require.NoError(b, err, "Failed to set permissions on test directory")
 
 	// Create filesystem instance
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true,
 	}
 	ctx := contextWithBenchmarkLogger(b)
@@ -985,7 +986,7 @@ func benchmarkMultiUserThreadIsolationVerification(b *testing.B, userCount, thre
 	expectedGIDs := make([]int64, userCount)
 
 	b.Log("Setting up users for thread isolation verification...")
-	for userID := 0; userID < userCount; userID++ {
+	for userID := range userCount {
 		// Create unique user context with specific UID/GID
 		uid := int64(3000 + userID)
 		gid := int64(3000 + userID)
@@ -1012,7 +1013,7 @@ func benchmarkMultiUserThreadIsolationVerification(b *testing.B, userCount, thre
 	}
 
 	// Reset timer and run benchmark with verification
-	b.ResetTimer()
+
 	b.ReportAllocs()
 	b.SetBytes(int64(userCount) * fileSize)
 
@@ -1020,13 +1021,13 @@ func benchmarkMultiUserThreadIsolationVerification(b *testing.B, userCount, thre
 	threadTracker := make(map[int]map[int64]int) // map[threadID]map[uid]count
 	threadStatsMu := sync.Mutex{}
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		// Use channels to coordinate goroutines and collect verification data
 		done := make(chan ThreadVerificationResult, threadCount)
 		errorChan := make(chan error, threadCount)
 
 		// Launch concurrent threads for different users with verification
-		for threadID := 0; threadID < threadCount; threadID++ {
+		for threadID := range threadCount {
 			go func(tID int) {
 				// Each thread picks a user (round-robin)
 				userID := tID % userCount
@@ -1050,7 +1051,7 @@ func benchmarkMultiUserThreadIsolationVerification(b *testing.B, userCount, thre
 
 				// Create a verification function that captures thread information
 				// We need to access the internal thread pool to verify the thread state
-				_, err = fs.threadPool.ExecuteOnUserThread(userCtx, userFromContext, func() (interface{}, error) {
+				_, err = fs.threadPool.ExecuteOnUserThread(userCtx, userFromContext, func() (any, error) {
 					// This function runs on the dedicated user thread
 					// Capture thread information here
 					actualThreadInfo = ThreadVerificationResult{
@@ -1219,7 +1220,7 @@ func benchmarkMultiUserConcurrentReads(b *testing.B, userCount, readsPerUser int
 	require.NoError(b, err, "Failed to set permissions on test directory")
 
 	// Create filesystem instance
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true,
 	}
 	ctx := contextWithBenchmarkLogger(b)
@@ -1241,7 +1242,7 @@ func benchmarkMultiUserConcurrentReads(b *testing.B, userCount, readsPerUser int
 	fileRefs := make([]*provider.Reference, userCount)
 
 	b.Logf("Setting up %d test files for concurrent reads...", userCount)
-	for userID := 0; userID < userCount; userID++ {
+	for userID := range userCount {
 		// Create unique user context
 		user := &userv1beta1.User{
 			Id: &userv1beta1.UserId{
@@ -1269,11 +1270,11 @@ func benchmarkMultiUserConcurrentReads(b *testing.B, userCount, readsPerUser int
 	}
 
 	// Reset timer and run benchmark
-	b.ResetTimer()
+
 	b.ReportAllocs()
 	b.SetBytes(int64(userCount*readsPerUser) * fileSize)
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		// Adaptive concurrency based on user count to avoid overwhelming the filesystem
 		var workerCount int
 		if userCount <= 20 {
@@ -1300,7 +1301,7 @@ func benchmarkMultiUserConcurrentReads(b *testing.B, userCount, readsPerUser int
 
 					// Enhanced retry logic with exponential backoff for I/O errors
 					var err error
-					for retry := 0; retry < 3; retry++ {
+					for retry := range 3 {
 						_, err = fs.GetMD(userCtx, ref, nil)
 						if err == nil {
 							break
@@ -1318,7 +1319,7 @@ func benchmarkMultiUserConcurrentReads(b *testing.B, userCount, readsPerUser int
 
 		// Send jobs
 		totalJobs := userCount * readsPerUser
-		for j := 0; j < totalJobs; j++ {
+		for j := range totalJobs {
 			jobs <- j
 		}
 		close(jobs)
@@ -1327,7 +1328,7 @@ func benchmarkMultiUserConcurrentReads(b *testing.B, userCount, readsPerUser int
 		errorCount := 0
 		successCount := 0
 		var lastError error
-		for j := 0; j < totalJobs; j++ {
+		for j := range totalJobs {
 			err := <-results
 			if err != nil {
 				errorCount++
@@ -1344,10 +1345,11 @@ func benchmarkMultiUserConcurrentReads(b *testing.B, userCount, readsPerUser int
 		successRate := float64(successCount) / float64(totalJobs) * 100
 
 		// Allow up to 10% error rate for high concurrency scenarios, but log statistics
-		maxErrors := totalJobs / 10 // 10% error tolerance
-		if maxErrors < 1 {
-			maxErrors = 1 // Allow at least 1 error
-		}
+		maxErrors := max(
+			// 10% error tolerance
+			totalJobs/10,
+			// Allow at least 1 error
+			1)
 
 		if errorCount > 0 {
 			b.Logf("Iteration %d: %d/%d successful reads (%.1f%% success rate, %d workers)",
@@ -1417,12 +1419,10 @@ func getBenchmarkTestDir(b *testing.B, prefix string) (string, func()) {
 }
 
 // createCephMountFSForBenchmark creates an cephmountfs instance for benchmarks
-func createCephMountFSForBenchmark(b *testing.B, ctx context.Context, config map[string]interface{}, cephVolumePath string, localMountPoint string) *cephmountfs {
+func createCephMountFSForBenchmark(b *testing.B, ctx context.Context, config map[string]any, cephVolumePath string, localMountPoint string) *cephmountfs {
 	// Create a copy of the config to avoid modifying the original
-	testConfig := make(map[string]interface{})
-	for k, v := range config {
-		testConfig[k] = v
-	}
+	testConfig := make(map[string]any)
+	maps.Copy(testConfig, config)
 	// Benchmarks always use local mode and ignore real fstab entries
 	testConfig["testing_allow_local_mode"] = true
 	// Don't set fstabentry for benchmarks - they should be isolated

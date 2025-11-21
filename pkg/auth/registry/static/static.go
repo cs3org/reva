@@ -71,7 +71,7 @@ func (r *reg) GetProvider(ctx context.Context, authType string) (*registrypb.Pro
 }
 
 // New returns an implementation of the auth.Registry interface.
-func New(ctx context.Context, m map[string]interface{}) (auth.Registry, error) {
+func New(ctx context.Context, m map[string]any) (auth.Registry, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

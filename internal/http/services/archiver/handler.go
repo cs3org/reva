@@ -73,7 +73,7 @@ func init() {
 }
 
 // New creates a new archiver service.
-func New(ctx context.Context, conf map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, conf map[string]any) (global.Service, error) {
 	var c Config
 	if err := cfg.Decode(conf, &c); err != nil {
 		return nil, err
