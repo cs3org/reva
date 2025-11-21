@@ -29,7 +29,7 @@ GIT_COMMIT	?= `git rev-parse --short HEAD`
 VERSION		?= `git describe --always`
 GO_VERSION	?= `go version | awk '{print $$3}'`
 BUILD_DATE	= `date +%FT%T%z`
-BUILD_FLAGS     = -X github.com/cs3org/reva/cmd/revad.gitCommit=$(GIT_COMMIT) -X github.com/cs3org/reva/cmd/revad.version=$(VERSION) -X github.com/cs3org/reva/cmd/revad.goVersion=$(GO_VERSION) -X github.com/cs3org/reva/cmd/revad.buildDate=$(BUILD_DATE)
+BUILD_FLAGS     = -X github.com/cs3org/reva/v3/cmd/revad.gitCommit=$(GIT_COMMIT) -X github.com/cs3org/reva/v3/cmd/revad.version=$(VERSION) -X github.com/cs3org/reva/v3/cmd/revad.goVersion=$(GO_VERSION) -X github.com/cs3org/reva/v3/cmd/revad.buildDate=$(BUILD_DATE)
 
 .PHONY: revad
 revad:
@@ -37,7 +37,12 @@ revad:
 
 .PHONY: revad-static
 revad-static:
-	go build -ldflags "-extldflags=-static $(BUILD_FLAGS)" -o ./cmd/revad/revad ./cmd/revad/main
+	go build -tags "sqlite_omit_load_extension" -ldflags "-extldflags=-static $(BUILD_FLAGS)" -o ./cmd/revad/revad ./cmd/revad/main
+
+.PHONY: revad-static-musl
+revad-static-musl:
+	@command -v musl-gcc >/dev/null 2>&1 || { echo "Error: musl-gcc not found. Install with: sudo apt install musl-tools"; exit 1; }
+	CGO_ENABLED=1 CC=musl-gcc go build -tags "sqlite_omit_load_extension" -ldflags "-extldflags '-static' $(BUILD_FLAGS)" -o ./cmd/revad/revad ./cmd/revad/main
 
 .PHONY: gaia
 gaia:
