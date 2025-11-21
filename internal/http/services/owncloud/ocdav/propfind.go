@@ -72,11 +72,8 @@ const (
 // ns is the namespace that is prefixed to the path in the cs3 namespace.
 func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
 
 	fn := path.Join(ns, r.URL.Path)
-	log.Info().Msgf("Findme - handlePathPropfind works on %s", fn)
-
 	ref := &provider.Reference{}
 
 	// We check if the PROPFIND was made to a resource ID instead of a path
@@ -172,7 +169,7 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 		log.Error().Err(err).Msg("propfindResponse: couldn't list user shares")
 	}
 
-	propRes, err := s.multistatusResponse(ctx, &pf, resourceInfos, namespace, usershares, linkshares, isSpacesRequest(ctx, namespace, r))
+	propRes, err := s.multistatusResponse(ctx, &pf, resourceInfos, namespace, usershares, linkshares)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -438,10 +435,10 @@ func readPropfind(r io.Reader) (pf propfindXML, status int, err error) {
 	return pf, 0, nil
 }
 
-func (s *svc) multistatusResponse(ctx context.Context, pf *propfindXML, mds []*provider.ResourceInfo, ns string, usershares, linkshares map[string]struct{}, isSpacesRequest bool) (string, error) {
+func (s *svc) multistatusResponse(ctx context.Context, pf *propfindXML, mds []*provider.ResourceInfo, ns string, usershares, linkshares map[string]struct{}) (string, error) {
 	responses := make([]*responseXML, 0, len(mds))
 	for i := range mds {
-		res, err := s.mdToPropResponse(ctx, pf, mds[i], ns, usershares, linkshares, isSpacesRequest)
+		res, err := s.mdToPropResponse(ctx, pf, mds[i], ns, usershares, linkshares)
 		if err != nil {
 			return "", err
 		}
@@ -556,7 +553,7 @@ func (s *svc) isOpenable(path string) bool {
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI.
-func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string, usershares, linkshares map[string]struct{}, isSpacesRequest bool) (*responseXML, error) {
+func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string, usershares, linkshares map[string]struct{}) (*responseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
 
 	spacesEnabled := s.c.SpacesEnabled
@@ -564,7 +561,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 	var ref string
 	var err error
-	if spacesEnabled && isSpacesRequest {
+	if spacesEnabled {
 		ref, err = spaceHref(ctx, baseURI, md)
 		if err != nil {
 			pxml := propstatXML{
