@@ -30,6 +30,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/interceptors/auth/credential/registry"
+	signedurlregistry "github.com/cs3org/reva/v3/internal/http/interceptors/auth/signed_url/registry"
 	tokenregistry "github.com/cs3org/reva/v3/internal/http/interceptors/auth/token/registry"
 	tokenwriterregistry "github.com/cs3org/reva/v3/internal/http/interceptors/auth/tokenwriter/registry"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -61,12 +62,14 @@ type config struct {
 	CredentialsByUserAgent map[string]string                 `mapstructure:"credentials_by_user_agent"`
 	CredentialChain        []string                          `mapstructure:"credential_chain"`
 	CredentialStrategies   map[string]map[string]interface{} `mapstructure:"credential_strategies"`
+	SignedURLStrategies    map[string]map[string]interface{} `mapstructure:"signed_url_strategies"`
 	TokenStrategyChain     []string                          `mapstructure:"token_strategy_chain"`
 	TokenStrategies        map[string]map[string]interface{} `mapstructure:"token_strategies"`
 	TokenManager           string                            `mapstructure:"token_manager"`
 	TokenManagers          map[string]map[string]interface{} `mapstructure:"token_managers"`
 	TokenWriter            string                            `mapstructure:"token_writer"`
 	TokenWriters           map[string]map[string]interface{} `mapstructure:"token_writers"`
+	MachineSecret          string                            `mapstructure:"machine_secret" docs:"nil;Secret used for the gateway to authenticate a user when using a signed URL"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -124,6 +127,18 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 		credChain[key] = credStrategy
 	}
 
+	// For now, only one strategy available
+	f, ok := signedurlregistry.NewSignedURLFuncs["signed_url"]
+	if !ok {
+		return nil, fmt.Errorf("signed_url strategy not found")
+	}
+
+	signedURLStrategy, err := f(conf.SignedURLStrategies["signed_url"])
+	if err != nil {
+		return nil, err
+	}
+	signedURLChain := []auth.SignedURLStrategy{signedURLStrategy}
+
 	tokenStrategyChain := make([]auth.TokenStrategy, 0, len(conf.TokenStrategyChain))
 	for _, strategy := range conf.TokenStrategyChain {
 		g, ok := tokenregistry.NewTokenFuncs[strategy]
@@ -172,7 +187,7 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 			if utils.Skip(r.URL.Path, unprotected) {
 				log.Info().Interface("unprotected", unprotected).Msg("skipping auth check for: " + r.URL.Path)
 			} else {
-				ctx, err := authenticateUser(w, r, conf, tokenStrategyChain, tokenManager, tokenWriter, credChain, false)
+				ctx, err := authenticateUser(w, r, conf, signedURLChain, tokenStrategyChain, tokenManager, tokenWriter, credChain, false)
 				if err != nil {
 					return
 				}
@@ -185,7 +200,7 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 	return chain, nil
 }
 
-func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, tokenStrategies []auth.TokenStrategy, tokenManager token.Manager, tokenWriter auth.TokenWriter, credChain map[string]auth.CredentialStrategy, isUnprotectedEndpoint bool) (context.Context, error) {
+func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, signedURLStrategies []auth.SignedURLStrategy, tokenStrategies []auth.TokenStrategy, tokenManager token.Manager, tokenWriter auth.TokenWriter, credChain map[string]auth.CredentialStrategy, isUnprotectedEndpoint bool) (context.Context, error) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	w.Header().Set("x-request-id", trace.Get(ctx))
@@ -197,6 +212,40 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 	if err != nil {
 		logError(isUnprotectedEndpoint, log, err, "error getting the authsvc client", http.StatusUnauthorized, w)
 		return nil, err
+	}
+
+	// First of all, let's see if the URL is signed
+	for _, signedURLStrategy := range signedURLStrategies {
+		r, valid := signedURLStrategy.Authenticate(r)
+		if valid {
+			// TODO(jgeens): check resp status
+			// appPasswordResp, err := client.GenerateAppPassword(ctx, &applicationsv1beta1.GenerateAppPasswordRequest{
+			// 	Expiration: &typesv1beta1.Timestamp{
+			// 		Seconds: uint64(time.Now().Add(time.Hour).Unix()),
+			// 	},
+			// 	TokenScope: map[string]*providerv1beta1.Scope{},
+			// })
+			// if err != nil {
+			// 	return nil, err
+			// }
+			// if appPasswordResp.Status.Code != rpc.Code_CODE_OK {
+			// 	return nil, fmt.Errorf("Failed to generate app password with status %+v", appPasswordResp.Status)
+			// }
+			// TODO(jgeens): check resp status
+			u := appctx.ContextMustGetUser(r.Context())
+
+			authResp, err := client.Authenticate(ctx, &gateway.AuthenticateRequest{
+				Type:         "machine",
+				ClientId:     u.Id.OpaqueId,
+				ClientSecret: conf.MachineSecret,
+			})
+			if err != nil {
+				return nil, err
+			}
+			return ctxWithUserInfo(ctx, r, authResp.GetUser(), authResp.Token), nil
+
+			//return r.Context(), nil
+		}
 	}
 
 	// reva token or auth token can be passed using the same tecnique (for example bearer)

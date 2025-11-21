@@ -23,6 +23,7 @@ import (
 	_ "github.com/cs3org/reva/v3/internal/grpc/interceptors/loader"
 	_ "github.com/cs3org/reva/v3/internal/grpc/services/loader"
 	_ "github.com/cs3org/reva/v3/internal/http/interceptors/auth/credential/loader"
+	_ "github.com/cs3org/reva/v3/internal/http/interceptors/auth/signed_url/loader"
 	_ "github.com/cs3org/reva/v3/internal/http/interceptors/auth/token/loader"
 	_ "github.com/cs3org/reva/v3/internal/http/interceptors/auth/tokenwriter/loader"
 	_ "github.com/cs3org/reva/v3/internal/http/interceptors/loader"

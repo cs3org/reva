@@ -20,6 +20,7 @@ package user
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,6 +32,8 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 
+	"golang.org/x/crypto/argon2"
+
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 )
@@ -39,17 +42,17 @@ import (
 type Handler struct {
 	gatewayAddr      string
 	allowedLanguages []string
-	signingKey       string
+	signingKeySecret string
 }
 
 // Init initializes this and any contained handlers.
 func (h *Handler) Init(c *config.Config) error {
-	if len(c.SigningKey) < 32 {
-		return errors.New("Please set a signing key with an appropriate length")
+	if len(c.SigningKeySecret) < 32 {
+		return errors.New("Please set a signing key secret with an appropriate length")
 	}
 	h.gatewayAddr = c.GatewaySvc
 	h.allowedLanguages = c.AllowedLanguages
-	h.signingKey = c.SigningKey
+	h.signingKeySecret = c.SigningKeySecret
 	if len(h.allowedLanguages) == 0 {
 		h.allowedLanguages = []string{"cs", "de", "en", "es", "fr", "it", "gl"}
 	}
@@ -89,9 +92,15 @@ type SigningKey struct {
 func (h *Handler) SigningKey(w http.ResponseWriter, r *http.Request) {
 	u := appctx.ContextMustGetUser(r.Context())
 
+	// We derive a signing key for the user using PBKDF2, based on the
+	// global secret and the username
+	// This method must match what's in internal/http/interceptors/auth/signed_url/strategy/signed_url/signed_url.go
+	bytesKey := argon2.Key([]byte(h.signingKeySecret), []byte(u.Username), 3, 32*1024, 4, 32)
+	hexKey := hex.EncodeToString(bytesKey)
+
 	response.WriteOCSSuccess(w, r, &SigningKey{
 		User:       u.Username,
-		SigningKey: h.signingKey,
+		SigningKey: hexKey,
 	})
 }
 

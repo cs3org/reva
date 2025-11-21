@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2025 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,21 +16,10 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package registry
+package loader
 
 import (
-	"github.com/cs3org/reva/v3/pkg/auth"
+	// Load core authentication strategies.
+	_ "github.com/cs3org/reva/v3/internal/http/interceptors/auth/signed_url/strategy/signed_url"
+	// Add your own here.
 )
-
-// NewCredentialFunc is the function that credential strategies
-// should register at init time.
-type NewCredentialFunc func(map[string]any) (auth.CredentialStrategy, error)
-
-// NewCredentialFuncs is a map containing all the registered auth strategies.
-var NewCredentialFuncs = map[string]NewCredentialFunc{}
-
-// Register registers a new auth strategy  new function.
-// Not safe for concurrent use. Safe for use from package init.
-func Register(name string, f NewCredentialFunc) {
-	NewCredentialFuncs[name] = f
-}
