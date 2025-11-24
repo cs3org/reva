@@ -11,7 +11,7 @@ require (
 	github.com/ceph/go-ceph v0.36.0
 	github.com/cern-eos/go-eosgrpc v0.0.0-20250429151059-e8c6e014a629
 	github.com/cheggaaa/pb v1.0.29
-	github.com/coreos/go-oidc/v3 v3.16.0
+	github.com/coreos/go-oidc/v3 v3.17.0
 	github.com/creasty/defaults v1.8.0
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
 	github.com/cs3org/go-cs3apis v0.0.0-20251111143439-85e49afa696e
