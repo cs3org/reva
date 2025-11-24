@@ -83,8 +83,8 @@ func convertToCS3OCMShare(s *model.OcmShare, am []*ocm.AccessMethod) *ocm.Share 
 			OpaqueId: strconv.Itoa(int(s.Id)),
 		},
 		ResourceId: &provider.ResourceId{
-			StorageId: s.StorageId,
-			OpaqueId:  s.FileId,
+			StorageId: s.Instance,
+			OpaqueId:  s.Inode,
 		},
 		Name:  s.Name,
 		Token: s.Token,
