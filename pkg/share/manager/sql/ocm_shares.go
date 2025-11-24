@@ -90,8 +90,8 @@ func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share) (*ocm.Share, error) 
 
 		share := &model.OcmShare{
 			Token:         s.Token,
-			StorageId:     s.ResourceId.StorageId,
-			FileId:        s.ResourceId.OpaqueId,
+			Instance:      s.ResourceId.StorageId,
+			Inode:         s.ResourceId.OpaqueId,
 			Name:          s.Name,
 			ShareWith:     formatUserID(s.Grantee.GetUserId()),
 			Owner:         s.Owner.OpaqueId,

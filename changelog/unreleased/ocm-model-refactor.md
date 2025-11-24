@@ -10,15 +10,16 @@ some fields for better consistency:
 * `Type` has been renamed to `RecipientType` with
   type `OcmShareType`, and converted both ways
 * Unique index constraints have been created as follows:
-  * For `Shares` on `(inode, instance, permissions, recipient, deletedAt)`
-  * For `OcmShares` on `(storageId, fileId, shareWith, owner, deletedAt)`
+  * For `Shares` on `(inode, instance, recipient, deletedAt)`
+  * For `OcmShares` on `(inode, instance, shareWith, owner, deletedAt)`
 * The unique indexes have been renamed with a `u_`
   prefix for consistency: this affected `u_shareid_user`,
   `u_link_token`. The `i_share_with` was dropped
   as redundant.
 * The `(FileIdPrefix, ItemSource)` tuple is now
-  `(StorageId, FileId)` in `OcmShare`, and it was
-  removed from `OcmReceivedShare` as unused
+  `(Instance, Inode)` in `OcmShare` to be consistent
+  with the regular shares, and it was removed
+  from `OcmReceivedShare` as unused
 * `Alias` and `Hidden` were added in `OcmReceivedShare`
 
 https://github.com/cs3org/reva/pull/5402

@@ -125,21 +125,18 @@ type ProtoShare struct {
 
 // Share is a regular share between users or groups. The unique index ensures that there
 // can only be one share per (inode, instance, permissions, recipient) tuple, unless the share is deleted:
-// for that, we redeclare the corresponding fields for GORM to define the unique index.
+// for that, we redeclare `DeletedAt`, `Inode`, and `Instance` for GORM to define the unique index.
 type Share struct {
 	ProtoShare
 	DeletedAt         gorm.DeletedAt `gorm:"uniqueIndex:u_share"`
 	Inode             string         `gorm:"size:32;uniqueIndex:u_share"`
 	Instance          string         `gorm:"size:32;uniqueIndex:u_share"`
-	Permissions       uint8          `gorm:"uniqueIndex:u_share"`
 	ShareWith         string         `gorm:"size:255;uniqueIndex:u_share"` // 255 because this can be an external account, which has a long representation
 	SharedWithIsGroup bool
 	Description       string `gorm:"size:1024"`
 }
 
-// PublicLink is a public link share.
-// TODO(lopresti) We could enforce a unique index on (UIDInitiator, Inode, Permissions, DeleteAt) but for now web allows
-// the creation of multiple links (with or without different names), so we only enforce a unique constraint on the token.
+// PublicLink is a public link share. We only enforce a unique constraint on the token.
 type PublicLink struct {
 	ProtoShare
 	Token                        string `gorm:"uniqueIndex:u_link_token;size:32"` // Current tokens are only 16 chars long, but old tokens used to be 32 characters
@@ -162,14 +159,14 @@ type ShareState struct {
 }
 
 // OcmShare represents an OCM share for a remote user. The unique index ensures that there
-// can only be one share per (storageId, fileId, shareWith, owner) tuple, unless the share is deleted:
-// for that, we redeclare the DeletedAt as in Share. In addition, tokens must be unique.
+// can only be one share per (inode, instance, shareWith, owner) tuple, unless the share is deleted:
+// for that, we redeclare `DeletedAt`, `Inode`, and `Instance` as in Share. In addition, tokens must be unique.
 type OcmShare struct {
 	BaseModel
 	DeletedAt     gorm.DeletedAt     `gorm:"uniqueIndex:u_ocmshare"`
+	Inode         string             `gorm:"size:64;not null;uniqueIndex:u_ocmshare"`
+	Instance      string             `gorm:"size:64;not null;uniqueIndex:u_ocmshare"`
 	Token         string             `gorm:"size:255;not null;uniqueIndex:u_ocmshare_token"`
-	StorageId     string             `gorm:"size:64;not null;uniqueIndex:u_ocmshare"`
-	FileId        string             `gorm:"size:64;not null;uniqueIndex:u_ocmshare"`
 	Name          string             `gorm:"type:text;not null"`
 	ShareWith     string             `gorm:"size:255;not null;uniqueIndex:u_ocmshare"`
 	Owner         string             `gorm:"size:255;not null;uniqueIndex:u_ocmshare"`
