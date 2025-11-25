@@ -19,7 +19,6 @@
 package model
 
 import (
-	"database/sql"
 	"strconv"
 	"time"
 
@@ -29,7 +28,7 @@ import (
 	resourcespb "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	conversions "github.com/cs3org/reva/v3/pkg/cbox/utils"
 
 	"gorm.io/datatypes"
@@ -95,37 +94,31 @@ type ShareID struct {
 	ID uint `gorm:"primarykey"`
 }
 
-// This is the base model for all share types. We cannot use gorm.Model, because we want our ID
-// to be a foreign key to ShareID, but we incorporate the date fields from gorm. This struct
-// does not declare any unique indexes as it is embedded by others.
-type BaseModel struct {
+// This is the base model for all share types and embeds parts of gorm.Model. We can't use it, because
+// we want our ID to be a foreign key to ShareID, but we incorporate the date fields from GORM.
+// The commented-out fields would logically belong here, but we define them in each specific type
+// to control the unique indexes to be enforced in the corresponding tables.
+type ProtoShare struct {
 	// Id has to be called Id and not ID, otherwise the foreign key will not work
 	// ID is a special field in GORM, which it uses as the default Primary Key
 	Id        uint    `gorm:"primaryKey;not null;autoIncrement:false"`
 	ShareId   ShareID `gorm:"foreignKey:Id;references:ID;constraint:OnDelete:CASCADE"` //;references:ID
 	CreatedAt time.Time
 	UpdatedAt time.Time
-	DeletedAt gorm.DeletedAt `gorm:"index"`
-}
-
-// ProtoShare contains fields that are common between PublicLinks and Shares.
-// We also define some indexes for performance reasons.
-type ProtoShare struct {
-	BaseModel
+	//DeletedAt  gorm.DeletedAt `gorm:"index"`
+	//Inode      string `gorm:"size:32;index"`
+	//Instance   string `gorm:"size:32;index"`
 	UIDOwner     string   `gorm:"size:64"`
 	UIDInitiator string   `gorm:"size:64;index"`
 	ItemType     ItemType `gorm:"size:16;index"` // file | folder | reference | symlink
 	InitialPath  string
-	Inode        string `gorm:"size:32;index"`
-	Instance     string `gorm:"size:32;index"`
 	Permissions  uint8
 	Orphan       bool
 	Expiration   datatypes.NullTime `gorm:"index"`
 }
 
 // Share is a regular share between users or groups. The unique index ensures that there
-// can only be one share per (inode, instance, permissions, recipient) tuple, unless the share is deleted:
-// for that, we redeclare `DeletedAt`, `Inode`, and `Instance` for GORM to define the unique index.
+// can only be one share per (inode, instance, permissions, recipient) tuple, unless the share is deleted.
 type Share struct {
 	ProtoShare
 	DeletedAt         gorm.DeletedAt `gorm:"uniqueIndex:u_share"`
@@ -139,7 +132,10 @@ type Share struct {
 // PublicLink is a public link share. We only enforce a unique constraint on the token.
 type PublicLink struct {
 	ProtoShare
-	Token                        string `gorm:"uniqueIndex:u_link_token;size:32"` // Current tokens are only 16 chars long, but old tokens used to be 32 characters
+	DeletedAt                    gorm.DeletedAt `gorm:"index"`
+	Inode                        string         `gorm:"size:32"`
+	Instance                     string         `gorm:"size:32"`
+	Token                        string         `gorm:"uniqueIndex:u_link_token;size:32"` // Current tokens are only 16 chars long, but old tokens used to be 32 characters
 	Quicklink                    bool
 	NotifyUploads                bool
 	NotifyUploadsExtraRecipients string
@@ -159,21 +155,21 @@ type ShareState struct {
 }
 
 // OcmShare represents an OCM share for a remote user. The unique index ensures that there
-// can only be one share per (inode, instance, shareWith, owner) tuple, unless the share is deleted:
-// for that, we redeclare `DeletedAt`, `Inode`, and `Instance` as in Share. In addition, tokens must be unique.
+// can only be one share per (inode, instance, recipient) tuple, unless the share is deleted.
+// In addition, tokens must be unique.
+// TODO(lopresti) see if we can consolidate Owner and Initiator with UIDOwner and UIDInitiator in ProtoShare
 type OcmShare struct {
-	BaseModel
+	ProtoShare
 	DeletedAt     gorm.DeletedAt     `gorm:"uniqueIndex:u_ocmshare"`
 	Inode         string             `gorm:"size:64;not null;uniqueIndex:u_ocmshare"`
 	Instance      string             `gorm:"size:64;not null;uniqueIndex:u_ocmshare"`
 	Token         string             `gorm:"size:255;not null;uniqueIndex:u_ocmshare_token"`
 	Name          string             `gorm:"type:text;not null"`
 	ShareWith     string             `gorm:"size:255;not null;uniqueIndex:u_ocmshare"`
-	Owner         string             `gorm:"size:255;not null;uniqueIndex:u_ocmshare"`
+	Owner         string             `gorm:"size:255;not null"`
 	Initiator     string             `gorm:"type:text;not null"`
 	Ctime         uint64             `gorm:"not null"`
 	Mtime         uint64             `gorm:"not null"`
-	Expiration    sql.NullInt64      `gorm:"default:null"`
 	RecipientType OcmShareType       `gorm:"not null"`
 	Protocols     []OcmShareProtocol `gorm:"constraint:OnDelete:CASCADE;"`
 }
@@ -189,18 +185,18 @@ type OcmShareProtocol struct {
 // OcmReceivedShare represents an OCM share received from a remote user.
 type OcmReceivedShare struct {
 	gorm.Model
-	RemoteShareID string        `gorm:"index:i_ocmrecshare_remoteshareid;not null"`
-	Name          string        `gorm:"size:255;not null"`
-	ItemType      ItemType      `gorm:"size:16;not null"`
-	ShareWith     string        `gorm:"size:255;not null"`
-	Owner         string        `gorm:"index:i_ocmrecshare_owner;size:255;not null"`
-	Initiator     string        `gorm:"index:i_ocmrecshare_initiator;size:255;not null"`
-	Ctime         uint64        `gorm:"not null"`
-	Mtime         uint64        `gorm:"not null"`
-	Expiration    sql.NullInt64 `gorm:"default:null"`
-	RecipientType OcmShareType  `gorm:"index:i_ocmrecshare_type;not null"`
-	State         OcmShareState `gorm:"index:i_ocmrecshare_state;not null"`
-	Alias         string        `gorm:"size:64"`
+	RemoteShareID string             `gorm:"index:i_ocmrecshare_remoteshareid;not null"`
+	Name          string             `gorm:"size:255;not null"`
+	ItemType      ItemType           `gorm:"size:16;not null"`
+	ShareWith     string             `gorm:"size:255;not null"`
+	Owner         string             `gorm:"index:i_ocmrecshare_owner;size:255;not null"`
+	Initiator     string             `gorm:"index:i_ocmrecshare_initiator;size:255;not null"`
+	Ctime         uint64             `gorm:"not null"`
+	Mtime         uint64             `gorm:"not null"`
+	Expiration    datatypes.NullTime `gorm:"index"`
+	RecipientType OcmShareType       `gorm:"index:i_ocmrecshare_type;not null"`
+	State         OcmShareState      `gorm:"index:i_ocmrecshare_state;not null"`
+	Alias         string             `gorm:"size:64"`
 	Hidden        bool
 }
 
@@ -219,10 +215,10 @@ type OcmReceivedShareProtocol struct {
 }
 
 func (s *Share) AsCS3Share(granteeType userpb.UserType) *collaboration.Share {
-	creationTs := &typespb.Timestamp{
+	creationTs := &types.Timestamp{
 		Seconds: uint64(s.CreatedAt.Unix()),
 	}
-	updateTs := &typespb.Timestamp{
+	updateTs := &types.Timestamp{
 		Seconds: uint64(s.UpdatedAt.Unix()),
 	}
 	share := &collaboration.Share{
@@ -244,7 +240,7 @@ func (s *Share) AsCS3Share(granteeType userpb.UserType) *collaboration.Share {
 	}
 
 	if s.Expiration.Valid {
-		share.Expiration = &typespb.Timestamp{
+		share.Expiration = &types.Timestamp{
 			Seconds: uint64(s.Expiration.V.Unix()),
 		}
 	}
@@ -271,16 +267,16 @@ func (s *Share) AsCS3ReceivedShare(state *ShareState, granteeType userpb.UserTyp
 }
 
 func (p *PublicLink) AsCS3PublicShare() *link.PublicShare {
-	ts := &typespb.Timestamp{
+	ts := &types.Timestamp{
 		Seconds: uint64(p.CreatedAt.Unix()),
 	}
 
-	var expires *typespb.Timestamp
+	var expires *types.Timestamp
 	if p.Expiration.Valid {
 		exp, err := p.Expiration.Value()
 		if err == nil {
 			expiration := exp.(time.Time)
-			expires = &typespb.Timestamp{
+			expires = &types.Timestamp{
 				Seconds: uint64(expiration.Unix()),
 			}
 		}

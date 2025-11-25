@@ -38,6 +38,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/protobuf/proto"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -101,8 +102,10 @@ func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share) (*ocm.Share, error) 
 			RecipientType: convertFromCS3OCMShareType(s.ShareType),
 		}
 		if s.Expiration != nil {
-			share.Expiration.Int64 = int64(s.Expiration.Seconds)
-			share.Expiration.Valid = true
+			share.Expiration = datatypes.NullTime{
+				V:     time.Unix(int64(s.Expiration.Seconds), 0),
+				Valid: true,
+			}
 		}
 		share.Id = id
 		share.ShareId = model.ShareID{ID: id}
@@ -274,10 +277,11 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*oc
 			RecipientType: convertFromCS3OCMShareType(s.ShareType),
 			State:         convertFromCS3OCMShareState(s.State),
 		}
-
 		if s.Expiration != nil {
-			receivedShare.Expiration.Int64 = int64(s.Expiration.Seconds)
-			receivedShare.Expiration.Valid = true
+			receivedShare.Expiration = datatypes.NullTime{
+				V:     time.Unix(int64(s.Expiration.Seconds), 0),
+				Valid: true,
+			}
 		}
 
 		id := tx.Create(receivedShare)
@@ -480,7 +484,7 @@ func (m *mgr) getByID(ctx context.Context, user *userpb.User, id *ocm.ShareId) (
 func (m *mgr) getByKey(ctx context.Context, user *userpb.User, key *ocm.ShareKey) (*ocm.Share, error) {
 	var shareModel model.OcmShare
 	if err := m.db.WithContext(ctx).
-		Where("owner = ? AND storage_id = ? AND file_id = ? AND share_with = ? AND (initiator = ? OR owner = ?)",
+		Where("owner = ? AND instance = ? AND inode = ? AND share_with = ? AND (initiator = ? OR owner = ?)",
 			key.Owner.OpaqueId, key.ResourceId.StorageId, key.ResourceId.OpaqueId, formatUserID(key.Grantee.GetUserId()), user.Id.OpaqueId, user.Id.OpaqueId).
 		First(&shareModel).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -562,7 +566,7 @@ func (m *mgr) deleteByID(ctx context.Context, user *userpb.User, id *ocm.ShareId
 
 func (m *mgr) deleteByKey(ctx context.Context, user *userpb.User, key *ocm.ShareKey) error {
 	result := m.db.WithContext(ctx).
-		Where("owner = ? AND storage_id = ? AND file_id = ? AND share_with = ? AND (initiator = ? OR owner = ?)",
+		Where("owner = ? AND instance = ? AND inode = ? AND share_with = ? AND (initiator = ? OR owner = ?)",
 			key.Owner.OpaqueId, key.ResourceId.StorageId, key.ResourceId.OpaqueId, formatUserID(key.Grantee.GetUserId()), user.Id.OpaqueId, user.Id.OpaqueId).
 		Delete(&model.OcmShare{})
 
@@ -675,7 +679,7 @@ func translateFilters(filters []*ocm.ListOCMSharesRequest_Filter) (string, []any
 		for n, f := range lst {
 			switch filter := f.Term.(type) {
 			case *ocm.ListOCMSharesRequest_Filter_ResourceId:
-				filterQuery.WriteString("storage_id = ? AND file_id = ?")
+				filterQuery.WriteString("instance = ? AND inode = ?")
 				params = append(params, filter.ResourceId.StorageId, filter.ResourceId.OpaqueId)
 			case *ocm.ListOCMSharesRequest_Filter_Creator:
 				filterQuery.WriteString("initiator = ?")

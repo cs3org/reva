@@ -122,11 +122,8 @@ func (m *ShareMgr) Share(ctx context.Context, md *provider.ResourceInfo, g *coll
 		return nil, errors.Wrap(err, "failed to create id for PublicShare")
 	}
 
-	share.BaseModel = model.BaseModel{
-		Id:      id,
-		ShareId: model.ShareID{ID: id},
-	}
-
+	share.Id = id
+	share.ShareId = model.ShareID{ID: id}
 	share.UIDOwner = conversions.FormatUserID(md.Owner)
 	share.UIDInitiator = conversions.FormatUserID(user.Id)
 	share.InitialPath = md.Path
@@ -606,9 +603,7 @@ func emptyShareWithId(id string) (*model.Share, error) {
 	}
 	share := &model.Share{
 		ProtoShare: model.ProtoShare{
-			BaseModel: model.BaseModel{
-				Id: uint(intId),
-			},
+			Id: uint(intId),
 		},
 	}
 	return share, nil

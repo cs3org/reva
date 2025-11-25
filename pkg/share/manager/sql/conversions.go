@@ -111,7 +111,7 @@ func convertToCS3OCMShare(s *model.OcmShare, am []*ocm.AccessMethod) *ocm.Share 
 	}
 	if s.Expiration.Valid {
 		share.Expiration = &types.Timestamp{
-			Seconds: uint64(s.Expiration.Int64),
+			Seconds: uint64(s.Expiration.V.Unix()),
 		}
 	}
 	return share
@@ -149,7 +149,7 @@ func convertToCS3OCMReceivedShare(s *model.OcmReceivedShare, p []*ocm.Protocol) 
 	}
 	if s.Expiration.Valid {
 		share.Expiration = &types.Timestamp{
-			Seconds: uint64(s.Expiration.Int64),
+			Seconds: uint64(s.Expiration.V.Unix()),
 		}
 	}
 	return share
