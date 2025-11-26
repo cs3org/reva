@@ -61,7 +61,7 @@ require (
 	golang.org/x/sys v0.38.0
 	golang.org/x/term v0.37.0
 	google.golang.org/genproto v0.0.0-20250603155806-513f23925822
-	google.golang.org/grpc v1.76.0
+	google.golang.org/grpc v1.77.0
 	google.golang.org/protobuf v1.36.10
 	gorm.io/datatypes v1.2.7
 	gorm.io/driver/mysql v1.6.0
@@ -134,8 +134,8 @@ require (
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	go.mongodb.org/mongo-driver v1.17.3 // indirect
-	go.opentelemetry.io/otel v1.37.0 // indirect
-	go.opentelemetry.io/otel/trace v1.37.0 // indirect
+	go.opentelemetry.io/otel v1.38.0 // indirect
+	go.opentelemetry.io/otel/trace v1.38.0 // indirect
 	golang.org/x/mod v0.29.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
