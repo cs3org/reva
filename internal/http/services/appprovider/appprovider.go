@@ -22,6 +22,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -434,7 +435,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 
 	viewMode := resolveViewMode(statRes.Info, r.Form.Get("view_mode"))
 	if viewMode == gateway.OpenInAppRequest_VIEW_MODE_INVALID {
-		writeError(w, r, appErrorUnauthenticated, "permission denied when accessing the file", err)
+		writeError(w, r, appErrorInvalidParameter, fmt.Sprintf("invalid view mode %s -> %d when opening the file", r.Form.Get("view_mode"), viewMode), err)
 		return
 	}
 
