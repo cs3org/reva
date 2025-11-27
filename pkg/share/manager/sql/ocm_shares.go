@@ -223,7 +223,7 @@ func (m *mgr) ListShares(ctx context.Context, user *userpb.User, filters []*ocm.
 	query := m.db.WithContext(ctx).Where("initiator = ? OR owner = ?", user.Id.OpaqueId, user.Id.OpaqueId)
 
 	if len(filters) > 0 {
-		filterQuery, filterParams, err := translateFilters(filters)
+		filterQuery, filterParams, err := translateShareFilters(filters)
 		if err != nil {
 			return nil, err
 		}
@@ -377,8 +377,19 @@ func storeTransferProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_TransferO
 	return nil
 }
 
-func (m *mgr) ListReceivedShares(ctx context.Context, user *userpb.User) ([]*ocm.ReceivedShare, error) {
+func (m *mgr) ListReceivedShares(ctx context.Context, user *userpb.User, filters []*ocm.ListReceivedOCMSharesRequest_Filter) ([]*ocm.ReceivedShare, error) {
 	query := m.db.WithContext(ctx).Where("share_with = ?", user.Id.OpaqueId)
+
+	if len(filters) > 0 {
+		filterQuery, filterParams, err := translateReceivedShareFilters(filters)
+		if err != nil {
+			return nil, err
+		}
+		if filterQuery != "" {
+			query = query.Where(filterQuery, filterParams...)
+		}
+	}
+
 	var receivedShareModels []model.OcmReceivedShare
 	if err := query.Find(&receivedShareModels).Error; err != nil {
 		return nil, err
@@ -681,7 +692,7 @@ func (m *mgr) updateShareByKey(ctx context.Context, user *userpb.User, key *ocm.
 	return m.updateShareByID(ctx, user, share.Id, f...)
 }
 
-func translateFilters(filters []*ocm.ListOCMSharesRequest_Filter) (string, []any, error) {
+func translateShareFilters(filters []*ocm.ListOCMSharesRequest_Filter) (string, []any, error) {
 	var (
 		filterQuery strings.Builder
 		params      []any
@@ -700,6 +711,44 @@ func translateFilters(filters []*ocm.ListOCMSharesRequest_Filter) (string, []any
 				filterQuery.WriteString("initiator = ?")
 				params = append(params, filter.Creator.OpaqueId)
 			case *ocm.ListOCMSharesRequest_Filter_Owner:
+				filterQuery.WriteString("owner = ?")
+				params = append(params, filter.Owner.OpaqueId)
+			default:
+				return "", nil, errtypes.BadRequest("unknown filter")
+			}
+
+			if n != len(lst)-1 {
+				filterQuery.WriteString(" OR ")
+			}
+		}
+		if count != len(grouped)-1 {
+			filterQuery.WriteString(" AND ")
+		}
+		count++
+	}
+
+	return filterQuery.String(), params, nil
+}
+
+func translateReceivedShareFilters(filters []*ocm.ListReceivedOCMSharesRequest_Filter) (string, []any, error) {
+	var (
+		filterQuery strings.Builder
+		params      []any
+	)
+
+	grouped := groupFiltersByType(filters)
+
+	var count int
+	for _, lst := range grouped {
+		for n, f := range lst {
+			switch filter := f.Term.(type) {
+			case *ocm.ListReceivedOCMSharesRequest_Filter_ResourceType:
+				filterQuery.WriteString("item_type = ?")
+				params = append(params, filter.ResourceType)
+			case *ocm.ListReceivedOCMSharesRequest_Filter_Creator:
+				filterQuery.WriteString("initiator = ?")
+				params = append(params, filter.Creator.OpaqueId)
+			case *ocm.ListReceivedOCMSharesRequest_Filter_Owner:
 				filterQuery.WriteString("owner = ?")
 				params = append(params, filter.Owner.OpaqueId)
 			default:

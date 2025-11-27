@@ -96,7 +96,22 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 
 	if s.c.OCMEnabled && !utils.IsLightweightUser(u) {
 		// include ocm shares in the response
-		ocmShareResp, err := gw.ListReceivedOCMShares(ctx, &ocm.ListReceivedOCMSharesRequest{})
+		ocmShareResp, err := gw.ListReceivedOCMShares(ctx, &ocm.ListReceivedOCMSharesRequest{
+			Filters: []*ocm.ListReceivedOCMSharesRequest_Filter{
+				{
+					Type: ocm.ListReceivedOCMSharesRequest_Filter_TYPE_SHARE_TYPE,
+					Term: &ocm.ListReceivedOCMSharesRequest_Filter_ResourceType{
+						ResourceType: ocm.ShareType_SHARE_TYPE_FILE,
+					},
+				},
+				{
+					Type: ocm.ListReceivedOCMSharesRequest_Filter_TYPE_SHARE_TYPE,
+					Term: &ocm.ListReceivedOCMSharesRequest_Filter_ResourceType{
+						ResourceType: ocm.ShareType_SHARE_TYPE_CONTAINER,
+					},
+				},
+			},
+		})
 		if err != nil {
 			handleError(ctx, err, w)
 			log.Fatal().Err(err).Msg("ListReceivedOCMShares returned error - user will not be able to see their OCM shares")

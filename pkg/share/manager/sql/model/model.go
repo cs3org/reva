@@ -83,6 +83,8 @@ const (
 	WebappProtocol
 	// TransferProtocol is the OCM `datatx` protocol.
 	TransferProtocol
+	// EmbeddedProtocol is the OCM `embedded` protocol.
+	EmbeddedProtocol
 )
 
 // ShareID only contains IDs of shares and public links. This is because the Web UI requires
@@ -199,6 +201,7 @@ type OcmReceivedShare struct {
 	State         OcmShareState      `gorm:"index:i_ocmrecshare_state;not null"`
 	Alias         string             `gorm:"size:64"`
 	Hidden        bool
+	Payload       datatypes.JSON `gorm:"type:json;default:null"`
 }
 
 // OcmReceivedShareProtocol represents the protocol used to access an OCM share received from a remote user.
