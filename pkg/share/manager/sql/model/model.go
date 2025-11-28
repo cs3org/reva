@@ -118,7 +118,7 @@ type ProtoShare struct {
 }
 
 // Share is a regular share between users or groups. The unique index ensures that there
-// can only be one share per (inode, instance, permissions, recipient) tuple, unless the share is deleted.
+// can only be one share per (inode, instance, recipient) tuple, unless the share is deleted.
 type Share struct {
 	ProtoShare
 	DeletedAt         gorm.DeletedAt `gorm:"uniqueIndex:u_share"`
