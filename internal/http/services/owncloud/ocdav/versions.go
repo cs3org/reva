@@ -166,18 +166,12 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 	// add version dir . entry, derived from file info
 	infos = append(infos, info)
 
-	var spacePath string
-	var ok bool
-	if s.c.SpacesEnabled {
-		storageSpaceID := spaces.ConcatStorageSpaceID(rid.StorageId, rid.SpaceId)
-		_, spacePath, ok = spaces.DecodeStorageSpaceID(storageSpaceID)
-		if !ok {
-			sublog.Error().Msg("error decoding storage space id")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-	} else {
-		spacePath = ""
+	storageSpaceID := spaces.ConcatStorageSpaceID(rid.StorageId, rid.SpaceId)
+	_, spacePath, ok := spaces.DecodeStorageSpaceID(storageSpaceID)
+	if !ok {
+		sublog.Error().Msg("error decoding storage space id")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	for i := range versions {
@@ -216,24 +210,8 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	// storageSpaceID := spaces.ConcatStorageSpaceID(md.Id.StorageId, md.Id.SpaceId)
-	// _, spacePath, ok := spaces.DecodeStorageSpaceID(storageSpaceID)
-	// if !ok {
-	// 	return "", errors.New("Failed to decode space ID")
-	// }
 
-	// relativePath, err := filepath.Rel(spacePath, md.Path)
-	// if err != nil {
-	// 	return "", errors.Wrapf(err, "failed to calculate path relative to space root: %v", spacePath)
-	// }
-
-	// // When requesting for versions, the request URL is baseURI=/remote.php/dav/meta/<resource-id>
-	// // When listing other resources, its value is baseURI=/remote.php/dav/spaces.
-	// // Because of this, a different response is expected, without the storageSpaceID.
-	// if md.Id.StorageId == "versions" {
-	// 	return path.Join(baseURI, relativePath), nil
-	// }
-	propRes, err := s.multistatusResponse(ctx, &pf, infos, "", href, nil, nil)
+	propRes, err := s.multistatusResponse(ctx, &pf, infos, nil, "", href, nil, nil)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)

@@ -189,7 +189,7 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	propRes, err := s.multistatusResponse(ctx, &pf, infos, ns, href, nil, nil)
+	propRes, err := s.multistatusResponse(ctx, &pf, infos, nil, ns, href, nil, nil)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)

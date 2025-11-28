@@ -126,7 +126,6 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			}
 
 			if r.Header.Get("Depth") == "" {
-				log.Error().Msgf("MethodNotAllowed: calls to /files without Depth header are not allowed")
 				w.WriteHeader(http.StatusMethodNotAllowed)
 				b, err := Marshal(exception{
 					code:    SabredavMethodNotAllowed,
@@ -165,9 +164,9 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			contextUser, ok := appctx.ContextGetUser(ctx)
 			if ok && isOwner(requestUserID, contextUser) {
 				// use home storage handler when user was detected
-				// base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files", requestUserID)
-				// ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
-				// r = r.WithContext(ctx)
+				base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files", requestUserID)
+				ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+				r = r.WithContext(ctx)
 
 				h.FilesHomeHandler.Handler(s).ServeHTTP(w, r)
 			} else {
@@ -183,7 +182,6 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "meta")
 			ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
 			r = r.WithContext(ctx)
-			log.Info().Msgf("FindMe - Handling path %s in meta", r.URL.Path)
 			h.MetaHandler.Handler(s).ServeHTTP(w, r)
 
 		case "trash-bin":
@@ -193,8 +191,8 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			h.TrashbinHandler.Handler(s).ServeHTTP(w, r)
 
 		case "spaces":
-			// base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "spaces")
-			// ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "spaces")
+			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
 
 			var head string
 			head, r.URL.Path = router.ShiftPath(r.URL.Path)
