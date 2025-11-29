@@ -32,8 +32,6 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/datagateway"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/rhttp/router"
-	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/rs/zerolog"
 )
 
@@ -63,7 +61,7 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 	}
 
 	// Local copy: in this case Destination is mandatory
-	dst, err := extractDestination(r)
+	dst, err := extractDestination(r, ns)
 	if err != nil {
 		appctx.GetLogger(ctx).Warn().Msg("HTTP COPY: failed to extract destination")
 		w.WriteHeader(http.StatusBadRequest)
@@ -80,18 +78,6 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-	}
-
-	// For the destination, we still need to handle this ourselves
-	if s.c.SpacesEnabled && ns != "/public" {
-		dstSpaceID, dstRelPath := router.ShiftPath(dst)
-		_, spaceRoot, ok := spaces.DecodeStorageSpaceID(dstSpaceID)
-		if !ok {
-			appctx.GetLogger(ctx).Warn().Str("dstSpaceID", dstSpaceID).Msg("handlePathCopy: Failed to parse destination space ID")
-		}
-		dst = path.Join(spaceRoot, dstRelPath)
-	} else {
-		dst = path.Join(ns, dst)
 	}
 
 	srcRef := &provider.Reference{

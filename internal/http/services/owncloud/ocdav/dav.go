@@ -60,6 +60,10 @@ const (
 	ErrFileNotFoundInRoot = "ERR_FILE_NOT_FOUND_IN_ROOT"
 )
 
+const (
+	ctxKeyIncomingURL = "ctxKeyIncomingURL"
+)
+
 func (h *DavHandler) init(c *Config) error {
 	h.AvatarsHandler = new(AvatarsHandler)
 	if err := h.AvatarsHandler.init(c); err != nil {

@@ -35,6 +35,7 @@ import (
 	storageProvider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/myofficefiles"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/trace"
 	"github.com/cs3org/reva/v3/pkg/utils"
 
@@ -131,7 +132,6 @@ type Config struct {
 	DisabledOpenInAppPaths       []string                  `mapstructure:"disabled_open_in_app_paths"`
 	Notifications                map[string]any            `docs:"nil; settings for the notification helper" mapstructure:"notifications"`
 	MyOfficeFilesAllowedProjects []string                  `mapstructure:"my_office_files_projects"`
-	SpacesEnabled                bool                      `mapstructure:"spaces_enabled"`
 }
 
 func (c *Config) ApplyDefaults() {
@@ -241,6 +241,10 @@ func (s *svc) Handler() http.Handler {
 		// to build correct href prop urls we need to keep track of the base path
 		// always starts with /
 		base := path.Join("/", s.Prefix())
+
+		// We store the actual incoming URL
+		ctx = context.WithValue(ctx, ctxKeyIncomingURL, r.URL.Path)
+		r = r.WithContext(ctx)
 
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
@@ -356,7 +360,7 @@ func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func extractDestination(r *http.Request) (string, error) {
+func extractDestination(r *http.Request, ns string) (string, error) {
 	dstHeader := r.Header.Get(HeaderDestination)
 	if dstHeader == "" {
 		return "", errors.Wrap(errInvalidValue, "destination header is empty")
@@ -370,8 +374,18 @@ func extractDestination(r *http.Request) (string, error) {
 	// TODO check if path is on same storage, return 502 on problems, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 	// Strip the base URI from the destination. The destination might contain redirection prefixes which need to be handled
 	destination := strings.TrimPrefix(dstURL.Path, baseURI)
-	return destination, nil
 
+	// If the destination is in a spaces format, we replace with the space path
+	dstSpaceID, dstRelPath := router.ShiftPath(destination)
+	_, spaceRoot, ok := spaces.DecodeStorageSpaceID(dstSpaceID)
+	if ok && ns != "/public" {
+		destination = path.Join(spaceRoot, dstRelPath)
+	} else {
+		// If it is non-spaces, we join the namespace
+		destination = path.Join(ns, destination)
+	}
+
+	return destination, nil
 }
 
 // replaceAllStringSubmatchFunc is taken from 'Go: Replace String with Regular Expression Callback'
