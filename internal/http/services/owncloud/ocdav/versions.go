@@ -186,13 +186,6 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 	}
 
 	for i := range versions {
-		sublog.Debug().
-			Int("version_index", i).
-			Str("version_key", versions[i].GetKey()).
-			Str("rid_space_id", rid.SpaceId).
-			Str("info_id_space_id", info.Id.SpaceId).
-			Msg("versions: creating version ResourceInfo")
-		
 		vi := &provider.ResourceInfo{
 			// TODO(jfd) we cannot access version content, this will be a problem when trying to fetch version thumbnails
 			// Opaque
@@ -214,14 +207,6 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 			Size:  versions[i].Size,
 			Owner: info.Owner,
 		}
-		
-		sublog.Debug().
-			Str("version_storage_id", vi.Id.StorageId).
-			Str("version_space_id", vi.Id.SpaceId).
-			Str("version_opaque_id", vi.Id.OpaqueId).
-			Str("version_path", vi.Path).
-			Msg("versions: created version ResourceInfo")
-		
 		infos = append(infos, vi)
 	}
 
