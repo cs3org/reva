@@ -437,7 +437,11 @@ func (fs *Eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 		return err
 	}
 
-	cboxAuth := utils.GetEmptyAuth()
+	u, err := utils.GetUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eosfs: no user in ctx")
+	}
+	userAuth, err := fs.getUserAuth(ctx, u, fn)
 
 	for k, v := range md.Metadata {
 		if k == "" || v == "" {
@@ -457,7 +461,7 @@ func (fs *Eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 
 		// TODO(labkode): SetArbitraryMetadata does not have semantics for recursivity.
 		// We set it to false
-		err := fs.c.SetAttr(ctx, cboxAuth, attr, false, false, fn, "")
+		err := fs.c.SetAttr(ctx, userAuth, attr, false, false, fn, "")
 		if err != nil {
 			return errors.Wrap(err, "eosfs: error setting xattr in eos driver")
 		}
