@@ -169,7 +169,7 @@ func (m *manager) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*
 }
 
 func tokenIsExpired(token *invitepb.InviteToken) bool {
-	return token.Expiration != nil && token.Expiration.Seconds > uint64(time.Now().Unix())
+	return token.Expiration != nil && token.Expiration.Seconds < uint64(time.Now().Unix())
 }
 
 func (m *manager) AddRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.User) error {
