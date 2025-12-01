@@ -37,8 +37,8 @@ func init() {
 
 // NewUnary returns a new unary interceptor
 // that checks grpc calls and blocks write requests.
-func NewUnary(_ map[string]interface{}) (grpc.UnaryServerInterceptor, int, error) {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func NewUnary(_ map[string]any) (grpc.UnaryServerInterceptor, int, error) {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		switch req.(type) {
 		case *provider.ListContainerRequest:
 			resp, err := handler(ctx, req)

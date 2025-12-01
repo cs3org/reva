@@ -51,7 +51,7 @@ func (c *config) ApplyDefaults() {
 	}
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
+func parseConfig(m map[string]any) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
@@ -62,7 +62,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New returns an implementation to of the storage.FS interface that talks to
 // a local filesystem with user homes.
-func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
+func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

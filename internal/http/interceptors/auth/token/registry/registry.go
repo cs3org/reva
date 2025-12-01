@@ -22,7 +22,7 @@ import "github.com/cs3org/reva/v3/pkg/auth"
 
 // NewTokenFunc is the function that token strategies
 // should register at init time.
-type NewTokenFunc func(map[string]interface{}) (auth.TokenStrategy, error)
+type NewTokenFunc func(map[string]any) (auth.TokenStrategy, error)
 
 // NewTokenFuncs is a map containing all the registered auth strategies.
 var NewTokenFuncs = map[string]NewTokenFunc{}

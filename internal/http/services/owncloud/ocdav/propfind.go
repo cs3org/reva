@@ -46,7 +46,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cs3org/reva/v3/pkg/publicshare"
-	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/share"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
@@ -167,8 +166,12 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 	} else {
 		log.Error().Err(err).Msg("propfindResponse: couldn't list user shares")
 	}
+	href := r.URL.Path
+	if ctxPath := ctx.Value(ctxKeyIncomingURL); ctxPath != nil {
+		href = ctxPath.(string)
+	}
 
-	propRes, err := s.multistatusResponse(ctx, &pf, resourceInfos, namespace, usershares, linkshares)
+	propRes, err := s.multistatusResponse(ctx, &pf, resourceInfos, parentInfo, namespace, href, usershares, linkshares)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -434,10 +437,10 @@ func readPropfind(r io.Reader) (pf propfindXML, status int, err error) {
 	return pf, 0, nil
 }
 
-func (s *svc) multistatusResponse(ctx context.Context, pf *propfindXML, mds []*provider.ResourceInfo, ns string, usershares, linkshares map[string]struct{}) (string, error) {
+func (s *svc) multistatusResponse(ctx context.Context, pf *propfindXML, mds []*provider.ResourceInfo, parent *provider.ResourceInfo, ns, href string, usershares, linkshares map[string]struct{}) (string, error) {
 	responses := make([]*responseXML, 0, len(mds))
 	for i := range mds {
-		res, err := s.mdToPropResponse(ctx, pf, mds[i], ns, usershares, linkshares)
+		res, err := s.mdToPropResponse(ctx, pf, mds[i], parent, ns, href, usershares, linkshares)
 		if err != nil {
 			return "", err
 		}
@@ -487,48 +490,6 @@ func (s *svc) newPropRaw(key, val string) *propertyXML {
 	}
 }
 
-// Compute the URL of the resource in the spaces format:
-// baseURI + /<space_id>/relative/path/to/space
-// The space_id MUST be set on `md`.
-// The path of the space root it is calculated from `md.Id.SpaceId`
-// Note that the path on `md.Path` must also be set, and must be a path relative to the space root.
-func spaceHref(ctx context.Context, baseURI string, md *provider.ResourceInfo) (string, error) {
-	if ocm, _ := ctx.Value(ctxOCM).(bool); ocm {
-		// /<token>/ was injected in front of the OCM path for the routing to work, we now remove it (see internal/http/services/owncloud/ocdav/dav.go)
-		_, md.Path = router.ShiftPath(md.Path)
-	}
-
-	if linkToken, _ := ctx.Value(ctxPublicLink).(string); linkToken != "" {
-		_, relativePath := router.ShiftPath(md.Path)
-		_, relativePath = router.ShiftPath(relativePath)
-		return path.Join(baseURI, linkToken, relativePath), nil
-	}
-
-	if md.Id == nil || md.Id.SpaceId == "" {
-		return "", errors.New("Space ID must be set to calculate Href")
-	}
-
-	storageSpaceID := spaces.ConcatStorageSpaceID(md.Id.StorageId, md.Id.SpaceId)
-	_, spacePath, ok := spaces.DecodeStorageSpaceID(storageSpaceID)
-	if !ok {
-		return "", errors.New("Failed to decode space ID")
-	}
-
-	relativePath, err := filepath.Rel(spacePath, md.Path)
-	if err != nil {
-		return "", errors.Wrapf(err, "failed to calculate path relative to space root: %v", spacePath)
-	}
-
-	// When requesting for versions, the request URL is baseURI=/remote.php/dav/meta/<resource-id>
-	// When listing other resources, its value is baseURI=/remote.php/dav/spaces.
-	// Because of this, a different response is expected, without the storageSpaceID.
-	if md.Id.StorageId == "versions" {
-		return path.Join(baseURI, relativePath), nil
-	}
-
-	return path.Join(baseURI, storageSpaceID, relativePath), nil
-}
-
 func appendSlash(path string) string {
 	if path == "" {
 		return "/"
@@ -553,45 +514,29 @@ func (s *svc) isOpenable(path string) bool {
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI.
-func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string, usershares, linkshares map[string]struct{}) (*responseXML, error) {
+func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, parent *provider.ResourceInfo, ns, ref string, usershares, linkshares map[string]struct{}) (*responseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
-
-	spacesEnabled := s.c.SpacesEnabled
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 
-	var ref string
-	var err error
-	if spacesEnabled {
-		ref, err = spaceHref(ctx, baseURI, md)
+	href := ref
+	if parent != nil {
+		relativePath, err := filepath.Rel(parent.Path, md.Path)
 		if err != nil {
-			sublog.Error().Err(err).Msg("propfind: spaceHref failed")
-			pxml := propstatXML{
-				Status: "HTTP/1.1 400 Bad Request",
-				Prop:   []*propertyXML{},
-			}
-
-			return &responseXML{
-				Href:     encodePath(ref),
-				Propstat: []propstatXML{pxml},
-			}, err
-
+			return nil, errors.Wrapf(err, "failed to calculate path relative to parent: %v", md.Path)
 		}
-	} else {
-		md.Path = strings.TrimPrefix(md.Path, ns)
-
-		if ocm, _ := ctx.Value(ctxOCM).(bool); ocm {
-			// /<token>/ was injected in front of the OCM path for the routing to work, we now remove it (see internal/http/services/owncloud/ocdav/dav.go)
-			_, md.Path = router.ShiftPath(md.Path)
+		href, err = url.JoinPath(ref, relativePath)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to join relative path with ref: %v", md.Path)
 		}
-		ref = path.Join(baseURI, md.Path)
 	}
+
 	if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ref += "/"
 	}
 
 	response := responseXML{
-		Href:     encodePath(ref),
+		Href:     href,
 		Propstat: []propstatXML{},
 	}
 
@@ -650,17 +595,11 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	if pf.Allprop != nil {
 		// return all known properties
 		if md.Id != nil {
-			if spacesEnabled {
-				id := spaces.EncodeResourceID(md.Id)
-				propstatOK.Prop = append(propstatOK.Prop,
-					s.newProp("oc:id", id),
-					s.newProp("oc:fileid", id))
-			} else {
-				id := spaces.ResourceIdToString(md.Id)
-				propstatOK.Prop = append(propstatOK.Prop,
-					s.newProp("oc:id", id),
-					s.newProp("oc:fileid", id))
-			}
+			id := spaces.EncodeResourceID(md.Id)
+			propstatOK.Prop = append(propstatOK.Prop,
+				s.newProp("oc:id", id),
+				s.newProp("oc:fileid", id))
+
 		}
 
 		if md.ParentId != nil {
@@ -763,7 +702,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "fileid": // phoenix only
 					if md.Id == nil {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
-					} else if spacesEnabled {
+					} else {
 						// If our client uses spaces, we try to use the spaces-encoded file id (storage$base32(spacePath)!inode)
 						fileId, err := spaces.EncodeResourceInfo(md)
 						if err != nil {
@@ -773,11 +712,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						} else {
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", fileId))
 						}
-					} else {
-						encodedId := spaces.ResourceIdToString(md.Id)
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", encodedId))
 					}
-
 				case "id": // desktop client only
 					if md.Id != nil {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:id", spaces.EncodeResourceID(md.Id)))
@@ -786,11 +721,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					}
 				case "file-parent":
 					if md.ParentId != nil {
-						if spacesEnabled {
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:file-parent", spaces.EncodeResourceID(md.ParentId)))
-						} else {
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:file-parent", spaces.ResourceIdToString(md.ParentId)))
-						}
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:file-parent", spaces.EncodeResourceID(md.ParentId)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:file-parent", ""))
 					}

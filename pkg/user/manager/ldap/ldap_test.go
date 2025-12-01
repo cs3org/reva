@@ -25,17 +25,17 @@ import (
 
 func TestUserManager(t *testing.T) {
 	// negative test for parseConfig
-	_, err := New(context.Background(), map[string]interface{}{"hostname": 42})
+	_, err := New(context.Background(), map[string]any{"hostname": 42})
 	if err == nil {
 		t.Fatal("expected error but got none")
 	}
 
-	internal := map[string]interface{}{
+	internal := map[string]any{
 		"mail": "email",
 		"dn":   "dn",
 	}
 
-	con := map[string]interface{}{
+	con := map[string]any{
 		"schema": internal,
 	}
 
@@ -65,7 +65,7 @@ func TestUserManager(t *testing.T) {
 	}
 
 	// positive tests for New
-	_, err = New(context.Background(), map[string]interface{}{})
+	_, err = New(context.Background(), map[string]any{})
 	if err != nil {
 		t.Fatal(err.Error())
 	}

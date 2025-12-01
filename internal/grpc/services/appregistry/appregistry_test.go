@@ -39,13 +39,13 @@ func (a ByAddress) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func Test_ListAppProviders(t *testing.T) {
 	tests := []struct {
 		name      string
-		providers []map[string]interface{}
-		mimeTypes []map[string]interface{}
+		providers []map[string]any
+		mimeTypes []map[string]any
 		want      *registrypb.ListAppProvidersResponse
 	}{
 		{
 			name: "simple test",
-			providers: []map[string]interface{}{
+			providers: []map[string]any{
 				{
 					"address":   "some Address",
 					"mimetypes": []string{"text/json"},
@@ -55,7 +55,7 @@ func Test_ListAppProviders(t *testing.T) {
 					"mimetypes": []string{"currently/ignored"},
 				},
 			},
-			mimeTypes: []map[string]interface{}{
+			mimeTypes: []map[string]any{
 				{
 					"mime_type":   "text/json",
 					"extension":   "json",
@@ -105,8 +105,8 @@ func Test_ListAppProviders(t *testing.T) {
 		},
 		{
 			name:      "empty providers",
-			providers: []map[string]interface{}{},
-			mimeTypes: []map[string]interface{}{},
+			providers: []map[string]any{},
+			mimeTypes: []map[string]any{},
 
 			// only Status and Providers will be asserted in the tests
 			want: &registrypb.ListAppProvidersResponse{
@@ -122,7 +122,7 @@ func Test_ListAppProviders(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rr, err := static.New(context.Background(), map[string]interface{}{"providers": tt.providers, "mime_types": tt.mimeTypes})
+			rr, err := static.New(context.Background(), map[string]any{"providers": tt.providers, "mime_types": tt.mimeTypes})
 			if err != nil {
 				t.Errorf("could not create registry error = %v", err)
 				return
@@ -146,7 +146,7 @@ func Test_ListAppProviders(t *testing.T) {
 }
 
 func Test_GetAppProviders(t *testing.T) {
-	providers := []map[string]interface{}{
+	providers := []map[string]any{
 		{
 			"address":   "text appprovider addr",
 			"mimetypes": []string{"text/json", "text/xml"},
@@ -296,7 +296,7 @@ func Test_GetAppProviders(t *testing.T) {
 		},
 	}
 
-	rr, err := static.New(context.Background(), map[string]interface{}{"providers": providers, "mime_types": mimeTypes})
+	rr, err := static.New(context.Background(), map[string]any{"providers": providers, "mime_types": mimeTypes})
 	if err != nil {
 		t.Errorf("could not create registry error = %v", err)
 		return
@@ -326,29 +326,29 @@ func Test_GetAppProviders(t *testing.T) {
 func TestNew(t *testing.T) {
 	tests := []struct {
 		name      string
-		m         map[string]interface{}
-		providers map[string]interface{}
+		m         map[string]any
+		providers map[string]any
 		want      svc
-		wantErr   interface{}
+		wantErr   any
 	}{
 		{
 			name:    "no error",
-			m:       map[string]interface{}{"Driver": "static"},
+			m:       map[string]any{"Driver": "static"},
 			wantErr: nil,
 		},
 		{
 			name:    "not existing driver",
-			m:       map[string]interface{}{"Driver": "doesnotexist"},
+			m:       map[string]any{"Driver": "doesnotexist"},
 			wantErr: "error: not found: appregistrysvc: driver not found: doesnotexist",
 		},
 		{
 			name:    "empty",
-			m:       map[string]interface{}{},
+			m:       map[string]any{},
 			wantErr: nil,
 		},
 		{
 			name:    "extra not existing field in setting",
-			m:       map[string]interface{}{"Driver": "static", "doesnotexist": "doesnotexist"},
+			m:       map[string]any{"Driver": "static", "doesnotexist": "doesnotexist"},
 			wantErr: nil,
 		},
 	}

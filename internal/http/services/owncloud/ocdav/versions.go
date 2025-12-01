@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"path"
 	"path/filepath"
 
@@ -171,18 +172,12 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 	// add version dir . entry, derived from file info
 	infos = append(infos, info)
 
-	var spacePath string
-	var ok bool
-	if s.c.SpacesEnabled {
-		storageSpaceID := spaces.ConcatStorageSpaceID(rid.StorageId, rid.SpaceId)
-		_, spacePath, ok = spaces.DecodeStorageSpaceID(storageSpaceID)
-		if !ok {
-			sublog.Error().Msg("error decoding storage space id")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-	} else {
-		spacePath = ""
+	storageSpaceID := spaces.ConcatStorageSpaceID(rid.StorageId, rid.SpaceId)
+	_, spacePath, ok := spaces.DecodeStorageSpaceID(storageSpaceID)
+	if !ok {
+		sublog.Error().Msg("error decoding storage space id")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	for i := range versions {
@@ -210,7 +205,19 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		infos = append(infos, vi)
 	}
 
-	propRes, err := s.multistatusResponse(ctx, &pf, infos, "", nil, nil)
+	baseURI := ctx.Value(ctxKeyBaseURI).(string)
+	URLPath := r.URL.Path
+	if ctxPath := ctx.Value(ctxKeyIncomingURL); ctxPath != nil {
+		URLPath = ctxPath.(string)
+	}
+	href, err := url.JoinPath(baseURI, URLPath)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error formatting propfind")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	propRes, err := s.multistatusResponse(ctx, &pf, infos, nil, "", href, nil, nil)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)

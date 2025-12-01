@@ -22,7 +22,7 @@ import "github.com/cs3org/reva/v3/pkg/auth"
 
 // NewTokenFunc is the function that token writers
 // should register at init time.
-type NewTokenFunc func(map[string]interface{}) (auth.TokenWriter, error)
+type NewTokenFunc func(map[string]any) (auth.TokenWriter, error)
 
 // NewTokenFuncs is a map containing all the registered token writers.
 var NewTokenFuncs = map[string]NewTokenFunc{}

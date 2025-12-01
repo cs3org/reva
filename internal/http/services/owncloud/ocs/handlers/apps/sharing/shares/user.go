@@ -325,7 +325,7 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filte
 	input := make(chan *collaboration.Share, len(lsUserSharesResponse.Shares))
 	output := make(chan *conversions.ShareData, len(lsUserSharesResponse.Shares))
 
-	for i := 0; i < workers; i++ {
+	for range workers {
 		wg.Add(1)
 		go func(ctx context.Context, client gateway.GatewayAPIClient, input chan *collaboration.Share, output chan *conversions.ShareData, wg *sync.WaitGroup) {
 			defer wg.Done()

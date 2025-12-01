@@ -44,10 +44,10 @@ type NotificationHelper struct {
 
 // Config contains the configuration for the Notification Helper.
 type Config struct {
-	NatsAddress string                 `docs:";The NATS server address."                          mapstructure:"nats_address"`
-	NatsToken   string                 `docs:";The token to authenticate against the NATS server" mapstructure:"nats_token"`
-	NatsStream  string                 `docs:"reva-notifications;The notifications NATS stream."  mapstructure:"nats_stream"`
-	Templates   map[string]interface{} `docs:"nil;Notification templates for the service."        mapstructure:"templates"`
+	NatsAddress string         `docs:";The NATS server address."                          mapstructure:"nats_address"`
+	NatsToken   string         `docs:";The token to authenticate against the NATS server" mapstructure:"nats_token"`
+	NatsStream  string         `docs:"reva-notifications;The notifications NATS stream."  mapstructure:"nats_stream"`
+	Templates   map[string]any `docs:"nil;Notification templates for the service."        mapstructure:"templates"`
 }
 
 func defaultConfig() *Config {
@@ -57,7 +57,7 @@ func defaultConfig() *Config {
 }
 
 // New creates a new Notification Helper.
-func New(name string, m map[string]interface{}, log *zerolog.Logger) *NotificationHelper {
+func New(name string, m map[string]any, log *zerolog.Logger) *NotificationHelper {
 	annotatedLogger := log.With().Str("service", name).Str("scope", "notifications").Logger()
 
 	conf := defaultConfig()
@@ -134,7 +134,7 @@ func (nh *NotificationHelper) Stop() {
 	}
 }
 
-func (nh *NotificationHelper) registerTemplates(ts map[string]interface{}) {
+func (nh *NotificationHelper) registerTemplates(ts map[string]any) {
 	if len(ts) == 0 {
 		nh.Log.Info().Msg("no templates to register")
 		return

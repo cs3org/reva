@@ -203,7 +203,7 @@ var _ = Describe("Dynamic storage provider", func() {
 	Context("initializing the provider", func() {
 		When("passed incorrect config", func() {
 			It("should return an error", func() {
-				d, err = New(context.Background(), map[string]interface{}{"rules": "hi"})
+				d, err = New(context.Background(), map[string]any{"rules": "hi"})
 				Expect(d).To(BeNil())
 				Expect(err).To(HaveOccurred())
 			})
@@ -211,7 +211,7 @@ var _ = Describe("Dynamic storage provider", func() {
 
 		When("passed correct config", func() {
 			It("should return a correct dynamic provider", func() {
-				d, err = New(context.Background(), map[string]interface{}{
+				d, err = New(context.Background(), map[string]any{
 					"rules":       rules,
 					"rewrites":    rewrites,
 					"home_path":   homePath,
@@ -229,7 +229,7 @@ var _ = Describe("Dynamic storage provider", func() {
 
 		When("passed a config missing some rules", func() {
 			It("should not return an error", func() {
-				_, err = New(context.Background(), map[string]interface{}{
+				_, err = New(context.Background(), map[string]any{
 					"rules":       badRules,
 					"rewrites":    rewrites,
 					"home_path":   homePath,
@@ -246,7 +246,7 @@ var _ = Describe("Dynamic storage provider", func() {
 
 		When("passed a bad db host in the config", func() {
 			It("should return a en error", func() {
-				d, err = New(context.Background(), map[string]interface{}{
+				d, err = New(context.Background(), map[string]any{
 					"rules":       rules,
 					"rewrites":    rewrites,
 					"home_path":   homePath,
@@ -266,7 +266,7 @@ var _ = Describe("Dynamic storage provider", func() {
 
 	Context("listing providers", func() {
 		JustBeforeEach(func() {
-			d, err = New(context.Background(), map[string]interface{}{
+			d, err = New(context.Background(), map[string]any{
 				"rules":       rules,
 				"rewrites":    rewrites,
 				"home_path":   homePath,
@@ -288,7 +288,7 @@ var _ = Describe("Dynamic storage provider", func() {
 
 	Context("getting home for user", func() {
 		JustBeforeEach(func() {
-			d, err = New(context.Background(), map[string]interface{}{
+			d, err = New(context.Background(), map[string]any{
 				"rules":       rules,
 				"rewrites":    rewrites,
 				"home_path":   homePath,
@@ -327,7 +327,7 @@ var _ = Describe("Dynamic storage provider", func() {
 
 	Context("finding providers for a reference", func() {
 		JustBeforeEach(func() {
-			d, err = New(context.Background(), map[string]interface{}{
+			d, err = New(context.Background(), map[string]any{
 				"rules":       rules,
 				"rewrites":    rewrites,
 				"home_path":   homePath,
@@ -369,10 +369,7 @@ var _ = Describe("Dynamic storage provider", func() {
 		})
 
 		for u, ctx := range map[string]context.Context{"alice": ctxAlice, "bob": ctxBob} {
-			u := u
-			ctx := ctx
 			for _, ref := range testHomeRefs {
-				ref := ref
 				When("passed a home path for user "+u+": "+ref.Path, func() {
 					It("should return the correct provider", func() {
 						ps, err := d.FindProviders(ctx, ref)
@@ -385,8 +382,6 @@ var _ = Describe("Dynamic storage provider", func() {
 		}
 
 		for path, providers := range testPaths {
-			path := path
-			providers := providers
 			When("passed a regular path: "+path, func() {
 				It("should return the correct providers", func() {
 					ps, err := d.FindProviders(context.Background(), &provider.Reference{Path: path})

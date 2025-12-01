@@ -43,7 +43,7 @@ func New() *Registry {
 
 // Put registers a handler in the registry.
 func (r *Registry) Put(tb []byte, hs map[string]handler.Handler) (string, error) {
-	var data map[string]interface{}
+	var data map[string]any
 
 	err := json.Unmarshal(tb, &data)
 	if err != nil {

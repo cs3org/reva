@@ -66,3 +66,28 @@ func SkipUserGroupsInToken() bool {
 func GetBlockedUsers() []string {
 	return sharedConf.BlockedUsers
 }
+
+func GetDBInfo(in config.Database) config.Database {
+	c := in
+
+	if c.Engine == "" {
+		c.Engine = sharedConf.Engine
+	}
+	if c.DBHost == "" {
+		c.DBHost = sharedConf.DBHost
+	}
+	if c.DBUsername == "" {
+		c.DBUsername = sharedConf.DBUsername
+	}
+	if c.DBPassword == "" {
+		c.DBPassword = sharedConf.DBPassword
+	}
+	if c.DBName == "" {
+		c.DBName = sharedConf.DBName
+	}
+	if c.DBPort == 0 {
+		c.DBPort = sharedConf.DBPort
+	}
+
+	return c
+}

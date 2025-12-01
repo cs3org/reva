@@ -490,6 +490,14 @@ func TestDump(t *testing.T) {
 			"datagateway":               "",
 			"skip_user_groups_in_token": false,
 			"blocked_users":             []any{},
+			"Database": map[string]any{
+				"DBHost":     "",
+				"DBName":     "",
+				"DBPassword": "",
+				"DBPort":     0,
+				"DBUsername": "",
+				"Engine":     "",
+			},
 		},
 		"log": map[string]any{
 			"output": "/var/log/revad/revad-gateway.log",

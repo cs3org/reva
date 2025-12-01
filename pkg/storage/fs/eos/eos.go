@@ -32,7 +32,7 @@ func init() {
 }
 
 // New returns a new implementation of the storage.FS interface that connects to EOS.
-func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
+func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	var c eosfs.Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

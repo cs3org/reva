@@ -45,7 +45,7 @@ func init() {
 }
 
 // New returns a new authorizer object.
-func New(ctx context.Context, m map[string]interface{}) (share.Repository, error) {
+func New(ctx context.Context, m map[string]any) (share.Repository, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

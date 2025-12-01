@@ -23,8 +23,10 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/pkg/notification"
 	"github.com/cs3org/reva/v3/pkg/notification/manager/registry"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
 
@@ -32,12 +34,12 @@ func init() {
 	registry.Register("sql", NewMysql)
 }
 
-type config struct {
-	DBUsername string `mapstructure:"db_username"`
-	DBPassword string `mapstructure:"db_password"`
-	DBHost     string `mapstructure:"db_host"`
-	DBPort     int    `mapstructure:"db_port"`
-	DBName     string `mapstructure:"db_name"`
+type Config struct {
+	config.Database `mapstructure:",squash"`
+}
+
+func (c *Config) ApplyDefaults() {
+	c.Database = sharedconf.GetDBInfo(c.Database)
 }
 
 type mgr struct {
@@ -46,11 +48,12 @@ type mgr struct {
 }
 
 // NewMysql returns an instance of the sql notifications manager.
-func NewMysql(ctx context.Context, m map[string]interface{}) (notification.Manager, error) {
-	var c config
+func NewMysql(ctx context.Context, m map[string]any) (notification.Manager, error) {
+	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
+	c.ApplyDefaults()
 
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName))
 	if err != nil {

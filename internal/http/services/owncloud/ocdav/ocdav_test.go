@@ -37,7 +37,7 @@ Granted this is not a lot on it's own but when a user has tens or hundreds of pa
 then this method alone will cost a huge amount of time.
 */
 func BenchmarkEncodePath(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = encodePath("/some/path/Folder %^*(#1)")
 	}
 }
@@ -57,7 +57,7 @@ func TestExtractDestination(t *testing.T) {
 	request.Header.Set(HeaderDestination, "https://example.org/remote.php/dav/dst")
 
 	ctx := context.WithValue(context.Background(), ctxKeyBaseURI, "/remote.php/dav")
-	destination, err := extractDestination(request.WithContext(ctx))
+	destination, err := extractDestination(request.WithContext(ctx), "")
 	if err != nil {
 		t.Errorf("Expected err to be nil got %s", err)
 	}
@@ -70,7 +70,7 @@ func TestExtractDestination(t *testing.T) {
 func TestExtractDestinationWithoutHeader(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "https://example.org/remote.php/dav/src", nil)
 
-	_, err := extractDestination(request)
+	_, err := extractDestination(request, "")
 	if err == nil {
 		t.Errorf("Expected err to be nil got %s", err)
 	}
@@ -83,7 +83,7 @@ func TestExtractDestinationWithoutHeader(t *testing.T) {
 func TestExtractDestinationWithInvalidDestination(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "https://example.org/remote.php/dav/src", nil)
 	request.Header.Set(HeaderDestination, "://example.org/remote.php/dav/dst")
-	_, err := extractDestination(request)
+	_, err := extractDestination(request, "")
 	if err == nil {
 		t.Errorf("Expected err to be nil got %s", err)
 	}

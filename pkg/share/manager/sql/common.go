@@ -3,10 +3,12 @@ package sql
 import (
 	"fmt"
 
+	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	ocmshareregistry "github.com/cs3org/reva/v3/pkg/ocm/share/repository/registry"
 	publicshareregistry "github.com/cs3org/reva/v3/pkg/publicshare/manager/registry"
 	shareregistry "github.com/cs3org/reva/v3/pkg/share/manager/registry"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -19,13 +21,8 @@ const (
 	projectPathPrefix             = "/eos/project/"
 )
 
-type config struct {
-	Engine               string `mapstructure:"engine"` // mysql | sqlite
-	DBUsername           string `mapstructure:"db_username"`
-	DBPassword           string `mapstructure:"db_password"`
-	DBHost               string `mapstructure:"db_host"`
-	DBPort               int    `mapstructure:"db_port"`
-	DBName               string `mapstructure:"db_name"`
+type Config struct {
+	config.Database      `mapstructure:",squash"`
 	GatewaySvc           string `mapstructure:"gatewaysvc"`
 	LinkPasswordHashCost int    `mapstructure:"password_hash_cost"`
 }
@@ -36,7 +33,12 @@ func init() {
 	ocmshareregistry.Register("sql", NewOCMShareManager)
 }
 
-func getDb(c config) (*gorm.DB, error) {
+func (c *Config) ApplyDefaults() {
+	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+	c.Database = sharedconf.GetDBInfo(c.Database)
+}
+
+func getDb(c Config) (*gorm.DB, error) {
 	gormCfg := &gorm.Config{
 		DisableForeignKeyConstraintWhenMigrating: false,
 	}

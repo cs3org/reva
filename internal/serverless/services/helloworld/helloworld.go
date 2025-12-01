@@ -52,7 +52,7 @@ func init() {
 }
 
 // New returns a new helloworld service.
-func New(ctx context.Context, m map[string]interface{}) (rserverless.Service, error) {
+func New(ctx context.Context, m map[string]any) (rserverless.Service, error) {
 	conf := &config{}
 	conf.init()
 

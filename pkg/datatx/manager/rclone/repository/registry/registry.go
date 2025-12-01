@@ -26,7 +26,7 @@ import (
 
 // NewFunc is the function that rclone repository implementations
 // should register at init time.
-type NewFunc func(context.Context, map[string]interface{}) (repository.Repository, error)
+type NewFunc func(context.Context, map[string]any) (repository.Repository, error)
 
 // NewFuncs is a map containing all the registered datatx backends.
 var NewFuncs = map[string]NewFunc{}

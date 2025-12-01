@@ -29,7 +29,7 @@ import (
 
 var ctx = context.Background()
 
-var input map[string]interface{}
+var input map[string]any
 
 type ExpectedError struct {
 	message string
@@ -38,7 +38,7 @@ type ExpectedError struct {
 func TestGetManagerWithInvalidUser(t *testing.T) {
 	tests := []struct {
 		name          string
-		user          interface{}
+		user          any
 		expectedError string
 	}{
 		{
@@ -51,7 +51,7 @@ func TestGetManagerWithInvalidUser(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			input = map[string]interface{}{
+			input = map[string]any{
 				"users": tt.user,
 			}
 
@@ -106,7 +106,7 @@ func TestGetManagerWithJSONObject(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			// get manager
-			input = map[string]interface{}{
+			input = map[string]any{
 				"users": tmpFile.Name(),
 			}
 
@@ -170,7 +170,7 @@ func TestGetAuthenticatedManager(t *testing.T) {
 	}
 
 	// get manager
-	input := map[string]interface{}{
+	input := map[string]any{
 		"users": tempFile.Name(),
 	}
 	manager, _ := New(ctx, input)

@@ -47,7 +47,7 @@ type config struct {
 }
 
 // New creates a new CORS middleware.
-func New(m map[string]interface{}) (global.Middleware, int, error) {
+func New(m map[string]any) (global.Middleware, int, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, 0, err
@@ -104,12 +104,16 @@ func New(m map[string]interface{}) (global.Middleware, int, error) {
 			"Upload-Checksum",
 			"Upload-Offset",
 			"X-HTTP-Method-Override",
+			"Range",
 		}
 	}
 
 	if len(conf.ExposedHeaders) == 0 {
 		conf.ExposedHeaders = []string{
 			"Location",
+			"Content-Range",
+			"Content-Length",
+			"Accept-Ranges",
 		}
 	}
 

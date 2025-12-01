@@ -22,7 +22,7 @@ import "github.com/cs3org/reva/v3/pkg/share/cache"
 
 // NewFunc is the function that cache warmup implementations
 // should register at init time.
-type NewFunc func(map[string]interface{}) (cache.WarmupResourceInfo, error)
+type NewFunc func(map[string]any) (cache.WarmupResourceInfo, error)
 
 // NewFuncs is a map containing all the registered cache warmup implementations.
 var NewFuncs = map[string]NewFunc{}

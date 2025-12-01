@@ -65,7 +65,7 @@ func (t FileNotFoundError) Error() string {
 }
 
 // New creates a new Template from a RegistrationRequest.
-func New(m map[string]interface{}, hs map[string]handler.Handler) (*Template, string, error) {
+func New(m map[string]any, hs map[string]handler.Handler) (*Template, string, error) {
 	rr := &RegistrationRequest{}
 	if err := mapstructure.Decode(m, rr); err != nil {
 		return nil, rr.Name, err
@@ -101,14 +101,14 @@ func New(m map[string]interface{}, hs map[string]handler.Handler) (*Template, st
 }
 
 // RenderSubject renders the subject template.
-func (t *Template) RenderSubject(arguments map[string]interface{}) (string, error) {
+func (t *Template) RenderSubject(arguments map[string]any) (string, error) {
 	var buf bytes.Buffer
 	err := t.tmplSubject.Execute(&buf, arguments)
 	return buf.String(), err
 }
 
 // RenderBody renders the body template.
-func (t *Template) RenderBody(arguments map[string]interface{}) (string, error) {
+func (t *Template) RenderBody(arguments map[string]any) (string, error) {
 	var buf bytes.Buffer
 	err := t.tmplBody.Execute(&buf, arguments)
 	return buf.String(), err
@@ -129,7 +129,7 @@ func CheckTemplateName(name string) error {
 	return nil
 }
 
-func parseTmplFile(path, name string) (interface{}, error) {
+func parseTmplFile(path, name string) (any, error) {
 	if path == "" {
 		return textTemplate.New(name).Parse("")
 	}

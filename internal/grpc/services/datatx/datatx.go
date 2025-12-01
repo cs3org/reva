@@ -49,11 +49,11 @@ func init() {
 
 type config struct {
 	// transfer driver
-	TxDriver       string                            `mapstructure:"txdriver"`
-	TxDrivers      map[string]map[string]interface{} `mapstructure:"txdrivers"`
-	StorageDriver  string                            `mapstructure:"storagedriver"`
-	StorageDrivers map[string]map[string]interface{} `mapstructure:"storagedrivers"`
-	RemoveOnCancel bool                              `mapstructure:"remove_transfer_on_cancel"`
+	TxDriver       string                    `mapstructure:"txdriver"`
+	TxDrivers      map[string]map[string]any `mapstructure:"txdrivers"`
+	StorageDriver  string                    `mapstructure:"storagedriver"`
+	StorageDrivers map[string]map[string]any `mapstructure:"storagedrivers"`
+	RemoveOnCancel bool                      `mapstructure:"remove_transfer_on_cancel"`
 }
 
 type service struct {
@@ -87,7 +87,7 @@ func getStorageManager(ctx context.Context, c *config) (txdriver.Repository, err
 }
 
 // New creates a new datatx svc.
-func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

@@ -42,6 +42,7 @@ const (
 	HeaderAcceptRanges               = "Accept-Ranges"
 	HeaderAccessControlAllowHeaders  = "Access-Control-Allow-Headers"
 	HeaderAccessControlExposeHeaders = "Access-Control-Expose-Headers"
+	HeaderAccessControlAllowOrigin   = "Access-Control-Allow-Origin"
 	HeaderContentDisposistion        = "Content-Disposition"
 	HeaderContentLength              = "Content-Length"
 	HeaderContentRange               = "Content-Range"

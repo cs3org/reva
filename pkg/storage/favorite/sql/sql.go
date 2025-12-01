@@ -26,8 +26,10 @@ import (
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 
+	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/cbox/utils"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/storage/favorite"
 	"github.com/cs3org/reva/v3/pkg/storage/favorite/registry"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
@@ -37,25 +39,26 @@ func init() {
 	registry.Register("sql", New)
 }
 
-type config struct {
-	DBUsername string `mapstructure:"db_username"`
-	DBPassword string `mapstructure:"db_password"`
-	DBHost     string `mapstructure:"db_host"`
-	DBPort     int    `mapstructure:"db_port"`
-	DBName     string `mapstructure:"db_name"`
+type Config struct {
+	config.Database `mapstructure:",squash"`
+}
+
+func (c *Config) ApplyDefaults() {
+	c.Database = sharedconf.GetDBInfo(c.Database)
 }
 
 type mgr struct {
-	c  *config
+	c  *Config
 	db *sql.DB
 }
 
 // New returns an instance of the cbox sql favorites manager.
-func New(m map[string]interface{}) (favorite.Manager, error) {
-	var c config
+func New(m map[string]any) (favorite.Manager, error) {
+	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
+	c.ApplyDefaults()
 
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName))
 	if err != nil {
@@ -105,7 +108,7 @@ func (m *mgr) SetFavorite(ctx context.Context, userID *user.UserId, resourceInfo
 	}
 
 	query = `INSERT INTO cbox_metadata SET item_type=?, uid=?, fileid_prefix=?, fileid=?, tag_key="fav"`
-	vals := []interface{}{utils.ResourceTypeToItemInt(resourceInfo.Type), user.Id.OpaqueId, resourceInfo.Id.StorageId, resourceInfo.Id.OpaqueId}
+	vals := []any{utils.ResourceTypeToItemInt(resourceInfo.Type), user.Id.OpaqueId, resourceInfo.Id.StorageId, resourceInfo.Id.OpaqueId}
 	stmt, err := m.db.Prepare(query)
 	if err != nil {
 		return err
