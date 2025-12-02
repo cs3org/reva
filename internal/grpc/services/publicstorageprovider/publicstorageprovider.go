@@ -503,6 +503,13 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 	}
 
 	if shareInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE || (relativePath == "" && nodeID == "") || shareInfo.Id.OpaqueId == nodeID {
+		// We do not want public links to be able to "delete" themselves
+		// so on the root, we remove the delete permission
+		if shareInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && (relativePath == "" || relativePath == "/") {
+			shareInfo.PermissionSet.Delete = false
+
+		}
+
 		res := &provider.StatResponse{
 			Status: status.NewOK(ctx),
 			Info:   shareInfo,
