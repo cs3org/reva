@@ -644,6 +644,11 @@ func (fs *Eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provid
 		return errtypes.NotSupported("shared lock not yet implemented")
 	}
 
+	oldLock, err := fs.GetLock(ctx, ref)
+	if err == nil && oldLock.LockId != "" {
+		return errtypes.Conflict("file is already locked, lockId: " + oldLock.LockId)
+	}
+
 	path, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
@@ -798,7 +803,7 @@ func (fs *Eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLo
 	}
 
 	if existingLockID != "" && oldLock.LockId != existingLockID {
-		return errtypes.BadRequest("lock id does not match")
+		return errtypes.BadRequest("mismatched existing lockId: " + existingLockID)
 	}
 
 	path, err := fs.resolve(ctx, ref)
