@@ -529,6 +529,18 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to join relative path with ref: %v", md.Path)
 		}
+	} else {
+		// If no parent specified, we just take space id + path relative to space
+		spaceID := md.Id.SpaceId
+		spacePath, _ := spaces.DecodeSpaceID(spaceID)
+		relativePath, err := filepath.Rel(spacePath, md.Path)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to calculate path relative to space: %v. %v", spacePath, md.Path)
+		}
+		href, err = url.JoinPath(ref, spaceID, relativePath)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to join relative path with ref: %v", md.Path)
+		}
 	}
 
 	if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {

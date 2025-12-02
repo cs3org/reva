@@ -22,7 +22,6 @@ import (
 	"encoding/xml"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -140,13 +139,7 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 		}
 	}
 
-	baseURI := ctx.Value(ctxKeyBaseURI).(string)
-	href, err := url.JoinPath(baseURI, r.URL.Path)
-	if err != nil {
-		log.Error().Err(err).Msg("error formatting propfind")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	href := ctx.Value(ctxKeyBaseURI).(string)
 	responsesXML, err := s.multistatusResponse(ctx, &propfindXML{Prop: ff.Prop}, resourceInfos, nil, namespace, href, nil, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
