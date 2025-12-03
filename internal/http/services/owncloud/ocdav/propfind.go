@@ -543,6 +543,10 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		}
 	}
 
+	if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		href, _ = url.JoinPath(href, "/")
+	}
+
 	response := responseXML{
 		Href:     href,
 		Propstat: []propstatXML{},
