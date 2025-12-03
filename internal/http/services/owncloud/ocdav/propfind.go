@@ -514,18 +514,18 @@ func (s *svc) isOpenable(path string) bool {
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI.
-func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, parent *provider.ResourceInfo, ns, ref string, usershares, linkshares map[string]struct{}) (*responseXML, error) {
+// hrefBase is the base of the `href` value, to which the `md`'s relative path to it's `parent` will be appended
+// in case no parent is given, the resource's space id + it's path relative to the space root is given
+func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, parent *provider.ResourceInfo, ns, hrefBase string, usershares, linkshares map[string]struct{}) (*responseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
 
-	baseURI := ctx.Value(ctxKeyBaseURI).(string)
-
-	href := ref
+	var href string
 	if parent != nil {
 		relativePath, err := filepath.Rel(parent.Path, md.Path)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to calculate path relative to parent: %v", md.Path)
 		}
-		href, err = url.JoinPath(ref, relativePath)
+		href, err = url.JoinPath(hrefBase, relativePath)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to join relative path with ref: %v", md.Path)
 		}
@@ -537,14 +537,10 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to calculate path relative to space: %v. %v", spacePath, md.Path)
 		}
-		href, err = url.JoinPath(ref, spaceID, relativePath)
+		href, err = url.JoinPath(hrefBase, spaceID, relativePath)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to join relative path with ref: %v", md.Path)
 		}
-	}
-
-	if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		ref += "/"
 	}
 
 	response := responseXML{
@@ -925,6 +921,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 							path = sb.String()
 						}
 						relativePath := strings.TrimPrefix(path, "/public")
+						baseURI := ctx.Value(ctxKeyBaseURI).(string)
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:downloadURL", s.c.PublicURL+baseURI+relativePath))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
