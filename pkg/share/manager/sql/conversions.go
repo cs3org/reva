@@ -32,35 +32,45 @@ import (
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 )
 
-func convertFromCS3OCMShareType(shareType ocm.ShareType) model.ShareType {
+func convertFromCS3OCMShareType(shareType ocm.ShareType) model.OcmShareType {
 	switch shareType {
 	case ocm.ShareType_SHARE_TYPE_USER:
-		return model.ShareTypeUser
+		return model.OcmShareTypeUser
 	case ocm.ShareType_SHARE_TYPE_GROUP:
-		return model.ShareTypeGroup
+		return model.OcmShareTypeGroup
 	}
 	return -1
+}
+
+func convertToCS3OCMShareType(recipientType model.OcmShareType) ocm.ShareType {
+	switch recipientType {
+	case model.OcmShareTypeUser:
+		return ocm.ShareType_SHARE_TYPE_USER
+	case model.OcmShareTypeGroup:
+		return ocm.ShareType_SHARE_TYPE_GROUP
+	}
+	return ocm.ShareType_SHARE_TYPE_INVALID
 }
 
 func convertFromCS3OCMShareState(shareState ocm.ShareState) model.OcmShareState {
 	switch shareState {
 	case ocm.ShareState_SHARE_STATE_ACCEPTED:
-		return model.ShareStateAccepted
+		return model.OcmShareStateAccepted
 	case ocm.ShareState_SHARE_STATE_PENDING:
-		return model.ShareStatePending
+		return model.OcmShareStatePending
 	case ocm.ShareState_SHARE_STATE_REJECTED:
-		return model.ShareStateRejected
+		return model.OcmShareStateRejected
 	}
 	return -1
 }
 
 func convertToCS3OCMShareState(state model.OcmShareState) ocm.ShareState {
 	switch state {
-	case model.ShareStateAccepted:
+	case model.OcmShareStateAccepted:
 		return ocm.ShareState_SHARE_STATE_ACCEPTED
-	case model.ShareStatePending:
+	case model.OcmShareStatePending:
 		return ocm.ShareState_SHARE_STATE_PENDING
-	case model.ShareStateRejected:
+	case model.OcmShareStateRejected:
 		return ocm.ShareState_SHARE_STATE_REJECTED
 	}
 	return ocm.ShareState_SHARE_STATE_INVALID
@@ -73,8 +83,8 @@ func convertToCS3OCMShare(s *model.OcmShare, am []*ocm.AccessMethod) *ocm.Share 
 			OpaqueId: strconv.Itoa(int(s.Id)),
 		},
 		ResourceId: &provider.ResourceId{
-			StorageId: s.FileidPrefix,
-			OpaqueId:  s.ItemSource,
+			StorageId: s.Instance,
+			OpaqueId:  s.Inode,
 		},
 		Name:  s.Name,
 		Token: s.Token,
@@ -96,12 +106,12 @@ func convertToCS3OCMShare(s *model.OcmShare, am []*ocm.AccessMethod) *ocm.Share 
 		Mtime: &types.Timestamp{
 			Seconds: uint64(s.Mtime),
 		},
-		ShareType:     ocm.ShareType_SHARE_TYPE_USER,
+		ShareType:     convertToCS3OCMShareType(s.RecipientType),
 		AccessMethods: am,
 	}
 	if s.Expiration.Valid {
 		share.Expiration = &types.Timestamp{
-			Seconds: uint64(s.Expiration.Int64),
+			Seconds: uint64(s.Expiration.V.Unix()),
 		}
 	}
 	return share
@@ -133,13 +143,13 @@ func convertToCS3OCMReceivedShare(s *model.OcmReceivedShare, p []*ocm.Protocol) 
 			Seconds: uint64(s.Mtime),
 		},
 		ResourceType: convertToCS3ResourceType(s.ItemType),
-		ShareType:    ocm.ShareType_SHARE_TYPE_USER,
+		ShareType:    convertToCS3OCMShareType(s.RecipientType),
 		State:        convertToCS3OCMShareState(s.State),
 		Protocols:    p,
 	}
 	if s.Expiration.Valid {
 		share.Expiration = &types.Timestamp{
-			Seconds: uint64(s.Expiration.Int64),
+			Seconds: uint64(s.Expiration.V.Unix()),
 		}
 	}
 	return share
@@ -161,15 +171,15 @@ func viewModeToInt(v appprovider.ViewMode) int {
 	return -1
 }
 
-func convertToCS3AccessMethod(m *model.OcmSharesAccessMethod) *ocm.AccessMethod {
+func convertToCS3AccessMethod(m *model.OcmShareProtocol) *ocm.AccessMethod {
 	switch m.Type {
-	case model.WebDAVAccessMethod:
+	case model.WebDAVProtocol:
 		return share.NewWebDavAccessMethod(
 			conversions.RoleFromOCSPermissions(conversions.Permissions(m.Permissions)).CS3ResourcePermissions(),
 			[]string{}) // TODO persist requirements
-	case model.WebappAccessMethod:
+	case model.WebappProtocol:
 		return share.NewWebappAccessMethod(appprovider.ViewMode(m.Permissions))
-	case model.TransferAccessMethod:
+	case model.TransferProtocol:
 		return share.NewTransferAccessMethod()
 	}
 	return nil
@@ -189,22 +199,22 @@ func convertToCS3Protocol(p *model.OcmReceivedShareProtocol) *ocm.Protocol {
 	return nil
 }
 
-func convertToCS3ResourceType(t model.OcmItemType) provider.ResourceType {
+func convertToCS3ResourceType(t model.ItemType) provider.ResourceType {
 	switch t {
-	case model.OcmItemTypeFile:
+	case model.ItemTypeFile:
 		return provider.ResourceType_RESOURCE_TYPE_FILE
-	case model.OcmItemTypeFolder:
+	case model.ItemTypeFolder:
 		return provider.ResourceType_RESOURCE_TYPE_CONTAINER
 	}
 	return provider.ResourceType_RESOURCE_TYPE_INVALID
 }
 
-func convertFromCS3ResourceType(t provider.ResourceType) model.OcmItemType {
+func convertFromCS3ResourceType(t provider.ResourceType) model.ItemType {
 	switch t {
 	case provider.ResourceType_RESOURCE_TYPE_FILE:
-		return model.OcmItemTypeFile
+		return model.ItemTypeFile
 	case provider.ResourceType_RESOURCE_TYPE_CONTAINER:
-		return model.OcmItemTypeFolder
+		return model.ItemTypeFolder
 	}
-	return -1
+	return model.ItemTypeFile
 }
