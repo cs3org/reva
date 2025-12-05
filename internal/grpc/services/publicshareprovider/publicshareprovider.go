@@ -20,12 +20,15 @@ package publicshareprovider
 
 import (
 	"context"
+	"errors"
 	"regexp"
 
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/notification"
+	"github.com/cs3org/reva/v3/pkg/notification/notificationhelper"
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/publicshare"
 	"github.com/cs3org/reva/v3/pkg/publicshare/manager/registry"
@@ -46,9 +49,10 @@ func init() {
 }
 
 type config struct {
-	Driver                string                            `mapstructure:"driver"`
-	Drivers               map[string]map[string]interface{} `mapstructure:"drivers"`
-	AllowedPathsForShares []string                          `mapstructure:"allowed_paths_for_shares"`
+	Driver                string                    `mapstructure:"driver"`
+	Drivers               map[string]map[string]any `mapstructure:"drivers"`
+	AllowedPathsForShares []string                  `mapstructure:"allowed_paths_for_shares"`
+	Notifications         map[string]any            `mapstructure:"notifications"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -61,6 +65,7 @@ type service struct {
 	conf                  *config
 	sm                    publicshare.Manager
 	allowedPathsForShares []*regexp.Regexp
+	notificationHelper    *notificationhelper.NotificationHelper
 }
 
 func getShareManager(ctx context.Context, c *config) (publicshare.Manager, error) {
@@ -104,10 +109,19 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 		allowedPathsForShares = append(allowedPathsForShares, regex)
 	}
 
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("FindMe: nh config: %v", c.Notifications)
+
+	nh := notificationhelper.New("publicshareprovider", c.Notifications, log)
+	if nh == nil {
+		return nil, errors.New("failed to construct notificationhelper")
+	}
+
 	service := &service{
 		conf:                  &c,
 		sm:                    sm,
 		allowedPathsForShares: allowedPathsForShares,
+		notificationHelper:    nh,
 	}
 
 	return service, nil
@@ -271,6 +285,37 @@ func (s *service) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicS
 	u, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		log.Error().Msg("error getting user from context")
+	}
+
+	share, err := s.sm.GetPublicShare(ctx, u, req.Ref, false)
+	if err != nil {
+		return &link.UpdatePublicShareResponse{
+			Status: status.NewNotFound(ctx, "share not found"),
+		}, nil
+	}
+
+	if !share.NotifyUploads && req.Update.NotifyUploads {
+		n := &notification.Notification{
+			TemplateName: "sharedfolder-upload-mail",
+			Ref:          req.Ref.GetId().OpaqueId,
+			Recipients:   []string{u.Mail},
+		}
+		log.Info().Msgf("FindMe - registering notification %v", n)
+
+		s.notificationHelper.RegisterNotification(n)
+	} else if share.NotifyUploads && !req.Update.NotifyUploads {
+		s.notificationHelper.UnregisterNotification(req.Ref.GetId().OpaqueId)
+	}
+
+	if share.NotifyUploadsExtraRecipients != req.Update.NotifyUploadsExtraRecipients {
+		if len(req.Update.NotifyUploadsExtraRecipients) > 0 {
+			n := &notification.Notification{
+				TemplateName: "sharedfolder-upload-mail",
+				Ref:          req.Ref.GetId().OpaqueId,
+				Recipients:   []string{u.Mail, req.Update.NotifyUploadsExtraRecipients},
+			}
+			s.notificationHelper.RegisterNotification(n)
+		}
 	}
 
 	updated, err := s.sm.UpdatePublicShare(ctx, u, req, nil)
