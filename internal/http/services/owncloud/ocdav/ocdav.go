@@ -158,6 +158,7 @@ type svc struct {
 	favoritesManager     favorite.Manager
 	myOfficeFilesManager myofficefiles.Manager
 	client               *httpclient.Client
+	// Can be nil if notifications are not set up
 	notificationHelper   *notificationhelper.NotificationHelper
 }
 
@@ -187,6 +188,8 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 
 	log := appctx.GetLogger(ctx)
 	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: c.Insecure}}
+
+
 	s := &svc{
 		c:             &c,
 		webDavHandler: new(WebDavHandler),
@@ -196,10 +199,16 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 			httpclient.RoundTripper(tr),
 		),
 		favoritesManager:     fm,
-		notificationHelper:   notificationhelper.New("ocdav", c.Notifications, log),
 		myOfficeFilesManager: myOfficeFilesManager,
 	}
-
+	if c.Notifications != nil {
+		nh, err := notificationhelper.New("ocdav", c.Notifications, log)
+		if err != nil {
+			return nil, err
+		}
+		s.notificationHelper = nh
+	}
+	
 	// initialize handlers and set default cigs
 	if err := s.webDavHandler.init(c.WebdavNamespace, true); err != nil {
 		return nil, err
@@ -215,7 +224,9 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Close() error {
-	s.notificationHelper.Stop()
+	if s.notificationHelper != nil {
+		s.notificationHelper.Stop()
+	}
 	return nil
 }
 

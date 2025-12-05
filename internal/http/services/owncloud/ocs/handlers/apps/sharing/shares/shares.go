@@ -64,6 +64,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -72,17 +73,18 @@ const (
 
 // Handler implements the shares part of the ownCloud sharing API.
 type Handler struct {
-	gatewayAddr                string
-	storageRegistryAddr        string
-	publicURL                  string
-	sharePrefix                string
-	homeNamespace              string
-	ocmMountPoint              string
-	additionalInfoTemplate     *template.Template
-	userIdentifierCache        *ttlcache.Cache
-	resourceInfoCache          cache.ResourceInfoCache
-	resourceInfoCacheTTL       time.Duration
-	listOCMShares              bool
+	gatewayAddr            string
+	storageRegistryAddr    string
+	publicURL              string
+	sharePrefix            string
+	homeNamespace          string
+	ocmMountPoint          string
+	additionalInfoTemplate *template.Template
+	userIdentifierCache    *ttlcache.Cache
+	resourceInfoCache      cache.ResourceInfoCache
+	resourceInfoCacheTTL   time.Duration
+	listOCMShares          bool
+	// May be nil if OCS runs without notifications
 	notificationHelper         *notificationhelper.NotificationHelper
 	Log                        *zerolog.Logger
 	EnableSpaces               bool
@@ -123,11 +125,19 @@ func (h *Handler) Init(c *config.Config, l *zerolog.Logger) {
 	h.listOCMShares = c.ListOCMShares
 	h.EnableSpaces = c.EnableSpaces
 	h.Log = l
-	h.notificationHelper = notificationhelper.New("ocs", c.Notifications, l)
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
 	h.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
 	h.pubRWLinkMaxExpiration = time.Second * time.Duration(c.PubRWLinkMaxExpiration)
 	h.pubRWLinkDefaultExpiration = time.Second * time.Duration(c.PubRWLinkDefaultExpiration)
+	if c.Notifications != nil {
+		nh, err := notificationhelper.New("ocs", c.Notifications, l)
+		// no return value :(
+		if err != nil {
+			log.Fatal().Msg("Failed to initialize notification handler in OCS - no emails will be sent on share creation!")
+		} else {
+			h.notificationHelper = nh
+		}
+	}
 
 	h.userIdentifierCache = ttlcache.NewCache()
 	_ = h.userIdentifierCache.SetTTL(time.Second * time.Duration(c.UserIdentifierCacheTTL))
@@ -354,6 +364,9 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 
 // SendShareNotification sends a notification with information from a Share.
 func (h *Handler) SendShareNotification(opaqueID string, granter *userpb.User, grantee any, statInfo *provider.ResourceInfo) string {
+	if h.notificationHelper == nil {
+		return ""
+	}
 	var granteeDisplayName, granteeName, recipient string
 	isGranteeGroup := false
 

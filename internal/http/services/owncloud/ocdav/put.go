@@ -418,7 +418,9 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 				"fileName": shareFileName,
 			},
 		}
-		s.notificationHelper.TriggerNotification(trg)
+		if s.notificationHelper != nil {
+			s.notificationHelper.TriggerNotification(trg)
+		}
 	}
 
 	// file was new
