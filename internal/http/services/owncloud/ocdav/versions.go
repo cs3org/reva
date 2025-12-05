@@ -57,6 +57,12 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 			return
 		}
 
+		log.Debug().
+			Str("storage_id", rid.StorageId).
+			Str("space_id", rid.SpaceId).
+			Str("opaque_id", rid.OpaqueId).
+			Msg("versions: handler entry - received rid")
+
 		// baseURI is encoded as part of the response payload in href field
 		baseURI := path.Join(ctx.Value(ctxKeyBaseURI).(string), spaces.EncodeResourceID(rid))
 		ctx = context.WithValue(ctx, ctxKeyBaseURI, baseURI)
