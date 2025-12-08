@@ -53,9 +53,11 @@ func (s *svc) getDrivePermissions(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+
 	actions, roles, perms, err := s.getPermissionsByCs3Reference(ctx, &provider.Reference{
 		ResourceId: resourceID,
 	})
+
 	if err != nil {
 		log.Error().Err(err).Msg("error getting permissions by cs3 reference")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -678,6 +680,7 @@ func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *provider.Re
 
 	actions = CS3ResourcePermissionsToLibregraphActions(statRes.Info.PermissionSet)
 	roles = GetApplicableRoleDefinitionsForActions(actions, statRes.Info)
+
 
 	return actions, roles, perms, nil
 }
