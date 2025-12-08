@@ -146,7 +146,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	info := res.Info
+	parentInfo := res.Info
 
 	lvRes, err := client.ListFileVersions(ctx, &provider.ListFileVersionsRequest{Ref: ref})
 	if err != nil {
@@ -163,20 +163,20 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 	infos := make([]*provider.ResourceInfo, 0, len(versions)+1)
 
 	// add version dir . entry, derived from file info
-	infos = append(infos, info)
+	infos = append(infos, parentInfo)
 
-	var spacePath string
-	var ok bool
-	if s.c.SpacesEnabled {
-		storageSpaceID := spaces.ConcatStorageSpaceID(rid.StorageId, rid.SpaceId)
-		_, spacePath, ok = spaces.DecodeStorageSpaceID(storageSpaceID)
-		if !ok {
-			sublog.Error().Msg("error decoding storage space id")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-	} else {
-		spacePath = ""
+	storageSpaceID := spaces.ConcatStorageSpaceID(rid.StorageId, rid.SpaceId)
+	_, spacePath, ok := spaces.DecodeStorageSpaceID(storageSpaceID)
+	if !ok {
+		sublog.Error().Msg("error decoding storage space id")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	relativePath, err := filepath.Rel(spacePath, parentInfo.Path)
+	if err != nil {
+		sublog.Error().Err(err).Msgf("failed to calculate path relative to space root in list versions: %s", parentInfo.Path)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	for i := range versions {
@@ -186,7 +186,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 			Type: provider.ResourceType_RESOURCE_TYPE_FILE,
 			Id: &provider.ResourceId{
 				StorageId: "versions",
-				OpaqueId:  info.Id.OpaqueId + "@" + versions[i].GetKey(),
+				OpaqueId:  parentInfo.Id.OpaqueId + "@" + versions[i].GetKey(),
 				SpaceId:   rid.SpaceId,
 			},
 			// Checksum
@@ -196,15 +196,25 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 				Seconds: versions[i].Mtime,
 				// TODO cs3apis FileVersion should use types.Timestamp instead of uint64
 			},
-			Path: path.Join(spacePath, "v", versions[i].Key),
+			Path: path.Join(spacePath, relativePath, "v", versions[i].Key),
 			// PermissionSet
 			Size:  versions[i].Size,
-			Owner: info.Owner,
+			Owner: parentInfo.Owner,
 		}
 		infos = append(infos, vi)
 	}
 
-	propRes, err := s.multistatusResponse(ctx, &pf, infos, "", nil, nil)
+	ctxPath := ctx.Value(ctxKeyIncomingURL)
+	if ctxPath == nil {
+		sublog.Error().Err(err).Msg("error listing versions: ctxKeyIncomingURL not set")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	href := ctxPath.(string)
+	// because parent info is used to calculate relative paths in the multistatusResponse
+	parentInfo.Path = path.Join(parentInfo.Path, "v")
+
+	propRes, err := s.multistatusResponse(ctx, &pf, infos, parentInfo, "", href, nil, nil)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)

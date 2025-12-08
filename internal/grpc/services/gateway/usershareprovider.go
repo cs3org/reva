@@ -229,7 +229,6 @@ func (s *svc) ListExistingShares(ctx context.Context, req *collaboration.ListSha
 	pool := pond.NewPool(50)
 
 	for _, share := range shares.Shares {
-		share := share
 		pool.SubmitErr(func() error {
 			key := resourceid.OwnCloudResourceIDWrap(share.ResourceId)
 			var resourceInfo *provider.ResourceInfo
@@ -366,7 +365,6 @@ func (s *svc) ListExistingReceivedShares(ctx context.Context, req *collaboration
 	sharesCh := make(chan *gateway.ReceivedShareResourceInfo, len(rshares.Shares))
 	pool := pond.NewPool(50)
 	for _, rs := range rshares.Shares {
-		rs := rs
 		pool.SubmitErr(func() error {
 			if rs.State == collaboration.ShareState_SHARE_STATE_INVALID {
 				return errors.New("Invalid Share State")
@@ -695,7 +693,8 @@ func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider
 
 	grantRes, err := c.AddGrant(ctx, grantReq)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling AddGrant")
+		err = errors.Wrap(err, "gateway: error calling AddGrant")
+		return status.NewInternal(ctx, err, "error committing share to storage grant"), err
 	}
 	if grantRes.Status.Code != rpc.Code_CODE_OK {
 		return status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),

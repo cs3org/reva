@@ -47,9 +47,9 @@ func init() {
 }
 
 type config struct {
-	Driver                string                            `mapstructure:"driver"`
-	Drivers               map[string]map[string]interface{} `mapstructure:"drivers"`
-	AllowedPathsForShares []string                          `mapstructure:"allowed_paths_for_shares"`
+	Driver                string                    `mapstructure:"driver"`
+	Drivers               map[string]map[string]any `mapstructure:"drivers"`
+	AllowedPathsForShares []string                  `mapstructure:"allowed_paths_for_shares"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -85,7 +85,7 @@ func (s *service) Register(ss *grpc.Server) {
 }
 
 // New creates a new user share provider svc.
-func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

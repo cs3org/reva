@@ -53,7 +53,7 @@ type svc struct {
 
 // New returns a new ocmd object, that implements
 // the OCM APIs specified in https://cs3org.github.io/OCM-API/docs.html
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

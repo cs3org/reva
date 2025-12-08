@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocmcore
+package ocmincoming
 
 // This package implements the core OCM API for receiving external shares from remote EFSS systems.
 
@@ -25,7 +25,7 @@ import (
 	"fmt"
 	"time"
 
-	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
+	ocmincoming "github.com/cs3org/go-cs3apis/cs3/ocm/incoming/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -41,8 +41,8 @@ import (
 )
 
 func init() {
-	rgrpc.Register("ocmcore", New)
-	plugin.RegisterNamespace("grpc.services.ocmcore.drivers", func(name string, newFunc any) {
+	rgrpc.Register("ocmincoming", New)
+	plugin.RegisterNamespace("grpc.services.ocmincoming.drivers", func(name string, newFunc any) {
 		var f registry.NewFunc
 		utils.Cast(newFunc, &f)
 		registry.Register(name, f)
@@ -50,8 +50,8 @@ func init() {
 }
 
 type config struct {
-	Driver  string                            `mapstructure:"driver"`
-	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
+	Driver  string                    `mapstructure:"driver"`
+	Drivers map[string]map[string]any `mapstructure:"drivers"`
 }
 
 type service struct {
@@ -66,7 +66,7 @@ func (c *config) ApplyDefaults() {
 }
 
 func (s *service) Register(ss *grpc.Server) {
-	ocmcore.RegisterOcmCoreAPIServer(ss, s)
+	ocmincoming.RegisterOcmIncomingAPIServer(ss, s)
 }
 
 func getShareRepository(ctx context.Context, c *config) (share.Repository, error) {
@@ -77,7 +77,7 @@ func getShareRepository(ctx context.Context, c *config) (share.Repository, error
 }
 
 // New creates a new ocm core svc.
-func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -101,11 +101,11 @@ func (s *service) Close() error {
 }
 
 func (s *service) UnprotectedEndpoints() []string {
-	return []string{"/cs3.ocm.core.v1beta1.OcmCoreAPI/CreateOCMCoreShare"}
+	return []string{"/cs3.ocm.incoming.v1beta1.OcmIncomingAPI/CreateOCMIncomingShare"}
 }
 
-// CreateOCMCoreShare is called when a remote OCM request comes into this reva instance.
-func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCMCoreShareRequest) (*ocmcore.CreateOCMCoreShareResponse, error) {
+// CreateOCMIncomingShare is called when a remote OCM request comes into this reva instance.
+func (s *service) CreateOCMIncomingShare(ctx context.Context, req *ocmincoming.CreateOCMIncomingShareRequest) (*ocmincoming.CreateOCMIncomingShareResponse, error) {
 	if req.ShareType != ocm.ShareType_SHARE_TYPE_USER {
 		return nil, errtypes.NotSupported("share type not supported")
 	}
@@ -135,22 +135,22 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 	})
 	if err != nil {
 		// TODO: identify errors
-		return &ocmcore.CreateOCMCoreShareResponse{
+		return &ocmincoming.CreateOCMIncomingShareResponse{
 			Status: status.NewInternal(ctx, err, err.Error()),
 		}, nil
 	}
 
-	return &ocmcore.CreateOCMCoreShareResponse{
+	return &ocmincoming.CreateOCMIncomingShareResponse{
 		Status:  status.NewOK(ctx),
 		Id:      share.Id.OpaqueId,
 		Created: share.Ctime,
 	}, nil
 }
 
-func (s *service) UpdateOCMCoreShare(ctx context.Context, req *ocmcore.UpdateOCMCoreShareRequest) (*ocmcore.UpdateOCMCoreShareResponse, error) {
+func (s *service) UpdateOCMIncomingShare(ctx context.Context, req *ocmincoming.UpdateOCMIncomingShareRequest) (*ocmincoming.UpdateOCMIncomingShareResponse, error) {
 	return nil, errtypes.NotSupported("not implemented")
 }
 
-func (s *service) DeleteOCMCoreShare(ctx context.Context, req *ocmcore.DeleteOCMCoreShareRequest) (*ocmcore.DeleteOCMCoreShareResponse, error) {
+func (s *service) DeleteOCMIncomingShare(ctx context.Context, req *ocmincoming.DeleteOCMIncomingShareRequest) (*ocmincoming.DeleteOCMIncomingShareResponse, error) {
 	return nil, errtypes.NotSupported("not implemented")
 }

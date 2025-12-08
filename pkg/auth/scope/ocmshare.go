@@ -41,7 +41,7 @@ import (
 // find a way to pass it from the config.
 const ocmNamespace = "/ocm"
 
-func ocmShareScope(_ context.Context, scope *authpb.Scope, resource interface{}, _ *zerolog.Logger) (bool, error) {
+func ocmShareScope(_ context.Context, scope *authpb.Scope, resource any, _ *zerolog.Logger) (bool, error) {
 	var share ocmv1beta1.Share
 	if err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share); err != nil {
 		return false, err

@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	in    = make(map[string]interface{})
+	in    = make(map[string]any)
 	reg   = New(in)
 	node1 = node{
 		id:      uuid.New().String(),
@@ -124,12 +124,3 @@ func TestGetService(t *testing.T) {
 		})
 	}
 }
-
-//	func contains(a []registry.Node, b registry.Node) bool {
-//		for i := range a {
-//			if a[i].Address() == b.Address() {
-//				return true
-//			}
-//		}
-//		return false
-//	}

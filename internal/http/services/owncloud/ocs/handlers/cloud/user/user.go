@@ -24,6 +24,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
+	"time"
 
 	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -32,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/auth/signing"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 )
 
@@ -39,17 +42,17 @@ import (
 type Handler struct {
 	gatewayAddr      string
 	allowedLanguages []string
-	signingKey       string
+	signingKeySecret string
 }
 
 // Init initializes this and any contained handlers.
 func (h *Handler) Init(c *config.Config) error {
-	if len(c.SigningKey) < 32 {
-		return errors.New("Please set a signing key with an appropriate length")
+	if len(c.SigningKeySecret) < 32 {
+		return errors.New("Please set a signing key secret with an appropriate length")
 	}
 	h.gatewayAddr = c.GatewaySvc
 	h.allowedLanguages = c.AllowedLanguages
-	h.signingKey = c.SigningKey
+	h.signingKeySecret = c.SigningKeySecret
 	if len(h.allowedLanguages) == 0 {
 		h.allowedLanguages = []string{"cs", "de", "en", "es", "fr", "it", "gl"}
 	}
@@ -88,11 +91,32 @@ type SigningKey struct {
 
 func (h *Handler) SigningKey(w http.ResponseWriter, r *http.Request) {
 	u := appctx.ContextMustGetUser(r.Context())
+	dateParam := r.URL.Query().Get("OC-Date")
+	date, err := time.Parse(time.RFC3339, dateParam)
+	if err != nil {
+		response.WriteOCSError(w, r, 400, "failed to parse mandatory OC-Date query parameter", err)
+		return
+	}
+	if !isValidTime(date) {
+		response.WriteOCSError(w, r, 400, "failed to parse mandatory OC-Date query parameter", err)
+		return
+	}
+	key := signing.DeriveSigningKey(u, h.signingKeySecret, dateParam)
 
 	response.WriteOCSSuccess(w, r, &SigningKey{
 		User:       u.Username,
-		SigningKey: h.signingKey,
+		SigningKey: string(key),
 	})
+}
+
+func isValidTime(check time.Time) bool {
+	if check.Before(time.Now().Add(-1 * time.Hour)) {
+		return false
+	}
+	if check.After(time.Now().Add(time.Hour)) {
+		return false
+	}
+	return true
 }
 
 func (h *Handler) getLanguage(ctx context.Context) string {
@@ -160,12 +184,7 @@ func (h *Handler) updateLanguage(ctx context.Context, lang string) error {
 }
 
 func (h *Handler) isLanguageAllowed(lang string) bool {
-	for _, l := range h.allowedLanguages {
-		if l == lang {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(h.allowedLanguages, lang)
 }
 
 func parseUpdateSelfRequest(r *http.Request) (updateSelfRequest, error) {

@@ -18,6 +18,8 @@
 
 package config
 
+import "maps"
+
 import "reflect"
 
 func dumpStruct(v reflect.Value) map[string]any {
@@ -29,7 +31,7 @@ func dumpStruct(v reflect.Value) map[string]any {
 	m := make(map[string]any, n)
 
 	t := v.Type()
-	for i := 0; i < n; i++ {
+	for i := range n {
 		e := v.Field(i)
 		f := t.Field(i)
 
@@ -51,9 +53,7 @@ func dumpStruct(v reflect.Value) map[string]any {
 			default:
 				panic("squash not allowed on non map/struct types")
 			}
-			for k, v := range mm {
-				m[k] = v
-			}
+			maps.Copy(m, mm)
 			continue
 		}
 
@@ -109,7 +109,7 @@ func dumpList(v reflect.Value) []any {
 	n := v.Len()
 	l := make([]any, 0, n)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		e := v.Index(i)
 		l = append(l, dumpByType(e))
 	}

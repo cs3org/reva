@@ -255,8 +255,8 @@ func ValidateCephConfig(t *testing.T) bool {
 //
 //	export CEPHMOUNT_FSTAB_ENTRY="cephfs.cephfs /mnt/cephfs ceph defaults,name=admin,secretfile=/etc/ceph/ceph.client.admin.keyring,conf=/etc/ceph/ceph.conf 0 2"
 //	go test -tags ceph -ceph-integration -v
-func GetCephConfig() map[string]interface{} {
-	config := map[string]interface{}{}
+func GetCephConfig() map[string]any {
+	config := map[string]any{}
 
 	// Get fstab entry - this is the only supported way now
 	fstabEntry := os.Getenv("CEPHMOUNT_FSTAB_ENTRY")

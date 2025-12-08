@@ -73,7 +73,7 @@ func (c *config) ApplyDefaults() {
 
 // New creates an OCM storage driver.
 // This driver exposes remote OCM resources to local users.
-func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
+func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

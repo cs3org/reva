@@ -296,7 +296,6 @@ func (r *Reva) Start() error {
 
 	var g errgroup.Group
 	for _, server := range r.servers {
-		server := server
 		g.Go(func() error {
 			return server.Start()
 		})

@@ -54,7 +54,7 @@ func (c *config) ApplyDefaults() {
 }
 
 // New returns a user manager implementation that reads a json file to provide user metadata.
-func New(_ context.Context, m map[string]interface{}) (user.Manager, error) {
+func New(_ context.Context, m map[string]any) (user.Manager, error) {
 	mgr := &manager{}
 	err := mgr.Configure(m)
 	if err != nil {
@@ -63,7 +63,7 @@ func New(_ context.Context, m map[string]interface{}) (user.Manager, error) {
 	return mgr, nil
 }
 
-func (m *manager) Configure(ml map[string]interface{}) error {
+func (m *manager) Configure(ml map[string]any) error {
 	var c config
 	if err := cfg.Decode(ml, &c); err != nil {
 		return err

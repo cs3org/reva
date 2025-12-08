@@ -80,7 +80,7 @@ func TestCephVolumePathMapping(t *testing.T) {
 				localMountPrefix = tempDir
 			}
 
-			config := map[string]interface{}{
+			config := map[string]any{
 				"chroot_dir": localMountPrefix, // Use the local mount point as chroot dir for this test
 			}
 
@@ -139,7 +139,7 @@ func TestCephVolumePathConcept(t *testing.T) {
 		}
 	}()
 
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true, // Allow local mode for tests
 	}
 

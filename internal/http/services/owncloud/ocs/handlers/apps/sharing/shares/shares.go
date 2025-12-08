@@ -345,7 +345,7 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	w.Header().Add("Content-Type", "application/json")
-	rb, _ := json.Marshal(map[string]interface{}{"recipients": []string{recipient}})
+	rb, _ := json.Marshal(map[string]any{"recipients": []string{recipient}})
 	_, err = w.Write(rb)
 	if err != nil {
 		h.Log.Error().Err(err).Msg("error writing response")
@@ -353,7 +353,7 @@ func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 }
 
 // SendShareNotification sends a notification with information from a Share.
-func (h *Handler) SendShareNotification(opaqueID string, granter *userpb.User, grantee interface{}, statInfo *provider.ResourceInfo) string {
+func (h *Handler) SendShareNotification(opaqueID string, granter *userpb.User, grantee any, statInfo *provider.ResourceInfo) string {
 	var granteeDisplayName, granteeName, recipient string
 	isGranteeGroup := false
 
@@ -375,7 +375,7 @@ func (h *Handler) SendShareNotification(opaqueID string, granter *userpb.User, g
 			Recipients:   []string{recipient},
 		},
 		Ref: opaqueID,
-		TemplateData: map[string]interface{}{
+		TemplateData: map[string]any{
 			"granteeDisplayName": granteeDisplayName,
 			"granteeUserName":    granteeName,
 			"granterDisplayName": granter.DisplayName,
@@ -923,7 +923,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	timeoutContext, cancel := context.WithTimeout(ctx, time.Duration(time.Millisecond*20000))
 	defer cancel()
 
-	for i := 0; i < workers; i++ {
+	for range workers {
 		wg.Add(1)
 		go func(ctx context.Context, client gateway.GatewayAPIClient, input chan *collaboration.ReceivedShare, output chan *conversions.ShareData, wg *sync.WaitGroup) {
 			defer wg.Done()

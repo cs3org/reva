@@ -22,6 +22,7 @@ import (
 	"context"
 	"net/url"
 	"path"
+	"slices"
 	"strings"
 	"time"
 
@@ -547,12 +548,7 @@ func (s *svc) isPathAllowed(cat string, path string) bool {
 		return true
 	}
 
-	for _, userAgent := range allowedUserAgents {
-		if userAgent == cat {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowedUserAgents, cat)
 }
 
 func (s *svc) listContainerAcrossProviders(ctx context.Context, req *provider.ListContainerRequest, providers []*registry.ProviderInfo) (*provider.ListContainerResponse, error) {

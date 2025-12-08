@@ -253,8 +253,8 @@ func getUserSelectionFromRequest(selQuery *godata.GoDataSelectQuery) []UserSelec
 		return nil
 	}
 	selection := []UserSelectableProperty{}
-	items := strings.Split(selQuery.RawValue, ",")
-	for _, item := range items {
+	items := strings.SplitSeq(selQuery.RawValue, ",")
+	for item := range items {
 		prop := UserSelectableProperty(item)
 		if prop.Valid() {
 			selection = append(selection, prop)

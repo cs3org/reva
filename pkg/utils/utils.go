@@ -58,7 +58,7 @@ var (
 	matchEmail    = regexp.MustCompile(`^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$`)
 	// GlobalRegistry configures a service registry globally accessible. It defaults to a memory registry. The usage of
 	// globals is not encouraged, and this is a workaround until the PR is out of a draft state.
-	GlobalRegistry registry.Registry = memory.New(map[string]interface{}{})
+	GlobalRegistry registry.Registry = memory.New(map[string]any{})
 )
 
 func appendSlash(p string) string {

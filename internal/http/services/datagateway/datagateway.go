@@ -77,7 +77,7 @@ type svc struct {
 }
 
 // New returns a new datagateway.
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -155,7 +155,7 @@ func (s *svc) verify(ctx context.Context, r *http.Request) (*transferClaims, err
 		r.Header.Set(TokenTransportHeader, token)
 	}
 
-	j, err := jwt.ParseWithClaims(token, &transferClaims{}, func(token *jwt.Token) (interface{}, error) {
+	j, err := jwt.ParseWithClaims(token, &transferClaims{}, func(token *jwt.Token) (any, error) {
 		return []byte(s.conf.TransferSharedSecret), nil
 	})
 

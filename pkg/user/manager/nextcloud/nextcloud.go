@@ -68,7 +68,7 @@ type Action struct {
 }
 
 // New returns a user manager implementation that reads a json file to provide user metadata.
-func New(ctx context.Context, m map[string]interface{}) (user.Manager, error) {
+func New(ctx context.Context, m map[string]any) (user.Manager, error) {
 	var c UserManagerConfig
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -136,7 +136,7 @@ func (um *Manager) do(ctx context.Context, a Action, username string) (int, []by
 }
 
 // Configure method as defined in https://github.com/cs3org/reva/blob/v1.13.0/pkg/user/user.go#L29-L35
-func (um *Manager) Configure(ml map[string]interface{}) error {
+func (um *Manager) Configure(ml map[string]any) error {
 	return nil
 }
 

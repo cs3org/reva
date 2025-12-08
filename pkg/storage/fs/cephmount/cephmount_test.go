@@ -46,7 +46,7 @@ func TestCephMount_BasicOperations(t *testing.T) {
 	}()
 
 	// Create cephmount instance
-	config := map[string]interface{}{
+	config := map[string]any{
 		"testing_allow_local_mode": true, // Allow local mode for tests (bypasses auto-discovery)
 	}
 

@@ -128,8 +128,6 @@ func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
 }
 
 func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
-	spacesEnabled := s.c.SpacesEnabled
-
 	if !checkPreconditions(w, r, log) {
 		// checkPreconditions handles error returns
 		return
@@ -368,12 +366,9 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	w.Header().Add(HeaderContentType, newInfo.MimeType)
 	w.Header().Set(HeaderETag, newInfo.Etag)
-	if spacesEnabled {
-		newInfoID, _ := spaces.EncodeResourceInfo(newInfo)
-		w.Header().Set(HeaderOCFileID, newInfoID)
-	} else {
-		w.Header().Set(HeaderOCFileID, spaces.ResourceIdToString(newInfo.Id))
-	}
+	newInfoID, _ := spaces.EncodeResourceInfo(newInfo)
+	w.Header().Set(HeaderOCFileID, newInfoID)
+
 	w.Header().Set(HeaderOCETag, newInfo.Etag)
 	t := utils.TSToTime(newInfo.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
@@ -398,7 +393,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		_, shareFileName := filepath.Split(ref.Path)
 
 		if f, ok := m["eos"]; ok {
-			eosOpaque := make(map[string]interface{})
+			eosOpaque := make(map[string]any)
 			switch f.Decoder {
 			case "json":
 				_ = json.Unmarshal(f.Value, &eosOpaque)
@@ -417,7 +412,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 		trg := &trigger.Trigger{
 			Ref: l.Id.OpaqueId,
-			TemplateData: map[string]interface{}{
+			TemplateData: map[string]any{
 				"path":     path,
 				"folder":   folder,
 				"fileName": shareFileName,

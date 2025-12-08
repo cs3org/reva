@@ -55,7 +55,7 @@ func TestUserManager(t *testing.T) {
 	}
 
 	// get manager
-	input := map[string]interface{}{
+	input := map[string]any{
 		"users": file.Name(),
 	}
 	_, err = New(context.TODO(), input)
@@ -83,7 +83,7 @@ func TestUserManager(t *testing.T) {
 	}
 
 	// get manager - positive test
-	input = map[string]interface{}{
+	input = map[string]any{
 		"users": file.Name(),
 	}
 	manager, _ := New(context.TODO(), input)

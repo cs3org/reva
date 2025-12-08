@@ -29,7 +29,7 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	group "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
+	ocmincoming "github.com/cs3org/go-cs3apis/cs3/ocm/incoming/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
@@ -46,13 +46,13 @@ import (
 
 type provider struct {
 	m    sync.Mutex
-	conn map[string]interface{}
+	conn map[string]any
 }
 
 func newProvider() provider {
 	return provider{
 		sync.Mutex{},
-		make(map[string]interface{}),
+		make(map[string]any),
 	}
 }
 
@@ -67,7 +67,7 @@ var (
 	ocmShareProviders      = newProvider()
 	ocmInviteManagers      = newProvider()
 	ocmProviderAuthorizers = newProvider()
-	ocmCores               = newProvider()
+	ocmIncoming            = newProvider()
 	publicShareProviders   = newProvider()
 	preferencesProviders   = newProvider()
 	permissionsProviders   = newProvider()
@@ -469,14 +469,14 @@ func GetOCMProviderAuthorizerClient(opts ...Option) (ocmprovider.ProviderAPIClie
 	return v, nil
 }
 
-// GetOCMCoreClient returns a new OCMCoreClient.
-func GetOCMCoreClient(opts ...Option) (ocmcore.OcmCoreAPIClient, error) {
-	ocmCores.m.Lock()
-	defer ocmCores.m.Unlock()
+// GetOCMIncomingClient returns a new OCMIncomingClient.
+func GetOCMIncomingClient(opts ...Option) (ocmincoming.OcmIncomingAPIClient, error) {
+	ocmIncoming.m.Lock()
+	defer ocmIncoming.m.Unlock()
 
 	options := newOptions(opts...)
-	if c, ok := ocmCores.conn[options.Endpoint]; ok {
-		return c.(ocmcore.OcmCoreAPIClient), nil
+	if c, ok := ocmIncoming.conn[options.Endpoint]; ok {
+		return c.(ocmincoming.OcmIncomingAPIClient), nil
 	}
 
 	conn, err := NewConn(options)
@@ -484,8 +484,8 @@ func GetOCMCoreClient(opts ...Option) (ocmcore.OcmCoreAPIClient, error) {
 		return nil, err
 	}
 
-	v := ocmcore.NewOcmCoreAPIClient(conn)
-	ocmCores.conn[options.Endpoint] = v
+	v := ocmincoming.NewOcmIncomingAPIClient(conn)
+	ocmIncoming.conn[options.Endpoint] = v
 	return v, nil
 }
 

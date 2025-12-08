@@ -66,7 +66,7 @@ func (c *config) ApplyDefaults() {
 }
 
 // New returns a new invite manager object.
-func New(ctx context.Context, m map[string]interface{}) (invite.Repository, error) {
+func New(ctx context.Context, m map[string]any) (invite.Repository, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -169,7 +169,7 @@ func (m *manager) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*
 }
 
 func tokenIsExpired(token *invitepb.InviteToken) bool {
-	return token.Expiration != nil && token.Expiration.Seconds > uint64(time.Now().Unix())
+	return token.Expiration != nil && token.Expiration.Seconds < uint64(time.Now().Unix())
 }
 
 func (m *manager) AddRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.User) error {

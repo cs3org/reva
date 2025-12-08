@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 
@@ -40,7 +41,7 @@ func init() {
 }
 
 // New returns a new authorizer object.
-func New(ctx context.Context, m map[string]interface{}) (provider.Authorizer, error) {
+func New(ctx context.Context, m map[string]any) (provider.Authorizer, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -167,11 +168,8 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, pi *ocmprovider.Prov
 		a.providerIPs.Store(ocmHost, ipList)
 	}
 
-	for _, ip := range ipList {
-		if ip == pi.Services[0].Host {
-			providerAuthorized = true
-			break
-		}
+	if slices.Contains(ipList, pi.Services[0].Host) {
+		providerAuthorized = true
 	}
 	if !providerAuthorized {
 		return errtypes.NotFound("OCM Host")

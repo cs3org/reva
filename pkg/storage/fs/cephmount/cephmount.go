@@ -74,7 +74,7 @@ func init() {
 	registry.Register("cephmount", New)
 }
 
-func parseOptions(m map[string]interface{}) (Options, error) {
+func parseOptions(m map[string]any) (Options, error) {
 	var o Options
 	if err := mapstructure.Decode(m, &o); err != nil {
 		return o, errors.Wrap(err, "error decoding conf")
@@ -85,7 +85,7 @@ func parseOptions(m map[string]interface{}) (Options, error) {
 
 // New returns an implementation of the storage.FS interface that talks to
 // the local filesystem using os.Root operations instead of libcephfs.
-func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
+func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	o, err := parseOptions(m)
 	if err != nil {
 		return nil, err

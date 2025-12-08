@@ -48,7 +48,7 @@ func (c *conf) ApplyDefaults() {
 // New returns a new PreferencesServiceServer
 // It can be tested like this:
 // prototool grpc --address 0.0.0.0:9999 --method 'revad.helloworld.HelloWorldService/Hello' --data '{"name": "Alice"}'.
-func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	var c conf
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

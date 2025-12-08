@@ -104,7 +104,7 @@ func (fs *cephmountfs) logOperationError(ctx context.Context, operation, path st
 }
 
 // executeAsUser runs a function that returns a result on the user's thread with correct UID
-func (fs *cephmountfs) executeAsUser(ctx context.Context, fn func() (interface{}, error)) (interface{}, error) {
+func (fs *cephmountfs) executeAsUser(ctx context.Context, fn func() (any, error)) (any, error) {
 	user, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		// Create a nobody user for fallback operations instead of using root
@@ -128,7 +128,7 @@ func (fs *cephmountfs) createNobodyUser() *userv1beta1.User {
 
 // executeOnUserThread runs a function on the user's thread with correct UID
 func (fs *cephmountfs) executeOnUserThread(ctx context.Context, fn func() error) error {
-	_, err := fs.executeAsUser(ctx, func() (interface{}, error) {
+	_, err := fs.executeAsUser(ctx, func() (any, error) {
 		return nil, fn()
 	})
 	return err
@@ -154,7 +154,7 @@ func (fs *cephmountfs) createFileAsUser(ctx context.Context, path string, perm o
 
 // statAsUser performs a stat operation on the user's thread with correct UID
 func (fs *cephmountfs) statAsUser(ctx context.Context, path string) (os.FileInfo, error) {
-	result, err := fs.executeAsUser(ctx, func() (interface{}, error) {
+	result, err := fs.executeAsUser(ctx, func() (any, error) {
 		return fs.rootFS.Stat(path)
 	})
 	if err != nil {
@@ -186,7 +186,7 @@ func (fs *cephmountfs) renameAsUser(ctx context.Context, oldPath, newPath string
 
 // readDirectoryAsUser reads a directory on the user's thread with correct UID
 func (fs *cephmountfs) readDirectoryAsUser(ctx context.Context, path string) ([]os.FileInfo, error) {
-	result, err := fs.executeAsUser(ctx, func() (interface{}, error) {
+	result, err := fs.executeAsUser(ctx, func() (any, error) {
 		dir, err := fs.rootFS.Open(path)
 		if err != nil {
 			return nil, err
@@ -203,7 +203,7 @@ func (fs *cephmountfs) readDirectoryAsUser(ctx context.Context, path string) ([]
 
 // openFileAsUser opens a file for reading on the user's thread with correct UID
 func (fs *cephmountfs) openFileAsUser(ctx context.Context, path string) (*os.File, error) {
-	result, err := fs.executeAsUser(ctx, func() (interface{}, error) {
+	result, err := fs.executeAsUser(ctx, func() (any, error) {
 		return fs.rootFS.Open(path)
 	})
 	if err != nil {

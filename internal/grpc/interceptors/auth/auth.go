@@ -48,13 +48,13 @@ var scopeExpansionCache gcache.Cache
 type config struct {
 	// TODO(labkode): access a map is more performant as uri as fixed in length
 	// for SkipMethods.
-	TokenManager  string                            `mapstructure:"token_manager"`
-	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
-	GatewayAddr   string                            `mapstructure:"gateway_addr"`
+	TokenManager  string                    `mapstructure:"token_manager"`
+	TokenManagers map[string]map[string]any `mapstructure:"token_managers"`
+	GatewayAddr   string                    `mapstructure:"gateway_addr"`
 	blockedUsers  []string
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
+func parseConfig(m map[string]any) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "auth: error decoding conf")
@@ -66,7 +66,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // NewUnary returns a new unary interceptor that adds
 // trace information for the request.
-func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerInterceptor, error) {
+func NewUnary(m map[string]any, unprotected []string) (grpc.UnaryServerInterceptor, error) {
 	conf, err := parseConfig(m)
 	if err != nil {
 		err = errors.Wrap(err, "auth: error parsing config")
@@ -93,7 +93,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 		return nil, errors.Wrap(err, "auth: error creating token manager")
 	}
 
-	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	interceptor := func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		log := appctx.GetLogger(ctx)
 
 		if utils.Skip(info.FullMethod, unprotected) {
@@ -130,7 +130,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 
 // NewStream returns a new server stream interceptor
 // that adds trace information to the request.
-func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServerInterceptor, error) {
+func NewStream(m map[string]any, unprotected []string) (grpc.StreamServerInterceptor, error) {
 	conf, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -153,7 +153,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 		return nil, errtypes.NotFound("auth: token manager not found: " + conf.TokenManager)
 	}
 
-	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	interceptor := func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := ss.Context()
 		log := appctx.GetLogger(ctx)
 
@@ -198,7 +198,7 @@ func (ss *wrappedServerStream) Context() context.Context {
 	return ss.newCtx
 }
 
-func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.Manager, gatewayAddr string, unprotected bool) (*userpb.User, map[string]*authpb.Scope, error) {
+func dismantleToken(ctx context.Context, tkn string, req any, mgr token.Manager, gatewayAddr string, unprotected bool) (*userpb.User, map[string]*authpb.Scope, error) {
 	u, tokenScope, err := mgr.DismantleToken(ctx, tkn)
 	if err != nil {
 		return nil, nil, err

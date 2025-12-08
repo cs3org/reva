@@ -52,13 +52,13 @@ func init() {
 }
 
 type config struct {
-	Driver            string                            `mapstructure:"driver"`
-	Drivers           map[string]map[string]interface{} `mapstructure:"drivers"`
-	TokenExpiration   string                            `mapstructure:"token_expiration"`
-	OCMClientTimeout  int                               `mapstructure:"ocm_timeout"`
-	OCMClientInsecure bool                              `mapstructure:"ocm_insecure"`
-	GatewaySVC        string                            `mapstructure:"gatewaysvc"                                    validate:"required"`
-	ProviderDomain    string                            `docs:"The same domain registered in the provider authorizer" mapstructure:"provider_domain" validate:"required"`
+	Driver            string                    `mapstructure:"driver"`
+	Drivers           map[string]map[string]any `mapstructure:"drivers"`
+	TokenExpiration   string                    `mapstructure:"token_expiration"`
+	OCMClientTimeout  int                       `mapstructure:"ocm_timeout"`
+	OCMClientInsecure bool                      `mapstructure:"ocm_insecure"`
+	GatewaySVC        string                    `mapstructure:"gatewaysvc"                                    validate:"required"`
+	ProviderDomain    string                    `docs:"The same domain registered in the provider authorizer" mapstructure:"provider_domain" validate:"required"`
 
 	tokenExpiration time.Duration
 }
@@ -92,7 +92,7 @@ func getInviteRepository(ctx context.Context, c *config) (invite.Repository, err
 }
 
 // New creates a new OCM invite manager svc.
-func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -300,6 +300,8 @@ func isTokenValid(token *invitepb.InviteToken) bool {
 
 func (s *service) GetAcceptedUser(ctx context.Context, req *invitepb.GetAcceptedUserRequest) (*invitepb.GetAcceptedUserResponse, error) {
 	log := appctx.GetLogger(ctx)
+	// TODO(lopresti): here we extract an opaque field to get the initiator of the invite, whereas we should implement
+	// a GetRemoteUser() call in the repository that only takes the remoteUserId no matter the initiator.
 	user, ok := getUserFilter(ctx, req)
 	if !ok {
 		return &invitepb.GetAcceptedUserResponse{

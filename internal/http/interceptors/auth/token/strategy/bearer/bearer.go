@@ -34,7 +34,7 @@ func init() {
 type b struct{}
 
 // New returns a new auth strategy that checks for bearer auth.
-func New(m map[string]interface{}) (auth.TokenStrategy, error) {
+func New(m map[string]any) (auth.TokenStrategy, error) {
 	return b{}, nil
 }
 

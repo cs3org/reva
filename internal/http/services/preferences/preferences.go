@@ -56,7 +56,7 @@ type svc struct {
 }
 
 // New returns a new ocmd object.
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -144,7 +144,7 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	js, err := json.Marshal(map[string]interface{}{
+	js, err := json.Marshal(map[string]any{
 		"namespace": ns,
 		"key":       key,
 		"value":     res.Val,

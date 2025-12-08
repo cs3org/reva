@@ -45,7 +45,7 @@ services:
 */
 func TestParseConfig(t *testing.T) {
 	type args struct {
-		m map[string]interface{}
+		m map[string]any
 	}
 	tests := []struct {
 		name    string
@@ -53,21 +53,21 @@ func TestParseConfig(t *testing.T) {
 		want    *Config
 		wantErr bool
 	}{
-		{name: "parse config", args: args{map[string]interface{}{
-			"services": map[string]map[string]interface{}{
+		{name: "parse config", args: args{map[string]any{
+			"services": map[string]map[string]any{
 				"authprovider": {
-					"basic": map[string]interface{}{
+					"basic": map[string]any{
 						"name": "auth-basic",
-						"nodes": []map[string]interface{}{
+						"nodes": []map[string]any{
 							{
 								"address":  "0.0.0.0:1234",
 								"metadata": map[string]string{"version": "v0.1.0"},
 							},
 						},
 					},
-					"bearer": map[string]interface{}{
+					"bearer": map[string]any{
 						"name": "auth-bearer",
-						"nodes": []map[string]interface{}{
+						"nodes": []map[string]any{
 							{
 								"address":  "0.0.0.0:5678",
 								"metadata": map[string]string{"version": "v0.1.0"},
