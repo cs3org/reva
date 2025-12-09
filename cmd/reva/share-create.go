@@ -28,7 +28,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/pkg/errors"
@@ -159,11 +159,11 @@ func getGrantType(t string) provider.GranteeType {
 func getSharePerm(p string) (*provider.ResourcePermissions, error) {
 	switch p {
 	case viewerPermission:
-		return conversions.NewViewerRole().CS3ResourcePermissions(), nil
+		return permissions.NewViewerRole().CS3ResourcePermissions(), nil
 	case editorPermission:
-		return conversions.NewEditorRole().CS3ResourcePermissions(), nil
+		return permissions.NewEditorRole().CS3ResourcePermissions(), nil
 	case collabPermission:
-		return conversions.NewManagerRole().CS3ResourcePermissions(), nil
+		return permissions.NewManagerRole().CS3ResourcePermissions(), nil
 	case denyPermission:
 		return &provider.ResourcePermissions{}, nil
 	default:

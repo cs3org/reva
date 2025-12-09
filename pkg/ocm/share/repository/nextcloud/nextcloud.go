@@ -33,7 +33,7 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
@@ -180,8 +180,8 @@ func (sm *Manager) efssShareToOcm(resp *EfssShare) *ocm.Share {
 
 	// first generate the map of access methods, assuming WebDAV is always present
 	var am = make([]*ocm.AccessMethod, 0, 3)
-	am = append(am, share.NewWebDavAccessMethod(conversions.RoleFromOCSPermissions(
-		conversions.Permissions(resp.Protocols.WebDAV.Permissions)).CS3ResourcePermissions(), []string{}))
+	am = append(am, share.NewWebDavAccessMethod(permissions.RoleFromOCSPermissions(
+		permissions.OcsPermissions(resp.Protocols.WebDAV.Permissions)).CS3ResourcePermissions(), []string{}))
 	if resp.Protocols.WebApp.ViewMode != "" {
 		am = append(am, share.NewWebappAccessMethod(utils.GetAppViewMode(resp.Protocols.WebApp.ViewMode)))
 	}
@@ -325,7 +325,7 @@ func efssReceivedShareToOcm(resp *ReceivedEfssShare) *ocm.ReceivedShare {
 	// first generate the map of protocols, assuming WebDAV is always present
 	var proto = make([]*ocm.Protocol, 0, 3)
 	proto = append(proto, share.NewWebDAVProtocol(resp.Share.Protocols.WebDAV.URI, resp.Share.Token, &ocm.SharePermissions{
-		Permissions: conversions.RoleFromOCSPermissions(conversions.Permissions(resp.Share.Protocols.WebDAV.Permissions)).CS3ResourcePermissions(),
+		Permissions: permissions.RoleFromOCSPermissions(permissions.OcsPermissions(resp.Share.Protocols.WebDAV.Permissions)).CS3ResourcePermissions(),
 	}, []string{}))
 	if resp.Share.Protocols.WebApp.ViewMode != "" {
 		proto = append(proto, share.NewWebappProtocol(resp.Share.Protocols.WebApp.URI, utils.GetAppViewMode(resp.Share.Protocols.WebApp.ViewMode)))

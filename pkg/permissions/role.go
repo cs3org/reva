@@ -17,7 +17,7 @@
 // or submit itself to any jurisdiction.
 
 // Package conversions sits between CS3 type definitions and OCS API Responses
-package conversions
+package permissions
 
 import (
 	"fmt"
@@ -31,7 +31,7 @@ import (
 type Role struct {
 	Name                   string
 	cS3ResourcePermissions *provider.ResourcePermissions
-	ocsPermissions         Permissions
+	ocsPermissions         OcsPermissions
 }
 
 const (
@@ -61,7 +61,7 @@ func (r *Role) CS3ResourcePermissions() *provider.ResourcePermissions {
 }
 
 // OCSPermissions for the role.
-func (r *Role) OCSPermissions() Permissions {
+func (r *Role) OCSPermissions() OcsPermissions {
 	return r.ocsPermissions
 }
 
@@ -254,7 +254,7 @@ func NewManagerRole() *Role {
 }
 
 // RoleFromOCSPermissions tries to map ocs permissions to a role.
-func RoleFromOCSPermissions(p Permissions) *Role {
+func RoleFromOCSPermissions(p OcsPermissions) *Role {
 	if p.Contain(PermissionNone) {
 		return NewDeniedRole()
 	}

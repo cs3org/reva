@@ -27,7 +27,7 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	projects_catalogue "github.com/cs3org/reva/v3/pkg/projects"
 	"github.com/cs3org/reva/v3/pkg/spaces"
@@ -95,9 +95,9 @@ func TestListProjects(t *testing.T) {
 					SpaceType: spaces.SpaceTypeProject.AsString(),
 					RootInfo: &provider.ResourceInfo{
 						Path:          "/path/to/project",
-						PermissionSet: conversions.NewManagerRole().CS3ResourcePermissions(),
+						PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
 					},
-					PermissionSet: conversions.NewManagerRole().CS3ResourcePermissions(),
+					PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
 				},
 			},
 		},
@@ -129,9 +129,9 @@ func TestListProjects(t *testing.T) {
 					SpaceType: spaces.SpaceTypeProject.AsString(),
 					RootInfo: &provider.ResourceInfo{
 						Path:          "/path/to/project",
-						PermissionSet: conversions.NewViewerRole().CS3ResourcePermissions(),
+						PermissionSet: permissions.NewViewerRole().CS3ResourcePermissions(),
 					},
-					PermissionSet: conversions.NewViewerRole().CS3ResourcePermissions(),
+					PermissionSet: permissions.NewViewerRole().CS3ResourcePermissions(),
 				},
 			},
 		},
@@ -163,9 +163,9 @@ func TestListProjects(t *testing.T) {
 					SpaceType: spaces.SpaceTypeProject.AsString(),
 					RootInfo: &provider.ResourceInfo{
 						Path:          "/path/to/project",
-						PermissionSet: conversions.NewEditorRole().CS3ResourcePermissions(),
+						PermissionSet: permissions.NewEditorRole().CS3ResourcePermissions(),
 					},
-					PermissionSet: conversions.NewEditorRole().CS3ResourcePermissions(),
+					PermissionSet: permissions.NewEditorRole().CS3ResourcePermissions(),
 				},
 			},
 		},
@@ -197,9 +197,9 @@ func TestListProjects(t *testing.T) {
 					SpaceType: spaces.SpaceTypeProject.AsString(),
 					RootInfo: &provider.ResourceInfo{
 						Path:          "/path/to/project",
-						PermissionSet: conversions.NewManagerRole().CS3ResourcePermissions(),
+						PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
 					},
-					PermissionSet: conversions.NewManagerRole().CS3ResourcePermissions(),
+					PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
 				},
 			},
 		},
@@ -231,9 +231,9 @@ func TestListProjects(t *testing.T) {
 					SpaceType: spaces.SpaceTypeProject.AsString(),
 					RootInfo: &provider.ResourceInfo{
 						Path:          "/path/to/project",
-						PermissionSet: conversions.NewManagerRole().CS3ResourcePermissions(),
+						PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
 					},
-					PermissionSet: conversions.NewManagerRole().CS3ResourcePermissions(),
+					PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
 				},
 			},
 		},

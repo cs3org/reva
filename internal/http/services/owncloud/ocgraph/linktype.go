@@ -26,7 +26,7 @@ import (
 
 	linkv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/grants"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 )
@@ -114,7 +114,7 @@ func NewInternalLinkPermissionSet() *LinkType {
 // NewViewLinkPermissionSet creates cs3 permissions for the view link type
 func NewViewLinkPermissionSet() *LinkType {
 	return &LinkType{
-		Permissions: conversions.NewViewerRole().CS3ResourcePermissions(),
+		Permissions: permissions.NewViewerRole().CS3ResourcePermissions(),
 		linkType:    libregraph.VIEW,
 	}
 }
@@ -122,7 +122,7 @@ func NewViewLinkPermissionSet() *LinkType {
 // NewFileEditLinkPermissionSet creates cs3 permissions for the file edit link type
 func NewFileEditLinkPermissionSet() *LinkType {
 	return &LinkType{
-		Permissions: conversions.NewFileEditorRole().CS3ResourcePermissions(),
+		Permissions: permissions.NewFileEditorRole().CS3ResourcePermissions(),
 		linkType:    libregraph.EDIT,
 	}
 }
@@ -130,7 +130,7 @@ func NewFileEditLinkPermissionSet() *LinkType {
 // NewFolderEditLinkPermissionSet creates cs3 permissions for the folder edit link type
 func NewFolderEditLinkPermissionSet() *LinkType {
 	return &LinkType{
-		Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
+		Permissions: permissions.NewEditorRole().CS3ResourcePermissions(),
 		linkType:    libregraph.EDIT,
 	}
 }
@@ -138,7 +138,7 @@ func NewFolderEditLinkPermissionSet() *LinkType {
 // NewFolderDropLinkPermissionSet creates cs3 permissions for the folder createOnly link type
 func NewFolderDropLinkPermissionSet() *LinkType {
 	return &LinkType{
-		Permissions: conversions.NewUploaderRole().CS3ResourcePermissions(),
+		Permissions: permissions.NewUploaderRole().CS3ResourcePermissions(),
 		linkType:    libregraph.CREATE_ONLY,
 	}
 }

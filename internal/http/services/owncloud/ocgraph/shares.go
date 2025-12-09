@@ -43,7 +43,7 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
-	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/spaces"
@@ -272,7 +272,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check that the user has share permissions
-	if !conversions.RoleFromResourcePermissions(statRes.Info.PermissionSet).OCSPermissions().Contain(conversions.PermissionShare) {
+	if !permissions.RoleFromResourcePermissions(statRes.Info.PermissionSet).OCSPermissions().Contain(permissions.PermissionShare) {
 		handleCustomError(ctx, errors.New("user does not have share permissions"), http.StatusUnauthorized, w)
 		return
 	}
@@ -411,7 +411,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check that the user has share permissions
-	if !conversions.RoleFromResourcePermissions(statRes.Info.PermissionSet).OCSPermissions().Contain(conversions.PermissionShare) {
+	if !permissions.RoleFromResourcePermissions(statRes.Info.PermissionSet).OCSPermissions().Contain(permissions.PermissionShare) {
 		handleCustomError(ctx, errors.New("user does not have the necessary permissions"), http.StatusUnauthorized, w)
 		return
 	}

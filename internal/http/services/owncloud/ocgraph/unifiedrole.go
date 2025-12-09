@@ -27,7 +27,7 @@ import (
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	libregraph "github.com/owncloud/libre-graph-api-go"
@@ -85,20 +85,20 @@ const (
 )
 
 var legacyNames map[string]string = map[string]string{
-	UnifiedRoleViewerID: conversions.RoleViewer,
+	UnifiedRoleViewerID: permissions.RoleViewer,
 	// in the V1 api the "spaceviewer" role was call "viewer" and the "spaceeditor" was "editor",
 	// we need to stay compatible with that
 	UnifiedRoleSpaceViewerID: "viewer",
 	UnifiedRoleSpaceEditorID: "editor",
-	UnifiedRoleEditorID:      conversions.RoleEditor,
-	UnifiedRoleFileEditorID:  conversions.RoleFileEditor,
-	// UnifiedRoleEditorLiteID:   conversions.RoleEditorLite,
-	UnifiedRoleManagerID: conversions.RoleManager,
+	UnifiedRoleEditorID:      permissions.RoleEditor,
+	UnifiedRoleFileEditorID:  permissions.RoleFileEditor,
+	// UnifiedRoleEditorLiteID:   permissions.RoleEditorLite,
+	UnifiedRoleManagerID: permissions.RoleManager,
 }
 
 // NewViewerUnifiedRole creates a viewer role.
 func NewViewerUnifiedRole() *libregraph.UnifiedRoleDefinition {
-	r := conversions.NewViewerRole()
+	r := permissions.NewViewerRole()
 	return &libregraph.UnifiedRoleDefinition{
 		Id:          proto.String(UnifiedRoleViewerID),
 		Description: proto.String("View and download."),
@@ -119,7 +119,7 @@ func NewViewerUnifiedRole() *libregraph.UnifiedRoleDefinition {
 
 // NewSpaceViewerUnifiedRole creates a spaceviewer role
 func NewSpaceViewerUnifiedRole() *libregraph.UnifiedRoleDefinition {
-	r := conversions.NewViewerRole()
+	r := permissions.NewViewerRole()
 	return &libregraph.UnifiedRoleDefinition{
 		Id:          proto.String(UnifiedRoleSpaceViewerID),
 		Description: proto.String("View and download."),
@@ -136,7 +136,7 @@ func NewSpaceViewerUnifiedRole() *libregraph.UnifiedRoleDefinition {
 
 // NewEditorUnifiedRole creates an editor role.
 func NewEditorUnifiedRole() *libregraph.UnifiedRoleDefinition {
-	r := conversions.NewEditorRole()
+	r := permissions.NewEditorRole()
 	return &libregraph.UnifiedRoleDefinition{
 		Id:          proto.String(UnifiedRoleEditorID),
 		Description: proto.String("View, download, upload, edit, add and delete."),
@@ -153,7 +153,7 @@ func NewEditorUnifiedRole() *libregraph.UnifiedRoleDefinition {
 
 // NewSpaceEditorUnifiedRole creates an editor role
 func NewSpaceEditorUnifiedRole() *libregraph.UnifiedRoleDefinition {
-	r := conversions.NewEditorRole()
+	r := permissions.NewEditorRole()
 	return &libregraph.UnifiedRoleDefinition{
 		Id:          proto.String(UnifiedRoleSpaceEditorID),
 		Description: proto.String("View, download, upload, edit, add and delete."),
@@ -170,7 +170,7 @@ func NewSpaceEditorUnifiedRole() *libregraph.UnifiedRoleDefinition {
 
 // NewFileEditorUnifiedRole creates a file-editor role
 func NewFileEditorUnifiedRole() *libregraph.UnifiedRoleDefinition {
-	r := conversions.NewFileEditorRole()
+	r := permissions.NewFileEditorRole()
 	return &libregraph.UnifiedRoleDefinition{
 		Id:          proto.String(UnifiedRoleFileEditorID),
 		Description: proto.String("View, download and edit."),
@@ -187,7 +187,7 @@ func NewFileEditorUnifiedRole() *libregraph.UnifiedRoleDefinition {
 
 // NewManagerUnifiedRole creates a manager role
 func NewManagerUnifiedRole() *libregraph.UnifiedRoleDefinition {
-	r := conversions.NewManagerRole()
+	r := permissions.NewManagerRole()
 	return &libregraph.UnifiedRoleDefinition{
 		Id:          proto.String(UnifiedRoleManagerID),
 		Description: proto.String("View, download, upload, edit, add, delete and manage members."),
@@ -204,7 +204,7 @@ func NewManagerUnifiedRole() *libregraph.UnifiedRoleDefinition {
 
 // NewUploaderUnifiedRole creates an uploader role
 func NewUploaderUnifiedRole() *libregraph.UnifiedRoleDefinition {
-	r := conversions.NewUploaderRole()
+	r := permissions.NewUploaderRole()
 	return &libregraph.UnifiedRoleDefinition{
 		Id:          proto.String(UnifiedRoleUploaderID),
 		Description: proto.String("Upload only."),
@@ -220,7 +220,7 @@ func NewUploaderUnifiedRole() *libregraph.UnifiedRoleDefinition {
 }
 
 func NewAccessDeniedUnifiedRole() *libregraph.UnifiedRoleDefinition {
-	r := conversions.NewDeniedRole()
+	r := permissions.NewDeniedRole()
 	return &libregraph.UnifiedRoleDefinition{
 		Id:          proto.String(UnifiedRoleDenyAccessID),
 		Description: proto.String("Remove all permissions."),
@@ -437,12 +437,12 @@ func GetLegacyName(role libregraph.UnifiedRoleDefinition) string {
 // CS3 ResourcePermissions.
 func CS3ResourcePermissionsToUnifiedRole(ctx context.Context, p *provider.ResourcePermissions) *libregraph.UnifiedRoleDefinition {
 	log := appctx.GetLogger(ctx)
-	role := conversions.RoleFromResourcePermissions(p)
+	role := permissions.RoleFromResourcePermissions(p)
 	log.Debug().Interface("role", role).Interface("perms", p).Msg("Converting cs3 resource permissions to unified role")
 	return ocsRoleUnifiedRole[role.Name]
 }
 
-func displayName(role *conversions.Role) *string {
+func displayName(role *permissions.Role) *string {
 	if role == nil {
 		return nil
 	}
@@ -452,15 +452,15 @@ func displayName(role *conversions.Role) *string {
 
 	var displayName string
 	switch role.Name {
-	case conversions.RoleViewer:
+	case permissions.RoleViewer:
 		displayName = "Can view"
-	case conversions.RoleEditor:
+	case permissions.RoleEditor:
 		displayName = canEdit
-	case conversions.RoleFileEditor:
+	case permissions.RoleFileEditor:
 		displayName = canEdit
-	case conversions.RoleManager:
+	case permissions.RoleManager:
 		displayName = "Can manage"
-	case conversions.RoleDenied:
+	case permissions.RoleDenied:
 		displayName = "Deny access"
 	default:
 		return nil
@@ -468,7 +468,7 @@ func displayName(role *conversions.Role) *string {
 	return proto.String(displayName)
 }
 
-func convert(role *conversions.Role) []string {
+func convert(role *permissions.Role) []string {
 	actions := make([]string, 0, 8)
 	if role == nil && role.CS3ResourcePermissions() == nil {
 		return actions
@@ -498,13 +498,13 @@ func GetBuiltinRoleDefinitionList() []*libregraph.UnifiedRoleDefinition {
 }
 
 var ocsRoleUnifiedRole = map[string]*libregraph.UnifiedRoleDefinition{
-	conversions.RoleViewer:     NewViewerUnifiedRole(),
-	conversions.RoleReader:     NewViewerUnifiedRole(),
-	conversions.RoleEditor:     NewEditorUnifiedRole(),
-	conversions.RoleFileEditor: NewFileEditorUnifiedRole(),
-	conversions.RoleUploader:   NewUploaderUnifiedRole(),
-	conversions.RoleManager:    NewManagerUnifiedRole(),
-	conversions.RoleDenied:     NewAccessDeniedUnifiedRole(),
+	permissions.RoleViewer:     NewViewerUnifiedRole(),
+	permissions.RoleReader:     NewViewerUnifiedRole(),
+	permissions.RoleEditor:     NewEditorUnifiedRole(),
+	permissions.RoleFileEditor: NewFileEditorUnifiedRole(),
+	permissions.RoleUploader:   NewUploaderUnifiedRole(),
+	permissions.RoleManager:    NewManagerUnifiedRole(),
+	permissions.RoleDenied:     NewAccessDeniedUnifiedRole(),
 }
 
 func UnifiedRoleIDToDefinition(unifiedRoleID string) (*libregraph.UnifiedRoleDefinition, bool) {

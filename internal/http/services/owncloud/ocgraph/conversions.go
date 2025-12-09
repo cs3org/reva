@@ -18,7 +18,7 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
@@ -253,7 +253,7 @@ func LinkTypeToPermissions(lt libregraph.SharingLinkType, resourceType provider.
 	case libregraph.INTERNAL:
 		fallthrough
 	default:
-		return conversions.NewDeniedRole().CS3ResourcePermissions()
+		return permissions.NewDeniedRole().CS3ResourcePermissions()
 	}
 }
 

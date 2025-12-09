@@ -29,7 +29,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
@@ -231,7 +231,7 @@ var _ = Describe("Nextcloud", func() {
 					Nanos:   0,
 				},
 				Path:          "/some/path",
-				PermissionSet: conversions.RoleFromOCSPermissions(conversions.Permissions(0)).CS3ResourcePermissions(),
+				PermissionSet: permissions.RoleFromOCSPermissions(permissions.OcsPermissions(0)).CS3ResourcePermissions(),
 				Size:          12345,
 				Owner: &userpb.UserId{
 					Idp:      "",
@@ -281,7 +281,7 @@ var _ = Describe("Nextcloud", func() {
 					Nanos:   0,
 				},
 				Path:          "/some/path",
-				PermissionSet: conversions.RoleFromOCSPermissions(conversions.Permissions(0)).CS3ResourcePermissions(),
+				PermissionSet: permissions.RoleFromOCSPermissions(permissions.OcsPermissions(0)).CS3ResourcePermissions(),
 				Size:          12345,
 				Owner: &userpb.UserId{
 					Idp:      "",
