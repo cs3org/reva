@@ -31,7 +31,7 @@ import (
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 
 	"github.com/cs3org/reva/v3/pkg/errtypes"
@@ -267,8 +267,8 @@ func resInfoFromEFSS(respObj *MDFromEFSS) *provider.ResourceInfo {
 			Seconds: uint64(respObj.Mtime.Seconds),
 		},
 		Path: respObj.Path,
-		PermissionSet: conversions.RoleFromOCSPermissions(
-			conversions.Permissions(respObj.Permissions)).CS3ResourcePermissions(),
+		PermissionSet: permissions.RoleFromOCSPermissions(
+			permissions.OcsPermissions(respObj.Permissions)).CS3ResourcePermissions(),
 		Size: uint64(respObj.Size),
 		Owner: &user.UserId{
 			Idp:      respObj.Owner.Idp,

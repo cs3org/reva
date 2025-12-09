@@ -31,7 +31,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	cachereg "github.com/cs3org/reva/v3/pkg/share/cache/registry"
 
-	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/plugin"
@@ -410,14 +410,14 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 		Name:      user.Username,
 		SpaceType: spaces.SpaceTypeHome.AsString(),
 		RootInfo: &provider.ResourceInfo{
-			PermissionSet: conversions.NewManagerRole().CS3ResourcePermissions(),
+			PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
 			Path:          home,
 		},
 		Quota: &provider.Quota{
 			QuotaMaxBytes:  quota.TotalBytes,
 			RemainingBytes: quota.TotalBytes - quota.UsedBytes,
 		},
-		PermissionSet: conversions.NewManagerRole().CS3ResourcePermissions(),
+		PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
 	}, nil
 }
 

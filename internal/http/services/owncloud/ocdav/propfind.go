@@ -40,10 +40,12 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/grpc/services/storageprovider"
-	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/spaces"
+	"github.com/cs3org/reva/v3/pkg/permissions"
+
 	"github.com/pkg/errors"
+	
 
 	"github.com/cs3org/reva/v3/pkg/publicshare"
 	"github.com/cs3org/reva/v3/pkg/share"
@@ -563,7 +565,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		}
 	}
 
-	role := conversions.RoleFromResourcePermissions(md.PermissionSet)
+	role := permissions.RoleFromResourcePermissions(md.PermissionSet)
 
 	isShared := !isCurrentUserOwner(ctx, md.Owner)
 	var wdp string
@@ -1036,8 +1038,8 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						perms := role.OCSPermissions()
 						// shared files cant have the create or delete permission set
 						if md.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
-							perms &^= conversions.PermissionCreate
-							perms &^= conversions.PermissionDelete
+							perms &^= permissions.PermissionCreate
+							perms &^= permissions.PermissionDelete
 						}
 						propstatOK.Prop = append(propstatOK.Prop, s.newPropNS(pf.Prop[i].Space, pf.Prop[i].Local, strconv.FormatUint(uint64(perms), 10)))
 					}

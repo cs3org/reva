@@ -36,7 +36,7 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/datagateway"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocdav"
-	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
@@ -312,9 +312,9 @@ func getPermissionsFromShare(share *ocmv1beta1.Share) *provider.ResourcePermissi
 		case *ocmv1beta1.AccessMethod_WebappOptions:
 			mode := v.WebappOptions.ViewMode
 			if mode == providerv1beta1.ViewMode_VIEW_MODE_READ_WRITE {
-				return conversions.NewEditorRole().CS3ResourcePermissions()
+				return permissions.NewEditorRole().CS3ResourcePermissions()
 			}
-			return conversions.NewViewerRole().CS3ResourcePermissions()
+			return permissions.NewViewerRole().CS3ResourcePermissions()
 		}
 	}
 	return nil

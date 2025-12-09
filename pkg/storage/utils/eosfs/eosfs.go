@@ -41,7 +41,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 
@@ -1723,22 +1723,22 @@ func (fs *Eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 	if role, ok := utils.HasPublicShareRole(u); ok {
 		switch role {
 		case "editor":
-			return conversions.NewEditorRole().CS3ResourcePermissions()
+			return permissions.NewEditorRole().CS3ResourcePermissions()
 		case "uploader":
-			return conversions.NewUploaderRole().CS3ResourcePermissions()
+			return permissions.NewUploaderRole().CS3ResourcePermissions()
 		}
-		return conversions.NewViewerRole().CS3ResourcePermissions()
+		return permissions.NewViewerRole().CS3ResourcePermissions()
 	}
 
 	if role, ok := utils.HasOCMShareRole(u); ok {
 		if role == "editor" {
-			return conversions.NewEditorRole().CS3ResourcePermissions()
+			return permissions.NewEditorRole().CS3ResourcePermissions()
 		}
-		return conversions.NewViewerRole().CS3ResourcePermissions()
+		return permissions.NewViewerRole().CS3ResourcePermissions()
 	}
 
 	if utils.UserEqual(u.Id, owner) {
-		return conversions.NewManagerRole().CS3ResourcePermissions()
+		return permissions.NewManagerRole().CS3ResourcePermissions()
 	}
 
 	auth, err := fs.getUserAuth(ctx, u, eosFileInfo.File)

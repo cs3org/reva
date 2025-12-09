@@ -30,6 +30,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	conversions "github.com/cs3org/reva/v3/pkg/cbox/utils"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
@@ -230,7 +231,7 @@ func (s *Share) AsCS3Share(granteeType userpb.UserType) *collaboration.Share {
 			StorageId: s.Instance,
 			OpaqueId:  s.Inode,
 		},
-		Permissions: &collaboration.SharePermissions{Permissions: conversions.IntTosharePerm(int(s.Permissions), s.ItemType.String())},
+		Permissions: &collaboration.SharePermissions{Permissions: permissions.OcsPermissions(s.Permissions).AsCS3Permissions()},
 		Grantee:     extractGrantee(s.SharedWithIsGroup, s.ShareWith, granteeType),
 		Owner:       conversions.MakeUserID(s.UIDOwner),
 		Creator:     conversions.MakeUserID(s.UIDInitiator),
@@ -290,7 +291,7 @@ func (p *PublicLink) AsCS3PublicShare() *link.PublicShare {
 			StorageId: p.Instance,
 			OpaqueId:  p.Inode,
 		},
-		Permissions:                  &link.PublicSharePermissions{Permissions: conversions.IntTosharePerm(int(p.Permissions), p.ItemType.String())},
+		Permissions:                  &link.PublicSharePermissions{Permissions: permissions.OcsPermissions(p.Permissions).AsCS3Permissions()},
 		Owner:                        conversions.MakeUserID(p.UIDOwner),
 		Creator:                      conversions.MakeUserID(p.UIDInitiator),
 		Token:                        p.Token,

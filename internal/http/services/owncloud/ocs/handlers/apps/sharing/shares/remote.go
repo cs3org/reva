@@ -34,6 +34,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	ocmd "github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
@@ -43,7 +44,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Request, resource *provider.ResourceInfo, role *conversions.Role, roleVal []byte) {
+func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Request, resource *provider.ResourceInfo, role *permissions.Role, roleVal []byte) {
 	ctx := r.Context()
 
 	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
@@ -155,11 +156,11 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 	response.WriteOCSSuccess(w, r, data)
 }
 
-func getViewModeFromRole(role *conversions.Role) providerv1beta1.ViewMode {
+func getViewModeFromRole(role *permissions.Role) providerv1beta1.ViewMode {
 	switch role.Name {
-	case conversions.RoleViewer:
+	case permissions.RoleViewer:
 		return providerv1beta1.ViewMode_VIEW_MODE_READ_ONLY
-	case conversions.RoleEditor:
+	case permissions.RoleEditor:
 		return providerv1beta1.ViewMode_VIEW_MODE_READ_WRITE
 	}
 	return providerv1beta1.ViewMode_VIEW_MODE_INVALID
