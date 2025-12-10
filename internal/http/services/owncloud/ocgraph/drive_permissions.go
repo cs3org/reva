@@ -892,7 +892,15 @@ func (s *svc) getLinkUpdates(ctx context.Context, link *linkv1beta1.PublicShare,
 				NotifyUploads: true,
 			})
 		}
+	} else {
+		if link.NotifyUploads {
+			updates = append(updates, &linkv1beta1.UpdatePublicShareRequest_Update{
+				Type:          linkv1beta1.UpdatePublicShareRequest_Update_TYPE_NOTIFYUPLOADS,
+				NotifyUploads: false,
+			})
+		}
 	}
+
 	if len(updates) == 0 {
 		return nil, errors.New("body contained nothing to update")
 	}
