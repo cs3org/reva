@@ -38,6 +38,7 @@ import (
 	revashare "github.com/cs3org/reva/v3/pkg/share"
 	"github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"github.com/cs3org/reva/v3/pkg/utils"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"google.golang.org/genproto/protobuf/field_mask"
 
@@ -133,7 +134,7 @@ func (m *ShareMgr) Share(ctx context.Context, md *provider.ResourceInfo, g *coll
 	share.ItemType = model.ItemType(conversions.ResourceTypeToItem(md.Type))
 	share.Inode = md.Id.OpaqueId
 	share.Instance = md.Id.StorageId
-	share.Permissions = uint8(conversions.SharePermToInt(g.Permissions.Permissions))
+	share.Permissions = uint8(permissions.OCSFromCS3Permission(g.Permissions.Permissions))
 	share.Orphan = false
 
 	if g.Expiration != nil {
@@ -178,8 +179,8 @@ func (m *ShareMgr) UpdateShare(ctx context.Context, ref *collaboration.ShareRefe
 
 	switch req.Field.GetField().(type) {
 	case *collaboration.UpdateShareRequest_UpdateField_Permissions:
-		permissions := conversions.SharePermToInt(req.Field.GetPermissions().Permissions)
-		res := m.db.Model(&share).Where("id = ?", share.Id).Update("permissions", uint8(permissions))
+		perms := uint8(permissions.OCSFromCS3Permission(req.Field.GetPermissions().Permissions))
+		res := m.db.Model(&share).Where("id = ?", share.Id).Update("permissions", perms)
 		if res.Error != nil {
 			return nil, res.Error
 		}

@@ -27,7 +27,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
-	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 )
@@ -165,7 +165,7 @@ func convertToCS3AccessMethod(m *model.OcmSharesAccessMethod) *ocm.AccessMethod 
 	switch m.Type {
 	case model.WebDAVAccessMethod:
 		return share.NewWebDavAccessMethod(
-			conversions.RoleFromOCSPermissions(conversions.Permissions(m.Permissions)).CS3ResourcePermissions(),
+			permissions.RoleFromOCSPermissions(permissions.OcsPermissions(m.Permissions)).CS3ResourcePermissions(),
 			[]string{}) // TODO persist requirements
 	case model.WebappAccessMethod:
 		return share.NewWebappAccessMethod(appprovider.ViewMode(m.Permissions))
@@ -179,7 +179,7 @@ func convertToCS3Protocol(p *model.OcmReceivedShareProtocol) *ocm.Protocol {
 	switch p.Type {
 	case model.WebDAVProtocol:
 		return share.NewWebDAVProtocol(p.Uri, p.SharedSecret, &ocm.SharePermissions{
-			Permissions: conversions.RoleFromOCSPermissions(conversions.Permissions(p.Permissions)).CS3ResourcePermissions(),
+			Permissions: permissions.RoleFromOCSPermissions(permissions.OcsPermissions(p.Permissions)).CS3ResourcePermissions(),
 		}, []string{}) // TODO persist requirements
 	case model.WebappProtocol:
 		return share.NewWebappProtocol(p.Uri, appprovider.ViewMode(p.Permissions))

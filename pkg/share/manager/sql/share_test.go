@@ -13,7 +13,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	conversions "github.com/cs3org/reva/v3/pkg/cbox/utils"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	revashare "github.com/cs3org/reva/v3/pkg/share"
 	"google.golang.org/genproto/protobuf/field_mask"
 )
@@ -84,7 +84,7 @@ func getUserShareGrant(shareeId, resourcetype string) *collaboration.ShareGrant 
 	sharegrant := &collaboration.ShareGrant{
 		Grantee: sharee,
 		Permissions: &collaboration.SharePermissions{
-			Permissions: conversions.IntTosharePerm(1, resourcetype),
+			Permissions: permissions.OcsPermissions(1).AsCS3Permissions(), //conversions.IntTosharePerm(1, resourcetype),
 		},
 	}
 	return sharegrant
@@ -102,7 +102,7 @@ func getGroupShareGrant(shareeId, resourcetype string) *collaboration.ShareGrant
 	return &collaboration.ShareGrant{
 		Grantee: sharee,
 		Permissions: &collaboration.SharePermissions{
-			Permissions: conversions.IntTosharePerm(1, resourcetype),
+			Permissions: permissions.OcsPermissions(1).AsCS3Permissions(),
 		},
 	}
 }
@@ -280,7 +280,7 @@ func TestDoNotCreateSameShareTwice(t *testing.T) {
 	sharegrant := &collaboration.ShareGrant{
 		Grantee: sharee,
 		Permissions: &collaboration.SharePermissions{
-			Permissions: conversions.IntTosharePerm(1, "file"),
+			Permissions: permissions.OcsPermissions(1).AsCS3Permissions(),
 		},
 	}
 	userctx := getUserContext("123456")
@@ -485,7 +485,7 @@ func TestUpdateShare(t *testing.T) {
 		Field: &collaboration.UpdateShareRequest_UpdateField{
 			Field: &collaboration.UpdateShareRequest_UpdateField_Permissions{
 				Permissions: &collaboration.SharePermissions{
-					Permissions: conversions.IntTosharePerm(newPermissions, "file"),
+					Permissions: permissions.OcsPermissions(newPermissions).AsCS3Permissions(),
 				},
 			},
 		},
@@ -495,7 +495,7 @@ func TestUpdateShare(t *testing.T) {
 		t.FailNow()
 	}
 
-	retrievedPerms := conversions.SharePermToInt(updatedShare.Permissions.Permissions)
+	retrievedPerms := int(permissions.OCSFromCS3Permission(updatedShare.Permissions.Permissions))
 	if retrievedPerms != newPermissions {
 		t.Errorf("Expected share permissions to be updated, but they were not: got %d instead of %d", retrievedPerms, newPermissions)
 	}

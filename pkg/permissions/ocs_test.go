@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package conversions
+package permissions
 
 import (
 	"testing"
@@ -46,7 +46,7 @@ func TestNewPermissionsWithInvalidValueShouldFail(t *testing.T) {
 }
 
 func TestContainPermissionAll(t *testing.T) {
-	table := map[int]Permissions{
+	table := map[int]OcsPermissions{
 		1:  PermissionRead,
 		2:  PermissionWrite,
 		4:  PermissionCreate,
@@ -63,7 +63,7 @@ func TestContainPermissionAll(t *testing.T) {
 	}
 }
 func TestContainPermissionRead(t *testing.T) {
-	table := map[int]Permissions{
+	table := map[int]OcsPermissions{
 		2:  PermissionWrite,
 		4:  PermissionCreate,
 		8:  PermissionDelete,
@@ -83,7 +83,7 @@ func TestContainPermissionRead(t *testing.T) {
 }
 
 func TestContainPermissionCustom(t *testing.T) {
-	table := map[int]Permissions{
+	table := map[int]OcsPermissions{
 		2:  PermissionWrite,
 		8:  PermissionDelete,
 		31: PermissionAll,
@@ -107,7 +107,7 @@ func TestContainPermissionCustom(t *testing.T) {
 }
 
 func TestContainWithMultiplePermissions(t *testing.T) {
-	table := map[int][]Permissions{
+	table := map[int][]OcsPermissions{
 		3: {
 			PermissionRead,
 			PermissionWrite,
@@ -142,7 +142,7 @@ func TestPermissions2Role(t *testing.T) {
 		}
 	}
 
-	table := map[Permissions]string{
+	table := map[OcsPermissions]string{
 		PermissionRead: RoleViewer,
 		PermissionRead | PermissionWrite | PermissionCreate | PermissionDelete: RoleEditor,
 		PermissionAll:  RoleManager,

@@ -49,6 +49,8 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/spaces"
+	"github.com/cs3org/reva/v3/pkg/permissions"
+
 
 	"github.com/cs3org/reva/v3/pkg/notification"
 	"github.com/cs3org/reva/v3/pkg/notification/notificationhelper"
@@ -241,7 +243,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// check user has share permissions
-	if !conversions.RoleFromResourcePermissions(statRes.Info.PermissionSet).OCSPermissions().Contain(conversions.PermissionShare) {
+	if !permissions.RoleFromResourcePermissions(statRes.Info.PermissionSet).OCSPermissions().Contain(permissions.PermissionShare) {
 		response.WriteOCSError(w, r, http.StatusNotFound, "No share permission", nil)
 		return
 	}
@@ -249,28 +251,28 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	switch shareType {
 	case int(conversions.ShareTypeUser):
 		// user collaborations default to collab
-		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewManagerRole()); err == nil {
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, permissions.NewManagerRole()); err == nil {
 			h.createUserShare(w, r, statRes.Info, role, val)
 		}
 	case int(conversions.ShareTypeGroup):
 		// group collaborations default to collab
-		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewManagerRole()); err == nil {
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, permissions.NewManagerRole()); err == nil {
 			h.createGroupShare(w, r, statRes.Info, role, val)
 		}
 	case int(conversions.ShareTypePublicLink):
 		// public links default to read only
-		if _, _, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
+		if _, _, err := h.extractPermissions(w, r, statRes.Info, permissions.NewViewerRole()); err == nil {
 			h.createPublicLinkShare(w, r, statRes.Info)
 		}
 	case int(conversions.ShareTypeFederatedCloudShare):
 		// federated shares default to read only
-		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, permissions.NewViewerRole()); err == nil {
 			h.createFederatedCloudShare(w, r, statRes.Info, role, val)
 		}
 	case int(conversions.ShareTypeSpaceMembership):
-		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, permissions.NewViewerRole()); err == nil {
 			switch role.Name {
-			case conversions.RoleManager, conversions.RoleEditor, conversions.RoleViewer:
+			case permissions.RoleManager, permissions.RoleEditor, permissions.RoleViewer:
 				h.addSpaceMember(w, r, statRes.Info, role, val)
 			default:
 				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "invalid role for space member", nil)
@@ -404,13 +406,13 @@ func (h *Handler) SendShareNotification(opaqueID string, granter *userpb.User, g
 	return recipient
 }
 
-func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri *provider.ResourceInfo, defaultPermissions *conversions.Role) (*conversions.Role, []byte, error) {
+func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri *provider.ResourceInfo, defaultPermissions *permissions.Role) (*permissions.Role, []byte, error) {
 	reqRole, reqPermissions := r.FormValue("role"), r.FormValue("permissions")
-	var role *conversions.Role
+	var role *permissions.Role
 
 	// the share role overrides the requested permissions
 	if reqRole != "" {
-		role = conversions.RoleFromName(reqRole)
+		role = permissions.RoleFromName(reqRole)
 	} else {
 		// map requested permissions
 		if reqPermissions == "" {
@@ -422,44 +424,44 @@ func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri 
 				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "permissions must be an integer", nil)
 				return nil, nil, err
 			}
-			perm, err := conversions.NewPermissions(pint)
+			perm, err := permissions.NewPermissions(pint)
 			if err != nil {
-				if err == conversions.ErrPermissionNotInRange {
+				if err == permissions.ErrPermissionNotInRange {
 					response.WriteOCSError(w, r, http.StatusNotFound, err.Error(), nil)
 				} else {
 					response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, err.Error(), nil)
 				}
 				return nil, nil, err
 			}
-			role = conversions.RoleFromOCSPermissions(perm)
+			role = permissions.RoleFromOCSPermissions(perm)
 		}
 	}
 
-	permissions := role.OCSPermissions()
+	perms := role.OCSPermissions()
 	if ri != nil && ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
 		// Single file shares should never have delete or create permissions
-		permissions &^= conversions.PermissionCreate
-		permissions &^= conversions.PermissionDelete
-		if permissions == conversions.PermissionInvalid {
+		perms &^= permissions.PermissionCreate
+		perms &^= permissions.PermissionDelete
+		if perms == permissions.PermissionInvalid {
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Cannot set the requested share permissions", nil)
 			return nil, nil, errors.New("cannot set the requested share permissions")
 		}
 	}
 
 	// add a deny permission only if the user has the grant to deny (ResourcePermissions.DenyGrant == true)
-	if permissions == conversions.PermissionNone {
+	if perms == permissions.PermissionNone {
 		if !ri.PermissionSet.DenyGrant {
 			response.WriteOCSError(w, r, http.StatusNotFound, "Cannot set the requested share permissions: no deny grant on resource", nil)
 		}
 	} else {
-		existingPermissions := conversions.RoleFromResourcePermissions(ri.PermissionSet).OCSPermissions()
-		if permissions == conversions.PermissionInvalid || !existingPermissions.Contain(permissions) {
+		existingPermissions := permissions.RoleFromResourcePermissions(ri.PermissionSet).OCSPermissions()
+		if perms == permissions.PermissionInvalid || !existingPermissions.Contain(perms) {
 			response.WriteOCSError(w, r, http.StatusNotFound, "Cannot set the requested share permissions", nil)
 			return nil, nil, errors.New("cannot set the requested share permissions")
 		}
 	}
 
-	role = conversions.RoleFromOCSPermissions(permissions)
+	role = permissions.RoleFromOCSPermissions(perms)
 	roleMap := map[string]string{"name": role.Name}
 	val, err := json.Marshal(roleMap)
 	if err != nil {
@@ -619,7 +621,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "permissions must be an integer", nil)
 		return
 	}
-	permissions, err := conversions.NewPermissions(pint)
+	perms, err := permissions.NewPermissions(pint)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, err.Error(), nil)
 		return
@@ -643,7 +645,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 			Field: &collaboration.UpdateShareRequest_UpdateField_Permissions{
 				Permissions: &collaboration.SharePermissions{
 					// this completely overwrites the permissions for this user
-					Permissions: conversions.RoleFromOCSPermissions(permissions).CS3ResourcePermissions(),
+					Permissions: permissions.RoleFromOCSPermissions(perms).CS3ResourcePermissions(),
 				},
 			},
 		},
@@ -721,7 +723,7 @@ func (h *Handler) updateFederatedShare(w http.ResponseWriter, r *http.Request, s
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "permissions must be an integer", nil)
 		return
 	}
-	permissions, err := conversions.NewPermissions(pint)
+	perms, err := permissions.NewPermissions(pint)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, err.Error(), nil)
 		return
@@ -747,7 +749,7 @@ func (h *Handler) updateFederatedShare(w http.ResponseWriter, r *http.Request, s
 					AccessMethods: &ocmv1beta1.AccessMethod{
 						Term: &ocmv1beta1.AccessMethod_WebdavOptions{
 							WebdavOptions: &ocmv1beta1.WebDAVAccessMethod{
-								Permissions: conversions.RoleFromOCSPermissions(permissions).CS3ResourcePermissions(),
+								Permissions: permissions.RoleFromOCSPermissions(perms).CS3ResourcePermissions(),
 							},
 						},
 					},

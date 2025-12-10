@@ -30,7 +30,7 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
-	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/projects"
 	"github.com/cs3org/reva/v3/pkg/projects/manager/registry"
@@ -302,16 +302,16 @@ func (m *ProjectsManager) GetProject(ctx context.Context, name string) (*Project
 
 func projectBelongsToUser(user *userpb.User, p *Project) (*provider.ResourcePermissions, bool) {
 	if user.Id.OpaqueId == p.Owner {
-		return conversions.NewManagerRole().CS3ResourcePermissions(), true
+		return permissions.NewManagerRole().CS3ResourcePermissions(), true
 	}
 	if slices.Contains(user.Groups, p.Admins) {
-		return conversions.NewManagerRole().CS3ResourcePermissions(), true
+		return permissions.NewManagerRole().CS3ResourcePermissions(), true
 	}
 	if slices.Contains(user.Groups, p.Writers) {
-		return conversions.NewEditorRole().CS3ResourcePermissions(), true
+		return permissions.NewEditorRole().CS3ResourcePermissions(), true
 	}
 	if slices.Contains(user.Groups, p.Readers) {
-		return conversions.NewViewerRole().CS3ResourcePermissions(), true
+		return permissions.NewViewerRole().CS3ResourcePermissions(), true
 	}
 	return nil, false
 }

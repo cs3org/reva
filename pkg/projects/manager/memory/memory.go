@@ -27,12 +27,12 @@ import (
 	"github.com/cs3org/reva/v3/pkg/projects"
 	"github.com/cs3org/reva/v3/pkg/projects/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/spaces"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	conversions "github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 )
 
 func init() {
@@ -122,16 +122,16 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 
 func projectBelongToUser(user *userpb.User, project *SpaceDescription) (*provider.ResourcePermissions, bool) {
 	if user.Id.OpaqueId == project.Owner {
-		return conversions.NewManagerRole().CS3ResourcePermissions(), true
+		return permissions.NewManagerRole().CS3ResourcePermissions(), true
 	}
 	if slices.Contains(user.Groups, project.Admins) {
-		return conversions.NewManagerRole().CS3ResourcePermissions(), true
+		return permissions.NewManagerRole().CS3ResourcePermissions(), true
 	}
 	if slices.Contains(user.Groups, project.Writers) {
-		return conversions.NewEditorRole().CS3ResourcePermissions(), true
+		return permissions.NewEditorRole().CS3ResourcePermissions(), true
 	}
 	if slices.Contains(user.Groups, project.Readers) {
-		return conversions.NewViewerRole().CS3ResourcePermissions(), true
+		return permissions.NewViewerRole().CS3ResourcePermissions(), true
 	}
 	return nil, false
 }

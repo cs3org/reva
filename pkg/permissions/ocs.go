@@ -16,20 +16,22 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package conversions
+package permissions
 
 import (
 	"fmt"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+
 )
 
-// Permissions reflects the CRUD permissions used in the OCS sharing API.
-type Permissions uint
+// OcsPermissions reflects the CRUD permissions used in the OCS sharing API.
+type OcsPermissions uint
 
 const (
 	// PermissionInvalid grants no permissions on a resource.
-	PermissionInvalid Permissions = 0
+	PermissionInvalid OcsPermissions = 0
 	// PermissionRead grants read permissions on a resource.
-	PermissionRead Permissions = 1 << (iota - 1)
+	PermissionRead OcsPermissions = 1 << (iota - 1)
 	// PermissionWrite grants write permissions on a resource.
 	PermissionWrite
 	// PermissionCreate grants create permissions on a resource.
@@ -44,7 +46,7 @@ const (
 	// PermissionNone grants no permissions on a resource.
 	PermissionNone
 	// PermissionMax is to be used within value range checks.
-	PermissionMax Permissions = (1 << (iota - 1)) - 1
+	PermissionMax OcsPermissions = (1 << (iota - 1)) - 1
 	// PermissionAll grants all permissions on a resource.
 	PermissionAll = PermissionMax - PermissionNone
 	// PermissionMin is to be used within value range checks.
@@ -58,16 +60,32 @@ var (
 
 // NewPermissions creates a new Permissions instance.
 // The value must be in the valid range.
-func NewPermissions(val int) (Permissions, error) {
+func NewPermissions(val int) (OcsPermissions, error) {
 	if val == int(PermissionInvalid) {
 		return PermissionInvalid, fmt.Errorf("permissions %d out of range %d - %d", val, PermissionMin, PermissionMax)
 	} else if val < int(PermissionInvalid) || int(PermissionMax) < val {
 		return PermissionInvalid, ErrPermissionNotInRange
 	}
-	return Permissions(val), nil
+	return OcsPermissions(val), nil
 }
 
 // Contain tests if the permissions contain another one.
-func (p Permissions) Contain(other Permissions) bool {
+func (p OcsPermissions) Contain(other OcsPermissions) bool {
 	return p&other == other
+}
+
+func (p OcsPermissions) AsCS3Permissions() *provider.ResourcePermissions {
+	return RoleFromOCSPermissions(p).CS3ResourcePermissions()
+}
+
+func OCSFromCS3Permission(p *provider.ResourcePermissions) OcsPermissions {
+	switch {
+	case p.InitiateFileUpload && !p.InitiateFileDownload:
+		return 4
+	case p.InitiateFileUpload:
+	 	return 15
+	case p.InitiateFileDownload:
+		return 1
+	}
+	return 0
 }
