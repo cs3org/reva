@@ -291,7 +291,7 @@ func (s *service) decorateProjects(ctx context.Context, projects []*provider.Sto
 	for _, proj := range projects {
 		timeout, cancel := context.WithTimeout(ctx, s.timeoutSkipSpaces)
 		defer cancel()
-		log.Debug().Msgf("timeout %d", s.timeoutSkipSpaces.Seconds())
+		log.Debug().Msgf("timeout %f", s.timeoutSkipSpaces.Seconds())
 		err := s.decorateProject(timeout, proj)
 		if err != nil {
 			log.Warn().Err(err).Msgf("Failed to decorate project %s, skipping it", proj.Name)
