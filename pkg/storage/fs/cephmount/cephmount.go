@@ -334,8 +334,7 @@ func (fs *cephmountfs) fileAsResourceInfo(path string, info os.FileInfo, mdKeys 
 
 	// Create resource ID using inode number
 	resourceId := &provider.ResourceId{
-		//StorageId: "cephmount",
-		OpaqueId:  strconv.FormatUint(stat.Ino, 10),
+		OpaqueId: strconv.FormatUint(stat.Ino, 10),
 	}
 
 	owner, _ := user.LookupId(fmt.Sprint(stat.Uid))
@@ -346,30 +345,29 @@ func (fs *cephmountfs) fileAsResourceInfo(path string, info os.FileInfo, mdKeys 
 		Checksum: &provider.ResourceChecksum{},
 		Size:     size,
 		Mtime:    &typepb.Timestamp{Seconds: uint64(info.ModTime().Unix())},
-		Path:     fs.fromChroot(path),                   // Convert chroot path back to external path
-		Owner:    &userv1beta1.UserId{OpaqueId: owner.Username}, 
+		Path:     fs.fromChroot(path), // Convert chroot path back to external path
+		Owner:    &userv1beta1.UserId{OpaqueId: owner.Username},
 		PermissionSet: &provider.ResourcePermissions{
 			GetPath:              true,
-                        GetQuota:             true,
-                        InitiateFileDownload: true,
-                        ListGrants:           true,
-                        ListContainer:        true,
-                        ListFileVersions:     true,
-                        ListRecycle:          true,
-                        Stat:                 true,
-                        InitiateFileUpload:   true,
-                        RestoreFileVersion:   true,
-                        RestoreRecycleItem:   true,
-                        Move:                 true,
-                        CreateContainer:      true,
-                        Delete:               true,
-                        PurgeRecycle:         true,
+			GetQuota:             true,
+			InitiateFileDownload: true,
+			ListGrants:           true,
+			ListContainer:        true,
+			ListFileVersions:     true,
+			ListRecycle:          true,
+			Stat:                 true,
+			InitiateFileUpload:   true,
+			RestoreFileVersion:   true,
+			RestoreRecycleItem:   true,
+			Move:                 true,
+			CreateContainer:      true,
+			Delete:               true,
+			PurgeRecycle:         true,
 
-                        // these permissions only make sense to enforce them in the root of the storage space.
-                        AddGrant:    true, // managers can add users to the space
-                        RemoveGrant: true, // managers can remove users from the space
-                        UpdateGrant: true,
-                        DenyGrant:   true,
+			AddGrant:    true,
+			RemoveGrant: true,
+			UpdateGrant: true,
+			DenyGrant:   true,
 		},
 		ArbitraryMetadata: &provider.ArbitraryMetadata{Metadata: map[string]string{}},
 	}
@@ -902,7 +900,7 @@ func (fs *cephmountfs) ListGrants(ctx context.Context, ref *provider.Reference) 
 	fs.logOperation(ctx, "ListGrants", path)
 
 	fullPath := filepath.Join(fs.chrootDir, path)
-	
+
 	// Use getfacl to read ACLs
 	cmd := exec.CommandContext(ctx, "getfacl", "--omit-header", "--numeric", fullPath)
 	output, err := cmd.CombinedOutput()
@@ -910,9 +908,9 @@ func (fs *cephmountfs) ListGrants(ctx context.Context, ref *provider.Reference) 
 		// No ACLs or error - return empty list
 		return []*provider.Grant{}, nil
 	}
-	
+
 	log := appctx.GetLogger(ctx)
-	
+
 	// Parse getfacl output
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
@@ -920,25 +918,25 @@ func (fs *cephmountfs) ListGrants(ctx context.Context, ref *provider.Reference) 
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		
+
 		// Parse ACL entry format: user:uid:rwx or group:gid:rwx (numeric due to --numeric flag)
 		parts := strings.Split(line, ":")
 		if len(parts) < 3 {
 			continue
 		}
-		
+
 		entryType := parts[0]
 		identifier := parts[1] // This is numeric UID or GID
 		permsStr := parts[2]
-		
+
 		// Skip base entries (owner, group, other, mask)
 		if identifier == "" || entryType == "mask" || entryType == "other" {
 			continue
 		}
-		
+
 		// Convert rwx string to ResourcePermissions
 		perms := fs.aclStringToPermissions(permsStr)
-		
+
 		var grant *provider.Grant
 		switch entryType {
 		case "user":
@@ -952,7 +950,7 @@ func (fs *cephmountfs) ListGrants(ctx context.Context, ref *provider.Reference) 
 					Msg("cephmount: skipping user ACL entry - cannot resolve UID to username")
 				continue
 			}
-			
+
 			grant = &provider.Grant{
 				Grantee: &provider.Grantee{
 					Type: provider.GranteeType_GRANTEE_TYPE_USER,
@@ -960,7 +958,7 @@ func (fs *cephmountfs) ListGrants(ctx context.Context, ref *provider.Reference) 
 				},
 				Permissions: perms,
 			}
-			
+
 		case "group":
 			// Resolve numeric GID back to groupname
 			groupInfo, err := user.LookupGroupId(identifier)
@@ -972,7 +970,7 @@ func (fs *cephmountfs) ListGrants(ctx context.Context, ref *provider.Reference) 
 					Msg("cephmount: skipping group ACL entry - cannot resolve GID to groupname")
 				continue
 			}
-			
+
 			grant = &provider.Grant{
 				Grantee: &provider.Grantee{
 					Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
@@ -980,11 +978,11 @@ func (fs *cephmountfs) ListGrants(ctx context.Context, ref *provider.Reference) 
 				},
 				Permissions: perms,
 			}
-			
+
 		default:
 			continue
 		}
-		
+
 		if grant != nil {
 			glist = append(glist, grant)
 		}
@@ -1026,7 +1024,6 @@ func (fs *cephmountfs) GetQuota(ctx context.Context, ref *provider.Reference) (t
 	} else {
 		used, _ = strconv.ParseUint(string(usedQuotaData), 10, 64)
 	}
-
 
 	return total, used, nil
 }
@@ -1330,17 +1327,17 @@ func (fs *cephmountfs) Unlock(ctx context.Context, ref *provider.Reference, lock
 func (fs *cephmountfs) addGrantViaSetfacl(ctx context.Context, path string, grant *provider.Grant) error {
 	log := appctx.GetLogger(ctx)
 	fullPath := filepath.Join(fs.chrootDir, path)
-	
+
 	// Check if it's a directory for recursive flag
 	info, err := os.Stat(fullPath)
 	if err != nil {
 		return errors.Wrap(err, "cephmount: failed to stat path")
 	}
-	
+
 	// Build ACL entry string based on grantee type
 	var aclEntry string
 	var identifier string
-	
+
 	switch grant.Grantee.Type {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
 		userId := grant.Grantee.GetUserId()
@@ -1348,7 +1345,7 @@ func (fs *cephmountfs) addGrantViaSetfacl(ctx context.Context, path string, gran
 			return errors.New("cephmount: user grantee without user ID")
 		}
 		identifier = userId.OpaqueId
-		
+
 		// Resolve username to UID for setfacl (OpaqueId is always a username)
 		userInfo, err := user.Lookup(identifier)
 		if err != nil {
@@ -1360,16 +1357,16 @@ func (fs *cephmountfs) addGrantViaSetfacl(ctx context.Context, path string, gran
 			Str("username", userId.OpaqueId).
 			Str("uid", identifier).
 			Msg("cephmount: resolved username to UID")
-		
+
 		aclEntry = fmt.Sprintf("u:%s:%s", identifier, fs.permissionsToACLString(grant.Permissions))
-		
+
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
 		groupId := grant.Grantee.GetGroupId()
 		if groupId == nil {
 			return errors.New("cephmount: group grantee without group ID")
 		}
 		identifier = groupId.OpaqueId
-		
+
 		// Resolve group name to GID for setfacl (OpaqueId is always a groupname)
 		groupInfo, err := user.LookupGroup(identifier)
 		if err != nil {
@@ -1381,13 +1378,13 @@ func (fs *cephmountfs) addGrantViaSetfacl(ctx context.Context, path string, gran
 			Str("groupname", groupId.OpaqueId).
 			Str("gid", identifier).
 			Msg("cephmount: resolved groupname to GID")
-		
+
 		aclEntry = fmt.Sprintf("g:%s:%s", identifier, fs.permissionsToACLString(grant.Permissions))
-		
+
 	default:
 		return errors.New("cephmount: invalid grantee type")
 	}
-	
+
 	// Build setfacl command
 	args := []string{"-m", aclEntry}
 	if info.IsDir() {
@@ -1397,13 +1394,13 @@ func (fs *cephmountfs) addGrantViaSetfacl(ctx context.Context, path string, gran
 		args = append(args, "-R")
 	}
 	args = append(args, fullPath)
-	
+
 	log.Debug().
 		Str("path", fullPath).
 		Str("acl_entry", aclEntry).
 		Strs("args", args).
 		Msg("cephmount: executing setfacl")
-	
+
 	// Execute setfacl
 	cmd := exec.CommandContext(ctx, "setfacl", args...)
 	output, err := cmd.CombinedOutput()
@@ -1415,11 +1412,11 @@ func (fs *cephmountfs) addGrantViaSetfacl(ctx context.Context, path string, gran
 			Msg("cephmount: setfacl failed")
 		return errors.Wrapf(err, "cephmount: setfacl failed: %s", string(output))
 	}
-	
+
 	log.Debug().
 		Str("path", fullPath).
 		Msg("cephmount: setfacl succeeded")
-	
+
 	return nil
 }
 
@@ -1427,17 +1424,17 @@ func (fs *cephmountfs) addGrantViaSetfacl(ctx context.Context, path string, gran
 func (fs *cephmountfs) removeGrantViaSetfacl(ctx context.Context, path string, grant *provider.Grant) error {
 	log := appctx.GetLogger(ctx)
 	fullPath := filepath.Join(fs.chrootDir, path)
-	
+
 	// Check if it's a directory for recursive flag
 	info, err := os.Stat(fullPath)
 	if err != nil {
 		return errors.Wrap(err, "cephmount: failed to stat path")
 	}
-	
+
 	// Build ACL removal entry string based on grantee type
 	var aclEntry string
 	var identifier string
-	
+
 	switch grant.Grantee.Type {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
 		userId := grant.Grantee.GetUserId()
@@ -1445,7 +1442,7 @@ func (fs *cephmountfs) removeGrantViaSetfacl(ctx context.Context, path string, g
 			return errors.New("cephmount: user grantee without user ID")
 		}
 		identifier = userId.OpaqueId
-		
+
 		// Resolve username to UID for setfacl (OpaqueId is always a username)
 		userInfo, err := user.Lookup(identifier)
 		if err != nil {
@@ -1457,16 +1454,16 @@ func (fs *cephmountfs) removeGrantViaSetfacl(ctx context.Context, path string, g
 			Str("username", userId.OpaqueId).
 			Str("uid", identifier).
 			Msg("cephmount: resolved username to UID for removal")
-		
+
 		aclEntry = fmt.Sprintf("u:%s", identifier)
-		
+
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
 		groupId := grant.Grantee.GetGroupId()
 		if groupId == nil {
 			return errors.New("cephmount: group grantee without group ID")
 		}
 		identifier = groupId.OpaqueId
-		
+
 		// Resolve group name to GID for setfacl (OpaqueId is always a groupname)
 		groupInfo, err := user.LookupGroup(identifier)
 		if err != nil {
@@ -1478,13 +1475,13 @@ func (fs *cephmountfs) removeGrantViaSetfacl(ctx context.Context, path string, g
 			Str("groupname", groupId.OpaqueId).
 			Str("gid", identifier).
 			Msg("cephmount: resolved groupname to GID for removal")
-		
+
 		aclEntry = fmt.Sprintf("g:%s", identifier)
-		
+
 	default:
 		return errors.New("cephmount: invalid grantee type")
 	}
-	
+
 	// Build setfacl command with -x to remove
 	args := []string{"-x", aclEntry}
 	if info.IsDir() {
@@ -1494,13 +1491,13 @@ func (fs *cephmountfs) removeGrantViaSetfacl(ctx context.Context, path string, g
 		args = append(args, "-R")
 	}
 	args = append(args, fullPath)
-	
+
 	log.Debug().
 		Str("path", fullPath).
 		Str("acl_entry", aclEntry).
 		Strs("args", args).
 		Msg("cephmount: executing setfacl for removal")
-	
+
 	// Execute setfacl
 	cmd := exec.CommandContext(ctx, "setfacl", args...)
 	output, err := cmd.CombinedOutput()
@@ -1515,18 +1512,18 @@ func (fs *cephmountfs) removeGrantViaSetfacl(ctx context.Context, path string, g
 			return errors.Wrapf(err, "cephmount: setfacl removal failed: %s", string(output))
 		}
 	}
-	
+
 	log.Debug().
 		Str("path", fullPath).
 		Msg("cephmount: setfacl removal succeeded")
-	
+
 	return nil
 }
 
 // aclStringToPermissions converts ACL rwx string to CS3 ResourcePermissions
 func (fs *cephmountfs) aclStringToPermissions(aclStr string) *provider.ResourcePermissions {
 	perms := &provider.ResourcePermissions{}
-	
+
 	if strings.Contains(aclStr, "r") {
 		perms.Stat = true
 		perms.GetPath = true
@@ -1534,7 +1531,7 @@ func (fs *cephmountfs) aclStringToPermissions(aclStr string) *provider.ResourceP
 		perms.InitiateFileDownload = true
 		perms.ListGrants = true
 	}
-	
+
 	if strings.Contains(aclStr, "w") {
 		perms.CreateContainer = true
 		perms.Delete = true
@@ -1548,43 +1545,43 @@ func (fs *cephmountfs) aclStringToPermissions(aclStr string) *provider.ResourceP
 		perms.RemoveGrant = true
 		perms.DenyGrant = true
 	}
-	
+
 	if strings.Contains(aclStr, "x") {
 		perms.ListRecycle = true
 		perms.ListContainer = true
 		perms.ListFileVersions = true
 	}
-	
+
 	return perms
 }
 
 // permissionsToACLString converts CS3 ResourcePermissions to ACL rwx string
 func (fs *cephmountfs) permissionsToACLString(perms *provider.ResourcePermissions) string {
 	var result string
-	
+
 	// Read permission
 	if perms.Stat || perms.GetPath || perms.GetQuota || perms.ListGrants || perms.InitiateFileDownload {
 		result += "r"
 	} else {
 		result += "-"
 	}
-	
+
 	// Write permission
-	if perms.CreateContainer || perms.Move || perms.Delete || perms.InitiateFileUpload || 
-	   perms.AddGrant || perms.UpdateGrant || perms.RemoveGrant || perms.DenyGrant ||
-	   perms.RestoreFileVersion || perms.PurgeRecycle || perms.RestoreRecycleItem {
+	if perms.CreateContainer || perms.Move || perms.Delete || perms.InitiateFileUpload ||
+		perms.AddGrant || perms.UpdateGrant || perms.RemoveGrant || perms.DenyGrant ||
+		perms.RestoreFileVersion || perms.PurgeRecycle || perms.RestoreRecycleItem {
 		result += "w"
 	} else {
 		result += "-"
 	}
-	
+
 	// Execute permission
 	if perms.ListRecycle || perms.ListContainer || perms.ListFileVersions {
 		result += "x"
 	} else {
 		result += "-"
 	}
-	
+
 	return result
 }
 

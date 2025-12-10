@@ -681,7 +681,6 @@ func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *provider.Re
 	actions = CS3ResourcePermissionsToLibregraphActions(statRes.Info.PermissionSet)
 	roles = GetApplicableRoleDefinitionsForActions(actions, statRes.Info)
 
-
 	return actions, roles, perms, nil
 }
 

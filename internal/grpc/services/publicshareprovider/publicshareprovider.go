@@ -19,8 +19,8 @@
 package publicshareprovider
 
 import (
-	"fmt"
 	"context"
+	"fmt"
 	"regexp"
 
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"

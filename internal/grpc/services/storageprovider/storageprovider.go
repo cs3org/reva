@@ -813,7 +813,6 @@ func (s *service) addSpaceInfo(ctx context.Context, ri *provider.ResourceInfo, w
 	ri.Id.SpaceId = spaceID
 	log.Debug().Any("path", ri.Path).Any("spaceID", spaceID).Msg("addSpaceInfo")
 
-
 	if s.spaceInfoCache != nil {
 		if space, err := s.spaceInfoCache.Get(spaceID); space != nil && err == nil {
 			ri.Space = space
