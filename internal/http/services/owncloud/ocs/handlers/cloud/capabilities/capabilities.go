@@ -230,6 +230,10 @@ func (h *Handler) Init(c *config.Config) {
 
 	// upload protocol-specific details
 	setCapabilitiesForChunkProtocol(chunkProtocol(h.defaultUploadProtocol), h.c.Capabilities)
+	if c.ChunkingParallelUploadDisabled {
+		h.c.Capabilities.Dav.ChunkingParallelUploadDisabled = true
+	}
+	
 }
 
 // GetCapabilities renders the capabilities.
