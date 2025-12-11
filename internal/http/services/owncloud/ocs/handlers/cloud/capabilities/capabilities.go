@@ -227,9 +227,6 @@ func (h *Handler) Init(c *config.Config) {
 			Product: "reva",
 		}
 	}
-
-	// upload protocol-specific details
-	setCapabilitiesForChunkProtocol(chunkProtocol(h.defaultUploadProtocol), h.c.Capabilities)
 }
 
 // GetCapabilities renders the capabilities.
