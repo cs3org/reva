@@ -285,7 +285,9 @@ func isRelativePathOrEmpty(path string) bool {
 func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent *provider.ResourceId, client gateway.GatewayAPIClient, mgr token.Manager) (bool, error) {
 	// Since the resource ID is obtained from the scope, the current token
 	// has access to it.
+	log := appctx.GetLogger(ctx)
 	statResponse, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: parent}})
+	log.Info().Err(err).Any("resp", statResponse).Msgf("FindMe - ref is %+v, parent is %+v", ref, parent)
 	if err != nil {
 		return false, err
 	}
