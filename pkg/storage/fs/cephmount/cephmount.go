@@ -1540,6 +1540,9 @@ func (fs *cephmountfs) aclStringToPermissions(aclStr string) *provider.ResourceP
 		perms.PurgeRecycle = true
 		perms.RestoreFileVersion = true
 		perms.RestoreRecycleItem = true
+		// TODO(lopresti) we should implement an additional xattr to store whether the user has
+		// permissions to add/edit permissions. For now write access also grants that so this is readily
+		// usable for personal spaces.
 		perms.AddGrant = true
 		perms.UpdateGrant = true
 		perms.RemoveGrant = true
