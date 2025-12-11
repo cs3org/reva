@@ -369,6 +369,8 @@ func GetViewMode(viewMode string) gateway.OpenInAppRequest_ViewMode {
 		return gateway.OpenInAppRequest_VIEW_MODE_READ_WRITE
 	case "preview":
 		return gateway.OpenInAppRequest_VIEW_MODE_PREVIEW
+	case "embedded":
+		return gateway.OpenInAppRequest_VIEW_MODE_EMBEDDED
 	default:
 		return gateway.OpenInAppRequest_VIEW_MODE_INVALID
 	}
@@ -385,6 +387,8 @@ func GetAppViewMode(viewMode string) appprovider.ViewMode {
 		return appprovider.ViewMode_VIEW_MODE_READ_WRITE
 	case "preview":
 		return appprovider.ViewMode_VIEW_MODE_PREVIEW
+	case "embedded":
+		return appprovider.ViewMode_VIEW_MODE_EMBEDDED
 	default:
 		return appprovider.ViewMode_VIEW_MODE_INVALID
 	}

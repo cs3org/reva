@@ -234,13 +234,17 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	}
 	q.Add("usertype", string(ut))
 
+	access := "view"
+	if viewMode == appprovider.ViewMode_VIEW_MODE_EMBEDDED {
+		access = "embedview"
+	}
 	var viewAppURL string
-	if viewAppURLs, ok := p.appURLs["view"]; ok {
+	if viewAppURLs, ok := p.appURLs[access]; ok {
 		if viewAppURL, ok = viewAppURLs[ext]; ok {
 			q.Add("appviewurl", viewAppURL)
 		}
 	}
-	var access = "edit"
+	access = "edit"
 	if resource.GetSize() == 0 {
 		if _, ok := p.appURLs["editnew"]; ok {
 			access = "editnew"
@@ -429,11 +433,13 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 		appURLs = make(map[string]map[string]string)
 		appURLs["view"] = make(map[string]string)
 		appURLs["edit"] = make(map[string]string)
+		appURLs["embedview"] = make(map[string]string)
 		for _, m := range c.MimeTypes {
 			exts := mime.GetFileExts(m)
 			for _, e := range exts {
 				appURLs["view"]["."+e] = c.AppURL
 				appURLs["edit"]["."+e] = c.AppURL
+				appURLs["embedview"]["."+e] = c.AppURL
 			}
 		}
 	}
@@ -474,7 +480,7 @@ func parseWopiDiscovery(body io.Reader) (map[string]map[string]string, error) {
 			for _, app := range netzone.SelectElements("app") {
 				for _, action := range app.SelectElements("action") {
 					access := action.SelectAttrValue("name", "")
-					if access == "view" || access == "edit" || access == "editnew" {
+					if access == "view" || access == "edit" || access == "editnew" || access == "embedview" {
 						ext := action.SelectAttrValue("ext", "")
 						urlString := action.SelectAttrValue("urlsrc", "")
 
