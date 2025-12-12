@@ -185,9 +185,6 @@ func (sm *Manager) efssShareToOcm(resp *EfssShare) *ocm.Share {
 	if resp.Protocols.WebApp.ViewMode != "" {
 		am = append(am, share.NewWebappAccessMethod(utils.GetAppViewMode(resp.Protocols.WebApp.ViewMode)))
 	}
-	if resp.Protocols.DataTx.SourceURI != "" {
-		am = append(am, share.NewTransferAccessMethod())
-	}
 
 	// return the OCM Share payload
 	return &ocm.Share{
@@ -329,9 +326,6 @@ func efssReceivedShareToOcm(resp *ReceivedEfssShare) *ocm.ReceivedShare {
 	}, []string{}))
 	if resp.Share.Protocols.WebApp.ViewMode != "" {
 		proto = append(proto, share.NewWebappProtocol(resp.Share.Protocols.WebApp.URI, utils.GetAppViewMode(resp.Share.Protocols.WebApp.ViewMode)))
-	}
-	if resp.Share.Protocols.DataTx.SourceURI != "" {
-		proto = append(proto, share.NewTransferProtocol(resp.Share.Protocols.DataTx.SourceURI, resp.Share.Token, uint64(resp.Share.Protocols.DataTx.Size)))
 	}
 
 	// return the OCM Received Share payload

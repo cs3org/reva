@@ -80,8 +80,6 @@ const (
 	WebDAVProtocol OcmProtocol = iota
 	// WebappProtocol is the OCM `webapp` protocol.
 	WebappProtocol
-	// TransferProtocol is the OCM `datatx` protocol.
-	TransferProtocol
 )
 
 // ShareID only contains IDs of shares and public links. This is because the Web UI requires
@@ -210,8 +208,6 @@ type OcmReceivedShareProtocol struct {
 	SharedSecret       string           `gorm:"type:text;not null"`
 	// WebDAV and WebApp Protocol fields
 	Permissions int `gorm:"default:null"`
-	// Transfer Protocol fields
-	Size uint64 `gorm:"default:null"`
 }
 
 func (s *Share) AsCS3Share(granteeType userpb.UserType) *collaboration.Share {

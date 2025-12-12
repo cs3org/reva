@@ -24,7 +24,6 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
-	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
@@ -78,25 +77,9 @@ func ocmShareUpdateReceivedCommand() *command {
 		}
 		shareRes.Share.State = shareState
 
-		// check if we are dealing with a transfer in case the destination path needs to be set
-		_, ok := getTransferProtocol(shareRes.Share)
-		var opaque *typesv1beta1.Opaque
-		if ok {
-			// transfer_destination_path is not part of TransferProtocol and is specified as an opaque field
-			opaque = &typesv1beta1.Opaque{
-				Map: map[string]*typesv1beta1.OpaqueEntry{
-					"transfer_destination_path": {
-						Decoder: "plain",
-						Value:   []byte(*path),
-					},
-				},
-			}
-		}
-
 		shareRequest := &ocm.UpdateReceivedOCMShareRequest{
 			Share:      shareRes.Share,
 			UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
-			Opaque:     opaque,
 		}
 
 		updateRes, err := shareClient.UpdateReceivedOCMShare(ctx, shareRequest)
@@ -112,15 +95,6 @@ func ocmShareUpdateReceivedCommand() *command {
 		return nil
 	}
 	return cmd
-}
-
-func getTransferProtocol(share *ocm.ReceivedShare) (*ocm.TransferProtocol, bool) {
-	for _, p := range share.Protocols {
-		if d, ok := p.Term.(*ocm.Protocol_TransferOptions); ok {
-			return d.TransferOptions, true
-		}
-	}
-	return nil, false
 }
 
 func getOCMShareState(state string) ocm.ShareState {

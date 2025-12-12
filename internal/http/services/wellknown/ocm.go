@@ -37,7 +37,6 @@ type OcmProviderConfig struct {
 	WebappRoot         string `docs:"/external/sciencemesh;The root URL to serve Web apps via OCM."                              mapstructure:"webapp_root"`
 	InviteAcceptDialog string `docs:"/open-cloud-mesh/accept-invite;The frontend URL where to land when receiving an invitation" mapstructure:"invite_accept_dialog"`
 	EnableWebapp       bool   `docs:"false;Whether web apps are enabled in OCM shares."                                          mapstructure:"enable_webapp"`
-	EnableDatatx       bool   `docs:"false;Whether data transfers are enabled in OCM shares."                                    mapstructure:"enable_datatx"`
 }
 
 type OcmDiscoveryData struct {
@@ -119,9 +118,6 @@ func (h *wkocmHandler) init(c *OcmProviderConfig) {
 	rtProtos["webdav"] = filepath.Join(endpointURL.Path, c.WebdavRoot)
 	if c.EnableWebapp {
 		rtProtos["webapp"] = filepath.Join(endpointURL.Path, c.WebappRoot)
-	}
-	if c.EnableDatatx {
-		rtProtos["datatx"] = filepath.Join(endpointURL.Path, c.WebdavRoot)
 	}
 	d.ResourceTypes = []resourceTypes{{
 		Name:       "file",           // so far we only support `file`

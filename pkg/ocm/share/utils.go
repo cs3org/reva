@@ -31,6 +31,7 @@ func NewWebDAVProtocol(uri, sharedSecret string, perms *ocm.SharePermissions, re
 			WebdavOptions: &ocm.WebDAVProtocol{
 				Uri:          uri,
 				SharedSecret: sharedSecret,
+				//AccessType:   accessType,
 				Permissions:  perms,
 				Requirements: reqs,
 			},
@@ -50,20 +51,8 @@ func NewWebappProtocol(uri string, viewMode appprovider.ViewMode) *ocm.Protocol 
 	}
 }
 
-// NewTransferProtocol is an abstraction for creating a Transfer protocol.
-func NewTransferProtocol(sourceURI, sharedSecret string, size uint64) *ocm.Protocol {
-	return &ocm.Protocol{
-		Term: &ocm.Protocol_TransferOptions{
-			TransferOptions: &ocm.TransferProtocol{
-				SourceUri:    sourceURI,
-				SharedSecret: sharedSecret,
-				Size:         size,
-			},
-		},
-	}
-}
-
-// NewWebDavAccessMethod is an abstraction for creating a WebDAV access method.
+// NewWebDavAccessMethod is an abstraction for creating a WebDAV access method,
+// which is the protocol used by remote users to access an OCM share.
 func NewWebDavAccessMethod(perms *provider.ResourcePermissions, reqs []string) *ocm.AccessMethod {
 	return &ocm.AccessMethod{
 		Term: &ocm.AccessMethod_WebdavOptions{
@@ -75,22 +64,14 @@ func NewWebDavAccessMethod(perms *provider.ResourcePermissions, reqs []string) *
 	}
 }
 
-// NewWebappAccessMethod is an abstraction for creating a Webapp access method.
+// NewWebappAccessMethod is an abstraction for creating a Webapp access method,
+// which is the protocol used by remote users to access an OCM share.
 func NewWebappAccessMethod(mode appprovider.ViewMode) *ocm.AccessMethod {
 	return &ocm.AccessMethod{
 		Term: &ocm.AccessMethod_WebappOptions{
 			WebappOptions: &ocm.WebappAccessMethod{
 				ViewMode: mode,
 			},
-		},
-	}
-}
-
-// NewTransferAccessMethod is an abstraction for creating a Transfer access method.
-func NewTransferAccessMethod() *ocm.AccessMethod {
-	return &ocm.AccessMethod{
-		Term: &ocm.AccessMethod_TransferOptions{
-			TransferOptions: &ocm.TransferAccessMethod{},
 		},
 	}
 }
