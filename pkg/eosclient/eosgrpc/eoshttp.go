@@ -187,7 +187,7 @@ func (c *EOSHTTPClient) doReq(req *http.Request, remoteuser string) (*http.Respo
 	// Here we put the headers that are required by EOS >= 5
 	req.Header.Set("x-gateway-authorization", c.opt.Authkey)
 	req.Header.Set("x-forwarded-for", "dummy")
-	req.Header.Set("remote-user", remoteuser)
+	req.Header.Set("remote-user", "cbox")
 
 	resp, err := c.cl.Do(req)
 
@@ -305,8 +305,10 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 		// we skip this and call the HTTP client directly
 		var resp *http.Response
 		if auth.Token != "" {
+			log.Info().Str("path", urlpath).Msgf("FindMe - using token %s", auth.Token[0:5])
 			resp, err = c.cl.Do(req)
 		} else {
+			log.Info().Str("path", urlpath).Msgf("FindMe - no token")
 			resp, err = c.doReq(req, remoteuser)
 		}
 
