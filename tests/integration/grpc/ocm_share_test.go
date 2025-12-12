@@ -37,9 +37,9 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/datagateway"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocdav"
-	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	jwt "github.com/cs3org/reva/v3/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/v3/tests/helpers"
@@ -200,7 +200,7 @@ var _ = Describe("ocm share", func() {
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(permissions.NewViewerRole().CS3ResourcePermissions(), []string{}),
+						share.NewWebDavAccessMethod(permissions.NewViewerRole().CS3ResourcePermissions(), []ocmv1beta1.AccessType{}, []string{}),
 					},
 					RecipientMeshProvider: cesnet.ProviderInfo,
 				})
@@ -241,7 +241,7 @@ var _ = Describe("ocm share", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(d2).To(Equal([]byte("test")))
 
-				By("marie can access the share using the ocm mount")
+				By("marie can access the share using the OCM mount")
 				ref := &provider.Reference{Path: ocmPath(share.Id, "")}
 				statRes, err := cesnetgw.Stat(ctxMarie, &provider.StatRequest{Ref: ref})
 				Expect(err).ToNot(HaveOccurred())
@@ -262,7 +262,7 @@ var _ = Describe("ocm share", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(data).To(Equal([]byte("test")))
 
-				By("marie cannot upload to the ocm mount")
+				By("marie cannot upload to the OCM mount")
 				Expect(helpers.UploadGateway(ctxMarie, cesnetgw, ref, []byte("will-never-be-written"))).ToNot(Succeed())
 			})
 		})
@@ -293,7 +293,7 @@ var _ = Describe("ocm share", func() {
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), []string{}),
+						share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), []ocmv1beta1.AccessType{}, []string{}),
 					},
 					RecipientMeshProvider: cesnet.ProviderInfo,
 				})
@@ -389,7 +389,7 @@ var _ = Describe("ocm share", func() {
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(permissions.NewViewerRole().CS3ResourcePermissions(), []string{}),
+						share.NewWebDavAccessMethod(permissions.NewViewerRole().CS3ResourcePermissions(), []ocmv1beta1.AccessType{}, []string{}),
 					},
 					RecipientMeshProvider: cesnet.ProviderInfo,
 				})
@@ -492,7 +492,7 @@ var _ = Describe("ocm share", func() {
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), []string{}),
+						share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), []ocmv1beta1.AccessType{}, []string{}),
 					},
 					RecipientMeshProvider: cesnet.ProviderInfo,
 				})
@@ -641,7 +641,7 @@ var _ = Describe("ocm share", func() {
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), []string{}),
+						share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), []ocmv1beta1.AccessType{}, []string{}),
 					},
 					RecipientMeshProvider: cesnet.ProviderInfo,
 				})
@@ -658,7 +658,7 @@ var _ = Describe("ocm share", func() {
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), []string{}),
+						share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), []ocmv1beta1.AccessType{}, []string{}),
 					},
 					RecipientMeshProvider: cesnet.ProviderInfo,
 				})
@@ -683,7 +683,7 @@ var _ = Describe("ocm share", func() {
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), []string{}),
+						share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), []ocmv1beta1.AccessType{}, []string{}),
 					},
 					RecipientMeshProvider: cesnet.ProviderInfo,
 				})
@@ -718,7 +718,7 @@ var _ = Describe("ocm share", func() {
 						},
 					},
 					AccessMethods: []*ocmv1beta1.AccessMethod{
-						share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), []string{"unsupported-requirement"}),
+						share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), []ocmv1beta1.AccessType{}, []string{"unsupported-requirement"}),
 					},
 					RecipientMeshProvider: cesnet.ProviderInfo,
 				})

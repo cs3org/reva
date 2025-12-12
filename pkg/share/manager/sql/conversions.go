@@ -27,8 +27,8 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
-	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 )
 
@@ -171,16 +171,29 @@ func viewModeToInt(v appprovider.ViewMode) int {
 	return -1
 }
 
+func accessTypesIntToArray(at ocm.AccessType) []ocm.AccessType {
+	switch at {
+	case ocm.AccessType_ACCESS_TYPE_REMOTE:
+		return []ocm.AccessType{at}
+	case ocm.AccessType_ACCESS_TYPE_DATATX:
+		return []ocm.AccessType{at}
+	case ocm.AccessType_ACCESS_TYPE_REMOTE + ocm.AccessType_ACCESS_TYPE_DATATX:
+		return []ocm.AccessType{ocm.AccessType_ACCESS_TYPE_REMOTE, ocm.AccessType_ACCESS_TYPE_DATATX}
+	default:
+		return []ocm.AccessType{ocm.AccessType_ACCESS_TYPE_REMOTE}
+	}
+}
+
 func convertToCS3AccessMethod(m *model.OcmShareProtocol) *ocm.AccessMethod {
 	switch m.Type {
 	case model.WebDAVProtocol:
 		return share.NewWebDavAccessMethod(
 			permissions.RoleFromOCSPermissions(permissions.OcsPermissions(m.Permissions)).CS3ResourcePermissions(),
-			[]string{}) // TODO persist requirements
+			accessTypesIntToArray(ocm.AccessType(m.AccessTypes)),
+			[]string{}, // TODO persist requirements
+		)
 	case model.WebappProtocol:
 		return share.NewWebappAccessMethod(appprovider.ViewMode(m.Permissions))
-	case model.TransferProtocol:
-		return share.NewTransferAccessMethod()
 	}
 	return nil
 }
@@ -188,13 +201,15 @@ func convertToCS3AccessMethod(m *model.OcmShareProtocol) *ocm.AccessMethod {
 func convertToCS3Protocol(p *model.OcmReceivedShareProtocol) *ocm.Protocol {
 	switch p.Type {
 	case model.WebDAVProtocol:
-		return share.NewWebDAVProtocol(p.Uri, p.SharedSecret, &ocm.SharePermissions{
-			Permissions: permissions.RoleFromOCSPermissions(permissions.OcsPermissions(p.Permissions)).CS3ResourcePermissions(),
-		}, []string{}) // TODO persist requirements
+		return share.NewWebDAVProtocol(p.Uri, p.SharedSecret,
+			&ocm.SharePermissions{
+				Permissions: permissions.RoleFromOCSPermissions(permissions.OcsPermissions(p.Permissions)).CS3ResourcePermissions(),
+			},
+			accessTypesIntToArray(ocm.AccessType(p.AccessTypes)),
+			[]string{}, // TODO persist requirements
+		)
 	case model.WebappProtocol:
 		return share.NewWebappProtocol(p.Uri, appprovider.ViewMode(p.Permissions))
-	case model.TransferProtocol:
-		return share.NewTransferProtocol(p.Uri, p.SharedSecret, uint64(p.Size))
 	case model.EmbeddedProtocol:
 		return share.NewEmbeddedProtocol(string(p.Payload))
 	}
