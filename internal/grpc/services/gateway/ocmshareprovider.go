@@ -24,6 +24,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"slices"
 
 	"github.com/alitto/pond/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -349,7 +350,7 @@ func (s *svc) handleTransfer(ctx context.Context, share *ocm.ReceivedShare, tran
 	if !ok {
 		return errors.New("gateway: unable to retrieve transfer protocol")
 	}
-	sourceURI := protocol.SourceUri
+	sourceURI := protocol.Uri
 
 	// get the webdav endpoint of the grantee's idp
 	var granteeIdp string
@@ -451,10 +452,12 @@ func (s *svc) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMSh
 	return res, nil
 }
 
-func (s *svc) getTransferProtocol(share *ocm.ReceivedShare) (*ocm.TransferProtocol, bool) {
+func (s *svc) getTransferProtocol(share *ocm.ReceivedShare) (*ocm.WebDAVProtocol, bool) {
 	for _, p := range share.Protocols {
-		if d, ok := p.Term.(*ocm.Protocol_TransferOptions); ok {
-			return d.TransferOptions, true
+		if d, ok := p.Term.(*ocm.Protocol_WebdavOptions); ok {
+			if slices.Contains(d.WebdavOptions.AccessTypes, ocm.AccessType_ACCESS_TYPE_DATATX) {
+				return d.WebdavOptions, true
+			}
 		}
 	}
 	return nil, false
