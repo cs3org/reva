@@ -32,7 +32,7 @@ driver = "localhome"
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="drivers" type="map[string]map[string]interface{}" default="localhome" %}}
+{{% dir name="drivers" type="map[string]map[string]any" default="localhome" %}}
  [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L77)
 {{< highlight toml >}}
 [grpc.services.storageprovider.drivers.localhome]

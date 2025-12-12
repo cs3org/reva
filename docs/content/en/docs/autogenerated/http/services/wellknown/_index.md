@@ -48,11 +48,11 @@ webapp_root = "/external/sciencemesh"
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="invite_accept_dialog" type="string" default="/sciencemesh-app/invitations" %}}
+{{% dir name="invite_accept_dialog" type="string" default="/open-cloud-mesh/accept-invite" %}}
 The frontend URL where to land when receiving an invitation [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L38)
 {{< highlight toml >}}
 [http.services.wellknown]
-invite_accept_dialog = "/sciencemesh-app/invitations"
+invite_accept_dialog = "/open-cloud-mesh/accept-invite"
 {{< /highlight >}}
 {{% /dir %}}
 
