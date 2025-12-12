@@ -34,4 +34,3 @@ ocm_prefix = "ocm"
 provider = "Reva for CESNET"
 endpoint = "http://{{cesnethttp_address}}"
 enable_webapp = true
-enable_datatx = true

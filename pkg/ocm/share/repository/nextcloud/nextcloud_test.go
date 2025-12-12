@@ -285,7 +285,6 @@ var _ = Describe("Nextcloud", func() {
 				AccessMethods: []*ocm.AccessMethod{
 					ocmshare.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions(), []string{}),
 					ocmshare.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
-					ocmshare.NewTransferAccessMethod(),
 				},
 				Ctime: &types.Timestamp{
 					Seconds: 1234567890,
@@ -424,7 +423,6 @@ var _ = Describe("Nextcloud", func() {
 				AccessMethods: []*ocm.AccessMethod{
 					ocmshare.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions(), []string{}),
 					ocmshare.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
-					ocmshare.NewTransferAccessMethod(),
 				},
 				Token: "some-token",
 			}))
@@ -477,7 +475,6 @@ var _ = Describe("Nextcloud", func() {
 						Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
 					}, []string{}),
 					ocmshare.NewWebappProtocol("app-uri-template", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
-					ocmshare.NewTransferProtocol("source-uri", "some-token", 1),
 				},
 				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
 			}))
@@ -535,7 +532,6 @@ var _ = Describe("Nextcloud", func() {
 						Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
 					}, []string{}),
 					ocmshare.NewWebappProtocol("app-uri-template", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
-					ocmshare.NewTransferProtocol("source-uri", "some-token", 1),
 				},
 				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
 			}))
@@ -624,7 +620,6 @@ var _ = Describe("Nextcloud", func() {
 						Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
 					}, []string{}),
 					ocmshare.NewWebappProtocol("app-uri-template", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
-					ocmshare.NewTransferProtocol("source-uri", "some-token", 1),
 				},
 				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
 			}))

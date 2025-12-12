@@ -179,8 +179,6 @@ func convertToCS3AccessMethod(m *model.OcmShareProtocol) *ocm.AccessMethod {
 			[]string{}) // TODO persist requirements
 	case model.WebappProtocol:
 		return share.NewWebappAccessMethod(appprovider.ViewMode(m.Permissions))
-	case model.TransferProtocol:
-		return share.NewTransferAccessMethod()
 	}
 	return nil
 }
@@ -193,8 +191,6 @@ func convertToCS3Protocol(p *model.OcmReceivedShareProtocol) *ocm.Protocol {
 		}, []string{}) // TODO persist requirements
 	case model.WebappProtocol:
 		return share.NewWebappProtocol(p.Uri, appprovider.ViewMode(p.Permissions))
-	case model.TransferProtocol:
-		return share.NewTransferProtocol(p.Uri, p.SharedSecret, uint64(p.Size))
 	case model.EmbeddedProtocol:
 		return share.NewEmbeddedProtocol(string(p.Payload))
 	}

@@ -122,10 +122,6 @@ func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share) (*ocm.Share, error) 
 				if err := storeWebappAccessMethod(tx, id, r); err != nil {
 					return err
 				}
-			case *ocm.AccessMethod_TransferOptions:
-				if err := storeTransferAccessMethod(tx, id, r); err != nil {
-					return err
-				}
 			}
 		}
 		return nil
@@ -161,19 +157,6 @@ func storeWebappAccessMethod(tx *gorm.DB, shareID uint, o *ocm.AccessMethod_Weba
 	err := tx.Create(accessMethod).Error
 	if err != nil {
 		return errors.Wrap(err, "failed to store webapp access method")
-	}
-	return nil
-}
-
-func storeTransferAccessMethod(tx *gorm.DB, shareID uint, o *ocm.AccessMethod_TransferOptions) error {
-	accessMethod := &model.OcmShareProtocol{
-		OcmShareID: uint(shareID),
-		Type:       model.TransferProtocol,
-	}
-
-	err := tx.Create(accessMethod).Error
-	if err != nil {
-		return errors.Wrap(err, "failed to store transfer access method")
 	}
 	return nil
 }
@@ -303,10 +286,6 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*oc
 				if err := storeWebappProtocol(tx, int64(receivedShare.ID), r); err != nil {
 					return err
 				}
-			case *ocm.Protocol_TransferOptions:
-				if err := storeTransferProtocol(tx, int64(receivedShare.ID), r); err != nil {
-					return err
-				}
 			case *ocm.Protocol_EmbeddedOptions:
 				if err := storeEmbeddedProtocol(tx, int64(receivedShare.ID), r); err != nil {
 					return err
@@ -356,20 +335,6 @@ func storeEmbeddedProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_EmbeddedO
 		OcmReceivedShareID: uint(shareID),
 		Type:               model.EmbeddedProtocol,
 		Payload:            datatypes.JSON([]byte(o.EmbeddedOptions.Payload)),
-	}
-	if err := tx.Create(protocol).Error; err != nil {
-		return err
-	}
-	return nil
-}
-
-func storeTransferProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_TransferOptions) error {
-	protocol := &model.OcmReceivedShareProtocol{
-		OcmReceivedShareID: uint(shareID),
-		Type:               model.TransferProtocol,
-		Uri:                o.TransferOptions.SourceUri,
-		SharedSecret:       o.TransferOptions.SharedSecret,
-		Size:               o.TransferOptions.Size,
 	}
 	if err := tx.Create(protocol).Error; err != nil {
 		return err

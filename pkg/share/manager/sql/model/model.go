@@ -81,10 +81,10 @@ const (
 	WebDAVProtocol OcmProtocol = iota
 	// WebappProtocol is the OCM `webapp` protocol.
 	WebappProtocol
-	// TransferProtocol is the OCM `datatx` protocol.
-	TransferProtocol
 	// EmbeddedProtocol is the OCM `embedded` protocol.
 	EmbeddedProtocol
+	// SshProtocol is the OCM `ssh` protocol (not currently supported).
+	SshProtocol
 )
 
 // ShareID only contains IDs of shares and public links. This is because the Web UI requires
@@ -183,6 +183,7 @@ type OcmShareProtocol struct {
 	OcmShareID  uint        `gorm:"not null;uniqueIndex:u_ocm_share_protocol"`
 	Type        OcmProtocol `gorm:"not null;uniqueIndex:u_ocm_share_protocol"`
 	Permissions int         `gorm:"default:null"`
+	AccessTypes int         `gorm:"default:null"`
 }
 
 // OcmReceivedShare represents an OCM share received from a remote user.
@@ -213,8 +214,7 @@ type OcmReceivedShareProtocol struct {
 	SharedSecret       string           `gorm:"type:text;not null"`
 	// WebDAV and WebApp Protocol fields
 	Permissions int `gorm:"default:null"`
-	// Transfer Protocol fields
-	Size uint64 `gorm:"default:null"`
+	AccessTypes int `gorm:"default:null"`
 	// JSON field for the embedded protocol payload
 	Payload datatypes.JSON `gorm:"type:json;default:null"`
 }
