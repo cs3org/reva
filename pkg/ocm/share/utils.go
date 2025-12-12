@@ -25,13 +25,14 @@ import (
 )
 
 // NewWebDAVProtocol is an abstraction for creating a WebDAV protocol.
-func NewWebDAVProtocol(uri, sharedSecret string, perms *ocm.SharePermissions, reqs []string) *ocm.Protocol {
+func NewWebDAVProtocol(uri, sharedSecret string, perms *ocm.SharePermissions, accTypes []ocm.AccessType, reqs []string) *ocm.Protocol {
 	return &ocm.Protocol{
 		Term: &ocm.Protocol_WebdavOptions{
 			WebdavOptions: &ocm.WebDAVProtocol{
 				Uri:          uri,
 				SharedSecret: sharedSecret,
 				Permissions:  perms,
+				AccessTypes:  accTypes,
 				Requirements: reqs,
 			},
 		},
@@ -50,19 +51,6 @@ func NewWebappProtocol(uri string, viewMode appprovider.ViewMode) *ocm.Protocol 
 	}
 }
 
-// NewTransferProtocol is an abstraction for creating a Transfer protocol.
-func NewTransferProtocol(sourceURI, sharedSecret string, size uint64) *ocm.Protocol {
-	return &ocm.Protocol{
-		Term: &ocm.Protocol_TransferOptions{
-			TransferOptions: &ocm.TransferProtocol{
-				SourceUri:    sourceURI,
-				SharedSecret: sharedSecret,
-				Size:         size,
-			},
-		},
-	}
-}
-
 // NewEmbeddedProtocol is an abstraction for creating an OCM embedded protocol.
 func NewEmbeddedProtocol(payload string) *ocm.Protocol {
 	return &ocm.Protocol{
@@ -74,34 +62,28 @@ func NewEmbeddedProtocol(payload string) *ocm.Protocol {
 	}
 }
 
-// NewWebDavAccessMethod is an abstraction for creating a WebDAV access method.
-func NewWebDavAccessMethod(perms *provider.ResourcePermissions, reqs []string) *ocm.AccessMethod {
+// NewWebDavAccessMethod is an abstraction for creating a WebDAV access method,
+// which is the protocol used by remote users to access an OCM share.
+func NewWebDavAccessMethod(perms *provider.ResourcePermissions, accTypes []ocm.AccessType, reqs []string) *ocm.AccessMethod {
 	return &ocm.AccessMethod{
 		Term: &ocm.AccessMethod_WebdavOptions{
 			WebdavOptions: &ocm.WebDAVAccessMethod{
 				Permissions:  perms,
+				AccessTypes:  accTypes,
 				Requirements: reqs,
 			},
 		},
 	}
 }
 
-// NewWebappAccessMethod is an abstraction for creating a Webapp access method.
+// NewWebappAccessMethod is an abstraction for creating a Webapp access method,
+// which is the protocol used by remote users to access an OCM share.
 func NewWebappAccessMethod(mode appprovider.ViewMode) *ocm.AccessMethod {
 	return &ocm.AccessMethod{
 		Term: &ocm.AccessMethod_WebappOptions{
 			WebappOptions: &ocm.WebappAccessMethod{
 				ViewMode: mode,
 			},
-		},
-	}
-}
-
-// NewTransferAccessMethod is an abstraction for creating a Transfer access method.
-func NewTransferAccessMethod() *ocm.AccessMethod {
-	return &ocm.AccessMethod{
-		Term: &ocm.AccessMethod_TransferOptions{
-			TransferOptions: &ocm.TransferAccessMethod{},
 		},
 	}
 }
