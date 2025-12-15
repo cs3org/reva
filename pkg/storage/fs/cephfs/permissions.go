@@ -190,6 +190,26 @@ const (
 	removeGrant = iota
 )
 
+func (fs *cephfs) granteeToSID(ctx context.Context, grantee *provider.Grantee) (sid posix_acl.AclSID, err error) {
+	switch grantee.Type {
+	case provider.GranteeType_GRANTEE_TYPE_USER:
+		var user *userpb.User
+		if user, err = fs.getUserByOpaqueID(ctx, grantee.GetUserId().OpaqueId); err != nil {
+			return
+		}
+		sid.SetUid(uint32(user.UidNumber))
+	case provider.GranteeType_GRANTEE_TYPE_GROUP:
+		var group *grouppb.Group
+		if group, err = fs.getGroupByOpaqueID(ctx, grantee.GetGroupId().OpaqueId); err != nil {
+			return
+		}
+		sid.SetGid(uint32(group.GidNumber))
+	default:
+		err = errors.New("cephfs: invalid grantee type")
+	}
+	return
+}
+
 func (fs *cephfs) changePerms(ctx context.Context, mt Mount, grant *provider.Grant, path string, method int) (err error) {
 	buf, err := mt.GetXattr(path, aclXattr)
 	if err != nil {
@@ -197,23 +217,10 @@ func (fs *cephfs) changePerms(ctx context.Context, mt Mount, grant *provider.Gra
 	}
 	acls := &posix_acl.Acl{}
 	acls.Decode(buf)
-	var sid posix_acl.AclSID
 
-	switch grant.Grantee.Type {
-	case provider.GranteeType_GRANTEE_TYPE_USER:
-		var user *userpb.User
-		if user, err = fs.getUserByOpaqueID(ctx, grant.Grantee.GetUserId().OpaqueId); err != nil {
-			return
-		}
-		sid.SetUid(uint32(user.UidNumber))
-	case provider.GranteeType_GRANTEE_TYPE_GROUP:
-		var group *grouppb.Group
-		if group, err = fs.getGroupByOpaqueID(ctx, grant.Grantee.GetGroupId().OpaqueId); err != nil {
-			return
-		}
-		sid.SetGid(uint32(group.GidNumber))
-	default:
-		return errors.New("cephfs: invalid grantee type")
+	sid, err := fs.granteeToSID(ctx, grant.Grantee)
+	if err != nil {
+		return
 	}
 
 	var found = false

@@ -1323,67 +1323,70 @@ func (fs *cephmountfs) Unlock(ctx context.Context, ref *provider.Reference, lock
 	return fs.UnsetArbitraryMetadata(ctx, ref, []string{xattrLock})
 }
 
-// addGrantViaSetfacl adds a grant using the setfacl system command
-func (fs *cephmountfs) addGrantViaSetfacl(ctx context.Context, path string, grant *provider.Grant) error {
+// resolveGranteeIdentifier resolves a grantee (user or group) to their system identifier (UID or GID)
+func (fs *cephmountfs) resolveGranteeIdentifier(ctx context.Context, grant *provider.Grant) (granteeType, identifier string, err error) {
 	log := appctx.GetLogger(ctx)
-	fullPath := filepath.Join(fs.chrootDir, path)
-
-	// Check if it's a directory for recursive flag
-	info, err := os.Stat(fullPath)
-	if err != nil {
-		return errors.Wrap(err, "cephmount: failed to stat path")
-	}
-
-	// Build ACL entry string based on grantee type
-	var aclEntry string
-	var identifier string
 
 	switch grant.Grantee.Type {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
 		userId := grant.Grantee.GetUserId()
 		if userId == nil {
-			return errors.New("cephmount: user grantee without user ID")
+			return "", "", errors.New("cephmount: user grantee without user ID")
 		}
-		identifier = userId.OpaqueId
+		username := userId.OpaqueId
 
-		// Resolve username to UID for setfacl (OpaqueId is always a username)
-		userInfo, err := user.Lookup(identifier)
+		userInfo, err := user.Lookup(username)
 		if err != nil {
-			return errors.Errorf("cephmount: user '%s' does not exist in /etc/passwd. "+
-				"All users must be available on the local system. Original error: %v", identifier, err)
+			return "", "", errors.Errorf("cephmount: user '%s' does not exist in /etc/passwd. "+
+				"All users must be available on the local system. Original error: %v", username, err)
 		}
-		identifier = userInfo.Uid
 		log.Debug().
-			Str("username", userId.OpaqueId).
-			Str("uid", identifier).
+			Str("username", username).
+			Str("uid", userInfo.Uid).
 			Msg("cephmount: resolved username to UID")
 
-		aclEntry = fmt.Sprintf("u:%s:%s", identifier, fs.permissionsToACLString(grant.Permissions))
+		return "u", userInfo.Uid, nil
 
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
 		groupId := grant.Grantee.GetGroupId()
 		if groupId == nil {
-			return errors.New("cephmount: group grantee without group ID")
+			return "", "", errors.New("cephmount: group grantee without group ID")
 		}
-		identifier = groupId.OpaqueId
+		groupname := groupId.OpaqueId
 
-		// Resolve group name to GID for setfacl (OpaqueId is always a groupname)
-		groupInfo, err := user.LookupGroup(identifier)
+		groupInfo, err := user.LookupGroup(groupname)
 		if err != nil {
-			return errors.Errorf("cephmount: group '%s' does not exist in /etc/group. "+
-				"All groups must be available on the local system. Original error: %v", identifier, err)
+			return "", "", errors.Errorf("cephmount: group '%s' does not exist in /etc/group. "+
+				"All groups must be available on the local system. Original error: %v", groupname, err)
 		}
-		identifier = groupInfo.Gid
 		log.Debug().
-			Str("groupname", groupId.OpaqueId).
-			Str("gid", identifier).
+			Str("groupname", groupname).
+			Str("gid", groupInfo.Gid).
 			Msg("cephmount: resolved groupname to GID")
 
-		aclEntry = fmt.Sprintf("g:%s:%s", identifier, fs.permissionsToACLString(grant.Permissions))
+		return "g", groupInfo.Gid, nil
 
 	default:
-		return errors.New("cephmount: invalid grantee type")
+		return "", "", errors.New("cephmount: invalid grantee type")
 	}
+}
+
+// addGrantViaSetfacl adds a grant using the setfacl system command
+func (fs *cephmountfs) addGrantViaSetfacl(ctx context.Context, path string, grant *provider.Grant) error {
+	log := appctx.GetLogger(ctx)
+	fullPath := filepath.Join(fs.chrootDir, path)
+
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		return errors.Wrap(err, "cephmount: failed to stat path")
+	}
+
+	granteeType, identifier, err := fs.resolveGranteeIdentifier(ctx, grant)
+	if err != nil {
+		return err
+	}
+
+	aclEntry := fmt.Sprintf("%s:%s:%s", granteeType, identifier, fs.permissionsToACLString(grant.Permissions))
 
 	// Build setfacl command
 	args := []string{"-m", aclEntry}
@@ -1425,62 +1428,17 @@ func (fs *cephmountfs) removeGrantViaSetfacl(ctx context.Context, path string, g
 	log := appctx.GetLogger(ctx)
 	fullPath := filepath.Join(fs.chrootDir, path)
 
-	// Check if it's a directory for recursive flag
 	info, err := os.Stat(fullPath)
 	if err != nil {
 		return errors.Wrap(err, "cephmount: failed to stat path")
 	}
 
-	// Build ACL removal entry string based on grantee type
-	var aclEntry string
-	var identifier string
-
-	switch grant.Grantee.Type {
-	case provider.GranteeType_GRANTEE_TYPE_USER:
-		userId := grant.Grantee.GetUserId()
-		if userId == nil {
-			return errors.New("cephmount: user grantee without user ID")
-		}
-		identifier = userId.OpaqueId
-
-		// Resolve username to UID for setfacl (OpaqueId is always a username)
-		userInfo, err := user.Lookup(identifier)
-		if err != nil {
-			return errors.Errorf("cephmount: user '%s' does not exist in /etc/passwd. "+
-				"All users must be available on the local system. Original error: %v", identifier, err)
-		}
-		identifier = userInfo.Uid
-		log.Debug().
-			Str("username", userId.OpaqueId).
-			Str("uid", identifier).
-			Msg("cephmount: resolved username to UID for removal")
-
-		aclEntry = fmt.Sprintf("u:%s", identifier)
-
-	case provider.GranteeType_GRANTEE_TYPE_GROUP:
-		groupId := grant.Grantee.GetGroupId()
-		if groupId == nil {
-			return errors.New("cephmount: group grantee without group ID")
-		}
-		identifier = groupId.OpaqueId
-
-		// Resolve group name to GID for setfacl (OpaqueId is always a groupname)
-		groupInfo, err := user.LookupGroup(identifier)
-		if err != nil {
-			return errors.Errorf("cephmount: group '%s' does not exist in /etc/group. "+
-				"All groups must be available on the local system. Original error: %v", identifier, err)
-		}
-		identifier = groupInfo.Gid
-		log.Debug().
-			Str("groupname", groupId.OpaqueId).
-			Str("gid", identifier).
-			Msg("cephmount: resolved groupname to GID for removal")
-
-		aclEntry = fmt.Sprintf("g:%s", identifier)
-
-	default:
-		return errors.New("cephmount: invalid grantee type")
+	granteeType, identifier, err := fs.resolveGranteeIdentifier(ctx, grant)
+	if err != nil {
+		return err
 	}
+
+	aclEntry := fmt.Sprintf("%s:%s", granteeType, identifier)
 
 	// Build setfacl command with -x to remove
 	args := []string{"-x", aclEntry}
