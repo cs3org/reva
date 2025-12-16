@@ -51,6 +51,7 @@ type Config struct {
 	SigningKeySecret           string `mapstructure:"signing_key_secret"`
 	PubRWLinkMaxExpiration     int64  `mapstructure:"pub_rw_link_max_expiration"`
 	PubRWLinkDefaultExpiration int64  `mapstructure:"pub_rw_link_default_expiration"`
+	ChunkingParallelUploadDisabled bool     `mapstructure:"chunking_parallel_upload_disabled"`
 }
 
 // Init sets sane defaults.

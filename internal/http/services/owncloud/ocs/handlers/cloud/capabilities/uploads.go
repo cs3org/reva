@@ -52,7 +52,6 @@ func setCapabilitiesForChunkProtocol(cp chunkProtocol, c *data.Capabilities) {
 	// 2.7+ will use Chunking V1 if "capabilities > files > bigfilechunking" is "true" AND "capabilities > dav > chunking" is not there
 	c.Files.BigFileChunking = true
 	c.Dav.Chunking = ""
-	c.Dav.ChunkingParallelUploadDisabled = false
 	c.Files.TusSupport = nil
 	/*
 	   switch cp {
