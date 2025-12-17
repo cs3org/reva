@@ -1,3 +1,12 @@
+
+---
+title: "v3.4.2"
+linkTitle: "v3.4.2"
+weight: 999658
+description: >
+  Changelog for Reva v3.4.2 (2025-12-17)
+---
+
 Changelog for reva 3.4.2 (2025-12-17)
 =======================================
 
