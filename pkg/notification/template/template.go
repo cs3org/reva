@@ -27,7 +27,10 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
+	"strings"
 	textTemplate "text/template"
+	"time"
 
 	"github.com/cs3org/reva/v3/pkg/notification/handler"
 	"github.com/mitchellh/mapstructure"
@@ -134,6 +137,29 @@ func parseTmplFile(path, name string) (any, error) {
 		return textTemplate.New(name).Parse("")
 	}
 
+	// functions that can be used in templates
+	funcMap := map[string]any{
+		// String operations
+		"split":    strings.Split,
+		"join":     strings.Join,
+		"trim":     strings.TrimSpace,
+		"contains": strings.Contains,
+		"replace":  strings.Replace,
+
+		// Path operations
+		"base":  filepath.Base,
+		"dir":   filepath.Dir,
+		"clean": filepath.Clean,
+
+		// Conversion
+		"atoi":   strconv.Atoi,
+		"atoi64": strconv.ParseInt,
+		"ftoa":   strconv.FormatFloat,
+
+		// Date/time
+		"now": time.Now,
+	}
+
 	ext := filepath.Ext(path)
 	f, err := os.Open(path)
 	if err != nil {
@@ -151,14 +177,14 @@ func parseTmplFile(path, name string) (any, error) {
 
 	switch ext {
 	case ".txt":
-		tmpl, err := textTemplate.New(name).Parse(string(data))
+		tmpl, err := textTemplate.New(name).Funcs(funcMap).Parse(string(data))
 		if err != nil {
 			return nil, err
 		}
 
 		return tmpl, nil
 	case ".html":
-		tmpl, err := htmlTemplate.New(name).Parse(string(data))
+		tmpl, err := htmlTemplate.New(name).Funcs(funcMap).Parse(string(data))
 		if err != nil {
 			return nil, err
 		}
