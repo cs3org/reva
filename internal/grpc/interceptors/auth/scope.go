@@ -22,6 +22,7 @@ import (
 	"context"
 	"path"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -88,14 +89,12 @@ func expandAndVerifyScope(ctx context.Context, req any, tokenScope map[string]*a
 				log.Err(err).Msgf("error resolving reference %s under scope %+v", ref.String(), k)
 			}
 		}
-	} else {
-		log.Trace().Msgf("Token scope is not ok. req:%+v, tokenScope:%+v", req, tokenScope)
 	}
-
 	if checkLightweightScope(ctx, req, tokenScope, client) {
 		return nil
 	}
 
+	log.Info().Interface("req", req).Str("rtype", reflect.TypeOf(req).String()).Interface("scope", tokenScope).Msg("Token scope is not ok for request")
 	return errtypes.PermissionDenied("access to resource not allowed within the assigned scope")
 }
 
@@ -142,6 +141,10 @@ func checkLightweightScope(ctx context.Context, req any, tokenScope map[string]*
 		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
 			InitiateFileDownload: true,
 		})
+	case *provider.GetLockRequest:
+		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
+			InitiateFileDownload: true,
+		})
 
 	// Editor role
 	case *provider.CreateContainerRequest:
@@ -182,6 +185,22 @@ func checkLightweightScope(ctx context.Context, req any, tokenScope map[string]*
 			return false
 		}
 		return hasPermissions(ctx, client, parent, &provider.ResourcePermissions{
+			InitiateFileUpload: true,
+		})
+	case *provider.SetArbitraryMetadataRequest:
+		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
+			InitiateFileUpload: true,
+		})
+	case *provider.SetLockRequest:
+		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
+			InitiateFileUpload: true,
+		})
+	case *provider.RefreshLockRequest:
+		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
+			InitiateFileUpload: true,
+		})
+	case *provider.UnlockRequest:
+		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
 			InitiateFileUpload: true,
 		})
 	}
