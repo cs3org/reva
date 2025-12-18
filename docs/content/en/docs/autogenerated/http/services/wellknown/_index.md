@@ -64,11 +64,3 @@ enable_webapp = false
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="enable_datatx" type="bool" default=false %}}
-Whether data transfers are enabled in OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L40)
-{{< highlight toml >}}
-[http.services.wellknown]
-enable_datatx = false
-{{< /highlight >}}
-{{% /dir %}}
-

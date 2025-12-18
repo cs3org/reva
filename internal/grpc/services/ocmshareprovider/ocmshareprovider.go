@@ -207,39 +207,12 @@ func (s *service) getWebappProtocol(share *ocm.Share) *ocmd.Webapp {
 	}
 }
 
-func (s *service) getDataTransferProtocol(ctx context.Context, share *ocm.Share) *ocmd.Datatx {
-	var size uint64
-	// get the path of the share
-	statRes, err := s.gateway.Stat(ctx, &providerpb.StatRequest{
-		Ref: &providerpb.Reference{
-			ResourceId: share.ResourceId,
-		},
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	path := statRes.GetInfo().Path
-	err = s.walk(ctx, path, func(path string, info *providerpb.ResourceInfo, err error) error {
-		if info.Type == providerpb.ResourceType_RESOURCE_TYPE_FILE {
-			size += info.Size
-		}
-		return nil
-	})
-	if err != nil {
-		panic(err)
-	}
-	return &ocmd.Datatx{
-		SourceURI: s.webdavURL(share),
-		Size:      size,
-	}
-}
-
 // walk traverses the path recursively to discover all resources in the tree.
 func (s *service) walk(ctx context.Context, path string, fn walker.WalkFunc) error {
 	return s.walker.Walk(ctx, path, fn)
 }
 
+// AccessMethods are protocols used by remote users to access a local OCM share.
 func (s *service) getProtocols(ctx context.Context, share *ocm.Share) ocmd.Protocols {
 	var p ocmd.Protocols
 	for _, m := range share.AccessMethods {
@@ -248,8 +221,6 @@ func (s *service) getProtocols(ctx context.Context, share *ocm.Share) ocmd.Proto
 			p = append(p, s.getWebdavProtocol(share, t))
 		case *ocm.AccessMethod_WebappOptions:
 			p = append(p, s.getWebappProtocol(share))
-		case *ocm.AccessMethod_TransferOptions:
-			p = append(p, s.getDataTransferProtocol(ctx, share))
 		}
 	}
 	return p

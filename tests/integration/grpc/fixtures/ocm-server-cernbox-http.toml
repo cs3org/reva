@@ -28,4 +28,3 @@ ocm_prefix = "ocm"
 provider = "Reva for CERNBox"
 endpoint = "http://{{cernboxhttp_address}}"
 enable_webapp = true
-enable_datatx = true

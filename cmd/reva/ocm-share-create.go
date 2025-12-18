@@ -206,9 +206,6 @@ func getAccessMethods(webdav, webapp, datatx bool, rol string) ([]*ocm.AccessMet
 		}
 		m = append(m, ocmshare.NewWebappAccessMethod(v))
 	}
-	if datatx {
-		m = append(m, ocmshare.NewTransferAccessMethod())
-	}
 	return m, nil
 }
 
@@ -219,7 +216,7 @@ func getOCMSharePerm(p string) (*provider.ResourcePermissions, error) {
 	case editorPermission:
 		return conversions.NewEditorRole().CS3ResourcePermissions(), nil
 	}
-	return nil, errors.New("invalid rol: " + p)
+	return nil, errors.New("invalid role: " + p)
 }
 
 func getOCMViewMode(p string) (appprovider.ViewMode, error) {
@@ -229,5 +226,5 @@ func getOCMViewMode(p string) (appprovider.ViewMode, error) {
 	case editorPermission:
 		return appprovider.ViewMode_VIEW_MODE_READ_WRITE, nil
 	}
-	return 0, errors.New("invalid rol: " + p)
+	return 0, errors.New("invalid role: " + p)
 }
