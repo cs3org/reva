@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strings"
 	"time"
 
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -885,10 +886,26 @@ func (s *svc) getLinkUpdates(ctx context.Context, link *linkv1beta1.PublicShare,
 	// Check for setting NotifyUploads
 	if len(permission.LibreGraphPermissionsActions) > 0 {
 		if slices.Contains(permission.LibreGraphPermissionsActions, "notifyUploads") {
-			updates = append(updates, &linkv1beta1.UpdatePublicShareRequest_Update{
-				Type:          linkv1beta1.UpdatePublicShareRequest_Update_TYPE_NOTIFYUPLOADS,
-				NotifyUploads: true,
-			})
+			// Now we check: for the user itself, or a third party notification?
+			if len(permission.GrantedToIdentities) > 0 {
+				receivers := []string{}
+				for _, identity := range permission.GrantedToIdentities {
+					if identity.User != nil && identity.User.Id != nil {
+						receivers = append(receivers, *identity.User.Id)
+					} else if identity.Group != nil && identity.Group.Id != nil {
+						receivers = append(receivers, *identity.Group.Id)
+					}
+				}
+				updates = append(updates, &linkv1beta1.UpdatePublicShareRequest_Update{
+					Type:                         linkv1beta1.UpdatePublicShareRequest_Update_TYPE_NOTIFYUPLOADSEXTRARECIPIENTS,
+					NotifyUploadsExtraRecipients: strings.Join(receivers, ","),
+				})
+			} else {
+				updates = append(updates, &linkv1beta1.UpdatePublicShareRequest_Update{
+					Type:          linkv1beta1.UpdatePublicShareRequest_Update_TYPE_NOTIFYUPLOADS,
+					NotifyUploads: true,
+				})
+			}
 		}
 	} else {
 		if link.NotifyUploads {

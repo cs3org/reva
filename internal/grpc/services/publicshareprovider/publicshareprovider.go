@@ -291,7 +291,7 @@ func (s *service) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicS
 		log.Error().Msg("error getting user from context")
 	}
 
-	share, err := s.sm.GetPublicShare(ctx, u, req.Ref, false)
+	_, err := s.sm.GetPublicShare(ctx, u, req.Ref, false)
 	if err != nil {
 		return &link.UpdatePublicShareResponse{
 			Status: status.NewNotFound(ctx, "share not found"),
@@ -299,27 +299,27 @@ func (s *service) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicS
 	}
 
 	if s.notificationHelper != nil {
-		if !share.NotifyUploads && req.Update.NotifyUploads {
-			n := &notification.Notification{
-				TemplateName: "sharedfolder-upload-mail",
-				Ref:          req.Ref.GetId().OpaqueId,
-				Recipients:   []string{u.Mail},
-			}
-
-			s.notificationHelper.RegisterNotification(n)
-		} else if share.NotifyUploads && !req.Update.NotifyUploads {
-			s.notificationHelper.UnregisterNotification(req.Ref.GetId().OpaqueId)
-		}
-
-		if share.NotifyUploadsExtraRecipients != req.Update.NotifyUploadsExtraRecipients {
-			if len(req.Update.NotifyUploadsExtraRecipients) > 0 {
+		if req.Update.Type == link.UpdatePublicShareRequest_Update_TYPE_NOTIFYUPLOADS {
+			if req.Update.NotifyUploads {
 				n := &notification.Notification{
 					TemplateName: "sharedfolder-upload-mail",
 					Ref:          req.Ref.GetId().OpaqueId,
-					Recipients:   []string{u.Mail, req.Update.NotifyUploadsExtraRecipients},
+					Recipients:   []string{u.Mail},
 				}
+
 				s.notificationHelper.RegisterNotification(n)
+			} else {
+				s.notificationHelper.UnregisterNotification(req.Ref.GetId().OpaqueId)
 			}
+		}
+
+		if req.Update.Type == link.UpdatePublicShareRequest_Update_TYPE_NOTIFYUPLOADSEXTRARECIPIENTS {
+			n := &notification.Notification{
+				TemplateName: "sharedfolder-upload-mail",
+				Ref:          req.Ref.GetId().OpaqueId,
+				Recipients:   []string{u.Mail, req.Update.NotifyUploadsExtraRecipients},
+			}
+			s.notificationHelper.RegisterNotification(n)
 		}
 	}
 
