@@ -283,12 +283,15 @@ func (s *service) listSpacesByType(ctx context.Context, req *provider.ListStorag
 	return sp, nil
 }
 
+// decorateProjects adds quota and mtime to each project.
+// If it fails to decorate a project, it is skipped.
 func (s *service) decorateProjects(ctx context.Context, projects []*provider.StorageSpace) ([]*provider.StorageSpace, error) {
 	log := appctx.GetLogger(ctx)
 	filtered := []*provider.StorageSpace{}
 	for _, proj := range projects {
 		timeout, cancel := context.WithTimeout(ctx, s.timeoutSkipSpaces)
 		defer cancel()
+		log.Debug().Msgf("timeout %f", s.timeoutSkipSpaces.Seconds())
 		err := s.decorateProject(timeout, proj)
 		if err != nil {
 			log.Warn().Err(err).Msgf("Failed to decorate project %s, skipping it", proj.Name)

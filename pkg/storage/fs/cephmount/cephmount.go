@@ -27,6 +27,8 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"os/exec"
+	"os/user"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -34,6 +36,7 @@ import (
 	"syscall"
 	"time"
 
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typepb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -331,9 +334,10 @@ func (fs *cephmountfs) fileAsResourceInfo(path string, info os.FileInfo, mdKeys 
 
 	// Create resource ID using inode number
 	resourceId := &provider.ResourceId{
-		StorageId: "cephmount",
-		OpaqueId:  strconv.FormatUint(stat.Ino, 10),
+		OpaqueId: strconv.FormatUint(stat.Ino, 10),
 	}
+
+	owner, _ := user.LookupId(fmt.Sprint(stat.Uid))
 
 	ri := &provider.ResourceInfo{
 		Type:     resourceType,
@@ -341,27 +345,29 @@ func (fs *cephmountfs) fileAsResourceInfo(path string, info os.FileInfo, mdKeys 
 		Checksum: &provider.ResourceChecksum{},
 		Size:     size,
 		Mtime:    &typepb.Timestamp{Seconds: uint64(info.ModTime().Unix())},
-		Path:     fs.fromChroot(path),                   // Convert chroot path back to external path
-		Owner:    &userv1beta1.UserId{OpaqueId: "root"}, // Default owner
+		Path:     fs.fromChroot(path), // Convert chroot path back to external path
+		Owner:    &userv1beta1.UserId{OpaqueId: owner.Username},
 		PermissionSet: &provider.ResourcePermissions{
-			AddGrant:             true,
-			CreateContainer:      true,
-			Delete:               true,
 			GetPath:              true,
 			GetQuota:             true,
 			InitiateFileDownload: true,
-			InitiateFileUpload:   true,
-			ListContainer:        true,
-			ListFileVersions:     false,
 			ListGrants:           true,
-			ListRecycle:          false,
-			Move:                 true,
-			PurgeRecycle:         false,
-			RemoveGrant:          true,
-			RestoreFileVersion:   false,
-			RestoreRecycleItem:   false,
+			ListContainer:        true,
+			ListFileVersions:     true,
+			ListRecycle:          true,
 			Stat:                 true,
-			UpdateGrant:          true,
+			InitiateFileUpload:   true,
+			RestoreFileVersion:   true,
+			RestoreRecycleItem:   true,
+			Move:                 true,
+			CreateContainer:      true,
+			Delete:               true,
+			PurgeRecycle:         true,
+
+			AddGrant:    true,
+			RemoveGrant: true,
+			UpdateGrant: true,
+			DenyGrant:   true,
 		},
 		ArbitraryMetadata: &provider.ArbitraryMetadata{Metadata: map[string]string{}},
 	}
@@ -837,18 +843,10 @@ func (fs *cephmountfs) AddGrant(ctx context.Context, ref *provider.Reference, g 
 
 	fs.logOperation(ctx, "AddGrant", path)
 
-	// Store grant information as extended attributes using user's thread
-	grantData, err := json.Marshal(g)
+	// Use setfacl system command to set permissions
+	err = fs.addGrantViaSetfacl(ctx, path, g)
 	if err != nil {
-		wrappedErr := errors.Wrap(err, "cephmount: failed to marshal grant")
-		fs.logOperationError(ctx, "AddGrant", path, wrappedErr)
-		return wrappedErr
-	}
-
-	grantKey := fmt.Sprintf("user.grant.%s", g.Grantee.GetUserId().GetOpaqueId())
-	err = fs.setXattrAsUser(ctx, path, grantKey, grantData)
-	if err != nil {
-		wrappedErr := errors.Wrap(err, "cephmount: failed to set grant xattr")
+		wrappedErr := errors.Wrap(err, "cephmount: failed to add grant via setfacl")
 		fs.logOperationError(ctx, "AddGrant", path, wrappedErr)
 		return wrappedErr
 	}
@@ -866,78 +864,134 @@ func (fs *cephmountfs) RemoveGrant(ctx context.Context, ref *provider.Reference,
 
 	fs.logOperation(ctx, "RemoveGrant", path)
 
-	grantKey := fmt.Sprintf("user.grant.%s", g.Grantee.GetUserId().GetOpaqueId())
-	err = fs.removeXattrAsUser(ctx, path, grantKey)
+	// Use setfacl system command to remove permissions
+	err = fs.removeGrantViaSetfacl(ctx, path, g)
 	if err != nil {
-		// Ignore if the attribute doesn't exist
-		if !strings.Contains(err.Error(), "no such attribute") {
-			wrappedErr := errors.Wrap(err, "cephmount: failed to remove grant xattr")
-			fs.logOperationError(ctx, "RemoveGrant", path, wrappedErr)
-			return wrappedErr
-		}
+		wrappedErr := errors.Wrap(err, "cephmount: failed to remove grant via setfacl")
+		fs.logOperationError(ctx, "RemoveGrant", path, wrappedErr)
+		return wrappedErr
 	}
 
 	return nil
 }
 
 func (fs *cephmountfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
-	// For simplicity, update is the same as add
+	// Update is the same as add for setfacl
 	return fs.AddGrant(ctx, ref, g)
 }
 
 func (fs *cephmountfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) (err error) {
-	path, err := fs.resolveRef(ctx, ref)
-	if err != nil {
-		return err
+	// Deny is the same as remove
+	grant := &provider.Grant{
+		Grantee:     g,
+		Permissions: &provider.ResourcePermissions{},
 	}
-
-	fs.logOperation(ctx, "DenyGrant", path)
-
-	grantKey := fmt.Sprintf("user.grant.%s", g.GetUserId().GetOpaqueId())
-	err = fs.removeXattrAsUser(ctx, path, grantKey)
-	if err != nil {
-		// Ignore if the attribute doesn't exist
-		if !strings.Contains(err.Error(), "no such attribute") {
-			return errors.Wrap(err, "cephmount: failed to deny grant")
-		}
-	}
-
-	return nil
+	return fs.RemoveGrant(ctx, ref, grant)
 }
 
 func (fs *cephmountfs) ListGrants(ctx context.Context, ref *provider.Reference) (glist []*provider.Grant, err error) {
 	path, err := fs.resolveRef(ctx, ref)
 	if err != nil {
-		return nil, err
+		wrappedErr := errors.Wrap(err, "cephmount: failed to resolve reference")
+		fs.logOperationError(ctx, "ListGrants", "", wrappedErr)
+		return nil, wrappedErr
 	}
 
 	fs.logOperation(ctx, "ListGrants", path)
 
-	// List all grant-related extended attributes on user's thread
-	attrs, err := fs.listXattrsAsUser(ctx, path)
+	fullPath := filepath.Join(fs.chrootDir, path)
+
+	// Use getfacl to read ACLs
+	cmd := exec.CommandContext(ctx, "getfacl", "--omit-header", "--numeric", fullPath)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, errors.Wrap(err, "cephmount: failed to list xattrs")
+		// No ACLs or error - return empty list
+		return []*provider.Grant{}, nil
 	}
 
-	for _, attr := range attrs {
-		if strings.HasPrefix(attr, "user.grant.") {
-			data, err := fs.getXattrAsUser(ctx, path, attr)
+	log := appctx.GetLogger(ctx)
+
+	// Parse getfacl output
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Parse ACL entry format: user:uid:rwx or group:gid:rwx (numeric due to --numeric flag)
+		parts := strings.Split(line, ":")
+		if len(parts) < 3 {
+			continue
+		}
+
+		entryType := parts[0]
+		identifier := parts[1] // This is numeric UID or GID
+		permsStr := parts[2]
+
+		// Skip base entries (owner, group, other, mask)
+		if identifier == "" || entryType == "mask" || entryType == "other" {
+			continue
+		}
+
+		// Convert rwx string to ResourcePermissions
+		perms := fs.aclStringToPermissions(permsStr)
+
+		var grant *provider.Grant
+		switch entryType {
+		case "user":
+			// Resolve numeric UID back to username
+			userInfo, err := user.LookupId(identifier)
 			if err != nil {
+				// Cannot resolve UID to username - skip this entry
+				log.Debug().
+					Str("uid", identifier).
+					Err(err).
+					Msg("cephmount: skipping user ACL entry - cannot resolve UID to username")
 				continue
 			}
 
-			var grant provider.Grant
-			if err := json.Unmarshal(data, &grant); err != nil {
+			grant = &provider.Grant{
+				Grantee: &provider.Grantee{
+					Type: provider.GranteeType_GRANTEE_TYPE_USER,
+					Id:   &provider.Grantee_UserId{UserId: &userv1beta1.UserId{OpaqueId: userInfo.Username}},
+				},
+				Permissions: perms,
+			}
+
+		case "group":
+			// Resolve numeric GID back to groupname
+			groupInfo, err := user.LookupGroupId(identifier)
+			if err != nil {
+				// Cannot resolve GID to groupname - skip this entry
+				log.Debug().
+					Str("gid", identifier).
+					Err(err).
+					Msg("cephmount: skipping group ACL entry - cannot resolve GID to groupname")
 				continue
 			}
 
-			glist = append(glist, &grant)
+			grant = &provider.Grant{
+				Grantee: &provider.Grantee{
+					Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+					Id:   &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: groupInfo.Name}},
+				},
+				Permissions: perms,
+			}
+
+		default:
+			continue
+		}
+
+		if grant != nil {
+			glist = append(glist, grant)
 		}
 	}
 
 	return glist, nil
 }
 
+// updatePerms updates ResourcePermissions based on rwx string
 func (fs *cephmountfs) GetQuota(ctx context.Context, ref *provider.Reference) (total uint64, used uint64, err error) {
 	log := appctx.GetLogger(ctx)
 
@@ -947,20 +1001,28 @@ func (fs *cephmountfs) GetQuota(ctx context.Context, ref *provider.Reference) (t
 		return 0, 0, errors.Wrap(err, "cephmount: error resolving home path")
 	}
 
-	// Get quota from extended attributes or use default
-	quotaData, err := xattr.Get(homePath, "user.quota.max_bytes")
+	// log homepath
+	log.Debug().Str("operation", "GetQuota").
+		Str("home_path", homePath).
+		Str("full_filesystem_path", filepath.Join(fs.chrootDir, homePath)).
+		Msg("cephmount GetQuota resolved home path")
+
+	// Get max quota from extended attributes or use default
+	fullHomePath := filepath.Join(fs.chrootDir, homePath)
+	maxQuotaData, err := xattr.Get(fullHomePath, "user.quota.max_bytes")
 	if err != nil {
-		log.Debug().Msg("cephmount: user quota bytes not set, using default")
+		log.Debug().Msg("cephmount: user.quota.max_bytes xattr not set, using default")
 		total = fs.conf.UserQuotaBytes
 	} else {
-		total, _ = strconv.ParseUint(string(quotaData), 10, 64)
+		total, _ = strconv.ParseUint(string(maxQuotaData), 10, 64)
 	}
 
-	// Calculate used space by walking the directory
-	used, err = fs.calculateDirectorySize(homePath)
+	// Get used quota from extended attributes or use default
+	usedQuotaData, err := xattr.Get(fullHomePath, "ceph.dir.rbytes")
 	if err != nil {
-		log.Debug().Err(err).Msg("failed to calculate directory size")
-		used = 0
+		log.Debug().Msg("cephmount: ceph.dir.rbytes xattr not set, using 0")
+	} else {
+		used, _ = strconv.ParseUint(string(usedQuotaData), 10, 64)
 	}
 
 	return total, used, nil
@@ -1011,11 +1073,12 @@ func (fs *cephmountfs) SetArbitraryMetadata(ctx context.Context, ref *provider.R
 
 	fs.logOperation(ctx, "SetArbitraryMetadata", path)
 
+	fullPath := filepath.Join(fs.chrootDir, path)
 	for k, v := range md.Metadata {
 		if !strings.HasPrefix(k, xattrUserNs) {
 			k = xattrUserNs + k
 		}
-		if err := xattr.Set(path, k, []byte(v)); err != nil {
+		if err := xattr.Set(fullPath, k, []byte(v)); err != nil {
 			wrappedErr := errors.Wrap(err, "cephmount: failed to set xattr")
 			fs.logOperationError(ctx, "SetArbitraryMetadata", path, wrappedErr)
 			return wrappedErr
@@ -1035,11 +1098,12 @@ func (fs *cephmountfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider
 
 	fs.logOperation(ctx, "UnsetArbitraryMetadata", path)
 
+	fullPath := filepath.Join(fs.chrootDir, path)
 	for _, key := range keys {
 		if !strings.HasPrefix(key, xattrUserNs) {
 			key = xattrUserNs + key
 		}
-		if err := xattr.Remove(path, key); err != nil {
+		if err := xattr.Remove(fullPath, key); err != nil {
 			// Ignore if the attribute doesn't exist
 			if !strings.Contains(err.Error(), "no such attribute") {
 				wrappedErr := errors.Wrap(err, "cephmount: failed to remove xattr")
@@ -1170,7 +1234,8 @@ func (fs *cephmountfs) GetLock(ctx context.Context, ref *provider.Reference) (*p
 	fs.logOperation(ctx, "GetLock", path)
 
 	// Try to read lock metadata
-	buf, err := xattr.Get(path, xattrLock)
+	fullPath := filepath.Join(fs.chrootDir, path)
+	buf, err := xattr.Get(fullPath, xattrLock)
 	if err != nil {
 		if strings.Contains(err.Error(), "no such attribute") {
 			return nil, errtypes.NotFound("file was not locked")
@@ -1256,6 +1321,247 @@ func (fs *cephmountfs) Unlock(ctx context.Context, ref *provider.Reference, lock
 
 	// Remove lock metadata
 	return fs.UnsetArbitraryMetadata(ctx, ref, []string{xattrLock})
+}
+
+// resolveGranteeIdentifier resolves a grantee (user or group) to their system identifier (UID or GID)
+func (fs *cephmountfs) resolveGranteeIdentifier(ctx context.Context, grant *provider.Grant) (granteeType, identifier string, err error) {
+	log := appctx.GetLogger(ctx)
+
+	switch grant.Grantee.Type {
+	case provider.GranteeType_GRANTEE_TYPE_USER:
+		userId := grant.Grantee.GetUserId()
+		if userId == nil {
+			return "", "", errors.New("cephmount: user grantee without user ID")
+		}
+		username := userId.OpaqueId
+
+		userInfo, err := user.Lookup(username)
+		if err != nil {
+			return "", "", errors.Errorf("cephmount: user '%s' does not exist in /etc/passwd. "+
+				"All users must be available on the local system. Original error: %v", username, err)
+		}
+		log.Debug().
+			Str("username", username).
+			Str("uid", userInfo.Uid).
+			Msg("cephmount: resolved username to UID")
+
+		return "u", userInfo.Uid, nil
+
+	case provider.GranteeType_GRANTEE_TYPE_GROUP:
+		groupId := grant.Grantee.GetGroupId()
+		if groupId == nil {
+			return "", "", errors.New("cephmount: group grantee without group ID")
+		}
+		groupname := groupId.OpaqueId
+
+		groupInfo, err := user.LookupGroup(groupname)
+		if err != nil {
+			return "", "", errors.Errorf("cephmount: group '%s' does not exist in /etc/group. "+
+				"All groups must be available on the local system. Original error: %v", groupname, err)
+		}
+		log.Debug().
+			Str("groupname", groupname).
+			Str("gid", groupInfo.Gid).
+			Msg("cephmount: resolved groupname to GID")
+
+		return "g", groupInfo.Gid, nil
+
+	default:
+		return "", "", errors.New("cephmount: invalid grantee type")
+	}
+}
+
+// addGrantViaSetfacl adds a grant using the setfacl system command
+func (fs *cephmountfs) addGrantViaSetfacl(ctx context.Context, path string, grant *provider.Grant) error {
+	log := appctx.GetLogger(ctx)
+	fullPath := filepath.Join(fs.chrootDir, path)
+
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		return errors.Wrap(err, "cephmount: failed to stat path")
+	}
+
+	granteeType, identifier, err := fs.resolveGranteeIdentifier(ctx, grant)
+	if err != nil {
+		return err
+	}
+
+	aclEntry := fmt.Sprintf("%s:%s:%s", granteeType, identifier, fs.permissionsToACLString(grant.Permissions))
+
+	// Build setfacl command
+	args := []string{"-m", aclEntry}
+	if info.IsDir() {
+		// Also set default ACLs for directories
+		args = append(args, "-m", "d:"+aclEntry)
+		// Recursive flag must come last before the path
+		args = append(args, "-R")
+	}
+	args = append(args, fullPath)
+
+	log.Debug().
+		Str("path", fullPath).
+		Str("acl_entry", aclEntry).
+		Strs("args", args).
+		Msg("cephmount: executing setfacl")
+
+	// Execute setfacl
+	cmd := exec.CommandContext(ctx, "setfacl", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("path", fullPath).
+			Str("output", string(output)).
+			Msg("cephmount: setfacl failed")
+		return errors.Wrapf(err, "cephmount: setfacl failed: %s", string(output))
+	}
+
+	log.Debug().
+		Str("path", fullPath).
+		Msg("cephmount: setfacl succeeded")
+
+	return nil
+}
+
+// removeGrantViaSetfacl removes a grant using the setfacl system command
+func (fs *cephmountfs) removeGrantViaSetfacl(ctx context.Context, path string, grant *provider.Grant) error {
+	log := appctx.GetLogger(ctx)
+	fullPath := filepath.Join(fs.chrootDir, path)
+
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		return errors.Wrap(err, "cephmount: failed to stat path")
+	}
+
+	granteeType, identifier, err := fs.resolveGranteeIdentifier(ctx, grant)
+	if err != nil {
+		return err
+	}
+
+	aclEntry := fmt.Sprintf("%s:%s", granteeType, identifier)
+
+	// Build setfacl command with -x to remove
+	args := []string{"-x", aclEntry}
+	if info.IsDir() {
+		// Also remove from default ACLs for directories
+		args = append(args, "-x", "d:"+aclEntry)
+		// Recursive flag must come last before the path
+		args = append(args, "-R")
+	}
+	args = append(args, fullPath)
+
+	log.Debug().
+		Str("path", fullPath).
+		Str("acl_entry", aclEntry).
+		Strs("args", args).
+		Msg("cephmount: executing setfacl for removal")
+
+	// Execute setfacl
+	cmd := exec.CommandContext(ctx, "setfacl", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// Ignore error if entry doesn't exist
+		if !strings.Contains(string(output), "No such file or directory") {
+			log.Error().
+				Err(err).
+				Str("path", fullPath).
+				Str("output", string(output)).
+				Msg("cephmount: setfacl removal failed")
+			return errors.Wrapf(err, "cephmount: setfacl removal failed: %s", string(output))
+		}
+	}
+
+	log.Debug().
+		Str("path", fullPath).
+		Msg("cephmount: setfacl removal succeeded")
+
+	return nil
+}
+
+// aclStringToPermissions converts ACL rwx string to CS3 ResourcePermissions
+func (fs *cephmountfs) aclStringToPermissions(aclStr string) *provider.ResourcePermissions {
+	perms := &provider.ResourcePermissions{}
+
+	if strings.Contains(aclStr, "r") {
+		perms.Stat = true
+		perms.GetPath = true
+		perms.GetQuota = true
+		perms.InitiateFileDownload = true
+		perms.ListGrants = true
+	}
+
+	if strings.Contains(aclStr, "w") {
+		perms.CreateContainer = true
+		perms.Delete = true
+		perms.InitiateFileUpload = true
+		perms.Move = true
+		perms.PurgeRecycle = true
+		perms.RestoreFileVersion = true
+		perms.RestoreRecycleItem = true
+		// TODO(lopresti) we should implement an additional xattr to store whether the user has
+		// permissions to add/edit permissions. For now write access also grants that so this is readily
+		// usable for personal spaces.
+		perms.AddGrant = true
+		perms.UpdateGrant = true
+		perms.RemoveGrant = true
+		perms.DenyGrant = true
+	}
+
+	if strings.Contains(aclStr, "x") {
+		perms.ListRecycle = true
+		perms.ListContainer = true
+		perms.ListFileVersions = true
+	}
+
+	return perms
+}
+
+// permissionsToACLString converts CS3 ResourcePermissions to ACL rwx string
+func (fs *cephmountfs) permissionsToACLString(perms *provider.ResourcePermissions) string {
+	var result string
+
+	// Read permission
+	if perms.Stat || perms.GetPath || perms.GetQuota || perms.ListGrants || perms.InitiateFileDownload {
+		result += "r"
+	} else {
+		result += "-"
+	}
+
+	// Write permission
+	if perms.CreateContainer || perms.Move || perms.Delete || perms.InitiateFileUpload ||
+		perms.AddGrant || perms.UpdateGrant || perms.RemoveGrant || perms.DenyGrant ||
+		perms.RestoreFileVersion || perms.PurgeRecycle || perms.RestoreRecycleItem {
+		result += "w"
+	} else {
+		result += "-"
+	}
+
+	// Execute permission
+	if perms.ListRecycle || perms.ListContainer || perms.ListFileVersions {
+		result += "x"
+	} else {
+		result += "-"
+	}
+
+	return result
+}
+
+// permToInt converts ResourcePermissions to rwx bits
+func permToInt(rp *provider.ResourcePermissions) (result uint16) {
+	if rp == nil {
+		return 0b111 // rwx
+	}
+	if rp.Stat || rp.GetPath || rp.GetQuota || rp.ListGrants || rp.InitiateFileDownload {
+		result |= 4
+	}
+	if rp.CreateContainer || rp.Move || rp.Delete || rp.InitiateFileUpload || rp.AddGrant || rp.UpdateGrant ||
+		rp.RemoveGrant || rp.DenyGrant || rp.RestoreFileVersion || rp.PurgeRecycle || rp.RestoreRecycleItem {
+		result |= 2
+	}
+	if rp.ListRecycle || rp.ListContainer || rp.ListFileVersions {
+		result |= 1
+	}
+	return
 }
 
 // Helper function from the original ceph implementation

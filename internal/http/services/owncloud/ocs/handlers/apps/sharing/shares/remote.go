@@ -30,9 +30,9 @@ import (
 	providerpb "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
-	ocmd "github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	ocmd "github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -290,7 +290,7 @@ func (h *Handler) mustGetRemoteUser(ctx context.Context, gw gatewayv1beta1.Gatew
 	}
 	userRes, err := gw.GetAcceptedUser(ctx, &invitepb.GetAcceptedUserRequest{
 		RemoteUserId: remoteUserId,
-		Opaque: o,
+		Opaque:       o,
 	})
 	if err != nil {
 		return &userIdentifiers{}
