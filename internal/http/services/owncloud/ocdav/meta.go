@@ -49,11 +49,6 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
-		log.Debug().
-			Str("raw_id", id).
-			Str("url_path", r.URL.Path).
-			Msg("meta: received resource ID from Web UI")
-
 		rid, ok := spaces.ParseResourceID(id)
 		if !ok {
 			// If this fails, client might be non-spaces
@@ -75,11 +70,6 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 		switch head {
 		case "v":
-			log.Debug().
-				Str("storage_id", rid.StorageId).
-				Str("space_id", rid.SpaceId).
-				Str("opaque_id", rid.OpaqueId).
-				Msg("meta: forwarding to versions handler")
 			h.VersionsHandler.Handler(s, rid).ServeHTTP(w, r)
 		default:
 			w.WriteHeader(http.StatusNotFound)
