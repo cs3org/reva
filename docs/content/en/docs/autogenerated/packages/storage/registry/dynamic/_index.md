@@ -6,10 +6,10 @@ description: >
   Configuration for the dynamic service
 ---
 
-# _struct: config_
+# _struct: Config_
 
 {{% dir name="rules" type="map[string]string" default=nil %}}
-A map from mountID to provider address [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/registry/dynamic/dynamic.go#L56)
+A map from mountID to provider address [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/registry/dynamic/dynamic.go#L58)
 {{< highlight toml >}}
 [storage.registry.dynamic]
 rules = nil
@@ -17,7 +17,7 @@ rules = nil
 {{% /dir %}}
 
 {{% dir name="rewrites" type="map[string]string" default=nil %}}
-A map from a path to an template alias to use when resolving [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/registry/dynamic/dynamic.go#L57)
+A map from a path to an template alias to use when resolving [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/registry/dynamic/dynamic.go#L59)
 {{< highlight toml >}}
 [storage.registry.dynamic]
 rewrites = nil
@@ -25,7 +25,7 @@ rewrites = nil
 {{% /dir %}}
 
 {{% dir name="aliases" type="map[string]string" default=nil %}}
-A map containing storageID aliases, can contain simple brackets [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/registry/dynamic/dynamic.go#L58)
+A map containing storageID aliases, can contain simple brackets [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/registry/dynamic/dynamic.go#L60)
 {{< highlight toml >}}
 [storage.registry.dynamic]
 aliases = nil

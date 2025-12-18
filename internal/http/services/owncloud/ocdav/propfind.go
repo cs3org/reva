@@ -50,7 +50,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -91,15 +90,15 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 		return
 	}
 
-	parentInfo, resourceInfos, ok := s.getResourceInfos(ctx, w, r, pf, ref, false, sublog)
+	parentInfo, resourceInfos, hrefBase, ok := s.getResourceInfos(ctx, w, r, pf, ref, sublog)
 	if !ok {
 		// getResourceInfos handles responses in case of an error so we can just return here.
 		return
 	}
-	s.propfindResponse(ctx, w, r, ns, pf, parentInfo, resourceInfos, sublog)
+	s.propfindResponse(ctx, w, r, ns, hrefBase, pf, parentInfo, resourceInfos, sublog)
 }
 
-func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf propfindXML, parentInfo *provider.ResourceInfo, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
+func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace, hrefBase string, pf propfindXML, parentInfo *provider.ResourceInfo, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
 	user, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -167,12 +166,8 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 	} else {
 		log.Error().Err(err).Msg("propfindResponse: couldn't list user shares")
 	}
-	href := r.URL.Path
-	if ctxPath := ctx.Value(ctxKeyIncomingURL); ctxPath != nil {
-		href = ctxPath.(string)
-	}
 
-	propRes, err := s.multistatusResponse(ctx, &pf, resourceInfos, parentInfo, namespace, href, usershares, linkshares)
+	propRes, err := s.multistatusResponse(ctx, &pf, resourceInfos, parentInfo, namespace, hrefBase, usershares, linkshares)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -200,7 +195,8 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 	}
 }
 
-func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf propfindXML, ref *provider.Reference, spacesPropfind bool, log zerolog.Logger) (*provider.ResourceInfo, []*provider.ResourceInfo, bool) {
+// returns parent, children, hrefBase, OK
+func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf propfindXML, ref *provider.Reference, log zerolog.Logger) (*provider.ResourceInfo, []*provider.ResourceInfo, string, bool) {
 	depth := r.Header.Get(HeaderDepth)
 	if depth == "" {
 		depth = "1"
@@ -215,14 +211,14 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			message: m,
 		}, "")
 		HandleWebdavError(&log, w, b, err)
-		return nil, nil, false
+		return nil, nil, "", false
 	}
 
 	client, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
-		return nil, nil, false
+		return nil, nil, "", false
 	}
 
 	var metadataKeys []string
@@ -250,7 +246,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 	if err != nil {
 		log.Error().Err(err).Interface("req", req).Msg("error sending a stat request to the gateway")
 		w.WriteHeader(http.StatusInternalServerError)
-		return nil, nil, false
+		return nil, nil, "", false
 	} else if res.Status.Code != rpc.Code_CODE_OK {
 		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusNotFound)
@@ -260,25 +256,26 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 				message: m,
 			}, "")
 			HandleWebdavError(&log, w, b, err)
-			return nil, nil, false
+			return nil, nil, "", false
 		}
 		HandleErrorStatus(&log, w, res.Status)
-		return nil, nil, false
-	}
-
-	if spacesPropfind {
-		res.Info.Path = ref.Path
+		return nil, nil, "", false
 	}
 
 	parentInfo := res.Info
 	resourceInfos := []*provider.ResourceInfo{parentInfo}
 
+	hrefBase := r.URL.Path
+	if ctxPath := ctx.Value(ctxKeyIncomingURL); ctxPath != nil {
+		hrefBase = ctxPath.(string)
+	}
+
 	switch {
 	case depth == "0":
 		// https://www.ietf.org/rfc/rfc2518.txt:
 		// the method is to be applied only to the resource
-		return parentInfo, resourceInfos, true
-	case !spacesPropfind && parentInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER:
+		return parentInfo, resourceInfos, hrefBase, true
+	case parentInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER:
 		// The propfind is requested for a file that exists
 		// In this case, we can stat the parent directory and return both
 		parentPath := path.Dir(parentInfo.Path)
@@ -290,7 +287,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		if err != nil {
 			log.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
 			w.WriteHeader(http.StatusInternalServerError)
-			return nil, nil, false
+			return nil, nil, "", false
 		} else if parentRes.Status.Code != rpc.Code_CODE_OK {
 			if parentRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 				w.WriteHeader(http.StatusNotFound)
@@ -300,12 +297,15 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 					message: m,
 				}, "")
 				HandleWebdavError(&log, w, b, err)
-				return nil, nil, false
+				return nil, nil, "", false
 			}
 			HandleErrorStatus(&log, w, parentRes.Status)
-			return nil, nil, false
+			return nil, nil, "", false
 		}
 		parentInfo = parentRes.Info
+		// The incoming URL was not to a folder, but to the file itself.
+		// So the href we constructed up to now is wrong: it needs to be refering to the parent
+		hrefBase = path.Dir(hrefBase)
 
 	case parentInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1":
 		req := &provider.ListContainerRequest{
@@ -316,12 +316,12 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		if err != nil {
 			log.Error().Err(err).Msg("error sending list container grpc request")
 			w.WriteHeader(http.StatusInternalServerError)
-			return nil, nil, false
+			return nil, nil, "", false
 		}
 
 		if res.Status.Code != rpc.Code_CODE_OK {
 			HandleErrorStatus(&log, w, res.Status)
-			return nil, nil, false
+			return nil, nil, "", false
 		}
 		resourceInfos = append(resourceInfos, res.Infos...)
 
@@ -333,28 +333,19 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			// retrieve path on top of stack
 			path := stack[len(stack)-1]
 
-			var nRef *provider.Reference
-			if spacesPropfind {
-				nRef = &provider.Reference{
-					ResourceId: ref.ResourceId,
-					Path:       path,
-				}
-			} else {
-				nRef = &provider.Reference{Path: path}
-			}
 			req := &provider.ListContainerRequest{
-				Ref:                   nRef,
+				Ref:                   &provider.Reference{Path: path},
 				ArbitraryMetadataKeys: metadataKeys,
 			}
 			res, err := client.ListContainer(ctx, req)
 			if err != nil {
 				log.Error().Err(err).Str("path", path).Msg("error sending list container grpc request")
 				w.WriteHeader(http.StatusInternalServerError)
-				return nil, nil, false
+				return nil, nil, "", false
 			}
 			if res.Status.Code != rpc.Code_CODE_OK {
 				HandleErrorStatus(&log, w, res.Status)
-				return nil, nil, false
+				return nil, nil, "", false
 			}
 
 			stack = stack[:len(stack)-1]
@@ -362,9 +353,6 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			// check sub-containers in reverse order and add them to the stack
 			// the reversed order here will produce a more logical sorting of results
 			for i := len(res.Infos) - 1; i >= 0; i-- {
-				if spacesPropfind {
-					res.Infos[i].Path = utils.MakeRelativePath(filepath.Join(nRef.Path, res.Infos[i].Path))
-				}
 				if res.Infos[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 					stack = append(stack, res.Infos[i].Path)
 				}
@@ -380,7 +368,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		}
 	}
 
-	return parentInfo, resourceInfos, true
+	return parentInfo, resourceInfos, hrefBase, true
 }
 
 func requiresExplicitFetching(n *xml.Name) bool {
@@ -455,6 +443,7 @@ func (s *svc) multistatusResponse(ctx context.Context, pf *propfindXML, mds []*p
 	msg := `<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:" `
 	msg += `xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns">`
 	msg += string(responsesXML) + `</d:multistatus>`
+
 	return msg, nil
 }
 
@@ -718,8 +707,9 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						// If our client uses spaces, we try to use the spaces-encoded file id (storage$base32(spacePath)!inode)
 						fileId, err := spaces.EncodeResourceInfo(md)
 						if err != nil {
-							log.Error().Err(err).Any("md", md).Msg("Failed to encode file id")
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", spaces.EncodeResourceID(md.Id)))
+							sublog.Error().Err(err).Any("md", md).Msg("Failed to encode file id with EncodeResourceInfo")
+							fallbackId := spaces.EncodeResourceID(md.Id)
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", fallbackId))
 						} else {
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", fileId))
 						}

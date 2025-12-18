@@ -32,7 +32,7 @@ nats_prefix = "reva-notifications"
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="handlers" type="map[string]map[string]interface{}" default=nil %}}
+{{% dir name="handlers" type="map[string]map[string]any" default=nil %}}
 Settings for the different notification handlers. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/serverless/services/notifications/notifications.go#L50)
 {{< highlight toml >}}
 [serverless.services.notifications]

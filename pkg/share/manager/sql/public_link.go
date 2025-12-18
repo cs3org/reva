@@ -109,11 +109,8 @@ func (m *PublicShareMgr) CreatePublicShare(ctx context.Context, u *user.User, md
 		return nil, errors.Wrap(err, "failed to create id for PublicShare")
 	}
 
-	publiclink.BaseModel = model.BaseModel{
-		Id:      id,
-		ShareId: model.ShareID{ID: id},
-	}
-
+	publiclink.Id = id
+	publiclink.ShareId = model.ShareID{ID: id}
 	publiclink.UIDOwner = conversions.FormatUserID(md.Owner)
 	publiclink.UIDInitiator = conversions.FormatUserID(user.Id)
 	publiclink.InitialPath = md.Path
@@ -512,9 +509,7 @@ func emptyLinkWithId(id string) (*model.PublicLink, error) {
 	}
 	link := &model.PublicLink{
 		ProtoShare: model.ProtoShare{
-			BaseModel: model.BaseModel{
-				Id: uint(intId),
-			},
+			Id: uint(intId),
 		},
 	}
 	return link, nil
