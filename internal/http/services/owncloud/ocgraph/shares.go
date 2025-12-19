@@ -96,17 +96,31 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 
 	if s.c.OCMEnabled && !utils.IsLightweightUser(u) {
 		// include ocm shares in the response
-		ocmShareResp, err := gw.ListReceivedOCMShares(ctx, &ocm.ListReceivedOCMSharesRequest{})
+		ocmShareResp, err := gw.ListReceivedOCMShares(ctx, &ocm.ListReceivedOCMSharesRequest{
+			Filters: []*ocm.ListReceivedOCMSharesRequest_Filter{
+				{
+					Type: ocm.ListReceivedOCMSharesRequest_Filter_TYPE_SHARE_TYPE,
+					Term: &ocm.ListReceivedOCMSharesRequest_Filter_SharedResourceType{
+						SharedResourceType: ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE,
+					},
+				},
+				{
+					Type: ocm.ListReceivedOCMSharesRequest_Filter_TYPE_SHARE_TYPE,
+					Term: &ocm.ListReceivedOCMSharesRequest_Filter_SharedResourceType{
+						SharedResourceType: ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER,
+					},
+				},
+			},
+		})
 		if err != nil {
-			handleError(ctx, err, w)
 			log.Fatal().Err(err).Msg("ListReceivedOCMShares returned error - user will not be able to see their OCM shares")
+			handleError(ctx, err, w)
 		} else if ocmShareResp != nil {
 			if ocmShareResp.Status == nil || ocmShareResp.Status.Code != rpc.Code_CODE_OK {
 				handleRpcStatus(ctx, ocmShareResp.Status, "ocgraph: failed to perform ListReceivedOCMShares ", w)
 			}
 
 			for _, share := range ocmShareResp.Shares {
-				log.Debug().Any("share", share).Msg("processing received ocm share")
 				// TODO(lopresti): we should retrieve the remote user and pass it to OCMReceivedShareToDriveItem
 				// remoteUser, err := gw.GetAcceptedUser(ctx, &ocm.GetAcceptedUserRequest{...})
 				drive, err := s.OCMReceivedShareToDriveItem(ctx, share)

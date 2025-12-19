@@ -32,11 +32,11 @@ import (
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 )
 
-func convertFromCS3OCMShareType(shareType ocm.ShareType) model.OcmShareType {
+func convertFromCS3OCMShareType(shareType ocm.RecipientType) model.OcmShareType {
 	switch shareType {
-	case ocm.ShareType_SHARE_TYPE_USER:
+	case ocm.RecipientType_RECIPIENT_TYPE_USER:
 		return model.OcmShareTypeUser
-	case ocm.ShareType_SHARE_TYPE_GROUP:
+	case ocm.RecipientType_RECIPIENT_TYPE_GROUP:
 		return model.OcmShareTypeGroup
 	}
 	return -1
@@ -211,12 +211,14 @@ func convertToCS3ResourceType(t model.ItemType) provider.ResourceType {
 	return provider.ResourceType_RESOURCE_TYPE_INVALID
 }
 
-func convertFromCS3ResourceType(t provider.ResourceType) model.ItemType {
+func convertFromCS3ResourceType(t ocm.SharedResourceType) model.ItemType {
 	switch t {
-	case provider.ResourceType_RESOURCE_TYPE_FILE:
+	case ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE:
 		return model.ItemTypeFile
-	case provider.ResourceType_RESOURCE_TYPE_CONTAINER:
+	case ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER:
 		return model.ItemTypeFolder
+	case ocm.SharedResourceType_SHARE_RESOURCE_TYPE_EMBEDDED:
+		return model.ItemTypeEmbedded
 	}
 	return model.ItemTypeFile
 }

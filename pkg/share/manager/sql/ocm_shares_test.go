@@ -373,7 +373,7 @@ func TestListOCMSharesReceived(t *testing.T) {
 		t.FailNow()
 	}
 
-	shares, err := mgr.ListReceivedShares(userctx, user)
+	shares, err := mgr.ListReceivedShares(userctx, user, []*ocm.ListReceivedOCMSharesRequest_Filter{})
 	if err != nil {
 		t.Error(err)
 		t.FailNow()

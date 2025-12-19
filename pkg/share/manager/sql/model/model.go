@@ -83,6 +83,8 @@ const (
 	WebappProtocol
 	// TransferProtocol is the OCM `datatx` protocol.
 	TransferProtocol
+	// EmbeddedProtocol is the OCM `embedded` protocol.
+	EmbeddedProtocol
 )
 
 // ShareID only contains IDs of shares and public links. This is because the Web UI requires

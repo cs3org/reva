@@ -83,7 +83,7 @@ type NewShareRequest struct {
 	SenderDisplayName string    `json:"senderDisplayName"`                                      // dispay name of the user who wants to share the resource
 	Code              string    `json:"code"`                                                   // nonce to be exchanged for a bearer token (not implemented for now)
 	ShareType         string    `json:"shareType"         validate:"required,oneof=user group"` // recipient share type (user or group)
-	ResourceType      string    `json:"resourceType"      validate:"required,oneof=file folder ro-crate"`
+	ResourceType      string    `json:"resourceType"      validate:"required,oneof=file folder embedded"`
 	Expiration        uint64    `json:"expiration"`
 	Protocols         Protocols `json:"protocol"          validate:"required"`
 }
