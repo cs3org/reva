@@ -56,7 +56,7 @@ require (
 	go.opencensus.io v0.24.0
 	go.step.sm/crypto v0.75.0
 	golang.org/x/crypto v0.46.0
-	golang.org/x/oauth2 v0.33.0
+	golang.org/x/oauth2 v0.34.0
 	golang.org/x/sync v0.19.0
 	golang.org/x/sys v0.39.0
 	golang.org/x/term v0.38.0
