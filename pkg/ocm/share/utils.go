@@ -25,15 +25,14 @@ import (
 )
 
 // NewWebDAVProtocol is an abstraction for creating a WebDAV protocol.
-// TODO(lopresti) implement access types: for now, they are empty defaulting to `remote`
-func NewWebDAVProtocol(uri, sharedSecret string, perms *ocm.SharePermissions, reqs []string) *ocm.Protocol {
+func NewWebDAVProtocol(uri, sharedSecret string, perms *ocm.SharePermissions, accTypes []ocm.AccessType, reqs []string) *ocm.Protocol {
 	return &ocm.Protocol{
 		Term: &ocm.Protocol_WebdavOptions{
 			WebdavOptions: &ocm.WebDAVProtocol{
 				Uri:          uri,
 				SharedSecret: sharedSecret,
-				AccessTypes:  nil,
 				Permissions:  perms,
+				AccessTypes:  accTypes,
 				Requirements: reqs,
 			},
 		},
@@ -65,11 +64,12 @@ func NewEmbeddedProtocol(payload string) *ocm.Protocol {
 
 // NewWebDavAccessMethod is an abstraction for creating a WebDAV access method,
 // which is the protocol used by remote users to access an OCM share.
-func NewWebDavAccessMethod(perms *provider.ResourcePermissions, reqs []string) *ocm.AccessMethod {
+func NewWebDavAccessMethod(perms *provider.ResourcePermissions, accTypes []ocm.AccessType, reqs []string) *ocm.AccessMethod {
 	return &ocm.AccessMethod{
 		Term: &ocm.AccessMethod_WebdavOptions{
 			WebdavOptions: &ocm.WebDAVAccessMethod{
 				Permissions:  perms,
+				AccessTypes:  accTypes,
 				Requirements: reqs,
 			},
 		},

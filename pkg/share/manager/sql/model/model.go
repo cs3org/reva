@@ -87,6 +87,20 @@ const (
 	SshProtocol
 )
 
+// OcmAccessType represents the access type to be used in OCM shares:
+// currently supported values are `remote` and `datatx`, possibly
+// combined as a bitmask.
+type OcmAccessType uint
+
+const (
+	// AccessTypeRemote is the OCM `remote` access type.
+	AccessTypeRemote OcmAccessType = 1
+	// AccessTypeDataTx is the OCM `datatx` access type.
+	AccessTypeDataTx OcmAccessType = 2
+	// AccessTypeBoth is the OCM `remote+datatx` access type.
+	AccessTypeBoth OcmAccessType = 3
+)
+
 // ShareID only contains IDs of shares and public links. This is because the Web UI requires
 // that shares and public links do not share an ID, so we need a shared table to make sure
 // that there are no duplicates.
@@ -177,13 +191,13 @@ type OcmShare struct {
 	Protocols     []OcmShareProtocol `gorm:"constraint:OnDelete:CASCADE;"`
 }
 
-// OcmShareProtocol represents the protocol used to access an OCM share, named AccessMethod in the OCM CS3 APIs.
+// OcmShareProtocol represents the protocol used to serve an OCM share, named AccessMethod in the OCM CS3 APIs.
 type OcmShareProtocol struct {
 	gorm.Model
-	OcmShareID  uint        `gorm:"not null;uniqueIndex:u_ocm_share_protocol"`
-	Type        OcmProtocol `gorm:"not null;uniqueIndex:u_ocm_share_protocol"`
-	Permissions int         `gorm:"default:null"`
-	AccessTypes int         `gorm:"default:null"`
+	OcmShareID  uint          `gorm:"not null;uniqueIndex:u_ocm_share_protocol"`
+	Type        OcmProtocol   `gorm:"not null;uniqueIndex:u_ocm_share_protocol"`
+	Permissions int           `gorm:"default:null"`
+	AccessTypes OcmAccessType `gorm:"default:null"`
 }
 
 // OcmReceivedShare represents an OCM share received from a remote user.
@@ -213,8 +227,8 @@ type OcmReceivedShareProtocol struct {
 	Uri                string           `gorm:"size:255"`
 	SharedSecret       string           `gorm:"type:text;not null"`
 	// WebDAV and WebApp Protocol fields
-	Permissions int `gorm:"default:null"`
-	AccessTypes int `gorm:"default:null"`
+	Permissions int           `gorm:"default:null"`
+	AccessTypes OcmAccessType `gorm:"default:null"`
 	// JSON field for the embedded protocol payload
 	Payload datatypes.JSON `gorm:"type:json;default:null"`
 }

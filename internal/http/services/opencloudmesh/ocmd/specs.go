@@ -136,8 +136,16 @@ func (w *WebDAV) ToOCMProtocol() *ocm.Protocol {
 			perms.Reshare = true
 		}
 	}
-
-	return ocmshare.NewWebDAVProtocol(w.URI, w.SharedSecret, perms, w.Requirements)
+	accTypes := []ocm.AccessType{}
+	for _, at := range w.AccessTypes {
+		switch at {
+		case "remote":
+			accTypes = append(accTypes, ocm.AccessType_ACCESS_TYPE_REMOTE)
+		case "datatx":
+			accTypes = append(accTypes, ocm.AccessType_ACCESS_TYPE_DATATX)
+		}
+	}
+	return ocmshare.NewWebDAVProtocol(w.URI, w.SharedSecret, perms, accTypes, w.Requirements)
 }
 
 // Webapp contains the parameters for the Webapp protocol.

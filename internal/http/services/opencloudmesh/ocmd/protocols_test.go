@@ -72,7 +72,7 @@ func TestUnmarshalProtocol(t *testing.T) {
 			expected: []Protocol{
 				&WebDAV{
 					SharedSecret: "secret",
-					AccessTypes:  []string{"datatx"},
+					AccessTypes:  []ocm.AccessType{ocm.AccessType_ACCESS_TYPE_DATATX},
 					Permissions:  []string{"read"},
 					Requirements: []string{},
 					URI:          "http://example.org",
@@ -106,12 +106,12 @@ func TestUnmarshalProtocol(t *testing.T) {
 		var got Protocols
 		err := json.Unmarshal([]byte(tt.raw), &got)
 		if err != nil && err.Error() != tt.err {
-			t.Fatalf("not expected error. got=%+v expected=%+v", err, tt.err)
+			t.Fatalf("unexpected error. got=%+v expected=%+v", err, tt.err)
 		}
 
 		if tt.err == "" {
 			if !protocolsEqual(got, tt.expected) {
-				t.Fatalf("result does not match with expected. got=%#v expected=%#v", got, tt.expected)
+				t.Fatalf("result does not match with expected. got=%#v expected=%#v for test=%+v", got, tt.expected, tt)
 			}
 		}
 	}

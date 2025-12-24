@@ -65,7 +65,7 @@ func (h *sharesHandler) init(c *config) error {
 	return nil
 }
 
-// CreateShare implements the OCM /shares call.
+// CreateShare implements the OCM /shares call and stores an incoming share
 func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
@@ -233,6 +233,17 @@ func getOCMShareType(t string) ocm.RecipientType {
 	}
 }
 
+func getOCMAccessType(t string) ocm.AccessType {
+	switch t {
+	case "remote":
+		return ocm.AccessType_ACCESS_TYPE_REMOTE
+	case "datatx":
+		return ocm.AccessType_ACCESS_TYPE_DATATX
+	default:
+		return ocm.AccessType_ACCESS_TYPE_REMOTE
+	}
+}
+
 func getAndResolveProtocols(ctx context.Context, p Protocols, ownerServer string) (protos []*ocm.Protocol, legacy bool, err error) {
 	protos = make([]*ocm.Protocol, 0, len(p))
 	legacy = false
@@ -248,6 +259,7 @@ func getAndResolveProtocols(ctx context.Context, p Protocols, ownerServer string
 				// we currently do not support any kind of requirement
 				return nil, false, errtypes.BadRequest(fmt.Sprintf("incoming OCM share with requirements %+v not supported at this endpoint", reqs))
 			}
+
 		case "webapp":
 			uri = ocmProto.GetWebappOptions().Uri
 		case "embedded":
