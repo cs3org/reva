@@ -112,6 +112,10 @@ func (s *svc) routerInit() error {
 	if err := wayfHandler.init(s.conf); err != nil {
 		return err
 	}
+	embeddedHandler := new(embeddedHandler)
+	if err := embeddedHandler.init(s.conf); err != nil {
+		return err
+	}
 
 	s.router.Post("/generate-invite", tokenHandler.Generate)
 	s.router.Get("/list-invite", tokenHandler.ListInvite)
@@ -122,6 +126,7 @@ func (s *svc) routerInit() error {
 	s.router.Post("/open-in-app", appsHandler.OpenInApp)
 	s.router.Get("/federations", wayfHandler.GetFederations)
 	s.router.Post("/discover", wayfHandler.DiscoverProvider)
+	s.router.Get("/embedded-shares", embeddedHandler.ListEmbeddedShares)
 	return nil
 }
 

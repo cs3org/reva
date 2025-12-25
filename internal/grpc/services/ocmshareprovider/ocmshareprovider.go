@@ -293,7 +293,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		Name:          filepath.Base(info.Path),
 		ResourceId:    req.ResourceId,
 		Grantee:       req.Grantee,
-		ShareType:     ocm.ShareType_SHARE_TYPE_USER,
+		RecipientType: ocm.RecipientType_RECIPIENT_TYPE_USER,
 		Owner:         info.Owner,
 		Creator:       user.Id,
 		Ctime:         ts,
@@ -488,7 +488,7 @@ func (s *service) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareReq
 
 func (s *service) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceivedOCMSharesRequest) (*ocm.ListReceivedOCMSharesResponse, error) {
 	user := appctx.ContextMustGetUser(ctx)
-	shares, err := s.repo.ListReceivedShares(ctx, user)
+	shares, err := s.repo.ListReceivedShares(ctx, user, req.Filters)
 	if err != nil {
 		return &ocm.ListReceivedOCMSharesResponse{
 			Status: status.NewInternal(ctx, err, "error listing received shares"),

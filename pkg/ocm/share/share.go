@@ -50,7 +50,7 @@ type Repository interface {
 	StoreReceivedShare(ctx context.Context, share *ocm.ReceivedShare) (*ocm.ReceivedShare, error)
 
 	// ListReceivedShares returns the list of shares the user has access.
-	ListReceivedShares(ctx context.Context, user *userpb.User) ([]*ocm.ReceivedShare, error)
+	ListReceivedShares(ctx context.Context, user *userpb.User, filters []*ocm.ListReceivedOCMSharesRequest_Filter) ([]*ocm.ReceivedShare, error)
 
 	// GetReceivedShare returns the information for a received share the user has access.
 	GetReceivedShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*ocm.ReceivedShare, error)

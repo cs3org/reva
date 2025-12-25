@@ -106,7 +106,7 @@ func (s *service) UnprotectedEndpoints() []string {
 
 // CreateOCMIncomingShare is called when a remote OCM request comes into this reva instance.
 func (s *service) CreateOCMIncomingShare(ctx context.Context, req *ocmincoming.CreateOCMIncomingShareRequest) (*ocmincoming.CreateOCMIncomingShareResponse, error) {
-	if req.ShareType != ocm.ShareType_SHARE_TYPE_USER {
+	if req.RecipientType != ocm.RecipientType_RECIPIENT_TYPE_USER {
 		return nil, errtypes.NotSupported("share type not supported")
 	}
 
@@ -123,15 +123,15 @@ func (s *service) CreateOCMIncomingShare(ctx context.Context, req *ocmincoming.C
 				UserId: req.ShareWith,
 			},
 		},
-		ResourceType: req.ResourceType,
-		ShareType:    req.ShareType,
-		Owner:        req.Owner,
-		Creator:      req.Sender,
-		Protocols:    req.Protocols,
-		Ctime:        now,
-		Mtime:        now,
-		Expiration:   req.Expiration,
-		State:        ocm.ShareState_SHARE_STATE_PENDING,
+		SharedResourceType: req.SharedResourceType,
+		RecipientType:      req.RecipientType,
+		Owner:              req.Owner,
+		Creator:            req.Sender,
+		Protocols:          req.Protocols,
+		Ctime:              now,
+		Mtime:              now,
+		Expiration:         req.Expiration,
+		State:              ocm.ShareState_SHARE_STATE_PENDING,
 	})
 	if err != nil {
 		// TODO: identify errors

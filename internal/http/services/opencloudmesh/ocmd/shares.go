@@ -30,7 +30,6 @@ import (
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/pkg/errors"
 
@@ -134,7 +133,6 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with remote owner", err)
 		return
 	}
-
 	protocols, legacy, err := getAndResolveProtocols(ctx, req.Protocols, owner.Idp)
 	if err != nil || len(protocols) == 0 {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with protocols payload", err)
@@ -155,15 +153,15 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	createShareReq := &ocmincoming.CreateOCMIncomingShareRequest{
-		Description:  req.Description,
-		Name:         req.Name,
-		ResourceId:   req.ProviderID,
-		Owner:        owner,
-		Sender:       sender,
-		ShareWith:    userRes.User.Id,
-		ResourceType: getResourceTypeFromOCMRequest(req.ResourceType),
-		ShareType:    getOCMShareType(req.ShareType),
-		Protocols:    protocols,
+		Description:        req.Description,
+		Name:               req.Name,
+		ResourceId:         req.ProviderID,
+		Owner:              owner,
+		Sender:             sender,
+		ShareWith:          userRes.User.Id,
+		SharedResourceType: getResourceTypeFromOCMRequest(req.ResourceType),
+		RecipientType:      getOCMShareType(req.ShareType),
+		Protocols:          protocols,
 	}
 
 	if req.Expiration != 0 {
@@ -210,26 +208,28 @@ func getCreateShareRequest(r *http.Request) (*NewShareRequest, error) {
 	return &req, nil
 }
 
-func getResourceTypeFromOCMRequest(t string) providerpb.ResourceType {
+func getResourceTypeFromOCMRequest(t string) ocm.SharedResourceType {
 	switch t {
 	case "file":
-		return providerpb.ResourceType_RESOURCE_TYPE_FILE
+		return ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE
 	case "folder":
-		return providerpb.ResourceType_RESOURCE_TYPE_CONTAINER
+		return ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER
+	case "embedded":
+		return ocm.SharedResourceType_SHARE_RESOURCE_TYPE_EMBEDDED
 	default:
-		return providerpb.ResourceType_RESOURCE_TYPE_INVALID
+		return ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID
 	}
 }
 
-func getOCMShareType(t string) ocm.ShareType {
+func getOCMShareType(t string) ocm.RecipientType {
 	switch t {
 	case "user":
-		return ocm.ShareType_SHARE_TYPE_USER
+		return ocm.RecipientType_RECIPIENT_TYPE_USER
 	case "group":
-		return ocm.ShareType_SHARE_TYPE_GROUP
+		return ocm.RecipientType_RECIPIENT_TYPE_GROUP
 	default:
 		// for now assume user share if not provided
-		return ocm.ShareType_SHARE_TYPE_USER
+		return ocm.RecipientType_RECIPIENT_TYPE_USER
 	}
 }
 
@@ -250,6 +250,9 @@ func getAndResolveProtocols(ctx context.Context, p Protocols, ownerServer string
 			}
 		case "webapp":
 			uri = ocmProto.GetWebappOptions().Uri
+		case "embedded":
+			protos = append(protos, ocmProto)
+			continue
 		}
 
 		// If the `uri` contains a hostname, use it as is
