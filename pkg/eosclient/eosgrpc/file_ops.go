@@ -309,7 +309,7 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, path st
 func (c *Client) ListWithRegex(ctx context.Context, auth eosclient.Authorization, path string, depth uint, regex string) ([]*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
 	result, err := c.list(ctx, auth, path, regex, depth)
-	log.Info().Str("path", path).Str("regex", regex).Any("results", result).Msg("ListWithRegex")
+	log.Info().Str("path", path).Str("regex", regex).Msg("ListWithRegex")
 
 	return result, err
 }
