@@ -35,7 +35,6 @@ type OcmProviderConfig struct {
 	Provider           string `docs:"reva;A friendly name that defines this service."                                            mapstructure:"provider"`
 	WebdavRoot         string `docs:"/remote.php/dav/ocm;The root URL of the WebDAV endpoint to serve OCM shares."               mapstructure:"webdav_root"`
 	WebappRoot         string `docs:"/external/sciencemesh;The root URL to serve Web apps via OCM."                              mapstructure:"webapp_root"`
-	EmbeddedRoot       string `docs:"/remote.php/shares;The root URL to serve Embedded shares via OCM."                           mapstructure:"embedded_root"`
 	InviteAcceptDialog string `docs:"/open-cloud-mesh/accept-invite;The frontend URL where to land when receiving an invitation" mapstructure:"invite_accept_dialog"`
 	EnableWebapp       bool   `docs:"false;Whether web apps are enabled in OCM shares."                                          mapstructure:"enable_webapp"`
 	EnableDatatx       bool   `docs:"false;Whether data transfers are enabled in OCM shares."                                    mapstructure:"enable_datatx"`
@@ -81,9 +80,6 @@ func (c *OcmProviderConfig) ApplyDefaults() {
 	if c.WebappRoot[len(c.WebappRoot)-1:] != "/" {
 		c.WebappRoot += "/"
 	}
-	if c.EmbeddedRoot == "" {
-		c.EmbeddedRoot = "/ocm/shares/"
-	}
 	if c.InviteAcceptDialog == "" {
 		c.InviteAcceptDialog = "/open-cloud-mesh/accept-invite"
 	}
@@ -128,14 +124,21 @@ func (h *wkocmHandler) init(c *OcmProviderConfig) {
 	if c.EnableDatatx {
 		rtProtos["datatx"] = filepath.Join(endpointURL.Path, c.WebdavRoot)
 	}
-	if c.EnableEmbedded {
-		rtProtos["embedded"] = filepath.Join(endpointURL.Path, c.EmbeddedRoot)
-	}
 	d.ResourceTypes = []resourceTypes{{
-		Name:       "file",           // so far we only support `file`
+		Name:       "file",
 		ShareTypes: []string{"user"}, // so far we only support `user`
 		Protocols:  rtProtos,         // expose the protocols as per configuration
 	}}
+	if c.EnableEmbedded {
+		d.ResourceTypes = append(d.ResourceTypes, resourceTypes{
+			Name:       "ro-crate",
+			ShareTypes: []string{"user"},
+			Protocols: map[string]string{
+				"embedded": "", // embedded resources have an empty root path by convention
+			},
+		})
+	}
+
 	// for now, we hardcoded the capabilities, as this is currently only advisory
 	d.Capabilities = []string{"invites", "webdav-uri", "protocol-object", "invite-wayf"}
 	d.InviteAcceptDialog, _ = url.JoinPath(c.Endpoint, c.InviteAcceptDialog)
