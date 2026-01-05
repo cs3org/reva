@@ -20,6 +20,7 @@ package publicshareprovider
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -147,7 +148,7 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 
 	if !s.isPathAllowed(req.ResourceInfo.Path) {
 		return &link.CreatePublicShareResponse{
-			Status: status.NewInvalidArg(ctx, "share creation is not allowed for the specified path"),
+			Status: status.NewInvalidArg(ctx, fmt.Sprintf("share creation is not allowed for the specified path: %q", req.ResourceInfo.Path)),
 		}, nil
 	}
 
