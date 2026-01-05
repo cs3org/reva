@@ -17,7 +17,7 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/spaces"
@@ -808,7 +808,7 @@ func (s *svc) getLinkUpdates(ctx context.Context, link *linkv1beta1.PublicShare,
 	if permission.Link != nil && permission.Link.Type != nil {
 		isEditorLink = permission.Link.GetType() == libregraph.EDIT
 	} else if link.Permissions != nil {
-		isEditorLink = conversions.RoleFromResourcePermissions(link.Permissions.Permissions).Name == conversions.RoleEditor
+		isEditorLink = permissions.RoleFromResourcePermissions(link.Permissions.Permissions).Name == permissions.RoleEditor
 	}
 
 	// Check for update of expiration

@@ -28,7 +28,7 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 )
 
 // DBShare stores information about user and public shares.
@@ -42,7 +42,7 @@ type DBShare struct {
 	ShareWith                    string
 	Token                        string
 	Expiration                   string
-	Permissions                  int
+	Permissions                  permissions.OcsPermissions
 	ShareType                    int
 	ShareName                    string
 	STime                        int
@@ -121,39 +121,6 @@ func ResourceTypeToItemInt(r provider.ResourceType) int {
 	}
 }
 
-// SharePermToInt maps read/write permissions to an integer.
-func SharePermToInt(p *provider.ResourcePermissions) int {
-	var perm int
-	switch {
-	case p.InitiateFileUpload && !p.InitiateFileDownload:
-		perm = 4
-	case p.InitiateFileUpload:
-		perm = 15
-	case p.InitiateFileDownload:
-		perm = 1
-	}
-	// TODO map denials and resharing; currently, denials are mapped to 0
-	return perm
-}
-
-// IntTosharePerm retrieves read/write permissions from an integer.
-func IntTosharePerm(p int, itemType string) *provider.ResourcePermissions {
-	switch p {
-	case 1:
-		return conversions.NewViewerRole().CS3ResourcePermissions()
-	case 15:
-		if itemType == "folder" {
-			return conversions.NewEditorRole().CS3ResourcePermissions()
-		}
-		return conversions.NewFileEditorRole().CS3ResourcePermissions()
-	case 4:
-		return conversions.NewUploaderRole().CS3ResourcePermissions()
-	default:
-		// TODO we may have other options, for now this is a denial
-		return &provider.ResourcePermissions{}
-	}
-}
-
 // IntToShareState retrieves the received share state from an integer.
 func IntToShareState(g int) collaboration.ShareState {
 	switch g {
@@ -183,38 +150,6 @@ func MakeUserID(u string) *userpb.UserId {
 	return &userpb.UserId{OpaqueId: u, Type: userpb.UserType_USER_TYPE_PRIMARY}
 }
 
-// ConvertToCS3Share converts a DBShare and a grantee userType to a CS3API collaboration share.
-// Here we take the shortcut that the Owner's and Creator's user type is PRIMARY.
-func ConvertToCS3Share(s DBShare, gtype userpb.UserType) *collaboration.Share {
-	ts := &typespb.Timestamp{
-		Seconds: uint64(s.STime),
-	}
-	return &collaboration.Share{
-		Id: &collaboration.ShareId{
-			OpaqueId: s.ID,
-		},
-		//ResourceId:  &provider.Reference{StorageId: s.Prefix, NodeId: s.ItemSource},
-		ResourceId: &provider.ResourceId{
-			StorageId: s.Prefix,
-			OpaqueId:  s.ItemSource,
-		},
-		Permissions: &collaboration.SharePermissions{Permissions: IntTosharePerm(s.Permissions, s.ItemType)},
-		Grantee:     ExtractGrantee(s.ShareType, s.ShareWith, gtype),
-		Owner:       MakeUserID(s.UIDOwner),
-		Creator:     MakeUserID(s.UIDInitiator),
-		Ctime:       ts,
-		Mtime:       ts,
-	}
-}
-
-// ConvertToCS3ReceivedShare converts a DBShare and a grantee userType to a CS3API collaboration received share.
-func ConvertToCS3ReceivedShare(s DBShare, gtype userpb.UserType) *collaboration.ReceivedShare {
-	return &collaboration.ReceivedShare{
-		Share: ConvertToCS3Share(s, gtype),
-		State: IntToShareState(s.State),
-	}
-}
-
 // ConvertToCS3PublicShare converts a DBShare to a CS3API public share.
 // Here we take the shortcut that the Owner's and Creator's user type is PRIMARY.
 func ConvertToCS3PublicShare(s DBShare) *link.PublicShare {
@@ -242,7 +177,7 @@ func ConvertToCS3PublicShare(s DBShare) *link.PublicShare {
 			StorageId: s.Prefix,
 			OpaqueId:  s.ItemSource,
 		},
-		Permissions:                  &link.PublicSharePermissions{Permissions: IntTosharePerm(s.Permissions, s.ItemType)},
+		Permissions:                  &link.PublicSharePermissions{Permissions: s.Permissions.AsCS3Permissions()},
 		Owner:                        MakeUserID(s.UIDOwner),
 		Creator:                      MakeUserID(s.UIDInitiator),
 		Token:                        s.Token,

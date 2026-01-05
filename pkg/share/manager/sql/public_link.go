@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/publicshare"
 	"github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"github.com/cs3org/reva/v3/pkg/utils"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/bcrypt"
@@ -117,7 +118,7 @@ func (m *PublicShareMgr) CreatePublicShare(ctx context.Context, u *user.User, md
 	publiclink.ItemType = model.ItemType(conversions.ResourceTypeToItem(md.Type))
 	publiclink.Inode = md.Id.OpaqueId
 	publiclink.Instance = md.Id.StorageId
-	publiclink.Permissions = uint8(conversions.SharePermToInt(g.Permissions.Permissions))
+	publiclink.Permissions = uint8(permissions.OCSFromCS3Permission(g.Permissions.Permissions))
 	publiclink.Orphan = false
 
 	if g.Password != "" {
@@ -156,10 +157,10 @@ func (m *PublicShareMgr) UpdatePublicShare(ctx context.Context, u *user.User, re
 			Where("id = ?", publiclink.Id).
 			Update("link_name", req.Update.GetDisplayName())
 	case link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS:
-		permissions := conversions.SharePermToInt(req.Update.GetGrant().GetPermissions().Permissions)
+		perms := uint8(permissions.OCSFromCS3Permission(g.Permissions.Permissions))
 		res = m.db.Model(&publiclink).
 			Where("id = ?", publiclink.Id).
-			Update("permissions", uint8(permissions))
+			Update("permissions", perms)
 	case link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION:
 		if req.Update.GetGrant().Expiration == nil {
 			res = m.db.Model(&publiclink).

@@ -28,9 +28,8 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/cbox/utils"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
@@ -141,7 +140,7 @@ func storeWebDAVAccessMethod(tx *gorm.DB, shareID uint, o *ocm.AccessMethod_Webd
 	accessMethod := &model.OcmShareProtocol{
 		OcmShareID:  uint(shareID),
 		Type:        model.WebDAVProtocol,
-		Permissions: utils.SharePermToInt(o.WebdavOptions.Permissions),
+		Permissions: int(permissions.OCSFromCS3Permission(o.WebdavOptions.Permissions)),
 	}
 
 	err := tx.Create(accessMethod).Error
@@ -324,7 +323,7 @@ func storeWebDAVProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_WebdavOptio
 		Type:               model.WebDAVProtocol,
 		Uri:                o.WebdavOptions.Uri,
 		SharedSecret:       o.WebdavOptions.SharedSecret,
-		Permissions:        utils.SharePermToInt(o.WebdavOptions.Permissions.Permissions),
+		Permissions:       int(permissions.OCSFromCS3Permission(o.WebdavOptions.Permissions.Permissions)),
 	}
 
 	if err := tx.Create(protocol).Error; err != nil {
@@ -597,7 +596,7 @@ func (m *mgr) queriesUpdatesOnShare(ctx context.Context, id *ocm.ShareId, f ...*
 				accessMethodUpdates = append(accessMethodUpdates, func(tx *gorm.DB) error {
 					return tx.Model(&model.OcmShareProtocol{}).
 						Where("ocm_share_id = ? AND type = ?", id.OpaqueId, model.WebDAVProtocol).
-						Update("permissions", int(conversions.RoleFromResourcePermissions(t.WebdavOptions.Permissions).OCSPermissions())).Error
+						Update("permissions", int(permissions.RoleFromResourcePermissions(t.WebdavOptions.Permissions).OCSPermissions())).Error
 				})
 			case *ocm.AccessMethod_WebappOptions:
 				accessMethodUpdates = append(accessMethodUpdates, func(tx *gorm.DB) error {

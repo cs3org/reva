@@ -12,8 +12,8 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ocsconversions "github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
-	conversions "github.com/cs3org/reva/v3/pkg/cbox/utils"
+	//permissions "github.com/cs3org/reva/v3/pkg/cbox/utils"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
@@ -87,9 +87,9 @@ func getWebAppProtocol(appURL string, role string) *ocm.Protocol {
 	return nil
 }
 
-func getProtocols(permissions int, resource_type string, role string) []*ocm.Protocol {
+func getProtocols(ocsPermissions permissions.OcsPermissions, resource_type string, role string) []*ocm.Protocol {
 	perms := &ocm.SharePermissions{
-		Permissions: conversions.IntTosharePerm(permissions, resource_type),
+		Permissions: permissions.RoleFromOCSPermissions(ocsPermissions).CS3ResourcePermissions(), //conversions.IntTosharePerm(permissions, resource_type),
 	}
 	protocols := []*ocm.Protocol{
 		getWebDavProtocol("https://webdav.example.com/remote.php/dav/shares/someid", "sharedsecret", perms, role),
@@ -141,12 +141,12 @@ func getOcmAccessMethods(role string) []*ocm.AccessMethod {
 	switch role {
 	case "viewer":
 		return []*ocm.AccessMethod{
-			share.NewWebDavAccessMethod(ocsconversions.NewViewerRole().CS3ResourcePermissions(), []string{}),
+			share.NewWebDavAccessMethod(permissions.NewViewerRole().CS3ResourcePermissions(), []string{}),
 			share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_ONLY),
 		}
 	case "editor":
 		return []*ocm.AccessMethod{
-			share.NewWebDavAccessMethod(ocsconversions.NewEditorRole().CS3ResourcePermissions(), []string{}),
+			share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), []string{}),
 			share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 		}
 	}
