@@ -139,7 +139,7 @@ func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share) (*ocm.Share, error) 
 func storeWebDAVAccessMethod(tx *gorm.DB, shareID uint, o *ocm.AccessMethod_WebdavOptions) error {
 	accessMethod := &model.OcmShareProtocol{
 		OcmShareID:  uint(shareID),
-		Type:        model.WebDAVAccessMethod,
+		Type:        model.WebDAVProtocol,
 		Permissions: int(permissions.OCSFromCS3Permission(o.WebdavOptions.Permissions)),
 	}
 
