@@ -31,10 +31,10 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	conversions "github.com/cs3org/reva/v3/pkg/cbox/utils"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/publicshare"
 	"github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"github.com/cs3org/reva/v3/pkg/utils"
-	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/bcrypt"
@@ -157,7 +157,7 @@ func (m *PublicShareMgr) UpdatePublicShare(ctx context.Context, u *user.User, re
 			Where("id = ?", publiclink.Id).
 			Update("link_name", req.Update.GetDisplayName())
 	case link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS:
-		perms := uint8(permissions.OCSFromCS3Permission(g.Permissions.Permissions))
+		perms := uint8(permissions.OCSFromCS3Permission(req.Update.GetGrant().GetPermissions().Permissions))
 		res = m.db.Model(&publiclink).
 			Where("id = ?", publiclink.Id).
 			Update("permissions", perms)
