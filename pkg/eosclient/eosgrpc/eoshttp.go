@@ -381,11 +381,11 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 	log.Info().Str("func", "PUTFile").Str("remoteuser", remoteuser).Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", urlpath).Int64("length", length).Str("app", app).Msg("")
 
 	// Now send the req and see what happens
-	tempUrl, err := c.buildFullURL(urlpath, auth)
+	tempURL, err := c.buildFullURL(urlpath, auth)
 	if err != nil {
 		return err
 	}
-	base, err := url.Parse(tempUrl)
+	base, err := url.Parse(tempURL)
 	if err != nil {
 		return errtypes.PermissionDenied("Could not parse url " + urlpath)
 	}
