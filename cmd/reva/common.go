@@ -72,6 +72,9 @@ func writeConfig(c *config) error {
 }
 
 func getTokenFile() string {
+	if tokenFile != "" {
+		return tokenFile
+	}
 	user, err := gouser.Current()
 	if err != nil {
 		panic(err)

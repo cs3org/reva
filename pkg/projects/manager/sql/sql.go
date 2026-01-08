@@ -113,6 +113,10 @@ func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
+	c.ApplyDefaults()
+	if c.Engine == "" {
+		return nil, fmt.Errorf("Database config: %+v", sharedconf.GetDBInfo(c.Database))
+	}
 	var db *gorm.DB
 	var err error
 	switch c.Engine {

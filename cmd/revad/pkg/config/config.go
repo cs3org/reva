@@ -56,11 +56,11 @@ type Shared struct {
 	DataGateway           string   `default:"http://0.0.0.0:19001/datagateway" key:"datagateway"                        mapstructure:"datagateway"`
 	SkipUserGroupsInToken bool     `key:"skip_user_groups_in_token"            mapstructure:"skip_user_groups_in_token"`
 	BlockedUsers          []string `default:"[]"                               key:"blocked_users"                      mapstructure:"blocked_users"`
-	Database
+	Database              `mapstructure:",squash"`
 }
 
 type Database struct {
-	Engine     string `mapstructure:"engine"` // mysql | sqlite
+	Engine     string `mapstructure:"db_engine"` // mysql | sqlite
 	DBUsername string `mapstructure:"db_username"`
 	DBPassword string `mapstructure:"db_password"`
 	DBHost     string `mapstructure:"db_host"`
