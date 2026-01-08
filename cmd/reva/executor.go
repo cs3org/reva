@@ -93,7 +93,8 @@ func (e *Executor) Execute(s string) {
 			}()
 
 			if err := executeWithContext(ctx, v); err != nil {
-				fmt.Println(err.Error())
+				fmt.Fprintln(os.Stderr, err.Error())
+				os.Exit(1)
 			}
 			return
 		}

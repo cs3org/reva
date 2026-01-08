@@ -811,7 +811,6 @@ func (s *service) addSpaceInfo(ctx context.Context, ri *provider.ResourceInfo, w
 	}
 	ri.ParentId.SpaceId = spaceID
 	ri.Id.SpaceId = spaceID
-	
 	log.Debug().
 		Str("path", ri.Path).
 		Str("derived_space_id", spaceID).
@@ -1693,10 +1692,8 @@ func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo, prefixMou
 	if ri == nil {
 		return nil
 	}
-	
 	originalPath := ri.Path
 	originalOpaqueID := ri.Id.OpaqueId
-	
 	if ri.Id.StorageId == "" {
 		// For wrapper drivers, the storage ID might already be set. In that case, skip setting it
 		ri.Id.StorageId = s.mountID
@@ -1708,7 +1705,6 @@ func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo, prefixMou
 		// TODO move mount path prefixing to the gateway
 		ri.Path = path.Join(s.mountPath, ri.Path)
 	}
-	
 	log.Debug().
 		Str("storage_id", ri.Id.StorageId).
 		Str("opaque_id", originalOpaqueID).
