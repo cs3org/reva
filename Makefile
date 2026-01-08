@@ -111,6 +111,14 @@ test-go:
 test-integration: revad
 	go test -race ./tests/integration/...
 
+.PHONY: test-reva-cli
+test-reva-cli:
+	@if ! command -v judo >/dev/null 2>&1; then \
+		echo "Error: judo not found. Install with: npm install -g @intuit/judo"; \
+		exit 1; \
+	fi
+	judo tests/integration/reva-cli/*.yaml
+
 .PHONY: check-changelog
 check-changelog: $(CALENS)
 ifndef PR
