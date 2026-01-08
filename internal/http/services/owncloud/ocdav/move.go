@@ -28,8 +28,6 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/rhttp/router"
-	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 )
@@ -39,13 +37,9 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 	srcPath := path.Join(ns, r.URL.Path)
 	dstPath, err := extractDestination(r, ns)
 	if err != nil {
+		appctx.GetLogger(ctx).Warn().Msg("HTTP MOVE: failed to extract destination")
 		w.WriteHeader(http.StatusBadRequest)
 		return
-	}
-
-	head, rel := router.ShiftPath(dstPath)
-	if _, base, ok := spaces.DecodeStorageSpaceID(head); ok {
-		dstPath = path.Join(base, rel)
 	}
 
 	for _, r := range nameRules {
@@ -54,8 +48,6 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 			return
 		}
 	}
-
-	dstPath = path.Join(ns, dstPath)
 
 	sublog := appctx.GetLogger(ctx).With().Str("src", srcPath).Str("dst", dstPath).Logger()
 	src := &provider.Reference{Path: srcPath}
