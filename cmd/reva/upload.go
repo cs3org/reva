@@ -103,6 +103,7 @@ func uploadCommand() *command {
 		if err != nil {
 			return err
 		}
+		fmt.Printf("Uploading to: %+v \n", res)
 
 		if res.Status.Code != rpc.Code_CODE_OK {
 			return formatError(res.Status)
@@ -150,6 +151,7 @@ func uploadCommand() *command {
 			}
 
 			httpReq.Header.Set(datagateway.TokenTransportHeader, p.Token)
+			httpReq.Header.Set("Upload-Length", strconv.FormatInt(md.Size(), 10))
 			q := httpReq.URL.Query()
 			q.Add("xs", xs)
 			q.Add("xs_type", storageprovider.GRPC2PKGXS(xsType).String())

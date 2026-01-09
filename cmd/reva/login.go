@@ -37,12 +37,14 @@ var loginCommand = func() *command {
 	cmd.Description = func() string { return "login into the reva server" }
 	cmd.Usage = func() string { return "Usage: login <type>" }
 	listFlag := cmd.Bool("list", false, "list available login methods")
-	usernameOpt := cmd.String("username", "", "provide the username (only with machine auth)")
+	usernameOpt := cmd.String("username", "", "provide the username")
+	passwordOpt := cmd.String("password", "", "provide the password")
 	apiKeyOpt := cmd.String("api-key", "", "secret for the machine auth")
 
 	cmd.ResetFlags = func() {
 		*listFlag = false
 		*usernameOpt = ""
+		*passwordOpt = ""
 		*apiKeyOpt = ""
 	}
 
@@ -88,12 +90,14 @@ var loginCommand = func() *command {
 		var username, password string
 		var err error
 
-		// if the user select the machine authentication, the only way
-		// to provide the username and the password (api-key) is through
-		// the flags -username and -api-key respectively
-		if authType == "machine" {
+		// Check if credentials are provided via flags
+		if *usernameOpt != "" && (*passwordOpt != "" || *apiKeyOpt != "") {
 			username = *usernameOpt
-			password = *apiKeyOpt
+			if authType == "machine" {
+				password = *apiKeyOpt
+			} else {
+				password = *passwordOpt
+			}
 		} else {
 			// for the other methods, take the username and pw from the stdin
 			reader := bufio.NewReader(os.Stdin)

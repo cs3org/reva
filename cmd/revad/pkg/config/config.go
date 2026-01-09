@@ -60,7 +60,7 @@ type Shared struct {
 }
 
 type Database struct {
-	Engine     string `mapstructure:"engine"` // mysql | sqlite
+	Engine     string `mapstructure:"db_engine"` // mysql | sqlite
 	DBUsername string `mapstructure:"db_username"`
 	DBPassword string `mapstructure:"db_password"`
 	DBHost     string `mapstructure:"db_host"`

@@ -38,8 +38,8 @@ func setupSuite(tb testing.TB) (projects_catalogue.Catalogue, error, func(tb tes
 	ctx := context.Background()
 	dbName := "test_db.sqlite"
 	cfg := map[string]any{
-		"engine":  "sqlite",
-		"db_name": dbName,
+		"db_engine": "sqlite",
+		"db_name":   dbName,
 	}
 	mgr, err := New(ctx, cfg)
 	if err != nil {

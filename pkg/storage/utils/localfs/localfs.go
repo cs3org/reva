@@ -50,18 +50,18 @@ import (
 
 // Config holds the configuration details for the local fs.
 type Config struct {
-	Root                 string `mapstructure:"root"`
-	DisableHome          bool   `mapstructure:"disable_home"`
-	UserLayout           string `mapstructure:"user_layout"`
-	VirtualHomeTemplate  string `mapstructure:"virtual_home_template"`
-	ShareFolder          string `mapstructure:"share_folder"`
-	DataTransfersFolder  string `mapstructure:"data_transfers_folder"`
-	Uploads              string `mapstructure:"uploads"`
-	DataDirectory        string `mapstructure:"data_directory"`
-	RecycleBin           string `mapstructure:"recycle_bin"`
-	Versions             string `mapstructure:"versions"`
-	Shadow               string `mapstructure:"shadow"`
-	References           string `mapstructure:"references"`
+	Root                string `mapstructure:"root"`
+	DisableHome         bool   `mapstructure:"disable_home"`
+	UserLayout          string `mapstructure:"user_layout"`
+	VirtualHomeTemplate string `mapstructure:"virtual_home_template"`
+	ShareFolder         string `mapstructure:"share_folder"`
+	DataTransfersFolder string `mapstructure:"data_transfers_folder"`
+	Uploads             string `mapstructure:"uploads"`
+	DataDirectory       string `mapstructure:"data_directory"`
+	RecycleBin          string `mapstructure:"recycle_bin"`
+	Versions            string `mapstructure:"versions"`
+	Shadow              string `mapstructure:"shadow"`
+	References          string `mapstructure:"references"`
 }
 
 func (c *Config) ApplyDefaults() {
@@ -179,13 +179,13 @@ func (fs *localfs) wrap(ctx context.Context, p string) string {
 	log := appctx.GetLogger(ctx)
 	// Prevent path traversal attacks
 	p = path.Join("/", p)
-	
+
 	// Strip virtual home prefix to map virtual namespace to flat per-user storage.
 	// Example: /home/einstein/file.txt -> /file.txt (stored as data/einstein/file.txt)
 	if virtualHome, err := fs.getVirtualHome(ctx); err == nil && virtualHome != "" {
 		p = fs.stripVirtualHomePrefix(p, virtualHome)
 	}
-	
+
 	// Apply user layout and data directory
 	var internal string
 	if !fs.conf.DisableHome {
@@ -206,28 +206,28 @@ func (fs *localfs) wrap(ctx context.Context, p string) string {
 func (fs *localfs) stripVirtualHomePrefix(p, virtualHome string) string {
 	virtualHomeParent := path.Dir(virtualHome)
 	virtualHomeBase := path.Base(virtualHome)
-	
+
 	switch {
 	case isExactVirtualHome(p, virtualHome):
 		// /home/einstein -> /
 		return "/"
-		
+
 	case isFullVirtualPath(p, virtualHome):
 		// /home/einstein/Test.txt -> /Test.txt
 		return strings.TrimPrefix(p, virtualHome)
-		
+
 	case isParentOfVirtualHome(p, virtualHome):
 		// /home -> / (when virtual home is /home/einstein)
 		return "/"
-		
+
 	case isGatewayStrippedParent(p, virtualHomeParent):
 		// /home/Test.txt -> /Test.txt (gateway omits username)
 		return strings.TrimPrefix(p, virtualHomeParent)
-		
+
 	case isGatewayStrippedUsername(p, virtualHomeBase):
 		// /einstein/Test.txt -> /Test.txt (WebDAV "home" alias strips /home)
 		return strings.TrimPrefix(p, "/"+virtualHomeBase)
-		
+
 	default:
 		return p
 	}
@@ -248,12 +248,12 @@ func isParentOfVirtualHome(p, virtualHome string) bool {
 }
 
 func isGatewayStrippedParent(p, virtualHomeParent string) bool {
-	return virtualHomeParent != "/" && virtualHomeParent != "." && 
+	return virtualHomeParent != "/" && virtualHomeParent != "." &&
 		strings.HasPrefix(p, virtualHomeParent+"/")
 }
 
 func isGatewayStrippedUsername(p, virtualHomeBase string) bool {
-	return virtualHomeBase != "/" && virtualHomeBase != "." && 
+	return virtualHomeBase != "/" && virtualHomeBase != "." &&
 		strings.HasPrefix(p, "/"+virtualHomeBase+"/")
 }
 
@@ -316,13 +316,13 @@ func (fs *localfs) unwrap(ctx context.Context, np string) string {
 	if external == "" {
 		external = "/"
 	}
-	
+
 	log.Debug().
 		Str("internal_path", np).
 		Str("namespace", ns).
 		Str("external_path", external).
 		Msg("localfs: unwrap")
-	
+
 	return external
 }
 
@@ -419,7 +419,7 @@ func (fs *localfs) permissionSet(ctx context.Context, owner *userpb.UserId) *pro
 
 func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string, mdKeys []string) (*provider.ResourceInfo, error) {
 	log := appctx.GetLogger(ctx)
-	fp := fs.unwrap(ctx, path.Join("/", fn))
+	fp := fs.unwrap(ctx, fn)
 	owner, err := getUser(ctx)
 	if err != nil {
 		return nil, err
@@ -440,14 +440,14 @@ func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string, mdK
 	// A fileid is constructed like `fileid-url_encoded_path`. See GetPathByID for the inverse conversion
 	// OpaqueId uses storage-relative path (e.g., einstein/Test.txt)
 	opaqueID := "fileid-" + url.QueryEscape(path.Join(layout, fp))
-	
+
 	// Path field needs virtual home prefix for space-based routing (PathToSpaceID)
 	virtualPath := fp
 	virtualHome, vhErr := fs.getVirtualHome(ctx)
 	if vhErr == nil && virtualHome != "" {
 		virtualPath = path.Join(virtualHome, fp)
 	}
-	
+
 	log.Debug().
 		Str("storage_relative", fp).
 		Str("virtual_home", virtualHome).
