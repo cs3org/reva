@@ -113,16 +113,17 @@ func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 
 	fn := path.Join(ns, r.URL.Path)
-	ref := &provider.Reference{}
+	ref := &provider.Reference{
+		Path: fn,
+	}
+	sublog := appctx.GetLogger(ctx).With().Any("ref", ref).Logger()
 
 	// We check if the PUT was made to a resource ID instead of a path
-	if r, ok := requestWasMadeToResourceId(ctx, fn); ok {
-		ref = r
-	} else {
-		ref.Path = fn
+	if req, ok := requestWasMadeToResourceId(ctx, fn); ok {
+		ref = req
 	}
 
-	sublog := appctx.GetLogger(ctx).With().Any("ref", ref).Logger()
+	sublog.Info().Str("URL", r.URL.Path).Msg("FindMe - HandlePathPut")
 
 	s.handlePut(ctx, w, r, ref, sublog)
 }
@@ -229,7 +230,9 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 
 	if userInCtxHasUploaderRole(ctx) {
-		ref.Path, err = randomizePath(ref.Path)
+		p := ref.Path
+		ref.Path, err = randomizePath(p)
+		log.Info().Str("oldPath", p).Str("newPath", ref.Path).Msg("FindMe")
 		if err != nil {
 			log.Debug().Err(err).Msg("error randomizing path")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -455,12 +458,9 @@ func randomizePath(p string) (string, error) {
 }
 
 func split(p string) (string, string) {
-	e := path.Ext(p)
-	if e == "" {
-		return p, ""
-	}
-	i := strings.Index(p, e)
-	return p[:i], e
+	ext := filepath.Ext(p)
+	base := strings.TrimSuffix(p, ext)
+	return base, ext
 }
 
 func (s *svc) handleSpacesPut(w http.ResponseWriter, r *http.Request, spaceID string) {
