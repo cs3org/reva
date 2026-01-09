@@ -32,3 +32,11 @@ user_layout = "{{.Username}}"
 {{< /highlight >}}
 {{% /dir %}}
 
+{{% dir name="virtual_home_template" type="string" default="" %}}
+Optional template for virtual home path (e.g., /home/{{.Username}}) [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/localhome/localhome.go#L39)
+{{< highlight toml >}}
+[storage.fs.localhome]
+virtual_home_template = ""
+{{< /highlight >}}
+{{% /dir %}}
+
