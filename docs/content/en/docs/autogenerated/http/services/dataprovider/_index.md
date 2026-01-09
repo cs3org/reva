@@ -31,6 +31,7 @@ The configuration for the storage driver [[Ref]](https://github.com/cs3org/reva/
 root = "/var/tmp/reva/"
 share_folder = "/MyShares"
 user_layout = "{{.Username}}"
+virtual_home_template = ""
 
 {{< /highlight >}}
 {{% /dir %}}
