@@ -41,16 +41,13 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/permissions"
-
-	"github.com/pkg/errors"
-	
-
 	"github.com/cs3org/reva/v3/pkg/publicshare"
 	"github.com/cs3org/reva/v3/pkg/share"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
@@ -511,12 +508,18 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
 
 	var href string
+	var err error
 	if parent != nil {
-		relativePath, err := filepath.Rel(parent.Path, md.Path)
+		// Encoding the paths to be able to handle special characters like spaces, #, ?
+		encodedParentPath := url.PathEscape(parent.Path)
+		encodedMdPath := url.PathEscape(md.Path)
+		encodedRelativePath := strings.TrimPrefix(encodedMdPath, encodedParentPath)
+		_, err = url.PathUnescape(encodedRelativePath)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to calculate path relative to parent: %v", md.Path)
 		}
-		href, err = url.JoinPath(hrefBase, relativePath)
+		href = url.PathEscape(hrefBase) + encodedRelativePath
+		_, err = url.PathUnescape(href)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to join relative path with ref: %v", md.Path)
 		}
@@ -524,11 +527,15 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		// If no parent specified, we just take space id + path relative to space
 		spaceID := md.Id.SpaceId
 		spacePath, _ := spaces.DecodeSpaceID(spaceID)
-		relativePath, err := filepath.Rel(spacePath, md.Path)
+		encodedSpacePath := url.PathEscape(spacePath)
+		encodedMdPath := url.PathEscape(md.Path)
+		encodedRelativePath := strings.TrimPrefix(encodedMdPath, encodedSpacePath)
+		_, err = url.PathUnescape(encodedRelativePath)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to calculate path relative to space: %v. %v", spacePath, md.Path)
 		}
-		href, err = url.JoinPath(hrefBase, spaceID, relativePath)
+		href = url.PathEscape(hrefBase) + encodedRelativePath
+		_, err = url.PathUnescape(href)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to join relative path with ref: %v", md.Path)
 		}
@@ -536,6 +543,12 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 
 	if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		href, _ = url.JoinPath(href, "/")
+	}
+
+	href, err = url.PathUnescape(href)
+	if err != nil {
+		sublog.Error().Err(err).Str("href", href).Msg("failed to unescape href")
+		return nil, errors.Wrapf(err, "failed to unescape href: %v", href)
 	}
 
 	response := responseXML{

@@ -39,7 +39,6 @@ import (
 
 // HTTPOptions to configure the Client.
 type HTTPOptions struct {
-
 	// HTTP URL of the EOS MGM.
 	// Default is https://eos-example.org
 	BaseURL string
@@ -381,11 +380,11 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 	log.Info().Str("func", "PUTFile").Str("remoteuser", remoteuser).Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", urlpath).Int64("length", length).Str("app", app).Msg("")
 
 	// Now send the req and see what happens
-	tempUrl, err := c.buildFullURL(urlpath, auth)
+	tempURL, err := c.buildFullURL(urlpath, auth)
 	if err != nil {
 		return err
 	}
-	base, err := url.Parse(tempUrl)
+	base, err := url.Parse(tempURL)
 	if err != nil {
 		return errtypes.PermissionDenied("Could not parse url " + urlpath)
 	}
@@ -445,6 +444,15 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 			if err != nil {
 				log.Error().Str("func", "PUTFile").Str("url", finalurl).Str("err", err.Error()).Msg("can't get a new location for a redirection")
 				return err
+			}
+			if loc.Fragment != "" {
+				loc = &url.URL{
+					Scheme:   loc.Scheme,
+					Host:     loc.Host,
+					Path:     loc.Path + "#" + loc.Fragment,
+					Fragment: "",
+					Opaque:   loc.Opaque,
+				}
 			}
 
 			req, err = http.NewRequestWithContext(ctx, http.MethodPut, loc.String(), stream)
