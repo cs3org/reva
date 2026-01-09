@@ -68,6 +68,18 @@ func TestUnmarshalProtocol(t *testing.T) {
 			},
 		},
 		{
+			raw: `{"name":"multi","options":{},"webdav":{"accessType":["datatx"],"sharedSecret":"secret","permissions":["read"],"uri":"http://example.org"}}`,
+			expected: []Protocol{
+				&WebDAV{
+					SharedSecret: "secret",
+					AccessTypes:  []ocm.AccessType{ocm.AccessType_ACCESS_TYPE_DATATX},
+					Permissions:  []string{"read"},
+					Requirements: []string{},
+					URI:          "http://example.org",
+				},
+			},
+		},
+		{
 			raw: `{"name":"multi","options":{},"webapp":{"uri":"http://example.org/test"}}`,
 			expected: []Protocol{
 				&Webapp{
@@ -76,17 +88,7 @@ func TestUnmarshalProtocol(t *testing.T) {
 			},
 		},
 		{
-			raw: `{"name":"multi","options":{},"datatx":{"sharedSecret":"secret","srcUri":"http://example.org","size":10}}`,
-			expected: []Protocol{
-				&Datatx{
-					SharedSecret: "secret",
-					SourceURI:    "http://example.org",
-					Size:         10,
-				},
-			},
-		},
-		{
-			raw: `{"name":"multi","options":{},"webdav":{"sharedSecret":"secret","permissions":["read","write"],"uri":"http://example.org"},"webapp":{"uri":"http://example.org/test"},"datatx":{"sharedSecret":"secret","srcUri":"http://example.org","size":10}}`,
+			raw: `{"name":"multi","options":{},"webdav":{"sharedSecret":"secret","permissions":["read","write"],"uri":"http://example.org"},"webapp":{"uri":"http://example.org/test"}}`,
 			expected: []Protocol{
 				&WebDAV{
 					SharedSecret: "secret",
@@ -96,11 +98,6 @@ func TestUnmarshalProtocol(t *testing.T) {
 				&Webapp{
 					URI: "http://example.org/test",
 				},
-				&Datatx{
-					SharedSecret: "secret",
-					SourceURI:    "http://example.org",
-					Size:         10,
-				},
 			},
 		},
 	}
@@ -109,12 +106,12 @@ func TestUnmarshalProtocol(t *testing.T) {
 		var got Protocols
 		err := json.Unmarshal([]byte(tt.raw), &got)
 		if err != nil && err.Error() != tt.err {
-			t.Fatalf("not expected error. got=%+v expected=%+v", err, tt.err)
+			t.Fatalf("unexpected error. got=%+v expected=%+v", err, tt.err)
 		}
 
 		if tt.err == "" {
 			if !protocolsEqual(got, tt.expected) {
-				t.Fatalf("result does not match with expected. got=%#v expected=%#v", got, tt.expected)
+				t.Fatalf("result does not match with expected. got=%#v expected=%#v for test=%+v", got, tt.expected, tt)
 			}
 		}
 	}
@@ -128,8 +125,6 @@ func protocolsToMap(p Protocols) map[string]Protocol {
 			m["webdav"] = prot
 		case *Webapp:
 			m["webapp"] = prot
-		case *Datatx:
-			m["datatx"] = prot
 		}
 	}
 	return m
@@ -170,6 +165,27 @@ func TestMarshalProtocol(t *testing.T) {
 		},
 		{
 			in: []Protocol{
+				&WebDAV{
+					AccessTypes:  []string{"datatx"},
+					SharedSecret: "secret",
+					Permissions:  []string{"read"},
+					Requirements: []string{},
+					URI:          "http://example.org",
+				},
+			},
+			expected: map[string]any{
+				"name":    "multi",
+				"options": map[string]any{},
+				"webdav": map[string]any{
+					"accessTypes":  []string{"datatx"},
+					"sharedSecret": "secret",
+					"permissions":  []any{"read"},
+					"uri":          "http://example.org",
+				},
+			},
+		},
+		{
+			in: []Protocol{
 				&Webapp{
 					URI:      "http://example.org",
 					ViewMode: "read",
@@ -182,24 +198,6 @@ func TestMarshalProtocol(t *testing.T) {
 					"uri":          "http://example.org",
 					"viewMode":     "read",
 					"sharedSecret": "",
-				},
-			},
-		},
-		{
-			in: []Protocol{
-				&Datatx{
-					SharedSecret: "secret",
-					SourceURI:    "http://example.org/source",
-					Size:         10,
-				},
-			},
-			expected: map[string]any{
-				"name":    "multi",
-				"options": map[string]any{},
-				"datatx": map[string]any{
-					"sharedSecret": "secret",
-					"srcUri":       "http://example.org/source",
-					"size":         float64(10),
 				},
 			},
 		},
@@ -215,11 +213,6 @@ func TestMarshalProtocol(t *testing.T) {
 					URI:      "http://example.org",
 					ViewMode: "read",
 				},
-				&Datatx{
-					SharedSecret: "secret",
-					SourceURI:    "http://example.org/source",
-					Size:         10,
-				},
 			},
 			expected: map[string]any{
 				"name":    "multi",
@@ -234,11 +227,6 @@ func TestMarshalProtocol(t *testing.T) {
 					"uri":          "http://example.org",
 					"viewMode":     "read",
 					"sharedSecret": "",
-				},
-				"datatx": map[string]any{
-					"sharedSecret": "secret",
-					"srcUri":       "http://example.org/source",
-					"size":         float64(10),
 				},
 			},
 		},

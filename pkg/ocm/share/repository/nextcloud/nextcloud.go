@@ -185,9 +185,6 @@ func (sm *Manager) efssShareToOcm(resp *EfssShare) *ocm.Share {
 	if resp.Protocols.WebApp.ViewMode != "" {
 		am = append(am, share.NewWebappAccessMethod(utils.GetAppViewMode(resp.Protocols.WebApp.ViewMode)))
 	}
-	if resp.Protocols.DataTx.SourceURI != "" {
-		am = append(am, share.NewTransferAccessMethod())
-	}
 
 	// return the OCM Share payload
 	return &ocm.Share{
@@ -330,9 +327,6 @@ func efssReceivedShareToOcm(resp *ReceivedEfssShare) *ocm.ReceivedShare {
 	if resp.Share.Protocols.WebApp.ViewMode != "" {
 		proto = append(proto, share.NewWebappProtocol(resp.Share.Protocols.WebApp.URI, utils.GetAppViewMode(resp.Share.Protocols.WebApp.ViewMode)))
 	}
-	if resp.Share.Protocols.DataTx.SourceURI != "" {
-		proto = append(proto, share.NewTransferProtocol(resp.Share.Protocols.DataTx.SourceURI, resp.Share.Token, uint64(resp.Share.Protocols.DataTx.Size)))
-	}
 
 	// return the OCM Received Share payload
 	rt := provider.ResourceType_RESOURCE_TYPE_FILE
@@ -370,7 +364,7 @@ func efssReceivedShareToOcm(resp *ReceivedEfssShare) *ocm.ReceivedShare {
 }
 
 // ListReceivedShares returns the list of shares the user has access.
-func (sm *Manager) ListReceivedShares(ctx context.Context, user *userpb.User) ([]*ocm.ReceivedShare, error) {
+func (sm *Manager) ListReceivedShares(ctx context.Context, user *userpb.User, filters []*ocm.ListReceivedOCMSharesRequest_Filter) ([]*ocm.ReceivedShare, error) {
 	_, respBody, err := sm.do(ctx, Action{"ListReceivedShares", ""}, getUsername(user))
 	if err != nil {
 		return nil, err

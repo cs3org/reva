@@ -207,39 +207,12 @@ func (s *service) getWebappProtocol(share *ocm.Share) *ocmd.Webapp {
 	}
 }
 
-func (s *service) getDataTransferProtocol(ctx context.Context, share *ocm.Share) *ocmd.Datatx {
-	var size uint64
-	// get the path of the share
-	statRes, err := s.gateway.Stat(ctx, &providerpb.StatRequest{
-		Ref: &providerpb.Reference{
-			ResourceId: share.ResourceId,
-		},
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	path := statRes.GetInfo().Path
-	err = s.walk(ctx, path, func(path string, info *providerpb.ResourceInfo, err error) error {
-		if info.Type == providerpb.ResourceType_RESOURCE_TYPE_FILE {
-			size += info.Size
-		}
-		return nil
-	})
-	if err != nil {
-		panic(err)
-	}
-	return &ocmd.Datatx{
-		SourceURI: s.webdavURL(share),
-		Size:      size,
-	}
-}
-
 // walk traverses the path recursively to discover all resources in the tree.
 func (s *service) walk(ctx context.Context, path string, fn walker.WalkFunc) error {
 	return s.walker.Walk(ctx, path, fn)
 }
 
+// AccessMethods are protocols used by remote users to access a local OCM share.
 func (s *service) getProtocols(ctx context.Context, share *ocm.Share) ocmd.Protocols {
 	var p ocmd.Protocols
 	for _, m := range share.AccessMethods {
@@ -248,8 +221,6 @@ func (s *service) getProtocols(ctx context.Context, share *ocm.Share) ocmd.Proto
 			p = append(p, s.getWebdavProtocol(share, t))
 		case *ocm.AccessMethod_WebappOptions:
 			p = append(p, s.getWebappProtocol(share))
-		case *ocm.AccessMethod_TransferOptions:
-			p = append(p, s.getDataTransferProtocol(ctx, share))
 		}
 	}
 	return p
@@ -293,7 +264,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		Name:          filepath.Base(info.Path),
 		ResourceId:    req.ResourceId,
 		Grantee:       req.Grantee,
-		ShareType:     ocm.ShareType_SHARE_TYPE_USER,
+		RecipientType: ocm.RecipientType_RECIPIENT_TYPE_USER,
 		Owner:         info.Owner,
 		Creator:       user.Id,
 		Ctime:         ts,
@@ -488,7 +459,7 @@ func (s *service) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareReq
 
 func (s *service) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceivedOCMSharesRequest) (*ocm.ListReceivedOCMSharesResponse, error) {
 	user := appctx.ContextMustGetUser(ctx)
-	shares, err := s.repo.ListReceivedShares(ctx, user)
+	shares, err := s.repo.ListReceivedShares(ctx, user, req.Filters)
 	if err != nil {
 		return &ocm.ListReceivedOCMSharesResponse{
 			Status: status.NewInternal(ctx, err, "error listing received shares"),

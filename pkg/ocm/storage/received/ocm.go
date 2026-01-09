@@ -251,7 +251,7 @@ func convertStatToResourceInfo(f fs.FileInfo, share *ocmpb.ReceivedShare, relPat
 	}
 
 	var name string
-	if share.ResourceType == provider.ResourceType_RESOURCE_TYPE_FILE {
+	if share.SharedResourceType == ocmpb.SharedResourceType_SHARE_RESOURCE_TYPE_FILE {
 		name = share.Name
 	} else {
 		name = f.Name()
