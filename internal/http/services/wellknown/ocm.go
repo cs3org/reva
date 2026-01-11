@@ -38,6 +38,7 @@ type OcmProviderConfig struct {
 	InviteAcceptDialog string `docs:"/open-cloud-mesh/accept-invite;The frontend URL where to land when receiving an invitation" mapstructure:"invite_accept_dialog"`
 	EnableWebapp       bool   `docs:"false;Whether web apps are enabled in OCM shares."                                          mapstructure:"enable_webapp"`
 	EnableDatatx       bool   `docs:"false;Whether data transfers are enabled in OCM shares."                                    mapstructure:"enable_datatx"`
+	EnableEmbedded     bool   `docs:"false;Whether embedded shares are enabled in OCM shares."                        mapstructure:"enable_embedded"`
 }
 
 type OcmDiscoveryData struct {
@@ -124,10 +125,20 @@ func (h *wkocmHandler) init(c *OcmProviderConfig) {
 		rtProtos["datatx"] = filepath.Join(endpointURL.Path, c.WebdavRoot)
 	}
 	d.ResourceTypes = []resourceTypes{{
-		Name:       "file",           // so far we only support `file`
+		Name:       "file",
 		ShareTypes: []string{"user"}, // so far we only support `user`
 		Protocols:  rtProtos,         // expose the protocols as per configuration
 	}}
+	if c.EnableEmbedded {
+		d.ResourceTypes = append(d.ResourceTypes, resourceTypes{
+			Name:       "ro-crate",
+			ShareTypes: []string{"user"},
+			Protocols: map[string]string{
+				"embedded": "", // embedded resources have an empty root path by convention
+			},
+		})
+	}
+
 	// for now, we hardcoded the capabilities, as this is currently only advisory
 	d.Capabilities = []string{"invites", "webdav-uri", "protocol-object", "invite-wayf"}
 	d.InviteAcceptDialog, _ = url.JoinPath(c.Endpoint, c.InviteAcceptDialog)

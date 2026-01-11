@@ -20,7 +20,7 @@ func handleError(ctx context.Context, err error, w http.ResponseWriter) {
 	} else {
 		log.Info().Err(err).Msg("ocgraph error")
 	}
-	w.WriteHeader(grpcCodeToHTTPStatus(code))
+	w.WriteHeader(GrpcCodeToHTTPStatus(code))
 	w.Write([]byte("Error: " + err.Error()))
 }
 
@@ -57,10 +57,10 @@ func handleRpcStatus(ctx context.Context, status *rpcv1beta1.Status, msg string,
 	w.Header().Set("x-request-id", trace.Get(ctx))
 
 	code := int32(status.Code)
-	w.WriteHeader(grpcCodeToHTTPStatus(codes.Code(code)))
+	w.WriteHeader(GrpcCodeToHTTPStatus(codes.Code(code)))
 }
 
-func grpcCodeToHTTPStatus(code codes.Code) int {
+func GrpcCodeToHTTPStatus(code codes.Code) int {
 	switch code {
 	case codes.OK:
 		return http.StatusOK
