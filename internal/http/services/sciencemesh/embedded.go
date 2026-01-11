@@ -27,7 +27,6 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocgraph"
-	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/internal/http/services/reqres"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/trace"
@@ -82,7 +81,7 @@ func (h *embeddedHandler) ListEmbeddedShares(w http.ResponseWriter, r *http.Requ
 
 	// Create a wrapper function to convert UnifiedRoleDefinition
 	roleConverter := func(ctx context.Context, perms *storageprovider.ResourcePermissions) *ocmconversions.UnifiedRoleDefinition {
-		role := CS3ResourcePermissionsToUnifiedRole(ctx, perms)
+		role := ocgraph.CS3ResourcePermissionsToUnifiedRole(ctx, perms)
 		if role == nil {
 			return nil
 		}
@@ -113,20 +112,13 @@ func (h *embeddedHandler) ListEmbeddedShares(w http.ResponseWriter, r *http.Requ
 		} else {
 			log.Info().Err(err).Msg("embedded error")
 		}
-		w.WriteHeader(grpcCodeToHTTPStatus(code))
+		w.WriteHeader(ocgraph.GrpcCodeToHTTPStatus(code))
 		w.Write([]byte("Error: " + err.Error()))
 
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-}
-
-func CS3ResourcePermissionsToUnifiedRole(ctx context.Context, p *storageprovider.ResourcePermissions) *libregraph.UnifiedRoleDefinition {
-	log := appctx.GetLogger(ctx)
-	role := conversions.RoleFromResourcePermissions(p)
-	log.Debug().Interface("role", role).Interface("perms", p).Msg("Converting cs3 resource permissions to unified role")
-	return ocsRoleUnifiedRole[role.Name]
 }
 
 func CreateStateMapping(ctx context.Context, receivedOCMShare []*ocm.ReceivedShare) map[string]string {
@@ -148,55 +140,4 @@ func convertShareState(state ocm.ShareState) string {
 		return val
 	}
 	return "unknown"
-}
-
-var ocsRoleUnifiedRole = map[string]*libregraph.UnifiedRoleDefinition{
-	conversions.RoleViewer:     ocgraph.NewViewerUnifiedRole(),
-	conversions.RoleReader:     ocgraph.NewViewerUnifiedRole(),
-	conversions.RoleEditor:     ocgraph.NewEditorUnifiedRole(),
-	conversions.RoleFileEditor: ocgraph.NewFileEditorUnifiedRole(),
-	conversions.RoleUploader:   ocgraph.NewUploaderUnifiedRole(),
-	conversions.RoleManager:    ocgraph.NewManagerUnifiedRole(),
-	conversions.RoleDenied:     ocgraph.NewAccessDeniedUnifiedRole(),
-}
-
-func grpcCodeToHTTPStatus(code codes.Code) int {
-	switch code {
-	case codes.OK:
-		return http.StatusOK
-	case codes.Canceled:
-		return 499 // Client Closed Request (non-standard)
-	case codes.Unknown:
-		return http.StatusInternalServerError
-	case codes.InvalidArgument:
-		return http.StatusBadRequest
-	case codes.DeadlineExceeded:
-		return http.StatusGatewayTimeout
-	case codes.NotFound:
-		return http.StatusNotFound
-	case codes.AlreadyExists:
-		return http.StatusConflict
-	case codes.PermissionDenied:
-		return http.StatusForbidden
-	case codes.ResourceExhausted:
-		return http.StatusTooManyRequests
-	case codes.FailedPrecondition:
-		return http.StatusBadRequest
-	case codes.Aborted:
-		return http.StatusConflict
-	case codes.OutOfRange:
-		return http.StatusBadRequest
-	case codes.Unimplemented:
-		return http.StatusNotImplemented
-	case codes.Internal:
-		return http.StatusInternalServerError
-	case codes.Unavailable:
-		return http.StatusServiceUnavailable
-	case codes.DataLoss:
-		return http.StatusInternalServerError
-	case codes.Unauthenticated:
-		return http.StatusUnauthorized
-	default:
-		return http.StatusInternalServerError
-	}
 }
