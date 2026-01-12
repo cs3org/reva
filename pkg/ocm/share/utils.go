@@ -63,7 +63,7 @@ func NewTransferProtocol(sourceURI, sharedSecret string, size uint64) *ocm.Proto
 	}
 }
 
-// NewROCrateProtocol is an abstraction for creating a RO-Crate protocol.
+// NewEmbeddedProtocol is an abstraction for creating an OCM embedded protocol.
 func NewEmbeddedProtocol(payload string) *ocm.Protocol {
 	return &ocm.Protocol{
 		Term: &ocm.Protocol_EmbeddedOptions{
