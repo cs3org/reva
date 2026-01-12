@@ -166,12 +166,12 @@ type ShareState struct {
 // TODO(lopresti) see if we can consolidate Owner and Initiator with UIDOwner and UIDInitiator in ProtoShare
 type OcmShare struct {
 	ProtoShare
-	DeletedAt     gorm.DeletedAt     `gorm:"uniqueIndex:u_ocmshare"`
-	Inode         string             `gorm:"size:64;not null;uniqueIndex:u_ocmshare"`
-	Instance      string             `gorm:"size:64;not null;uniqueIndex:u_ocmshare"`
+	DeletedAt     gorm.DeletedAt     `gorm:"uniqueIndex:u_ocmshare"` // the composite index also works as regular index here, similarly as in the `Share` struct
+	Inode         string             `gorm:"size:64;not null;uniqueIndex:u_ocmshare;index"`
+	Instance      string             `gorm:"size:64;not null;uniqueIndex:u_ocmshare;index"`
 	Token         string             `gorm:"size:255;not null;uniqueIndex:u_ocmshare_token"`
 	Name          string             `gorm:"type:text;not null"`
-	ShareWith     string             `gorm:"size:255;not null;uniqueIndex:u_ocmshare"`
+	ShareWith     string             `gorm:"size:255;not null;uniqueIndex:u_ocmshare;index"`
 	Owner         string             `gorm:"size:255;not null"`
 	Initiator     string             `gorm:"type:text;not null"`
 	Ctime         uint64             `gorm:"not null"`
