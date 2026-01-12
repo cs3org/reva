@@ -109,12 +109,12 @@ type ProtoShare struct {
 	//DeletedAt  gorm.DeletedAt `gorm:"index"`
 	//Inode      string `gorm:"size:32;index"`
 	//Instance   string `gorm:"size:32;index"`
-	UIDOwner     string   `gorm:"size:64"`
+	UIDOwner     string   `gorm:"size:64;index"`
 	UIDInitiator string   `gorm:"size:64;index"`
 	ItemType     ItemType `gorm:"size:16;index"` // file | folder | reference | symlink
 	InitialPath  string
 	Permissions  uint8
-	Orphan       bool
+	Orphan       bool               `gorm:"index"`
 	Expiration   datatypes.NullTime `gorm:"index"`
 }
 
@@ -122,10 +122,15 @@ type ProtoShare struct {
 // can only be one share per (inode, instance, recipient) tuple, unless the share is deleted.
 type Share struct {
 	ProtoShare
+	// Note that the order of the fields here determines the order of the composite index u_share.
+	// `deleted_at` has no separate index here because it is the first entry in the composite index,
+	// which MySQL can use.
+	// Should you change the order of the fields, make sure to add an index to `deleted_at`, or
+	// you might encounter performance issues!
 	DeletedAt         gorm.DeletedAt `gorm:"uniqueIndex:u_share"`
-	Inode             string         `gorm:"size:32;uniqueIndex:u_share"`
-	Instance          string         `gorm:"size:32;uniqueIndex:u_share"`
-	ShareWith         string         `gorm:"size:255;uniqueIndex:u_share"` // 255 because this can be an external account, which has a long representation
+	Inode             string         `gorm:"size:32;uniqueIndex:u_share;index"`
+	Instance          string         `gorm:"size:32;uniqueIndex:u_share;index"`
+	ShareWith         string         `gorm:"size:255;uniqueIndex:u_share;index"` // 255 because this can be an external account, which has a long representation
 	SharedWithIsGroup bool
 	Description       string `gorm:"size:1024"`
 }
@@ -134,9 +139,9 @@ type Share struct {
 type PublicLink struct {
 	ProtoShare
 	DeletedAt                    gorm.DeletedAt `gorm:"index"`
-	Inode                        string         `gorm:"size:32"`
-	Instance                     string         `gorm:"size:32"`
-	Token                        string         `gorm:"uniqueIndex:u_link_token;size:32"` // Current tokens are only 16 chars long, but old tokens used to be 32 characters
+	Inode                        string         `gorm:"size:32;index"`
+	Instance                     string         `gorm:"size:32;index"`
+	Token                        string         `gorm:"uniqueIndex:u_link_token;size:32;index"` // Current tokens are only 16 chars long, but old tokens used to be 32 characters
 	Quicklink                    bool
 	NotifyUploads                bool
 	NotifyUploadsExtraRecipients string
