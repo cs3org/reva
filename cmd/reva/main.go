@@ -34,7 +34,7 @@ import (
 var (
 	conf                                                        *config
 	host                                                        string
-	tokenFile                                                  string
+	tokenFile                                                   string
 	insecure, skipverify, disableargprompt, insecuredatagateway bool
 	timeout                                                     int64
 
@@ -57,6 +57,7 @@ var (
 		rmCommand(),
 		moveCommand(),
 		mkdirCommand(),
+		touchCommand(),
 		ocmFindAcceptedUsersCommand(),
 		ocmRemoveAcceptedUser(),
 		ocmInviteGenerateCommand(),
