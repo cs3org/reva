@@ -1,8 +1,8 @@
-Enhancement: Embedded shares
+Enhancement: OCM Embedded shares
 
-This PR introduces embedded shares
+This PR introduces OCM embedded shares
 
-* Adds functionality to store embedded shares (where the shared data is embedded in the share)
+* Adds functionality to store embedded shares (where the shared data is embedded in the OCM share payload)
 * Adds filters to `ListReceivedOCMShares` call and adapts to the new fields `SharedResourceType` and `RecipientType`
 * Adds an endpoint to list embedded shares (using the previously mentioned filters)
 
