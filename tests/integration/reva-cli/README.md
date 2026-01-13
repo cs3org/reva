@@ -17,15 +17,18 @@ Tests can be run using `make test-reva-cli`.
 
 ## Overview of test coverage
 
-As a guideline, this test suite aims to cover the following methods:
-* GetHome, CreateHome
+This test suite aims covers the following methods:
 * CreateDir, TouchFile, Delete, Move, GetMD, ListFolder, Upload, Download
 * ListRevisions, DownloadRevision, RestoreRevision
 * ListRecycle, RestoreRecycleItem, PurgeRecycleItem, EmptyRecycle
-* AddGrant, DenyGrant, RemoveGrant, UpdateGrant, ListGrants
+* AddGrant, RemoveGrant, UpdateGrant, ListGrants
+
+In the future, it would be nice to also test the following:
+* GetHome, CreateHome
 * GetQuota
 * SetArbitraryMetadata, UnsetArbitraryMetada
 * SetLock, GetLock, RefreshLock, Unlock
+* DenyGrant
 
 ### CI/CD Pipelines
 

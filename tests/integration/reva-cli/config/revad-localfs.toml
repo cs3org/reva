@@ -119,6 +119,15 @@ driver = "json"
 [grpc.services.groupprovider.drivers.json]
 groups = "./tmp/groups.json"
 
+#########
+# SHARE #
+#########
+
+[grpc.services.usershareprovider]
+driver = "sql"
+
+[grpc.services.usershareprovider.drivers.sql]
+
 ########
 # HTTP #
 ########

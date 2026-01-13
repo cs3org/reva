@@ -119,6 +119,7 @@ test-reva-cli:
 	fi
 	judo tests/integration/reva-cli/file-operations.yaml
 	judo tests/integration/reva-cli/versions-recycle.yaml
+	judo tests/integration/reva-cli/grants.yaml
 
 .PHONY: check-changelog
 check-changelog: $(CALENS)
