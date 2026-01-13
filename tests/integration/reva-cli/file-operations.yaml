@@ -1,0 +1,88 @@
+# This test covers the following operations:
+# CreateDir, Delete, ListFolder, Upload, Download, Move, TouchFile, GetMD 
+
+vars:
+  REVANODE: "localhost:9142"
+  TESTUSER: "testuser"
+  TESTPASS: "testpass"
+  BASEDIR: "/localfs"
+
+run:
+  login:
+    command: "cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token login --username={{TESTUSER}} --password={{TESTPASS}} basic"
+    expectCode: 0
+  
+  makeDir:
+    command: 'cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token mkdir {{BASEDIR}}/tests'
+    expectCode: 0
+    
+  checkFolder:
+    command: 'cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token ls {{BASEDIR}}/'
+    expectCode: 0
+    outputContains:
+    - 'tests'
+  
+  uploadFile:
+    prerequisiteCwd: .
+    prerequisites:
+      - 'echo "Hello World" > local-test-file.txt'
+    command:  'cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token upload local-test-file.txt  {{BASEDIR}}/tests/my-test-file.txt'
+    expectCode: 0
+  
+  createFile:
+    command:  'cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token touch {{BASEDIR}}/tests/created-test-file.txt'
+    expectCode: 0
+
+  checkFileAfterUploadAndCreate:
+    command: 'cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token ls {{BASEDIR}}/tests/'
+    expectCode: 0
+    outputContains:
+    - 'my-test-file.txt'
+    - 'created-test-file.txt'
+
+  statUploadedFile:
+    command: 'cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token stat {{BASEDIR}}/tests/my-test-file.txt'
+    expectCode: 0
+    outputContains:
+    - 'my-test-file.txt'
+    - 'testuser'
+  
+  moveFile:
+    command:  'cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token mv {{BASEDIR}}/tests/my-test-file.txt {{BASEDIR}}/tests/my-test-file-moved.txt'
+    expectCode: 0
+    
+  checkFileAfterMove:
+    command: 'cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token ls {{BASEDIR}}/tests/'
+    expectCode: 0
+    outputContains:
+    - 'my-test-file-moved.txt'
+    outputDoesntContain:
+    - 'my-test-file.txt'
+  
+  downloadFile:
+    command:  'cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token download {{BASEDIR}}/tests/my-test-file-moved.txt local-test-file-copy.txt'
+    expectCode: 0
+
+  verifyFileHash:
+    prerequisiteCwd: .
+    command: |
+      bash -c "
+        ORIGINAL_HASH=$(sha256sum local-test-file.txt | cut -d\" \" -f1)
+        DOWNLOADED_HASH=$(sha256sum local-test-file-copy.txt | cut -d\" \" -f1)
+        if [ \"$ORIGINAL_HASH\" != \"$DOWNLOADED_HASH\" ]; then
+          echo \"Hash mismatch: original=$ORIGINAL_HASH, downloaded=$DOWNLOADED_HASH\"
+          exit 1
+        fi
+        echo \"File hashes match: $ORIGINAL_HASH\"
+      "
+    expectCode: 0
+
+  deleteFile:
+    command: 'cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token rm {{BASEDIR}}/tests/my-test-file-moved.txt'
+    expectCode: 0
+
+  verifyDeleted:
+    command: 'cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token ls {{BASEDIR}}/tests/'
+    expectCode: 0
+    outputDoesntContain:
+      - 'my-test-file.txt'

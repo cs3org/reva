@@ -15,6 +15,21 @@ These tests use the [Judo](https://github.com/intuit/judo) framework to execute 
 
 Tests can be run using `make test-reva-cli`.
 
+## Overview of test coverage
+
+This test suite aims covers the following methods:
+* CreateDir, TouchFile, Delete, Move, GetMD, ListFolder, Upload, Download
+* ListRevisions, DownloadRevision, RestoreRevision
+* ListRecycle, RestoreRecycleItem, PurgeRecycleItem, EmptyRecycle
+* AddGrant, RemoveGrant, UpdateGrant, ListGrants
+
+In the future, it would be nice to also test the following:
+* GetHome, CreateHome
+* GetQuota
+* SetArbitraryMetadata, UnsetArbitraryMetada
+* SetLock, GetLock, RefreshLock, Unlock
+* DenyGrant
+
 ### CI/CD Pipelines
 
 The Reva CI/CD pipeline uses localfs as a backend, while EOS will obviously use a different config, with EOS as its storage backend. The Reva pipeline tests are defined in [test-reva-cli.yml](/.github/workflows/test-reva-cli.yml)
@@ -32,4 +47,3 @@ run:
     command:  'cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token upload local-test-file.txt  /localfs/my-test-file.txt'
     expectCode: 0
 ```
-

@@ -720,7 +720,7 @@ func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest)
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error touching file: "+req.Ref.String())
+			st = status.NewInternal(ctx, err, "error touching file "+req.Ref.String()+": "+err.Error())
 		}
 		return &provider.TouchFileResponse{
 			Status: st,
@@ -750,7 +750,7 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
-			st = status.NewNotFound(ctx, "path not found when creating container")
+			st = status.NewNotFound(ctx, "path not found when deleting container")
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
@@ -1191,7 +1191,7 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error listing file versions: "+req.Ref.String())
+			st = status.NewInternal(ctx, err, "error listing file versions for "+req.Ref.String()+": "+err.Error())
 		}
 		return &provider.ListFileVersionsResponse{
 			Status: st,

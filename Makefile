@@ -117,7 +117,9 @@ test-reva-cli:
 		echo "Error: judo not found. Install with: npm install -g @intuit/judo"; \
 		exit 1; \
 	fi
-	judo tests/integration/reva-cli/*.yaml
+	judo tests/integration/reva-cli/file-operations.yaml
+	judo tests/integration/reva-cli/versions-recycle.yaml
+	judo tests/integration/reva-cli/grants.yaml
 
 .PHONY: check-changelog
 check-changelog: $(CALENS)

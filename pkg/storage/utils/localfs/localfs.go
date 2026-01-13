@@ -905,7 +905,40 @@ func (fs *localfs) CreateDir(ctx context.Context, ref *provider.Reference) error
 
 // TouchFile as defined in the storage.FS interface.
 func (fs *localfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
-	return fmt.Errorf("unimplemented: TouchFile")
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error resolving ref")
+	}
+
+	if fs.isShareFolder(ctx, fn) {
+		return errtypes.PermissionDenied("localfs: cannot create file under the share folder")
+	}
+
+	fp := fs.wrap(ctx, fn)
+	if _, err := os.Stat(fp); err == nil {
+		return errtypes.AlreadyExists(fn)
+	}
+
+	// Check if parent directory exists
+	parentDir := path.Dir(fp)
+	if _, err := os.Stat(parentDir); err != nil {
+		if os.IsNotExist(err) {
+			return errtypes.NotFound("localfs: parent directory does not exist: " + parentDir)
+		}
+		return errors.Wrap(err, "localfs: error checking parent directory")
+	}
+
+	// Create empty file
+	file, err := os.OpenFile(fp, os.O_CREATE|os.O_WRONLY, os.FileMode(0664))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errtypes.NotFound(fn)
+		}
+		return errors.Wrap(err, "localfs: error creating file")
+	}
+	defer file.Close()
+
+	return fs.propagate(ctx, path.Dir(fp))
 }
 
 func (fs *localfs) Delete(ctx context.Context, ref *provider.Reference) error {
@@ -1225,6 +1258,10 @@ func (fs *localfs) ListRevisions(ctx context.Context, ref *provider.Reference) (
 	revisions := []*provider.FileVersion{}
 	entries, err := os.ReadDir(versionsDir)
 	if err != nil {
+		if os.IsNotExist(err) {
+			// Versions directory doesn't exist yet, return empty list
+			return revisions, nil
+		}
 		return nil, errors.Wrap(err, "localfs: error reading"+versionsDir)
 	}
 	mds := make([]iofs.FileInfo, 0, len(entries))
