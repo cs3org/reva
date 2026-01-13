@@ -239,8 +239,6 @@ func (c *EOSHTTPClient) buildFullURL(urlpath string, auth eosclient.Authorizatio
 
 	if auth.Token != "" {
 		fullurl += "authz=" + auth.Token
-	} else if auth.Role.UID != "" {
-		fullurl += fmt.Sprintf("eos.ruid=%s&eos.rgid=%s", auth.Role.UID, auth.Role.GID)
 	}
 
 	u, err := url.Parse(fullurl)
