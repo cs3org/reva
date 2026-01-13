@@ -24,15 +24,21 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 
 	ret := make([]*eosclient.DeletedEntry, 0)
 	count := 0
+	
 	for d := to; !d.Before(from); d = d.AddDate(0, 0, -1) {
-		msg := new(erpc.NSRequest_RecycleRequest)
-		msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(erpc.NSRequest_RecycleRequest_RECYCLE_CMD_value["LIST"])
-		msg.Listflag = new(erpc.NSRequest_RecycleRequest_ListFlags)
-		msg.Listflag.Day = int32(d.Day())
-		msg.Listflag.Month = int32(d.Month())
-		msg.Listflag.Year = int32(d.Year())
-		msg.Listflag.Maxentries = int32(maxentries + 1)
-		rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
+		rq.Command = &erpc.NSRequest_Recycle{
+			Recycle: &erpc.RecycleProto{
+				Subcmd: &erpc.RecycleProto_Ls{
+					Ls: &erpc.RecycleProto_LsProto{
+						Type: erpc.RecycleProto_UID,
+						FullDetails: true,
+						MonitorFmt: true,
+						Maxentries:  int32(maxentries + 1),
+						Date: fmt.Sprintf("%04d/%02d/%02d", d.Year(), d.Month(), d.Day()),
+					},
+				},
+			},
+		}
 
 		// Now send the req and see what happens
 		resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
@@ -88,13 +94,16 @@ func (c *Client) RestoreDeletedEntry(ctx context.Context, auth eosclient.Authori
 	if err != nil {
 		return err
 	}
-
-	msg := new(erpc.NSRequest_RecycleRequest)
-	msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(erpc.NSRequest_RecycleRequest_RECYCLE_CMD_value["RESTORE"])
-
-	msg.Key = key
-
-	rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
+	
+	rq.Command = &erpc.NSRequest_Recycle{
+		Recycle: &erpc.RecycleProto{
+			Subcmd: &erpc.RecycleProto_Restore{
+				Restore: &erpc.RecycleProto_RestoreProto{
+					Key: key,
+				},
+			},
+		},
+	}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
@@ -126,11 +135,14 @@ func (c *Client) PurgeDeletedEntries(ctx context.Context, auth eosclient.Authori
 	if err != nil {
 		return err
 	}
-
-	msg := new(erpc.NSRequest_RecycleRequest)
-	msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(erpc.NSRequest_RecycleRequest_RECYCLE_CMD_value["PURGE"])
-
-	rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
+	
+	rq.Command = &erpc.NSRequest_Recycle{
+		Recycle: &erpc.RecycleProto{
+			Subcmd: &erpc.RecycleProto_Purge{
+				Purge: &erpc.RecycleProto_PurgeProto{},
+			},
+		},
+	}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
