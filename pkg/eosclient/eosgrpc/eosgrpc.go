@@ -279,11 +279,6 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 	var localfile io.WriteCloser
 	localfile = nil
 
-	u, err := utils.GetUser(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "eos: no user in ctx")
-	}
-
 	if c.opt.ReadUsesLocalTemp {
 		rand := "eosread-" + uuid.New().String()
 		localTarget := fmt.Sprintf("%s/%s", c.opt.CacheDirectory, rand)
@@ -297,7 +292,7 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 		}
 	}
 
-	bodystream, err := c.httpcl.GETFile(ctx, u.Username, auth, path, localfile, ranges)
+	bodystream, err := c.httpcl.GETFile(ctx, auth.Role.UID, auth, path, localfile, ranges)
 	if err != nil {
 		log.Error().Str("func", "Read").Str("path", path).Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("err", err.Error()).Msg("")
 		return nil, errtypes.InternalError(fmt.Sprintf("can't GET local cache file '%s'", localTarget))
@@ -312,11 +307,6 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser, length int64, app string, disableVersioning bool) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "Write").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
-
-	u, err := utils.GetUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eos: no user in ctx")
-	}
 
 	if c.opt.WriteUsesLocalTemp {
 		fd, err := os.CreateTemp(c.opt.CacheDirectory, "eoswrite-")
@@ -340,10 +330,10 @@ func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path s
 		defer wfd.Close()
 		defer os.RemoveAll(fd.Name())
 
-		return c.httpcl.PUTFile(ctx, u.Username, auth, path, wfd, length, app, disableVersioning)
+		return c.httpcl.PUTFile(ctx, auth.Role.UID, auth, path, wfd, length, app, disableVersioning)
 	}
 
-	return c.httpcl.PUTFile(ctx, u.Username, auth, path, stream, length, app, disableVersioning)
+	return c.httpcl.PUTFile(ctx, auth.Role.UID, auth, path, stream, length, app, disableVersioning)
 }
 
 func (c *Client) getOrCreateVersionFolderInode(ctx context.Context, ownerAuth eosclient.Authorization, p string) (uint64, error) {
