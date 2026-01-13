@@ -44,6 +44,7 @@ const (
 	ItemTypeFolder    ItemType = "folder"
 	ItemTypeReference ItemType = "reference"
 	ItemTypeSymlink   ItemType = "symlink"
+	ItemTypeEmbedded  ItemType = "embedded"
 )
 
 func (i ItemType) String() string {
@@ -83,6 +84,8 @@ const (
 	WebappProtocol
 	// TransferProtocol is the OCM `datatx` protocol.
 	TransferProtocol
+	// EmbeddedProtocol is the OCM `embedded` protocol.
+	EmbeddedProtocol
 )
 
 // ShareID only contains IDs of shares and public links. This is because the Web UI requires
@@ -218,6 +221,8 @@ type OcmReceivedShareProtocol struct {
 	Permissions int `gorm:"default:null"`
 	// Transfer Protocol fields
 	Size uint64 `gorm:"default:null"`
+	// JSON field for the embedded protocol payload
+	Payload datatypes.JSON `gorm:"type:json;default:null"`
 }
 
 func (s *Share) AsCS3Share(granteeType userpb.UserType) *collaboration.Share {

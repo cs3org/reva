@@ -438,7 +438,7 @@ var _ = Describe("Nextcloud", func() {
 			am, called, teardown := setUpNextcloudServer()
 			defer teardown()
 
-			receivedShares, err := am.ListReceivedShares(ctx, user)
+			receivedShares, err := am.ListReceivedShares(ctx, user, []*ocm.ListReceivedOCMSharesRequest_Filter{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(receivedShares)).To(Equal(1))
 			Expect(receivedShares[0]).To(Equal(&ocm.ReceivedShare{

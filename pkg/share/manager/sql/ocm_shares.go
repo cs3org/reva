@@ -98,7 +98,7 @@ func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share) (*ocm.Share, error) 
 			Initiator:     s.Creator.OpaqueId,
 			Ctime:         s.Ctime.Seconds,
 			Mtime:         s.Mtime.Seconds,
-			RecipientType: convertFromCS3OCMShareType(s.ShareType),
+			RecipientType: convertFromCS3OCMShareType(s.RecipientType),
 		}
 		if s.Expiration != nil {
 			share.Expiration = datatypes.NullTime{
@@ -222,7 +222,7 @@ func (m *mgr) ListShares(ctx context.Context, user *userpb.User, filters []*ocm.
 	query := m.db.WithContext(ctx).Where("initiator = ? OR owner = ?", user.Id.OpaqueId, user.Id.OpaqueId)
 
 	if len(filters) > 0 {
-		filterQuery, filterParams, err := translateFilters(filters)
+		filterQuery, filterParams, err := translateShareFilters(filters)
 		if err != nil {
 			return nil, err
 		}
@@ -267,13 +267,13 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*oc
 		receivedShare := &model.OcmReceivedShare{
 			Name:          s.Name,
 			RemoteShareID: s.RemoteShareId,
-			ItemType:      convertFromCS3ResourceType(s.ResourceType),
+			ItemType:      convertFromCS3ResourceType(s.SharedResourceType),
 			ShareWith:     s.Grantee.GetUserId().OpaqueId,
 			Owner:         formatUserID(s.Owner),
 			Initiator:     formatUserID(s.Creator),
 			Ctime:         s.Ctime.Seconds,
 			Mtime:         s.Mtime.Seconds,
-			RecipientType: convertFromCS3OCMShareType(s.ShareType),
+			RecipientType: convertFromCS3OCMShareType(s.RecipientType),
 			State:         convertFromCS3OCMShareState(s.State),
 		}
 		if s.Expiration != nil {
@@ -304,6 +304,10 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*oc
 				}
 			case *ocm.Protocol_TransferOptions:
 				if err := storeTransferProtocol(tx, int64(receivedShare.ID), r); err != nil {
+					return err
+				}
+			case *ocm.Protocol_EmbeddedOptions:
+				if err := storeEmbeddedProtocol(tx, int64(receivedShare.ID), r); err != nil {
 					return err
 				}
 			}
@@ -346,6 +350,17 @@ func storeWebappProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_WebappOptio
 	}
 	return nil
 }
+func storeEmbeddedProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_EmbeddedOptions) error {
+	protocol := &model.OcmReceivedShareProtocol{
+		OcmReceivedShareID: uint(shareID),
+		Type:               model.EmbeddedProtocol,
+		Payload:            datatypes.JSON([]byte(o.EmbeddedOptions.Payload)),
+	}
+	if err := tx.Create(protocol).Error; err != nil {
+		return err
+	}
+	return nil
+}
 
 func storeTransferProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_TransferOptions) error {
 	protocol := &model.OcmReceivedShareProtocol{
@@ -361,8 +376,19 @@ func storeTransferProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_TransferO
 	return nil
 }
 
-func (m *mgr) ListReceivedShares(ctx context.Context, user *userpb.User) ([]*ocm.ReceivedShare, error) {
+func (m *mgr) ListReceivedShares(ctx context.Context, user *userpb.User, filters []*ocm.ListReceivedOCMSharesRequest_Filter) ([]*ocm.ReceivedShare, error) {
 	query := m.db.WithContext(ctx).Where("share_with = ?", user.Id.OpaqueId)
+
+	if len(filters) > 0 {
+		filterQuery, filterParams, err := translateReceivedShareFilters(filters)
+		if err != nil {
+			return nil, err
+		}
+		if filterQuery != "" {
+			query = query.Where(filterQuery, filterParams...)
+		}
+	}
+
 	var receivedShareModels []model.OcmReceivedShare
 	if err := query.Find(&receivedShareModels).Error; err != nil {
 		return nil, err
@@ -665,7 +691,7 @@ func (m *mgr) updateShareByKey(ctx context.Context, user *userpb.User, key *ocm.
 	return m.updateShareByID(ctx, user, share.Id, f...)
 }
 
-func translateFilters(filters []*ocm.ListOCMSharesRequest_Filter) (string, []any, error) {
+func translateShareFilters(filters []*ocm.ListOCMSharesRequest_Filter) (string, []any, error) {
 	var (
 		filterQuery strings.Builder
 		params      []any
@@ -684,6 +710,44 @@ func translateFilters(filters []*ocm.ListOCMSharesRequest_Filter) (string, []any
 				filterQuery.WriteString("initiator = ?")
 				params = append(params, filter.Creator.OpaqueId)
 			case *ocm.ListOCMSharesRequest_Filter_Owner:
+				filterQuery.WriteString("owner= ? ")
+				params = append(params, filter.Owner.OpaqueId)
+			default:
+				return "", nil, errtypes.BadRequest("unknown filter")
+			}
+
+			if n != len(lst)-1 {
+				filterQuery.WriteString(" OR ")
+			}
+		}
+		if count != len(grouped)-1 {
+			filterQuery.WriteString(" AND ")
+		}
+		count++
+	}
+
+	return filterQuery.String(), params, nil
+}
+
+func translateReceivedShareFilters(filters []*ocm.ListReceivedOCMSharesRequest_Filter) (string, []any, error) {
+	var (
+		filterQuery strings.Builder
+		params      []any
+	)
+
+	grouped := groupReceivedFiltersByType(filters)
+
+	var count int
+	for _, lst := range grouped {
+		for n, f := range lst {
+			switch filter := f.Term.(type) {
+			case *ocm.ListReceivedOCMSharesRequest_Filter_SharedResourceType:
+				filterQuery.WriteString("item_type = ?")
+				params = append(params, translateSharedResourceTypeToItemType(filter.SharedResourceType))
+			case *ocm.ListReceivedOCMSharesRequest_Filter_Creator:
+				filterQuery.WriteString("initiator = ?")
+				params = append(params, filter.Creator.OpaqueId)
+			case *ocm.ListReceivedOCMSharesRequest_Filter_Owner:
 				filterQuery.WriteString("owner = ?")
 				params = append(params, filter.Owner.OpaqueId)
 			default:
@@ -703,6 +767,19 @@ func translateFilters(filters []*ocm.ListOCMSharesRequest_Filter) (string, []any
 	return filterQuery.String(), params, nil
 }
 
+func translateSharedResourceTypeToItemType(t ocm.SharedResourceType) model.ItemType {
+	switch t {
+	case ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE:
+		return model.ItemTypeFile
+	case ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER:
+		return model.ItemTypeFolder
+	case ocm.SharedResourceType_SHARE_RESOURCE_TYPE_EMBEDDED:
+		return model.ItemTypeEmbedded
+	default:
+		return model.ItemTypeFile
+	}
+}
+
 func groupFiltersByType(filters []*ocm.ListOCMSharesRequest_Filter) map[ocm.ListOCMSharesRequest_Filter_Type][]*ocm.ListOCMSharesRequest_Filter {
 	m := make(map[ocm.ListOCMSharesRequest_Filter_Type][]*ocm.ListOCMSharesRequest_Filter)
 	for _, f := range filters {
@@ -711,6 +788,13 @@ func groupFiltersByType(filters []*ocm.ListOCMSharesRequest_Filter) map[ocm.List
 	return m
 }
 
+func groupReceivedFiltersByType(filters []*ocm.ListReceivedOCMSharesRequest_Filter) map[ocm.ListReceivedOCMSharesRequest_Filter_Type][]*ocm.ListReceivedOCMSharesRequest_Filter {
+	m := make(map[ocm.ListReceivedOCMSharesRequest_Filter_Type][]*ocm.ListReceivedOCMSharesRequest_Filter)
+	for _, f := range filters {
+		m[f.Type] = append(m[f.Type], f)
+	}
+	return m
+}
 func (m *mgr) getAccessMethodsByIds(ctx context.Context, ids []any) (map[string][]*ocm.AccessMethod, error) {
 	methods := make(map[string][]*ocm.AccessMethod)
 	if len(ids) == 0 {

@@ -208,7 +208,7 @@ var _ = Describe("ocm share", func() {
 				Expect(createShareRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
 				By("marie can list the share she received")
-				listRes, err := cesnetgw.ListReceivedOCMShares(ctxMarie, &ocmv1beta1.ListReceivedOCMSharesRequest{})
+				listRes, err := cesnetgw.ListReceivedOCMShares(ctxMarie, &ocmv1beta1.ListReceivedOCMSharesRequest{Filters: []*ocmv1beta1.ListReceivedOCMSharesRequest_Filter{}})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
@@ -301,7 +301,7 @@ var _ = Describe("ocm share", func() {
 				Expect(createShareRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
 				By("marie can access the share and modify the content of the file")
-				listRes, err := cesnetgw.ListReceivedOCMShares(ctxMarie, &ocmv1beta1.ListReceivedOCMSharesRequest{})
+				listRes, err := cesnetgw.ListReceivedOCMShares(ctxMarie, &ocmv1beta1.ListReceivedOCMSharesRequest{Filters: []*ocmv1beta1.ListReceivedOCMSharesRequest_Filter{}})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
@@ -397,7 +397,7 @@ var _ = Describe("ocm share", func() {
 				Expect(createShareRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
 				By("marie see the content of the folder")
-				listRes, err := cesnetgw.ListReceivedOCMShares(ctxMarie, &ocmv1beta1.ListReceivedOCMSharesRequest{})
+				listRes, err := cesnetgw.ListReceivedOCMShares(ctxMarie, &ocmv1beta1.ListReceivedOCMSharesRequest{Filters: []*ocmv1beta1.ListReceivedOCMSharesRequest_Filter{}})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
@@ -500,7 +500,7 @@ var _ = Describe("ocm share", func() {
 				Expect(createShareRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
 				By("marie can upload a file")
-				listRes, err := cesnetgw.ListReceivedOCMShares(ctxMarie, &ocmv1beta1.ListReceivedOCMSharesRequest{})
+				listRes, err := cesnetgw.ListReceivedOCMShares(ctxMarie, &ocmv1beta1.ListReceivedOCMSharesRequest{Filters: []*ocmv1beta1.ListReceivedOCMSharesRequest_Filter{}})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 

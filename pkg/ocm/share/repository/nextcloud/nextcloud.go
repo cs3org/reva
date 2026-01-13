@@ -370,7 +370,7 @@ func efssReceivedShareToOcm(resp *ReceivedEfssShare) *ocm.ReceivedShare {
 }
 
 // ListReceivedShares returns the list of shares the user has access.
-func (sm *Manager) ListReceivedShares(ctx context.Context, user *userpb.User) ([]*ocm.ReceivedShare, error) {
+func (sm *Manager) ListReceivedShares(ctx context.Context, user *userpb.User, filters []*ocm.ListReceivedOCMSharesRequest_Filter) ([]*ocm.ReceivedShare, error) {
 	_, respBody, err := sm.do(ctx, Action{"ListReceivedShares", ""}, getUsername(user))
 	if err != nil {
 		return nil, err

@@ -63,6 +63,17 @@ func NewTransferProtocol(sourceURI, sharedSecret string, size uint64) *ocm.Proto
 	}
 }
 
+// NewEmbeddedProtocol is an abstraction for creating an OCM embedded protocol.
+func NewEmbeddedProtocol(payload string) *ocm.Protocol {
+	return &ocm.Protocol{
+		Term: &ocm.Protocol_EmbeddedOptions{
+			EmbeddedOptions: &ocm.EmbeddedProtocol{
+				Payload: payload,
+			},
+		},
+	}
+}
+
 // NewWebDavAccessMethod is an abstraction for creating a WebDAV access method.
 func NewWebDavAccessMethod(perms *provider.ResourcePermissions, reqs []string) *ocm.AccessMethod {
 	return &ocm.AccessMethod{
