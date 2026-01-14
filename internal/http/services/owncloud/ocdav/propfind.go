@@ -552,7 +552,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	}
 
 	response := responseXML{
-		Href:     href,
+		Href:     encodePath(href),
 		Propstat: []propstatXML{},
 	}
 
