@@ -65,7 +65,6 @@ type HTTPOptions struct {
 
 	// TTL for an idle conn per transport
 	IdleConnTimeout int
-
 	// If the URL is https, then we need to configure this client
 	// with the usual TLS stuff
 	// Defaults are /etc/grid-security/hostcert.pem and /etc/grid-security/hostkey.pem
@@ -229,9 +228,11 @@ func (c *EOSHTTPClient) buildFullURL(urlpath string, auth eosclient.Authorizatio
 		}
 	}
 
+	urlpathEncoded := strings.ReplaceAll(url.PathEscape(urlpath), "%2F", "/")
+
 	fullurl := strings.TrimRight(c.opt.BaseURL, "/")
 	fullurl += "/"
-	fullurl += strings.TrimLeft(urlpath, "/")
+	fullurl += strings.TrimLeft(urlpathEncoded, "/")
 
 	if pos < 0 {
 		fullurl += "?"
@@ -245,7 +246,7 @@ func (c *EOSHTTPClient) buildFullURL(urlpath string, auth eosclient.Authorizatio
 
 	u, err := url.Parse(fullurl)
 	if err != nil {
-		return "", errtypes.PermissionDenied("Could not parse url " + urlpath)
+		return "", errtypes.PermissionDenied("Could not parse url " + urlpathEncoded)
 	}
 
 	final := strings.ReplaceAll(u.String(), "#", "%23")
@@ -381,11 +382,11 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 	log.Info().Str("func", "PUTFile").Str("remoteuser", remoteuser).Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", urlpath).Int64("length", length).Str("app", app).Msg("")
 
 	// Now send the req and see what happens
-	tempUrl, err := c.buildFullURL(urlpath, auth)
+	tempURL, err := c.buildFullURL(urlpath, auth)
 	if err != nil {
 		return err
 	}
-	base, err := url.Parse(tempUrl)
+	base, err := url.Parse(tempURL)
 	if err != nil {
 		return errtypes.PermissionDenied("Could not parse url " + urlpath)
 	}
