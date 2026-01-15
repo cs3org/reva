@@ -68,9 +68,6 @@ func New(ctx context.Context, m map[string]any) (preferences.Manager, error) {
 		return nil, err
 	}
 	c.ApplyDefaults()
-	if c.Engine == "" {
-		return nil, fmt.Errorf("Database config: %+v", sharedconf.GetDBInfo(c.Database))
-	}
 
 	var db *gorm.DB
 	var err error
