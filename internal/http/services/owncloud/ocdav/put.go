@@ -113,15 +113,18 @@ func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 
 	fn := path.Join(ns, r.URL.Path)
-	ref := &provider.Reference{}
+	var ref *provider.Reference
 
 	// We check if the PUT was made to a resource ID instead of a path
-	if r, ok := requestWasMadeToResourceId(ctx, fn); ok {
-		ref = r
+	if idRef, ok := requestWasMadeToResourceId(ctx, fn); ok {
+		ref = idRef
 	} else {
-		ref.Path = fn
+		// otherwise, the reference is just the path
+		ref = &provider.Reference{
+			Path: fn,
+		}
 	}
-
+	
 	sublog := appctx.GetLogger(ctx).With().Any("ref", ref).Logger()
 
 	s.handlePut(ctx, w, r, ref, sublog)
@@ -229,7 +232,8 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 
 	if userInCtxHasUploaderRole(ctx) {
-		ref.Path, err = randomizePath(ref.Path)
+		p := ref.Path
+		ref.Path, err = randomizePath(p)
 		if err != nil {
 			log.Debug().Err(err).Msg("error randomizing path")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -455,31 +459,9 @@ func randomizePath(p string) (string, error) {
 }
 
 func split(p string) (string, string) {
-	e := path.Ext(p)
-	if e == "" {
-		return p, ""
-	}
-	i := strings.Index(p, e)
-	return p[:i], e
-}
-
-func (s *svc) handleSpacesPut(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx := r.Context()
-	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
-
-	spaceRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
-	if err != nil {
-		sublog.Error().Err(err).Msg("error sending a grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
-		return
-	}
-
-	s.handlePut(ctx, w, r, spaceRef, sublog)
+	ext := filepath.Ext(p)
+	base := strings.TrimSuffix(p, ext)
+	return base, ext
 }
 
 func checkPreconditions(w http.ResponseWriter, r *http.Request, log zerolog.Logger) bool {
