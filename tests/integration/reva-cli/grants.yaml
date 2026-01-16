@@ -12,44 +12,44 @@ run:
   login:
     command: "cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token login --username={{TESTUSER}} --password={{TESTPASS}} basic"
     expectCode: 0
-  
+
   makeDir:
-    command: 'cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token mkdir {{BASEDIR}}/grants-tests'
+    command: "cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token mkdir {{BASEDIR}}/grants-tests"
     expectCode: 0
-    
+
   checkFolder:
-    command: 'cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token ls {{BASEDIR}}/'
+    command: "cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token ls {{BASEDIR}}/"
     expectCode: 0
     outputContains:
-    - 'grants-tests'
-  
+      - "grants-tests"
+
   # Create a test file to share
   createTestFile:
-    command: 'cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token touch {{BASEDIR}}/grants-tests/test-file.txt'
+    command: "cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token touch {{BASEDIR}}/grants-tests/test-file.txt"
     expectCode: 0
-  
+
   # AddGrant: Create a share (which adds a grant)
   # Note: We need another user/group to grant to, otherwise Reva will throw an error
   addGrant:
-    command: 'cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token share-create -grantee={{TESTRECVUSER}} -rol=viewer {{BASEDIR}}/grants-tests/test-file.txt'
+    command: "cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token share-create -grantee={{TESTRECVUSER}} -rol=viewer {{BASEDIR}}/grants-tests/test-file.txt"
     expectCode: 0
     outputContains:
-    - '{{TESTRECVUSER}}'
-    - 'initiate_file_download:true'
-    - 'list_container:true' 
-    - 'list_file_versions:true'
-    - 'list_recycle:true'
-    - 'stat:true'
-  
+      - "{{TESTRECVUSER}}"
+      - "initiate_file_download:true"
+      - "list_container:true"
+      - "list_file_versions:true"
+      - "list_recycle:true"
+      - "stat:true"
+
   # ListGrants: List shares (which shows grants)
   listGrants:
-    command: 'cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token share-list'
+    command: "cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token share-list"
     expectCode: 0
     # We cannot do a check for path here, because this is not stored
     # and we cannot check for storage / inode, because this test suite needs to be storage agnostic
     outputContains:
-    - '{{TESTRECVUSER}}'
-  
+      - "{{TESTRECVUSER}}"
+
   # UpdateGrant: Update the share permissions (which updates the grant)
   # Extract share ID from list output and update it
   updateGrant:
@@ -65,15 +65,15 @@ run:
         fi
       "
     expectCode: 0
-  
+
   # Verify grant was updated
   verifyGrantUpdated:
-    command: 'cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token share-list'
+    command: "cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token share-list"
     expectCode: 0
     outputContains:
-    - 'initiate_file_upload:true'
-    - 'create_container:true'
-  
+      - "initiate_file_upload:true"
+      - "create_container:true"
+
   # RemoveGrant: Remove the share (which removes the grant)
   removeGrant:
     command: |
@@ -88,11 +88,10 @@ run:
         fi
       "
     expectCode: 0
-  
+
   # Verify grant was removed
   verifyGrantRemoved:
-    command: 'cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token share-list'
+    command: "cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token share-list"
     expectCode: 0
     outputDoesntContain:
-    - 'test-file.txt'
-
+      - "test-file.txt"

@@ -311,6 +311,12 @@ func (fs *Eosfs) unwrap(ctx context.Context, internal string) (string, error) {
 func (fs *Eosfs) getNsMatch(internal string, nss []string) (string, error) {
 	var match string
 
+	// Ensure that `internal` ends in a trailing slash
+	// Otherwise `/eos` would not be in the `/eos/` namespace
+	if !strings.HasSuffix(internal, string(os.PathSeparator)) {
+		internal += string(os.PathSeparator)
+	}
+
 	for _, ns := range nss {
 		if strings.HasPrefix(internal, ns) && len(ns) > len(match) {
 			match = ns
@@ -1473,6 +1479,8 @@ func (fs *Eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]
 	var fn string
 	var err error
 
+	log := appctx.GetLogger(ctx)
+
 	md, err := fs.GetMD(ctx, ref, nil)
 	if err != nil {
 		return nil, err
@@ -1490,9 +1498,11 @@ func (fs *Eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]
 	}
 
 	eosRevisions, err := fs.c.ListVersions(ctx, auth, fn)
+	log.Debug().Err(err).Any("revisions", eosRevisions).Msgf("ListRevisions")
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: error listing versions")
 	}
+
 	revisions := []*provider.FileVersion{}
 	for _, eosRev := range eosRevisions {
 		if rev, err := fs.convertToRevision(ctx, eosRev); err == nil {
@@ -1574,6 +1584,9 @@ func (fs *Eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 	var recycleid string
 	var err error
 
+	log := appctx.GetLogger(ctx)
+	log.Debug().Str("basePath", basePath).Str("key", key).Str("relativePath", relativePath).Msgf("ListRecycle")
+
 	u, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		return nil, errtypes.PermissionDenied("no user found in context for ListRecycle")
@@ -1585,9 +1598,11 @@ func (fs *Eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 	// for ownerless recycle bins, a special attribute is set: so let's stat the base path
 	md, err := fs.GetMD(ctx, &provider.Reference{Path: basePath}, nil)
 	if err != nil {
+		log.Error().Err(err).Msgf("ListRecycle")
 		return nil, err
 	}
 	if !md.PermissionSet.ListRecycle {
+		log.Error().Err(fmt.Errorf("No permission")).Msgf("ListRecycle")
 		return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to list the recycle bin")
 	}
 	// ownerless project: use recycle id
@@ -1598,11 +1613,16 @@ func (fs *Eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 			return nil, err
 		}
 	} else {
-		// project owned by an account: we impersonate the account
-		auth, err = fs.getUIDGateway(ctx, md.Owner)
+		// space owned by an account: we impersonate the account
+		if md.Owner != nil {
+			auth, err = fs.getUIDGateway(ctx, md.Owner)
+		} else {
+			auth, err = fs.getUserAuth(ctx, u, "")
+		}
 		if err != nil {
 			return nil, err
 		}
+
 	}
 
 	var dateFrom, dateTo time.Time
@@ -1622,6 +1642,8 @@ func (fs *Eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 	sublog.Debug().Time("from", dateFrom).Time("to", dateTo).Msg("executing ListDeletedEntries")
 	eosDeletedEntries, err := fs.c.ListDeletedEntries(ctx, auth, recycleid, fs.conf.MaxRecycleEntries, dateFrom, dateTo)
 
+	log.Debug().Any("entries", eosDeletedEntries).Err(err).Msgf("ListRecycle deleted entries")
+
 	if err != nil {
 		switch err.(type) {
 		case errtypes.IsBadRequest:
@@ -1640,6 +1662,8 @@ func (fs *Eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 		}
 		if recycleItem, err := fs.convertToRecycleItem(ctx, entry); err == nil {
 			recycleEntries = append(recycleEntries, recycleItem)
+		} else {
+			log.Error().Err(err).Msgf("Failed to convert to recycle item")
 		}
 	}
 	return recycleEntries, nil
@@ -1673,7 +1697,11 @@ func (fs *Eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relative
 		}
 	} else {
 		// project owned by an account: we impersonate the account
-		auth, err = fs.getUIDGateway(ctx, md.Owner)
+		if md.Owner != nil {
+			auth, err = fs.getUIDGateway(ctx, md.Owner)
+		} else {
+			auth, err = fs.getUserAuth(ctx, u, "")
+		}
 		if err != nil {
 			return err
 		}

@@ -19,6 +19,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -64,6 +65,8 @@ func recycleRestoreCommand() *command {
 
 		if res.Status.Code != rpc.Code_CODE_OK {
 			return formatError(res.Status)
+		} else {
+			fmt.Printf("Restored recycle item %s\n", req.Key)
 		}
 
 		return nil
