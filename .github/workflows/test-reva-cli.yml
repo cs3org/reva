@@ -48,9 +48,9 @@ jobs:
               "display_name": "Test User",
               "mail": "test@example.com",
               "mail_verified": true,
-              "groups": ["users"],
-              "uid_number": 1000,
-              "gid_number": 1000
+              "groups": ["myusers"],
+              "uid_number": 1255,
+              "gid_number": 123
             }, 
             {
               "username": "testreceivinguser",
@@ -63,9 +63,9 @@ jobs:
               "display_name": "Test User",
               "mail": "test2@example.com",
               "mail_verified": true,
-              "groups": ["users"],
-              "uid_number": 1001,
-              "gid_number": 1000
+              "groups": ["myusers"],
+              "uid_number": 1256,
+              "gid_number": 123
             }
           ]
           EOF
@@ -75,10 +75,10 @@ jobs:
           [
             {
               "id": {
-                "opaque_id": "users",
+                "opaque_id": "myusers",
                 "idp": "http://localhost:20080"
               },
-              "group_name": "users",
+              "group_name": "myusers",
               "mail": "sailing-lovers@example.org",
               "display_name": "Sailing Lovers",
               "gid_number": 123,
