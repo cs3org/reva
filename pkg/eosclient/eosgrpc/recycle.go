@@ -12,7 +12,7 @@ import (
 )
 
 // ListDeletedEntries returns a list of the deleted entries.
-func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization, maxentries int, from, to time.Time) ([]*eosclient.DeletedEntry, error) {
+func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization, recycleid string, maxentries int, from, to time.Time) ([]*eosclient.DeletedEntry, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "ListDeletedEntries").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Msg("")
 
@@ -25,16 +25,22 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 	ret := make([]*eosclient.DeletedEntry, 0)
 	count := 0
 	
+	recycleType := erpc.RecycleProto_UID
+	if recycleid != "" {
+		recycleType = erpc.RecycleProto_RID
+	}
+	
 	for d := to; !d.Before(from); d = d.AddDate(0, 0, -1) {
 		rq.Command = &erpc.NSRequest_Recycle{
 			Recycle: &erpc.RecycleProto{
 				Subcmd: &erpc.RecycleProto_Ls{
 					Ls: &erpc.RecycleProto_LsProto{
-						Type: erpc.RecycleProto_UID,
+						Type: recycleType,
 						FullDetails: true,
 						MonitorFmt: true,
 						Maxentries:  int32(maxentries + 1),
 						Date: fmt.Sprintf("%04d/%02d/%02d", d.Year(), d.Month(), d.Day()),
+						RecycleId: recycleid,
 					},
 				},
 			},
