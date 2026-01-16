@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: "18"
       - name: Install judo
         run: npm install -g @intuit/judo
       - name: Build reva
@@ -34,69 +34,9 @@ jobs:
       - name: Create storage directory
         run: mkdir -p tmp/revalocalstorage/data tmp/revalocalstorage/shares
       - name: Create users.json
-        run: |
-          cat > tmp/users.json << 'EOF'
-          [
-            {
-              "username": "testuser",
-              "id": {
-                "idp": "http://localhost:20080",
-                "opaque_id": "testuser",
-                "type": 1
-              },
-              "secret": "testpass",
-              "display_name": "Test User",
-              "mail": "test@example.com",
-              "mail_verified": true,
-              "groups": ["users"],
-              "uid_number": 1000,
-              "gid_number": 1000
-            }, 
-            {
-              "username": "testreceivinguser",
-              "id": {
-                "idp": "http://localhost:20080",
-                "opaque_id": "testreceivinguser",
-                "type": 1
-              },
-              "secret": "testpass",
-              "display_name": "Test User",
-              "mail": "test2@example.com",
-              "mail_verified": true,
-              "groups": ["users"],
-              "uid_number": 1001,
-              "gid_number": 1000
-            }
-          ]
-          EOF
+        run: cp tests/integration/reva-cli/config/users.json tmp/users.json
       - name: Create groups.json
-        run: |
-          cat > tmp/groups.json << 'EOF'
-          [
-            {
-              "id": {
-                "opaque_id": "users",
-                "idp": "http://localhost:20080"
-              },
-              "group_name": "users",
-              "mail": "sailing-lovers@example.org",
-              "display_name": "Sailing Lovers",
-              "gid_number": 123,
-              "members": [
-                {
-                  "id": {
-                    "idp": "http://localhost:20080",
-                    "opaque_id": "testuser"
-                  }
-                },
-                {
-                  "idp": "http://localhost:20080",
-                  "opaque_id": "testreceivinguser"
-                }
-              ]
-            }
-          ]
-          EOF
+        run: cp tests/integration/reva-cli/config/groups.json tmp/groups.json
       - name: Start revad
         run: |
           ./cmd/revad/revad -c tests/integration/reva-cli/config/revad-localfs.toml &

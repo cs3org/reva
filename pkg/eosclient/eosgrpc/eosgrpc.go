@@ -143,34 +143,38 @@ func newgrpc(ctx context.Context, log *zerolog.Logger, opt *Options) (erpc.EosCl
 
 	log.Debug().Msgf("Going to ping '%s'", opt.GrpcURI)
 	ecl := erpc.NewEosClient(conn)
-	// If we can't ping... just print warnings. In the case EOS is down, grpc will take care of
-	// connecting later
+
 	prq := new(erpc.PingRequest)
 	prq.Authkey = opt.Authkey
 	prq.Message = []byte("hi this is a ping from reva")
 	prep, err := ecl.Ping(ctx, prq)
 	if err != nil {
-		if opt.AllowInsecure {
-			conn, err = grpc.NewClient(opt.GrpcURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
-			if err != nil {
-				log.Warn().Err(err).Msgf("Error connecting to '%s' using insecure", opt.GrpcURI)
-				return nil, err
-			} else {
-				log.Warn().Err(err).Msgf("Fell back to insecure mode when connecting to %s because TLS ping failed", opt.GrpcURI)
-				ecl = erpc.NewEosClient(conn)
-			}
-		} else {
+		// Must use TLS, so we fail
+		if !opt.AllowInsecure {
 			log.Error().Err(err).Msgf("Failed to connect to '%s' using TLS, and allow_insecure is false", opt.GrpcURI)
 			return nil, err
 		}
-		log.Warn().Err(err).Msgf("Could not ping to '%s'", opt.GrpcURI)
+
+		// Otherwise, let's try again, but this time without TLS
+		conn, err = grpc.NewClient(opt.GrpcURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			log.Warn().Err(err).Msgf("Failed to create insecure gRPC client")
+			return nil, err
+		}
+		ecl = erpc.NewEosClient(conn)
+		prep, err = ecl.Ping(ctx, prq)
+		if err != nil {
+			log.Error().Err(err).Msgf("Failed to connect to '%s' in insecure mode", opt.GrpcURI)
+			return nil, err
+		}
 	}
 
 	if prep == nil {
 		log.Warn().Msgf("Could not ping to '%s': nil response", opt.GrpcURI)
+		return nil, errors.New("Got nil response from ping to EOS")
 	}
-	log.Debug().Msgf("Ping to '%s' succeeded", opt.GrpcURI)
 
+	log.Debug().Msgf("Ping to '%s' succeeded", opt.GrpcURI)
 	return ecl, nil
 }
 
