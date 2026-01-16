@@ -24,23 +24,23 @@ func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authoriz
 
 	ret := make([]*eosclient.DeletedEntry, 0)
 	count := 0
-	
+
 	recycleType := erpc.RecycleProto_UID
 	if recycleid != "" {
 		recycleType = erpc.RecycleProto_RID
 	}
-	
+
 	for d := to; !d.Before(from); d = d.AddDate(0, 0, -1) {
 		rq.Command = &erpc.NSRequest_Recycle{
 			Recycle: &erpc.RecycleProto{
 				Subcmd: &erpc.RecycleProto_Ls{
 					Ls: &erpc.RecycleProto_LsProto{
-						Type: recycleType,
+						Type:        recycleType,
 						FullDetails: true,
-						MonitorFmt: true,
+						MonitorFmt:  true,
 						Maxentries:  int32(maxentries + 1),
-						Date: fmt.Sprintf("%04d/%02d/%02d", d.Year(), d.Month(), d.Day()),
-						RecycleId: recycleid,
+						Date:        fmt.Sprintf("%04d/%02d/%02d", d.Year(), d.Month(), d.Day()),
+						RecycleId:   recycleid,
 					},
 				},
 			},
@@ -100,7 +100,7 @@ func (c *Client) RestoreDeletedEntry(ctx context.Context, auth eosclient.Authori
 	if err != nil {
 		return err
 	}
-	
+
 	rq.Command = &erpc.NSRequest_Recycle{
 		Recycle: &erpc.RecycleProto{
 			Subcmd: &erpc.RecycleProto_Restore{
@@ -141,7 +141,7 @@ func (c *Client) PurgeDeletedEntries(ctx context.Context, auth eosclient.Authori
 	if err != nil {
 		return err
 	}
-	
+
 	rq.Command = &erpc.NSRequest_Recycle{
 		Recycle: &erpc.RecycleProto{
 			Subcmd: &erpc.RecycleProto_Purge{
@@ -162,7 +162,7 @@ func (c *Client) PurgeDeletedEntries(ctx context.Context, auth eosclient.Authori
 		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' ", auth.Role.UID))
 	}
 
-	log.Info().Str("func", "PurgeDeletedEntries").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+	log.Info().Str("func", "PurgeDeletedEntries").Any("err", resp.GetError()).Msg("grpc response")
 
 	return err
 }
