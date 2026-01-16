@@ -806,7 +806,10 @@ func (c *Client) writeFile(ctx context.Context, auth eosclient.Authorization, pa
 }
 
 // ListDeletedEntries returns a list of the deleted entries.
-func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization, maxentries int, from, to time.Time) ([]*eosclient.DeletedEntry, error) {
+func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization, recycleid string, maxentries int, from, to time.Time) ([]*eosclient.DeletedEntry, error) {
+	if recycleid != "" {
+		return nil, errtypes.NotSupported("EOS Binary Client does not support listing deleted entries based on recycle id")
+	}
 	deleted := []*eosclient.DeletedEntry{}
 	count := 0
 	for d := to; !d.Before(from); d = d.AddDate(0, 0, -1) {
