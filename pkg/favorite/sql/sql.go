@@ -30,8 +30,8 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/cbox/utils"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
-	"github.com/cs3org/reva/v3/pkg/storage/favorite"
-	"github.com/cs3org/reva/v3/pkg/storage/favorite/registry"
+	"github.com/cs3org/reva/v3/pkg/favorite"
+	"github.com/cs3org/reva/v3/pkg/favorite/registry"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
 
