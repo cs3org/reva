@@ -46,8 +46,8 @@ import (
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
-	"github.com/cs3org/reva/v3/pkg/storage/favorite"
-	"github.com/cs3org/reva/v3/pkg/storage/favorite/registry"
+	"github.com/cs3org/reva/v3/pkg/favorite"
+	"github.com/cs3org/reva/v3/pkg/favorite/registry"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
