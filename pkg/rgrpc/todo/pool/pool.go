@@ -29,6 +29,7 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	group "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	labels "github.com/cs3org/go-cs3apis/cs3/labels/v1beta1"
 	ocmincoming "github.com/cs3org/go-cs3apis/cs3/ocm/incoming/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
@@ -81,6 +82,7 @@ var (
 	userProviders          = newProvider()
 	groupProviders         = newProvider()
 	dataTxs                = newProvider()
+	labelsProviders        = newProvider()
 )
 
 // NewConn creates a new connection to a grpc server
@@ -491,6 +493,26 @@ func GetOCMIncomingClient(opts ...Option) (ocmincoming.OcmIncomingAPIClient, err
 
 	v := ocmincoming.NewOcmIncomingAPIClient(conn)
 	ocmIncoming.conn[options.Endpoint] = v
+	return v, nil
+}
+
+// GetLabelsClient returns a new LabelsAPIClient.
+func GetLabelsClient(opts ...Option) (labels.LabelsAPIClient, error) {
+	labelsProviders.m.Lock()
+	defer labelsProviders.m.Unlock()
+
+	options := newOptions(opts...)
+	if c, ok := labelsProviders.conn[options.Endpoint]; ok {
+		return c.(labels.LabelsAPIClient), nil
+	}
+
+	conn, err := NewConn(options)
+	if err != nil {
+		return nil, err
+	}
+
+	v := labels.NewLabelsAPIClient(conn)
+	labelsProviders.conn[options.Endpoint] = v
 	return v, nil
 }
 
