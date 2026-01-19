@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2026 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,21 +16,22 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package favorite
+package labels
 
 import (
 	"context"
 
-	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
-// Manager defines an interface for a favorites manager.
+// Manager defines an interface for a labels manager.
 type Manager interface {
-	// ListFavorites returns all resources that were favorited by a user.
-	ListFavorites(ctx context.Context, userID *user.UserId) ([]*provider.ResourceId, error)
-	// SetFavorite marks a resource as favorited by a user.
-	SetFavorite(ctx context.Context, userID *user.UserId, resourceInfo *provider.ResourceInfo) error
-	// UnsetFavorite unmarks a resource as favorited by a user.
-	UnsetFavorite(ctx context.Context, userID *user.UserId, resourceInfo *provider.ResourceInfo) error
+	// List the unique labels that a user has attached to resources
+	ListLabels(ctx context.Context) ([]string, error)
+	// List the resources which have a given label attached for a given user
+	ListResourcesForLabel(ctx context.Context, label string) ([]*provider.ResourceId, error)
+	// SetLabel qttaches a label to a resource for a user..
+	SetLabel(ctx context.Context, label string, resourceId *provider.ResourceId) error
+	// UnsetLabel removes a label from a resource for a user..
+	UnsetLabel(ctx context.Context, label string, resourceId *provider.ResourceId) error
 }

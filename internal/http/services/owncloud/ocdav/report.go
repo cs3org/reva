@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"strings"
 
+	labelsv1beta1 "github.com/cs3org/go-cs3apis/cs3/labels/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -88,17 +89,23 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 
 	if ff.Rules.Favorite {
 		// List the users favorite resources.
-		currentUser := appctx.ContextMustGetUser(ctx)
-		favorites, err := s.favoritesManager.ListFavorites(ctx, currentUser.Id)
+		listRes, err := client.ListResourcesForLabel(ctx, &labelsv1beta1.ListResourcesForLabelRequest{
+			Labels: "favorite",
+		})
 		if err != nil {
 			log.Error().Err(err).Msg("error getting favorites")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		if listRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+			log.Error().Interface("status", listRes.Status).Msg("error getting favorites")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
-		resourceInfos = make([]*provider.ResourceInfo, 0, len(favorites))
-		for i := range favorites {
-			statRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: favorites[i]}})
+		resourceInfos = make([]*provider.ResourceInfo, 0, len(listRes.Ref))
+		for _, ref := range listRes.Ref {
+			statRes, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
 			if err != nil {
 				log.Error().Err(err).Msg("error getting resource info")
 				continue
