@@ -34,10 +34,10 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	ocmd "github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
-	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/go-chi/chi/v5"
@@ -112,7 +112,7 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 		},
 		RecipientMeshProvider: providerInfoResp.ProviderInfo,
 		AccessMethods: []*ocm.AccessMethod{
-			share.NewWebDavAccessMethod(role.CS3ResourcePermissions(), []string{}),
+			share.NewWebDavAccessMethod(role.CS3ResourcePermissions(), []ocm.AccessType{ocm.AccessType_ACCESS_TYPE_REMOTE}, []string{}),
 			share.NewWebappAccessMethod(getViewModeFromRole(role)),
 		},
 	})

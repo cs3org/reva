@@ -111,6 +111,7 @@ type Protocol interface {
 
 // WebDAV contains the parameters for the WebDAV protocol.
 type WebDAV struct {
+	AccessTypes  []string `json:"accessTypes"  validate:"omitempty,oneof=remote datatx"` // defaults to ["remote"]
 	SharedSecret string   `json:"sharedSecret" validate:"required"`
 	Permissions  []string `json:"permissions"  validate:"required,dive,required,oneof=read write share"`
 	Requirements []string `json:"requirements,omitempty"`
@@ -135,32 +136,28 @@ func (w *WebDAV) ToOCMProtocol() *ocm.Protocol {
 			perms.Reshare = true
 		}
 	}
-
-	return ocmshare.NewWebDAVProtocol(w.URI, w.SharedSecret, perms, w.Requirements)
+	accTypes := []ocm.AccessType{ocm.AccessType_ACCESS_TYPE_REMOTE}
+	for _, at := range w.AccessTypes {
+		switch at {
+		//case "remote":
+		//	accTypes = append(accTypes, ocm.AccessType_ACCESS_TYPE_REMOTE)
+		case "datatx":
+			accTypes = append(accTypes, ocm.AccessType_ACCESS_TYPE_DATATX)
+		}
+	}
+	return ocmshare.NewWebDAVProtocol(w.URI, w.SharedSecret, perms, accTypes, w.Requirements)
 }
 
 // Webapp contains the parameters for the Webapp protocol.
 type Webapp struct {
 	URI          string `json:"uri" validate:"required"`
-	ViewMode     string `json:"viewMode"    validate:"required,dive,required,oneof=view read write"`
+	ViewMode     string `json:"viewMode" validate:"required,dive,required,oneof=view read write"`
 	SharedSecret string `json:"sharedSecret"`
 }
 
 // ToOCMProtocol convert the protocol to a ocm Protocol struct.
 func (w *Webapp) ToOCMProtocol() *ocm.Protocol {
 	return ocmshare.NewWebappProtocol(w.URI, utils.GetAppViewMode(w.ViewMode))
-}
-
-// Datatx contains the parameters for the Datatx protocol.
-type Datatx struct {
-	SharedSecret string `json:"sharedSecret" validate:"required"`
-	SourceURI    string `json:"srcUri"       validate:"required"`
-	Size         uint64 `json:"size"         validate:"required"`
-}
-
-// ToOCMProtocol convert the protocol to a ocm Protocol struct.
-func (w *Datatx) ToOCMProtocol() *ocm.Protocol {
-	return ocmshare.NewTransferProtocol(w.SourceURI, w.SharedSecret, w.Size)
 }
 
 // Embedded contains the parameters for the Embedded protocol.
@@ -176,7 +173,6 @@ func (w *Embedded) ToOCMProtocol() *ocm.Protocol {
 var protocolImpl = map[string]reflect.Type{
 	"webdav":   reflect.TypeOf(WebDAV{}),
 	"webapp":   reflect.TypeOf(Webapp{}),
-	"datatx":   reflect.TypeOf(Datatx{}),
 	"embedded": reflect.TypeOf(Embedded{}),
 }
 

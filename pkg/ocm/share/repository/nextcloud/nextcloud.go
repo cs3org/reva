@@ -33,11 +33,11 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/ocm/share/repository/registry"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
@@ -181,12 +181,10 @@ func (sm *Manager) efssShareToOcm(resp *EfssShare) *ocm.Share {
 	// first generate the map of access methods, assuming WebDAV is always present
 	var am = make([]*ocm.AccessMethod, 0, 3)
 	am = append(am, share.NewWebDavAccessMethod(permissions.RoleFromOCSPermissions(
-		permissions.OcsPermissions(resp.Protocols.WebDAV.Permissions)).CS3ResourcePermissions(), []string{}))
+		permissions.OcsPermissions(resp.Protocols.WebDAV.Permissions)).CS3ResourcePermissions(),
+		[]ocm.AccessType{ocm.AccessType_ACCESS_TYPE_REMOTE}, []string{}))
 	if resp.Protocols.WebApp.ViewMode != "" {
 		am = append(am, share.NewWebappAccessMethod(utils.GetAppViewMode(resp.Protocols.WebApp.ViewMode)))
-	}
-	if resp.Protocols.DataTx.SourceURI != "" {
-		am = append(am, share.NewTransferAccessMethod())
 	}
 
 	// return the OCM Share payload
@@ -326,12 +324,9 @@ func efssReceivedShareToOcm(resp *ReceivedEfssShare) *ocm.ReceivedShare {
 	var proto = make([]*ocm.Protocol, 0, 3)
 	proto = append(proto, share.NewWebDAVProtocol(resp.Share.Protocols.WebDAV.URI, resp.Share.Token, &ocm.SharePermissions{
 		Permissions: permissions.RoleFromOCSPermissions(permissions.OcsPermissions(resp.Share.Protocols.WebDAV.Permissions)).CS3ResourcePermissions(),
-	}, []string{}))
+	}, []ocm.AccessType{ocm.AccessType_ACCESS_TYPE_DATATX}, []string{}))
 	if resp.Share.Protocols.WebApp.ViewMode != "" {
 		proto = append(proto, share.NewWebappProtocol(resp.Share.Protocols.WebApp.URI, utils.GetAppViewMode(resp.Share.Protocols.WebApp.ViewMode)))
-	}
-	if resp.Share.Protocols.DataTx.SourceURI != "" {
-		proto = append(proto, share.NewTransferProtocol(resp.Share.Protocols.DataTx.SourceURI, resp.Share.Token, uint64(resp.Share.Protocols.DataTx.Size)))
 	}
 
 	// return the OCM Received Share payload

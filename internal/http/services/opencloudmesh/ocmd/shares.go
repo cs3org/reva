@@ -65,7 +65,7 @@ func (h *sharesHandler) init(c *config) error {
 	return nil
 }
 
-// CreateShare implements the OCM /shares call.
+// CreateShare implements the OCM /shares call and stores an incoming share
 func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
@@ -221,8 +221,8 @@ func getResourceTypeFromOCMRequest(t string) ocm.SharedResourceType {
 	}
 }
 
-func getOCMShareType(t string) ocm.RecipientType {
-	switch t {
+func getOCMShareType(st string) ocm.RecipientType {
+	switch st {
 	case "user":
 		return ocm.RecipientType_RECIPIENT_TYPE_USER
 	case "group":
@@ -230,6 +230,17 @@ func getOCMShareType(t string) ocm.RecipientType {
 	default:
 		// for now assume user share if not provided
 		return ocm.RecipientType_RECIPIENT_TYPE_USER
+	}
+}
+
+func getOCMAccessType(at string) ocm.AccessType {
+	switch at {
+	case "remote":
+		return ocm.AccessType_ACCESS_TYPE_REMOTE
+	case "datatx":
+		return ocm.AccessType_ACCESS_TYPE_DATATX
+	default:
+		return ocm.AccessType_ACCESS_TYPE_REMOTE
 	}
 }
 
@@ -248,6 +259,12 @@ func getAndResolveProtocols(ctx context.Context, p Protocols, ownerServer string
 				// we currently do not support any kind of requirement
 				return nil, false, errtypes.BadRequest(fmt.Sprintf("incoming OCM share with requirements %+v not supported at this endpoint", reqs))
 			}
+			var accTypes ocm.AccessType
+			for at := range ocmProto {
+				accTypes = accTypes + getOCMAccessType(at)
+			}
+			ocmProto.GetWebdavOptions().AccessTypes = accTypes
+
 		case "webapp":
 			uri = ocmProto.GetWebappOptions().Uri
 		case "embedded":
