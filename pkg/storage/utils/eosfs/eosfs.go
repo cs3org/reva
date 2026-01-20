@@ -41,8 +41,8 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 
 	"github.com/cs3org/reva/v3/pkg/eosclient"
@@ -1216,8 +1216,14 @@ func (fs *Eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 
 	eosFileInfos, err := fs.c.List(ctx, auth, fn)
 	if err != nil {
-		log.Error().Str("filename", fn).Err(err).Msg("eosfs: error listing")
-		return nil, errors.Wrap(err, "eosfs: error listing")
+		switch {
+		case strings.Contains(err.Error(), "PermissionDenied"):
+			return nil, errtypes.PermissionDenied(err.Error())
+		case strings.Contains(err.Error(), "NotFound"):
+			return nil, errtypes.NotFound(err.Error())
+		default:
+			return nil, errors.Wrap(err, "eosfs: error listing")
+		}
 	}
 
 	for _, eosFileInfo := range eosFileInfos {

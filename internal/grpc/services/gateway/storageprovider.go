@@ -496,7 +496,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		}
 		rsp, err := c.Stat(ctx, req)
 		if err != nil || rsp.Status.Code != rpc.Code_CODE_OK {
-			log.Error().Err(err).Msg("Failed to stat " + resPath)
+			log.Warn().Err(err).Any("resp", rsp).Msgf("Failed to stat %+v", req.Ref)
 			return rsp, err
 		}
 		log.Debug().
