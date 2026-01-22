@@ -126,48 +126,41 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 		}, nil
 	}
 
-	// if we need to commit the share, we need the resource it points to.
-	var share *collaboration.Share
-	if s.c.CommitShareToStorageGrant {
-		getShareReq := &collaboration.GetShareRequest{
-			Ref: req.Ref,
-		}
-		getShareRes, err := c.GetShare(ctx, getShareReq)
-		if err != nil {
-			return nil, errors.Wrap(err, "gateway: error calling GetShare")
-		}
-
-		if getShareRes.Status.Code != rpc.Code_CODE_OK {
-			res := &collaboration.RemoveShareResponse{
-				Status: status.NewInternal(ctx, status.NewErrorFromCode(getShareRes.Status.Code, "gateway"),
-					"error getting share when committing to the storage"),
-			}
-			return res, nil
-		}
-		share = getShareRes.Share
+	getShareReq := &collaboration.GetShareRequest{
+		Ref: req.Ref,
 	}
-
-	res, err := c.RemoveShare(ctx, req)
+	getShareRes, err := c.GetShare(ctx, getShareReq)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling RemoveShare")
+		return nil, errors.Wrap(err, "gateway: error calling GetShare")
 	}
 
-	// if we don't need to commit we return earlier
-	if !s.c.CommitShareToStorageGrant {
+	if getShareRes.Status.Code != rpc.Code_CODE_OK {
+		res := &collaboration.RemoveShareResponse{
+			Status: status.NewInternal(ctx, status.NewErrorFromCode(getShareRes.Status.Code, "gateway"),
+				"error getting share to be removed"),
+		}
 		return res, nil
 	}
+	share := getShareRes.Share
 
-	// TODO(labkode): if both commits are enabled they could be done concurrently.
+	// Now we first try to remove from EOS
 	if s.c.CommitShareToStorageGrant {
 		removeGrantStatus, err := s.removeGrant(ctx, share.ResourceId, share.Grantee, share.Permissions.Permissions)
 		if err != nil {
 			return nil, errors.Wrap(err, "gateway: error removing grant from storage")
 		}
+		// If this fails, we abort, so that the user does not think the share is removed while the permissions remain
 		if removeGrantStatus.Code != rpc.Code_CODE_OK {
 			return &collaboration.RemoveShareResponse{
 				Status: removeGrantStatus,
 			}, err
 		}
+	}
+
+	// Finally, we remove from the db
+	res, err := c.RemoveShare(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling RemoveShare")
 	}
 
 	return res, nil
