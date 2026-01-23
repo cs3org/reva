@@ -72,3 +72,11 @@ enable_datatx = false
 {{< /highlight >}}
 {{% /dir %}}
 
+{{% dir name="enable_embedded" type="bool" default=false %}}
+Whether embedded shares are enabled in OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L41)
+{{< highlight toml >}}
+[http.services.wellknown]
+enable_embedded = false
+{{< /highlight >}}
+{{% /dir %}}
+
