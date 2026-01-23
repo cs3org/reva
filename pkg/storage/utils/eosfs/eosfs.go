@@ -1576,37 +1576,30 @@ func (fs *Eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 		return nil, errtypes.PermissionDenied("no user found in context for ListRecycle")
 	}
 
-	// user's own trashbin
-	if basePath == "/" {
+	// there are two types of recycle bins ownerless (with a recycle id),
+	// or owned by an account (primary account for users, service account for projects)
+
+	// for ownerless recycle bins, a special attribute is set: so let's stat the base path
+	md, err := fs.GetMD(ctx, &provider.Reference{Path: basePath}, nil)
+	if err != nil {
+		return nil, err
+	}
+	if !md.PermissionSet.ListRecycle {
+		return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to list the recycle bin")
+	}
+	// ownerless project: use recycle id
+	if value, ok := md.ArbitraryMetadata.Metadata["recycleid"]; ok {
+		recycleid = value
 		auth, err = fs.getUserAuth(ctx, u, "")
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		// project trashbin
-		// there are two options: ownerless or service-account-owned
-		md, err := fs.GetMD(ctx, &provider.Reference{Path: basePath}, nil)
+		// project owned by an account: we impersonate the account
+		auth, err = fs.getUIDGateway(ctx, md.Owner)
 		if err != nil {
 			return nil, err
 		}
-		if !md.PermissionSet.ListRecycle {
-			return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to restore recycled items")
-		}
-		// ownerless project: use recycle id
-		if value, ok := md.ArbitraryMetadata.Metadata["recycleid"]; ok {
-			recycleid = value
-			auth, err = fs.getUserAuth(ctx, u, "")
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			// project owned by a service account: we impersonate the service account
-			auth, err = fs.getUIDGateway(ctx, md.Owner)
-			if err != nil {
-				return nil, err
-			}
-		}
-
 	}
 
 	var dateFrom, dateTo time.Time
@@ -1658,34 +1651,28 @@ func (fs *Eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relative
 		return errtypes.PermissionDenied("no user found in context for RestoreRecycleItem")
 	}
 
-	// user's own trashbin
-	if basePath == "/" {
+	// there are two types of recycle bins ownerless (with a recycle id),
+	// or owned by an account (primary account for users, service account for projects)
+
+	// for ownerless recycle bins, a special attribute is set: so let's stat the base path
+	md, err := fs.GetMD(ctx, &provider.Reference{Path: basePath}, nil)
+	if err != nil {
+		return err
+	}
+	if !md.PermissionSet.RestoreRecycleItem {
+		return errtypes.PermissionDenied("eosfs: user doesn't have permissions to restore recycled items")
+	}
+	// ownerless project: use recycle id
+	if _, ok := md.ArbitraryMetadata.Metadata["recycleid"]; ok {
 		auth, err = fs.getUserAuth(ctx, u, "")
 		if err != nil {
 			return err
 		}
 	} else {
-		// project trashbin
-		// there are two options: ownerless or service-account-owned
-		md, err := fs.GetMD(ctx, &provider.Reference{Path: basePath}, nil)
+		// project owned by an account: we impersonate the account
+		auth, err = fs.getUIDGateway(ctx, md.Owner)
 		if err != nil {
 			return err
-		}
-		if !md.PermissionSet.RestoreRecycleItem {
-			return errtypes.PermissionDenied("eosfs: user doesn't have permissions to restore recycled items")
-		}
-		// ownerless project: use recycle id
-		if _, ok := md.ArbitraryMetadata.Metadata["recycleid"]; ok {
-			auth, err = fs.getUserAuth(ctx, u, "")
-			if err != nil {
-				return err
-			}
-		} else {
-			// project owned by a service account: we impersonate the service account
-			auth, err = fs.getUIDGateway(ctx, md.Owner)
-			if err != nil {
-				return err
-			}
 		}
 	}
 
