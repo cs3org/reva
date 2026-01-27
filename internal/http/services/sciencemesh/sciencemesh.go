@@ -127,6 +127,7 @@ func (s *svc) routerInit() error {
 	s.router.Get("/federations", wayfHandler.GetFederations)
 	s.router.Post("/discover", wayfHandler.DiscoverProvider)
 	s.router.Get("/embedded-shares", embeddedHandler.ListEmbeddedShares)
+	s.router.Post("/process-embedded-share", embeddedHandler.ProcessEmbeddedShare)
 	return nil
 }
 
