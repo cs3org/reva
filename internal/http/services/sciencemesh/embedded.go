@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/trace"
 	"google.golang.org/grpc/codes"
 	rpcstatus "google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	ocmconversions "github.com/cs3org/reva/v3/pkg/ocm/conversions"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
@@ -52,6 +53,47 @@ func (h *embeddedHandler) init(c *config) error {
 	h.config = c
 
 	return nil
+}
+
+func (h *embeddedHandler) ProcessEmbeddedShare(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+	queryParams := r.URL.Query()
+
+	dest_path := queryParams.Get("destination")
+	share_id := queryParams.Get("share_id")
+	process := queryParams.Get("process")
+
+	// For now we just log the destination path, but we don't use it yet.
+	log.Debug().Str("share_id", share_id).Str("dest_path", dest_path).Msg("processing embedded share")
+
+	req := ocm.UpdateReceivedOCMShareRequest{
+		Share: &ocm.ReceivedShare{
+			Id: &ocm.ShareId{
+				OpaqueId: share_id,
+			},
+		},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
+	}
+
+	// Accept the embedded share or set it back to pending
+	// depending on the "process" query parameter
+	switch process {
+	case "true":
+		req.Share.State = ocm.ShareState_SHARE_STATE_ACCEPTED
+	case "false":
+		req.Share.State = ocm.ShareState_SHARE_STATE_PENDING
+	}
+
+	_, err := h.gatewayClient.UpdateReceivedOCMShare(ctx, &req)
+
+	if err != nil {
+		log.Error().Err(err).Msg("error accepting embedded share")
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error accepting embedded share", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 // ListEmbeddedShares lists all embedded ocm shares for the current user.
