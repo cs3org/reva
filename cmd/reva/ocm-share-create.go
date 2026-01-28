@@ -33,8 +33,8 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/permissions"
 	ocmshare "github.com/cs3org/reva/v3/pkg/ocm/share"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/pkg/errors"
@@ -197,7 +197,7 @@ func getAccessMethods(webdav, webapp, datatx bool, rol string) ([]*ocm.AccessMet
 		if err != nil {
 			return nil, err
 		}
-		m = append(m, ocmshare.NewWebDavAccessMethod(perm, []string{}))
+		m = append(m, ocmshare.NewWebDavAccessMethod(perm, []ocm.AccessType{}, []string{}))
 	}
 	if webapp {
 		v, err := getOCMViewMode(rol)
@@ -205,9 +205,6 @@ func getAccessMethods(webdav, webapp, datatx bool, rol string) ([]*ocm.AccessMet
 			return nil, err
 		}
 		m = append(m, ocmshare.NewWebappAccessMethod(v))
-	}
-	if datatx {
-		m = append(m, ocmshare.NewTransferAccessMethod())
 	}
 	return m, nil
 }
@@ -219,7 +216,7 @@ func getOCMSharePerm(p string) (*provider.ResourcePermissions, error) {
 	case editorPermission:
 		return permissions.NewEditorRole().CS3ResourcePermissions(), nil
 	}
-	return nil, errors.New("invalid rol: " + p)
+	return nil, errors.New("invalid role: " + p)
 }
 
 func getOCMViewMode(p string) (appprovider.ViewMode, error) {
@@ -229,5 +226,5 @@ func getOCMViewMode(p string) (appprovider.ViewMode, error) {
 	case editorPermission:
 		return appprovider.ViewMode_VIEW_MODE_READ_WRITE, nil
 	}
-	return 0, errors.New("invalid rol: " + p)
+	return 0, errors.New("invalid role: " + p)
 }
