@@ -31,9 +31,9 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	cachereg "github.com/cs3org/reva/v3/pkg/share/cache/registry"
 
-	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/projects"
 	"github.com/cs3org/reva/v3/pkg/projects/manager/registry"
@@ -306,36 +306,38 @@ func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpa
 	log := appctx.GetLogger(ctx)
 	// Add quota
 
-	// To get the quota for a project, we cannot do the request
-	// on behalf of the current logged user, because the project
-	// is owned by an other account, in general different from the
-	// logged in user.
-	// We need then to impersonate the owner and ask the quota
-	// on behalf of him.
+	ownerCtx := ctx
+	if proj.Owner != nil && proj.Owner.Id.OpaqueId != "root" {
+		// To get the quota for a project, we cannot do the request
+		// on behalf of the current logged user, because the project
+		// is owned by an other account, in general different from the
+		// logged in user.
+		// We need then to impersonate the owner and ask the quota
+		// on behalf of him.
 
-	// This is no longer necessary for the new project quota nodes,
-	// but we need to keep it here until we migrate all of the old
-	// project quota nodes
-	// See CERNBOX-3995
+		// This is no longer necessary for the new project quota nodes,
+		// but we need to keep it here until we migrate all of the old
+		// project quota nodes
+		// See CERNBOX-3995
+		authRes, err := s.gw.Authenticate(ctx, &gateway.AuthenticateRequest{
+			Type:         "machine",
+			ClientId:     proj.Owner.Id.OpaqueId,
+			ClientSecret: s.c.MachineSecret,
+		})
+		if err != nil {
+			return err
+		}
+		if authRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+			return errors.New(authRes.Status.Message)
+		}
 
-	authRes, err := s.gw.Authenticate(ctx, &gateway.AuthenticateRequest{
-		Type:         "machine",
-		ClientId:     proj.Owner.Id.OpaqueId,
-		ClientSecret: s.c.MachineSecret,
-	})
-	if err != nil {
-		return err
+		token := authRes.Token
+		owner := authRes.User
+
+		ownerCtx = appctx.ContextSetToken(ctx, token)
+		ownerCtx = metadata.AppendToOutgoingContext(ownerCtx, appctx.TokenHeader, token)
+		ownerCtx = appctx.ContextSetUser(ownerCtx, owner)
 	}
-	if authRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-		return errors.New(authRes.Status.Message)
-	}
-
-	token := authRes.Token
-	owner := authRes.User
-
-	ownerCtx := appctx.ContextSetToken(ctx, token)
-	ownerCtx = metadata.AppendToOutgoingContext(ownerCtx, appctx.TokenHeader, token)
-	ownerCtx = appctx.ContextSetUser(ownerCtx, owner)
 
 	log.Debug().Msgf("Fetching quota for project %s", proj.Name)
 	quota, err := s.gw.GetQuota(ownerCtx, &gateway.GetQuotaRequest{
