@@ -63,10 +63,11 @@ import (
 )
 
 const (
-	refTargetAttrKey = "reva.target"      // used as user attr to store a reference
-	lwShareAttrKey   = "reva.lwshare"     // used to store grants to lightweight accounts
-	lockPayloadKey   = "reva.lockpayload" // used to store lock payloads
-	eosLockKey       = "app.lock"         // this is the key known by EOS to enforce a lock.
+	refTargetAttrKey = "reva.target"          // used as user attr to store a reference
+	lwShareAttrKey   = "reva.lwshare"         // used to store grants to lightweight accounts
+	lockPayloadKey   = "reva.lockpayload"     // used to store lock payloads
+	eosLockKey       = "app.lock"             // this is the key known by EOS to enforce a lock.
+	recycleIdKey     = "sys.forced.recycleid" // recycle id of the project
 )
 
 const (
@@ -1567,30 +1568,35 @@ func (fs *Eosfs) EmptyRecycle(ctx context.Context) error {
 
 func (fs *Eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath string, from, to *types.Timestamp) ([]*provider.RecycleItem, error) {
 	var auth eosclient.Authorization
+	var recycleid string
+	var err error
 
-	if fs.conf.AllowPathRecycleOperations && basePath != "/" {
-		// We need to access the recycle bin for a non-home reference.
-		// We'll get the owner of the particular resource and impersonate them
-		// if we have access to it.
-		md, err := fs.GetMD(ctx, &provider.Reference{Path: basePath}, nil)
+	u, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return nil, errtypes.PermissionDenied("no user found in context for ListRecycle")
+	}
+
+	// there are two types of recycle bins ownerless (with a recycle id),
+	// or owned by an account (primary account for users, service account for projects)
+
+	// for ownerless recycle bins, a special attribute is set: so let's stat the base path
+	md, err := fs.GetMD(ctx, &provider.Reference{Path: basePath}, nil)
+	if err != nil {
+		return nil, err
+	}
+	if !md.PermissionSet.ListRecycle {
+		return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to list the recycle bin")
+	}
+	// ownerless project: use recycle id
+	if value, ok := md.ArbitraryMetadata.Metadata["recycleid"]; ok {
+		recycleid = value
+		auth, err = fs.getUserAuth(ctx, u, "")
 		if err != nil {
 			return nil, err
 		}
-		if md.PermissionSet.ListRecycle {
-			auth, err = fs.getUIDGateway(ctx, md.Owner)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to restore recycled items")
-		}
 	} else {
-		// We just act on the logged-in user's recycle bin
-		u, err := utils.GetUser(ctx)
-		if err != nil {
-			return nil, errors.Wrap(err, "eosfs: no user in ctx")
-		}
-		auth, err = fs.getUserAuth(ctx, u, "")
+		// project owned by an account: we impersonate the account
+		auth, err = fs.getUIDGateway(ctx, md.Owner)
 		if err != nil {
 			return nil, err
 		}
@@ -1611,7 +1617,8 @@ func (fs *Eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 
 	sublog := appctx.GetLogger(ctx).With().Logger()
 	sublog.Debug().Time("from", dateFrom).Time("to", dateTo).Msg("executing ListDeletedEntries")
-	eosDeletedEntries, err := fs.c.ListDeletedEntries(ctx, auth, fs.conf.MaxRecycleEntries, dateFrom, dateTo)
+	eosDeletedEntries, err := fs.c.ListDeletedEntries(ctx, auth, recycleid, fs.conf.MaxRecycleEntries, dateFrom, dateTo)
+
 	if err != nil {
 		switch err.(type) {
 		case errtypes.IsBadRequest:
@@ -1637,30 +1644,33 @@ func (fs *Eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 
 func (fs *Eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
 	var auth eosclient.Authorization
+	var err error
 
-	if fs.conf.AllowPathRecycleOperations && basePath != "/" {
-		// We need to access the recycle bin for a non-home reference.
-		// We'll get the owner of the particular resource and impersonate them
-		// if we have access to it.
-		md, err := fs.GetMD(ctx, &provider.Reference{Path: basePath}, nil)
+	u, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return errtypes.PermissionDenied("no user found in context for RestoreRecycleItem")
+	}
+
+	// there are two types of recycle bins ownerless (with a recycle id),
+	// or owned by an account (primary account for users, service account for projects)
+
+	// for ownerless recycle bins, a special attribute is set: so let's stat the base path
+	md, err := fs.GetMD(ctx, &provider.Reference{Path: basePath}, nil)
+	if err != nil {
+		return err
+	}
+	if !md.PermissionSet.RestoreRecycleItem {
+		return errtypes.PermissionDenied("eosfs: user doesn't have permissions to restore recycled items")
+	}
+	// ownerless project: use recycle id
+	if _, ok := md.ArbitraryMetadata.Metadata["recycleid"]; ok {
+		auth, err = fs.getUserAuth(ctx, u, "")
 		if err != nil {
 			return err
 		}
-		if md.PermissionSet.RestoreRecycleItem {
-			auth, err = fs.getUIDGateway(ctx, md.Owner)
-			if err != nil {
-				return err
-			}
-		} else {
-			return errtypes.PermissionDenied("eosfs: user doesn't have permissions to restore recycled items")
-		}
 	} else {
-		// We just act on the logged-in user's recycle bin
-		u, err := utils.GetUser(ctx)
-		if err != nil {
-			return errors.Wrap(err, "eosfs: no user in ctx")
-		}
-		auth, err = fs.getUserAuth(ctx, u, "")
+		// project owned by an account: we impersonate the account
+		auth, err = fs.getUIDGateway(ctx, md.Owner)
 		if err != nil {
 			return err
 		}
@@ -1881,6 +1891,11 @@ func (fs *Eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 	for k, v := range eosFileInfo.Attrs {
 		if !strings.HasPrefix(k, "sys") {
 			filteredAttrs[k] = v
+		}
+		// we also want to expose the recycle id, if set
+		// see https://eos-docs.web.cern.ch/diopside/manual/interfaces.html#recycle-bin
+		if k == recycleIdKey {
+			filteredAttrs["recycleid"] = v
 		}
 	}
 
