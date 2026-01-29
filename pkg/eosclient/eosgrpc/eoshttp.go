@@ -186,8 +186,13 @@ func (c *EOSHTTPClient) doReq(req *http.Request, remoteuser string) (*http.Respo
 	// Here we put the headers that are required by EOS >= 5
 	req.Header.Set("x-gateway-authorization", c.opt.Authkey)
 	req.Header.Set("x-forwarded-for", "dummy")
-	req.Header.Set("remote-user", remoteuser)
 
+	u := appctx.ContextMustGetUser(req.Context())
+	req.Header.Set("remote-user", u.Id.OpaqueId)
+	// req.Header.Set("remote-user", remoteuser)
+
+	log := appctx.GetLogger(req.Context())
+	log.Info().Any("headers", req.Header).Str("URL", req.URL.String()).Msgf("FindMe")
 	resp, err := c.cl.Do(req)
 
 	return resp, err
@@ -423,8 +428,10 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 			return errtypes.InternalError("Timeout with url" + finalurl)
 		}
 
+		finalurl = strings.TrimSuffix(finalurl, "?")
+
 		// Execute the request. I don't like that there is no explicit timeout or buffer control on the input stream
-		log.Debug().Str("func", "PUTFile").Any("headers", req.Header).Msg("sending req")
+		log.Debug().Str("func", "PUTFile").Any("headers", req.Header).Str("URL", finalurl).Any("auth", auth).Msg("sending req")
 
 		// c.doReq sets headers such as remoteuser and x-gateway-authorization
 		// we don't want those when using a token (i.e. ?authz=), so in this case
