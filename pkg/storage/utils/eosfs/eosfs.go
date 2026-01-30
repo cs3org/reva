@@ -1251,6 +1251,8 @@ func (fs *Eosfs) CreateStorageSpace(ctx context.Context, req *provider.CreateSto
 }
 
 func (fs *Eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (totalbytes, usedbytes uint64, err error) {
+	log := appctx.GetLogger(ctx)
+
 	u, err := utils.GetUser(ctx)
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "eosfs: no user in ctx")
@@ -1267,6 +1269,7 @@ func (fs *Eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (totalby
 	}
 
 	qi, err := fs.c.GetQuota(ctx, userAuth, cboxAuth, ref.Path)
+	log.Debug().Any("ref", ref).Any("quota", qi).Str("user", u.Id.OpaqueId).Err(err).Msgf("GetQuota")
 	if err != nil {
 		err := errors.Wrap(err, "eosfs: error getting quota")
 		return 0, 0, err

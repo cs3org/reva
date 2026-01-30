@@ -334,7 +334,8 @@ func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpa
 		token := authRes.Token
 		owner := authRes.User
 
-		ownerCtx = appctx.ContextSetToken(ctx, token)
+		ownerCtx = context.Background()
+		ownerCtx = appctx.ContextSetToken(ownerCtx, token)
 		ownerCtx = metadata.AppendToOutgoingContext(ownerCtx, appctx.TokenHeader, token)
 		ownerCtx = appctx.ContextSetUser(ownerCtx, owner)
 	}
