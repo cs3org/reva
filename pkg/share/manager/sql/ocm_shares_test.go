@@ -12,6 +12,7 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+
 	//permissions "github.com/cs3org/reva/v3/pkg/cbox/utils"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 
@@ -70,9 +71,9 @@ func getOcmShare(accessMethods []*ocm.AccessMethod, grantee *provider.Grantee, c
 func getWebDavProtocol(uri string, sharedsecret string, perms *ocm.SharePermissions, role string) *ocm.Protocol {
 	switch role {
 	case "viewer":
-		return share.NewWebDAVProtocol(uri, sharedsecret, perms, []string{})
+		return share.NewWebDAVProtocol(uri, sharedsecret, perms, []ocm.AccessType{}, []string{})
 	case "editor":
-		return share.NewWebDAVProtocol(uri, sharedsecret, perms, []string{})
+		return share.NewWebDAVProtocol(uri, sharedsecret, perms, []ocm.AccessType{}, []string{})
 	}
 	return nil
 }
@@ -141,12 +142,12 @@ func getOcmAccessMethods(role string) []*ocm.AccessMethod {
 	switch role {
 	case "viewer":
 		return []*ocm.AccessMethod{
-			share.NewWebDavAccessMethod(permissions.NewViewerRole().CS3ResourcePermissions(), []string{}),
+			share.NewWebDavAccessMethod(permissions.NewViewerRole().CS3ResourcePermissions(), []ocm.AccessType{}, []string{}),
 			share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_ONLY),
 		}
 	case "editor":
 		return []*ocm.AccessMethod{
-			share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), []string{}),
+			share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), []ocm.AccessType{}, []string{}),
 			share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 		}
 	}

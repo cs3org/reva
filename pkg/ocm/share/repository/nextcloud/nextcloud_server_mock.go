@@ -39,7 +39,7 @@ type Response struct {
 const serverStateError = "ERROR"
 const serverStateEmpty = "EMPTY"
 const serverStateHome = "HOME"
-const testShare = `{"id":{},"resource_id":{"opaque_id":"fileid-/some/path"},"token":"some-token","name":"test share","protocols":{"webdav":{"uri":"webdav-uri","permissions":15},"webapp":{"uri_template":"app-uri-template","view_mode":"write"},"transfer":{"source_uri":"source-uri","size":1}},"grantee":{"id":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}},"owner":{"id":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}},"creator":{"id":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}},"ctime":{"seconds":1234567890},"mtime":{"seconds":1234567890}}`
+const testShare = `{"id":{},"resource_id":{"opaque_id":"fileid-/some/path"},"token":"some-token","name":"test share","protocols":{"webdav":{"uri":"webdav-uri","permissions":15},"webapp":{"uri_template":"app-uri-template","view_mode":"write"}},"grantee":{"id":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}},"owner":{"id":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}},"creator":{"id":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}},"ctime":{"seconds":1234567890},"mtime":{"seconds":1234567890}}`
 
 var serverState = serverStateEmpty
 

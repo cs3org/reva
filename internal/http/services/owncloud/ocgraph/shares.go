@@ -43,9 +43,9 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
-	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	libregraph "github.com/owncloud/libre-graph-api-go"
@@ -198,7 +198,7 @@ func (s *svc) createOCMShare(ctx context.Context, gw gateway.GatewayAPIClient, r
 		},
 		RecipientMeshProvider: recipientProviderInfo.ProviderInfo,
 		AccessMethods: []*ocm.AccessMethod{
-			share.NewWebDavAccessMethod(perm, []string{}),
+			share.NewWebDavAccessMethod(perm, []ocm.AccessType{ocm.AccessType_ACCESS_TYPE_REMOTE}, []string{}),
 			share.NewWebappAccessMethod(viewMode),
 		},
 	})

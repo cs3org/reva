@@ -65,7 +65,7 @@ func (h *sharesHandler) init(c *config) error {
 	return nil
 }
 
-// CreateShare implements the OCM /shares call.
+// CreateShare implements the OCM /shares call and stores an incoming share
 func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
@@ -221,8 +221,8 @@ func getResourceTypeFromOCMRequest(t string) ocm.SharedResourceType {
 	}
 }
 
-func getOCMShareType(t string) ocm.RecipientType {
-	switch t {
+func getOCMShareType(st string) ocm.RecipientType {
+	switch st {
 	case "user":
 		return ocm.RecipientType_RECIPIENT_TYPE_USER
 	case "group":
