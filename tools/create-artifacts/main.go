@@ -82,7 +82,14 @@ func main() {
 					continue
 				}
 				out := fmt.Sprintf("./dist/%s_%s_%s_%s", bin, *version, o, arch)
-				args := []string{"build", "-o", out, "-ldflags", ldFlags, "./cmd/" + bin}
+				var target string
+				if bin == "revad" {
+					// the main for revad is cmd/revad/main/main.go following the introduction of plugins
+					target = bin + "/main"
+				} else {
+					target = bin
+				}
+				args := []string{"build", "-o", out, "-ldflags", ldFlags, "./cmd/" + target}
 				cmd := exec.Command("go", args...)
 				cmd.Env = os.Environ()
 				cmd.Env = append(cmd.Env, []string{"GOOS=" + o, "GOARCH=" + arch}...)
