@@ -15,17 +15,11 @@ Reva is meant to be a high performant and customizable HTTP and gRPC server.
 
 ## Installation
 
-Head to the [Releases](https://github.com/cs3org/reva/releases) to get the latest available release.
-
-## Documentation & Support
-
-Read the [beginners guide](https://github.com/cs3org/reva/wiki/beginners-guide) and the other featured guides in the [wiki](https://github.com/cs3org/reva/wiki). The wiki includes tutorials and guides contributed by the community.
-
-In addition, at https://reva.link you can learn about the Reva project and its software components.
+You can download a pre-built Reva from the [Releases](https://github.com/cs3org/reva/releases), or build it yourself.
 
 ### Build and run it yourself
 
-You need to have [Go](https://golang.org/doc/install) (version 1.21 or higher), [git](https://git-scm.com/) and [make](https://en.wikipedia.org/wiki/Make_(software)) installed. Some of these commands may require `sudo`, depending on your system setup.
+You need to have [Go](https://golang.org/doc/install) (version 1.25 or higher), [git](https://git-scm.com/) and [make](https://en.wikipedia.org/wiki/Make_(software)) installed. Some of these commands may require `sudo`, depending on your system setup.
 
 ```
 # build
@@ -34,8 +28,6 @@ $ cd reva
 $ make revad
 $ cmd/revad/revad --version
 ```
-
-You can also read the [build from sources guide](https://github.com/cs3org/reva/wiki/build-reva) and the [setup tutorial](https://github.com/cs3org/reva/wiki/setup-tutorial).
 
 ### Run tests
 
@@ -49,15 +41,20 @@ You can get more verbose output with `ginkgo -v -r tests/integration/`.
 To run EOS tests you need to have an up and running Docker system:
 `make docker-eos-full-tests`
 
+## Documentation & Support
+
+Read the [beginners guide](https://github.com/cs3org/reva/wiki/beginners-guide) and the other featured guides in the [wiki](https://github.com/cs3org/reva/wiki). The wiki includes tutorials and guides contributed by the community, and are being refurbished for better clarity.
+
+In addition, at https://reva.link you can learn about the Reva project and its software components.
+
+You can also read the [build from sources guide](https://github.com/cs3org/reva/wiki/build-reva) and the [setup tutorial](https://github.com/cs3org/reva/wiki/setup-tutorial).
+
 ## Versioning
 
 The `master` branch is the stable development branch. All versions are tagged from it except for the `2.x` series: such versions were tagged out of a different branch codenamed `edge`, which now lives in external forks.
 
-## Docker images
-
-See [https://hub.docker.com/r/cs3org/reva](https://hub.docker.com/r/cs3org/reva).
-
 ## Plugin development
+
 You can extend Reva without having to create PR's to this repo.
 To do so, you can create plugins, pease checkout the [Wiki](https://github.com/cs3org/reva/wiki).
 
