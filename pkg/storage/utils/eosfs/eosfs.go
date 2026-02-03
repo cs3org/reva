@@ -287,7 +287,7 @@ func (fs *Eosfs) Shutdown(ctx context.Context) error {
 }
 
 func (fs *Eosfs) wrap(ctx context.Context, fn string) (internal string) {
-	internal = path.Join(fs.conf.Namespace, fn)
+	internal = path.Join(path.Clean(fs.conf.Namespace), fn)
 	log := appctx.GetLogger(ctx)
 	log.Debug().Msg("eosfs: wrap external=" + fn + " internal=" + internal)
 	return
@@ -320,7 +320,7 @@ func (fs *Eosfs) getNsMatch(internal string, nss []string) (string, error) {
 		return "", errtypes.NotFound(fmt.Sprintf("eosfs: path is outside namespaces: path=%s namespaces=%+v", internal, nss))
 	}
 
-	return match, nil
+	return path.Clean(match), nil
 }
 
 func (fs *Eosfs) unwrapInternal(ctx context.Context, ns, np string) (string, error) {
@@ -1128,6 +1128,8 @@ func (fs *Eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 
 	p := ref.Path
 	fn := fs.wrap(ctx, p)
+
+	log.Info().Msgf("FindMe GetMD for path %s", fn)
 
 	// We use daemon for auth because we need access to the file in order to stat it
 	// We cannot use the current user, because the file may be a shared file
