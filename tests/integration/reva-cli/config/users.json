@@ -1,0 +1,32 @@
+[
+  {
+    "username": "testuser",
+    "id": {
+      "idp": "http://localhost:20080",
+      "opaque_id": "testuser",
+      "type": 1
+    },
+    "secret": "testpass",
+    "display_name": "Test User",
+    "mail": "test@example.com",
+    "mail_verified": true,
+    "groups": ["myusers"],
+    "uid_number": 1255,
+    "gid_number": 123
+  },
+  {
+    "username": "testreceivinguser",
+    "id": {
+      "idp": "http://localhost:20080",
+      "opaque_id": "testreceivinguser",
+      "type": 1
+    },
+    "secret": "testpass",
+    "display_name": "Test User",
+    "mail": "test2@example.com",
+    "mail_verified": true,
+    "groups": ["myusers"],
+    "uid_number": 1256,
+    "gid_number": 123
+  }
+]
