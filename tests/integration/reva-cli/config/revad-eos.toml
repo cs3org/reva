@@ -148,7 +148,20 @@ driver = "sql"
 address = "0.0.0.0:38001"
 
 [http.services.dataprovider]
-driver = "local"
+driver = "eoswrapper"
 
-[http.services.dataprovider.drivers.local]
-root = "./tmp/revalocalstorage/data"
+[http.services.dataprovider.drivers.eoswrapper]
+namespace = "/eos/"
+quota_node = "/eos/"
+user_layout = "{{substr 0 1 .Username}}/{{.Username}}"
+xrdcopy_binary = "/opt/eos/xrootd/bin/xrdcopy"
+cache_directory = "/var/tmp/reva"
+write_uses_local_temp = false
+master_url = "root://localhost"
+master_grpc_uri = "localhost:50051"
+grpc_auth_key = "auth_key"
+https_auth_key = "auth_key"
+use_grpc = true
+allow_insecure = true
+default_quota_files = 5000000
+default_secondary_quota_bytes = 20000000000
