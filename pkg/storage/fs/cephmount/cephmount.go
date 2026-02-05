@@ -467,8 +467,12 @@ func (fs *cephmountfs) Delete(ctx context.Context, ref *provider.Reference) (err
 
 	fs.logOperationWithPaths(ctx, "Delete", receivedPath, path)
 
+	// add root to path
+	fs_path := filepath.Join(fs.chrootDir, path)
+
 	// Execute stat and delete operations on user's thread with correct UID
-	info, err := fs.statAsUser(ctx, path)
+	// to avoid moving non-existing files, first stat the file
+	_, err = fs.statAsUser(ctx, fs_path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil // Already deleted
@@ -478,10 +482,29 @@ func (fs *cephmountfs) Delete(ctx context.Context, ref *provider.Reference) (err
 		return wrappedErr
 	}
 
-	if info.IsDir() {
-		err = fs.removeAllAsUser(ctx, path)
-	} else {
-		err = fs.removeAsUser(ctx, path)
+	// Remove trailing slash from the path of the file or directory to be deleted (if any)
+	path = strings.TrimRight(path, "/")
+	// Extract the directory part of the path
+	dirPart := filepath.Dir(path)
+
+	// Get current date
+	currentDate := time.Now().Format("2006/01/02")
+	// Construct recycle path
+	recyclePath := filepath.Join(fs.chrootDir, fs.conf.RecycleRoot, currentDate, dirPart)
+	// Create the recycle directory and necessary parents if they don't exist
+	err = fs.createDirectoryAsUser(ctx, recyclePath, os.FileMode(fs.conf.DirPerms))
+	if err != nil {
+		wrappedErr := errors.Wrap(err, "cephmount: failed to create recycle directory")
+		fs.logOperationError(ctx, "Delete", recyclePath, wrappedErr)
+		return wrappedErr
+	}
+	destinationPath := filepath.Join(recyclePath, filepath.Base(path))
+	// Move the file to the recycle bin
+	err = fs.renameAsUser(ctx, path, destinationPath)
+	if err != nil {
+		wrappedErr := errors.Wrap(err, "cephmount: failed to move file to recycle bin")
+		fs.logOperationError(ctx, "Delete", path, wrappedErr)
+		return wrappedErr
 	}
 
 	if err != nil {
@@ -843,7 +866,8 @@ func (fs *cephmountfs) AddGrant(ctx context.Context, ref *provider.Reference, g 
 
 	fs.logOperation(ctx, "AddGrant", path)
 
-	// Use setfacl system command to set permissions
+	// Use setfacl system command to set permissions	log := appctx.GetLogger(ctx)
+
 	err = fs.addGrantViaSetfacl(ctx, path, g)
 	if err != nil {
 		wrappedErr := errors.Wrap(err, "cephmount: failed to add grant via setfacl")
@@ -1143,23 +1167,125 @@ func (fs *cephmountfs) TouchFile(ctx context.Context, ref *provider.Reference) e
 }
 
 func (fs *cephmountfs) EmptyRecycle(ctx context.Context) error {
-	return errtypes.NotSupported("unimplemented")
+	log := appctx.GetLogger(ctx)
+	log.Info().Msg("Emptying recycle bin")
+	recyclePath := filepath.Join(fs.chrootDir, fs.conf.RecycleRoot)
+	if err := fs.removeAllAsUser(ctx, recyclePath); err != nil {
+		log.Error().Err(err).Msg("Failed to remove recycle bin items")
+		return errors.Wrap(err, "cephmount: failed to empty recycle bin")
+	}
+	return nil
+}
+
+func (fs *cephmountfs) convertToRecycleItem(ctx context.Context, fileinfo *provider.ResourceInfo) (*provider.RecycleItem, error) {
+	log := appctx.GetLogger(ctx)
+	log.Info().Str("entry", fileinfo.Path).Msg("Converting directory entry to recycle item")
+	// Convert the directory entry to a recycle item
+	return &provider.RecycleItem{
+		Ref:          &provider.Reference{Path: fileinfo.Path},
+		Key:          fileinfo.Path,
+		Size:         fileinfo.Size,
+		DeletionTime: fileinfo.Mtime,
+	}, nil
+}
+
+func (fs *cephmountfs) ListRecycle(ctx context.Context, basePath, key, relativePath string, from, to *typepb.Timestamp) ([]*provider.RecycleItem, error) {
+	log := appctx.GetLogger(ctx)
+	log.Info().Str("basePath", basePath).Str("key", key).Str("relativePath", basePath).Msg("Listing recycle bin items")
+
+	recyclePath := filepath.Join(fs.chrootDir, fs.conf.RecycleRoot, basePath)
+	entries, err := fs.readDirectoryAsUser(ctx, recyclePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			log.Info().Str("recyclePath", recyclePath).Msg("Recycle path does not exist, returning empty list")
+			return []*provider.RecycleItem{}, nil
+		}
+		log.Error().Err(err).Str("recyclePath", recyclePath).Msg("Failed to read recycle directory")
+		return nil, errors.Wrap(err, "cephmount: failed to read recycle directory")
+	}
+
+	var items []*provider.RecycleItem
+	for _, entry := range entries {
+		if from != nil || to != nil {
+			entryDate, err := time.Parse("2006/01/02", basePath)
+			if err != nil {
+				log.Error().Err(err).Str("basePath", basePath).Msg("Failed to parse date from recycle path")
+				continue
+			}
+			entryTime := entryDate.Unix()
+			if from != nil {
+				fromTime := int64(from.Seconds)
+				if entryTime < fromTime {
+					log.Debug().Int64("entryTime", entryTime).Int64("fromTime", fromTime).Msg("Skipping recycle item - before from timestamp")
+					continue
+				}
+			}
+			if to != nil {
+				toTime := int64(to.Seconds)
+				if entryTime > toTime {
+					log.Debug().Int64("entryTime", entryTime).Int64("toTime", toTime).Msg("Skipping recycle item - after to timestamp")
+					continue
+				}
+			}
+			log.Debug().Int64("entryTime", entryTime).Msg("Recycle item is within from/to timestamps")
+
+		}
+		fileinfo, err := fs.fileAsResourceInfo(filepath.Join(recyclePath, entry.Name()), entry, nil)
+		if err != nil {
+			log.Error().Err(err).Str("entry", entry.Name()).Msg("Failed to get file info")
+			continue
+		}
+		recycleItem, err := fs.convertToRecycleItem(ctx, fileinfo)
+		if err != nil {
+			log.Error().Err(err).Str("entry", entry.Name()).Msg("Failed to convert to recycle item")
+			continue
+		}
+		items = append(items, recycleItem)
+	}
+
+	return items, nil
+}
+
+func (fs *cephmountfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
+	log := appctx.GetLogger(ctx)
+
+	fullPath := filepath.Join(fs.chrootDir, fs.conf.RecycleRoot, relativePath)
+	log.Info().Str("recycleItemPath", fullPath).Msg("Purging recycle bin item")
+
+	if err := fs.removeAllAsUser(ctx, fullPath); err != nil {
+		log.Error().Err(err).Msg("Failed to purge recycle bin item")
+		return errors.Wrap(err, "cephmount: failed to purge recycle bin item")
+	}
+	return nil
+}
+
+func (fs *cephmountfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+	log := appctx.GetLogger(ctx)
+
+	recycleItemPath := filepath.Join(fs.chrootDir, fs.conf.RecycleRoot, basePath)
+	log.Info().Str("recycleItemPath", recycleItemPath).Msg("Restoring recycle bin item")
+
+	// get the restore path
+	restorePath := filepath.Join(fs.chrootDir, basePath)
+	// check that the restore path doesn't exist
+	_, err := fs.statAsUser(ctx, restorePath)
+	if err == nil {
+		log.Warn().Str("restorePath", restorePath).Msg("Restore path already exists")
+		return errors.New("restore path already exists")
+	}
+
+	log.Info().Str("restorePath", restorePath).Msg("Restoring to original location")
+	// Perform the restore operation
+	if err := fs.renameAsUser(ctx, recycleItemPath, restorePath); err != nil {
+		log.Error().Err(err).Msg("Failed to restore recycle bin item")
+		return errors.Wrap(err, "cephmount: failed to restore recycle bin item")
+	}
+	return nil
+
 }
 
 func (fs *cephmountfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (r *provider.CreateStorageSpaceResponse, err error) {
 	return nil, errtypes.NotSupported("unimplemented")
-}
-
-func (fs *cephmountfs) ListRecycle(ctx context.Context, basePath, key, relativePath string, from, to *typepb.Timestamp) ([]*provider.RecycleItem, error) {
-	return nil, errtypes.NotSupported("unimplemented")
-}
-
-func (fs *cephmountfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
-	return errtypes.NotSupported("unimplemented")
-}
-
-func (fs *cephmountfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
-	return errtypes.NotSupported("unimplemented")
 }
 
 func (fs *cephmountfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {

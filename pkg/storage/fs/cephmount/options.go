@@ -24,6 +24,7 @@ type Options struct {
 	DirPerms       uint32 `mapstructure:"dir_perms"`
 	FilePerms      uint32 `mapstructure:"file_perms"`
 	UserQuotaBytes uint64 `mapstructure:"user_quota_bytes"`
+	RecycleRoot    string `mapstructure:"recycle_root"`
 
 	// Nobody user/group for fallback operations (instead of root)
 	NobodyUID int `mapstructure:"nobody_uid"`
@@ -41,6 +42,10 @@ type Options struct {
 func (c *Options) ApplyDefaults() {
 	if c.UploadFolder == "" {
 		c.UploadFolder = ".uploads"
+	}
+
+	if c.RecycleRoot == "" {
+		c.RecycleRoot = "/.recycle"
 	}
 
 	// Nobody user/group defaults (commonly 65534 on Linux systems)
