@@ -375,11 +375,9 @@ func TestListAppPasswords(t *testing.T) {
 			},
 		},
 		{
-			description: "ListAppPasswords with not empty state with expired password (only one user)",
-			stateJSON:   string(dummyDataUserExpiredJSON),
-			expectedState: []*apppb.AppPassword{
-				dummyDataUserExpired[user0Test.GetId().String()][token],
-			},
+			description:   "ListAppPasswords with not empty state with expired password (only one user)",
+			stateJSON:     string(dummyDataUserExpiredJSON),
+			expectedState: make([]*apppb.AppPassword, 0), // expired tokens are purged on load
 		},
 		{
 			description: "ListAppPasswords with not empty state (different users)",

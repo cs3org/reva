@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log"
 	"os"
 	"sync"
 	"time"
@@ -52,7 +53,7 @@ type config struct {
 }
 
 type jsonManager struct {
-	sync.Mutex
+	sync.RWMutex
 	config *config
 	// map[userid][password]AppPassword
 	passwords map[string]map[string]*apppb.AppPassword
@@ -74,6 +75,16 @@ func New(m map[string]interface{}) (appauth.Manager, error) {
 	}
 
 	manager.config = c
+
+	// Purge expired tokens on startup so they don't accumulate over time.
+	// This runs before the manager is shared, so no lock is needed.
+	// If persisting the purged state fails, log and continue — the service
+	// can still operate with the expired tokens in memory (they will be
+	// skipped during authentication anyway).
+	manager.purgeExpiredTokens()
+	if err := manager.save(); err != nil {
+		log.Printf("appauth: warning: failed to persist purged tokens: %v", err)
+	}
 
 	return manager, nil
 }
@@ -154,6 +165,8 @@ func (mgr *jsonManager) GenerateAppPassword(ctx context.Context, scope map[strin
 	mgr.Lock()
 	defer mgr.Unlock()
 
+	mgr.purgeExpiredUserTokens(userID.String())
+
 	// check if user has some previous password
 	if _, ok := mgr.passwords[userID.String()]; !ok {
 		mgr.passwords[userID.String()] = make(map[string]*apppb.AppPassword)
@@ -173,8 +186,8 @@ func (mgr *jsonManager) GenerateAppPassword(ctx context.Context, scope map[strin
 
 func (mgr *jsonManager) ListAppPasswords(ctx context.Context) ([]*apppb.AppPassword, error) {
 	userID := ctxpkg.ContextMustGetUser(ctx).GetId()
-	mgr.Lock()
-	defer mgr.Unlock()
+	mgr.RLock()
+	defer mgr.RUnlock()
 	appPasswords := []*apppb.AppPassword{}
 	for _, pw := range mgr.passwords[userID.String()] {
 		appPasswords = append(appPasswords, pw)
@@ -207,31 +220,48 @@ func (mgr *jsonManager) InvalidateAppPassword(ctx context.Context, password stri
 }
 
 func (mgr *jsonManager) GetAppPassword(ctx context.Context, userID *userpb.UserId, password string) (*apppb.AppPassword, error) {
-	mgr.Lock()
-	defer mgr.Unlock()
-
-	appPassword, ok := mgr.passwords[userID.String()]
+	// Phase 1: find the matching token under a read lock.
+	// Expired tokens are skipped before the expensive bcrypt comparison so
+	// that accumulated expired tokens do not slow down authentication.
+	// A read lock allows concurrent GetAppPassword calls.
+	mgr.RLock()
+	appPasswords, ok := mgr.passwords[userID.String()]
 	if !ok {
+		mgr.RUnlock()
 		return nil, errtypes.NotFound("password not found")
 	}
 
-	for hash, pw := range appPassword {
-		err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-		if err == nil {
-			// password found
-			if pw.Expiration != nil && pw.Expiration.Seconds != 0 && uint64(time.Now().Unix()) > pw.Expiration.Seconds {
-				// password expired
-				return nil, errtypes.NotFound("password not found")
-			}
-			// password not expired
-			// update last used time
-			pw.Utime = now()
-			if err := mgr.save(); err != nil {
-				return nil, errors.Wrap(err, "error saving file")
-			}
-
-			return pw, nil
+	nowSec := uint64(time.Now().Unix())
+	var matchedHash string
+	var matchedPw *apppb.AppPassword
+	for hash, pw := range appPasswords {
+		if isExpired(pw, nowSec) {
+			continue
 		}
+		if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err == nil {
+			matchedHash = hash
+			matchedPw = pw
+			break
+		}
+	}
+	mgr.RUnlock()
+
+	if matchedPw == nil {
+		return nil, errtypes.NotFound("password not found")
+	}
+
+	// Phase 2: update last-used time under a write lock.
+	// Between RUnlock and Lock, the token could have been invalidated by
+	// another goroutine, so re-check that it still exists.
+	mgr.Lock()
+	defer mgr.Unlock()
+
+	if current, ok := mgr.passwords[userID.String()][matchedHash]; ok {
+		current.Utime = now()
+		if err := mgr.save(); err != nil {
+			return nil, errors.Wrap(err, "error saving file")
+		}
+		return current, nil
 	}
 
 	return nil, errtypes.NotFound("password not found")
@@ -252,4 +282,53 @@ func (mgr *jsonManager) save() error {
 	}
 
 	return nil
+}
+
+// isExpired returns true if the token has a non-zero expiration time that is in the past.
+func isExpired(pw *apppb.AppPassword, nowSec uint64) bool {
+	return pw.Expiration != nil && pw.Expiration.Seconds != 0 && pw.Expiration.Seconds < nowSec
+}
+
+// purgeExpiredUserTokens removes expired tokens for a single user.
+// Must be called while holding the write lock.
+//
+// Deleting map entries during a range loop is safe in Go per the language spec:
+// https://go.dev/ref/spec#For_range
+// "If a map entry that has not yet been reached is removed during iteration,
+// the corresponding iteration value will not be produced."
+func (mgr *jsonManager) purgeExpiredUserTokens(uid string) {
+	tokens, ok := mgr.passwords[uid]
+	if !ok {
+		return
+	}
+	nowSec := uint64(time.Now().Unix())
+	for hash, pw := range tokens {
+		if isExpired(pw, nowSec) {
+			delete(tokens, hash)
+		}
+	}
+	if len(tokens) == 0 {
+		delete(mgr.passwords, uid)
+	}
+}
+
+// purgeExpiredTokens removes expired tokens for all users.
+// Must be called before the manager is shared (no lock needed).
+//
+// Deleting map entries during a range loop is safe in Go per the language spec:
+// https://go.dev/ref/spec#For_range
+// "If a map entry that has not yet been reached is removed during iteration,
+// the corresponding iteration value will not be produced."
+func (mgr *jsonManager) purgeExpiredTokens() {
+	nowSec := uint64(time.Now().Unix())
+	for uid, tokens := range mgr.passwords {
+		for hash, pw := range tokens {
+			if isExpired(pw, nowSec) {
+				delete(tokens, hash)
+			}
+		}
+		if len(tokens) == 0 {
+			delete(mgr.passwords, uid)
+		}
+	}
 }
