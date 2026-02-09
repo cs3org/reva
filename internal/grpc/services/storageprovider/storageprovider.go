@@ -1295,7 +1295,7 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
-			st = status.NewNotFound(ctx, "path not found when listing recycle")
+			st = status.NewNotFound(ctx, "path "+ref.GetPath()+" not found when listing recycle")
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		case errtypes.BadRequest:
