@@ -14,7 +14,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.17.0
 	github.com/creasty/defaults v1.8.0
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-        github.com/cs3org/go-cs3apis v0.0.0-20260130145416-2dc593dc27e7
+	github.com/cs3org/go-cs3apis v0.0.0-20260130145416-2dc593dc27e7
 	github.com/dgraph-io/ristretto v0.2.0
 	github.com/dolthub/go-mysql-server v0.14.0
 	github.com/glpatcern/go-mime v0.0.0-20221026162842-2a8d71ad17a9
@@ -58,7 +58,7 @@ require (
 	golang.org/x/crypto v0.47.0
 	golang.org/x/oauth2 v0.34.0
 	golang.org/x/sync v0.19.0
-	golang.org/x/sys v0.40.0
+	golang.org/x/sys v0.41.0
 	golang.org/x/term v0.39.0
 	google.golang.org/genproto v0.0.0-20251202230838-ff82c1b0f217
 	google.golang.org/grpc v1.78.0
