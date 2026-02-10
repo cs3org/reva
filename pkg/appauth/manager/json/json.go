@@ -22,7 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"log"
+
 	"os"
 	"sync"
 	"time"
@@ -78,13 +78,8 @@ func New(m map[string]interface{}) (appauth.Manager, error) {
 
 	// Purge expired tokens on startup so they don't accumulate over time.
 	// This runs before the manager is shared, so no lock is needed.
-	// If persisting the purged state fails, log and continue — the service
-	// can still operate with the expired tokens in memory (they will be
-	// skipped during authentication anyway).
 	manager.purgeExpiredTokens()
-	if err := manager.save(); err != nil {
-		log.Printf("appauth: warning: failed to persist purged tokens: %v", err)
-	}
+	_ = manager.save()
 
 	return manager, nil
 }

@@ -72,8 +72,8 @@ func TestGetAppPassword_SkipsExpiredTokens(t *testing.T) {
 			Expiration: &typespb.Timestamp{
 				Seconds: uint64(time.Now().Add(-1 * time.Hour).Unix()),
 			},
-			Ctime: now(),
-			Utime: now(),
+			Ctime: &typespb.Timestamp{Seconds: uint64(time.Now().Unix())},
+			Utime: &typespb.Timestamp{Seconds: uint64(time.Now().Unix())},
 		},
 	}
 
@@ -219,8 +219,8 @@ func TestGenerateAppPassword_PurgesExpired(t *testing.T) {
 			Expiration: &typespb.Timestamp{
 				Seconds: uint64(time.Now().Add(-1 * time.Hour).Unix()),
 			},
-			Ctime: now(),
-			Utime: now(),
+			Ctime: &typespb.Timestamp{Seconds: uint64(time.Now().Unix())},
+			Utime: &typespb.Timestamp{Seconds: uint64(time.Now().Unix())},
 		},
 	}
 
