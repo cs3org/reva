@@ -47,9 +47,10 @@ func init() {
 }
 
 type config struct {
-	File             string `mapstructure:"file"`
-	TokenStrength    int    `mapstructure:"token_strength"`
-	PasswordHashCost int    `mapstructure:"password_hash_cost"`
+	File                    string `mapstructure:"file"`
+	TokenStrength           int    `mapstructure:"token_strength"`
+	PasswordHashCost        int    `mapstructure:"password_hash_cost"`
+	KeepExpiredTokensOnLoad bool   `mapstructure:"keep_expired_tokens_on_load"`
 }
 
 type jsonManager struct {
@@ -78,8 +79,10 @@ func New(m map[string]interface{}) (appauth.Manager, error) {
 
 	// Purge expired tokens on startup so they don't accumulate over time.
 	// This runs before the manager is shared, so no lock is needed.
-	manager.purgeExpiredTokens()
-	_ = manager.save()
+	if !c.KeepExpiredTokensOnLoad {
+		manager.purgeExpiredTokens()
+		_ = manager.save()
+	}
 
 	return manager, nil
 }
