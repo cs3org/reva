@@ -31,6 +31,7 @@ type Options struct {
 
 	// Simplified Ceph configuration - just paste the fstab entry
 	FstabEntry string `mapstructure:"fstabentry"` // Complete fstab line for Ceph mount
+	RootDir    string `mapstructure:"root_dir"`   // Root directory for the Ceph mount
 
 	// Testing-only option - allows running without Ceph configuration for local filesystem tests
 	TestingAllowLocalMode bool `mapstructure:"testing_allow_local_mode"` // Bypass fstab parsing requirement for tests only
