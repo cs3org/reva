@@ -126,6 +126,9 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		discoveredLocalMountPoint = ""
 	}
 
+	if o.RootDir != "" {
+		discoveredLocalMountPoint = filepath.Join(discoveredLocalMountPoint, o.RootDir)
+	}
 	// Use discovered local mount point as chroot directory
 	chrootDir := discoveredLocalMountPoint
 
