@@ -176,7 +176,7 @@ description: >
 		"CHANGELOG.md",
 		"VERSION",
 		"RELEASE_DATE",
-		"docs/content/en/docs/changelog",
+		"docs/content/",
 	)
 
 	if *commit {
