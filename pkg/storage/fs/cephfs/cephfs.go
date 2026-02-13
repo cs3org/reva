@@ -632,7 +632,7 @@ func (fs *cephfs) TouchFile(ctx context.Context, ref *provider.Reference) error 
 	return getRevaError(ctx, err)
 }
 
-func (fs *cephfs) EmptyRecycle(ctx context.Context) error {
+func (fs *cephfs) EmptyRecycle(ctx context.Context, _ string) error {
 	return errtypes.NotSupported("unimplemented")
 }
 

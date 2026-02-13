@@ -523,7 +523,7 @@ var _ = Describe("Nextcloud", func() {
 		It("calls the EmpytRecycle endpoint", func() {
 			nc, called, teardown := setUpNextcloudServer()
 			defer teardown()
-			err := nc.EmptyRecycle(ctx)
+			err := nc.EmptyRecycle(ctx, "")
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/EmptyRecycle `)
 		})

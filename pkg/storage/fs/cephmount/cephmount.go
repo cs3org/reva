@@ -1145,7 +1145,7 @@ func (fs *cephmountfs) TouchFile(ctx context.Context, ref *provider.Reference) e
 	return nil
 }
 
-func (fs *cephmountfs) EmptyRecycle(ctx context.Context) error {
+func (fs *cephmountfs) EmptyRecycle(ctx context.Context, _ string) error {
 	return errtypes.NotSupported("unimplemented")
 }
 

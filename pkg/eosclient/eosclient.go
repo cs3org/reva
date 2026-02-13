@@ -54,9 +54,9 @@ type EOSClient interface {
 	ListWithRegex(ctx context.Context, auth Authorization, path string, depth uint, regex string) ([]*FileInfo, error)
 	Read(ctx context.Context, auth Authorization, path string, ranges []storage.Range) (io.ReadCloser, error)
 	Write(ctx context.Context, auth Authorization, path string, stream io.ReadCloser, length int64, app string, disableVersioning bool) error
-	ListDeletedEntries(ctx context.Context, auth Authorization, maxentries int, from, to time.Time) ([]*DeletedEntry, error)
+	ListDeletedEntries(ctx context.Context, auth Authorization, recycleid string, maxentries int, from, to time.Time) ([]*DeletedEntry, error)
 	RestoreDeletedEntry(ctx context.Context, auth Authorization, key string) error
-	PurgeDeletedEntries(ctx context.Context, auth Authorization) error
+	PurgeDeletedEntries(ctx context.Context, recycleid string, auth Authorization, entries []string) error
 	ListVersions(ctx context.Context, auth Authorization, p string) ([]*FileInfo, error)
 	RollbackToVersion(ctx context.Context, auth Authorization, path, version string) error
 	ReadVersion(ctx context.Context, auth Authorization, p, version string) (io.ReadCloser, error)

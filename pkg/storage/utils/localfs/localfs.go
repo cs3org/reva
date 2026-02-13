@@ -1362,7 +1362,7 @@ func (fs *localfs) PurgeRecycleItem(ctx context.Context, basePath, key, relative
 	return nil
 }
 
-func (fs *localfs) EmptyRecycle(ctx context.Context) error {
+func (fs *localfs) EmptyRecycle(ctx context.Context, basePath string) error {
 	rp := fs.wrapRecycleBin(ctx, "/")
 
 	if err := os.RemoveAll(rp); err != nil {

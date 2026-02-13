@@ -143,34 +143,38 @@ func newgrpc(ctx context.Context, log *zerolog.Logger, opt *Options) (erpc.EosCl
 
 	log.Debug().Msgf("Going to ping '%s'", opt.GrpcURI)
 	ecl := erpc.NewEosClient(conn)
-	// If we can't ping... just print warnings. In the case EOS is down, grpc will take care of
-	// connecting later
+
 	prq := new(erpc.PingRequest)
 	prq.Authkey = opt.Authkey
 	prq.Message = []byte("hi this is a ping from reva")
 	prep, err := ecl.Ping(ctx, prq)
 	if err != nil {
-		if opt.AllowInsecure {
-			conn, err = grpc.NewClient(opt.GrpcURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
-			if err != nil {
-				log.Warn().Err(err).Msgf("Error connecting to '%s' using insecure", opt.GrpcURI)
-				return nil, err
-			} else {
-				log.Warn().Err(err).Msgf("Fell back to insecure mode when connecting to %s because TLS ping failed", opt.GrpcURI)
-				ecl = erpc.NewEosClient(conn)
-			}
-		} else {
+		// Must use TLS, so we fail
+		if !opt.AllowInsecure {
 			log.Error().Err(err).Msgf("Failed to connect to '%s' using TLS, and allow_insecure is false", opt.GrpcURI)
 			return nil, err
 		}
-		log.Warn().Err(err).Msgf("Could not ping to '%s'", opt.GrpcURI)
+
+		// Otherwise, let's try again, but this time without TLS
+		conn, err = grpc.NewClient(opt.GrpcURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			log.Warn().Err(err).Msgf("Failed to create insecure gRPC client")
+			return nil, err
+		}
+		ecl = erpc.NewEosClient(conn)
+		prep, err = ecl.Ping(ctx, prq)
+		if err != nil {
+			log.Error().Err(err).Msgf("Failed to connect to '%s' in insecure mode", opt.GrpcURI)
+			return nil, err
+		}
 	}
 
 	if prep == nil {
 		log.Warn().Msgf("Could not ping to '%s': nil response", opt.GrpcURI)
+		return nil, errors.New("Got nil response from ping to EOS")
 	}
-	log.Debug().Msgf("Ping to '%s' succeeded", opt.GrpcURI)
 
+	log.Debug().Msgf("Ping to '%s' succeeded", opt.GrpcURI)
 	return ecl, nil
 }
 
@@ -279,11 +283,6 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 	var localfile io.WriteCloser
 	localfile = nil
 
-	u, err := utils.GetUser(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "eos: no user in ctx")
-	}
-
 	if c.opt.ReadUsesLocalTemp {
 		rand := "eosread-" + uuid.New().String()
 		localTarget := fmt.Sprintf("%s/%s", c.opt.CacheDirectory, rand)
@@ -297,7 +296,7 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 		}
 	}
 
-	bodystream, err := c.httpcl.GETFile(ctx, u.Username, auth, path, localfile, ranges)
+	bodystream, err := c.httpcl.GETFile(ctx, auth.Role.UID, auth, path, localfile, ranges)
 	if err != nil {
 		log.Error().Str("func", "Read").Str("path", path).Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("err", err.Error()).Msg("")
 		return nil, errtypes.InternalError(fmt.Sprintf("can't GET local cache file '%s'", localTarget))
@@ -312,11 +311,6 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser, length int64, app string, disableVersioning bool) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "Write").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
-
-	u, err := utils.GetUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eos: no user in ctx")
-	}
 
 	if c.opt.WriteUsesLocalTemp {
 		fd, err := os.CreateTemp(c.opt.CacheDirectory, "eoswrite-")
@@ -340,10 +334,10 @@ func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path s
 		defer wfd.Close()
 		defer os.RemoveAll(fd.Name())
 
-		return c.httpcl.PUTFile(ctx, u.Username, auth, path, wfd, length, app, disableVersioning)
+		return c.httpcl.PUTFile(ctx, auth.Role.UID, auth, path, wfd, length, app, disableVersioning)
 	}
 
-	return c.httpcl.PUTFile(ctx, u.Username, auth, path, stream, length, app, disableVersioning)
+	return c.httpcl.PUTFile(ctx, auth.Role.UID, auth, path, stream, length, app, disableVersioning)
 }
 
 func (c *Client) getOrCreateVersionFolderInode(ctx context.Context, ownerAuth eosclient.Authorization, p string) (uint64, error) {

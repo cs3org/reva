@@ -806,7 +806,10 @@ func (c *Client) writeFile(ctx context.Context, auth eosclient.Authorization, pa
 }
 
 // ListDeletedEntries returns a list of the deleted entries.
-func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization, maxentries int, from, to time.Time) ([]*eosclient.DeletedEntry, error) {
+func (c *Client) ListDeletedEntries(ctx context.Context, auth eosclient.Authorization, recycleid string, maxentries int, from, to time.Time) ([]*eosclient.DeletedEntry, error) {
+	if recycleid != "" {
+		return nil, errtypes.NotSupported("EOS Binary Client does not support listing deleted entries based on recycle id")
+	}
 	deleted := []*eosclient.DeletedEntry{}
 	count := 0
 	for d := to; !d.Before(from); d = d.AddDate(0, 0, -1) {
@@ -844,10 +847,23 @@ func (c *Client) RestoreDeletedEntry(ctx context.Context, auth eosclient.Authori
 }
 
 // PurgeDeletedEntries purges all entries from the recycle bin.
-func (c *Client) PurgeDeletedEntries(ctx context.Context, auth eosclient.Authorization) error {
-	args := []string{"recycle", "purge"}
-	_, _, err := c.executeEOS(ctx, args, auth)
-	return err
+func (c *Client) PurgeDeletedEntries(ctx context.Context, recycleid string, auth eosclient.Authorization, entries []string) error {
+	if recycleid != "" {
+		return errtypes.NotSupported("EOS Binary Client does not support purging deleted entries based on recycle id")
+	}
+	if len(entries) == 0 {
+		args := []string{"recycle", "purge"}
+		_, _, err := c.executeEOS(ctx, args, auth)
+		return err
+	}
+	for _, entry := range entries {
+		args := []string{"recycle", "purge", entry}
+		_, _, err := c.executeEOS(ctx, args, auth)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ListVersions list all the versions for a given file.

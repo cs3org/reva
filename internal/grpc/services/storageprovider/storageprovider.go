@@ -508,6 +508,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		}
 	}
 	uploadIDs, err := s.storage.InitiateUpload(ctx, newRef, uploadLength, metadata)
+	log.Debug().Any("ref", newRef).Err(err).Any("uploadIDs", uploadIDs).Msgf("InitiateFileUpload")
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
@@ -1374,7 +1375,7 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 				Status: st,
 			}, nil
 		}
-	} else if err := s.storage.EmptyRecycle(ctx); err != nil {
+	} else if err := s.storage.EmptyRecycle(ctx, ref.GetPath()); err != nil {
 		// otherwise try emptying the whole recycle bin
 		var st *rpc.Status
 		switch err.(type) {

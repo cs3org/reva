@@ -19,6 +19,8 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"io"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -28,9 +30,14 @@ import (
 func recyclePurgeCommand() *command {
 	cmd := newCommand("recycle-purge")
 	cmd.Description = func() string { return "purge a recycle bin" }
-	cmd.Usage = func() string { return "Usage: recycle-purge [-flags] " }
+	cmd.Usage = func() string { return "Usage: recycle-purge [-flags] key" }
 
 	cmd.Action = func(w ...io.Writer) error {
+		if cmd.NArg() < 1 {
+			return errors.New("Invalid arguments; you must provide a key to purge: " + cmd.Usage())
+		}
+
+		key := cmd.Args()[0]
 		client, err := getClient()
 		if err != nil {
 			return err
@@ -47,6 +54,7 @@ func recyclePurgeCommand() *command {
 			Ref: &provider.Reference{
 				Path: getHomeRes.Path,
 			},
+			Key: key,
 		}
 
 		res, err := client.PurgeRecycle(ctx, req)
@@ -56,6 +64,8 @@ func recyclePurgeCommand() *command {
 
 		if res.Status.Code != rpc.Code_CODE_OK {
 			return formatError(res.Status)
+		} else {
+			fmt.Printf("Purged recycle item %s. Status: %s\n", key, res.Status.String())
 		}
 
 		return nil
