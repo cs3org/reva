@@ -701,7 +701,7 @@ func (d *driver) PurgeRecycleItem(ctx context.Context, basePath, key, relativePa
 	return errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) EmptyRecycle(ctx context.Context) error {
+func (d *driver) EmptyRecycle(ctx context.Context, _ string) error {
 	return errtypes.NotSupported("operation not supported")
 }
 

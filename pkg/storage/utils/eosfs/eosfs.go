@@ -1562,20 +1562,23 @@ func (fs *Eosfs) RestoreRevision(ctx context.Context, ref *provider.Reference, r
 }
 
 func (fs *Eosfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
-	return errtypes.NotSupported("eosfs: operation not supported")
-}
-
-func (fs *Eosfs) EmptyRecycle(ctx context.Context) error {
 	u, err := utils.GetUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
-	auth, err := fs.getUserAuth(ctx, u, "")
+
+	md, err := fs.GetMD(ctx, &provider.Reference{Path: basePath}, nil)
 	if err != nil {
 		return err
 	}
 
-	return fs.c.PurgeDeletedEntries(ctx, auth)
+	recycleid, auth, err := fs.getRecycleIdAndAuth(ctx, u, md)
+
+	return fs.c.PurgeDeletedEntries(ctx, recycleid, auth, []string{key})
+}
+
+func (fs *Eosfs) EmptyRecycle(ctx context.Context, basePath string) error {
+	return errtypes.NotSupported("eosfs: EmptyRecycle: operation not supported")
 }
 
 func (fs *Eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath string, from, to *types.Timestamp) ([]*provider.RecycleItem, error) {
@@ -1604,25 +1607,8 @@ func (fs *Eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 		log.Error().Err(fmt.Errorf("No permission")).Msgf("ListRecycle")
 		return nil, errtypes.PermissionDenied("eosfs: user doesn't have permissions to list the recycle bin")
 	}
-	// ownerless project: use recycle id
-	if value, ok := md.ArbitraryMetadata.Metadata["recycleid"]; ok {
-		recycleid = value
-		auth, err = fs.getUserAuth(ctx, u, "")
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		// space owned by an account: we impersonate the account
-		if md.Owner != nil {
-			auth, err = fs.getUIDGateway(ctx, md.Owner)
-		} else {
-			auth, err = fs.getUserAuth(ctx, u, "")
-		}
-		if err != nil {
-			return nil, err
-		}
 
-	}
+	recycleid, auth, err = fs.getRecycleIdAndAuth(ctx, u, md)
 
 	var dateFrom, dateTo time.Time
 	if from != nil && to != nil {
@@ -1707,6 +1693,30 @@ func (fs *Eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relative
 	}
 
 	return fs.c.RestoreDeletedEntry(ctx, auth, key)
+}
+
+func (fs *Eosfs) getRecycleIdAndAuth(ctx context.Context, u *userpb.User, md *provider.ResourceInfo) (recycleid string, auth eosclient.Authorization, err error) {
+	// ownerless project: use recycle id
+	if value, ok := md.ArbitraryMetadata.Metadata["recycleid"]; ok {
+		recycleid = value
+		auth, err = fs.getUserAuth(ctx, u, "")
+		if err != nil {
+			return "", eosclient.Authorization{}, err
+		}
+	} else {
+		// space owned by an account: we impersonate the account
+		// no recycleid
+		recycleid = ""
+		if md.Owner != nil {
+			auth, err = fs.getUIDGateway(ctx, md.Owner)
+		} else {
+			auth, err = fs.getUserAuth(ctx, u, "")
+		}
+		if err != nil {
+			return "", eosclient.Authorization{}, err
+		}
+	}
+	return recycleid, auth, nil
 }
 
 func (fs *Eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {

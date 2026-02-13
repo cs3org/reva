@@ -65,7 +65,7 @@ func recyclePurgeCommand() *command {
 		if res.Status.Code != rpc.Code_CODE_OK {
 			return formatError(res.Status)
 		} else {
-			fmt.Printf("Purged recycle bin. Status: %s\n", res.Status.String())
+			fmt.Printf("Purged recycle item %s. Status: %s\n", key, res.Status.String())
 		}
 
 		return nil

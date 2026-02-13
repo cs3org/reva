@@ -1375,7 +1375,7 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 				Status: st,
 			}, nil
 		}
-	} else if err := s.storage.EmptyRecycle(ctx); err != nil {
+	} else if err := s.storage.EmptyRecycle(ctx, ref.GetPath()); err != nil {
 		// otherwise try emptying the whole recycle bin
 		var st *rpc.Status
 		switch err.(type) {

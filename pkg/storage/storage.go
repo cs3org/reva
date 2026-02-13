@@ -49,7 +49,7 @@ type FS interface {
 	ListRecycle(ctx context.Context, basePath, key, relativePath string, from, to *typepb.Timestamp) ([]*provider.RecycleItem, error)
 	RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error
 	PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error
-	EmptyRecycle(ctx context.Context) error
+	EmptyRecycle(ctx context.Context, basePath string) error
 	GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
 	AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error
