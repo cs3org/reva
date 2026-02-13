@@ -246,7 +246,6 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	// where to upload the file?
 	uRes, err := client.InitiateFileUpload(ctx, uReq)
-	log.Debug().Any("req", uReq).Any("resp", uRes).Err(err).Msgf("InitiateUpload Response")
 	if err != nil {
 		log.Error().Err(err).Msg("error initiating file upload")
 		w.WriteHeader(http.StatusInternalServerError)

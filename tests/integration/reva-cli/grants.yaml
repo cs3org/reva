@@ -31,7 +31,7 @@ run:
   # AddGrant: Create a share (which adds a grant)
   # Note: We need another user/group to grant to, otherwise Reva will throw an error
   addGrant:
-    command: "cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token share-create -grantee={{TESTRECVUSER}} -rol=viewer {{BASEDIR}}/grants-tests/test-file.txt"
+    command: "cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token share-create -grantee={{TESTRECVUSER}} -role=viewer {{BASEDIR}}/grants-tests/test-file.txt"
     expectCode: 0
     outputContains:
       - "{{TESTRECVUSER}}"
@@ -55,9 +55,9 @@ run:
   updateGrant:
     command: |
       bash -c "
-        SHARE_ID=$(cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token share-list 2>&1 | grep 'test-file.txt' | head -1 | awk '{print $2}' | tr -d '[:space:]')
+        SHARE_ID=$(cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token share-list 2>&1 | grep 'testuser' | head -1 | awk '{print $2}' | tr -d '[:space:]')
         if [ -n \"$SHARE_ID\" ] && [ \"$SHARE_ID\" != \"\" ]; then
-          cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token share-update -rol=editor \"$SHARE_ID\"
+          cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token share-update -role=editor \"$SHARE_ID\"
         else
           echo \"Error: Could not extract share ID from output\"
           cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token share-list 2>&1 || true
@@ -78,7 +78,7 @@ run:
   removeGrant:
     command: |
       bash -c "
-        SHARE_ID=$(cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token share-list 2>&1 | grep 'test-file.txt' | head -1 | awk '{print $2}' | tr -d '[:space:]')
+        SHARE_ID=$(cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token share-list 2>&1 | grep 'testuser' | head -1 | awk '{print $2}' | tr -d '[:space:]')
         if [ -n \"$SHARE_ID\" ] && [ \"$SHARE_ID\" != \"\" ]; then
           cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token share-remove \"$SHARE_ID\"
         else

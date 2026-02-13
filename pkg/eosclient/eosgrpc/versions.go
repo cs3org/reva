@@ -19,7 +19,6 @@ func (c *Client) ListVersions(ctx context.Context, auth eosclient.Authorization,
 
 	versionFolder := eosclient.GetVersionFolder(p)
 	finfos, err := c.List(ctx, auth, versionFolder)
-	log.Debug().Any("versionFolder", versionFolder).Err(err).Any("infos", finfos).Msg("ListVersions")
 	if err != nil {
 		return []*eosclient.FileInfo{}, err
 	}

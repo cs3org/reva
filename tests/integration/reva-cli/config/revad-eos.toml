@@ -91,6 +91,7 @@ quota_node = "/eos/"
 master_url = "root://localhost"
 master_grpc_uri = "localhost:50051"
 user_layout = "{{substr 0 1 .Username}}/{{.Username}}"
+mount_id_template = "eos"
 xrdcopy_binary = "/opt/eos/xrootd/bin/xrdcopy"
 cache_directory = "/var/tmp/reva"
 write_uses_local_temp = false

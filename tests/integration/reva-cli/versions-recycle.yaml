@@ -162,7 +162,19 @@ run:
 
   # Purge recycle bin (EmptyRecycle)
   purgeRecycle:
-    command: "cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token recycle-purge"
+    command: |
+      bash -c "
+        KEY=$(cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token recycle-list 2>&1 | grep -o 'key:\"[^\"]*\"' | head -1 | sed 's/key:\"//;s/\"//' | tr -d '[:space:]')
+        if [ -n \"$KEY\" ] && [ \"$KEY\" != \"\" ]; then
+          cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token recycle-purge \"$KEY\"
+        else
+          echo \"Error: Could not extract recycle key from output\"
+          echo \"Debug - recycle list output:\"
+          cmd/reva/reva -insecure -host={{REVANODE}} -token-file=token recycle-list 2>&1 || true
+          echo \"Extracted key was: [\"$KEY\"]\"
+          exit 1
+        fi
+      "
     expectCode: 0
 
   # Verify recycle bin is empty
