@@ -41,11 +41,10 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/permissions"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 
 	"github.com/pkg/errors"
-	
 
 	"github.com/cs3org/reva/v3/pkg/publicshare"
 	"github.com/cs3org/reva/v3/pkg/share"
@@ -512,11 +511,11 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 
 	var href string
 	if parent != nil {
-		relativePath, err := filepath.Rel(parent.Path, md.Path)
+		relativePath, err := filepath.Rel(encodePath(parent.Path), encodePath(md.Path))
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to calculate path relative to parent: %v", md.Path)
 		}
-		href, err = url.JoinPath(hrefBase, relativePath)
+		href, err = url.JoinPath(encodePath(hrefBase), relativePath)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to join relative path with ref: %v", md.Path)
 		}
@@ -524,11 +523,11 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		// If no parent specified, we just take space id + path relative to space
 		spaceID := md.Id.SpaceId
 		spacePath, _ := spaces.DecodeSpaceID(spaceID)
-		relativePath, err := filepath.Rel(spacePath, md.Path)
+		relativePath, err := filepath.Rel(spacePath, encodePath(md.Path))
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to calculate path relative to space: %v. %v", spacePath, md.Path)
 		}
-		href, err = url.JoinPath(hrefBase, spaceID, relativePath)
+		href, err = url.JoinPath(encodePath(hrefBase), spaceID, relativePath)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to join relative path with ref: %v", md.Path)
 		}
