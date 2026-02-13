@@ -1,20 +1,5 @@
 [
   {
-    "username": "root",
-    "id": {
-      "idp": "http://localhost:20080",
-      "opaque_id": "root",
-      "type": 1
-    },
-    "secret": "rootpassword",
-    "display_name": "Root User",
-    "mail": "root@localhost",
-    "mail_verified": false,
-    "groups": [""],
-    "uid_number": 0,
-    "gid_number": 0
-  },
-  {
     "username": "testuser",
     "id": {
       "idp": "http://localhost:20080",

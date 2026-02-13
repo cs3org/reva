@@ -508,7 +508,6 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		}
 	}
 	uploadIDs, err := s.storage.InitiateUpload(ctx, newRef, uploadLength, metadata)
-	log.Debug().Any("ref", newRef).Err(err).Any("uploadIDs", uploadIDs).Msgf("InitiateFileUpload")
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {

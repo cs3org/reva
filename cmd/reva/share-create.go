@@ -41,11 +41,11 @@ func shareCreateCommand() *command {
 	grantType := cmd.String("type", "user", "grantee type (user or group)")
 	grantee := cmd.String("grantee", "", "the grantee")
 	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
-	rol := cmd.String("rol", "viewer", "the permission for the share (viewer, editor, denied)")
+	role := cmd.String("role", "viewer", "the permission for the share (viewer, editor, denied)")
 	userType := cmd.String("user-type", "primary", "the type of user account, defaults to primary")
 
 	cmd.ResetFlags = func() {
-		*grantType, *grantee, *idp, *rol, *userType = "user", "", "", "viewer", "primary"
+		*grantType, *grantee, *idp, *role, *userType = "user", "", "", "viewer", "primary"
 	}
 
 	cmd.Action = func(w ...io.Writer) error {
@@ -77,7 +77,7 @@ func shareCreateCommand() *command {
 			return formatError(res.Status)
 		}
 
-		perm, err := getSharePerm(*rol)
+		perm, err := getSharePerm(*role)
 		if err != nil {
 			return err
 		}
