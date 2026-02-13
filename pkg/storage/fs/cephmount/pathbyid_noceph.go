@@ -46,3 +46,7 @@ func (c *CephAdminConn) Close() {
 func (fs *cephmountfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
 	return "", errtypes.NotSupported("cephmount: GetPathByID requires ceph support (build with -tags ceph)")
 }
+
+func (fs *cephmountfs) GetActiveMDS(ctx context.Context) (string, error) {
+	return "", errtypes.NotSupported("cephmount: GetActiveMDS requires ceph support (build with -tags ceph)")
+}

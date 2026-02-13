@@ -178,9 +178,9 @@ func (fs *cephmountfs) GetPathByID(ctx context.Context, id *provider.ResourceId)
 
 	// Get filesystem status to find active MDS
 	log.Info().Msg("cephmount: Finding active MDS for inode operation")
-	activeMDS, err := fs.getActiveMDS(ctx)
+	activeMDS, err := fs.GetActiveMDS(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("cephmount: Failed to find active MDS - cannot proceed with inode lookup")
+		log.Fatal().Err(err).Msg("cephmount: Critical Failure - Failed to find active MDS - cannot proceed with inode lookup")
 		return "", errors.Wrap(err, "cephmount: failed to get active MDS")
 	}
 
@@ -364,180 +364,136 @@ func (fs *cephmountfs) extractPathFromInodeOutput(ctx context.Context, output []
 	return "", errors.New("no path information found in MDS output")
 }
 
-// getActiveMDS gets the active MDS using manager commands
-func (fs *cephmountfs) getActiveMDS(ctx context.Context) (string, error) {
+// GetActiveMDS gets the active MDS using manager commands
+func (fs *cephmountfs) GetActiveMDS(ctx context.Context) (string, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("cephmount: Starting active MDS detection process")
 
-	// Prepare fs status command
+	// Prepare fs dump command
 	cmd, err := json.Marshal(map[string]interface{}{
-		"prefix": "fs status",
+		"prefix": "fs dump",
 		"format": "json",
 	})
 	if err != nil {
-		log.Error().Err(err).Msg("cephmount: Failed to marshal fs status command")
-		return "", errors.Wrap(err, "failed to marshal fs status command")
+		log.Error().Err(err).Msg("cephmount: Failed to marshal fs dump command")
+		return "", errors.Wrap(err, "failed to marshal fs dump command")
 	}
 
-	log.Debug().Str("command", "fs status").Msg("cephmount: Executing fs status command to get cluster state")
+	log.Debug().Str("command", "fs dump").Msg("cephmount: Executing fs dump command to get cluster state")
 
-	// Execute manager command (fs status is a manager command, not MDS command)
-	buf, info, err := fs.cephAdminConn.radosConn.MgrCommand([][]byte{cmd})
+	// Execute manager command
+	buf, info, err := fs.cephAdminConn.radosConn.MonCommand(cmd)
 	if err != nil {
-		log.Error().Err(err).Msg("cephmount: Failed to execute fs status command - check MDS cluster connectivity")
-		return "", errors.Wrap(err, "failed to execute fs status command")
+		log.Error().Err(err).Msg("cephmount: Failed to execute fs dump command - check MDS cluster connectivity")
+		return "", errors.Wrap(err, "failed to execute fs dump command")
 	}
 
 	if info != "" {
 		log.Debug().Str("info", info).Msg("cephmount: Manager command returned additional info")
 	}
 
-	log.Debug().Str("fs_status_response", string(buf)).Msg("cephmount: Raw fs status response received")
-	log.Info().Int("response_size", len(buf)).Msg("cephmount: Received fs status response, parsing for MDS information")
+	log.Info().Int("response_size", len(buf)).Msg("cephmount: Received fs dump response, parsing for MDS information")
 
-	// Parse the filesystem status JSON
-	var fsStatus map[string]interface{}
-	if err := json.Unmarshal(buf, &fsStatus); err != nil {
-		log.Error().Err(err).Str("response", string(buf)).Msg("cephmount: Failed to parse fs status as JSON")
-		return "", errors.Wrap(err, "failed to parse fs status JSON")
-	}
-
-	log.Info().Int("fields_count", len(fsStatus)).Msg("cephmount: Successfully parsed fs status JSON")
-
-	// Log all top-level fields for debugging
-	topLevelFields := make([]string, 0, len(fsStatus))
-	for key := range fsStatus {
-		topLevelFields = append(topLevelFields, key)
-	}
-	log.Debug().Strs("available_fields", topLevelFields).Msg("cephmount: Available fields in fs status")
-
-	// Look for mdsmap
-	mdsmapRaw, ok := fsStatus["mdsmap"]
-	if !ok {
-		log.Error().Strs("available_fields", topLevelFields).Msg("cephmount: No mdsmap field found in fs status - cluster may not have MDS services")
-		return "", errors.New("no mdsmap found in fs status")
-	}
-
-	log.Info().Msg("cephmount: Found mdsmap in fs status, analyzing MDS configuration")
-
-	// Convert to JSON and back to handle the interface{}
-	mdsmapBytes, err := json.Marshal(mdsmapRaw)
-	if err != nil {
-		log.Error().Err(err).Msg("cephmount: Failed to marshal mdsmap for analysis")
-		return "", errors.Wrap(err, "failed to marshal mdsmap")
-	}
-
-	log.Debug().Str("mdsmap_json", string(mdsmapBytes)).Int("mdsmap_size", len(mdsmapBytes)).Msg("cephmount: Serialized mdsmap for parsing")
-
-	// Try parsing as object with info field first (most common format)
-	log.Info().Msg("cephmount: Attempting to parse mdsmap as object with 'info' field")
-	var mdsmap struct {
-		Info json.RawMessage `json:"info"`
-	}
-
-	if err := json.Unmarshal(mdsmapBytes, &mdsmap); err == nil && len(mdsmap.Info) > 0 {
-		log.Info().Int("info_size", len(mdsmap.Info)).Msg("cephmount: Found 'info' field in mdsmap, parsing MDS entries")
-
-		// Parse the info section as array first (newer Ceph format)
-		var infoArray []struct {
-			Name  string `json:"name"`
-			State string `json:"state"`
-			Rank  int    `json:"rank,omitempty"`
-		}
-		if err := json.Unmarshal(mdsmap.Info, &infoArray); err == nil {
-			log.Info().Int("mds_count", len(infoArray)).Msg("cephmount: Successfully parsed mdsmap.info as array format")
-
-			for i, mds := range infoArray {
-				log.Info().
-					Int("mds_index", i).
-					Str("mds_name", mds.Name).
-					Str("mds_state", mds.State).
-					Int("mds_rank", mds.Rank).
-					Bool("is_active", strings.Contains(mds.State, "active")).
-					Msg("cephmount: Evaluating MDS entry from array")
-
-				if strings.Contains(mds.State, "active") {
-					log.Info().
-						Str("chosen_mds", mds.Name).
-						Str("mds_state", mds.State).
-						Int("mds_rank", mds.Rank).
-						Msg("cephmount: SELECTED ACTIVE MDS - This MDS will be used for inode operations")
-					return mds.Name, nil
-				}
-			}
-			log.Warn().Int("total_mds", len(infoArray)).Msg("cephmount: No active MDS found in array format - all MDS may be inactive")
-		} else {
-			log.Info().Msg("cephmount: Array parsing failed, trying map format for mdsmap.info")
-			// Try parsing as map (older Ceph format)
-			var infoMap map[string]struct {
-				Name  string `json:"name"`
-				State string `json:"state"`
-				Rank  int    `json:"rank,omitempty"`
-			}
-			if err := json.Unmarshal(mdsmap.Info, &infoMap); err == nil {
-				log.Info().Int("mds_count", len(infoMap)).Msg("cephmount: Successfully parsed mdsmap.info as map format")
-
-				for key, mds := range infoMap {
-					log.Info().
-						Str("mds_key", key).
-						Str("mds_name", mds.Name).
-						Str("mds_state", mds.State).
-						Int("mds_rank", mds.Rank).
-						Bool("is_active", strings.Contains(mds.State, "active")).
-						Msg("cephmount: Evaluating MDS entry from map")
-
-					if strings.Contains(mds.State, "active") {
-						log.Info().
-							Str("chosen_mds", mds.Name).
-							Str("mds_state", mds.State).
-							Int("mds_rank", mds.Rank).
-							Str("mds_key", key).
-							Msg("cephmount: SELECTED ACTIVE MDS - This MDS will be used for inode operations")
-						return mds.Name, nil
-					}
-				}
-				log.Warn().Int("total_mds", len(infoMap)).Msg("cephmount: No active MDS found in map format - all MDS may be inactive")
-			} else {
-				log.Error().Err(err).Str("info_raw", string(mdsmap.Info)).Msg("cephmount: Failed to parse mdsmap.info as either array or map")
-			}
-		}
-	} else {
-		log.Info().Msg("cephmount: No 'info' field found or empty, trying direct array parsing of mdsmap")
-	}
-
-	// If mdsmap.info approach fails, try direct array parsing (alternative format)
-	log.Info().Msg("cephmount: Attempting direct array parsing of mdsmap (alternative format)")
-	var directMDSArray []struct {
+	// Internal types for parsing
+	type MDSInfo struct {
+		GID   uint64 `json:"gid"`
 		Name  string `json:"name"`
+		Rank  int    `json:"rank"`
 		State string `json:"state"`
-		Rank  int    `json:"rank,omitempty"`
+		Addr  string `json:"addr"`
 	}
-	if err := json.Unmarshal(mdsmapBytes, &directMDSArray); err == nil {
-		log.Info().Int("mds_entries", len(directMDSArray)).Msg("cephmount: Successfully parsed mdsmap as direct array")
 
-		for i, mds := range directMDSArray {
-			log.Info().
-				Int("mds_index", i).
-				Str("mds_name", mds.Name).
-				Str("mds_state", mds.State).
-				Int("mds_rank", mds.Rank).
-				Bool("is_active", strings.Contains(mds.State, "active")).
-				Msg("cephmount: Evaluating MDS entry from direct array")
+	type MDSMap struct {
+		Epoch  int                 `json:"epoch"`
+		MaxMDS int                 `json:"max_mds"`
+		FsName string              `json:"fs_name"`
+		Info   map[string]*MDSInfo `json:"info"` // Dynamic keys like "gid_14631204"
+		Up     map[string]uint64   `json:"up"`   // e.g. {"mds_0": 14631204}
+	}
 
-			if strings.Contains(mds.State, "active") {
-				log.Info().
-					Str("chosen_mds", mds.Name).
-					Str("mds_state", mds.State).
-					Int("mds_rank", mds.Rank).
-					Msg("cephmount: SELECTED ACTIVE MDS - This MDS will be used for inode operations")
-				return mds.Name, nil
+	type FSMapEntry struct {
+		ID     int    `json:"id"`
+		MDSMap MDSMap `json:"mdsmap"`
+	}
+
+	// Determine if the response is a wrapper object ({"filesystems": [...]}) or a direct array
+	var filesystems []FSMapEntry
+
+	// Attempt 1: Parse as wrapper object (common in "fs dump")
+	var wrapper struct {
+		Filesystems []FSMapEntry `json:"filesystems"`
+	}
+	if err := json.Unmarshal(buf, &wrapper); err == nil && len(wrapper.Filesystems) > 0 {
+		filesystems = wrapper.Filesystems
+		log.Info().Int("fs_count", len(filesystems)).Msg("cephmount: Parsed filesystems via wrapper object")
+	} else {
+		// Attempt 2: Parse as direct array (fallback for some versions/contexts)
+		if err := json.Unmarshal(buf, &filesystems); err != nil {
+			log.Error().Err(err).Str("response_snippet", string(buf[:min(len(buf), 100)])).Msg("cephmount: Failed to parse fs dump as either wrapper or array")
+			return "", errors.Wrap(err, "failed to parse fs dump JSON")
+		}
+		log.Info().Int("fs_count", len(filesystems)).Msg("cephmount: Parsed filesystems via direct array")
+	}
+
+	// Iterate through filesystems to find ours and its active MDS
+	for _, entry := range filesystems {
+		if entry.MDSMap.FsName != fs.conf.FsName {
+			log.Debug().
+				Str("found_fs", entry.MDSMap.FsName).
+				Str("expected_fs", fs.conf.FsName).
+				Msg("cephmount: Skipping non-matching filesystem")
+			continue
+		}
+
+		log.Info().
+			Str("fs_name", entry.MDSMap.FsName).
+			Int("epoch", entry.MDSMap.Epoch).
+			Msg("cephmount: Found matching filesystem")
+
+		// Step 1: Check 'up' map for rank 0 to identify the active GID
+		activeGid, ok := entry.MDSMap.Up["mds_0"]
+		if !ok {
+			log.Warn().Str("fs", fs.conf.FsName).Msg("cephmount: No active rank 0 (mds_0) found in 'up' map for this filesystem")
+			continue
+		}
+
+		// Step 2: Find the daemon info matching this GID
+		// We iterate because the Info map keys are dynamic ("gid_XXXX")
+		var activeMDS *MDSInfo
+		for _, info := range entry.MDSMap.Info {
+			if info != nil && info.GID == activeGid {
+				activeMDS = info
+				break
 			}
 		}
-		log.Warn().Int("total_mds", len(directMDSArray)).Msg("cephmount: No active MDS found in direct array - all MDS may be inactive")
-	} else {
-		log.Error().Err(err).Str("mdsmap_raw", string(mdsmapBytes)).Msg("cephmount: Failed to parse mdsmap as direct array")
+
+		if activeMDS != nil {
+			log.Info().
+				Str("mds_name", activeMDS.Name).
+				Str("mds_state", activeMDS.State).
+				Uint64("mds_gid", activeMDS.GID).
+				Int("mds_rank", activeMDS.Rank).
+				Msg("cephmount: Found MDS daemon assigned to rank 0")
+
+			if strings.Contains(activeMDS.State, "active") {
+				log.Info().
+					Str("chosen_mds", activeMDS.Name).
+					Str("mds_addr", activeMDS.Addr).
+					Msg("cephmount: SELECTED ACTIVE MDS - This MDS will be used for inode operations")
+				return activeMDS.Name, nil
+			} else {
+				log.Warn().
+					Str("mds_name", activeMDS.Name).
+					Str("state", activeMDS.State).
+					Msg("cephmount: MDS assigned to rank 0 is not in 'active' state")
+			}
+		} else {
+			log.Warn().Uint64("gid", activeGid).Msg("cephmount: Active GID found in 'up' map but missing from 'info' map")
+		}
 	}
 
-	log.Error().Msg("cephmount: FAILED TO FIND ACTIVE MDS - No active MDS found in any format. Check MDS cluster health.")
+	log.Fatal().
+		Str("expected_fs", fs.conf.FsName).
+		Msg("cephmount: FAILED TO FIND ACTIVE MDS - No active MDS found for the configured filesystem")
 	return "", errors.New("no active MDS found")
 }
