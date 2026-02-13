@@ -270,8 +270,7 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 			Str("capability", "full per-user thread isolation available").
 			Msg("cephmount: sufficient privileges verified for per-user thread isolation")
 	}
-
-	return &cephmountfs{
+	fs := &cephmountfs{
 		conf:            &o,
 		cephAdminConn:   cephAdminConn,
 		rootFS:          rootFS,
@@ -279,7 +278,20 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		cephVolumePath:  discoveredCephVolumePath,
 		localMountPoint: discoveredLocalMountPoint,
 		chrootDir:       chrootDir,
-	}, nil
+	}
+
+	// Don't check for active MDS if we don't have a Ceph volume path
+	// this allows the driver to be used in a limited local mode without Ceph for testing or non-Ceph use cases
+	if !o.TestingAllowLocalMode {
+		_, err = fs.GetActiveMDS(ctx)
+		if err != nil {
+			log.Fatal().
+				Msg("cephmount: CRITICAL - failed to get active MDS during initialization - this is required for GetPathByID to function")
+			return nil, errors.Wrap(err, "cephmount: Critical - failed to get active MDS")
+		}
+	}
+
+	return fs, nil
 }
 
 // resolveRef converts a provider.Reference to a chroot-relative path
