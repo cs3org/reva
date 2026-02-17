@@ -36,6 +36,7 @@ import (
 	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/storage"
+	"github.com/cs3org/reva/v3/pkg/utils"
 
 	"github.com/cs3org/reva/v3/pkg/eosclient"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
@@ -634,7 +635,7 @@ func deserializeAttribute(attrStr string) (*eosclient.Attribute, error) {
 }
 
 // GetQuota gets the quota of a user on the quota node defined by path.
-func (c *Client) GetQuota(ctx context.Context, user eosclient.Authorization, rootAuth eosclient.Authorization, path string) (*eosclient.QuotaInfo, error) {
+func (c *Client) GetQuota(ctx context.Context, user eosclient.Authorization, path string) (*eosclient.QuotaInfo, error) {
 	var args []string
 	// NewStyle project quota
 	if user.Role.GID == eosclient.ProjectQuotaGID {
@@ -643,7 +644,7 @@ func (c *Client) GetQuota(ctx context.Context, user eosclient.Authorization, roo
 		// Old style quota
 		args = []string{"quota", "ls", "-u", user.Role.UID, "-m"}
 	}
-	stdout, _, err := c.executeEOS(ctx, args, rootAuth)
+	stdout, _, err := c.executeEOS(ctx, args, utils.GetEmptyAuth())
 	if err != nil {
 		return nil, err
 	}

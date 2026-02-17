@@ -10,15 +10,15 @@ import (
 	"github.com/cs3org/reva/v3/pkg/eosclient"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/trace"
+	"github.com/cs3org/reva/v3/pkg/utils"
 )
 
 // GetQuota gets the quota of a user on the quota node defined by path.
-func (c *Client) GetQuota(ctx context.Context, user eosclient.Authorization, rootAuth eosclient.Authorization, path string) (*eosclient.QuotaInfo, error) {
+func (c *Client) GetQuota(ctx context.Context, user eosclient.Authorization, path string) (*eosclient.QuotaInfo, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "GetQuota").Str("rootuid,rootgid", rootAuth.Role.UID+","+rootAuth.Role.GID).Any("user", user).Str("path", path).Msg("")
+	log.Info().Str("func", "GetQuota").Any("user", user).Str("path", path).Msg("")
 
-	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(ctx, rootAuth, "")
+	rq, err := c.initNSRequest(ctx, utils.GetEmptyAuth(), "")
 	if err != nil {
 		return nil, err
 	}
@@ -30,20 +30,20 @@ func (c *Client) GetQuota(ctx context.Context, user eosclient.Authorization, roo
 	// Eos filters the returned quotas by username. This means that EOS must know it, someone
 	// must have created an user with that name
 
-	uid, err := strconv.ParseUint(user.Role.UID, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	gid, err := strconv.ParseUint(user.Role.GID, 10, 64)
-	if err != nil {
-		return nil, err
+	if user.Role.GID != "" || user.Role.UID != "" {
+		gid, err := strconv.ParseUint(user.Role.GID, 10, 64)
+		if err == nil && gid == 99 {
+			msg.Id.Gid = gid
+		} else {
+			uid, err := strconv.ParseUint(user.Role.UID, 10, 64)
+			if err == nil {
+				msg.Id.Uid = uid
+			} else {
+				return nil, err
+			}
+		}
 	}
 
-	if gid == 99 {
-		msg.Id.Gid = gid
-	} else {
-		msg.Id.Uid = uid
-	}
 	msg.Id.Trace = trace.Get(ctx)
 	rq.Command = &erpc.NSRequest_Quota{Quota: msg}
 

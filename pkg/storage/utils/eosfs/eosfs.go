@@ -1119,7 +1119,6 @@ func (fs *Eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*pr
 
 func (fs *Eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Msg("eosfs: get md for ref:" + ref.String())
 
 	if ref == nil {
 		return nil, errtypes.BadRequest("No ref was given to GetMD")
@@ -1182,6 +1181,7 @@ func (fs *Eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	}
 
 	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, fn)
+
 	if err != nil {
 		log.Error().Err(err).Str("path", fn).Msg("Failed to get file info by path")
 		return nil, err
@@ -1262,13 +1262,12 @@ func (fs *Eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (totalby
 	if err != nil {
 		return 0, 0, err
 	}
-	cboxAuth := utils.GetEmptyAuth()
 
 	if ref.Path != fs.conf.QuotaNode && ref.Path != "" {
 		ref.Path = fs.wrap(ctx, ref.Path)
 	}
 
-	qi, err := fs.c.GetQuota(ctx, userAuth, cboxAuth, ref.Path)
+	qi, err := fs.c.GetQuota(ctx, userAuth, ref.Path)
 	log.Debug().Any("ref", ref).Any("quota", qi).Str("user", u.Id.OpaqueId).Err(err).Msgf("GetQuota")
 	if err != nil {
 		err := errors.Wrap(err, "eosfs: error getting quota")
@@ -1721,7 +1720,11 @@ func (fs *Eosfs) convertToResourceInfo(ctx context.Context, eosFileInfo *eosclie
 
 // permissionSet returns the permission set for the current user.
 func (fs *Eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileInfo, owner *userpb.UserId) *provider.ResourcePermissions {
+	log := appctx.GetLogger(ctx)
+
 	u, ok := appctx.ContextGetUser(ctx)
+	log.Info().Any("u", u).Any("fileInfo", eosFileInfo).Any("owner", owner).Msgf("FindMe permissionSet")
+
 	if !ok || u.Id == nil {
 		return &provider.ResourcePermissions{
 			// no permissions
@@ -1750,6 +1753,8 @@ func (fs *Eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 	}
 
 	auth, err := fs.getUserAuth(ctx, u, eosFileInfo.File)
+	log.Info().Any("auth", auth).Msgf("FindMe")
+
 	if err != nil {
 		return &provider.ResourcePermissions{
 			// no permissions
@@ -1885,8 +1890,8 @@ func (fs *Eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 			filteredAttrs[k] = v
 		}
 	}
-
 	parseAndSetFavoriteAttr(ctx, filteredAttrs)
+	permissionSet := fs.permissionSet(ctx, eosFileInfo, owner)
 
 	info := &provider.ResourceInfo{
 		Id: &provider.ResourceId{
@@ -1899,7 +1904,7 @@ func (fs *Eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		MimeType:      mime.Detect(eosFileInfo.IsDir, p),
 		Size:          size,
 		ParentId:      &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.FID)},
-		PermissionSet: fs.permissionSet(ctx, eosFileInfo, owner),
+		PermissionSet: permissionSet,
 		Checksum:      &xs,
 		Type:          getResourceType(eosFileInfo.IsDir),
 		Mtime: &types.Timestamp{
@@ -1918,6 +1923,7 @@ func (fs *Eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 			},
 		},
 	}
+
 	if eosFileInfo.Attrs[eosLockKey] != "" {
 		// populate the lock if decodable, log failure (but move on) if not
 		l, err := decodeLock(eosFileInfo.Attrs[lockPayloadKey], eosFileInfo.Attrs[eosLockKey])
@@ -1928,6 +1934,7 @@ func (fs *Eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 			info.Lock = l
 		}
 	}
+
 	if eosFileInfo.IsDir {
 		info.Opaque.Map["disable_tus"] = &types.OpaqueEntry{
 			Decoder: "plain",

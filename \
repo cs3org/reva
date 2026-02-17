@@ -1,0 +1,18 @@
+WIP
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# Date:      Tue Feb 17 10:55:30 2026 +0100
+#
+# On branch fix/egroup-external-accs
+# Your branch is up to date with 'origin/fix/egroup-external-accs'.
+#
+# Changes to be committed:
+#	modified:   internal/grpc/services/gateway/storageprovider.go
+#	modified:   internal/grpc/services/spacesregistry/spacesregistry.go
+#	modified:   pkg/eosclient/eosbinary/eosbinary.go
+#	modified:   pkg/eosclient/eosclient.go
+#	modified:   pkg/eosclient/eosgrpc/quota.go
+#	modified:   pkg/storage/utils/eosfs/eosfs.go
+#

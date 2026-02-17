@@ -80,6 +80,9 @@ func (c *config) ApplyDefaults() {
 	if c.UserSpace == "" {
 		c.UserSpace = "/home"
 	}
+	if c.TimeoutSkipSpaces == 0 {
+		c.TimeoutSkipSpaces = int(time.Second * time.Duration(10))
+	}
 }
 
 type service struct {
@@ -96,6 +99,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
+	c.ApplyDefaults()
 	s, err := getSpacesDriver(ctx, c.Driver, c.Drivers)
 	if err != nil {
 		return nil, err
@@ -119,11 +123,7 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	}
 
 	// set default timeout to decorate spaces (usually quota + stat call on the underlying storage).
-	svc.timeoutSkipSpaces = time.Second * time.Duration(c.TimeoutSkipSpaces)
-	if svc.timeoutSkipSpaces == 0 {
-		svc.timeoutSkipSpaces = time.Second * time.Duration(3) // 3 seconds.
-	}
-
+	svc.timeoutSkipSpaces = time.Duration(10) * time.Second
 	return &svc, nil
 }
 
