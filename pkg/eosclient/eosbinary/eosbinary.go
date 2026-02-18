@@ -638,7 +638,7 @@ func (c *Client) GetQuota(ctx context.Context, user eosclient.Authorization, roo
 	var args []string
 	// NewStyle project quota
 	if user.Role.GID == eosclient.ProjectQuotaGID {
-		args = []string{"quota", "ls", "-g", user.Role.GID, "-p", path}
+		args = []string{"quota", "ls", "-g", user.Role.GID, "-p", path, "-m"}
 	} else {
 		// Old style quota
 		args = []string{"quota", "ls", "-u", user.Role.UID, "-m"}
