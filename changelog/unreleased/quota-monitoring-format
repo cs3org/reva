@@ -1,0 +1,6 @@
+Bugfix: Quota should be retrieved in monitoring key=value format
+
+The quota command now uses the `-m` flag to retrieve quota information in 
+monitoring key=value format, ensuring consistent and parseable output.
+
+https://github.com/cs3org/reva/pull/5511
