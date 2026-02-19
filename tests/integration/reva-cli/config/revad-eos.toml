@@ -1,0 +1,178 @@
+[log]
+level = "debug"
+
+[shared]
+gatewaysvc = "localhost:9142"
+jwt_secret = "top_secret_jwt_secret"
+skip_user_groups_in_token = true
+
+db_name = "test"
+db_engine = "sqlite"
+
+###########
+# GATEWAY #
+###########
+
+[grpc]
+address = "0.0.0.0:9142"
+
+[grpc.services.gateway]
+commit_share_to_storage_grant = true
+commit_share_to_storage_ref = true
+disable_home_creation_on_login = true
+transfer_shared_secret = "top_secret_transfer_shared_secret"
+transfer_expires = 86400
+home_mapping = ""
+home_layout = "/eos/"
+etag_cache_ttl = 0
+create_home_cache_ttl = 1
+resource_info_cache_ttl = 60
+resource_info_cache_type = "memory"
+ocm_enabled = false
+
+authregistrysvc = "localhost:9142"
+storageregistrysvc = "localhost:9142"
+appregistrysvc = "localhost:9142"
+preferencessvc = "localhost:9142"
+userprovidersvc = "localhost:9142"
+groupprovidersvc = "localhost:9142"
+usershareprovidersvc = "localhost:9142"
+publicshareprovidersvc = "localhost:9142"
+spacessvc = "localhost:9142"
+
+datagateway = "http://localhost:38001/datagw"
+
+allowed_user_agents = { "/home" = ["grpc", "desktop"] }
+
+[grpc.services.gateway.token_managers.jwt]
+expires_next_weekend = true
+expires = 86400
+
+[grpc.services.preferences]
+driver = "sql"
+
+[grpc.services.preferences.drivers.sql]
+
+###########
+# STORAGE #
+###########
+
+[grpc.services.spacesregistry]
+driver = "sql"
+user_space = "/eos"
+machine_secret = "top_secret_machine_secret"
+resource_info_cache_ttl = 300
+resource_info_cache_type = "memory"
+
+[grpc.services.spacesregistry.drivers.sql]
+
+[grpc.services.storageregistry]
+driver = "static"
+
+[grpc.services.storageregistry.drivers.static]
+home_provider = "/home"
+
+[grpc.services.storageregistry.drivers.static.rules]
+"/eos" = {"address" = "localhost:9142"}
+"eos" = {"address" = "localhost:9142"}
+
+[grpc.services.storageprovider]
+# custom_mime_types_json = "/etc/revad/custom-mimetypes.json"
+driver = "eoswrapper"
+mount_path = "/eos"
+mount_id = "eos"
+data_server_url = "http://localhost:38001/data"
+minimum_allowed_path_level_for_share = 5
+provides_space_type = "personal"
+
+[grpc.services.storageprovider.drivers.eoswrapper]
+namespace = "/eos/"
+quota_node = "/eos/"
+master_url = "root://localhost"
+master_grpc_uri = "localhost:50051"
+user_layout = "{{substr 0 1 .Username}}/{{.Username}}"
+mount_id_template = "eos"
+xrdcopy_binary = "/opt/eos/xrootd/bin/xrdcopy"
+cache_directory = "/var/tmp/reva"
+write_uses_local_temp = false
+default_quota_files = 5000000
+default_secondary_quota_bytes = 20000000000
+grpc_auth_key = "auth_key"
+https_auth_key = "auth_key"
+use_grpc = true
+allow_insecure = true
+
+########
+# AUTH #
+########
+
+[grpc.services.authregistry]
+driver = "static"
+
+[grpc.services.authregistry.drivers.static.rules]
+basic = "localhost:9142"
+bearer = "localhost:9142"
+publicshares = "localhost:9142"
+
+[grpc.services.authprovider]
+auth_manager = "json"
+
+[grpc.services.authprovider.auth_managers.json]
+users = "./tmp/users.json"
+
+[grpc.services.userprovider]
+driver = "json"
+
+[grpc.services.userprovider.drivers.json]
+users = "./tmp/users.json"
+
+[grpc.services.groupprovider]
+driver = "json"
+
+[grpc.services.groupprovider.drivers.json]
+groups = "./tmp/groups.json"
+
+#########
+# SHARE #
+#########
+
+[grpc.services.usershareprovider]
+driver = "sql"
+
+[grpc.services.usershareprovider.drivers.sql]
+
+########
+# HTTP #
+########
+
+[http]
+address = "0.0.0.0:38001"
+
+[http.services.datagateway]
+transfer_shared_secret = "top_secret_transfer_shared_secret"
+timeout = 86400
+insecure = true
+prefix = "datagw"
+
+
+[http.services.dataprovider]
+driver = "eoswrapper"
+
+[http.services.dataprovider.drivers.eoswrapper]
+namespace = "/eos/"
+quota_node = "/eos/"
+user_layout = "{{substr 0 1 .Username}}/{{.Username}}"
+xrdcopy_binary = "/opt/eos/xrootd/bin/xrdcopy"
+cache_directory = "/var/tmp/reva"
+write_uses_local_temp = false
+master_url = "https://localhost:8443"
+master_grpc_uri = "localhost:50051"
+http_client_certfile = "/root/.globus/usercert.pem"
+http_client_keyfile = "/root/.globus/userkey.pem"
+
+grpc_auth_key = "auth_key"
+https_auth_key = "auth_key"
+use_grpc = true
+allow_insecure = true
+default_quota_files = 5000000
+default_secondary_quota_bytes = 20000000000

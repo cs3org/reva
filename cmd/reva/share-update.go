@@ -31,10 +31,10 @@ func shareUpdateCommand() *command {
 	cmd := newCommand("share-update")
 	cmd.Description = func() string { return "update a share" }
 	cmd.Usage = func() string { return "Usage: share-update [-flags] <share_id>" }
-	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
+	role := cmd.String("role", "viewer", "the permission for the share (viewer or editor)")
 
 	cmd.ResetFlags = func() {
-		*rol = "viewer"
+		*role = "viewer"
 	}
 	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
@@ -42,8 +42,8 @@ func shareUpdateCommand() *command {
 		}
 
 		// validate flags
-		if *rol != viewerPermission && *rol != editorPermission {
-			return errors.New("Invalid rol: rol must be viewer or editor\n" + cmd.Usage())
+		if *role != viewerPermission && *role != editorPermission {
+			return errors.New("Invalid role: role must be viewer or editor\n" + cmd.Usage())
 		}
 
 		id := cmd.Args()[0]
@@ -54,7 +54,7 @@ func shareUpdateCommand() *command {
 			return err
 		}
 
-		perm, err := getSharePerm(*rol)
+		perm, err := getSharePerm(*role)
 		if err != nil {
 			return err
 		}

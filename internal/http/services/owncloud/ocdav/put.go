@@ -124,7 +124,7 @@ func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
 			Path: fn,
 		}
 	}
-	
+
 	sublog := appctx.GetLogger(ctx).With().Any("ref", ref).Logger()
 
 	s.handlePut(ctx, w, r, ref, sublog)
