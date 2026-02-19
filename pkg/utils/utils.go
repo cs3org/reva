@@ -40,10 +40,10 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/eosclient"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/cs3org/reva/v3/pkg/registry/memory"
+	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
 	"github.com/pkg/errors"
 	"go.step.sm/crypto/randutil"
 

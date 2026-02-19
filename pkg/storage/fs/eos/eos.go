@@ -22,8 +22,8 @@ import (
 	"context"
 
 	"github.com/cs3org/reva/v3/pkg/storage"
+	eosfs "github.com/cs3org/reva/v3/pkg/storage/fs/eos/fs"
 	"github.com/cs3org/reva/v3/pkg/storage/fs/registry"
-	"github.com/cs3org/reva/v3/pkg/storage/utils/eosfs"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
 
