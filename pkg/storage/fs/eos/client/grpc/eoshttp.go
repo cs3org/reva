@@ -32,9 +32,9 @@ import (
 
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/eosclient"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/storage"
+	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
 )
 
 // HTTPOptions to configure the Client.

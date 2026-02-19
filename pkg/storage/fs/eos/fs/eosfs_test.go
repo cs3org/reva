@@ -31,7 +31,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/eosclient"
+	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
 	"github.com/thanhpk/randstr"
 )
 

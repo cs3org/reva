@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cs3org/reva/v3/pkg/eosclient"
+	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
 )
 
 // Test that, when the PUTFile method is called with disableVersioning
