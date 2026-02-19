@@ -319,7 +319,7 @@ func (fs *Eosfs) getNsMatch(internal string, nss []string) (string, error) {
 		return "", errtypes.NotFound(fmt.Sprintf("eosfs: path is outside namespaces: path=%s namespaces=%+v", internal, nss))
 	}
 
-	return path.Clean(match), nil
+	return match, nil
 }
 
 func (fs *Eosfs) unwrapInternal(ctx context.Context, ns, np string) (string, error) {
