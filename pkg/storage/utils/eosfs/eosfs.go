@@ -82,7 +82,6 @@ var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
 var eosLockReg = regexp.MustCompile(`expires:\d+,type:[a-z]+,owner:.+:.+`)
 
 func (c *Config) ApplyDefaults() {
-	c.Namespace = path.Clean(c.Namespace)
 	if !strings.HasPrefix(c.Namespace, "/") {
 		c.Namespace = "/"
 	}
