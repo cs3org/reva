@@ -22,7 +22,6 @@ import (
 	"context"
 
 	"github.com/cs3org/reva/v3/pkg/storage"
-	eosfs "github.com/cs3org/reva/v3/pkg/storage/fs/eos/fs"
 	"github.com/cs3org/reva/v3/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
@@ -33,7 +32,7 @@ func init() {
 
 // New returns a new implementation of the storage.FS interface that connects to EOS.
 func New(ctx context.Context, m map[string]any) (storage.FS, error) {
-	var c eosfs.Config
+	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
@@ -43,5 +42,5 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		c.VersionInvariant = true
 	}
 
-	return eosfs.NewEOSFS(ctx, &c)
+	return NewEOSFS(ctx, &c)
 }
