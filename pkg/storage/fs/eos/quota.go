@@ -41,12 +41,16 @@ func (fs *Eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (totalby
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "eosfs: no user in ctx")
 	}
-	// lightweight accounts don't have quota nodes, so we're passing an empty string as path
-	userAuth, err := fs.getUserAuth(ctx, u, "")
+
+	if utils.IsLightweightUser(u) {
+		return 0, 0, errors.Wrap(err, "eosfs: lightweight users do not have quota")
+	}
+
+	userAuth, err := extractUIDAndGID(u)
 	if err != nil {
 		return 0, 0, err
 	}
-	cboxAuth := utils.GetEmptyAuth()
+	sysAuth := getSystemAuth()
 
 	if ref.Path != fs.conf.QuotaNode && ref.Path != "" {
 		ref.Path = fs.wrap(ctx, ref.Path)
@@ -58,7 +62,7 @@ func (fs *Eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (totalby
 			if time.Since(entry.fetchedAt) > fs.quotaCache.ttl {
 				// TTL expired: trigger a background refresh if none is already running
 				if fs.quotaCache.tryMarkRefreshing(key) {
-					go fs.refreshQuotaCache(key, userAuth, cboxAuth, ref.Path)
+					go fs.refreshQuotaCache(key, userAuth, sysAuth, ref.Path)
 				}
 			}
 			log.Debug().Any("ref", ref).Any("quota", entry.info).Str("user", u.Id.OpaqueId).Msgf("GetQuota (cached)")
@@ -66,7 +70,7 @@ func (fs *Eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (totalby
 		}
 	}
 
-	qi, err := fs.c.GetQuota(ctx, userAuth, cboxAuth, ref.Path)
+	qi, err := fs.c.GetQuota(ctx, userAuth, sysAuth, ref.Path)
 	log.Debug().Any("ref", ref).Any("quota", qi).Str("user", u.Id.OpaqueId).Err(err).Msgf("GetQuota")
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "eosfs: error getting quota")
@@ -97,7 +101,7 @@ func (fs *Eosfs) refreshQuotaCache(key string, userAuth, cboxAuth eosclient.Auth
 // It is intended to run as a goroutine at startup for home instances.
 func (fs *Eosfs) warmupQuotaCache(log *zerolog.Logger) {
 	ctx := context.Background()
-	cboxAuth := utils.GetEmptyAuth()
+	cboxAuth := invalidAuth()
 
 	quotas, err := fs.c.ListAllQuota(ctx, cboxAuth)
 	if err != nil {
