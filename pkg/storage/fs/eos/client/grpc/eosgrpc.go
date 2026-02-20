@@ -36,7 +36,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/storage"
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
 	"github.com/cs3org/reva/v3/pkg/trace"
-	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -220,7 +219,7 @@ func (c *Client) initNSRequest(ctx context.Context, auth eosclient.Authorization
 		// cbox is a sudo'er, so we become the user specified in UID/GID, if it is set
 		rq.Authkey = c.opt.Authkey
 
-		uid, gid, err := utils.ExtractUidGid(auth)
+		uid, gid, err := ExtractUidGid(auth)
 		if err == nil {
 			rq.Role.Uid = uid
 			rq.Role.Gid = gid
@@ -254,7 +253,7 @@ func (c *Client) initMDRequest(ctx context.Context, auth eosclient.Authorization
 		// cbox is a sudo'er, so we become the user specified in UID/GID, if it is set
 		rq.Authkey = c.opt.Authkey
 
-		uid, gid, err := utils.ExtractUidGid(auth)
+		uid, gid, err := ExtractUidGid(auth)
 		if err == nil {
 			rq.Role.Uid = uid
 			rq.Role.Gid = gid

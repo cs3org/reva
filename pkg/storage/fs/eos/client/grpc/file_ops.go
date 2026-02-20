@@ -13,7 +13,6 @@ import (
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/acl"
 	"github.com/cs3org/reva/v3/pkg/trace"
-	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -66,7 +65,7 @@ func (c *Client) Chown(ctx context.Context, auth, chownAuth eosclient.Authorizat
 	msg := new(erpc.NSRequest_ChownRequest)
 	msg.Owner = new(erpc.RoleId)
 
-	uid, gid, err := utils.ExtractUidGid(chownAuth)
+	uid, gid, err := ExtractUidGid(chownAuth)
 	if err == nil {
 		msg.Owner.Uid = uid
 		msg.Owner.Gid = gid
@@ -328,7 +327,7 @@ func (c *Client) list(ctx context.Context, auth eosclient.Authorization, dpath s
 	fdrq.Role = new(erpc.RoleId)
 	fdrq.Role.Trace = trace.Get(ctx)
 
-	uid, gid, err := utils.ExtractUidGid(auth)
+	uid, gid, err := ExtractUidGid(auth)
 	if err == nil {
 		fdrq.Role.Uid = uid
 		fdrq.Role.Gid = gid

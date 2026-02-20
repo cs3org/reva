@@ -20,14 +20,17 @@ package eos
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"strconv"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
@@ -36,7 +39,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (fs *Eosfs) extractUIDAndGID(u *userpb.User) (eosclient.Authorization, error) {
+func extractUIDAndGID(u *userpb.User) (eosclient.Authorization, error) {
 	if u.UidNumber == 0 {
 		return eosclient.Authorization{}, errors.New("eosfs: uid missing for user")
 	}
@@ -50,7 +53,7 @@ func (fs *Eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (eosclient
 	log := appctx.GetLogger(ctx)
 	if userIDInterface, err := fs.userIDCache.Get(u.OpaqueId); err == nil {
 		log.Debug().Msg("eosfs: found cached user " + u.OpaqueId)
-		return fs.extractUIDAndGID(userIDInterface.(*userpb.User))
+		return extractUIDAndGID(userIDInterface.(*userpb.User))
 	}
 
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.conf.GatewaySvc))
@@ -71,7 +74,7 @@ func (fs *Eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (eosclient
 	}
 
 	_ = fs.userIDCache.Set(u.OpaqueId, getUserResp.User)
-	return fs.extractUIDAndGID(getUserResp.User)
+	return extractUIDAndGID(getUserResp.User)
 }
 
 func (fs *Eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.UserId, error) {
@@ -113,7 +116,14 @@ func (fs *Eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.User
 	return getUserResp.User.Id, nil
 }
 
-func (fs *Eosfs) getUserAuth(ctx context.Context, u *userpb.User, fn string) (eosclient.Authorization, error) {
+// Return an auth object with uid and gid set to the user passed.
+// This will error on lightweight users
+func (fs *Eosfs) getUserAuth(ctx context.Context) (eosclient.Authorization, error) {
+	u, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return invalidAuth(), fmt.Errorf("eosfs: no user found in context")
+	}
+
 	if fs.conf.ForceSingleUserMode {
 		if fs.singleUserAuth.Role.UID != "" && fs.singleUserAuth.Role.GID != "" {
 			return fs.singleUserAuth, nil
@@ -124,32 +134,146 @@ func (fs *Eosfs) getUserAuth(ctx context.Context, u *userpb.User, fn string) (eo
 	}
 
 	if utils.IsLightweightUser(u) {
-		return fs.getEOSToken(ctx, u, fn)
+		return invalidAuth(), fmt.Errorf("eosfs: cannot get uid/gid for external user")
+		//return fs.getEOSToken(ctx, u, fn)
 	}
 
-	return fs.extractUIDAndGID(u)
+	return extractUIDAndGID(u)
 }
 
-// Generate an EOS token that acts on behalf of the owner of the file or folder `fn`
-func (fs *Eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eosclient.Authorization, error) {
-	if fn == "" {
-		return eosclient.Authorization{}, errtypes.BadRequest("eosfs: path cannot be empty")
+// Return an auth object with uid and gid set to the user passed
+// if it is a primary user (primary, secondary, service). Otherwise,
+// the uid / gid of a special service account for accesses of external
+// accounts is set, and this user's id is added to the ACLs of the file
+func (fs *Eosfs) getUserOrExternalAuth(ctx context.Context, fn string) (eosclient.Authorization, error) {
+	u, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return invalidAuth(), fmt.Errorf("eosfs: no user found in context")
 	}
 
-	daemonAuth, _ := fs.getDaemonAuth(ctx)
-	info, err := fs.c.GetFileInfoByPath(ctx, daemonAuth, fn)
-	if err != nil {
-		return eosclient.Authorization{}, err
+	if fs.conf.ForceSingleUserMode {
+		if fs.singleUserAuth.Role.UID != "" && fs.singleUserAuth.Role.GID != "" {
+			return fs.singleUserAuth, nil
+		}
+		var err error
+		fs.singleUserAuth, err = fs.getUIDGateway(ctx, &userpb.UserId{OpaqueId: fs.conf.SingleUsername})
+		return fs.singleUserAuth, err
 	}
-	auth := eosclient.Authorization{
+
+	if utils.IsLightweightUser(u) {
+		return fs.getExternalAccountAuth(ctx, fn)
+	}
+
+	return extractUIDAndGID(u)
+}
+
+// Returns an authorization that maps to nobody,
+// to represent invalid authorizations in case of errors
+func invalidAuth() eosclient.Authorization {
+	return eosclient.Authorization{
 		Role: eosclient.Role{
-			UID: strconv.FormatUint(info.UID, 10),
-			GID: strconv.FormatUint(info.GID, 10),
+			UID: "65534",
+			GID: "65534",
 		},
 	}
+}
+
+// When an external account (i.e. a lightweight or federated account) needs access to a resource,
+// we cannot do it in their name, because these users are not known to EOS
+// Therefore, accesses like this happen in the name of a dedicated system account
+// such as `cboxexternal`.
+func (fs *Eosfs) getExternalAccountAuth(ctx context.Context, fn string) (eosclient.Authorization, error) {
+	log := appctx.GetLogger(ctx)
+
+	if fn == "" {
+		return invalidAuth(), errtypes.BadRequest("eosfs: path cannot be empty when generating a token")
+	}
+
+	daemonAuth, err := fs.getDaemonAuth(ctx)
+	if err != nil {
+		return invalidAuth(), err
+	}
+
+	info, err := fs.c.GetFileInfoByPath(ctx, daemonAuth, fn)
+	if err != nil {
+		return invalidAuth(), err
+	}
+
+	hasAcl := false
+	for _, acl := range info.SysACL.Entries {
+		if acl.Qualifier == fs.conf.ExternalAccountsUserUID {
+			hasAcl = true
+			break
+		}
+	}
+
+	if !hasAcl {
+		log.Debug().Msgf("adding cboxexternal ACL to %s", fn)
+		err = fs.AddGrant(ctx,
+			&providerv1beta1.Reference{ResourceId: &providerv1beta1.ResourceId{StorageId: info.Instance, OpaqueId: strconv.Itoa(int(info.Inode))}},
+			&providerv1beta1.Grant{
+				Grantee: &providerv1beta1.Grantee{
+					Type: providerv1beta1.GranteeType_GRANTEE_TYPE_USER,
+					Id: &providerv1beta1.Grantee_UserId{
+						UserId: &userpb.UserId{
+							OpaqueId: fs.conf.ExternalAccountsUserName,
+							Type:     userpb.UserType_USER_TYPE_SERVICE,
+						},
+					},
+				},
+				Permissions: permissions.NewEditorRole().CS3ResourcePermissions(),
+			})
+		if err != nil {
+			return invalidAuth(), errors.Wrap(err, "failed to add ACL for external account access")
+		}
+	}
+
+	return eosclient.Authorization{Role: eosclient.Role{
+		UID: fs.conf.ExternalAccountsUserUID,
+		GID: fs.conf.ExternalAccountsUserGID,
+	}}, nil
+}
+
+// Generate an EOS token that acts on behalf of the owner of the file or folder `path`
+func (fs *Eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eosclient.Authorization, error) {
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("Fetching EOS token for user %s for path %s", u.Id.OpaqueId, fn)
+
+	// This token cache is broken; fix it if you want to use this auth method :)
+
+	// Let's check the token cache first, before doing expensive operations
+	// For the cache, we also check if there are tokens on higher-level resources
+	// which would also give us access to this resource
+	// p := path.Clean(fn)
+	// for p != "." && p != fs.conf.Namespace {
+	// 	cacheKey := p + "!" + u.Id.OpaqueId
+	// 	if tknIf, err := fs.tokenCache.Get(cacheKey); err == nil {
+	// 		return eosclient.Authorization{Token: tknIf.(string)}, nil
+	// 	}
+	// 	p = path.Dir(p)
+	// }
+	// log.Info().Msgf("EOS token after loop", u.Id.OpaqueId, fn)
+
+	daemonAuth, err := fs.getDaemonAuth(ctx)
+	if err != nil {
+		return invalidAuth(), err
+	}
+
+	info, err := fs.c.GetFileInfoByPath(ctx, daemonAuth, fn)
+	if err != nil {
+		return invalidAuth(), err
+	}
+
+	// auth := eosclient.Authorization{
+	// 	Role: eosclient.Role{
+	// 		UID: strconv.FormatUint(info.UID, 10),
+	// 		GID: strconv.FormatUint(info.GID, 10),
+	// 	},
+	// }
 
 	// For files, the "x" bit cannot be set, so we initialize without
 	// and if it's a directory, we add `x` later
+	// TODO: why default to rw? should be empty!
 	perm := "rw"
 	for _, e := range info.SysACL.Entries {
 		if e.Type == acl.TypeLightweight && e.Qualifier == u.Id.OpaqueId {
@@ -158,41 +282,33 @@ func (fs *Eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eo
 		}
 	}
 
-	p := path.Clean(fn)
-	for p != "." && p != fs.conf.Namespace {
-		key := p + "!" + perm
-		if tknIf, err := fs.tokenCache.Get(key); err == nil {
-			return eosclient.Authorization{Token: tknIf.(string)}, nil
-		}
-		p = path.Dir(p)
-	}
-
 	if info.IsDir {
 		// EOS expects directories to have a trailing slash when generating tokens
 		fn = path.Clean(fn) + "/"
 		perm = perm + "x"
 	}
-	tkn, err := fs.c.GenerateToken(ctx, auth, fn, &acl.Entry{Permissions: perm})
+	tkn, err := fs.c.GenerateToken(ctx, getSystemAuth(), fn, &acl.Entry{Permissions: perm})
 	if err != nil {
-		return eosclient.Authorization{}, err
+		return invalidAuth(), err
 	}
 
-	key := path.Clean(fn) + "!" + perm
-	_ = fs.tokenCache.SetWithExpire(key, tkn, time.Second*time.Duration(fs.conf.TokenExpiry))
+	// Set token in the cache
+	cacheKey := path.Clean(fn) + "!" + u.Id.OpaqueId
+	_ = fs.tokenCache.SetWithExpire(cacheKey, tkn, time.Second*time.Duration(fs.conf.TokenExpiry))
 
 	return eosclient.Authorization{Token: tkn}, nil
 }
 
-// // Returns an Authorization wich assumes the role of the owner of the file `fn`
+// Returns an Authorization wich assumes the role of the owner of the file `fn`
 func (fs *Eosfs) getOwnerAuth(ctx context.Context, fn string) (eosclient.Authorization, error) {
 	if fn == "" {
-		return eosclient.Authorization{}, errtypes.BadRequest("eosfs: path cannot be empty")
+		return invalidAuth(), errtypes.BadRequest("eosfs: path cannot be empty")
 	}
 
 	daemonAuth, _ := fs.getDaemonAuth(ctx)
 	info, err := fs.c.GetFileInfoByPath(ctx, daemonAuth, fn)
 	if err != nil {
-		return eosclient.Authorization{}, err
+		return invalidAuth(), err
 	}
 	auth := eosclient.Authorization{
 		Role: eosclient.Role{
@@ -217,5 +333,13 @@ func (fs *Eosfs) getDaemonAuth(ctx context.Context) (eosclient.Authorization, er
 		fs.singleUserAuth, err = fs.getUIDGateway(ctx, &userpb.UserId{OpaqueId: fs.conf.SingleUsername})
 		return fs.singleUserAuth, err
 	}
-	return utils.GetDaemonAuth(), nil
+	return eosclient.Authorization{Role: eosclient.Role{UID: "2", GID: "2"}}, nil
+}
+
+// This function is used when we don't want to pass any additional auth info.
+// Because we later populate the secret key for gRPC, we will be automatically
+// mapped to the user which is mapped to the auth key in EOS's vid list.
+// For CERNBox this comes down to the cbox user.
+func getSystemAuth() eosclient.Authorization {
+	return eosclient.Authorization{}
 }

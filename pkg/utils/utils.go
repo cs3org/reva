@@ -29,7 +29,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -43,7 +42,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/cs3org/reva/v3/pkg/registry/memory"
-	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
 	"github.com/pkg/errors"
 	"go.step.sm/crypto/randutil"
 
@@ -461,46 +459,6 @@ func Cast(v any, to any) {
 	}
 	toVal = toVal.Elem()
 	toVal.Set(reflect.ValueOf(v))
-}
-
-func GetDaemonAuth() eosclient.Authorization {
-	return eosclient.Authorization{Role: eosclient.Role{UID: "2", GID: "2"}}
-}
-
-// This function is used when we don't want to pass any additional auth info.
-// Because we later populate the secret key for gRPC, we will be automatically
-// mapped to cbox.
-// So, in other words, use this function if you want to use the cbox account.
-func GetEmptyAuth() eosclient.Authorization {
-	return eosclient.Authorization{}
-}
-
-// Returns the userAuth if this is a valid auth object,
-// otherwise returns daemonAuth
-func GetUserOrDaemonAuth(userAuth eosclient.Authorization) eosclient.Authorization {
-	if userAuth.Role.UID == "" || userAuth.Role.GID == "" {
-		return GetDaemonAuth()
-	} else {
-		return userAuth
-	}
-}
-
-// Extract uid and gid from auth object
-func ExtractUidGid(auth eosclient.Authorization) (uid, gid uint64, err error) {
-	// $ id nobody
-	// uid=65534(nobody) gid=65534(nobody) groups=65534(nobody)
-	nobody := uint64(65534)
-
-	uid, err = strconv.ParseUint(auth.Role.UID, 10, 64)
-	if err != nil {
-		return nobody, nobody, err
-	}
-	gid, err = strconv.ParseUint(auth.Role.GID, 10, 64)
-	if err != nil {
-		return nobody, nobody, err
-	}
-
-	return uid, gid, nil
 }
 
 // Retrieve current user fromt he context

@@ -29,7 +29,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
-	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -39,17 +38,7 @@ func (fs *Eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 		return "", errors.Wrap(err, "eosfs: error parsing fileid string")
 	}
 
-	u, err := utils.GetUser(ctx)
-	if err != nil {
-		return "", errors.Wrap(err, "eosfs: no user in ctx")
-	}
-
-	var auth eosclient.Authorization
-	if utils.IsLightweightUser(u) {
-		auth, err = fs.getDaemonAuth(ctx)
-	} else {
-		auth, err = fs.getUserAuth(ctx, u, "")
-	}
+	auth, err := fs.getDaemonAuth(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -74,8 +63,10 @@ func (fs *Eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		return nil, errtypes.BadRequest("No ref was given to GetMD")
 	}
 
-	p := ref.Path
-	fn := fs.wrap(ctx, p)
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil, errtypes.BadRequest("No ref was given to GetMD")
+	}
 
 	// We use daemon for auth because we need access to the file in order to stat it
 	// We cannot use the current user, because the file may be a shared file

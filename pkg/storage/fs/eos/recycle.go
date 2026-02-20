@@ -46,9 +46,9 @@ func (fs *Eosfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePa
 	}
 
 	recycleid, _, err := fs.getRecycleIdAndAuth(ctx, u, md)
-	cboxAuth := utils.GetEmptyAuth()
+	sysAuth := getSystemAuth()
 
-	return fs.c.PurgeDeletedEntries(ctx, recycleid, cboxAuth, []string{key})
+	return fs.c.PurgeDeletedEntries(ctx, recycleid, sysAuth, []string{key})
 }
 
 func (fs *Eosfs) EmptyRecycle(ctx context.Context) error {
@@ -150,7 +150,7 @@ func (fs *Eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relative
 	}
 	// ownerless project: use recycle id
 	if _, ok := md.ArbitraryMetadata.Metadata["recycleid"]; ok {
-		auth, err = fs.getUserAuth(ctx, u, "")
+		auth, err = extractUIDAndGID(u)
 		if err != nil {
 			return err
 		}
@@ -159,7 +159,7 @@ func (fs *Eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relative
 		if md.Owner != nil {
 			auth, err = fs.getUIDGateway(ctx, md.Owner)
 		} else {
-			auth, err = fs.getUserAuth(ctx, u, "")
+			auth, err = extractUIDAndGID(u)
 		}
 		if err != nil {
 			return err
@@ -173,7 +173,7 @@ func (fs *Eosfs) getRecycleIdAndAuth(ctx context.Context, u *userpb.User, md *pr
 	// ownerless project: use recycle id
 	if value, ok := md.ArbitraryMetadata.Metadata["recycleid"]; ok {
 		recycleid = value
-		auth, err = fs.getUserAuth(ctx, u, "")
+		auth, err = extractUIDAndGID(u)
 		if err != nil {
 			return "", eosclient.Authorization{}, err
 		}
@@ -184,7 +184,7 @@ func (fs *Eosfs) getRecycleIdAndAuth(ctx context.Context, u *userpb.User, md *pr
 		if md.Owner != nil {
 			auth, err = fs.getUIDGateway(ctx, md.Owner)
 		} else {
-			auth, err = fs.getUserAuth(ctx, u, "")
+			auth, err = extractUIDAndGID(u)
 		}
 		if err != nil {
 			return "", eosclient.Authorization{}, err

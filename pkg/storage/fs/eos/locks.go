@@ -58,7 +58,6 @@ func (fs *Eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 		return nil, errtypes.BadRequest("user has no read access on resource")
 	}
 
-	path = fs.wrap(ctx, path)
 	return fs.getLock(ctx, user, path, ref)
 }
 
@@ -107,7 +106,6 @@ func (fs *Eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provid
 		}
 	}
 
-	path = fs.wrap(ctx, path)
 	return fs.setLock(ctx, l, path)
 }
 
@@ -146,7 +144,6 @@ func (fs *Eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLo
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
 	}
-	path = fs.wrap(ctx, path)
 
 	// the cs3apis require to have the write permission on the resource
 	// to set a lock
@@ -202,7 +199,6 @@ func (fs *Eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
 	}
-	path = fs.wrap(ctx, path)
 
 	return fs.removeLockAttrs(ctx, path, fs.EncodeAppName(lock.AppName))
 }
@@ -217,14 +213,14 @@ func (fs *Eosfs) EncodeAppName(a string) string {
 
 func (fs *Eosfs) getLockPayloads(ctx context.Context, path string) (string, string, error) {
 	// sys attributes want root auth, buddy
-	cboxAuth := utils.GetEmptyAuth()
+	sysAuth := getSystemAuth()
 
-	data, err := fs.c.GetAttr(ctx, cboxAuth, "sys."+lockPayloadKey, path)
+	data, err := fs.c.GetAttr(ctx, sysAuth, "sys."+lockPayloadKey, path)
 	if err != nil {
 		return "", "", err
 	}
 
-	eoslock, err := fs.c.GetAttr(ctx, cboxAuth, "sys."+eosLockKey, path)
+	eoslock, err := fs.c.GetAttr(ctx, sysAuth, "sys."+eosLockKey, path)
 	if err != nil {
 		return "", "", err
 	}
@@ -233,9 +229,9 @@ func (fs *Eosfs) getLockPayloads(ctx context.Context, path string) (string, stri
 }
 
 func (fs *Eosfs) removeLockAttrs(ctx context.Context, path, app string) error {
-	cboxAuth := utils.GetEmptyAuth()
+	sysAuth := getSystemAuth()
 
-	err := fs.c.UnsetAttr(ctx, cboxAuth, &eosclient.Attribute{
+	err := fs.c.UnsetAttr(ctx, sysAuth, &eosclient.Attribute{
 		Type: SystemAttr,
 		Key:  eosLockKey,
 	}, false, path, app)
@@ -243,7 +239,7 @@ func (fs *Eosfs) removeLockAttrs(ctx context.Context, path, app string) error {
 		return errors.Wrap(err, "eosfs: error unsetting the eos lock")
 	}
 
-	err = fs.c.UnsetAttr(ctx, cboxAuth, &eosclient.Attribute{
+	err = fs.c.UnsetAttr(ctx, sysAuth, &eosclient.Attribute{
 		Type: SystemAttr,
 		Key:  lockPayloadKey,
 	}, false, path, app)
@@ -289,7 +285,7 @@ func (fs *Eosfs) getLock(ctx context.Context, user *userpb.User, path string, re
 }
 
 func (fs *Eosfs) setLock(ctx context.Context, lock *provider.Lock, path string) error {
-	cboxAuth := utils.GetEmptyAuth()
+	sysAuth := getSystemAuth()
 
 	encodedLock, eosLock, err := fs.encodeLock(lock)
 	if err != nil {
@@ -297,7 +293,7 @@ func (fs *Eosfs) setLock(ctx context.Context, lock *provider.Lock, path string) 
 	}
 
 	// set eos lock
-	err = fs.c.SetAttr(ctx, cboxAuth, &eosclient.Attribute{
+	err = fs.c.SetAttr(ctx, sysAuth, &eosclient.Attribute{
 		Type: SystemAttr,
 		Key:  eosLockKey,
 		Val:  eosLock,
@@ -310,7 +306,7 @@ func (fs *Eosfs) setLock(ctx context.Context, lock *provider.Lock, path string) 
 	}
 
 	// set payload
-	err = fs.c.SetAttr(ctx, cboxAuth, &eosclient.Attribute{
+	err = fs.c.SetAttr(ctx, sysAuth, &eosclient.Attribute{
 		Type: SystemAttr,
 		Key:  lockPayloadKey,
 		Val:  encodedLock,
