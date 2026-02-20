@@ -12,7 +12,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
-	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -76,14 +75,9 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 }
 
 // GetFileInfoByPath returns the FilInfo at the given path.
-func (c *Client) GetFileInfoByPath(ctx context.Context, userAuth eosclient.Authorization, path string) (*eosclient.FileInfo, error) {
+func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authorization, path string) (*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
-	log.Debug().Str("func", "GetFileInfoByPath").Str("uid,gid", userAuth.Role.UID+","+userAuth.Role.GID).Str("path", path).Msg("entering")
-
-	// UserAuth may not be sufficient, because the user may not have access to the file
-	// e.g. in the case of a guest account. So we check if a uid/gid is set, and if not,
-	// revert to the daemon account
-	auth := utils.GetUserOrDaemonAuth(userAuth)
+	log.Debug().Str("func", "GetFileInfoByPath").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("entering")
 
 	// Initialize the common fields of the MDReq
 	mdrq, err := c.initMDRequest(ctx, auth)
