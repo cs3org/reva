@@ -3,6 +3,7 @@ package eosgrpc
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	erpc "github.com/cern-eos/go-eosgrpc"
@@ -57,4 +58,22 @@ func (c *Client) GenerateToken(ctx context.Context, auth eosclient.Authorization
 	}
 	log.Error().Str("func", "GenerateToken").Msg("GenerateToken over gRPC expected an error but did not receive one")
 	return "", err
+}
+
+// Extract uid and gid from auth object
+func ExtractUidGid(auth eosclient.Authorization) (uid, gid uint64, err error) {
+	// $ id nobody
+	// uid=65534(nobody) gid=65534(nobody) groups=65534(nobody)
+	nobody := uint64(65534)
+
+	uid, err = strconv.ParseUint(auth.Role.UID, 10, 64)
+	if err != nil {
+		return nobody, nobody, err
+	}
+	gid, err = strconv.ParseUint(auth.Role.GID, 10, 64)
+	if err != nil {
+		return nobody, nobody, err
+	}
+
+	return uid, gid, nil
 }
