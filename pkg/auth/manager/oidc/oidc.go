@@ -62,14 +62,15 @@ type mgr struct {
 }
 
 type config struct {
-	Insecure     bool   `docs:"false;Whether to skip certificate checks when sending requests."          mapstructure:"insecure"`
-	Issuer       string `docs:";The issuer of the OIDC token."                                           mapstructure:"issuer"`
-	IDClaim      string `docs:"sub;The claim containing the ID of the user."                             mapstructure:"id_claim"`
-	UIDClaim     string `docs:";The claim containing the UID of the user."                               mapstructure:"uid_claim"`
-	GIDClaim     string `docs:";The claim containing the GID of the user."                               mapstructure:"gid_claim"`
-	GatewaySvc   string `docs:";The endpoint at which the GRPC gateway is exposed."                      mapstructure:"gatewaysvc"`
-	UsersMapping string `docs:"; The optional OIDC users mapping file path"                              mapstructure:"users_mapping"`
-	GroupClaim   string `docs:"; The group claim to be looked up to map the user (default to 'groups')." mapstructure:"group_claim"`
+	Insecure       bool              `docs:"false;Whether to skip certificate checks when sending requests."                                                     mapstructure:"insecure"`
+	Issuer         string            `docs:";The issuer of the OIDC token."                                                                                      mapstructure:"issuer"`
+	DefaultIDClaim string            `docs:"sub;The default claim used as the user ID when no per-IDP override is configured."                                   mapstructure:"default_id_claim"`
+	IDPToIDClaim   map[string]string `docs:";Per-IDP claim to use as the user ID, keyed by the value of the identity_provider token claim. Overrides default_id_claim for matching IDPs." mapstructure:"idp_to_id_claim"`
+	UIDClaim       string            `docs:";The claim containing the UID of the user."                                                                          mapstructure:"uid_claim"`
+	GIDClaim       string            `docs:";The claim containing the GID of the user."                                                                          mapstructure:"gid_claim"`
+	GatewaySvc     string            `docs:";The endpoint at which the GRPC gateway is exposed."                                                                 mapstructure:"gatewaysvc"`
+	UsersMapping   string            `docs:"; The optional OIDC users mapping file path"                                                                         mapstructure:"users_mapping"`
+	GroupClaim     string            `docs:"; The group claim to be looked up to map the user (default to 'groups')."                                             mapstructure:"group_claim"`
 }
 
 type oidcUserMapping struct {
@@ -79,9 +80,9 @@ type oidcUserMapping struct {
 }
 
 func (c *config) ApplyDefaults() {
-	if c.IDClaim == "" {
+	if c.DefaultIDClaim == "" {
 		// sub is stable and defined as unique. the user manager needs to take care of the sub to user metadata lookup
-		c.IDClaim = "sub"
+		c.DefaultIDClaim = "sub"
 	}
 	if c.GroupClaim == "" {
 		c.GroupClaim = "groups"
@@ -184,10 +185,20 @@ func (am *mgr) isIssuerAllowed(issuer string) bool {
 	return false
 }
 
+func (am *mgr) idClaimForToken(claims jwt.MapClaims) string {
+	if idp, ok := claims["identity_provider"].(string); ok && idp != "" {
+		if claim, ok := am.c.IDPToIDClaim[idp]; ok {
+			return claim
+		}
+	}
+	return am.c.DefaultIDClaim
+}
+
 func (am *mgr) doUserMapping(tkn *oidc.IDToken, claims jwt.MapClaims) (string, error) {
+	idClaim := am.idClaimForToken(claims)
 	var sub = tkn.Subject
-	if am.c.IDClaim != "sub" && claims[am.c.IDClaim] != nil {
-		sub, _ = claims[am.c.IDClaim].(string)
+	if idClaim != "sub" && claims[idClaim] != nil {
+		sub, _ = claims[idClaim].(string)
 	}
 	if len(am.oidcUsersMapping) == 0 {
 		return sub, nil
