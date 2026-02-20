@@ -91,7 +91,7 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	// FstabEntry is now required since manual configuration has been removed
 	// However, for testing purposes, TestingAllowLocalMode can bypass this requirement
 	if o.FstabEntry == "" && !o.TestingAllowLocalMode {
-		return nil, errors.New("cephmount: fstabentry must be provided (manual configuration has been removed)")
+		return nil, errors.New("cephmount: fstabentry must be provided")
 	}
 
 	log := appctx.GetLogger(ctx)
@@ -104,7 +104,7 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 
 		mountInfo, err := ParseFstabEntry(ctx, o.FstabEntry)
 		if err != nil {
-			log.Error().Err(err).Msg("cephmount: Failed to parse fstab entry")
+			log.Fatal().Err(err).Msg("cephmount: Failed to parse fstab entry")
 			return nil, errors.Wrap(err, "cephmount: failed to parse fstab entry")
 		}
 
@@ -124,6 +124,9 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		log.Info().Msg("cephmount: Running in local mode (Ceph features disabled)")
 		discoveredCephVolumePath = ""
 		discoveredLocalMountPoint = ""
+	} else {
+		log.Fatal().Msg("cephmount: No fstab entry provided and local mode not allowed")
+		return nil, errors.New("cephmount: no fstab entry provided and local mode not allowed")
 	}
 
 	if o.RootDir != "" {
@@ -143,6 +146,7 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 
 	// Validate that we have a chroot directory
 	if chrootDir == "" {
+		log.Fatal().Msg("cephmount: no chroot directory available")
 		return nil, errors.New("cephmount: no chroot directory available (either provide fstabentry or set CEPHMOUNT_TEST_CHROOT_DIR for testing)")
 	}
 
@@ -169,8 +173,10 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		// Use the updated newCephAdminConn which will parse the fstab entry internally
 		cephAdminConn, err = newCephAdminConn(ctx, &o)
 		if err != nil {
-			// Log warning but continue - GetPathByID will not work but other operations will
-			log.Warn().Err(err).Msg("cephmount: failed to create ceph admin connection, GetPathByID will not work")
+			log.Fatal().Err(err).Msg("cephmount: failed to create Ceph admin connection")
+			if !o.TestingAllowLocalMode {
+				return nil, errors.Wrap(err, "cephmount: failed to create Ceph admin connection")
+			}
 		}
 	}
 
@@ -210,28 +216,23 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	finalFsUID := setfsuidSafe(-1)
 	finalFsGID := setfsgidSafe(-1)
 
-	log.Info().
+	if (finalFsUID != privResult.CurrentFsUID) || (finalFsGID != privResult.CurrentFsGID) {
+		log.Fatal().
+			Int("expected_fsuid", privResult.CurrentFsUID).
+			Int("actual_fsuid", finalFsUID).
+			Int("expected_fsgid", privResult.CurrentFsGID).
+			Int("actual_fsgid", finalFsGID).
+			Msg("cephmount: privilege verification failed to restore original fsuid or fsgid")
+		if !o.TestingAllowLocalMode {
+			return nil, errors.New("cephmount: failed to restore original fsuid or fsgid")
+		}
+	}
+	log.Debug().
 		Int("original_fsuid", privResult.CurrentFsUID).
 		Int("final_fsuid", finalFsUID).
 		Int("original_fsgid", privResult.CurrentFsGID).
 		Int("final_fsgid", finalFsGID).
-		Bool("fsuid_restored", finalFsUID == privResult.CurrentFsUID).
-		Bool("fsgid_restored", finalFsGID == privResult.CurrentFsGID).
 		Msg("cephmount: privilege verification restoration status")
-
-	if finalFsUID != privResult.CurrentFsUID {
-		log.Error().
-			Int("expected_fsuid", privResult.CurrentFsUID).
-			Int("actual_fsuid", finalFsUID).
-			Msg("cephmount: CRITICAL - privilege verification failed to restore original fsuid - this will cause permission issues")
-	}
-
-	if finalFsGID != privResult.CurrentFsGID {
-		log.Error().
-			Int("expected_fsgid", privResult.CurrentFsGID).
-			Int("actual_fsgid", finalFsGID).
-			Msg("cephmount: CRITICAL - privilege verification failed to restore original fsgid - this will cause permission issues")
-	}
 
 	if !privResult.HasSufficientPrivileges() {
 		if privResult.HasPartialPrivileges() {
@@ -243,7 +244,7 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 				Str("impact", "some per-user operations may not work correctly").
 				Msg("cephmount: partial privileges detected")
 		} else {
-			log.Error().
+			log.Fatal().
 				Int("current_uid", privResult.CurrentUID).
 				Int("current_gid", privResult.CurrentGID).
 				Int("current_fsuid", privResult.CurrentFsUID).
@@ -252,11 +253,14 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 				Interface("tested_gids", privResult.TestedGIDs).
 				Interface("error_messages", privResult.ErrorMessages).
 				Interface("recommendations", privResult.Recommendations).
-				Str("impact", "per-user thread isolation will not work - all operations will run as current user").
+				Str("impact", "per-user thread isolation does not work").
 				Msg("cephmount: insufficient privileges for setfsuid/setfsgid")
+			if !o.TestingAllowLocalMode {
+				return nil, errors.New("cephmount: insufficient privileges for setfsuid/setfsgid")
+			}
 		}
 	} else {
-		log.Info().
+		log.Debug().
 			Bool("can_change_uid", privResult.CanChangeUID).
 			Bool("can_change_gid", privResult.CanChangeGID).
 			Int("current_uid", privResult.CurrentUID).
@@ -270,6 +274,7 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 			Str("capability", "full per-user thread isolation available").
 			Msg("cephmount: sufficient privileges verified for per-user thread isolation")
 	}
+
 	fs := &cephmountfs{
 		conf:            &o,
 		cephAdminConn:   cephAdminConn,
@@ -285,9 +290,7 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	if !o.TestingAllowLocalMode {
 		_, err = fs.GetActiveMDS(ctx)
 		if err != nil {
-			log.Fatal().
-				Msg("cephmount: CRITICAL - failed to get active MDS during initialization - this is required for GetPathByID to function")
-			return nil, errors.Wrap(err, "cephmount: Critical - failed to get active MDS")
+			return nil, errors.Wrap(err, "cephmount: failed to get active MDS at init time")
 		}
 	}
 
