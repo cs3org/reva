@@ -1006,34 +1006,32 @@ func (fs *cephmountfs) ListGrants(ctx context.Context, ref *provider.Reference) 
 	return glist, nil
 }
 
-// updatePerms updates ResourcePermissions based on rwx string
+// GetQuota of the given reference.
 func (fs *cephmountfs) GetQuota(ctx context.Context, ref *provider.Reference) (total uint64, used uint64, err error) {
 	log := appctx.GetLogger(ctx)
 
-	// Get user home path for quota check
-	homePath, err := fs.resolveRef(ctx, &provider.Reference{Path: "."})
+	path, err := fs.resolveRef(ctx, ref)
 	if err != nil {
-		return 0, 0, errors.Wrap(err, "cephmount: error resolving home path")
+		return 0, 0, errors.Wrap(err, "cephmount: error resolving path")
 	}
 
-	// log homepath
 	log.Debug().Str("operation", "GetQuota").
-		Str("home_path", homePath).
-		Str("full_filesystem_path", filepath.Join(fs.chrootDir, homePath)).
-		Msg("cephmount GetQuota resolved home path")
+		Str("path", path).
+		Str("full_filesystem_path", filepath.Join(fs.chrootDir, path)).
+		Msg("cephmount GetQuota resolved path")
 
 	// Get max quota from extended attributes or use default
-	fullHomePath := filepath.Join(fs.chrootDir, homePath)
-	maxQuotaData, err := xattr.Get(fullHomePath, "user.quota.max_bytes")
+	fullPath := filepath.Join(fs.chrootDir, path)
+	maxQuotaData, err := xattr.Get(fullPath, "ceph.quota.max_bytes")
 	if err != nil {
-		log.Debug().Msg("cephmount: user.quota.max_bytes xattr not set, using default")
+		log.Debug().Msg("cephmount: ceph.quota.max_bytes xattr not set, using default")
 		total = fs.conf.UserQuotaBytes
 	} else {
 		total, _ = strconv.ParseUint(string(maxQuotaData), 10, 64)
 	}
 
 	// Get used quota from extended attributes or use default
-	usedQuotaData, err := xattr.Get(fullHomePath, "ceph.dir.rbytes")
+	usedQuotaData, err := xattr.Get(fullPath, "ceph.dir.rbytes")
 	if err != nil {
 		log.Debug().Msg("cephmount: ceph.dir.rbytes xattr not set, using 0")
 	} else {
@@ -1041,22 +1039,6 @@ func (fs *cephmountfs) GetQuota(ctx context.Context, ref *provider.Reference) (t
 	}
 
 	return total, used, nil
-}
-
-func (fs *cephmountfs) calculateDirectorySize(root string) (uint64, error) {
-	var size uint64
-
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			size += uint64(info.Size())
-		}
-		return nil
-	})
-
-	return size, err
 }
 
 func (fs *cephmountfs) CreateReference(ctx context.Context, path string, targetURI *url.URL) (err error) {
