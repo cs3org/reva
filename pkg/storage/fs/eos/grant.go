@@ -26,23 +26,31 @@ import (
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/acl"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/grants"
-	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/pkg/errors"
 )
 
 func (fs *Eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	cboxAuth := utils.GetEmptyAuth()
+	log := appctx.GetLogger(ctx)
+	log.Info().Any("ref", ref).Any("grant", g).Msgf("AddGrant")
 
-	eosACL, err := fs.getEosACL(ctx, g)
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return err
+	}
+	log.Info().Any("ref", ref).Str("path", fn).Msgf("AddGrant - resolved ref")
+
+	sysAuth := getSystemAuth()
+	userAuth, err := fs.getUserAuth(ctx)
 	if err != nil {
 		return err
 	}
 
-	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
+	eosACL, err := fs.getEosACL(ctx, g)
 	if err != nil {
 		return err
 	}
@@ -58,13 +66,13 @@ func (fs *Eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 			Val:  eosACL.Permissions,
 		}
 
-		if err := fs.c.SetAttr(ctx, cboxAuth, attr, false, true, fn, ""); err != nil {
+		if err := fs.c.SetAttr(ctx, sysAuth, attr, false, true, fn, ""); err != nil {
 			return errors.Wrap(err, "eosfs: error adding acl for lightweight account")
 		}
 		return nil
 	}
 
-	err = fs.c.AddACL(ctx, auth, cboxAuth, fn, eosclient.StartPosition, eosACL)
+	err = fs.c.AddACL(ctx, userAuth, sysAuth, fn, eosclient.StartPosition, eosACL)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error adding acl")
 	}
@@ -72,14 +80,18 @@ func (fs *Eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 }
 
 func (fs *Eosfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
-	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return err
+	}
+
+	sysAuth := getSystemAuth()
+	userAuth, err := fs.getUserAuth(ctx)
 	if err != nil {
 		return err
 	}
 
 	position := eosclient.EndPosition
-
-	cboxAuth := utils.GetEmptyAuth()
 
 	// empty permissions => deny
 	grant := &provider.Grant{
@@ -92,7 +104,7 @@ func (fs *Eosfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *prov
 		return err
 	}
 
-	err = fs.c.AddACL(ctx, auth, cboxAuth, fn, position, eosACL)
+	err = fs.c.AddACL(ctx, userAuth, sysAuth, fn, position, eosACL)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error adding acl")
 	}
@@ -138,12 +150,16 @@ func (fs *Eosfs) getEosACL(ctx context.Context, g *provider.Grant) (*acl.Entry, 
 }
 
 func (fs *Eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
+	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	cboxAuth := utils.GetEmptyAuth()
+	sysAuth := getSystemAuth()
+	userAuth, err := fs.getUserAuth(ctx)
+	if err != nil {
+		return err
+	}
 
 	eosACL, err := fs.getEosACL(ctx, g)
 	if err != nil {
@@ -156,13 +172,13 @@ func (fs *Eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pr
 			Key:  fmt.Sprintf("%s.%s", lwShareAttrKey, eosACL.Qualifier),
 		}
 
-		if err := fs.c.UnsetAttr(ctx, cboxAuth, attr, true, fn, ""); err != nil {
+		if err := fs.c.UnsetAttr(ctx, sysAuth, attr, true, fn, ""); err != nil {
 			return errors.Wrap(err, "eosfs: error removing acl for lightweight account")
 		}
 		return nil
 	}
 
-	err = fs.c.RemoveACL(ctx, auth, cboxAuth, fn, eosACL)
+	err = fs.c.RemoveACL(ctx, userAuth, sysAuth, fn, eosACL)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error removing acl")
 	}
@@ -229,21 +245,27 @@ func parseLightweightACL(a *eosclient.Attribute) *provider.Grant {
 }
 
 func (fs *Eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
-	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
+	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
 
-	// This is invoked just to see if it fails, I know, it's ugly
-	_, err = fs.c.GetAttrs(ctx, auth, fn)
+	userAuth, err := fs.getUserAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Now we get the real info, I know, it's ugly
-	cboxAuth := utils.GetEmptyAuth()
+	// This is invoked just to see if it fails: the user should
+	// have acces
+	_, err = fs.c.GetAttrs(ctx, userAuth, fn)
+	if err != nil {
+		return nil, err
+	}
 
-	attrs, err := fs.c.GetAttrs(ctx, cboxAuth, fn)
+	// Now we get the real info (since users cannot get all the attrs)
+	sysAuth := getSystemAuth()
+
+	attrs, err := fs.c.GetAttrs(ctx, sysAuth, fn)
 	if err != nil {
 		return nil, err
 	}

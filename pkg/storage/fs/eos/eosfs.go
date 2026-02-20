@@ -235,7 +235,7 @@ func (fs *Eosfs) userIDcacheWarmup() {
 	for i := 0; i < fs.conf.UserIDCacheWarmupDepth; i++ {
 		var newPaths []string
 		for _, fn := range paths {
-			if eosFileInfos, err := fs.c.List(ctx, utils.GetEmptyAuth(), fn); err == nil {
+			if eosFileInfos, err := fs.c.List(ctx, getSystemAuth(), fn); err == nil {
 				for _, f := range eosFileInfos {
 					_, _ = fs.getUserIDGateway(ctx, strconv.FormatUint(f.UID, 10))
 					newPaths = append(newPaths, f.File)
@@ -271,6 +271,9 @@ func (fs *Eosfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateSto
 }
 
 func (fs *Eosfs) wrap(ctx context.Context, fn string) (internal string) {
+	if fs.isPathWrapped(fn) {
+		return fn
+	}
 	internal = path.Join(fs.conf.Namespace, fn)
 	log := appctx.GetLogger(ctx)
 	log.Debug().Msg("eosfs: wrap external=" + fn + " internal=" + internal)
@@ -328,26 +331,7 @@ func (fs *Eosfs) unwrapInternal(ctx context.Context, ns, np string) (string, err
 	return external, nil
 }
 
-func (fs *Eosfs) resolveRefAndGetAuth(ctx context.Context, ref *provider.Reference) (string, eosclient.Authorization, error) {
-	p, err := fs.resolve(ctx, ref)
-	if err != nil {
-		return "", eosclient.Authorization{}, errors.Wrap(err, "eosfs: error resolving reference")
-	}
-
-	u, err := utils.GetUser(ctx)
-	if err != nil {
-		return "", eosclient.Authorization{}, errors.Wrap(err, "eosfs: no user in ctx")
-	}
-	fn := fs.wrap(ctx, p)
-	auth, err := fs.getUserAuth(ctx, u, fn)
-	if err != nil {
-		return "", eosclient.Authorization{}, err
-	}
-
-	return fn, auth, nil
-}
-
-// resolve takes in a request path or request id and returns the unwrapped path.
+// resolve takes in a request path or request id and returns the wrapped path.
 func (fs *Eosfs) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
 	if ref.ResourceId != nil {
 		p, err := fs.getPath(ctx, ref.ResourceId)
@@ -355,14 +339,38 @@ func (fs *Eosfs) resolve(ctx context.Context, ref *provider.Reference) (string, 
 			return "", err
 		}
 		p = path.Join(p, ref.Path)
+		if !fs.isPathWrapped(p) {
+			p = fs.wrap(ctx, p)
+		}
 		return p, nil
 	}
 	if ref.Path != "" {
-		return ref.Path, nil
+		p := ref.Path
+		if !fs.isPathWrapped(p) {
+			p = fs.wrap(ctx, p)
+		}
+		return p, nil
 	}
 
 	// reference is invalid
 	return "", fmt.Errorf("invalid reference %+v. at least resource_id or path must be set", ref)
+}
+
+func (fs *Eosfs) isPathWrapped(fn string) bool {
+	ns := filepath.Clean(fs.conf.Namespace)
+	fn = filepath.Clean(fn)
+
+	// Same path.
+	if fn == ns {
+		return true
+	}
+
+	// Ensure base ends with a separator so we only match full path elements.
+	if !strings.HasSuffix(ns, string(filepath.Separator)) {
+		ns += string(filepath.Separator)
+	}
+
+	return strings.HasPrefix(fn, ns)
 }
 
 // permissionSet returns the permission set for the current user.
@@ -395,13 +403,6 @@ func (fs *Eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 		return permissions.NewManagerRole().CS3ResourcePermissions()
 	}
 
-	auth, err := fs.getUserAuth(ctx, u, eosFileInfo.File)
-	if err != nil {
-		return &provider.ResourcePermissions{
-			// no permissions
-		}
-	}
-
 	if eosFileInfo.SysACL == nil {
 		return &provider.ResourcePermissions{
 			// no permissions
@@ -420,22 +421,36 @@ func (fs *Eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 
 	userGroupsSet := makeSet(u.Groups)
 
-	for _, e := range eosFileInfo.SysACL.Entries {
-		userInGroup := e.Type == acl.TypeGroup && userGroupsSet.in(strings.ToLower(e.Qualifier))
-
-		if (e.Type == acl.TypeUser && e.Qualifier == auth.Role.UID) || (e.Type == acl.TypeLightweight && e.Qualifier == u.Id.OpaqueId) || userInGroup {
-			mergePermissions(&perm, grants.GetGrantPermissionSet(e.Permissions))
+	if utils.IsLightweightUser(u) {
+		for _, e := range eosFileInfo.SysACL.Entries {
+			userInGroup := e.Type == acl.TypeGroup && userGroupsSet.in(strings.ToLower(e.Qualifier))
+			if (e.Type == acl.TypeLightweight && e.Qualifier == u.Id.OpaqueId) || userInGroup {
+				mergePermissions(&perm, grants.GetGrantPermissionSet(e.Permissions))
+			}
 		}
-	}
 
-	// for normal files, we need to inherit also the lw acls
-	// from the parent folder, as these, when creating a new
-	// file are not inherited
+		// for normal files, we need to inherit also the lw acls
+		// from the parent folder, as these, when creating a new
+		// file are not inherited
+		if !eosFileInfo.IsDir {
+			if parentPath, err := fs.unwrap(ctx, filepath.Dir(eosFileInfo.File)); err == nil {
+				if parent, err := fs.GetMD(ctx, &provider.Reference{Path: parentPath}, nil); err == nil {
+					mergePermissions(&perm, parent.PermissionSet)
+				}
+			}
+		}
+	} else {
+		auth, err := extractUIDAndGID(u)
+		if err != nil {
+			return &provider.ResourcePermissions{
+				// no permissions
+			}
+		}
+		for _, e := range eosFileInfo.SysACL.Entries {
+			userInGroup := e.Type == acl.TypeGroup && userGroupsSet.in(strings.ToLower(e.Qualifier))
 
-	if utils.IsLightweightUser(u) && !eosFileInfo.IsDir {
-		if parentPath, err := fs.unwrap(ctx, filepath.Dir(eosFileInfo.File)); err == nil {
-			if parent, err := fs.GetMD(ctx, &provider.Reference{Path: parentPath}, nil); err == nil {
-				mergePermissions(&perm, parent.PermissionSet)
+			if (e.Type == acl.TypeUser && e.Qualifier == auth.Role.UID) || userInGroup {
+				mergePermissions(&perm, grants.GetGrantPermissionSet(e.Permissions))
 			}
 		}
 	}

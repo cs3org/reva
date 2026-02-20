@@ -858,7 +858,9 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
+	log.Debug().Any("req", req).Msgf("Stat")
 	md, err := s.storage.GetMD(ctx, newRef, req.ArbitraryMetadataKeys)
+	log.Debug().Any("req", req).Any("md", md).Err(err).Msgf("Finished Stat")
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
