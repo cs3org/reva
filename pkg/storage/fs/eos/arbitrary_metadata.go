@@ -25,7 +25,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
-	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -34,12 +33,12 @@ func (fs *Eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 		return errtypes.BadRequest("eosfs: no metadata set")
 	}
 
-	fn, _, err := fs.resolveRefAndGetAuth(ctx, ref)
+	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	cboxAuth := utils.GetEmptyAuth()
+	sysAuth := getSystemAuth()
 
 	for k, v := range md.Metadata {
 		if k == "" || v == "" {
@@ -59,7 +58,7 @@ func (fs *Eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 
 		// TODO(labkode): SetArbitraryMetadata does not have semantics for recursivity.
 		// We set it to false
-		err := fs.c.SetAttr(ctx, cboxAuth, attr, false, false, fn, "")
+		err := fs.c.SetAttr(ctx, sysAuth, attr, false, false, fn, "")
 		if err != nil {
 			return errors.Wrap(err, "eosfs: error setting xattr in eos driver")
 		}
@@ -72,12 +71,12 @@ func (fs *Eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 		return errtypes.BadRequest("eosfs: no keys set")
 	}
 
-	fn, _, err := fs.resolveRefAndGetAuth(ctx, ref)
+	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	cboxAuth := utils.GetEmptyAuth()
+	sysAuth := getSystemAuth()
 
 	for _, k := range keys {
 		if k == "" {
@@ -89,7 +88,7 @@ func (fs *Eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 			Key:  k,
 		}
 
-		err := fs.c.UnsetAttr(ctx, cboxAuth, attr, false, fn, "")
+		err := fs.c.UnsetAttr(ctx, sysAuth, attr, false, fn, "")
 
 		if err != nil {
 			if errors.Is(err, eosclient.AttrNotExistsError) {
