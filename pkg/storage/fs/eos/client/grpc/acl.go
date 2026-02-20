@@ -13,19 +13,20 @@ import (
 )
 
 // AddACL adds an new acl to EOS with the given aclType.
-func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, pos uint, a *acl.Entry) error {
+func (c *Client) AddACL(ctx context.Context, auth eosclient.Authorization, path string, pos uint, a *acl.Entry) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "AddACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Str("acl", a.CitrineSerialize()).Msg("")
 
 	// First, we need to figure out if the path is a directory
 	// to know whether our request should be recursive
-	fileInfo, err := c.GetFileInfoByPath(ctx, auth, path)
+	fileInfo, err := c.GetFileInfoByPath(ctx, eosclient.Authorization{Role: eosclient.Role{UID: "2", GID: "2"}}, path)
 	if err != nil {
+		log.Error().Err(err).Msgf("FindMe Failed to stat in AddACL")
 		return err
 	}
 
 	// Init a new NSRequest
-	rq, err := c.initNSRequest(ctx, rootAuth, "")
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
@@ -65,18 +66,18 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 }
 
 // RemoveACL removes the acl from EOS.
-func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, a *acl.Entry) error {
+func (c *Client) RemoveACL(ctx context.Context, auth eosclient.Authorization, path string, a *acl.Entry) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "RemoveACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Str("ACL", a.CitrineSerialize()).Msg("")
 
 	// We set permissions to "", so the ACL will serialize to `u:123456=`, which will make EOS delete the entry
 	a.Permissions = ""
-	return c.AddACL(ctx, auth, rootAuth, path, eosclient.StartPosition, a)
+	return c.AddACL(ctx, auth, path, eosclient.StartPosition, a)
 }
 
 // UpdateACL updates the EOS acl.
-func (c *Client) UpdateACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, position uint, a *acl.Entry) error {
-	return c.AddACL(ctx, auth, rootAuth, path, position, a)
+func (c *Client) UpdateACL(ctx context.Context, auth eosclient.Authorization, path string, position uint, a *acl.Entry) error {
+	return c.AddACL(ctx, auth, path, position, a)
 }
 
 // GetACL for a file.
