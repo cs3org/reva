@@ -105,7 +105,7 @@ $(TEST): docker-eos-full-tests docker-revad-eos
 
 .PHONY: test-go
 test-go:
-	go test $$([[ -z "$(COVER_PROFILE)" ]] && echo "" || echo "-coverprofile=$(COVER_PROFILE)") -race $$(go list ./... | grep -v /tests/integration)
+	go test -v $$([[ -z "$(COVER_PROFILE)" ]] && echo "" || echo "-coverprofile=$(COVER_PROFILE)") -race $$(go list ./... | grep -v /tests/integration)
 
 .PHONY: test-integration
 test-integration: revad
