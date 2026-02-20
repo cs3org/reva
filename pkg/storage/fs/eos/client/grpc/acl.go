@@ -13,9 +13,15 @@ import (
 )
 
 // AddACL adds an new acl to EOS with the given aclType.
-func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, pos uint, a *acl.Entry) error {
+func (c *Client) AddACL(ctx context.Context, auth eosclient.Authorization, path string, pos uint, a *acl.Entry) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "AddACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Str("acl", a.CitrineSerialize()).Msg("")
+
+	// Workaround: sudo'ers can set system attributes, but they cannot list directories
+	// which means that they cannot set attributes recursively.
+	// To fix this, we request the gid of `daemon`, which can read,
+	// while keeping the uid of the sudo'er (cbox)
+	auth.Role.GID = "2"
 
 	// First, we need to figure out if the path is a directory
 	// to know whether our request should be recursive
@@ -25,16 +31,10 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 	}
 
 	// Init a new NSRequest
-	rq, err := c.initNSRequest(ctx, rootAuth, "")
+	rq, err := c.initNSRequest(ctx, auth, "")
 	if err != nil {
 		return err
 	}
-
-	// Workaround: sudo'ers can set system attributes, but they cannot list directories
-	// which means that they cannot set attributes recursively.
-	// To fix this, we request the gid of `daemon`, which can read,
-	// while keeping the uid of the sudo'er (cbox)
-	rq.Role.Gid = 2
 
 	msg := new(erpc.NSRequest_AclRequest)
 	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["MODIFY"])
@@ -65,18 +65,18 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 }
 
 // RemoveACL removes the acl from EOS.
-func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, a *acl.Entry) error {
+func (c *Client) RemoveACL(ctx context.Context, auth eosclient.Authorization, path string, a *acl.Entry) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "RemoveACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Str("ACL", a.CitrineSerialize()).Msg("")
 
 	// We set permissions to "", so the ACL will serialize to `u:123456=`, which will make EOS delete the entry
 	a.Permissions = ""
-	return c.AddACL(ctx, auth, rootAuth, path, eosclient.StartPosition, a)
+	return c.AddACL(ctx, auth, path, eosclient.StartPosition, a)
 }
 
 // UpdateACL updates the EOS acl.
-func (c *Client) UpdateACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, position uint, a *acl.Entry) error {
-	return c.AddACL(ctx, auth, rootAuth, path, position, a)
+func (c *Client) UpdateACL(ctx context.Context, auth eosclient.Authorization, path string, position uint, a *acl.Entry) error {
+	return c.AddACL(ctx, auth, path, position, a)
 }
 
 // GetACL for a file.

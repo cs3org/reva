@@ -288,7 +288,7 @@ func (c *Client) executeEOS(ctx context.Context, cmdArgs []string, auth eosclien
 }
 
 // AddACL adds an new acl to EOS with the given aclType.
-func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, pos uint, a *acl.Entry) error {
+func (c *Client) AddACL(ctx context.Context, auth eosclient.Authorization, path string, pos uint, a *acl.Entry) error {
 	finfo, err := c.getRawFileInfoByPath(ctx, auth, path)
 	if err != nil {
 		return err
@@ -308,12 +308,12 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 
 	args = append(args, sysACL, path)
 
-	_, _, err = c.executeEOS(ctx, args, rootAuth)
+	_, _, err = c.executeEOS(ctx, args, auth)
 	return err
 }
 
 // RemoveACL removes the acl from EOS.
-func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, a *acl.Entry) error {
+func (c *Client) RemoveACL(ctx context.Context, auth eosclient.Authorization, path string, a *acl.Entry) error {
 	finfo, err := c.getRawFileInfoByPath(ctx, auth, path)
 	if err != nil {
 		return err
@@ -327,13 +327,13 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 	}
 	args = append(args, sysACL, path)
 
-	_, _, err = c.executeEOS(ctx, args, rootAuth)
+	_, _, err = c.executeEOS(ctx, args, auth)
 	return err
 }
 
 // UpdateACL updates the EOS acl.
-func (c *Client) UpdateACL(ctx context.Context, auth, rootAuth eosclient.Authorization, path string, position uint, a *acl.Entry) error {
-	return c.AddACL(ctx, auth, rootAuth, path, position, a)
+func (c *Client) UpdateACL(ctx context.Context, auth eosclient.Authorization, path string, position uint, a *acl.Entry) error {
+	return c.AddACL(ctx, auth, path, position, a)
 }
 
 // GetACL for a file.
