@@ -145,7 +145,7 @@ func VerifyPrivileges(nobodyUID, nobodyGID int) *PrivilegeVerificationResult {
 // generateMessages creates error messages and recommendations based on test results
 func (r *PrivilegeVerificationResult) generateMessages() {
 	if !r.CanChangeUID && !r.CanChangeGID {
-		r.ErrorMessages = append(r.ErrorMessages, "Cannot change filesystem UID or GID - insufficient privileges")
+		r.ErrorMessages = append(r.ErrorMessages, "Cannot change filesystem UID nor GID - insufficient privileges")
 		r.Recommendations = append(r.Recommendations, "Run with elevated privileges (e.g., sudo) or configure capabilities")
 	} else if !r.CanChangeUID {
 		r.ErrorMessages = append(r.ErrorMessages, "Cannot change filesystem UID - insufficient privileges")
