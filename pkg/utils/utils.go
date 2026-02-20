@@ -463,27 +463,27 @@ func Cast(v any, to any) {
 	toVal.Set(reflect.ValueOf(v))
 }
 
-func GetDaemonAuth() eosclient.Authorization {
-	return eosclient.Authorization{Role: eosclient.Role{UID: "2", GID: "2"}}
-}
+// func GetDaemonAuth() eosclient.Authorization {
+// 	return eosclient.Authorization{Role: eosclient.Role{UID: "2", GID: "2"}}
+// }
 
-// This function is used when we don't want to pass any additional auth info.
-// Because we later populate the secret key for gRPC, we will be automatically
-// mapped to cbox.
-// So, in other words, use this function if you want to use the cbox account.
-func GetEmptyAuth() eosclient.Authorization {
-	return eosclient.Authorization{}
-}
+// // This function is used when we don't want to pass any additional auth info.
+// // Because we later populate the secret key for gRPC, we will be automatically
+// // mapped to cbox.
+// // So, in other words, use this function if you want to use the cbox account.
+// func GetEmptyAuth() eosclient.Authorization {
+// 	return eosclient.Authorization{}
+// }
 
-// Returns the userAuth if this is a valid auth object,
-// otherwise returns daemonAuth
-func GetUserOrDaemonAuth(userAuth eosclient.Authorization) eosclient.Authorization {
-	if userAuth.Role.UID == "" || userAuth.Role.GID == "" {
-		return GetDaemonAuth()
-	} else {
-		return userAuth
-	}
-}
+// // Returns the userAuth if this is a valid auth object,
+// // otherwise returns daemonAuth
+// func GetUserOrDaemonAuth(userAuth eosclient.Authorization) eosclient.Authorization {
+// 	if userAuth.Role.UID == "" || userAuth.Role.GID == "" {
+// 		return GetDaemonAuth()
+// 	} else {
+// 		return userAuth
+// 	}
+// }
 
 // Extract uid and gid from auth object
 func ExtractUidGid(auth eosclient.Authorization) (uid, gid uint64, err error) {

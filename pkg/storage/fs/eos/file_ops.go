@@ -45,19 +45,15 @@ import (
 func (fs *Eosfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	log := appctx.GetLogger(ctx)
 
-	p, err := fs.resolve(ctx, ref)
+	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
 	}
-	u, err := utils.GetUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: no user in ctx")
-	}
 
-	// We need the auth corresponding to the parent directory
-	// as the file might not exist at the moment
-	fn := fs.wrap(ctx, p)
-	auth, err := fs.getUserAuth(ctx, u, path.Dir(fn))
+	// TODO: do we need the auth corresponding to the parent directory?
+	// so should do path.Dir(p) ?
+	//fn := fs.wrap(ctx, p)
+	auth, err := fs.getUserAuthOrToken(ctx, fn)
 	if err != nil {
 		return err
 	}
@@ -66,7 +62,8 @@ func (fs *Eosfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	return fs.c.CreateDir(ctx, auth, fn)
 }
 
-func (fs *Eosfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) error {
+// TODO: uses systemAuth here: we should do an auth check for the user!
+func (fs *Eosfs) CreateReference(ctx context.Context, fn string, targetURI *url.URL) error {
 	_, err := utils.GetUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
@@ -74,12 +71,14 @@ func (fs *Eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 
 	// TODO(labkode): with the grpc plugin we can create a file touching with xattrs.
 	// Current mechanism is: touch to hidden location, set xattr, rename.
-	fn := fs.wrap(ctx, p)
+	if !fs.isPathWrapped(fn) {
+		fn = fs.wrap(ctx, fn)
+	}
 	dir, base := path.Split(fn)
 	tmp := path.Join(dir, fmt.Sprintf(".sys.reva#.%s", base))
-	cboxAuth := utils.GetEmptyAuth()
+	sysAuth := getSystemAuth()
 
-	if err := fs.c.CreateDir(ctx, cboxAuth, tmp); err != nil {
+	if err := fs.c.CreateDir(ctx, sysAuth, tmp); err != nil {
 		err = errors.Wrapf(err, "eosfs: error creating temporary ref file")
 		return err
 	}
@@ -91,13 +90,13 @@ func (fs *Eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 		Val:  targetURI.String(),
 	}
 
-	if err := fs.c.SetAttr(ctx, cboxAuth, attr, false, false, tmp, ""); err != nil {
+	if err := fs.c.SetAttr(ctx, sysAuth, attr, false, false, tmp, ""); err != nil {
 		err = errors.Wrapf(err, "eosfs: error setting reva.ref attr on file: %q", tmp)
 		return err
 	}
 
 	// rename to have the file visible in user space.
-	if err := fs.c.Rename(ctx, cboxAuth, tmp, fn); err != nil {
+	if err := fs.c.Rename(ctx, sysAuth, tmp, fn); err != nil {
 		err = errors.Wrapf(err, "eosfs: error renaming from: %q to %q", tmp, fn)
 		return err
 	}
@@ -108,22 +107,23 @@ func (fs *Eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 // Create a new, empty file
 func (fs *Eosfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
 	log := appctx.GetLogger(ctx)
-
-	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
+	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return err
 	}
+
+	auth, err := fs.getUserAuthOrToken(ctx, fn)
+	if err != nil {
+		return err
+	}
+
 	log.Info().Msgf("eosfs: touch file: path=%s", fn)
 
 	return fs.c.Touch(ctx, auth, fn)
 }
 
+// TODO: is token on oldPath enough?
 func (fs *Eosfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
-	u, err := utils.GetUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: no user in ctx")
-	}
-
 	oldPath, err := fs.resolve(ctx, oldRef)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
@@ -133,28 +133,25 @@ func (fs *Eosfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) e
 		return errors.Wrap(err, "eosfs: error resolving reference")
 	}
 
-	oldFn := fs.wrap(ctx, oldPath)
-	newFn := fs.wrap(ctx, newPath)
-	auth, err := fs.getUserAuth(ctx, u, oldFn)
+	// oldFn := fs.wrap(ctx, oldPath)
+	// newFn := fs.wrap(ctx, newPath)
+
+	auth, err := fs.getUserAuthOrToken(ctx, oldPath)
 	if err != nil {
 		return err
 	}
 
-	return fs.c.Rename(ctx, auth, oldFn, newFn)
+	return fs.c.Rename(ctx, auth, oldPath, newPath)
 }
 
 func (fs *Eosfs) Delete(ctx context.Context, ref *provider.Reference) error {
-	p, err := fs.resolve(ctx, ref)
+	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "eosfs: error resolving reference")
+		return err
 	}
-	u, err := utils.GetUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: no user in ctx")
-	}
+	//fn = fs.wrap(ctx, fn)
 
-	fn := fs.wrap(ctx, p)
-	auth, err := fs.getUserAuth(ctx, u, fn)
+	auth, err := fs.getUserAuthOrToken(ctx, fn)
 	if err != nil {
 		return err
 	}
@@ -163,22 +160,22 @@ func (fs *Eosfs) Delete(ctx context.Context, ref *provider.Reference) error {
 }
 
 func (fs *Eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, metadata map[string]string) error {
-	p, err := fs.resolve(ctx, ref)
+	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "eos: error resolving reference")
 	}
 
-	ok, err := chunking.IsChunked(p)
+	ok, err := chunking.IsChunked(fn)
 	if err != nil {
 		return errors.Wrap(err, "eos: error checking path")
 	}
 	if ok {
 		var assembledFile string
-		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, r)
+		fn, assembledFile, err = fs.chunkHandler.WriteChunk(fn, r)
 		if err != nil {
 			return err
 		}
-		if p == "" {
+		if fn == "" {
 			return errtypes.PartialContent(ref.String())
 		}
 		fd, err := os.Open(assembledFile)
@@ -190,16 +187,11 @@ func (fs *Eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 		r = fd
 	}
 
-	fn := fs.wrap(ctx, p)
-
-	u, err := utils.GetUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eos: no user in ctx")
-	}
+	//fn := fs.wrap(ctx, p)
 
 	// We need the auth corresponding to the parent directory
 	// as the file might not exist at the moment
-	auth, err := fs.getUserAuth(ctx, u, path.Dir(fn))
+	auth, err := fs.getUserAuthOrToken(ctx, path.Dir(fn))
 	if err != nil {
 		return err
 	}
@@ -251,7 +243,12 @@ func (fs *Eosfs) CreateHome(ctx context.Context) error {
 }
 
 func (fs *Eosfs) Download(ctx context.Context, ref *provider.Reference, ranges []storage.Range) (io.ReadCloser, error) {
-	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+
+	auth, err := fs.getUserAuthOrToken(ctx, fn)
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +266,7 @@ func (fs *Eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 }
 
 func (fs *Eosfs) ListWithRegex(ctx context.Context, path, regex string, depth uint, user *userpb.User) ([]*provider.ResourceInfo, error) {
-	userAuth, err := fs.getUserAuth(ctx, user, "")
+	userAuth, err := fs.getUserAuthOrToken(ctx, path)
 	if err != nil {
 		return nil, err
 	}
@@ -296,17 +293,12 @@ func (fs *Eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 	log := appctx.GetLogger(ctx)
 	fn := fs.wrap(ctx, p)
 
-	u, err := utils.GetUser(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "eosfs: no user in ctx")
-	}
-	userAuth, err := fs.getUserAuth(ctx, u, fn)
+	userAuth, err := fs.getUserAuthOrToken(ctx, fn)
 	if err != nil {
 		return nil, err
 	}
-	auth := utils.GetUserOrDaemonAuth(userAuth)
 
-	eosFileInfos, err := fs.c.List(ctx, auth, fn)
+	eosFileInfos, err := fs.c.List(ctx, userAuth, fn)
 	if err != nil {
 		switch {
 		case strings.Contains(err.Error(), "PermissionDenied"):
@@ -346,10 +338,14 @@ func (fs *Eosfs) createNominalHome(ctx context.Context) error {
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
 
+	if utils.IsLightweightUser(u) {
+		return fmt.Errorf("eosfs: lightweight users cannot create homes")
+	}
+
 	home := templates.WithUser(u, fs.conf.UserLayout)
 	home = path.Join(fs.conf.Namespace, home)
 
-	auth, err := fs.getUserAuth(ctx, u, "")
+	auth, err := fs.getUserAuth(ctx)
 	if err != nil {
 		return err
 	}

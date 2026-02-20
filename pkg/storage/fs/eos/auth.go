@@ -20,6 +20,7 @@ package eos
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"strconv"
 	"time"
@@ -36,7 +37,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (fs *Eosfs) extractUIDAndGID(u *userpb.User) (eosclient.Authorization, error) {
+func extractUIDAndGID(u *userpb.User) (eosclient.Authorization, error) {
 	if u.UidNumber == 0 {
 		return eosclient.Authorization{}, errors.New("eosfs: uid missing for user")
 	}
@@ -50,7 +51,7 @@ func (fs *Eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (eosclient
 	log := appctx.GetLogger(ctx)
 	if userIDInterface, err := fs.userIDCache.Get(u.OpaqueId); err == nil {
 		log.Debug().Msg("eosfs: found cached user " + u.OpaqueId)
-		return fs.extractUIDAndGID(userIDInterface.(*userpb.User))
+		return extractUIDAndGID(userIDInterface.(*userpb.User))
 	}
 
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.conf.GatewaySvc))
@@ -71,7 +72,7 @@ func (fs *Eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (eosclient
 	}
 
 	_ = fs.userIDCache.Set(u.OpaqueId, getUserResp.User)
-	return fs.extractUIDAndGID(getUserResp.User)
+	return extractUIDAndGID(getUserResp.User)
 }
 
 func (fs *Eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.UserId, error) {
@@ -113,7 +114,41 @@ func (fs *Eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.User
 	return getUserResp.User.Id, nil
 }
 
-func (fs *Eosfs) getUserAuth(ctx context.Context, u *userpb.User, fn string) (eosclient.Authorization, error) {
+// Return an auth object with uid and gid set to the user passed.
+// This will error on lightweight users
+func (fs *Eosfs) getUserAuth(ctx context.Context) (eosclient.Authorization, error) {
+	u, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return invalidAuth(), fmt.Errorf("eosfs: no user found in context")
+	}
+
+	if fs.conf.ForceSingleUserMode {
+		if fs.singleUserAuth.Role.UID != "" && fs.singleUserAuth.Role.GID != "" {
+			return fs.singleUserAuth, nil
+		}
+		var err error
+		fs.singleUserAuth, err = fs.getUIDGateway(ctx, &userpb.UserId{OpaqueId: fs.conf.SingleUsername})
+		return fs.singleUserAuth, err
+	}
+
+	if utils.IsLightweightUser(u) {
+		return invalidAuth(), fmt.Errorf("eosfs: cannot get uid/gid for external user")
+		//return fs.getEOSToken(ctx, u, fn)
+	}
+
+	return extractUIDAndGID(u)
+}
+
+// Return an auth object with uid and gid set to the user passed
+// if it is a primary user. Otherwise no uid/gid are set,
+// but a token is set instead, valid for the path fn that is passed
+// This will error on lightweight users
+func (fs *Eosfs) getUserAuthOrToken(ctx context.Context, fn string) (eosclient.Authorization, error) {
+	u, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return invalidAuth(), fmt.Errorf("eosfs: no user found in context")
+	}
+
 	if fs.conf.ForceSingleUserMode {
 		if fs.singleUserAuth.Role.UID != "" && fs.singleUserAuth.Role.GID != "" {
 			return fs.singleUserAuth, nil
@@ -127,20 +162,47 @@ func (fs *Eosfs) getUserAuth(ctx context.Context, u *userpb.User, fn string) (eo
 		return fs.getEOSToken(ctx, u, fn)
 	}
 
-	return fs.extractUIDAndGID(u)
+	return extractUIDAndGID(u)
 }
 
-// Generate an EOS token that acts on behalf of the owner of the file or folder `fn`
+// TODO: return nobody or some blocked user without access
+// because empty defaults to the system user (sudo'er)
+func invalidAuth() eosclient.Authorization {
+	return eosclient.Authorization{}
+}
+
+// Generate an EOS token that acts on behalf of the owner of the file or folder `path`
 func (fs *Eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eosclient.Authorization, error) {
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("Fetching EOS token for user %s for path %s", u.Id.OpaqueId, fn)
 	if fn == "" {
-		return eosclient.Authorization{}, errtypes.BadRequest("eosfs: path cannot be empty")
+		return invalidAuth(), errtypes.BadRequest("eosfs: path cannot be empty when generating a token")
 	}
 
-	daemonAuth, _ := fs.getDaemonAuth(ctx)
+	// Let's check the token cache first, before doing expensive operations
+	// For the cache, we also check if there are tokens on higher-level resources
+	// which would also give us access to this resource
+	// p := path.Clean(fn)
+	// for p != "." && p != fs.conf.Namespace {
+	// 	cacheKey := p + "!" + u.Id.OpaqueId
+	// 	if tknIf, err := fs.tokenCache.Get(cacheKey); err == nil {
+	// 		return eosclient.Authorization{Token: tknIf.(string)}, nil
+	// 	}
+	// 	p = path.Dir(p)
+	// }
+	// log.Info().Msgf("EOS token after loop", u.Id.OpaqueId, fn)
+
+	daemonAuth, err := fs.getDaemonAuth(ctx)
+	if err != nil {
+		return invalidAuth(), err
+	}
+
+	// TODO: should check token cache first
 	info, err := fs.c.GetFileInfoByPath(ctx, daemonAuth, fn)
 	if err != nil {
-		return eosclient.Authorization{}, err
+		return invalidAuth(), err
 	}
+
 	auth := eosclient.Authorization{
 		Role: eosclient.Role{
 			UID: strconv.FormatUint(info.UID, 10),
@@ -150,21 +212,13 @@ func (fs *Eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eo
 
 	// For files, the "x" bit cannot be set, so we initialize without
 	// and if it's a directory, we add `x` later
+	// TODO: why default to rw? should be empty!
 	perm := "rw"
 	for _, e := range info.SysACL.Entries {
 		if e.Type == acl.TypeLightweight && e.Qualifier == u.Id.OpaqueId {
 			perm = e.Permissions
 			break
 		}
-	}
-
-	p := path.Clean(fn)
-	for p != "." && p != fs.conf.Namespace {
-		key := p + "!" + perm
-		if tknIf, err := fs.tokenCache.Get(key); err == nil {
-			return eosclient.Authorization{Token: tknIf.(string)}, nil
-		}
-		p = path.Dir(p)
 	}
 
 	if info.IsDir {
@@ -174,25 +228,27 @@ func (fs *Eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eo
 	}
 	tkn, err := fs.c.GenerateToken(ctx, auth, fn, &acl.Entry{Permissions: perm})
 	if err != nil {
-		return eosclient.Authorization{}, err
+		return invalidAuth(), err
 	}
 
-	key := path.Clean(fn) + "!" + perm
-	_ = fs.tokenCache.SetWithExpire(key, tkn, time.Second*time.Duration(fs.conf.TokenExpiry))
+	// Set token in the cache
+	cacheKey := path.Clean(fn) + "!" + u.Id.OpaqueId
+	_ = fs.tokenCache.SetWithExpire(cacheKey, tkn, time.Second*time.Duration(fs.conf.TokenExpiry))
 
 	return eosclient.Authorization{Token: tkn}, nil
 }
 
-// // Returns an Authorization wich assumes the role of the owner of the file `fn`
+// TODO: should check if we can also get rid of the stat here
+// Returns an Authorization wich assumes the role of the owner of the file `fn`
 func (fs *Eosfs) getOwnerAuth(ctx context.Context, fn string) (eosclient.Authorization, error) {
 	if fn == "" {
-		return eosclient.Authorization{}, errtypes.BadRequest("eosfs: path cannot be empty")
+		return invalidAuth(), errtypes.BadRequest("eosfs: path cannot be empty")
 	}
 
 	daemonAuth, _ := fs.getDaemonAuth(ctx)
 	info, err := fs.c.GetFileInfoByPath(ctx, daemonAuth, fn)
 	if err != nil {
-		return eosclient.Authorization{}, err
+		return invalidAuth(), err
 	}
 	auth := eosclient.Authorization{
 		Role: eosclient.Role{
@@ -203,6 +259,8 @@ func (fs *Eosfs) getOwnerAuth(ctx context.Context, fn string) (eosclient.Authori
 
 	return auth, nil
 }
+
+// TODO: should we make `daemon` configurable?
 
 // Returns an eosclient.Authorization object with the uid/gid of the daemon user
 // This is a system user with read-only access to files.
@@ -217,5 +275,13 @@ func (fs *Eosfs) getDaemonAuth(ctx context.Context) (eosclient.Authorization, er
 		fs.singleUserAuth, err = fs.getUIDGateway(ctx, &userpb.UserId{OpaqueId: fs.conf.SingleUsername})
 		return fs.singleUserAuth, err
 	}
-	return utils.GetDaemonAuth(), nil
+	return eosclient.Authorization{Role: eosclient.Role{UID: "2", GID: "2"}}, nil
+}
+
+// This function is used when we don't want to pass any additional auth info.
+// Because we later populate the secret key for gRPC, we will be automatically
+// mapped to the user which is mapped to the auth key in EOS's vid list.
+// For CERNBox this comes down to the cbox user.
+func getSystemAuth() eosclient.Authorization {
+	return eosclient.Authorization{}
 }
