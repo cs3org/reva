@@ -376,7 +376,7 @@ func (s *svc) patchSpace(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		storage, _, id, ok := spaces.DecodeResourceID(*updateData.Id)
+		storage, _, id, ok := spaces.DecodeToResourceID(*updateData.Id)
 		if !ok {
 			handleBadRequest(ctx, errors.New("ID not in an understandable format"), w)
 			return
@@ -499,7 +499,7 @@ func cs3PermissionsToLibreGraph(user *userpb.User, perms *provider.ResourcePermi
 func (s *svc) ResourceInfoToDriveItem(r *provider.ResourceInfo, special string) libregraph.DriveItem {
 
 	item := libregraph.DriveItem{
-		Id:        libregraph.PtrString(spaces.EncodeResourceID(r.Id)),
+		Id:        libregraph.PtrString(spaces.EncodeToStringifiedResourceID(r.Id)),
 		ETag:      libregraph.PtrString(r.Etag),
 		Name:      libregraph.PtrString(r.Name),
 		Size:      libregraph.PtrInt64(int64(r.Size)),

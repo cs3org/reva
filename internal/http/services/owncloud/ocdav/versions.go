@@ -64,7 +64,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 			Msg("versions: handler entry - received rid")
 
 		// baseURI is encoded as part of the response payload in href field
-		baseURI := path.Join(ctx.Value(ctxKeyBaseURI).(string), spaces.EncodeResourceID(rid))
+		baseURI := path.Join(ctx.Value(ctxKeyBaseURI).(string), spaces.EncodeToStringifiedResourceID(rid))
 		ctx = context.WithValue(ctx, ctxKeyBaseURI, baseURI)
 		r = r.WithContext(ctx)
 
@@ -171,10 +171,9 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 	// add version dir . entry, derived from file info
 	infos = append(infos, parentInfo)
 
-	storageSpaceID := spaces.ConcatStorageSpaceID(rid.StorageId, rid.SpaceId)
-	_, spacePath, ok := spaces.DecodeStorageSpaceID(storageSpaceID)
-	if !ok {
-		sublog.Error().Msg("error decoding storage space id")
+	spacePath, err := spaces.DecodeSpaceID(rid.SpaceId)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error decoding storage space id")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

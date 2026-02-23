@@ -106,9 +106,9 @@ func (c *Converter) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCM
 		LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(receivedOCMShare.Mtime)),
 		Name:                 libregraph.PtrString(receivedOCMShare.Name),
 		ParentReference: &libregraph.ItemReference{
-			DriveId:   libregraph.PtrString(spaces.ConcatStorageSpaceID(ShareJailID, ShareJailID)),
+			DriveId:   libregraph.PtrString(spaces.EncodeStorageSpaceID(ShareJailID, ShareJailID)),
 			DriveType: libregraph.PtrString("virtual"),
-			Id:        libregraph.PtrString(spaces.EncodeResourceID(&provider.ResourceId{OpaqueId: ShareJailID, StorageId: ShareJailID, SpaceId: ShareJailID})),
+			Id:        libregraph.PtrString(spaces.EncodeToStringifiedResourceID(&provider.ResourceId{OpaqueId: ShareJailID, StorageId: ShareJailID, SpaceId: ShareJailID})),
 		},
 		RemoteItem: &libregraph.RemoteItem{
 			CreatedBy: &libregraph.IdentitySet{

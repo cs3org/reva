@@ -407,7 +407,7 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 
 	return &provider.StorageSpace{
 		Id: &provider.StorageSpaceId{
-			OpaqueId: spaces.EncodeStorageSpaceID(stat.Info.Id.StorageId, home),
+			OpaqueId: spaces.EncodeStorageSpaceID(stat.Info.Id.StorageId, stat.Info.Id.SpaceId),
 		},
 		Owner:     user,
 		Name:      user.Username,
@@ -453,7 +453,7 @@ func (s *service) getAllPublicSpaces(ctx context.Context) ([]*provider.StorageSp
 			continue
 		}
 
-		spaceID := spaces.EncodeStorageSpaceID(resourceInfo.Id.StorageId, path)
+		spaceID := spaces.EncodeStorageSpaceID(resourceInfo.Id.StorageId, resourceInfo.Id.SpaceId)
 		space := &provider.StorageSpace{
 			SpaceType: spaces.SpaceTypePublic.AsString(),
 			Root:      resourceInfo.Id,

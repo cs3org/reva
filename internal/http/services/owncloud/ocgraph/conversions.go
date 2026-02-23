@@ -16,9 +16,9 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	ocmconversions "github.com/cs3org/reva/v3/pkg/ocm/conversions"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	libregraph "github.com/owncloud/libre-graph-api-go"
@@ -343,9 +343,9 @@ func (s *svc) cs3ReceivedShareToDriveItem(ctx context.Context, rsi *gateway.Rece
 		LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(rsi.ResourceInfo.Mtime)),
 		Name:                 libregraph.PtrString(rsi.ResourceInfo.Name),
 		ParentReference: &libregraph.ItemReference{
-			DriveId:   libregraph.PtrString(spaces.ConcatStorageSpaceID(ShareJailID, ShareJailID)),
+			DriveId:   libregraph.PtrString(spaces.EncodeStorageSpaceID(ShareJailID, ShareJailID)),
 			DriveType: libregraph.PtrString("virtual"),
-			Id:        libregraph.PtrString(spaces.EncodeResourceID(&provider.ResourceId{OpaqueId: ShareJailID, StorageId: ShareJailID, SpaceId: ShareJailID})),
+			Id:        libregraph.PtrString(spaces.EncodeToStringifiedResourceID(&provider.ResourceId{OpaqueId: ShareJailID, StorageId: ShareJailID, SpaceId: ShareJailID})),
 		},
 		RemoteItem: &libregraph.RemoteItem{
 			CreatedBy: &libregraph.IdentitySet{
@@ -414,20 +414,17 @@ func (s *svc) cs3ShareToDriveItem(ctx context.Context, info *provider.ResourceIn
 		return nil, err
 	}
 
-	if info.ParentId.SpaceId == "" {
-		info.ParentId.SpaceId = spaces.PathToSpaceID(info.Path)
-	}
 	webUrl, _ := url.JoinPath(s.c.WebBase, info.Path)
 
 	d := &libregraph.DriveItem{
 		ETag:                 libregraph.PtrString(info.Etag),
-		Id:                   libregraph.PtrString(spaces.EncodeResourceID(info.Id)),
+		Id:                   libregraph.PtrString(spaces.EncodeToStringifiedResourceID(info.Id)),
 		LastModifiedDateTime: libregraph.PtrTime(utils.TSToTime(info.Mtime)),
 		Name:                 libregraph.PtrString(info.Name),
 		ParentReference: &libregraph.ItemReference{
-			DriveId: libregraph.PtrString(spaces.ConcatStorageSpaceID(info.ParentId.StorageId, info.ParentId.SpaceId)),
+			DriveId: libregraph.PtrString(spaces.EncodeStorageSpaceID(info.ParentId.StorageId, info.ParentId.SpaceId)),
 			// DriveType: libregraph.PtrString(info.Space.SpaceType),
-			Id:   libregraph.PtrString(spaces.EncodeResourceID(info.ParentId)),
+			Id:   libregraph.PtrString(spaces.EncodeToStringifiedResourceID(info.ParentId)),
 			Name: libregraph.PtrString(path.Base(relativePath)),
 			Path: libregraph.PtrString(parentRelativePath),
 		},
@@ -626,7 +623,7 @@ func (s *svc) toGrantee(ctx context.Context, recipientType string, id string) (*
 
 func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libregraph.Drive {
 	// the prefix of the remote_item.id and rootid
-	spacePath, _ := spaces.ResourceToSpacePath(rsi.ResourceInfo)
+	spacePath, _ := spaces.DecodeSpaceID(rsi.ResourceInfo.Id.SpaceId) //.ResourceToSpacePath(rsi.ResourceInfo)
 	// Drive Alias does not contain the first '/'
 	driveAlias := strings.TrimPrefix(spacePath, "/")
 	resourceRelativePath, _ := spaces.PathRelativeToSpaceRoot(rsi.ResourceInfo)
@@ -651,7 +648,7 @@ func (s *svc) convertShareToSpace(rsi *gateway.ReceivedShareResourceInfo) *libre
 				Folder:     &libregraph.Folder{},
 				// The Id must correspond to the id in the OCS response, for the time being
 				// It is in the form <something>!<something-else>
-				Id:                   libregraph.PtrString(spaces.EncodeResourceID(rsi.ResourceInfo.Id)),
+				Id:                   libregraph.PtrString(spaces.EncodeToStringifiedResourceID(rsi.ResourceInfo.Id)),
 				LastModifiedDateTime: libregraph.PtrTime(time.Unix(int64(rsi.ResourceInfo.Mtime.Seconds), int64(rsi.ResourceInfo.Mtime.Nanos))),
 				Name:                 libregraph.PtrString(filepath.Base(rsi.ResourceInfo.Path)),
 				Path:                 libregraph.PtrString(resourceRelativePath),

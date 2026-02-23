@@ -61,10 +61,10 @@ func (h *TrashbinHandler) handleTrashbinSpaces(s *svc, w http.ResponseWriter, r 
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	var spaceID string
-	spaceID, r.URL.Path = router.ShiftPath(r.URL.Path)
+	var storageSpaceID string
+	storageSpaceID, r.URL.Path = router.ShiftPath(r.URL.Path)
 
-	_, base, ok := spaces.DecodeStorageSpaceID(spaceID)
+	_, base, ok := spaces.DecodeStorageSpaceIDToPath(storageSpaceID)
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -116,8 +116,8 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		}
 
 		// check if we are in a space
-		spaceID, _ := router.ShiftPath(r.URL.Path)
-		if _, _, ok := spaces.DecodeStorageSpaceID(spaceID); ok {
+		storageSpaceID, _ := router.ShiftPath(r.URL.Path)
+		if _, _, ok := spaces.DecodeStorageSpaceIDToPath(storageSpaceID); ok {
 			h.handleTrashbinSpaces(s, w, r)
 			return
 		}

@@ -85,6 +85,7 @@ type config struct {
 	SpaceInfoCacheTTL               int                       `mapstructure:"space_info_cache_ttl"`
 	SpaceInfoCacheDrivers           map[string]map[string]any `mapstructure:"space_info_caches"`
 	ProvidesSpaceType               string                    `docs:"nil;Defines which type of spaces this storage provider provides (e.g. home, project, ...)."  mapstructure:"provides_space_type"`
+	SpaceDepth                      int                       `docs:"nil;Defines at which level spaces start. E.g. if spaces are located under '/eos/{space}', this would be 2. Zero means there is only one spaces provided by this StorageProvider."  mapstructure:"space_depth"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -802,10 +803,13 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	return res, nil
 }
 
-func (s *service) addSpaceInfo(ctx context.Context, ri *provider.ResourceInfo, withFetch bool) {
+func (s *service) addSpaceInfo(ctx context.Context, ri *provider.ResourceInfo, withFetch bool) error {
 	log := appctx.GetLogger(ctx)
 
-	spaceID := spaces.PathToSpaceID(ri.Path)
+	spaceID, err := s.pathToSpaceID(ri.Path)
+	if err != nil {
+		return err
+	}
 	if ri.ParentId == nil {
 		ri.ParentId = &provider.ResourceId{}
 	}
@@ -822,7 +826,7 @@ func (s *service) addSpaceInfo(ctx context.Context, ri *provider.ResourceInfo, w
 	if s.spaceInfoCache != nil {
 		if space, err := s.spaceInfoCache.Get(spaceID); space != nil && err == nil {
 			ri.Space = space
-			return
+			return nil
 		}
 	}
 
@@ -843,6 +847,18 @@ func (s *service) addSpaceInfo(ctx context.Context, ri *provider.ResourceInfo, w
 			}
 		}
 	}
+
+	return nil
+}
+
+func (s *service) pathToSpaceID(path string) (string, error) {
+	split := s.conf.SpaceDepth + 1
+	paths := strings.Split(path, string(os.PathSeparator))
+	if len(paths) < split {
+		return "", fmt.Errorf("")
+	}
+	spacesPath := strings.Join(paths[:split], string(os.PathSeparator))
+	return spaces.EncodeSpaceID(spacesPath), nil
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {

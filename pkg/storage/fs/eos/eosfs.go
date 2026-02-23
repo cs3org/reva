@@ -37,7 +37,6 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/permissions"
-	"github.com/cs3org/reva/v3/pkg/spaces"
 
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/mime"
@@ -539,10 +538,11 @@ func (fs *Eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 
 	parseAndSetFavoriteAttr(ctx, filteredAttrs)
 
+	// Note that SpaceId and StorageID are set by the StorageProvider
 	info := &provider.ResourceInfo{
 		Id: &provider.ResourceId{
 			OpaqueId: fmt.Sprintf("%d", eosFileInfo.Inode),
-			SpaceId:  spaces.PathToSpaceID(p)},
+		},
 		Path:          p,
 		Name:          path.Base(p),
 		Owner:         owner,

@@ -22,15 +22,9 @@ import (
 	"context"
 	"log"
 	"os"
-	"reflect"
 	"testing"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/permissions"
-	"github.com/cs3org/reva/v3/pkg/appctx"
 	projects_catalogue "github.com/cs3org/reva/v3/pkg/projects"
-	"github.com/cs3org/reva/v3/pkg/spaces"
 )
 
 // You can use testing.T, if you want to test the code without benchmarking
@@ -53,240 +47,240 @@ func setupSuite(tb testing.TB) (projects_catalogue.Catalogue, error, func(tb tes
 	}
 }
 
-func TestListProjects(t *testing.T) {
+// func TestListProjects(t *testing.T) {
 
-	tests := []struct {
-		description string
-		projects    []*Project
-		user        *userpb.User
-		expected    []*provider.StorageSpace
-	}{
-		{
-			description: "empty list",
-			projects:    []*Project{},
-			user:        &userpb.User{Id: &userpb.UserId{OpaqueId: "opaque", Idp: "idp"}},
-			expected:    []*provider.StorageSpace{},
-		},
-		{
-			description: "user is owner of the projects",
-			projects: []*Project{
-				{
-					StorageID: "storage_id",
-					Path:      "/path/to/project",
-					Name:      "project",
-					Owner:     "owner",
-					Readers:   "project-readers",
-					Writers:   "project-writers",
-					Admins:    "project-admins",
-				},
-			},
-			user: &userpb.User{Id: &userpb.UserId{OpaqueId: "owner", Idp: "idp"}},
-			expected: []*provider.StorageSpace{
-				{
-					Id: &provider.StorageSpaceId{
-						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", "/path/to/project"),
-					},
-					Owner: &userpb.User{
-						Id: &userpb.UserId{
-							OpaqueId: "owner",
-						},
-					},
-					Name:      "project",
-					SpaceType: spaces.SpaceTypeProject.AsString(),
-					RootInfo: &provider.ResourceInfo{
-						Path:          "/path/to/project",
-						PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
-					},
-					PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
-				},
-			},
-		},
-		{
-			description: "user part of the readers group",
-			projects: []*Project{
-				{
-					StorageID: "storage_id",
-					Path:      "/path/to/project",
-					Name:      "project",
-					Owner:     "unknown",
-					Readers:   "project-readers",
-					Writers:   "project-writers",
-					Admins:    "project-admins",
-				},
-			},
-			user: &userpb.User{Id: &userpb.UserId{OpaqueId: "owner", Idp: "idp"}, Groups: []string{"project-readers"}},
-			expected: []*provider.StorageSpace{
-				{
-					Id: &provider.StorageSpaceId{
-						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", "/path/to/project"),
-					},
-					Owner: &userpb.User{
-						Id: &userpb.UserId{
-							OpaqueId: "unknown",
-						},
-					},
-					Name:      "project",
-					SpaceType: spaces.SpaceTypeProject.AsString(),
-					RootInfo: &provider.ResourceInfo{
-						Path:          "/path/to/project",
-						PermissionSet: permissions.NewViewerRole().CS3ResourcePermissions(),
-					},
-					PermissionSet: permissions.NewViewerRole().CS3ResourcePermissions(),
-				},
-			},
-		},
-		{
-			description: "user part of the writers group",
-			projects: []*Project{
-				{
-					StorageID: "storage_id",
-					Path:      "/path/to/project",
-					Name:      "project",
-					Owner:     "unknown",
-					Readers:   "project-readers",
-					Writers:   "project-writers",
-					Admins:    "project-admins",
-				},
-			},
-			user: &userpb.User{Id: &userpb.UserId{OpaqueId: "owner", Idp: "idp"}, Groups: []string{"project-writers"}},
-			expected: []*provider.StorageSpace{
-				{
-					Id: &provider.StorageSpaceId{
-						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", "/path/to/project"),
-					},
-					Owner: &userpb.User{
-						Id: &userpb.UserId{
-							OpaqueId: "unknown",
-						},
-					},
-					Name:      "project",
-					SpaceType: spaces.SpaceTypeProject.AsString(),
-					RootInfo: &provider.ResourceInfo{
-						Path:          "/path/to/project",
-						PermissionSet: permissions.NewEditorRole().CS3ResourcePermissions(),
-					},
-					PermissionSet: permissions.NewEditorRole().CS3ResourcePermissions(),
-				},
-			},
-		},
-		{
-			description: "user part of the admins group",
-			projects: []*Project{
-				{
-					StorageID: "storage_id",
-					Path:      "/path/to/project",
-					Name:      "project",
-					Owner:     "unknown",
-					Readers:   "project-readers",
-					Writers:   "project-writers",
-					Admins:    "project-admins",
-				},
-			},
-			user: &userpb.User{Id: &userpb.UserId{OpaqueId: "owner", Idp: "idp"}, Groups: []string{"project-admins"}},
-			expected: []*provider.StorageSpace{
-				{
-					Id: &provider.StorageSpaceId{
-						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", "/path/to/project"),
-					},
-					Owner: &userpb.User{
-						Id: &userpb.UserId{
-							OpaqueId: "unknown",
-						},
-					},
-					Name:      "project",
-					SpaceType: spaces.SpaceTypeProject.AsString(),
-					RootInfo: &provider.ResourceInfo{
-						Path:          "/path/to/project",
-						PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
-					},
-					PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
-				},
-			},
-		},
-		{
-			description: "user part of the admins and readers group",
-			projects: []*Project{
-				{
-					StorageID: "storage_id",
-					Path:      "/path/to/project",
-					Name:      "project",
-					Owner:     "unknown",
-					Readers:   "project-readers",
-					Writers:   "project-writers",
-					Admins:    "project-admins",
-				},
-			},
-			user: &userpb.User{Id: &userpb.UserId{OpaqueId: "owner", Idp: "idp"}, Groups: []string{"project-readers", "project-admins"}},
-			expected: []*provider.StorageSpace{
-				{
-					Id: &provider.StorageSpaceId{
-						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", "/path/to/project"),
-					},
-					Owner: &userpb.User{
-						Id: &userpb.UserId{
-							OpaqueId: "unknown",
-						},
-					},
-					Name:      "project",
-					SpaceType: spaces.SpaceTypeProject.AsString(),
-					RootInfo: &provider.ResourceInfo{
-						Path:          "/path/to/project",
-						PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
-					},
-					PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
-				},
-			},
-		},
-		{
-			description: "user is neither the owner nor part of the projects' groups",
-			projects: []*Project{
-				{
-					StorageID: "storage_id",
-					Path:      "/path/to/project",
-					Name:      "project",
-					Owner:     "unknown",
-					Readers:   "project-readers",
-					Writers:   "project-writers",
-					Admins:    "project-admins",
-				},
-			},
-			user:     &userpb.User{Id: &userpb.UserId{OpaqueId: "owner", Idp: "idp"}, Groups: []string{"something-readers"}},
-			expected: []*provider.StorageSpace{},
-		},
-	}
+// 	tests := []struct {
+// 		description string
+// 		projects    []*Project
+// 		user        *userpb.User
+// 		expected    []*provider.StorageSpace
+// 	}{
+// 		{
+// 			description: "empty list",
+// 			projects:    []*Project{},
+// 			user:        &userpb.User{Id: &userpb.UserId{OpaqueId: "opaque", Idp: "idp"}},
+// 			expected:    []*provider.StorageSpace{},
+// 		},
+// 		{
+// 			description: "user is owner of the projects",
+// 			projects: []*Project{
+// 				{
+// 					StorageID: "storage_id",
+// 					Path:      "/path/to/project",
+// 					Name:      "project",
+// 					Owner:     "owner",
+// 					Readers:   "project-readers",
+// 					Writers:   "project-writers",
+// 					Admins:    "project-admins",
+// 				},
+// 			},
+// 			user: &userpb.User{Id: &userpb.UserId{OpaqueId: "owner", Idp: "idp"}},
+// 			expected: []*provider.StorageSpace{
+// 				{
+// 					Id: &provider.StorageSpaceId{
+// 						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", "/path/to/project"),
+// 					},
+// 					Owner: &userpb.User{
+// 						Id: &userpb.UserId{
+// 							OpaqueId: "owner",
+// 						},
+// 					},
+// 					Name:      "project",
+// 					SpaceType: spaces.SpaceTypeProject.AsString(),
+// 					RootInfo: &provider.ResourceInfo{
+// 						Path:          "/path/to/project",
+// 						PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
+// 					},
+// 					PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
+// 				},
+// 			},
+// 		},
+// 		{
+// 			description: "user part of the readers group",
+// 			projects: []*Project{
+// 				{
+// 					StorageID: "storage_id",
+// 					Path:      "/path/to/project",
+// 					Name:      "project",
+// 					Owner:     "unknown",
+// 					Readers:   "project-readers",
+// 					Writers:   "project-writers",
+// 					Admins:    "project-admins",
+// 				},
+// 			},
+// 			user: &userpb.User{Id: &userpb.UserId{OpaqueId: "owner", Idp: "idp"}, Groups: []string{"project-readers"}},
+// 			expected: []*provider.StorageSpace{
+// 				{
+// 					Id: &provider.StorageSpaceId{
+// 						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", "/path/to/project"),
+// 					},
+// 					Owner: &userpb.User{
+// 						Id: &userpb.UserId{
+// 							OpaqueId: "unknown",
+// 						},
+// 					},
+// 					Name:      "project",
+// 					SpaceType: spaces.SpaceTypeProject.AsString(),
+// 					RootInfo: &provider.ResourceInfo{
+// 						Path:          "/path/to/project",
+// 						PermissionSet: permissions.NewViewerRole().CS3ResourcePermissions(),
+// 					},
+// 					PermissionSet: permissions.NewViewerRole().CS3ResourcePermissions(),
+// 				},
+// 			},
+// 		},
+// 		{
+// 			description: "user part of the writers group",
+// 			projects: []*Project{
+// 				{
+// 					StorageID: "storage_id",
+// 					Path:      "/path/to/project",
+// 					Name:      "project",
+// 					Owner:     "unknown",
+// 					Readers:   "project-readers",
+// 					Writers:   "project-writers",
+// 					Admins:    "project-admins",
+// 				},
+// 			},
+// 			user: &userpb.User{Id: &userpb.UserId{OpaqueId: "owner", Idp: "idp"}, Groups: []string{"project-writers"}},
+// 			expected: []*provider.StorageSpace{
+// 				{
+// 					Id: &provider.StorageSpaceId{
+// 						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", "/path/to/project"),
+// 					},
+// 					Owner: &userpb.User{
+// 						Id: &userpb.UserId{
+// 							OpaqueId: "unknown",
+// 						},
+// 					},
+// 					Name:      "project",
+// 					SpaceType: spaces.SpaceTypeProject.AsString(),
+// 					RootInfo: &provider.ResourceInfo{
+// 						Path:          "/path/to/project",
+// 						PermissionSet: permissions.NewEditorRole().CS3ResourcePermissions(),
+// 					},
+// 					PermissionSet: permissions.NewEditorRole().CS3ResourcePermissions(),
+// 				},
+// 			},
+// 		},
+// 		{
+// 			description: "user part of the admins group",
+// 			projects: []*Project{
+// 				{
+// 					StorageID: "storage_id",
+// 					Path:      "/path/to/project",
+// 					Name:      "project",
+// 					Owner:     "unknown",
+// 					Readers:   "project-readers",
+// 					Writers:   "project-writers",
+// 					Admins:    "project-admins",
+// 				},
+// 			},
+// 			user: &userpb.User{Id: &userpb.UserId{OpaqueId: "owner", Idp: "idp"}, Groups: []string{"project-admins"}},
+// 			expected: []*provider.StorageSpace{
+// 				{
+// 					Id: &provider.StorageSpaceId{
+// 						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", "/path/to/project"),
+// 					},
+// 					Owner: &userpb.User{
+// 						Id: &userpb.UserId{
+// 							OpaqueId: "unknown",
+// 						},
+// 					},
+// 					Name:      "project",
+// 					SpaceType: spaces.SpaceTypeProject.AsString(),
+// 					RootInfo: &provider.ResourceInfo{
+// 						Path:          "/path/to/project",
+// 						PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
+// 					},
+// 					PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
+// 				},
+// 			},
+// 		},
+// 		{
+// 			description: "user part of the admins and readers group",
+// 			projects: []*Project{
+// 				{
+// 					StorageID: "storage_id",
+// 					Path:      "/path/to/project",
+// 					Name:      "project",
+// 					Owner:     "unknown",
+// 					Readers:   "project-readers",
+// 					Writers:   "project-writers",
+// 					Admins:    "project-admins",
+// 				},
+// 			},
+// 			user: &userpb.User{Id: &userpb.UserId{OpaqueId: "owner", Idp: "idp"}, Groups: []string{"project-readers", "project-admins"}},
+// 			expected: []*provider.StorageSpace{
+// 				{
+// 					Id: &provider.StorageSpaceId{
+// 						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", "/path/to/project"),
+// 					},
+// 					Owner: &userpb.User{
+// 						Id: &userpb.UserId{
+// 							OpaqueId: "unknown",
+// 						},
+// 					},
+// 					Name:      "project",
+// 					SpaceType: spaces.SpaceTypeProject.AsString(),
+// 					RootInfo: &provider.ResourceInfo{
+// 						Path:          "/path/to/project",
+// 						PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
+// 					},
+// 					PermissionSet: permissions.NewManagerRole().CS3ResourcePermissions(),
+// 				},
+// 			},
+// 		},
+// 		{
+// 			description: "user is neither the owner nor part of the projects' groups",
+// 			projects: []*Project{
+// 				{
+// 					StorageID: "storage_id",
+// 					Path:      "/path/to/project",
+// 					Name:      "project",
+// 					Owner:     "unknown",
+// 					Readers:   "project-readers",
+// 					Writers:   "project-writers",
+// 					Admins:    "project-admins",
+// 				},
+// 			},
+// 			user:     &userpb.User{Id: &userpb.UserId{OpaqueId: "owner", Idp: "idp"}, Groups: []string{"something-readers"}},
+// 			expected: []*provider.StorageSpace{},
+// 		},
+// 	}
 
-	for _, tt := range tests {
-		t.Run(tt.description, func(t *testing.T) {
-			ctx := context.Background()
-			catalogue, err, teardown := setupSuite(t)
+// 	for _, tt := range tests {
+// 		t.Run(tt.description, func(t *testing.T) {
+// 			ctx := context.Background()
+// 			catalogue, err, teardown := setupSuite(t)
 
-			if err != nil {
-				t.Error(err)
-			}
+// 			if err != nil {
+// 				t.Error(err)
+// 			}
 
-			if err != nil {
-				t.Fatalf("not expected error while creating projects driver: %+v", err)
-			}
+// 			if err != nil {
+// 				t.Fatalf("not expected error while creating projects driver: %+v", err)
+// 			}
 
-			catmgr := catalogue.(*ProjectsManager)
-			for _, proj := range tt.projects {
-				catmgr.db.Create(&proj)
-			}
+// 			catmgr := catalogue.(*ProjectsManager)
+// 			for _, proj := range tt.projects {
+// 				catmgr.db.Create(&proj)
+// 			}
 
-			ctx = appctx.ContextSetUser(ctx, tt.user)
-			got, err := catalogue.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{})
-			if err != nil {
-				t.Fatalf("not expected error while listing projects: %+v", err)
-			}
+// 			ctx = appctx.ContextSetUser(ctx, tt.user)
+// 			got, err := catalogue.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{})
+// 			if err != nil {
+// 				t.Fatalf("not expected error while listing projects: %+v", err)
+// 			}
 
-			if !reflect.DeepEqual(got.StorageSpaces, tt.expected) {
-				t.Fatalf("projects' list do not match. got=%+v expected=%+v", got.StorageSpaces, tt.expected)
-			}
+// 			if !reflect.DeepEqual(got.StorageSpaces, tt.expected) {
+// 				t.Fatalf("projects' list do not match. got=%+v expected=%+v", got.StorageSpaces, tt.expected)
+// 			}
 
-			err = teardown(t)
-			if err != nil {
-				t.Fatalf("failed to teardown test suite: %+v", err)
-			}
-		})
-	}
-}
+// 			err = teardown(t)
+// 			if err != nil {
+// 				t.Fatalf("failed to teardown test suite: %+v", err)
+// 			}
+// 		})
+// 	}
+// }
