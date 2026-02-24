@@ -132,6 +132,12 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	// Use discovered local mount point as chroot directory
 	chrootDir := discoveredLocalMountPoint
 
+	// We need to also append the o.rootdir to the ceph volume path if it was discovered,
+	// since the driver operates within that subdirectory as the root of the filesystem view.
+	// This ensures that operations like GetPathByID which return paths in the Ceph volume coordinate
+	// system will be correctly mapped to the local filesystem paths within the chroot.
+	discoveredCephVolumePath = filepath.Join(discoveredCephVolumePath, o.RootDir)
+
 	// Override chroot directory from environment variable for testing (does not pollute Options)
 	if testChrootDir := os.Getenv("CEPHMOUNT_TEST_CHROOT_DIR"); testChrootDir != "" {
 		log.Info().
