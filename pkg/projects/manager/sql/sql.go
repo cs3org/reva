@@ -321,7 +321,7 @@ func projectBelongsToUser(user *userpb.User, p *Project) (*provider.ResourcePerm
 func projectToStorageSpace(p *Project, perms *provider.ResourcePermissions) *provider.StorageSpace {
 	return &provider.StorageSpace{
 		Id: &provider.StorageSpaceId{
-			OpaqueId: p.SpaceID,
+			OpaqueId: spaces.EncodeStorageSpaceID(p.StorageID, p.SpaceID),
 		},
 		Owner: &userpb.User{
 			Id: &userpb.UserId{

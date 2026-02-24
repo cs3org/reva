@@ -85,7 +85,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		if perms, ok := projectBelongToUser(user, &space); ok {
 			projects = append(projects, &provider.StorageSpace{
 				Id: &provider.StorageSpaceId{
-					OpaqueId: space.SpaceID,
+					OpaqueId: spaces.EncodeStorageSpaceID(space.StorageID, space.SpaceID),
 				},
 				Owner: &userpb.User{
 					Id: &userpb.UserId{

@@ -38,6 +38,9 @@ func EncodeStorageSpaceID(storageID, spaceID string) string {
 // This ID is expected to be in the format <storage_id>$base32(<path>).
 func DecodeStorageSpaceIDToPath(raw string) (storageID, path string, ok bool) {
 	storageID, spaceId, ok := decodeStorageSpaceID(raw)
+	if !ok {
+		return "", "", false
+	}
 	path, err := DecodeSpaceID(spaceId)
 	if err != nil {
 		return "", "", false
