@@ -24,10 +24,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/user"
 	"runtime"
 	"sync"
 	"syscall"
 	"time"
+	"strconv"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -419,6 +421,30 @@ func (p *UserThreadPool) cleanupExpiredThreads() {
 	}
 }
 
+
+func (ut *UserThread) getUserAdditionalGroupIDs(username string) ([]int, error) {
+	u, err := user.Lookup(username)
+	if err != nil {
+		return nil, fmt.Errorf("user lookup failed: %w", err)
+	}
+
+	groupStrs, err := u.GroupIds()
+	if err != nil {
+		return nil, fmt.Errorf("group lookup failed: %w", err)
+	}
+
+	gids := make([]int, 0, len(groupStrs))
+	for _, g := range groupStrs {
+		parsed, err := strconv.ParseUint(g, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("invalid GID %q: %w", g, err)
+		}
+		gids = append(gids, int(parsed))
+	}
+
+	return gids, nil
+}
+
 // run is the main loop for a user thread
 func (ut *UserThread) run() {
 	// Lock this goroutine to the current OS thread
@@ -432,11 +458,38 @@ func (ut *UserThread) run() {
 	originalFsuid := setfsuidSafe(-1)
 	originalFsgid := setfsgidSafe(-1)
 
+	// Get original groups before changing them
+	originalGroups, err := syscall.Getgroups()
+	if err != nil {
+		appctx.GetLogger(context.Background()).Error().Err(err).Msg("failed to get original groups, continuing without group restoration")
+		originalGroups = nil
+	}
+
+	// We need to set additional groups before setting uid/gid.
+	// we assume uid/gid/username have been validated before creating the user thread.
+	gids, err := ut.getUserAdditionalGroupIDs(ut.username)
+	if err != nil {
+		appctx.GetLogger(context.Background()).Error().Err(err).Str("username", ut.username).Msg("failed to get additional group IDs")
+		gids = nil
+	}
+
+	if gids != nil {
+		if err := syscall.Setgroups(gids); err != nil {
+			appctx.GetLogger(context.Background()).Error().Err(err).Str("username", ut.username).Msg("failed to set additional groups")
+		}
+	}
+
 	// Change to user's UID
 	setfsuidSafe(ut.uid)
 	setfsgidSafe(ut.gid)
 
 	defer func() {
+		// Restore original groups before restoring UID/GID
+		if originalGroups != nil {
+			if err := syscall.Setgroups(originalGroups); err != nil {
+				appctx.GetLogger(context.Background()).Error().Err(err).Msg("failed to restore original groups")
+			}
+		}
 		// Restore original filesystem UID/GID when thread exits
 		setfsuidSafe(originalFsuid)
 		setfsgidSafe(originalFsgid)
