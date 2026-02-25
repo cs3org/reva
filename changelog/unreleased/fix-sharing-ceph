@@ -1,0 +1,7 @@
+Bugfix: Fix issues with sharing for the cephmount driver
+
+This PR includes two fixes
+* ListVersions now returns an empty list.
+* The root directory is appended to the CephVolumePath.
+
+https://github.com/cs3org/reva/pull/5520

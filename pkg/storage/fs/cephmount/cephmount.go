@@ -839,7 +839,8 @@ func (fs *cephmountfs) InitiateUpload(ctx context.Context, ref *provider.Referen
 func (fs *cephmountfs) ListRevisions(ctx context.Context, ref *provider.Reference) (fvs []*provider.FileVersion, err error) {
 	wrappedErr := errtypes.NotSupported("cephmount: ListRevisions not supported")
 	fs.logOperationError(ctx, "ListRevisions", "", wrappedErr)
-	return nil, wrappedErr
+	// return an empty list
+	return []*provider.FileVersion{}, nil
 }
 
 func (fs *cephmountfs) DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (file io.ReadCloser, err error) {
