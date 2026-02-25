@@ -164,8 +164,6 @@ func (c *Client) PurgeDeletedEntries(ctx context.Context, recycleid string, auth
 			},
 		}
 
-		log.Debug().Any("req", rq).Msgf("FindMe")
-
 		// Now send the req and see what happens
 		resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
 		e := c.getRespError(resp, err)

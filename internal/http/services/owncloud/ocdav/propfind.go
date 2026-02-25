@@ -238,7 +238,6 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			}
 		}
 	}
-	log.Info().Any("ref", ref).Msgf("FindMe - stat")
 	req := &provider.StatRequest{
 		Ref:                   ref,
 		ArbitraryMetadataKeys: metadataKeys,

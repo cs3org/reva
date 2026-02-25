@@ -84,7 +84,7 @@ type config struct {
 	SpaceInfoCacheTTL     int                       `mapstructure:"space_info_cache_ttl"`
 	SpaceInfoCacheDrivers map[string]map[string]any `mapstructure:"space_info_caches"`
 	ProvidesSpaceType     string                    `docs:"nil;Defines which type of spaces this storage provider provides (e.g. home, project, ...)."  mapstructure:"provides_space_type"`
-	SpaceDepth            int                       `docs:"nil;Defines at which level spaces start. E.g. if spaces are located under '/eos/{space}', this would be 2. Zero means there is only one spaces provided by this StorageProvider."  mapstructure:"space_depth"`
+	SpaceDepth            int                       `docs:"nil;Defines at which level spaces start. E.g. if spaces are located under '/eos/{space}', this would be 2. Any number lower than the depth of the SP's mount_path means only one space is provided by this StorageProvider."  mapstructure:"space_depth"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -851,14 +851,14 @@ func (s *service) addSpaceInfo(ctx context.Context, ri *provider.ResourceInfo, w
 }
 
 func (s *service) pathToSpaceID(path string) (string, error) {
-	if s.conf.SpaceDepth == 0 {
+	split := s.conf.SpaceDepth + 1
+
+	// In case the space depth is lower than the mount path, the whole mount will be a single space
+	if pathLevels(s.mountPath) < split {
 		return spaces.EncodeSpaceID(s.mountPath), nil
 	}
-	split := s.conf.SpaceDepth + 1
+
 	paths := strings.Split(path, string(os.PathSeparator))
-	if len(paths) < split {
-		return "", fmt.Errorf("")
-	}
 	spacesPath := strings.Join(paths[:split], string(os.PathSeparator))
 	return spaces.EncodeSpaceID(spacesPath), nil
 }
