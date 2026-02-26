@@ -127,7 +127,7 @@ func newCephAdminConnFromFstab(ctx context.Context, o *Options, mountInfo *Fstab
 	// Mount the filesystem at default root
 	// Path trimming will be handled by convertCephVolumePathToUserPath using chrootDir
 	logger.Info().Msg("mounting ceph filesystem at default root")
-	err = adminMount.Mount()
+	err = adminMount.MountWithRoot(mountInfo.CephVolumePath)
 	if err != nil {
 		logger.Error().Err(err).Msg("failed to mount ceph filesystem at default root")
 		adminMount.Release()
