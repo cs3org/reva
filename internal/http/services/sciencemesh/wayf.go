@@ -65,11 +65,8 @@ func (h *wayfHandler) init(c *config) error {
 	log := appctx.GetLogger(context.Background())
 
 	// Create OCM client for discovery from config
-	h.ocmClient = ocmd.NewClient(time.Duration(c.OCMClientTimeout)*time.Second, c.OCMClientInsecure)
-	log.Debug().
-		Int("timeout_seconds", c.OCMClientTimeout).
-		Bool("insecure", c.OCMClientInsecure).
-		Msg("Created OCM client for discovery")
+	h.ocmClient = ocmd.NewClientWithConfig(&c.OCMClient)
+	log.Debug().Msg("Created OCM client for discovery")
 
 	urls := strings.Fields(c.DirectoryServiceURLs)
 	if len(urls) == 0 {
