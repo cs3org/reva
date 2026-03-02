@@ -1,0 +1,5 @@
+Enhancement: Add status field to projects table
+
+A new status field has been added to the projects table.
+
+https://github.com/cs3org/reva/pull/5523
