@@ -65,6 +65,16 @@ type ProjectsManager struct {
 
 const cacheKey = "projects/projectsListCache"
 
+type ProjectStatus string
+
+const (
+	ProjectStatusCreating ProjectStatus = "creating"
+	ProjectStatusActive   ProjectStatus = "active"
+	ProjectStatusArchived ProjectStatus = "archived"
+)
+
+func (ps ProjectStatus) AsString() string { return string(ps) }
+
 // Project represents a project in the DB.
 type Project struct {
 	gorm.Model
@@ -72,8 +82,8 @@ type Project struct {
 	StorageID string `gorm:"size:255"`
 	Path      string
 	Name      string `gorm:"size:255;uniqueIndex:i_name_archived_at"`
-	// Status of the project (e.g., active, pending creation, etc.)
-	Status string `gorm:"size:50"`
+	// Status of the project (e.g., active, creating, archived, etc.)
+	Status ProjectStatus `gorm:"size:50;index:idx_status"`
 	// Owner of the project
 	Owner string `gorm:"size:255"`
 	// Readers e-group ID
@@ -302,6 +312,12 @@ func (m *ProjectsManager) GetProject(ctx context.Context, name string) (*Project
 	}
 
 	return fetchedProject, nil
+}
+
+func (m *ProjectsManager) ListProjectsByStatus(ctx context.Context, status ProjectStatus) ([]*Project, error) {
+	var projects []*Project
+	err := m.db.Where("status = ? AND archived_at is null", status).Find(&projects).Error
+	return projects, err
 }
 
 func projectBelongsToUser(user *userpb.User, p *Project) (*provider.ResourcePermissions, bool) {
