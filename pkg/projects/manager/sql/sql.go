@@ -323,6 +323,11 @@ func (m *ProjectsManager) GetProject(ctx context.Context, name string) (*Project
 func (m *ProjectsManager) UpdateProjectStatus(ctx context.Context, name string, status ProjectStatus) error {
 	log := appctx.GetLogger(ctx)
 
+	// Validate that the status is one of the allowed values
+	if status != ProjectStatusCreating && status != ProjectStatusActive && status != ProjectStatusArchived {
+		return fmt.Errorf("invalid status '%s': must be one of creating, active, or archived", status)
+	}
+
 	res := m.db.Model(&Project{}).
 		Where("name = ?", name).
 		Update("status", status)
