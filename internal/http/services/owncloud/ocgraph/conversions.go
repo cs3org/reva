@@ -137,12 +137,17 @@ func (s *svc) buildGrantedToForRegularShare(ctx context.Context, grantee *provid
 	case provider.GranteeType_GRANTEE_TYPE_USER:
 		u, err := s.getUserInfo(ctx, grantee.GetUserId())
 		if err != nil {
-			return nil, errors.New("Failed to fetch user info")
+			// User does not necessarily have to be resolvable
+			grantedTo.SetUser(libregraph.Identity{
+				Id: libregraph.PtrString(grantee.GetUserId().OpaqueId),
+			})
+		} else {
+			grantedTo.SetUser(libregraph.Identity{
+				Id:          libregraph.PtrString(grantee.GetUserId().OpaqueId),
+				DisplayName: u.DisplayName,
+			})
 		}
-		grantedTo.SetUser(libregraph.Identity{
-			Id:          libregraph.PtrString(grantee.GetUserId().OpaqueId),
-			DisplayName: u.DisplayName,
-		})
+
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
 		g, err := s.getGroupInfo(ctx, grantee.GetGroupId())
 		if err != nil {

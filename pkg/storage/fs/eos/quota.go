@@ -39,7 +39,7 @@ func (fs *Eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (totalby
 		return 0, 0, errors.Wrap(err, "eosfs: no user in ctx")
 	}
 
-	if utils.IsLightweightUser(u) {
+	if utils.IsExternalUser(u) {
 		return 0, 0, errors.Wrap(err, "eosfs: lightweight users do not have quota")
 	}
 

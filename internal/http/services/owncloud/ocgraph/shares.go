@@ -94,7 +94,7 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if s.c.OCMEnabled && !utils.IsLightweightUser(u) {
+	if s.c.OCMEnabled && !utils.IsExternalUser(u) {
 		// include ocm shares in the response
 		ocmShareResp, err := gw.ListReceivedOCMShares(ctx, &ocm.ListReceivedOCMSharesRequest{
 			Filters: []*ocm.ListReceivedOCMSharesRequest_Filter{
@@ -580,7 +580,7 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if utils.IsLightweightUser(user) {
+	if utils.IsExternalUser(user) {
 		handleCustomError(ctx, errors.New("external accounts do not have permission to share"), http.StatusUnauthorized, w)
 	}
 
@@ -614,7 +614,7 @@ func (s *svc) getSharedByMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var OCMShares *gateway.ListExistingOCMSharesResponse
-	if s.c.OCMEnabled && !utils.IsLightweightUser(user) {
+	if s.c.OCMEnabled && !utils.IsExternalUser(user) {
 		// include ocm shares in the response
 		OCMShares, err = gw.ListExistingOCMShares(ctx, &ocm.ListOCMSharesRequest{
 			Filters: []*ocm.ListOCMSharesRequest_Filter{

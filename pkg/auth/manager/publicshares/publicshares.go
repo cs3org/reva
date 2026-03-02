@@ -20,6 +20,7 @@ package publicshares
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -129,16 +130,6 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 		return nil, nil, errtypes.InternalError(publicShareResponse.Status.Message)
 	}
 
-	getUserResponse, err := gwConn.GetUser(ctx, &user.GetUserRequest{
-		UserId: publicShareResponse.GetShare().GetOwner(),
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	if getUserResponse.Status.Code != rpcv1beta1.Code_CODE_OK {
-		return nil, nil, errtypes.NotFound(getUserResponse.Status.Message)
-	}
-
 	share := publicShareResponse.GetShare()
 	role := authpb.Role_ROLE_VIEWER
 	roleStr := "viewer"
@@ -155,7 +146,12 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 		return nil, nil, err
 	}
 
-	u := getUserResponse.GetUser()
+	u := &user.User{
+		Id: &user.UserId{
+			Type:     user.UserType_USER_TYPE_GUEST,
+			OpaqueId: fmt.Sprintf("publiclink:%s", publicShareResponse.Share.Id.OpaqueId),
+		},
+	}
 	u.Opaque = &types.Opaque{
 		Map: map[string]*types.OpaqueEntry{
 			"public-share-role": {

@@ -133,7 +133,7 @@ func (fs *Eosfs) getUserAuth(ctx context.Context) (eosclient.Authorization, erro
 		return fs.singleUserAuth, err
 	}
 
-	if utils.IsLightweightUser(u) {
+	if utils.IsExternalUser(u) {
 		return invalidAuth(), fmt.Errorf("eosfs: cannot get uid/gid for external user")
 		//return fs.getEOSToken(ctx, u, fn)
 	}
@@ -160,7 +160,7 @@ func (fs *Eosfs) getUserOrExternalAuth(ctx context.Context, fn string) (eosclien
 		return fs.singleUserAuth, err
 	}
 
-	if utils.IsLightweightUser(u) {
+	if utils.IsExternalUser(u) {
 		return fs.getExternalAccountAuth(ctx, fn)
 	}
 
