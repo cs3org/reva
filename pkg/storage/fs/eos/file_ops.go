@@ -330,7 +330,7 @@ func (fs *Eosfs) createNominalHome(ctx context.Context) error {
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
 
-	if utils.IsLightweightUser(u) {
+	if utils.IsExternalUser(u) {
 		return fmt.Errorf("eosfs: lightweight users cannot create homes")
 	}
 
