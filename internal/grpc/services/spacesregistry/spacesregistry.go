@@ -233,7 +233,7 @@ func (s *service) listSpacesByType(ctx context.Context, req *provider.ListStorag
 	case spaces.SpaceTypeProject:
 		resp, err := s.projects.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{
 			Filters: req.Filters,
-		})
+		}, "active")
 		if err != nil {
 			return nil, err
 		}

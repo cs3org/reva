@@ -1,6 +1,8 @@
 Enhancement: Add status field to projects table
 
 A new status field has been added to the projects table with possible values: 
-creating, active, and archived.
+creating, active, and archived. The default value is 'active'. ListStorageSpaces 
+now accepts a status parameter to filter projects by their status. A new method 
+UpdateProjectStatus allows changing the status of a project.
 
 https://github.com/cs3org/reva/pull/5523
