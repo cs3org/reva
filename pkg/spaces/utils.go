@@ -72,6 +72,7 @@ func DecodeSpaceID(spaceId string) (string, error) {
 	return string(res), nil
 }
 
+// TODO(lopresti) drop this in favor of having OCM received shares live in their space (however it is named)
 func EncodeOCMShareID(ShareID string) string {
 	return fmt.Sprintf("ocm-received$%s", base32.StdEncoding.EncodeToString([]byte("/ocm-received/"+ShareID)))
 }
