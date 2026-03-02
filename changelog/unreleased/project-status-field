@@ -1,5 +1,6 @@
 Enhancement: Add status field to projects table
 
-A new status field has been added to the projects table.
+A new status field has been added to the projects table with possible values: 
+creating, active, and archived.
 
 https://github.com/cs3org/reva/pull/5523
