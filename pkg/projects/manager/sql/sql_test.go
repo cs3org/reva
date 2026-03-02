@@ -288,7 +288,7 @@ func TestListProjects(t *testing.T) {
 			}
 
 			ctx = appctx.ContextSetUser(ctx, tt.user)
-			got, err := catalogue.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{})
+			got, err := catalogue.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{}, "active")
 			if err != nil {
 				t.Fatalf("not expected error while listing projects: %+v", err)
 			}

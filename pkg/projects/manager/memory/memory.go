@@ -70,7 +70,7 @@ func NewWithConfig(ctx context.Context, c *Config) (projects.Catalogue, error) {
 	return &service{c: c}, nil
 }
 
-func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
+func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest, status string) (*provider.ListStorageSpacesResponse, error) {
 	projects := []*provider.StorageSpace{}
 	user, ok := appctx.ContextGetUser(ctx)
 	if !ok {

@@ -27,7 +27,7 @@ import (
 // Catalogue is the interface that stores the project spaces.
 type Catalogue interface {
 	CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error)
-	ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error)
+	ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest, status string) (*provider.ListStorageSpacesResponse, error)
 	UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error)
 	DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error)
 }
