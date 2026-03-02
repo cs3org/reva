@@ -71,20 +71,20 @@ func init() {
 const addSpaceInfoKey = "add_space_info"
 
 type config struct {
-	MountPath                       string                    `docs:"/;The path where the file system would be mounted."                                                           mapstructure:"mount_path"`
-	MountID                         string                    `docs:"-;The ID of the mounted file system."                                                                         mapstructure:"mount_id"`
-	Driver                          string                    `docs:"localhome;The storage driver to be used."                                                                     mapstructure:"driver"`
-	Drivers                         map[string]map[string]any `docs:"url:pkg/storage/fs/localhome/localhome.go"                                                                    mapstructure:"drivers"`
-	DataServerURL                   string                    `docs:"http://localhost/data;The URL for the data server."                                                           mapstructure:"data_server_url"`
-	ExposeDataServer                bool                      `docs:"false;Whether to expose data server."                                                                         mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
-	AvailableXS                     map[string]uint32         `docs:"nil;List of available checksums."                                                                             mapstructure:"available_checksums"`
-	CustomMimeTypesJSON             string                    `docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types." mapstructure:"custom_mime_types_json"`
-	GatewaySvc                      string                    `mapstructure:"gatewaysvc"`
-	MinimunAllowedPathLevelForShare int                       `mapstructure:"minimum_allowed_path_level_for_share"`
-	SpaceInfoCacheDriver            string                    `mapstructure:"space_info_cache_type"`
-	SpaceInfoCacheTTL               int                       `mapstructure:"space_info_cache_ttl"`
-	SpaceInfoCacheDrivers           map[string]map[string]any `mapstructure:"space_info_caches"`
-	ProvidesSpaceType               string                    `docs:"nil;Defines which type of spaces this storage provider provides (e.g. home, project, ...)."  mapstructure:"provides_space_type"`
+	MountPath             string                    `docs:"/;The path where the file system would be mounted."                                                           mapstructure:"mount_path"`
+	MountID               string                    `docs:"-;The ID of the mounted file system."                                                                         mapstructure:"mount_id"`
+	Driver                string                    `docs:"localhome;The storage driver to be used."                                                                     mapstructure:"driver"`
+	Drivers               map[string]map[string]any `docs:"url:pkg/storage/fs/localhome/localhome.go"                                                                    mapstructure:"drivers"`
+	DataServerURL         string                    `docs:"http://localhost/data;The URL for the data server."                                                           mapstructure:"data_server_url"`
+	ExposeDataServer      bool                      `docs:"false;Whether to expose data server."                                                                         mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
+	AvailableXS           map[string]uint32         `docs:"nil;List of available checksums."                                                                             mapstructure:"available_checksums"`
+	CustomMimeTypesJSON   string                    `docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types." mapstructure:"custom_mime_types_json"`
+	GatewaySvc            string                    `mapstructure:"gatewaysvc"`
+	SpaceInfoCacheDriver  string                    `mapstructure:"space_info_cache_type"`
+	SpaceInfoCacheTTL     int                       `mapstructure:"space_info_cache_ttl"`
+	SpaceInfoCacheDrivers map[string]map[string]any `mapstructure:"space_info_caches"`
+	ProvidesSpaceType     string                    `docs:"nil;Defines which type of spaces this storage provider provides (e.g. home, project, ...)."  mapstructure:"provides_space_type"`
+	SpaceDepth            int                       `docs:"nil;Defines at which level spaces start. E.g. if spaces are located under '/eos/{space}', this would be 2. Any number lower than the depth of the SP's mount_path means only one space is provided by this StorageProvider."  mapstructure:"space_depth"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -802,10 +802,13 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	return res, nil
 }
 
-func (s *service) addSpaceInfo(ctx context.Context, ri *provider.ResourceInfo, withFetch bool) {
+func (s *service) addSpaceInfo(ctx context.Context, ri *provider.ResourceInfo, withFetch bool) error {
 	log := appctx.GetLogger(ctx)
 
-	spaceID := spaces.PathToSpaceID(ri.Path)
+	spaceID, err := s.pathToSpaceID(ri.Path)
+	if err != nil {
+		return err
+	}
 	if ri.ParentId == nil {
 		ri.ParentId = &provider.ResourceId{}
 	}
@@ -822,7 +825,7 @@ func (s *service) addSpaceInfo(ctx context.Context, ri *provider.ResourceInfo, w
 	if s.spaceInfoCache != nil {
 		if space, err := s.spaceInfoCache.Get(spaceID); space != nil && err == nil {
 			ri.Space = space
-			return
+			return nil
 		}
 	}
 
@@ -843,6 +846,21 @@ func (s *service) addSpaceInfo(ctx context.Context, ri *provider.ResourceInfo, w
 			}
 		}
 	}
+
+	return nil
+}
+
+func (s *service) pathToSpaceID(path string) (string, error) {
+	split := s.conf.SpaceDepth + 1
+
+	// In case the space depth is lower than the mount path, the whole mount will be a single space
+	if pathLevels(s.mountPath) < split {
+		return spaces.EncodeSpaceID(s.mountPath), nil
+	}
+
+	paths := strings.Split(path, string(os.PathSeparator))
+	spacesPath := strings.Join(paths[:split], string(os.PathSeparator))
+	return spaces.EncodeSpaceID(spacesPath), nil
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
@@ -902,8 +920,8 @@ func pathLevels(p string) int {
 }
 
 func (s *service) fixPermissions(md *provider.ResourceInfo) {
-	// do not allow shares for low path levels
-	if pathLevels(md.Path) < s.conf.MinimunAllowedPathLevelForShare {
+	// do not allow shares above space roots
+	if pathLevels(md.Path) < s.conf.SpaceDepth+1 {
 		md.PermissionSet.AddGrant = false
 		md.PermissionSet.RemoveGrant = false
 		md.PermissionSet.DenyGrant = false

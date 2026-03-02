@@ -227,7 +227,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 	// We extract the inode and storage ID from the request
 	resourceID := chi.URLParam(r, "resource-id")
 	resourceID, _ = url.QueryUnescape(resourceID)
-	storageID, _, itemID, ok := spaces.DecodeResourceID(resourceID)
+	storageID, _, itemID, ok := spaces.DecodeToResourceID(resourceID)
 	if !ok {
 		log.Error().Str("resource-id", resourceID).Msg("resource id cannot be decoded")
 		handleBadRequest(ctx, errors.New("error decoding resource id"), w)
@@ -376,7 +376,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 	// We extract the inode and storage ID from the request
 	resourceID := chi.URLParam(r, "resource-id")
 	resourceID, _ = url.QueryUnescape(resourceID)
-	storageID, _, itemID, ok := spaces.DecodeResourceID(resourceID)
+	storageID, _, itemID, ok := spaces.DecodeToResourceID(resourceID)
 	if !ok {
 		log.Error().Str("resource-id", resourceID).Msg("resource id cannot be decoded")
 		handleBadRequest(ctx, errors.New("error decoding resource id"), w)
@@ -472,7 +472,7 @@ func (s *svc) createLink(w http.ResponseWriter, r *http.Request) {
 }
 
 func encodeSpaceIDForShareJail(res *provider.ResourceInfo) string {
-	return spaces.EncodeResourceID(res.Id)
+	return spaces.EncodeToStringifiedResourceID(res.Id)
 }
 
 func (s *svc) getUserByID(ctx context.Context, u *userpb.UserId) (*userpb.User, error) {

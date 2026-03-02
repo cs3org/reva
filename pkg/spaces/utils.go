@@ -20,9 +20,7 @@ package spaces
 
 import (
 	"encoding/base32"
-	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -31,36 +29,35 @@ import (
 
 // EncodeStorageSpaceID encodes storage ID and space ID.
 // In case of empty space ID, the path is used to create an identifier
-// in the format <storage_id>$base32(<path>), where base32(<path>) is the space ID.
-func EncodeStorageSpaceID(storageID, path string) string {
-	if path == "" {
-		return storageID
-	}
-
-	encodedPath := PathToSpaceID(path)
-	return ConcatStorageSpaceID(storageID, encodedPath)
+// in the format <storage_id>$<space_id>, where base32(<path>) is the space ID.
+func EncodeStorageSpaceID(storageID, spaceID string) string {
+	return fmt.Sprintf("%s$%s", storageID, spaceID)
 }
 
 // DecodeStorageSpaceID returns the components of the storage + space ID.
 // This ID is expected to be in the format <storage_id>$base32(<path>).
-func DecodeStorageSpaceID(raw string) (storageID, path string, ok bool) {
-	// The input is expected to be in the form of <storage_id>$<base32(<path>)
-	s := strings.SplitN(raw, "$", 2)
-	if len(s) != 2 {
+func DecodeStorageSpaceIDToPath(raw string) (storageID, path string, ok bool) {
+	storageID, spaceId, ok := decodeStorageSpaceID(raw)
+	if !ok {
 		return "", "", false
 	}
-
-	storageID = s[0]
-	encodedPath := s[1]
-	path, err := DecodeSpaceID(encodedPath)
+	path, err := DecodeSpaceID(spaceId)
 	if err != nil {
 		return "", "", false
 	}
 	return storageID, path, true
 }
 
-func ConcatStorageSpaceID(storageID, spaceID string) string {
-	return fmt.Sprintf("%s$%s", storageID, spaceID)
+// DecodeStorageSpaceID returns the components of the storage + space ID.
+// This ID is expected to be in the format <storage_id>$base32(<path>).
+func decodeStorageSpaceID(raw string) (storageID, spaceId string, ok bool) {
+	// The input is expected to be in the form of <storage_id>$<base32(<path>)
+	s := strings.SplitN(raw, "$", 2)
+	if len(s) != 2 {
+		return "", "", false
+	}
+
+	return s[0], s[1], true
 }
 
 func EncodeSpaceID(spacePath string) string {
@@ -75,15 +72,16 @@ func DecodeSpaceID(spaceId string) (string, error) {
 	return string(res), nil
 }
 
+// TODO(lopresti) drop this in favor of having OCM received shares live in their space (however it is named)
 func EncodeOCMShareID(ShareID string) string {
 	return fmt.Sprintf("ocm-received$%s", base32.StdEncoding.EncodeToString([]byte("/ocm-received/"+ShareID)))
 }
 
-// EncodeResourceID encodes the provided resource ID as a string,
+// EncodeToStringifiedResourceID encodes the provided resource ID as a string,
 // in the format <storage_id>$<space_id>!<item_id>.
 // If space_id or opaque_id is not set on the ResourceId,
 // then this part will not be encoded
-func EncodeResourceID(r *provider.ResourceId) string {
+func EncodeToStringifiedResourceID(r *provider.ResourceId) string {
 	if r.SpaceId == "" {
 		return fmt.Sprintf("%s!%s", r.StorageId, r.OpaqueId)
 	} else if r.OpaqueId == "" {
@@ -94,25 +92,31 @@ func EncodeResourceID(r *provider.ResourceId) string {
 
 // Decode resourceID returns the components of the space ID.
 // The resource ID is expected to be in the form of <storage_id>$base32(<path>)!<item_id>.
-func DecodeResourceID(raw string) (storageID, spacePath, itemID string, ok bool) {
+func DecodeToResourceID(raw string) (storageID, spacePath, itemID string, ok bool) {
 	// The input is expected to be in the form of <storage_id>$base32(<path>)!<item_id>
-	s := strings.SplitN(raw, "!", 2)
-	if len(s) != 2 {
+	rid, ok := ParseResourceID(raw)
+	if !ok {
 		return "", "", "", false
 	}
-	itemID = s[1]
-	storageID, spacePath, ok = DecodeStorageSpaceID(s[0])
-	return storageID, spacePath, itemID, ok
+	path, err := DecodeSpaceID(rid.SpaceId)
+	if err != nil {
+		return "", "", "", false
+	}
+	return rid.StorageId, path, rid.OpaqueId, true
 }
 
 // ParseResourceID converts the encoded resource id in a CS3API ResourceId.
 func ParseResourceID(raw string) (*provider.ResourceId, bool) {
-	storageID, path, itemID, ok := DecodeResourceID(raw)
+	// 	// The input is expected to be in the form of <storage_id>$base32(<path>)!<item_id>
+	s := strings.SplitN(raw, "!", 2)
+	if len(s) != 2 {
+		return nil, false
+	}
+	storageID, spaceID, ok := decodeStorageSpaceID(s[0])
 	if !ok {
 		return nil, false
 	}
-
-	spaceID := PathToSpaceID(path)
+	itemID := s[1]
 
 	return &provider.ResourceId{
 		StorageId: storageID,
@@ -121,72 +125,14 @@ func ParseResourceID(raw string) (*provider.ResourceId, bool) {
 	}, true
 }
 
-// EncodeResourceInfo encodes the provided resource ID as a string,
-// in the format <storage_id>$<space_id>!<item_id>.
-// If space_id is not set, it will be calculated from the path.
-// If no path or space_id is set, an error will be returned
-func EncodeResourceInfo(info *provider.ResourceInfo) (spaceId string, err error) {
-	if info.Id.SpaceId != "" {
-		return fmt.Sprintf("%s$%s!%s", info.Id.StorageId, info.Id.SpaceId, info.Id.OpaqueId), nil
-	} else if info.Path != "" {
-		encodedPath := PathToSpaceID(info.Path)
-		return fmt.Sprintf("%s$%s!%s", info.Id.StorageId, encodedPath, info.Id.OpaqueId), nil
-	} else {
-		return "", errors.New("resourceInfo must contain a spaceID or a path")
-	}
-}
-
-// If the path given is a subfolder of a space,
-// then the ID of that space will be returned.
-// If it is not a subfolder, then the space-encoding (base32)
-// of this full path will be returned.
-func PathToSpaceID(path string) string {
-	paths := strings.Split(path, string(os.PathSeparator))
-	if len(paths) < spacesLevel(path) {
-		return EncodeSpaceID(path)
-	}
-	spacesPath := strings.Join(paths[:spacesLevel(path)], string(os.PathSeparator))
-	return EncodeSpaceID(spacesPath)
-}
-
-// TODO: for now, we hardcoded this. But this will not be necessary anymore
-// once all storage providers decorate all the returned ResourceInfos with a space ID,
-// because we won't need to do path -> space_id anymore
-
-// Returns how many parts of the path belong to the space identifier
-// - For EOS user/project, this is 5 ((1)/(2)eos/(3)user/(4)u/(5)user)
-func spacesLevel(path string) int {
-	if strings.HasPrefix(path, "/eos/user") || strings.HasPrefix(path, "/eos/project") || strings.HasPrefix(path, "/eosdev/project") {
-		return 5
-	} else if strings.HasPrefix(path, "/winspaces") || strings.HasPrefix(path, "/eos/media") || strings.HasPrefix(path, "/eos/atlas") {
-		// e.g. /winspaces/c/copstest-doyle
-		return 4
-	} else {
-		// a safe default for all other eos paths (e.g. /eos/experiment etc)
-		return 3
-	}
-}
-
 // Returns the path relative to the space root.
 func PathRelativeToSpaceRoot(info *provider.ResourceInfo) (relativePath string, err error) {
-	spacePath, err := ResourceToSpacePath(info)
+	spacePath, err := DecodeSpaceID(info.Id.SpaceId)
 	if err != nil {
 		return "", err
 	}
 
 	return filepath.Rel(spacePath, info.Path)
-}
-
-func ResourceToSpacePath(info *provider.ResourceInfo) (path string, err error) {
-	if info.Id.SpaceId == "" {
-		return "", errors.New("resourceInfo must contain a space ID")
-	}
-	_, spacePath, ok := DecodeStorageSpaceID(fmt.Sprintf("%s$%s", info.Id.StorageId, info.Id.SpaceId))
-	if !ok {
-		return "", fmt.Errorf("failed to decode storage space ID: %s", fmt.Sprintf("%s$%s", info.Id.StorageId, info.Id.SpaceId))
-	}
-
-	return spacePath, nil
 }
 
 func ResourceIdToString(id *provider.ResourceId) string {

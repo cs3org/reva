@@ -24,10 +24,10 @@ import (
 	"slices"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/projects"
 	"github.com/cs3org/reva/v3/pkg/projects/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/spaces"
-	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -41,6 +41,7 @@ func init() {
 
 type SpaceDescription struct {
 	StorageID string `mapstructure:"storage_id" validate:"required"`
+	SpaceID   string `mapstructure:"space_id" validate:"required"`
 	Path      string `mapstructure:"path"       validate:"required"`
 	Name      string `mapstructure:"name"       validate:"required"`
 	Owner     string `mapstructure:"owner"      validate:"required"`
@@ -84,7 +85,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		if perms, ok := projectBelongToUser(user, &space); ok {
 			projects = append(projects, &provider.StorageSpace{
 				Id: &provider.StorageSpaceId{
-					OpaqueId: spaces.EncodeStorageSpaceID(space.StorageID, space.Path),
+					OpaqueId: spaces.EncodeStorageSpaceID(space.StorageID, space.SpaceID),
 				},
 				Owner: &userpb.User{
 					Id: &userpb.UserId{

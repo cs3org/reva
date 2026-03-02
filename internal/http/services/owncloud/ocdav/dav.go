@@ -211,7 +211,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				//    i.e. in the form of storage$space_id!inode
 				//    and the relative path is relative to this folder
 
-				_, base, ok := spaces.DecodeStorageSpaceID(head)
+				_, base, ok := spaces.DecodeStorageSpaceIDToPath(head)
 				if ok {
 					// this is case (1)
 					ctx = context.WithValue(ctx, ctxSpaceID, head)
@@ -224,7 +224,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				} else if r.Method == http.MethodPut || r.Method == MethodPropfind {
 					// If it's not a space ID, we try to parse it as a resource ID, i.e. case (2)
 					var storageId, itemId string
-					storageId, base, itemId, ok = spaces.DecodeResourceID(head)
+					storageId, base, itemId, ok = spaces.DecodeToResourceID(head)
 					if !ok {
 						w.WriteHeader(http.StatusBadRequest)
 						return

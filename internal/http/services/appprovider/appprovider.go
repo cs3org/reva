@@ -287,7 +287,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 
 	js, err := json.Marshal(
 		map[string]any{
-			"file_id": spaces.EncodeResourceID(statRes.Info.Id),
+			"file_id": spaces.EncodeToStringifiedResourceID(statRes.Info.Id),
 		},
 	)
 	if err != nil {
@@ -318,7 +318,7 @@ func (s *svc) extractReference(ctx context.Context, id string) (*provider.Resour
 		return parentContainerRef, nil
 	}
 	// Option three
-	_, spaceRoot, ok := spaces.DecodeStorageSpaceID(id)
+	_, spaceRoot, ok := spaces.DecodeStorageSpaceIDToPath(id)
 	if !ok {
 		return nil, errors.New("failed to decode ID")
 	}

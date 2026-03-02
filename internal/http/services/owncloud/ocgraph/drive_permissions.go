@@ -17,9 +17,9 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/go-chi/chi/v5"
 	libregraph "github.com/owncloud/libre-graph-api-go"
@@ -196,7 +196,7 @@ func (s *svc) parseResourceID(r *http.Request) (*provider.ResourceId, error) {
 
 	resourceID := chi.URLParam(r, "resource-id")
 	resourceID, _ = url.QueryUnescape(resourceID)
-	storageID, _, itemID, ok := spaces.DecodeResourceID(resourceID)
+	storageID, _, itemID, ok := spaces.DecodeToResourceID(resourceID)
 	if !ok {
 		log.Error().Str("resource-id", resourceID).Msg("resource id cannot be decoded")
 		return nil, errtypes.BadRequest("resource id cannot be decoded")
@@ -567,7 +567,7 @@ func (s *svc) getRootDrivePermissions(w http.ResponseWriter, r *http.Request) {
 
 	spaceID := chi.URLParam(r, "space-id")
 	spaceID, _ = url.QueryUnescape(spaceID)
-	_, path, ok := spaces.DecodeStorageSpaceID(spaceID)
+	_, path, ok := spaces.DecodeStorageSpaceIDToPath(spaceID)
 	if !ok {
 		log.Error().Str("space-id", spaceID).Msg("space id cannot be decoded")
 		w.WriteHeader(http.StatusBadRequest)

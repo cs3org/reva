@@ -48,9 +48,8 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/permissions"
-
+	"github.com/cs3org/reva/v3/pkg/spaces"
 
 	"github.com/cs3org/reva/v3/pkg/notification"
 	"github.com/cs3org/reva/v3/pkg/notification/notificationhelper"
@@ -173,7 +172,7 @@ func (h *Handler) extractReference(r *http.Request) (*provider.Reference, error)
 	var ref provider.Reference
 	if h.EnableSpaces {
 		if spaceID := r.FormValue("space_ref"); spaceID != "" {
-			_, base, _, ok := spaces.DecodeResourceID(spaceID)
+			_, base, _, ok := spaces.DecodeToResourceID(spaceID)
 			if !ok {
 				return nil, errors.New("bad space id format")
 			}
@@ -1220,7 +1219,7 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		// TODO Storage: int
 		var itemID string
 		if h.EnableSpaces {
-			itemID = spaces.EncodeResourceID(info.Id)
+			itemID = spaces.EncodeToStringifiedResourceID(info.Id)
 		} else {
 			itemID = spaces.ResourceIdToString(info.Id)
 		}

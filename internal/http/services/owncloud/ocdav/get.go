@@ -124,7 +124,7 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	w.Header().Set(HeaderContentDisposistion, "attachment; filename*=UTF-8''"+
 		url.PathEscape(path.Base(r.URL.Path))+"; filename=\""+path.Base(r.URL.Path)+"\"")
 	w.Header().Set(HeaderETag, info.Etag)
-	w.Header().Set(HeaderOCFileID, spaces.EncodeResourceID(info.Id))
+	w.Header().Set(HeaderOCFileID, spaces.EncodeToStringifiedResourceID(info.Id))
 	w.Header().Set(HeaderOCETag, info.Etag)
 	t := utils.TSToTime(info.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)

@@ -40,14 +40,14 @@ import (
 	"github.com/cs3org/reva/v3/pkg/utils"
 
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/favorite"
+	"github.com/cs3org/reva/v3/pkg/favorite/registry"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/cs3org/reva/v3/pkg/notification/notificationhelper"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
-	"github.com/cs3org/reva/v3/pkg/favorite"
-	"github.com/cs3org/reva/v3/pkg/favorite/registry"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
@@ -159,7 +159,7 @@ type svc struct {
 	myOfficeFilesManager myofficefiles.Manager
 	client               *httpclient.Client
 	// Can be nil if notifications are not set up
-	notificationHelper   *notificationhelper.NotificationHelper
+	notificationHelper *notificationhelper.NotificationHelper
 }
 
 func getFavoritesManager(c *Config) (favorite.Manager, error) {
@@ -189,7 +189,6 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	log := appctx.GetLogger(ctx)
 	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: c.Insecure}}
 
-
 	s := &svc{
 		c:             &c,
 		webDavHandler: new(WebDavHandler),
@@ -208,7 +207,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		}
 		s.notificationHelper = nh
 	}
-	
+
 	// initialize handlers and set default cigs
 	if err := s.webDavHandler.init(c.WebdavNamespace, true); err != nil {
 		return nil, err
@@ -388,7 +387,7 @@ func extractDestination(r *http.Request, ns string) (string, error) {
 
 	// If the destination is in a spaces format, we replace with the space path
 	dstSpaceID, dstRelPath := router.ShiftPath(destination)
-	_, spaceRoot, ok := spaces.DecodeStorageSpaceID(dstSpaceID)
+	_, spaceRoot, ok := spaces.DecodeStorageSpaceIDToPath(dstSpaceID)
 	if ok && ns != "/public" {
 		destination = path.Join(spaceRoot, dstRelPath)
 	} else {

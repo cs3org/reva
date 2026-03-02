@@ -597,7 +597,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	if pf.Allprop != nil {
 		// return all known properties
 		if md.Id != nil {
-			id := spaces.EncodeResourceID(md.Id)
+			id := spaces.EncodeToStringifiedResourceID(md.Id)
 			propstatOK.Prop = append(propstatOK.Prop,
 				s.newProp("oc:id", id),
 				s.newProp("oc:fileid", id))
@@ -605,7 +605,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		}
 
 		if md.ParentId != nil {
-			id := spaces.EncodeResourceID(md.ParentId)
+			id := spaces.EncodeToStringifiedResourceID(md.ParentId)
 			propstatOK.Prop = append(propstatOK.Prop,
 				s.newProp("oc:file-parent", id),
 			)
@@ -705,25 +705,17 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					if md.Id == nil {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
 					} else {
-						// If our client uses spaces, we try to use the spaces-encoded file id (storage$base32(spacePath)!inode)
-						fileId, err := spaces.EncodeResourceInfo(md)
-						if err != nil {
-							sublog.Error().Err(err).Any("md", md).Msg("Failed to encode file id with EncodeResourceInfo")
-							fallbackId := spaces.EncodeResourceID(md.Id)
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", fallbackId))
-						} else {
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", fileId))
-						}
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", spaces.EncodeToStringifiedResourceID(md.Id)))
 					}
 				case "id": // desktop client only
 					if md.Id != nil {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:id", spaces.EncodeResourceID(md.Id)))
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:id", spaces.EncodeToStringifiedResourceID(md.Id)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:id", ""))
 					}
 				case "file-parent":
 					if md.ParentId != nil {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:file-parent", spaces.EncodeResourceID(md.ParentId)))
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:file-parent", spaces.EncodeToStringifiedResourceID(md.ParentId)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:file-parent", ""))
 					}

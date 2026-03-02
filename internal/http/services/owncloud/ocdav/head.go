@@ -70,7 +70,7 @@ func (s *svc) handleHead(ctx context.Context, w http.ResponseWriter, r *http.Req
 	info := res.Info
 	w.Header().Set(HeaderContentType, info.MimeType)
 	w.Header().Set(HeaderETag, info.Etag)
-	w.Header().Set(HeaderOCFileID, spaces.EncodeResourceID((info.Id)))
+	w.Header().Set(HeaderOCFileID, spaces.EncodeToStringifiedResourceID((info.Id)))
 	w.Header().Set(HeaderOCETag, info.Etag)
 	if info.Checksum != nil {
 		w.Header().Set(HeaderOCChecksum, fmt.Sprintf("%s:%s", strings.ToUpper(string(storageprovider.GRPC2PKGXS(info.Checksum.Type))), info.Checksum.Sum))

@@ -27,8 +27,8 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	projects_catalogue "github.com/cs3org/reva/v3/pkg/projects"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 )
@@ -55,6 +55,8 @@ func setupSuite(tb testing.TB) (projects_catalogue.Catalogue, error, func(tb tes
 
 func TestListProjects(t *testing.T) {
 
+	spaceID := spaces.EncodeSpaceID("/path/to/project")
+
 	tests := []struct {
 		description string
 		projects    []*Project
@@ -72,6 +74,7 @@ func TestListProjects(t *testing.T) {
 			projects: []*Project{
 				{
 					StorageID: "storage_id",
+					SpaceID:   spaceID,
 					Path:      "/path/to/project",
 					Name:      "project",
 					Owner:     "owner",
@@ -84,7 +87,7 @@ func TestListProjects(t *testing.T) {
 			expected: []*provider.StorageSpace{
 				{
 					Id: &provider.StorageSpaceId{
-						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", "/path/to/project"),
+						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", spaceID),
 					},
 					Owner: &userpb.User{
 						Id: &userpb.UserId{
@@ -106,6 +109,7 @@ func TestListProjects(t *testing.T) {
 			projects: []*Project{
 				{
 					StorageID: "storage_id",
+					SpaceID:   spaceID,
 					Path:      "/path/to/project",
 					Name:      "project",
 					Owner:     "unknown",
@@ -118,7 +122,7 @@ func TestListProjects(t *testing.T) {
 			expected: []*provider.StorageSpace{
 				{
 					Id: &provider.StorageSpaceId{
-						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", "/path/to/project"),
+						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", spaceID),
 					},
 					Owner: &userpb.User{
 						Id: &userpb.UserId{
@@ -140,6 +144,7 @@ func TestListProjects(t *testing.T) {
 			projects: []*Project{
 				{
 					StorageID: "storage_id",
+					SpaceID:   spaceID,
 					Path:      "/path/to/project",
 					Name:      "project",
 					Owner:     "unknown",
@@ -152,7 +157,7 @@ func TestListProjects(t *testing.T) {
 			expected: []*provider.StorageSpace{
 				{
 					Id: &provider.StorageSpaceId{
-						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", "/path/to/project"),
+						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", spaceID),
 					},
 					Owner: &userpb.User{
 						Id: &userpb.UserId{
@@ -174,6 +179,7 @@ func TestListProjects(t *testing.T) {
 			projects: []*Project{
 				{
 					StorageID: "storage_id",
+					SpaceID:   spaceID,
 					Path:      "/path/to/project",
 					Name:      "project",
 					Owner:     "unknown",
@@ -186,7 +192,7 @@ func TestListProjects(t *testing.T) {
 			expected: []*provider.StorageSpace{
 				{
 					Id: &provider.StorageSpaceId{
-						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", "/path/to/project"),
+						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", spaceID),
 					},
 					Owner: &userpb.User{
 						Id: &userpb.UserId{
@@ -208,6 +214,7 @@ func TestListProjects(t *testing.T) {
 			projects: []*Project{
 				{
 					StorageID: "storage_id",
+					SpaceID:   spaceID,
 					Path:      "/path/to/project",
 					Name:      "project",
 					Owner:     "unknown",
@@ -220,7 +227,7 @@ func TestListProjects(t *testing.T) {
 			expected: []*provider.StorageSpace{
 				{
 					Id: &provider.StorageSpaceId{
-						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", "/path/to/project"),
+						OpaqueId: spaces.EncodeStorageSpaceID("storage_id", spaceID),
 					},
 					Owner: &userpb.User{
 						Id: &userpb.UserId{
@@ -242,6 +249,7 @@ func TestListProjects(t *testing.T) {
 			projects: []*Project{
 				{
 					StorageID: "storage_id",
+					SpaceID:   spaceID,
 					Path:      "/path/to/project",
 					Name:      "project",
 					Owner:     "unknown",
@@ -268,6 +276,12 @@ func TestListProjects(t *testing.T) {
 				t.Fatalf("not expected error while creating projects driver: %+v", err)
 			}
 
+			defer func() {
+				if err := teardown(t); err != nil {
+					t.Fatalf("failed to teardown test suite: %+v", err)
+				}
+			}()
+
 			catmgr := catalogue.(*ProjectsManager)
 			for _, proj := range tt.projects {
 				catmgr.db.Create(&proj)
@@ -281,11 +295,6 @@ func TestListProjects(t *testing.T) {
 
 			if !reflect.DeepEqual(got.StorageSpaces, tt.expected) {
 				t.Fatalf("projects' list do not match. got=%+v expected=%+v", got.StorageSpaces, tt.expected)
-			}
-
-			err = teardown(t)
-			if err != nil {
-				t.Fatalf("failed to teardown test suite: %+v", err)
 			}
 		})
 	}

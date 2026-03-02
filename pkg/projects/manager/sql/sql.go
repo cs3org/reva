@@ -30,8 +30,8 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
-	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/projects"
 	"github.com/cs3org/reva/v3/pkg/projects/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
@@ -114,7 +114,7 @@ func New(ctx context.Context, m map[string]any) (projects.Catalogue, error) {
 		return nil, err
 	}
 	c.ApplyDefaults()
-	
+
 	var db *gorm.DB
 	var err error
 	switch c.Engine {
@@ -321,7 +321,7 @@ func projectBelongsToUser(user *userpb.User, p *Project) (*provider.ResourcePerm
 func projectToStorageSpace(p *Project, perms *provider.ResourcePermissions) *provider.StorageSpace {
 	return &provider.StorageSpace{
 		Id: &provider.StorageSpaceId{
-			OpaqueId: spaces.EncodeStorageSpaceID(p.StorageID, p.Path),
+			OpaqueId: spaces.EncodeStorageSpaceID(p.StorageID, p.SpaceID),
 		},
 		Owner: &userpb.User{
 			Id: &userpb.UserId{

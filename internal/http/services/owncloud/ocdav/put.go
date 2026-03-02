@@ -370,8 +370,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	w.Header().Add(HeaderContentType, newInfo.MimeType)
 	w.Header().Set(HeaderETag, newInfo.Etag)
-	newInfoID, _ := spaces.EncodeResourceInfo(newInfo)
-	w.Header().Set(HeaderOCFileID, newInfoID)
+	w.Header().Set(HeaderOCFileID, spaces.EncodeToStringifiedResourceID(newInfo.Id))
 
 	w.Header().Set(HeaderOCETag, newInfo.Etag)
 	t := utils.TSToTime(newInfo.Mtime).UTC()
