@@ -5,6 +5,7 @@ address = "{{grpc_address}}"
 
 [grpc.services.storageprovider]
 driver = "nextcloud"
+space_depth = 0
 
 [grpc.services.storageprovider.drivers.nextcloud]
 endpoint = "http://localhost:8080/apps/sciencemesh/"

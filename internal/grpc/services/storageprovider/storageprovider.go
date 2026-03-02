@@ -55,7 +55,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 )
 
@@ -182,6 +181,7 @@ func registerMimeTypes(mappingFile string) error {
 
 // New creates a new storage provider svc.
 func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
+	log := appctx.GetLogger(ctx)
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -197,6 +197,10 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 
 	if fs == nil {
 		return nil, errors.New("error creating fs driver")
+	}
+
+	if c.SpaceDepth < pathLevels(mountPath) {
+		log.Error().Msgf("the space_depth parameter should be set to at least the depth of the mount_path. For mount_path %s the space_depth should be set to at least %d", mountPath, pathLevels(mountPath))
 	}
 
 	// parse data server url
@@ -853,12 +857,17 @@ func (s *service) addSpaceInfo(ctx context.Context, ri *provider.ResourceInfo, w
 func (s *service) pathToSpaceID(path string) (string, error) {
 	split := s.conf.SpaceDepth + 1
 
-	// In case the space depth is lower than the mount path, the whole mount will be a single space
-	if pathLevels(s.mountPath) < split {
+	// Sanity check
+	paths := strings.Split(path, string(os.PathSeparator))
+	if len(paths) < split {
+		return "", errors.New("path is outside of space")
+	}
+
+	// In case the space depth is lower than or equal to the mount path depth, the whole mount will be a single space
+	if s.conf.SpaceDepth <= pathLevels(s.mountPath) {
 		return spaces.EncodeSpaceID(s.mountPath), nil
 	}
 
-	paths := strings.Split(path, string(os.PathSeparator))
 	spacesPath := strings.Join(paths[:split], string(os.PathSeparator))
 	return spaces.EncodeSpaceID(spacesPath), nil
 }
