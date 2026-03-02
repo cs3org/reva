@@ -920,7 +920,7 @@ func pathLevels(p string) int {
 }
 
 func (s *service) fixPermissions(md *provider.ResourceInfo) {
-	// do not allow shares above spaces
+	// do not allow shares above space roots
 	if pathLevels(md.Path) < s.conf.SpaceDepth+1 {
 		md.PermissionSet.AddGrant = false
 		md.PermissionSet.RemoveGrant = false
