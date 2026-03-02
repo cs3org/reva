@@ -72,6 +72,8 @@ type Project struct {
 	StorageID string `gorm:"size:255"`
 	Path      string
 	Name      string `gorm:"size:255;uniqueIndex:i_name_archived_at"`
+	// Status of the project (e.g., active, pending creation, etc.)
+	Status string `gorm:"size:50"`
 	// Owner of the project
 	Owner string `gorm:"size:255"`
 	// Readers e-group ID
@@ -96,7 +98,7 @@ type Project struct {
 
 	// Description of the use-case that was passed in the creation ticket
 	UserProvidedDescription string
-	// Service acount linked to the project
+	// Service account linked to the project
 	ServiceAccount string
 	// Comments about the project, for second / third level support
 	Comments string
