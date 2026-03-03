@@ -176,7 +176,7 @@ func (m *ProjectsManager) ListStorageSpaces(ctx context.Context, req *provider.L
 	if res, err := m.cache.Get(cacheKey); shouldCache && err == nil && res != nil {
 		fetchedProjects = res.([]*Project)
 	} else {
-		query := m.db.Model(&Project{}).Where("archived_at is null AND status = ?", status)
+		query := m.db.Model(&Project{}).Where("status = ?", status)
 		query = m.appendFiltersToQuery(ctx, query, req.Filters)
 
 		res := query.Find(&fetchedProjects)
@@ -313,8 +313,6 @@ func (m *ProjectsManager) UpdateProjectStatus(ctx context.Context, name string, 
 
 	if status == projects.ProjectStatusArchived {
 		updates["archived_at"] = time.Now()
-	} else {
-		updates["archived_at"] = nil
 	}
 
 	res := m.db.Model(&Project{}).
