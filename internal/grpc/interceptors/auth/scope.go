@@ -314,6 +314,9 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 	parentPath := statResponse.Info.Path
 
 	childPath := ref.GetPath()
+
+	log := appctx.GetLogger(ctx)
+	log.Debug().Str("parentPath", parentPath).Str("childPath", childPath).Msg("Checking if child path is nested under parent path")
 	if isRelativePathOrEmpty(childPath) {
 		// We mint a token as the owner of the public share and try to stat the reference
 		// TODO(ishank011): We need to find a better alternative to this
