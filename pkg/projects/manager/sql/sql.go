@@ -65,16 +65,6 @@ type ProjectsManager struct {
 
 const cacheKey = "projects/projectsListCache"
 
-type ProjectStatus string
-
-const (
-	ProjectStatusCreating ProjectStatus = "creating"
-	ProjectStatusActive   ProjectStatus = "active"
-	ProjectStatusArchived ProjectStatus = "archived"
-)
-
-func (ps ProjectStatus) AsString() string { return string(ps) }
-
 // Project represents a project in the DB.
 type Project struct {
 	gorm.Model
@@ -83,7 +73,7 @@ type Project struct {
 	Path      string
 	Name      string `gorm:"size:255;uniqueIndex:i_name_archived_at"`
 	// Status of the project (e.g., active, creating, archived, etc.)
-	Status ProjectStatus `gorm:"size:50;index:idx_status;default:'active'"`
+	Status projects.ProjectStatus `gorm:"size:50;index:idx_status;default:'active'"`
 	// Owner of the project
 	Owner string `gorm:"size:255"`
 	// Readers e-group ID
@@ -169,7 +159,7 @@ func (c *Config) ApplyDefaults() {
 	c.Database = sharedconf.GetDBInfo(c.Database)
 }
 
-func (m *ProjectsManager) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest, status string) (*provider.ListStorageSpacesResponse, error) {
+func (m *ProjectsManager) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest, status projects.ProjectStatus) (*provider.ListStorageSpacesResponse, error) {
 	user, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		return &provider.ListStorageSpacesResponse{
@@ -180,19 +170,13 @@ func (m *ProjectsManager) ListStorageSpaces(ctx context.Context, req *provider.L
 		}, nil
 	}
 
-	// By default, only list active projects unless a different status is specified
-	statusFilter := ProjectStatusActive
-	if status != "" {
-		statusFilter = ProjectStatus(status)
-	}
-
 	var fetchedProjects []*Project
 	// If there is a filter other than SpaceType, we don't cache
 	shouldCache := !containsDriverLevelFilters(req.Filters)
 	if res, err := m.cache.Get(cacheKey); shouldCache && err == nil && res != nil {
 		fetchedProjects = res.([]*Project)
 	} else {
-		query := m.db.Model(&Project{}).Where("archived_at is null AND status = ?", statusFilter)
+		query := m.db.Model(&Project{}).Where("archived_at is null AND status = ?", status)
 		query = m.appendFiltersToQuery(ctx, query, req.Filters)
 
 		res := query.Find(&fetchedProjects)
@@ -320,17 +304,22 @@ func (m *ProjectsManager) GetProject(ctx context.Context, name string) (*Project
 	return fetchedProject, nil
 }
 
-func (m *ProjectsManager) UpdateProjectStatus(ctx context.Context, name string, status ProjectStatus) error {
+func (m *ProjectsManager) UpdateProjectStatus(ctx context.Context, name string, status projects.ProjectStatus) error {
 	log := appctx.GetLogger(ctx)
 
-	// Validate that the status is one of the allowed values
-	if status != ProjectStatusCreating && status != ProjectStatusActive && status != ProjectStatusArchived {
-		return fmt.Errorf("invalid status '%s': must be one of creating, active, or archived", status)
+	updates := map[string]interface{}{
+		"status": status,
+	}
+
+	if status == projects.ProjectStatusArchived {
+		updates["archived_at"] = time.Now()
+	} else {
+		updates["archived_at"] = nil
 	}
 
 	res := m.db.Model(&Project{}).
 		Where("name = ?", name).
-		Update("status", status)
+		Updates(updates)
 
 	if res.Error != nil {
 		log.Error().Err(res.Error).Str("project", name).Str("status", status.AsString()).Msg("Failed to update project status")
