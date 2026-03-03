@@ -304,6 +304,7 @@ func (m *ProjectsManager) GetProject(ctx context.Context, name string) (*Project
 	return fetchedProject, nil
 }
 
+// To be used only by cernboxcop.
 func (m *ProjectsManager) UpdateProjectStatus(ctx context.Context, name string, status projects.ProjectStatus) error {
 	log := appctx.GetLogger(ctx)
 
