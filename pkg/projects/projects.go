@@ -24,10 +24,20 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
+type ProjectStatus string
+
+const (
+	ProjectStatusCreating ProjectStatus = "creating"
+	ProjectStatusActive   ProjectStatus = "active"
+	ProjectStatusArchived ProjectStatus = "archived"
+)
+
+func (ps ProjectStatus) AsString() string { return string(ps) }
+
 // Catalogue is the interface that stores the project spaces.
 type Catalogue interface {
 	CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error)
-	ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest, status string) (*provider.ListStorageSpacesResponse, error)
+	ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest, status ProjectStatus) (*provider.ListStorageSpacesResponse, error)
 	UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error)
 	DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error)
 }
