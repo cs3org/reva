@@ -72,7 +72,7 @@ type Project struct {
 	StorageID string `gorm:"size:255"`
 	Path      string
 	Name      string `gorm:"size:255;uniqueIndex:i_name_archived_at"`
-	// Status of the project (e.g., active, creating, archived, etc.)
+	// Status of the project (e.g., active, creating, archiving, archived, etc.)
 	Status projects.ProjectStatus `gorm:"size:50;index:idx_status;default:'active'"`
 	// Owner of the project
 	Owner string `gorm:"size:255"`

@@ -27,9 +27,10 @@ import (
 type ProjectStatus string
 
 const (
-	ProjectStatusCreating ProjectStatus = "creating"
-	ProjectStatusActive   ProjectStatus = "active"
-	ProjectStatusArchived ProjectStatus = "archived"
+	ProjectStatusCreating  ProjectStatus = "creating"
+	ProjectStatusActive    ProjectStatus = "active"
+	ProjectStatusArchiving ProjectStatus = "archiving"
+	ProjectStatusArchived  ProjectStatus = "archived"
 )
 
 func (ps ProjectStatus) AsString() string { return string(ps) }
