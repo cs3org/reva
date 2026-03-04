@@ -1073,32 +1073,14 @@ func (fs *cephmountfs) GetQuota(ctx context.Context, ref *provider.Reference) (t
 		}
 	}
 
-	// Try to find ceph.dir.rbytes in current path or ancestors
-	currentPath = fullPath
-	for {
-		usedQuotaData, err := xattr.Get(currentPath, "ceph.dir.rbytes")
-		if err == nil {
-			// Found the attribute
-			used, _ = strconv.ParseUint(string(usedQuotaData), 10, 64)
-			log.Debug().Str("found_at", currentPath).Msg("cephmount: ceph.dir.rbytes found in ancestor")
-			break
-		}
-		// Check if error is "attribute not found" (continue to parent) vs other errors (stop)
-		errStr := err.Error()
-		if strings.Contains(errStr, "no data available") {
-			// Attribute not found, try parent
-			parentPath := filepath.Dir(currentPath)
-			if parentPath == currentPath || parentPath == fs.chrootDir || parentPath == "/" {
-				// Reached root without finding attribute
-				log.Debug().Msg("cephmount: ceph.dir.rbytes xattr not found in path or ancestors, using 0")
-				break
-			}
-			currentPath = parentPath
-		} else {
-			// Other error occurred (path not found, permission denied, etc.), use default (0)
-			log.Debug().Err(err).Msg("cephmount: error reading ceph.dir.rbytes xattr, using 0")
-			break
-		}
+	// rbytes exists at every level and is not inherited like max_bytes
+	// so we only check the path where the quota was found.
+	usedQuotaData, err := xattr.Get(currentPath, "ceph.dir.rbytes")
+	if err == nil {
+		// Found the attribute
+		used, _ = strconv.ParseUint(string(usedQuotaData), 10, 64)
+	} else {
+		log.Debug().Err(err).Msg("cephmount: error reading ceph.dir.rbytes xattr, using 0")
 	}
 
 	return total, used, nil
