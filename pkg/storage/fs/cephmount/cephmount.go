@@ -1015,36 +1015,90 @@ func (fs *cephmountfs) ListGrants(ctx context.Context, ref *provider.Reference) 
 
 // updatePerms updates ResourcePermissions based on rwx string
 func (fs *cephmountfs) GetQuota(ctx context.Context, ref *provider.Reference) (total uint64, used uint64, err error) {
+	if ref == nil {
+		wrappedErr := errors.New("error: ref is nil")
+		fs.logOperationError(ctx, "GetQuota", "", wrappedErr)
+		return 0, 0, wrappedErr
+	}
+
 	log := appctx.GetLogger(ctx)
 
-	// Get user home path for quota check
-	homePath, err := fs.resolveRef(ctx, &provider.Reference{Path: "."})
-	if err != nil {
-		return 0, 0, errors.Wrap(err, "cephmount: error resolving home path")
+	// capture the original received path for logging
+	var receivedPath string
+	if ref.Path != "" {
+		receivedPath = ref.Path
+	} else if ref.ResourceId != nil {
+		receivedPath = fmt.Sprintf("ResourceId{StorageId:%s, OpaqueId:%s}", ref.ResourceId.StorageId, ref.ResourceId.OpaqueId)
 	}
 
-	// log homepath
-	log.Debug().Str("operation", "GetQuota").
-		Str("home_path", homePath).
-		Str("full_filesystem_path", filepath.Join(fs.chrootDir, homePath)).
-		Msg("cephmount GetQuota resolved home path")
-
-	// Get max quota from extended attributes or use default
-	fullHomePath := filepath.Join(fs.chrootDir, homePath)
-	maxQuotaData, err := xattr.Get(fullHomePath, "user.quota.max_bytes")
+	path, err := fs.resolveRef(ctx, ref)
 	if err != nil {
-		log.Debug().Msg("cephmount: user.quota.max_bytes xattr not set, using default")
-		total = fs.conf.UserQuotaBytes
-	} else {
-		total, _ = strconv.ParseUint(string(maxQuotaData), 10, 64)
+		wrappedErr := errors.Wrap(err, "cephmount: failed to resolve reference")
+		fs.logOperationError(ctx, "GetQuota", "", wrappedErr)
+		return 0, 0, wrappedErr
 	}
 
-	// Get used quota from extended attributes or use default
-	usedQuotaData, err := xattr.Get(fullHomePath, "ceph.dir.rbytes")
-	if err != nil {
-		log.Debug().Msg("cephmount: ceph.dir.rbytes xattr not set, using 0")
-	} else {
-		used, _ = strconv.ParseUint(string(usedQuotaData), 10, 64)
+	fs.logOperationWithPaths(ctx, "GetQuota", receivedPath, path)
+
+	// build absolute path for xattr operations
+	fullPath := filepath.Join(fs.chrootDir, path)
+
+	// try to find ceph.quota.max_bytes in current path or ancestors
+	total = fs.conf.UserQuotaBytes // default value
+	currentPath := fullPath
+	for {
+		maxQuotaData, err := xattr.Get(currentPath, "ceph.quota.max_bytes")
+		if err == nil {
+			// Found the attribute
+			total, _ = strconv.ParseUint(string(maxQuotaData), 10, 64)
+			log.Debug().Str("found_at", currentPath).Msg("cephmount: ceph.quota.max_bytes found in ancestor")
+			break
+		}
+
+		// check if error is "attribute not found" (continue to parent) vs other errors (stop)
+		errStr := err.Error()
+		if strings.Contains(errStr, "no data available") {
+			// Attribute not found, try parent
+			parentPath := filepath.Dir(currentPath)
+			if parentPath == currentPath || parentPath == fs.chrootDir || parentPath == "/" {
+				// Reached root without finding attribute
+				log.Debug().Msg("cephmount: ceph.quota.max_bytes xattr not found in path or ancestors, using default")
+				break
+			}
+			currentPath = parentPath
+		} else {
+			// other error occurred (path not found, permission denied, etc.), use default
+			log.Debug().Err(err).Msg("cephmount: error reading ceph.quota.max_bytes xattr, using default")
+			break
+		}
+	}
+
+	// Try to find ceph.dir.rbytes in current path or ancestors
+	currentPath = fullPath
+	for {
+		usedQuotaData, err := xattr.Get(currentPath, "ceph.dir.rbytes")
+		if err == nil {
+			// Found the attribute
+			used, _ = strconv.ParseUint(string(usedQuotaData), 10, 64)
+			log.Debug().Str("found_at", currentPath).Msg("cephmount: ceph.dir.rbytes found in ancestor")
+			break
+		}
+		// Check if error is "attribute not found" (continue to parent) vs other errors (stop)
+		errStr := err.Error()
+		if strings.Contains(errStr, "no data available") {
+			// Attribute not found, try parent
+			parentPath := filepath.Dir(currentPath)
+			if parentPath == currentPath || parentPath == fs.chrootDir || parentPath == "/" {
+				// Reached root without finding attribute
+				log.Debug().Msg("cephmount: ceph.dir.rbytes xattr not found in path or ancestors, using 0")
+				break
+			}
+			currentPath = parentPath
+		} else {
+			// Other error occurred (path not found, permission denied, etc.), use default (0)
+			log.Debug().Err(err).Msg("cephmount: error reading ceph.dir.rbytes xattr, using 0")
+			break
+		}
 	}
 
 	return total, used, nil
