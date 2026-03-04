@@ -426,7 +426,7 @@ func (fs *Eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 
 	userGroupsSet := makeSet(u.Groups)
 
-	if utils.IsLightweightUser(u) {
+	if utils.IsExternalUser(u) {
 		for _, e := range eosFileInfo.SysACL.Entries {
 			userInGroup := e.Type == acl.TypeGroup && userGroupsSet.in(strings.ToLower(e.Qualifier))
 			if (e.Type == acl.TypeLightweight && e.Qualifier == u.Id.OpaqueId) || userInGroup {
