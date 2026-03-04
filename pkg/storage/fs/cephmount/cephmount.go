@@ -1079,7 +1079,6 @@ func (fs *cephmountfs) GetQuota(ctx context.Context, ref *provider.Reference) (t
 	if err == nil {
 		// Found the attribute
 		used, _ = strconv.ParseUint(string(usedQuotaData), 10, 64)
-		log.Debug().Str("found_at", currentPath).Msg("cephmount: ceph.dir.rbytes found in ancestor")
 	} else {
 		log.Debug().Err(err).Msg("cephmount: error reading ceph.dir.rbytes xattr, using 0")
 	}
