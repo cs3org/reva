@@ -1,0 +1,26 @@
+name: Vulnerability Check
+on:
+  pull_request:
+  push:
+    branches:
+      - "*"
+  workflow_dispatch:
+
+env:
+  GO_VERSION: "1.25.7"
+
+jobs:
+  vulncheck:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go environment
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: Run govulncheck
+        run: govulncheck ./...
