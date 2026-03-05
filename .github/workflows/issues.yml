@@ -18,8 +18,8 @@ jobs:
           # Only issues
           days-before-pr-stale: -1
 
-          # 1 year inactivity -> stale, then close after 14 more days
-          days-before-issue-stale: 365
+          # 2-year inactivity -> stale, then close after 14 more days
+          days-before-issue-stale: 730
           days-before-issue-close: 14
 
           # Labels + exemptions
