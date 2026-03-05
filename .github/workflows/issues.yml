@@ -28,7 +28,7 @@ jobs:
 
           # Messages (set stale-issue-message: "" if you want labeling without a comment)
           stale-issue-message: >
-            This issue has been automatically marked as stale because it has had no activity for 1 year.
+            This issue has been automatically marked as stale because it has had no activity for 2 years.
             Comment to keep it open; otherwise it will be closed in 14 days.
           close-issue-message: >
             This issue has been closed due to prolonged inactivity. Feel free to reopen or file a new issue with updates.
