@@ -599,6 +599,8 @@ func (s *svc) toGrantee(ctx context.Context, recipientType string, id string) (*
 		if err != nil || userRes.Status == nil || userRes.Status.Code != rpcv1beta1.Code_CODE_OK {
 			return nil, errors.New("failed to fetch sharee data")
 		}
+		// TODO: here we check if user is lw -> if so, we set email in grantee
+
 		return &provider.Grantee{
 			Type: provider.GranteeType_GRANTEE_TYPE_USER,
 			Id:   &provider.Grantee_UserId{UserId: userRes.User.GetId()},
