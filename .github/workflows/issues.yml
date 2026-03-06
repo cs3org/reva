@@ -26,6 +26,8 @@ jobs:
           stale-issue-label: stale
           exempt-issue-labels: "pinned,security,never-stale"
 
+          operations-per-run: 100
+
           # Messages (set stale-issue-message: "" if you want labeling without a comment)
           stale-issue-message: >
             This issue has been automatically marked as stale because it has had no activity for 2 years.
