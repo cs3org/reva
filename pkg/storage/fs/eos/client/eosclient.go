@@ -21,6 +21,7 @@ package eosclient
 import (
 	"context"
 	"io"
+	"strconv"
 	"time"
 
 	"github.com/cs3org/reva/v3/pkg/errtypes"
@@ -30,9 +31,9 @@ import (
 
 // EOSClient is the interface which enables access to EOS instances through various interfaces.
 type EOSClient interface {
-	AddACL(ctx context.Context, auth, rootAuth Authorization, path string, position uint, a *acl.Entry) error
-	RemoveACL(ctx context.Context, auth, rootAuth Authorization, path string, a *acl.Entry) error
-	UpdateACL(ctx context.Context, auth, rootAuth Authorization, path string, position uint, a *acl.Entry) error
+	AddACL(ctx context.Context, auth Authorization, path string, position uint, a *acl.Entry) error
+	RemoveACL(ctx context.Context, auth Authorization, path string, a *acl.Entry) error
+	UpdateACL(ctx context.Context, auth Authorization, path string, position uint, a *acl.Entry) error
 	GetACL(ctx context.Context, auth Authorization, path, aclType, target string) (*acl.Entry, error)
 	ListACLs(ctx context.Context, auth Authorization, path string) ([]*acl.Entry, error)
 	GetFileInfoByInode(ctx context.Context, auth Authorization, inode uint64) (*FileInfo, error)
@@ -139,6 +140,25 @@ const (
 // Role holds the attributes required to authenticate to EOS via role-based access.
 type Role struct {
 	UID, GID string
+}
+
+// Return uid and gid in uint64 format.
+// Returns nobody and an error in case the ids cannot be parsed
+func (r Role) Decompose() (uid, gid uint64, err error) {
+	// $ id nobody
+	// uid=65534(nobody) gid=65534(nobody) groups=65534(nobody)
+	nobody := uint64(65534)
+
+	uid, err = strconv.ParseUint(r.UID, 10, 64)
+	if err != nil {
+		return nobody, nobody, err
+	}
+	gid, err = strconv.ParseUint(r.GID, 10, 64)
+	if err != nil {
+		return nobody, nobody, err
+	}
+
+	return uid, gid, nil
 }
 
 // Authorization specifies the mechanisms through which EOS can be accessed.
