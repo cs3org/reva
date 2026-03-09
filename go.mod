@@ -61,7 +61,7 @@ require (
 	golang.org/x/sys v0.42.0
 	golang.org/x/term v0.40.0
 	google.golang.org/genproto v0.0.0-20260128011058-8636f8732409
-	google.golang.org/grpc v1.79.1
+	google.golang.org/grpc v1.79.2
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/mail.v2 v2.3.1
 	gorm.io/datatypes v1.2.7
