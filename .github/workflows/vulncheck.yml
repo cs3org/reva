@@ -12,7 +12,6 @@ env:
 jobs:
   vulncheck:
     runs-on: self-hosted
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,4 +23,5 @@ jobs:
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
       - name: Run govulncheck
+        continue-on-error: true
         run: govulncheck ./...
