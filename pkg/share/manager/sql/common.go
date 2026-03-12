@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	projectInstancesPrefix        = "newproject"
 	projectSpaceGroupsPrefix      = "cernbox-project-"
 	projectSpaceAdminGroupsSuffix = "-admins"
 	projectPathPrefix             = "/eos/project/"
@@ -36,6 +35,10 @@ func init() {
 func (c *Config) ApplyDefaults() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 	c.Database = sharedconf.GetDBInfo(c.Database)
+	if c.LinkPasswordHashCost < 6 {
+		c.LinkPasswordHashCost = 11
+	}
+
 }
 
 func getDb(c Config) (*gorm.DB, error) {
