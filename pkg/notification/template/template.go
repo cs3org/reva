@@ -22,11 +22,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"html/template"
 	htmlTemplate "html/template"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	textTemplate "text/template"
@@ -150,6 +152,7 @@ func parseTmplFile(path, name string) (any, error) {
 		"base":  filepath.Base,
 		"dir":   filepath.Dir,
 		"clean": filepath.Clean,
+		"ext":   filepath.Ext,
 
 		// Conversion
 		"atoi":   strconv.Atoi,
@@ -158,6 +161,17 @@ func parseTmplFile(path, name string) (any, error) {
 
 		// Date/time
 		"now": time.Now,
+
+		// Slice operations
+		"list": func(items ...string) []string { return items },
+		"sliceContains": func(slice []string, s string) bool {
+			return slices.Contains(slice, s)
+		},
+
+		// Other
+		"css": func(s string) template.CSS {
+			return template.CSS(s)
+		},
 	}
 
 	ext := filepath.Ext(path)
