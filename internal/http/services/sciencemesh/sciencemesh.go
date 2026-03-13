@@ -22,6 +22,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
@@ -70,8 +71,7 @@ type config struct {
 	BodyTemplatePath     string                      `mapstructure:"body_template_path"`
 	OCMMountPoint        string                      `mapstructure:"ocm_mount_point"`
 	DirectoryServiceURLs string                      `mapstructure:"directory_service_urls"`
-	OCMClientTimeout     int                         `mapstructure:"ocm_client_timeout"`
-	OCMClientInsecure    bool                        `mapstructure:"ocm_client_insecure"`
+	OCMClient            ocmd.ClientSecurityConfig   `mapstructure:"ocm_client"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -81,9 +81,7 @@ func (c *config) ApplyDefaults() {
 	if c.OCMMountPoint == "" {
 		c.OCMMountPoint = "/ocm"
 	}
-	if c.OCMClientTimeout == 0 {
-		c.OCMClientTimeout = 10
-	}
+	c.OCMClient.ApplyDefaults()
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
