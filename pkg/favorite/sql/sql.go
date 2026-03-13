@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2026 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,22 +16,26 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package cbox
+package sql
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
+	"time"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/pkg/errors"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/cbox/utils"
-	"github.com/cs3org/reva/v3/pkg/sharedconf"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/favorite"
 	"github.com/cs3org/reva/v3/pkg/favorite/registry"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
 
@@ -49,7 +53,20 @@ func (c *Config) ApplyDefaults() {
 
 type mgr struct {
 	c  *Config
-	db *sql.DB
+	db *gorm.DB
+}
+
+type Favorite struct {
+	// We don't use gorm.Model since we want to add an index on DeletedAt
+	//gorm.Model
+	ID        uint `gorm:"primarykey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt `gorm:"uniqueIndex:u_favorite;index"`
+
+	Inode    string `gorm:"size:32;uniqueIndex:u_favorite;index"`
+	Instance string `gorm:"size:32;uniqueIndex:u_favorite;index"`
+	UserId   string `gorm:"size:64;uniqueIndex:u_favorite;index"`
 }
 
 // New returns an instance of the cbox sql favorites manager.
@@ -60,9 +77,27 @@ func New(m map[string]any) (favorite.Manager, error) {
 	}
 	c.ApplyDefaults()
 
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName))
+	var db *gorm.DB
+	var err error
+	switch c.Engine {
+	case "sqlite":
+		db, err = gorm.Open(sqlite.Open(c.DBName), &gorm.Config{})
+	case "mysql":
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true", c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName)
+		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	default: // default is mysql
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true", c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName)
+		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	}
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Failed to connect to favorites database using engine "+c.Engine)
+	}
+
+	// Migrate schemas
+	err = db.AutoMigrate(&Favorite{})
+
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to mgirate favorites schema")
 	}
 
 	return &mgr{
@@ -72,69 +107,71 @@ func New(m map[string]any) (favorite.Manager, error) {
 }
 
 func (m *mgr) ListFavorites(ctx context.Context, userID *user.UserId) ([]*provider.ResourceId, error) {
-	user := appctx.ContextMustGetUser(ctx)
+	log := appctx.GetLogger(ctx)
+
+	user, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return nil, errtypes.UserRequired("favorites: error getting user from ctx")
+	}
+
+	query := m.db.Model(&Favorite{}).
+		Where("user_id = ?", user.Id.OpaqueId)
+
+	fetchedFavorites := []Favorite{}
+	res := query.First(&fetchedFavorites)
+
+	if res.Error != nil {
+		log.Error().Err(res.Error).Msg("ListFavorites: database error")
+		return nil, res.Error
+	}
+
 	infos := []*provider.ResourceId{}
-	query := `SELECT fileid_prefix, fileid FROM cbox_metadata WHERE uid=? AND tag_key="fav"`
-	rows, err := m.db.Query(query, user.Id.OpaqueId)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var info provider.ResourceId
-		if err := rows.Scan(&info.StorageId, &info.OpaqueId); err != nil {
-			return nil, err
-		}
-		infos = append(infos, &info)
+	for _, fav := range fetchedFavorites {
+		infos = append(infos, &provider.ResourceId{
+			StorageId: fav.Instance,
+			OpaqueId:  fav.Inode,
+		})
 	}
 
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
 	return infos, nil
 }
 
 func (m *mgr) SetFavorite(ctx context.Context, userID *user.UserId, resourceInfo *provider.ResourceInfo) error {
-	user := appctx.ContextMustGetUser(ctx)
+	log := appctx.GetLogger(ctx)
 
-	// The primary key is just the ID in the table, it should ideally be (uid, fileid_prefix, fileid, tag_key)
-	// For the time being, just check if the favorite already exists. If it does, return early
-	var id int
-	query := `SELECT id FROM cbox_metadata WHERE uid=? AND fileid_prefix=? AND fileid=? AND tag_key="fav"`
-	if err := m.db.QueryRow(query, user.Id.OpaqueId, resourceInfo.Id.StorageId, resourceInfo.Id.OpaqueId).Scan(&id); err == nil {
-		// Favorite is already set, return
-		return nil
+	user, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return errtypes.UserRequired("favorites: error getting user from ctx")
 	}
 
-	query = `INSERT INTO cbox_metadata SET item_type=?, uid=?, fileid_prefix=?, fileid=?, tag_key="fav"`
-	vals := []any{utils.ResourceTypeToItemInt(resourceInfo.Type), user.Id.OpaqueId, resourceInfo.Id.StorageId, resourceInfo.Id.OpaqueId}
-	stmt, err := m.db.Prepare(query)
-	if err != nil {
-		return err
+	favorite := &Favorite{
+		UserId:   user.Id.OpaqueId,
+		Inode:    resourceInfo.Id.OpaqueId,
+		Instance: resourceInfo.Id.StorageId,
 	}
+	res := m.db.Create(favorite)
 
-	if _, err = stmt.Exec(vals...); err != nil {
-		return err
-	}
-	return nil
+	log.Debug().Err(res.Error).Msgf("Set favorite for %+v", favorite)
+
+	return res.Error
 }
 
 func (m *mgr) UnsetFavorite(ctx context.Context, userID *user.UserId, resourceInfo *provider.ResourceInfo) error {
-	user := appctx.ContextMustGetUser(ctx)
-	stmt, err := m.db.Prepare(`DELETE FROM cbox_metadata WHERE uid=? AND fileid_prefix=? AND fileid=? AND tag_key="fav"`)
-	if err != nil {
-		return err
+	log := appctx.GetLogger(ctx)
+
+	user, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return errtypes.UserRequired("favorites: error getting user from ctx")
 	}
 
-	res, err := stmt.Exec(user.Id.OpaqueId, resourceInfo.Id.StorageId, resourceInfo.Id.OpaqueId)
-	if err != nil {
-		return err
-	}
+	query := m.db.
+		Where("user_id = ?", user.Id.OpaqueId).
+		Where("inode = ?", resourceInfo.Id.OpaqueId).
+		Where("instance = ?", resourceInfo.Id.StorageId)
 
-	_, err = res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	return nil
+	res := query.Delete(&Favorite{})
+
+	log.Debug().Err(res.Error).Msgf("Delete favorite for (%s, %s) for user %s", resourceInfo.Id.OpaqueId, resourceInfo.Id.StorageId, user.Id.OpaqueId)
+
+	return res.Error
 }
