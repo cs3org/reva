@@ -61,7 +61,6 @@ type config struct {
 	PermissionsEndpoint           string `mapstructure:"permissionssvc"`
 	SpacesEndpoint                string `mapstructure:"spacessvc"`
 	CommitShareToStorageGrant     bool   `mapstructure:"commit_share_to_storage_grant"`
-	CommitShareToStorageRef       bool   `mapstructure:"commit_share_to_storage_ref"`
 	DisableHomeCreationOnLogin    bool   `mapstructure:"disable_home_creation_on_login"`
 	TransferSharedSecret          string `mapstructure:"transfer_shared_secret"`
 	TransferExpires               int64  `mapstructure:"transfer_expires"`
@@ -69,7 +68,6 @@ type config struct {
 	// ShareFolder is the location where to create shares in the recipient's storage provider.
 	ShareFolder              string                    `mapstructure:"share_folder"`
 	DataTransfersFolder      string                    `mapstructure:"data_transfers_folder"`
-	HomeMapping              string                    `mapstructure:"home_mapping"`
 	TokenManagers            map[string]map[string]any `mapstructure:"token_managers"`
 	EtagCacheTTL             int                       `mapstructure:"etag_cache_ttl"`
 	AllowedUserAgents        map[string][]string       `mapstructure:"allowed_user_agents"` // map[path][]user-agent
