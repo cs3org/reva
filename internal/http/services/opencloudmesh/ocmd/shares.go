@@ -243,11 +243,6 @@ func getAndResolveProtocols(ctx context.Context, p Protocols, ownerServer string
 		switch protocolName {
 		case "webdav":
 			uri = ocmProto.GetWebdavOptions().Uri
-			reqs := ocmProto.GetWebdavOptions().Requirements
-			if len(reqs) > 0 {
-				// we currently do not support any kind of requirement
-				return nil, false, errtypes.BadRequest(fmt.Sprintf("incoming OCM share with requirements %+v not supported at this endpoint", reqs))
-			}
 		case "webapp":
 			uri = ocmProto.GetWebappOptions().Uri
 		case "embedded":
