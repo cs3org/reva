@@ -34,15 +34,20 @@ func init() {
 }
 
 type config struct {
-	Prefix                     string `mapstructure:"prefix"`
-	GatewaySvc                 string `mapstructure:"gatewaysvc"                    validate:"required"`
-	ExposeRecipientDisplayName bool   `mapstructure:"expose_recipient_display_name"`
+	Prefix                     string                    `mapstructure:"prefix"`
+	GatewaySvc                 string                    `mapstructure:"gatewaysvc"                    validate:"required"`
+	ExposeRecipientDisplayName bool                      `mapstructure:"expose_recipient_display_name"`
+	TokenManager               string                    `mapstructure:"token_manager"`
+	TokenManagers              map[string]map[string]any `mapstructure:"token_managers"`
 }
 
 func (c *config) ApplyDefaults() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 	if c.Prefix == "" {
 		c.Prefix = "ocm"
+	}
+	if c.TokenManager == "" {
+		c.TokenManager = "jwt"
 	}
 }
 
@@ -87,9 +92,15 @@ func (s *svc) routerInit() error {
 		return err
 	}
 
+	tokenHandler := new(tokenHandler)
+	if err := tokenHandler.init(s.Conf); err != nil {
+		return err
+	}
+
 	s.router.Post("/shares", sharesHandler.CreateShare)
 	s.router.Post("/invite-accepted", invitesHandler.AcceptInvite)
 	s.router.Post("/notifications", notifHandler.Notifications)
+	s.router.Post("/token", tokenHandler.ExchangeToken)
 	return nil
 }
 
@@ -103,7 +114,7 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/invite-accepted", "/shares", "/notifications"}
+	return []string{"/invite-accepted", "/shares", "/notifications", "/token"}
 }
 
 func (s *svc) Handler() http.Handler {

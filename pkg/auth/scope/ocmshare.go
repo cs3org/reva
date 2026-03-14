@@ -103,21 +103,50 @@ func ocmShareScope(_ context.Context, scope *authpb.Scope, resource any, _ *zero
 
 func checkStorageRefForOCMShare(s *ocmv1beta1.Share, r *provider.Reference, ns string) bool {
 	if r.ResourceId != nil {
-		return utils.ResourceIDEqual(s.ResourceId, r.GetResourceId()) || strings.HasPrefix(r.ResourceId.OpaqueId, s.Token)
+		return utils.ResourceIDEqual(s.ResourceId, r.GetResourceId()) ||
+			strings.HasPrefix(r.ResourceId.OpaqueId, s.Id.GetOpaqueId()) ||
+			strings.HasPrefix(r.ResourceId.OpaqueId, s.Token)
 	}
 
 	// FIXME: the path here is hardcoded
-	return strings.HasPrefix(r.GetPath(), filepath.Join(ns, s.Token))
+	return strings.HasPrefix(r.GetPath(), filepath.Join(ns, s.Id.GetOpaqueId())) ||
+		strings.HasPrefix(r.GetPath(), filepath.Join(ns, s.Token))
 }
 
 func checkOCMShareRef(s *ocmv1beta1.Share, ref *ocmv1beta1.ShareReference) bool {
+	if id := ref.GetId(); id != nil {
+		return id.GetOpaqueId() == s.Id.GetOpaqueId()
+	}
 	return ref.GetToken() == s.Token
 }
 
 // AddOCMShareScope adds the scope to allow access to an OCM share and the share resource.
+// It carries Id, ResourceId, and Token for backward compatibility with legacy direct-secret flows.
 func AddOCMShareScope(share *ocmv1beta1.Share, role authpb.Role, scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
-	// Create a new "scope share" to only expose the required fields `ResourceId` and `Token` to the scope.
-	scopeShare := ocmv1beta1.Share{ResourceId: share.ResourceId, Token: share.Token}
+	scopeShare := ocmv1beta1.Share{ResourceId: share.ResourceId, Id: share.Id, Token: share.Token}
+	val, err := utils.MarshalProtoV1ToJSON(&scopeShare)
+	if err != nil {
+		return nil, err
+	}
+	if scopes == nil {
+		scopes = make(map[string]*authpb.Scope)
+	}
+
+	scopes["ocmshare:"+share.Id.OpaqueId] = &authpb.Scope{
+		Resource: &types.OpaqueEntry{
+			Decoder: "json",
+			Value:   val,
+		},
+		Role: role,
+	}
+	return scopes, nil
+}
+
+// AddCodeFlowOCMShareScope adds a shareId/resource-only scope used by code-flow exchanged JWTs.
+// Unlike AddOCMShareScope, it deliberately omits Token so the long-lived shared secret
+// is never embedded in exchanged-token scopes.
+func AddCodeFlowOCMShareScope(share *ocmv1beta1.Share, role authpb.Role, scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
+	scopeShare := ocmv1beta1.Share{ResourceId: share.ResourceId, Id: share.Id}
 	val, err := utils.MarshalProtoV1ToJSON(&scopeShare)
 	if err != nil {
 		return nil, err

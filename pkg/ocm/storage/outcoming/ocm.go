@@ -90,6 +90,27 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	return d, nil
 }
 
+func (d *driver) resolveByShareID(ctx context.Context, shareID string) (*ocmv1beta1.Share, error) {
+	shareRes, err := d.gateway.GetOCMShare(ctx, &ocmv1beta1.GetOCMShareRequest{
+		Ref: &ocmv1beta1.ShareReference{
+			Spec: &ocmv1beta1.ShareReference_Id{
+				Id: &ocmv1beta1.ShareId{OpaqueId: shareID},
+			},
+		},
+	})
+
+	switch {
+	case err != nil:
+		return nil, err
+	case shareRes.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
+		return nil, errtypes.NotFound(shareID)
+	case shareRes.Status.Code != rpcv1beta1.Code_CODE_OK:
+		return nil, errtypes.InternalError(shareRes.Status.Message)
+	}
+
+	return shareRes.Share, nil
+}
+
 func (d *driver) resolveToken(ctx context.Context, token string) (*ocmv1beta1.Share, error) {
 	shareRes, err := d.gateway.GetOCMShare(ctx, &ocmv1beta1.GetOCMShareRequest{
 		Ref: &ocmv1beta1.ShareReference{
@@ -134,31 +155,33 @@ func makeRelative(path string) string {
 
 func (d *driver) shareAndRelativePathFromRef(ctx context.Context, ref *provider.Reference) (*ocmv1beta1.Share, string, error) {
 	var (
-		token string
-		path  string
+		candidate string
+		relPath   string
 	)
 	if ref.ResourceId == nil {
-		// path is of type /token/<rel-path>
-		token, path = router.ShiftPath(ref.Path)
+		candidate, relPath = router.ShiftPath(ref.Path)
 	} else {
-		// opaque id is of type token:rel.path
 		s := strings.SplitN(ref.ResourceId.OpaqueId, ":", 2)
-		token = s[0]
+		candidate = s[0]
 		if len(s) == 2 {
-			path = s[1]
+			relPath = s[1]
 		}
-		path = filepath.Join(path, ref.Path)
+		relPath = filepath.Join(relPath, ref.Path)
 	}
-	path = makeRelative(path)
+	relPath = makeRelative(relPath)
 
 	log := appctx.GetLogger(ctx)
-	log.Info().Interface("ref", ref).Str("path", path).Str("token", token).Msg("Accessing OCM share")
+	log.Debug().Interface("ref", ref).Str("path", relPath).Msg("resolving OCM share")
 
-	share, err := d.resolveToken(ctx, token)
+	// try shareId lookup first, fall back to legacy token lookup
+	share, err := d.resolveByShareID(ctx, candidate)
+	if _, ok := err.(errtypes.IsNotFound); ok {
+		share, err = d.resolveToken(ctx, candidate)
+	}
 	if err != nil {
 		return nil, "", err
 	}
-	return share, path, nil
+	return share, relPath, nil
 }
 
 func (d *driver) translateOCMShareResourceToCS3Ref(ctx context.Context, resID *provider.ResourceId, rel string) (*provider.Reference, error) {
@@ -321,14 +344,12 @@ func getPermissionsFromShare(share *ocmv1beta1.Share) *provider.ResourcePermissi
 }
 
 func fixResourceInfo(info, shareInfo *provider.ResourceInfo, share *ocmv1beta1.Share, perms *provider.ResourcePermissions) {
-	// fix path
 	relPath := makeRelative(strings.TrimPrefix(info.Path, shareInfo.Path))
-	info.Path = filepath.Join("/", share.Token, relPath)
+	info.Path = filepath.Join("/", share.Id.OpaqueId, relPath)
 
 	// to enable collaborative apps, the fileid must be the same
 	// of the proxied storage
 
-	// fix permissions
 	info.PermissionSet = perms
 }
 

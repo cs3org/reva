@@ -28,6 +28,7 @@ import (
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/spaces"
@@ -252,63 +253,75 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				return
 			}
 
-			var token, ocmshare, mode string
-			// OCM v1.1+ (OCIS et al.).
-			if strings.Index(r.Header.Get("Authorization"), "Bearer") != -1 {
-				// Bearer token is the shared secret, path is /{shareId}/path/to/resource.
-				// Here we're keeping the simpler public-share model, where the internal routing is done via the token,
-				// therefore we strip the shareId and reinject the token.
-				// TODO(lopresti) We should instead perform a lookup via shareId and leave the token just for auth.
-				var relPath string
+			var token, ocmshare, authType, mode string
+			var relPath string
+			if strings.Contains(r.Header.Get("Authorization"), "Bearer") {
 				token = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 				ocmshare, relPath = router.ShiftPath(r.URL.Path)
-				r.URL.Path = filepath.Join("/", token, relPath)
+				if strings.Count(token, ".") == 2 {
+					authType = "ocmexchangedtoken"
+				} else {
+					authType = "ocmshares"
+				}
 				mode = "bearer"
 			} else {
 				username, _, ok := r.BasicAuth()
 				if ok {
-					// OCM v1.0 (OC10 and Nextcloud) uses basic auth for carrying the shared secret,
-					// and does not pass the shareId
 					token = username
-					r.URL.Path = filepath.Join("/", token, r.URL.Path)
+					relPath = strings.TrimPrefix(r.URL.Path, "/")
+					authType = "ocmshares"
 					mode = "legacy"
 				} else {
-					log.Info().Any("url", r.URL.Path).Any("headers", r.Header).Msg("unauthenticated remote OCM access")
+					log.Info().Any("url", r.URL.Path).Msg("unauthenticated remote OCM access")
 					w.WriteHeader(http.StatusUnauthorized)
 					return
 				}
 			}
 
-			authRes, err := handleOCMAuth(ctx, c, ocmshare, token)
+			authRes, err := handleOCMAuth(ctx, c, ocmshare, token, authType)
 			switch {
 			case err != nil:
 				log.Info().Err(err).Str("mode", mode).Msg("error authenticating remote OCM access")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			case authRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
-				log.Info().Str("token", token).Str("mode", mode).Msg("permission denied in remote OCM access")
+				log.Info().Str("mode", mode).Msg("permission denied in remote OCM access")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			case authRes.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
-				log.Info().Str("token", token).Str("mode", mode).Msg("unauthorized token in remote OCM access")
+				log.Info().Str("mode", mode).Msg("unauthorized in remote OCM access")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			case authRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
-				log.Info().Str("token", token).Str("mode", mode).Msg("invalid token in remote OCM access")
+				log.Info().Str("mode", mode).Msg("not found in remote OCM access")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			case authRes.Status.Code != rpc.Code_CODE_OK:
-				log.Error().Str("token", token).Str("mode", mode).Interface("status", authRes.Status).Msg("grpc auth request failed in remote OCM access")
+				log.Error().Str("mode", mode).Interface("status", authRes.Status).Msg("grpc auth request failed in remote OCM access")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
+
+			// For legacy Basic auth, recover the canonical shareId through a token lookup
+			// since Basic does not carry the shareId in the URL path.
+			if mode == "legacy" && ocmshare == "" {
+				shareRes, shareErr := c.GetOCMShareByToken(ctx, &ocmv1beta1.GetOCMShareByTokenRequest{Token: token})
+				if shareErr == nil && shareRes.GetStatus().GetCode() == rpc.Code_CODE_OK {
+					ocmshare = shareRes.GetShare().GetId().GetOpaqueId()
+				}
+			}
+
+			// Normalize both path targets to /{shareId}/relPath
+			normalizedPath := filepath.Join("/", ocmshare, relPath)
+			r.URL.Path = normalizedPath
+			ctx = context.WithValue(ctx, ctxKeyIncomingURL, normalizedPath)
 
 			ctx = appctx.ContextSetToken(ctx, authRes.Token)
 			ctx = appctx.ContextSetUser(ctx, authRes.User)
 			ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, authRes.Token)
 			ctx = context.WithValue(ctx, ctxOCM, true)
 
-			log.Info().Str("token", token).Str("mode", mode).Interface("user", authRes.User).Msg("remote OCM access authenticated")
+			log.Debug().Str("mode", mode).Str("ocmshare", ocmshare).Msg("remote OCM access authenticated")
 
 			r = r.WithContext(ctx)
 			h.OCMSharesHandler.Handler(s).ServeHTTP(w, r)
@@ -452,9 +465,9 @@ func handleSignatureAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient,
 	return c.Authenticate(ctx, &authenticateRequest)
 }
 
-func handleOCMAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, ocmshare, token string) (*gatewayv1beta1.AuthenticateResponse, error) {
+func handleOCMAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, ocmshare, token, authType string) (*gatewayv1beta1.AuthenticateResponse, error) {
 	return c.Authenticate(ctx, &gatewayv1beta1.AuthenticateRequest{
-		Type:         "ocmshares",
+		Type:         authType,
 		ClientId:     ocmshare,
 		ClientSecret: token,
 	})

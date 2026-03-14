@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2026 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,10 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocmshares
+// Package ocmsharecode validates OCM exchange codes for the /ocm/token endpoint.
+// It resolves the accepted user and returns a shareId/resource-only scope
+// suitable for minting exchanged JWTs (no long-lived shared secret in scope).
+package ocmsharecode
 
 import (
 	"context"
@@ -42,7 +45,7 @@ import (
 )
 
 func init() {
-	registry.Register("ocmshares", New)
+	registry.Register("ocmsharecode", New)
 }
 
 type manager struct {
@@ -58,7 +61,7 @@ func (c *config) ApplyDefaults() {
 	c.GatewayAddr = sharedconf.GetGatewaySVC(c.GatewayAddr)
 }
 
-// New creates a new ocmshares authentication manager.
+// New creates a new ocmsharecode authentication manager.
 func New(ctx context.Context, m map[string]any) (auth.Manager, error) {
 	var mgr manager
 	if err := mgr.Configure(m); err != nil {
@@ -69,62 +72,45 @@ func New(ctx context.Context, m map[string]any) (auth.Manager, error) {
 		return nil, err
 	}
 	mgr.gw = gw
-
 	return &mgr, nil
 }
 
 func (m *manager) Configure(ml map[string]any) error {
 	var c config
 	if err := cfg.Decode(ml, &c); err != nil {
-		return errors.Wrap(err, "ocmshares: error decoding config")
+		return errors.Wrap(err, "ocmsharecode: error decoding config")
 	}
 	m.c = &c
 	return nil
 }
 
-func (m *manager) Authenticate(ctx context.Context, ocmshare, token string) (*userpb.User, map[string]*authpb.Scope, error) {
-	log := appctx.GetLogger(ctx).With().Str("ocmshare", ocmshare).Logger()
+// Authenticate validates an exchange code (the existing long-lived OCM WebDAV shared secret)
+// and returns the accepted user with a shareId/resource-only scope for JWT minting.
+func (m *manager) Authenticate(ctx context.Context, shareID, code string) (*userpb.User, map[string]*authpb.Scope, error) {
+	log := appctx.GetLogger(ctx).With().Str("ocmshare", shareID).Logger()
+
 	shareRes, err := m.gw.GetOCMShareByToken(ctx, &ocm.GetOCMShareByTokenRequest{
-		Token: token,
+		Token: code,
 	})
 
 	switch {
 	case err != nil:
-		log.Error().Err(err).Msg("error getting ocm share by token")
+		log.Error().Err(err).Msg("error getting ocm share by code")
 		return nil, nil, err
 	case shareRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
-		log.Debug().Msg("ocm share not found")
 		return nil, nil, errtypes.NotFound(shareRes.Status.Message)
 	case shareRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
-		log.Debug().Msg("permission denied")
 		return nil, nil, errtypes.InvalidCredentials(shareRes.Status.Message)
 	case shareRes.Status.Code != rpc.Code_CODE_OK:
-		log.Error().Interface("status", shareRes.Status).Msg("got unexpected error in the grpc call to GetOCMShare")
 		return nil, nil, errtypes.InternalError(shareRes.Status.Message)
 	}
 
-	// validate OCM share id if given (OCM v1.1)
-	if ocmshare != "" && shareRes.GetShare().GetId().GetOpaqueId() != ocmshare {
-		log.Error().Str("requested_share", ocmshare).Str("share_from_provider", shareRes.GetShare().GetId().GetOpaqueId()).Msg("mismatching ocm share id for existing secret")
-		return nil, nil, errtypes.InvalidCredentials("invalid shared secret")
+	if shareID != "" && shareRes.GetShare().GetId().GetOpaqueId() != shareID {
+		return nil, nil, errtypes.InvalidCredentials("mismatching share id for exchange code")
 	}
 
-	// Reject direct-secret access to shares that require token exchange
-	for _, am := range shareRes.Share.AccessMethods {
-		if dav, ok := am.Term.(*ocm.AccessMethod_WebdavOptions); ok {
-			for _, r := range dav.WebdavOptions.Requirements {
-				if r == "must-exchange-token" {
-					return nil, nil, errtypes.InvalidCredentials("share requires token exchange")
-				}
-			}
-		}
-	}
-
-	// the user authenticated using the ocmshares authentication method
-	// is the recipient of the share
+	// Resolve the accepted user (same pattern as ocmshares)
 	u := shareRes.Share.Grantee.GetUserId()
-	log.Debug().Msgf("ocmshares found grantee '%s' at '%s'", u.OpaqueId, u.Idp)
-
 	d, err := utils.MarshalProtoV1ToJSON(shareRes.GetShare().Creator)
 	if err != nil {
 		return nil, nil, err
@@ -148,14 +134,15 @@ func (m *manager) Authenticate(ctx context.Context, ocmshare, token string) (*us
 	case err != nil:
 		return nil, nil, err
 	case userRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
-		return nil, nil, errtypes.NotFound(shareRes.Status.Message)
+		return nil, nil, errtypes.NotFound(userRes.Status.Message)
 	case userRes.Status.Code != rpc.Code_CODE_OK:
 		return nil, nil, errtypes.InternalError(userRes.Status.Message)
 	}
 
 	role, roleStr := getRole(shareRes.Share)
 
-	scope, err := scope.AddOCMShareScope(shareRes.Share, role, nil)
+	// Use code-flow scope: shareId/resource-only, no embedded shared secret
+	s, err := scope.AddCodeFlowOCMShareScope(shareRes.Share, role, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -170,15 +157,10 @@ func (m *manager) Authenticate(ctx context.Context, ocmshare, token string) (*us
 		},
 	}
 
-	return user, scope, nil
+	return user, s, nil
 }
 
 func getRole(s *ocm.Share) (authpb.Role, string) {
-	// TODO: consider to somehow merge the permissions from all the access methods?
-	// it's not clear infact which should be the role when webdav is editor role while
-	// webapp is only view mode for example
-	// this implementation considers only the simple case in which when a client creates
-	// a share with multiple access methods, the permissions are matching in all of them.
 	for _, m := range s.AccessMethods {
 		switch v := m.Term.(type) {
 		case *ocm.AccessMethod_WebdavOptions:

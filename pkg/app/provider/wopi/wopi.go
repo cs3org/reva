@@ -535,7 +535,11 @@ func getPathForExternalLink(ctx context.Context, scopes map[string]*authpb.Scope
 		token = pubShares[0].Token
 	case len(ocmShares) == 1:
 		resID = ocmShares[0].ResourceId
-		token = ocmShares[0].Token
+		if id := ocmShares[0].Id.GetOpaqueId(); id != "" {
+			token = id
+		} else {
+			token = ocmShares[0].Token
+		}
 	default:
 		return "", errors.New("Either one public xor OCM share is supported, lookups not implemented")
 	}
