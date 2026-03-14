@@ -102,14 +102,15 @@ func ocmShareScope(_ context.Context, scope *authpb.Scope, resource any, _ *zero
 }
 
 func checkStorageRefForOCMShare(s *ocmv1beta1.Share, r *provider.Reference, ns string) bool {
+	shareID := s.Id.GetOpaqueId()
 	if r.ResourceId != nil {
 		return utils.ResourceIDEqual(s.ResourceId, r.GetResourceId()) ||
-			strings.HasPrefix(r.ResourceId.OpaqueId, s.Id.GetOpaqueId()) ||
+			(shareID != "" && strings.HasPrefix(r.ResourceId.OpaqueId, shareID)) ||
 			strings.HasPrefix(r.ResourceId.OpaqueId, s.Token)
 	}
 
 	// FIXME: the path here is hardcoded
-	return strings.HasPrefix(r.GetPath(), filepath.Join(ns, s.Id.GetOpaqueId())) ||
+	return (shareID != "" && strings.HasPrefix(r.GetPath(), filepath.Join(ns, shareID))) ||
 		strings.HasPrefix(r.GetPath(), filepath.Join(ns, s.Token))
 }
 

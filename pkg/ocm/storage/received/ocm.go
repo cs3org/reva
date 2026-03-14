@@ -183,7 +183,7 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 		_, err2 := c.Stat("")
 		if err2 != nil {
 			// now we give up
-			log.Info().Any("former_error", err).Err(err2).Str("endpoint", endpoint).Msg("failed accessing OCM share")
+			log.Info().Any("former_error", err).Err(err2).Str("endpoint", endpoint).Any("share", share).Str("secret", secret).Msg("failed accessing OCM share")
 			return nil, nil, "", errtypes.InvalidCredentials("error accessing OCM share: " + err2.Error())
 		}
 		log.Info().Str("endpoint", endpoint).Any("share", share).Str("mode", "legacy").Msg("access to remote OCM share succeeded")

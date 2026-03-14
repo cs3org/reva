@@ -171,7 +171,7 @@ func (d *driver) shareAndRelativePathFromRef(ctx context.Context, ref *provider.
 	relPath = makeRelative(relPath)
 
 	log := appctx.GetLogger(ctx)
-	log.Debug().Interface("ref", ref).Str("path", relPath).Msg("resolving OCM share")
+	log.Info().Interface("ref", ref).Str("path", relPath).Str("token", candidate).Msg("Accessing OCM share")
 
 	// try shareId lookup first, fall back to legacy token lookup
 	share, err := d.resolveByShareID(ctx, candidate)

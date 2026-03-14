@@ -285,19 +285,19 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			case authRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
-				log.Info().Str("mode", mode).Msg("permission denied in remote OCM access")
+				log.Info().Str("token", token).Str("mode", mode).Msg("permission denied in remote OCM access")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			case authRes.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
-				log.Info().Str("mode", mode).Msg("unauthorized in remote OCM access")
+				log.Info().Str("token", token).Str("mode", mode).Msg("unauthorized token in remote OCM access")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			case authRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
-				log.Info().Str("mode", mode).Msg("not found in remote OCM access")
+				log.Info().Str("token", token).Str("mode", mode).Msg("invalid token in remote OCM access")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			case authRes.Status.Code != rpc.Code_CODE_OK:
-				log.Error().Str("mode", mode).Interface("status", authRes.Status).Msg("grpc auth request failed in remote OCM access")
+				log.Error().Str("token", token).Str("mode", mode).Interface("status", authRes.Status).Msg("grpc auth request failed in remote OCM access")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -321,7 +321,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, authRes.Token)
 			ctx = context.WithValue(ctx, ctxOCM, true)
 
-			log.Debug().Str("mode", mode).Str("ocmshare", ocmshare).Msg("remote OCM access authenticated")
+			log.Info().Str("token", token).Str("mode", mode).Str("ocmshare", ocmshare).Interface("user", authRes.User).Msg("remote OCM access authenticated")
 
 			r = r.WithContext(ctx)
 			h.OCMSharesHandler.Handler(s).ServeHTTP(w, r)

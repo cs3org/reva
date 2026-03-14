@@ -83,7 +83,7 @@ func (m *manager) Configure(ml map[string]any) error {
 }
 
 func (m *manager) Authenticate(ctx context.Context, ocmshare, token string) (*userpb.User, map[string]*authpb.Scope, error) {
-	log := appctx.GetLogger(ctx).With().Str("ocmshare", ocmshare).Logger()
+	log := appctx.GetLogger(ctx).With().Str("token", token).Str("ocmshare", ocmshare).Logger()
 	shareRes, err := m.gw.GetOCMShareByToken(ctx, &ocm.GetOCMShareByTokenRequest{
 		Token: token,
 	})
