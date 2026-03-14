@@ -57,8 +57,9 @@ func init() {
 }
 
 type cachedClient struct {
-	client *gowebdav.Client
-	share  *ocmpb.ReceivedShare
+	client     *gowebdav.Client
+	share      *ocmpb.ReceivedShare
+	authHeader string
 }
 
 type driver struct {
@@ -234,23 +235,28 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 
 		// build legacy client: try bearer (OCM v1.1+), then basic (OCM v1.0)
 		var c *gowebdav.Client
+		var authHdr string
+		bearerHdr := "Bearer " + secret
 		c = gowebdav.NewClient(endpoint, "", "")
-		c.SetHeader("Authorization", "Bearer "+secret)
+		c.SetHeader("Authorization", bearerHdr)
 		_, err = c.Stat("")
 		if err != nil {
+			basicHdr := "Basic " + base64.StdEncoding.EncodeToString([]byte(secret+":"))
 			c = gowebdav.NewClient(endpoint, "", "")
-			c.SetHeader("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(secret+":")))
+			c.SetHeader("Authorization", basicHdr)
 			_, err2 := c.Stat("")
 			if err2 != nil {
 				log.Info().Any("former_error", err).Err(err2).Str("endpoint", endpoint).Any("share", share).Str("secret", secret).Msg("failed accessing OCM share")
 				return nil, nil, "", errtypes.InvalidCredentials("error accessing OCM share: " + err2.Error())
 			}
+			authHdr = basicHdr
 			log.Info().Str("endpoint", endpoint).Any("share", share).Str("mode", "legacy").Msg("access to remote OCM share succeeded")
 		} else {
+			authHdr = bearerHdr
 			log.Info().Str("endpoint", endpoint).Any("share", share).Str("mode", "bearer").Msg("access to remote OCM share succeeded")
 		}
 
-		d.ccache.SetWithTTL(id.OpaqueId, &cachedClient{client: c, share: share}, time.Hour)
+		d.ccache.SetWithTTL(id.OpaqueId, &cachedClient{client: c, share: share, authHeader: authHdr}, time.Hour)
 		return c, share, rel, nil
 	}
 
@@ -560,7 +566,8 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 
 // uploadAuth returns the Authorization header value for an upload attempt.
 // For code-flow shares it performs a token exchange; for legacy shares it
-// returns Bearer <secret>.
+// returns the cached auth header (Bearer or Basic) if available, falling
+// back to Bearer when the cache has not yet been populated.
 func (d *driver) uploadAuth(ctx context.Context, share *ocmpb.ReceivedShare, endpoint, secret string, id *ocmpb.ShareId) (string, error) {
 	if requiresExchange(share.Protocols) {
 		tokenEndpoint, err := d.getTokenEndpoint(ctx, share)
@@ -572,6 +579,10 @@ func (d *driver) uploadAuth(ctx context.Context, share *ocmpb.ReceivedShare, end
 			return "", errors.Wrap(err, "token exchange failed for upload")
 		}
 		return "Bearer " + accessToken, nil
+	}
+	// legacy: use the auth header established during the first webdavClient probe
+	if entry, err := d.ccache.Get(id.OpaqueId); err == nil {
+		return entry.(*cachedClient).authHeader, nil
 	}
 	return "Bearer " + secret, nil
 }
