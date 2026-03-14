@@ -19,6 +19,7 @@
 package sql
 
 import (
+	"encoding/json"
 	"strconv"
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
@@ -30,6 +31,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
+	"gorm.io/datatypes"
 )
 
 func convertFromCS3OCMShareType(shareType ocm.RecipientType) model.OcmShareType {
@@ -184,13 +186,24 @@ func accessTypesIntToArray(at ocm.AccessType) []ocm.AccessType {
 	}
 }
 
+func requirementsFromJSON(r datatypes.JSON) []string {
+	if r == nil {
+		return nil
+	}
+	var reqs []string
+	if err := json.Unmarshal(r, &reqs); err != nil {
+		return nil
+	}
+	return reqs
+}
+
 func convertToCS3AccessMethod(m *model.OcmShareProtocol) *ocm.AccessMethod {
 	switch m.Type {
 	case model.WebDAVProtocol:
 		return share.NewWebDavAccessMethod(
 			permissions.RoleFromOCSPermissions(permissions.OcsPermissions(m.Permissions)).CS3ResourcePermissions(),
 			accessTypesIntToArray(ocm.AccessType(m.AccessTypes)),
-			[]string{}, // TODO persist requirements
+			requirementsFromJSON(m.Requirements),
 		)
 	case model.WebappProtocol:
 		return share.NewWebappAccessMethod(appprovider.ViewMode(m.Permissions))
@@ -206,7 +219,7 @@ func convertToCS3Protocol(p *model.OcmReceivedShareProtocol) *ocm.Protocol {
 				Permissions: permissions.RoleFromOCSPermissions(permissions.OcsPermissions(p.Permissions)).CS3ResourcePermissions(),
 			},
 			accessTypesIntToArray(ocm.AccessType(p.AccessTypes)),
-			[]string{}, // TODO persist requirements
+			requirementsFromJSON(p.Requirements),
 		)
 	case model.WebappProtocol:
 		return share.NewWebappProtocol(p.Uri, appprovider.ViewMode(p.Permissions))

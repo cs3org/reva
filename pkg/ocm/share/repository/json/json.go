@@ -374,7 +374,120 @@ func receivedShareEqual(ref *ocm.ShareReference, s *ocm.ReceivedShare) bool {
 }
 
 func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*ocm.Share, error) {
-	return nil, errtypes.NotSupported("not yet implemented")
+	m.Lock()
+	defer m.Unlock()
+
+	if err := m.load(); err != nil {
+		return nil, err
+	}
+
+	var s *ocm.Share
+	var err error
+	switch {
+	case ref.GetId() != nil:
+		s, err = m.getByID(ctx, ref.GetId())
+	case ref.GetKey() != nil:
+		s, err = m.getByKey(ctx, ref.GetKey())
+	case ref.GetToken() != "":
+		s, err = m.getByToken(ctx, ref.GetToken())
+	default:
+		return nil, errtypes.NotFound(ref.String())
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	if !utils.UserEqual(user.Id, s.Owner) && !utils.UserEqual(user.Id, s.Creator) {
+		return nil, share.ErrShareNotFound
+	}
+
+	for _, field := range f {
+		switch u := field.Field.(type) {
+		case *ocm.UpdateOCMShareRequest_UpdateField_Expiration:
+			s.Expiration = u.Expiration
+		case *ocm.UpdateOCMShareRequest_UpdateField_AccessMethods:
+			if err := mergeAccessMethod(s, u.AccessMethods); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	now := time.Now().UnixNano()
+	s.Mtime = &typespb.Timestamp{
+		Seconds: uint64(now / 1000000000),
+		Nanos:   uint32(now % 1000000000),
+	}
+	m.model.Shares[s.Id.OpaqueId] = cloneShare(s)
+
+	if err := m.save(); err != nil {
+		return nil, errors.Wrap(err, "error saving model")
+	}
+
+	return s, nil
+}
+
+func mergeAccessMethod(s *ocm.Share, incoming *ocm.AccessMethod) error {
+	switch inc := incoming.Term.(type) {
+	case *ocm.AccessMethod_WebdavOptions:
+		for _, am := range s.AccessMethods {
+			if existing, ok := am.Term.(*ocm.AccessMethod_WebdavOptions); ok {
+				if err := validateImmutableStringSlice(existing.WebdavOptions.Requirements, inc.WebdavOptions.Requirements); err != nil {
+					return err
+				}
+				if err := validateImmutableAccessTypes(existing.WebdavOptions.AccessTypes, inc.WebdavOptions.AccessTypes); err != nil {
+					return err
+				}
+				existing.WebdavOptions.Permissions = inc.WebdavOptions.Permissions
+				return nil
+			}
+		}
+		s.AccessMethods = append(s.AccessMethods, incoming)
+	case *ocm.AccessMethod_WebappOptions:
+		for _, am := range s.AccessMethods {
+			if existing, ok := am.Term.(*ocm.AccessMethod_WebappOptions); ok {
+				existing.WebappOptions.ViewMode = inc.WebappOptions.ViewMode
+				return nil
+			}
+		}
+		s.AccessMethods = append(s.AccessMethods, incoming)
+	}
+	return nil
+}
+
+func validateImmutableStringSlice(stored, incoming []string) error {
+	if len(incoming) == 0 {
+		return nil
+	}
+	if len(stored) == 0 {
+		return errtypes.BadRequest("requirements cannot be set on update; they are immutable after creation")
+	}
+	if len(stored) != len(incoming) {
+		return errtypes.BadRequest("requirements are immutable after creation")
+	}
+	for i := range stored {
+		if stored[i] != incoming[i] {
+			return errtypes.BadRequest("requirements are immutable after creation")
+		}
+	}
+	return nil
+}
+
+func validateImmutableAccessTypes(stored, incoming []ocm.AccessType) error {
+	if len(incoming) == 0 {
+		return nil
+	}
+	if len(stored) == 0 {
+		return errtypes.BadRequest("access_types cannot be set on update; they are immutable after creation")
+	}
+	if len(stored) != len(incoming) {
+		return errtypes.BadRequest("access_types are immutable after creation")
+	}
+	for i := range stored {
+		if stored[i] != incoming[i] {
+			return errtypes.BadRequest("access_types are immutable after creation")
+		}
+	}
+	return nil
 }
 
 func (m *mgr) ListShares(ctx context.Context, user *userpb.User, filters []*ocm.ListOCMSharesRequest_Filter) ([]*ocm.Share, error) {

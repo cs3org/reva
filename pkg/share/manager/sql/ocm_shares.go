@@ -20,6 +20,7 @@ package sql
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -28,10 +29,10 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
@@ -134,9 +135,11 @@ func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share) (*ocm.Share, error) 
 
 func storeWebDAVAccessMethod(tx *gorm.DB, shareID uint, o *ocm.AccessMethod_WebdavOptions) error {
 	accessMethod := &model.OcmShareProtocol{
-		OcmShareID:  uint(shareID),
-		Type:        model.WebDAVProtocol,
-		Permissions: int(permissions.OCSFromCS3Permission(o.WebdavOptions.Permissions)),
+		OcmShareID:   uint(shareID),
+		Type:         model.WebDAVProtocol,
+		Permissions:  int(permissions.OCSFromCS3Permission(o.WebdavOptions.Permissions)),
+		AccessTypes:  accessTypesToInt(o.WebdavOptions.AccessTypes),
+		Requirements: requirementsToJSON(o.WebdavOptions.Requirements),
 	}
 
 	err := tx.Create(accessMethod).Error
@@ -306,7 +309,9 @@ func storeWebDAVProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_WebdavOptio
 		Type:               model.WebDAVProtocol,
 		Uri:                o.WebdavOptions.Uri,
 		SharedSecret:       o.WebdavOptions.SharedSecret,
-		Permissions:       int(permissions.OCSFromCS3Permission(o.WebdavOptions.Permissions.Permissions)),
+		Permissions:        int(permissions.OCSFromCS3Permission(o.WebdavOptions.Permissions.Permissions)),
+		AccessTypes:        accessTypesToInt(o.WebdavOptions.AccessTypes),
+		Requirements:       requirementsToJSON(o.WebdavOptions.Requirements),
 	}
 
 	if err := tx.Create(protocol).Error; err != nil {
@@ -339,6 +344,25 @@ func storeEmbeddedProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_EmbeddedO
 		return err
 	}
 	return nil
+}
+
+func requirementsToJSON(reqs []string) datatypes.JSON {
+	if len(reqs) == 0 {
+		return nil
+	}
+	b, err := json.Marshal(reqs)
+	if err != nil {
+		return nil
+	}
+	return datatypes.JSON(b)
+}
+
+func accessTypesToInt(at []ocm.AccessType) model.OcmAccessType {
+	var bitmask model.OcmAccessType
+	for _, t := range at {
+		bitmask |= model.OcmAccessType(t)
+	}
+	return bitmask
 }
 
 func (m *mgr) ListReceivedShares(ctx context.Context, user *userpb.User, filters []*ocm.ListReceivedOCMSharesRequest_Filter) ([]*ocm.ReceivedShare, error) {
@@ -608,6 +632,15 @@ func (m *mgr) updateShareByID(ctx context.Context, user *userpb.User, id *ocm.Sh
 		return nil, errtypes.BadRequest("invalid share ID")
 	}
 
+	currentMethods, err := m.getAccessMethods(ctx, shareID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := validateImmutableFields(currentMethods, f...); err != nil {
+		return nil, err
+	}
+
 	updates, accessMethodUpdates, err := m.queriesUpdatesOnShare(ctx, id, f...)
 	if err != nil {
 		return nil, err
@@ -646,6 +679,77 @@ func (m *mgr) updateShareByID(ctx context.Context, user *userpb.User, id *ocm.Sh
 	}
 
 	return m.getByID(ctx, user, id)
+}
+
+// validateImmutableFields checks that a partial update does not attempt to
+// change Requirements or AccessTypes, which are immutable after creation.
+// Omitted or empty slices mean "preserve stored value" and are allowed.
+// Identical non-empty slices are a no-op. Different non-empty slices are rejected.
+func validateImmutableFields(currentMethods []*ocm.AccessMethod, f ...*ocm.UpdateOCMShareRequest_UpdateField) error {
+	for _, field := range f {
+		u, ok := field.Field.(*ocm.UpdateOCMShareRequest_UpdateField_AccessMethods)
+		if !ok {
+			continue
+		}
+		wdav, ok := u.AccessMethods.Term.(*ocm.AccessMethod_WebdavOptions)
+		if !ok {
+			continue
+		}
+
+		var storedReqs []string
+		var storedATs []ocm.AccessType
+		for _, m := range currentMethods {
+			if existing, ok := m.Term.(*ocm.AccessMethod_WebdavOptions); ok {
+				storedReqs = existing.WebdavOptions.Requirements
+				storedATs = existing.WebdavOptions.AccessTypes
+				break
+			}
+		}
+
+		if err := checkImmutableStringSlice(storedReqs, wdav.WebdavOptions.Requirements, "requirements"); err != nil {
+			return err
+		}
+		if err := checkImmutableAccessTypes(storedATs, wdav.WebdavOptions.AccessTypes, "access_types"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkImmutableStringSlice(stored, incoming []string, field string) error {
+	if len(incoming) == 0 {
+		return nil
+	}
+	if len(stored) == 0 {
+		return errtypes.BadRequest(field + " cannot be set on update; they are immutable after creation")
+	}
+	if len(stored) != len(incoming) {
+		return errtypes.BadRequest(field + " are immutable after creation")
+	}
+	for i := range stored {
+		if stored[i] != incoming[i] {
+			return errtypes.BadRequest(field + " are immutable after creation")
+		}
+	}
+	return nil
+}
+
+func checkImmutableAccessTypes(stored, incoming []ocm.AccessType, field string) error {
+	if len(incoming) == 0 {
+		return nil
+	}
+	if len(stored) == 0 {
+		return errtypes.BadRequest(field + " cannot be set on update; they are immutable after creation")
+	}
+	if len(stored) != len(incoming) {
+		return errtypes.BadRequest(field + " are immutable after creation")
+	}
+	for i := range stored {
+		if stored[i] != incoming[i] {
+			return errtypes.BadRequest(field + " are immutable after creation")
+		}
+	}
+	return nil
 }
 
 func (m *mgr) updateShareByKey(ctx context.Context, user *userpb.User, key *ocm.ShareKey, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*ocm.Share, error) {
