@@ -143,6 +143,27 @@ func protocolsEqual(p1, p2 Protocols) bool {
 	return reflect.DeepEqual(protocolsToMap(p1), protocolsToMap(p2))
 }
 
+func TestRequirementsRoundTripThroughToOCMProtocol(t *testing.T) {
+	w := &WebDAV{
+		SharedSecret: "secret",
+		Permissions:  []string{"read"},
+		Requirements: []string{"must-exchange-token"},
+		URI:          "https://example.org/dav",
+	}
+
+	proto := w.ToOCMProtocol()
+	wdav := proto.GetWebdavOptions()
+	if wdav == nil {
+		t.Fatal("expected WebDAV protocol options")
+	}
+	if len(wdav.Requirements) != 1 || wdav.Requirements[0] != "must-exchange-token" {
+		t.Errorf("requirements lost in ToOCMProtocol: got %v", wdav.Requirements)
+	}
+	if len(wdav.AccessTypes) == 0 {
+		t.Error("expected at least one access type (default remote)")
+	}
+}
+
 func TestMarshalProtocol(t *testing.T) {
 	tests := []struct {
 		in       Protocols
