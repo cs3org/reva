@@ -16,16 +16,15 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package appctx creates a context with useful
-// components attached to the context like loggers and
-// token managers.
 package trace
 
 import (
 	"context"
 	"net/http"
 
-	"github.com/cs3org/reva/v3/pkg/trace"
+	revatrace "github.com/cs3org/reva/v3/pkg/trace"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -35,34 +34,39 @@ func New() func(http.Handler) http.Handler {
 	return handler
 }
 
-func handler(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func handler(next http.Handler) http.Handler {
+	// otelhttp extracts W3C traceparent from the request, creates a span,
+	// and injects it into the request context before calling inner.
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		traceID, ctx := getTraceID(r)
-
-		// in case the http service will call a grpc service,
-		// we set the outgoing context so the trace information is
-		// passed through the two protocols.
 		ctx = metadata.AppendToOutgoingContext(ctx, "revad-grpc-trace-id", traceID)
-
-		r = r.WithContext(ctx)
-		h.ServeHTTP(w, r)
+		w.Header().Set("x-request-id", traceID)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+	return otelhttp.NewHandler(inner, "reva.http")
 }
 
 func getTraceID(r *http.Request) (string, context.Context) {
 	ctx := r.Context()
-	// try to get trace from context
-	traceID := trace.Get(ctx)
-	if traceID == "" {
-		// check if traceID is coming from header
-		traceID = r.Header.Get("X-Trace-ID")
-		if traceID == "" {
-			traceID = r.Header.Get("X-Request-ID")
-			if traceID == "" {
-				traceID = trace.Generate()
-			}
-		}
-		ctx = trace.Set(ctx, traceID)
+	// Preserve a trace ID already set in the context by a parent middleware.
+	if id := revatrace.Get(ctx); id != "" {
+		return id, ctx
 	}
-	return traceID, ctx
+	// Prefer the OTel span's trace ID (set by otelhttp above). This ensures
+	// the trace ID in logs matches the one visible in Jaeger.
+	if span := oteltrace.SpanFromContext(ctx); span.SpanContext().IsValid() {
+		id := span.SpanContext().TraceID().String()
+		return id, revatrace.Set(ctx, id)
+	}
+	// Accept X-Trace-ID / X-Request-ID headers from clients that don't
+	// send a W3C traceparent.
+	if traceID := r.Header.Get("X-Trace-ID"); traceID != "" {
+		return traceID, revatrace.Set(ctx, traceID)
+	}
+	if traceID := r.Header.Get("X-Request-ID"); traceID != "" {
+		return traceID, revatrace.Set(ctx, traceID)
+	}
+	// Otherwise, we generate one ourselves
+	traceID := revatrace.Generate()
+	return traceID, revatrace.Set(ctx, traceID)
 }

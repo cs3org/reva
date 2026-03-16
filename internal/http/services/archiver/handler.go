@@ -42,7 +42,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/downloader"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/walker"
-	"github.com/cs3org/reva/v3/pkg/trace"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	ua "github.com/mileusna/useragent"
 )
@@ -215,7 +214,6 @@ func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		// get the paths and/or the resources id from the query
 		ctx := r.Context()
-		rw.Header().Set("x-request-id", trace.Get(ctx))
 
 		log := appctx.GetLogger(ctx)
 		v := r.URL.Query()

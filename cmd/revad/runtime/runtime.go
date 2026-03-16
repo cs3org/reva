@@ -37,6 +37,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rhttp"
+	"github.com/cs3org/reva/v3/pkg/trace"
 
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/rserverless"
@@ -58,8 +59,9 @@ type Reva struct {
 	watcher    *grace.Watcher
 	lns        map[string]net.Listener
 
-	pidfile string
-	log     *zerolog.Logger
+	pidfile       string
+	log           *zerolog.Logger
+	traceShutdown func(context.Context) error
 }
 
 // Server represents a reva server (grpc or http).
@@ -109,6 +111,18 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 	}
 	initSharedConf(config)
 
+	traceShutdown, err := trace.InitProvider(ctx, trace.ProviderConfig{
+		Enabled:     config.Core.TracingEnabled,
+		Endpoint:    config.Core.TracingEndpoint,
+		Collector:   config.Core.TracingCollector,
+		ServiceName: config.Core.TracingServiceName,
+		Log:         log,
+	})
+	if err != nil {
+		watcher.Clean()
+		return nil, errors.Wrap(err, "error initializing tracing provider")
+	}
+
 	grpc := groupGRPCByAddress(config)
 	http := groupHTTPByAddress(config)
 	servers, err := newServers(ctx, grpc, http, listeners, log)
@@ -124,14 +138,15 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 	}
 
 	r := &Reva{
-		ctx:        ctx,
-		config:     config,
-		servers:    servers,
-		serverless: serverless,
-		watcher:    watcher,
-		lns:        listeners,
-		pidfile:    opts.PidFile,
-		log:        log,
+		ctx:           ctx,
+		config:        config,
+		servers:       servers,
+		serverless:    serverless,
+		watcher:       watcher,
+		lns:           listeners,
+		pidfile:       opts.PidFile,
+		log:           log,
+		traceShutdown: traceShutdown,
 	}
 	r.initConfigDumper()
 	return r, nil
@@ -290,6 +305,7 @@ func groupHTTPByAddress(cfg *config.Config) []*config.HTTP {
 
 // Start starts all the reva services and waits for a signal.
 func (r *Reva) Start() error {
+	defer r.traceShutdown(r.ctx)
 	defer r.watcher.Clean()
 	r.watcher.SetServers(list.Map(r.servers, func(s *Server) grace.Server { return s.server }))
 	r.watcher.SetServerless(r.serverless)
