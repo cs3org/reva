@@ -29,6 +29,7 @@ import (
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -195,5 +196,6 @@ func (s *Server) getInterceptors() []grpc.ServerOption {
 	return []grpc.ServerOption{
 		grpc.UnaryInterceptor(unaryChain),
 		grpc.StreamInterceptor(streamChain),
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 	}
 }

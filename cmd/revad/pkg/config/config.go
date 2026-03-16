@@ -73,10 +73,9 @@ type Core struct {
 	MaxCPUs            string `key:"max_cpus"             mapstructure:"max_cpus"`
 	ConfigDumpFile     string `key:"config_dump_file"     mapstructure:"config_dump_file"`
 	TracingEnabled     bool   `default:"true"             key:"tracing_enabled"               mapstructure:"tracing_enabled"`
-	TracingEndpoint    string `default:"localhost:6831"   key:"tracing_endpoint"              mapstructure:"tracing_endpoint"`
+	TracingEndpoint    string `                           key:"tracing_endpoint"              mapstructure:"tracing_endpoint"`
 	TracingCollector   string `key:"tracing_collector"    mapstructure:"tracing_collector"`
 	TracingServiceName string `key:"tracing_service_name" mapstructure:"tracing_service_name"`
-	TracingService     string `key:"tracing_service"      mapstructure:"tracing_service"`
 }
 
 // Vars holds the a set of configuration paramenters that
