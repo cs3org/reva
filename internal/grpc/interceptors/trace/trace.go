@@ -21,53 +21,47 @@ package trace
 import (
 	"context"
 
-	"github.com/cs3org/reva/v3/pkg/trace"
+	revatrace "github.com/cs3org/reva/v3/pkg/trace"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
 
+// getContext returns a context filled with a trace ID.
+// If a trace ID is already set, this context is returned as-is.
+// Otherwise, if a span is set, the trace id of this span is set.
+// Finally, we check for `revad-grpc-trace-id` in the context metadtata.
+// If none of these are set, a new trace ID is generated and set.
 func getContext(ctx context.Context) context.Context {
-	traceID := trace.Get(ctx)
-	if traceID != "" {
+	if id := revatrace.Get(ctx); id != "" {
 		return ctx
 	}
-
-	md, ok := metadata.FromIncomingContext(ctx)
-	if ok && md != nil {
-		if val, ok := md["revad-grpc-trace-id"]; ok {
-			if len(val) > 0 && val[0] != "" {
-				traceID = val[0]
-			}
+	if span := oteltrace.SpanFromContext(ctx); span.SpanContext().IsValid() {
+		return revatrace.Set(ctx, span.SpanContext().TraceID().String())
+	}
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		if val := md["revad-grpc-trace-id"]; len(val) > 0 && val[0] != "" {
+			return revatrace.Set(ctx, val[0])
 		}
 	}
-
-	if traceID == "" {
-		traceID = trace.Generate()
-	}
-
-	ctx = trace.Set(ctx, traceID)
-	return ctx
+	return revatrace.Set(ctx, revatrace.Generate())
 }
 
 // NewUnary returns a new unary interceptor that adds
 // trace information for the request.
 func NewUnary() grpc.UnaryServerInterceptor {
-	interceptor := func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		ctx = getContext(ctx)
-		return handler(ctx, req)
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		return handler(getContext(ctx), req)
 	}
-	return interceptor
 }
 
 // NewStream returns a new server stream interceptor
 // that adds trace information to the request.
 func NewStream() grpc.StreamServerInterceptor {
-	interceptor := func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := getContext(ss.Context())
-		wrapped := newWrappedServerStream(ctx, ss)
-		return handler(srv, wrapped)
+		return handler(srv, newWrappedServerStream(ctx, ss))
 	}
-	return interceptor
 }
 
 func newWrappedServerStream(ctx context.Context, ss grpc.ServerStream) *wrappedServerStream {

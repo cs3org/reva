@@ -100,16 +100,14 @@ func initGRPCInterceptors(conf map[string]map[string]any, unprotected []string, 
 		}
 		inter, prio, err := new(c)
 		if err != nil {
-			if err != nil {
-				return nil, nil, errors.Wrapf(err, "error creating streaming interceptor: %s,", name)
-			}
-			triple := &streamInterceptorTriple{
-				Name:        name,
-				Priority:    prio,
-				Interceptor: inter,
-			}
-			streamTriples = append(streamTriples, triple)
+			return nil, nil, errors.Wrapf(err, "error creating streaming interceptor: %s,", name)
 		}
+		triple := &streamInterceptorTriple{
+			Name:        name,
+			Priority:    prio,
+			Interceptor: inter,
+		}
+		streamTriples = append(streamTriples, triple)
 	}
 	// sort stream triples
 	sort.SliceStable(streamTriples, func(i, j int) bool {
