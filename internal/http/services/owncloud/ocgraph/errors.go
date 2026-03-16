@@ -6,14 +6,12 @@ import (
 
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/trace"
 	"google.golang.org/grpc/codes"
 	rpcstatus "google.golang.org/grpc/status"
 )
 
 func handleError(ctx context.Context, err error, w http.ResponseWriter) {
 	log := appctx.GetLogger(ctx)
-	w.Header().Set("x-request-id", trace.Get(ctx))
 	code := rpcstatus.Code(err)
 	if code == codes.Internal {
 		log.Error().Err(err).Msg("ocgraph error")
@@ -26,7 +24,6 @@ func handleError(ctx context.Context, err error, w http.ResponseWriter) {
 
 func handleCustomError(ctx context.Context, err error, status int, w http.ResponseWriter) {
 	log := appctx.GetLogger(ctx)
-	w.Header().Set("x-request-id", trace.Get(ctx))
 	if status == http.StatusInternalServerError {
 		log.Error().Err(err).Int("status", status).Msg("ocgraph error")
 	} else {
@@ -38,7 +35,6 @@ func handleCustomError(ctx context.Context, err error, status int, w http.Respon
 
 func handleBadRequest(ctx context.Context, err error, w http.ResponseWriter) {
 	log := appctx.GetLogger(ctx)
-	w.Header().Set("x-request-id", trace.Get(ctx))
 	w.WriteHeader(http.StatusBadRequest)
 	log.Info().Err(err).Msg("ocgraph error")
 	w.Write([]byte("Error: " + err.Error()))
@@ -53,8 +49,6 @@ func handleRpcStatus(ctx context.Context, status *rpcv1beta1.Status, msg string,
 	}
 
 	log.Error().Str("Status", status.String()).Msg(msg)
-
-	w.Header().Set("x-request-id", trace.Get(ctx))
 
 	code := int32(status.Code)
 	w.WriteHeader(GrpcCodeToHTTPStatus(codes.Code(code)))
