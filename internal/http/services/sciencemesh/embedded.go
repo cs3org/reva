@@ -29,7 +29,6 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocgraph"
 	"github.com/cs3org/reva/v3/internal/http/services/reqres"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/trace"
 	"google.golang.org/grpc/codes"
 	rpcstatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
@@ -147,7 +146,6 @@ func (h *embeddedHandler) ListEmbeddedShares(w http.ResponseWriter, r *http.Requ
 		"value": shares,
 		"state": CreateStateMapping(ctx, ocm_shares.Shares),
 	}); err != nil {
-		w.Header().Set("x-request-id", trace.Get(ctx))
 		code := rpcstatus.Code(err)
 		if code == codes.Internal {
 			log.Error().Err(err).Msg("embedded error")

@@ -29,7 +29,6 @@ import (
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
-	"github.com/cs3org/reva/v3/pkg/trace"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/go-chi/chi/v5"
 )
@@ -88,13 +87,9 @@ func (s *svc) initRouter() {
 	s.router = chi.NewRouter()
 
 	s.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		w.Header().Set("x-request-id", trace.Get(ctx))
 		w.WriteHeader(http.StatusNotFound)
 	})
 	s.router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		w.Header().Set("x-request-id", trace.Get(ctx))
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	})
 
