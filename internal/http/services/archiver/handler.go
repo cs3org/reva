@@ -148,7 +148,9 @@ func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, erro
 		case err != nil:
 			return nil, err
 		case resp.Status.Code == rpc.Code_CODE_NOT_FOUND:
-			return nil, errtypes.NotFound(id)
+			// we just want to ignore these files
+			//return nil, errtypes.NotFound(id)
+			continue
 		case resp.Status.Code != rpc.Code_CODE_OK:
 			return nil, errtypes.InternalError(fmt.Sprintf("error getting stats from %s", id))
 		}
