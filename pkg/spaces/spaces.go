@@ -27,3 +27,9 @@ const (
 )
 
 func (t SpaceType) AsString() string { return string(t) }
+
+// Opaque map keys for project filtering
+const (
+	// OpaqueKeyProjectStatus is the key used in request Opaque maps to specify project status filtering
+	OpaqueKeyProjectStatus = "project_status"
+)
