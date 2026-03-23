@@ -231,9 +231,10 @@ func (s *service) listSpacesByType(ctx context.Context, req *provider.ListStorag
 			}
 		}
 	case spaces.SpaceTypeProject:
+		projectStatus := getProjectStatus(req)
 		resp, err := s.projects.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{
 			Filters: req.Filters,
-		}, projects.ProjectStatusActive)
+		}, projectStatus)
 		if err != nil {
 			return nil, err
 		}
@@ -500,6 +501,24 @@ func isFilterByID(filters []*provider.ListStorageSpacesRequest_Filter) (string, 
 		}
 	}
 	return "", false
+}
+
+// getProjectStatus extracts the project status from the Opaque map.
+// If no status is provided, it returns ProjectStatusActive as default.
+func getProjectStatus(req *provider.ListStorageSpacesRequest) projects.ProjectStatus {
+	if req.Opaque != nil && req.Opaque.Map != nil {
+		if statusEntry, ok := req.Opaque.Map[spaces.OpaqueKeyProjectStatus]; ok {
+			status := projects.ProjectStatus(string(statusEntry.Value))
+			// Validate that it's a valid status
+			switch status {
+			case projects.ProjectStatusCreating, projects.ProjectStatusActive,
+				projects.ProjectStatusArchiving, projects.ProjectStatusArchived:
+				return status
+			}
+		}
+	}
+	// Default to active projects
+	return projects.ProjectStatusActive
 }
 
 func (s *service) Register(ss *grpc.Server) {
