@@ -333,6 +333,26 @@ func (m *ProjectsManager) UpdateProjectStatus(ctx context.Context, name string, 
 	return nil
 }
 
+// To be used only by cernboxcop.
+func (m *ProjectsManager) ListAllProjects(ctx context.Context, status projects.ProjectStatus, owner string) ([]*Project, error) {
+	var fetchedProjects []*Project
+	query := m.db.Model(&Project{})
+
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+
+	if owner != "" {
+		query = query.Where("owner = ?", owner)
+	}
+
+	res := query.Find(&fetchedProjects)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	return fetchedProjects, nil
+}
+
 func projectBelongsToUser(user *userpb.User, p *Project) (*provider.ResourcePermissions, bool) {
 	if user.Id.OpaqueId == p.Owner {
 		return permissions.NewManagerRole().CS3ResourcePermissions(), true
