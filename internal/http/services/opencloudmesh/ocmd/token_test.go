@@ -100,7 +100,7 @@ func postTokenForm(h *tokenHandler, grantType, code, clientID string) *httptest.
 
 func TestExchangeTokenValid(t *testing.T) {
 	h := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
-	rr := postTokenForm(h, "authorization_code", "code123", "share-abc")
+	rr := postTokenForm(h, "authorization_code", "code123", "nextcloud1.docker")
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusOK)
@@ -122,7 +122,7 @@ func TestExchangeTokenValid(t *testing.T) {
 
 func TestExchangeTokenOcmShareGrant(t *testing.T) {
 	h := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
-	rr := postTokenForm(h, "ocm_share", "code123", "share-abc")
+	rr := postTokenForm(h, "ocm_share", "code123", "nextcloud1.docker")
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusOK)
@@ -131,7 +131,7 @@ func TestExchangeTokenOcmShareGrant(t *testing.T) {
 
 func TestExchangeTokenUnsupportedGrant(t *testing.T) {
 	h := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
-	rr := postTokenForm(h, "client_credentials", "code123", "share-abc")
+	rr := postTokenForm(h, "client_credentials", "code123", "nextcloud1.docker")
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusBadRequest)
@@ -147,7 +147,7 @@ func TestExchangeTokenUnsupportedGrant(t *testing.T) {
 
 func TestExchangeTokenEmptyGrant(t *testing.T) {
 	h := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
-	rr := postTokenForm(h, "", "code123", "share-abc")
+	rr := postTokenForm(h, "", "code123", "nextcloud1.docker")
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusBadRequest)
@@ -156,7 +156,7 @@ func TestExchangeTokenEmptyGrant(t *testing.T) {
 
 func TestExchangeTokenNotFound(t *testing.T) {
 	h := setupTokenHandler(t, rpc.Code_CODE_NOT_FOUND, nil)
-	rr := postTokenForm(h, "authorization_code", "bad-code", "share-abc")
+	rr := postTokenForm(h, "authorization_code", "bad-code", "nextcloud1.docker")
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusBadRequest)
@@ -172,7 +172,7 @@ func TestExchangeTokenNotFound(t *testing.T) {
 
 func TestExchangeTokenPermissionDenied(t *testing.T) {
 	h := setupTokenHandler(t, rpc.Code_CODE_PERMISSION_DENIED, nil)
-	rr := postTokenForm(h, "authorization_code", "bad-code", "share-abc")
+	rr := postTokenForm(h, "authorization_code", "bad-code", "nextcloud1.docker")
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusBadRequest)
@@ -186,7 +186,7 @@ func TestExchangeTokenPermissionDenied(t *testing.T) {
 
 func TestExchangeTokenGatewayError(t *testing.T) {
 	h := setupTokenHandler(t, rpc.Code_CODE_OK, errors.New("connection refused"))
-	rr := postTokenForm(h, "authorization_code", "code123", "share-abc")
+	rr := postTokenForm(h, "authorization_code", "code123", "nextcloud1.docker")
 
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusInternalServerError)

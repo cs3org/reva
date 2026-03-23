@@ -19,6 +19,7 @@
 package ocm
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -29,6 +30,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/studio-b12/gowebdav"
 )
 
@@ -193,8 +195,8 @@ func (f *fakeFileInfo) ModTime() time.Time {
 	}
 	return f.modTime
 }
-func (f *fakeFileInfo) IsDir() bool  { return f.isDir }
-func (f *fakeFileInfo) Sys() any     { return nil }
+func (f *fakeFileInfo) IsDir() bool { return f.isDir }
+func (f *fakeFileInfo) Sys() any    { return nil }
 
 func testReceivedShare(id string, isFile bool) *ocmpb.ReceivedShare {
 	srt := ocmpb.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER
@@ -208,6 +210,15 @@ func testReceivedShare(id string, isFile bool) *ocmpb.ReceivedShare {
 			OpaqueId: "creator",
 			Idp:      "sender.example.com",
 		},
+		Grantee: &provider.Grantee{
+			Type: provider.GranteeType_GRANTEE_TYPE_USER,
+			Id: &provider.Grantee_UserId{
+				UserId: &userpb.UserId{
+					OpaqueId: "receiver",
+					Idp:      "nextcloud1.docker",
+				},
+			},
+		},
 		SharedResourceType: srt,
 		Protocols: []*ocmpb.Protocol{
 			{Term: &ocmpb.Protocol_WebdavOptions{WebdavOptions: &ocmpb.WebDAVProtocol{
@@ -215,13 +226,44 @@ func testReceivedShare(id string, isFile bool) *ocmpb.ReceivedShare {
 				SharedSecret: "secret",
 				Permissions: &ocmpb.SharePermissions{
 					Permissions: &provider.ResourcePermissions{
-						Stat:                  true,
-						InitiateFileDownload:  true,
-						InitiateFileUpload:    true,
+						Stat:                 true,
+						InitiateFileDownload: true,
+						InitiateFileUpload:   true,
 					},
 				},
 			}}},
 		},
+	}
+}
+
+func TestReceiverClientIDPrefersContextUserIDP(t *testing.T) {
+	share := testReceivedShare("share-abc", false)
+	ctx := appctx.ContextSetUser(context.Background(), &userpb.User{
+		Id: &userpb.UserId{OpaqueId: "local-user", Idp: "local-context.example"},
+	})
+
+	got := receiverClientID(ctx, share)
+	if got != "local-context.example" {
+		t.Errorf("got %q, want local-context.example", got)
+	}
+}
+
+func TestReceiverClientIDFallsBackToShareGranteeIDP(t *testing.T) {
+	share := testReceivedShare("share-abc", false)
+
+	got := receiverClientID(context.Background(), share)
+	if got != "nextcloud1.docker" {
+		t.Errorf("got %q, want nextcloud1.docker", got)
+	}
+}
+
+func TestReceiverClientIDReturnsEmptyWhenUnavailable(t *testing.T) {
+	share := testReceivedShare("share-abc", false)
+	share.Grantee = nil
+
+	got := receiverClientID(context.Background(), share)
+	if got != "" {
+		t.Errorf("got %q, want empty string", got)
 	}
 }
 

@@ -71,9 +71,9 @@ type driver struct {
 }
 
 type config struct {
-	GatewaySVC       string `mapstructure:"gatewaysvc"`
-	OCMClientTimeout int    `mapstructure:"ocm_timeout"`
-	OCMClientInsecure bool  `mapstructure:"ocm_insecure"`
+	GatewaySVC        string `mapstructure:"gatewaysvc"`
+	OCMClientTimeout  int    `mapstructure:"ocm_timeout"`
+	OCMClientInsecure bool   `mapstructure:"ocm_insecure"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -212,6 +212,25 @@ func isWebDAV401(err error) bool {
 	return gowebdav.IsErrCode(err, http.StatusUnauthorized)
 }
 
+func receiverClientID(ctx context.Context, share *ocmpb.ReceivedShare) string {
+	if u, ok := appctx.ContextGetUser(ctx); ok && u.GetId() != nil && u.GetId().GetIdp() != "" {
+		return u.GetId().GetIdp()
+	}
+	if share != nil && share.GetGrantee() != nil && share.GetGrantee().GetUserId() != nil {
+		return share.GetGrantee().GetUserId().GetIdp()
+	}
+	return ""
+}
+
+func (d *driver) exchangeAccessToken(ctx context.Context, share *ocmpb.ReceivedShare, tokenEndpoint, secret string) (string, error) {
+	clientID := receiverClientID(ctx, share)
+	accessToken, _, err := d.ocmClient.ExchangeToken(ctx, tokenEndpoint, secret, clientID)
+	if err != nil {
+		return "", err
+	}
+	return accessToken, nil
+}
+
 func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*gowebdav.Client, *ocmpb.ReceivedShare, string, error) {
 	log := appctx.GetLogger(ctx)
 	id, rel := shareInfoFromReference(ref)
@@ -265,7 +284,7 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 	if err != nil {
 		return nil, nil, "", errors.Wrap(err, "could not discover token endpoint for code-flow share")
 	}
-	accessToken, _, err := d.ocmClient.ExchangeToken(ctx, tokenEndpoint, secret, id.OpaqueId)
+	accessToken, err := d.exchangeAccessToken(ctx, share, tokenEndpoint, secret)
 	if err != nil {
 		return nil, nil, "", errors.Wrap(err, "token exchange failed")
 	}
@@ -574,7 +593,7 @@ func (d *driver) uploadAuth(ctx context.Context, share *ocmpb.ReceivedShare, end
 		if err != nil {
 			return "", errors.Wrap(err, "could not discover token endpoint for upload")
 		}
-		accessToken, _, err := d.ocmClient.ExchangeToken(ctx, tokenEndpoint, secret, id.OpaqueId)
+		accessToken, err := d.exchangeAccessToken(ctx, share, tokenEndpoint, secret)
 		if err != nil {
 			return "", errors.Wrap(err, "token exchange failed for upload")
 		}

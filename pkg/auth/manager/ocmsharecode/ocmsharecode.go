@@ -86,8 +86,10 @@ func (m *manager) Configure(ml map[string]any) error {
 
 // Authenticate validates an exchange code (the existing long-lived OCM WebDAV shared secret)
 // and returns the accepted user with a shareId/resource-only scope for JWT minting.
-func (m *manager) Authenticate(ctx context.Context, shareID, code string) (*userpb.User, map[string]*authpb.Scope, error) {
-	log := appctx.GetLogger(ctx).With().Str("ocmshare", shareID).Logger()
+// The generic auth interface passes OAuth client_id as the first argument. In OCM code flow
+// that identifies the receiving server, so share lookup must come from the exchanged code.
+func (m *manager) Authenticate(ctx context.Context, clientID, code string) (*userpb.User, map[string]*authpb.Scope, error) {
+	log := appctx.GetLogger(ctx).With().Str("client_id", clientID).Logger()
 
 	shareRes, err := m.gw.GetOCMShareByToken(ctx, &ocm.GetOCMShareByTokenRequest{
 		Token: code,
@@ -103,10 +105,6 @@ func (m *manager) Authenticate(ctx context.Context, shareID, code string) (*user
 		return nil, nil, errtypes.InvalidCredentials(shareRes.Status.Message)
 	case shareRes.Status.Code != rpc.Code_CODE_OK:
 		return nil, nil, errtypes.InternalError(shareRes.Status.Message)
-	}
-
-	if shareID != "" && shareRes.GetShare().GetId().GetOpaqueId() != shareID {
-		return nil, nil, errtypes.InvalidCredentials("mismatching share id for exchange code")
 	}
 
 	// Resolve the accepted user (same pattern as ocmshares)

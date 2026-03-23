@@ -32,12 +32,18 @@ func (s *svc) doStatus(w http.ResponseWriter, r *http.Request) {
 		Installed:      true,
 		Maintenance:    false,
 		NeedsDBUpgrade: false,
-		Version:        "10.0.11.5", // TODO(jfd) make build/config determined
-		VersionString:  "10.0.11",
+		Version:        "",
+		VersionString:  "",
 		Edition:        "community",
 		ProductName:    "reva",
 		Product:        "reva",
 	}
+	log.Debug().
+		Str("method", r.Method).
+		Str("path", r.URL.Path).
+		Bool("has_version", status.Version != "").
+		Str("product", status.Product).
+		Msg("status.php served non-owncloud status payload")
 
 	statusJSON, err := json.MarshalIndent(status, "", "    ")
 	if err != nil {

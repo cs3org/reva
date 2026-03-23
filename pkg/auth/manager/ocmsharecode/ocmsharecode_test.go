@@ -96,7 +96,7 @@ func TestAuthenticateValidCode(t *testing.T) {
 		gw: &mockGW{share: s, shareErr: rpc.Code_CODE_OK, remoteErr: rpc.Code_CODE_OK},
 	}
 
-	user, scopes, err := mgr.Authenticate(context.Background(), "share-abc", "code123")
+	user, scopes, err := mgr.Authenticate(context.Background(), "nextcloud1.docker", "code123")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,19 +117,19 @@ func TestAuthenticateValidCode(t *testing.T) {
 	}
 }
 
-func TestAuthenticateMismatchedShareID(t *testing.T) {
+func TestAuthenticateClientIDDoesNotNeedShareIDMatch(t *testing.T) {
 	s := testShare("share-abc", "code123")
 	mgr := &manager{
 		c:  &config{},
 		gw: &mockGW{share: s, shareErr: rpc.Code_CODE_OK, remoteErr: rpc.Code_CODE_OK},
 	}
 
-	_, _, err := mgr.Authenticate(context.Background(), "different-share", "code123")
-	if err == nil {
-		t.Fatal("expected error for mismatched shareId")
+	user, _, err := mgr.Authenticate(context.Background(), "nextcloud1.docker", "code123")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, ok := err.(errtypes.InvalidCredentials); !ok {
-		t.Errorf("expected InvalidCredentials, got %T: %v", err, err)
+	if user.Id.OpaqueId != "accepted-user" {
+		t.Errorf("user: got %s, want accepted-user", user.Id.OpaqueId)
 	}
 }
 
