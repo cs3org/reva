@@ -21,7 +21,6 @@ package spaces
 import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
 type ListStorageSpaceFilter struct {
@@ -80,24 +79,4 @@ func (f ListStorageSpaceFilter) ByUser(user *userpb.UserId) ListStorageSpaceFilt
 
 func (f ListStorageSpaceFilter) List() []*providerpb.ListStorageSpacesRequest_Filter {
 	return f.filters
-}
-
-// WithProjectStatus sets the project status in the Opaque map of a ListStorageSpacesRequest.
-// Valid status values are: "creating", "active", "archiving", "archived".
-// If no status is set, the default is "active".
-func WithProjectStatus(req *providerpb.ListStorageSpacesRequest, status string) *providerpb.ListStorageSpacesRequest {
-	if req.Opaque == nil {
-		req.Opaque = &types.Opaque{
-			Map: make(map[string]*types.OpaqueEntry),
-		}
-	} else if req.Opaque.Map == nil {
-		req.Opaque.Map = make(map[string]*types.OpaqueEntry)
-	}
-
-	req.Opaque.Map[OpaqueKeyProjectStatus] = &types.OpaqueEntry{
-		Decoder: "plain",
-		Value:   []byte(status),
-	}
-
-	return req
 }
