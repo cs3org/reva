@@ -545,27 +545,6 @@ func (fs *localfs) GetPathByID(ctx context.Context, ref *provider.ResourceId) (s
 	return url.QueryUnescape(strings.TrimPrefix(ref.OpaqueId, "fileid-"+layout))
 }
 
-// // GetPathByID returns the path pointed by the file id
-// // In this implementation the file id is in the form `fileid-url_encoded_path`.
-// // When the id is exactly "fileid-<layout>" (space root), return "/<layout>" so
-// // that resolve() produces paths under the user home (e.g. /einstein/filename).
-// func (fs *localfs) GetPathByID(ctx context.Context, ref *provider.ResourceId) (string, error) {
-// 	var layout string
-// 	if !fs.conf.DisableHome {
-// 		var err error
-// 		layout, err = fs.GetHome(ctx)
-// 		if err != nil {
-// 			return "", err
-// 		}
-// 	}
-// 	prefix := "fileid-" + layout
-// 	suffix := strings.TrimPrefix(ref.OpaqueId, prefix)
-// 	if suffix == "" {
-// 		return path.Join("/", layout), nil
-// 	}
-// 	return url.QueryUnescape(suffix), nil
-// }
-
 func (fs *localfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
 	return errtypes.NotSupported("localfs: deny grant not supported")
 }
@@ -1097,7 +1076,7 @@ func (fs *localfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []
 		Bool("ref_has_resource_id", ref.ResourceId != nil).
 		Str("resolved", fn).
 		Str("wrapped", wrapped).
-		Msg("localfs: GetMD resolve+wrap (debug 77067f)")
+		Msg("localfs: GetMD resolve+wrap")
 	fn = wrapped
 	md, err := os.Stat(fn)
 	if err != nil {
