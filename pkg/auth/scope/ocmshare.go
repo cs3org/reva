@@ -101,17 +101,47 @@ func ocmShareScope(_ context.Context, scope *authpb.Scope, resource any, _ *zero
 	return false, nil
 }
 
+// pathUnderOCMPrefix reports whether path is the namespace prefix or a child under it.
+// We require a path segment after the prefix (path == prefix or path starts with prefix+"/")
+// so that names that merely start with the prefix string do not match. Example: /ocm-m6-proof.txt
+// must not match prefix /ocm; only /ocm or /ocm/... may match.
+func pathUnderOCMPrefix(path, prefix string) bool {
+	if path == prefix {
+		return true
+	}
+	return strings.HasPrefix(path, prefix+"/")
+}
+
+// checkStorageRefForOCMShare reports whether ref refers to a resource inside this OCM share.
+// Flow: ref is either by ResourceId (storage opaque id) or by path. We allow only when the
+// ref clearly belongs to this share. Used at gRPC (storage) scope check; for path refs at
+// space root we get ref.Path = "/<filename>", so pathUnderOCMPrefix avoids matching "/ocm-*.txt".
+// Works together with AddOwnerScope in ocmsharecode: after we correctly return false here,
+// the token must have user scope (from AddOwnerScope) so the request is still allowed.
 func checkStorageRefForOCMShare(s *ocmv1beta1.Share, r *provider.Reference, ns string) bool {
 	shareID := s.Id.GetOpaqueId()
+
+	// Ref by ResourceId: allow only if ref equals share resource, or ref id is scoped to this share.
 	if r.ResourceId != nil {
-		return utils.ResourceIDEqual(s.ResourceId, r.GetResourceId()) ||
-			(shareID != "" && strings.HasPrefix(r.ResourceId.OpaqueId, shareID)) ||
-			strings.HasPrefix(r.ResourceId.OpaqueId, s.Token)
+		if utils.ResourceIDEqual(s.ResourceId, r.GetResourceId()) {
+			return true
+		}
+		if shareID != "" && strings.HasPrefix(r.ResourceId.OpaqueId, shareID) {
+			return true
+		}
+		// Token prefix: only when share has a token. Code-flow scope omits token; in Go
+		// strings.HasPrefix(id, "") is true for any id, so we must not use token match when empty.
+		if s.Token != "" && strings.HasPrefix(r.ResourceId.OpaqueId, s.Token) {
+			return true
+		}
+		return false
 	}
 
-	// FIXME: the path here is hardcoded
-	return (shareID != "" && strings.HasPrefix(r.GetPath(), filepath.Join(ns, shareID))) ||
-		strings.HasPrefix(r.GetPath(), filepath.Join(ns, s.Token))
+	// Ref by path: allow only if path is under this share in the OCM namespace (ns/shareID or ns/token).
+	path := r.GetPath()
+	underShareID := shareID != "" && pathUnderOCMPrefix(path, filepath.Join(ns, shareID))
+	underToken := pathUnderOCMPrefix(path, filepath.Join(ns, s.Token))
+	return underShareID || underToken
 }
 
 func checkOCMShareRef(s *ocmv1beta1.Share, ref *ocmv1beta1.ShareReference) bool {

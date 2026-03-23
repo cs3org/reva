@@ -95,6 +95,42 @@ func TestCheckStorageRefEmptyShareIDDoesNotMatchAll(t *testing.T) {
 	}
 }
 
+func TestCheckStorageRefPathPrefixOcmInFilename(t *testing.T) {
+	// Regression: path /ocm-m6-proof.txt was mistaken for OCM share because
+	// HasPrefix("/ocm-m6-proof.txt", "/ocm") was true.
+	s := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share123"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
+		Token:      "tok",
+	}
+
+	for _, path := range []string{"/ocm-m6-proof.txt", "/ocm-foo", "/ocm"} {
+		ref := &provider.Reference{Path: path}
+		if checkStorageRefForOCMShare(s, ref, "/ocm") {
+			t.Errorf("path %q must not match OCM share (filename/folder starting with ocm)", path)
+		}
+	}
+}
+
+func TestCheckStorageRefResourceIdEmptyToken(t *testing.T) {
+	// Regression: code-flow scope has empty Token; strings.HasPrefix(anyId, "") is true in Go,
+	// so refs with ResourceId (e.g. personal file ocm-whatever.txt) must not match.
+	s := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share123"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "share-res"},
+		Token:      "", // code-flow scope omits token
+	}
+	ref := &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "other", OpaqueId: "ocm-whatever-file-id"}}
+	if checkStorageRefForOCMShare(s, ref, "/ocm") {
+		t.Error("ref with ResourceId must not match OCM share when share has empty Token")
+	}
+	// Exact ResourceId match should still allow
+	refSame := &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "share-res"}}
+	if !checkStorageRefForOCMShare(s, refSame, "/ocm") {
+		t.Error("ref matching share ResourceId should match")
+	}
+}
+
 func TestCheckOCMShareRefByID(t *testing.T) {
 	s := &ocmv1beta1.Share{
 		Id:    &ocmv1beta1.ShareId{OpaqueId: "share123"},
