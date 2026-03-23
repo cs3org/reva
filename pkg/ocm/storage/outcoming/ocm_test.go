@@ -19,12 +19,16 @@
 package outcoming
 
 import (
+	"context"
 	"testing"
 
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	authscope "github.com/cs3org/reva/v3/pkg/auth/scope"
 )
 
 func TestMakeRelative(t *testing.T) {
@@ -211,5 +215,38 @@ func TestGetDownloadProtocol(t *testing.T) {
 	_, _, ok = getDownloadProtocol(protocols, []string{"nonexistent"})
 	if ok {
 		t.Error("should not find nonexistent protocol")
+	}
+}
+
+func TestShareIDFromContextScopes(t *testing.T) {
+	share := &ocmv1beta1.Share{Id: &ocmv1beta1.ShareId{OpaqueId: "share-from-scope"}}
+	scopes, err := authscope.AddCodeFlowOCMShareScope(share, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		t.Fatalf("AddCodeFlowOCMShareScope returned error: %v", err)
+	}
+
+	ctx := appctx.ContextSetScopes(context.Background(), scopes)
+	got := shareIDFromContextScopes(ctx)
+	if got != "share-from-scope" {
+		t.Fatalf("shareIDFromContextScopes() = %q, want %q", got, "share-from-scope")
+	}
+}
+
+func TestShareIDFromContextScopesRequiresSingleOCMShare(t *testing.T) {
+	shareA := &ocmv1beta1.Share{Id: &ocmv1beta1.ShareId{OpaqueId: "share-a"}}
+	shareB := &ocmv1beta1.Share{Id: &ocmv1beta1.ShareId{OpaqueId: "share-b"}}
+
+	scopes, err := authscope.AddCodeFlowOCMShareScope(shareA, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		t.Fatalf("AddCodeFlowOCMShareScope(shareA) returned error: %v", err)
+	}
+	scopes, err = authscope.AddCodeFlowOCMShareScope(shareB, authpb.Role_ROLE_VIEWER, scopes)
+	if err != nil {
+		t.Fatalf("AddCodeFlowOCMShareScope(shareB) returned error: %v", err)
+	}
+
+	ctx := appctx.ContextSetScopes(context.Background(), scopes)
+	if got := shareIDFromContextScopes(ctx); got != "" {
+		t.Fatalf("shareIDFromContextScopes() = %q, want empty string", got)
 	}
 }

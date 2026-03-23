@@ -33,6 +33,7 @@ import (
 
 	"github.com/ReneKroon/ttlcache/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -222,8 +223,31 @@ func receiverClientID(ctx context.Context, share *ocmpb.ReceivedShare) string {
 	return ""
 }
 
-func (d *driver) exchangeAccessToken(ctx context.Context, share *ocmpb.ReceivedShare, tokenEndpoint, secret string) (string, error) {
+func receiverClientIDWithLookup(ctx context.Context, share *ocmpb.ReceivedShare, lookup func(context.Context, *userpb.UserId) string) string {
 	clientID := receiverClientID(ctx, share)
+	if clientID == "" && lookup != nil && share != nil && share.GetGrantee() != nil && share.GetGrantee().GetUserId() != nil {
+		clientID = lookup(ctx, share.GetGrantee().GetUserId())
+	}
+	return clientID
+}
+
+func (d *driver) lookupReceiverUserIDP(ctx context.Context, userID *userpb.UserId) string {
+	if d == nil || d.gateway == nil || userID == nil || userID.GetOpaqueId() == "" {
+		return ""
+	}
+
+	res, err := d.gateway.GetUser(ctx, &userpb.GetUserRequest{
+		UserId:                 userID,
+		SkipFetchingUserGroups: true,
+	})
+	if err != nil || res.GetStatus().GetCode() != rpc.Code_CODE_OK || res.GetUser() == nil || res.GetUser().GetId() == nil {
+		return ""
+	}
+	return res.GetUser().GetId().GetIdp()
+}
+
+func (d *driver) exchangeAccessToken(ctx context.Context, share *ocmpb.ReceivedShare, tokenEndpoint, secret string) (string, error) {
+	clientID := receiverClientIDWithLookup(ctx, share, d.lookupReceiverUserIDP)
 	accessToken, _, err := d.ocmClient.ExchangeToken(ctx, tokenEndpoint, secret, clientID)
 	if err != nil {
 		return "", err

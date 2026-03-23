@@ -267,6 +267,37 @@ func TestReceiverClientIDReturnsEmptyWhenUnavailable(t *testing.T) {
 	}
 }
 
+func TestReceiverClientIDWithLookupFallsBackToGatewayUserIDP(t *testing.T) {
+	share := testReceivedShare("share-abc", false)
+	share.Grantee.GetUserId().Idp = ""
+
+	got := receiverClientIDWithLookup(context.Background(), share, func(_ context.Context, userID *userpb.UserId) string {
+		if userID.GetOpaqueId() != "receiver" {
+			t.Fatalf("lookup user id: got %q, want receiver", userID.GetOpaqueId())
+		}
+		return "local-gateway.example"
+	})
+	if got != "local-gateway.example" {
+		t.Errorf("got %q, want local-gateway.example", got)
+	}
+}
+
+func TestReceiverClientIDWithLookupSkipsGatewayWhenShareAlreadyHasIDP(t *testing.T) {
+	share := testReceivedShare("share-abc", false)
+	lookupCalled := false
+
+	got := receiverClientIDWithLookup(context.Background(), share, func(_ context.Context, _ *userpb.UserId) string {
+		lookupCalled = true
+		return "unexpected.example"
+	})
+	if got != "nextcloud1.docker" {
+		t.Errorf("got %q, want nextcloud1.docker", got)
+	}
+	if lookupCalled {
+		t.Error("expected lookup not to be called when share grantee already has an idp")
+	}
+}
+
 func TestConvertStatToResourceInfo_File(t *testing.T) {
 	fi := &fakeFileInfo{name: "file.txt", size: 1024}
 	share := testReceivedShare("share-abc", true)

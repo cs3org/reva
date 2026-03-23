@@ -36,6 +36,7 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/datagateway"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocdav"
+	authscope "github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -153,6 +154,20 @@ func makeRelative(path string) string {
 	return path
 }
 
+func shareIDFromContextScopes(ctx context.Context) string {
+	scopes, ok := appctx.ContextGetScopes(ctx)
+	if !ok || len(scopes) == 0 {
+		return ""
+	}
+
+	shares, err := authscope.GetOCMSharesFromScopes(scopes)
+	if err != nil || len(shares) != 1 {
+		return ""
+	}
+
+	return shares[0].Id.GetOpaqueId()
+}
+
 func (d *driver) shareAndRelativePathFromRef(ctx context.Context, ref *provider.Reference) (*ocmv1beta1.Share, string, error) {
 	var (
 		candidate string
@@ -169,6 +184,11 @@ func (d *driver) shareAndRelativePathFromRef(ctx context.Context, ref *provider.
 		relPath = filepath.Join(relPath, ref.Path)
 	}
 	relPath = makeRelative(relPath)
+	if candidate == "" {
+		// Root-mounted receivers like Nextcloud talk to the generic OCM DAV
+		// endpoint and identify the share through the exchanged token scope.
+		candidate = shareIDFromContextScopes(ctx)
+	}
 
 	log := appctx.GetLogger(ctx)
 	log.Info().Interface("ref", ref).Str("path", relPath).Str("token", candidate).Msg("Accessing OCM share")

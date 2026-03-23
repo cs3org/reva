@@ -464,7 +464,16 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 		// Currently, we only support the simple protocol for GET requests
 		// Once we have multiple protocols, this would be moved to the fs layer
 		protocol.Protocol = "simple"
-		u.Path = path.Join(u.Path, "simple", newRef.GetPath())
+		downloadPath := newRef.GetPath()
+		if s.conf.ExposeDataServer {
+			if info, err := s.storage.GetMD(ctx, newRef, nil); err == nil {
+				mappedPath := exposedDownloadPath(downloadPath, info)
+				if mappedPath != downloadPath {
+					downloadPath = mappedPath
+				}
+			}
+		}
+		u.Path = path.Join(u.Path, "simple", downloadPath)
 	}
 
 	protocol.DownloadEndpoint = u.String()
@@ -473,6 +482,13 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 		Protocols: []*provider.FileDownloadProtocol{protocol},
 		Status:    status.NewOK(ctx),
 	}, nil
+}
+
+func exposedDownloadPath(refPath string, info *provider.ResourceInfo) string {
+	if refPath == "/" && info != nil && info.Type == provider.ResourceType_RESOURCE_TYPE_FILE && info.Path != "" {
+		return info.Path
+	}
+	return refPath
 }
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {

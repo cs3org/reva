@@ -472,9 +472,11 @@ func (m *mgr) getByID(ctx context.Context, user *userpb.User, id *ocm.ShareId) (
 		return nil, errtypes.BadRequest("invalid share ID")
 	}
 
+	shareWith := formatUserID(user.Id)
+
 	var shareModel model.OcmShare
 	if err := m.db.WithContext(ctx).
-		Where("id = ? AND (initiator = ? OR owner = ?)", shareID, user.Id.OpaqueId, user.Id.OpaqueId).
+		Where("id = ? AND (initiator = ? OR owner = ? OR share_with = ?)", shareID, user.Id.OpaqueId, user.Id.OpaqueId, shareWith).
 		First(&shareModel).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, share.ErrShareNotFound

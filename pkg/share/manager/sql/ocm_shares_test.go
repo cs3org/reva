@@ -258,6 +258,43 @@ func TestGetOCMShareById(t *testing.T) {
 	}
 }
 
+func TestGetOCMShareByIdAllowsFederatedGrantee(t *testing.T) {
+	mgr, err, teardown := setupSuiteOcmShares(t)
+	defer teardown(t)
+
+	ownerCtx := getUserContext("owner1")
+	owner, _ := appctx.ContextGetUser(ownerCtx)
+	owner.Id.Idp = "cernbox1.docker"
+
+	grantee := getUserOcmShareGrantee("michiel")
+	grantee.GetUserId().Idp = "nextcloud1.docker"
+	accessMethods := getOcmAccessMethods("viewer")
+
+	share, err := mgr.StoreShare(ownerCtx, getOcmShare(accessMethods, grantee, owner.Id, getResourceId(), "federatedtoken"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	recipientCtx := getUserContext("michiel")
+	recipient, _ := appctx.ContextGetUser(recipientCtx)
+	recipient.Id.Idp = "nextcloud1.docker"
+
+	ref := ocm.ShareReference{
+		Spec: &ocm.ShareReference_Id{
+			Id: share.Id,
+		},
+	}
+
+	retrievedShare, err := mgr.GetShare(recipientCtx, recipient, &ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if retrievedShare.Id.OpaqueId != share.Id.OpaqueId {
+		t.Errorf("Expected share ID %s, got %s", share.Id.OpaqueId, retrievedShare.Id.OpaqueId)
+	}
+}
+
 func TestGetOcmShareByKey(t *testing.T) {
 	mgr, err, teardown := setupSuiteOcmShares(t)
 	defer teardown(t)

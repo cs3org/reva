@@ -71,6 +71,19 @@ func testGrantee() *provider.Grantee {
 	}
 }
 
+func testFederatedGrantee(opaqueID, idp string) *provider.Grantee {
+	return &provider.Grantee{
+		Type: provider.GranteeType_GRANTEE_TYPE_USER,
+		Id: &provider.Grantee_UserId{
+			UserId: &userpb.UserId{
+				OpaqueId: opaqueID,
+				Idp:      idp,
+				Type:     userpb.UserType_USER_TYPE_FEDERATED,
+			},
+		},
+	}
+}
+
 func testResourceID() *provider.ResourceId {
 	return &provider.ResourceId{StorageId: "stor", OpaqueId: "res"}
 }
@@ -135,6 +148,42 @@ func TestStoreAndGetShareRoundTrip(t *testing.T) {
 
 	ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: stored.Id}}
 	got, err := mgr.GetShare(ctx, user, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Id.OpaqueId != stored.Id.OpaqueId {
+		t.Fatalf("id mismatch: got %s, want %s", got.Id.OpaqueId, stored.Id.OpaqueId)
+	}
+}
+
+func TestFederatedGranteeCanGetShareByID(t *testing.T) {
+	mgr, cleanup := setup(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	owner := testUser()
+	owner.Id.Idp = "cernbox1.docker"
+
+	s := testShare("tok-fed", codeFlowMethods())
+	s.Owner = owner.Id
+	s.Creator = owner.Id
+	s.Grantee = testFederatedGrantee("michiel", "nextcloud1.docker")
+
+	stored, err := mgr.StoreShare(ctx, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	granteeUser := &userpb.User{
+		Id: &userpb.UserId{
+			OpaqueId: "michiel",
+			Idp:      "nextcloud1.docker",
+			Type:     userpb.UserType_USER_TYPE_FEDERATED,
+		},
+	}
+
+	ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: stored.Id}}
+	got, err := mgr.GetShare(ctx, granteeUser, ref)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -297,8 +297,12 @@ func (m *mgr) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareRef
 		return nil, err
 	}
 
-	// check if we are the owner
+	// Outgoing OCM shares must be readable by the owner, the creator,
+	// and the federated grantee identified in the share payload.
 	if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
+		return s, nil
+	}
+	if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GetUserId()) {
 		return s, nil
 	}
 
