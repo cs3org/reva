@@ -84,9 +84,8 @@ func TestAddGrant(t *testing.T) {
 	}
 
 	fs, err := NewEOSFS(&Config{
-		MasterURL:           "root://eoshomecanary.cern.ch",
-		UseGRPC:             false,
-		ForceSingleUserMode: true,
+		MasterURL: "root://eoshomecanary.cern.ch",
+		UseGRPC:   false,
 	})
 
 	if err != nil {

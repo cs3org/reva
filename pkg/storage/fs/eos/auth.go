@@ -124,15 +124,6 @@ func (fs *Eosfs) getUserAuth(ctx context.Context) (eosclient.Authorization, erro
 		return invalidAuth(), fmt.Errorf("eosfs: no user found in context")
 	}
 
-	if fs.conf.ForceSingleUserMode {
-		if fs.singleUserAuth.Role.UID != "" && fs.singleUserAuth.Role.GID != "" {
-			return fs.singleUserAuth, nil
-		}
-		var err error
-		fs.singleUserAuth, err = fs.getUIDGateway(ctx, &userpb.UserId{OpaqueId: fs.conf.SingleUsername})
-		return fs.singleUserAuth, err
-	}
-
 	if utils.IsLightweightUser(u) {
 		return invalidAuth(), fmt.Errorf("eosfs: cannot get uid/gid for external user")
 		//return fs.getEOSToken(ctx, u, fn)
@@ -149,15 +140,6 @@ func (fs *Eosfs) getUserOrExternalAuth(ctx context.Context, fn string) (eosclien
 	u, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		return invalidAuth(), fmt.Errorf("eosfs: no user found in context")
-	}
-
-	if fs.conf.ForceSingleUserMode {
-		if fs.singleUserAuth.Role.UID != "" && fs.singleUserAuth.Role.GID != "" {
-			return fs.singleUserAuth, nil
-		}
-		var err error
-		fs.singleUserAuth, err = fs.getUIDGateway(ctx, &userpb.UserId{OpaqueId: fs.conf.SingleUsername})
-		return fs.singleUserAuth, err
 	}
 
 	if utils.IsLightweightUser(u) {
@@ -322,14 +304,6 @@ func (fs *Eosfs) getOwnerAuth(ctx context.Context, fn string) (eosclient.Authori
 // We use it e.g. when retrieving metadata from a file when accessing through a guest account,
 // so we can look up which user to impersonate (i.e. the owner)
 func (fs *Eosfs) getDaemonAuth(ctx context.Context) (eosclient.Authorization, error) {
-	if fs.conf.ForceSingleUserMode {
-		if fs.singleUserAuth.Role.UID != "" && fs.singleUserAuth.Role.GID != "" {
-			return fs.singleUserAuth, nil
-		}
-		var err error
-		fs.singleUserAuth, err = fs.getUIDGateway(ctx, &userpb.UserId{OpaqueId: fs.conf.SingleUsername})
-		return fs.singleUserAuth, err
-	}
 	return eosclient.Authorization{Role: eosclient.Role{UID: "2", GID: "2"}}, nil
 }
 

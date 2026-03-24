@@ -194,17 +194,16 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 		}
 	} else {
 		eosClientOpts := &eosbinary.Options{
-			XrdcopyBinary:       c.XrdcopyBinary,
-			URL:                 c.MasterURL,
-			EosBinary:           c.EosBinary,
-			CacheDirectory:      c.CacheDirectory,
-			ForceSingleUserMode: c.ForceSingleUserMode,
-			SingleUsername:      c.SingleUsername,
-			UseKeytab:           c.UseKeytab,
-			Keytab:              c.Keytab,
-			SecProtocol:         c.SecProtocol,
-			VersionInvariant:    c.VersionInvariant,
-			TokenExpiry:         c.TokenExpiry,
+			XrdcopyBinary:    c.XrdcopyBinary,
+			URL:              c.MasterURL,
+			EosBinary:        c.EosBinary,
+			CacheDirectory:   c.CacheDirectory,
+			SingleUsername:   c.SingleUsername,
+			UseKeytab:        c.UseKeytab,
+			Keytab:           c.Keytab,
+			SecProtocol:      c.SecProtocol,
+			VersionInvariant: c.VersionInvariant,
+			TokenExpiry:      c.TokenExpiry,
 		}
 		eosClient, err = eosbinary.New(eosClientOpts)
 	}
