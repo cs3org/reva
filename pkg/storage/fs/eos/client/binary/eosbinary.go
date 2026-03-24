@@ -70,10 +70,6 @@ func isValidAttribute(a *eosclient.Attribute) bool {
 
 // Options to configure the Client.
 type Options struct {
-	// ForceSingleUserMode forces all connections to use only one user.
-	// This is the case when access to EOS is done from FUSE under apache or www-data.
-	ForceSingleUserMode bool
-
 	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
 	UseKeytab bool
 
@@ -117,10 +113,6 @@ type Options struct {
 }
 
 func (opt *Options) ApplyDefaults() {
-	if opt.ForceSingleUserMode && opt.SingleUsername != "" {
-		opt.SingleUsername = "apache"
-	}
-
 	if opt.EosBinary == "" {
 		opt.EosBinary = "/usr/bin/eos"
 	}
