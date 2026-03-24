@@ -33,12 +33,12 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	conversions "github.com/cs3org/reva/v3/pkg/cbox/utils"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	revashare "github.com/cs3org/reva/v3/pkg/share"
 	"github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"github.com/cs3org/reva/v3/pkg/utils"
-	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"google.golang.org/genproto/protobuf/field_mask"
 
@@ -203,7 +203,7 @@ func (m *ShareMgr) UpdateShare(ctx context.Context, ref *collaboration.ShareRefe
 }
 
 func (m *ShareMgr) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
-	shares, err := m.ListModelShares(nil, filters, false)
+	shares, err := m.ListModelShares(nil, filters, true)
 	if err != nil {
 		return nil, err
 	}
@@ -342,9 +342,9 @@ func (m *ShareMgr) UpdateReceivedShare(ctx context.Context, recvShare *collabora
 // Exported functions below are not part of the CS3-defined API, but are used by cernboxcop
 
 // Used by cernboxcop, to include listings with orphans (which cannot be represented in the CS3 Shares)
-func (m *ShareMgr) ListModelShares(u *user.User, filters []*collaboration.Filter, remove_orphan bool) ([]model.Share, error) {
+func (m *ShareMgr) ListModelShares(u *user.User, filters []*collaboration.Filter, hideOrphans bool) ([]model.Share, error) {
 	query := m.db.Model(&model.Share{})
-	if remove_orphan {
+	if hideOrphans {
 		query = query.Where("orphan = ?", false)
 	}
 
