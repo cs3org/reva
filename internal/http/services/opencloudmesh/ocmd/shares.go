@@ -205,6 +205,11 @@ func getCreateShareRequest(r *http.Request) (*NewShareRequest, error) {
 	if err := validate.Struct(req); err != nil {
 		return nil, err
 	}
+	// Protocols are interface-backed, so validate the decoded protocol payloads
+	// explicitly before we create or persist a received share.
+	if err := req.Protocols.Validate(); err != nil {
+		return nil, err
+	}
 	return &req, nil
 }
 
@@ -248,6 +253,11 @@ func getAndResolveProtocols(ctx context.Context, p Protocols, ownerServer string
 		case "embedded":
 			protos = append(protos, ocmProto)
 			continue
+		}
+		// Absolute URIs should already be clean sender-owned endpoints. Validate
+		// again here so malformed values fail before any discovery-based rewriting.
+		if err := validateProtocolURI(protocolName, uri); err != nil {
+			return nil, false, err
 		}
 
 		// If the `uri` contains a hostname, use it as is

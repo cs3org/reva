@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"reflect"
 	"strings"
 
@@ -105,6 +106,12 @@ type Protocols []Protocol
 type Protocol interface {
 	// ToOCMProtocol converts the protocol to a CS3API OCM `Protocol` struct
 	ToOCMProtocol() *ocm.Protocol
+}
+
+var validWebDAVPermissions = map[string]struct{}{
+	"read":  {},
+	"write": {},
+	"share": {},
 }
 
 // protocols supported by the OCM API
@@ -254,6 +261,69 @@ func GetProtocolName(p Protocol) string {
 	n := reflect.TypeOf(p).String()
 	s := strings.Split(n, ".")
 	return strings.ToLower(s[len(s)-1])
+}
+
+// Validate applies the protocol checks that the generic request validator cannot
+// express once the payload has been unmarshaled into the Protocol interface.
+func (p Protocols) Validate() error {
+	if len(p) == 0 {
+		return errors.New("missing protocol definition")
+	}
+
+	for _, protocol := range p {
+		switch data := protocol.(type) {
+		case *WebDAV:
+			if data.SharedSecret == "" {
+				return errors.New("protocol webdav missing sharedSecret")
+			}
+			if len(data.Permissions) == 0 {
+				return errors.New("protocol webdav missing permissions")
+			}
+			// Reject unknown permission vocabularies here so they do not degrade into
+			// an empty CS3 permission set later in ToOCMProtocol.
+			for _, permission := range data.Permissions {
+				if _, ok := validWebDAVPermissions[permission]; !ok {
+					return fmt.Errorf("protocol webdav has unsupported permission %q", permission)
+				}
+			}
+			if err := validateProtocolURI("webdav", data.URI); err != nil {
+				return err
+			}
+		case *Webapp:
+			if err := validateProtocolURI("webapp", data.URI); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// Absolute protocol URIs should already be fully usable sender endpoints. Catch
+// malformed values such as double-scheme hosts before they are stored or resolved.
+func validateProtocolURI(protocolName, uri string) error {
+	if uri == "" {
+		return nil
+	}
+
+	parsedURI, err := url.Parse(uri)
+	if err != nil {
+		return fmt.Errorf("protocol %s has invalid uri %q: %w", protocolName, uri, err)
+	}
+	if parsedURI.Host == "" {
+		return nil
+	}
+	if parsedURI.Scheme != "http" && parsedURI.Scheme != "https" {
+		return fmt.Errorf("protocol %s has unsupported absolute uri scheme %q", protocolName, parsedURI.Scheme)
+	}
+	if parsedURI.Host == "http:" || parsedURI.Host == "https:" ||
+		strings.Contains(parsedURI.Host, "://") ||
+		strings.HasPrefix(parsedURI.Path, "//http://") ||
+		strings.HasPrefix(parsedURI.Path, "//https://") {
+		return fmt.Errorf("protocol %s has malformed absolute uri %q", protocolName, uri)
+	}
+
+	return nil
 }
 
 // GetUserIdFromOCMAddress parses an OCM address identifier in the form <id>@<provider>
