@@ -30,13 +30,16 @@ import (
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/studio-b12/gowebdav"
+	"google.golang.org/grpc"
 )
 
 func TestShareInfoFromPath(t *testing.T) {
@@ -202,6 +205,24 @@ func (f *fakeFileInfo) ModTime() time.Time {
 }
 func (f *fakeFileInfo) IsDir() bool { return f.isDir }
 func (f *fakeFileInfo) Sys() any    { return nil }
+
+type mockReceivedGateway struct {
+	gateway.GatewayAPIClient
+	shares []*ocmpb.ReceivedShare
+	calls  int
+}
+
+func (m *mockReceivedGateway) GetReceivedOCMShare(_ context.Context, _ *ocmpb.GetReceivedOCMShareRequest, _ ...grpc.CallOption) (*ocmpb.GetReceivedOCMShareResponse, error) {
+	idx := m.calls
+	if idx >= len(m.shares) {
+		idx = len(m.shares) - 1
+	}
+	m.calls++
+	return &ocmpb.GetReceivedOCMShareResponse{
+		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+		Share:  m.shares[idx],
+	}, nil
+}
 
 func testReceivedShare(id string, isFile bool) *ocmpb.ReceivedShare {
 	srt := ocmpb.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER
@@ -476,6 +497,137 @@ func TestUploadAuthLegacyUsesCachedHeader(t *testing.T) {
 	}
 	if got != "Basic cached-auth" {
 		t.Fatalf("uploadAuth() = %q, want %q", got, "Basic cached-auth")
+	}
+}
+
+func TestWithExchangeStatRetryRetriesAndReturnsFreshShare(t *testing.T) {
+	discoveryCalls := 0
+	tokenCalls := 0
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/ocm":
+			discoveryCalls++
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"enabled":       true,
+				"apiVersion":    "1.2.0",
+				"endPoint":      srv.URL + "/ocm",
+				"provider":      "reva",
+				"resourceTypes": []any{},
+				"capabilities":  []string{"exchange-token"},
+				"tokenEndPoint": srv.URL + "/ocm/token",
+			})
+		case "/ocm/token":
+			tokenCalls++
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"access_token": "jwt-tok",
+				"token_type":   "Bearer",
+				"expires_in":   3600,
+			})
+		default:
+			http.Error(w, "unexpected path", http.StatusInternalServerError)
+		}
+	}))
+	defer srv.Close()
+
+	share1 := testCodeFlowReceivedShare(srv.URL)
+	share1.Name = "stale-name"
+	share2 := testCodeFlowReceivedShare(srv.URL)
+	share2.Name = "fresh-name"
+
+	d := newTestReceivedDriver()
+	d.gateway = &mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share1, share2}}
+
+	ref := &provider.Reference{Path: "/share-abc/docs"}
+	fnCalls := 0
+	info, share, rel, err := d.withExchangeStatRetry(context.Background(), ref, func(_ *gowebdav.Client, _ string) (fs.FileInfo, error) {
+		fnCalls++
+		if fnCalls == 1 {
+			return nil, gowebdav.NewPathError("GET", "/docs", http.StatusUnauthorized)
+		}
+		return &fakeFileInfo{name: "docs", isDir: true}, nil
+	})
+	if err != nil {
+		t.Fatalf("withExchangeStatRetry returned error: %v", err)
+	}
+	if fnCalls != 2 {
+		t.Fatalf("expected fn to be called twice, got %d", fnCalls)
+	}
+	if discoveryCalls != 1 {
+		t.Fatalf("expected discovery to be called once, got %d", discoveryCalls)
+	}
+	if tokenCalls != 2 {
+		t.Fatalf("expected token endpoint to be called twice, got %d", tokenCalls)
+	}
+	if info == nil || !info.IsDir() {
+		t.Fatalf("expected directory info after retry, got %#v", info)
+	}
+	if share.GetName() != "fresh-name" {
+		t.Fatalf("expected fresh share metadata after retry, got %q", share.GetName())
+	}
+	if rel != "/docs" {
+		t.Fatalf("expected rel path /docs, got %q", rel)
+	}
+}
+
+func TestWithExchangeRetrySecond401ReturnsInvalidCredentials(t *testing.T) {
+	discoveryCalls := 0
+	tokenCalls := 0
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/ocm":
+			discoveryCalls++
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"enabled":       true,
+				"apiVersion":    "1.2.0",
+				"endPoint":      srv.URL + "/ocm",
+				"provider":      "reva",
+				"resourceTypes": []any{},
+				"capabilities":  []string{"exchange-token"},
+				"tokenEndPoint": srv.URL + "/ocm/token",
+			})
+		case "/ocm/token":
+			tokenCalls++
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"access_token": "jwt-tok",
+				"token_type":   "Bearer",
+				"expires_in":   3600,
+			})
+		default:
+			http.Error(w, "unexpected path", http.StatusInternalServerError)
+		}
+	}))
+	defer srv.Close()
+
+	share := testCodeFlowReceivedShare(srv.URL)
+	d := newTestReceivedDriver()
+	d.gateway = &mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share, share}}
+
+	ref := &provider.Reference{Path: "/share-abc/docs"}
+	fnCalls := 0
+	err := d.withExchangeRetry(context.Background(), ref, func(_ *gowebdav.Client, _ string) error {
+		fnCalls++
+		return gowebdav.NewPathError("GET", "/docs", http.StatusUnauthorized)
+	})
+	if err == nil {
+		t.Fatal("expected invalid credentials error after second 401")
+	}
+	if _, ok := err.(errtypes.IsInvalidCredentials); !ok {
+		t.Fatalf("expected InvalidCredentials error, got %T: %v", err, err)
+	}
+	if fnCalls != 2 {
+		t.Fatalf("expected fn to be called twice, got %d", fnCalls)
+	}
+	if discoveryCalls != 1 {
+		t.Fatalf("expected discovery to be called once, got %d", discoveryCalls)
+	}
+	if tokenCalls != 2 {
+		t.Fatalf("expected token endpoint to be called twice, got %d", tokenCalls)
 	}
 }
 
