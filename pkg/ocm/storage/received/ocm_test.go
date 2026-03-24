@@ -20,17 +20,22 @@ package ocm
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/studio-b12/gowebdav"
 )
 
@@ -236,6 +241,24 @@ func testReceivedShare(id string, isFile bool) *ocmpb.ReceivedShare {
 	}
 }
 
+func newTestReceivedDriver() *driver {
+	disco := ttlcache.NewCache()
+	_ = disco.SetTTL(5 * time.Minute)
+	return &driver{
+		ccache:         ttlcache.NewCache(),
+		discoveryCache: disco,
+		ocmClient:      ocmd.NewClient(10*time.Second, true),
+	}
+}
+
+func testCodeFlowReceivedShare(baseURL string) *ocmpb.ReceivedShare {
+	share := testReceivedShare("share-abc", false)
+	webdav := share.Protocols[0].GetWebdavOptions()
+	webdav.Uri = baseURL + "/remote.php/dav/ocm/share-abc"
+	webdav.Requirements = []string{"must-exchange-token"}
+	return share
+}
+
 func TestReceiverClientIDPrefersContextUserIDP(t *testing.T) {
 	share := testReceivedShare("share-abc", false)
 	ctx := appctx.ContextSetUser(context.Background(), &userpb.User{
@@ -295,6 +318,164 @@ func TestReceiverClientIDWithLookupSkipsGatewayWhenShareAlreadyHasIDP(t *testing
 	}
 	if lookupCalled {
 		t.Error("expected lookup not to be called when share grantee already has an idp")
+	}
+}
+
+func TestGetTokenEndpointCachesDiscovery(t *testing.T) {
+	discoveryCalls := 0
+	var unexpectedPath string
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/.well-known/ocm" {
+			unexpectedPath = r.URL.Path
+			http.Error(w, "unexpected path", http.StatusInternalServerError)
+			return
+		}
+		discoveryCalls++
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"enabled":       true,
+			"apiVersion":    "1.2.0",
+			"endPoint":      srv.URL + "/ocm",
+			"provider":      "reva",
+			"resourceTypes": []any{},
+			"capabilities":  []string{"exchange-token"},
+			"tokenEndPoint": srv.URL + "/ocm/token",
+		})
+	}))
+	defer srv.Close()
+
+	d := newTestReceivedDriver()
+	share := testCodeFlowReceivedShare(srv.URL)
+
+	got1, err := d.getTokenEndpoint(context.Background(), share)
+	if err != nil {
+		t.Fatalf("getTokenEndpoint first call returned error: %v", err)
+	}
+	got2, err := d.getTokenEndpoint(context.Background(), share)
+	if err != nil {
+		t.Fatalf("getTokenEndpoint second call returned error: %v", err)
+	}
+	want := srv.URL + "/ocm/token"
+	if got1 != want || got2 != want {
+		t.Fatalf("getTokenEndpoint() = %q, %q, want %q", got1, got2, want)
+	}
+	if discoveryCalls != 1 {
+		t.Fatalf("expected discovery to be called once, got %d", discoveryCalls)
+	}
+	if unexpectedPath != "" {
+		t.Fatalf("unexpected path: got %q, want /.well-known/ocm", unexpectedPath)
+	}
+}
+
+func TestGetTokenEndpointRequiresDiscoveryTokenEndpoint(t *testing.T) {
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"enabled":       true,
+			"apiVersion":    "1.2.0",
+			"endPoint":      srv.URL + "/ocm",
+			"provider":      "reva",
+			"resourceTypes": []any{},
+			"capabilities":  []string{"exchange-token"},
+		})
+	}))
+	defer srv.Close()
+
+	d := newTestReceivedDriver()
+	share := testCodeFlowReceivedShare(srv.URL)
+
+	_, err := d.getTokenEndpoint(context.Background(), share)
+	if err == nil {
+		t.Fatal("expected error when discovery payload has no tokenEndPoint")
+	}
+	if _, ok := err.(errtypes.IsNotFound); !ok {
+		t.Fatalf("expected NotFound error, got %T: %v", err, err)
+	}
+}
+
+func TestUploadAuthCodeFlowExchangesBearerToken(t *testing.T) {
+	var gotCode, gotClientID string
+	discoveryCalls := 0
+	tokenCalls := 0
+	var parseErr error
+	var unexpectedPath string
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/ocm":
+			discoveryCalls++
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"enabled":       true,
+				"apiVersion":    "1.2.0",
+				"endPoint":      srv.URL + "/ocm",
+				"provider":      "reva",
+				"resourceTypes": []any{},
+				"capabilities":  []string{"exchange-token"},
+				"tokenEndPoint": srv.URL + "/ocm/token",
+			})
+		case "/ocm/token":
+			tokenCalls++
+			if err := r.ParseForm(); err != nil {
+				parseErr = err
+				http.Error(w, "bad form", http.StatusBadRequest)
+				return
+			}
+			gotCode = r.FormValue("code")
+			gotClientID = r.FormValue("client_id")
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"access_token": "jwt-tok",
+				"token_type":   "Bearer",
+				"expires_in":   3600,
+			})
+		default:
+			unexpectedPath = r.URL.Path
+			http.Error(w, "unexpected path", http.StatusInternalServerError)
+		}
+	}))
+	defer srv.Close()
+
+	d := newTestReceivedDriver()
+	share := testCodeFlowReceivedShare(srv.URL)
+
+	got, err := d.uploadAuth(context.Background(), share, share.Protocols[0].GetWebdavOptions().Uri, "exchange-secret", share.GetId())
+	if err != nil {
+		t.Fatalf("uploadAuth returned error: %v", err)
+	}
+	if got != "Bearer jwt-tok" {
+		t.Fatalf("uploadAuth() = %q, want %q", got, "Bearer jwt-tok")
+	}
+	if gotCode != "exchange-secret" {
+		t.Fatalf("code: got %q, want %q", gotCode, "exchange-secret")
+	}
+	if gotClientID != "nextcloud1.docker" {
+		t.Fatalf("client_id: got %q, want %q", gotClientID, "nextcloud1.docker")
+	}
+	if discoveryCalls != 1 || tokenCalls != 1 {
+		t.Fatalf("expected one discovery call and one token call, got discovery=%d token=%d", discoveryCalls, tokenCalls)
+	}
+	if parseErr != nil {
+		t.Fatalf("ParseForm returned error: %v", parseErr)
+	}
+	if unexpectedPath != "" {
+		t.Fatalf("unexpected path: %q", unexpectedPath)
+	}
+}
+
+func TestUploadAuthLegacyUsesCachedHeader(t *testing.T) {
+	d := newTestReceivedDriver()
+	share := testReceivedShare("share-abc", false)
+	_ = d.ccache.Set(share.GetId().GetOpaqueId(), &cachedClient{authHeader: "Basic cached-auth"})
+
+	got, err := d.uploadAuth(context.Background(), share, share.Protocols[0].GetWebdavOptions().Uri, "legacy-secret", share.GetId())
+	if err != nil {
+		t.Fatalf("uploadAuth returned error: %v", err)
+	}
+	if got != "Basic cached-auth" {
+		t.Fatalf("uploadAuth() = %q, want %q", got, "Basic cached-auth")
 	}
 }
 
