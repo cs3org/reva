@@ -185,8 +185,10 @@ func (d *driver) shareAndRelativePathFromRef(ctx context.Context, ref *provider.
 	}
 	relPath = makeRelative(relPath)
 	if candidate == "" {
-		// Root-mounted receivers like Nextcloud talk to the generic OCM DAV
-		// endpoint and identify the share through the exchanged token scope.
+		// Nextcloud is the concrete client we validated here: it mounts the generic
+		// OCM DAV discovery root instead of always using a share-specific DAV path.
+		// Recover the canonical share id from the exchanged-token scope so these
+		// root-mounted requests still resolve to the intended share.
 		candidate = shareIDFromContextScopes(ctx)
 	}
 

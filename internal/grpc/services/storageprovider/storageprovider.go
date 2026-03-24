@@ -485,6 +485,10 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 }
 
 func exposedDownloadPath(refPath string, info *provider.ResourceInfo) string {
+	// Nextcloud is the validated root-mounted DAV client here: it can ask to
+	// download "/" even when the resolved OCM target is a single file. Reuse the
+	// canonical file path so the exposed simple-download URL still points at the
+	// real file object.
 	if refPath == "/" && info != nil && info.Type == provider.ResourceType_RESOURCE_TYPE_FILE && info.Path != "" {
 		return info.Path
 	}
