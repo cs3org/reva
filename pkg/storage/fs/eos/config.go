@@ -69,9 +69,6 @@ type Config struct {
 	// .sys.v# and .sys.a# files.
 	ShowHiddenSysFiles bool `mapstructure:"show_hidden_sys_files"`
 
-	// ForceSingleUserMode will force connections to EOS to use SingleUsername
-	ForceSingleUserMode bool `mapstructure:"force_single_user_mode"`
-
 	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
 	UseKeytab bool `mapstructure:"use_keytab"`
 
