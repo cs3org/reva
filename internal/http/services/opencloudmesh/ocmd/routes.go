@@ -16,20 +16,11 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package contract
-
-import (
-	"net/url"
-	"strings"
-)
+package ocmd
 
 const (
-	SharesPath         = "/shares"
-	InviteAcceptedPath = "/invite-accepted"
-	NotificationsPath  = "/notifications"
-	TokenPath          = "/token"
+	sharesPath         = "/shares"
+	inviteAcceptedPath = "/invite-accepted"
+	notificationsPath  = "/notifications"
+	tokenPath          = "/token"
 )
-
-func TokenEndpoint(baseURL, prefix string) (string, error) {
-	return url.JoinPath(baseURL, prefix, strings.TrimPrefix(TokenPath, "/"))
-}

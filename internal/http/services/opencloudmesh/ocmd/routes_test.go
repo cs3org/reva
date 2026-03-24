@@ -21,16 +21,16 @@ package ocmd
 import (
 	"testing"
 
-	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/contract"
+	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 )
 
-func TestTokenEndpoint(t *testing.T) {
-	got, err := contract.TokenEndpoint("https://cernbox.cern.ch", "ocm")
+func TestDiscoveryTokenEndpointMatchesRoutePath(t *testing.T) {
+	got, err := wellknown.TokenEndpoint("https://cernbox.cern.ch", "ocm")
 	if err != nil {
-		t.Fatalf("contract.TokenEndpoint returned error: %v", err)
+		t.Fatalf("wellknown.TokenEndpoint returned error: %v", err)
 	}
 	if got != "https://cernbox.cern.ch/ocm/token" {
-		t.Fatalf("contract.TokenEndpoint() = %q, want %q", got, "https://cernbox.cern.ch/ocm/token")
+		t.Fatalf("wellknown.TokenEndpoint() = %q, want %q", got, "https://cernbox.cern.ch/ocm/token")
 	}
 }
 
@@ -40,11 +40,11 @@ func TestUnprotectedIncludesTokenPath(t *testing.T) {
 
 	count := 0
 	for _, p := range paths {
-		if p == contract.TokenPath {
+		if p == tokenPath {
 			count++
 		}
 	}
 	if count != 1 {
-		t.Fatalf("expected %q exactly once in unprotected routes, got %d in %v", contract.TokenPath, count, paths)
+		t.Fatalf("expected %q exactly once in unprotected routes, got %d in %v", tokenPath, count, paths)
 	}
 }
