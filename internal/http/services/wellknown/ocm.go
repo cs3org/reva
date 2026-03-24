@@ -24,6 +24,7 @@ import (
 	"net/url"
 	"path/filepath"
 
+	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/contract"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 )
 
@@ -145,10 +146,14 @@ func (h *wkocmHandler) init(c *OcmProviderConfig) {
 	d.Capabilities = []string{"invites", "webdav-uri", "protocol-object", "invite-wayf"}
 	d.InviteAcceptDialog, _ = url.JoinPath(c.Endpoint, c.InviteAcceptDialog)
 	if c.EnableCodeFlow {
-		d.TokenEndPoint, _ = url.JoinPath(c.Endpoint, c.OCMPrefix, "token")
+		d.TokenEndPoint, _ = tokenEndpoint(c.Endpoint, c.OCMPrefix)
 		d.Capabilities = append(d.Capabilities, "exchange-token")
 	}
 	h.data = d
+}
+
+func tokenEndpoint(baseURL, prefix string) (string, error) {
+	return contract.TokenEndpoint(baseURL, prefix)
 }
 
 // Ocm handles the OCM discovery endpoint specified in

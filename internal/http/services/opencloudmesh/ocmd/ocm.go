@@ -22,6 +22,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/contract"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
@@ -97,10 +98,10 @@ func (s *svc) routerInit() error {
 		return err
 	}
 
-	s.router.Post("/shares", sharesHandler.CreateShare)
-	s.router.Post("/invite-accepted", invitesHandler.AcceptInvite)
-	s.router.Post("/notifications", notifHandler.Notifications)
-	s.router.Post("/token", tokenHandler.ExchangeToken)
+	s.router.Post(contract.SharesPath, sharesHandler.CreateShare)
+	s.router.Post(contract.InviteAcceptedPath, invitesHandler.AcceptInvite)
+	s.router.Post(contract.NotificationsPath, notifHandler.Notifications)
+	s.router.Post(contract.TokenPath, tokenHandler.ExchangeToken)
 	return nil
 }
 
@@ -116,7 +117,7 @@ func (s *svc) Prefix() string {
 func (s *svc) Unprotected() []string {
 	// These OCM ingress routes authenticate at the protocol layer, so they stay
 	// reachable without the outer auth middleware.
-	return []string{"/invite-accepted", "/shares", "/notifications", "/token"}
+	return []string{contract.InviteAcceptedPath, contract.SharesPath, contract.NotificationsPath, contract.TokenPath}
 }
 
 func (s *svc) Handler() http.Handler {
