@@ -41,13 +41,19 @@ import (
 
 type tokenMockGW struct {
 	gateway.GatewayAPIClient
-	status *rpc.Status
-	token  string
-	user   *userpb.User
-	err    error
+	status  *rpc.Status
+	token   string
+	user    *userpb.User
+	err     error
+	authFn  func(*gateway.AuthenticateRequest) (*gateway.AuthenticateResponse, error)
+	lastReq *gateway.AuthenticateRequest
 }
 
-func (m *tokenMockGW) Authenticate(_ context.Context, _ *gateway.AuthenticateRequest, _ ...grpc.CallOption) (*gateway.AuthenticateResponse, error) {
+func (m *tokenMockGW) Authenticate(_ context.Context, req *gateway.AuthenticateRequest, _ ...grpc.CallOption) (*gateway.AuthenticateResponse, error) {
+	m.lastReq = req
+	if m.authFn != nil {
+		return m.authFn(req)
+	}
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -58,7 +64,7 @@ func (m *tokenMockGW) Authenticate(_ context.Context, _ *gateway.AuthenticateReq
 	}, nil
 }
 
-func setupTokenHandler(t *testing.T, statusCode rpc.Code, gwErr error) *tokenHandler {
+func setupTokenHandler(t *testing.T, statusCode rpc.Code, gwErr error) (*tokenHandler, *tokenMockGW) {
 	t.Helper()
 	tokenmgr, err := jwt.New(map[string]any{"secret": "test-secret-for-token-handler", "expires": int64(3600)})
 	if err != nil {
@@ -75,15 +81,17 @@ func setupTokenHandler(t *testing.T, statusCode rpc.Code, gwErr error) *tokenHan
 	scopes, _ := scope.AddCodeFlowOCMShareScope(share, authpb.Role_ROLE_VIEWER, nil)
 	mintedToken, _ := tokenmgr.MintToken(context.Background(), u, scopes)
 
-	return &tokenHandler{
-		gw: &tokenMockGW{
-			status: &rpc.Status{Code: statusCode},
-			token:  mintedToken,
-			user:   u,
-			err:    gwErr,
-		},
-		tokenmgr: tokenmgr,
+	mockGW := &tokenMockGW{
+		status: &rpc.Status{Code: statusCode},
+		token:  mintedToken,
+		user:   u,
+		err:    gwErr,
 	}
+
+	return &tokenHandler{
+		gw:       mockGW,
+		tokenmgr: tokenmgr,
+	}, mockGW
 }
 
 func postTokenForm(h *tokenHandler, grantType, code, clientID string) *httptest.ResponseRecorder {
@@ -99,7 +107,7 @@ func postTokenForm(h *tokenHandler, grantType, code, clientID string) *httptest.
 }
 
 func TestExchangeTokenValid(t *testing.T) {
-	h := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
+	h, _ := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
 	rr := postTokenForm(h, "authorization_code", "code123", "nextcloud1.docker")
 
 	if rr.Code != http.StatusOK {
@@ -121,7 +129,7 @@ func TestExchangeTokenValid(t *testing.T) {
 }
 
 func TestExchangeTokenOcmShareGrant(t *testing.T) {
-	h := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
+	h, _ := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
 	rr := postTokenForm(h, "ocm_share", "code123", "nextcloud1.docker")
 
 	if rr.Code != http.StatusOK {
@@ -130,7 +138,7 @@ func TestExchangeTokenOcmShareGrant(t *testing.T) {
 }
 
 func TestExchangeTokenUnsupportedGrant(t *testing.T) {
-	h := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
+	h, mockGW := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
 	rr := postTokenForm(h, "client_credentials", "code123", "nextcloud1.docker")
 
 	if rr.Code != http.StatusBadRequest {
@@ -143,10 +151,13 @@ func TestExchangeTokenUnsupportedGrant(t *testing.T) {
 	if errResp.Error != "unsupported_grant_type" {
 		t.Errorf("error: got %q, want unsupported_grant_type", errResp.Error)
 	}
+	if mockGW.lastReq != nil {
+		t.Fatalf("Authenticate should not be called for unsupported grant, got %+v", mockGW.lastReq)
+	}
 }
 
 func TestExchangeTokenEmptyGrant(t *testing.T) {
-	h := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
+	h, _ := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
 	rr := postTokenForm(h, "", "code123", "nextcloud1.docker")
 
 	if rr.Code != http.StatusBadRequest {
@@ -155,7 +166,7 @@ func TestExchangeTokenEmptyGrant(t *testing.T) {
 }
 
 func TestExchangeTokenNotFound(t *testing.T) {
-	h := setupTokenHandler(t, rpc.Code_CODE_NOT_FOUND, nil)
+	h, _ := setupTokenHandler(t, rpc.Code_CODE_NOT_FOUND, nil)
 	rr := postTokenForm(h, "authorization_code", "bad-code", "nextcloud1.docker")
 
 	if rr.Code != http.StatusBadRequest {
@@ -171,7 +182,7 @@ func TestExchangeTokenNotFound(t *testing.T) {
 }
 
 func TestExchangeTokenPermissionDenied(t *testing.T) {
-	h := setupTokenHandler(t, rpc.Code_CODE_PERMISSION_DENIED, nil)
+	h, _ := setupTokenHandler(t, rpc.Code_CODE_PERMISSION_DENIED, nil)
 	rr := postTokenForm(h, "authorization_code", "bad-code", "nextcloud1.docker")
 
 	if rr.Code != http.StatusBadRequest {
@@ -185,7 +196,7 @@ func TestExchangeTokenPermissionDenied(t *testing.T) {
 }
 
 func TestExchangeTokenGatewayError(t *testing.T) {
-	h := setupTokenHandler(t, rpc.Code_CODE_OK, errors.New("connection refused"))
+	h, _ := setupTokenHandler(t, rpc.Code_CODE_OK, errors.New("connection refused"))
 	rr := postTokenForm(h, "authorization_code", "code123", "nextcloud1.docker")
 
 	if rr.Code != http.StatusInternalServerError {
@@ -195,5 +206,62 @@ func TestExchangeTokenGatewayError(t *testing.T) {
 	_ = json.NewDecoder(rr.Body).Decode(&errResp)
 	if errResp.Error != "server_error" {
 		t.Errorf("error: got %q, want server_error", errResp.Error)
+	}
+}
+
+func TestExchangeTokenEmptyCode(t *testing.T) {
+	h, mockGW := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
+	rr := postTokenForm(h, "authorization_code", "", "nextcloud1.docker")
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusBadRequest)
+	}
+	var errResp tokenErrorResponse
+	if err := json.NewDecoder(rr.Body).Decode(&errResp); err != nil {
+		t.Fatal(err)
+	}
+	if errResp.Error != "invalid_grant" {
+		t.Errorf("error: got %q, want invalid_grant", errResp.Error)
+	}
+	if mockGW.lastReq != nil {
+		t.Fatalf("Authenticate should not be called for empty code, got %+v", mockGW.lastReq)
+	}
+}
+
+func TestExchangeTokenEmptyClientIDStillUsesCode(t *testing.T) {
+	h, mockGW := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
+	rr := postTokenForm(h, "authorization_code", "code123", "")
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusOK)
+	}
+	if mockGW.lastReq == nil {
+		t.Fatal("expected Authenticate to be called")
+	}
+	if mockGW.lastReq.ClientId != "" {
+		t.Errorf("client_id: got %q, want empty", mockGW.lastReq.ClientId)
+	}
+	if mockGW.lastReq.ClientSecret != "code123" {
+		t.Errorf("code: got %q, want code123", mockGW.lastReq.ClientSecret)
+	}
+}
+
+func TestExchangeTokenMalformedForm(t *testing.T) {
+	h, _ := setupTokenHandler(t, rpc.Code_CODE_OK, nil)
+	req := httptest.NewRequest(http.MethodPost, "/ocm/token", strings.NewReader("%zz"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	h.ExchangeToken(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status: got %d, want %d", rr.Code, http.StatusBadRequest)
+	}
+	var errResp tokenErrorResponse
+	if err := json.NewDecoder(rr.Body).Decode(&errResp); err != nil {
+		t.Fatal(err)
+	}
+	if errResp.Error != "invalid_request" {
+		t.Errorf("error: got %q, want invalid_request", errResp.Error)
 	}
 }

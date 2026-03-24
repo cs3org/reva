@@ -78,12 +78,20 @@ func (h *tokenHandler) ExchangeToken(w http.ResponseWriter, r *http.Request) {
 
 	switch grantType {
 	case "authorization_code", "ocm_share":
-		// accepted grant types
+		// Keep the legacy OCM grant name alongside the OAuth2-standard one while
+		// partner stacks converge on the same token exchange contract.
 	default:
 		writeTokenError(w, http.StatusBadRequest, "unsupported_grant_type")
 		return
 	}
+	if code == "" {
+		writeTokenError(w, http.StatusBadRequest, "invalid_grant")
+		return
+	}
 
+	// client_id identifies the receiving server, but the exchanged code remains
+	// the lookup key for the accepted share. Do not reinterpret client_id as a
+	// share identifier.
 	authRes, err := h.gw.Authenticate(ctx, &gateway.AuthenticateRequest{
 		Type:         "ocmsharecode",
 		ClientId:     clientID,

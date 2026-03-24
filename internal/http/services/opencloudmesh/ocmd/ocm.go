@@ -114,6 +114,8 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Unprotected() []string {
+	// These OCM ingress routes authenticate at the protocol layer, so they stay
+	// reachable without the outer auth middleware.
 	return []string{"/invite-accepted", "/shares", "/notifications", "/token"}
 }
 
