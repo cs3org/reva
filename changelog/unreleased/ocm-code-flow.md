@@ -23,3 +23,5 @@ WOPI share-id fallback, received-side token-endpoint discovery and exchange
 helpers, received-side retry wrappers, and persistence/validation behavior.
 Legacy direct-secret flows remain operational, while code-flow shares enforce
 token exchange as an explicit protocol requirement.
+
+https://github.com/cs3org/reva/pull/5552
