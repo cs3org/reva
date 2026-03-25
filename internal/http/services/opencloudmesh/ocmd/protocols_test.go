@@ -164,6 +164,40 @@ func TestRequirementsRoundTripThroughToOCMProtocol(t *testing.T) {
 	}
 }
 
+func TestProtocolsValidateRejectsUnsupportedWebDAVRequirement(t *testing.T) {
+	protocols := Protocols{
+		&WebDAV{
+			SharedSecret: "secret",
+			Permissions:  []string{"read"},
+			Requirements: []string{"unsupported-requirement"},
+			URI:          "https://example.org/dav",
+		},
+	}
+
+	err := protocols.Validate()
+	if err == nil {
+		t.Fatal("expected validation error for unsupported requirement")
+	}
+	if got, want := err.Error(), `protocol webdav has unsupported requirement "unsupported-requirement"`; got != want {
+		t.Fatalf("Validate() error = %q, want %q", got, want)
+	}
+}
+
+func TestProtocolsValidateAllowsSupportedWebDAVRequirement(t *testing.T) {
+	protocols := Protocols{
+		&WebDAV{
+			SharedSecret: "secret",
+			Permissions:  []string{"read"},
+			Requirements: []string{"must-exchange-token"},
+			URI:          "https://example.org/dav",
+		},
+	}
+
+	if err := protocols.Validate(); err != nil {
+		t.Fatalf("Validate() returned error: %v", err)
+	}
+}
+
 func TestMarshalProtocol(t *testing.T) {
 	tests := []struct {
 		in       Protocols

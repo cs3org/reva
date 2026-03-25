@@ -114,6 +114,10 @@ var validWebDAVPermissions = map[string]struct{}{
 	"share": {},
 }
 
+var validWebDAVRequirements = map[string]struct{}{
+	"must-exchange-token": {},
+}
+
 // protocols supported by the OCM API
 
 // WebDAV contains the parameters for the WebDAV protocol.
@@ -284,6 +288,11 @@ func (p Protocols) Validate() error {
 			for _, permission := range data.Permissions {
 				if _, ok := validWebDAVPermissions[permission]; !ok {
 					return fmt.Errorf("protocol webdav has unsupported permission %q", permission)
+				}
+			}
+			for _, requirement := range data.Requirements {
+				if _, ok := validWebDAVRequirements[requirement]; !ok {
+					return fmt.Errorf("protocol webdav has unsupported requirement %q", requirement)
 				}
 			}
 			if err := validateProtocolURI("webdav", data.URI); err != nil {
