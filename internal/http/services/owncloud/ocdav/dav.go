@@ -311,10 +311,11 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				}
 			}
 
-			// Normalize both path targets to /{shareId}/relPath
-			normalizedPath := filepath.Join("/", ocmshare, relPath)
-			r.URL.Path = normalizedPath
-			ctx = context.WithValue(ctx, ctxKeyIncomingURL, normalizedPath)
+			internalPath, updateIncomingURL := ocmInternalPath(authType, token, ocmshare, relPath)
+			r.URL.Path = internalPath
+			if updateIncomingURL {
+				ctx = context.WithValue(ctx, ctxKeyIncomingURL, internalPath)
+			}
 
 			ctx = appctx.ContextSetToken(ctx, authRes.Token)
 			ctx = appctx.ContextSetUser(ctx, authRes.User)
@@ -471,4 +472,15 @@ func handleOCMAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, ocmsh
 		ClientId:     ocmshare,
 		ClientSecret: token,
 	})
+}
+
+// Legacy direct-secret DAV access still routes internally by token. Exchanged-
+// token access routes by share ID because code-flow tokens do not carry the
+// shared secret.
+func ocmInternalPath(authType, token, shareID, relPath string) (string, bool) {
+	internalPath := filepath.Join("/", token, relPath)
+	if authType == "ocmexchangedtoken" {
+		return filepath.Join("/", shareID, relPath), true
+	}
+	return internalPath, false
 }

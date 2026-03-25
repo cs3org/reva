@@ -144,3 +144,23 @@ func TestNameDoesNotContainRule(t *testing.T) {
 		}
 	}
 }
+
+func TestOCMInternalPathLegacyUsesToken(t *testing.T) {
+	got, updateIncomingURL := ocmInternalPath("ocmshares", "legacy-token", "share-123", "sub/file.txt")
+	if got != "/legacy-token/sub/file.txt" {
+		t.Fatalf("ocmInternalPath() = %q, want %q", got, "/legacy-token/sub/file.txt")
+	}
+	if updateIncomingURL {
+		t.Fatal("legacy path should not request ctxKeyIncomingURL update")
+	}
+}
+
+func TestOCMInternalPathExchangedTokenUsesShareID(t *testing.T) {
+	got, updateIncomingURL := ocmInternalPath("ocmexchangedtoken", "jwt-token", "share-123", "sub/file.txt")
+	if got != "/share-123/sub/file.txt" {
+		t.Fatalf("ocmInternalPath() = %q, want %q", got, "/share-123/sub/file.txt")
+	}
+	if !updateIncomingURL {
+		t.Fatal("exchanged-token path should request ctxKeyIncomingURL update")
+	}
+}
