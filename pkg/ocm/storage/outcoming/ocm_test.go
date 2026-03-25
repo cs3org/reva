@@ -25,6 +25,7 @@ import (
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -45,6 +46,55 @@ func TestMakeRelative(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("makeRelative(%q) = %q, want %q", tc.in, got, tc.want)
 		}
+	}
+}
+
+func TestCandidateAndRelativePathFromRef_PathOnly(t *testing.T) {
+	tests := []struct {
+		name    string
+		ref     *provider.Reference
+		wantKey string
+		wantRel string
+	}{
+		{
+			name:    "share-specific dav path",
+			ref:     &provider.Reference{Path: "/ocm/share123/sub/file.txt"},
+			wantKey: "share123",
+			wantRel: "/sub/file.txt",
+		},
+		{
+			name:    "root-mounted dav path",
+			ref:     &provider.Reference{Path: "/ocm"},
+			wantKey: "",
+			wantRel: "/",
+		},
+		{
+			name:    "legacy bare token path",
+			ref:     &provider.Reference{Path: "/token123/sub/file.txt"},
+			wantKey: "token123",
+			wantRel: "/sub/file.txt",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			gotKey, gotRel := candidateAndRelativePathFromRef(tc.ref)
+			if gotKey != tc.wantKey || gotRel != tc.wantRel {
+				t.Fatalf("candidateAndRelativePathFromRef(%+v) = (%q, %q), want (%q, %q)", tc.ref, gotKey, gotRel, tc.wantKey, tc.wantRel)
+			}
+		})
+	}
+}
+
+func TestCandidateAndRelativePathFromRef_ResourceID(t *testing.T) {
+	ref := &provider.Reference{
+		ResourceId: &provider.ResourceId{OpaqueId: "share123:dir"},
+		Path:       "file.txt",
+	}
+
+	gotKey, gotRel := candidateAndRelativePathFromRef(ref)
+	if gotKey != "share123" || gotRel != "dir/file.txt" {
+		t.Fatalf("candidateAndRelativePathFromRef(%+v) = (%q, %q), want (%q, %q)", ref, gotKey, gotRel, "share123", "dir/file.txt")
 	}
 }
 
@@ -248,5 +298,66 @@ func TestShareIDFromContextScopesRequiresSingleOCMShare(t *testing.T) {
 	ctx := appctx.ContextSetScopes(context.Background(), scopes)
 	if got := shareIDFromContextScopes(ctx); got != "" {
 		t.Fatalf("shareIDFromContextScopes() = %q, want empty string", got)
+	}
+}
+
+func TestShareFromContextScopesMatchesShareID(t *testing.T) {
+	share := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share-1"},
+		Token:      "legacy-token",
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
+		Creator:    &userpb.UserId{},
+		AccessMethods: []*ocmv1beta1.AccessMethod{
+			{
+				Term: &ocmv1beta1.AccessMethod_WebdavOptions{
+					WebdavOptions: &ocmv1beta1.WebDAVAccessMethod{
+						Permissions: &provider.ResourcePermissions{Stat: true},
+					},
+				},
+			},
+		},
+	}
+
+	scopes, err := authscope.AddOCMShareScope(share, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		t.Fatalf("AddOCMShareScope returned error: %v", err)
+	}
+
+	ctx := appctx.ContextSetScopes(context.Background(), scopes)
+	got := shareFromContextScopes(ctx, "share-1")
+	if got == nil {
+		t.Fatal("shareFromContextScopes() returned nil")
+	}
+	if got.GetToken() != "legacy-token" || got.GetCreator() == nil || len(got.GetAccessMethods()) != 1 {
+		t.Fatalf("shareFromContextScopes() returned incomplete share: %+v", got)
+	}
+}
+
+func TestShareFromContextScopesMatchesLegacyToken(t *testing.T) {
+	share := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share-2"},
+		Token:      "legacy-token",
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
+		Creator:    &userpb.UserId{},
+		AccessMethods: []*ocmv1beta1.AccessMethod{
+			{
+				Term: &ocmv1beta1.AccessMethod_WebdavOptions{
+					WebdavOptions: &ocmv1beta1.WebDAVAccessMethod{
+						Permissions: &provider.ResourcePermissions{Stat: true},
+					},
+				},
+			},
+		},
+	}
+
+	scopes, err := authscope.AddOCMShareScope(share, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		t.Fatalf("AddOCMShareScope returned error: %v", err)
+	}
+
+	ctx := appctx.ContextSetScopes(context.Background(), scopes)
+	got := shareFromContextScopes(ctx, "legacy-token")
+	if got == nil || got.GetId().GetOpaqueId() != "share-2" {
+		t.Fatalf("shareFromContextScopes() = %+v, want share-2", got)
 	}
 }

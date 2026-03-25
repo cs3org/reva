@@ -154,6 +154,24 @@ func makeRelative(path string) string {
 	return path
 }
 
+func candidateAndRelativePathFromRef(ref *provider.Reference) (string, string) {
+	if ref.ResourceId == nil {
+		candidate, relPath := router.ShiftPath(ref.Path)
+		if candidate == "ocm" {
+			candidate, relPath = router.ShiftPath(relPath)
+		}
+		return candidate, relPath
+	}
+
+	s := strings.SplitN(ref.ResourceId.OpaqueId, ":", 2)
+	candidate := s[0]
+	var relPath string
+	if len(s) == 2 {
+		relPath = s[1]
+	}
+	return candidate, filepath.Join(relPath, ref.Path)
+}
+
 func shareIDFromContextScopes(ctx context.Context) string {
 	scopes, ok := appctx.ContextGetScopes(ctx)
 	if !ok || len(scopes) == 0 {
@@ -168,34 +186,58 @@ func shareIDFromContextScopes(ctx context.Context) string {
 	return shares[0].Id.GetOpaqueId()
 }
 
-func (d *driver) shareAndRelativePathFromRef(ctx context.Context, ref *provider.Reference) (*ocmv1beta1.Share, string, error) {
-	var (
-		candidate string
-		relPath   string
-	)
-	if ref.ResourceId == nil {
-		candidate, relPath = router.ShiftPath(ref.Path)
-	} else {
-		s := strings.SplitN(ref.ResourceId.OpaqueId, ":", 2)
-		candidate = s[0]
-		if len(s) == 2 {
-			relPath = s[1]
-		}
-		relPath = filepath.Join(relPath, ref.Path)
+// Only use scoped shares that already carry enough metadata to execute
+// sender-side operations directly. Older or incomplete scope payloads fall back
+// to repository resolution.
+func shareFromContextScopes(ctx context.Context, candidate string) *ocmv1beta1.Share {
+	scopes, ok := appctx.ContextGetScopes(ctx)
+	if !ok || len(scopes) == 0 {
+		return nil
 	}
+
+	shares, err := authscope.GetOCMSharesFromScopes(scopes)
+	if err != nil || len(shares) == 0 {
+		return nil
+	}
+
+	for _, share := range shares {
+		if candidate != "" && candidate != share.GetId().GetOpaqueId() && candidate != share.GetToken() {
+			continue
+		}
+		if share.GetResourceId() == nil || share.GetCreator() == nil || len(share.GetAccessMethods()) == 0 {
+			continue
+		}
+		return share
+	}
+
+	if candidate == "" && len(shares) == 1 {
+		share := shares[0]
+		if share.GetResourceId() != nil && share.GetCreator() != nil && len(share.GetAccessMethods()) > 0 {
+			return share
+		}
+	}
+
+	return nil
+}
+
+func (d *driver) shareAndRelativePathFromRef(ctx context.Context, ref *provider.Reference) (*ocmv1beta1.Share, string, error) {
+	candidate, relPath := candidateAndRelativePathFromRef(ref)
 	relPath = makeRelative(relPath)
 	if candidate == "" {
-		// Nextcloud is the concrete client we validated here: it mounts the generic
-		// OCM DAV discovery root instead of always using a share-specific DAV path.
-		// Recover the canonical share id from the exchanged-token scope so these
-		// root-mounted requests still resolve to the intended share.
+		// Some OCM clients mount the generic DAV root instead of a share-specific path.
+		// When the path does not carry a candidate, recover the single scoped share id
+		// so root-mounted requests still resolve to the intended share.
 		candidate = shareIDFromContextScopes(ctx)
+	}
+	if share := shareFromContextScopes(ctx, candidate); share != nil {
+		return share, relPath, nil
 	}
 
 	log := appctx.GetLogger(ctx)
 	log.Info().Interface("ref", ref).Str("path", relPath).Str("token", candidate).Msg("Accessing OCM share")
 
-	// try shareId lookup first, fall back to legacy token lookup
+	// Scoped share data is the preferred source for authenticated OCM requests.
+	// Fall back to repository lookups for older paths that still rely on them.
 	share, err := d.resolveByShareID(ctx, candidate)
 	if _, ok := err.(errtypes.IsNotFound); ok {
 		share, err = d.resolveToken(ctx, candidate)
