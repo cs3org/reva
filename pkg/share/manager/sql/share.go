@@ -23,6 +23,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -208,12 +209,17 @@ func (m *ShareMgr) ListShares(ctx context.Context, filters []*collaboration.Filt
 		return nil, err
 	}
 
-	var cs3shares []*collaboration.Share
-	for _, s := range shares {
-		granteeType, _ := m.getUserType(ctx, s.ShareWith)
-		cs3share := s.AsCS3Share(granteeType)
-		cs3shares = append(cs3shares, cs3share)
+	cs3shares := make([]*collaboration.Share, len(shares))
+	var wg sync.WaitGroup
+	for i, s := range shares {
+		wg.Add(1)
+		go func(i int, s model.Share) {
+			defer wg.Done()
+			granteeType, _ := m.getUserType(ctx, s.ShareWith)
+			cs3shares[i] = s.AsCS3Share(granteeType)
+		}(i, s)
 	}
+	wg.Wait()
 
 	return cs3shares, nil
 }
