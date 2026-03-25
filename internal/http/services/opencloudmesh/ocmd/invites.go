@@ -119,7 +119,7 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 			reqres.WriteError(w, r, reqres.APIErrorNotFound, "token not found", nil)
 			return
 		case rpc.Code_CODE_INVALID_ARGUMENT:
-			reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "token has expired", nil)
+			reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, acceptInviteResponse.Status.Message, nil)
 			return
 		case rpc.Code_CODE_ALREADY_EXISTS:
 			reqres.WriteError(w, r, reqres.APIErrorAlreadyExist, "user already known", nil)
@@ -130,6 +130,8 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(&RemoteUser{
 		UserID: acceptInviteResponse.UserId.OpaqueId,
 		Email:  acceptInviteResponse.Email,
@@ -138,8 +140,6 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error encoding response", err)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "application/json")
 
 	log.Info().Str("user", fmt.Sprintf("%s@%s", userObj.Id.OpaqueId, userObj.Id.Idp)).Str("token", req.Token).Msg("added to accepted users")
 }
