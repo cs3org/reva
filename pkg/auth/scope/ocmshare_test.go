@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
@@ -131,6 +132,24 @@ func TestCheckStorageRefResourceIdEmptyToken(t *testing.T) {
 	}
 }
 
+func TestCheckStorageRefPathEmptyTokenDoesNotMatchOtherShare(t *testing.T) {
+	s := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share123"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "share-res"},
+		Token:      "",
+	}
+
+	ref := &provider.Reference{Path: "/ocm/other-share/file.txt"}
+	if checkStorageRefForOCMShare(s, ref, "/ocm") {
+		t.Error("code-flow share with empty token must not match another share path")
+	}
+
+	refSame := &provider.Reference{Path: "/ocm/share123/file.txt"}
+	if !checkStorageRefForOCMShare(s, refSame, "/ocm") {
+		t.Error("code-flow share should still match its own share-id path")
+	}
+}
+
 func TestCheckOCMShareRefByID(t *testing.T) {
 	s := &ocmv1beta1.Share{
 		Id:    &ocmv1beta1.ShareId{OpaqueId: "share123"},
@@ -175,6 +194,16 @@ func TestAddCodeFlowScopeOmitsToken(t *testing.T) {
 		Id:         &ocmv1beta1.ShareId{OpaqueId: "share123"},
 		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
 		Token:      "should-not-appear",
+		Creator:    &userpb.UserId{OpaqueId: "creator"},
+		AccessMethods: []*ocmv1beta1.AccessMethod{
+			{
+				Term: &ocmv1beta1.AccessMethod_WebdavOptions{
+					WebdavOptions: &ocmv1beta1.WebDAVAccessMethod{
+						Permissions: &provider.ResourcePermissions{Stat: true},
+					},
+				},
+			},
+		},
 	}
 
 	scopes, err := AddCodeFlowOCMShareScope(s, authpb.Role_ROLE_VIEWER, nil)
@@ -195,6 +224,9 @@ func TestAddCodeFlowScopeOmitsToken(t *testing.T) {
 	if shares[0].Id.GetOpaqueId() != "share123" {
 		t.Errorf("scope share Id: got %s, want share123", shares[0].Id.GetOpaqueId())
 	}
+	if shares[0].Creator == nil || len(shares[0].AccessMethods) != 1 {
+		t.Fatalf("code-flow scope lost share metadata: %+v", shares[0])
+	}
 }
 
 func TestAddOCMShareScopeCarriesToken(t *testing.T) {
@@ -202,6 +234,16 @@ func TestAddOCMShareScopeCarriesToken(t *testing.T) {
 		Id:         &ocmv1beta1.ShareId{OpaqueId: "share123"},
 		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
 		Token:      "the-token",
+		Creator:    &userpb.UserId{OpaqueId: "creator"},
+		AccessMethods: []*ocmv1beta1.AccessMethod{
+			{
+				Term: &ocmv1beta1.AccessMethod_WebdavOptions{
+					WebdavOptions: &ocmv1beta1.WebDAVAccessMethod{
+						Permissions: &provider.ResourcePermissions{Stat: true},
+					},
+				},
+			},
+		},
 	}
 
 	scopes, err := AddOCMShareScope(s, authpb.Role_ROLE_VIEWER, nil)
@@ -218,5 +260,8 @@ func TestAddOCMShareScopeCarriesToken(t *testing.T) {
 	}
 	if shares[0].Token != "the-token" {
 		t.Errorf("legacy scope should carry token, got %q", shares[0].Token)
+	}
+	if shares[0].Creator == nil || len(shares[0].AccessMethods) != 1 {
+		t.Fatalf("legacy scope lost share metadata: %+v", shares[0])
 	}
 }

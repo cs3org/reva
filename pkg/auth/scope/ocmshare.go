@@ -116,8 +116,9 @@ func pathUnderOCMPrefix(path, prefix string) bool {
 // Flow: ref is either by ResourceId (storage opaque id) or by path. We allow only when the
 // ref clearly belongs to this share. Used at gRPC (storage) scope check; for path refs at
 // space root we get ref.Path = "/<filename>", so pathUnderOCMPrefix avoids matching "/ocm-*.txt".
-// Works together with AddOwnerScope in ocmsharecode: after we correctly return false here,
-// the token must have user scope (from AddOwnerScope) so the request is still allowed.
+// Path checks must stay narrower than user scope. Code-flow tokens may also carry owner
+// scope for non-share paths, so this function should only accept refs that clearly belong
+// to the OCM share itself.
 func checkStorageRefForOCMShare(s *ocmv1beta1.Share, r *provider.Reference, ns string) bool {
 	shareID := s.Id.GetOpaqueId()
 
@@ -140,7 +141,7 @@ func checkStorageRefForOCMShare(s *ocmv1beta1.Share, r *provider.Reference, ns s
 	// Ref by path: allow only if path is under this share in the OCM namespace (ns/shareID or ns/token).
 	path := r.GetPath()
 	underShareID := shareID != "" && pathUnderOCMPrefix(path, filepath.Join(ns, shareID))
-	underToken := pathUnderOCMPrefix(path, filepath.Join(ns, s.Token))
+	underToken := s.Token != "" && pathUnderOCMPrefix(path, filepath.Join(ns, s.Token))
 	return underShareID || underToken
 }
 
@@ -152,9 +153,16 @@ func checkOCMShareRef(s *ocmv1beta1.Share, ref *ocmv1beta1.ShareReference) bool 
 }
 
 // AddOCMShareScope adds the scope to allow access to an OCM share and the share resource.
-// It carries Id, ResourceId, and Token for backward compatibility with legacy direct-secret flows.
+// It carries the share metadata needed to resolve authenticated DAV requests without a second
+// repository lookup, including Token for backward compatibility with legacy direct-secret flows.
 func AddOCMShareScope(share *ocmv1beta1.Share, role authpb.Role, scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
-	scopeShare := ocmv1beta1.Share{ResourceId: share.ResourceId, Id: share.Id, Token: share.Token}
+	scopeShare := ocmv1beta1.Share{
+		ResourceId:    share.ResourceId,
+		Id:            share.Id,
+		Token:         share.Token,
+		Creator:       share.Creator,
+		AccessMethods: share.AccessMethods,
+	}
 	val, err := utils.MarshalProtoV1ToJSON(&scopeShare)
 	if err != nil {
 		return nil, err
@@ -177,7 +185,12 @@ func AddOCMShareScope(share *ocmv1beta1.Share, role authpb.Role, scopes map[stri
 // Unlike AddOCMShareScope, it deliberately omits Token so the long-lived shared secret
 // is never embedded in exchanged-token scopes.
 func AddCodeFlowOCMShareScope(share *ocmv1beta1.Share, role authpb.Role, scopes map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
-	scopeShare := ocmv1beta1.Share{ResourceId: share.ResourceId, Id: share.Id}
+	scopeShare := ocmv1beta1.Share{
+		ResourceId:    share.ResourceId,
+		Id:            share.Id,
+		Creator:       share.Creator,
+		AccessMethods: share.AccessMethods,
+	}
 	val, err := utils.MarshalProtoV1ToJSON(&scopeShare)
 	if err != nil {
 		return nil, err

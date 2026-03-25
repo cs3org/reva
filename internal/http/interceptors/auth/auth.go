@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/bluele/gcache"
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -235,7 +236,13 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, sign
 			if authResp.Status.Code != rpc.Code_CODE_OK {
 				return nil, fmt.Errorf("Failed to authenticate to gateway with machine auth for signed URL: %s", authResp.Status.String())
 			}
-			return ctxWithUserInfo(ctx, r, authResp.GetUser(), authResp.Token), nil
+			// Signed URLs end up with a normal Reva token. Dismantle it here so
+			// downstream handlers receive scopes just like other auth paths.
+			_, scopes, err := tokenManager.DismantleToken(ctx, authResp.Token)
+			if err != nil {
+				return nil, err
+			}
+			return ctxWithUserInfo(ctx, r, authResp.GetUser(), authResp.Token, scopes), nil
 		}
 	}
 
@@ -245,12 +252,12 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, sign
 	for _, tokenStrategy := range tokenStrategies {
 		token := tokenStrategy.GetToken(r)
 		if token != "" {
-			if user, ok := isTokenValid(r, tokenManager, token); ok {
+			if user, scopes, ok := isTokenValid(r, tokenManager, token); ok {
 				if err := insertGroupsInUser(ctx, userGroupsCache, client, user); err != nil {
 					logError(isUnprotectedEndpoint, log, err, "got an error retrieving groups for user "+user.Username, http.StatusInternalServerError, w)
 					return nil, err
 				}
-				return ctxWithUserInfo(ctx, r, user, token), nil
+				return ctxWithUserInfo(ctx, r, user, token, scopes), nil
 			}
 		}
 	}
@@ -333,12 +340,15 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, sign
 		return nil, err
 	}
 
-	return ctxWithUserInfo(ctx, r, res.User, token), nil
+	return ctxWithUserInfo(ctx, r, res.User, token, tokenScope), nil
 }
 
-func ctxWithUserInfo(ctx context.Context, r *http.Request, user *userpb.User, token string) context.Context {
+// Keep the authenticated request state together so downstream handlers see the
+// same user, token, and scopes.
+func ctxWithUserInfo(ctx context.Context, r *http.Request, user *userpb.User, token string, scopes map[string]*authpb.Scope) context.Context {
 	ctx = appctx.ContextSetUser(ctx, user)
 	ctx = appctx.ContextSetToken(ctx, token)
+	ctx = appctx.ContextSetScopes(ctx, scopes)
 	ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, token)
 	ctx = metadata.AppendToOutgoingContext(ctx, appctx.UserAgentHeader, r.UserAgent())
 
@@ -363,21 +373,21 @@ func insertGroupsInUser(ctx context.Context, userGroupsCache gcache.Cache, clien
 	return nil
 }
 
-func isTokenValid(r *http.Request, tokenManager token.Manager, token string) (*userpb.User, bool) {
+func isTokenValid(r *http.Request, tokenManager token.Manager, token string) (*userpb.User, map[string]*authpb.Scope, bool) {
 	ctx := r.Context()
 
 	u, tokenScope, err := tokenManager.DismantleToken(ctx, token)
 	if err != nil {
-		return nil, false
+		return nil, nil, false
 	}
 
 	// ensure access to the resource is allowed
 	ok, err := scope.VerifyScope(ctx, tokenScope, r.URL.Path)
 	if err != nil {
-		return nil, false
+		return nil, nil, false
 	}
 
-	return u, ok
+	return u, tokenScope, ok
 }
 
 func logError(isUnprotectedEndpoint bool, log *zerolog.Logger, err error, msg string, status int, w http.ResponseWriter) {
