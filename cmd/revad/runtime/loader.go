@@ -35,6 +35,7 @@ import (
 	_ "github.com/cs3org/reva/v3/pkg/auth/manager/loader"
 	_ "github.com/cs3org/reva/v3/pkg/auth/registry/loader"
 	_ "github.com/cs3org/reva/v3/pkg/datatx/manager/loader"
+	_ "github.com/cs3org/reva/v3/pkg/favorite/loader"
 	_ "github.com/cs3org/reva/v3/pkg/group/manager/loader"
 	_ "github.com/cs3org/reva/v3/pkg/metrics/driver/loader"
 	_ "github.com/cs3org/reva/v3/pkg/notification/handler/loader"
@@ -51,9 +52,9 @@ import (
 	_ "github.com/cs3org/reva/v3/pkg/share/cache/loader"
 	_ "github.com/cs3org/reva/v3/pkg/share/cache/warmup/loader"
 	_ "github.com/cs3org/reva/v3/pkg/share/manager/loader"
-	_ "github.com/cs3org/reva/v3/pkg/favorite/loader"
 	_ "github.com/cs3org/reva/v3/pkg/storage/fs/loader"
 	_ "github.com/cs3org/reva/v3/pkg/storage/registry/loader"
 	_ "github.com/cs3org/reva/v3/pkg/token/manager/loader"
 	_ "github.com/cs3org/reva/v3/pkg/user/manager/loader"
+	_ "github.com/cs3org/reva/v3/pkg/user/outgoing/manager/loader"
 )
