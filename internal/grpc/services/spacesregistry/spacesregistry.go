@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -287,18 +288,28 @@ func (s *service) listSpacesByType(ctx context.Context, req *provider.ListStorag
 // If it fails to decorate a project, it is skipped.
 func (s *service) decorateProjects(ctx context.Context, projects []*provider.StorageSpace) ([]*provider.StorageSpace, error) {
 	log := appctx.GetLogger(ctx)
-	filtered := []*provider.StorageSpace{}
+	var (
+		filtered []*provider.StorageSpace
+		mu       sync.Mutex
+		wg       sync.WaitGroup
+	)
 	for _, proj := range projects {
-		timeout, cancel := context.WithTimeout(ctx, s.timeoutSkipSpaces)
-		defer cancel()
-		log.Debug().Msgf("timeout %f", s.timeoutSkipSpaces.Seconds())
-		err := s.decorateProject(timeout, proj)
-		if err != nil {
-			log.Warn().Err(err).Msgf("Failed to decorate project %s, skipping it", proj.Name)
-			continue
-		}
-		filtered = append(filtered, proj)
+		wg.Add(1)
+		go func(proj *provider.StorageSpace) {
+			defer wg.Done()
+			timeout, cancel := context.WithTimeout(ctx, s.timeoutSkipSpaces)
+			defer cancel()
+			log.Debug().Msgf("timeout %f", s.timeoutSkipSpaces.Seconds())
+			if err := s.decorateProject(timeout, proj); err != nil {
+				log.Warn().Err(err).Msgf("Failed to decorate project %s, skipping it", proj.Name)
+				return
+			}
+			mu.Lock()
+			filtered = append(filtered, proj)
+			mu.Unlock()
+		}(proj)
 	}
+	wg.Wait()
 	return filtered, nil
 }
 
