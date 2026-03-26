@@ -24,7 +24,6 @@ import (
 	_ "github.com/cs3org/reva/v3/pkg/ocm/storage/received"
 	_ "github.com/cs3org/reva/v3/pkg/storage/fs/cephfs"
 	_ "github.com/cs3org/reva/v3/pkg/storage/fs/cephmount"
-	_ "github.com/cs3org/reva/v3/pkg/storage/fs/eos"
 	_ "github.com/cs3org/reva/v3/pkg/storage/fs/local"
 	_ "github.com/cs3org/reva/v3/pkg/storage/fs/localhome"
 	_ "github.com/cs3org/reva/v3/pkg/storage/fs/nextcloud"

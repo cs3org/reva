@@ -165,4 +165,15 @@ type Config struct {
 	// AllowInsecure determines whether EOS can fall back to no TLS
 	// Default is false
 	AllowInsecure bool `mapstructure:"allow_insecure"`
+
+	// EnableQuotaCache enables an in-memory cache for GetQuota results.
+	// When enabled, cached values are returned immediately and refreshed in the background
+	// after QuotaCacheTTL seconds. Entries are never evicted, only refreshed.
+	// Default is false.
+	EnableQuotaCache bool `mapstructure:"enable_quota_cache"`
+
+	// QuotaCacheTTL is the time-to-live in seconds for quota cache entries.
+	// After this period, the cached value is still returned but a background refresh is triggered.
+	// Default is 600.
+	QuotaCacheTTL int `mapstructure:"quota_cache_ttl"`
 }

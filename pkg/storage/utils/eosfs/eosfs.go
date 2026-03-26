@@ -144,6 +144,7 @@ type Eosfs struct {
 	singleUserAuth eosclient.Authorization
 	userIDCache    *ttlcache.Cache
 	tokenCache     gcache.Cache
+	quotaCache     *quotaCache
 }
 
 // NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance.
@@ -229,6 +230,13 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 			_, _ = eosfs.getUserIDGateway(context.Background(), key)
 		}
 	})
+
+	if c.EnableQuotaCache {
+		eosfs.quotaCache = newQuotaCache(time.Duration(c.QuotaCacheTTL) * time.Second)
+		appctx.GetLogger(ctx).Info().Int("ttl_seconds", c.QuotaCacheTTL).Msg("FINDME: quota cache enabled")
+	} else {
+		appctx.GetLogger(ctx).Info().Msg("FINDME: quota cache disabled")
+	}
 
 	go eosfs.userIDcacheWarmup()
 
@@ -1250,6 +1258,34 @@ func (fs *Eosfs) CreateStorageSpace(ctx context.Context, req *provider.CreateSto
 	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
 }
 
+// func (fs *Eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (totalbytes, usedbytes uint64, err error) {
+// 	log := appctx.GetLogger(ctx)
+
+// 	u, err := utils.GetUser(ctx)
+// 	if err != nil {
+// 		return 0, 0, errors.Wrap(err, "eosfs: no user in ctx")
+// 	}
+// 	// lightweight accounts don't have quota nodes, so we're passing an empty string as path
+// 	userAuth, err := fs.getUserAuth(ctx, u, "")
+// 	if err != nil {
+// 		return 0, 0, err
+// 	}
+// 	cboxAuth := utils.GetEmptyAuth()
+
+// 	if ref.Path != fs.conf.QuotaNode && ref.Path != "" {
+// 		ref.Path = fs.wrap(ctx, ref.Path)
+// 	}
+
+// 	qi, err := fs.c.GetQuota(ctx, userAuth, cboxAuth, ref.Path)
+// 	log.Debug().Any("ref", ref).Any("quota", qi).Str("user", u.Id.OpaqueId).Err(err).Msgf("GetQuota")
+// 	if err != nil {
+// 		err := errors.Wrap(err, "eosfs: error getting quota")
+// 		return 0, 0, err
+// 	}
+
+// 	return qi.TotalBytes, qi.UsedBytes, nil
+// }
+
 func (fs *Eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (totalbytes, usedbytes uint64, err error) {
 	log := appctx.GetLogger(ctx)
 
@@ -1268,14 +1304,46 @@ func (fs *Eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (totalby
 		ref.Path = fs.wrap(ctx, ref.Path)
 	}
 
+	if fs.quotaCache != nil {
+		key := ref.Path
+		if entry, ok := fs.quotaCache.get(key); ok {
+			if time.Since(entry.fetchedAt) > fs.quotaCache.ttl {
+				// TTL expired: trigger a background refresh if none is already running
+				if fs.quotaCache.tryMarkRefreshing(key) {
+					go fs.refreshQuotaCache(key, userAuth, cboxAuth, ref.Path)
+				}
+			}
+			log.Debug().Any("ref", ref).Any("quota", entry.info).Str("user", u.Id.OpaqueId).Msgf("GetQuota (cached)")
+			return entry.info.TotalBytes, entry.info.UsedBytes, nil
+		}
+	}
+
 	qi, err := fs.c.GetQuota(ctx, userAuth, cboxAuth, ref.Path)
 	log.Debug().Any("ref", ref).Any("quota", qi).Str("user", u.Id.OpaqueId).Err(err).Msgf("GetQuota")
 	if err != nil {
-		err := errors.Wrap(err, "eosfs: error getting quota")
-		return 0, 0, err
+		return 0, 0, errors.Wrap(err, "eosfs: error getting quota")
+	}
+
+	if fs.quotaCache != nil {
+		fs.quotaCache.set(ref.Path, qi)
+		log.Info().Str("path", ref.Path).Str("user", u.Id.OpaqueId).Uint64("total", qi.TotalBytes).Uint64("used", qi.UsedBytes).Msg("FINDME: quota cache populated")
 	}
 
 	return qi.TotalBytes, qi.UsedBytes, nil
+}
+
+// refreshQuotaCache fetches fresh quota data from EOS and updates the cache.
+// Intended to be run as a goroutine. Uses a background context since the
+// original request context may already be done.
+func (fs *Eosfs) refreshQuotaCache(key string, userAuth, cboxAuth eosclient.Authorization, path string) {
+	qi, err := fs.c.GetQuota(context.Background(), userAuth, cboxAuth, path)
+	if err != nil {
+		// Leave the stale entry intact so subsequent requests can still return it;
+		// clear the refreshing flag so the next TTL expiry will retry.
+		fs.quotaCache.clearRefreshing(key)
+		return
+	}
+	fs.quotaCache.set(key, qi)
 }
 
 func (fs *Eosfs) GetHome(ctx context.Context) (string, error) {
