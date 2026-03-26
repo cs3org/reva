@@ -125,6 +125,10 @@ func (c *Config) ApplyDefaults() {
 		c.MaxDaysInRecycleList = 14
 	}
 
+	if c.QuotaCacheTTL == 0 {
+		c.QuotaCacheTTL = 600
+	}
+
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
@@ -135,6 +139,7 @@ type Eosfs struct {
 	singleUserAuth eosclient.Authorization
 	userIDCache    *ttlcache.Cache
 	tokenCache     gcache.Cache
+	quotaCache     *quotaCache
 }
 
 // NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance.
@@ -210,6 +215,13 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 		chunkHandler: chunking.NewChunkHandler(c.CacheDirectory),
 		userIDCache:  ttlcache.NewCache(),
 		tokenCache:   gcache.New(c.UserIDCacheSize).LFU().Build(),
+	}
+
+	if c.EnableQuotaCache {
+		eosfs.quotaCache = newQuotaCache(time.Duration(c.QuotaCacheTTL) * time.Second)
+		appctx.GetLogger(ctx).Info().Int("ttl_seconds", c.QuotaCacheTTL).Msg("FINDME: quota cache enabled")
+	} else {
+		appctx.GetLogger(ctx).Info().Msg("FINDME: quota cache disabled")
 	}
 
 	eosfs.userIDCache.SetCacheSizeLimit(c.UserIDCacheSize)
