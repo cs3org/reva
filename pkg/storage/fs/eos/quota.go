@@ -31,6 +31,7 @@ import (
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 )
 
 func (fs *Eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (totalbytes, usedbytes uint64, err error) {
@@ -73,7 +74,6 @@ func (fs *Eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (totalby
 
 	if fs.quotaCache != nil {
 		fs.quotaCache.set(ref.Path, qi)
-		log.Info().Str("path", ref.Path).Str("user", u.Id.OpaqueId).Uint64("total", qi.TotalBytes).Uint64("used", qi.UsedBytes).Msg("FINDME: quota cache populated")
 	}
 
 	return qi.TotalBytes, qi.UsedBytes, nil
@@ -91,4 +91,20 @@ func (fs *Eosfs) refreshQuotaCache(key string, userAuth, cboxAuth eosclient.Auth
 		return
 	}
 	fs.quotaCache.set(key, qi)
+}
+
+// warmupQuotaCache fetches all quota nodes from EOS and pre-populates the cache.
+// It is intended to run as a goroutine at startup for home instances.
+func (fs *Eosfs) warmupQuotaCache(log *zerolog.Logger) {
+	ctx := context.Background()
+	cboxAuth := utils.GetEmptyAuth()
+
+	quotas, err := fs.c.ListAllQuota(ctx, cboxAuth)
+	if err != nil {
+		log.Error().Err(err).Msg("warmupQuotaCache: failed to list all quota nodes")
+		return
+	}
+
+	fs.quotaCache.setAll(quotas)
+	log.Debug().Int("entries", len(quotas)).Msg("warmupQuotaCache: quota cache warmup complete")
 }
