@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	erpc "github.com/cern-eos/go-eosgrpc"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -86,6 +87,68 @@ func (c *Client) GetQuota(ctx context.Context, user eosclient.Authorization, roo
 	}
 
 	return qi, err
+}
+
+// ListAllQuota returns all quota nodes linked to gid=99
+func (c *Client) ListAllQuota(ctx context.Context, rootAuth eosclient.Authorization) (map[string]*eosclient.QuotaInfo, error) {
+	log := appctx.GetLogger(ctx)
+	log.Info().Str("func", "ListAllQuota").Str("rootuid,rootgid", rootAuth.Role.UID+","+rootAuth.Role.GID).Msg("")
+
+	rq, err := c.initNSRequest(ctx, rootAuth, "")
+	if err != nil {
+		return nil, err
+	}
+
+	msg := new(erpc.NSRequest_QuotaRequest)
+	msg.Id = new(erpc.RoleId)
+	msg.Id.Gid = 99
+	msg.Op = erpc.QUOTAOP_GET
+	msg.Id.Trace = trace.Get(ctx)
+	rq.Command = &erpc.NSRequest_Quota{Quota: msg}
+
+	resp, err := c.cl.Exec(appctx.ContextGetClean(ctx), rq)
+	e := c.getRespError(resp, err)
+	if e != nil {
+		return nil, e
+	}
+
+	if resp == nil {
+		return nil, errtypes.InternalError("nil response for ListAllQuota")
+	}
+
+	if resp.GetError() != nil {
+		log.Error().Str("func", "ListAllQuota").Str("info:", fmt.Sprintf("%#v", resp)).Int64("eoserrcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
+	}
+
+	if resp.Quota == nil {
+		return nil, errtypes.InternalError("nil quota response for ListAllQuota")
+	}
+
+	if resp.Quota.Code != 0 {
+		return nil, errtypes.InternalError(fmt.Sprintf("Quota error from eos. info: '%#v'", resp.Quota))
+	}
+
+	result := make(map[string]*eosclient.QuotaInfo, len(resp.Quota.Quotanode))
+	for i, qn := range resp.Quota.Quotanode {
+		path := strings.TrimRight(string(qn.Path), "/")
+		if path == "" {
+			log.Debug().Str("func", "ListAllQuota").Int("index", i).Msg("skipping quota node with empty path")
+			continue
+		}
+		qi, ok := result[path]
+		if !ok {
+			qi = new(eosclient.QuotaInfo)
+			result[path] = qi
+		}
+		qi.TotalBytes += max(uint64(qn.Maxlogicalbytes), 0)
+		qi.UsedBytes += qn.Usedlogicalbytes
+		qi.TotalInodes += max(uint64(qn.Maxfiles), 0)
+		qi.UsedInodes += qn.Usedfiles
+		log.Debug().Str("func", "ListAllQuota").Str("path", path).Str("quotanode", fmt.Sprintf("%#v", qn)).Msg("")
+	}
+
+	log.Debug().Str("func", "ListAllQuota").Int("quota_nodes", len(result)).Msg("grpc response")
+	return result, nil
 }
 
 // SetQuota sets the quota of a user on the quota node defined by path.

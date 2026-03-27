@@ -44,6 +44,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/spaces"
+	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/v3/pkg/eosclient"
 	"github.com/cs3org/reva/v3/pkg/eosclient/eosbinary"
@@ -233,9 +234,13 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 
 	if c.EnableQuotaCache {
 		eosfs.quotaCache = newQuotaCache(time.Duration(c.QuotaCacheTTL) * time.Second)
-		appctx.GetLogger(ctx).Info().Int("ttl_seconds", c.QuotaCacheTTL).Msg("FINDME: quota cache enabled")
+		appctx.GetLogger(ctx).Info().Int("ttl_seconds", c.QuotaCacheTTL).Msg("quota cache enabled")
+		if strings.Contains(c.Namespace, "user") || strings.Contains(c.Namespace, "home") {
+			log := appctx.GetLogger(ctx)
+			go eosfs.warmupQuotaCache(log)
+		}
 	} else {
-		appctx.GetLogger(ctx).Info().Msg("FINDME: quota cache disabled")
+		appctx.GetLogger(ctx).Info().Msg("quota cache disabled")
 	}
 
 	go eosfs.userIDcacheWarmup()
@@ -1326,7 +1331,6 @@ func (fs *Eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (totalby
 
 	if fs.quotaCache != nil {
 		fs.quotaCache.set(ref.Path, qi)
-		log.Info().Str("path", ref.Path).Str("user", u.Id.OpaqueId).Uint64("total", qi.TotalBytes).Uint64("used", qi.UsedBytes).Msg("FINDME: quota cache populated")
 	}
 
 	return qi.TotalBytes, qi.UsedBytes, nil
@@ -1344,6 +1348,19 @@ func (fs *Eosfs) refreshQuotaCache(key string, userAuth, cboxAuth eosclient.Auth
 		return
 	}
 	fs.quotaCache.set(key, qi)
+}
+
+// warmupQuotaCache fetches all quota nodes from EOS and pre-populates the cache.
+// It is intended to run as a goroutine at startup for home instances.
+func (fs *Eosfs) warmupQuotaCache(log *zerolog.Logger) {
+	quotas, err := fs.c.ListAllQuota(context.Background(), utils.GetEmptyAuth())
+	if err != nil {
+		log.Error().Err(err).Msg("warmupQuotaCache: failed to list all quota nodes")
+		return
+	}
+
+	fs.quotaCache.setAll(quotas)
+	log.Debug().Int("entries", len(quotas)).Msg("warmupQuotaCache: quota cache warmup complete")
 }
 
 func (fs *Eosfs) GetHome(ctx context.Context) (string, error) {

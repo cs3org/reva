@@ -65,6 +65,19 @@ func (c *quotaCache) set(key string, info *eosclient.QuotaInfo) {
 	}
 }
 
+// setAll stores a batch of entries under a single lock acquisition.
+func (c *quotaCache) setAll(entries map[string]*eosclient.QuotaInfo) {
+	now := time.Now()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for key, info := range entries {
+		c.entries[key] = &quotaCacheEntry{
+			info:      *info,
+			fetchedAt: now,
+		}
+	}
+}
+
 // tryMarkRefreshing atomically marks the entry as being refreshed in the background.
 // Returns true if it succeeded (entry exists and wasn't already marked as refreshing).
 func (c *quotaCache) tryMarkRefreshing(key string) bool {
