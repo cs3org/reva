@@ -207,7 +207,7 @@ func getProvider(ctx context.Context, c *config) (app.Provider, error) {
 }
 
 func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
-	appURL, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken, req.Opaque.Map, s.conf.Language)
+	appURL, forcedvm, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken, req.Opaque.Map, s.conf.Language)
 	if err != nil {
 		res := &providerpb.OpenInAppResponse{
 			Status: status.NewStatusFromErrType(ctx, "appprovider: error calling GetAppURL", err),
@@ -217,6 +217,14 @@ func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppReques
 	res := &providerpb.OpenInAppResponse{
 		Status: status.NewOK(ctx),
 		AppUrl: appURL,
+		Opaque: &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				"forced-viewmode-reason": {
+					Decoder: "plain",
+					Value:   []byte(forcedvm),
+				},
+			},
+		},
 	}
 	return res, nil
 }

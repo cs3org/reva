@@ -481,16 +481,21 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// recreate the structure to be able to marshal the AppUrl.Target as a string
-	js, err := json.Marshal(
-		map[string]any{
-			"app_url":         openRes.AppUrl.AppUrl,
-			"method":          openRes.AppUrl.Method,
-			"form_parameters": openRes.AppUrl.FormParameters,
-			"headers":         openRes.AppUrl.Headers,
-			"target":          appTargetToString(openRes.AppUrl.Target),
-		},
-	)
+	// recreate the structure to be able to marshal the AppUrl.Target as a string and to add the optional forced viewmode reason
+	resPayload := map[string]any{
+		"app_url":         openRes.AppUrl.AppUrl,
+		"method":          openRes.AppUrl.Method,
+		"form_parameters": openRes.AppUrl.FormParameters,
+		"headers":         openRes.AppUrl.Headers,
+		"target":          appTargetToString(openRes.AppUrl.Target),
+	}
+	if openRes.Opaque != nil && openRes.Opaque.Map != nil {
+		if entry, ok := openRes.Opaque.Map["forced-viewmode-reason"]; ok {
+			resPayload["forced_viewmode_reason"] = string(entry.Value)
+		}
+	}
+
+	js, err := json.Marshal(resPayload)
 	if err != nil {
 		writeError(w, r, appErrorServerError, "Internal error with JSON payload",
 			errors.Wrap(err, "error marshalling JSON response"))
