@@ -43,6 +43,7 @@ type EOSClient interface {
 	GetAttr(ctx context.Context, auth Authorization, key, path string) (*Attribute, error)
 	GetAttrs(ctx context.Context, auth Authorization, path string) ([]*Attribute, error)
 	GetQuota(ctx context.Context, user Authorization, rootAuth Authorization, path string) (*QuotaInfo, error)
+	ListAllQuota(ctx context.Context, rootAuth Authorization) (map[string]*QuotaInfo, error)
 	SetQuota(ctx context.Context, user Authorization, rootAuth Authorization, info *SetQuotaInfo) error
 	Touch(ctx context.Context, auth Authorization, path string) error
 	Chown(ctx context.Context, auth, chownauth Authorization, path string) error

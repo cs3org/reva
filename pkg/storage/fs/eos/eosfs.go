@@ -219,9 +219,13 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 
 	if c.EnableQuotaCache {
 		eosfs.quotaCache = newQuotaCache(time.Duration(c.QuotaCacheTTL) * time.Second)
-		appctx.GetLogger(ctx).Info().Int("ttl_seconds", c.QuotaCacheTTL).Msg("FINDME: quota cache enabled")
-	} else {
-		appctx.GetLogger(ctx).Info().Msg("FINDME: quota cache disabled")
+		appctx.GetLogger(ctx).Info().Int("ttl_seconds", c.QuotaCacheTTL).Msg("quota cache enabled")
+		if strings.Contains(c.Namespace, "user") || strings.Contains(c.Namespace, "home") {
+			log := appctx.GetLogger(ctx)
+			go eosfs.warmupQuotaCache(log)
+		} else {
+			appctx.GetLogger(ctx).Info().Msg("quota cache disabled")
+		}
 	}
 
 	eosfs.userIDCache.SetCacheSizeLimit(c.UserIDCacheSize)
