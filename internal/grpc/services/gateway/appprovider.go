@@ -203,7 +203,6 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling OpenInApp")
 	}
-
 	return res, nil
 }
 
