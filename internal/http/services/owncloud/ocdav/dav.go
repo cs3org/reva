@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"context"
+	"encoding/base64"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -258,7 +259,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			if strings.Contains(r.Header.Get("Authorization"), "Bearer") {
 				token = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 				ocmshare, relPath = router.ShiftPath(r.URL.Path)
-				if strings.Count(token, ".") == 2 {
+				if isJWT(token) {
 					authType = "ocmexchangedtoken"
 				} else {
 					authType = "ocmshares"
@@ -472,6 +473,25 @@ func handleOCMAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, ocmsh
 		ClientId:     ocmshare,
 		ClientSecret: token,
 	})
+}
+
+// Three non-empty base64url segments (RFC 7515 JWS Compact Serialization).
+// Classifies the bearer as an exchanged JWT vs a legacy direct secret.
+// Not a cryptographic proof, @Mahdi: I can't think of anything better at this point.
+func isJWT(token string) bool {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	for _, p := range parts {
+		if len(p) == 0 {
+			return false
+		}
+		if _, err := base64.RawURLEncoding.DecodeString(p); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // Legacy direct-secret DAV access still routes internally by token. Exchanged-
