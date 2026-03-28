@@ -70,7 +70,12 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	req, err := getCreateShareRequest(r)
-	log.Info().Any("req", req).Str("Remote", r.RemoteAddr).Err(err).Msg("OCM /shares request received")
+	// Log whitelist metadata only; incoming OCM share requests carry shared secrets in protocol options.
+	logEvent := log.Info().Str("remote", r.RemoteAddr).Err(err)
+	if req != nil {
+		logEvent = logEvent.Str("sender", req.Sender).Str("resource_type", req.ResourceType)
+	}
+	logEvent.Msg("OCM /shares request received")
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
 		return
@@ -170,7 +175,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	log.Info().Any("req", createShareReq).Msg("CreateOCMIncomingShare payload")
+	log.Info().Str("resource_id", req.ProviderID).Str("sender", req.Sender).Str("resource_type", req.ResourceType).Msg("CreateOCMIncomingShare payload")
 	createShareResp, err := h.gatewayClient.CreateOCMIncomingShare(ctx, createShareReq)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error creating ocm share", err)

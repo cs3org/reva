@@ -285,19 +285,19 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			case authRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
-				log.Info().Str("token", token).Str("mode", mode).Msg("permission denied in remote OCM access")
+				log.Info().Str("mode", mode).Msg("permission denied in remote OCM access")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			case authRes.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
-				log.Info().Str("token", token).Str("mode", mode).Msg("unauthorized token in remote OCM access")
+				log.Info().Str("mode", mode).Msg("unauthorized token in remote OCM access")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			case authRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
-				log.Info().Str("token", token).Str("mode", mode).Msg("invalid token in remote OCM access")
+				log.Info().Str("mode", mode).Msg("invalid token in remote OCM access")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			case authRes.Status.Code != rpc.Code_CODE_OK:
-				log.Error().Str("token", token).Str("mode", mode).Interface("status", authRes.Status).Msg("grpc auth request failed in remote OCM access")
+				log.Error().Str("mode", mode).Interface("status", authRes.Status).Msg("grpc auth request failed in remote OCM access")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -322,7 +322,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, authRes.Token)
 			ctx = context.WithValue(ctx, ctxOCM, true)
 
-			log.Info().Str("token", token).Str("mode", mode).Str("ocmshare", ocmshare).Interface("user", authRes.User).Msg("remote OCM access authenticated")
+			log.Info().Str("mode", mode).Str("ocmshare", ocmshare).Str("userid", authRes.User.GetId().GetOpaqueId()).Msg("remote OCM access authenticated")
 
 			r = r.WithContext(ctx)
 			h.OCMSharesHandler.Handler(s).ServeHTTP(w, r)
@@ -409,15 +409,15 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			case sRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
 				fallthrough
 			case sRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
-				log.Debug().Str("token", token).Interface("status", res.Status).Msg("resource not found")
+				log.Debug().Str("token", token).Interface("status", sRes.Status).Msg("resource not found")
 				w.WriteHeader(http.StatusNotFound) // log the difference
 				return
 			case sRes.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
-				log.Debug().Str("token", token).Interface("status", res.Status).Msg("unauthorized")
+				log.Debug().Str("token", token).Interface("status", sRes.Status).Msg("unauthorized")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			case sRes.Status.Code != rpc.Code_CODE_OK:
-				log.Error().Str("token", token).Interface("status", res.Status).Msg("grpc stat request failed")
+				log.Error().Str("token", token).Interface("status", sRes.Status).Msg("grpc stat request failed")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}

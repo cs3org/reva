@@ -272,7 +272,7 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 		// legacy path: check cache first
 		if entry, err := d.ccache.Get(id.OpaqueId); err == nil {
 			cc := entry.(*cachedClient)
-			log.Info().Interface("share", cc.share).Str("rel", rel).Msg("accessing OCM share via cached client")
+			log.Info().Str("shareId", cc.share.GetId().GetOpaqueId()).Str("rel", rel).Msg("accessing OCM share via cached client")
 			return cc.client, cc.share, rel, nil
 		}
 
@@ -289,14 +289,14 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 			c.SetHeader("Authorization", basicHdr)
 			_, err2 := c.Stat("")
 			if err2 != nil {
-				log.Info().Any("former_error", err).Err(err2).Str("endpoint", endpoint).Any("share", share).Str("secret", secret).Msg("failed accessing OCM share")
+				log.Info().Any("former_error", err).Err(err2).Str("endpoint", endpoint).Str("shareId", share.GetId().GetOpaqueId()).Msg("failed accessing OCM share")
 				return nil, nil, "", errtypes.InvalidCredentials("error accessing OCM share: " + err2.Error())
 			}
 			authHdr = basicHdr
-			log.Info().Str("endpoint", endpoint).Any("share", share).Str("mode", "legacy").Msg("access to remote OCM share succeeded")
+			log.Info().Str("endpoint", endpoint).Str("shareId", share.GetId().GetOpaqueId()).Str("mode", "legacy").Msg("access to remote OCM share succeeded")
 		} else {
 			authHdr = bearerHdr
-			log.Info().Str("endpoint", endpoint).Any("share", share).Str("mode", "bearer").Msg("access to remote OCM share succeeded")
+			log.Info().Str("endpoint", endpoint).Str("shareId", share.GetId().GetOpaqueId()).Str("mode", "bearer").Msg("access to remote OCM share succeeded")
 		}
 
 		d.ccache.SetWithTTL(id.OpaqueId, &cachedClient{client: c, share: share, authHeader: authHdr}, time.Hour)

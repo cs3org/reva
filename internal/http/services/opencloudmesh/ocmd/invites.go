@@ -56,7 +56,12 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(ctx)
 
 	req, err := getAcceptInviteRequest(r)
-	log.Info().Any("req", req).Str("Remote", r.RemoteAddr).Err(err).Msg("OCM /invite-accepted request received")
+	// Log whitelist metadata only; invite-accepted requests carry invite tokens.
+	logEvent := log.Info().Str("remote", r.RemoteAddr).Err(err)
+	if req != nil {
+		logEvent = logEvent.Str("recipient_provider", req.RecipientProvider).Bool("has_token", req.Token != "")
+	}
+	logEvent.Msg("OCM /invite-accepted request received")
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
 		return
@@ -141,7 +146,7 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Info().Str("user", fmt.Sprintf("%s@%s", userObj.Id.OpaqueId, userObj.Id.Idp)).Str("token", req.Token).Msg("added to accepted users")
+	log.Info().Str("user", fmt.Sprintf("%s@%s", userObj.Id.OpaqueId, userObj.Id.Idp)).Msg("added to accepted users")
 }
 
 func getAcceptInviteRequest(r *http.Request) (*InviteAcceptedRequest, error) {

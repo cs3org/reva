@@ -63,15 +63,15 @@ func (c *Converter) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCM
 	}
 
 	log := appctx.GetLogger(ctx)
-	log.Debug().Interface("receivedOCMShare", receivedOCMShare).Msg("processing received OCM share")
+	log.Debug().Str("shareId", receivedOCMShare.GetId().GetOpaqueId()).Msg("processing received OCM share")
 
 	var permissions *provider.ResourcePermissions
 	for _, p := range receivedOCMShare.Protocols {
 		if p.GetWebdavOptions() != nil {
 			permissions = p.GetWebdavOptions().GetPermissions().Permissions
-			log.Debug().Str("webdav_uri", p.GetWebdavOptions().GetUri()).Str("shared_secret", p.GetWebdavOptions().GetSharedSecret()).Msg("processing webdav options")
+			log.Debug().Str("webdav_uri", p.GetWebdavOptions().GetUri()).Msg("processing webdav options")
 		} else if p.GetWebappOptions() != nil {
-			log.Debug().Str("webapp_uri", p.GetWebappOptions().GetUri()).Str("shared_secret", p.GetWebappOptions().GetSharedSecret()).Msg("processing webapp options")
+			log.Debug().Str("webapp_uri", p.GetWebappOptions().GetUri()).Msg("processing webapp options")
 		} else {
 			log.Debug().Any("protocol", p).Msg("unknown access method, skipping")
 		}

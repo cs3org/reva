@@ -234,7 +234,7 @@ func (d *driver) shareAndRelativePathFromRef(ctx context.Context, ref *provider.
 	}
 
 	log := appctx.GetLogger(ctx)
-	log.Info().Interface("ref", ref).Str("path", relPath).Str("token", candidate).Msg("Accessing OCM share")
+	log.Info().Str("path", relPath).Bool("has_candidate", candidate != "").Msg("Accessing OCM share via repository fallback")
 
 	// Scoped share data is the preferred source for authenticated OCM requests.
 	// Fall back to repository lookups for older paths that still rely on them.
