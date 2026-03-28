@@ -140,9 +140,15 @@ func checkStorageRefForOCMShare(s *ocmv1beta1.Share, r *provider.Reference, ns s
 	}
 
 	// Ref by path: allow only if path is under this share in the OCM namespace (ns/shareID or ns/token).
-	path := r.GetPath()
-	underShareID := shareID != "" && pathUnderOCMPrefix(path, filepath.Join(ns, shareID))
-	underToken := s.Token != "" && pathUnderOCMPrefix(path, filepath.Join(ns, s.Token))
+	// Bare namespace root (e.g. "/ocm") is allowed for mount-point PROPFIND. Safety: empty-share
+	// exchanged-token auth requires exactly one OCM share scope, so multi-share ambiguity is
+	// rejected before reaching here.
+	refPath := r.GetPath()
+	if refPath == ns {
+		return true
+	}
+	underShareID := shareID != "" && pathUnderOCMPrefix(refPath, filepath.Join(ns, shareID))
+	underToken := s.Token != "" && pathUnderOCMPrefix(refPath, filepath.Join(ns, s.Token))
 	return underShareID || underToken
 }
 

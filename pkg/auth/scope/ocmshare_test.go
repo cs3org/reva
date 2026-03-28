@@ -106,11 +106,16 @@ func TestCheckStorageRefPathPrefixOcmInFilename(t *testing.T) {
 		Token:      "tok",
 	}
 
-	for _, path := range []string{"/ocm-m6-proof.txt", "/ocm-foo", "/ocm"} {
+	for _, path := range []string{"/ocm-m6-proof.txt", "/ocm-foo"} {
 		ref := &provider.Reference{Path: path}
 		if checkStorageRefForOCMShare(s, ref, "/ocm") {
 			t.Errorf("path %q must not match OCM share (filename/folder starting with ocm)", path)
 		}
+	}
+	// Bare namespace root ("/ocm") is now allowed for mount-point PROPFIND.
+	rootRef := &provider.Reference{Path: "/ocm"}
+	if !checkStorageRefForOCMShare(s, rootRef, "/ocm") {
+		t.Error("bare namespace root /ocm must be allowed for mount-point stat")
 	}
 }
 
@@ -329,6 +334,11 @@ func TestVerifyScopeGRPCRequests(t *testing.T) {
 			name:    "stat request wrong share path",
 			req:     &provider.StatRequest{Ref: &provider.Reference{Path: "/ocm/other-id/file.txt"}},
 			allowed: false,
+		},
+		{
+			name:    "stat request bare namespace root",
+			req:     &provider.StatRequest{Ref: &provider.Reference{Path: "/ocm"}},
+			allowed: true,
 		},
 	}
 	for _, tt := range tests {
