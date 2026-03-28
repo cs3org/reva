@@ -361,3 +361,114 @@ func TestShareFromContextScopesMatchesLegacyToken(t *testing.T) {
 		t.Fatalf("shareFromContextScopes() = %+v, want share-2", got)
 	}
 }
+
+func TestShareFromContextScopesEmptyCandidateIncompleteShare(t *testing.T) {
+	share := &ocmv1beta1.Share{
+		Id:    &ocmv1beta1.ShareId{OpaqueId: "incomplete-share"},
+		Token: "tok",
+		// ResourceId intentionally nil -- incomplete scope payload.
+		Creator:       &userpb.UserId{},
+		AccessMethods: []*ocmv1beta1.AccessMethod{{Term: &ocmv1beta1.AccessMethod_WebdavOptions{WebdavOptions: &ocmv1beta1.WebDAVAccessMethod{Permissions: &provider.ResourcePermissions{Stat: true}}}}},
+	}
+
+	scopes, err := authscope.AddCodeFlowOCMShareScope(share, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		t.Fatalf("AddCodeFlowOCMShareScope returned error: %v", err)
+	}
+
+	ctx := appctx.ContextSetScopes(context.Background(), scopes)
+	if got := shareFromContextScopes(ctx, ""); got != nil {
+		t.Fatalf("shareFromContextScopes(\"\") = %+v, want nil for incomplete share", got)
+	}
+}
+
+func TestShareFromContextScopesEmptyCandidateOneCompleteShare(t *testing.T) {
+	share := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "solo-share"},
+		Token:      "tok",
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
+		Creator:    &userpb.UserId{},
+		AccessMethods: []*ocmv1beta1.AccessMethod{{Term: &ocmv1beta1.AccessMethod_WebdavOptions{
+			WebdavOptions: &ocmv1beta1.WebDAVAccessMethod{Permissions: &provider.ResourcePermissions{Stat: true}},
+		}}},
+	}
+
+	scopes, err := authscope.AddCodeFlowOCMShareScope(share, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		t.Fatalf("AddCodeFlowOCMShareScope returned error: %v", err)
+	}
+
+	ctx := appctx.ContextSetScopes(context.Background(), scopes)
+	got := shareFromContextScopes(ctx, "")
+	if got == nil {
+		t.Fatal("shareFromContextScopes(\"\") returned nil, want the single complete share")
+	}
+	if got.GetId().GetOpaqueId() != "solo-share" {
+		t.Fatalf("shareFromContextScopes(\"\") returned %q, want solo-share", got.GetId().GetOpaqueId())
+	}
+}
+
+func TestShareFromContextScopesEmptyCandidateTwoCompleteShares(t *testing.T) {
+	shareA := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share-a"},
+		Token:      "tok-a",
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res-a"},
+		Creator:    &userpb.UserId{},
+		AccessMethods: []*ocmv1beta1.AccessMethod{{Term: &ocmv1beta1.AccessMethod_WebdavOptions{
+			WebdavOptions: &ocmv1beta1.WebDAVAccessMethod{Permissions: &provider.ResourcePermissions{Stat: true}},
+		}}},
+	}
+	shareB := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share-b"},
+		Token:      "tok-b",
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res-b"},
+		Creator:    &userpb.UserId{},
+		AccessMethods: []*ocmv1beta1.AccessMethod{{Term: &ocmv1beta1.AccessMethod_WebdavOptions{
+			WebdavOptions: &ocmv1beta1.WebDAVAccessMethod{Permissions: &provider.ResourcePermissions{Stat: true}},
+		}}},
+	}
+
+	scopes, err := authscope.AddCodeFlowOCMShareScope(shareA, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		t.Fatalf("AddCodeFlowOCMShareScope(shareA) returned error: %v", err)
+	}
+	scopes, err = authscope.AddCodeFlowOCMShareScope(shareB, authpb.Role_ROLE_VIEWER, scopes)
+	if err != nil {
+		t.Fatalf("AddCodeFlowOCMShareScope(shareB) returned error: %v", err)
+	}
+
+	ctx := appctx.ContextSetScopes(context.Background(), scopes)
+	if got := shareFromContextScopes(ctx, ""); got != nil {
+		t.Fatalf("shareFromContextScopes(\"\") = %+v, want nil for ambiguous multi-share", got)
+	}
+}
+
+func TestShareAndRelativePathFromRefRootMountedCodeFlow(t *testing.T) {
+	share := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "root-share"},
+		Token:      "tok",
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
+		Creator:    &userpb.UserId{},
+		AccessMethods: []*ocmv1beta1.AccessMethod{{Term: &ocmv1beta1.AccessMethod_WebdavOptions{
+			WebdavOptions: &ocmv1beta1.WebDAVAccessMethod{Permissions: &provider.ResourcePermissions{Stat: true}},
+		}}},
+	}
+
+	scopes, err := authscope.AddCodeFlowOCMShareScope(share, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		t.Fatalf("AddCodeFlowOCMShareScope returned error: %v", err)
+	}
+
+	ctx := appctx.ContextSetScopes(context.Background(), scopes)
+	d := &driver{}
+	got, rel, err := d.shareAndRelativePathFromRef(ctx, &provider.Reference{Path: "/ocm"})
+	if err != nil {
+		t.Fatalf("shareAndRelativePathFromRef returned error: %v", err)
+	}
+	if got == nil || got.GetId().GetOpaqueId() != "root-share" {
+		t.Fatalf("shareAndRelativePathFromRef returned share %+v, want root-share", got)
+	}
+	if rel != "./" {
+		t.Fatalf("shareAndRelativePathFromRef returned rel %q, want \"./\"", rel)
+	}
+}

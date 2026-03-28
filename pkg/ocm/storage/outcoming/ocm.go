@@ -188,7 +188,8 @@ func shareIDFromContextScopes(ctx context.Context) string {
 
 // Only use scoped shares that already carry enough metadata to execute
 // sender-side operations directly. Older or incomplete scope payloads fall back
-// to repository resolution.
+// to repository resolution. When candidate is empty, exactly one complete
+// scoped share must exist; multiple complete shares are rejected as ambiguous.
 func shareFromContextScopes(ctx context.Context, candidate string) *ocmv1beta1.Share {
 	scopes, ok := appctx.ContextGetScopes(ctx)
 	if !ok || len(scopes) == 0 {
@@ -200,23 +201,30 @@ func shareFromContextScopes(ctx context.Context, candidate string) *ocmv1beta1.S
 		return nil
 	}
 
-	for _, share := range shares {
-		if candidate != "" && candidate != share.GetId().GetOpaqueId() && candidate != share.GetToken() {
-			continue
+	if candidate != "" {
+		for _, share := range shares {
+			if candidate != share.GetId().GetOpaqueId() && candidate != share.GetToken() {
+				continue
+			}
+			if share.GetResourceId() == nil || share.GetCreator() == nil || len(share.GetAccessMethods()) == 0 {
+				continue
+			}
+			return share
 		}
+		return nil
+	}
+
+	// candidate == "": collect all complete shares and accept only if unambiguous.
+	var complete []*ocmv1beta1.Share
+	for _, share := range shares {
 		if share.GetResourceId() == nil || share.GetCreator() == nil || len(share.GetAccessMethods()) == 0 {
 			continue
 		}
-		return share
+		complete = append(complete, share)
 	}
-
-	if candidate == "" && len(shares) == 1 {
-		share := shares[0]
-		if share.GetResourceId() != nil && share.GetCreator() != nil && len(share.GetAccessMethods()) > 0 {
-			return share
-		}
+	if len(complete) == 1 {
+		return complete[0]
 	}
-
 	return nil
 }
 
