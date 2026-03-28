@@ -19,6 +19,7 @@
 package scope
 
 import (
+	"context"
 	"testing"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
@@ -293,5 +294,122 @@ func TestAddOCMShareScopeCarriesToken(t *testing.T) {
 	}
 	if shares[0].Creator == nil || len(shares[0].AccessMethods) != 1 {
 		t.Fatalf("legacy scope lost share metadata: %+v", shares[0])
+	}
+}
+
+func TestVerifyScopeGRPCRequests(t *testing.T) {
+	share := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share-abc"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res-1"},
+		Creator:    &userpb.UserId{OpaqueId: "creator"},
+		AccessMethods: []*ocmv1beta1.AccessMethod{
+			{Term: &ocmv1beta1.AccessMethod_WebdavOptions{
+				WebdavOptions: &ocmv1beta1.WebDAVAccessMethod{
+					Permissions: &provider.ResourcePermissions{Stat: true},
+				},
+			}},
+		},
+	}
+	tokenScope, err := AddCodeFlowOCMShareScope(share, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name    string
+		req     any
+		allowed bool
+	}{
+		{
+			name:    "stat request matching share path",
+			req:     &provider.StatRequest{Ref: &provider.Reference{Path: "/ocm/share-abc/file.txt"}},
+			allowed: true,
+		},
+		{
+			name:    "stat request wrong share path",
+			req:     &provider.StatRequest{Ref: &provider.Reference{Path: "/ocm/other-id/file.txt"}},
+			allowed: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ok, err := VerifyScope(context.Background(), tokenScope, tt.req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if ok != tt.allowed {
+				t.Errorf("VerifyScope = %v, want %v", ok, tt.allowed)
+			}
+		})
+	}
+}
+
+func TestVerifyScopeHTTPDAVPaths(t *testing.T) {
+	share := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share-abc"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res-1"},
+		Creator:    &userpb.UserId{OpaqueId: "creator"},
+		AccessMethods: []*ocmv1beta1.AccessMethod{
+			{Term: &ocmv1beta1.AccessMethod_WebdavOptions{
+				WebdavOptions: &ocmv1beta1.WebDAVAccessMethod{
+					Permissions: &provider.ResourcePermissions{Stat: true},
+				},
+			}},
+		},
+	}
+	codeFlowScope, err := AddCodeFlowOCMShareScope(share, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	legacyShare := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share-abc"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res-1"},
+		Token:      "legacy-token",
+		Creator:    &userpb.UserId{OpaqueId: "creator"},
+		AccessMethods: []*ocmv1beta1.AccessMethod{
+			{Term: &ocmv1beta1.AccessMethod_WebdavOptions{
+				WebdavOptions: &ocmv1beta1.WebDAVAccessMethod{
+					Permissions: &provider.ResourcePermissions{Stat: true},
+				},
+			}},
+		},
+	}
+	legacyScope, err := AddOCMShareScope(legacyShare, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name    string
+		scope   map[string]*authpb.Scope
+		path    string
+		allowed bool
+	}{
+		{"stripped share-id path", codeFlowScope, "/dav/ocm/share-abc/file.txt", true},
+		{"unstripped share-id path", codeFlowScope, "/remote.php/dav/ocm/share-abc/file.txt", true},
+		{"stripped wrong share-id", codeFlowScope, "/dav/ocm/other-id/file.txt", false},
+		{"unstripped wrong share-id", codeFlowScope, "/remote.php/dav/ocm/other-id/file.txt", false},
+		{"bare root", codeFlowScope, "/dav/ocm", true},
+		{"bare root trailing slash", codeFlowScope, "/dav/ocm/", true},
+		{"unstripped bare root", codeFlowScope, "/remote.php/dav/ocm", true},
+		{"unstripped bare root trailing slash", codeFlowScope, "/remote.php/dav/ocm/", true},
+		{"stripped legacy-token path", legacyScope, "/dav/ocm/legacy-token/file.txt", true},
+		{"unstripped legacy-token path", legacyScope, "/remote.php/dav/ocm/legacy-token/file.txt", true},
+		{"non-DAV OCM route /ocm/token", codeFlowScope, "/ocm/token", false},
+		{"non-DAV OCM share-looking", codeFlowScope, "/ocm/share-abc/file.txt", false},
+		{"later-ocm rescue attempt", codeFlowScope, "/dav/ocm/other-id/dir/ocm/share-abc/file.txt", false},
+		{"double-slash injection", codeFlowScope, "/dav/ocm//file.txt", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ok, err := VerifyScope(context.Background(), tt.scope, tt.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if ok != tt.allowed {
+				t.Errorf("VerifyScope(%q) = %v, want %v", tt.path, ok, tt.allowed)
+			}
+		})
 	}
 }

@@ -115,6 +115,9 @@ func TestAuthenticateValidCode(t *testing.T) {
 	if shares[0].Id.GetOpaqueId() != "share-abc" {
 		t.Errorf("scope shareId: got %s, want share-abc", shares[0].Id.GetOpaqueId())
 	}
+	if _, ok := scopes["user"]; ok {
+		t.Error("code-flow token must not contain 'user' scope key")
+	}
 }
 
 func TestAuthenticateClientIDDoesNotNeedShareIDMatch(t *testing.T) {

@@ -145,18 +145,6 @@ func (m *manager) Authenticate(ctx context.Context, clientID, code string) (*use
 		return nil, nil, err
 	}
 
-	// Add owner scope so the same token allows access to the user's personal space and
-	// non-share paths (e.g. files named ocm-*.txt). Two scope checks apply: (1) HTTP auth
-	// passes the full URL path string; ocmshare uses checkResourcePath(path) which never
-	// matches DAV paths, so without user scope we get 401 for all DAV requests. (2) gRPC
-	// (storage) passes the request; for ref.Path like "/ocm-mahdi-baghbani.txt" pathUnderOCMPrefix
-	// correctly makes ocmshare return false, so we need user scope to allow. AddOwnerScope
-	// adds user scope to the code-flow token so both checks can pass when ocmshare declines.
-	s, err = scope.AddOwnerScope(s)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	user := userRes.RemoteUser
 	user.Opaque = &types.Opaque{
 		Map: map[string]*types.OpaqueEntry{

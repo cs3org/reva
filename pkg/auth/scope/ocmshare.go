@@ -20,6 +20,7 @@ package scope
 
 import (
 	"context"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -96,7 +97,10 @@ func ocmShareScope(_ context.Context, scope *authpb.Scope, resource any, _ *zero
 	case *ocmv1beta1.GetOCMShareRequest:
 		return checkOCMShareRef(&share, v.GetRef()), nil
 	case string:
-		return checkResourcePath(v), nil
+		if checkResourcePath(v) {
+			return true, nil
+		}
+		return checkDAVOCMPath(v, &share), nil
 	}
 	return false, nil
 }
@@ -116,9 +120,6 @@ func pathUnderOCMPrefix(path, prefix string) bool {
 // Flow: ref is either by ResourceId (storage opaque id) or by path. We allow only when the
 // ref clearly belongs to this share. Used at gRPC (storage) scope check; for path refs at
 // space root we get ref.Path = "/<filename>", so pathUnderOCMPrefix avoids matching "/ocm-*.txt".
-// Path checks must stay narrower than user scope. Code-flow tokens may also carry owner
-// scope for non-share paths, so this function should only accept refs that clearly belong
-// to the OCM share itself.
 func checkStorageRefForOCMShare(s *ocmv1beta1.Share, r *provider.Reference, ns string) bool {
 	shareID := s.Id.GetOpaqueId()
 
@@ -143,6 +144,44 @@ func checkStorageRefForOCMShare(s *ocmv1beta1.Share, r *provider.Reference, ns s
 	underShareID := shareID != "" && pathUnderOCMPrefix(path, filepath.Join(ns, shareID))
 	underToken := s.Token != "" && pathUnderOCMPrefix(path, filepath.Join(ns, s.Token))
 	return underShareID || underToken
+}
+
+// checkDAVOCMPath authorizes HTTP path strings for OCM DAV requests scoped to
+// this share. the HTTP auth interceptor's VerifyScope call dispatches here for
+// DAV paths that checkResourcePath does not cover. Only /dav/ocm/... and
+// /remote.php/dav/ocm/... are accepted; non-DAV /ocm/* routes are rejected.
+func checkDAVOCMPath(rawPath string, s *ocmv1beta1.Share) bool {
+	cleaned := path.Clean(rawPath)
+	segments := strings.Split(cleaned, "/")
+	// path.Clean preserves the leading "/", so segments[0] is always "".
+	segments = segments[1:]
+
+	// Strip optional leading "remote.php" deployment wrapper.
+	if len(segments) > 0 && segments[0] == "remote.php" {
+		segments = segments[1:]
+	}
+
+	// Require exactly "dav", "ocm" as the next two segments.
+	if len(segments) < 2 || segments[0] != "dav" || segments[1] != "ocm" {
+		return false
+	}
+
+	// Bare-root PROPFIND at the OCM mount point: /dav/ocm (no segment after ocm).
+	if len(segments) == 2 {
+		return true
+	}
+
+	// The segment after "ocm" must match the share's canonical ID or legacy token.
+	target := segments[2]
+	shareID := s.Id.GetOpaqueId()
+	if shareID != "" && target == shareID {
+		return true
+	}
+	if s.Token != "" && target == s.Token {
+		return true
+	}
+
+	return false
 }
 
 func checkOCMShareRef(s *ocmv1beta1.Share, ref *ocmv1beta1.ShareReference) bool {

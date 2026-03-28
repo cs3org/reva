@@ -99,6 +99,13 @@ func (m *manager) Authenticate(ctx context.Context, shareID, bearerToken string)
 		if !found {
 			return nil, nil, errtypes.InvalidCredentials("scope mismatch for share " + shareID)
 		}
+	} else {
+		// Bare-root request (e.g. PROPFIND /dav/ocm/): allow only when the
+		// token carries exactly one OCM share scope so downstream storage
+		// resolution is unambiguous.
+		if len(ocmShares) != 1 {
+			return nil, nil, errtypes.InvalidCredentials("empty shareID requires exactly one OCM share scope")
+		}
 	}
 
 	return user, scopes, nil

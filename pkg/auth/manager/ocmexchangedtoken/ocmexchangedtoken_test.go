@@ -88,7 +88,7 @@ func TestAuthenticateMismatchedShareID(t *testing.T) {
 	}
 }
 
-func TestAuthenticateEmptyShareIDAcceptsAny(t *testing.T) {
+func TestAuthenticateEmptyShareIDSingleScopeAllows(t *testing.T) {
 	mgr := testJWTManager()
 	tok := mintTestToken(mgr, "share-abc")
 
@@ -98,6 +98,41 @@ func TestAuthenticateEmptyShareIDAcceptsAny(t *testing.T) {
 	}
 	if user.Id.OpaqueId != "remote-user" {
 		t.Errorf("user: got %s, want remote-user", user.Id.OpaqueId)
+	}
+}
+
+func TestAuthenticateEmptyShareIDMultiScopeRejects(t *testing.T) {
+	mgr := testJWTManager()
+	u := &userpb.User{
+		Id: &userpb.UserId{OpaqueId: "remote-user", Idp: "remote.example.com", Type: userpb.UserType_USER_TYPE_FEDERATED},
+	}
+	s1 := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share-one"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res-1"},
+	}
+	s2 := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share-two"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res-2"},
+	}
+	scopes, err := scope.AddCodeFlowOCMShareScope(s1, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scopes, err = scope.AddCodeFlowOCMShareScope(s2, authpb.Role_ROLE_VIEWER, scopes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tok, err := mgr.tokenmgr.MintToken(context.Background(), u, scopes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = mgr.Authenticate(context.Background(), "", tok)
+	if err == nil {
+		t.Fatal("expected error for empty shareID with multiple scoped shares")
+	}
+	if _, ok := err.(errtypes.InvalidCredentials); !ok {
+		t.Errorf("expected InvalidCredentials, got %T: %v", err, err)
 	}
 }
 
