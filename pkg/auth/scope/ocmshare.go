@@ -127,12 +127,12 @@ func checkStorageRefForOCMShare(s *ocmv1beta1.Share, r *provider.Reference, ns s
 		if utils.ResourceIDEqual(s.ResourceId, r.GetResourceId()) {
 			return true
 		}
-		if shareID != "" && strings.HasPrefix(r.ResourceId.OpaqueId, shareID) {
+		if shareID != "" && r.ResourceId.OpaqueId == shareID {
 			return true
 		}
-		// Token prefix: only when share has a token. Code-flow scope omits token; in Go
-		// strings.HasPrefix(id, "") is true for any id, so we must not use token match when empty.
-		if s.Token != "" && strings.HasPrefix(r.ResourceId.OpaqueId, s.Token) {
+		// Only when share has a token. Code-flow scope omits token; matching
+		// against an empty string would be meaningless, so skip when unset.
+		if s.Token != "" && r.ResourceId.OpaqueId == s.Token {
 			return true
 		}
 		return false

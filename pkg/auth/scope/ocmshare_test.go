@@ -229,6 +229,36 @@ func TestAddCodeFlowScopeOmitsToken(t *testing.T) {
 	}
 }
 
+func TestCheckStorageRefShareIDPrefixRejects(t *testing.T) {
+	// share-id "share123" must NOT match a resource whose OpaqueId merely starts with it.
+	s := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share123"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
+		Token:      "longlivedtoken",
+	}
+	ref := &provider.Reference{
+		ResourceId: &provider.ResourceId{OpaqueId: "share123extra"},
+	}
+	if checkStorageRefForOCMShare(s, ref, "/ocm") {
+		t.Error("share-id prefix of a longer opaque id must reject")
+	}
+}
+
+func TestCheckStorageRefTokenPrefixRejects(t *testing.T) {
+	// token "legacy-token" must NOT match a resource whose OpaqueId merely starts with it.
+	s := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share-xyz"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
+		Token:      "legacy-token",
+	}
+	ref := &provider.Reference{
+		ResourceId: &provider.ResourceId{OpaqueId: "legacy-token-extra"},
+	}
+	if checkStorageRefForOCMShare(s, ref, "/ocm") {
+		t.Error("token prefix of a longer opaque id must reject")
+	}
+}
+
 func TestAddOCMShareScopeCarriesToken(t *testing.T) {
 	s := &ocmv1beta1.Share{
 		Id:         &ocmv1beta1.ShareId{OpaqueId: "share123"},
