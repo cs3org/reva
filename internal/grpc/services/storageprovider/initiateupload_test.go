@@ -250,3 +250,27 @@ func TestInitiateFileUploadRootFolderStillRejectedWithExposeDataServer(t *testin
 		t.Fatal("InitiateUpload must not run for folder mount root")
 	}
 }
+
+func TestInitiateFileUploadRootGetMDErrorReportsStorageFailure(t *testing.T) {
+	t.Parallel()
+
+	fs := &captureRootMountFS{rootMD: nil}
+	svc := newServiceForInitiateUploadTest(t, fs, true)
+	ctx := context.Background()
+
+	res, err := svc.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
+		Ref: &provider.Reference{Path: "/"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status.Code == rpc.Code_CODE_OK {
+		t.Fatal("expected non-OK when GetMD fails at mount root")
+	}
+	if res.Status.Message != "error resolving mount-root resource for upload" {
+		t.Fatalf("expected storage-resolution error message, got %q", res.Status.Message)
+	}
+	if fs.lastUploadRef != nil {
+		t.Fatal("InitiateUpload must not run when GetMD fails")
+	}
+}

@@ -512,13 +512,17 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 
 	uploadRef := newRef
 	if newRef.GetPath() == "/" && s.conf.ExposeDataServer {
-		if info, err := s.storage.GetMD(ctx, newRef, nil); err == nil {
-			mapped := singleFileRootMountRemap(newRef.GetPath(), info)
-			if mapped != newRef.GetPath() {
-				uploadRef = &provider.Reference{
-					ResourceId: newRef.ResourceId,
-					Path:       mapped,
-				}
+		info, err := s.storage.GetMD(ctx, newRef, nil)
+		if err != nil {
+			return &provider.InitiateFileUploadResponse{
+				Status: status.NewInternal(ctx, err, "error resolving mount-root resource for upload"),
+			}, nil
+		}
+		mapped := singleFileRootMountRemap(newRef.GetPath(), info)
+		if mapped != newRef.GetPath() {
+			uploadRef = &provider.Reference{
+				ResourceId: newRef.ResourceId,
+				Path:       mapped,
 			}
 		}
 	}
