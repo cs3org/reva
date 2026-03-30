@@ -19,7 +19,7 @@ require (
 	github.com/dolthub/go-mysql-server v0.14.0
 	github.com/glpatcern/go-mime v0.0.0-20221026162842-2a8d71ad17a9
 	github.com/go-chi/chi/v5 v5.2.5
-	github.com/go-ldap/ldap/v3 v3.4.12
+	github.com/go-ldap/ldap/v3 v3.4.13
 	github.com/go-playground/locales v0.14.1
 	github.com/go-playground/universal-translator v0.18.1
 	github.com/go-playground/validator/v10 v10.30.1
@@ -83,7 +83,7 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
-	github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358 // indirect
+	github.com/Azure/go-ntlmssp v0.1.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/alitto/pond/v2 v2.7.0
