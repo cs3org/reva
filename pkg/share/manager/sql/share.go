@@ -133,6 +133,7 @@ func (m *ShareMgr) Share(ctx context.Context, md *provider.ResourceInfo, g *coll
 	share.ItemType = model.ItemType(conversions.ResourceTypeToItem(md.Type))
 	share.Inode = md.Id.OpaqueId
 	share.Instance = md.Id.StorageId
+	share.SpaceId = md.Id.SpaceId
 	share.Permissions = uint8(permissions.OCSFromCS3Permission(g.Permissions.Permissions))
 	share.Orphan = false
 	share.SpaceID = md.Id.SpaceId
@@ -720,6 +721,27 @@ func (m *ShareMgr) appendShareFiltersToQuery(query *gorm.DB, filters []*collabor
 					innerQuery = innerQuery.Where("uid_initiator = ?", filter.GetCreator().OpaqueId)
 				} else {
 					innerQuery = innerQuery.Or("uid_initiator = ?", filter.GetCreator().OpaqueId)
+				}
+			}
+			query = query.Where(innerQuery)
+		case collaboration.Filter_TYPE_SPACE_ID:
+			innerQuery := m.db
+			for i, filter := range filters {
+				if i == 0 {
+					innerQuery = innerQuery.Where("space_id = ?", filter.GetSpaceId())
+				} else {
+					innerQuery = innerQuery.Or("space_id = ?", filter.GetSpaceId())
+				}
+			}
+			query = query.Where(innerQuery)
+		case collaboration.Filter_TYPE_GRANTEE:
+			innerQuery := m.db
+			for i, filter := range filters {
+				_, shareWith := conversions.FormatGrantee(filter.GetGrantee())
+				if i == 0 {
+					innerQuery = innerQuery.Where("share_with = ?", shareWith)
+				} else {
+					innerQuery = innerQuery.Or("share_with = ?", shareWith)
 				}
 			}
 			query = query.Where(innerQuery)
