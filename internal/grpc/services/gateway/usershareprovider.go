@@ -31,6 +31,8 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	revashare "github.com/cs3org/reva/v3/pkg/share"
+	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
 
 	"github.com/cs3org/reva/v3/pkg/errtypes"
@@ -73,40 +75,63 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 		return nil, errtypes.InternalError("ShareManager is not online")
 	}
 
-	// Then we set ACLs on the storage layer
-	// -------------------------------------
+	// Hierarchy check (ADR-GENERAL-005)
+	// (https://gitlab.cern.ch/cernbox/adr/-/blob/master/decisions/general/0005-sharing.md)
+	// ---------------------------------
+	spaceId := req.ResourceInfo.Id.SpaceId
+	// Force means we delete child shares, instead of returning a conflict error
+	force := parseForce(req.Opaque)
 
-	// TODO(labkode): if both commits are enabled they could be done concurrently.
+	existingShares, err := s.listSharesForGranteeInSpace(ctx, shareClient, spaceId, req.Grant.Grantee)
+	if err != nil {
+		return &collaboration.CreateShareResponse{
+			Status: status.NewInternal(ctx, err, "error listing shares for hierarchy check"),
+		}, nil
+	}
+
+	checker := &sharehierarchy.Checker{GetPath: s.getPathForResourceId}
+	result, err := checker.CheckGrantConsistency(ctx, req.ResourceInfo.Path, req.Grant.Permissions.Permissions, existingShares)
+	if err != nil {
+		return &collaboration.CreateShareResponse{
+			Status: status.NewStatusFromErrType(ctx, "hierarchy check", err),
+		}, nil
+	}
+	// If we don't force, we show a warning to the user that shares will be deleted
+	if !force && len(result.ToDelete) > 0 {
+		conflictErr := errtypes.ShareChildConflict(sharehierarchy.ChildConflictMessage(result.ToDelete))
+		return &collaboration.CreateShareResponse{
+			Status: status.NewStatusFromErrType(ctx, "hierarchy check", conflictErr),
+		}, nil
+	}
+
+	// If we commit to the storage, first we apply to the new resource, then we clean up
 	if s.c.CommitShareToStorageGrant {
-		// If the share is a denial we call  denyGrant instead.
-		if grants.PermissionsEqual(req.Grant.Permissions.Permissions, &provider.ResourcePermissions{}) {
-			denyGrantStatus, err := s.denyGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee)
+		if grantStatus, err := s.applyGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions); err != nil || grantStatus.Code != rpc.Code_CODE_OK {
 			if err != nil {
-				return nil, errors.Wrap(err, "gateway: error denying grant in storage")
+				return nil, errors.Wrap(err, "gateway: error applying grant to storage")
 			}
-			if denyGrantStatus.Code != rpc.Code_CODE_OK {
-				return &collaboration.CreateShareResponse{
-					Status: denyGrantStatus,
-				}, nil
+			return &collaboration.CreateShareResponse{Status: grantStatus}, nil
+		}
+		// Remove grants for child shares made redundant by the new share.
+		for _, child := range result.ToDelete {
+			if st, err := s.removeGrant(ctx, child.ResourceId, child.Grantee, child.Permissions.Permissions); err != nil || st.Code != rpc.Code_CODE_OK {
+				if err != nil {
+					return nil, errors.Wrap(err, "gateway: error removing child grant")
+				}
+				return &collaboration.CreateShareResponse{Status: st}, nil
 			}
-		} else {
-			addGrantStatus, err := s.addGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions)
-			if err != nil {
-				log.Error().Err(err).Str("ResourceInfo", req.ResourceInfo.String()).Str("Grantee", req.Grant.Grantee.String()).Str("Message", addGrantStatus.Message).Msg("Failed to Create Share: error during addGrant")
-				return nil, errors.Wrap(err, "gateway: error adding grant to storage")
-			}
-			if addGrantStatus.Code != rpc.Code_CODE_OK {
-				return &collaboration.CreateShareResponse{
-					Status: addGrantStatus,
-				}, nil
+		}
+		// Re-apply grants for children that retain higher permissions (N=R, C=RW).
+		// ToReapply is already sorted shallowest-first by CheckGrantConsistency.
+		for _, child := range result.ToReapply {
+			if _, err := s.addGrant(ctx, child.ResourceId, child.Grantee, child.Permissions.Permissions); err != nil {
+				log.Error().Err(err).Str("shareId", child.Id.OpaqueId).Msg("error re-applying child grant after CreateShare")
 			}
 		}
 	}
 
-	// Then we commit to the db
-	// ------------------------
+	// Finally, we write to the db
 	res, err := shareClient.CreateShare(ctx, req)
-
 	if err != nil {
 		log.Error().Str("ResourceInfo", req.ResourceInfo.String()).Str("Grantee", req.Grant.Grantee.String()).Msg("Failed to Create Share but ACLs are already set")
 		return nil, errors.Wrap(err, "gateway: error calling CreateShare")
@@ -115,10 +140,23 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 		return nil, errors.New("ShareClient returned error: " + res.Status.Code.String() + ": " + res.Status.Message)
 	}
 
+	// And we remove from the db the deleted shares
+	// Remove child share records made redundant by the new share.
+	for _, child := range result.ToDelete {
+		if _, err := shareClient.RemoveShare(ctx, &collaboration.RemoveShareRequest{
+			Ref: &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: child.Id}},
+		}); err != nil {
+			log.Error().Err(err).Str("shareId", child.Id.OpaqueId).Msg("error removing child share from DB after CreateShare")
+		}
+	}
+
 	return res, nil
+
 }
 
 func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareRequest) (*collaboration.RemoveShareResponse, error) {
+	log := appctx.GetLogger(ctx)
+
 	c, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
 	if err != nil {
 		return &collaboration.RemoveShareResponse{
@@ -126,38 +164,62 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 		}, nil
 	}
 
-	getShareReq := &collaboration.GetShareRequest{
-		Ref: req.Ref,
-	}
-	getShareRes, err := c.GetShare(ctx, getShareReq)
+	getShareRes, err := c.GetShare(ctx, &collaboration.GetShareRequest{Ref: req.Ref})
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling GetShare")
 	}
-
 	if getShareRes.Status.Code != rpc.Code_CODE_OK {
-		res := &collaboration.RemoveShareResponse{
+		return &collaboration.RemoveShareResponse{
 			Status: status.NewInternal(ctx, status.NewErrorFromCode(getShareRes.Status.Code, "gateway"),
 				"error getting share to be removed"),
-		}
-		return res, nil
+		}, nil
 	}
 	share := getShareRes.Share
 
-	// Now we first try to remove from EOS
+	// Resolve parent / child shares so we can reapply the hierarchy (ADR-GENERAL-005).
+	var ancestors, descendants []*collaboration.Share
+	var paths map[string]string
+	checker := &sharehierarchy.Checker{GetPath: s.getPathForResourceId}
+
+	existingShares, listErr := s.listSharesForGranteeInSpace(ctx, c, share.ResourceId.SpaceId, share.Grantee)
+	if listErr != nil {
+		return &collaboration.RemoveShareResponse{
+			Status: status.NewInternal(ctx, listErr, "error listing shares for hierarchy reapply"),
+		}, nil
+	}
+	existingShares = filterOutShare(existingShares, share.Id.OpaqueId)
+	paths = checker.ResolvePaths(ctx, existingShares)
+	sharePath, pathErr := s.getPathForResourceId(ctx, share.ResourceId)
+	if pathErr == nil {
+		ancestors = sharehierarchy.FilterAncestors(existingShares, paths, sharePath)
+		descendants = sharehierarchy.FilterDescendants(existingShares, paths, sharePath)
+	}
+
 	if s.c.CommitShareToStorageGrant {
 		removeGrantStatus, err := s.removeGrant(ctx, share.ResourceId, share.Grantee, share.Permissions.Permissions)
 		if err != nil {
 			return nil, errors.Wrap(err, "gateway: error removing grant from storage")
 		}
-		// If this fails, we abort, so that the user does not think the share is removed while the permissions remain
 		if removeGrantStatus.Code != rpc.Code_CODE_OK {
-			return &collaboration.RemoveShareResponse{
-				Status: removeGrantStatus,
-			}, err
+			return &collaboration.RemoveShareResponse{Status: removeGrantStatus}, nil
+		}
+
+		// Re-apply the closest parent's permissions to the now-unshared node.
+		if parent := sharehierarchy.ClosestAncestor(ancestors, paths); parent != nil {
+			if _, err := s.addGrant(ctx, share.ResourceId, share.Grantee, parent.Permissions.Permissions); err != nil {
+				log.Error().Err(err).Str("shareId", share.Id.OpaqueId).Msg("error reapplying parent grant after RemoveShare")
+			}
+		}
+
+		// Re-apply descendant grants shallowest-first so child permissions are not overridden.
+		sharehierarchy.SortByPathDepthAsc(descendants, paths)
+		for _, child := range descendants {
+			if _, err := s.addGrant(ctx, child.ResourceId, child.Grantee, child.Permissions.Permissions); err != nil {
+				log.Error().Err(err).Str("childShareId", child.Id.OpaqueId).Msg("error reapplying child grant after RemoveShare")
+			}
 		}
 	}
 
-	// Finally, we remove from the db
 	res, err := c.RemoveShare(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling RemoveShare")
@@ -289,32 +351,99 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 		}, nil
 	}
 
+	// Fetch the current share before updating so we have its path and space.
+	getRes, err := c.GetShare(ctx, &collaboration.GetShareRequest{Ref: req.Ref})
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling GetShare for UpdateShare")
+	}
+	if getRes.Status.Code != rpc.Code_CODE_OK {
+		return &collaboration.UpdateShareResponse{
+			Status: status.NewInternal(ctx, status.NewErrorFromCode(getRes.Status.Code, "gateway"), "error getting share for update"),
+		}, nil
+	}
+	currentShare := getRes.Share
+
+	_, isPermUpdate := req.Field.GetField().(*collaboration.UpdateShareRequest_UpdateField_Permissions)
+	newPerms := req.Field.GetPermissions().GetPermissions()
+
+	// Hierarchy check (ADR-GENERAL-005) — only for permission updates when SpaceId is available.
+	// Returns early on conflict; on success, populates toDelete/toReapply for use below.
+	checker := &sharehierarchy.Checker{GetPath: s.getPathForResourceId}
+	var toDelete, toReapply []*collaboration.Share
+	if isPermUpdate && currentShare.ResourceId.SpaceId != "" {
+		force := parseForce(req.Opaque)
+
+		existingShares, listErr := s.listSharesForGranteeInSpace(ctx, c, currentShare.ResourceId.SpaceId, currentShare.Grantee)
+		if listErr != nil {
+			return &collaboration.UpdateShareResponse{
+				Status: status.NewInternal(ctx, listErr, "error listing shares for hierarchy check"),
+			}, nil
+		}
+		existingShares = filterOutShare(existingShares, currentShare.Id.OpaqueId)
+
+		currentPath, pathErr := s.getPathForResourceId(ctx, currentShare.ResourceId)
+		if pathErr != nil {
+			return &collaboration.UpdateShareResponse{
+				Status: status.NewInternal(ctx, pathErr, "error resolving share path for hierarchy check"),
+			}, nil
+		}
+
+		result, checkErr := checker.CheckGrantConsistency(ctx, currentPath, newPerms, existingShares)
+		if checkErr != nil {
+			return &collaboration.UpdateShareResponse{
+				Status: status.NewStatusFromErrType(ctx, "hierarchy check", checkErr),
+			}, nil
+		}
+		if !force && len(result.ToDelete) > 0 {
+			conflictErr := errtypes.ShareChildConflict(sharehierarchy.ChildConflictMessage(result.ToDelete))
+			return &collaboration.UpdateShareResponse{
+				Status: status.NewStatusFromErrType(ctx, "hierarchy check", conflictErr),
+			}, nil
+		}
+		toDelete = result.ToDelete
+		toReapply = result.ToReapply
+	}
+
+	if isPermUpdate && s.c.CommitShareToStorageGrant {
+		if grantStatus, err := s.updateGrant(ctx, currentShare.ResourceId, currentShare.Grantee, newPerms); err != nil || grantStatus.Code != rpc.Code_CODE_OK {
+			if err != nil {
+				return nil, errors.Wrap(err, "gateway: error calling updateGrant")
+			}
+			return &collaboration.UpdateShareResponse{Status: grantStatus}, nil
+		}
+
+		// Remove grants for child shares made redundant by the updated permissions.
+		for _, child := range toDelete {
+			if st, err := s.removeGrant(ctx, child.ResourceId, child.Grantee, child.Permissions.Permissions); err != nil || st.Code != rpc.Code_CODE_OK {
+				if err != nil {
+					return nil, errors.Wrap(err, "gateway: error removing child grant")
+				}
+				return &collaboration.UpdateShareResponse{Status: st}, nil
+			}
+		}
+
+		// Re-apply grants for children that retain higher permissions.
+		// toReapply is already sorted shallowest-first by CheckGrantConsistency.
+		for _, child := range toReapply {
+			if _, err := s.addGrant(ctx, child.ResourceId, child.Grantee, child.Permissions.Permissions); err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Str("shareId", child.Id.OpaqueId).Msg("error re-applying child grant after UpdateShare")
+			}
+		}
+	}
+
 	res, err := c.UpdateShare(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling UpdateShare")
 	}
-
-	// if we don't need to commit we return earlier
-	if !s.c.CommitShareToStorageGrant {
+	if res.Status.Code != rpc.Code_CODE_OK {
 		return res, nil
 	}
-
-	// TODO(labkode): if both commits are enabled they could be done concurrently.
-
-	if s.c.CommitShareToStorageGrant {
-		updateGrantStatus, err := s.updateGrant(ctx, res.GetShare().GetResourceId(),
-			res.GetShare().GetGrantee(),
-			res.GetShare().GetPermissions().GetPermissions())
-
-		if err != nil {
-			return nil, errors.Wrap(err, "gateway: error calling updateGrant")
-		}
-
-		if updateGrantStatus.Code != rpc.Code_CODE_OK {
-			return &collaboration.UpdateShareResponse{
-				Status: updateGrantStatus,
-				Share:  res.Share,
-			}, nil
+	// Remove child share records made redundant by the updated permissions.
+	for _, child := range toDelete {
+		if _, err := c.RemoveShare(ctx, &collaboration.RemoveShareRequest{
+			Ref: &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: child.Id}},
+		}); err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("shareId", child.Id.OpaqueId).Msg("error removing child share from DB after UpdateShare")
 		}
 	}
 
@@ -482,6 +611,74 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 
 	return res, nil
 }
+
+// ---------------------------------------------------------------------------
+// Hierarchy helpers (ADR-0005-P01)
+// ---------------------------------------------------------------------------
+
+// parseForce reads the "force" flag from the request opaque map.
+func parseForce(opaque *typesv1beta1.Opaque) bool {
+	if opaque == nil {
+		return false
+	}
+	v, ok := opaque.Map["force"]
+	return ok && string(v.Value) == "true"
+}
+
+// getPathForResourceId resolves a ResourceId to its current filesystem path.
+func (s *svc) getPathForResourceId(ctx context.Context, id *provider.ResourceId) (string, error) {
+	res, err := s.GetPath(ctx, &provider.GetPathRequest{ResourceId: id})
+	if err != nil {
+		return "", errors.Wrap(err, "gateway: error calling GetPath")
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return "", errors.New("gateway: GetPath failed: " + res.Status.Message)
+	}
+	return res.Path, nil
+}
+
+// listSharesForGranteeInSpace returns all active shares for the given grantee in the given space.
+func (s *svc) listSharesForGranteeInSpace(ctx context.Context, c collaboration.CollaborationAPIClient, spaceId string, grantee *provider.Grantee) ([]*collaboration.Share, error) {
+	if spaceId == "" {
+		return nil, nil
+	}
+
+	res, err := c.ListShares(ctx, &collaboration.ListSharesRequest{
+		Filters: []*collaboration.Filter{
+			revashare.SpaceIDFilter(spaceId),
+			revashare.GranteeFilter(grantee),
+		},
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error listing shares for grantee in space")
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return nil, errors.New("gateway: ListShares for space returned: " + res.Status.Message)
+	}
+	return res.Shares, nil
+}
+
+// applyGrant sets an ACL on EOS for the given resource, calling denyGrant for empty permissions
+// or addGrant for normal permissions.
+func (s *svc) applyGrant(ctx context.Context, id *provider.ResourceId, grantee *provider.Grantee, perms *provider.ResourcePermissions) (*rpc.Status, error) {
+	if grants.PermissionsEqual(perms, &provider.ResourcePermissions{}) {
+		return s.denyGrant(ctx, id, grantee)
+	}
+	return s.addGrant(ctx, id, grantee, perms)
+}
+
+// filterOutShare returns shares with the given opaqueId excluded.
+func filterOutShare(shares []*collaboration.Share, opaqueId string) []*collaboration.Share {
+	result := make([]*collaboration.Share, 0, len(shares))
+	for _, s := range shares {
+		if s.Id.OpaqueId != opaqueId {
+			result = append(result, s)
+		}
+	}
+	return result
+}
+
+// ---------------------------------------------------------------------------
 
 func (s *svc) removeReference(ctx context.Context, resourceID *provider.ResourceId) *rpc.Status {
 	log := appctx.GetLogger(ctx)
