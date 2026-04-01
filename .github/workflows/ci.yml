@@ -1,0 +1,164 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Jobs that need Docker (litmus, cs3api, acceptance) run on bare ubuntu with setup-go.
+# Container jobs can't run `docker run` — no Docker-in-Docker in GHA.
+# https://docs.github.com/en/actions/using-jobs/running-jobs-in-a-container#about-container-jobs
+
+jobs:
+  check-go-generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - run: make go-generate && git diff --exit-code
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - run: sudo apt-get update && sudo apt-get install -y inotify-tools
+      - run: make test
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage.out
+
+  build:
+    needs: [unit-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - run: make dist
+
+  integration-tests:
+    needs: [unit-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - run: docker run -d --name redis --network host -e REDIS_DATABASES=1 redis:6-alpine
+      - run: make test-integration
+        env:
+          REDIS_ADDRESS: localhost:6379
+
+  litmus:
+    needs: [unit-tests]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        endpoint: [old-webdav, new-webdav, spaces-dav]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - run: python3 tests/acceptance/run-litmus.py --endpoint ${{ matrix.endpoint }}
+
+  cs3api-validator:
+    needs: [unit-tests]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        storage: [ocis]  # TODO: s3ng blocked on Ceph networking — follow-up PR
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - run: python3 tests/acceptance/run-cs3api.py --storage ${{ matrix.storage }}
+
+  acceptance-tests-ocis:
+    needs: [unit-tests]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2]  # TODO: parts 3,4 blocked on chunked Transfer-Encoding revad bug — follow-up PR
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - uses: shivammathur/setup-php@accd6127cb78bee3e8082180cb391013d204ef9f # v2
+        with:
+          php-version: "8.4"
+      - run: python3 tests/acceptance/run-acceptance.py --storage ocis --total-parts 4 --run-part ${{ matrix.part }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: acceptance-ocis-part-${{ matrix.part }}
+          path: tmp/testrunner/tests/acceptance/output/
+
+  # TODO: acceptance-tests-s3ng skipped — blocked on Ceph networking — follow-up PR
+
+  acceptance-tests-posixfs:
+    needs: [unit-tests]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2]  # TODO: parts 3,4 blocked on chunked Transfer-Encoding revad bug — follow-up PR
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - uses: shivammathur/setup-php@accd6127cb78bee3e8082180cb391013d204ef9f # v2
+        with:
+          php-version: "8.4"
+      - run: sudo apt-get update && sudo apt-get install -y inotify-tools
+      - run: python3 tests/acceptance/run-acceptance.py --storage posixfs --total-parts 4 --run-part ${{ matrix.part }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: acceptance-posixfs-part-${{ matrix.part }}
+          path: tmp/testrunner/tests/acceptance/output/
+
+  ci-ok:
+    if: always()
+    needs:
+      - check-go-generate
+      - unit-tests
+      - build
+      - integration-tests
+      - litmus
+      - cs3api-validator
+      - acceptance-tests-ocis
+      - acceptance-tests-posixfs
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          results=(
+            "${{ needs.check-go-generate.result }}"
+            "${{ needs.unit-tests.result }}"
+            "${{ needs.build.result }}"
+            "${{ needs.integration-tests.result }}"
+            "${{ needs.litmus.result }}"
+            "${{ needs.cs3api-validator.result }}"
+            "${{ needs.acceptance-tests-ocis.result }}"
+            "${{ needs.acceptance-tests-posixfs.result }}"
+          )
+          for r in "${results[@]}"; do
+            if [[ "$r" != "success" && "$r" != "skipped" ]]; then
+              echo "FAILED: $r"
+              exit 1
+            fi
+          done
