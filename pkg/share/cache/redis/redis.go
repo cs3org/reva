@@ -20,6 +20,8 @@ package redis
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -36,9 +38,11 @@ func init() {
 }
 
 type config struct {
-	RedisAddress  string `mapstructure:"redis_address"`
-	RedisUsername string `mapstructure:"redis_username"`
-	RedisPassword string `mapstructure:"redis_password"`
+	RedisAddress      string `mapstructure:"redis_address"`
+	RedisUsername     string `mapstructure:"redis_username"`
+	RedisPassword     string `mapstructure:"redis_password"`
+	RedisMasterName   string `mapstructure:"redis_master_name"`
+	RedisSentinelMode bool   `mapstructure:"redis_sentinel_mode"`
 }
 
 type manager[T cache.Cacheable] struct {
@@ -48,6 +52,12 @@ type manager[T cache.Cacheable] struct {
 func (c *config) ApplyDefaults() {
 	if c.RedisAddress == "" {
 		c.RedisAddress = "localhost:6379"
+	}
+	if c.RedisMasterName == "" {
+		c.RedisMasterName = "cboxmaster"
+	}
+	if !c.RedisSentinelMode {
+		c.RedisSentinelMode = false
 	}
 }
 
@@ -65,18 +75,62 @@ func New[T cache.Cacheable](m map[string]any) (cache.GenericCache[T], error) {
 
 		Dial: func() (redis.Conn, error) {
 			var opts []redis.DialOption
-			if c.RedisUsername != "" {
-				opts = append(opts, redis.DialUsername(c.RedisUsername))
-			}
+			// Only authenticate if a password is configured.
+			// (Redis will error if AUTH is attempted but no password is set server-side.)
 			if c.RedisPassword != "" {
+				if c.RedisUsername != "" {
+					opts = append(opts, redis.DialUsername(c.RedisUsername))
+				}
 				opts = append(opts, redis.DialPassword(c.RedisPassword))
 			}
 
-			c, err := redis.Dial("tcp", c.RedisAddress, opts...)
+			address := c.RedisAddress
+			sentinelMode := c.RedisSentinelMode
+			masterName := c.RedisMasterName
+
+			// Non-sentinel mode: connect directly.
+			if !sentinelMode {
+				return redis.Dial("tcp", address, opts...)
+			}
+
+			if masterName == "" {
+				return nil, errors.New("cache: redis_sentinel_mode enabled but redis_master_name is empty")
+			}
+
+			// Sentinel mode.
+			// We treat `address` as a sentinel endpoint. If it turns out not to be a sentinel
+			// (eg points to a regular redis server), fall back to direct dialing.
+			sentinelConn, err := redis.Dial("tcp", address, opts...)
 			if err != nil {
 				return nil, err
 			}
-			return c, err
+			defer sentinelConn.Close()
+
+			reply, err := redis.Values(sentinelConn.Do("SENTINEL", "get-master-addr-by-name", masterName))
+			if err != nil {
+				// If we connected to a plain redis instance, it will reply with "unknown command 'SENTINEL'".
+				// In that case, just use the configured address directly.
+				msg := strings.ToLower(err.Error())
+				if strings.Contains(msg, "unknown command") && strings.Contains(msg, "sentinel") {
+					return redis.Dial("tcp", address, opts...)
+				}
+				return nil, err
+			}
+			if len(reply) != 2 {
+				return nil, errors.New("cache: invalid sentinel reply for get-master-addr-by-name")
+			}
+
+			host, err := redis.String(reply[0], nil)
+			if err != nil {
+				return nil, err
+			}
+			port, err := redis.String(reply[1], nil)
+			if err != nil {
+				return nil, err
+			}
+
+			masterAddr := fmt.Sprintf("%s:%s", host, port)
+			return redis.Dial("tcp", masterAddr, opts...)
 		},
 
 		TestOnBorrow: func(c redis.Conn, t time.Time) error {
