@@ -24,6 +24,7 @@ type Config struct {
 	config.Database      `mapstructure:",squash"`
 	GatewaySvc           string `mapstructure:"gatewaysvc"`
 	LinkPasswordHashCost int    `mapstructure:"password_hash_cost"`
+	WebDAVURL            string `mapstructure:"webdav_url"`
 }
 
 func init() {

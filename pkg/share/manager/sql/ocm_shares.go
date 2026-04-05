@@ -20,7 +20,11 @@ package sql
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -28,13 +32,14 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
+	"github.com/studio-b12/gowebdav"
 	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/protobuf/proto"
 	"gorm.io/datatypes"
@@ -46,6 +51,24 @@ import (
 type mgr struct {
 	c  *Config
 	db *gorm.DB
+}
+
+type crate struct {
+	Graph []crateEntity `json:"@graph"`
+}
+
+type crateEntity struct {
+	ID             string          `json:"@id"`
+	Type           json.RawMessage `json:"@type"`
+	URL            json.RawMessage `json:"url"`
+	Name           string          `json:"name"`
+	ContentSize    string          `json:"contentSize"`
+	EncodingFormat string          `json:"encodingFormat"`
+	Description    string          `json:"description"`
+}
+
+type idRef struct {
+	ID string `json:"@id"`
 }
 
 func NewOCMShareManager(ctx context.Context, m map[string]any) (share.Repository, error) {
@@ -244,6 +267,186 @@ func (m *mgr) ListShares(ctx context.Context, user *userpb.User, filters []*ocm.
 	return shares, nil
 }
 
+func (e crateEntity) URLString() string {
+	if len(e.URL) == 0 {
+		return ""
+	}
+
+	var s string
+	if err := json.Unmarshal(e.URL, &s); err == nil {
+		return s
+	}
+
+	var ref idRef
+	if err := json.Unmarshal(e.URL, &ref); err == nil {
+		return ref.ID
+	}
+
+	return ""
+}
+
+func (e crateEntity) HasType(want string) bool {
+	if len(e.Type) == 0 {
+		return false
+	}
+
+	var single string
+	if err := json.Unmarshal(e.Type, &single); err == nil {
+		return single == want
+	}
+
+	var many []string
+	if err := json.Unmarshal(e.Type, &many); err == nil {
+		for _, t := range many {
+			if t == want {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func (e crateEntity) IsTransferable() bool {
+	if e.URLString() == "" {
+		return false
+	}
+
+	return e.HasType("File") || e.HasType("ComputationalWorkflow") || e.HasType("SoftwareSourceCode")
+}
+
+func uploadURLToWebDAV(ctx context.Context, httpClient *http.Client, dav *gowebdav.Client, srcURL, remotePath string, sizeHint int64) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srcURL, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("GET %s failed: %s: %s", srcURL, resp.Status, string(body))
+	}
+
+	if sizeHint >= 0 {
+		return dav.WriteStreamWithLength(remotePath, resp.Body, sizeHint, 0644)
+	}
+
+	if resp.ContentLength >= 0 {
+		return dav.WriteStreamWithLength(remotePath, resp.Body, resp.ContentLength, 0644)
+	}
+
+	return dav.WriteStream(remotePath, resp.Body, 0644)
+}
+
+func (m *mgr) ProcessEmbeddedShare(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare, destination string) (*ocm.ReceivedShare, error) {
+	log := appctx.GetLogger(ctx)
+	log.Debug().
+		Interface("share", share).
+		Str("destination", destination).
+		Msg("Processing received share")
+
+	protocols, err := m.getProtocolsByIds(ctx, []any{share.Id.OpaqueId})
+	if err != nil {
+		return nil, err
+	}
+
+	pList, ok := protocols[share.Id.OpaqueId]
+	if !ok {
+		return nil, errtypes.NotFound("share not found")
+	}
+
+	token := appctx.ContextMustGetToken(ctx)
+
+	httpClient := &http.Client{}
+	// e.g. "https://cbox-ocisdev-rasmus.cern.ch/webdav/"
+	// We use the bearer token so leave password and username empty.
+	dav := gowebdav.NewClient(m.c.WebDAVURL, "", "")
+	dav.SetInterceptor(func(method string, rq *http.Request) {
+		rq.Header.Set("Authorization", "Bearer "+token)
+		if method == http.MethodPut {
+			rq.Header.Set("Content-Type", "application/octet-stream")
+		}
+	})
+
+	if err := dav.Connect(); err != nil {
+		return nil, err
+	}
+
+	if err := dav.MkdirAll(destination, 0755); err != nil {
+		return nil, err
+	}
+
+	for _, protocol := range pList {
+		embedded, ok := protocol.Term.(*ocm.Protocol_EmbeddedOptions)
+		if !ok {
+			continue
+		}
+
+		var c crate
+		if err := json.Unmarshal([]byte(embedded.EmbeddedOptions.Payload), &c); err != nil {
+			return nil, fmt.Errorf("unmarshal embedded payload: %w", err)
+		}
+
+		log.Debug().
+			Str("dest_path", destination).
+			Int("entities", len(c.Graph)).
+			Msg("Processing embedded share payload")
+
+		for _, e := range c.Graph {
+			if !e.IsTransferable() {
+				continue
+			}
+
+			srcURL := e.URLString()
+			if srcURL == "" {
+				continue
+			}
+
+			name := strings.TrimSpace(e.Name)
+			if name == "" {
+				name = path.Base(srcURL)
+			}
+			if name == "" || name == "." || name == "/" {
+				log.Warn().
+					Str("entity_id", e.ID).
+					Str("src", srcURL).
+					Msg("Skipping entity with unusable destination name")
+				continue
+			}
+
+			remotePath := path.Join(destination, name)
+
+			size := int64(-1)
+			if e.ContentSize != "" {
+				if parsed, err := strconv.ParseInt(e.ContentSize, 10, 64); err == nil {
+					size = parsed
+				}
+			}
+
+			log.Debug().
+				Str("entity_id", e.ID).
+				Str("src", srcURL).
+				Str("remote", remotePath).
+				Int64("size_hint", size).
+				Str("encoding_format", e.EncodingFormat).
+				Msg("Streaming embedded file to WebDAV")
+
+			if err := uploadURLToWebDAV(ctx, httpClient, dav, srcURL, remotePath, size); err != nil {
+				return nil, fmt.Errorf("upload %s to %s: %w", srcURL, remotePath, err)
+			}
+		}
+
+		return share, nil
+	}
+
+	return nil, errtypes.NotFound("protocol not found")
+}
+
 func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*ocm.ReceivedShare, error) {
 	if err := m.db.Transaction(func(tx *gorm.DB) error {
 
@@ -306,7 +509,7 @@ func storeWebDAVProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_WebdavOptio
 		Type:               model.WebDAVProtocol,
 		Uri:                o.WebdavOptions.Uri,
 		SharedSecret:       o.WebdavOptions.SharedSecret,
-		Permissions:       int(permissions.OCSFromCS3Permission(o.WebdavOptions.Permissions.Permissions)),
+		Permissions:        int(permissions.OCSFromCS3Permission(o.WebdavOptions.Permissions.Permissions)),
 	}
 
 	if err := tx.Create(protocol).Error; err != nil {

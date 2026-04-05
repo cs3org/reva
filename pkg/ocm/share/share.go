@@ -57,6 +57,9 @@ type Repository interface {
 
 	// UpdateReceivedShare updates the received share with share state.
 	UpdateReceivedShare(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*ocm.ReceivedShare, error)
+
+	// Process the embedded share with the given state.
+	ProcessEmbeddedShare(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare, destination string) (*ocm.ReceivedShare, error)
 }
 
 // ResourceIDFilter is an abstraction for creating filter by resource id.
