@@ -158,15 +158,6 @@ func (fs *Eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eo
 		}
 	}
 
-	p := path.Clean(fn)
-	for p != "." && p != fs.conf.Namespace {
-		key := p + "!" + perm
-		if tknIf, err := fs.tokenCache.Get(key); err == nil {
-			return eosclient.Authorization{Token: tknIf.(string)}, nil
-		}
-		p = path.Dir(p)
-	}
-
 	if info.IsDir {
 		// EOS expects directories to have a trailing slash when generating tokens
 		fn = path.Clean(fn) + "/"
@@ -176,9 +167,6 @@ func (fs *Eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eo
 	if err != nil {
 		return eosclient.Authorization{}, err
 	}
-
-	key := path.Clean(fn) + "!" + perm
-	_ = fs.tokenCache.SetWithExpire(key, tkn, time.Second*time.Duration(fs.conf.TokenExpiry))
 
 	return eosclient.Authorization{Token: tkn}, nil
 }

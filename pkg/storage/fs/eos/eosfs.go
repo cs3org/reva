@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
-	"github.com/bluele/gcache"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -138,7 +137,6 @@ type Eosfs struct {
 	chunkHandler   *chunking.ChunkHandler
 	singleUserAuth eosclient.Authorization
 	userIDCache    *ttlcache.Cache
-	tokenCache     gcache.Cache
 	quotaCache     *quotaCache
 }
 
@@ -214,7 +212,6 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 		conf:         c,
 		chunkHandler: chunking.NewChunkHandler(c.CacheDirectory),
 		userIDCache:  ttlcache.NewCache(),
-		tokenCache:   gcache.New(c.UserIDCacheSize).LFU().Build(),
 	}
 
 	if c.EnableQuotaCache {
