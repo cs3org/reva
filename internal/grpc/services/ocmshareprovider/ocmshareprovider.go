@@ -475,6 +475,23 @@ func (s *service) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceiv
 
 func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceivedOCMShareRequest) (*ocm.UpdateReceivedOCMShareResponse, error) {
 	user := appctx.ContextMustGetUser(ctx)
+	// If the share is set to pending it means we are "unprocessing"  the share,
+	// meaning it has already been processed and we don't want to do it again
+	if req.Opaque != nil && req.Share.State != ocm.ShareState_SHARE_STATE_PENDING {
+		if dest, ok := req.Opaque.Map["destination"]; ok {
+			destPath := string(dest.Value)
+			if _, err := s.repo.ProcessEmbeddedShare(ctx, user, req.Share, destPath); err != nil {
+				if errors.Is(err, share.ErrShareNotFound) {
+					return &ocm.UpdateReceivedOCMShareResponse{
+						Status: status.NewNotFound(ctx, "share does not exist"),
+					}, nil
+				}
+				return &ocm.UpdateReceivedOCMShareResponse{
+					Status: status.NewInternal(ctx, err, "error processing embedded share"),
+				}, nil
+			}
+		}
+	}
 	_, err := s.repo.UpdateReceivedShare(ctx, user, req.Share, req.UpdateMask)
 	if err != nil {
 		if errors.Is(err, share.ErrShareNotFound) {
