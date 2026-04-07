@@ -35,7 +35,6 @@ import (
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
-	"github.com/bluele/gcache"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -144,7 +143,6 @@ type Eosfs struct {
 	chunkHandler   *chunking.ChunkHandler
 	singleUserAuth eosclient.Authorization
 	userIDCache    *ttlcache.Cache
-	tokenCache     gcache.Cache
 	quotaCache     *quotaCache
 }
 
@@ -220,7 +218,6 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 		conf:         c,
 		chunkHandler: chunking.NewChunkHandler(c.CacheDirectory),
 		userIDCache:  ttlcache.NewCache(),
-		tokenCache:   gcache.New(c.UserIDCacheSize).LFU().Build(),
 	}
 
 	eosfs.userIDCache.SetCacheSizeLimit(c.UserIDCacheSize)
@@ -2152,15 +2149,6 @@ func (fs *Eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eo
 		}
 	}
 
-	p := path.Clean(fn)
-	for p != "." && p != fs.conf.Namespace {
-		key := p + "!" + perm
-		if tknIf, err := fs.tokenCache.Get(key); err == nil {
-			return eosclient.Authorization{Token: tknIf.(string)}, nil
-		}
-		p = path.Dir(p)
-	}
-
 	if info.IsDir {
 		// EOS expects directories to have a trailing slash when generating tokens
 		fn = path.Clean(fn) + "/"
@@ -2170,9 +2158,6 @@ func (fs *Eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eo
 	if err != nil {
 		return eosclient.Authorization{}, err
 	}
-
-	key := path.Clean(fn) + "!" + perm
-	_ = fs.tokenCache.SetWithExpire(key, tkn, time.Second*time.Duration(fs.conf.TokenExpiry))
 
 	return eosclient.Authorization{Token: tkn}, nil
 }
