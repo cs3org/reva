@@ -377,9 +377,9 @@ func (m *mgr) ProcessEmbeddedShare(ctx context.Context, user *userpb.User, share
 		return nil, err
 	}
 
-	if err := dav.MkdirAll(destination, 0755); err != nil {
-		return nil, err
-	}
+	// if err := dav.MkdirAll(destination, 0755); err != nil {
+	// 	return nil, err
+	// }
 
 	for _, protocol := range pList {
 		embedded, ok := protocol.Term.(*ocm.Protocol_EmbeddedOptions)
