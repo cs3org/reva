@@ -18,6 +18,7 @@
 
 package ocmd
 
+// OCM official routes as defined by the spec
 const (
 	sharesPath         = "/shares"
 	inviteAcceptedPath = "/invite-accepted"
