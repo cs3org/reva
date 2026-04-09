@@ -113,28 +113,56 @@ func (c *Checker) CheckGrantConsistency(ctx context.Context, nodePath string, no
 	}
 
 	// Sort ToReapply shallowest-first so the caller can apply ACLs in the correct order.
-	SortByPathDepthAsc(result.ToReapply, reapplyPaths)
+	sortByPathDepthAsc(result.ToReapply, reapplyPaths)
 	return result, nil
 }
 
-// ResolvePaths resolves the current filesystem path for each share.
-// Returns a map from share OpaqueId to path. Shares whose paths cannot be
-// resolved (e.g. orphaned resources) are silently omitted.
-func (c *Checker) ResolvePaths(ctx context.Context, shares []*collaboration.Share) map[string]string {
-	paths := make(map[string]string, len(shares))
-	for _, s := range shares {
-		path, err := c.GetPath(ctx, s.ResourceId)
-		if err != nil {
-			continue
-		}
-		paths[s.Id.OpaqueId] = path
-	}
-	return paths
+// RemoveReapplyResult holds the grants that must be re-applied after a share is removed.
+type RemoveReapplyResult struct {
+	// ParentGrant is the closest ancestor share, or nil if none exists.
+	// Its permissions must be re-applied to the removed share's resource.
+	ParentGrant *collaboration.Share
+	// ChildGrants is the list of descendant shares sorted shallowest-first.
+	// Each must be re-applied to its own resource.
+	ChildGrants []*collaboration.Share
 }
 
-// FilterAncestors returns the subset of shares whose resolved path is a strict
+// GrantsToReapplyAfterRemove computes the grants that must be re-applied once the
+// share identified by removedID on removedResourceID is deleted.
+//
+// allShares must contain all active shares for the same (spaceId, grantee), including
+// the share being removed — this method excludes it internally.
+//
+// If the path of the removed resource cannot be resolved, both fields are nil/empty.
+func (c *Checker) GrantsToReapplyAfterRemove(ctx context.Context, removedID string, removedResourceID *provider.ResourceId, allShares []*collaboration.Share) *RemoveReapplyResult {
+	// Resolve paths for all shares except the one being removed.
+	// Shares absent from the map are naturally excluded by filterAncestors/filterDescendants.
+	paths := make(map[string]string, len(allShares))
+	var removedPath string
+	for _, s := range allShares {
+		path, err := c.GetPath(ctx, s.ResourceId)
+		if s.Id.OpaqueId == removedID {
+			if err != nil {
+				return &RemoveReapplyResult{}
+			}
+			removedPath = path
+		} else if err == nil {
+			paths[s.Id.OpaqueId] = path
+		}
+	}
+
+	ancestors := filterAncestors(allShares, paths, removedPath)
+	descendants := filterDescendants(allShares, paths, removedPath)
+	sortByPathDepthAsc(descendants, paths)
+	return &RemoveReapplyResult{
+		ParentGrant: closestAncestor(ancestors, paths),
+		ChildGrants: descendants,
+	}
+}
+
+// filterAncestors returns the subset of shares whose resolved path is a strict
 // ancestor of targetPath.
-func FilterAncestors(shares []*collaboration.Share, paths map[string]string, targetPath string) []*collaboration.Share {
+func filterAncestors(shares []*collaboration.Share, paths map[string]string, targetPath string) []*collaboration.Share {
 	var result []*collaboration.Share
 	for _, s := range shares {
 		if p, ok := paths[s.Id.OpaqueId]; ok && isStrictAncestor(p, targetPath) {
@@ -144,9 +172,9 @@ func FilterAncestors(shares []*collaboration.Share, paths map[string]string, tar
 	return result
 }
 
-// FilterDescendants returns the subset of shares whose resolved path is a strict
+// filterDescendants returns the subset of shares whose resolved path is a strict
 // descendant of targetPath.
-func FilterDescendants(shares []*collaboration.Share, paths map[string]string, targetPath string) []*collaboration.Share {
+func filterDescendants(shares []*collaboration.Share, paths map[string]string, targetPath string) []*collaboration.Share {
 	var result []*collaboration.Share
 	for _, s := range shares {
 		if p, ok := paths[s.Id.OpaqueId]; ok && isStrictAncestor(targetPath, p) {
@@ -156,9 +184,9 @@ func FilterDescendants(shares []*collaboration.Share, paths map[string]string, t
 	return result
 }
 
-// ClosestAncestor returns the ancestor share with the longest (most specific) path,
+// closestAncestor returns the ancestor share with the longest (most specific) path,
 // i.e. the nearest parent. Returns nil if ancestors is empty.
-func ClosestAncestor(ancestors []*collaboration.Share, paths map[string]string) *collaboration.Share {
+func closestAncestor(ancestors []*collaboration.Share, paths map[string]string) *collaboration.Share {
 	var closest *collaboration.Share
 	var closestPath string
 	for _, s := range ancestors {
@@ -171,10 +199,10 @@ func ClosestAncestor(ancestors []*collaboration.Share, paths map[string]string) 
 	return closest
 }
 
-// SortByPathDepthAsc sorts shares in place by ascending path depth (shallowest first).
+// sortByPathDepthAsc sorts shares in place by ascending path depth (shallowest first).
 // Applying ACLs in this order ensures parent permissions are set before child permissions,
 // maintaining correct inheritance semantics.
-func SortByPathDepthAsc(shares []*collaboration.Share, paths map[string]string) {
+func sortByPathDepthAsc(shares []*collaboration.Share, paths map[string]string) {
 	sort.Slice(shares, func(i, j int) bool {
 		pi := paths[shares[i].Id.OpaqueId]
 		pj := paths[shares[j].Id.OpaqueId]
