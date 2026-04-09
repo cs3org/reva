@@ -650,6 +650,11 @@ func (c *Client) GetQuota(ctx context.Context, user eosclient.Authorization, roo
 	return c.parseQuota(path, stdout)
 }
 
+// ListAllQuota is not supported by the binary client.
+func (c *Client) ListAllQuota(_ context.Context, _ eosclient.Authorization) (map[string]*eosclient.QuotaInfo, error) {
+	return nil, errtypes.NotSupported("eosbinary: ListAllQuota not implemented")
+}
+
 // SetQuota sets the quota of a user on the quota node defined by path.
 func (c *Client) SetQuota(ctx context.Context, user eosclient.Authorization, rootAuth eosclient.Authorization, info *eosclient.SetQuotaInfo) error {
 	maxBytes := fmt.Sprintf("%d", info.MaxBytes)

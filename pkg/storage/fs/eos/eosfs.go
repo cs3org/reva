@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
-	"github.com/bluele/gcache"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -125,6 +124,10 @@ func (c *Config) ApplyDefaults() {
 		c.MaxDaysInRecycleList = 14
 	}
 
+	if c.QuotaCacheTTL == 0 {
+		c.QuotaCacheTTL = 600
+	}
+
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
@@ -134,7 +137,7 @@ type Eosfs struct {
 	chunkHandler   *chunking.ChunkHandler
 	singleUserAuth eosclient.Authorization
 	userIDCache    *ttlcache.Cache
-	tokenCache     gcache.Cache
+	quotaCache     *quotaCache
 }
 
 // NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance.
@@ -209,7 +212,17 @@ func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 		conf:         c,
 		chunkHandler: chunking.NewChunkHandler(c.CacheDirectory),
 		userIDCache:  ttlcache.NewCache(),
-		tokenCache:   gcache.New(c.UserIDCacheSize).LFU().Build(),
+	}
+
+	if c.EnableQuotaCache {
+		eosfs.quotaCache = newQuotaCache(time.Duration(c.QuotaCacheTTL) * time.Second)
+		appctx.GetLogger(ctx).Info().Int("ttl_seconds", c.QuotaCacheTTL).Msg("quota cache enabled")
+		if strings.Contains(c.Namespace, "user") || strings.Contains(c.Namespace, "home") {
+			log := appctx.GetLogger(ctx)
+			go eosfs.warmupQuotaCache(log)
+		} else {
+			appctx.GetLogger(ctx).Info().Msg("quota cache disabled")
+		}
 	}
 
 	eosfs.userIDCache.SetCacheSizeLimit(c.UserIDCacheSize)

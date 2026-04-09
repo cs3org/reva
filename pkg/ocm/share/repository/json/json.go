@@ -623,3 +623,7 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, share 
 
 	return rs, nil
 }
+
+func (m *mgr) ProcessEmbeddedShare(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare, destination string) (*ocm.ReceivedShare, error) {
+	return nil, errtypes.NotSupported("processing embedded shares is not supported")
+}

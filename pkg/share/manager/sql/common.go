@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	projectInstancesPrefix        = "newproject"
 	projectSpaceGroupsPrefix      = "cernbox-project-"
 	projectSpaceAdminGroupsSuffix = "-admins"
 	projectPathPrefix             = "/eos/project/"
@@ -25,6 +24,7 @@ type Config struct {
 	config.Database      `mapstructure:",squash"`
 	GatewaySvc           string `mapstructure:"gatewaysvc"`
 	LinkPasswordHashCost int    `mapstructure:"password_hash_cost"`
+	WebDAVURL            string `mapstructure:"webdav_url"`
 }
 
 func init() {
@@ -36,6 +36,12 @@ func init() {
 func (c *Config) ApplyDefaults() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 	c.Database = sharedconf.GetDBInfo(c.Database)
+	// PasswordHashCost is the number of bcrypt rounds,
+	// which should be at least 11
+	if c.LinkPasswordHashCost < 11 {
+		c.LinkPasswordHashCost = 11
+	}
+
 }
 
 func getDb(c Config) (*gorm.DB, error) {
