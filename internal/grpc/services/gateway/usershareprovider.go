@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"path"
 	"strings"
-	"time"
 
 	"github.com/alitto/pond/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -728,62 +727,6 @@ func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provi
 	}
 
 	return status.NewOK(ctx), nil
-}
-
-// ExpireShare sets the expiration date on the given share.
-func (s *svc) ExpireShare(ctx context.Context, ref *collaboration.ShareReference, expiration *typesv1beta1.Timestamp) error {
-	c, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
-	if err != nil {
-		return errors.Wrap(err, "gateway: error getting user share provider client")
-	}
-
-	updateRes, err := c.UpdateShare(ctx, &collaboration.UpdateShareRequest{
-		Ref: ref,
-		Field: &collaboration.UpdateShareRequest_UpdateField{
-			Field: &collaboration.UpdateShareRequest_UpdateField_Expiration{
-				Expiration: expiration,
-			},
-		},
-	})
-	if err != nil {
-		return errors.Wrap(err, "gateway: error updating share expiration")
-	}
-	if updateRes.Status.Code != rpc.Code_CODE_OK {
-		return fmt.Errorf("gateway: UpdateShare returned %s", updateRes.Status.Code)
-	}
-	return nil
-}
-
-// RemoveShares calls RemoveShare for every share whose expiration date is in the past,
-// removing the storage grant and soft-deleting the share in the DB.
-func (s *svc) RemoveShares(ctx context.Context) error {
-	c, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
-	if err != nil {
-		return errors.Wrap(err, "gateway: error getting user share provider client")
-	}
-
-	listRes, err := c.ListShares(ctx, &collaboration.ListSharesRequest{})
-	if err != nil {
-		return errors.Wrap(err, "gateway: error listing shares")
-	}
-	if listRes.Status.Code != rpc.Code_CODE_OK {
-		return fmt.Errorf("gateway: list shares returned %s", listRes.Status.Code)
-	}
-
-	now := time.Now()
-	for _, share := range listRes.Shares {
-		if share.Expiration == nil || time.Unix(int64(share.Expiration.Seconds), 0).After(now) {
-			continue
-		}
-		if _, err := s.RemoveShare(ctx, &collaboration.RemoveShareRequest{
-			Ref: &collaboration.ShareReference{
-				Spec: &collaboration.ShareReference_Id{Id: share.Id},
-			},
-		}); err != nil {
-			return errors.Wrap(err, "gateway: error removing expired share "+share.Id.OpaqueId)
-		}
-	}
-	return nil
 }
 
 func (s *svc) removeGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
