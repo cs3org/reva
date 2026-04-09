@@ -16,4 +16,4 @@ Discovered by uploading an AVIF file to oCIS and observing that
 cause is that reva's `mime.Detect()` uses a hardcoded map and does not fall
 back to the OS mime.types database.
 
-https://github.com/owncloud/reva/pull/XXXXX
+https://github.com/owncloud/reva/pull/570
