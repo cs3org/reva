@@ -25,6 +25,8 @@ package sharehierarchy
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -206,7 +208,7 @@ func sortByPathDepthAsc(shares []*collaboration.Share, paths map[string]string) 
 	sort.Slice(shares, func(i, j int) bool {
 		pi := paths[shares[i].Id.OpaqueId]
 		pj := paths[shares[j].Id.OpaqueId]
-		return strings.Count(pi, "/") < strings.Count(pj, "/")
+		return strings.Count(pi, string(os.PathSeparator)) < strings.Count(pj, string(os.PathSeparator))
 	})
 }
 
@@ -214,13 +216,11 @@ func sortByPathDepthAsc(shares []*collaboration.Share, paths map[string]string) 
 // i.e. every component of ancestorPath is a parent of childPath.
 // "/a" is a strict ancestor of "/a/b" but not of "/a" itself or "/ab/c".
 func isStrictAncestor(ancestorPath, childPath string) bool {
-	if ancestorPath == childPath {
+	rel, err := filepath.Rel(ancestorPath, childPath)
+	if err != nil {
 		return false
 	}
-	// Normalise: ensure the ancestor ends with exactly one slash for prefix matching,
-	// so that "/a" does not accidentally match "/ab/c".
-	ancestor := strings.TrimRight(ancestorPath, "/") + "/"
-	return strings.HasPrefix(childPath, ancestor)
+	return rel != "." && !strings.HasPrefix(rel, "..")
 }
 
 // ChildConflictMessage builds a human-readable description of a child conflict
