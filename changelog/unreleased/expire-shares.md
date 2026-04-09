@@ -1,4 +1,4 @@
-Enhancement: Add support for expiring user/group shares
+Enhancement: `ListReceivedShares` no longer returns shares whose expiration date has passed
 
 - `ListReceivedShares` no longer returns shares whose expiration date has passed
 
