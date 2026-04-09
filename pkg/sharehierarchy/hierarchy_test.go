@@ -322,30 +322,47 @@ func TestIsStrictAncestor(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.ancestor+"→"+tt.child, func(t *testing.T) {
-			// Access via exported helpers since isStrictAncestor is unexported.
-			// We test it indirectly through FilterAncestors.
+			// Test isStrictAncestor indirectly via CheckGrantConsistency:
+			// a share at tt.ancestor is a parent of the new node at tt.child
+			// only when isStrictAncestor(tt.ancestor, tt.child) is true.
 			share := makeShare(1, "id", readPerms)
-			paths := map[string]string{"1": tt.ancestor}
-			result := sharehierarchy.FilterAncestors([]*collaboration.Share{share}, paths, tt.child)
-			got := len(result) == 1
+			checker := &sharehierarchy.Checker{GetPath: pathMap(map[string]string{"id": tt.ancestor})}
+			_, err := checker.CheckGrantConsistency(context.Background(), tt.child, rwPerms, []*collaboration.Share{share})
+			// rwPerms escalates beyond readPerms, so a true ancestor produces no error.
+			// A non-ancestor produces no error either, but also no ToDelete/ToReapply.
+			// We detect ancestry by whether the share appears in the result at all.
+			result, _ := checker.CheckGrantConsistency(context.Background(), tt.child, readPerms, []*collaboration.Share{share})
+			var detected bool
+			if err != nil {
+				detected = true // ShareParentConflict means ancestor was found
+			} else if result != nil && len(result.ToDelete)+len(result.ToReapply) > 0 {
+				detected = true // child relationship found — not what we're testing here
+			}
+			// For the ancestor direction: use readPerms on node so same-or-lower triggers conflict.
+			_, ancestorErr := checker.CheckGrantConsistency(context.Background(), tt.child, readPerms, []*collaboration.Share{share})
+			got := ancestorErr != nil
 			assert.Equal(t, tt.want, got, "ancestor=%q child=%q", tt.ancestor, tt.child)
+			_ = detected
 		})
 	}
 }
 
-func TestSortByPathDepthAsc(t *testing.T) {
-	shares := []*collaboration.Share{
-		makeShare(1, "deep", readPerms),
-		makeShare(2, "root", readPerms),
-		makeShare(3, "mid", readPerms),
-	}
-	paths := map[string]string{
-		"1": "/a/b/c/d",
-		"2": "/a",
-		"3": "/a/b",
-	}
-	sharehierarchy.SortByPathDepthAsc(shares, paths)
-	assert.Equal(t, "2", shares[0].Id.OpaqueId) // /a
-	assert.Equal(t, "3", shares[1].Id.OpaqueId) // /a/b
-	assert.Equal(t, "1", shares[2].Id.OpaqueId) // /a/b/c/d
+func TestToReapplySortedShallowestFirst(t *testing.T) {
+	// Three children at different depths; all have higher perms (RW) than the new node (R).
+	// ToReapply must come out sorted shallowest-first without any manual sorting by the caller.
+	deep := makeShare(1, "deep", rwPerms)
+	root := makeShare(2, "root-child", rwPerms)
+	mid := makeShare(3, "mid", rwPerms)
+	checker := &sharehierarchy.Checker{GetPath: pathMap(map[string]string{
+		"deep":       "/a/b/c/d",
+		"root-child": "/a/b",
+		"mid":        "/a/b/c",
+	})}
+
+	result, err := checker.CheckGrantConsistency(context.Background(), "/a", readPerms, []*collaboration.Share{deep, root, mid})
+	require.NoError(t, err)
+	require.Len(t, result.ToReapply, 3)
+	assert.Equal(t, "2", result.ToReapply[0].Id.OpaqueId) // /a/b
+	assert.Equal(t, "3", result.ToReapply[1].Id.OpaqueId) // /a/b/c
+	assert.Equal(t, "1", result.ToReapply[2].Id.OpaqueId) // /a/b/c/d
 }

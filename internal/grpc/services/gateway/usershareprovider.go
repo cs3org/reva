@@ -176,24 +176,16 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 	}
 	share := getShareRes.Share
 
-	// Resolve parent / child shares so we can reapply the hierarchy (ADR-GENERAL-005).
-	var ancestors, descendants []*collaboration.Share
-	var paths map[string]string
 	checker := &sharehierarchy.Checker{GetPath: s.getPathForResourceId}
 
+	// Resolve parent / child shares so we can reapply the hierarchy (ADR-GENERAL-005).
 	existingShares, listErr := s.listSharesForGranteeInSpace(ctx, c, share.ResourceId.SpaceId, share.Grantee)
 	if listErr != nil {
 		return &collaboration.RemoveShareResponse{
 			Status: status.NewInternal(ctx, listErr, "error listing shares for hierarchy reapply"),
 		}, nil
 	}
-	existingShares = filterOutShare(existingShares, share.Id.OpaqueId)
-	paths = checker.ResolvePaths(ctx, existingShares)
-	sharePath, pathErr := s.getPathForResourceId(ctx, share.ResourceId)
-	if pathErr == nil {
-		ancestors = sharehierarchy.FilterAncestors(existingShares, paths, sharePath)
-		descendants = sharehierarchy.FilterDescendants(existingShares, paths, sharePath)
-	}
+	reapply := checker.GrantsToReapplyAfterRemove(ctx, share.Id.OpaqueId, share.ResourceId, existingShares)
 
 	if s.c.CommitShareToStorageGrant {
 		removeGrantStatus, err := s.removeGrant(ctx, share.ResourceId, share.Grantee, share.Permissions.Permissions)
@@ -204,16 +196,16 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 			return &collaboration.RemoveShareResponse{Status: removeGrantStatus}, nil
 		}
 
-		// Re-apply the closest parent's permissions to the now-unshared node.
-		if parent := sharehierarchy.ClosestAncestor(ancestors, paths); parent != nil {
-			if _, err := s.addGrant(ctx, share.ResourceId, share.Grantee, parent.Permissions.Permissions); err != nil {
+		// Re-apply the closest parent's permissions to the now-unshared node (if any).
+		if reapply.ParentGrant != nil {
+			if _, err := s.addGrant(ctx, share.ResourceId, share.Grantee, reapply.ParentGrant.Permissions.Permissions); err != nil {
 				log.Error().Err(err).Str("shareId", share.Id.OpaqueId).Msg("error reapplying parent grant after RemoveShare")
 			}
 		}
 
 		// Re-apply descendant grants shallowest-first so child permissions are not overridden.
-		sharehierarchy.SortByPathDepthAsc(descendants, paths)
-		for _, child := range descendants {
+		// (and the results are already pre-sorted to be shallowest-first)
+		for _, child := range reapply.ChildGrants {
 			if _, err := s.addGrant(ctx, child.ResourceId, child.Grantee, child.Permissions.Permissions); err != nil {
 				log.Error().Err(err).Str("childShareId", child.Id.OpaqueId).Msg("error reapplying child grant after RemoveShare")
 			}
