@@ -64,6 +64,30 @@ func NewStream() grpc.StreamServerInterceptor {
 	}
 }
 
+// NewUnaryClientInterceptor returns a new unary client interceptor that
+// propagates the reva trace ID from the context into outgoing gRPC metadata.
+// This ensures trace IDs are carried across gRPC service boundaries (e.g.
+// gateway → storage provider) even when OTel is not configured.
+func NewUnaryClientInterceptor() grpc.UnaryClientInterceptor {
+	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		if traceID := revatrace.Get(ctx); traceID != "" {
+			ctx = metadata.AppendToOutgoingContext(ctx, "revad-grpc-trace-id", traceID)
+		}
+		return invoker(ctx, method, req, reply, cc, opts...)
+	}
+}
+
+// NewStreamClientInterceptor returns a new stream client interceptor that
+// propagates the reva trace ID from the context into outgoing gRPC metadata.
+func NewStreamClientInterceptor() grpc.StreamClientInterceptor {
+	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+		if traceID := revatrace.Get(ctx); traceID != "" {
+			ctx = metadata.AppendToOutgoingContext(ctx, "revad-grpc-trace-id", traceID)
+		}
+		return streamer(ctx, desc, cc, method, opts...)
+	}
+}
+
 func newWrappedServerStream(ctx context.Context, ss grpc.ServerStream) *wrappedServerStream {
 	return &wrappedServerStream{ServerStream: ss, newCtx: ctx}
 }
