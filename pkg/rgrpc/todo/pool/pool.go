@@ -40,6 +40,7 @@ import (
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
+	revtrace "github.com/cs3org/reva/v3/internal/grpc/interceptors/trace"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -92,6 +93,8 @@ func NewConn(options Options) (*grpc.ClientConn, error) {
 			grpc.MaxCallRecvMsgSize(options.MaxCallRecvMsgSize),
 		),
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+		grpc.WithChainUnaryInterceptor(revtrace.NewUnaryClientInterceptor()),
+		grpc.WithChainStreamInterceptor(revtrace.NewStreamClientInterceptor()),
 	)
 	if err != nil {
 		return nil, err
