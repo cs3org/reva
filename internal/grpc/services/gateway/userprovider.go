@@ -22,6 +22,7 @@ import (
 	"context"
 	"slices"
 
+	tenant "github.com/cs3org/go-cs3apis/cs3/identity/tenant/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -120,4 +121,16 @@ func (s *svc) GetUserGroups(ctx context.Context, req *user.GetUserGroupsRequest)
 	}
 
 	return res, nil
+}
+
+func (s *svc) GetTenant(ctx context.Context, req *tenant.GetTenantRequest) (*tenant.GetTenantResponse, error) {
+	return &tenant.GetTenantResponse{
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("GetTenant not implemented"), "GetTenant not implemented"),
+	}, nil
+}
+
+func (s *svc) GetTenantByClaim(ctx context.Context, req *tenant.GetTenantByClaimRequest) (*tenant.GetTenantByClaimResponse, error) {
+	return &tenant.GetTenantByClaimResponse{
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("GetTenantByClaim not implemented"), "GetTenantByClaim not implemented"),
+	}, nil
 }
