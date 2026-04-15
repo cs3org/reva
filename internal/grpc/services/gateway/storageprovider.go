@@ -726,6 +726,18 @@ func (s *svc) splitPath(_ context.Context, p string) []string {
 	return strings.SplitN(p, "/", 4) // ["home", "MyShares", "photos", "Ibiza/beach.png"]
 }
 
+func (s *svc) AddFavorite(ctx context.Context, req *provider.AddFavoriteRequest) (*provider.AddFavoriteResponse, error) {
+	return &provider.AddFavoriteResponse{
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("AddFavorite not implemented"), "AddFavorite not implemented"),
+	}, nil
+}
+
+func (s *svc) RemoveFavorite(ctx context.Context, req *provider.RemoveFavoriteRequest) (*provider.RemoveFavoriteResponse, error) {
+	return &provider.RemoveFavoriteResponse{
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("RemoveFavorite not implemented"), "RemoveFavorite not implemented"),
+	}, nil
+}
+
 func (s *svc) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
 	return &provider.CreateSymlinkResponse{
 		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CreateSymlink not implemented"), "CreateSymlink not implemented"),
