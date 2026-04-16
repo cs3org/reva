@@ -36,6 +36,8 @@ func (c *Client) AddACL(ctx context.Context, auth eosclient.Authorization, path 
 		return err
 	}
 
+	rq.Role.Gid = 2
+
 	msg := new(erpc.NSRequest_AclRequest)
 	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["MODIFY"])
 	msg.Type = erpc.NSRequest_AclRequest_ACL_TYPE(erpc.NSRequest_AclRequest_ACL_TYPE_value["SYS_ACL"])
@@ -59,7 +61,7 @@ func (c *Client) AddACL(ctx context.Context, auth eosclient.Authorization, path 
 		return errtypes.NotFound(fmt.Sprintf("Path: %s", path))
 	}
 
-	log.Debug().Str("func", "AddACL").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+	log.Debug().Str("func", "AddACL").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Any("acl", resp.Acl).Any("error", resp.Error).Msg("grpc response")
 
 	return err
 }
