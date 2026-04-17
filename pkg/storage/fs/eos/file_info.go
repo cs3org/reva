@@ -63,11 +63,6 @@ func (fs *Eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		return nil, errtypes.BadRequest("No ref was given to GetMD")
 	}
 
-	fn, err := fs.resolve(ctx, ref)
-	if err != nil {
-		return nil, errtypes.BadRequest("No ref was given to GetMD")
-	}
-
 	// We use daemon for auth because we need access to the file in order to stat it
 	// We cannot use the current user, because the file may be a shared file
 	// and lightweight accounts don't have a uid
@@ -76,29 +71,39 @@ func (fs *Eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		return nil, fmt.Errorf("error getting daemon auth")
 	}
 
-	if ref.ResourceId != nil {
-		// Check if it's a version
-		// Cannot check with (ResourceId.StorageId == "versions") because of the storage provider
-		if strings.Contains(ref.ResourceId.OpaqueId, "@") {
-			parts := strings.Split(ref.ResourceId.OpaqueId, "@")
-			version := ""
-			ref.ResourceId.OpaqueId, version = parts[0], parts[1]
+	// First we check if it's a version (calling fs.resolve would fail, because
+	// there is no path, and the opaque id is not an integer)
+	if ref.ResourceId != nil && strings.Contains(ref.ResourceId.OpaqueId, "@") {
+		parts := strings.Split(ref.ResourceId.OpaqueId, "@")
+		opaqueID, version := parts[0], parts[1]
 
-			path, err := fs.getPath(ctx, ref.ResourceId)
-			if err != nil {
-				return nil, fmt.Errorf("error getting path for resource id: %s", ref.ResourceId.OpaqueId)
-			}
-			path = filepath.Join(fn, path)
-
-			versionFolder := eosclient.GetVersionFolder(path)
-			versionPath := filepath.Join(versionFolder, version)
-			eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, versionPath)
-			if err != nil {
-				return nil, fmt.Errorf("error getting file info by path: %s", versionPath)
-			}
-
-			return fs.convertToResourceInfo(ctx, eosFileInfo)
+		fileId := &provider.ResourceId{
+			StorageId: ref.ResourceId.StorageId,
+			SpaceId:   ref.ResourceId.SpaceId,
+			OpaqueId:  opaqueID,
 		}
+		filePath, err := fs.getPath(ctx, fileId)
+		if err != nil {
+			return nil, fmt.Errorf("error getting path for resource id: %s", opaqueID)
+		}
+		filePath = fs.wrap(ctx, filePath)
+
+		versionFolder := eosclient.GetVersionFolder(filePath)
+		versionPath := filepath.Join(versionFolder, version)
+		eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, versionPath)
+		if err != nil {
+			return nil, fmt.Errorf("error getting file info by path: %s", versionPath)
+		}
+
+		return fs.convertToResourceInfo(ctx, eosFileInfo)
+	}
+
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil, errtypes.BadRequest("No ref was given to GetMD")
+	}
+
+	if ref.ResourceId != nil {
 		fid, err := strconv.ParseUint(ref.ResourceId.OpaqueId, 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("error converting string to int for eos fileid: %s", ref.ResourceId.OpaqueId)
