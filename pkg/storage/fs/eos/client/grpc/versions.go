@@ -56,8 +56,12 @@ func (c *Client) RollbackToVersion(ctx context.Context, auth eosclient.Authoriza
 		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' ", auth.Role.UID))
 	}
 
-	if resp.GetError() != nil {
-		log.Info().Str("func", "RollbackToVersion").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+	if v := resp.GetVersion(); v != nil {
+		if v.Code != 0 {
+			log.Error().Str("func", "RollbackToVersion").Int64("errcode", v.Code).Str("errmsg", v.Msg).Msg("EOS version rollback failed")
+			return errtypes.InternalError(fmt.Sprintf("EOS version rollback failed: %s (code: %d)", v.Msg, v.Code))
+		}
+		log.Debug().Str("func", "RollbackToVersion").Int64("errcode", v.Code).Str("errmsg", v.Msg).Msg("grpc version response")
 	}
 	return nil
 }
