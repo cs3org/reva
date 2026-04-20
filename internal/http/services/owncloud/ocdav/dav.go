@@ -258,9 +258,9 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			var relPath string
 			// OCM v1.1+ (OCIS et al.).
 			if strings.Contains(r.Header.Get("Authorization"), "Bearer") {
-				// Bearer token is the shared secret, path is /{shareId}/path/to/resource.
-				// Here we're keeping the simpler public-share model, where the internal routing is done via the token,
-				// therefore we strip the shareId and reinject the token.
+				// Bearer token is either the exchanged JWT or the legacy shared secret, path is /{shareId}/path/to/resource.
+				// Here we're keeping the simpler public-share model for legacy direct-secret access, where the internal routing is done via the token,
+				// therefore we strip the shareId and reinject the token on that path, while exchanged-token DAV is routed by shareId below.
 				token = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 				ocmshare, relPath = router.ShiftPath(r.URL.Path)
 				if isJWT(token) {
