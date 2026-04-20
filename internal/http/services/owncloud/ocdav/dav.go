@@ -256,10 +256,11 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 			var token, ocmshare, authType, mode string
 			var relPath string
+			// OCM v1.1+ (OCIS et al.).
 			if strings.Contains(r.Header.Get("Authorization"), "Bearer") {
-				// OCM v1.1+ clients use Bearer auth for DAV requests.
-				// The first path segment is the share ID when the sender has a
-				// canonical share-specific URL.
+				// Bearer token is the shared secret, path is /{shareId}/path/to/resource.
+				// Here we're keeping the simpler public-share model, where the internal routing is done via the token,
+				// therefore we strip the shareId and reinject the token.
 				token = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 				ocmshare, relPath = router.ShiftPath(r.URL.Path)
 				if isJWT(token) {
@@ -271,8 +272,8 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			} else {
 				username, _, ok := r.BasicAuth()
 				if ok {
-					// Legacy OCM v1.0 clients carry the long-lived shared secret via
-					// Basic auth and may still address the DAV root without a share ID.
+					// OCM v1.0 (OC10 and Nextcloud) uses basic auth for carrying the shared secret,
+					// and does not pass the shareId
 					token = username
 					relPath = strings.TrimPrefix(r.URL.Path, "/")
 					authType = "ocmshares"
