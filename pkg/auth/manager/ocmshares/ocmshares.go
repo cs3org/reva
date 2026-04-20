@@ -192,11 +192,11 @@ func getRole(s *ocm.Share) (authpb.Role, string) {
 		case *ocm.AccessMethod_WebappOptions:
 			viewMode := v.WebappOptions.ViewMode
 			if viewMode == provider.ViewMode_VIEW_MODE_VIEW_ONLY ||
-				viewMode == provider.ViewMode_VIEW_MODE_READ_ONLY ||
-				viewMode == provider.ViewMode_VIEW_MODE_PREVIEW {
+				viewMode == provider.ViewMode_VIEW_MODE_READ_ONLY {
 				return authpb.Role_ROLE_VIEWER, "viewer"
 			}
-			if viewMode == provider.ViewMode_VIEW_MODE_READ_WRITE {
+			if viewMode == provider.ViewMode_VIEW_MODE_READ_WRITE ||
+				viewMode == provider.ViewMode_VIEW_MODE_PREVIEW {
 				return authpb.Role_ROLE_EDITOR, "editor"
 			}
 		}

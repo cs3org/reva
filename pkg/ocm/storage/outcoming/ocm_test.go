@@ -168,6 +168,27 @@ func TestGetPermissionsFromShare_WebAppReadWrite(t *testing.T) {
 	}
 }
 
+func TestGetPermissionsFromShare_WebAppPreview(t *testing.T) {
+	share := &ocmv1beta1.Share{
+		AccessMethods: []*ocmv1beta1.AccessMethod{
+			{
+				Term: &ocmv1beta1.AccessMethod_WebappOptions{
+					WebappOptions: &ocmv1beta1.WebappAccessMethod{
+						ViewMode: providerv1beta1.ViewMode_VIEW_MODE_PREVIEW,
+					},
+				},
+			},
+		},
+	}
+	got := getPermissionsFromShare(share)
+	if got == nil {
+		t.Fatal("expected non-nil permissions for preview webapp")
+	}
+	if !got.InitiateFileUpload {
+		t.Error("preview mode should allow InitiateFileUpload")
+	}
+}
+
 func TestGetPermissionsFromShare_WebAppViewOnly(t *testing.T) {
 	share := &ocmv1beta1.Share{
 		AccessMethods: []*ocmv1beta1.AccessMethod{

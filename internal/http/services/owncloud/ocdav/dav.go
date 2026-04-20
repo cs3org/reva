@@ -257,6 +257,9 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			var token, ocmshare, authType, mode string
 			var relPath string
 			if strings.Contains(r.Header.Get("Authorization"), "Bearer") {
+				// OCM v1.1+ clients use Bearer auth for DAV requests.
+				// The first path segment is the share ID when the sender has a
+				// canonical share-specific URL.
 				token = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 				ocmshare, relPath = router.ShiftPath(r.URL.Path)
 				if isJWT(token) {
@@ -268,6 +271,8 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			} else {
 				username, _, ok := r.BasicAuth()
 				if ok {
+					// Legacy OCM v1.0 clients carry the long-lived shared secret via
+					// Basic auth and may still address the DAV root without a share ID.
 					token = username
 					relPath = strings.TrimPrefix(r.URL.Path, "/")
 					authType = "ocmshares"
@@ -477,7 +482,7 @@ func handleOCMAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, ocmsh
 
 // Three non-empty base64url segments (RFC 7515 JWS Compact Serialization).
 // Classifies the bearer as an exchanged JWT vs a legacy direct secret.
-// Not a cryptographic proof, @Mahdi: I can't think of anything better at this point.
+// Heuristic only; the exchanged-token auth manager still verifies the JWT.
 func isJWT(token string) bool {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {

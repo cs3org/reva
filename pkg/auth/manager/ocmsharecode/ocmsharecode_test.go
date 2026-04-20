@@ -22,6 +22,8 @@ import (
 	"context"
 	"testing"
 
+	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocminvite "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
@@ -179,5 +181,27 @@ func TestAuthenticatePermissionDenied(t *testing.T) {
 	}
 	if _, ok := err.(errtypes.InvalidCredentials); !ok {
 		t.Errorf("expected InvalidCredentials, got %T: %v", err, err)
+	}
+}
+
+func TestGetRoleTreatsPreviewAsEditor(t *testing.T) {
+	share := &ocm.Share{
+		AccessMethods: []*ocm.AccessMethod{
+			{
+				Term: &ocm.AccessMethod_WebappOptions{
+					WebappOptions: &ocm.WebappAccessMethod{
+						ViewMode: appprovider.ViewMode_VIEW_MODE_PREVIEW,
+					},
+				},
+			},
+		},
+	}
+
+	role, roleStr := getRole(share)
+	if role != authpb.Role_ROLE_EDITOR {
+		t.Fatalf("getRole() role = %v, want %v", role, authpb.Role_ROLE_EDITOR)
+	}
+	if roleStr != "editor" {
+		t.Fatalf("getRole() roleStr = %q, want %q", roleStr, "editor")
 	}
 }

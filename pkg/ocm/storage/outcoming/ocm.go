@@ -406,7 +406,8 @@ func getPermissionsFromShare(share *ocmv1beta1.Share) *provider.ResourcePermissi
 			return v.WebdavOptions.Permissions
 		case *ocmv1beta1.AccessMethod_WebappOptions:
 			mode := v.WebappOptions.ViewMode
-			if mode == providerv1beta1.ViewMode_VIEW_MODE_READ_WRITE {
+			if mode == providerv1beta1.ViewMode_VIEW_MODE_READ_WRITE ||
+				mode == providerv1beta1.ViewMode_VIEW_MODE_PREVIEW {
 				return permissions.NewEditorRole().CS3ResourcePermissions()
 			}
 			return permissions.NewViewerRole().CS3ResourcePermissions()
