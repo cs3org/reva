@@ -139,6 +139,11 @@ func loadOrCreate(file string) (*jsonManager, error) {
 }
 
 func (mgr *jsonManager) GenerateAppPassword(ctx context.Context, scope map[string]*authpb.Scope, label string, expiration *typespb.Timestamp) (*apppb.AppPassword, error) {
+	// Reject already-expired tokens outright.
+	if expiration != nil && expiration.Seconds != 0 && expiration.Seconds < uint64(time.Now().Unix()) {
+		return nil, errors.New("cannot create an already-expired app password")
+	}
+
 	token, err := password.Generate(mgr.config.TokenStrength, mgr.config.TokenStrength/2, 0, false, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating new token")
