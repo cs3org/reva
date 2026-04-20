@@ -143,8 +143,7 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 	}
 
 	log := appctx.GetLogger(ctx)
-	// Log whitelist metadata only; OCM payloads carry shared secrets.
-	log.Info().Str("url", url).Int("payload_bytes", len(body)).Msg("Sending OCM share")
+	log.Info().Str("url", url).Str("payload", string(body)).Msg("Sending OCM share")
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating request")
@@ -198,8 +197,7 @@ func (c *OCMClient) InviteAccepted(ctx context.Context, endpoint string, r *Invi
 	}
 
 	log := appctx.GetLogger(ctx)
-	// Log whitelist metadata only; OCM payloads carry invite tokens.
-	log.Info().Str("url", url).Int("payload_bytes", len(body)).Msg("Sending OCM invite-accepted")
+	log.Info().Str("url", url).Str("payload", string(body)).Msg("Sending OCM invite-accepted")
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating request")
