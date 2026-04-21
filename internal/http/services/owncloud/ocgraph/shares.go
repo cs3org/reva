@@ -46,6 +46,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/permissions"
+	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	libregraph "github.com/owncloud/libre-graph-api-go"
@@ -173,6 +174,11 @@ func (s *svc) createLocalShare(ctx context.Context, gw gateway.GatewayAPIClient,
 		return nil, err
 	}
 	if resp.Status.Code != rpc.Code_CODE_OK {
+		if resp.Status.Code == rpc.Code_CODE_ABORTED {
+			if conflictErr := sharehierarchy.UnmarshalHierarchyConflictError(resp.Status.Message); conflictErr != nil {
+				return nil, conflictErr
+			}
+		}
 		return nil, errors.New("failed to create share: " + resp.Status.Message)
 	}
 
@@ -306,6 +312,12 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 		case "user", "group":
 			resp, err := s.createLocalShare(ctx, gw, storageID, itemID, path, owner, statRes.Info.Type, *recipient.LibreGraphRecipientType, *recipient.ObjectId, exp, requestedPerms)
 			if err != nil {
+				if conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError); ok {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusConflict)
+					json.NewEncoder(w).Encode(conflictErr)
+					return
+				}
 				log.Error().Err(err).Msg("")
 				handleError(ctx, err, w)
 				return

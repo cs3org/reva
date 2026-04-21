@@ -102,15 +102,16 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 	checker := &sharehierarchy.Checker{GetPath: s.getPathForResourceId}
 	result, err := checker.CheckGrantConsistency(ctx, req.ResourceInfo.Path, req.Grant.Permissions.Permissions, existingShares)
 	if err != nil {
+		conflictErr := err.(*sharehierarchy.HierarchyConflictError)
 		return &collaboration.CreateShareResponse{
-			Status: status.NewStatusFromErrType(ctx, "hierarchy check", err),
+			Status: status.NewConflict(ctx, conflictErr, conflictErr.MarshalToJSON()),
 		}, nil
 	}
 	// If we don't force, we show a warning to the user that shares will be deleted
 	if !force && len(result.ToDelete) > 0 {
-		conflictErr := errtypes.ShareChildConflict(sharehierarchy.ChildConflictMessage(result.ToDelete))
+		conflictErr := sharehierarchy.NewChildConflictError(sharehierarchy.ChildConflictMessage(result.ToDelete), result.ToDelete)
 		return &collaboration.CreateShareResponse{
-			Status: status.NewStatusFromErrType(ctx, "hierarchy check", conflictErr),
+			Status: status.NewConflict(ctx, conflictErr, conflictErr.MarshalToJSON()),
 		}, nil
 	}
 
@@ -392,14 +393,15 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 
 		result, checkErr := checker.CheckGrantConsistency(ctx, currentPath, newPerms, existingShares)
 		if checkErr != nil {
+			conflictErr := checkErr.(*sharehierarchy.HierarchyConflictError)
 			return &collaboration.UpdateShareResponse{
-				Status: status.NewStatusFromErrType(ctx, "hierarchy check", checkErr),
+				Status: status.NewConflict(ctx, conflictErr, conflictErr.MarshalToJSON()),
 			}, nil
 		}
 		if !force && len(result.ToDelete) > 0 {
-			conflictErr := errtypes.ShareChildConflict(sharehierarchy.ChildConflictMessage(result.ToDelete))
+			conflictErr := sharehierarchy.NewChildConflictError(sharehierarchy.ChildConflictMessage(result.ToDelete), result.ToDelete)
 			return &collaboration.UpdateShareResponse{
-				Status: status.NewStatusFromErrType(ctx, "hierarchy check", conflictErr),
+				Status: status.NewConflict(ctx, conflictErr, conflictErr.MarshalToJSON()),
 			}, nil
 		}
 		toDelete = result.ToDelete

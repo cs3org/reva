@@ -86,8 +86,8 @@ func TestCheckForAdd_ParentR_NodeR_Conflict(t *testing.T) {
 
 	_, err := checker.CheckGrantConsistency(context.Background(), "/a/b", readPerms, []*collaboration.Share{parent})
 	require.Error(t, err)
-	_, ok := err.(errtypes.IsShareParentConflict)
-	assert.True(t, ok, "expected ShareParentConflict, got %T: %v", err, err)
+	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError); _ = conflictErr
+	assert.True(t, ok, "expected HierarchyConflictError, got %T: %v", err, err)
 }
 
 func TestCheckForAdd_ParentRW_NodeR_Conflict(t *testing.T) {
@@ -97,7 +97,7 @@ func TestCheckForAdd_ParentRW_NodeR_Conflict(t *testing.T) {
 
 	_, err := checker.CheckGrantConsistency(context.Background(), "/a/b", readPerms, []*collaboration.Share{parent})
 	require.Error(t, err)
-	_, ok := err.(errtypes.IsShareParentConflict)
+	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError); _ = conflictErr
 	assert.True(t, ok)
 }
 
@@ -108,7 +108,7 @@ func TestCheckForAdd_ParentRW_NodeRW_Conflict(t *testing.T) {
 
 	_, err := checker.CheckGrantConsistency(context.Background(), "/a/b", rwPerms, []*collaboration.Share{parent})
 	require.Error(t, err)
-	_, ok := err.(errtypes.IsShareParentConflict)
+	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError); _ = conflictErr
 	assert.True(t, ok)
 }
 
@@ -212,7 +212,7 @@ func TestCheckForAdd_DenyParent_Conflict(t *testing.T) {
 
 	_, err := checker.CheckGrantConsistency(context.Background(), "/a/b", readPerms, []*collaboration.Share{parent})
 	require.Error(t, err)
-	_, ok := err.(errtypes.IsShareParentConflict)
+	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError); _ = conflictErr
 	assert.True(t, ok)
 }
 
@@ -245,7 +245,7 @@ func TestCheckForAdd_ParentDeny_NodeDeny_Conflict(t *testing.T) {
 
 	_, err := checker.CheckGrantConsistency(context.Background(), "/a/b", denyPerms, []*collaboration.Share{parent})
 	require.Error(t, err)
-	_, ok := err.(errtypes.IsShareParentConflict)
+	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError); _ = conflictErr
 	assert.True(t, ok)
 }
 
@@ -256,7 +256,7 @@ func TestCheckForAdd_ParentDeny_NodeRW_Conflict(t *testing.T) {
 
 	_, err := checker.CheckGrantConsistency(context.Background(), "/a/b", rwPerms, []*collaboration.Share{parent})
 	require.Error(t, err)
-	_, ok := err.(errtypes.IsShareParentConflict)
+	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError); _ = conflictErr
 	assert.True(t, ok)
 }
 
