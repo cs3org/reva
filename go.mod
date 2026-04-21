@@ -94,7 +94,7 @@ require (
 	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8
 	golang.org/x/oauth2 v0.35.0
 	golang.org/x/sync v0.19.0
-	golang.org/x/sys v0.41.0
+	golang.org/x/sys v0.42.0
 	golang.org/x/term v0.40.0
 	golang.org/x/text v0.34.0
 	google.golang.org/genproto v0.0.0-20250303144028-a0af3efb3deb
