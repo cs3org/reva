@@ -189,6 +189,15 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 
 	checker := &sharehierarchy.Checker{GetPath: s.getPathForResourceId}
 
+	if share.ResourceId.SpaceId == "" {
+		if stat, statErr := s.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: share.ResourceId}}); statErr == nil && stat.Status.Code == rpc.Code_CODE_OK && stat.Info.Id.SpaceId != "" {
+			share.ResourceId.SpaceId = stat.Info.Id.SpaceId
+			log.Debug().Str("keyword", "sharehierarchy").Str("spaceId", share.ResourceId.SpaceId).Msg("sharehierarchy: populated missing spaceId for DeleteShare via stat")
+		} else {
+			log.Warn().Str("keyword", "sharehierarchy").Msg("sharehierarchy: spaceId missing on DeleteShare and stat could not resolve it")
+		}
+	}
+
 	// Resolve parent / child shares so we can reapply the hierarchy (ADR-GENERAL-005).
 	existingShares, listErr := s.listSharesForGranteeInSpace(ctx, c, share.ResourceId.SpaceId, share.Grantee)
 	if listErr != nil {
@@ -368,6 +377,15 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 
 	_, isPermUpdate := req.Field.GetField().(*collaboration.UpdateShareRequest_UpdateField_Permissions)
 	newPerms := req.Field.GetPermissions().GetPermissions()
+
+	if isPermUpdate && currentShare.ResourceId.SpaceId == "" {
+		if stat, statErr := s.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: currentShare.ResourceId}}); statErr == nil && stat.Status.Code == rpc.Code_CODE_OK && stat.Info.Id.SpaceId != "" {
+			currentShare.ResourceId.SpaceId = stat.Info.Id.SpaceId
+			appctx.GetLogger(ctx).Debug().Str("keyword", "sharehierarchy").Str("spaceId", currentShare.ResourceId.SpaceId).Msg("sharehierarchy: populated missing spaceId for UpdateShare via stat")
+		} else {
+			appctx.GetLogger(ctx).Warn().Str("keyword", "sharehierarchy").Msg("sharehierarchy: spaceId missing on UpdateShare and stat could not resolve it")
+		}
+	}
 
 	// Hierarchy check (ADR-GENERAL-005) — only for permission updates when SpaceId is available.
 	// Returns early on conflict; on success, populates toDelete/toReapply for use below.
