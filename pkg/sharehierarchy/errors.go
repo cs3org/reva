@@ -37,11 +37,11 @@ type ConflictingShare struct {
 // Status.Message field so the HTTP layer can decode it and return a 409 with detail.
 type HierarchyConflictError struct {
 	// ErrorType is either "parent_conflict" or "child_conflict".
-	ErrorType string             `json:"error_type"`
-	Message   string             `json:"message"`
-	// CausedBy is the existing share that blocks the operation (parent_conflict only).
-	CausedBy  *ConflictingShare  `json:"caused_by,omitempty"`
-	Shares    []ConflictingShare `json:"conflicting_shares,omitempty"`
+	ErrorType         string             `json:"error_type"`
+	Message           string             `json:"message"`
+	// CanForce indicates whether the caller may retry with force=true to override the conflict.
+	CanForce          bool               `json:"can_force"`
+	ConflictingShares []ConflictingShare `json:"conflicting_shares,omitempty"`
 }
 
 func (e *HierarchyConflictError) Error() string { return e.Message }
@@ -55,7 +55,7 @@ func NewChildConflictError(msg string, shares []*collaboration.Share) *Hierarchy
 			ResourceID: s.ResourceId.StorageId + "!" + s.ResourceId.OpaqueId,
 		})
 	}
-	return &HierarchyConflictError{ErrorType: "child_conflict", Message: msg, Shares: cs}
+	return &HierarchyConflictError{ErrorType: "child_conflict", CanForce: true, Message: msg, ConflictingShares: cs}
 }
 
 // MarshalToJSON serialises the error to a JSON string suitable for embedding in a gRPC Status message.
