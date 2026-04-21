@@ -88,6 +88,8 @@ func (m *manager) Configure(ml map[string]any) error {
 // and returns the accepted user with a shareId/resource-only scope for JWT minting.
 // The generic auth interface passes OAuth client_id as the first argument. In OCM code flow
 // that identifies the receiving server, so share lookup must come from the exchanged code.
+// TODO(lopresti) here we could also enforce that the domain of the remote request matches
+// the domain recorded in `shareRes`, taking into account forwarded host headers etc.
 func (m *manager) Authenticate(ctx context.Context, clientID, code string) (*userpb.User, map[string]*authpb.Scope, error) {
 	log := appctx.GetLogger(ctx).With().Str("client_id", clientID).Logger()
 
