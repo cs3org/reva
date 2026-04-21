@@ -33,7 +33,6 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/errtypes"
 )
 
 // Checker runs the hierarchical share consistency algorithm.
@@ -102,10 +101,18 @@ func (c *Checker) CheckGrantConsistency(ctx context.Context, nodePath string, no
 				continue
 			}
 			log.Debug().Str("keyword", "sharehierarchy").Str("shareId", s.Id.OpaqueId).Str("parentPath", path).Str("parentPerms", sharePerms.String()).Str("nodePath", nodePath).Str("nodePerms", nodePermLevel.String()).Msg("sharehierarchy: parent conflict detected")
-			return nil, errtypes.ShareParentConflict(fmt.Sprintf(
-				"resource at %q is already accessible via a %s share on parent %q",
-				nodePath, sharePerms, path,
-			))
+			return nil, &HierarchyConflictError{
+				ErrorType: "parent_conflict",
+				Message: fmt.Sprintf(
+					"resource at %q is already accessible via a %s share on parent %q",
+					nodePath, sharePerms, path,
+				),
+				CausedBy: &ConflictingShare{
+					ID:             s.Id.OpaqueId,
+					Path:           path,
+					PermissionType: sharePerms.String(),
+				},
+			}
 
 		case isStrictAncestor(nodePath, path):
 			// Step 2: existing share S is a child of the new node N.
