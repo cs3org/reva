@@ -103,14 +103,17 @@ func (c *Checker) CheckGrantConsistency(ctx context.Context, nodePath string, no
 			log.Debug().Str("keyword", "sharehierarchy").Str("shareId", s.Id.OpaqueId).Str("parentPath", path).Str("parentPerms", sharePerms.String()).Str("nodePath", nodePath).Str("nodePerms", nodePermLevel.String()).Msg("sharehierarchy: parent conflict detected")
 			return nil, &HierarchyConflictError{
 				ErrorType: "parent_conflict",
+				CanForce:  false,
 				Message: fmt.Sprintf(
 					"resource at %q is already accessible via a %s share on parent %q",
 					nodePath, sharePerms, path,
 				),
-				CausedBy: &ConflictingShare{
-					ID:             s.Id.OpaqueId,
-					Path:           path,
-					PermissionType: sharePerms.String(),
+				ConflictingShares: []ConflictingShare{
+					{
+						ID:             s.Id.OpaqueId,
+						Path:           path,
+						PermissionType: sharePerms.String(),
+					},
 				},
 			}
 
