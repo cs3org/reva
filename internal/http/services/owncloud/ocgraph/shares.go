@@ -149,7 +149,17 @@ func (s *svc) createLocalShare(ctx context.Context, gw gateway.GatewayAPIClient,
 		return nil, err
 	}
 
+	var opaque *types.Opaque
+	if force {
+		opaque = &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				"force": {Decoder: "plain", Value: []byte("true")},
+			},
+		}
+	}
+
 	createShareRequest := &collaboration.CreateShareRequest{
+		Opaque: opaque,
 		ResourceInfo: &provider.ResourceInfo{
 			Id:    ri,
 			Path:  path,
@@ -294,6 +304,8 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	force := r.Header.Get("Force") == "true"
+
 	// And we keep a list of share responses
 	response := make([]*libregraph.Permission, 0, len(invite.Recipients))
 
@@ -306,7 +318,11 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 		// If the recipient is a user or a group, we create a local share
 		switch *recipient.LibreGraphRecipientType {
 		case "user", "group":
+<<<<<<< HEAD
 			resp, err := s.createLocalShare(ctx, gw, statRes.Info.Id, path, owner, statRes.Info.Type, *recipient.LibreGraphRecipientType, *recipient.ObjectId, exp, requestedPerms)
+=======
+			resp, err := s.createLocalShare(ctx, gw, storageID, itemID, path, owner, statRes.Info.Type, *recipient.LibreGraphRecipientType, *recipient.ObjectId, exp, requestedPerms, force)
+>>>>>>> e44dc51c4 (make `force` param work)
 			if err != nil {
 				if conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError); ok {
 					w.Header().Set("Content-Type", "application/json")
