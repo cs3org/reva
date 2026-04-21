@@ -1,6 +1,6 @@
 module github.com/owncloud/reva/v2
 
-go 1.25
+go 1.25.0
 
 require (
 	bou.ke/monkey v1.0.2
@@ -58,7 +58,7 @@ require (
 	github.com/minio/minio-go/v7 v7.0.98
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/nats-io/nats-server/v2 v2.12.4
-	github.com/nats-io/nats.go v1.49.0
+	github.com/nats-io/nats.go v1.48.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.0
@@ -80,16 +80,16 @@ require (
 	github.com/studio-b12/gowebdav v0.9.0
 	github.com/test-go/testify v1.1.4
 	github.com/thanhpk/randstr v1.0.6
-	github.com/tus/tusd/v2 v2.9.1
+	github.com/tus/tusd/v2 v2.8.0
 	github.com/wk8/go-ordered-map v1.0.0
 	go-micro.dev/v4 v4.11.0
 	go.etcd.io/etcd/client/v3 v3.6.8
 	go.opencensus.io v0.24.0
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.65.0
-	go.opentelemetry.io/otel v1.40.0
+	go.opentelemetry.io/otel v1.42.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.40.0
 	go.opentelemetry.io/otel/sdk v1.40.0
-	go.opentelemetry.io/otel/trace v1.40.0
+	go.opentelemetry.io/otel/trace v1.42.0
 	golang.org/x/crypto v0.48.0
 	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8
 	golang.org/x/oauth2 v0.35.0
@@ -97,7 +97,7 @@ require (
 	golang.org/x/sys v0.41.0
 	golang.org/x/term v0.40.0
 	golang.org/x/text v0.34.0
-	google.golang.org/genproto v0.0.0-20251202230838-ff82c1b0f217
+	google.golang.org/genproto v0.0.0-20250303144028-a0af3efb3deb
 	google.golang.org/grpc v1.79.1
 	google.golang.org/protobuf v1.36.11
 )
@@ -212,7 +212,7 @@ require (
 	go.mongodb.org/mongo-driver v1.17.6 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.40.0 // indirect
-	go.opentelemetry.io/otel/metric v1.40.0 // indirect
+	go.opentelemetry.io/otel/metric v1.42.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.9.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
