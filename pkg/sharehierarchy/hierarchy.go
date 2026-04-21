@@ -32,6 +32,7 @@ import (
 
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 )
 
@@ -74,14 +75,18 @@ type HierarchyCheckResult struct {
 //     may be non-empty and must be acted on by the caller.
 //   - (nil, ShareParentConflict): hard failure, operation must be aborted.
 func (c *Checker) CheckGrantConsistency(ctx context.Context, nodePath string, nodePerms *provider.ResourcePermissions, existingShares []*collaboration.Share) (*HierarchyCheckResult, error) {
+	log := appctx.GetLogger(ctx)
 	result := &HierarchyCheckResult{}
 	nodePermLevel := PermLevelFromCS3(nodePerms)
 	reapplyPaths := make(map[string]string)
+
+	log.Debug().Str("keyword", "sharehierarchy").Str("nodePath", nodePath).Str("nodePerms", nodePermLevel.String()).Int("existingShares", len(existingShares)).Msg("sharehierarchy: CheckGrantConsistency start")
 
 	for _, s := range existingShares {
 		path, err := c.GetPath(ctx, s.ResourceId)
 		if err != nil {
 			// Share may be orphaned or its resource temporarily unavailable; skip it.
+			log.Debug().Str("keyword", "sharehierarchy").Str("shareId", s.Id.OpaqueId).Err(err).Msg("sharehierarchy: skipping share with unresolvable path")
 			continue
 		}
 
@@ -93,8 +98,10 @@ func (c *Checker) CheckGrantConsistency(ctx context.Context, nodePath string, no
 			// Allowed only when N strictly escalates beyond P in the permission ordering.
 			// Any other combination means N is redundant or conflicts with P.
 			if nodePermLevel > sharePerms {
+				log.Debug().Str("keyword", "sharehierarchy").Str("shareId", s.Id.OpaqueId).Str("parentPath", path).Str("parentPerms", sharePerms.String()).Msg("sharehierarchy: parent share allows escalation, continuing")
 				continue
 			}
+			log.Debug().Str("keyword", "sharehierarchy").Str("shareId", s.Id.OpaqueId).Str("parentPath", path).Str("parentPerms", sharePerms.String()).Str("nodePath", nodePath).Str("nodePerms", nodePermLevel.String()).Msg("sharehierarchy: parent conflict detected")
 			return nil, errtypes.ShareParentConflict(fmt.Sprintf(
 				"resource at %q is already accessible via a %s share on parent %q",
 				nodePath, sharePerms, path,
@@ -106,9 +113,11 @@ func (c *Checker) CheckGrantConsistency(ctx context.Context, nodePath string, no
 			// must be re-applied after adding N so it is not shadowed.
 			// Otherwise the child is redundant or would be implicitly elevated and must be deleted.
 			if sharePerms > nodePermLevel {
+				log.Debug().Str("keyword", "sharehierarchy").Str("shareId", s.Id.OpaqueId).Str("childPath", path).Str("childPerms", sharePerms.String()).Msg("sharehierarchy: child share has higher perms, will reapply")
 				result.ToReapply = append(result.ToReapply, s)
 				reapplyPaths[s.Id.OpaqueId] = path
 			} else {
+				log.Debug().Str("keyword", "sharehierarchy").Str("shareId", s.Id.OpaqueId).Str("childPath", path).Str("childPerms", sharePerms.String()).Msg("sharehierarchy: child share is redundant, will delete")
 				result.ToDelete = append(result.ToDelete, s)
 			}
 		}
@@ -116,6 +125,7 @@ func (c *Checker) CheckGrantConsistency(ctx context.Context, nodePath string, no
 
 	// Sort ToReapply shallowest-first so the caller can apply ACLs in the correct order.
 	sortByPathDepthAsc(result.ToReapply, reapplyPaths)
+	log.Debug().Str("keyword", "sharehierarchy").Str("nodePath", nodePath).Int("toDelete", len(result.ToDelete)).Int("toReapply", len(result.ToReapply)).Msg("sharehierarchy: CheckGrantConsistency done")
 	return result, nil
 }
 
@@ -137,6 +147,9 @@ type RemoveReapplyResult struct {
 //
 // If the path of the removed resource cannot be resolved, both fields are nil/empty.
 func (c *Checker) GrantsToReapplyAfterRemove(ctx context.Context, removedID string, removedResourceID *provider.ResourceId, allShares []*collaboration.Share) *RemoveReapplyResult {
+	log := appctx.GetLogger(ctx)
+	log.Debug().Str("keyword", "sharehierarchy").Str("removedShareId", removedID).Int("totalShares", len(allShares)).Msg("sharehierarchy: GrantsToReapplyAfterRemove start")
+
 	// Resolve paths for all shares except the one being removed.
 	// Shares absent from the map are naturally excluded by filterAncestors/filterDescendants.
 	paths := make(map[string]string, len(allShares))
@@ -145,21 +158,31 @@ func (c *Checker) GrantsToReapplyAfterRemove(ctx context.Context, removedID stri
 		path, err := c.GetPath(ctx, s.ResourceId)
 		if s.Id.OpaqueId == removedID {
 			if err != nil {
+				log.Warn().Str("keyword", "sharehierarchy").Str("removedShareId", removedID).Err(err).Msg("sharehierarchy: cannot resolve path of removed share, skipping reapply")
 				return &RemoveReapplyResult{}
 			}
 			removedPath = path
 		} else if err == nil {
 			paths[s.Id.OpaqueId] = path
+		} else {
+			log.Debug().Str("keyword", "sharehierarchy").Str("shareId", s.Id.OpaqueId).Err(err).Msg("sharehierarchy: skipping share with unresolvable path during remove")
 		}
 	}
 
 	ancestors := filterAncestors(allShares, paths, removedPath)
 	descendants := filterDescendants(allShares, paths, removedPath)
 	sortByPathDepthAsc(descendants, paths)
-	return &RemoveReapplyResult{
+	result := &RemoveReapplyResult{
 		ParentGrant: closestAncestor(ancestors, paths),
 		ChildGrants: descendants,
 	}
+
+	if result.ParentGrant != nil {
+		log.Debug().Str("keyword", "sharehierarchy").Str("removedShareId", removedID).Str("removedPath", removedPath).Str("parentShareId", result.ParentGrant.Id.OpaqueId).Int("childGrants", len(result.ChildGrants)).Msg("sharehierarchy: GrantsToReapplyAfterRemove done")
+	} else {
+		log.Debug().Str("keyword", "sharehierarchy").Str("removedShareId", removedID).Str("removedPath", removedPath).Int("childGrants", len(result.ChildGrants)).Msg("sharehierarchy: GrantsToReapplyAfterRemove done, no parent grant")
+	}
+	return result
 }
 
 // filterAncestors returns the subset of shares whose resolved path is a strict
