@@ -79,6 +79,16 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 	// (https://gitlab.cern.ch/cernbox/adr/-/blob/master/decisions/general/0005-sharing.md)
 	// ---------------------------------
 	spaceId := req.ResourceInfo.Id.SpaceId
+	if spaceId == "" {
+		if stat, statErr := s.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: req.ResourceInfo.Id}}); statErr == nil && stat.Status.Code == rpc.Code_CODE_OK && stat.Info.Id.SpaceId != "" {
+			spaceId = stat.Info.Id.SpaceId
+			req.ResourceInfo.Id.SpaceId = spaceId
+			log.Debug().Str("keyword", "sharehierarchy").Str("spaceId", spaceId).Msg("sharehierarchy: populated missing spaceId via stat")
+		} else {
+			log.Warn().Str("keyword", "sharehierarchy").Msg("sharehierarchy: spaceId missing and stat could not resolve it")
+		}
+	}
+
 	// Force means we delete child shares, instead of returning a conflict error
 	force := parseForce(req.Opaque)
 
@@ -632,6 +642,7 @@ func (s *svc) getPathForResourceId(ctx context.Context, id *provider.ResourceId)
 // listSharesForGranteeInSpace returns all active shares for the given grantee in the given space.
 func (s *svc) listSharesForGranteeInSpace(ctx context.Context, c collaboration.CollaborationAPIClient, spaceId string, grantee *provider.Grantee) ([]*collaboration.Share, error) {
 	if spaceId == "" {
+		appctx.GetLogger(ctx).Warn().Str("keyword", "sharehierarchy").Msg("sharehierarchy: spaceId is empty, skipping hierarchy check")
 		return nil, nil
 	}
 
