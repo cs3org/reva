@@ -53,6 +53,8 @@ const (
 	RoleSpaceEditorWithoutVersions = "spaceeditor-without-versions"
 	// RoleSpaceEditorWithoutTrashbin grants editor permission without list/restore resources in trashbin on a space.
 	RoleSpaceEditorWithoutTrashbin = "spaceeditor-without-trashbin"
+	// RoleSpaceEditorWithoutVersionsWithoutTrashbin grants editor permission without list/restore versions and without list/restore resources in trashbin on a space.
+	RoleSpaceEditorWithoutVersionsWithoutTrashbin = "spaceeditor-without-versions-without-trashbin"
 	// RoleFileEditor grants editor permission on a single file.
 	RoleFileEditor = "file-editor"
 	// RoleFileEditorListGrants grants editor permission on a single file.
@@ -183,6 +185,8 @@ func RoleFromName(name string) *Role {
 		return NewSpaceEditorRole()
 	case RoleSpaceEditorWithoutTrashbin:
 		return NewSpaceEditorWithoutTrashbinRole()
+	case RoleSpaceEditorWithoutVersionsWithoutTrashbin:
+		return NewSpaceEditorWithoutVersionsWithoutTrashbinRole()
 	case RoleFileEditor:
 		return NewFileEditorRole()
 	case RoleFileEditorListGrants:
@@ -357,6 +361,26 @@ func NewSpaceEditorWithoutTrashbinRole() *Role {
 			ListGrants:           true,
 			Move:                 true,
 			RestoreFileVersion:   true,
+			Stat:                 true,
+		},
+		ocsPermissions: PermissionRead | PermissionCreate | PermissionWrite | PermissionDelete,
+	}
+}
+
+// NewSpaceEditorWithoutVersionsWithoutTrashbinRole creates an editor role without list/restore versions and without list/restore resources in trashbin on a space.
+func NewSpaceEditorWithoutVersionsWithoutTrashbinRole() *Role {
+	return &Role{
+		Name: RoleSpaceEditorWithoutVersionsWithoutTrashbin,
+		cS3ResourcePermissions: &provider.ResourcePermissions{
+			CreateContainer:      true,
+			Delete:               true,
+			GetPath:              true,
+			GetQuota:             true,
+			InitiateFileDownload: true,
+			InitiateFileUpload:   true,
+			ListContainer:        true,
+			ListGrants:           true,
+			Move:                 true,
 			Stat:                 true,
 		},
 		ocsPermissions: PermissionRead | PermissionCreate | PermissionWrite | PermissionDelete,
