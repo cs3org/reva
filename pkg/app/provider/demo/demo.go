@@ -26,7 +26,6 @@ import (
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/app"
 	"github.com/cs3org/reva/v3/pkg/app/provider/registry"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
@@ -40,7 +39,7 @@ type demoProvider struct {
 	iframeUIProvider string
 }
 
-func (p *demoProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.ViewMode, token string, opaqueMap map[string]*typespb.OpaqueEntry, language string) (*appprovider.OpenInAppURL, string, error) {
+func (p *demoProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.ViewMode, token string, language string) (*appprovider.OpenInAppURL, string, error) {
 	url := fmt.Sprintf("<iframe src=%s/open/%s?view-mode=%s&access-token=%s&lang=%s />", p.iframeUIProvider, resource.Id.StorageId+":"+resource.Id.OpaqueId, viewMode.String(), token, language)
 	return &appprovider.OpenInAppURL{
 		AppUrl: url,

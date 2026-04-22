@@ -40,7 +40,6 @@ import (
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/app"
 	"github.com/cs3org/reva/v3/pkg/app/provider/registry"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -138,7 +137,7 @@ func New(ctx context.Context, m map[string]any) (app.Provider, error) {
 	}, nil
 }
 
-func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.ViewMode, token string, opaqueMap map[string]*typespb.OpaqueEntry, language string) (*appprovider.OpenInAppURL, string, error) {
+func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.ViewMode, token string, language string) (*appprovider.OpenInAppURL, string, error) {
 	log := appctx.GetLogger(ctx)
 
 	ext := path.Ext(resource.Path)

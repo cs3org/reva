@@ -439,15 +439,6 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	opaqueMap := make(map[string]*typespb.OpaqueEntry)
-	for k, v := range r.Form {
-		if k != "file_id" && k != "view_mode" && k != "app_name" {
-			opaqueMap[k] = &typespb.OpaqueEntry{
-				Decoder: "plain",
-				Value:   []byte(v[0]),
-			}
-		}
-	}
 	appName := r.Form.Get("app_name")
 	appName, err = url.QueryUnescape(appName)
 	if err != nil {
@@ -460,7 +451,6 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		Ref:      &fileRef,
 		ViewMode: viewMode,
 		App:      appName,
-		Opaque:   &typespb.Opaque{Map: opaqueMap},
 	}
 	openRes, err := client.OpenInApp(ctx, &openReq)
 	if err != nil {
