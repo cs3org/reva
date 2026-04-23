@@ -123,9 +123,12 @@ func (s *service) GetUserByClaim(ctx context.Context, req *userpb.GetUserByClaim
 	user, err := s.usermgr.GetUserByClaim(ctx, req.Claim, req.Value, req.SkipFetchingUserGroups)
 	if err != nil {
 		res := &userpb.GetUserByClaimResponse{}
-		if _, ok := err.(errtypes.NotFound); ok {
+		switch err.(type) {
+		case errtypes.NotFound:
 			res.Status = status.NewNotFound(ctx, fmt.Sprintf("user not found %s %s", req.Claim, req.Value))
-		} else {
+		case errtypes.Conflict:
+			res.Status = status.NewConflict(ctx, err, fmt.Sprintf("conflict getting user %s by claim %s", req.Value, req.Claim))
+		default:
 			err = errors.Wrap(err, "userprovidersvc: error getting user by claim")
 			res.Status = status.NewInternal(ctx, err, fmt.Sprintf("error getting user %s by claim %s", req.Value, req.Claim))
 		}
