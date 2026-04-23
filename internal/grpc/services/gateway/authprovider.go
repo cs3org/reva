@@ -65,6 +65,8 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	case res.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
 		fallthrough
 	case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
+		fallthrough
+	case res.Status.Code == rpc.Code_CODE_ABORTED:
 		// normal failures, no need to log
 		return &gateway.AuthenticateResponse{
 			Status: res.Status,

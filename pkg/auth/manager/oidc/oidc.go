@@ -284,6 +284,9 @@ func (am *mgr) Authenticate(ctx context.Context, _, clientSecret string) (*user.
 		return nil, nil, errors.Wrapf(err, "error getting user by username '%v'", sub)
 	}
 	if userRes.Status.Code != rpc.Code_CODE_OK {
+		if userRes.Status.Code == rpc.Code_CODE_ABORTED {
+			return nil, nil, errtypes.Conflict(userRes.Status.Message)
+		}
 		return nil, nil, status.NewErrorFromCode(userRes.Status.Code, "oidc")
 	}
 

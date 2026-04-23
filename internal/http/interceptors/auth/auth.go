@@ -301,7 +301,13 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, sign
 
 	if res.Status.Code != rpc.Code_CODE_OK {
 		err := status.NewErrorFromCode(res.Status.Code, "auth")
-		logError(isUnprotectedEndpoint, log, err, "error generating access token from credentials", http.StatusUnauthorized, w)
+		if res.Status.Code == rpc.Code_CODE_ABORTED {
+			// A conflict occurs when an identity cannot be resolved for a known reason,
+			// e.g. a lightweight account that has been linked to a primary account.
+			logError(isUnprotectedEndpoint, log, err, "conflict when generating access token from credentials", http.StatusConflict, w)
+		} else {
+			logError(isUnprotectedEndpoint, log, err, "error generating access token from credentials", http.StatusUnauthorized, w)
+		}
 		return nil, err
 	}
 
