@@ -120,3 +120,31 @@ func TestSufficientPermissions(t *testing.T) {
 		assert.Equal(t, test.Sufficient, SufficientCS3Permissions(test.Existing, test.Requested))
 	}
 }
+
+func TestNewSpaceEditorWithoutVersionsWithoutTrashbinRole(t *testing.T) {
+	role := NewSpaceEditorWithoutVersionsWithoutTrashbinRole()
+	p := role.CS3ResourcePermissions()
+
+	assert.Equal(t, RoleSpaceEditorWithoutVersionsWithoutTrashbin, role.Name)
+
+	// should have basic editor permissions
+	assert.True(t, p.CreateContainer)
+	assert.True(t, p.Delete)
+	assert.True(t, p.GetPath)
+	assert.True(t, p.GetQuota)
+	assert.True(t, p.InitiateFileDownload)
+	assert.True(t, p.InitiateFileUpload)
+	assert.True(t, p.ListContainer)
+	assert.True(t, p.ListGrants)
+	assert.True(t, p.Move)
+	assert.True(t, p.Stat)
+
+	// should not have version permissions
+	assert.False(t, p.ListFileVersions)
+	assert.False(t, p.RestoreFileVersion)
+
+	// should not have trashbin permissions
+	assert.False(t, p.ListRecycle)
+	assert.False(t, p.RestoreRecycleItem)
+	assert.False(t, p.PurgeRecycle)
+}
