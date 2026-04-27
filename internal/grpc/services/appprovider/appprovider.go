@@ -23,13 +23,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
 	"time"
 
 	providerpb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/app"
 	"github.com/cs3org/reva/v3/pkg/app/provider/registry"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -67,7 +65,6 @@ type config struct {
 	GatewaySvc          string                    `mapstructure:"gatewaysvc"`
 	MimeTypes           []string                  `docs:"nil;A list of mime types supported by this app."                                                              mapstructure:"mime_types"`
 	CustomMimeTypesJSON string                    `docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types." mapstructure:"custom_mime_types_json"`
-	Priority            uint64                    `mapstructure:"priority"`
 	Language            string                    `mapstructure:"language"`
 }
 
@@ -156,17 +153,6 @@ func (s *service) registerProvider(ctx context.Context) {
 	}
 	req := &registrypb.AddAppProviderRequest{Provider: pInfo}
 
-	if s.conf.Priority != 0 {
-		req.Opaque = &types.Opaque{
-			Map: map[string]*types.OpaqueEntry{
-				"priority": {
-					Decoder: "plain",
-					Value:   []byte(strconv.FormatUint(s.conf.Priority, 10)),
-				},
-			},
-		}
-	}
-
 	res, err := client.AddAppProvider(ctx, req)
 	if err != nil {
 		log.Error().Err(err).Msgf("error registering app provider: error calling add app provider")
@@ -207,7 +193,7 @@ func getProvider(ctx context.Context, c *config) (app.Provider, error) {
 }
 
 func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
-	appURL, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken, req.Opaque.Map, s.conf.Language)
+	appURL, forcedvm, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken, s.conf.Language)
 	if err != nil {
 		res := &providerpb.OpenInAppResponse{
 			Status: status.NewStatusFromErrType(ctx, "appprovider: error calling GetAppURL", err),
@@ -215,8 +201,9 @@ func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppReques
 		return res, nil
 	}
 	res := &providerpb.OpenInAppResponse{
-		Status: status.NewOK(ctx),
-		AppUrl: appURL,
+		Status:               status.NewOK(ctx),
+		AppUrl:               appURL,
+		ForcedViewModeReason: forcedvm,
 	}
 	return res, nil
 }

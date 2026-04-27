@@ -378,6 +378,7 @@ func (s *svc) handleList(w http.ResponseWriter, r *http.Request) {
 
 func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
 	if err != nil {
@@ -438,15 +439,6 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	opaqueMap := make(map[string]*typespb.OpaqueEntry)
-	for k, v := range r.Form {
-		if k != "file_id" && k != "view_mode" && k != "app_name" {
-			opaqueMap[k] = &typespb.OpaqueEntry{
-				Decoder: "plain",
-				Value:   []byte(v[0]),
-			}
-		}
-	}
 	appName := r.Form.Get("app_name")
 	appName, err = url.QueryUnescape(appName)
 	if err != nil {
@@ -459,7 +451,6 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		Ref:      &fileRef,
 		ViewMode: viewMode,
 		App:      appName,
-		Opaque:   &typespb.Opaque{Map: opaqueMap},
 	}
 	openRes, err := client.OpenInApp(ctx, &openReq)
 	if err != nil {
@@ -481,27 +472,28 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// recreate the structure to be able to marshal the AppUrl.Target as a string
-	js, err := json.Marshal(
-		map[string]any{
-			"app_url":         openRes.AppUrl.AppUrl,
-			"method":          openRes.AppUrl.Method,
-			"form_parameters": openRes.AppUrl.FormParameters,
-			"headers":         openRes.AppUrl.Headers,
-			"target":          appTargetToString(openRes.AppUrl.Target),
-		},
-	)
+	// recreate the structure to be able to marshal the AppUrl.Target as a string and to add the optional forced viewmode reason
+	resPayload := map[string]any{
+		"app_url":                openRes.AppUrl.AppUrl,
+		"method":                 openRes.AppUrl.Method,
+		"form_parameters":        openRes.AppUrl.FormParameters,
+		"headers":                openRes.AppUrl.Headers,
+		"target":                 appTargetToString(openRes.AppUrl.Target),
+		"forced_viewmode_reason": openRes.ForcedViewModeReason,
+	}
+
+	js, err := json.Marshal(resPayload)
 	if err != nil {
 		writeError(w, r, appErrorServerError, "Internal error with JSON payload",
 			errors.Wrap(err, "error marshalling JSON response"))
 		return
 	}
 
-	log := appctx.GetLogger(ctx)
 	log.Info().Interface("resource", fileRef.ResourceId).
 		Str("url", openRes.AppUrl.AppUrl).
 		Str("method", openRes.AppUrl.Method).
 		Interface("viewMode", viewMode).
+		Interface("forcedViewModeReason", openRes.ForcedViewModeReason).
 		Str("fileExt", filepath.Ext(statRes.Info.Path)).
 		Str("agent", utils.SimplifiedUserAgent(r)).
 		Msg("returning app URL for file")

@@ -40,7 +40,6 @@ import (
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/app"
 	"github.com/cs3org/reva/v3/pkg/app/provider/registry"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -138,19 +137,19 @@ func New(ctx context.Context, m map[string]any) (app.Provider, error) {
 	}, nil
 }
 
-func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.ViewMode, token string, opaqueMap map[string]*typespb.OpaqueEntry, language string) (*appprovider.OpenInAppURL, error) {
+func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.ViewMode, token string, language string) (*appprovider.OpenInAppURL, string, error) {
 	log := appctx.GetLogger(ctx)
 
 	ext := path.Ext(resource.Path)
 	wopiurl, err := url.Parse(p.conf.WopiURL)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	wopiurl.Path = path.Join(wopiurl.Path, "/wopi/iop/openinapp")
+	wopiurl.Path, _ = url.JoinPath(wopiurl.Path, "/wopi/iop/openinapp")
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, wopiurl.String(), nil)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	q := httpReq.URL.Query()
@@ -163,7 +162,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	u, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		// we must have been authenticated
-		return nil, errors.New("wopi: ContextGetUser failed")
+		return nil, "", errors.New("wopi: ContextGetUser failed")
 	}
 	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT || u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
 		q.Add("userid", resource.Owner.OpaqueId+"@"+resource.Owner.Idp)
@@ -175,7 +174,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	scopes, ok := appctx.ContextGetScopes(ctx)
 	if !ok {
 		// we must find at least one scope (as owner or sharee)
-		return nil, errors.New("wopi: ContextGetScopes failed")
+		return nil, "", errors.New("wopi: ContextGetScopes failed")
 	}
 
 	// TODO (lopresti) consolidate with the templating implemented in the edge branch;
@@ -214,7 +213,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 			log.Debug().Interface("mime", resource.MimeType).Interface("ext", ext).Msg("wopi: resolved extension for single-file OCM share")
 		}
 		if ext == "" {
-			return nil, errors.New("wopi: failed to resolve extension from OCM file's mime type %s" + resource.MimeType)
+			return nil, "", errors.New("wopi: failed to resolve extension from OCM file's mime type %s" + resource.MimeType)
 		}
 	default:
 		// in all other cases use the resource's path
@@ -263,7 +262,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		q.Add("appurl", viewAppURL)
 	}
 	if q.Get("appurl") == "" && q.Get("appviewurl") == "" {
-		return nil, errors.New("wopi: neither edit nor view app url found for type " + ext)
+		return nil, "", errors.New("wopi: neither edit nor view app url found for type " + ext)
 	}
 	if p.conf.AppIntURL != "" {
 		q.Add("appinturl", p.conf.AppIntURL)
@@ -282,13 +281,13 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	// Call the WOPI server and parse the response (body will always contain a payload)
 	openRes, err := p.wopiClient.Do(httpReq)
 	if err != nil {
-		return nil, errors.Wrap(err, "wopi: error performing open request to wopiserver")
+		return nil, "", errors.Wrap(err, "wopi: error performing open request to wopiserver")
 	}
 	defer openRes.Body.Close()
 
 	body, err := io.ReadAll(openRes.Body)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if openRes.StatusCode != http.StatusOK {
 		// WOPI returned failure: body contains a user-friendly error message (yet perform a sanity check)
@@ -297,18 +296,18 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 			sbody = string(body)
 		}
 		log.Warn().Str("status", openRes.Status).Str("error", sbody).Msg("wopi: wopiserver returned error")
-		return nil, errors.New(sbody)
+		return nil, "", errors.New(sbody)
 	}
 
 	var result map[string]any
 	err = json.Unmarshal(body, &result)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	tokenTTL, err := p.getAccessTokenTTL(ctx)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	appFullURL := result["app-url"].(string)
@@ -316,7 +315,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	if language != "" {
 		url, err := url.Parse(appFullURL)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		urlQuery := url.Query()
 		urlQuery.Set("ui", language)   // OnlyOffice + Office365
@@ -340,12 +339,17 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		}
 	}
 
+	forcedvm := ""
+	if fvm, ok := result["forced-viewmode-reason"].(string); ok {
+		forcedvm = fvm
+		log.Info().Str("reason", forcedvm).Msg("wopi: forced viewmode change")
+	}
 	return &appprovider.OpenInAppURL{
 		AppUrl:         appFullURL,
 		Method:         method,
 		FormParameters: formParams,
 		Target:         appprovider.Target_TARGET_IFRAME,
-	}, nil
+	}, forcedvm, nil
 }
 
 func (p *wopiProvider) GetAppProviderInfo(ctx context.Context) (*appregistry.ProviderInfo, error) {
