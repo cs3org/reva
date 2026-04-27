@@ -726,15 +726,15 @@ func (s *svc) splitPath(_ context.Context, p string) []string {
 	return strings.SplitN(p, "/", 4) // ["home", "MyShares", "photos", "Ibiza/beach.png"]
 }
 
-func (s *svc) AddFavorite(ctx context.Context, req *provider.AddFavoriteRequest) (*provider.AddFavoriteResponse, error) {
-	return &provider.AddFavoriteResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("AddFavorite not implemented"), "AddFavorite not implemented"),
+func (s *svc) AddLabel(ctx context.Context, req *provider.AddLabelRequest) (*provider.AddLabelResponse, error) {
+	return &provider.AddLabelResponse{
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("AddLabel not implemented"), "AddLabel not implemented"),
 	}, nil
 }
 
-func (s *svc) RemoveFavorite(ctx context.Context, req *provider.RemoveFavoriteRequest) (*provider.RemoveFavoriteResponse, error) {
-	return &provider.RemoveFavoriteResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("RemoveFavorite not implemented"), "RemoveFavorite not implemented"),
+func (s *svc) RemoveLabel(ctx context.Context, req *provider.RemoveLabelRequest) (*provider.RemoveLabelResponse, error) {
+	return &provider.RemoveLabelResponse{
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("RemoveLabel not implemented"), "RemoveLabel not implemented"),
 	}, nil
 }
 

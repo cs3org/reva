@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2026 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,8 +29,8 @@ import (
 type Manager interface {
 	// ListFavorites returns all resources that were favorited by a user.
 	ListFavorites(ctx context.Context, userID *user.UserId) ([]*provider.ResourceId, error)
-	// SetFavorite marks a resource as favorited by a user.
-	SetFavorite(ctx context.Context, userID *user.UserId, resourceInfo *provider.ResourceInfo) error
-	// UnsetFavorite unmarks a resource as favorited by a user.
-	UnsetFavorite(ctx context.Context, userID *user.UserId, resourceInfo *provider.ResourceInfo) error
+	// SetLabel qttaches a label to a resource for a user..
+	SetLabel(ctx context.Context, label string, resourceInfo *provider.ResourceInfo) error
+	// UnsetLabel removes a label from a resource for a user..
+	UnsetLabel(ctx context.Context, label string, resourceInfo *provider.ResourceInfo) error
 }

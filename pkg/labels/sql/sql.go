@@ -33,8 +33,7 @@ import (
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"github.com/cs3org/reva/v3/pkg/favorite"
-	"github.com/cs3org/reva/v3/pkg/favorite/registry"
+	"github.com/cs3org/reva/v3/pkg/labels/registry"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 )
@@ -56,21 +55,22 @@ type mgr struct {
 	db *gorm.DB
 }
 
-type Favorite struct {
+type Label struct {
 	// We don't use gorm.Model since we want to add an index on DeletedAt
 	//gorm.Model
 	ID        uint `gorm:"primarykey"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
-	DeletedAt gorm.DeletedAt `gorm:"uniqueIndex:u_favorite;index"`
+	DeletedAt gorm.DeletedAt `gorm:"uniqueIndex:u_label;index"`
 
-	Inode    string `gorm:"size:32;uniqueIndex:u_favorite;index"`
-	Instance string `gorm:"size:32;uniqueIndex:u_favorite;index"`
-	UserId   string `gorm:"size:64;uniqueIndex:u_favorite;index"`
+	Inode    string `gorm:"size:32;uniqueIndex:u_label;index"`
+	Instance string `gorm:"size:32;uniqueIndex:u_label;index"`
+	UserId   string `gorm:"size:64;uniqueIndex:u_label;index"`
+	Label    string `gorm:"size:64;uniqueIndex:u_label;index"`
 }
 
-// New returns an instance of the cbox sql favorites manager.
-func New(m map[string]any) (favorite.Manager, error) {
+// New returns an instance of the cbox sql labels manager.
+func New(m map[string]any) (labels.Manager, error) {
 	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
@@ -94,7 +94,7 @@ func New(m map[string]any) (favorite.Manager, error) {
 	}
 
 	// Migrate schemas
-	err = db.AutoMigrate(&Favorite{})
+	err = db.AutoMigrate(&Label{})
 
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to mgirate favorites schema")
@@ -106,7 +106,7 @@ func New(m map[string]any) (favorite.Manager, error) {
 	}, nil
 }
 
-func (m *mgr) ListFavorites(ctx context.Context, userID *user.UserId) ([]*provider.ResourceId, error) {
+func (m *mgr) ListFavorites(ctx context.Context, label string, userID *user.UserId) ([]*provider.ResourceId, error) {
 	log := appctx.GetLogger(ctx)
 
 	user, ok := appctx.ContextGetUser(ctx)
@@ -114,11 +114,12 @@ func (m *mgr) ListFavorites(ctx context.Context, userID *user.UserId) ([]*provid
 		return nil, errtypes.UserRequired("favorites: error getting user from ctx")
 	}
 
-	query := m.db.Model(&Favorite{}).
-		Where("user_id = ?", user.Id.OpaqueId)
+	query := m.db.Model(&Label{}).
+		Where("user_id = ?", user.Id.OpaqueId).
+		Where("label = ?", label)
 
-	fetchedFavorites := []Favorite{}
-	res := query.First(&fetchedFavorites)
+	fetchedResults := []Label{}
+	res := query.First(&fetchedResults)
 
 	if res.Error != nil {
 		log.Error().Err(res.Error).Msg("ListFavorites: database error")
@@ -126,17 +127,17 @@ func (m *mgr) ListFavorites(ctx context.Context, userID *user.UserId) ([]*provid
 	}
 
 	infos := []*provider.ResourceId{}
-	for _, fav := range fetchedFavorites {
+	for _, label := range fetchedResults {
 		infos = append(infos, &provider.ResourceId{
-			StorageId: fav.Instance,
-			OpaqueId:  fav.Inode,
+			StorageId: label.Instance,
+			OpaqueId:  label.Inode,
 		})
 	}
 
 	return infos, nil
 }
 
-func (m *mgr) SetFavorite(ctx context.Context, userID *user.UserId, resourceInfo *provider.ResourceInfo) error {
+func (m *mgr) SetLabel(ctx context.Context, label string, resourceInfo *provider.ResourceInfo) error {
 	log := appctx.GetLogger(ctx)
 
 	user, ok := appctx.ContextGetUser(ctx)
@@ -144,19 +145,19 @@ func (m *mgr) SetFavorite(ctx context.Context, userID *user.UserId, resourceInfo
 		return errtypes.UserRequired("favorites: error getting user from ctx")
 	}
 
-	favorite := &Favorite{
+	l := &Label{
 		UserId:   user.Id.OpaqueId,
 		Inode:    resourceInfo.Id.OpaqueId,
 		Instance: resourceInfo.Id.StorageId,
 	}
-	res := m.db.Create(favorite)
+	res := m.db.Create(l)
 
-	log.Debug().Err(res.Error).Msgf("Set favorite for %+v", favorite)
+	log.Debug().Err(res.Error).Msgf("Set label for %+v", l)
 
 	return res.Error
 }
 
-func (m *mgr) UnsetFavorite(ctx context.Context, userID *user.UserId, resourceInfo *provider.ResourceInfo) error {
+func (m *mgr) UnsetLabel(ctx context.Context, label string, resourceInfo *provider.ResourceInfo) error {
 	log := appctx.GetLogger(ctx)
 
 	user, ok := appctx.ContextGetUser(ctx)
@@ -167,11 +168,12 @@ func (m *mgr) UnsetFavorite(ctx context.Context, userID *user.UserId, resourceIn
 	query := m.db.
 		Where("user_id = ?", user.Id.OpaqueId).
 		Where("inode = ?", resourceInfo.Id.OpaqueId).
-		Where("instance = ?", resourceInfo.Id.StorageId)
+		Where("instance = ?", resourceInfo.Id.StorageId).
+		Where("label = ?", label)
 
-	res := query.Delete(&Favorite{})
+	res := query.Delete(&Label{})
 
-	log.Debug().Err(res.Error).Msgf("Delete favorite for (%s, %s) for user %s", resourceInfo.Id.OpaqueId, resourceInfo.Id.StorageId, user.Id.OpaqueId)
+	log.Debug().Err(res.Error).Msgf("Delete label %s for (%s, %s) for user %s", label, resourceInfo.Id.OpaqueId, resourceInfo.Id.StorageId, user.Id.OpaqueId)
 
 	return res.Error
 }

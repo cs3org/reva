@@ -734,11 +734,11 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) AddFavorite(ctx context.Context, req *provider.AddFavoriteRequest) (*provider.AddFavoriteResponse, error) {
+func (s *service) AddLabel(ctx context.Context, req *provider.AddLabelRequest) (*provider.AddLabelResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) RemoveFavorite(ctx context.Context, req *provider.RemoveFavoriteRequest) (*provider.RemoveFavoriteResponse, error) {
+func (s *service) RemoveLabel(ctx context.Context, req *provider.RemoveLabelRequest) (*provider.RemoveLabelResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 

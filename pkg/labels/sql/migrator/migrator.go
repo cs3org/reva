@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/cs3org/reva/v3/pkg/favorite/sql"
+	"github.com/cs3org/reva/v3/pkg/labels/sql"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )

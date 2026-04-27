@@ -1654,15 +1654,15 @@ func (s *service) CreateSymlink(ctx context.Context, req *provider.CreateSymlink
 	}, nil
 }
 
-func (s *service) AddFavorite(ctx context.Context, req *provider.AddFavoriteRequest) (*provider.AddFavoriteResponse, error) {
-	return &provider.AddFavoriteResponse{
+func (s *service) AddLabel(ctx context.Context, req *provider.AddLabelRequest) (*provider.AddLabelResponse, error) {
+	return &provider.AddLabelResponse{
 		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("AddFavorite not implemented"), "AddFavorite not implemented"),
 	}, nil
 }
 
-func (s *service) RemoveFavorite(ctx context.Context, req *provider.RemoveFavoriteRequest) (*provider.RemoveFavoriteResponse, error) {
-	return &provider.RemoveFavoriteResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("RemoveFavorite not implemented"), "RemoveFavorite not implemented"),
+func (s *service) RemoveLabel(ctx context.Context, req *provider.RemoveLabelRequest) (*provider.RemoveLabelResponse, error) {
+	return &provider.RemoveLabelResponse{
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("RemoveLabel not implemented"), "RemoveLabel not implemented"),
 	}, nil
 }
 
