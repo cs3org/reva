@@ -631,15 +631,23 @@ func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *provider.Re
 	allShares = append(allShares, ocmShares...)
 	allShares = append(allShares, links...)
 
-	perms = make([]*libregraph.Permission, 0, len(allShares))
-	for _, genericShare := range allShares {
-		perm, err := s.shareToLibregraphPerm(ctx, genericShare)
-		if err == nil {
-			perms = append(perms, perm)
-		} else {
-			log.Error().Err(err).Any("share", genericShare).Msg("error converting share to libregraph permission")
-		}
+	perms = make([]*libregraph.Permission, len(allShares))
+	g = new(errgroup.Group)
+	for i, genericShare := range allShares {
+		g.Go(func() error {
+			perm, err := s.shareToLibregraphPerm(ctx, genericShare)
+			if err != nil {
+				log.Error().Err(err).Any("share", genericShare).Msg("error converting share to libregraph permission")
+				return err
+			}
+			perms[i] = perm
+			return nil
+		})
 	}
+	if err := g.Wait(); err != nil {
+		return nil, nil, nil, err
+	}
+	perms = slices.DeleteFunc(perms, func(p *libregraph.Permission) bool { return p == nil })
 
 	actions = CS3ResourcePermissionsToLibregraphActions(statRes.Info.PermissionSet)
 	roles = GetApplicableRoleDefinitionsForActions(actions, statRes.Info)
