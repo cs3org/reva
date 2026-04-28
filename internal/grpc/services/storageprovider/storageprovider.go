@@ -875,17 +875,15 @@ func (s *service) addSpaceInfo(ctx context.Context, ri *provider.ResourceInfo, w
 		}
 	}
 
+	ri.Space = &provider.StorageSpace{
+		Id: &provider.StorageSpaceId{
+			OpaqueId: spaceID,
+		},
+		SpaceType: s.conf.ProvidesSpaceType,
+	}
+
 	if withFetch {
-		space, err := s.fetchSpace(ctx, spaceID)
-		if err != nil {
-			log.Error().Err(err)
-			ri.Space = &provider.StorageSpace{
-				Id: &provider.StorageSpaceId{
-					OpaqueId: spaceID,
-				},
-				SpaceType: s.conf.ProvidesSpaceType,
-			}
-		} else {
+		if space, err := s.fetchSpace(ctx, spaceID); err == nil {
 			ri.Space = space
 			if s.spaceInfoCache != nil {
 				s.spaceInfoCache.Set(spaceID, space)
