@@ -24,6 +24,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 )
 
 // Enum for sharetype in GenericShare
@@ -594,12 +595,13 @@ func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *provider.Re
 		return nil, nil, nil, err
 	}
 
+	// First we stat the resource
 	statRes, err := gw.Stat(ctx, &provider.StatRequest{
 		Ref: ref,
 		Opaque: &typesv1beta1.Opaque{
 			Map: map[string]*typesv1beta1.OpaqueEntry{
 				// defined in internal/grpc/storageprovider
-				"add_space_info": &typesv1beta1.OpaqueEntry{
+				"add_space_info": {
 					Decoder: "plain",
 					Value:   []byte("true"),
 				},
@@ -613,69 +615,29 @@ func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *provider.Re
 		log.Error().Interface("ref", ref).Int("code", int(statRes.Status.Code)).Str("message", statRes.Status.Message).Msg("error statting resource")
 		return nil, nil, nil, fmt.Errorf("failed to stat: code %d with message %s", statRes.Status.Code, statRes.Status.Message)
 	}
-	perms = make([]*libregraph.Permission, 0)
-	shares, err := s.getSharesForResource(ctx, gw, statRes.Info)
-	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "failed to get shares for resource")
+
+	var shares, ocmShares, links []*GenericShare
+
+	g := new(errgroup.Group)
+	g.Go(func() (err error) { shares, err = s.getSharesForResource(ctx, gw, statRes.Info); return })
+	g.Go(func() (err error) { ocmShares, err = s.getOCMSharesForResource(ctx, gw, statRes.Info); return })
+	g.Go(func() (err error) { links, err = s.getPublicSharesForResource(ctx, gw, statRes.Info); return })
+	if err := g.Wait(); err != nil {
+		return nil, nil, nil, err
 	}
 
-	for _, share := range shares {
-		sharePerms, err := s.shareToLibregraphPerm(ctx, &GenericShare{
-			shareType: ShareTypeShare,
-			ID:        share.GetId().GetOpaqueId(),
-			share:     share,
-		})
+	allShares := make([]*GenericShare, 0, len(shares)+len(ocmShares)+len(links))
+	allShares = append(allShares, shares...)
+	allShares = append(allShares, ocmShares...)
+	allShares = append(allShares, links...)
+
+	perms = make([]*libregraph.Permission, 0, len(allShares))
+	for _, genericShare := range allShares {
+		perm, err := s.shareToLibregraphPerm(ctx, genericShare)
 		if err == nil {
-			perms = append(perms, sharePerms)
+			perms = append(perms, perm)
 		} else {
-			log.Error().Err(err).Any("share", share).Msg("error converting share to libregraph permission")
-		}
-	}
-
-	if s.c.OCMEnabled {
-		ocm_shares, err := gw.ListOCMShares(ctx, &ocm.ListOCMSharesRequest{
-			Filters: []*ocm.ListOCMSharesRequest_Filter{
-				{
-					Type: ocm.ListOCMSharesRequest_Filter_TYPE_RESOURCE_ID,
-					Term: &ocm.ListOCMSharesRequest_Filter_ResourceId{
-						ResourceId: statRes.Info.GetId(),
-					},
-				},
-			},
-		})
-		if err != nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-			log.Error().Interface("ref", ref).Int("code", int(statRes.Status.Code)).Str("message", statRes.Status.Message).Msg("error getting ocm shares for resource")
-			return nil, nil, nil, err
-		}
-		for _, ocm_share := range ocm_shares.GetShares() {
-			ocmSharePerms, err := s.shareToLibregraphPerm(ctx, &GenericShare{
-				shareType: ShareTypeOCMShare,
-				ID:        ocm_share.GetId().GetOpaqueId(),
-				ocmshare:  ocm_share,
-			})
-			if err == nil {
-				perms = append(perms, ocmSharePerms)
-			} else {
-				log.Error().Err(err).Any("ocm_share", ocm_share).Msg("error converting ocm share to libregraph permission")
-			}
-		}
-	}
-
-	links, err := s.getPublicSharesForResource(ctx, gw, statRes.Info)
-	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "failed to get public shares for resource")
-	}
-
-	for _, link := range links {
-		linkPerms, err := s.shareToLibregraphPerm(ctx, &GenericShare{
-			shareType: ShareTypeLink,
-			ID:        link.GetId().GetOpaqueId(),
-			link:      link,
-		})
-		if err == nil {
-			perms = append(perms, linkPerms)
-		} else {
-			log.Error().Err(err).Any("link", link).Msg("error converting link to libregraph permission")
+			log.Error().Err(err).Any("share", genericShare).Msg("error converting share to libregraph permission")
 		}
 	}
 
@@ -685,7 +647,7 @@ func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *provider.Re
 	return actions, roles, perms, nil
 }
 
-func (s *svc) getSharesForResource(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ri *provider.ResourceInfo) ([]*collaborationv1beta1.Share, error) {
+func (s *svc) getSharesForResource(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ri *provider.ResourceInfo) ([]*GenericShare, error) {
 	log := appctx.GetLogger(ctx)
 	user, ok := appctx.ContextGetUser(ctx)
 	if !ok {
@@ -715,7 +677,6 @@ func (s *svc) getSharesForResource(ctx context.Context, gw gatewayv1beta1.Gatewa
 	}
 
 	shareRes, err := gw.ListShares(ctx, req)
-
 	if err != nil {
 		return nil, err
 	}
@@ -724,10 +685,53 @@ func (s *svc) getSharesForResource(ctx context.Context, gw gatewayv1beta1.Gatewa
 		return nil, err
 	}
 
-	return shareRes.Shares, nil
+	genericShares := make([]*GenericShare, 0, len(shareRes.Shares))
+	for _, share := range shareRes.Shares {
+		genericShares = append(genericShares, &GenericShare{
+			shareType: ShareTypeShare,
+			ID:        share.GetId().GetOpaqueId(),
+			share:     share,
+		})
+	}
+	return genericShares, nil
 }
 
-func (s *svc) getPublicSharesForResource(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ri *provider.ResourceInfo) ([]*linkv1beta1.PublicShare, error) {
+func (s *svc) getOCMSharesForResource(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ri *provider.ResourceInfo) ([]*GenericShare, error) {
+	if !s.c.OCMEnabled {
+		return nil, nil
+	}
+
+	log := appctx.GetLogger(ctx)
+	ocmShares, err := gw.ListOCMShares(ctx, &ocm.ListOCMSharesRequest{
+		Filters: []*ocm.ListOCMSharesRequest_Filter{
+			{
+				Type: ocm.ListOCMSharesRequest_Filter_TYPE_RESOURCE_ID,
+				Term: &ocm.ListOCMSharesRequest_Filter_ResourceId{
+					ResourceId: ri.GetId(),
+				},
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if ocmShares.Status != nil && ocmShares.Status.Code != rpcv1beta1.Code_CODE_OK {
+		log.Error().Interface("resource_id", ri.GetId()).Int("code", int(ocmShares.Status.Code)).Str("message", ocmShares.Status.Message).Msg("error getting ocm shares for resource")
+		return nil, fmt.Errorf("failed to list OCM shares: code %d", ocmShares.Status.Code)
+	}
+
+	genericShares := make([]*GenericShare, 0, len(ocmShares.GetShares()))
+	for _, ocmShare := range ocmShares.GetShares() {
+		genericShares = append(genericShares, &GenericShare{
+			shareType: ShareTypeOCMShare,
+			ID:        ocmShare.GetId().GetOpaqueId(),
+			ocmshare:  ocmShare,
+		})
+	}
+	return genericShares, nil
+}
+
+func (s *svc) getPublicSharesForResource(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ri *provider.ResourceInfo) ([]*GenericShare, error) {
 	log := appctx.GetLogger(ctx)
 	user, ok := appctx.ContextGetUser(ctx)
 	if !ok {
@@ -765,7 +769,15 @@ func (s *svc) getPublicSharesForResource(ctx context.Context, gw gatewayv1beta1.
 		return nil, err
 	}
 
-	return linksRes.Share, nil
+	genericShares := make([]*GenericShare, 0, len(linksRes.Share))
+	for _, link := range linksRes.Share {
+		genericShares = append(genericShares, &GenericShare{
+			shareType: ShareTypeLink,
+			ID:        link.GetId().GetOpaqueId(),
+			link:      link,
+		})
+	}
+	return genericShares, nil
 }
 
 func (s *svc) userHasAdminAccessToProject(ctx context.Context, ri *provider.ResourceInfo) bool {
