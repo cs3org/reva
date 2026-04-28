@@ -137,10 +137,9 @@ func (s *svc) buildGrantedToForRegularShare(ctx context.Context, grantee *provid
 	case provider.GranteeType_GRANTEE_TYPE_USER:
 		u, err := s.getUserInfo(ctx, grantee.GetUserId())
 		if err != nil {
-			// User does not necessarily have to be resolvable
-			grantedTo.SetUser(libregraph.Identity{
-				Id: libregraph.PtrString(grantee.GetUserId().OpaqueId),
-			})
+			// We need to error here, otherwise we show "empty shares"
+			// or shares to users who don't exist anymore
+			return nil, errors.New("user is not resolvable")
 		} else {
 			grantedTo.SetUser(libregraph.Identity{
 				Id:          libregraph.PtrString(grantee.GetUserId().OpaqueId),
