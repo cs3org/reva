@@ -16,7 +16,7 @@ import (
 	linkv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/permissions"
@@ -595,18 +595,8 @@ func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *provider.Re
 		return nil, nil, nil, err
 	}
 
-	// First we stat the resource
 	statRes, err := gw.Stat(ctx, &provider.StatRequest{
 		Ref: ref,
-		Opaque: &typesv1beta1.Opaque{
-			Map: map[string]*typesv1beta1.OpaqueEntry{
-				// defined in internal/grpc/storageprovider
-				"add_space_info": {
-					Decoder: "plain",
-					Value:   []byte("true"),
-				},
-			},
-		},
 	})
 	if err != nil {
 		log.Error().Err(err).Interface("ref", ref).Msg("error statting resource")
@@ -795,10 +785,7 @@ func (s *svc) userHasAdminAccessToProject(ctx context.Context, ri *provider.Reso
 	if ri.Space.SpaceType != spaces.SpaceTypeProject.AsString() {
 		return false
 	}
-	if ri.Space.PermissionSet != nil && ri.Space.PermissionSet.ListGrants {
-		return true
-	}
-	return false
+	return ri.PermissionSet != nil && ri.PermissionSet.ListGrants
 }
 
 func (s *svc) writePermissions(ctx context.Context, w http.ResponseWriter, actions []string, roles []*libregraph.UnifiedRoleDefinition, perms []*libregraph.Permission) {
