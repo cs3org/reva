@@ -61,6 +61,10 @@ func (c *Client) AddACL(ctx context.Context, auth eosclient.Authorization, path 
 		return errtypes.NotFound(fmt.Sprintf("Path: %s", path))
 	}
 
+	if resp.Acl != nil && resp.Acl.Code != 0 {
+		return fmt.Errorf("Got error from EOS: code %d with message %s", resp.Acl.Code, resp.Acl.Msg)
+	}
+
 	log.Debug().Str("func", "AddACL").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Any("acl", resp.Acl).Any("error", resp.Error).Msg("grpc response")
 
 	return err
