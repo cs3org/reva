@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -39,6 +40,8 @@ func lightweightAccountScope(_ context.Context, scope *authpb.Scope, resource an
 	case *collaboration.ListReceivedSharesRequest:
 		return true, nil
 	case *provider.ListStorageSpacesRequest:
+		return true, nil
+	case *grouppb.GetGroupRequest:
 		return true, nil
 	case string:
 		return checkLightweightPath(v), nil
