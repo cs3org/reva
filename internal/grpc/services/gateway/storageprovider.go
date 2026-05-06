@@ -726,17 +726,6 @@ func (s *svc) splitPath(_ context.Context, p string) []string {
 	return strings.SplitN(p, "/", 4) // ["home", "MyShares", "photos", "Ibiza/beach.png"]
 }
 
-func (s *svc) AddLabel(ctx context.Context, req *provider.AddLabelRequest) (*provider.AddLabelResponse, error) {
-	return &provider.AddLabelResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("AddLabel not implemented"), "AddLabel not implemented"),
-	}, nil
-}
-
-func (s *svc) RemoveLabel(ctx context.Context, req *provider.RemoveLabelRequest) (*provider.RemoveLabelResponse, error) {
-	return &provider.RemoveLabelResponse{
-		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("RemoveLabel not implemented"), "RemoveLabel not implemented"),
-	}, nil
-}
 
 func (s *svc) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
 	return &provider.CreateSymlinkResponse{

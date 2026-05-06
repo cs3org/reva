@@ -734,13 +734,6 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) AddLabel(ctx context.Context, req *provider.AddLabelRequest) (*provider.AddLabelResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
-}
-
-func (s *service) RemoveLabel(ctx context.Context, req *provider.RemoveLabelRequest) (*provider.RemoveLabelResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
-}
 
 func (s *service) trimMountPrefix(fn string) (string, error) {
 	if after, ok := strings.CutPrefix(fn, s.mountPath); ok {

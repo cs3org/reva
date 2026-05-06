@@ -18,7 +18,7 @@
 
 package registry
 
-import labels "github.com/cs3org/reva/v3/pkg/labels"
+import "github.com/cs3org/reva/v3/pkg/labels"
 
 // NewFunc is the function that favorite storage implementations
 // should register at init time.

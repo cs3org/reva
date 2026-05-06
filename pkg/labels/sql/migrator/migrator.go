@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/cs3org/reva/v3/pkg/labels/sql"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -51,18 +50,18 @@ func MigrateOldFavoritesToNew(db *gorm.DB) error {
 
 	log.Printf("Found %d old favorites to migrate", len(oldFavs))
 
-	for _, old := range oldFavs {
-		fav := sql.Favorite{
-			UserId:   old.UID,
-			Inode:    old.Fileid,
-			Instance: old.FileidPrefix,
-		}
+	// for _, old := range oldFavs {
+	// 	fav := sql.Favorite{
+	// 		UserId:   old.UID,
+	// 		Inode:    old.Fileid,
+	// 		Instance: old.FileidPrefix,
+	// 	}
 
-		err = db.Where(sql.Favorite{UserId: fav.UserId, Inode: fav.Inode, Instance: fav.Instance}).Attrs(fav).FirstOrCreate(&fav).Error
-		if err != nil {
-			return err
-		}
-	}
+	// 	err = db.Where(sql.Favorite{UserId: fav.UserId, Inode: fav.Inode, Instance: fav.Instance}).Attrs(fav).FirstOrCreate(&fav).Error
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// }
 
 	log.Printf("Successfully migrated %d favorites", len(oldFavs))
 	return nil

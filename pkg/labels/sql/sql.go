@@ -21,9 +21,7 @@ package sql
 import (
 	"context"
 	"fmt"
-	"time"
 
-	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/pkg/errors"
 	"gorm.io/driver/mysql"
@@ -33,6 +31,7 @@ import (
 	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/labels"
 	"github.com/cs3org/reva/v3/pkg/labels/registry"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
@@ -57,11 +56,11 @@ type mgr struct {
 
 type Label struct {
 	// We don't use gorm.Model since we want to add an index on DeletedAt
-	//gorm.Model
-	ID        uint `gorm:"primarykey"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	DeletedAt gorm.DeletedAt `gorm:"uniqueIndex:u_label;index"`
+	gorm.Model
+	// ID        uint `gorm:"primarykey"`
+	// CreatedAt time.Time
+	// UpdatedAt time.Time
+	// DeletedAt gorm.DeletedAt `gorm:"uniqueIndex:u_label;index"`
 
 	Inode    string `gorm:"size:32;uniqueIndex:u_label;index"`
 	Instance string `gorm:"size:32;uniqueIndex:u_label;index"`
@@ -106,12 +105,16 @@ func New(m map[string]any) (labels.Manager, error) {
 	}, nil
 }
 
-func (m *mgr) ListFavorites(ctx context.Context, label string, userID *user.UserId) ([]*provider.ResourceId, error) {
+func (m *mgr) ListLabels(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
+
+func (m *mgr) ListResourcesForLabel(ctx context.Context, label string) ([]*provider.ResourceId, error) {
 	log := appctx.GetLogger(ctx)
 
 	user, ok := appctx.ContextGetUser(ctx)
 	if !ok {
-		return nil, errtypes.UserRequired("favorites: error getting user from ctx")
+		return nil, errtypes.UserRequired("ListResourcesForLabel: error getting user from ctx")
 	}
 
 	query := m.db.Model(&Label{}).
@@ -122,7 +125,7 @@ func (m *mgr) ListFavorites(ctx context.Context, label string, userID *user.User
 	res := query.First(&fetchedResults)
 
 	if res.Error != nil {
-		log.Error().Err(res.Error).Msg("ListFavorites: database error")
+		log.Error().Err(res.Error).Msg("ListResourcesForLabel: database error")
 		return nil, res.Error
 	}
 
@@ -137,7 +140,7 @@ func (m *mgr) ListFavorites(ctx context.Context, label string, userID *user.User
 	return infos, nil
 }
 
-func (m *mgr) SetLabel(ctx context.Context, label string, resourceInfo *provider.ResourceInfo) error {
+func (m *mgr) SetLabel(ctx context.Context, label string, resourceId *provider.ResourceId) error {
 	log := appctx.GetLogger(ctx)
 
 	user, ok := appctx.ContextGetUser(ctx)
@@ -147,8 +150,9 @@ func (m *mgr) SetLabel(ctx context.Context, label string, resourceInfo *provider
 
 	l := &Label{
 		UserId:   user.Id.OpaqueId,
-		Inode:    resourceInfo.Id.OpaqueId,
-		Instance: resourceInfo.Id.StorageId,
+		Inode:    resourceId.OpaqueId,
+		Instance: resourceId.StorageId,
+		Label:    label,
 	}
 	res := m.db.Create(l)
 
@@ -157,7 +161,7 @@ func (m *mgr) SetLabel(ctx context.Context, label string, resourceInfo *provider
 	return res.Error
 }
 
-func (m *mgr) UnsetLabel(ctx context.Context, label string, resourceInfo *provider.ResourceInfo) error {
+func (m *mgr) UnsetLabel(ctx context.Context, label string, resourceId *provider.ResourceId) error {
 	log := appctx.GetLogger(ctx)
 
 	user, ok := appctx.ContextGetUser(ctx)
@@ -167,13 +171,13 @@ func (m *mgr) UnsetLabel(ctx context.Context, label string, resourceInfo *provid
 
 	query := m.db.
 		Where("user_id = ?", user.Id.OpaqueId).
-		Where("inode = ?", resourceInfo.Id.OpaqueId).
-		Where("instance = ?", resourceInfo.Id.StorageId).
+		Where("inode = ?", resourceId.OpaqueId).
+		Where("instance = ?", resourceId.StorageId).
 		Where("label = ?", label)
 
 	res := query.Delete(&Label{})
 
-	log.Debug().Err(res.Error).Msgf("Delete label %s for (%s, %s) for user %s", label, resourceInfo.Id.OpaqueId, resourceInfo.Id.StorageId, user.Id.OpaqueId)
+	log.Debug().Err(res.Error).Msgf("Delete label %s for (%s, %s) for user %s", label, resourceId.OpaqueId, resourceId.StorageId, user.Id.OpaqueId)
 
 	return res.Error
 }

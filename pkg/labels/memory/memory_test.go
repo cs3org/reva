@@ -37,8 +37,8 @@ type environment struct {
 	userThree    *user.User
 	userThreeCtx context.Context
 
-	resourceInfoOne *provider.ResourceInfo
-	resourceInfoTwo *provider.ResourceInfo
+	resourceIdOne *provider.ResourceId
+	resourceIdTwo *provider.ResourceId
 }
 
 func createEnvironment() environment {
@@ -46,8 +46,8 @@ func createEnvironment() environment {
 	userTwo := &user.User{Id: &user.UserId{OpaqueId: "userTwo"}}
 	userThree := &user.User{Id: &user.UserId{OpaqueId: "userThree"}}
 
-	resourceInfoOne := &provider.ResourceInfo{Id: &provider.ResourceId{OpaqueId: "resourceInfoOne"}}
-	resourceInfoTwo := &provider.ResourceInfo{Id: &provider.ResourceId{OpaqueId: "resourceInfoTwo"}}
+	resourceIdOne := &provider.ResourceId{OpaqueId: "resourceInfoOne"}
+	resourceIdTwo := &provider.ResourceId{OpaqueId: "resourceInfoTwo"}
 
 	return environment{
 		userOne:      userOne,
@@ -57,73 +57,73 @@ func createEnvironment() environment {
 		userThree:    userThree,
 		userThreeCtx: appctx.ContextSetUser(context.Background(), userThree),
 
-		resourceInfoOne: resourceInfoOne,
-		resourceInfoTwo: resourceInfoTwo,
+		resourceIdOne: resourceIdOne,
+		resourceIdTwo: resourceIdTwo,
 	}
 }
 
-func TestListFavorite(t *testing.T) {
+func TestListResourcesForLabel(t *testing.T) {
 	env := createEnvironment()
 	sut, _ := New(nil)
 
-	favorites, _ := sut.ListFavorites(env.userOneCtx, env.userOne.Id)
-	if len(favorites) != 0 {
-		t.Error("ListFavorites should not return anything when a user hasn't set a favorite")
+	resources, _ := sut.ListResourcesForLabel(env.userOneCtx, "favorite")
+	if len(resources) != 0 {
+		t.Error("ListResourcesForLabel should not return anything when a user hasn't set a label")
 	}
 
-	_ = sut.SetFavorite(env.userOneCtx, env.userOne.Id, env.resourceInfoOne)
-	_ = sut.SetFavorite(env.userTwoCtx, env.userTwo.Id, env.resourceInfoOne)
-	_ = sut.SetFavorite(env.userTwoCtx, env.userTwo.Id, env.resourceInfoTwo)
+	_ = sut.SetLabel(env.userOneCtx, "favorite", env.resourceIdOne)
+	_ = sut.SetLabel(env.userTwoCtx, "favorite", env.resourceIdOne)
+	_ = sut.SetLabel(env.userTwoCtx, "favorite", env.resourceIdTwo)
 
-	favorites, _ = sut.ListFavorites(env.userOneCtx, env.userOne.Id)
-	if len(favorites) != 1 {
-		t.Errorf("Expected %d favorites got %d", 1, len(favorites))
+	resources, _ = sut.ListResourcesForLabel(env.userOneCtx, "favorite")
+	if len(resources) != 1 {
+		t.Errorf("Expected %d resources got %d", 1, len(resources))
 	}
 
-	favorites, _ = sut.ListFavorites(env.userTwoCtx, env.userTwo.Id)
-	if len(favorites) != 2 {
-		t.Errorf("Expected %d favorites got %d", 2, len(favorites))
+	resources, _ = sut.ListResourcesForLabel(env.userTwoCtx, "favorite")
+	if len(resources) != 2 {
+		t.Errorf("Expected %d resources got %d", 2, len(resources))
 	}
 
-	favorites, _ = sut.ListFavorites(env.userThreeCtx, env.userThree.Id)
-	if len(favorites) != 0 {
-		t.Errorf("Expected %d favorites got %d", 0, len(favorites))
+	resources, _ = sut.ListResourcesForLabel(env.userThreeCtx, "favorite")
+	if len(resources) != 0 {
+		t.Errorf("Expected %d resources got %d", 0, len(resources))
 	}
 }
 
-func TestSetFavorite(t *testing.T) {
+func TestSetLabel(t *testing.T) {
 	env := createEnvironment()
 
 	sut, _ := New(nil)
 
-	favorites, _ := sut.ListFavorites(env.userOneCtx, env.userOne.Id)
-	lenBefore := len(favorites)
+	resources, _ := sut.ListResourcesForLabel(env.userOneCtx, "favorite")
+	lenBefore := len(resources)
 
-	_ = sut.SetFavorite(env.userOneCtx, env.userOne.Id, env.resourceInfoOne)
+	_ = sut.SetLabel(env.userOneCtx, "favorite", env.resourceIdOne)
 
-	favorites, _ = sut.ListFavorites(env.userOneCtx, env.userOne.Id)
-	lenAfter := len(favorites)
+	resources, _ = sut.ListResourcesForLabel(env.userOneCtx, "favorite")
+	lenAfter := len(resources)
 
 	if lenAfter-lenBefore != 1 {
-		t.Errorf("Setting a favorite should add 1 favorite but actually added %d", lenAfter-lenBefore)
+		t.Errorf("Setting a label should add 1 resource but actually added %d", lenAfter-lenBefore)
 	}
 }
 
-func TestUnsetFavorite(t *testing.T) {
+func TestUnsetLabel(t *testing.T) {
 	env := createEnvironment()
 
 	sut, _ := New(nil)
 
-	_ = sut.SetFavorite(env.userOneCtx, env.userOne.Id, env.resourceInfoOne)
-	favorites, _ := sut.ListFavorites(env.userOneCtx, env.userOne.Id)
-	lenBefore := len(favorites)
+	_ = sut.SetLabel(env.userOneCtx, "favorite", env.resourceIdOne)
+	resources, _ := sut.ListResourcesForLabel(env.userOneCtx, "favorite")
+	lenBefore := len(resources)
 
-	_ = sut.UnsetFavorite(env.userOneCtx, env.userOne.Id, env.resourceInfoOne)
+	_ = sut.UnsetLabel(env.userOneCtx, "favorite", env.resourceIdOne)
 
-	favorites, _ = sut.ListFavorites(env.userOneCtx, env.userOne.Id)
-	lenAfter := len(favorites)
+	resources, _ = sut.ListResourcesForLabel(env.userOneCtx, "favorite")
+	lenAfter := len(resources)
 
 	if lenAfter-lenBefore != -1 {
-		t.Errorf("Setting a favorite should remove 1 favorite but actually removed %d", lenAfter-lenBefore)
+		t.Errorf("Unsetting a label should remove 1 label but actually removed %d", lenAfter-lenBefore)
 	}
 }

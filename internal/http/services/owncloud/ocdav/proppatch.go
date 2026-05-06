@@ -27,6 +27,7 @@ import (
 	"path"
 	"strings"
 
+	labelsv1beta1 "github.com/cs3org/go-cs3apis/cs3/labels/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -229,13 +230,10 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 					return nil, nil, false
 				}
 				if key == _propOcFavorite {
-					statRes, err := c.Stat(ctx, &provider.StatRequest{Ref: ref})
-					if err != nil {
-						w.WriteHeader(http.StatusInternalServerError)
-						return nil, nil, false
-					}
-					currentUser := appctx.ContextMustGetUser(ctx)
-					err = s.favoritesManager.UnsetFavorite(ctx, currentUser.Id, statRes.Info)
+					_, err := c.RemoveLabel(ctx, &labelsv1beta1.RemoveLabelRequest{
+						Ref:   ref,
+						Label: "favorite",
+					})
 					if err != nil {
 						w.WriteHeader(http.StatusInternalServerError)
 						return nil, nil, false
@@ -270,13 +268,10 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 				delete(sreq.ArbitraryMetadata.Metadata, key)
 
 				if key == _propOcFavorite {
-					statRes, err := c.Stat(ctx, &provider.StatRequest{Ref: ref})
-					if err != nil {
-						w.WriteHeader(http.StatusInternalServerError)
-						return nil, nil, false
-					}
-					currentUser := appctx.ContextMustGetUser(ctx)
-					err = s.favoritesManager.SetFavorite(ctx, currentUser.Id, statRes.Info)
+					_, err := c.AddLabel(ctx, &labelsv1beta1.AddLabelRequest{
+						Ref:   ref,
+						Label: "favorite",
+					})
 					if err != nil {
 						w.WriteHeader(http.StatusInternalServerError)
 						return nil, nil, false
