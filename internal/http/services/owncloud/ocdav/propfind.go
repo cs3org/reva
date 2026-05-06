@@ -681,15 +681,15 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 
 		// ls do not report any properties as missing by default
 		if ls == nil {
-			// favorites from arbitrary metadata
-			if k := md.GetArbitraryMetadata(); k == nil {
-				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
-			} else if amd := k.GetMetadata(); amd == nil {
-				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
-			} else if v, ok := amd[_propOcFavorite]; ok && v != "" {
-				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", v))
-			} else {
-				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+			if u, ok := appctx.ContextGetUser(ctx); ok {
+				labelPrefix := fmt.Sprintf("reva.labels.%s.", u.Id.OpaqueId)
+				if k := md.GetArbitraryMetadata(); k != nil {
+					for key := range k.GetMetadata() {
+						if label, ok := strings.CutPrefix(key, labelPrefix); ok {
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:"+label, "1"))
+						}
+					}
+				}
 			}
 		}
 		// TODO return other properties ... but how do we put them in a namespace?

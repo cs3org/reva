@@ -20,10 +20,12 @@ package gateway
 
 import (
 	"context"
+	"fmt"
 
 	labels "github.com/cs3org/go-cs3apis/cs3/labels/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
@@ -49,6 +51,10 @@ func (s *svc) resolveRef(ctx context.Context, ref *provider.Reference) (*provide
 	return &provider.Reference{ResourceId: statRes.Info.Id}, nil, nil
 }
 
+func labelMetadataKey(uid, label string) string {
+	return fmt.Sprintf("reva.labels.%s.%s", uid, label)
+}
+
 func (s *svc) AddLabel(ctx context.Context, req *labels.AddLabelRequest) (*labels.AddLabelResponse, error) {
 	ref, st, err := s.resolveRef(ctx, req.GetRef())
 	if err != nil {
@@ -61,6 +67,27 @@ func (s *svc) AddLabel(ctx context.Context, req *labels.AddLabelRequest) (*label
 	}
 	req.Ref = ref
 
+	u := appctx.ContextMustGetUser(ctx)
+
+	// Set the label as metadata on the storage provider first.
+	metaRes, err := s.SetArbitraryMetadata(ctx, &provider.SetArbitraryMetadataRequest{
+		Ref: ref,
+		ArbitraryMetadata: &provider.ArbitraryMetadata{
+			Metadata: map[string]string{
+				labelMetadataKey(u.Id.OpaqueId, req.GetLabel()): "1",
+			},
+		},
+	})
+	if err != nil {
+		return &labels.AddLabelResponse{
+			Status: status.NewInternal(ctx, err, "error setting label metadata on storage provider"),
+		}, nil
+	}
+	if metaRes.Status.Code != rpc.Code_CODE_OK {
+		return &labels.AddLabelResponse{Status: metaRes.Status}, nil
+	}
+
+	// Store the label in the labels database.
 	c, err := pool.GetLabelsClient(pool.Endpoint(s.c.LabelsEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetLabelsClient")
@@ -89,6 +116,23 @@ func (s *svc) RemoveLabel(ctx context.Context, req *labels.RemoveLabelRequest) (
 	}
 	req.Ref = ref
 
+	u := appctx.ContextMustGetUser(ctx)
+
+	// Remove the label metadata from the storage provider first.
+	metaRes, err := s.UnsetArbitraryMetadata(ctx, &provider.UnsetArbitraryMetadataRequest{
+		Ref:                   ref,
+		ArbitraryMetadataKeys: []string{labelMetadataKey(u.Id.OpaqueId, req.GetLabel())},
+	})
+	if err != nil {
+		return &labels.RemoveLabelResponse{
+			Status: status.NewInternal(ctx, err, "error unsetting label metadata on storage provider"),
+		}, nil
+	}
+	if metaRes.Status.Code != rpc.Code_CODE_OK {
+		return &labels.RemoveLabelResponse{Status: metaRes.Status}, nil
+	}
+
+	// Remove the label from the labels database.
 	c, err := pool.GetLabelsClient(pool.Endpoint(s.c.LabelsEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetLabelsClient")

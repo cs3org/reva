@@ -230,12 +230,17 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 					return nil, nil, false
 				}
 				if key == _propOcFavorite {
-					_, err := c.RemoveLabel(ctx, &labelsv1beta1.RemoveLabelRequest{
+					removeLabelRes, err := c.RemoveLabel(ctx, &labelsv1beta1.RemoveLabelRequest{
 						Ref:   ref,
 						Label: "favorite",
 					})
 					if err != nil {
+						log.Error().Err(err).Msg("error calling RemoveLabel")
 						w.WriteHeader(http.StatusInternalServerError)
+						return nil, nil, false
+					}
+					if removeLabelRes.Status.Code != rpc.Code_CODE_OK {
+						HandleErrorStatus(&log, w, removeLabelRes.Status)
 						return nil, nil, false
 					}
 				}
@@ -268,12 +273,17 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 				delete(sreq.ArbitraryMetadata.Metadata, key)
 
 				if key == _propOcFavorite {
-					_, err := c.AddLabel(ctx, &labelsv1beta1.AddLabelRequest{
+					addLabelRes, err := c.AddLabel(ctx, &labelsv1beta1.AddLabelRequest{
 						Ref:   ref,
 						Label: "favorite",
 					})
 					if err != nil {
+						log.Error().Err(err).Msg("error calling AddLabel")
 						w.WriteHeader(http.StatusInternalServerError)
+						return nil, nil, false
+					}
+					if addLabelRes.Status.Code != rpc.Code_CODE_OK {
+						HandleErrorStatus(&log, w, addLabelRes.Status)
 						return nil, nil, false
 					}
 				}
