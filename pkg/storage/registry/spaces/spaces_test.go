@@ -31,6 +31,7 @@ import (
 	"github.com/owncloud/reva/v2/pkg/storage/registry/spaces"
 	"github.com/owncloud/reva/v2/pkg/storage/registry/spaces/mocks"
 	"github.com/owncloud/reva/v2/pkg/storagespace"
+	"github.com/owncloud/reva/v2/pkg/utils"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 
@@ -151,6 +152,10 @@ var _ = Describe("Spaces", func() {
 				return barClient, nil
 			case "127.0.0.1:13022":
 				return bazClient, nil
+			case "com.owncloud.api.storage-users":
+				return fooClient, nil
+			case "com.owncloud.api.storage-users-vault":
+				return barClient, nil
 			}
 			return nil, fmt.Errorf("Nooooo")
 		}
@@ -377,6 +382,95 @@ var _ = Describe("Spaces", func() {
 				Expect(spaces[0].Opaque.Map["path"].Decoder).To(Equal("plain"))
 				spacePath = string(spaces[0].Opaque.Map["path"].Value)
 				Expect(spacePath).To(Equal("/projects/Baz space 2"))
+			})
+		})
+	})
+
+	Context("with storage-users and storage-users-vault providers", func() {
+		BeforeEach(func() {
+			rules = map[string]interface{}{
+				"providers": map[string]interface{}{
+					"com.owncloud.api.storage-users": map[string]interface{}{
+						"providerid": "provider-id",
+						"spaces": map[string]interface{}{
+							"personal": map[string]interface{}{
+								"mount_point":   "/users",
+								"path_template": "/users/{{.Space.Owner.Id.OpaqueId}}",
+							},
+							"project": map[string]interface{}{
+								"mount_point":   "/projects",
+								"path_template": "/projects/{{.Space.Name}}",
+							},
+						},
+					},
+					"com.owncloud.api.storage-users-vault": map[string]interface{}{
+						"providerid": "provider-vault-id",
+						"spaces": map[string]interface{}{
+							"personal": map[string]interface{}{
+								"mount_point":   "/vault/users",
+								"path_template": "/vault/users/{{.Space.Owner.Id.OpaqueId}}",
+							},
+							"project": map[string]interface{}{
+								"mount_point":   "/vault/projects",
+								"path_template": "/vault/projects/{{.Space.Name}}",
+							},
+						},
+					},
+				},
+			}
+			utils.VaultStorageProviderID = "provider-vault-id"
+		})
+
+		Describe("GetProvider", func() {
+			It("prefers storage-users when no storage id is provided", func() {
+				space := &provider.StorageSpace{
+					Root:      &provider.ResourceId{},
+					SpaceType: "personal",
+				}
+
+				p, err := handler.GetProvider(ctxAlice, space)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(p).ToNot(BeNil())
+				Expect(p.Address).To(Equal("com.owncloud.api.storage-users"))
+			})
+
+			It("selects storage-users-vault when storage id targets the vault provider", func() {
+				space := &provider.StorageSpace{
+					Root: &provider.ResourceId{
+						StorageId: "provider-vault-id",
+					},
+					SpaceType: "personal",
+				}
+
+				p, err := handler.GetProvider(ctxAlice, space)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(p).ToNot(BeNil())
+				Expect(p.Address).To(Equal("com.owncloud.api.storage-users-vault"))
+			})
+		})
+
+		Describe("ListProviders", func() {
+			It("excludes vault spaces when storage_id is not provided", func() {
+				filters := map[string]string{
+					"space_type": "personal",
+				}
+
+				providers, err := handler.ListProviders(ctxAlice, filters)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(providers)).To(Equal(1))
+				Expect(providers[0].Address).To(Equal("com.owncloud.api.storage-users"))
+			})
+
+			It("includes vault spaces when storage_id targets the vault provider", func() {
+				filters := map[string]string{
+					"space_type": "personal",
+					"storage_id": "provider-vault-id",
+				}
+
+				providers, err := handler.ListProviders(ctxAlice, filters)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(providers)).To(Equal(1))
+				Expect(providers[0].Address).To(Equal("com.owncloud.api.storage-users-vault"))
 			})
 		})
 	})
