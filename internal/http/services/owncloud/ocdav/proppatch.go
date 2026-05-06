@@ -206,7 +206,39 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 			// specified in the PROPPATCH request
 			// http://www.webdav.org/specs/rfc2518.html#rfc.section.8.2
 			// FIXME: batch this somehow
-			if remove {
+			if key == _propOcFavorite {
+				if remove {
+					res, err := c.RemoveLabel(ctx, &labelsv1beta1.RemoveLabelRequest{
+						Ref:   ref,
+						Label: "favorite",
+					})
+					if err != nil {
+						log.Error().Err(err).Msg("error calling RemoveLabel")
+						w.WriteHeader(http.StatusInternalServerError)
+						return nil, nil, false
+					}
+					if res.Status.Code != rpc.Code_CODE_OK {
+						HandleErrorStatus(&log, w, res.Status)
+						return nil, nil, false
+					}
+					removedProps = append(removedProps, propNameXML)
+				} else {
+					res, err := c.AddLabel(ctx, &labelsv1beta1.AddLabelRequest{
+						Ref:   ref,
+						Label: "favorite",
+					})
+					if err != nil {
+						log.Error().Err(err).Msg("error calling AddLabel")
+						w.WriteHeader(http.StatusInternalServerError)
+						return nil, nil, false
+					}
+					if res.Status.Code != rpc.Code_CODE_OK {
+						HandleErrorStatus(&log, w, res.Status)
+						return nil, nil, false
+					}
+					acceptedProps = append(acceptedProps, propNameXML)
+				}
+			} else if remove {
 				rreq.ArbitraryMetadataKeys[0] = key
 				res, err := c.UnsetArbitraryMetadata(ctx, rreq)
 				if err != nil {
@@ -228,21 +260,6 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 					}
 					HandleErrorStatus(&log, w, res.Status)
 					return nil, nil, false
-				}
-				if key == _propOcFavorite {
-					removeLabelRes, err := c.RemoveLabel(ctx, &labelsv1beta1.RemoveLabelRequest{
-						Ref:   ref,
-						Label: "favorite",
-					})
-					if err != nil {
-						log.Error().Err(err).Msg("error calling RemoveLabel")
-						w.WriteHeader(http.StatusInternalServerError)
-						return nil, nil, false
-					}
-					if removeLabelRes.Status.Code != rpc.Code_CODE_OK {
-						HandleErrorStatus(&log, w, removeLabelRes.Status)
-						return nil, nil, false
-					}
 				}
 				removedProps = append(removedProps, propNameXML)
 			} else {
@@ -271,22 +288,6 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 
 				acceptedProps = append(acceptedProps, propNameXML)
 				delete(sreq.ArbitraryMetadata.Metadata, key)
-
-				if key == _propOcFavorite {
-					addLabelRes, err := c.AddLabel(ctx, &labelsv1beta1.AddLabelRequest{
-						Ref:   ref,
-						Label: "favorite",
-					})
-					if err != nil {
-						log.Error().Err(err).Msg("error calling AddLabel")
-						w.WriteHeader(http.StatusInternalServerError)
-						return nil, nil, false
-					}
-					if addLabelRes.Status.Code != rpc.Code_CODE_OK {
-						HandleErrorStatus(&log, w, addLabelRes.Status)
-						return nil, nil, false
-					}
-				}
 			}
 		}
 		// FIXME: in case of error, need to set all properties back to the original state,

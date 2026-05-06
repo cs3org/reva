@@ -21,6 +21,7 @@ package sql
 import (
 	"context"
 	"fmt"
+	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/pkg/errors"
@@ -56,11 +57,11 @@ type mgr struct {
 
 type Label struct {
 	// We don't use gorm.Model since we want to add an index on DeletedAt
-	gorm.Model
-	// ID        uint `gorm:"primarykey"`
-	// CreatedAt time.Time
-	// UpdatedAt time.Time
-	// DeletedAt gorm.DeletedAt `gorm:"uniqueIndex:u_label;index"`
+	//gorm.Model
+	ID        uint `gorm:"primarykey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt `gorm:"uniqueIndex:u_label;index"`
 
 	Inode    string `gorm:"size:32;uniqueIndex:u_label;index"`
 	Instance string `gorm:"size:32;uniqueIndex:u_label;index"`
@@ -122,7 +123,7 @@ func (m *mgr) ListResourcesForLabel(ctx context.Context, label string) ([]*provi
 		Where("label = ?", label)
 
 	fetchedResults := []Label{}
-	res := query.First(&fetchedResults)
+	res := query.Find(&fetchedResults)
 
 	if res.Error != nil {
 		log.Error().Err(res.Error).Msg("ListResourcesForLabel: database error")
