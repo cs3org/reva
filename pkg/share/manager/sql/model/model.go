@@ -22,8 +22,6 @@ import (
 	"strconv"
 	"time"
 
-	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	resourcespb "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -239,7 +237,7 @@ type OcmReceivedShareProtocol struct {
 	Payload datatypes.JSON `gorm:"type:json;default:null"`
 }
 
-func (s *Share) AsCS3Share(granteeType userpb.UserType) *collaboration.Share {
+func (s *Share) AsCS3Share(grantee *provider.Grantee) *collaboration.Share {
 	creationTs := &types.Timestamp{
 		Seconds: uint64(s.CreatedAt.Unix()),
 	}
@@ -256,7 +254,7 @@ func (s *Share) AsCS3Share(granteeType userpb.UserType) *collaboration.Share {
 			OpaqueId:  s.Inode,
 		},
 		Permissions: &collaboration.SharePermissions{Permissions: permissions.OcsPermissions(s.Permissions).AsCS3Permissions()},
-		Grantee:     extractGrantee(s.SharedWithIsGroup, s.ShareWith, granteeType),
+		Grantee:     grantee,
 		Owner:       conversions.MakeUserID(s.UIDOwner),
 		Creator:     conversions.MakeUserID(s.UIDInitiator),
 		Ctime:       creationTs,
@@ -273,7 +271,7 @@ func (s *Share) AsCS3Share(granteeType userpb.UserType) *collaboration.Share {
 	return share
 }
 
-func (s *Share) AsCS3ReceivedShare(state *ShareState, granteeType userpb.UserType) *collaboration.ReceivedShare {
+func (s *Share) AsCS3ReceivedShare(state *ShareState, grantee *provider.Grantee) *collaboration.ReceivedShare {
 	// Currently, some implementations still rely on the ShareState to determine whether a file is hidden
 	// instead of using the field
 	var rsharestate resourcespb.ShareState
@@ -284,7 +282,7 @@ func (s *Share) AsCS3ReceivedShare(state *ShareState, granteeType userpb.UserTyp
 	}
 
 	return &collaboration.ReceivedShare{
-		Share:  s.AsCS3Share(granteeType),
+		Share:  s.AsCS3Share(grantee),
 		State:  rsharestate,
 		Hidden: state.Hidden,
 		Alias:  state.Alias,
@@ -330,24 +328,6 @@ func (p *PublicLink) AsCS3PublicShare() *link.PublicShare {
 	}
 }
 
-// ExtractGrantee retrieves the CS3API Grantee from a grantee type and username/groupname.
-// The grantee userType is relevant only for users.
-func extractGrantee(sharedWithIsGroup bool, g string, gtype userpb.UserType) *provider.Grantee {
-	var grantee provider.Grantee
-	if sharedWithIsGroup {
-		grantee.Type = provider.GranteeType_GRANTEE_TYPE_GROUP
-		grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{
-			OpaqueId: g,
-		}}
-	} else {
-		grantee.Type = provider.GranteeType_GRANTEE_TYPE_USER
-		grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{
-			OpaqueId: g,
-			Type:     gtype,
-		}}
-	}
-	return &grantee
-}
 
 func defaultLinkDisplayName(displayName string, quickLink bool) string {
 	if displayName != "" {
