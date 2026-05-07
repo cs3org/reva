@@ -29,7 +29,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -66,8 +65,6 @@ func init() {
 		registry.Register(name, f)
 	})
 }
-
-const addSpaceInfoKey = "add_space_info"
 
 type config struct {
 	MountPath             string                    `docs:"/;The path where the file system would be mounted."                                                           mapstructure:"mount_path"`
@@ -130,8 +127,6 @@ type service struct {
 	mountPath, mountID string
 	dataServerURL      *url.URL
 	availableXS        []*provider.ResourceChecksumPriority
-	spaceInfoCache     cache.SpaceInfoCache
-	spaceInfoCacheTTL  time.Duration
 }
 
 func (s *service) Close() error {
@@ -232,14 +227,6 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		mountID:       mountID,
 		dataServerURL: u,
 		availableXS:   xsTypes,
-	}
-
-	sicache, err := getCacheManager(&c)
-	if err == nil {
-		service.spaceInfoCache = sicache
-		service.spaceInfoCacheTTL = time.Second * time.Duration(c.SpaceInfoCacheTTL)
-	} else {
-		log.Error().Err(err).Msgf("Failed to initialize space info cache")
 	}
 
 	return service, nil
@@ -806,7 +793,7 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	return res, nil
 }
 
-func (s *service) addSpaceInfo(ctx context.Context, ri *provider.ResourceInfo, withFetch bool) error {
+func (s *service) addSpaceInfo(ctx context.Context, ri *provider.ResourceInfo) error {
 	log := appctx.GetLogger(ctx)
 
 	spaceID, err := s.pathToSpaceID(ri.Path)
@@ -823,30 +810,13 @@ func (s *service) addSpaceInfo(ctx context.Context, ri *provider.ResourceInfo, w
 		Str("derived_space_id", spaceID).
 		Str("storage_id", ri.Id.StorageId).
 		Str("opaque_id", ri.Id.OpaqueId).
-		Bool("with_fetch", withFetch).
 		Msg("storageprovider: addSpaceInfo")
-
-	if s.spaceInfoCache != nil {
-		if space, err := s.spaceInfoCache.Get(spaceID); space != nil && err == nil {
-			ri.Space = space
-			return nil
-		}
-	}
 
 	ri.Space = &provider.StorageSpace{
 		Id: &provider.StorageSpaceId{
 			OpaqueId: spaceID,
 		},
 		SpaceType: s.conf.ProvidesSpaceType,
-	}
-
-	if withFetch {
-		if space, err := s.fetchSpace(ctx, spaceID); err == nil {
-			ri.Space = space
-			if s.spaceInfoCache != nil {
-				s.spaceInfoCache.Set(spaceID, space)
-			}
-		}
 	}
 
 	return nil
@@ -907,9 +877,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 
 	s.fixPermissions(md)
 	s.stripNonUtf8Metadata(ctx, md)
-
-	_, shouldAddFullSpaceInfo := req.Opaque.GetMap()[addSpaceInfoKey]
-	s.addSpaceInfo(ctx, md, shouldAddFullSpaceInfo)
+	s.addSpaceInfo(ctx, md)
 
 	res := &provider.StatResponse{
 		Status: status.NewOK(ctx),
@@ -1114,7 +1082,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		}
 		s.fixPermissions(md)
 		s.stripNonUtf8Metadata(ctx, md)
-		s.addSpaceInfo(ctx, md, false)
+		s.addSpaceInfo(ctx, md)
 		infos = append(infos, md)
 	}
 	res := &provider.ListContainerResponse{
