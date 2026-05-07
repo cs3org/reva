@@ -627,8 +627,8 @@ func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *provider.Re
 		g.Go(func() error {
 			perm, err := s.shareToLibregraphPerm(ctx, genericShare)
 			if err != nil {
-				log.Error().Err(err).Any("share", genericShare).Msg("error converting share to libregraph permission")
-				return err
+				log.Warn().Err(err).Any("share", genericShare).Msg("error converting share to libregraph permission, skipping")
+				return nil
 			}
 			perms[i] = perm
 			return nil
