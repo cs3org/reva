@@ -90,14 +90,14 @@ func New(m map[string]any) (labels.Manager, error) {
 		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	}
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to connect to favorites database using engine "+c.Engine)
+		return nil, errors.Wrap(err, "Failed to connect to labels database using engine "+c.Engine)
 	}
 
 	// Migrate schemas
 	err = db.AutoMigrate(&Label{})
 
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to mgirate favorites schema")
+		return nil, errors.Wrap(err, "Failed to mgirate labels schema")
 	}
 
 	return &mgr{
@@ -146,7 +146,7 @@ func (m *mgr) SetLabel(ctx context.Context, label string, resourceId *provider.R
 
 	user, ok := appctx.ContextGetUser(ctx)
 	if !ok {
-		return errtypes.UserRequired("favorites: error getting user from ctx")
+		return errtypes.UserRequired("labels: error getting user from ctx")
 	}
 
 	l := &Label{
@@ -155,7 +155,7 @@ func (m *mgr) SetLabel(ctx context.Context, label string, resourceId *provider.R
 		Instance: resourceId.StorageId,
 		Label:    label,
 	}
-	res := m.db.Create(l)
+	res := m.db.Where(l).FirstOrCreate(l)
 
 	log.Debug().Err(res.Error).Msgf("Set label for %+v", l)
 
@@ -167,14 +167,15 @@ func (m *mgr) UnsetLabel(ctx context.Context, label string, resourceId *provider
 
 	user, ok := appctx.ContextGetUser(ctx)
 	if !ok {
-		return errtypes.UserRequired("favorites: error getting user from ctx")
+		return errtypes.UserRequired("labels: error getting user from ctx")
 	}
 
 	query := m.db.
 		Where("user_id = ?", user.Id.OpaqueId).
 		Where("inode = ?", resourceId.OpaqueId).
 		Where("instance = ?", resourceId.StorageId).
-		Where("label = ?", label)
+		Where("label = ?", label).
+		Limit(1)
 
 	res := query.Delete(&Label{})
 

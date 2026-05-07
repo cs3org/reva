@@ -24,7 +24,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
-// Manager defines an interface for a favorites manager.
+// Manager defines an interface for a labels manager.
 type Manager interface {
 	// List the unique labels that a user has attached to resources
 	ListLabels(ctx context.Context) ([]string, error)

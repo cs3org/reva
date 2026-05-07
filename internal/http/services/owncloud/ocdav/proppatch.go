@@ -196,7 +196,6 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 			remove := patches[i].Remove
 			// boolean flags may be "set" to false as well
 			if s.isBooleanProperty(key) {
-				// Make boolean properties either "0" or "1"
 				value = s.as0or1(value)
 				if value == "0" {
 					remove = true
@@ -355,7 +354,6 @@ func (s *svc) formatProppatchResponse(ctx context.Context, acceptedProps []xml.N
 }
 
 func (s *svc) isBooleanProperty(prop string) bool {
-	// TODO add other properties we know to be boolean?
 	return prop == _propOcFavorite
 }
 
