@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -144,8 +145,8 @@ func (m *ShareMgr) Share(ctx context.Context, md *provider.ResourceInfo, g *coll
 		return nil, res.Error
 	}
 
-	granteeType, _ := m.getUserType(ctx, share.ShareWith)
-	return share.AsCS3Share(granteeType), nil
+	grantee := m.getGrantee(ctx, *share)
+	return share.AsCS3Share(grantee), nil
 }
 
 func (m *ShareMgr) GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error) {
@@ -154,8 +155,8 @@ func (m *ShareMgr) GetShare(ctx context.Context, ref *collaboration.ShareReferen
 		return nil, err
 	}
 
-	granteeType, _ := m.getUserType(ctx, share.ShareWith)
-	cs3share := share.AsCS3Share(granteeType)
+	grantee := m.getGrantee(ctx, *share)
+	cs3share := share.AsCS3Share(grantee)
 
 	return cs3share, nil
 }
@@ -215,8 +216,8 @@ func (m *ShareMgr) ListShares(ctx context.Context, filters []*collaboration.Filt
 		wg.Add(1)
 		go func(i int, s model.Share) {
 			defer wg.Done()
-			granteeType, _ := m.getUserType(ctx, s.ShareWith)
-			cs3shares[i] = s.AsCS3Share(granteeType)
+			grantee := m.getGrantee(ctx, s)
+			cs3shares[i] = s.AsCS3Share(grantee)
 		}(i, s)
 	}
 	wg.Wait()
@@ -266,9 +267,9 @@ func (m *ShareMgr) ListReceivedShares(ctx context.Context, filters []*collaborat
 	for _, res := range results {
 		shareState := res.ShareState
 		shareState.Share = res.Share
-		granteeType, _ := m.getUserType(ctx, res.Share.ShareWith)
+		grantee := m.getGrantee(ctx, res.Share)
 
-		receivedShares = append(receivedShares, res.Share.AsCS3ReceivedShare(&shareState, granteeType))
+		receivedShares = append(receivedShares, res.Share.AsCS3ReceivedShare(&shareState, grantee))
 	}
 
 	return receivedShares, nil
@@ -279,30 +280,21 @@ func (m *ShareMgr) GetReceivedShare(ctx context.Context, ref *collaboration.Shar
 	var err error
 	switch {
 	case ref.GetId() != nil:
-		s, err = m.getReceivedByID(ctx, ref.GetId(), userpb.UserType_USER_TYPE_INVALID)
+		s, err = m.getReceivedByID(ctx, ref.GetId())
 	case ref.GetKey() != nil:
-		s, err = m.getReceivedByKey(ctx, ref.GetKey(), userpb.UserType_USER_TYPE_INVALID)
+		s, err = m.getReceivedByKey(ctx, ref.GetKey())
 	default:
 		err = errtypes.NotFound(ref.String())
 	}
 
-	if err != nil {
-		return nil, err
-	}
-
-	// resolve grantee's user type if applicable
-	if s.Share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
-		s.Share.Grantee.GetUserId().Type, _ = m.getUserType(ctx, s.Share.Grantee.GetUserId().OpaqueId)
-	}
-
-	return s, nil
+	return s, err
 }
 
 func (m *ShareMgr) UpdateReceivedShare(ctx context.Context, recvShare *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
 
 	user := appctx.ContextMustGetUser(ctx)
 
-	rs, err := m.getReceivedByID(ctx, recvShare.Share.Id, user.Id.Type)
+	rs, err := m.getReceivedByID(ctx, recvShare.Share.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -616,7 +608,7 @@ func emptyShareWithId(id string) (*model.Share, error) {
 	return share, nil
 }
 
-func (m *ShareMgr) getReceivedByID(ctx context.Context, id *collaboration.ShareId, gtype userpb.UserType) (*collaboration.ReceivedShare, error) {
+func (m *ShareMgr) getReceivedByID(ctx context.Context, id *collaboration.ShareId) (*collaboration.ReceivedShare, error) {
 	user := appctx.ContextMustGetUser(ctx)
 	share, err := m.getShareByID(ctx, id, true)
 	if err != nil {
@@ -628,11 +620,12 @@ func (m *ShareMgr) getReceivedByID(ctx context.Context, id *collaboration.ShareI
 		return nil, err
 	}
 
-	receivedShare := share.AsCS3ReceivedShare(shareState, gtype)
+	grantee := m.getGrantee(ctx, *share)
+	receivedShare := share.AsCS3ReceivedShare(shareState, grantee)
 	return receivedShare, nil
 }
 
-func (m *ShareMgr) getReceivedByKey(ctx context.Context, key *collaboration.ShareKey, gtype userpb.UserType) (*collaboration.ReceivedShare, error) {
+func (m *ShareMgr) getReceivedByKey(ctx context.Context, key *collaboration.ShareKey) (*collaboration.ReceivedShare, error) {
 	user := appctx.ContextMustGetUser(ctx)
 	share, err := m.getShareByKey(ctx, key, false, true)
 	if err != nil {
@@ -644,8 +637,28 @@ func (m *ShareMgr) getReceivedByKey(ctx context.Context, key *collaboration.Shar
 		return nil, err
 	}
 
-	receivedShare := share.AsCS3ReceivedShare(shareState, gtype)
+	grantee := m.getGrantee(ctx, *share)
+	receivedShare := share.AsCS3ReceivedShare(shareState, grantee)
 	return receivedShare, nil
+}
+
+func (m *ShareMgr) getGrantee(ctx context.Context, share model.Share) *provider.Grantee {
+	if share.SharedWithIsGroup {
+		return &provider.Grantee{
+			Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+			Id: &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{
+				OpaqueId: share.ShareWith,
+			}},
+		}
+	}
+	userType, _ := m.getUserType(ctx, share.ShareWith)
+	return &provider.Grantee{
+		Type: provider.GranteeType_GRANTEE_TYPE_USER,
+		Id: &provider.Grantee_UserId{UserId: &userpb.UserId{
+			OpaqueId: share.ShareWith,
+			Type:     userType,
+		}},
+	}
 }
 
 func (m *ShareMgr) getUserType(ctx context.Context, username string) (userpb.UserType, error) {
