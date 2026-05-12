@@ -130,6 +130,7 @@ func (b *reg) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
 }
 
 func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*registrypb.ProviderInfo, error) {
+	log := appctx.GetLogger(ctx)
 	// find longest match
 	var match *registrypb.ProviderInfo
 	var shardedMatches []*registrypb.ProviderInfo
@@ -170,6 +171,18 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 				continue
 			}
 			if m := r.FindString(fn); m != "" {
+				if !matchesPathBoundary(fn, m) {
+					continue
+				}
+				// A path can match more than one static rule. Log each boundary-checked
+				// candidate so provider routing stays inspectable when longest-prefix
+				// selection chooses the final match.
+				log.Debug().
+					Str("ref_path", fn).
+					Str("provider_rule", prefix).
+					Str("matched_prefix", m).
+					Str("provider_address", addr).
+					Msg("storageregistry: matched provider candidate")
 				if match != nil && len(match.ProviderPath) > len(m) {
 					// Do not overwrite existing longer match
 					continue
@@ -201,4 +214,19 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	}
 
 	return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
+}
+
+// matchesPathBoundary keeps mount-style rules segment-aware, so "/ocm" matches
+// "/ocm" and "/ocm/..." but not filenames like "/ocm-proof.txt".
+func matchesPathBoundary(path, matched string) bool {
+	switch {
+	case matched == "":
+		return false
+	case matched == "/":
+		return true
+	case path == matched:
+		return true
+	default:
+		return strings.HasPrefix(path, matched+"/")
+	}
 }

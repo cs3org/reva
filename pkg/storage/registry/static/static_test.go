@@ -238,4 +238,37 @@ var _ = Describe("Static", func() {
 			Expect(providers).To(Equal([]*registrypb.ProviderInfo{home00ID}))
 		})
 	})
+
+	Describe("FindProviders honors path boundaries", func() {
+		boundaryHandler, err := static.New(context.Background(), map[string]any{
+			"home_provider": "/",
+			"rules": map[string]any{
+				"/": map[string]any{
+					"address": "root-provider",
+				},
+				"/ocm": map[string]any{
+					"address": "ocm-provider",
+				},
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		It("does not route /ocm-file.txt to the /ocm provider", func() {
+			providers, err := boundaryHandler.FindProviders(ctxAlice, &provider.Reference{Path: "/ocm-file.txt"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(providers).To(Equal([]*registrypb.ProviderInfo{{
+				ProviderPath: "/",
+				Address:      "root-provider",
+			}}))
+		})
+
+		It("still routes /ocm/share-id to the /ocm provider", func() {
+			providers, err := boundaryHandler.FindProviders(ctxAlice, &provider.Reference{Path: "/ocm/share-id"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(providers).To(Equal([]*registrypb.ProviderInfo{{
+				ProviderPath: "/ocm",
+				Address:      "ocm-provider",
+			}}))
+		})
+	})
 })

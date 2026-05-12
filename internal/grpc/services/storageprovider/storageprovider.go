@@ -464,7 +464,16 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 		// Currently, we only support the simple protocol for GET requests
 		// Once we have multiple protocols, this would be moved to the fs layer
 		protocol.Protocol = "simple"
-		u.Path = path.Join(u.Path, "simple", newRef.GetPath())
+		downloadPath := newRef.GetPath()
+		if s.conf.ExposeDataServer {
+			if info, err := s.storage.GetMD(ctx, newRef, nil); err == nil {
+				mappedPath := exposedDownloadPath(downloadPath, info)
+				if mappedPath != downloadPath {
+					downloadPath = mappedPath
+				}
+			}
+		}
+		u.Path = path.Join(u.Path, "simple", downloadPath)
 	}
 
 	protocol.DownloadEndpoint = u.String()
@@ -475,8 +484,24 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	}, nil
 }
 
+// singleFileRootMountRemap maps a mount-root path to the storage file path when
+// the mounted resource is a single file. Nextcloud uses "/" on that DAV layout
+// for both read and write; simple download already applied this in
+// InitiateFileDownload, and InitiateFileUpload must use the same rule so PUT
+// does not fail on the generic mount-path guard while folder mounts stay
+// rejected at "/".
+func singleFileRootMountRemap(refPath string, info *provider.ResourceInfo) string {
+	if refPath == "/" && info != nil && info.Type == provider.ResourceType_RESOURCE_TYPE_FILE && info.Path != "" {
+		return info.Path
+	}
+	return refPath
+}
+
+func exposedDownloadPath(refPath string, info *provider.ResourceInfo) string {
+	return singleFileRootMountRemap(refPath, info)
+}
+
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
-	// TODO(labkode): same considerations as download
 	log := appctx.GetLogger(ctx)
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
@@ -484,7 +509,24 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
-	if newRef.GetPath() == "/" {
+
+	uploadRef := newRef
+	if newRef.GetPath() == "/" && s.conf.ExposeDataServer {
+		info, err := s.storage.GetMD(ctx, newRef, nil)
+		if err != nil {
+			return &provider.InitiateFileUploadResponse{
+				Status: status.NewInternal(ctx, err, "error resolving mount-root resource for upload"),
+			}, nil
+		}
+		mapped := singleFileRootMountRemap(newRef.GetPath(), info)
+		if mapped != newRef.GetPath() {
+			uploadRef = &provider.Reference{
+				ResourceId: newRef.ResourceId,
+				Path:       mapped,
+			}
+		}
+	}
+	if uploadRef.GetPath() == "/" {
 		return &provider.InitiateFileUploadResponse{
 			Status: status.NewInternal(ctx, errtypes.BadRequest("can't upload to mount path"), "can't upload to mount path"),
 		}, nil
@@ -511,7 +553,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 			metadata["mtime"] = string(req.Opaque.Map["X-OC-Mtime"].Value)
 		}
 	}
-	uploadIDs, err := s.storage.InitiateUpload(ctx, newRef, uploadLength, metadata)
+	uploadIDs, err := s.storage.InitiateUpload(ctx, uploadRef, uploadLength, metadata)
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {

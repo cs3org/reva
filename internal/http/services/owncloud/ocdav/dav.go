@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"context"
+	"encoding/base64"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -28,6 +29,7 @@ import (
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/spaces"
@@ -252,17 +254,20 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				return
 			}
 
-			var token, ocmshare, mode string
+			var token, ocmshare, authType, mode string
+			var relPath string
 			// OCM v1.1+ (OCIS et al.).
-			if strings.Index(r.Header.Get("Authorization"), "Bearer") != -1 {
-				// Bearer token is the shared secret, path is /{shareId}/path/to/resource.
-				// Here we're keeping the simpler public-share model, where the internal routing is done via the token,
-				// therefore we strip the shareId and reinject the token.
-				// TODO(lopresti) We should instead perform a lookup via shareId and leave the token just for auth.
-				var relPath string
+			if strings.Contains(r.Header.Get("Authorization"), "Bearer") {
+				// Bearer token is either the exchanged JWT or the legacy shared secret, path is /{shareId}/path/to/resource.
+				// Here we're keeping the simpler public-share model for legacy direct-secret access, where the internal routing is done via the token,
+				// therefore we strip the shareId and reinject the token on that path, while exchanged-token DAV is routed by shareId below.
 				token = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 				ocmshare, relPath = router.ShiftPath(r.URL.Path)
-				r.URL.Path = filepath.Join("/", token, relPath)
+				if isJWT(token) {
+					authType = "ocmexchangedtoken"
+				} else {
+					authType = "ocmshares"
+				}
 				mode = "bearer"
 			} else {
 				username, _, ok := r.BasicAuth()
@@ -270,7 +275,8 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 					// OCM v1.0 (OC10 and Nextcloud) uses basic auth for carrying the shared secret,
 					// and does not pass the shareId
 					token = username
-					r.URL.Path = filepath.Join("/", token, r.URL.Path)
+					relPath = strings.TrimPrefix(r.URL.Path, "/")
+					authType = "ocmshares"
 					mode = "legacy"
 				} else {
 					log.Info().Any("url", r.URL.Path).Any("headers", r.Header).Msg("unauthenticated remote OCM access")
@@ -279,7 +285,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				}
 			}
 
-			authRes, err := handleOCMAuth(ctx, c, ocmshare, token)
+			authRes, err := handleOCMAuth(ctx, c, ocmshare, token, authType)
 			switch {
 			case err != nil:
 				log.Info().Err(err).Str("mode", mode).Msg("error authenticating remote OCM access")
@@ -303,12 +309,27 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				return
 			}
 
+			// For legacy Basic auth, recover the canonical shareId through a token lookup
+			// since Basic does not carry the shareId in the URL path.
+			if mode == "legacy" && ocmshare == "" {
+				shareRes, shareErr := c.GetOCMShareByToken(ctx, &ocmv1beta1.GetOCMShareByTokenRequest{Token: token})
+				if shareErr == nil && shareRes.GetStatus().GetCode() == rpc.Code_CODE_OK {
+					ocmshare = shareRes.GetShare().GetId().GetOpaqueId()
+				}
+			}
+
+			internalPath, updateIncomingURL := ocmInternalPath(authType, token, ocmshare, relPath)
+			r.URL.Path = internalPath
+			if updateIncomingURL {
+				ctx = context.WithValue(ctx, ctxKeyIncomingURL, internalPath)
+			}
+
 			ctx = appctx.ContextSetToken(ctx, authRes.Token)
 			ctx = appctx.ContextSetUser(ctx, authRes.User)
 			ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, authRes.Token)
 			ctx = context.WithValue(ctx, ctxOCM, true)
 
-			log.Info().Str("token", token).Str("mode", mode).Interface("user", authRes.User).Msg("remote OCM access authenticated")
+			log.Info().Str("token", token).Str("mode", mode).Str("ocmshare", ocmshare).Interface("user", authRes.User).Msg("remote OCM access authenticated")
 
 			r = r.WithContext(ctx)
 			h.OCMSharesHandler.Handler(s).ServeHTTP(w, r)
@@ -395,15 +416,15 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			case sRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
 				fallthrough
 			case sRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
-				log.Debug().Str("token", token).Interface("status", res.Status).Msg("resource not found")
+				log.Debug().Str("token", token).Interface("status", sRes.Status).Msg("resource not found")
 				w.WriteHeader(http.StatusNotFound) // log the difference
 				return
 			case sRes.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
-				log.Debug().Str("token", token).Interface("status", res.Status).Msg("unauthorized")
+				log.Debug().Str("token", token).Interface("status", sRes.Status).Msg("unauthorized")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			case sRes.Status.Code != rpc.Code_CODE_OK:
-				log.Error().Str("token", token).Interface("status", res.Status).Msg("grpc stat request failed")
+				log.Error().Str("token", token).Interface("status", sRes.Status).Msg("grpc stat request failed")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -452,10 +473,40 @@ func handleSignatureAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient,
 	return c.Authenticate(ctx, &authenticateRequest)
 }
 
-func handleOCMAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, ocmshare, token string) (*gatewayv1beta1.AuthenticateResponse, error) {
+func handleOCMAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, ocmshare, token, authType string) (*gatewayv1beta1.AuthenticateResponse, error) {
 	return c.Authenticate(ctx, &gatewayv1beta1.AuthenticateRequest{
-		Type:         "ocmshares",
+		Type:         authType,
 		ClientId:     ocmshare,
 		ClientSecret: token,
 	})
+}
+
+// Three non-empty base64url segments (RFC 7515 JWS Compact Serialization).
+// Classifies the bearer as an exchanged JWT vs a legacy direct secret.
+// Heuristic only; the exchanged-token auth manager still verifies the JWT.
+func isJWT(token string) bool {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	for _, p := range parts {
+		if len(p) == 0 {
+			return false
+		}
+		if _, err := base64.RawURLEncoding.DecodeString(p); err != nil {
+			return false
+		}
+	}
+	return true
+}
+
+// Legacy direct-secret DAV access still routes internally by token. Exchanged-
+// token access routes by share ID because code-flow tokens do not carry the
+// shared secret.
+func ocmInternalPath(authType, token, shareID, relPath string) (string, bool) {
+	internalPath := filepath.Join("/", token, relPath)
+	if authType == "ocmexchangedtoken" {
+		return filepath.Join("/", shareID, relPath), true
+	}
+	return internalPath, false
 }

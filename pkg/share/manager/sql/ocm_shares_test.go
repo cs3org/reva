@@ -161,6 +161,67 @@ func getResourceId() *provider.ResourceId {
 	}
 }
 
+func getOcmAccessMethodsWithCodeFlow(role string) []*ocm.AccessMethod {
+	reqs := []string{"must-exchange-token"}
+	ats := []ocm.AccessType{ocm.AccessType_ACCESS_TYPE_REMOTE}
+	switch role {
+	case "viewer":
+		return []*ocm.AccessMethod{
+			share.NewWebDavAccessMethod(permissions.NewViewerRole().CS3ResourcePermissions(), ats, reqs),
+			share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_ONLY),
+		}
+	case "editor":
+		return []*ocm.AccessMethod{
+			share.NewWebDavAccessMethod(permissions.NewEditorRole().CS3ResourcePermissions(), ats, reqs),
+			share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
+		}
+	}
+	return []*ocm.AccessMethod{}
+}
+
+func getOCMReceivedShareWithCodeFlow(user *userpb.User, grantee *provider.Grantee, receivedShareID string) *ocm.ReceivedShare {
+	perms := &ocm.SharePermissions{
+		Permissions: permissions.NewViewerRole().CS3ResourcePermissions(),
+	}
+	reqs := []string{"must-exchange-token"}
+	ats := []ocm.AccessType{ocm.AccessType_ACCESS_TYPE_REMOTE}
+
+	return &ocm.ReceivedShare{
+		Name:          "receivedshare",
+		RemoteShareId: receivedShareID,
+		Grantee:       grantee,
+		Owner:         user.Id,
+		Creator:       user.Id,
+		Ctime:         &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Unix())},
+		Mtime:         &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Unix())},
+		Expiration:    &typesv1beta1.Timestamp{Seconds: uint64(time.Now().Add(24 * time.Hour).Unix())},
+		ShareType:     ocm.ShareType_SHARE_TYPE_USER,
+		ResourceType:  provider.ResourceType_RESOURCE_TYPE_FILE,
+		Protocols: []*ocm.Protocol{
+			share.NewWebDAVProtocol("https://webdav.example.com/remote.php/dav/shares/someid", "sharedsecret", perms, ats, reqs),
+			share.NewWebappProtocol("https://webapp.example.com/apps/files/?dir=/Shares/someid", appprovider.ViewMode_VIEW_MODE_READ_ONLY),
+		},
+	}
+}
+
+func findWebDAVAccessMethod(methods []*ocm.AccessMethod) *ocm.WebDAVAccessMethod {
+	for _, m := range methods {
+		if wdav, ok := m.Term.(*ocm.AccessMethod_WebdavOptions); ok {
+			return wdav.WebdavOptions
+		}
+	}
+	return nil
+}
+
+func findWebDAVProtocol(protocols []*ocm.Protocol) *ocm.WebDAVProtocol {
+	for _, p := range protocols {
+		if wdav, ok := p.Term.(*ocm.Protocol_WebdavOptions); ok {
+			return wdav.WebdavOptions
+		}
+	}
+	return nil
+}
+
 // ===========================
 //        Actual tests
 // ===========================
@@ -190,6 +251,43 @@ func TestGetOCMShareById(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
+	}
+
+	if retrievedShare.Id.OpaqueId != share.Id.OpaqueId {
+		t.Errorf("Expected share ID %s, got %s", share.Id.OpaqueId, retrievedShare.Id.OpaqueId)
+	}
+}
+
+func TestGetOCMShareByIdAllowsFederatedGrantee(t *testing.T) {
+	mgr, err, teardown := setupSuiteOcmShares(t)
+	defer teardown(t)
+
+	ownerCtx := getUserContext("owner1")
+	owner, _ := appctx.ContextGetUser(ownerCtx)
+	owner.Id.Idp = "cernbox1.docker"
+
+	grantee := getUserOcmShareGrantee("michiel")
+	grantee.GetUserId().Idp = "nextcloud1.docker"
+	accessMethods := getOcmAccessMethods("viewer")
+
+	share, err := mgr.StoreShare(ownerCtx, getOcmShare(accessMethods, grantee, owner.Id, getResourceId(), "federatedtoken"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	recipientCtx := getUserContext("michiel")
+	recipient, _ := appctx.ContextGetUser(recipientCtx)
+	recipient.Id.Idp = "nextcloud1.docker"
+
+	ref := ocm.ShareReference{
+		Spec: &ocm.ShareReference_Id{
+			Id: share.Id,
+		},
+	}
+
+	retrievedShare, err := mgr.GetShare(recipientCtx, recipient, &ref)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	if retrievedShare.Id.OpaqueId != share.Id.OpaqueId {
@@ -500,5 +598,201 @@ func TestListOCMSharesWithOwnerFilter(t *testing.T) {
 
 	if len(shares) != 1 {
 		t.Errorf("Expected 2 shares, got %d", len(shares))
+	}
+}
+
+func TestOutgoingShareRoundTripsRequirementsAndAccessTypes(t *testing.T) {
+	mgr, err, teardown := setupSuiteOcmShares(t)
+	defer teardown(t)
+
+	userctx := getUserContext("123456")
+	user, _ := appctx.ContextGetUser(userctx)
+	grantee := getUserOcmShareGrantee("sharee1")
+	accessMethods := getOcmAccessMethodsWithCodeFlow("viewer")
+
+	stored, err := mgr.StoreShare(userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "codeflowtoken"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: stored.Id}}
+	retrieved, err := mgr.GetShare(userctx, user, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wdav := findWebDAVAccessMethod(retrieved.AccessMethods)
+	if wdav == nil {
+		t.Fatal("expected WebDAV access method on retrieved share")
+	}
+	if len(wdav.Requirements) != 1 || wdav.Requirements[0] != "must-exchange-token" {
+		t.Errorf("requirements: got %v, want [must-exchange-token]", wdav.Requirements)
+	}
+	if len(wdav.AccessTypes) != 1 || wdav.AccessTypes[0] != ocm.AccessType_ACCESS_TYPE_REMOTE {
+		t.Errorf("access_types: got %v, want [ACCESS_TYPE_REMOTE]", wdav.AccessTypes)
+	}
+}
+
+func TestReceivedShareRoundTripsRequirementsAndAccessTypes(t *testing.T) {
+	mgr, err, teardown := setupSuiteOcmShares(t)
+	defer teardown(t)
+
+	userctx := getUserContext("sharee1")
+	user, _ := appctx.ContextGetUser(userctx)
+	grantee := getUserOcmShareGrantee("sharee1")
+
+	receivedShare := getOCMReceivedShareWithCodeFlow(user, grantee, "remote-cf-1")
+	stored, err := mgr.StoreReceivedShare(userctx, receivedShare)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: stored.Id}}
+	retrieved, err := mgr.GetReceivedShare(userctx, user, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wdav := findWebDAVProtocol(retrieved.Protocols)
+	if wdav == nil {
+		t.Fatal("expected WebDAV protocol on retrieved received share")
+	}
+	if len(wdav.Requirements) != 1 || wdav.Requirements[0] != "must-exchange-token" {
+		t.Errorf("requirements: got %v, want [must-exchange-token]", wdav.Requirements)
+	}
+	if len(wdav.AccessTypes) != 1 || wdav.AccessTypes[0] != ocm.AccessType_ACCESS_TYPE_REMOTE {
+		t.Errorf("access_types: got %v, want [ACCESS_TYPE_REMOTE]", wdav.AccessTypes)
+	}
+}
+
+func TestUpdatePreservesRequirementsWhenFieldsOmitted(t *testing.T) {
+	mgr, err, teardown := setupSuiteOcmShares(t)
+	defer teardown(t)
+
+	userctx := getUserContext("123456")
+	user, _ := appctx.ContextGetUser(userctx)
+	grantee := getUserOcmShareGrantee("sharee1")
+	accessMethods := getOcmAccessMethodsWithCodeFlow("viewer")
+
+	stored, err := mgr.StoreShare(userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "cftoken-ocs"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: stored.Id}}
+
+	// OCS caller shape: sends Permissions only, omits Requirements and AccessTypes
+	_, err = mgr.UpdateShare(userctx, user, ref, &ocm.UpdateOCMShareRequest_UpdateField{
+		Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+			AccessMethods: &ocm.AccessMethod{
+				Term: &ocm.AccessMethod_WebdavOptions{
+					WebdavOptions: &ocm.WebDAVAccessMethod{
+						Permissions: permissions.NewEditorRole().CS3ResourcePermissions(),
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	retrieved, err := mgr.GetShare(userctx, user, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wdav := findWebDAVAccessMethod(retrieved.AccessMethods)
+	if wdav == nil {
+		t.Fatal("expected WebDAV access method after update")
+	}
+	if len(wdav.Requirements) != 1 || wdav.Requirements[0] != "must-exchange-token" {
+		t.Errorf("requirements lost after OCS-shape update: got %v", wdav.Requirements)
+	}
+	if len(wdav.AccessTypes) != 1 || wdav.AccessTypes[0] != ocm.AccessType_ACCESS_TYPE_REMOTE {
+		t.Errorf("access_types lost after OCS-shape update: got %v", wdav.AccessTypes)
+	}
+}
+
+func TestUpdatePreservesRequirementsWithExplicitEmptySlice(t *testing.T) {
+	mgr, err, teardown := setupSuiteOcmShares(t)
+	defer teardown(t)
+
+	userctx := getUserContext("123456")
+	user, _ := appctx.ContextGetUser(userctx)
+	grantee := getUserOcmShareGrantee("sharee1")
+	accessMethods := getOcmAccessMethodsWithCodeFlow("viewer")
+
+	stored, err := mgr.StoreShare(userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "cftoken-graph"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: stored.Id}}
+
+	// ocGraph/CLI caller shape: sends explicit Requirements: []string{}
+	_, err = mgr.UpdateShare(userctx, user, ref, &ocm.UpdateOCMShareRequest_UpdateField{
+		Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+			AccessMethods: &ocm.AccessMethod{
+				Term: &ocm.AccessMethod_WebdavOptions{
+					WebdavOptions: &ocm.WebDAVAccessMethod{
+						Permissions:  permissions.NewEditorRole().CS3ResourcePermissions(),
+						Requirements: []string{},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	retrieved, err := mgr.GetShare(userctx, user, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wdav := findWebDAVAccessMethod(retrieved.AccessMethods)
+	if wdav == nil {
+		t.Fatal("expected WebDAV access method after update")
+	}
+	if len(wdav.Requirements) != 1 || wdav.Requirements[0] != "must-exchange-token" {
+		t.Errorf("requirements lost after ocGraph-shape update: got %v", wdav.Requirements)
+	}
+	if len(wdav.AccessTypes) != 1 || wdav.AccessTypes[0] != ocm.AccessType_ACCESS_TYPE_REMOTE {
+		t.Errorf("access_types lost after ocGraph-shape update: got %v", wdav.AccessTypes)
+	}
+}
+
+func TestUpdateRejectsDifferentRequirements(t *testing.T) {
+	mgr, err, teardown := setupSuiteOcmShares(t)
+	defer teardown(t)
+
+	userctx := getUserContext("123456")
+	user, _ := appctx.ContextGetUser(userctx)
+	grantee := getUserOcmShareGrantee("sharee1")
+	accessMethods := getOcmAccessMethodsWithCodeFlow("viewer")
+
+	stored, err := mgr.StoreShare(userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "cftoken-reject"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: stored.Id}}
+
+	_, err = mgr.UpdateShare(userctx, user, ref, &ocm.UpdateOCMShareRequest_UpdateField{
+		Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+			AccessMethods: &ocm.AccessMethod{
+				Term: &ocm.AccessMethod_WebdavOptions{
+					WebdavOptions: &ocm.WebDAVAccessMethod{
+						Permissions:  permissions.NewEditorRole().CS3ResourcePermissions(),
+						Requirements: []string{"something-different"},
+					},
+				},
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error when updating with different requirements, got nil")
 	}
 }

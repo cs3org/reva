@@ -94,7 +94,7 @@ func expandAndVerifyScope(ctx context.Context, req any, tokenScope map[string]*a
 		return nil
 	}
 
-	log.Info().Interface("req", req).Str("rtype", reflect.TypeOf(req).String()).Interface("scope", tokenScope).Msg("Token scope is not ok for request")
+	log.Info().Str("rtype", reflect.TypeOf(req).String()).Int("scope_count", len(tokenScope)).Msg("Token scope is not ok for request")
 	return errtypes.PermissionDenied("access to resource not allowed within the assigned scope")
 }
 

@@ -203,7 +203,8 @@ type OcmShareProtocol struct {
 	OcmShareID  uint          `gorm:"not null;uniqueIndex:u_ocm_share_protocol"`
 	Type        OcmProtocol   `gorm:"not null;uniqueIndex:u_ocm_share_protocol"`
 	Permissions int           `gorm:"default:null"`
-	AccessTypes OcmAccessType `gorm:"default:null"`
+	AccessTypes  OcmAccessType  `gorm:"default:null"`
+	Requirements datatypes.JSON `gorm:"type:json;default:null"`
 }
 
 // OcmReceivedShare represents an OCM share received from a remote user.
@@ -236,7 +237,8 @@ type OcmReceivedShareProtocol struct {
 	Permissions int           `gorm:"default:null"`
 	AccessTypes OcmAccessType `gorm:"default:null"`
 	// JSON field for the embedded protocol payload
-	Payload datatypes.JSON `gorm:"type:json;default:null"`
+	Payload      datatypes.JSON `gorm:"type:json;default:null"`
+	Requirements datatypes.JSON `gorm:"type:json;default:null"`
 }
 
 func (s *Share) AsCS3Share(granteeType userpb.UserType) *collaboration.Share {

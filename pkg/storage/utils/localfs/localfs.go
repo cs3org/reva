@@ -177,7 +177,8 @@ func (fs *localfs) getVirtualHome(ctx context.Context) (string, error) {
 
 func (fs *localfs) wrap(ctx context.Context, p string) string {
 	log := appctx.GetLogger(ctx)
-	// Prevent path traversal attacks
+	// Normalize and secure: path.Join("/", p) collapses ".." and "." and produces
+	// a single leading slash so stripVirtualHomePrefix and later logic see a stable form.
 	p = path.Join("/", p)
 
 	// Strip virtual home prefix to map virtual namespace to flat per-user storage.
@@ -186,18 +187,22 @@ func (fs *localfs) wrap(ctx context.Context, p string) string {
 		p = fs.stripVirtualHomePrefix(p, virtualHome)
 	}
 
-	// Apply user layout and data directory
+	// Build internal path under DataDirectory (and per-user layout). p is normalized
+	// above with a leading slash; path.Join(dataDir, layout, "/file.txt") would
+	// ignore dataDir and layout. Use a relative segment so the result stays under
+	// the user dir.
+	pRel := strings.TrimPrefix(p, "/")
 	var internal string
 	if !fs.conf.DisableHome {
 		layout, err := fs.GetHome(ctx)
 		if err != nil {
 			panic(err)
 		}
-		internal = path.Join(fs.conf.DataDirectory, layout, p)
+		internal = path.Join(fs.conf.DataDirectory, layout, pRel)
 	} else {
-		internal = path.Join(fs.conf.DataDirectory, p)
+		internal = path.Join(fs.conf.DataDirectory, pRel)
 	}
-	log.Debug().Str("old", p).Str("wrapped", internal).Msg("localfs: wrap")
+	log.Debug().Str("old", p).Str("pRel", pRel).Str("wrapped", internal).Msg("localfs: wrap")
 	return internal
 }
 
@@ -1065,7 +1070,14 @@ func (fs *localfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []
 		}
 	}
 
-	fn = fs.wrap(ctx, fn)
+	wrapped := fs.wrap(ctx, fn)
+	log.Debug().
+		Str("ref_path", ref.GetPath()).
+		Bool("ref_has_resource_id", ref.ResourceId != nil).
+		Str("resolved", fn).
+		Str("wrapped", wrapped).
+		Msg("localfs: GetMD resolve+wrap")
+	fn = wrapped
 	md, err := os.Stat(fn)
 	if err != nil {
 		log.Warn().Str("path", fn).Any("md", md).Err(err).Msg("failed stat call in localfs")

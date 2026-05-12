@@ -125,7 +125,14 @@ func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
 		}
 	}
 
-	sublog := appctx.GetLogger(ctx).With().Any("ref", ref).Logger()
+	log := appctx.GetLogger(ctx)
+	hasResourceId := ref.ResourceId != nil
+	log.Debug().
+		Str("put_url_path", r.URL.Path).
+		Bool("ref_has_resource_id", hasResourceId).
+		Str("ref_path", ref.GetPath()).
+		Msg("ocdav: built PUT reference from DAV request")
+	sublog := log.With().Any("ref", ref).Logger()
 
 	s.handlePut(ctx, w, r, ref, sublog)
 }

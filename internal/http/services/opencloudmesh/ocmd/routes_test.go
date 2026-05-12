@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2026 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,24 +16,35 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package token
+package ocmd
 
 import (
-	"context"
-	"time"
+	"testing"
 
-	auth "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
-	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 )
 
-// Manager is the interface to implement to sign and verify tokens.
-type Manager interface {
-	MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error)
-	DismantleToken(ctx context.Context, token string) (*user.User, map[string]*auth.Scope, error)
+func TestDiscoveryTokenEndpointMatchesRoutePath(t *testing.T) {
+	got, err := wellknown.TokenEndpoint("https://cernbox.cern.ch", "ocm")
+	if err != nil {
+		t.Fatalf("wellknown.TokenEndpoint returned error: %v", err)
+	}
+	if got != "https://cernbox.cern.ch/ocm/token" {
+		t.Fatalf("wellknown.TokenEndpoint() = %q, want %q", got, "https://cernbox.cern.ch/ocm/token")
+	}
 }
 
-// ValidatedExpiry is an optional interface a token Manager may implement
-// to expose the validated expiration time of a previously minted token.
-type ValidatedExpiry interface {
-	ValidatedExpiresAt(ctx context.Context, token string) (time.Time, error)
+func TestUnprotectedIncludesTokenPath(t *testing.T) {
+	s := &svc{}
+	paths := s.Unprotected()
+
+	count := 0
+	for _, p := range paths {
+		if p == tokenPath {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("expected %q exactly once in unprotected routes, got %d in %v", tokenPath, count, paths)
+	}
 }

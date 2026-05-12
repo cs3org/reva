@@ -70,7 +70,12 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	req, err := getCreateShareRequest(r)
-	log.Info().Any("req", req).Str("Remote", r.RemoteAddr).Err(err).Msg("OCM /shares request received")
+	// Log whitelist metadata only; incoming OCM share requests carry shared secrets in protocol options.
+	logEvent := log.Info().Str("remote", r.RemoteAddr).Err(err)
+	if req != nil {
+		logEvent = logEvent.Str("sender", req.Sender).Str("resource_type", req.ResourceType)
+	}
+	logEvent.Msg("OCM /shares request received")
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
 		return
@@ -170,14 +175,14 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	log.Info().Any("req", createShareReq).Msg("CreateOCMIncomingShare payload")
+	log.Info().Str("resource_id", req.ProviderID).Str("sender", req.Sender).Str("resource_type", req.ResourceType).Msg("CreateOCMIncomingShare payload")
 	createShareResp, err := h.gatewayClient.CreateOCMIncomingShare(ctx, createShareReq)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error creating ocm share", err)
 		return
 	}
 
-	if userRes.Status.Code != rpc.Code_CODE_OK {
+	if createShareResp.Status.Code != rpc.Code_CODE_OK {
 		// TODO: define errors in the cs3apis
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error creating ocm share", errors.New(createShareResp.Status.Message))
 		return
@@ -203,6 +208,11 @@ func getCreateShareRequest(r *http.Request) (*NewShareRequest, error) {
 	}
 	// validate the request
 	if err := validate.Struct(req); err != nil {
+		return nil, err
+	}
+	// Protocols are interface-backed, so validate the decoded protocol payloads
+	// explicitly before we create or persist a received share.
+	if err := req.Protocols.Validate(); err != nil {
 		return nil, err
 	}
 	return &req, nil
@@ -243,16 +253,16 @@ func getAndResolveProtocols(ctx context.Context, p Protocols, ownerServer string
 		switch protocolName {
 		case "webdav":
 			uri = ocmProto.GetWebdavOptions().Uri
-			reqs := ocmProto.GetWebdavOptions().Requirements
-			if len(reqs) > 0 {
-				// we currently do not support any kind of requirement
-				return nil, false, errtypes.BadRequest(fmt.Sprintf("incoming OCM share with requirements %+v not supported at this endpoint", reqs))
-			}
 		case "webapp":
 			uri = ocmProto.GetWebappOptions().Uri
 		case "embedded":
 			protos = append(protos, ocmProto)
 			continue
+		}
+		// Absolute URIs should already be clean sender-owned endpoints. Validate
+		// again here so malformed values fail before any discovery-based rewriting.
+		if err := validateProtocolURI(protocolName, uri); err != nil {
+			return nil, false, err
 		}
 
 		// If the `uri` contains a hostname, use it as is

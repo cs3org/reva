@@ -39,6 +39,7 @@ type OcmProviderConfig struct {
 	EnableWebapp       bool   `docs:"false;Whether web apps are enabled in OCM shares."                                          mapstructure:"enable_webapp"`
 	EnableDatatx       bool   `docs:"false;Whether data transfers are enabled in OCM shares."                                    mapstructure:"enable_datatx"`
 	EnableEmbedded     bool   `docs:"false;Whether embedded shares are enabled in OCM shares."                        mapstructure:"enable_embedded"`
+	EnableCodeFlow     bool   `docs:"false;Whether code-flow token exchange is enabled in OCM shares."                mapstructure:"enable_code_flow"`
 }
 
 type OcmDiscoveryData struct {
@@ -49,6 +50,7 @@ type OcmDiscoveryData struct {
 	ResourceTypes      []resourceTypes `json:"resourceTypes"      xml:"resourceTypes"`
 	Capabilities       []string        `json:"capabilities"       xml:"capabilities"`
 	InviteAcceptDialog string          `json:"inviteAcceptDialog" xml:"inviteAcceptDialog"`
+	TokenEndPoint      string          `json:"tokenEndPoint,omitempty" xml:"tokenEndPoint,omitempty"`
 }
 
 type resourceTypes struct {
@@ -142,7 +144,16 @@ func (h *wkocmHandler) init(c *OcmProviderConfig) {
 	// for now, we hardcoded the capabilities, as this is currently only advisory
 	d.Capabilities = []string{"invites", "webdav-uri", "protocol-object", "invite-wayf"}
 	d.InviteAcceptDialog, _ = url.JoinPath(c.Endpoint, c.InviteAcceptDialog)
+	if c.EnableCodeFlow {
+		d.TokenEndPoint, _ = TokenEndpoint(c.Endpoint, c.OCMPrefix)
+		d.Capabilities = append(d.Capabilities, "exchange-token")
+	}
 	h.data = d
+}
+
+// TokenEndpoint builds the advertised code-flow token endpoint for OCM discovery.
+func TokenEndpoint(baseURL, prefix string) (string, error) {
+	return url.JoinPath(baseURL, prefix, "token")
 }
 
 // Ocm handles the OCM discovery endpoint specified in

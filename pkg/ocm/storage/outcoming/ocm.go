@@ -36,6 +36,7 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/datagateway"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocdav"
+	authscope "github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -90,6 +91,27 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 	return d, nil
 }
 
+func (d *driver) resolveByShareID(ctx context.Context, shareID string) (*ocmv1beta1.Share, error) {
+	shareRes, err := d.gateway.GetOCMShare(ctx, &ocmv1beta1.GetOCMShareRequest{
+		Ref: &ocmv1beta1.ShareReference{
+			Spec: &ocmv1beta1.ShareReference_Id{
+				Id: &ocmv1beta1.ShareId{OpaqueId: shareID},
+			},
+		},
+	})
+
+	switch {
+	case err != nil:
+		return nil, err
+	case shareRes.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
+		return nil, errtypes.NotFound(shareID)
+	case shareRes.Status.Code != rpcv1beta1.Code_CODE_OK:
+		return nil, errtypes.InternalError(shareRes.Status.Message)
+	}
+
+	return shareRes.Share, nil
+}
+
 func (d *driver) resolveToken(ctx context.Context, token string) (*ocmv1beta1.Share, error) {
 	shareRes, err := d.gateway.GetOCMShare(ctx, &ocmv1beta1.GetOCMShareRequest{
 		Ref: &ocmv1beta1.ShareReference{
@@ -132,33 +154,106 @@ func makeRelative(path string) string {
 	return path
 }
 
-func (d *driver) shareAndRelativePathFromRef(ctx context.Context, ref *provider.Reference) (*ocmv1beta1.Share, string, error) {
-	var (
-		token string
-		path  string
-	)
+func candidateAndRelativePathFromRef(ref *provider.Reference) (string, string) {
 	if ref.ResourceId == nil {
-		// path is of type /token/<rel-path>
-		token, path = router.ShiftPath(ref.Path)
-	} else {
-		// opaque id is of type token:rel.path
-		s := strings.SplitN(ref.ResourceId.OpaqueId, ":", 2)
-		token = s[0]
-		if len(s) == 2 {
-			path = s[1]
+		candidate, relPath := router.ShiftPath(ref.Path)
+		if candidate == "ocm" {
+			candidate, relPath = router.ShiftPath(relPath)
 		}
-		path = filepath.Join(path, ref.Path)
+		return candidate, relPath
 	}
-	path = makeRelative(path)
+
+	s := strings.SplitN(ref.ResourceId.OpaqueId, ":", 2)
+	candidate := s[0]
+	var relPath string
+	if len(s) == 2 {
+		relPath = s[1]
+	}
+	return candidate, filepath.Join(relPath, ref.Path)
+}
+
+func shareIDFromContextScopes(ctx context.Context) string {
+	scopes, ok := appctx.ContextGetScopes(ctx)
+	if !ok || len(scopes) == 0 {
+		return ""
+	}
+
+	shares, err := authscope.GetOCMSharesFromScopes(scopes)
+	if err != nil || len(shares) != 1 {
+		return ""
+	}
+
+	return shares[0].Id.GetOpaqueId()
+}
+
+// Only use scoped shares that already carry enough metadata to execute
+// sender-side operations directly. Older or incomplete scope payloads fall back
+// to repository resolution. When candidate is empty, exactly one complete
+// scoped share must exist; multiple complete shares are rejected as ambiguous.
+func shareFromContextScopes(ctx context.Context, candidate string) *ocmv1beta1.Share {
+	scopes, ok := appctx.ContextGetScopes(ctx)
+	if !ok || len(scopes) == 0 {
+		return nil
+	}
+
+	shares, err := authscope.GetOCMSharesFromScopes(scopes)
+	if err != nil || len(shares) == 0 {
+		return nil
+	}
+
+	if candidate != "" {
+		for _, share := range shares {
+			if candidate != share.GetId().GetOpaqueId() && candidate != share.GetToken() {
+				continue
+			}
+			if share.GetResourceId() == nil || share.GetCreator() == nil || len(share.GetAccessMethods()) == 0 {
+				continue
+			}
+			return share
+		}
+		return nil
+	}
+
+	// candidate == "": collect all complete shares and accept only if unambiguous.
+	var complete []*ocmv1beta1.Share
+	for _, share := range shares {
+		if share.GetResourceId() == nil || share.GetCreator() == nil || len(share.GetAccessMethods()) == 0 {
+			continue
+		}
+		complete = append(complete, share)
+	}
+	if len(complete) == 1 {
+		return complete[0]
+	}
+	return nil
+}
+
+func (d *driver) shareAndRelativePathFromRef(ctx context.Context, ref *provider.Reference) (*ocmv1beta1.Share, string, error) {
+	candidate, relPath := candidateAndRelativePathFromRef(ref)
+	relPath = makeRelative(relPath)
+	if candidate == "" {
+		// Some OCM clients mount the generic DAV root instead of a share-specific path.
+		// When the path does not carry a candidate, recover the single scoped share id
+		// so root-mounted requests still resolve to the intended share.
+		candidate = shareIDFromContextScopes(ctx)
+	}
+	if share := shareFromContextScopes(ctx, candidate); share != nil {
+		return share, relPath, nil
+	}
 
 	log := appctx.GetLogger(ctx)
-	log.Info().Interface("ref", ref).Str("path", path).Str("token", token).Msg("Accessing OCM share")
+	log.Info().Str("path", relPath).Bool("has_candidate", candidate != "").Msg("Accessing OCM share via repository fallback")
 
-	share, err := d.resolveToken(ctx, token)
+	// Scoped share data is the preferred source for authenticated OCM requests.
+	// Fall back to repository lookups for older paths that still rely on them.
+	share, err := d.resolveByShareID(ctx, candidate)
+	if _, ok := err.(errtypes.IsNotFound); ok {
+		share, err = d.resolveToken(ctx, candidate)
+	}
 	if err != nil {
 		return nil, "", err
 	}
-	return share, path, nil
+	return share, relPath, nil
 }
 
 func (d *driver) translateOCMShareResourceToCS3Ref(ctx context.Context, resID *provider.ResourceId, rel string) (*provider.Reference, error) {
@@ -311,7 +406,8 @@ func getPermissionsFromShare(share *ocmv1beta1.Share) *provider.ResourcePermissi
 			return v.WebdavOptions.Permissions
 		case *ocmv1beta1.AccessMethod_WebappOptions:
 			mode := v.WebappOptions.ViewMode
-			if mode == providerv1beta1.ViewMode_VIEW_MODE_READ_WRITE {
+			if mode == providerv1beta1.ViewMode_VIEW_MODE_READ_WRITE ||
+				mode == providerv1beta1.ViewMode_VIEW_MODE_PREVIEW {
 				return permissions.NewEditorRole().CS3ResourcePermissions()
 			}
 			return permissions.NewViewerRole().CS3ResourcePermissions()
@@ -321,14 +417,12 @@ func getPermissionsFromShare(share *ocmv1beta1.Share) *provider.ResourcePermissi
 }
 
 func fixResourceInfo(info, shareInfo *provider.ResourceInfo, share *ocmv1beta1.Share, perms *provider.ResourcePermissions) {
-	// fix path
 	relPath := makeRelative(strings.TrimPrefix(info.Path, shareInfo.Path))
-	info.Path = filepath.Join("/", share.Token, relPath)
+	info.Path = filepath.Join("/", share.Id.OpaqueId, relPath)
 
 	// to enable collaborative apps, the fileid must be the same
 	// of the proxied storage
 
-	// fix permissions
 	info.PermissionSet = perms
 }
 

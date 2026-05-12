@@ -23,9 +23,11 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
@@ -244,6 +246,58 @@ func (c *OCMClient) parseInviteAcceptedResponse(r *http.Response) (*RemoteUser, 
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1notifications/post
 func (c *OCMClient) NewNotification(ctx context.Context, endpoint string, r *InviteAcceptedRequest) (*RemoteUser, error) {
 	return nil, errtypes.NotSupported("not implemented")
+}
+
+// ExchangeToken performs an OAuth2 authorization_code exchange against the
+// sender's token endpoint, returning the short-lived access token and its TTL.
+func (c *OCMClient) ExchangeToken(ctx context.Context, tokenEndpoint, code, clientID string) (string, int64, error) {
+	values := url.Values{}
+	values.Set("grant_type", "authorization_code")
+	values.Set("code", code)
+	if clientID != "" {
+		values.Set("client_id", clientID)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, strings.NewReader(values.Encode()))
+	if err != nil {
+		return "", 0, errors.Wrap(err, "error creating token exchange request")
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return "", 0, errors.Wrap(err, "error sending token exchange request")
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// success, decode below
+	case http.StatusBadRequest:
+		var errBody struct {
+			Error string `json:"error"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&errBody); err == nil && errBody.Error == "invalid_grant" {
+			return "", 0, errtypes.InvalidCredentials("token exchange: invalid_grant")
+		}
+		return "", 0, errtypes.InternalError("token exchange returned HTTP 400 (sender contract error)")
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return "", 0, errtypes.PermissionDenied("token exchange was rejected by the sender")
+	default:
+		return "", 0, errtypes.InternalError(fmt.Sprintf("token exchange returned HTTP %d", resp.StatusCode))
+	}
+
+	var result struct {
+		AccessToken string `json:"access_token"`
+		ExpiresIn   int64  `json:"expires_in"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", 0, errors.Wrap(err, "error decoding token exchange response")
+	}
+	if result.AccessToken == "" {
+		return "", 0, errtypes.InternalError("token exchange response missing access_token")
+	}
+	return result.AccessToken, result.ExpiresIn, nil
 }
 
 // GetDirectoryService fetches a directory service listing from the given URL per OCM spec Appendix C.

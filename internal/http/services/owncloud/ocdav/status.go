@@ -38,6 +38,12 @@ func (s *svc) doStatus(w http.ResponseWriter, r *http.Request) {
 		ProductName:    "reva",
 		Product:        "reva",
 	}
+	log.Debug().
+		Str("method", r.Method).
+		Str("path", r.URL.Path).
+		Bool("has_version", status.Version != "").
+		Str("product", status.Product).
+		Msg("status.php served reva status payload")
 
 	statusJSON, err := json.MarshalIndent(status, "", "    ")
 	if err != nil {

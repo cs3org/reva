@@ -539,7 +539,14 @@ func getPathForExternalLink(ctx context.Context, scopes map[string]*authpb.Scope
 		token = pubShares[0].Token
 	case len(ocmShares) == 1:
 		resID = ocmShares[0].ResourceId
-		token = ocmShares[0].Token
+		if id := ocmShares[0].Id.GetOpaqueId(); id != "" {
+			// Prefer the canonical share id for OCM links. The validated Nextcloud
+			// root-mounted DAV flow resolves the share through that id rather than
+			// assuming a share-specific path or relying on the legacy token shape.
+			token = id
+		} else {
+			token = ocmShares[0].Token
+		}
 	default:
 		return "", errors.New("Either one public xor OCM share is supported, lookups not implemented")
 	}

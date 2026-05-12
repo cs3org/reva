@@ -143,6 +143,61 @@ func protocolsEqual(p1, p2 Protocols) bool {
 	return reflect.DeepEqual(protocolsToMap(p1), protocolsToMap(p2))
 }
 
+func TestRequirementsRoundTripThroughToOCMProtocol(t *testing.T) {
+	w := &WebDAV{
+		SharedSecret: "secret",
+		Permissions:  []string{"read"},
+		Requirements: []string{"must-exchange-token"},
+		URI:          "https://example.org/dav",
+	}
+
+	proto := w.ToOCMProtocol()
+	wdav := proto.GetWebdavOptions()
+	if wdav == nil {
+		t.Fatal("expected WebDAV protocol options")
+	}
+	if len(wdav.Requirements) != 1 || wdav.Requirements[0] != "must-exchange-token" {
+		t.Errorf("requirements lost in ToOCMProtocol: got %v", wdav.Requirements)
+	}
+	if len(wdav.AccessTypes) == 0 {
+		t.Error("expected at least one access type (default remote)")
+	}
+}
+
+func TestProtocolsValidateRejectsUnsupportedWebDAVRequirement(t *testing.T) {
+	protocols := Protocols{
+		&WebDAV{
+			SharedSecret: "secret",
+			Permissions:  []string{"read"},
+			Requirements: []string{"unsupported-requirement"},
+			URI:          "https://example.org/dav",
+		},
+	}
+
+	err := protocols.Validate()
+	if err == nil {
+		t.Fatal("expected validation error for unsupported requirement")
+	}
+	if got, want := err.Error(), `protocol webdav has unsupported requirement "unsupported-requirement"`; got != want {
+		t.Fatalf("Validate() error = %q, want %q", got, want)
+	}
+}
+
+func TestProtocolsValidateAllowsSupportedWebDAVRequirement(t *testing.T) {
+	protocols := Protocols{
+		&WebDAV{
+			SharedSecret: "secret",
+			Permissions:  []string{"read"},
+			Requirements: []string{"must-exchange-token"},
+			URI:          "https://example.org/dav",
+		},
+	}
+
+	if err := protocols.Validate(); err != nil {
+		t.Fatalf("Validate() returned error: %v", err)
+	}
+}
+
 func TestMarshalProtocol(t *testing.T) {
 	tests := []struct {
 		in       Protocols

@@ -144,3 +144,65 @@ func TestNameDoesNotContainRule(t *testing.T) {
 		}
 	}
 }
+
+func TestIsJWT(t *testing.T) {
+	tests := []struct {
+		name  string
+		token string
+		want  bool
+	}{
+		{
+			name:  "valid three-segment base64url JWT",
+			token: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1In0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
+			want:  true,
+		},
+		{
+			name:  "UUID legacy secret",
+			token: "a3f8c2d1-4b67-11ee-be56-0242ac120002",
+			want:  false,
+		},
+		{
+			name:  "two dots but invalid base64url segment",
+			token: "abc.!invalid!.xyz",
+			want:  false,
+		},
+		{
+			name:  "only two segments",
+			token: "abc.def",
+			want:  false,
+		},
+		{
+			name:  "empty middle segment",
+			token: "abc..def",
+			want:  false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isJWT(tt.token)
+			if got != tt.want {
+				t.Errorf("isJWT(%q) = %v, want %v", tt.token, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestOCMInternalPathLegacyUsesToken(t *testing.T) {
+	got, updateIncomingURL := ocmInternalPath("ocmshares", "legacy-token", "share-123", "sub/file.txt")
+	if got != "/legacy-token/sub/file.txt" {
+		t.Fatalf("ocmInternalPath() = %q, want %q", got, "/legacy-token/sub/file.txt")
+	}
+	if updateIncomingURL {
+		t.Fatal("legacy path should not request ctxKeyIncomingURL update")
+	}
+}
+
+func TestOCMInternalPathExchangedTokenUsesShareID(t *testing.T) {
+	got, updateIncomingURL := ocmInternalPath("ocmexchangedtoken", "jwt-token", "share-123", "sub/file.txt")
+	if got != "/share-123/sub/file.txt" {
+		t.Fatalf("ocmInternalPath() = %q, want %q", got, "/share-123/sub/file.txt")
+	}
+	if !updateIncomingURL {
+		t.Fatal("exchanged-token path should request ctxKeyIncomingURL update")
+	}
+}

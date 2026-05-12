@@ -132,3 +132,19 @@ func (m *manager) DismantleToken(ctx context.Context, tkn string) (*user.User, m
 
 	return nil, nil, errtypes.InvalidCredentials("invalid token")
 }
+
+// ValidatedExpiresAt parses the token, validates it, and returns the expiration time.
+func (m *manager) ValidatedExpiresAt(_ context.Context, tkn string) (time.Time, error) {
+	token, err := jwt.ParseWithClaims(tkn, &claims{}, func(token *jwt.Token) (any, error) {
+		// here we are called back by the JWT library to verify the signature of the token, which was encrypted
+		// with the secret configured in Reva to mint tokens, therefore that's the one we have to return
+		return []byte(m.conf.Secret), nil
+	})
+	if err != nil {
+		return time.Time{}, errors.Wrap(err, "error parsing token")
+	}
+	if c, ok := token.Claims.(*claims); ok && token.Valid && c.ExpiresAt != nil {
+		return c.ExpiresAt.Time, nil
+	}
+	return time.Time{}, errtypes.InternalError("token has no expiration")
+}

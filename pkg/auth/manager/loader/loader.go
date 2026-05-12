@@ -26,6 +26,8 @@ import (
 	_ "github.com/cs3org/reva/v3/pkg/auth/manager/ldap"
 	_ "github.com/cs3org/reva/v3/pkg/auth/manager/machine"
 	_ "github.com/cs3org/reva/v3/pkg/auth/manager/nextcloud"
+	_ "github.com/cs3org/reva/v3/pkg/auth/manager/ocmexchangedtoken"
+	_ "github.com/cs3org/reva/v3/pkg/auth/manager/ocmsharecode"
 	_ "github.com/cs3org/reva/v3/pkg/auth/manager/ocmshares"
 	_ "github.com/cs3org/reva/v3/pkg/auth/manager/oidc"
 	_ "github.com/cs3org/reva/v3/pkg/auth/manager/publicshares"

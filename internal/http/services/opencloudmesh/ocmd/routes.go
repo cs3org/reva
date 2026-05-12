@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2026 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,24 +16,12 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package token
+package ocmd
 
-import (
-	"context"
-	"time"
-
-	auth "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
-	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+// OCM official routes as defined by the spec
+const (
+	sharesPath         = "/shares"
+	inviteAcceptedPath = "/invite-accepted"
+	notificationsPath  = "/notifications"
+	tokenPath          = "/token"
 )
-
-// Manager is the interface to implement to sign and verify tokens.
-type Manager interface {
-	MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error)
-	DismantleToken(ctx context.Context, token string) (*user.User, map[string]*auth.Scope, error)
-}
-
-// ValidatedExpiry is an optional interface a token Manager may implement
-// to expose the validated expiration time of a previously minted token.
-type ValidatedExpiry interface {
-	ValidatedExpiresAt(ctx context.Context, token string) (time.Time, error)
-}

@@ -1,0 +1,425 @@
+// Copyright 2018-2026 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
+package scope
+
+import (
+	"context"
+	"testing"
+
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+)
+
+func TestCheckStorageRefForOCMShareWithShareID(t *testing.T) {
+	s := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share123"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
+		Token:      "longlivedtoken",
+	}
+
+	ref := &provider.Reference{
+		ResourceId: &provider.ResourceId{OpaqueId: "share123"},
+	}
+	if !checkStorageRefForOCMShare(s, ref, "/ocm") {
+		t.Error("expected shareId-based ref to match")
+	}
+}
+
+func TestCheckStorageRefForOCMShareWithToken(t *testing.T) {
+	s := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share123"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
+		Token:      "longlivedtoken",
+	}
+
+	ref := &provider.Reference{
+		ResourceId: &provider.ResourceId{OpaqueId: "longlivedtoken"},
+	}
+	if !checkStorageRefForOCMShare(s, ref, "/ocm") {
+		t.Error("expected token-based ref to match")
+	}
+}
+
+func TestCheckStorageRefForOCMShareWithPath(t *testing.T) {
+	s := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share123"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
+		Token:      "longlivedtoken",
+	}
+
+	ref := &provider.Reference{Path: "/ocm/share123/somefile.txt"}
+	if !checkStorageRefForOCMShare(s, ref, "/ocm") {
+		t.Error("expected shareId-path ref to match")
+	}
+
+	ref = &provider.Reference{Path: "/ocm/longlivedtoken/somefile.txt"}
+	if !checkStorageRefForOCMShare(s, ref, "/ocm") {
+		t.Error("expected token-path ref to match")
+	}
+}
+
+func TestCheckStorageRefEmptyShareIDDoesNotMatchAll(t *testing.T) {
+	// Regression: empty shareId with HasPrefix was always-true
+	s := &ocmv1beta1.Share{
+		Id:         nil,
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
+		Token:      "tok",
+	}
+
+	ref := &provider.Reference{
+		ResourceId: &provider.ResourceId{OpaqueId: "unrelated-resource"},
+	}
+	if checkStorageRefForOCMShare(s, ref, "/ocm") {
+		t.Error("nil Id share should not match arbitrary resource via empty shareId prefix")
+	}
+
+	ref = &provider.Reference{Path: "/ocm/anything/file.txt"}
+	if checkStorageRefForOCMShare(s, ref, "/ocm") {
+		t.Error("nil Id share should not match arbitrary path via empty shareId prefix")
+	}
+}
+
+func TestCheckStorageRefPathPrefixOcmInFilename(t *testing.T) {
+	// Regression: path /ocm-m6-proof.txt was mistaken for OCM share because
+	// HasPrefix("/ocm-m6-proof.txt", "/ocm") was true.
+	s := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share123"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
+		Token:      "tok",
+	}
+
+	for _, path := range []string{"/ocm-m6-proof.txt", "/ocm-foo"} {
+		ref := &provider.Reference{Path: path}
+		if checkStorageRefForOCMShare(s, ref, "/ocm") {
+			t.Errorf("path %q must not match OCM share (filename/folder starting with ocm)", path)
+		}
+	}
+	// Bare namespace root ("/ocm") is now allowed for mount-point PROPFIND.
+	rootRef := &provider.Reference{Path: "/ocm"}
+	if !checkStorageRefForOCMShare(s, rootRef, "/ocm") {
+		t.Error("bare namespace root /ocm must be allowed for mount-point stat")
+	}
+}
+
+func TestCheckStorageRefResourceIdEmptyToken(t *testing.T) {
+	// Regression: code-flow scope has empty Token; strings.HasPrefix(anyId, "") is true in Go,
+	// so refs with ResourceId (e.g. personal file ocm-whatever.txt) must not match.
+	s := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share123"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "share-res"},
+		Token:      "", // code-flow scope omits token
+	}
+	ref := &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "other", OpaqueId: "ocm-whatever-file-id"}}
+	if checkStorageRefForOCMShare(s, ref, "/ocm") {
+		t.Error("ref with ResourceId must not match OCM share when share has empty Token")
+	}
+	// Exact ResourceId match should still allow
+	refSame := &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "share-res"}}
+	if !checkStorageRefForOCMShare(s, refSame, "/ocm") {
+		t.Error("ref matching share ResourceId should match")
+	}
+}
+
+func TestCheckStorageRefPathEmptyTokenDoesNotMatchOtherShare(t *testing.T) {
+	s := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share123"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "share-res"},
+		Token:      "",
+	}
+
+	ref := &provider.Reference{Path: "/ocm/other-share/file.txt"}
+	if checkStorageRefForOCMShare(s, ref, "/ocm") {
+		t.Error("code-flow share with empty token must not match another share path")
+	}
+
+	refSame := &provider.Reference{Path: "/ocm/share123/file.txt"}
+	if !checkStorageRefForOCMShare(s, refSame, "/ocm") {
+		t.Error("code-flow share should still match its own share-id path")
+	}
+}
+
+func TestCheckOCMShareRefByID(t *testing.T) {
+	s := &ocmv1beta1.Share{
+		Id:    &ocmv1beta1.ShareId{OpaqueId: "share123"},
+		Token: "tok",
+	}
+
+	ref := &ocmv1beta1.ShareReference{
+		Spec: &ocmv1beta1.ShareReference_Id{
+			Id: &ocmv1beta1.ShareId{OpaqueId: "share123"},
+		},
+	}
+	if !checkOCMShareRef(s, ref) {
+		t.Error("expected match by share ID")
+	}
+
+	ref = &ocmv1beta1.ShareReference{
+		Spec: &ocmv1beta1.ShareReference_Id{
+			Id: &ocmv1beta1.ShareId{OpaqueId: "other"},
+		},
+	}
+	if checkOCMShareRef(s, ref) {
+		t.Error("expected no match for different share ID")
+	}
+}
+
+func TestCheckOCMShareRefByToken(t *testing.T) {
+	s := &ocmv1beta1.Share{
+		Id:    &ocmv1beta1.ShareId{OpaqueId: "share123"},
+		Token: "tok",
+	}
+
+	ref := &ocmv1beta1.ShareReference{
+		Spec: &ocmv1beta1.ShareReference_Token{Token: "tok"},
+	}
+	if !checkOCMShareRef(s, ref) {
+		t.Error("expected match by token")
+	}
+}
+
+func TestAddCodeFlowScopeOmitsToken(t *testing.T) {
+	s := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share123"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
+		Token:      "should-not-appear",
+		Creator:    &userpb.UserId{OpaqueId: "creator"},
+		AccessMethods: []*ocmv1beta1.AccessMethod{
+			{
+				Term: &ocmv1beta1.AccessMethod_WebdavOptions{
+					WebdavOptions: &ocmv1beta1.WebDAVAccessMethod{
+						Permissions: &provider.ResourcePermissions{Stat: true},
+					},
+				},
+			},
+		},
+	}
+
+	scopes, err := AddCodeFlowOCMShareScope(s, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	shares, err := GetOCMSharesFromScopes(scopes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(shares) != 1 {
+		t.Fatalf("expected 1 share in scope, got %d", len(shares))
+	}
+	if shares[0].Token != "" {
+		t.Errorf("code-flow scope should not carry token, got %q", shares[0].Token)
+	}
+	if shares[0].Id.GetOpaqueId() != "share123" {
+		t.Errorf("scope share Id: got %s, want share123", shares[0].Id.GetOpaqueId())
+	}
+	if shares[0].Creator == nil || len(shares[0].AccessMethods) != 1 {
+		t.Fatalf("code-flow scope lost share metadata: %+v", shares[0])
+	}
+}
+
+func TestCheckStorageRefShareIDPrefixRejects(t *testing.T) {
+	// share-id "share123" must NOT match a resource whose OpaqueId merely starts with it.
+	s := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share123"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
+		Token:      "longlivedtoken",
+	}
+	ref := &provider.Reference{
+		ResourceId: &provider.ResourceId{OpaqueId: "share123extra"},
+	}
+	if checkStorageRefForOCMShare(s, ref, "/ocm") {
+		t.Error("share-id prefix of a longer opaque id must reject")
+	}
+}
+
+func TestCheckStorageRefTokenPrefixRejects(t *testing.T) {
+	// token "legacy-token" must NOT match a resource whose OpaqueId merely starts with it.
+	s := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share-xyz"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
+		Token:      "legacy-token",
+	}
+	ref := &provider.Reference{
+		ResourceId: &provider.ResourceId{OpaqueId: "legacy-token-extra"},
+	}
+	if checkStorageRefForOCMShare(s, ref, "/ocm") {
+		t.Error("token prefix of a longer opaque id must reject")
+	}
+}
+
+func TestAddOCMShareScopeCarriesToken(t *testing.T) {
+	s := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share123"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
+		Token:      "the-token",
+		Creator:    &userpb.UserId{OpaqueId: "creator"},
+		AccessMethods: []*ocmv1beta1.AccessMethod{
+			{
+				Term: &ocmv1beta1.AccessMethod_WebdavOptions{
+					WebdavOptions: &ocmv1beta1.WebDAVAccessMethod{
+						Permissions: &provider.ResourcePermissions{Stat: true},
+					},
+				},
+			},
+		},
+	}
+
+	scopes, err := AddOCMShareScope(s, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	shares, err := GetOCMSharesFromScopes(scopes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(shares) != 1 {
+		t.Fatalf("expected 1 share in scope, got %d", len(shares))
+	}
+	if shares[0].Token != "the-token" {
+		t.Errorf("legacy scope should carry token, got %q", shares[0].Token)
+	}
+	if shares[0].Creator == nil || len(shares[0].AccessMethods) != 1 {
+		t.Fatalf("legacy scope lost share metadata: %+v", shares[0])
+	}
+}
+
+func TestVerifyScopeGRPCRequests(t *testing.T) {
+	share := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share-abc"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res-1"},
+		Creator:    &userpb.UserId{OpaqueId: "creator"},
+		AccessMethods: []*ocmv1beta1.AccessMethod{
+			{Term: &ocmv1beta1.AccessMethod_WebdavOptions{
+				WebdavOptions: &ocmv1beta1.WebDAVAccessMethod{
+					Permissions: &provider.ResourcePermissions{Stat: true},
+				},
+			}},
+		},
+	}
+	tokenScope, err := AddCodeFlowOCMShareScope(share, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name    string
+		req     any
+		allowed bool
+	}{
+		{
+			name:    "stat request matching share path",
+			req:     &provider.StatRequest{Ref: &provider.Reference{Path: "/ocm/share-abc/file.txt"}},
+			allowed: true,
+		},
+		{
+			name:    "stat request wrong share path",
+			req:     &provider.StatRequest{Ref: &provider.Reference{Path: "/ocm/other-id/file.txt"}},
+			allowed: false,
+		},
+		{
+			name:    "stat request bare namespace root",
+			req:     &provider.StatRequest{Ref: &provider.Reference{Path: "/ocm"}},
+			allowed: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ok, err := VerifyScope(context.Background(), tokenScope, tt.req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if ok != tt.allowed {
+				t.Errorf("VerifyScope = %v, want %v", ok, tt.allowed)
+			}
+		})
+	}
+}
+
+func TestVerifyScopeHTTPDAVPaths(t *testing.T) {
+	share := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share-abc"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res-1"},
+		Creator:    &userpb.UserId{OpaqueId: "creator"},
+		AccessMethods: []*ocmv1beta1.AccessMethod{
+			{Term: &ocmv1beta1.AccessMethod_WebdavOptions{
+				WebdavOptions: &ocmv1beta1.WebDAVAccessMethod{
+					Permissions: &provider.ResourcePermissions{Stat: true},
+				},
+			}},
+		},
+	}
+	codeFlowScope, err := AddCodeFlowOCMShareScope(share, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	legacyShare := &ocmv1beta1.Share{
+		Id:         &ocmv1beta1.ShareId{OpaqueId: "share-abc"},
+		ResourceId: &provider.ResourceId{StorageId: "stor", OpaqueId: "res-1"},
+		Token:      "legacy-token",
+		Creator:    &userpb.UserId{OpaqueId: "creator"},
+		AccessMethods: []*ocmv1beta1.AccessMethod{
+			{Term: &ocmv1beta1.AccessMethod_WebdavOptions{
+				WebdavOptions: &ocmv1beta1.WebDAVAccessMethod{
+					Permissions: &provider.ResourcePermissions{Stat: true},
+				},
+			}},
+		},
+	}
+	legacyScope, err := AddOCMShareScope(legacyShare, authpb.Role_ROLE_VIEWER, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name    string
+		scope   map[string]*authpb.Scope
+		path    string
+		allowed bool
+	}{
+		{"stripped share-id path", codeFlowScope, "/dav/ocm/share-abc/file.txt", true},
+		{"unstripped share-id path", codeFlowScope, "/remote.php/dav/ocm/share-abc/file.txt", true},
+		{"stripped wrong share-id", codeFlowScope, "/dav/ocm/other-id/file.txt", false},
+		{"unstripped wrong share-id", codeFlowScope, "/remote.php/dav/ocm/other-id/file.txt", false},
+		{"bare root", codeFlowScope, "/dav/ocm", true},
+		{"bare root trailing slash", codeFlowScope, "/dav/ocm/", true},
+		{"unstripped bare root", codeFlowScope, "/remote.php/dav/ocm", true},
+		{"unstripped bare root trailing slash", codeFlowScope, "/remote.php/dav/ocm/", true},
+		{"stripped legacy-token path", legacyScope, "/dav/ocm/legacy-token/file.txt", true},
+		{"unstripped legacy-token path", legacyScope, "/remote.php/dav/ocm/legacy-token/file.txt", true},
+		{"non-DAV OCM route /ocm/token", codeFlowScope, "/ocm/token", false},
+		{"non-DAV OCM share-looking", codeFlowScope, "/ocm/share-abc/file.txt", false},
+		{"later-ocm rescue attempt", codeFlowScope, "/dav/ocm/other-id/dir/ocm/share-abc/file.txt", false},
+		{"double-slash injection", codeFlowScope, "/dav/ocm//file.txt", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ok, err := VerifyScope(context.Background(), tt.scope, tt.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if ok != tt.allowed {
+				t.Errorf("VerifyScope(%q) = %v, want %v", tt.path, ok, tt.allowed)
+			}
+		})
+	}
+}
