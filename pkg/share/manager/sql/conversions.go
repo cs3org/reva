@@ -142,10 +142,10 @@ func convertToCS3OCMReceivedShare(s *model.OcmReceivedShare, p []*ocm.Protocol) 
 		Mtime: &types.Timestamp{
 			Seconds: uint64(s.Mtime),
 		},
-		ResourceType: convertToCS3ResourceType(s.ItemType),
-		ShareType:    convertToCS3OCMShareType(s.RecipientType),
-		State:        convertToCS3OCMShareState(s.State),
-		Protocols:    p,
+		SharedResourceType: convertToCS3SharedResourceType(s.ItemType),
+		ShareType:          convertToCS3OCMShareType(s.RecipientType),
+		State:              convertToCS3OCMShareState(s.State),
+		Protocols:          p,
 	}
 	if s.Expiration.Valid {
 		share.Expiration = &types.Timestamp{
@@ -216,14 +216,16 @@ func convertToCS3Protocol(p *model.OcmReceivedShareProtocol) *ocm.Protocol {
 	return nil
 }
 
-func convertToCS3ResourceType(t model.ItemType) provider.ResourceType {
+func convertToCS3SharedResourceType(t model.ItemType) ocm.SharedResourceType {
 	switch t {
 	case model.ItemTypeFile:
-		return provider.ResourceType_RESOURCE_TYPE_FILE
+		return ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE
 	case model.ItemTypeFolder:
-		return provider.ResourceType_RESOURCE_TYPE_CONTAINER
+		return ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER
+	case model.ItemTypeEmbedded:
+		return ocm.SharedResourceType_SHARE_RESOURCE_TYPE_EMBEDDED
 	}
-	return provider.ResourceType_RESOURCE_TYPE_INVALID
+	return ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID
 }
 
 func convertFromCS3ResourceType(t ocm.SharedResourceType) model.ItemType {
