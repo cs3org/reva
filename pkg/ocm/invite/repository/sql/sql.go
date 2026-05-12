@@ -27,6 +27,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	conversions "github.com/cs3org/reva/v3/pkg/cbox/utils"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/invite"
@@ -51,30 +52,29 @@ func init() {
 }
 
 type mgr struct {
-	c  *config
+	c  *Config
 	db *sql.DB
 }
 
-type config struct {
-	DBUsername string `mapstructure:"db_username"`
-	DBPassword string `mapstructure:"db_password"`
-	DBAddress  string `mapstructure:"db_address"`
-	DBName     string `mapstructure:"db_name"`
-	GatewaySvc string `mapstructure:"gatewaysvc"`
+type Config struct {
+	config.Database `mapstructure:",squash"`
+	GatewaySvc      string `mapstructure:"gatewaysvc"`
 }
 
-func (c *config) ApplyDefaults() {
+func (c *Config) ApplyDefaults() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+	c.Database = sharedconf.GetDBInfo(c.Database)
 }
 
 // New creates a sql repository for ocm tokens and users.
 func New(ctx context.Context, m map[string]any) (invite.Repository, error) {
-	var c config
+	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
+	c.ApplyDefaults()
 
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true", c.DBUsername, c.DBPassword, c.DBAddress, c.DBName))
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true", c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName))
 	if err != nil {
 		return nil, errors.Wrap(err, "sql: error opening connection to mysql database")
 	}
