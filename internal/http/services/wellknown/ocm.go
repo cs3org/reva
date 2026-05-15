@@ -27,19 +27,17 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 )
 
-const OCMAPIVersion = "1.2.0"
+const OCMAPIVersion = "1.3.0"
 
 type OcmProviderConfig struct {
 	OCMPrefix          string `docs:"ocm;The prefix URL where the OCM API is served."                                            mapstructure:"ocm_prefix"`
 	Endpoint           string `docs:"This host's full URL. If it's not configured, it is assumed OCM is not available."          mapstructure:"endpoint"`
 	Provider           string `docs:"reva;A friendly name that defines this service."                                            mapstructure:"provider"`
 	WebdavRoot         string `docs:"/remote.php/dav/ocm;The root URL of the WebDAV endpoint to serve OCM shares."               mapstructure:"webdav_root"`
-	WebappRoot         string `docs:"/external/sciencemesh;The root URL to serve Web apps via OCM."                              mapstructure:"webapp_root"`
 	InviteAcceptDialog string `docs:"/open-cloud-mesh/accept-invite;The frontend URL where to land when receiving an invitation" mapstructure:"invite_accept_dialog"`
 	EnableWebapp       bool   `docs:"false;Whether web apps are enabled in OCM shares."                                          mapstructure:"enable_webapp"`
-	EnableDatatx       bool   `docs:"false;Whether data transfers are enabled in OCM shares."                                    mapstructure:"enable_datatx"`
-	EnableEmbedded     bool   `docs:"false;Whether embedded shares are enabled in OCM shares."                        mapstructure:"enable_embedded"`
-	EnableCodeFlow     bool   `docs:"false;Whether code-flow token exchange is enabled in OCM shares."                mapstructure:"enable_code_flow"`
+	EnableEmbedded     bool   `docs:"false;Whether embedded shares are enabled in OCM shares."                                   mapstructure:"enable_embedded"`
+	EnableCodeFlow     bool   `docs:"false;Whether code-flow token exchange is enabled in OCM shares."                           mapstructure:"enable_code_flow"`
 }
 
 type OcmDiscoveryData struct {
@@ -47,16 +45,17 @@ type OcmDiscoveryData struct {
 	APIVersion         string          `json:"apiVersion"         xml:"apiVersion"`
 	Endpoint           string          `json:"endPoint"           xml:"endPoint"`
 	Provider           string          `json:"provider"           xml:"provider"`
-	ResourceTypes      []resourceTypes `json:"resourceTypes"      xml:"resourceTypes"`
+	ResourceTypes      []ResourceTypes `json:"resourceTypes"      xml:"resourceTypes"`
 	Capabilities       []string        `json:"capabilities"       xml:"capabilities"`
+	Criteria           []string        `json:"criteria"           xml:"criteria"`
 	InviteAcceptDialog string          `json:"inviteAcceptDialog" xml:"inviteAcceptDialog"`
 	TokenEndPoint      string          `json:"tokenEndPoint,omitempty" xml:"tokenEndPoint,omitempty"`
 }
 
-type resourceTypes struct {
-	Name       string            `json:"name"`
-	ShareTypes []string          `json:"shareTypes"`
-	Protocols  map[string]string `json:"protocols"`
+type ResourceTypes struct {
+	Name       string         `json:"name"`
+	ShareTypes []string       `json:"shareTypes"`
+	Protocols  map[string]any `json:"protocols"`
 }
 
 type wkocmHandler struct {
@@ -76,12 +75,6 @@ func (c *OcmProviderConfig) ApplyDefaults() {
 	if c.WebdavRoot[len(c.WebdavRoot)-1:] != "/" {
 		c.WebdavRoot += "/"
 	}
-	if c.WebappRoot == "" {
-		c.WebappRoot = "/external/sciencemesh/"
-	}
-	if c.WebappRoot[len(c.WebappRoot)-1:] != "/" {
-		c.WebappRoot += "/"
-	}
 	if c.InviteAcceptDialog == "" {
 		c.InviteAcceptDialog = "/open-cloud-mesh/accept-invite"
 	}
@@ -96,10 +89,10 @@ func (h *wkocmHandler) init(c *OcmProviderConfig) {
 	d.Endpoint = ""
 	d.APIVersion = OCMAPIVersion
 	d.Provider = c.Provider
-	d.ResourceTypes = []resourceTypes{{
+	d.ResourceTypes = []ResourceTypes{{
 		Name:       "file",
 		ShareTypes: []string{},
-		Protocols:  map[string]string{},
+		Protocols:  map[string]any{},
 	}}
 	d.Capabilities = []string{}
 
@@ -117,32 +110,45 @@ func (h *wkocmHandler) init(c *OcmProviderConfig) {
 	// now prepare the enabled one
 	d.Enabled = true
 	d.Endpoint, _ = url.JoinPath(c.Endpoint, c.OCMPrefix)
-	rtProtos := map[string]string{}
-	// webdav is always enabled
+	rtProtos := map[string]any{}
+	// webdav is always enabled and we support receiving absolute URIs
 	rtProtos["webdav"] = filepath.Join(endpointURL.Path, c.WebdavRoot)
+	rtProtos["webdav-receive"] = map[string]any{
+		"uri": "absolute",
+	}
 	if c.EnableWebapp {
-		rtProtos["webapp"] = filepath.Join(endpointURL.Path, c.WebappRoot)
+		// if webapps are enabled, we can both send and receive webapp shares
+		rtProtos["webapp"] = map[string]any{}
+		rtProtos["webapp-receive"] = map[string]any{
+			"targets": []string{"blank"},
+		}
 	}
-	if c.EnableDatatx {
-		rtProtos["datatx"] = filepath.Join(endpointURL.Path, c.WebdavRoot)
+	d.ResourceTypes = []ResourceTypes{
+		{
+			Name:       "file",
+			ShareTypes: []string{"user"}, // so far we only support `user`
+			Protocols:  rtProtos,         // expose the protocols as per configuration
+		},
+		{
+			Name:       "folder", // same as file
+			ShareTypes: []string{"user"},
+			Protocols:  rtProtos,
+		},
 	}
-	d.ResourceTypes = []resourceTypes{{
-		Name:       "file",
-		ShareTypes: []string{"user"}, // so far we only support `user`
-		Protocols:  rtProtos,         // expose the protocols as per configuration
-	}}
 	if c.EnableEmbedded {
-		d.ResourceTypes = append(d.ResourceTypes, resourceTypes{
+		// declare that we are able to receive ro-crate shares (sending is not implemented)
+		d.ResourceTypes = append(d.ResourceTypes, ResourceTypes{
 			Name:       "ro-crate",
 			ShareTypes: []string{"user"},
-			Protocols: map[string]string{
-				"embedded": "", // embedded resources have an empty root path by convention
+			Protocols: map[string]any{
+				"embedded-receive": map[string]any{},
 			},
 		})
 	}
 
-	// for now, we hardcoded the capabilities, as this is currently only advisory
-	d.Capabilities = []string{"invites", "webdav-uri", "protocol-object", "invite-wayf"}
+	// expose the enabled capabilities
+	d.Capabilities = []string{"invites", "protocol-object", "invite-wayf"}
+	d.Criteria = []string{"must-invite"}
 	d.InviteAcceptDialog, _ = url.JoinPath(c.Endpoint, c.InviteAcceptDialog)
 	if c.EnableCodeFlow {
 		d.TokenEndPoint, _ = TokenEndpoint(c.Endpoint, c.OCMPrefix)
