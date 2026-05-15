@@ -20,6 +20,7 @@ package ocminvitemanager
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -158,7 +159,7 @@ func (s *service) ListInviteTokens(ctx context.Context, req *invitepb.ListInvite
 func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInviteRequest) (*invitepb.ForwardInviteResponse, error) {
 	user := appctx.ContextMustGetUser(ctx)
 
-	ocmEndpoint, err := getOCMEndpoint(req.GetOriginSystemProvider())
+	ocmEndpoint, err := GetOCMEndpoint(req.GetOriginSystemProvider())
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +223,7 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 	}, nil
 }
 
-func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
+func GetOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
 	for _, s := range originProvider.Services {
 		if s.Endpoint.Type.Name == "OCM" {
 			return s.Endpoint.Path, nil
@@ -305,7 +306,7 @@ func (s *service) GetAcceptedUser(ctx context.Context, req *invitepb.GetAccepted
 	user, ok := getUserFilter(ctx, req)
 	if !ok {
 		return &invitepb.GetAcceptedUserResponse{
-			Status: status.NewInvalidArg(ctx, "user not found"),
+			Status: status.NewInvalidArg(ctx, fmt.Sprintf("user not found, req was %+v", req)),
 		}, nil
 	}
 

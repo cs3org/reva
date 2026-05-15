@@ -82,7 +82,7 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 	}
 	var path string
 	for _, t := range ocmCaps.ResourceTypes {
-		webdavRoot, ok := t.Protocols["webdav"]
+		webdavRoot, ok := t.Protocols["webdav"].(string)
 		if ok {
 			// assume the first resourceType that exposes a webdav root is OK to use: as a matter of fact,
 			// no implementation exists yet that exposes multiple resource types with different roots.
