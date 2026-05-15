@@ -681,15 +681,15 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 
 		// ls do not report any properties as missing by default
 		if ls == nil {
-			// favorites from arbitrary metadata
-			if k := md.GetArbitraryMetadata(); k == nil {
-				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
-			} else if amd := k.GetMetadata(); amd == nil {
-				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
-			} else if v, ok := amd[_propOcFavorite]; ok && v != "" {
-				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", v))
-			} else {
-				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+			if u, ok := appctx.ContextGetUser(ctx); ok {
+				labelPrefix := fmt.Sprintf("reva.labels.%s.", u.Id.OpaqueId)
+				if k := md.GetArbitraryMetadata(); k != nil {
+					for key := range k.GetMetadata() {
+						if label, ok := strings.CutPrefix(key, labelPrefix); ok {
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:"+label, "1"))
+						}
+					}
+				}
 			}
 		}
 		// TODO return other properties ... but how do we put them in a namespace?
@@ -802,19 +802,17 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-id", ""))
 					}
 				case "favorite": // phoenix only
-					// TODO: can be 0 or 1?, in oc10 it is present or not
-					// TODO: read favorite via separate call? that would be expensive? I hope it is in the md
-					// TODO: this boolean favorite property is so horribly wrong ... either it is presont, or it is not ... unless ... it is possible to have a non binary value ... we need to double check
 					if ls == nil {
-						if k := md.GetArbitraryMetadata(); k == nil {
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
-						} else if amd := k.GetMetadata(); amd == nil {
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
-						} else if v, ok := amd[_propOcFavorite]; ok && v != "" {
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "1"))
-						} else {
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+						favVal := "0"
+						if u, ok := appctx.ContextGetUser(ctx); ok {
+							favKey := fmt.Sprintf("reva.labels.%s.favorite", u.Id.OpaqueId)
+							if k := md.GetArbitraryMetadata(); k != nil {
+								if _, ok := k.GetMetadata()[favKey]; ok {
+									favVal = "1"
+								}
+							}
 						}
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", favVal))
 					} else {
 						// link share root collection has no favorite
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:favorite", ""))

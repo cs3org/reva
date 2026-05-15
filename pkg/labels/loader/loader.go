@@ -19,8 +19,8 @@
 package loader
 
 import (
-	// Load storage favorite drivers.
-	_ "github.com/cs3org/reva/v3/pkg/favorite/memory"
-	_ "github.com/cs3org/reva/v3/pkg/favorite/sql"
+	// Load storage labels drivers.
+	_ "github.com/cs3org/reva/v3/pkg/labels/memory"
+	_ "github.com/cs3org/reva/v3/pkg/labels/sql"
 	// Add your own here.
 )
