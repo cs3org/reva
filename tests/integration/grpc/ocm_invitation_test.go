@@ -180,10 +180,12 @@ var _ = Describe("ocm invitation workflow", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(forwardRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
+					By("einstein was accepted by marie")
 					Expect(forwardRes.DisplayName).To(Equal(einstein.DisplayName))
 					Expect(forwardRes.Email).To(Equal(einstein.Mail))
 					Expect(utils.UserEqual(forwardRes.UserId, einstein.Id)).To(BeTrue())
 
+					By("einstein knows about marie")
 					usersRes1, err := cernboxgw.FindAcceptedUsers(ctxEinstein, &invitepb.FindAcceptedUsersRequest{})
 					Expect(err).ToNot(HaveOccurred())
 					Expect(usersRes1.Status.Code).To(Equal(rpc.Code_CODE_OK))
@@ -191,6 +193,7 @@ var _ = Describe("ocm invitation workflow", func() {
 					info1 := usersRes1.AcceptedUsers[0]
 					Expect(ocmUserEqual(info1, marie)).To(BeTrue())
 
+					By("marie knows about einstein")
 					usersRes2, err := cesnetgw.FindAcceptedUsers(ctxMarie, &invitepb.FindAcceptedUsersRequest{})
 					Expect(err).ToNot(HaveOccurred())
 					Expect(usersRes2.Status.Code).To(Equal(rpc.Code_CODE_OK))

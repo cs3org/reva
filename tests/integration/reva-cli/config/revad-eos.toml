@@ -80,6 +80,7 @@ home_provider = "/home"
 # custom_mime_types_json = "/etc/revad/custom-mimetypes.json"
 driver = "eoswrapper"
 mount_path = "/eos"
+space_depth = 2
 mount_id = "eos"
 data_server_url = "http://localhost:38001/data"
 minimum_allowed_path_level_for_share = 5

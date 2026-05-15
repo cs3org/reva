@@ -70,6 +70,7 @@ users = "fixtures/ocm-users.demo.json"
 [grpc.services.storageprovider]
 driver = "ocmreceived"
 mount_path = "/ocm"
+space_depth = 2
 mount_id = "984e7351-2729-4417-99b4-ab5e6d41fa97"
 data_server_url = "http://{{cesnethttp_address}}/data"
 
