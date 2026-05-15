@@ -569,6 +569,8 @@ func (fs *Eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		}
 	}
 
+	parseAndSetFavoriteAttr(ctx, filteredAttrs)
+
 	// Note that SpaceId and StorageID are set by the StorageProvider
 	info := &provider.ResourceInfo{
 		Id: &provider.ResourceId{
@@ -647,4 +649,27 @@ func (fs *Eosfs) getEosMetadata(finfo *eosclient.FileInfo) []byte {
 
 	v, _ := json.Marshal(sys)
 	return v
+}
+
+func parseAndSetFavoriteAttr(ctx context.Context, attrs map[string]string) {
+	// Read and correctly set the favorite attr
+	if user, ok := appctx.ContextGetUser(ctx); ok {
+		if favAttrStr, ok := attrs[eosclient.FavoritesKey]; ok {
+			favUsers, err := acl.Parse(favAttrStr, acl.ShortTextForm)
+			if err != nil {
+				return
+			}
+			for _, u := range favUsers.Entries {
+				// Check if the current user has favorited this resource
+				if u.Qualifier == user.Id.OpaqueId {
+					// Set attr val to 1
+					attrs[eosclient.FavoritesKey] = "1"
+					return
+				}
+			}
+		}
+	}
+
+	// Delete the favorite attr from the response
+	delete(attrs, eosclient.FavoritesKey)
 }

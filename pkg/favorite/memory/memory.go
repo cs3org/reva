@@ -20,13 +20,12 @@ package memory
 
 import (
 	"context"
-	"errors"
 	"sync"
 
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/labels"
-	"github.com/cs3org/reva/v3/pkg/labels/registry"
+	"github.com/cs3org/reva/v3/pkg/favorite"
+	"github.com/cs3org/reva/v3/pkg/favorite/registry"
 )
 
 func init() {
@@ -39,52 +38,33 @@ type mgr struct {
 }
 
 // New returns an instance of the in-memory favorites manager.
-func New(m map[string]any) (labels.Manager, error) {
+func New(m map[string]any) (favorite.Manager, error) {
 	return &mgr{favorites: make(map[string]map[string]*provider.ResourceId)}, nil
 }
 
-func (m *mgr) ListLabels(ctx context.Context) ([]string, error) {
-	return []string{"favorite"}, nil
-}
-
-func (m *mgr) ListResourcesForLabel(ctx context.Context, label string) ([]*provider.ResourceId, error) {
-	user, ok := appctx.ContextGetUser(ctx)
-	if !ok {
-		return nil, errors.New("no valid user in context")
-	}
-
+func (m *mgr) ListFavorites(_ context.Context, userID *user.UserId) ([]*provider.ResourceId, error) {
 	m.RLock()
 	defer m.RUnlock()
-	favorites := make([]*provider.ResourceId, 0, len(m.favorites[user.Id.OpaqueId]))
-	for _, id := range m.favorites[user.Id.OpaqueId] {
+	favorites := make([]*provider.ResourceId, 0, len(m.favorites[userID.OpaqueId]))
+	for _, id := range m.favorites[userID.OpaqueId] {
 		favorites = append(favorites, id)
 	}
 	return favorites, nil
 }
 
-func (m *mgr) SetLabel(ctx context.Context, label string, resourceId *provider.ResourceId) error {
-	user, ok := appctx.ContextGetUser(ctx)
-	if !ok {
-		return errors.New("no valid user in context")
-	}
-
+func (m *mgr) SetFavorite(_ context.Context, userID *user.UserId, resourceInfo *provider.ResourceInfo) error {
 	m.Lock()
 	defer m.Unlock()
-	if m.favorites[user.Id.OpaqueId] == nil {
-		m.favorites[user.Id.OpaqueId] = make(map[string]*provider.ResourceId)
+	if m.favorites[userID.OpaqueId] == nil {
+		m.favorites[userID.OpaqueId] = make(map[string]*provider.ResourceId)
 	}
-	m.favorites[user.Id.OpaqueId][resourceId.OpaqueId] = resourceId
+	m.favorites[userID.OpaqueId][resourceInfo.Id.OpaqueId] = resourceInfo.Id
 	return nil
 }
 
-func (m *mgr) UnsetLabel(ctx context.Context, label string, resourceId *provider.ResourceId) error {
-	user, ok := appctx.ContextGetUser(ctx)
-	if !ok {
-		return errors.New("no valid user in context")
-	}
-
+func (m *mgr) UnsetFavorite(_ context.Context, userID *user.UserId, resourceInfo *provider.ResourceInfo) error {
 	m.Lock()
 	defer m.Unlock()
-	delete(m.favorites[user.Id.OpaqueId], resourceId.OpaqueId)
+	delete(m.favorites[userID.OpaqueId], resourceInfo.Id.OpaqueId)
 	return nil
 }

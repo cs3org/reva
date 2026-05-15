@@ -38,6 +38,9 @@ import (
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
 
+	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/favorite"
+	"github.com/cs3org/reva/v3/pkg/favorite/registry"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/cs3org/reva/v3/pkg/notification/notificationhelper"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
@@ -122,6 +125,8 @@ type Config struct {
 	// "x-access-token":	results in header: X-Access-Token: ...token...
 	HTTPTpcPushAuthHeader        string                    `mapstructure:"http_tpc_push_auth_header"`
 	PublicURL                    string                    `mapstructure:"public_url"`
+	FavoriteStorageDriver        string                    `mapstructure:"favorite_storage_driver"`
+	FavoriteStorageDrivers       map[string]map[string]any `mapstructure:"favorite_storage_drivers"`
 	PublicLinkDownload           *ConfigPublicLinkDownload `mapstructure:"publiclink_download"`
 	DisabledOpenInAppPaths       []string                  `mapstructure:"disabled_open_in_app_paths"`
 	Notifications                map[string]any            `docs:"nil; settings for the notification helper" mapstructure:"notifications"`
@@ -131,6 +136,10 @@ type Config struct {
 func (c *Config) ApplyDefaults() {
 	// note: default c.Prefix is an empty string
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+
+	if c.FavoriteStorageDriver == "" {
+		c.FavoriteStorageDriver = "memory"
+	}
 
 	if c.OCMNamespace == "" {
 		c.OCMNamespace = "/ocm"
@@ -145,16 +154,29 @@ type svc struct {
 	c                    *Config
 	webDavHandler        *WebDavHandler
 	davHandler           *DavHandler
+	favoritesManager     favorite.Manager
 	myOfficeFilesManager myofficefiles.Manager
 	client               *httpclient.Client
 	// Can be nil if notifications are not set up
 	notificationHelper *notificationhelper.NotificationHelper
 }
 
+func getFavoritesManager(c *Config) (favorite.Manager, error) {
+	if f, ok := registry.NewFuncs[c.FavoriteStorageDriver]; ok {
+		return f(c.FavoriteStorageDrivers[c.FavoriteStorageDriver])
+	}
+	return nil, errtypes.NotFound("driver not found: " + c.FavoriteStorageDriver)
+}
+
 // New returns a new ocdav.
 func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
+		return nil, err
+	}
+
+	fm, err := getFavoritesManager(&c)
+	if err != nil {
 		return nil, err
 	}
 
@@ -174,6 +196,7 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 			httpclient.Timeout(time.Duration(c.Timeout*int64(time.Second))),
 			httpclient.RoundTripper(tr),
 		),
+		favoritesManager:     fm,
 		myOfficeFilesManager: myOfficeFilesManager,
 	}
 	if c.Notifications != nil {

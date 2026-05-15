@@ -452,8 +452,8 @@ func (s *service) getAllPublicSpaces(ctx context.Context) ([]*provider.StorageSp
 			statRes, err := s.gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
 				Path: path,
 			}})
-			if err != nil || statRes == nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-				log.Error().Err(err).Any("statRes", statRes).Msgf("Failed to stat path %s for public space %s, ignoring this space", path, spaceName)
+			if err != nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+				log.Error().Err(err).Any("Status", statRes.Status).Msgf("Failed to stat path %s for public space %s, ignoring this space", path, spaceName)
 			} else {
 				resourceInfo = statRes.Info
 				s.resourceInfoCache.Set(path, resourceInfo)

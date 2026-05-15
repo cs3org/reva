@@ -27,7 +27,6 @@ import (
 	"path"
 	"strings"
 
-	labelsv1beta1 "github.com/cs3org/go-cs3apis/cs3/labels/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -196,6 +195,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 			remove := patches[i].Remove
 			// boolean flags may be "set" to false as well
 			if s.isBooleanProperty(key) {
+				// Make boolean properties either "0" or "1"
 				value = s.as0or1(value)
 				if value == "0" {
 					remove = true
@@ -205,39 +205,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 			// specified in the PROPPATCH request
 			// http://www.webdav.org/specs/rfc2518.html#rfc.section.8.2
 			// FIXME: batch this somehow
-			if key == _propOcFavorite {
-				if remove {
-					res, err := c.RemoveLabel(ctx, &labelsv1beta1.RemoveLabelRequest{
-						Ref:   ref,
-						Label: "favorite",
-					})
-					if err != nil {
-						log.Error().Err(err).Msg("error calling RemoveLabel")
-						w.WriteHeader(http.StatusInternalServerError)
-						return nil, nil, false
-					}
-					if res.Status.Code != rpc.Code_CODE_OK {
-						HandleErrorStatus(&log, w, res.Status)
-						return nil, nil, false
-					}
-					removedProps = append(removedProps, propNameXML)
-				} else {
-					res, err := c.AddLabel(ctx, &labelsv1beta1.AddLabelRequest{
-						Ref:   ref,
-						Label: "favorite",
-					})
-					if err != nil {
-						log.Error().Err(err).Msg("error calling AddLabel")
-						w.WriteHeader(http.StatusInternalServerError)
-						return nil, nil, false
-					}
-					if res.Status.Code != rpc.Code_CODE_OK {
-						HandleErrorStatus(&log, w, res.Status)
-						return nil, nil, false
-					}
-					acceptedProps = append(acceptedProps, propNameXML)
-				}
-			} else if remove {
+			if remove {
 				rreq.ArbitraryMetadataKeys[0] = key
 				res, err := c.UnsetArbitraryMetadata(ctx, rreq)
 				if err != nil {
@@ -259,6 +227,19 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 					}
 					HandleErrorStatus(&log, w, res.Status)
 					return nil, nil, false
+				}
+				if key == _propOcFavorite {
+					statRes, err := c.Stat(ctx, &provider.StatRequest{Ref: ref})
+					if err != nil {
+						w.WriteHeader(http.StatusInternalServerError)
+						return nil, nil, false
+					}
+					currentUser := appctx.ContextMustGetUser(ctx)
+					err = s.favoritesManager.UnsetFavorite(ctx, currentUser.Id, statRes.Info)
+					if err != nil {
+						w.WriteHeader(http.StatusInternalServerError)
+						return nil, nil, false
+					}
 				}
 				removedProps = append(removedProps, propNameXML)
 			} else {
@@ -287,6 +268,20 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 
 				acceptedProps = append(acceptedProps, propNameXML)
 				delete(sreq.ArbitraryMetadata.Metadata, key)
+
+				if key == _propOcFavorite {
+					statRes, err := c.Stat(ctx, &provider.StatRequest{Ref: ref})
+					if err != nil {
+						w.WriteHeader(http.StatusInternalServerError)
+						return nil, nil, false
+					}
+					currentUser := appctx.ContextMustGetUser(ctx)
+					err = s.favoritesManager.SetFavorite(ctx, currentUser.Id, statRes.Info)
+					if err != nil {
+						w.WriteHeader(http.StatusInternalServerError)
+						return nil, nil, false
+					}
+				}
 			}
 		}
 		// FIXME: in case of error, need to set all properties back to the original state,
@@ -354,6 +349,7 @@ func (s *svc) formatProppatchResponse(ctx context.Context, acceptedProps []xml.N
 }
 
 func (s *svc) isBooleanProperty(prop string) bool {
+	// TODO add other properties we know to be boolean?
 	return prop == _propOcFavorite
 }
 
