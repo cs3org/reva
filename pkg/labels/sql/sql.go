@@ -106,8 +106,27 @@ func New(m map[string]any) (labels.Manager, error) {
 	}, nil
 }
 
+// Note: not yet called by the frontend, which currently only lists favorites.
 func (m *mgr) ListLabels(ctx context.Context) ([]string, error) {
-	return nil, nil
+	log := appctx.GetLogger(ctx)
+
+	user, ok := appctx.ContextGetUser(ctx)
+	if !ok {
+		return nil, errtypes.UserRequired("ListLabels: error getting user from ctx")
+	}
+
+	var labelNames []string
+	res := m.db.Model(&Label{}).
+		Distinct("label").
+		Where("user_id = ?", user.Id.OpaqueId).
+		Pluck("label", &labelNames)
+
+	if res.Error != nil {
+		log.Error().Err(res.Error).Msg("ListLabels: database error")
+		return nil, res.Error
+	}
+
+	return labelNames, nil
 }
 
 func (m *mgr) ListResourcesForLabel(ctx context.Context, label string) ([]*provider.ResourceId, error) {
