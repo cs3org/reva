@@ -116,6 +116,10 @@ func (m SignedURLAuthenticator) validate(req *http.Request) (err error) {
 		return err
 	}
 
+	if !strings.EqualFold(req.Method, query.Get(_paramOCVerb)) {
+		return fmt.Errorf("request method %s does not match OC-Verb %s", req.Method, query.Get(_paramOCVerb))
+	}
+
 	if err = m.urlIsExpired(query); err != nil {
 		return err
 	}
@@ -219,16 +223,12 @@ func (m SignedURLAuthenticator) buildUrlToSign(req *http.Request) string {
 	}
 
 	// Now let's remove any remaining query params that are not part of the URL that is to be signed
-	for qParam, _ := range req.URL.Query() {
+	for qParam := range req.URL.Query() {
 		q.Del(qParam)
 	}
 
 	urlToSign := *req.URL
-	if len(q) == 0 {
-		urlToSign.RawQuery = signParameters.Encode()
-	} else {
-		urlToSign.RawQuery = strings.Join([]string{q.Encode(), signParameters.Encode()}, "&")
-	}
+	urlToSign.RawQuery = signParameters.Encode()
 	u := urlToSign.String()
 	if !urlToSign.IsAbs() {
 		u = "https://" + req.Host + u
