@@ -4,7 +4,7 @@
 gatewaysvc = "{{cernboxgw_address}}"
 
 [http]
-address = "{{grpc_address}}"
+address = "{{cernboxhttp_address}}"
 
 [http.services.ocm]
 

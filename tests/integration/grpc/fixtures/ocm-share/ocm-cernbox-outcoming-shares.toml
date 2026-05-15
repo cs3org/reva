@@ -9,6 +9,7 @@ address = "{{grpc_address}}"
 [grpc.services.storageprovider]
 driver = "ocmoutcoming"
 mount_path = "/ocm"
+space_depth = 2
 mount_id = "ocm"
 data_server_url = "http://{{cernboxocmdataserver_address}}/data"
 

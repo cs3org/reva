@@ -27,6 +27,7 @@ home_provider = "/home"
 [grpc.services.storageprovider]
 driver = "localhome"
 mount_path = "/home"
+space_depth = 2
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 data_server_url = "http://{{cernboxhttp_address}}/data"
 
