@@ -112,6 +112,7 @@ var _ = Describe("Cache", func() {
 				replicas[i] = receivedsharecache.New(storage, 0*time.Second)
 			}
 
+			errs := make([]error, numShares)
 			var wg sync.WaitGroup
 			for i := 0; i < numShares; i++ {
 				wg.Add(1)
@@ -123,10 +124,13 @@ var _ = Describe("Cache", func() {
 						},
 						State: collaboration.ShareState_SHARE_STATE_PENDING,
 					}
-					Expect(replicas[idx%numReplicas].Add(ctx, userID, spaceID, rs)).To(Succeed())
+					errs[idx] = replicas[idx%numReplicas].Add(ctx, userID, spaceID, rs)
 				}(i)
 			}
 			wg.Wait()
+			for i, err := range errs {
+				Expect(err).ToNot(HaveOccurred(), "Add failed for share-%d", i)
+			}
 
 			fresh := receivedsharecache.New(storage, 0*time.Second)
 			spaces, err := fresh.List(ctx, userID)
