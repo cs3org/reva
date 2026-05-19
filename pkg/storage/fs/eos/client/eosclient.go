@@ -188,6 +188,8 @@ const AttrNotExistsError = errtypes.BadRequest("attr not exists")
 // attribute to an already locked file with a mismatched lock.
 const FileIsLockedError = errtypes.BadRequest("file is locked")
 
+const NoDataError = errtypes.NotFound("ENODATA")
+
 // The URL query parameter to be used to pass the app "tag" to EOS
 const EosAppParam = "eos.app"
 
