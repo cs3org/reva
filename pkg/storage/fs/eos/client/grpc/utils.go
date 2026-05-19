@@ -3,6 +3,7 @@ package eosgrpc
 import (
 	"fmt"
 	"strings"
+	"syscall"
 
 	erpc "github.com/cern-eos/go-eosgrpc"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
@@ -21,10 +22,12 @@ func (c *Client) getRespError(rsp *erpc.NSResponse, err error) error {
 	}
 
 	switch rsp.Error.Code {
-	case 16: // EBUSY
+	case int64(syscall.EBUSY):
 		return eosclient.FileIsLockedError
-	case 17: // EEXIST
+	case int64(syscall.EEXIST):
 		return eosclient.AttrAlreadyExistsError
+	case int64(syscall.ENODATA):
+		return eosclient.NoDataError
 	default:
 		return errtypes.InternalError(fmt.Sprintf("%s (code: %d)", rsp.Error.Msg, rsp.Error.Code))
 	}

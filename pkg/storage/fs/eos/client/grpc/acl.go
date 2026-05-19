@@ -10,6 +10,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/acl"
+	"github.com/pkg/errors"
 )
 
 // AddACL adds an new acl to EOS with the given aclType.
@@ -77,7 +78,12 @@ func (c *Client) RemoveACL(ctx context.Context, auth eosclient.Authorization, pa
 
 	// We set permissions to "", so the ACL will serialize to `u:123456=`, which will make EOS delete the entry
 	a.Permissions = ""
-	return c.AddACL(ctx, auth, path, eosclient.StartPosition, a)
+	err := c.AddACL(ctx, auth, path, eosclient.StartPosition, a)
+	// If there are no ACLs left after the remove, EOS returns ENODATA. But that is not an actual error for us.
+	if errors.Is(err, eosclient.NoDataError) {
+		return nil
+	}
+	return err
 }
 
 // UpdateACL updates the EOS acl.
