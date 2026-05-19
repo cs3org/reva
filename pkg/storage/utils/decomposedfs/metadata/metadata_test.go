@@ -147,6 +147,15 @@ var _ = Describe("Backend", func() {
 				_, err := backend.All(context.Background(), file)
 				Expect(err).To(HaveOccurred())
 			})
+
+			It("fails when the metafile is empty", func() {
+				err := os.WriteFile(file+".mpk", []byte{}, 0600)
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = backend.All(context.Background(), file)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("empty metadata file"))
+			})
 		})
 
 		Describe("List", func() {
