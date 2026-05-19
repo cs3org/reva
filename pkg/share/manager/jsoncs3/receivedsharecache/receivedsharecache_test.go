@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -107,9 +108,13 @@ var _ = Describe("Cache", func() {
 			const numReplicas = 3
 			const numShares = 15
 
+			// barrierStorage holds all Upload calls until numReplicas have arrived,
+			// then releases them simultaneously. This makes the race deterministic
+			// regardless of OS goroutine scheduling or GOMAXPROCS.
+			bs := newBarrierStorage(storage, numReplicas)
 			replicas := make([]receivedsharecache.Cache, numReplicas)
 			for i := range replicas {
-				replicas[i] = receivedsharecache.New(storage, 0*time.Second)
+				replicas[i] = receivedsharecache.New(bs, 0*time.Second)
 			}
 
 			errs := make([]error, numShares)
@@ -199,3 +204,26 @@ var _ = Describe("Cache", func() {
 		})
 	})
 })
+
+// barrierStorage wraps a Storage and holds Upload calls until n goroutines have
+// arrived, then releases them all at once. This makes the concurrent-write race
+// reproducible regardless of OS goroutine scheduling.
+type barrierStorage struct {
+	metadata.Storage
+	arrived   int32
+	n         int32
+	ready     chan struct{}
+	closeOnce sync.Once
+}
+
+func newBarrierStorage(s metadata.Storage, n int) *barrierStorage {
+	return &barrierStorage{Storage: s, n: int32(n), ready: make(chan struct{})}
+}
+
+func (b *barrierStorage) Upload(ctx context.Context, req metadata.UploadRequest) (*metadata.UploadResponse, error) {
+	if atomic.AddInt32(&b.arrived, 1) >= b.n {
+		b.closeOnce.Do(func() { close(b.ready) })
+	}
+	<-b.ready
+	return b.Storage.Upload(ctx, req)
+}
