@@ -1,4 +1,4 @@
-Enhancement: `ListReceivedShares` no longer returns shares whose expiration date has passed
+Enhancement: Exclude expired shares from `ListReceivedShares`
 
 - `ListReceivedShares` no longer returns shares whose expiration date has passed
 
