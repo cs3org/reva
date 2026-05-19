@@ -20,7 +20,9 @@ package receivedsharecache_test
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -97,6 +99,42 @@ var _ = Describe("Cache", func() {
 			s, err := c.Get(ctx, userID, spaceID, shareID)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(s).ToNot(BeNil())
+		})
+	})
+
+	Describe("concurrent writes from multiple cache instances", func() {
+		It("preserves all shares when replicas write concurrently for the same user", func() {
+			const numReplicas = 3
+			const numShares = 15
+
+			replicas := make([]receivedsharecache.Cache, numReplicas)
+			for i := range replicas {
+				replicas[i] = receivedsharecache.New(storage, 0*time.Second)
+			}
+
+			var wg sync.WaitGroup
+			for i := 0; i < numShares; i++ {
+				wg.Add(1)
+				go func(idx int) {
+					defer wg.Done()
+					rs := &collaboration.ReceivedShare{
+						Share: &collaboration.Share{
+							Id: &collaboration.ShareId{OpaqueId: fmt.Sprintf("share-%d", idx)},
+						},
+						State: collaboration.ShareState_SHARE_STATE_PENDING,
+					}
+					Expect(replicas[idx%numReplicas].Add(ctx, userID, spaceID, rs)).To(Succeed())
+				}(i)
+			}
+			wg.Wait()
+
+			fresh := receivedsharecache.New(storage, 0*time.Second)
+			spaces, err := fresh.List(ctx, userID)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(spaces[spaceID]).ToNot(BeNil())
+			for i := 0; i < numShares; i++ {
+				Expect(spaces[spaceID].States).To(HaveKey(fmt.Sprintf("share-%d", i)))
+			}
 		})
 	})
 
