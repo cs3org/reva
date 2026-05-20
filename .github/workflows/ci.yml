@@ -28,7 +28,7 @@ jobs:
           go-version-file: go.mod
       - run: sudo apt-get update && sudo apt-get install -y inotify-tools
       - run: make test
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: coverage
@@ -101,7 +101,7 @@ jobs:
         with:
           php-version: "8.4"
       - run: python3 tests/acceptance/run-acceptance.py --storage ocis --total-parts 4 --run-part ${{ matrix.part }}
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
           name: acceptance-ocis-part-${{ matrix.part }}
@@ -126,7 +126,7 @@ jobs:
           php-version: "8.4"
       - run: sudo apt-get update && sudo apt-get install -y inotify-tools
       - run: python3 tests/acceptance/run-acceptance.py --storage posixfs --total-parts 4 --run-part ${{ matrix.part }}
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
           name: acceptance-posixfs-part-${{ matrix.part }}
