@@ -94,7 +94,7 @@ type File struct {
 //
 // Special variables are created for the revad addresses, e.g. having a
 // `storage` and a `users` revad will make `storage_address` and
-// `users_address` available wit the dynamically assigned ports so that
+// `users_address` available with the dynamically assigned ports so that
 // the services can be made available to each other.
 func startRevads(configs map[string]string, externalFiles map[string]string, newResources map[string]Resource, variables map[string]string) (map[string]*Revad, error) {
 	mutex.Lock()

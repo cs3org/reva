@@ -11,7 +11,7 @@ driver = "ocmoutcoming"
 mount_path = "/ocm"
 space_depth = 2
 mount_id = "ocm"
-data_server_url = "http://{{cernboxocmdataserver_address}}/data"
+data_server_url = "http://127.0.0.1:12345/data"
 
 [grpc.services.storageprovider.drivers.ocmoutcoming]
 machine_secret = "secret"
