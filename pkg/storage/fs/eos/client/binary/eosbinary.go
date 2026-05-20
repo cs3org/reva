@@ -1016,8 +1016,6 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 		return c == '\n'
 	})
 
-	var ownerAuth *eosclient.Authorization
-
 	var parent *eosclient.FileInfo
 	for _, rl := range rawLines {
 		if rl == "" {
@@ -1041,15 +1039,6 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 			versionFolders[fi.File] = fi
 		}
 
-		if ownerAuth == nil {
-			ownerAuth = &eosclient.Authorization{
-				Role: eosclient.Role{
-					UID: strconv.FormatUint(fi.UID, 10),
-					GID: strconv.FormatUint(fi.GID, 10),
-				},
-			}
-		}
-
 		finfos = append(finfos, fi)
 	}
 
@@ -1057,6 +1046,13 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 		// For files, inherit ACLs from the parent
 		// And set the inode to that of their version folder
 		if !fi.IsDir && !eosclient.IsVersionFolder(dirPath) {
+			auth := eosclient.Authorization{
+				Role: eosclient.Role{
+					UID: strconv.FormatUint(fi.UID, 10),
+					GID: strconv.FormatUint(fi.GID, 10),
+				},
+			}
+
 			if parent != nil {
 				fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
 			}
@@ -1072,11 +1068,11 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 				fi.Inode = vf.Inode
 				fi.SysACL.Entries = append(fi.SysACL.Entries, vf.SysACL.Entries...)
 				maps.Copy(fi.Attrs, vf.Attrs)
-			} else if err := c.CreateDir(ctx, *ownerAuth, versionFolderPath); err == nil { // Create the version folder if it doesn't exist
+			} else if err := c.CreateDir(ctx, auth, versionFolderPath); err == nil { // Create the version folder if it doesn't exist
 				if md, err := c.getRawFileInfoByPath(ctx, auth, versionFolderPath); err == nil {
 					fi.Inode = md.Inode
 				} else {
-					log.Error().Err(err).Interface("auth", ownerAuth).Str("path", versionFolderPath).Msg("got error creating version folder")
+					log.Error().Err(err).Interface("auth", auth).Str("path", versionFolderPath).Msg("got error creating version folder")
 				}
 			}
 			if cache {

@@ -360,7 +360,6 @@ func (c *Client) list(ctx context.Context, auth eosclient.Authorization, dpath s
 	var mylst []*eosclient.FileInfo
 	versionFolders := map[string]*eosclient.FileInfo{}
 	var parent *eosclient.FileInfo
-	var ownerAuth *eosclient.Authorization
 
 	i := 0
 	for {
@@ -404,15 +403,6 @@ func (c *Client) list(ctx context.Context, auth eosclient.Authorization, dpath s
 			versionFolders[myitem.File] = myitem
 		}
 
-		if ownerAuth == nil {
-			ownerAuth = &eosclient.Authorization{
-				Role: eosclient.Role{
-					UID: strconv.FormatUint(myitem.UID, 10),
-					GID: strconv.FormatUint(myitem.GID, 10),
-				},
-			}
-		}
-
 		mylst = append(mylst, myitem)
 	}
 
@@ -423,6 +413,13 @@ func (c *Client) list(ctx context.Context, auth eosclient.Authorization, dpath s
 			}
 		}
 		if !fi.IsDir && !eosclient.IsVersionFolder(dpath) {
+			auth := eosclient.Authorization{
+				Role: eosclient.Role{
+					UID: strconv.FormatUint(fi.UID, 10),
+					GID: strconv.FormatUint(fi.GID, 10),
+				},
+			}
+
 			// For files, inherit ACLs from the parent
 			if parent != nil && parent.SysACL != nil {
 				fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
@@ -436,12 +433,12 @@ func (c *Client) list(ctx context.Context, auth eosclient.Authorization, dpath s
 					fi.SysACL.Entries = append(fi.SysACL.Entries, vf.SysACL.Entries...)
 				}
 				maps.Copy(fi.Attrs, vf.Attrs)
-			} else if err := c.CreateDir(ctx, *ownerAuth, versionFolderPath); err == nil {
+			} else if err := c.CreateDir(ctx, auth, versionFolderPath); err == nil {
 				// Create the version folder if it doesn't exist
 				if md, err := c.GetFileInfoByPath(ctx, auth, versionFolderPath); err == nil {
 					fi.Inode = md.Inode
 				} else {
-					log.Error().Err(err).Interface("auth", ownerAuth).Str("path", versionFolderPath).Msg("got error creating version folder")
+					log.Error().Err(err).Interface("auth", auth).Str("path", versionFolderPath).Msg("got error creating version folder")
 				}
 			}
 		}
