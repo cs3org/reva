@@ -4,14 +4,18 @@
 gatewaysvc = "{{cernboxgw_address}}"
 
 [http]
-address = "{{cernboxhttp_address}}"
+address = "{{grpc_address}}"
 
 [http.services.ocm]
 
 [http.services.sciencemesh]
-provider_domain = "{{cernboxhttp_address}}"
+provider_domain = "127.0.0.1:12345"
 mesh_directory_url = "http://meshdir"
 smtp_credentials = {}
+
+[http.middlewares.auth]
+credential_chain = ["publicshares", "basic", "bearer"]
+token_strategy_chain = ["bearer", "header"]
 
 [http.middlewares.cors]
 
@@ -21,10 +25,20 @@ driver = "json"
 [http.middlewares.providerauthorizer.drivers.json]
 providers = "fixtures/ocm-providers.demo.json"
 
-[http.services.wellknown]
+[http.services.datagateway]
 
+[http.services.dataprovider]
+driver = "localhome"
+
+[http.services.dataprovider.drivers.localhome]
+root = "{{localhome_root}}"
+
+[http.services.ocdav]
+spaces_enabled = true
+
+[http.services.wellknown]
 [http.services.wellknown.ocmprovider]
 ocm_prefix = "ocm"
 provider = "Reva for CERNBox"
-endpoint = "http://{{cernboxhttp_address}}"
+endpoint = "http://127.0.0.1:12345"
 enable_webapp = true
