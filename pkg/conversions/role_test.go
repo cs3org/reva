@@ -148,3 +148,17 @@ func TestNewSpaceEditorWithoutVersionsWithoutTrashbinRole(t *testing.T) {
 	assert.False(t, p.RestoreRecycleItem)
 	assert.False(t, p.PurgeRecycle)
 }
+
+func TestRoleFromResourcePermissions_WithoutTrashbinRolesAreWritable(t *testing.T) {
+	for _, constructor := range []func() *Role{
+		NewSpaceEditorWithoutTrashbinRole,
+		NewSpaceEditorWithoutVersionsWithoutTrashbinRole,
+	} {
+		role := constructor()
+		got := RoleFromResourcePermissions(role.CS3ResourcePermissions(), false)
+		assert.True(t, got.ocsPermissions.Contain(PermissionWrite),
+			"expected PermissionWrite for role %s", role.Name)
+		assert.Contains(t, got.WebDAVPermissions(false, false, false, false), "W",
+			"expected W in WebDAV permissions for role %s", role.Name)
+	}
+}
