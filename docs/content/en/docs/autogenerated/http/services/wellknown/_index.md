@@ -80,3 +80,11 @@ enable_embedded = false
 {{< /highlight >}}
 {{% /dir %}}
 
+{{% dir name="enable_code_flow" type="bool" default=false %}}
+Whether code-flow token exchange is enabled in OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L42)
+{{< highlight toml >}}
+[http.services.wellknown]
+enable_code_flow = false
+{{< /highlight >}}
+{{% /dir %}}
+
