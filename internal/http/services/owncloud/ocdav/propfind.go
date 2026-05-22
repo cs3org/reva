@@ -701,6 +701,8 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				switch pf.Prop[i].Local {
 				// TODO(jfd): maybe phoenix and the other clients can just use this id as an opaque string?
 				// I tested the desktop client and phoenix to annotate which properties are requestted, see below cases
+				case "name":
+					// oc:name is already added unconditionally to propstatOK above
 				case "fileid": // phoenix only
 					if md.Id == nil {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
@@ -778,7 +780,6 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-expiration", ""))
 					}
-					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-expiration", ""))
 				case "size": // phoenix only
 					// TODO we cannot find out if md.Size is set or not because ints in go default to 0
 					// TODO what is the difference to d:quota-used-bytes (which only exists for collections)?
@@ -939,7 +940,6 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:privatelink", ""))
 					}
-					fallthrough
 				case "dDC": // desktop
 					fallthrough
 				case "data-fingerprint": // desktop
