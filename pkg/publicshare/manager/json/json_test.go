@@ -20,6 +20,7 @@ package json_test
 
 import (
 	"context"
+	encjson "encoding/json"
 	"os"
 	"path/filepath"
 	"sync"
@@ -127,6 +128,41 @@ var _ = Describe("Json", func() {
 				Expect(bcrypt.CompareHashAndPassword([]byte(pshares[0].Password), []byte("foo"))).To(Succeed())
 				Expect(pshares[0].PublicShare.Creator).To(BeComparableTo(user1.Id, protocmp.Transform()))
 				Expect(pshares[0].PublicShare.ResourceId).To(BeComparableTo(sharedResource.Id, protocmp.Transform()))
+			})
+		})
+
+		Describe("ListPublicShares", func() {
+			It("skips shares whose persisted resource_id is nil instead of panicking", func() {
+				// Create one valid share so the manager has a healthy row to compare against.
+				validShare, err := m.CreatePublicShare(ctx, user1, sharedResource, &link.Grant{
+					Permissions: &link.PublicSharePermissions{
+						Permissions: &providerv1beta1.ResourcePermissions{},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				// Inject a corrupt row directly into the persistence file: the share's stored
+				// JSON has no `resource_id`, so after unmarshal `local.ResourceId` is nil.
+				// This mirrors the production state described in OCISDEV-862.
+				raw, err := os.ReadFile(tmpFile.Name())
+				Expect(err).ToNot(HaveOccurred())
+
+				db := map[string]interface{}{}
+				Expect(encjson.Unmarshal(raw, &db)).To(Succeed())
+
+				db["corrupt-share-id"] = map[string]interface{}{
+					"share":    `{"id":{"opaque_id":"corrupt-share-id"},"token":"corrupt-token"}`,
+					"password": "",
+				}
+				patched, err := encjson.Marshal(db)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(os.WriteFile(tmpFile.Name(), patched, 0644)).To(Succeed())
+
+				// Listing must not panic and must return the valid share.
+				shares, err := m.ListPublicShares(ctx, user1, []*link.ListPublicSharesRequest_Filter{}, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(shares)).To(Equal(1))
+				Expect(shares[0].Id.OpaqueId).To(Equal(validShare.Id.OpaqueId))
 			})
 		})
 
