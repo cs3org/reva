@@ -236,6 +236,15 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 					ctx = context.WithValue(ctx, ctxSpaceID, spaceId)
 					ctx = context.WithValue(ctx, ctxStorageId, storageId)
 					ctx = context.WithValue(ctx, ctxResourceOpaqueId, itemId)
+				} else {
+					// head is neither a valid space ID nor (for the methods that
+					// support it) a resource ID. Reject the request rather than
+					// falling through with an empty base, which would otherwise be
+					// joined with r.URL.Path and resolve to "/" — causing operations
+					// like COPY/MOVE to act on the storage root.
+					log.Warn().Str("head", head).Str("method", r.Method).Msg("spaces: head is not a valid space or resource ID")
+					w.WriteHeader(http.StatusBadRequest)
+					return
 				}
 
 				ctx = context.WithValue(ctx, ctxSpacePath, base)
