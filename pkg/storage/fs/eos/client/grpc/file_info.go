@@ -71,7 +71,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 	}
 
 	log.Info().Str("func", "GetFileInfoByInode").Uint64("inode", inode).Uint64("info.Inode", info.Inode).Str("file", info.File).Uint64("size", info.Size).Str("etag", info.ETag).Msg("result")
-	return c.fixupACLs(ctx, auth, info), nil
+	return c.fixupACLsAndAttrs(ctx, auth, info), nil
 }
 
 // GetFileInfoByPath returns the FilInfo at the given path.
@@ -137,7 +137,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 	}
 
 	log.Info().Str("func", "GetFileInfoByPath").Str("path", path).Uint64("info.Inode", info.Inode).Uint64("size", info.Size).Str("etag", info.ETag).Msg("result")
-	return c.fixupACLs(ctx, auth, info), nil
+	return c.fixupACLsAndAttrs(ctx, auth, info), nil
 }
 
 // GetFileInfoByFXID returns the FileInfo by the given file id in hexadecimal.

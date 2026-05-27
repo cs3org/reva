@@ -25,11 +25,11 @@ import (
 	"strings"
 
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/storage/utils/acl"
 )
 
 const (
 	versionPrefix = ".sys.v#."
-	FavoritesKey  = "http://owncloud.org/ns/favorite"
 )
 
 const (
@@ -84,4 +84,40 @@ func IsVersionFolder(p string) bool {
 
 func GetFileFromVersionFolder(p string) string {
 	return path.Join(path.Dir(p), strings.TrimPrefix(path.Base(p), versionPrefix))
+}
+
+// aclSubject identifies an ACL entry by who it applies to (its type and qualifier),
+// independent of the granted permissions.
+type aclSubject struct {
+	Type      string
+	Qualifier string
+}
+
+// MergeACLEntries merges two ACL entry lists into a single list holding one entry per
+// subject (type + qualifier). When the same subject is present in both lists, the entry
+// from precedence wins; subjects present only in base keep their value. This makes the
+// precedence explicit at the call site instead of relying on the order in which entries
+// happen to be appended. The result preserves the order in which subjects first appear
+// (base entries first, then precedence-only subjects).
+func MergeACLEntries(base, precedence []*acl.Entry) []*acl.Entry {
+	merged := make([]*acl.Entry, 0, len(base)+len(precedence))
+	index := make(map[aclSubject]int, len(base)+len(precedence))
+
+	put := func(e *acl.Entry) {
+		subject := aclSubject{Type: e.Type, Qualifier: e.Qualifier}
+		if i, ok := index[subject]; ok {
+			merged[i] = e
+			return
+		}
+		index[subject] = len(merged)
+		merged = append(merged, e)
+	}
+
+	for _, e := range base {
+		put(e)
+	}
+	for _, e := range precedence {
+		put(e)
+	}
+	return merged
 }

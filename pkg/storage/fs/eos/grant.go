@@ -21,6 +21,7 @@ package eos
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -51,6 +52,11 @@ func (fs *Eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 		return err
 	}
 
+	info, err := fs.c.GetFileInfoByPath(ctx, sysAuth, fn)
+	if err != nil {
+		return err
+	}
+
 	if eosACL.Type == acl.TypeLightweight {
 		// The ACLs for a lightweight are not understandable by EOS
 		// directly, but only from reva. So we have to store them
@@ -61,16 +67,35 @@ func (fs *Eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 			Key:  fmt.Sprintf("%s.%s", lwShareAttrKey, eosACL.Qualifier),
 			Val:  eosACL.Permissions,
 		}
-
-		if err := fs.c.SetAttr(ctx, sysAuth, attr, false, true, fn, ""); err != nil {
+		if info.IsDir {
+			if err := fs.c.SetAttr(ctx, sysAuth, attr, false, true, fn, ""); err != nil {
+				return errors.Wrap(err, "eosfs: error adding acl for lightweight account")
+			}
+			return nil
+		}
+		if err := fs.c.SetAttr(ctx, sysAuth, attr, false, false, fn, ""); err != nil {
+			return errors.Wrap(err, "eosfs: error adding acl for lightweight account")
+		}
+		if err := fs.c.SetAttr(ctx, sysAuth, attr, false, false, eosclient.GetVersionFolder(fn), ""); err != nil {
 			return errors.Wrap(err, "eosfs: error adding acl for lightweight account")
 		}
 		return nil
 	}
 
-	err = fs.c.AddACL(ctx, sysAuth, fn, eosclient.StartPosition, eosACL)
-	if err != nil {
+	// EOS enforces the system ACL on the file itself, but file xattrs are wiped when the
+	// file is overwritten. For files we therefore also store the ACL on the version folder,
+	// which survives overwrites and is re-applied to the file on open (applyVersionFolderACL).
+	if err := fs.c.AddACL(ctx, sysAuth, fn, eosclient.StartPosition, eosACL, info.IsDir); err != nil {
 		return errors.Wrap(err, "eosfs: error adding acl")
+	}
+	if !info.IsDir {
+		vfPath := eosclient.GetVersionFolder(fn)
+		if err := fs.ensureVersionFolder(ctx, sysAuth, info, vfPath); err != nil {
+			return errors.Wrap(err, "eosfs: error ensuring version folder")
+		}
+		if err := fs.c.AddACL(ctx, sysAuth, vfPath, eosclient.StartPosition, eosACL, false); err != nil {
+			return errors.Wrap(err, "eosfs: error adding acl on version folder")
+		}
 	}
 	return nil
 }
@@ -94,9 +119,25 @@ func (fs *Eosfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *prov
 		return err
 	}
 
-	err = fs.c.AddACL(ctx, getSystemAuth(), fn, position, eosACL)
+	sysAuth := getSystemAuth()
+	info, err := fs.c.GetFileInfoByPath(ctx, sysAuth, fn)
 	if err != nil {
+		return err
+	}
+
+	if err := fs.c.AddACL(ctx, sysAuth, fn, position, eosACL, info.IsDir); err != nil {
 		return errors.Wrap(err, "eosfs: error adding acl")
+	}
+	if !info.IsDir {
+		vfPath := eosclient.GetVersionFolder(fn)
+		if err := fs.ensureVersionFolder(ctx, sysAuth, info, vfPath); err != nil {
+			return errors.Wrap(err, "eosfs: error ensuring version folder")
+		}
+		// We do not want to set recursive here, because EOS does not support
+		// recursively setting ACLs on version folders
+		if err := fs.c.AddACL(ctx, sysAuth, vfPath, position, eosACL, false); err != nil {
+			return errors.Wrap(err, "eosfs: error adding acl on version folder")
+		}
 	}
 	return nil
 }
@@ -150,27 +191,93 @@ func (fs *Eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pr
 		return err
 	}
 
+	sysAuth := getSystemAuth()
+	info, err := fs.c.GetFileInfoByPath(ctx, sysAuth, fn)
+	if err != nil {
+		return err
+	}
+
 	if eosACL.Type == acl.TypeLightweight {
 		attr := &eosclient.Attribute{
 			Type: SystemAttr,
 			Key:  fmt.Sprintf("%s.%s", lwShareAttrKey, eosACL.Qualifier),
 		}
-
-		if err := fs.c.UnsetAttr(ctx, getSystemAuth(), attr, true, fn, ""); err != nil {
-			return errors.Wrap(err, "eosfs: error removing acl for lightweight account")
+		if info.IsDir {
+			if err := fs.c.UnsetAttr(ctx, sysAuth, attr, true, fn, ""); err != nil && !errors.Is(err, eosclient.AttrNotExistsError) {
+				return errors.Wrap(err, "eosfs: error removing acl for lightweight account")
+			}
+			return nil
+		}
+		// For files, clear from both the file and the version folder: new shares live on the
+		// version folder, but shares created before that change still live on the file.
+		for _, t := range []string{fn, eosclient.GetVersionFolder(fn)} {
+			if err := fs.c.UnsetAttr(ctx, sysAuth, attr, false, t, ""); err != nil && !errors.Is(err, eosclient.AttrNotExistsError) {
+				return errors.Wrap(err, "eosfs: error removing acl for lightweight account")
+			}
 		}
 		return nil
 	}
 
-	err = fs.c.RemoveACL(ctx, getSystemAuth(), fn, eosACL)
-	if err != nil {
+	if err := fs.c.RemoveACL(ctx, sysAuth, fn, eosACL, info.IsDir); err != nil {
 		return errors.Wrap(err, "eosfs: error removing acl")
+	}
+	if !info.IsDir {
+		if err := fs.c.RemoveACL(ctx, sysAuth, eosclient.GetVersionFolder(fn), eosACL, false); err != nil {
+			return errors.Wrap(err, "eosfs: error removing acl on version folder")
+		}
 	}
 	return nil
 }
 
 func (fs *Eosfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	return fs.AddGrant(ctx, ref, g)
+}
+
+// ensureVersionFolder creates the version folder for fn if it does not yet exist.
+// EOS only creates version folders on the first file overwrite, so a brand-new file
+// may not have one. The folder is created with the file owner's credentials so EOS
+// assigns the correct ownership.
+func (fs *Eosfs) ensureVersionFolder(ctx context.Context, sysAuth eosclient.Authorization, info *eosclient.FileInfo, vfPath string) error {
+	if _, err := fs.c.GetFileInfoByPath(ctx, sysAuth, vfPath); err == nil {
+		return nil
+	}
+	ownerAuth := eosclient.Authorization{
+		Role: eosclient.Role{
+			UID: strconv.FormatUint(info.UID, 10),
+			GID: strconv.FormatUint(info.GID, 10),
+		},
+	}
+	return fs.c.CreateDir(ctx, ownerAuth, vfPath)
+}
+
+// applyVersionFolderACL mirrors the canonical sys.acl persisted on the file's version folder
+// back onto the file, so EOS enforces the up-to-date ACL on direct reads even after an
+// overwrite wiped the file's xattrs. It is a no-op for version folders, for directories,
+// and for files whose version folder carries no grant.
+func (fs *Eosfs) applyVersionFolderACL(ctx context.Context, auth eosclient.Authorization, fn string) error {
+	if eosclient.IsVersionFolder(fn) {
+		return nil
+	}
+
+	vfInfo, err := fs.c.GetFileInfoByPath(ctx, auth, eosclient.GetVersionFolder(fn))
+	if err != nil {
+		// No version folder (e.g. fn is a directory or it does not exist yet): nothing to restore.
+		return nil
+	}
+	vfACL := vfInfo.Attrs["sys.acl"]
+	if vfACL == "" {
+		// No grant persisted on the version folder. Grant removal clears the file directly,
+		// so there is nothing to reconcile here.
+		return nil
+	}
+
+	// Replace the file's sys.acl with the version folder's so both additions and removals are
+	// reflected. fs.c.SetAttr is exact-path, so this writes the file itself, not the version folder.
+	return fs.c.SetAttr(ctx, auth, &eosclient.Attribute{
+		Type: SystemAttr,
+		Key:  "acl",
+		Val:  vfACL,
+	}, false, false, fn, "")
 }
 
 func (fs *Eosfs) convertACLsToGrants(ctx context.Context, acls *acl.ACLs) ([]*provider.Grant, error) {

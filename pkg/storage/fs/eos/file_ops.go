@@ -246,6 +246,13 @@ func (fs *Eosfs) Download(ctx context.Context, ref *provider.Reference, ranges [
 		return nil, err
 	}
 
+	// Persisted xattrs (including sys.acl) live on the version folder so they survive file
+	// overwrites. Lazily push the version folder's sys.acl onto the file so EOS enforces
+	// the up-to-date ACL on this read. Failure here is non-fatal: log and continue.
+	if err := fs.applyVersionFolderACL(ctx, getSystemAuth(), fn); err != nil {
+		appctx.GetLogger(ctx).Warn().Err(err).Str("path", fn).Msg("eosfs: could not apply version folder ACL on open")
+	}
+
 	return fs.c.Read(ctx, auth, fn, ranges)
 }
 

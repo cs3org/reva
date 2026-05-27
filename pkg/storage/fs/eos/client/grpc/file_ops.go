@@ -420,17 +420,18 @@ func (c *Client) list(ctx context.Context, auth eosclient.Authorization, dpath s
 				},
 			}
 
-			// For files, inherit ACLs from the parent
+			// Inherited parent ACLs are the base; the file's own entries take precedence.
 			if parent != nil && parent.SysACL != nil {
-				fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
+				fi.SysACL.Entries = eosclient.MergeACLEntries(parent.SysACL.Entries, fi.SysACL.Entries)
 			}
 			// If there is a version folder then use its inode
 			// to implement the invariance of the fileid across updates
 			versionFolderPath := eosclient.GetVersionFolder(fi.File)
 			if vf, ok := versionFolders[versionFolderPath]; ok {
 				fi.Inode = vf.Inode
+				// The version folder is the canonical store for grants, so its entries win.
 				if vf.SysACL != nil {
-					fi.SysACL.Entries = append(fi.SysACL.Entries, vf.SysACL.Entries...)
+					fi.SysACL.Entries = eosclient.MergeACLEntries(fi.SysACL.Entries, vf.SysACL.Entries)
 				}
 				maps.Copy(fi.Attrs, vf.Attrs)
 			} else if err := c.CreateDir(ctx, auth, versionFolderPath); err == nil {

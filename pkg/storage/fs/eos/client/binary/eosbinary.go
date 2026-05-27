@@ -280,15 +280,10 @@ func (c *Client) executeEOS(ctx context.Context, cmdArgs []string, auth eosclien
 }
 
 // AddACL adds an new acl to EOS with the given aclType.
-func (c *Client) AddACL(ctx context.Context, auth eosclient.Authorization, path string, pos uint, a *acl.Entry) error {
-	finfo, err := c.getRawFileInfoByPath(ctx, auth, path)
-	if err != nil {
-		return err
-	}
-
+func (c *Client) AddACL(ctx context.Context, auth eosclient.Authorization, path string, pos uint, a *acl.Entry, recursive bool) error {
 	sysACL := a.CitrineSerialize()
 	args := []string{"acl", "--sys"}
-	if finfo.IsDir {
+	if recursive {
 		args = append(args, "--recursive")
 	}
 
@@ -300,32 +295,27 @@ func (c *Client) AddACL(ctx context.Context, auth eosclient.Authorization, path 
 
 	args = append(args, sysACL, path)
 
-	_, _, err = c.executeEOS(ctx, args, auth)
+	_, _, err := c.executeEOS(ctx, args, auth)
 	return err
 }
 
 // RemoveACL removes the acl from EOS.
-func (c *Client) RemoveACL(ctx context.Context, auth eosclient.Authorization, path string, a *acl.Entry) error {
-	finfo, err := c.getRawFileInfoByPath(ctx, auth, path)
-	if err != nil {
-		return err
-	}
-
+func (c *Client) RemoveACL(ctx context.Context, auth eosclient.Authorization, path string, a *acl.Entry, recursive bool) error {
 	a.Permissions = ""
 	sysACL := a.CitrineSerialize()
 	args := []string{"acl", "--sys"}
-	if finfo.IsDir {
+	if recursive {
 		args = append(args, "--recursive")
 	}
 	args = append(args, sysACL, path)
 
-	_, _, err = c.executeEOS(ctx, args, auth)
+	_, _, err := c.executeEOS(ctx, args, auth)
 	return err
 }
 
 // UpdateACL updates the EOS acl.
-func (c *Client) UpdateACL(ctx context.Context, auth eosclient.Authorization, path string, position uint, a *acl.Entry) error {
-	return c.AddACL(ctx, auth, path, position, a)
+func (c *Client) UpdateACL(ctx context.Context, auth eosclient.Authorization, path string, position uint, a *acl.Entry, recursive bool) error {
+	return c.AddACL(ctx, auth, path, position, a, recursive)
 }
 
 // GetACL for a file.
@@ -439,31 +429,37 @@ func (c *Client) getRawFileInfoByPath(ctx context.Context, auth eosclient.Author
 }
 
 func (c *Client) mergeACLsAndAttrsForFiles(ctx context.Context, auth eosclient.Authorization, info *eosclient.FileInfo) *eosclient.FileInfo {
-	// We need to inherit the ACLs for the parent directory as these are not available for files
+	// For files we combine three ACL sources by precedence (lowest to highest): the parent
+	// directory's inherited ACLs, the file's own entries, and the version folder's entries
+	// (the canonical store for grants, also mirrored onto the file). We also merge the
+	// attributes persisted on the version folder.
 	if !info.IsDir {
+		// Inherited parent ACLs are the base; the file's own entries take precedence.
 		parentInfo, err := c.getRawFileInfoByPath(ctx, auth, path.Dir(info.File))
 		// Even if this call fails, at least return the current file object
+		if err == nil && parentInfo.SysACL != nil {
+			info.SysACL.Entries = eosclient.MergeACLEntries(parentInfo.SysACL.Entries, info.SysACL.Entries)
+		}
+
+		// The version folder is the canonical store for grants and attributes (which live
+		// there to survive file overwrites), so its ACL entries take precedence.
+		versionFolderInfo, err := c.getRawFileInfoByPath(ctx, auth, eosclient.GetVersionFolder(info.File))
 		if err == nil {
-			info.SysACL.Entries = append(info.SysACL.Entries, parentInfo.SysACL.Entries...)
+			if versionFolderInfo.SysACL != nil {
+				info.SysACL.Entries = eosclient.MergeACLEntries(info.SysACL.Entries, versionFolderInfo.SysACL.Entries)
+			}
+			maps.Copy(info.Attrs, versionFolderInfo.Attrs)
 		}
 	}
 
 	return info
 }
 
-// SetAttr sets an extended attributes on a path.
+// SetAttr sets an extended attribute on the exact path given. Routing of file xattrs to
+// the version folder is decided by the eosfs layer, not here.
 func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path, app string) error {
 	if !isValidAttribute(attr) {
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
-	}
-
-	// Favorites need to be stored per user so handle these separately
-	if attr.Type == eosclient.UserAttr && attr.Key == eosclient.FavoritesKey {
-		info, err := c.getRawFileInfoByPath(ctx, auth, path)
-		if err != nil {
-			return err
-		}
-		return c.handleFavAttr(ctx, auth, attr, recursive, path, info, true)
 	}
 	return c.setEOSAttr(ctx, auth, attr, errorIfExists, recursive, path, app)
 }
@@ -497,57 +493,11 @@ func (c *Client) setEOSAttr(ctx context.Context, auth eosclient.Authorization, a
 	return nil
 }
 
-func (c *Client) handleFavAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path string, info *eosclient.FileInfo, set bool) error {
-	var err error
-	u := appctx.ContextMustGetUser(ctx)
-	if info == nil {
-		info, err = c.getRawFileInfoByPath(ctx, auth, path)
-		if err != nil {
-			return err
-		}
-	}
-	favStr := info.Attrs[eosclient.FavoritesKey]
-	favs, err := acl.Parse(favStr, acl.ShortTextForm)
-	if err != nil {
-		return err
-	}
-	if set {
-		err = favs.SetEntry(acl.TypeUser, u.Id.OpaqueId, "1")
-		if err != nil {
-			return err
-		}
-	} else {
-		favs.DeleteEntry(acl.TypeUser, u.Id.OpaqueId)
-	}
-	attr.Val = favs.Serialize()
-
-	if attr.Val == "" {
-		return c.unsetEOSAttr(ctx, auth, attr, recursive, path, "", true)
-	} else {
-		return c.setEOSAttr(ctx, auth, attr, false, recursive, path, "")
-	}
-}
-
-// UnsetAttr unsets an extended attribute on a path.
+// UnsetAttr unsets an extended attribute on the exact path given. Routing of file xattrs
+// to the version folder is decided by the eosfs layer, not here.
 func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path, app string) error {
-	// In the case of handleFavs, we call unsetEOSAttr with deleteFavs = true, which is why this simply calls a subroutine
-	return c.unsetEOSAttr(ctx, auth, attr, recursive, path, app, false)
-}
-
-// UnsetAttr unsets an extended attribute on a path.
-func (c *Client) unsetEOSAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path, app string, deleteFavs bool) error {
 	if !isValidAttribute(attr) {
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
-	}
-
-	var err error
-	// Favorites need to be stored per user so handle these separately
-	if !deleteFavs && attr.Type == eosclient.UserAttr && attr.Key == eosclient.FavoritesKey {
-		info, err := c.getRawFileInfoByPath(ctx, auth, path)
-		if err != nil {
-			return err
-		}
-		return c.handleFavAttr(ctx, auth, attr, recursive, path, info, false)
 	}
 
 	var args []string
@@ -560,7 +510,7 @@ func (c *Client) unsetEOSAttr(ctx context.Context, auth eosclient.Authorization,
 	}
 	args = append(args, "rm", fmt.Sprintf("%s.%s", attrTypeToString(attr.Type), attr.Key), path)
 
-	_, _, err = c.executeEOS(ctx, args, auth)
+	_, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		var exErr *exec.ExitError
 		if errors.As(err, &exErr) && exErr.ExitCode() == 61 {
@@ -573,21 +523,64 @@ func (c *Client) unsetEOSAttr(ctx context.Context, auth eosclient.Authorization,
 
 // GetAttr returns the attribute specified by key.
 func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, key, path string) (*eosclient.Attribute, error) {
+	info, err := c.getRawFileInfoByPath(ctx, auth, path)
+	if err != nil {
+		return nil, err
+	}
+
+	// SetAttr persists xattrs of files on the version folder, but some attributes may
+	// still live on the file itself. Check the version folder first and fall back to
+	// the file.
+	if !info.IsDir {
+		if attr, err := c.getEOSAttr(ctx, auth, key, eosclient.GetVersionFolder(path)); err == nil {
+			return attr, nil
+		}
+	}
+	return c.getEOSAttr(ctx, auth, key, path)
+}
+
+func (c *Client) getEOSAttr(ctx context.Context, auth eosclient.Authorization, key, path string) (*eosclient.Attribute, error) {
 	args := []string{"attr", "get", key, path}
 	attrOut, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
 		return nil, err
 	}
-
-	attr, err := deserializeAttribute(attrOut)
-	if err != nil {
-		return nil, err
-	}
-	return attr, nil
+	return deserializeAttribute(attrOut)
 }
 
 // GetAttrs returns all the attributes of a resource.
 func (c *Client) GetAttrs(ctx context.Context, auth eosclient.Authorization, path string) ([]*eosclient.Attribute, error) {
+	info, err := c.getRawFileInfoByPath(ctx, auth, path)
+	if err != nil {
+		return nil, err
+	}
+
+	attrs, err := c.getEOSAttrs(ctx, auth, path)
+	if err != nil {
+		return nil, err
+	}
+
+	// SetAttr persists xattrs of files on the version folder; merge those on top of any
+	// attributes still living on the file itself (version folder takes precedence).
+	if !info.IsDir {
+		if vfAttrs, err := c.getEOSAttrs(ctx, auth, eosclient.GetVersionFolder(path)); err == nil {
+			merged := make(map[string]*eosclient.Attribute, len(attrs)+len(vfAttrs))
+			for _, a := range attrs {
+				merged[a.GetKey()] = a
+			}
+			for _, a := range vfAttrs {
+				merged[a.GetKey()] = a
+			}
+			attrs = make([]*eosclient.Attribute, 0, len(merged))
+			for _, a := range merged {
+				attrs = append(attrs, a)
+			}
+		}
+	}
+	return attrs, nil
+}
+
+func (c *Client) getEOSAttrs(ctx context.Context, auth eosclient.Authorization, path string) ([]*eosclient.Attribute, error) {
 	args := []string{"attr", "ls", path}
 	attrOut, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
@@ -1053,8 +1046,9 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 				},
 			}
 
-			if parent != nil {
-				fi.SysACL.Entries = append(fi.SysACL.Entries, parent.SysACL.Entries...)
+			// Inherited parent ACLs are the base; the file's own entries take precedence.
+			if parent != nil && parent.SysACL != nil {
+				fi.SysACL.Entries = eosclient.MergeACLEntries(parent.SysACL.Entries, fi.SysACL.Entries)
 			}
 			versionFolderPath := eosclient.GetVersionFolder(fi.File)
 			vf, ok := versionFolders[versionFolderPath]
@@ -1066,7 +1060,10 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 			}
 			if ok {
 				fi.Inode = vf.Inode
-				fi.SysACL.Entries = append(fi.SysACL.Entries, vf.SysACL.Entries...)
+				// The version folder is the canonical store for grants, so its entries win.
+				if vf.SysACL != nil {
+					fi.SysACL.Entries = eosclient.MergeACLEntries(fi.SysACL.Entries, vf.SysACL.Entries)
+				}
 				maps.Copy(fi.Attrs, vf.Attrs)
 			} else if err := c.CreateDir(ctx, auth, versionFolderPath); err == nil { // Create the version folder if it doesn't exist
 				if md, err := c.getRawFileInfoByPath(ctx, auth, versionFolderPath); err == nil {
