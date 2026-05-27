@@ -40,6 +40,16 @@ func (fs *Eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 
 	sysAuth := getSystemAuth()
 
+	info, err := fs.c.GetFileInfoByPath(ctx, sysAuth, fn)
+	if err != nil {
+		return err
+	}
+	// xattrs of files are stored on the version folder so they survive overwrites.
+	target := fn
+	if !info.IsDir {
+		target = eosclient.GetVersionFolder(fn)
+	}
+
 	for k, v := range md.Metadata {
 		if k == "" || v == "" {
 			return errtypes.BadRequest(fmt.Sprintf("eosfs: key or value is empty: key:%s, value:%s", k, v))
@@ -58,8 +68,7 @@ func (fs *Eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 
 		// TODO(labkode): SetArbitraryMetadata does not have semantics for recursivity.
 		// We set it to false
-		err := fs.c.SetAttr(ctx, sysAuth, attr, false, false, fn, "")
-		if err != nil {
+		if err := fs.c.SetAttr(ctx, sysAuth, attr, false, false, target, ""); err != nil {
 			return errors.Wrap(err, "eosfs: error setting xattr in eos driver")
 		}
 	}
@@ -78,6 +87,18 @@ func (fs *Eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 
 	sysAuth := getSystemAuth()
 
+	info, err := fs.c.GetFileInfoByPath(ctx, sysAuth, fn)
+	if err != nil {
+		return err
+	}
+	// SetArbitraryMetadata stores xattrs of files on the version folder, but reads merge the
+	// file and the version folder, so clear the attribute from both. This also removes any
+	// value still living on the file from before metadata moved to the version folder.
+	targets := []string{fn}
+	if !info.IsDir {
+		targets = append(targets, eosclient.GetVersionFolder(fn))
+	}
+
 	for _, k := range keys {
 		if k == "" {
 			return errtypes.BadRequest("eosfs: key is empty")
@@ -88,13 +109,10 @@ func (fs *Eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 			Key:  k,
 		}
 
-		err := fs.c.UnsetAttr(ctx, sysAuth, attr, false, fn, "")
-
-		if err != nil {
-			if errors.Is(err, eosclient.AttrNotExistsError) {
-				continue
+		for _, t := range targets {
+			if err := fs.c.UnsetAttr(ctx, sysAuth, attr, false, t, ""); err != nil && !errors.Is(err, eosclient.AttrNotExistsError) {
+				return errors.Wrap(err, "eosfs: error unsetting xattr in eos driver")
 			}
-			return errors.Wrap(err, "eosfs: error unsetting xattr in eos driver")
 		}
 	}
 	return nil

@@ -14,7 +14,7 @@ import (
 )
 
 // AddACL adds an new acl to EOS with the given aclType.
-func (c *Client) AddACL(ctx context.Context, auth eosclient.Authorization, path string, pos uint, a *acl.Entry) error {
+func (c *Client) AddACL(ctx context.Context, auth eosclient.Authorization, path string, pos uint, a *acl.Entry, recursive bool) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "AddACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Str("acl", a.CitrineSerialize()).Msg("")
 
@@ -23,13 +23,6 @@ func (c *Client) AddACL(ctx context.Context, auth eosclient.Authorization, path 
 	// To fix this, we request the gid of `daemon`, which can read,
 	// while keeping the uid of the sudo'er (cbox)
 	auth.Role.GID = "2"
-
-	// First, we need to figure out if the path is a directory
-	// to know whether our request should be recursive
-	fileInfo, err := c.GetFileInfoByPath(ctx, auth, path)
-	if err != nil {
-		return err
-	}
 
 	// Init a new NSRequest
 	rq, err := c.initNSRequest(ctx, auth, "")
@@ -42,7 +35,7 @@ func (c *Client) AddACL(ctx context.Context, auth eosclient.Authorization, path 
 	msg := new(erpc.NSRequest_AclRequest)
 	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["MODIFY"])
 	msg.Type = erpc.NSRequest_AclRequest_ACL_TYPE(erpc.NSRequest_AclRequest_ACL_TYPE_value["SYS_ACL"])
-	msg.Recursive = fileInfo.IsDir
+	msg.Recursive = recursive
 	msg.Rule = a.CitrineSerialize()
 
 	msg.Id = new(erpc.MDId)
@@ -72,13 +65,13 @@ func (c *Client) AddACL(ctx context.Context, auth eosclient.Authorization, path 
 }
 
 // RemoveACL removes the acl from EOS.
-func (c *Client) RemoveACL(ctx context.Context, auth eosclient.Authorization, path string, a *acl.Entry) error {
+func (c *Client) RemoveACL(ctx context.Context, auth eosclient.Authorization, path string, a *acl.Entry, recursive bool) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "RemoveACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Str("ACL", a.CitrineSerialize()).Msg("")
 
 	// We set permissions to "", so the ACL will serialize to `u:123456=`, which will make EOS delete the entry
 	a.Permissions = ""
-	err := c.AddACL(ctx, auth, path, eosclient.StartPosition, a)
+	err := c.AddACL(ctx, auth, path, eosclient.StartPosition, a, recursive)
 	// If there are no ACLs left after the remove, EOS returns ENODATA. But that is not an actual error for us.
 	if errors.Is(err, eosclient.NoDataError) {
 		return nil
@@ -87,8 +80,8 @@ func (c *Client) RemoveACL(ctx context.Context, auth eosclient.Authorization, pa
 }
 
 // UpdateACL updates the EOS acl.
-func (c *Client) UpdateACL(ctx context.Context, auth eosclient.Authorization, path string, position uint, a *acl.Entry) error {
-	return c.AddACL(ctx, auth, path, position, a)
+func (c *Client) UpdateACL(ctx context.Context, auth eosclient.Authorization, path string, position uint, a *acl.Entry, recursive bool) error {
+	return c.AddACL(ctx, auth, path, position, a, recursive)
 }
 
 // GetACL for a file.
@@ -179,23 +172,41 @@ func (c *Client) getACLForPath(ctx context.Context, auth eosclient.Authorization
 	return aclret, err
 }
 
-func (c *Client) fixupACLs(ctx context.Context, auth eosclient.Authorization, info *eosclient.FileInfo) *eosclient.FileInfo {
-	// Append the ACLs that are described by the xattr sys.acl entry
-	a, err := acl.Parse(info.Attrs["sys.acl"], acl.ShortTextForm)
-	if err == nil {
-		if info.SysACL != nil {
-			info.SysACL.Entries = append(info.SysACL.Entries, a.Entries...)
-		} else {
-			info.SysACL = a
-		}
+func (c *Client) fixupACLsAndAttrs(ctx context.Context, auth eosclient.Authorization, info *eosclient.FileInfo) *eosclient.FileInfo {
+	// info.SysACL already holds the file's own ACL, parsed from its sys.acl xattr in
+	// grpcMDResponseToFileInfo. Ensure it is non-nil so we can merge into it.
+	if info.SysACL == nil {
+		info.SysACL = &acl.ACLs{}
 	}
 
-	// We need to inherit the ACLs for the parent directory as these are not available for files
+	// For files we combine three ACL sources by precedence (lowest to highest): the parent
+	// directory's inherited ACLs, the file's own entries, and the version folder's entries
+	// (the canonical store for grants, also mirrored onto the file). We also merge the
+	// attributes persisted on the version folder.
 	if !info.IsDir {
+		// Inherited parent ACLs are the base; the file's own entries take precedence.
 		parentInfo, err := c.GetFileInfoByPath(ctx, auth, path.Dir(info.File))
 		// Even if this call fails, at least return the current file object
+		if err == nil && parentInfo.SysACL != nil {
+			info.SysACL.Entries = eosclient.MergeACLEntries(parentInfo.SysACL.Entries, info.SysACL.Entries)
+		}
+
+		versionFolderInfo, err := c.GetFileInfoByPath(ctx, auth, eosclient.GetVersionFolder(info.File))
 		if err == nil {
-			info.SysACL.Entries = append(info.SysACL.Entries, parentInfo.SysACL.Entries...)
+			// The version folder is the canonical store for grants, so its entries win.
+			if versionFolderInfo.SysACL != nil {
+				info.SysACL.Entries = eosclient.MergeACLEntries(info.SysACL.Entries, versionFolderInfo.SysACL.Entries)
+			}
+			if info.Attrs == nil {
+				info.Attrs = map[string]string{}
+			}
+			for k, v := range versionFolderInfo.Attrs {
+				if k == "sys.acl" {
+					// sys.acl is represented in SysACL, merged above; don't shadow it as a raw attr.
+					continue
+				}
+				info.Attrs[k] = v
+			}
 		}
 	}
 	return info

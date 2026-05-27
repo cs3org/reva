@@ -9,29 +9,21 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
-	"github.com/cs3org/reva/v3/pkg/storage/utils/acl"
 	"github.com/cs3org/reva/v3/pkg/trace"
 	"github.com/pkg/errors"
 )
 
-// SetAttr sets an extended attributes on a path.
+// SetAttr sets an extended attribute on the exact path given. Routing of file xattrs to
+// the version folder is decided by the eosfs layer, not here.
 func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path, app string) error {
 	log := appctx.GetLogger(ctx)
 
 	if !isValidAttribute(attr) {
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
 	}
-	info, err := c.GetFileInfoByPath(ctx, auth, path)
-	if err != nil {
-		return err
-	}
 
 	log.Debug().Bool("recursive", recursive).Str("path", path).Any("attr", attr).Str("trace", trace.Get(ctx)).Msg("eos-grpc SetAttr()")
-	// Favorites need to be stored per user so handle these separately
-	if attr.Type == eosclient.UserAttr && attr.Key == eosclient.FavoritesKey {
-		return c.handleFavAttr(ctx, auth, attr, recursive, path, info, true)
-	}
-	return c.setEOSAttr(ctx, auth, attr, errorIfExists, recursive && info.IsDir, path, app)
+	return c.setEOSAttr(ctx, auth, attr, errorIfExists, recursive, path, app)
 }
 
 func (c *Client) setEOSAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path, app string) error {
@@ -93,55 +85,11 @@ func (c *Client) setEOSAttr(ctx context.Context, auth eosclient.Authorization, a
 	return err
 }
 
-func (c *Client) handleFavAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path string, info *eosclient.FileInfo, set bool) error {
-	var err error
-	u := appctx.ContextMustGetUser(ctx)
-	if info == nil {
-		info, err = c.GetFileInfoByPath(ctx, auth, path)
-		if err != nil {
-			return err
-		}
-	}
-	favStr := info.Attrs[eosclient.FavoritesKey]
-	favs, err := acl.Parse(favStr, acl.ShortTextForm)
-	if err != nil {
-		return err
-	}
-	if set {
-		err = favs.SetEntry(acl.TypeUser, u.Id.OpaqueId, "1")
-		if err != nil {
-			return err
-		}
-	} else {
-		favs.DeleteEntry(acl.TypeUser, u.Id.OpaqueId)
-	}
-	attr.Val = favs.Serialize()
-
-	if attr.Val == "" {
-		return c.unsetEOSAttr(ctx, auth, attr, recursive, path, "", true)
-	} else {
-		return c.setEOSAttr(ctx, auth, attr, false, recursive, path, "")
-	}
-}
-
-// UnsetAttr unsets an extended attribute on a path.
+// UnsetAttr unsets an extended attribute on the exact path given. Routing of file xattrs
+// to the version folder is decided by the eosfs layer, not here.
 func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path, app string) error {
-	// In the case of handleFavs, we call unsetEOSAttr with deleteFavs = true, which is why this simply calls a subroutine
-	return c.unsetEOSAttr(ctx, auth, attr, recursive, path, app, false)
-}
-
-func (c *Client) unsetEOSAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path, app string, deleteFavs bool) error {
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("func", "unsetEOSAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
-
-	// Favorites need to be stored per user so handle these separately
-	if !deleteFavs && attr.Type == eosclient.UserAttr && attr.Key == eosclient.FavoritesKey {
-		info, err := c.GetFileInfoByPath(ctx, auth, path)
-		if err != nil {
-			return err
-		}
-		return c.handleFavAttr(ctx, auth, attr, recursive, path, info, false)
-	}
+	log.Info().Str("func", "UnsetAttr").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Initialize the common fields of the NSReq
 	rq, err := c.initNSRequest(ctx, auth, app)
