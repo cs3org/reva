@@ -345,11 +345,11 @@ func uploadURLToWebDAV(ctx context.Context, httpClient *http.Client, dav *gowebd
 	return dav.WriteStream(remotePath, resp.Body, 0644)
 }
 
-func (m *mgr) ProcessEmbeddedShare(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare, destination string) (*ocm.ReceivedShare, error) {
+func (m *mgr) ProcessEmbeddedShare(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare) (*ocm.ReceivedShare, error) {
 	log := appctx.GetLogger(ctx)
 	log.Debug().
 		Interface("share", share).
-		Str("destination", destination).
+		Str("destination", share.Destination).
 		Msg("Processing received share")
 
 	protocols, err := m.getProtocolsByIds(ctx, []any{share.Id.OpaqueId})
@@ -379,7 +379,7 @@ func (m *mgr) ProcessEmbeddedShare(ctx context.Context, user *userpb.User, share
 		return nil, err
 	}
 
-	if err := dav.MkdirAll(destination, 0755); err != nil {
+	if err := dav.MkdirAll(share.Destination, 0755); err != nil {
 		return nil, err
 	}
 
@@ -395,7 +395,7 @@ func (m *mgr) ProcessEmbeddedShare(ctx context.Context, user *userpb.User, share
 		}
 
 		log.Debug().
-			Str("dest_path", destination).
+			Str("dest_path", share.Destination).
 			Int("entities", len(c.Graph)).
 			Msg("Processing embedded share payload")
 
@@ -421,7 +421,7 @@ func (m *mgr) ProcessEmbeddedShare(ctx context.Context, user *userpb.User, share
 				continue
 			}
 
-			remotePath := path.Join(destination, name)
+			remotePath := path.Join(share.Destination, name)
 
 			size := int64(-1)
 			if e.ContentSize != "" {
