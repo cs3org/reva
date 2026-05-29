@@ -21,13 +21,9 @@ const (
 )
 
 type Config struct {
-	config.Database         `mapstructure:",squash"`
-	GatewaySvc              string `mapstructure:"gatewaysvc"`
-	LinkPasswordHashCost    int    `mapstructure:"password_hash_cost"`
-	WebDAVURL                   string `mapstructure:"webdav_url"`
-	EmbeddedTransferTimeout     int    `mapstructure:"embedded_transfer_timeout"`
-	EmbeddedTransferIdleTimeout int    `mapstructure:"embedded_transfer_idle_timeout"`
-	EmbeddedTransferRetries     int    `mapstructure:"embedded_transfer_retries"`
+	config.Database      `mapstructure:",squash"`
+	GatewaySvc           string `mapstructure:"gatewaysvc"`
+	LinkPasswordHashCost int    `mapstructure:"password_hash_cost"`
 }
 
 func init() {
@@ -43,26 +39,6 @@ func (c *Config) ApplyDefaults() {
 	// which should be at least 11
 	if c.LinkPasswordHashCost < 11 {
 		c.LinkPasswordHashCost = 11
-	}
-
-	// Absolute per-file ceiling (in seconds) for background transfers of
-	// embedded share payloads. A generous upper bound; the idle timeout below
-	// is what catches stalls quickly.
-	if c.EmbeddedTransferTimeout <= 0 {
-		c.EmbeddedTransferTimeout = 3600
-	}
-
-	// Stall timeout (in seconds): if no bytes flow for this long during a
-	// file transfer, the attempt is aborted (and then retried). Catches a
-	// stalled connection in minutes instead of waiting for the ceiling above.
-	if c.EmbeddedTransferIdleTimeout <= 0 {
-		c.EmbeddedTransferIdleTimeout = 120
-	}
-
-	// Number of attempts per file (1 = no retry) when transferring embedded
-	// share payloads, to ride out transient download/upload failures.
-	if c.EmbeddedTransferRetries <= 0 {
-		c.EmbeddedTransferRetries = 3
 	}
 }
 

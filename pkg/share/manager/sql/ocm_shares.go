@@ -1,4 +1,4 @@
-// Copyright 2018-2025 CERN
+// Copyright 2018-2026 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,13 +22,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"path"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -41,8 +36,6 @@ import (
 	model "github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
-	"github.com/studio-b12/gowebdav"
 	"google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/protobuf/proto"
 	"gorm.io/datatypes"
@@ -54,38 +47,6 @@ import (
 type mgr struct {
 	c  *Config
 	db *gorm.DB
-}
-
-type crate struct {
-	Graph []crateEntity `json:"@graph"`
-}
-
-type crateEntity struct {
-	ID             string               `json:"@id"`
-	Type           json.RawMessage      `json:"@type"`
-	URL            json.RawMessage      `json:"url"`
-	Name           string               `json:"name"`
-	ContentSize    string               `json:"contentSize"`
-	EncodingFormat string               `json:"encodingFormat"`
-	Description    string               `json:"description"`
-	Distribution   []zenodoDistribution `json:"distribution"`
-}
-
-type zenodoDistribution struct {
-	Type           string `json:"@type"`
-	ContentURL     string `json:"contentUrl"`
-	EncodingFormat string `json:"encodingFormat"`
-}
-
-type transferEntry struct {
-	srcURL         string
-	name           string
-	sizeHint       int64
-	encodingFormat string
-}
-
-type idRef struct {
-	ID string `json:"@id"`
 }
 
 func NewOCMShareManager(ctx context.Context, m map[string]any) (share.Repository, error) {
@@ -286,432 +247,26 @@ func (m *mgr) ListShares(ctx context.Context, user *userpb.User, filters []*ocm.
 	return shares, nil
 }
 
-func (e crateEntity) URLString() string {
-	if len(e.URL) == 0 {
-		return ""
-	}
-
-	var s string
-	if err := json.Unmarshal(e.URL, &s); err == nil {
-		return s
-	}
-
-	var ref idRef
-	if err := json.Unmarshal(e.URL, &ref); err == nil {
-		return ref.ID
-	}
-
-	return ""
-}
-
-func (e crateEntity) HasType(want string) bool {
-	if len(e.Type) == 0 {
-		return false
-	}
-
-	var single string
-	if err := json.Unmarshal(e.Type, &single); err == nil {
-		return single == want
-	}
-
-	var many []string
-	if err := json.Unmarshal(e.Type, &many); err == nil {
-		for _, t := range many {
-			if t == want {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-func (e crateEntity) IsTransferable() bool {
-	if e.URLString() == "" {
-		return false
-	}
-
-	return e.HasType("File") || e.HasType("ComputationalWorkflow") || e.HasType("SoftwareSourceCode")
-}
-
-// progressReader wraps a reader to track how many bytes have been read and when
-// the last non-empty read happened, so a watchdog can log throughput and detect
-// a stalled transfer. It is safe for concurrent use: the wrapped reader is read
-// by net/http's body goroutine while the watchdog reads the counters.
-type progressReader struct {
-	r        io.Reader
-	total    atomic.Int64
-	lastData atomic.Int64 // unix nanos of the last read that returned data
-}
-
-func newProgressReader(r io.Reader) *progressReader {
-	pr := &progressReader{r: r}
-	pr.lastData.Store(time.Now().UnixNano())
-	return pr
-}
-
-func (pr *progressReader) Read(p []byte) (int, error) {
-	n, err := pr.r.Read(p)
-	if n > 0 {
-		pr.total.Add(int64(n))
-		pr.lastData.Store(time.Now().UnixNano())
-	}
-	return n, err
-}
-
-// monitorTransfer periodically logs transfer progress and aborts the transfer
-// (via cancel) if no data has flowed for idleTimeout. It exits when stop closes.
-func monitorTransfer(log *zerolog.Logger, pr *progressReader, remotePath string, idleTimeout time.Duration, cancel context.CancelFunc, stop <-chan struct{}) {
-	const interval = 15 * time.Second
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	var lastTotal int64
-	for {
-		select {
-		case <-stop:
-			return
-		case <-ticker.C:
-			total := pr.total.Load()
-			rate := float64(total-lastTotal) / interval.Seconds() / (1024 * 1024)
-			lastTotal = total
-			idle := time.Since(time.Unix(0, pr.lastData.Load()))
-
-			log.Debug().
-				Str("remote", remotePath).
-				Int64("bytes", total).
-				Float64("mb_per_s", rate).
-				Msg("Embedded transfer progress")
-
-			if idle > idleTimeout {
-				log.Warn().
-					Str("remote", remotePath).
-					Dur("idle", idle).
-					Msg("embedded transfer: no data received, aborting attempt (will retry)")
-				cancel()
-				return
-			}
-		}
-	}
-}
-
-func uploadURLToWebDAV(ctx context.Context, log *zerolog.Logger, httpClient *http.Client, dav *gowebdav.Client, srcURL, remotePath string, sizeHint int64, idleTimeout time.Duration) error {
-	reqCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, srcURL, nil)
-	if err != nil {
-		return err
-	}
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	// Only a 2xx with a body is the actual file. Non-success responses (e.g.
-	// Zenodo's structured JSON for 401/403/404/429) must never be written to
-	// the destination as if they were data.
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		err := fmt.Errorf("GET %s failed: %s: %s", srcURL, resp.Status, string(body))
-		if resp.StatusCode == http.StatusTooManyRequests {
-			return &retryableError{err: err, retryAfter: parseRetryAfter(resp.Header.Get("Retry-After"))}
-		}
-		return err
-	}
-
-	log.Debug().
-		Str("remote", remotePath).
-		Str("content_type", resp.Header.Get("Content-Type")).
-		Str("content_disposition", resp.Header.Get("Content-Disposition")).
-		Int64("content_length", resp.ContentLength).
-		Msg("Embedded transfer: download response")
-
-	pr := newProgressReader(resp.Body)
-	stop := make(chan struct{})
-	defer close(stop)
-	go monitorTransfer(log, pr, remotePath, idleTimeout, cancel, stop)
-
-	// With a known length gowebdav sets the request ContentLength, so net/http
-	// streams exactly that many bytes and errors if the download is truncated —
-	// a short read surfaces as an error here and is retried, never stored as a
-	// complete file.
-	length := sizeHint
-	if length < 0 {
-		length = resp.ContentLength
-	}
-	if length >= 0 {
-		return dav.WriteStreamWithLength(remotePath, pr, length, 0644)
-	}
-	return dav.WriteStream(remotePath, pr, 0644)
-}
-
-// retryableError wraps an error whose operation should be retried, optionally
-// after a server-suggested delay (e.g. from an HTTP 429 Retry-After header).
-type retryableError struct {
-	err        error
-	retryAfter time.Duration
-}
-
-func (e *retryableError) Error() string { return e.err.Error() }
-func (e *retryableError) Unwrap() error { return e.err }
-
-// parseRetryAfter interprets an HTTP Retry-After header, which may be either a
-// number of seconds or an HTTP date. Returns 0 if absent or unparseable.
-func parseRetryAfter(h string) time.Duration {
-	if h == "" {
-		return 0
-	}
-	if secs, err := strconv.Atoi(strings.TrimSpace(h)); err == nil && secs > 0 {
-		return time.Duration(secs) * time.Second
-	}
-	if t, err := http.ParseTime(h); err == nil {
-		if d := time.Until(t); d > 0 {
-			return d
-		}
-	}
-	return 0
-}
-
-func (m *mgr) ProcessEmbeddedShare(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare) (*ocm.ReceivedShare, error) {
-	log := appctx.GetLogger(ctx)
-	log.Debug().
-		Interface("share", share).
-		Str("destination", share.Destination).
-		Msg("Processing received share")
-
+// GetEmbeddedPayload returns the RO-Crate JSON payload carried by the embedded
+// protocol of the received share, or an empty string if the share has no
+// embedded protocol.
+func (m *mgr) GetEmbeddedPayload(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare) (string, error) {
 	protocols, err := m.getProtocolsByIds(ctx, []any{share.Id.OpaqueId})
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	pList, ok := protocols[share.Id.OpaqueId]
 	if !ok {
-		return nil, errtypes.NotFound("share not found")
+		return "", errtypes.NotFound("share not found")
 	}
 
-	var entries []transferEntry
-	found := false
 	for _, protocol := range pList {
-		embedded, ok := protocol.Term.(*ocm.Protocol_EmbeddedOptions)
-		if !ok {
-			continue
-		}
-		found = true
-
-		var c crate
-		if err := json.Unmarshal([]byte(embedded.EmbeddedOptions.Payload), &c); err != nil {
-			return nil, fmt.Errorf("unmarshal embedded payload: %w", err)
-		}
-		entries = crateEntries(log, c.Graph)
-		break
-	}
-	if !found {
-		return nil, errtypes.NotFound("protocol not found")
-	}
-
-	// The payload can reference many GB across dozens of files. Transferring it
-	// inline would block (and could be cancelled by) the share-accept request,
-	// so run it in the background and return immediately. The request token is
-	// captured for WebDAV auth; a very long transfer may outlive it, in which
-	// case the remaining files fail auth and are skipped (best-effort).
-	token := appctx.ContextMustGetToken(ctx)
-	timeout := time.Duration(m.c.EmbeddedTransferTimeout) * time.Second
-	go m.transferEmbeddedEntries(log, token, share.Destination, entries, timeout)
-
-	return share, nil
-}
-
-// embeddedRetryBaseBackoff is the base delay between per-file retry attempts;
-// it grows exponentially with each subsequent attempt.
-const embeddedRetryBaseBackoff = 2 * time.Second
-
-// transferEmbeddedEntries streams each entry from its source URL to the WebDAV
-// destination. It runs detached from the request context. Each file is retried
-// a few times with backoff and, if it still fails, is logged and skipped so one
-// bad file does not abort the whole dataset; each attempt is bounded by timeout
-// so a stalled connection cannot hang forever.
-func (m *mgr) transferEmbeddedEntries(log *zerolog.Logger, token, destination string, entries []transferEntry, timeout time.Duration) {
-	httpClient := &http.Client{}
-	// e.g. "https://cbox-ocisdev-rasmus.cern.ch/webdav/"
-	// We authenticate via the bearer token set in the interceptor below, so we
-	// use a preemptive authorizer rather than gowebdav's default auto-auth. The
-	// auto-auth authorizer tees every non-seekable upload body into an in-memory
-	// buffer (to be able to replay it on an auth challenge), which would copy
-	// each multi-GB file fully into RAM and peg CPU on GC. The preemptive
-	// authorizer leaves the body untouched, so uploads truly stream.
-	dav := gowebdav.NewAuthClient(m.c.WebDAVURL, gowebdav.NewPreemptiveAuth(&gowebdav.BasicAuth{}))
-	dav.SetTimeout(timeout)
-	dav.SetInterceptor(func(method string, rq *http.Request) {
-		rq.Header.Set("Authorization", "Bearer "+token)
-		if method == http.MethodPut {
-			rq.Header.Set("Content-Type", "application/octet-stream")
-		}
-	})
-
-	if err := dav.Connect(); err != nil {
-		log.Error().Err(err).Msg("embedded transfer: failed to connect to WebDAV")
-		return
-	}
-
-	if err := dav.MkdirAll(destination, 0755); err != nil {
-		log.Error().Err(err).Str("destination", destination).Msg("embedded transfer: failed to create destination directory")
-		return
-	}
-
-	idleTimeout := time.Duration(m.c.EmbeddedTransferIdleTimeout) * time.Second
-
-	log.Debug().
-		Str("dest_path", destination).
-		Int("entries", len(entries)).
-		Msg("Starting embedded share transfer")
-
-	var transferred, failed int
-	for _, e := range entries {
-		remotePath := path.Join(destination, e.name)
-
-		log.Debug().
-			Str("src", e.srcURL).
-			Str("remote", remotePath).
-			Int64("size_hint", e.sizeHint).
-			Str("encoding_format", e.encodingFormat).
-			Msg("Streaming embedded file to WebDAV")
-
-		if err := m.uploadEntryWithRetry(log, httpClient, dav, e, remotePath, timeout, idleTimeout); err != nil {
-			failed++
-			log.Error().Err(err).
-				Str("src", e.srcURL).
-				Str("remote", remotePath).
-				Msg("embedded transfer: skipping file after exhausting retries")
-			continue
-		}
-		transferred++
-	}
-
-	log.Info().
-		Str("destination", destination).
-		Int("transferred", transferred).
-		Int("failed", failed).
-		Int("total", len(entries)).
-		Msg("Finished embedded share transfer")
-}
-
-// uploadEntryWithRetry transfers a single entry, retrying on failure up to
-// EmbeddedTransferRetries attempts with exponential backoff. Each attempt gets a
-// fresh timeout-bounded context. It returns the last error if all attempts fail.
-func (m *mgr) uploadEntryWithRetry(log *zerolog.Logger, httpClient *http.Client, dav *gowebdav.Client, e transferEntry, remotePath string, timeout, idleTimeout time.Duration) error {
-	var err error
-	for attempt := 1; attempt <= m.c.EmbeddedTransferRetries; attempt++ {
-		fileCtx, cancel := context.WithTimeout(context.Background(), timeout)
-		err = uploadURLToWebDAV(fileCtx, log, httpClient, dav, e.srcURL, remotePath, e.sizeHint, idleTimeout)
-		cancel()
-		if err == nil {
-			return nil
-		}
-
-		if attempt < m.c.EmbeddedTransferRetries {
-			backoff := embeddedRetryBaseBackoff << (attempt - 1)
-			// Honor a server-requested delay (e.g. HTTP 429 Retry-After).
-			var re *retryableError
-			if errors.As(err, &re) && re.retryAfter > backoff {
-				backoff = re.retryAfter
-			}
-			log.Warn().Err(err).
-				Str("src", e.srcURL).
-				Str("remote", remotePath).
-				Int("attempt", attempt).
-				Dur("backoff", backoff).
-				Msg("embedded transfer: file failed, retrying")
-			time.Sleep(backoff)
+		if embedded, ok := protocol.Term.(*ocm.Protocol_EmbeddedOptions); ok {
+			return embedded.EmbeddedOptions.Payload, nil
 		}
 	}
-	return err
-}
-
-// crateEntries walks the RO-Crate @graph and collects every transferable file.
-// It handles two flavors that share the same graph envelope:
-//   - ScienceMesh: a graph entity that is itself a File with a direct url.
-//   - Zenodo: a graph entity (a schema.org Dataset) carrying a distribution[]
-//     of DataDownload entries, each with a contentUrl.
-func crateEntries(log *zerolog.Logger, graph []crateEntity) []transferEntry {
-	var entries []transferEntry
-	for _, e := range graph {
-		if e.IsTransferable() {
-			if entry, ok := scienceMeshEntry(log, e); ok {
-				entries = append(entries, entry)
-			}
-		}
-		for _, d := range e.Distribution {
-			if entry, ok := zenodoEntry(log, d); ok {
-				entries = append(entries, entry)
-			}
-		}
-	}
-	return entries
-}
-
-func scienceMeshEntry(log *zerolog.Logger, e crateEntity) (transferEntry, bool) {
-	srcURL := e.URLString()
-	if srcURL == "" {
-		return transferEntry{}, false
-	}
-
-	name := strings.TrimSpace(e.Name)
-	if name == "" {
-		name = path.Base(srcURL)
-	}
-	if name == "" || name == "." || name == "/" {
-		log.Warn().
-			Str("entity_id", e.ID).
-			Str("src", srcURL).
-			Msg("Skipping entity with unusable destination name")
-		return transferEntry{}, false
-	}
-
-	size := int64(-1)
-	if e.ContentSize != "" {
-		if parsed, err := strconv.ParseInt(e.ContentSize, 10, 64); err == nil {
-			size = parsed
-		}
-	}
-
-	return transferEntry{
-		srcURL:         srcURL,
-		name:           name,
-		sizeHint:       size,
-		encodingFormat: e.EncodingFormat,
-	}, true
-}
-
-func zenodoEntry(log *zerolog.Logger, d zenodoDistribution) (transferEntry, bool) {
-	if d.Type != "DataDownload" || d.ContentURL == "" {
-		return transferEntry{}, false
-	}
-
-	name := zenodoFilename(d.ContentURL)
-	if name == "" || name == "." || name == "/" {
-		log.Warn().
-			Str("src", d.ContentURL).
-			Msg("Skipping Zenodo distribution with unusable destination name")
-		return transferEntry{}, false
-	}
-
-	return transferEntry{
-		srcURL:         d.ContentURL,
-		name:           name,
-		sizeHint:       -1,
-		encodingFormat: d.EncodingFormat,
-	}, true
-}
-
-func zenodoFilename(rawURL string) string {
-	u, err := url.Parse(rawURL)
-	if err != nil || u.Path == "" {
-		return path.Base(rawURL)
-	}
-	return path.Base(strings.TrimSuffix(u.Path, "/content"))
+	return "", nil
 }
 
 func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*ocm.ReceivedShare, error) {

@@ -41,6 +41,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/ocm/embedded"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/ocm/share/repository/registry"
 	"github.com/cs3org/reva/v3/pkg/plugin"
@@ -62,31 +63,42 @@ func init() {
 		utils.Cast(newFunc, &f)
 		registry.Register(name, f)
 	})
+	plugin.RegisterNamespace("grpc.services.ocmshareprovider.embedded_drivers", func(name string, newFunc any) {
+		var f embedded.NewFunc
+		utils.Cast(newFunc, &f)
+		embedded.Register(name, f)
+	})
 }
 
 type config struct {
-	Driver         string                    `mapstructure:"driver"`
-	Drivers        map[string]map[string]any `mapstructure:"drivers"`
-	ClientTimeout  int                       `mapstructure:"client_timeout"`
-	ClientInsecure bool                      `mapstructure:"client_insecure"`
-	GatewaySVC     string                    `mapstructure:"gatewaysvc"                                    validate:"required"`
-	ProviderDomain string                    `docs:"The same domain registered in the provider authorizer" mapstructure:"provider_domain" validate:"required"`
-	WebDAVEndpoint string                    `mapstructure:"webdav_endpoint"                               validate:"required"`
-	WebappTemplate string                    `mapstructure:"webapp_template"                               validate:"required"`
+	Driver          string                    `mapstructure:"driver"`
+	Drivers         map[string]map[string]any `mapstructure:"drivers"`
+	EmbeddedDriver  string                    `mapstructure:"embedded_driver"`
+	EmbeddedDrivers map[string]map[string]any `mapstructure:"embedded_drivers"`
+	ClientTimeout   int                       `mapstructure:"client_timeout"`
+	ClientInsecure  bool                      `mapstructure:"client_insecure"`
+	GatewaySVC      string                    `mapstructure:"gatewaysvc"                                    validate:"required"`
+	ProviderDomain  string                    `docs:"The same domain registered in the provider authorizer" mapstructure:"provider_domain" validate:"required"`
+	WebDAVEndpoint  string                    `mapstructure:"webdav_endpoint"                               validate:"required"`
+	WebappTemplate  string                    `mapstructure:"webapp_template"                               validate:"required"`
 }
 
 type service struct {
-	conf       *config
-	repo       share.Repository
-	client     *ocmd.OCMClient
-	gateway    gateway.GatewayAPIClient
-	webappTmpl *template.Template
-	walker     walker.Walker
+	conf        *config
+	repo        share.Repository
+	client      *ocmd.OCMClient
+	gateway     gateway.GatewayAPIClient
+	webappTmpl  *template.Template
+	walker      walker.Walker
+	transferrer embedded.Transferrer
 }
 
 func (c *config) ApplyDefaults() {
 	if c.Driver == "" {
 		c.Driver = "json"
+	}
+	if c.EmbeddedDriver == "" {
+		c.EmbeddedDriver = "webdav"
 	}
 	if c.ClientTimeout == 0 {
 		c.ClientTimeout = 10
@@ -106,6 +118,13 @@ func getShareRepository(ctx context.Context, c *config) (share.Repository, error
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
+func getEmbeddedTransferrer(ctx context.Context, c *config) (embedded.Transferrer, error) {
+	if f, ok := embedded.NewFuncs[c.EmbeddedDriver]; ok {
+		return f(ctx, c.EmbeddedDrivers[c.EmbeddedDriver])
+	}
+	return nil, errtypes.NotFound("embedded driver not found: " + c.EmbeddedDriver)
+}
+
 // New creates a new ocm share provider svc.
 func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	var c config
@@ -114,6 +133,11 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	}
 
 	repo, err := getShareRepository(ctx, &c)
+	if err != nil {
+		return nil, err
+	}
+
+	transferrer, err := getEmbeddedTransferrer(ctx, &c)
 	if err != nil {
 		return nil, err
 	}
@@ -131,12 +155,13 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 
 	ocmcl := ocmd.NewClient(time.Duration(c.ClientTimeout)*time.Second, c.ClientInsecure)
 	service := &service{
-		conf:       &c,
-		repo:       repo,
-		client:     ocmcl,
-		gateway:    gateway,
-		webappTmpl: tpl,
-		walker:     walker,
+		conf:        &c,
+		repo:        repo,
+		client:      ocmcl,
+		gateway:     gateway,
+		webappTmpl:  tpl,
+		walker:      walker,
+		transferrer: transferrer,
 	}
 
 	return service, nil
@@ -478,15 +503,23 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 	// This is the state we are setting when processing a share
 	// meaning it should be ACCEPTED in order to trigger the processing.
 	if req.Share.State == ocm.ShareState_SHARE_STATE_ACCEPTED {
-		if _, err := s.repo.ProcessEmbeddedShare(ctx, user, req.Share); err != nil {
+		payload, err := s.repo.GetEmbeddedPayload(ctx, user, req.Share)
+		if err != nil {
 			if errors.Is(err, share.ErrShareNotFound) {
 				return &ocm.UpdateReceivedOCMShareResponse{
 					Status: status.NewNotFound(ctx, "share does not exist"),
 				}, nil
 			}
 			return &ocm.UpdateReceivedOCMShareResponse{
-				Status: status.NewInternal(ctx, err, "error processing embedded share"),
+				Status: status.NewInternal(ctx, err, "error retrieving embedded share payload"),
 			}, nil
+		}
+		if payload != "" {
+			if err := s.transferrer.Process(ctx, payload, req.Share.Destination); err != nil {
+				return &ocm.UpdateReceivedOCMShareResponse{
+					Status: status.NewInternal(ctx, err, "error processing embedded share"),
+				}, nil
+			}
 		}
 	}
 	_, err := s.repo.UpdateReceivedShare(ctx, user, req.Share, req.UpdateMask)

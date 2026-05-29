@@ -1,4 +1,4 @@
-// Copyright 2018-2025 CERN
+// Copyright 2018-2026 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -198,9 +198,9 @@ type OcmShare struct {
 // OcmShareProtocol represents the protocol used to serve an OCM share, named AccessMethod in the OCM CS3 APIs.
 type OcmShareProtocol struct {
 	gorm.Model
-	OcmShareID  uint          `gorm:"not null;uniqueIndex:u_ocm_share_protocol"`
-	Type        OcmProtocol   `gorm:"not null;uniqueIndex:u_ocm_share_protocol"`
-	Permissions int           `gorm:"default:null"`
+	OcmShareID   uint           `gorm:"not null;uniqueIndex:u_ocm_share_protocol"`
+	Type         OcmProtocol    `gorm:"not null;uniqueIndex:u_ocm_share_protocol"`
+	Permissions  int            `gorm:"default:null"`
 	AccessTypes  OcmAccessType  `gorm:"default:null"`
 	Requirements datatypes.JSON `gorm:"type:json;default:null"`
 }
@@ -329,7 +329,6 @@ func (p *PublicLink) AsCS3PublicShare() *link.PublicShare {
 		NotifyUploadsExtraRecipients: p.NotifyUploadsExtraRecipients,
 	}
 }
-
 
 func defaultLinkDisplayName(displayName string, quickLink bool) string {
 	if displayName != "" {
