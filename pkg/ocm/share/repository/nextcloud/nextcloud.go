@@ -483,6 +483,6 @@ func (sm *Manager) do(ctx context.Context, a Action, username string) (int, []by
 	return resp.StatusCode, body, nil
 }
 
-func (sm *Manager) ProcessEmbeddedShare(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare, destination string) (*ocm.ReceivedShare, error) {
+func (sm *Manager) ProcessEmbeddedShare(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare) (*ocm.ReceivedShare, error) {
 	return nil, errtypes.NotSupported("processing embedded shares is not supported")
 }

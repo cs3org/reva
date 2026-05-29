@@ -26,7 +26,6 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocgraph"
 	"github.com/cs3org/reva/v3/internal/http/services/reqres"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -75,22 +74,13 @@ func (h *embeddedHandler) ProcessEmbeddedShare(w http.ResponseWriter, r *http.Re
 		},
 		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
 	}
-
-	// TODO(rawe0): Create a real "ProcessEmbeddedShareRequest" in the CS3APIs and
-	// use that instead of hijacking the UpdateReceivedOCMShareRequest via the opaque.
-	req.Opaque = &types.Opaque{
-		Map: map[string]*types.OpaqueEntry{
-			"destination": {
-				Decoder: "plain",
-				Value:   []byte(dest_path),
-			},
-		},
-	}
 	// Accept the embedded share or set it back to pending
 	// depending on the "process" query parameter
 	switch process {
 	case "true":
 		req.Share.State = ocm.ShareState_SHARE_STATE_ACCEPTED
+		// Update the destination path if we are processing the share.
+		req.Share.Destination = dest_path
 	case "false":
 		req.Share.State = ocm.ShareState_SHARE_STATE_PENDING
 	}
