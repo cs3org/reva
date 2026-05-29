@@ -73,6 +73,50 @@ var _ = Describe("Cache", func() {
 		}
 	})
 
+	Describe("ListSpace", func() {
+		Context("when no cache file exists yet", func() {
+			It("creates the cache file on first call", func() {
+				_, err := c.ListSpace(ctx, storageID, spaceID)
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = os.Stat(filepath.Join(tmpdir, "storages", storageID, spaceID+".json"))
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("sets an etag after the first call", func() {
+				_, err := c.ListSpace(ctx, storageID, spaceID)
+				Expect(err).ToNot(HaveOccurred())
+
+				spaces, ok := c.Providers.Load(storageID)
+				Expect(ok).To(BeTrue())
+				space, ok := spaces.Spaces.Load(spaceID)
+				Expect(ok).To(BeTrue())
+				Expect(space.Etag).ToNot(BeEmpty())
+			})
+
+			It("returns empty shares", func() {
+				shares, err := c.ListSpace(ctx, storageID, spaceID)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(shares.Shares).To(BeEmpty())
+			})
+
+			It("does not upload again on second call", func() {
+				_, err := c.ListSpace(ctx, storageID, spaceID)
+				Expect(err).ToNot(HaveOccurred())
+
+				spaces, _ := c.Providers.Load(storageID)
+				space, _ := spaces.Spaces.Load(spaceID)
+				etagAfterFirst := space.Etag
+
+				_, err = c.ListSpace(ctx, storageID, spaceID)
+				Expect(err).ToNot(HaveOccurred())
+
+				space, _ = spaces.Spaces.Load(spaceID)
+				Expect(space.Etag).To(Equal(etagAfterFirst))
+			})
+		})
+	})
+
 	Describe("Add", func() {
 		It("adds a share", func() {
 			s, err := c.Get(ctx, storageID, spaceID, shareID, false)

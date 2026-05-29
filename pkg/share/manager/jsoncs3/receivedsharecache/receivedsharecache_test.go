@@ -75,6 +75,35 @@ var _ = Describe("Cache", func() {
 		}
 	})
 
+	Describe("List", func() {
+		Context("when no cache file exists yet", func() {
+			It("creates the cache file on first call", func() {
+				_, err := c.List(ctx, userID)
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = os.Stat(tmpdir + "/users/" + userID + "/received.json")
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("returns empty spaces", func() {
+				spaces, err := c.List(ctx, userID)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(spaces).To(BeEmpty())
+			})
+
+			It("is readable by a fresh cache instance after first call", func() {
+				_, err := c.List(ctx, userID)
+				Expect(err).ToNot(HaveOccurred())
+
+				// a new cache instance must be able to read the bootstrapped file
+				c2 := receivedsharecache.New(storage, 0*time.Second)
+				spaces, err := c2.List(ctx, userID)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(spaces).To(BeEmpty())
+			})
+		})
+	})
+
 	Describe("Add", func() {
 		It("adds an entry", func() {
 			rs := &collaboration.ReceivedShare{

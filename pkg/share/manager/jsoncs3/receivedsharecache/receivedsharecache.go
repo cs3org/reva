@@ -332,6 +332,9 @@ func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 		span.AddEvent("updating local cache")
 	case errtypes.NotFound:
 		span.SetStatus(codes.Ok, "")
+		if err := c.persist(ctx, userID); err != nil {
+			log.Warn().Err(err).Msg("failed to create empty received share cache file")
+		}
 		return nil
 	case errtypes.NotModified:
 		span.SetStatus(codes.Ok, "")
