@@ -101,6 +101,21 @@ var _ = Describe("Cache", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(spaces).To(BeEmpty())
 			})
+
+			It("allows adding a share after bootstrap", func() {
+				_, err := c.List(ctx, userID)
+				Expect(err).ToNot(HaveOccurred())
+
+				rs := &collaboration.ReceivedShare{
+					Share: share,
+					State: collaboration.ShareState_SHARE_STATE_PENDING,
+				}
+				Expect(c.Add(ctx, userID, spaceID, rs)).To(Succeed())
+
+				spaces, err := c.List(ctx, userID)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(spaces[spaceID].States).To(HaveKey(shareID))
+			})
 		})
 	})
 
