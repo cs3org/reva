@@ -131,6 +131,7 @@ type ProtoShare struct {
 	Permissions  uint8
 	Orphan       bool               `gorm:"index"`
 	Expiration   datatypes.NullTime `gorm:"index"`
+	SpaceID      string             `gorm:"index"`
 }
 
 // Share is a regular share between users or groups. The unique index ensures that there
