@@ -120,6 +120,7 @@ func (m *PublicShareMgr) CreatePublicShare(ctx context.Context, u *user.User, md
 	publiclink.Instance = md.Id.StorageId
 	publiclink.Permissions = uint8(permissions.OCSFromCS3Permission(g.Permissions.Permissions))
 	publiclink.Orphan = false
+	publiclink.SpaceID = md.Id.SpaceId
 
 	if g.Password != "" {
 		hashedPassword, err := hashPassword(g.Password, m.c.LinkPasswordHashCost)

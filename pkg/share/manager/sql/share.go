@@ -135,6 +135,7 @@ func (m *ShareMgr) Share(ctx context.Context, md *provider.ResourceInfo, g *coll
 	share.Instance = md.Id.StorageId
 	share.Permissions = uint8(permissions.OCSFromCS3Permission(g.Permissions.Permissions))
 	share.Orphan = false
+	share.SpaceID = md.Id.SpaceId
 
 	if g.Expiration != nil {
 		share.Expiration.Scan(time.Unix(int64(g.Expiration.Seconds), 0))
