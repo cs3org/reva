@@ -127,7 +127,7 @@ func (m *ShareMgr) Share(ctx context.Context, md *provider.ResourceInfo, g *coll
 
 	share.Id = id
 	share.ShareId = model.ShareID{ID: id}
-	share.UIDOwner = conversions.FormatUserID(md.Owner)
+	share.UIDOwner = conversions.FormatUserID(user.Id)
 	share.UIDInitiator = conversions.FormatUserID(user.Id)
 	share.InitialPath = md.Path
 	share.ItemType = model.ItemType(conversions.ResourceTypeToItem(md.Type))

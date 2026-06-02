@@ -112,7 +112,7 @@ func (m *PublicShareMgr) CreatePublicShare(ctx context.Context, u *user.User, md
 
 	publiclink.Id = id
 	publiclink.ShareId = model.ShareID{ID: id}
-	publiclink.UIDOwner = conversions.FormatUserID(md.Owner)
+	publiclink.UIDOwner = conversions.FormatUserID(user.Id)
 	publiclink.UIDInitiator = conversions.FormatUserID(user.Id)
 	publiclink.InitialPath = md.Path
 	publiclink.ItemType = model.ItemType(conversions.ResourceTypeToItem(md.Type))
