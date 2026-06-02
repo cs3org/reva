@@ -24,7 +24,6 @@ type Config struct {
 	config.Database      `mapstructure:",squash"`
 	GatewaySvc           string `mapstructure:"gatewaysvc"`
 	LinkPasswordHashCost int    `mapstructure:"password_hash_cost"`
-	WebDAVURL            string `mapstructure:"webdav_url"`
 }
 
 func init() {
@@ -41,7 +40,6 @@ func (c *Config) ApplyDefaults() {
 	if c.LinkPasswordHashCost < 11 {
 		c.LinkPasswordHashCost = 11
 	}
-
 }
 
 func getDb(c Config) (*gorm.DB, error) {

@@ -58,8 +58,11 @@ type Repository interface {
 	// UpdateReceivedShare updates the received share with share state.
 	UpdateReceivedShare(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*ocm.ReceivedShare, error)
 
-	// Process the embedded share with the given state.
-	ProcessEmbeddedShare(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare) (*ocm.ReceivedShare, error)
+	// GetEmbeddedPayload returns the RO-Crate JSON payload carried by the embedded
+	// protocol of a received share, or an empty string if the share carries no
+	// embedded protocol. It is used to drive the background transfer of embedded
+	// share contents.
+	GetEmbeddedPayload(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare) (string, error)
 }
 
 // ResourceIDFilter is an abstraction for creating filter by resource id.
