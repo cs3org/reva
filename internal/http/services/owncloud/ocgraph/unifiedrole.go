@@ -288,7 +288,7 @@ func GetApplicableRoleDefinitionsForActions(actions []string, resource *provider
 		}
 
 	}
-	if resource.Space.SpaceType == string(spaces.SpaceTypeProject) {
+	if resource.Space != nil && resource.Space.SpaceType == string(spaces.SpaceTypeProject) {
 		definitions = append(definitions, NewAccessDeniedUnifiedRole())
 	}
 
