@@ -239,7 +239,7 @@ func dismantleToken(ctx context.Context, tkn string, req any, mgr token.Manager,
 func getUserGroups(ctx context.Context, u *userpb.User, client gatewayv1beta1.GatewayAPIClient) ([]string, error) {
 	if groupsIf, err := userGroupsCache.Get(u.Id.OpaqueId); err == nil {
 		log := appctx.GetLogger(ctx)
-		log.Info().Msgf("user groups found in cache %s", u.Id.OpaqueId)
+		log.Debug().Msgf("user groups found in cache %s", u.Id.OpaqueId)
 		return groupsIf.([]string), nil
 	}
 
