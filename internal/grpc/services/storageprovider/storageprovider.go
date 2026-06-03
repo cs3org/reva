@@ -838,28 +838,34 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 func (s *service) addSpaceInfo(ctx context.Context, ri *provider.ResourceInfo) error {
 	log := appctx.GetLogger(ctx)
 
+	if ri == nil {
+		log.Error().Msg("addSpaceInfo called on nil resourceInfo")
+	}
+
+	ri.Space = &provider.StorageSpace{}
+	ri.Space.SpaceType = s.conf.ProvidesSpaceType
+
 	spaceID, err := s.pathToSpaceID(ri.Path)
 	if err != nil {
+		log.Error().Err(err).Str("ri.Path", ri.Path).Int("spaceDepth", s.conf.SpaceDepth).Msgf("addSpaceInfo: failed call to pathToSpaceID")
 		return err
 	}
+
 	if ri.ParentId == nil {
 		ri.ParentId = &provider.ResourceId{}
 	}
 	ri.ParentId.SpaceId = spaceID
 	ri.Id.SpaceId = spaceID
+	ri.Space.Id = &provider.StorageSpaceId{
+		OpaqueId: spaceID,
+	}
+
 	log.Debug().
 		Str("path", ri.Path).
 		Str("derived_space_id", spaceID).
 		Str("storage_id", ri.Id.StorageId).
 		Str("opaque_id", ri.Id.OpaqueId).
 		Msg("storageprovider: addSpaceInfo")
-
-	ri.Space = &provider.StorageSpace{
-		Id: &provider.StorageSpaceId{
-			OpaqueId: spaceID,
-		},
-		SpaceType: s.conf.ProvidesSpaceType,
-	}
 
 	return nil
 }
