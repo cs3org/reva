@@ -23,7 +23,6 @@ Clients that need to distinguish this case from other `409 Conflict` responses (
 | Header | `X-Oc-Linked-Primary-Account: true` |
 | `Content-Type` | `application/json; charset=utf-8` |
 | `Cache-Control` | `no-store` (avoid retaining auth-failure payloads in shared caches or browser history substitutes) |
-
 | Body | JSON object with `error.code` and `error.message` (Libre Graph / OData style) |
 
 Example body (pretty-printed; the wire encoding is compact JSON from `encoding/json`, with the same keys and strings):
