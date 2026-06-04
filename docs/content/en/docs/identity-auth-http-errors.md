@@ -43,7 +43,7 @@ Implementations omit raw GRPC or LDAP diagnostics from the HTTP body to avoid le
 - **Caches:** Responses use **`Cache-Control: no-store`** so intermediaries and clients are discouraged from storing this identity outcome.
 - **Logs:** Middleware still logs **`Err(err)`**, which may include GRPC status text from **`GetUserByClaim`** upstream. Align log retention and access control with sensitive identity metadata (same discipline as other `logError` paths).
 - **Client-visible oracle:** Anyone who can obtain a valid IdP bearer and hit a protected bootstrap URL receives **409 + `X-Oc-Linked-Primary-Account`**, signalling a linkage conflict rather than a generic credential failure. This is deliberate for UX; minimise abuse surface with IdP/session policy and abuse monitoring where needed.
-- **Semantic breadth:** HTTP **409 + linked-primary contract** applies to **every** **`Authenticate`** outcome that surfaces as **`CODE_ABORTED`** / **`errtypes.Conflict`** today (not only “linked primary” if additional auth managers reuse that code). Narrow in code later if tighter semantics are required.
+- **Semantic breadth:** HTTP **409 + linked-primary contract** applies to **every** **`Authenticate`** outcome that surfaces as **`CODE_ABORTED`** / **`errtypes.Conflict`** today (not only "linked primary" if additional auth managers reuse that code). Narrow in code later if tighter semantics are required.
 
 ## Consumer reference
 
@@ -54,7 +54,7 @@ fixed English message intentionally contains the substring `linked primary accou
 ## Staging verification (manual QA)
 
 1. **Linked-primary subject:** Sign in with a test identity that triggers user resolution conflict (same GRPC path as OIDC
-   `GetUserByClaim` → `CODE_ABORTED`). Open the browser developer tools Network tab.
+   `GetUserByClaim` -> `CODE_ABORTED`). Open the browser developer tools Network tab.
 2. **Bootstrap call:** Reload or navigate so the SPA issues a bootstrap request (for example `GET .../graph/v1.0/me` with
    the IdP bearer). Expect **409**, header **`X-Oc-Linked-Primary-Account: true`**, and JSON with **`linkedPrimaryAccount`**.
 3. **Regression:** Sign in with a normal user; expect **200** on the same bootstrap URL and unchanged login behaviour.
