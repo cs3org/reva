@@ -35,7 +35,6 @@ import (
 	"github.com/owncloud/reva/v2/pkg/storage/fs/ocis"
 	"github.com/owncloud/reva/v2/pkg/storage/fs/registry"
 	jwt "github.com/owncloud/reva/v2/pkg/token/manager/jwt"
-	"github.com/owncloud/reva/v2/pkg/utils"
 	"github.com/owncloud/reva/v2/tests/helpers"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -276,35 +275,6 @@ var _ = Describe("storage providers", func() {
 			statRes, err = providerClient.Stat(ctx, &storagep.StatRequest{Ref: targetRef})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-		})
-	}
-
-	assertMoveOpaque := func(provider string) {
-		It("populates MoveResponse.Opaque with resolved newref and oldref", func() {
-			subdirRef := ref(provider, subdirPath)
-			statRes, err := providerClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-
-			targetRef := &storagep.Reference{ResourceId: subdirRef.ResourceId, Path: "/new_subdir_event"}
-			res, err := providerClient.Move(ctx, &storagep.MoveRequest{Source: subdirRef, Destination: targetRef})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(res.GetStatus().GetCode()).To(Equal(rpcv1beta1.Code_CODE_OK))
-
-			Expect(res.Opaque).ToNot(BeNil(), "MoveResponse.Opaque must not be nil")
-
-			var newRef storagep.Reference
-			Expect(utils.ReadJSONFromOpaque(res.Opaque, "newref", &newRef)).To(Succeed())
-			Expect(newRef.ResourceId).ToNot(BeNil(), "newref must carry a resolved ResourceId")
-			Expect(newRef.ResourceId.SpaceId).ToNot(BeEmpty(), "newref.SpaceId must be set")
-
-			var oldRef storagep.Reference
-			Expect(utils.ReadJSONFromOpaque(res.Opaque, "oldref", &oldRef)).To(Succeed())
-			Expect(oldRef.ResourceId).ToNot(BeNil(), "oldref must carry a resolved ResourceId")
-			Expect(oldRef.ResourceId.SpaceId).ToNot(BeEmpty(), "oldref.SpaceId must be set")
-
-			Expect(newRef.ResourceId.OpaqueId).To(Equal(oldRef.ResourceId.OpaqueId),
-				"newref and oldref should point to the same node")
 		})
 	}
 
@@ -727,9 +697,6 @@ var _ = Describe("storage providers", func() {
 				assertGetPath(provider)
 				assertDelete(provider)
 				assertMove(provider)
-				if provider == "ocis" {
-					assertMoveOpaque(provider)
-				}
 				assertGrants(provider)
 				assertUploads(provider)
 				assertDownloads(provider)

@@ -63,6 +63,9 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		sendOwnerChan := make(chan *user.UserId)
 		ctx = storagespace.ContextRegisterSendOwnerChan(ctx, sendOwnerChan)
 
+		moveSlot := &storagespace.MoveResultSlot{}
+		ctx = storagespace.ContextRegisterMoveResultSlot(ctx, moveSlot)
+
 		res, err := handler(ctx, req)
 		if err != nil {
 			return res, err
@@ -80,7 +83,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		switch v := res.(type) {
 		case *provider.MoveResponse:
 			if isSuccess(v) {
-				ev = ItemMoved(v, req.(*provider.MoveRequest), ownerID, executant)
+				ev = ItemMoved(v, req.(*provider.MoveRequest), moveSlot.Result, executant)
 			}
 		case *collaboration.CreateShareResponse:
 			if isSuccess(v) {

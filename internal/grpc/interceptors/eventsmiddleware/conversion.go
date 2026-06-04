@@ -28,6 +28,7 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/owncloud/reva/v2/pkg/events"
+	"github.com/owncloud/reva/v2/pkg/storage"
 	"github.com/owncloud/reva/v2/pkg/storagespace"
 	"github.com/owncloud/reva/v2/pkg/utils"
 )
@@ -282,15 +283,19 @@ func ItemTrashed(r *provider.DeleteResponse, req *provider.DeleteRequest, spaceO
 }
 
 // ItemMoved converts the response to an event
-func ItemMoved(r *provider.MoveResponse, req *provider.MoveRequest, spaceOwner *user.UserId, executant *user.User) events.ItemMoved {
-	var newRef, oldRef provider.Reference
-	_ = utils.ReadJSONFromOpaque(r.Opaque, "newref", &newRef)
-	_ = utils.ReadJSONFromOpaque(r.Opaque, "oldref", &oldRef)
+func ItemMoved(r *provider.MoveResponse, req *provider.MoveRequest, result *storage.MoveResult, executant *user.User) events.ItemMoved {
+	var spaceOwner *user.UserId
+	var newRef, oldRef *provider.Reference
+	if result != nil {
+		spaceOwner = result.SpaceOwner
+		newRef = result.NewReference
+		oldRef = result.OldReference
+	}
 	return events.ItemMoved{
 		SpaceOwner:        spaceOwner,
 		Executant:         executant.GetId(),
-		Ref:               &newRef,
-		OldReference:      &oldRef,
+		Ref:               newRef,
+		OldReference:      oldRef,
 		Timestamp:         utils.TSNow(),
 		ImpersonatingUser: extractImpersonator(executant),
 	}

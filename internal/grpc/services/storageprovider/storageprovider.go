@@ -762,16 +762,12 @@ func (s *Service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
 
 	result, err := s.Storage.Move(ctx, req.Source, req.Destination)
-
-	res := &provider.MoveResponse{
-		Status: status.NewStatusFromErrType(ctx, "move", err),
-	}
 	if err == nil && result != nil {
-		storagespace.ContextSendSpaceOwnerID(ctx, result.SpaceOwner)
-		res.Opaque = utils.AppendJSONToOpaque(res.Opaque, "newref", result.NewReference)
-		res.Opaque = utils.AppendJSONToOpaque(res.Opaque, "oldref", result.OldReference)
+		storagespace.ContextSetMoveResult(ctx, result)
 	}
-	return res, nil
+	return &provider.MoveResponse{
+		Status: status.NewStatusFromErrType(ctx, "move", err),
+	}, nil
 }
 
 func (s *Service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
