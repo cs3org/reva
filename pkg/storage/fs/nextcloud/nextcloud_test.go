@@ -204,7 +204,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 				Path: "/some/new/path",
 			}
-			err := nc.Move(ctx, ref1, ref2)
+			_, err := nc.Move(ctx, ref1, ref2)
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/Move {"oldRef":{"resource_id":{"storage_id":"storage-id-1","opaque_id":"opaque-id-1"},"path":"/some/old/path"},"newRef":{"resource_id":{"storage_id":"storage-id-2","opaque_id":"opaque-id-2"},"path":"/some/new/path"}}`)
 		})

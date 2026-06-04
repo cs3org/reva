@@ -761,11 +761,17 @@ func (s *Service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 func (s *Service) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
 	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
 
-	err := s.Storage.Move(ctx, req.Source, req.Destination)
+	result, err := s.Storage.Move(ctx, req.Source, req.Destination)
 
-	return &provider.MoveResponse{
+	res := &provider.MoveResponse{
 		Status: status.NewStatusFromErrType(ctx, "move", err),
-	}, nil
+	}
+	if err == nil && result != nil {
+		storagespace.ContextSendSpaceOwnerID(ctx, result.SpaceOwner)
+		res.Opaque = utils.AppendJSONToOpaque(res.Opaque, "newref", result.NewReference)
+		res.Opaque = utils.AppendJSONToOpaque(res.Opaque, "oldref", result.OldReference)
+	}
+	return res, nil
 }
 
 func (s *Service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {

@@ -76,9 +76,12 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 
 		executant, _ := revactx.ContextGetUser(ctx)
 
-		// The MoveResponse event is moved to the decomposedfs
 		var ev interface{}
 		switch v := res.(type) {
+		case *provider.MoveResponse:
+			if isSuccess(v) {
+				ev = ItemMoved(v, req.(*provider.MoveRequest), ownerID, executant)
+			}
 		case *collaboration.CreateShareResponse:
 			if isSuccess(v) {
 				ev = ShareCreated(v, executant)

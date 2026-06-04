@@ -70,8 +70,8 @@ func (fs *hellofs) Delete(ctx context.Context, ref *provider.Reference) error {
 }
 
 // Move changes the path of a resource
-func (fs *hellofs) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
-	return errtypes.NotSupported("unimplemented")
+func (fs *hellofs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (*storage.MoveResult, error) {
+	return nil, errtypes.NotSupported("unimplemented")
 }
 
 // Upload creates or updates a resource of type file with a new revision

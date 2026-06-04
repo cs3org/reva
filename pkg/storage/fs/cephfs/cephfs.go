@@ -195,14 +195,15 @@ func (fs *cephfs) Delete(ctx context.Context, ref *provider.Reference) (err erro
 	return getRevaError(err)
 }
 
-func (fs *cephfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
+func (fs *cephfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (*storage.MoveResult, error) {
 	var oldPath, newPath string
+	var err error
 	user := fs.makeUser(ctx)
 	if oldPath, err = user.resolveRef(oldRef); err != nil {
-		return
+		return nil, err
 	}
 	if newPath, err = user.resolveRef(newRef); err != nil {
-		return
+		return nil, err
 	}
 
 	user.op(func(cv *cacheVal) {
@@ -215,10 +216,10 @@ func (fs *cephfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) 
 
 	// has already been moved by direct mount
 	if err != nil && err.Error() == errNotFound {
-		return nil
+		return nil, nil
 	}
 
-	return getRevaError(err)
+	return nil, getRevaError(err)
 }
 
 func (fs *cephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string, fieldMask []string) (ri *provider.ResourceInfo, err error) {

@@ -288,7 +288,7 @@ func (nc *StorageDriver) Delete(ctx context.Context, ref *provider.Reference) er
 }
 
 // Move as defined in the storage.FS interface
-func (nc *StorageDriver) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
+func (nc *StorageDriver) Move(ctx context.Context, oldRef, newRef *provider.Reference) (*storage.MoveResult, error) {
 	type paramsObj struct {
 		OldRef *provider.Reference `json:"oldRef"`
 		NewRef *provider.Reference `json:"newRef"`
@@ -302,7 +302,7 @@ func (nc *StorageDriver) Move(ctx context.Context, oldRef, newRef *provider.Refe
 	log.Info().Msgf("Move %s", bodyStr)
 
 	_, _, err := nc.do(ctx, Action{"Move", string(bodyStr)})
-	return err
+	return nil, err
 }
 
 // GetMD as defined in the storage.FS interface

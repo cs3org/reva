@@ -283,11 +283,14 @@ func ItemTrashed(r *provider.DeleteResponse, req *provider.DeleteRequest, spaceO
 
 // ItemMoved converts the response to an event
 func ItemMoved(r *provider.MoveResponse, req *provider.MoveRequest, spaceOwner *user.UserId, executant *user.User) events.ItemMoved {
+	var newRef, oldRef provider.Reference
+	_ = utils.ReadJSONFromOpaque(r.Opaque, "newref", &newRef)
+	_ = utils.ReadJSONFromOpaque(r.Opaque, "oldref", &oldRef)
 	return events.ItemMoved{
 		SpaceOwner:        spaceOwner,
 		Executant:         executant.GetId(),
-		Ref:               req.Destination,
-		OldReference:      req.Source,
+		Ref:               &newRef,
+		OldReference:      &oldRef,
 		Timestamp:         utils.TSNow(),
 		ImpersonatingUser: extractImpersonator(executant),
 	}

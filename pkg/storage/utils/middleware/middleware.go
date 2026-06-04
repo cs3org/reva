@@ -226,7 +226,7 @@ func (f *FS) Delete(ctx context.Context, ref *provider.Reference) error {
 	return res0
 }
 
-func (f *FS) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
+func (f *FS) Move(ctx context.Context, oldRef, newRef *provider.Reference) (*storage.MoveResult, error) {
 	var (
 		err     error
 		unhook  UnHook
@@ -235,22 +235,22 @@ func (f *FS) Move(ctx context.Context, oldRef, newRef *provider.Reference) error
 	for _, hook := range f.hooks {
 		ctx, unhook, err = hook("Move", ctx, oldRef.GetResourceId().GetSpaceId())
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if unhook != nil {
 			unhooks = append(unhooks, unhook)
 		}
 	}
 
-	res0 := f.next.Move(ctx, oldRef, newRef)
+	res0, res1 := f.next.Move(ctx, oldRef, newRef)
 
 	for _, unhook := range unhooks {
 		if err := unhook(); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	return res0
+	return res0, res1
 }
 
 func (f *FS) GetMD(ctx context.Context, ref *provider.Reference, mdKeys, fieldMask []string) (*provider.ResourceInfo, error) {

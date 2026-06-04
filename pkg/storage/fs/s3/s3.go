@@ -449,17 +449,17 @@ func (fs *s3FS) moveObject(ctx context.Context, oldKey string, newKey string) er
 	return nil
 }
 
-func (fs *s3FS) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
+func (fs *s3FS) Move(ctx context.Context, oldRef, newRef *provider.Reference) (*storage.MoveResult, error) {
 	log := appctx.GetLogger(ctx)
 
 	fn, err := fs.resolve(ctx, oldRef)
 	if err != nil {
-		return errors.Wrap(err, "error resolving ref")
+		return nil, errors.Wrap(err, "error resolving ref")
 	}
 
 	newName, err := fs.resolve(ctx, newRef)
 	if err != nil {
-		return errors.Wrap(err, "error resolving ref")
+		return nil, errors.Wrap(err, "error resolving ref")
 	}
 
 	// first we need to find out if fn is a dir or a file
@@ -474,7 +474,7 @@ func (fs *s3FS) Move(ctx context.Context, oldRef, newRef *provider.Reference) er
 			switch aerr.Code() {
 			case s3.ErrCodeNoSuchBucket:
 			case s3.ErrCodeNoSuchKey:
-				return errtypes.NotFound(fn)
+				return nil, errtypes.NotFound(fn)
 			}
 		}
 
@@ -488,7 +488,7 @@ func (fs *s3FS) Move(ctx context.Context, oldRef, newRef *provider.Reference) er
 		for isTruncated {
 			output, err := fs.client.ListObjectsV2(input)
 			if err != nil {
-				return errors.Wrap(err, "s3FS: error listing "+fn)
+				return nil, errors.Wrap(err, "s3FS: error listing "+fn)
 			}
 
 			for _, o := range output.Contents {
@@ -499,7 +499,7 @@ func (fs *s3FS) Move(ctx context.Context, oldRef, newRef *provider.Reference) er
 
 				err := fs.moveObject(ctx, *o.Key, strings.Replace(*o.Key, fn+"/", newName+"/", 1))
 				if err != nil {
-					return err
+					return nil, err
 				}
 			}
 
@@ -507,15 +507,15 @@ func (fs *s3FS) Move(ctx context.Context, oldRef, newRef *provider.Reference) er
 			isTruncated = *output.IsTruncated
 		}
 		// ok, we are done
-		return nil
+		return nil, nil
 	}
 
 	// move single object
 	err = fs.moveObject(ctx, fn, newName)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return nil, nil
 }
 
 func (fs *s3FS) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string, fieldMask []string) (*provider.ResourceInfo, error) {
