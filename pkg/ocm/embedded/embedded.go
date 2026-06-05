@@ -67,8 +67,14 @@ func (c *Config) ApplyDefaults() {
 
 // Transferrer processes an embedded share payload, transferring its referenced
 // files to a destination. Drivers register an implementation via Register.
+//
+// Process returns synchronously once the transfer has been scheduled; the actual
+// copy runs in the background. The optional onComplete callback is invoked once
+// the transfer has finished, with a nil error on success, allowing the caller to
+// observe completion (e.g. to advance the share state). A malformed payload is
+// reported as a synchronous error from Process and onComplete is not called.
 type Transferrer interface {
-	Process(ctx context.Context, payload, destination string) error
+	Process(ctx context.Context, payload, destination string, onComplete func(error)) error
 }
 
 // NewFunc builds a Transferrer from its driver configuration.
@@ -106,8 +112,10 @@ const embeddedRetryBaseBackoff = 2 * time.Second
 
 // Process parses the RO-Crate payload and streams its files to destination in the
 // background, using the bearer token from ctx for WebDAV auth. It errors only on a
-// malformed payload.
-func (d *driver) Process(ctx context.Context, payload, destination string) error {
+// malformed payload. When set, onComplete is invoked once the transfer finishes
+// (immediately when there is nothing to transfer, otherwise from the background
+// goroutine), with a nil error on success.
+func (d *driver) Process(ctx context.Context, payload, destination string, onComplete func(error)) error {
 	log := appctx.GetLogger(ctx)
 
 	var c crate
@@ -118,6 +126,9 @@ func (d *driver) Process(ctx context.Context, payload, destination string) error
 	entries := crateEntries(log, c.Graph)
 	if len(entries) == 0 {
 		log.Debug().Str("destination", destination).Msg("embedded transfer: no transferable entries in payload")
+		if onComplete != nil {
+			onComplete(nil)
+		}
 		return nil
 	}
 
@@ -125,14 +136,21 @@ func (d *driver) Process(ctx context.Context, payload, destination string) error
 	// captured token may expire mid-transfer, failing later files (best-effort).
 	token := appctx.ContextMustGetToken(ctx)
 	timeout := time.Duration(d.c.Timeout) * time.Second
-	go d.transferEntries(log, token, destination, entries, timeout)
+	go func() {
+		err := d.transferEntries(log, token, destination, entries, timeout)
+		if onComplete != nil {
+			onComplete(err)
+		}
+	}()
 
 	return nil
 }
 
 // transferEntries streams each entry to the WebDAV destination. A file that keeps
-// failing is skipped so one bad file doesn't abort the whole dataset.
-func (d *driver) transferEntries(log *zerolog.Logger, token, destination string, entries []transferEntry, timeout time.Duration) {
+// failing is skipped so one bad file doesn't abort the whole dataset. It returns
+// an error only when the transfer cannot proceed at all (e.g. the destination is
+// unreachable); per-file failures are best-effort and do not produce an error.
+func (d *driver) transferEntries(log *zerolog.Logger, token, destination string, entries []transferEntry, timeout time.Duration) error {
 	httpClient := &http.Client{}
 	// Preemptive auth, not gowebdav's default auto-auth: auto-auth buffers each
 	// upload body in memory to replay on an auth challenge, blowing up RAM on
@@ -148,12 +166,12 @@ func (d *driver) transferEntries(log *zerolog.Logger, token, destination string,
 
 	if err := dav.Connect(); err != nil {
 		log.Error().Err(err).Msg("embedded transfer: failed to connect to WebDAV")
-		return
+		return err
 	}
 
 	if err := dav.MkdirAll(destination, 0755); err != nil {
 		log.Error().Err(err).Str("destination", destination).Msg("embedded transfer: failed to create destination directory")
-		return
+		return err
 	}
 
 	idleTimeout := time.Duration(d.c.IdleTimeout) * time.Second
@@ -191,6 +209,8 @@ func (d *driver) transferEntries(log *zerolog.Logger, token, destination string,
 		Int("failed", failed).
 		Int("total", len(entries)).
 		Msg("Finished embedded share transfer")
+
+	return nil
 }
 
 // uploadEntryWithRetry transfers one entry, retrying up to Retries times with

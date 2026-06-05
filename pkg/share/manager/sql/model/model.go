@@ -69,6 +69,9 @@ const (
 	OcmShareStateAccepted
 	// OcmShareStateRejected is the share for a rejected share.
 	OcmShareStateRejected
+	// OcmShareStateTransferring is the state for a share whose embedded
+	// content is currently being transferred to its destination.
+	OcmShareStateTransferring
 )
 
 // OcmProtocol is the protocol used by the recipient of an OCM share
