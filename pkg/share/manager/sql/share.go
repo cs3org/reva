@@ -133,7 +133,6 @@ func (m *ShareMgr) Share(ctx context.Context, md *provider.ResourceInfo, g *coll
 	share.ItemType = model.ItemType(conversions.ResourceTypeToItem(md.Type))
 	share.Inode = md.Id.OpaqueId
 	share.Instance = md.Id.StorageId
-	share.SpaceId = md.Id.SpaceId
 	share.Permissions = uint8(permissions.OCSFromCS3Permission(g.Permissions.Permissions))
 	share.Orphan = false
 	share.SpaceID = md.Id.SpaceId

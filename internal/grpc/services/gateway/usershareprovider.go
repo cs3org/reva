@@ -85,7 +85,8 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 			req.ResourceInfo.Id.SpaceId = spaceId
 			log.Debug().Str("keyword", "sharehierarchy").Str("spaceId", spaceId).Msg("sharehierarchy: populated missing spaceId via stat")
 		} else {
-			log.Warn().Str("keyword", "sharehierarchy").Msg("sharehierarchy: spaceId missing and stat could not resolve it")
+			log.Error().Str("keyword", "sharehierarchy").Msg("sharehierarchy: spaceId missing and stat could not resolve it")
+			return nil, errors.New("SpaceID missing when creating share")
 		}
 	}
 
