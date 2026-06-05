@@ -923,16 +923,16 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 
 	log := appctx.GetLogger(ctx)
 	newResolved := newRef
-	if nref, err := fs.refFromNode(ctx, newNode, newRef.GetResourceId().GetStorageId(), nrp); err == nil {
-		newResolved = nref
-	} else {
+	if nref, err := fs.refFromNode(ctx, newNode, newRef.GetResourceId().GetStorageId(), nrp); err != nil {
 		log.Error().Err(err).Msg("move: failed to resolve new reference")
+	} else {
+		newResolved = nref
 	}
 	oldResolved := oldRef
-	if oref, err := fs.refFromNode(ctx, oldNode, oldRef.GetResourceId().GetStorageId(), orp); err == nil {
-		oldResolved = oref
-	} else {
+	if oref, err := fs.refFromNode(ctx, oldNode, oldRef.GetResourceId().GetStorageId(), orp); err != nil {
 		log.Error().Err(err).Msg("move: failed to resolve old reference")
+	} else {
+		oldResolved = oref
 	}
 	return &storage.MoveResult{
 		SpaceOwner:   newNode.SpaceOwnerOrManager(ctx),
