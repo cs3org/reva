@@ -1,21 +1,3 @@
-// Copyright 2018-2026 CERN
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// In applying this license, CERN does not waive the privileges and immunities
-// granted to it by virtue of its status as an Intergovernmental Organization
-// or submit itself to any jurisdiction.
-
 package ocm
 
 import (
@@ -36,11 +18,57 @@ import (
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/opencloudmesh/ocmd"
+	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/studio-b12/gowebdav"
 	"google.golang.org/grpc"
 )
+
+// ocmDiscoveryServer starts a local httptest.Server that answers /.well-known/ocm
+// with a minimal OcmDiscoveryData payload advertising the given protocol for the
+// given resource type. The server's own URL is used as the OCM endpoint so that
+// any URL constructed from the discovery response also resolves locally.
+// Callers must call srv.Close() when done (typically via t.Cleanup).
+func ocmDiscoveryServer(t *testing.T, proto, resType string) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	// We need a two-step setup: register the handler before the server starts,
+	// but reference srv.URL inside the handler. Use a pointer so the closure
+	// captures the final value after httptest.NewServer returns.
+	var srv *httptest.Server
+	mux.HandleFunc("/.well-known/ocm", func(w http.ResponseWriter, r *http.Request) {
+		endpoint := "http://" + r.Host
+		disco := wellknown.OcmDiscoveryData{
+			Endpoint: endpoint,
+			ResourceTypes: []wellknown.ResourceTypes{
+				{
+					Name: resType,
+					Protocols: map[string]interface{}{
+						proto: "/remote.php/dav/ocm",
+					},
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(disco)
+	})
+	// Also serve /ocm/token so tests that exercise the code-flow path and happen
+	// to hit this server for token exchange get a sensible default response.
+	mux.HandleFunc("/ocm/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"access_token": "mock-token",
+			"token_type":   "Bearer",
+			"expires_in":   3600,
+		})
+	})
+	srv = httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// --- helpers ---
 
 func TestShareInfoFromPath(t *testing.T) {
 	id, rel := shareInfoFromPath("/share123/sub/file.txt")
@@ -186,6 +214,8 @@ func TestGetPathFromShareIDAndRelPath_Root(t *testing.T) {
 	}
 }
 
+// --- fakes and mocks ---
+
 type fakeFileInfo struct {
 	name    string
 	size    int64
@@ -224,7 +254,12 @@ func (m *mockReceivedGateway) GetReceivedOCMShare(_ context.Context, _ *ocmpb.Ge
 	}, nil
 }
 
-func testReceivedShare(id string, isFile bool) *ocmpb.ReceivedShare {
+// testReceivedShare builds a minimal ReceivedShare whose Creator.Idp and WebDAV
+// URI host both point at senderAddr (e.g. "127.0.0.1:12345"), so that any
+// discovery call the driver makes — whether it derives the target from the
+// WebDAV URI or from Creator.Idp — hits the local httptest.Server instead of
+// the real internet.
+func testReceivedShare(senderAddr, id string, isFile bool) *ocmpb.ReceivedShare {
 	srt := ocmpb.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER
 	if isFile {
 		srt = ocmpb.SharedResourceType_SHARE_RESOURCE_TYPE_FILE
@@ -234,7 +269,7 @@ func testReceivedShare(id string, isFile bool) *ocmpb.ReceivedShare {
 		Name: "shared-doc.txt",
 		Creator: &userpb.UserId{
 			OpaqueId: "creator",
-			Idp:      "sender.example.com",
+			Idp:      senderAddr,
 		},
 		Grantee: &provider.Grantee{
 			Type: provider.GranteeType_GRANTEE_TYPE_USER,
@@ -248,7 +283,7 @@ func testReceivedShare(id string, isFile bool) *ocmpb.ReceivedShare {
 		SharedResourceType: srt,
 		Protocols: []*ocmpb.Protocol{
 			{Term: &ocmpb.Protocol_WebdavOptions{WebdavOptions: &ocmpb.WebDAVProtocol{
-				Uri:          "https://remote/dav",
+				Uri:          "http://" + senderAddr + "/remote.php/dav/ocm/" + id,
 				SharedSecret: "secret",
 				Permissions: &ocmpb.SharePermissions{
 					Permissions: &provider.ResourcePermissions{
@@ -272,16 +307,20 @@ func newTestReceivedDriver() *driver {
 	}
 }
 
-func testCodeFlowReceivedShare(baseURL string) *ocmpb.ReceivedShare {
-	share := testReceivedShare("share-abc", false)
+func testCodeFlowReceivedShare(senderAddr, baseURL string) *ocmpb.ReceivedShare {
+	share := testReceivedShare(senderAddr, "share-abc", false)
 	webdav := share.Protocols[0].GetWebdavOptions()
 	webdav.Uri = baseURL + "/remote.php/dav/ocm/share-abc"
 	webdav.Requirements = []string{"must-exchange-token"}
 	return share
 }
 
+// --- receiver client ID tests ---
+// These tests don't trigger network calls; they use a static senderAddr since
+// the share fields are never passed to the OCM client here.
+
 func TestReceiverClientIDPrefersContextUserIDP(t *testing.T) {
-	share := testReceivedShare("share-abc", false)
+	share := testReceivedShare("sender.example.com", "share-abc", false)
 	ctx := appctx.ContextSetUser(context.Background(), &userpb.User{
 		Id: &userpb.UserId{OpaqueId: "local-user", Idp: "local-context.example"},
 	})
@@ -293,7 +332,7 @@ func TestReceiverClientIDPrefersContextUserIDP(t *testing.T) {
 }
 
 func TestReceiverClientIDFallsBackToShareGranteeIDP(t *testing.T) {
-	share := testReceivedShare("share-abc", false)
+	share := testReceivedShare("sender.example.com", "share-abc", false)
 
 	got := receiverClientID(context.Background(), share)
 	if got != "nextcloud1.docker" {
@@ -302,7 +341,7 @@ func TestReceiverClientIDFallsBackToShareGranteeIDP(t *testing.T) {
 }
 
 func TestReceiverClientIDReturnsEmptyWhenUnavailable(t *testing.T) {
-	share := testReceivedShare("share-abc", false)
+	share := testReceivedShare("sender.example.com", "share-abc", false)
 	share.Grantee = nil
 
 	got := receiverClientID(context.Background(), share)
@@ -312,7 +351,7 @@ func TestReceiverClientIDReturnsEmptyWhenUnavailable(t *testing.T) {
 }
 
 func TestReceiverClientIDWithLookupFallsBackToGatewayUserIDP(t *testing.T) {
-	share := testReceivedShare("share-abc", false)
+	share := testReceivedShare("sender.example.com", "share-abc", false)
 	share.Grantee.GetUserId().Idp = ""
 
 	got := receiverClientIDWithLookup(context.Background(), share, func(_ context.Context, userID *userpb.UserId) string {
@@ -327,7 +366,7 @@ func TestReceiverClientIDWithLookupFallsBackToGatewayUserIDP(t *testing.T) {
 }
 
 func TestReceiverClientIDWithLookupSkipsGatewayWhenShareAlreadyHasIDP(t *testing.T) {
-	share := testReceivedShare("share-abc", false)
+	share := testReceivedShare("sender.example.com", "share-abc", false)
 	lookupCalled := false
 
 	got := receiverClientIDWithLookup(context.Background(), share, func(_ context.Context, _ *userpb.UserId) string {
@@ -341,6 +380,11 @@ func TestReceiverClientIDWithLookupSkipsGatewayWhenShareAlreadyHasIDP(t *testing
 		t.Error("expected lookup not to be called when share grantee already has an idp")
 	}
 }
+
+// --- discovery / token-exchange tests ---
+// All of these spin up a local httptest.Server and thread its address through
+// both Creator.Idp and the WebDAV URI host via testReceivedShare /
+// testCodeFlowReceivedShare, so no real outbound DNS lookups are made.
 
 func TestGetTokenEndpointCachesDiscovery(t *testing.T) {
 	discoveryCalls := 0
@@ -367,7 +411,7 @@ func TestGetTokenEndpointCachesDiscovery(t *testing.T) {
 	defer srv.Close()
 
 	d := newTestReceivedDriver()
-	share := testCodeFlowReceivedShare(srv.URL)
+	share := testCodeFlowReceivedShare(srv.Listener.Addr().String(), srv.URL)
 
 	got1, err := d.getTokenEndpoint(context.Background(), share)
 	if err != nil {
@@ -400,12 +444,13 @@ func TestGetTokenEndpointRequiresDiscoveryTokenEndpoint(t *testing.T) {
 			"provider":      "reva",
 			"resourceTypes": []any{},
 			"capabilities":  []string{"exchange-token"},
+			// intentionally omitting "tokenEndPoint"
 		})
 	}))
 	defer srv.Close()
 
 	d := newTestReceivedDriver()
-	share := testCodeFlowReceivedShare(srv.URL)
+	share := testCodeFlowReceivedShare(srv.Listener.Addr().String(), srv.URL)
 
 	_, err := d.getTokenEndpoint(context.Background(), share)
 	if err == nil {
@@ -460,7 +505,7 @@ func TestUploadAuthCodeFlowExchangesBearerToken(t *testing.T) {
 	defer srv.Close()
 
 	d := newTestReceivedDriver()
-	share := testCodeFlowReceivedShare(srv.URL)
+	share := testCodeFlowReceivedShare(srv.Listener.Addr().String(), srv.URL)
 
 	got, err := d.uploadAuth(context.Background(), share, share.Protocols[0].GetWebdavOptions().Uri, "exchange-secret", share.GetId())
 	if err != nil {
@@ -487,8 +532,10 @@ func TestUploadAuthCodeFlowExchangesBearerToken(t *testing.T) {
 }
 
 func TestUploadAuthLegacyUsesCachedHeader(t *testing.T) {
+	// Legacy path reads from ccache before any discovery; the senderAddr is
+	// unused by the code path under test, so a static placeholder is fine here.
 	d := newTestReceivedDriver()
-	share := testReceivedShare("share-abc", false)
+	share := testReceivedShare("sender.example.com", "share-abc", false)
 	_ = d.ccache.Set(share.GetId().GetOpaqueId(), &cachedClient{authHeader: "Basic cached-auth"})
 
 	got, err := d.uploadAuth(context.Background(), share, share.Protocols[0].GetWebdavOptions().Uri, "legacy-secret", share.GetId())
@@ -532,9 +579,10 @@ func TestWithExchangeStatRetryRetriesAndReturnsFreshShare(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	share1 := testCodeFlowReceivedShare(srv.URL)
+	senderAddr := srv.Listener.Addr().String()
+	share1 := testCodeFlowReceivedShare(senderAddr, srv.URL)
 	share1.Name = "stale-name"
-	share2 := testCodeFlowReceivedShare(srv.URL)
+	share2 := testCodeFlowReceivedShare(senderAddr, srv.URL)
 	share2.Name = "fresh-name"
 
 	d := newTestReceivedDriver()
@@ -604,7 +652,8 @@ func TestWithExchangeRetrySecond401ReturnsInvalidCredentials(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	share := testCodeFlowReceivedShare(srv.URL)
+	senderAddr := srv.Listener.Addr().String()
+	share := testCodeFlowReceivedShare(senderAddr, srv.URL)
 	d := newTestReceivedDriver()
 	d.gateway = &mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share, share}}
 
@@ -631,9 +680,12 @@ func TestWithExchangeRetrySecond401ReturnsInvalidCredentials(t *testing.T) {
 	}
 }
 
+// --- convertStatToResourceInfo tests ---
+
 func TestConvertStatToResourceInfo_File(t *testing.T) {
 	fi := &fakeFileInfo{name: "file.txt", size: 1024}
-	share := testReceivedShare("share-abc", true)
+	// senderAddr is irrelevant: convertStatToResourceInfo never triggers discovery.
+	share := testReceivedShare("sender.example.com", "share-abc", true)
 
 	info := convertStatToResourceInfo(fi, share, "sub/file.txt")
 
@@ -663,7 +715,7 @@ func TestConvertStatToResourceInfo_File(t *testing.T) {
 
 func TestConvertStatToResourceInfo_Dir(t *testing.T) {
 	fi := &fakeFileInfo{name: "docs", size: 0, isDir: true}
-	share := testReceivedShare("share-abc", false)
+	share := testReceivedShare("sender.example.com", "share-abc", false)
 
 	info := convertStatToResourceInfo(fi, share, "docs")
 
@@ -675,6 +727,8 @@ func TestConvertStatToResourceInfo_Dir(t *testing.T) {
 		t.Errorf("name: got %q, want docs", info.Name)
 	}
 }
+
+// --- isWebDAV401 tests ---
 
 func TestIsWebDAV401_True(t *testing.T) {
 	err := gowebdav.NewPathError("GET", "/test", http.StatusUnauthorized)
