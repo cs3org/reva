@@ -34,15 +34,12 @@ import (
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/v3/pkg/token"
 	jwt "github.com/cs3org/reva/v3/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/list"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"google.golang.org/grpc/metadata"
 )
 
 type generateInviteResponse struct {
@@ -50,18 +47,6 @@ type generateInviteResponse struct {
 	Description string `json:"descriptions"`
 	Expiration  uint64 `json:"expiration"`
 	InviteLink  string `json:"invite_link"`
-}
-
-func ctxWithAuthToken(tokenManager token.Manager, user *userpb.User) context.Context {
-	ctx := context.Background()
-	scope, err := scope.AddOwnerScope(nil)
-	Expect(err).ToNot(HaveOccurred())
-	tkn, err := tokenManager.MintToken(ctx, user, scope)
-	Expect(err).ToNot(HaveOccurred())
-	ctx = appctx.ContextSetToken(ctx, tkn)
-	ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, tkn)
-	ctx = appctx.ContextSetUser(ctx, user)
-	return ctx
 }
 
 func ocmUserEqual(u1, u2 *userpb.User) bool {
@@ -140,7 +125,15 @@ var _ = Describe("ocm invitation workflow", func() {
 				"cesnethttp":  "ocm-server-cesnet-http.toml",
 			}, map[string]string{
 				"providers": "ocm-providers.demo.json",
-			}, nil, variables)
+			}, map[string]Resource{
+				"ocm_share_cernbox_file": File{Content: "{}"},
+				"ocm_share_cesnet_file":  File{Content: "{}"},
+				"invite_token_file":      File{Content: "{}"},
+				"localhome_root":         Folder{},
+			}, variables, map[string]string{
+				"cernboxhttp": "127.0.0.1:12345",
+				"cesnethttp":  "127.0.0.1:54321",
+			})
 			Expect(err).ToNot(HaveOccurred())
 			cernboxgw, err = pool.GetGatewayServiceClient(pool.Endpoint(revads["cernboxgw"].GrpcAddress))
 			Expect(err).ToNot(HaveOccurred())
