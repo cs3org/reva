@@ -18,6 +18,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/ocm/share"
+	"google.golang.org/genproto/protobuf/field_mask"
 )
 
 // ===========================
@@ -794,5 +795,58 @@ func TestUpdateRejectsDifferentRequirements(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error when updating with different requirements, got nil")
+	}
+}
+
+func TestUpdateReceivedOCMShareHidden(t *testing.T) {
+	mgr, err, teardown := setupSuiteOcmShares(t)
+	defer teardown(t)
+
+	userctx := getUserContext("sharee1")
+	user, _ := appctx.ContextGetUser(userctx)
+	grantee := getUserOcmShareGrantee("sharee1")
+
+	stored, err := mgr.StoreReceivedShare(userctx, getOCMReceivedShare(user, grantee, "file", "viewer", "remoteshareid-hidden"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ref := &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: &ocm.ShareId{OpaqueId: stored.Id.OpaqueId}}}
+
+	// Newly stored share must not be hidden.
+	got, err := mgr.GetReceivedShare(userctx, user, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.GetHidden() {
+		t.Fatal("expected freshly stored share to not be hidden")
+	}
+
+	// Hide the share via the dedicated hidden flag.
+	toUpdate := &ocm.ReceivedShare{Id: &ocm.ShareId{OpaqueId: stored.Id.OpaqueId}, Hidden: true}
+	if _, err := mgr.UpdateReceivedShare(userctx, user, toUpdate, &field_mask.FieldMask{Paths: []string{"hidden"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Re-read from the DB and verify the hidden flag was persisted.
+	got, err = mgr.GetReceivedShare(userctx, user, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.GetHidden() {
+		t.Fatal("expected share to be hidden after update")
+	}
+
+	// Unhide and verify it round-trips back.
+	toUpdate = &ocm.ReceivedShare{Id: &ocm.ShareId{OpaqueId: stored.Id.OpaqueId}, Hidden: false}
+	if _, err := mgr.UpdateReceivedShare(userctx, user, toUpdate, &field_mask.FieldMask{Paths: []string{"hidden"}}); err != nil {
+		t.Fatal(err)
+	}
+	got, err = mgr.GetReceivedShare(userctx, user, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.GetHidden() {
+		t.Fatal("expected share to not be hidden after unhide")
 	}
 }
