@@ -157,6 +157,7 @@ func convertToCS3OCMReceivedShare(s *model.OcmReceivedShare, p []*ocm.Protocol) 
 			Seconds: uint64(s.Expiration.V.Unix()),
 		}
 	}
+	share.Hidden = s.Hidden
 	return share
 }
 

@@ -470,6 +470,7 @@ func (s *svc) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCMShare 
 		}
 	}
 
+	// UIHidden is set by the shared converter from receivedOCMShare.Hidden.
 	return converter.OCMReceivedShareToDriveItem(ctx, receivedOCMShare, roleConverter)
 }
 

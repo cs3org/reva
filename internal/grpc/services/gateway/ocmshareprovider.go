@@ -298,6 +298,9 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 				// FIXME we are ignoring an error from removeReference here
 				return res, nil
 			}
+		case "hidden":
+			// hiding a share has no gateway-side side effects; the hidden flag is
+			// persisted by the UpdateReceivedOCMShare call above.
 		case "mount_point":
 			// TODO(labkode): implementing updating mount point
 			err = errtypes.NotSupported("gateway: update of mount point is not yet implemented")
