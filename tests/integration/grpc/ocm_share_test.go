@@ -141,7 +141,10 @@ var _ = Describe("ocm share", func() {
 			"ocm_share_cesnet_file":  File{Content: "{}"},
 			"invite_token_file":      File{Content: "{}"},
 			"localhome_root":         Folder{},
-		}, variables)
+		}, variables, map[string]string{
+			"cernboxhttp": "127.0.0.1:12345",
+			"cesnethttp":  "127.0.0.1:54321",
+		})
 		Expect(err).ToNot(HaveOccurred())
 		cernboxgw, err = pool.GetGatewayServiceClient(pool.Endpoint(revads["cernboxgw"].GrpcAddress))
 		Expect(err).ToNot(HaveOccurred())
