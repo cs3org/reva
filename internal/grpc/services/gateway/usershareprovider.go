@@ -125,21 +125,15 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 			return &collaboration.CreateShareResponse{Status: grantStatus}, nil
 		}
 		// Remove grants for child shares made redundant by the new share.
-		for _, child := range result.ToDelete {
-			if st, err := s.removeGrant(ctx, child.ResourceId, child.Grantee, child.Permissions.Permissions); err != nil || st.Code != rpc.Code_CODE_OK {
-				if err != nil {
-					return nil, errors.Wrap(err, "gateway: error removing child grant")
-				}
-				return &collaboration.CreateShareResponse{Status: st}, nil
+		if st, err := s.removeChildGrants(ctx, result.ToDelete); err != nil || st.Code != rpc.Code_CODE_OK {
+			if err != nil {
+				return nil, err
 			}
+			return &collaboration.CreateShareResponse{Status: st}, nil
 		}
 		// Re-apply grants for children that retain higher permissions (N=R, C=RW).
 		// ToReapply is already sorted shallowest-first by CheckGrantConsistency.
-		for _, child := range result.ToReapply {
-			if _, err := s.addGrant(ctx, child.ResourceId, child.Grantee, child.Permissions.Permissions); err != nil {
-				log.Error().Err(err).Str("shareId", child.Id.OpaqueId).Msg("error re-applying child grant after CreateShare")
-			}
-		}
+		s.reapplyChildGrants(ctx, result.ToReapply)
 	}
 
 	// Finally, we write to the db
@@ -152,15 +146,8 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 		return nil, errors.New("ShareClient returned error: " + res.Status.Code.String() + ": " + res.Status.Message)
 	}
 
-	// And we remove from the db the deleted shares
-	// Remove child share records made redundant by the new share.
-	for _, child := range result.ToDelete {
-		if _, err := shareClient.RemoveShare(ctx, &collaboration.RemoveShareRequest{
-			Ref: &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: child.Id}},
-		}); err != nil {
-			log.Error().Err(err).Str("shareId", child.Id.OpaqueId).Msg("error removing child share from DB after CreateShare")
-		}
-	}
+	// And we remove from the db the deleted shares made redundant by the new share.
+	s.removeChildShareRecords(ctx, shareClient, result.ToDelete)
 
 	return res, nil
 
@@ -226,11 +213,7 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 
 		// Re-apply descendant grants shallowest-first so child permissions are not overridden.
 		// (and the results are already pre-sorted to be shallowest-first)
-		for _, child := range reapply.ChildGrants {
-			if _, err := s.addGrant(ctx, child.ResourceId, child.Grantee, child.Permissions.Permissions); err != nil {
-				log.Error().Err(err).Str("childShareId", child.Id.OpaqueId).Msg("error reapplying child grant after RemoveShare")
-			}
-		}
+		s.reapplyChildGrants(ctx, reapply.ChildGrants)
 	}
 
 	res, err := c.RemoveShare(ctx, req)
@@ -436,22 +419,16 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 		}
 
 		// Remove grants for child shares made redundant by the updated permissions.
-		for _, child := range toDelete {
-			if st, err := s.removeGrant(ctx, child.ResourceId, child.Grantee, child.Permissions.Permissions); err != nil || st.Code != rpc.Code_CODE_OK {
-				if err != nil {
-					return nil, errors.Wrap(err, "gateway: error removing child grant")
-				}
-				return &collaboration.UpdateShareResponse{Status: st}, nil
+		if st, err := s.removeChildGrants(ctx, toDelete); err != nil || st.Code != rpc.Code_CODE_OK {
+			if err != nil {
+				return nil, err
 			}
+			return &collaboration.UpdateShareResponse{Status: st}, nil
 		}
 
 		// Re-apply grants for children that retain higher permissions.
 		// toReapply is already sorted shallowest-first by CheckGrantConsistency.
-		for _, child := range toReapply {
-			if _, err := s.addGrant(ctx, child.ResourceId, child.Grantee, child.Permissions.Permissions); err != nil {
-				appctx.GetLogger(ctx).Error().Err(err).Str("shareId", child.Id.OpaqueId).Msg("error re-applying child grant after UpdateShare")
-			}
-		}
+		s.reapplyChildGrants(ctx, toReapply)
 	}
 
 	res, err := c.UpdateShare(ctx, req)
@@ -462,13 +439,7 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 		return res, nil
 	}
 	// Remove child share records made redundant by the updated permissions.
-	for _, child := range toDelete {
-		if _, err := c.RemoveShare(ctx, &collaboration.RemoveShareRequest{
-			Ref: &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: child.Id}},
-		}); err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Str("shareId", child.Id.OpaqueId).Msg("error removing child share from DB after UpdateShare")
-		}
-	}
+	s.removeChildShareRecords(ctx, c, toDelete)
 
 	return res, nil
 }
@@ -689,6 +660,48 @@ func (s *svc) applyGrant(ctx context.Context, id *provider.ResourceId, grantee *
 		return s.denyGrant(ctx, id, grantee)
 	}
 	return s.addGrant(ctx, id, grantee, perms)
+}
+
+// removeChildGrants removes the storage grants for the given child shares.
+// It aborts on the first failure, returning a non-OK status (when the storage
+// rejected the call) or an error (when the call itself failed), mirroring the
+// caller's expectation that a redundant child must be cleaned up before we proceed.
+func (s *svc) removeChildGrants(ctx context.Context, children []*collaboration.Share) (*rpc.Status, error) {
+	for _, child := range children {
+		st, err := s.removeGrant(ctx, child.ResourceId, child.Grantee, child.Permissions.Permissions)
+		if err != nil {
+			return nil, errors.Wrap(err, "gateway: error removing child grant")
+		}
+		if st.Code != rpc.Code_CODE_OK {
+			return st, nil
+		}
+	}
+	return status.NewOK(ctx), nil
+}
+
+// reapplyChildGrants re-applies the storage grants for the given child shares on a
+// best-effort basis. Children must be pre-sorted shallowest-first so that deeper,
+// more specific grants are not overridden. Failures are logged but do not abort the caller.
+func (s *svc) reapplyChildGrants(ctx context.Context, children []*collaboration.Share) {
+	log := appctx.GetLogger(ctx)
+	for _, child := range children {
+		if _, err := s.addGrant(ctx, child.ResourceId, child.Grantee, child.Permissions.Permissions); err != nil {
+			log.Error().Err(err).Str("shareId", child.Id.OpaqueId).Msg("error re-applying child grant")
+		}
+	}
+}
+
+// removeChildShareRecords deletes the share DB records for the given child shares
+// on a best-effort basis. Failures are logged but do not abort the caller.
+func (s *svc) removeChildShareRecords(ctx context.Context, c collaboration.CollaborationAPIClient, children []*collaboration.Share) {
+	log := appctx.GetLogger(ctx)
+	for _, child := range children {
+		if _, err := c.RemoveShare(ctx, &collaboration.RemoveShareRequest{
+			Ref: &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: child.Id}},
+		}); err != nil {
+			log.Error().Err(err).Str("shareId", child.Id.OpaqueId).Msg("error removing child share from DB")
+		}
+	}
 }
 
 // filterOutShare returns shares with the given opaqueId excluded.
