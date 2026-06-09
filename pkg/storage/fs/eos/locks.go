@@ -262,10 +262,11 @@ func (fs *Eosfs) getLock(ctx context.Context, user *userpb.User, path string, re
 	}
 
 	d, eosl, err := fs.getLockPayloads(ctx, path)
+	if eosl == "" || (err != nil && !errors.Is(err, eosclient.AttrNotExistsError)) {
+		return nil, errtypes.NotFound("lock not found for ref")
+	}
 	if err != nil {
-		if !errors.Is(err, eosclient.AttrNotExistsError) {
-			return nil, errtypes.NotFound("lock not found for ref")
-		}
+		return nil, errors.Wrap(err, "eosfs: unreadable lock payload")
 	}
 
 	l, err := decodeLock(d, eosl)
