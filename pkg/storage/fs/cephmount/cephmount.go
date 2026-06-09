@@ -317,20 +317,23 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 // resolveRef converts a provider.Reference to a chroot-relative path
 func (fs *cephmountfs) resolveRef(ctx context.Context, ref *provider.Reference) (string, error) {
 	switch {
-	case ref.Path != "":
-		// Convert external path to chroot-relative path
-		return fs.toChroot(ref.Path), nil
-	case ref.ResourceId != nil:
-		// For resource IDs, use GetPathByID
-		if ref.ResourceId.StorageId != "" && ref.ResourceId.OpaqueId != "" {
-			externalPath, err := fs.GetPathByID(ctx, ref.ResourceId)
-			if err != nil {
-				return "", err
-			}
-			// Convert the external path to chroot-relative
-			return fs.toChroot(externalPath), nil
+	case ref.ResourceId != nil && ref.ResourceId.OpaqueId != "":
+		externalPath, err := fs.GetPathByID(ctx, ref.ResourceId)
+		if err != nil {
+			return "", err
 		}
+		base := fs.toChroot(externalPath)
+		// Apply the relative path component, if any ("." means the resource
+		// itself, "./sub/file" navigates below it).
+		if rel := strings.TrimPrefix(ref.Path, "."); rel != "" {
+			return filepath.Join(base, rel), nil
+		}
+		return base, nil
+	case ref.ResourceId != nil:
 		return "", errors.New("cephmount: invalid resource id")
+	case ref.Path != "":
+		// Absolute path reference: convert to chroot-relative path.
+		return fs.toChroot(ref.Path), nil
 	default:
 		return "", errors.New("cephmount: invalid reference")
 	}
