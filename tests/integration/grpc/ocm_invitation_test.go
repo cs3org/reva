@@ -484,7 +484,7 @@ var _ = Describe("ocm invitation workflow", func() {
 					Expect(ocmUsersEqual(list.Map(users, remoteToCs3User), []*userpb.User{})).To(BeTrue())
 
 					ocmToken, code := generateToken(tknEinstein, cernboxURL)
-					Expect(code).To(Equal(http.StatusOK))
+					Expect(code).To(Equal(http.StatusCreated))
 
 					code = acceptInvite(tknMarie, cesnetURL, "cernbox.cern.ch", ocmToken.Token)
 					Expect(code).To(Equal(http.StatusOK))
