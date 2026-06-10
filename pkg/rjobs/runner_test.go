@@ -77,6 +77,29 @@ func TestLeaderJobNeedsStore(t *testing.T) {
 	}
 }
 
+func TestStoreRequiresStatusStore(t *testing.T) {
+	resetRegistry()
+
+	if _, err := NewRunner(context.Background(), Options{Store: stubStore{}}); err == nil {
+		t.Fatal("expected error: store configured without a status store")
+	}
+}
+
+// stubStore is a minimal Store used only to exercise runner construction.
+type stubStore struct{}
+
+func (stubStore) Enqueue(context.Context, Run) (RunID, error)      { return "", nil }
+func (stubStore) Claim(context.Context) (Run, error)               { return Run{}, nil }
+func (stubStore) Complete(context.Context, RunID) error            { return nil }
+func (stubStore) Fail(context.Context, RunID, time.Duration) error { return nil }
+func (stubStore) DueScheduled(context.Context, time.Time) ([]ScheduledRun, error) {
+	return nil, nil
+}
+func (stubStore) RegisterScheduled(context.Context, string, Schedule, time.Time) error {
+	return nil
+}
+func (stubStore) Close(context.Context) error { return nil }
+
 func TestGuardSkipsOverlap(t *testing.T) {
 	r := &Runner{running: make(map[string]bool)}
 	p := Periodic{Name: "j", Overlap: Skip}

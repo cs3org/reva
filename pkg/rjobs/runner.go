@@ -43,6 +43,9 @@ type Options struct {
 	// Store is the durable backend. It may be nil, in which case only
 	// all-nodes periodic jobs run (no leader-scoped or on-demand work).
 	Store Store
+	// Status records and serves per-run status. It is required whenever Store
+	// is set, since every durable run gets a status record.
+	Status StatusStore
 	// Elector decides whether this replica schedules leader-scoped jobs.
 	// Defaults to AlwaysLeader.
 	Elector Elector
@@ -54,6 +57,7 @@ type Options struct {
 type Runner struct {
 	workers  int
 	store    Store
+	status   StatusStore
 	elector  Elector
 	log      zerolog.Logger
 	periodic []Periodic
@@ -79,6 +83,7 @@ func NewRunner(ctx context.Context, opts Options) (*Runner, error) {
 	r := &Runner{
 		workers:  opts.Workers,
 		store:    opts.Store,
+		status:   opts.Status,
 		elector:  opts.Elector,
 		log:      *appctx.GetLogger(ctx),
 		periodic: registeredPeriodic(),
@@ -92,6 +97,12 @@ func NewRunner(ctx context.Context, opts Options) (*Runner, error) {
 				return nil, errors.Errorf("rjobs: periodic job %q is leader-scoped but no store is configured", p.Name)
 			}
 		}
+	}
+
+	// a durable backend implies a status store: every queued/claimed run gets
+	// a status record.
+	if r.store != nil && r.status == nil {
+		return nil, errors.New("rjobs: a status store is required when a durable store is configured")
 	}
 
 	return r, nil
@@ -166,6 +177,11 @@ func (r *Runner) Stop(ctx context.Context) error {
 			return err
 		}
 	}
+	if r.status != nil {
+		if err := r.status.Close(ctx); err != nil {
+			return err
+		}
+	}
 	return r.elector.Close(ctx)
 }
 
@@ -185,7 +201,33 @@ func (r *Runner) Enqueue(ctx context.Context, name string, p Params, opts ...Enq
 	for _, o := range opts {
 		o(&run)
 	}
-	return r.store.Enqueue(ctx, run)
+
+	id, err := r.store.Enqueue(ctx, run)
+	if err != nil {
+		return "", err
+	}
+
+	if err := r.status.Put(ctx, Status{
+		RunID:      id,
+		Job:        name,
+		State:      StateQueued,
+		Attempt:    1,
+		EnqueuedAt: time.Now(),
+	}); err != nil {
+		// the run is already durably queued; a failed status write must not
+		// fail the enqueue, only lose observability for this run.
+		r.log.Error().Err(err).Str("run", string(id)).Msg("rjobs: recording queued status failed")
+	}
+	return id, nil
+}
+
+// Status returns the current status of a previously enqueued run. It returns
+// an errtypes.NotFound error if the run is unknown.
+func (r *Runner) Status(ctx context.Context, id RunID) (Status, error) {
+	if r.status == nil {
+		return Status{}, errors.New("rjobs: no status store configured")
+	}
+	return r.status.Get(ctx, id)
 }
 
 // runLocalTicker drives an all-nodes periodic job on this replica. It never
@@ -263,21 +305,61 @@ func (r *Runner) runDispatcher(ctx context.Context) {
 	}
 }
 
-// execRun runs a claimed durable run (on-demand or leader periodic) and
-// acks/naks it.
+// execRun runs a claimed durable run (on-demand or leader periodic), records
+// its status transitions and acks/naks it.
 func (r *Runner) execRun(ctx context.Context, run Run) {
 	log := r.log.With().Str("job", run.Job).Str("run", string(run.ID)).Int("attempt", run.Attempt).Logger()
 
-	_, err := r.invoke(ctx, run, log)
+	r.recordStatus(ctx, run, StateRunning, nil, nil, log)
+
+	result, err := r.invoke(ctx, run, log)
 	if err != nil {
 		log.Error().Err(err).Msg("rjobs: run failed")
+		r.recordStatus(ctx, run, StateFailed, nil, err, log)
 		if ferr := r.store.Fail(ctx, run.ID, defaultRetryAfter); ferr != nil {
 			log.Error().Err(ferr).Msg("rjobs: marking run failed errored")
 		}
 		return
 	}
+
+	r.recordStatus(ctx, run, StateSucceeded, result, nil, log)
 	if cerr := r.store.Complete(ctx, run.ID); cerr != nil {
 		log.Error().Err(cerr).Msg("rjobs: completing run errored")
+	}
+}
+
+// recordStatus upserts a run's status. Periodic runs (those matching a
+// registered periodic job) are not tracked: their observability comes from the
+// scheduler, not the per-run status store.
+func (r *Runner) recordStatus(ctx context.Context, run Run, state State, result Params, runErr error, log zerolog.Logger) {
+	if r.status == nil {
+		return
+	}
+	if _, ok := r.lookupPeriodic(run.Job); ok {
+		return
+	}
+
+	now := time.Now()
+	st := Status{
+		RunID:      run.ID,
+		Job:        run.Job,
+		State:      state,
+		Attempt:    run.Attempt,
+		EnqueuedAt: run.EnqueuedAt,
+		Result:     result,
+	}
+	switch state {
+	case StateRunning:
+		st.StartedAt = &now
+	case StateSucceeded, StateFailed:
+		st.FinishedAt = &now
+	}
+	if runErr != nil {
+		st.LastError = runErr.Error()
+	}
+
+	if err := r.status.Put(ctx, st); err != nil {
+		log.Error().Err(err).Str("state", string(state)).Msg("rjobs: recording status failed")
 	}
 }
 
