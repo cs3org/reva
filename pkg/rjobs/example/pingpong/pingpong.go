@@ -56,23 +56,24 @@ type params struct {
 	Ping string `mapstructure:"ping"`
 }
 
-// Run logs a pong for the received ping. A real job would do its work here and
-// return an error to have the run retried.
-func (j *job) Run(ctx context.Context, p rjobs.Params) error {
+// Run logs a pong for the received ping and returns it as the run result. A
+// real job would do its work here and return an error to have the run retried.
+func (j *job) Run(ctx context.Context, p rjobs.Params) (rjobs.Params, error) {
 	var pp params
 	if err := mapstructure.Decode(map[string]any(p), &pp); err != nil {
-		return errors.Wrap(err, "pingpong: decoding params failed")
+		return nil, errors.Wrap(err, "pingpong: decoding params failed")
 	}
 	if pp.Ping == "" {
-		return errors.New("pingpong: missing 'ping' parameter")
+		return nil, errors.New("pingpong: missing 'ping' parameter")
 	}
 
+	pong := "pong: " + pp.Ping
 	appctx.GetLogger(ctx).Info().
 		Str("ping", pp.Ping).
-		Str("pong", "pong: "+pp.Ping).
+		Str("pong", pong).
 		Msg("pingpong: received ping, responding with pong")
 
-	return nil
+	return rjobs.Params{"pong": pong}, nil
 }
 
 // Enqueue is a convenience wrapper that submits a ping-pong run through the

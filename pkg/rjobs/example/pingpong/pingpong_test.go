@@ -31,11 +31,15 @@ func TestRun(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := j.Run(context.Background(), rjobs.Params{"ping": "hello"}); err != nil {
+	res, err := j.Run(context.Background(), rjobs.Params{"ping": "hello"})
+	if err != nil {
 		t.Errorf("Run with a ping should succeed, got %v", err)
 	}
+	if res["pong"] != "pong: hello" {
+		t.Errorf("unexpected pong result: %v", res["pong"])
+	}
 
-	if err := j.Run(context.Background(), rjobs.Params{}); err == nil {
+	if _, err := j.Run(context.Background(), rjobs.Params{}); err == nil {
 		t.Error("Run without a ping should fail")
 	}
 }

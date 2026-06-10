@@ -268,7 +268,7 @@ func (r *Runner) runDispatcher(ctx context.Context) {
 func (r *Runner) execRun(ctx context.Context, run Run) {
 	log := r.log.With().Str("job", run.Job).Str("run", string(run.ID)).Int("attempt", run.Attempt).Logger()
 
-	err := r.invoke(ctx, run, log)
+	_, err := r.invoke(ctx, run, log)
 	if err != nil {
 		log.Error().Err(err).Msg("rjobs: run failed")
 		if ferr := r.store.Fail(ctx, run.ID, defaultRetryAfter); ferr != nil {
@@ -283,21 +283,22 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 
 // invoke dispatches a run to the right registered job. Periodic runs (empty
 // Params and a known periodic name) call the periodic Run closure; everything
-// else is an on-demand job.
-func (r *Runner) invoke(ctx context.Context, run Run, log zerolog.Logger) error {
+// else is an on-demand job. The returned Params are the on-demand job's result
+// (always nil for periodic runs).
+func (r *Runner) invoke(ctx context.Context, run Run, log zerolog.Logger) (Params, error) {
 	jobCtx := appctx.WithLogger(ctx, &log)
 
 	if p, ok := r.lookupPeriodic(run.Job); ok {
-		return r.guard(p, func() error { return p.Run(jobCtx) })
+		return nil, r.guard(p, func() error { return p.Run(jobCtx) })
 	}
 
 	newFunc, ok := lookupOnDemand(run.Job)
 	if !ok {
-		return errors.Errorf("rjobs: run references unknown job %q", run.Job)
+		return nil, errors.Errorf("rjobs: run references unknown job %q", run.Job)
 	}
 	job, err := newFunc(jobCtx, nil)
 	if err != nil {
-		return errors.Wrap(err, "rjobs: building on-demand job failed")
+		return nil, errors.Wrap(err, "rjobs: building on-demand job failed")
 	}
 	return job.Run(jobCtx, run.Params)
 }

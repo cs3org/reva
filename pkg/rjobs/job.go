@@ -77,9 +77,11 @@ type Params map[string]any
 // idempotent and re-entrant: the framework guarantees at-least-once delivery,
 // so the same job may run more than once (e.g. after a crash) or concurrently.
 type Job interface {
-	// Run executes the job. Returning an error marks the run as failed; the
-	// store decides retry and backoff. ctx is cancelled on shutdown.
-	Run(ctx context.Context, p Params) error
+	// Run executes the job. The returned Params are recorded as the run's
+	// result (e.g. a download URL) and surfaced through the run status; return
+	// nil if the job has no result. Returning an error marks the run as failed;
+	// the store decides retry and backoff. ctx is cancelled on shutdown.
+	Run(ctx context.Context, p Params) (Params, error)
 }
 
 // NewJob constructs an on-demand job from its configuration. It is the
