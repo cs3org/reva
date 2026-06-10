@@ -1,0 +1,323 @@
+# SPDX-FileCopyrightText: 2025 CERN and Reva contributors
+# SPDX-License-Identifier: Apache-2.0
+name: OCM Test Suite
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  # Orchestrator: compute version
+  ocm-prepare:
+    name: Prepare
+    runs-on: ubuntu-latest
+    outputs:
+      current_version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Derive current Reva version
+        id: version
+        shell: bash
+        run: |
+          if [[ -f VERSION ]]; then
+            ver=$(cat VERSION | tr -d '[:space:]')
+          else
+            ver="dev"
+          fi
+          echo "version=v${ver}" >> "$GITHUB_OUTPUT"
+          echo "Detected Reva version: v${ver}"
+
+  # Build: create static revad binary from current branch
+  ocm-build-revad:
+    name: Build Reva
+    needs: ocm-prepare
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: Install musl tools for static build
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Extract gaia from DockyPody image
+        run: |
+          docker pull ghcr.io/mahdibaghbani/containers/gaia:latest
+          container_id=$(docker create ghcr.io/mahdibaghbani/containers/gaia:latest)
+          docker cp "${container_id}:/usr/local/bin/gaia" ./gaia
+          docker rm "${container_id}"
+          chmod +x ./gaia
+
+      - name: Clone reva-plugins
+        run: |
+          git clone https://github.com/cernbox/reva-plugins.git reva-plugins
+
+      - name: Build revad static binary with gaia
+        run: |
+          ./gaia build \
+            --with github.com/cs3org/reva/v3="${GITHUB_WORKSPACE}" \
+            --with github.com/cernbox/reva-plugins="${GITHUB_WORKSPACE}/reva-plugins" \
+            --static-musl \
+            --output "${GITHUB_WORKSPACE}/revad"
+          chmod +x "${GITHUB_WORKSPACE}/revad"
+
+      - name: Verify static binary
+        run: |
+          ldd "${GITHUB_WORKSPACE}/revad" 2>&1 | grep -q "not a dynamic executable" || \
+            echo "Note: Binary may be dynamically linked on this platform"
+          ls -la "${GITHUB_WORKSPACE}/revad"
+
+      - name: Upload Reva binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: revad-binary
+          path: revad
+          retention-days: 1
+
+  # Matrix actor job: runs all OCM combinations in parallel.
+  # Each combo pulls its required images directly from registries.
+  ocm-actors:
+    needs: [ocm-prepare, ocm-build-revad]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - combo_id: stub-stub
+            display_name: "Stub to Stub"
+            sender: ocmstub
+            sender_version: v1.1.0
+            receiver: ocmstub
+            receiver_version: v1.1.0
+            requires_reva_binary: false
+            images: |
+              pondersource/cypress:latest
+              pondersource/dev-stock:latest
+              pondersource/ocmstub:v1.1.0
+          - combo_id: stub-cernbox
+            display_name: "Stub to CERNBox"
+            sender: ocmstub
+            sender_version: v1.1.0
+            receiver: cernbox
+            receiver_version: v2
+            requires_reva_binary: true
+            images: |
+              pondersource/cypress:latest
+              pondersource/dev-stock:latest
+              pondersource/ocmstub:v1.1.0
+              ghcr.io/mahdibaghbani/containers/idp:latest
+              ghcr.io/mahdibaghbani/containers/cernbox-revad:mahdi_fix_localhome-development
+              ghcr.io/mahdibaghbani/containers/cernbox-web:testing
+          - combo_id: cernbox-stub
+            display_name: "CERNBox to Stub"
+            sender: cernbox
+            sender_version: v2
+            receiver: ocmstub
+            receiver_version: v1.1.0
+            requires_reva_binary: true
+            images: |
+              pondersource/cypress:latest
+              pondersource/dev-stock:latest
+              pondersource/ocmstub:v1.1.0
+              ghcr.io/mahdibaghbani/containers/idp:latest
+              ghcr.io/mahdibaghbani/containers/cernbox-revad:mahdi_fix_localhome-development
+              ghcr.io/mahdibaghbani/containers/cernbox-web:testing
+          - combo_id: cernbox-cernbox
+            display_name: "CERNBox to CERNBox"
+            sender: cernbox
+            sender_version: v2
+            receiver: cernbox
+            receiver_version: v2
+            requires_reva_binary: true
+            images: |
+              pondersource/cypress:latest
+              pondersource/dev-stock:latest
+              ghcr.io/mahdibaghbani/containers/idp:latest
+              ghcr.io/mahdibaghbani/containers/cernbox-revad:mahdi_fix_localhome-development
+              ghcr.io/mahdibaghbani/containers/cernbox-web:testing
+
+    name: ${{ matrix.display_name }}
+
+    steps:
+      - name: Prepare host paths
+        run: |
+          mkdir -p "${{ github.workspace }}/.ocm-dev-stock-root/cypress/videos"
+          mkdir -p "${{ github.workspace }}/.ocm-dev-stock-root/cypress/screenshots"
+          mkdir -p "${{ github.workspace }}/.ocm-dev-stock-root/reva-binaries/cmd"
+          sudo ln -sfn "${{ github.workspace }}/.ocm-dev-stock-root" /dev-stock
+
+      - name: Pull images
+        shell: bash
+        run: |
+          echo "${{ matrix.images }}" | while read -r image; do
+            if [[ -n "$image" ]]; then
+              echo "Pulling $image..."
+              docker pull "$image"
+            fi
+          done
+
+      - name: Download Reva binary
+        if: ${{ matrix.requires_reva_binary }}
+        uses: actions/download-artifact@v4
+        with:
+          name: revad-binary
+          path: ${{ github.workspace }}/.ocm-dev-stock-root/reva-binaries/cmd
+
+      - name: Make binary executable
+        if: ${{ matrix.requires_reva_binary }}
+        run: chmod +x "${{ github.workspace }}/.ocm-dev-stock-root/reva-binaries/cmd/revad"
+
+      - name: Run OCM test
+        id: run
+        shell: bash
+        run: |
+          set +e
+
+          REVA_ENV=""
+          if [[ "${{ matrix.requires_reva_binary }}" == "true" ]]; then
+            REVA_ENV="-e REVA_BINARY_DIR=/dev-stock/reva-binaries/cmd"
+          fi
+
+          docker run --rm \
+            --name="dev-stock-${{ github.run_id }}-${{ matrix.combo_id }}" \
+            -e CI_ENVIRONMENT=true \
+            -e DEVSTOCK_DEBUG=true \
+            $REVA_ENV \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            --entrypoint ocm-test-suite \
+            pondersource/dev-stock:latest \
+            invite-link ${{ matrix.sender }} ${{ matrix.sender_version }} ci electron ${{ matrix.receiver }} ${{ matrix.receiver_version }}
+
+          exit_code=$?
+          if [ $exit_code -eq 0 ]; then
+            echo "status=pass" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=fail" >> "$GITHUB_OUTPUT"
+          fi
+          exit $exit_code
+
+      - name: Write status JSON
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p /tmp/status
+          STATUS="${{ steps.run.outputs.status }}"
+          if [[ -z "$STATUS" ]]; then
+            STATUS="unknown"
+          fi
+          echo "{\"combo_id\":\"${{ matrix.combo_id }}\",\"status\":\"${STATUS}\"}" > /tmp/status/status.json
+
+      - name: Upload status artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocm-matrix-status-${{ matrix.combo_id }}
+          path: /tmp/status/status.json
+          retention-days: 1
+
+      - name: Upload Cypress artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-${{ matrix.combo_id }}
+          path: |
+            ${{ github.workspace }}/.ocm-dev-stock-root/cypress/videos
+            ${{ github.workspace }}/.ocm-dev-stock-root/cypress/screenshots
+          if-no-files-found: ignore
+
+  # Summary: collect results from matrix actors (always runs, never blocks)
+  ocm-summary:
+    name: Summary
+    needs:
+      - ocm-prepare
+      - ocm-actors
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install jq
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y jq
+
+      - name: Download status artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ocm-matrix-status-*
+          path: /tmp/status-artifacts
+          merge-multiple: false
+
+      - name: Generate OCM Test Summary
+        env:
+          CURRENT_VERSION: ${{ needs.ocm-prepare.outputs.current_version }}
+        shell: bash
+        run: |
+          {
+            echo "## OCM Test Suite Results"
+            echo ""
+            echo "Reva version: \`${CURRENT_VERSION}\`"
+            echo ""
+            echo "| Combination | Scenario | Status | Artifacts |"
+            echo "|-------------|----------|--------|-----------|"
+
+            for combo in stub-stub stub-cernbox cernbox-stub cernbox-cernbox; do
+              status_file="/tmp/status-artifacts/ocm-matrix-status-${combo}/status.json"
+              if [[ -f "$status_file" ]]; then
+                status=$(jq -r '.status' "$status_file")
+              else
+                status="UNKNOWN"
+              fi
+
+              case "$combo" in
+                stub-stub)
+                  display="Stub v1.1.0 <-> Stub v1.1.0"
+                  ;;
+                stub-cernbox)
+                  display="Stub v1.1.0 <-> CERNBox (current)"
+                  ;;
+                cernbox-stub)
+                  display="CERNBox (current) <-> Stub v1.1.0"
+                  ;;
+                cernbox-cernbox)
+                  display="CERNBox (current) <-> CERNBox (current)"
+                  ;;
+              esac
+
+              echo "| ${display} | invite-link | ${status} | cypress-${combo} |"
+            done
+
+            echo ""
+            echo "Note: This workflow is non-blocking. Failures are reported above but do not fail the overall workflow."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Delete status artifacts
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: ocm-matrix-status-*
+          failOnError: false
