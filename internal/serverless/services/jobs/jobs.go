@@ -17,8 +17,8 @@
 // or submit itself to any jurisdiction.
 
 // Package jobs hosts the rjobs runner as a serverless service. It builds the
-// store and elector from configuration, constructs the runner over the
-// registered jobs, and exposes it process-wide for in-process enqueueing.
+// store from configuration, constructs the runner over the registered jobs,
+// and exposes it process-wide for in-process enqueueing.
 package jobs
 
 import (

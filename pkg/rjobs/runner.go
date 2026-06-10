@@ -46,9 +46,6 @@ type Options struct {
 	// Status records and serves per-run status. It is required whenever Store
 	// is set, since every durable run gets a status record.
 	Status StatusStore
-	// Elector decides whether this replica schedules leader-scoped jobs.
-	// Defaults to AlwaysLeader.
-	Elector Elector
 }
 
 // Runner owns the scheduling, dispatching and execution of jobs. A process
@@ -58,7 +55,6 @@ type Runner struct {
 	workers  int
 	store    Store
 	status   StatusStore
-	elector  Elector
 	log      zerolog.Logger
 	periodic []Periodic
 
@@ -76,15 +72,11 @@ func NewRunner(ctx context.Context, opts Options) (*Runner, error) {
 	if opts.Workers <= 0 {
 		opts.Workers = 4
 	}
-	if opts.Elector == nil {
-		opts.Elector = AlwaysLeader{}
-	}
 
 	r := &Runner{
 		workers:  opts.Workers,
 		store:    opts.Store,
 		status:   opts.Status,
-		elector:  opts.Elector,
 		log:      *appctx.GetLogger(ctx),
 		periodic: registeredPeriodic(),
 		running:  make(map[string]bool),
@@ -179,7 +171,7 @@ func (r *Runner) Stop(ctx context.Context) error {
 			return err
 		}
 	}
-	return r.elector.Close(ctx)
+	return nil
 }
 
 // Enqueue schedules an on-demand job to run as soon as a worker is free. It is
@@ -230,8 +222,6 @@ func (r *Runner) Status(ctx context.Context, id RunID) (Status, error) {
 // runLocalTicker drives an all-nodes periodic job on this replica. It never
 // touches the store.
 func (r *Runner) runLocalTicker(ctx context.Context, p Periodic) {
-	defer r.wg.Done()
-
 	sched, _ := ParseSchedule(p.Schedule)
 	log := r.log.With().Str("job", p.Name).Str("scope", p.Scope.String()).Logger()
 
@@ -250,11 +240,11 @@ func (r *Runner) runLocalTicker(ctx context.Context, p Periodic) {
 	}
 }
 
-// runScheduler enqueues due leader-scoped periodic runs while this replica is
-// the leader.
+// runScheduler enqueues due leader-scoped periodic runs. Every jobs process
+// runs this loop: the store's DueScheduled atomically advances each job's
+// next-fire, so exactly one process wins a given tick and enqueues it. No
+// leader election is needed.
 func (r *Runner) runScheduler(ctx context.Context) {
-	defer r.wg.Done()
-
 	ticker := time.NewTicker(schedulerTick)
 	defer ticker.Stop()
 
@@ -263,9 +253,6 @@ func (r *Runner) runScheduler(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if !r.elector.IsLeader() {
-				continue
-			}
 			due, err := r.store.DueScheduled(ctx, time.Now())
 			if err != nil {
 				r.log.Error().Err(err).Msg("rjobs: querying due jobs failed")
@@ -282,8 +269,6 @@ func (r *Runner) runScheduler(ctx context.Context) {
 
 // runDispatcher claims runs from the store and executes them.
 func (r *Runner) runDispatcher(ctx context.Context) {
-	defer r.wg.Done()
-
 	for {
 		run, err := r.store.Claim(ctx)
 		if err != nil {
