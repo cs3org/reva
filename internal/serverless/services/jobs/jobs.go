@@ -24,9 +24,11 @@ package jobs
 import (
 	"context"
 
+	revadcfg "github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/rjobs"
 	natsstore "github.com/cs3org/reva/v3/pkg/rjobs/store/nats"
+	sqlstatus "github.com/cs3org/reva/v3/pkg/rjobs/store/sql"
 	"github.com/cs3org/reva/v3/pkg/rserverless"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/rs/zerolog"
@@ -37,10 +39,11 @@ func init() {
 }
 
 type config struct {
-	WorkerPoolSize int    `mapstructure:"worker_pool_size"`
-	NatsAddress    string `mapstructure:"nats_address"`
-	NatsToken      string `mapstructure:"nats_token"`
-	NatsPrefix     string `mapstructure:"nats_prefix"`
+	WorkerPoolSize int               `mapstructure:"worker_pool_size"`
+	NatsAddress    string            `mapstructure:"nats_address"`
+	NatsToken      string            `mapstructure:"nats_token"`
+	NatsPrefix     string            `mapstructure:"nats_prefix"`
+	StatusDB       revadcfg.Database `mapstructure:"status_db"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -81,16 +84,26 @@ func (s *svc) Start() {
 		Workers: s.conf.WorkerPoolSize,
 	}
 
+	// the durable queue and the status store go together: on-demand and
+	// leader-scoped jobs need both. If either is unavailable we run only the
+	// all-nodes jobs, which need neither.
 	if s.conf.NatsAddress != "" {
-		store, err := natsstore.New(s.ctx, natsstore.Options{
-			Address: s.conf.NatsAddress,
-			Token:   s.conf.NatsToken,
-			Prefix:  s.conf.NatsPrefix,
-		})
+		status, err := sqlstatus.New(s.ctx, s.conf.StatusDB)
 		if err != nil {
-			s.log.Error().Err(err).Msg("jobs: connecting to the store failed, leader and on-demand jobs disabled")
+			s.log.Error().Err(err).Msg("jobs: opening the status store failed, leader and on-demand jobs disabled")
 		} else {
-			opts.Store = store
+			store, err := natsstore.New(s.ctx, natsstore.Options{
+				Address: s.conf.NatsAddress,
+				Token:   s.conf.NatsToken,
+				Prefix:  s.conf.NatsPrefix,
+			})
+			if err != nil {
+				s.log.Error().Err(err).Msg("jobs: connecting to the queue failed, leader and on-demand jobs disabled")
+				_ = status.Close(s.ctx)
+			} else {
+				opts.Store = store
+				opts.Status = status
+			}
 		}
 	} else {
 		s.log.Warn().Msg("jobs: no nats_address configured, only all-nodes jobs will run")
