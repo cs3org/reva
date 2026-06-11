@@ -339,6 +339,54 @@ func (fs *cephmountfs) resolveRef(ctx context.Context, ref *provider.Reference) 
 	}
 }
 
+// readArbitraryMetadata reads the file's user.* extended attributes and returns
+// them as a logical metadata map with the "user." prefix stripped. This is the
+// inverse of SetArbitraryMetadata, which stores an incoming logical key K as the
+// on-disk xattr user.K, so the round-trip stays symmetric. The lock payload
+// xattr is included too, since it lives in the user namespace and represents a
+// userspace lock. Reads are best-effort: any failure is skipped and
+// whatever was read so far is returned. If mdKeys is non-empty and does not
+// contain "*", only the requested logical keys are returned.
+func (fs *cephmountfs) readArbitraryMetadata(path string, mdKeys []string) map[string]string {
+	var fullPath string
+	if path == "." {
+		fullPath = fs.chrootDir
+	} else {
+		fullPath = filepath.Join(fs.chrootDir, path)
+	}
+
+	wantAll := len(mdKeys) == 0
+	want := make(map[string]bool, len(mdKeys))
+	for _, k := range mdKeys {
+		if k == "*" {
+			wantAll = true
+			break
+		}
+		want[k] = true
+	}
+
+	md := map[string]string{}
+	names, err := xattr.List(fullPath)
+	if err != nil {
+		return md
+	}
+	for _, name := range names {
+		if !strings.HasPrefix(name, xattrUserNs) {
+			continue
+		}
+		key := strings.TrimPrefix(name, xattrUserNs)
+		if !wantAll && !want[key] {
+			continue
+		}
+		buf, err := xattr.Get(fullPath, name)
+		if err != nil {
+			continue
+		}
+		md[key] = string(buf)
+	}
+	return md
+}
+
 // fileAsResourceInfo converts file info to ResourceInfo without user context
 func (fs *cephmountfs) fileAsResourceInfo(path string, info os.FileInfo, mdKeys []string) (*provider.ResourceInfo, error) {
 	var (
@@ -421,7 +469,11 @@ func (fs *cephmountfs) fileAsResourceInfo(path string, info os.FileInfo, mdKeys 
 			ri.MimeType = mimeType
 		}
 	}
-
+	// Populate arbitrary metadata from the file's stored user.* xattrs, then add
+	// the computed inode/device entries (added last so they always win).
+	for k, v := range fs.readArbitraryMetadata(path, mdKeys) {
+		ri.ArbitraryMetadata.Metadata[k] = v
+	}
 	// Set inode and device info
 	ri.ArbitraryMetadata.Metadata["inode"] = strconv.FormatUint(stat.Ino, 10)
 	ri.ArbitraryMetadata.Metadata["device"] = strconv.FormatUint(uint64(stat.Dev), 10)
