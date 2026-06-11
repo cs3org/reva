@@ -7,4 +7,4 @@ caused excessive metrics storage. The label is now derived from the leading
 static path segment, keeping cardinality bounded to the number of route
 prefixes.
 
-https://github.com/cs3org/reva/issues/4509
+https://github.com/cs3org/reva/pull/5639```
