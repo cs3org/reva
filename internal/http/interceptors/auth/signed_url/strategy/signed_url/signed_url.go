@@ -96,6 +96,18 @@ var (
 		_paramOCVerb,
 	}
 	_requiredParams = append(_requiredParamsToSign, _paramOCSignature)
+
+	// _optionalParamsToSign are query parameters that are not part of every
+	// signed URL but, when present, select the resource being acted upon and so
+	// must be covered by the signature. These are the archiver's file-selection
+	// params (path, id) and its archive format (arch_type): without signing them
+	// a signature would not bind to the requested files and could be replayed
+	// against any other path/id the credential can read.
+	_optionalParamsToSign = []string{
+		"path",
+		"id",
+		"arch_type",
+	}
 )
 
 func (m SignedURLAuthenticator) shouldServe(req *http.Request) bool {
@@ -219,6 +231,15 @@ func (m SignedURLAuthenticator) buildUrlToSign(req *http.Request) string {
 	signParameters := make(url.Values)
 	for _, p := range _requiredParamsToSign {
 		signParameters.Add(p, q.Get(p))
+		q.Del(p)
+	}
+
+	// Optional resource-selecting params (e.g. the archiver's path/id/arch_type)
+	// are only signed when present. Add every value so repeated params survive.
+	for _, p := range _optionalParamsToSign {
+		for _, val := range q[p] {
+			signParameters.Add(p, val)
+		}
 		q.Del(p)
 	}
 
