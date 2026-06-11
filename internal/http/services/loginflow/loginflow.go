@@ -126,6 +126,8 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 		byPoll:  make(map[string]*flow),
 	}
 
+	appctx.GetLogger(ctx).Info().Str("service", "loginflow").Str("prefix", c.Prefix).Str("server_base_url", c.ServerBaseURL).Str("auto_approve_user", c.AutoApproveUser).Str("auto_approve_user_idp", c.AutoApproveUserIdp).Str("appauth_driver", c.AppAuthDriver).Int("flow_ttl_seconds", c.FlowTTLSeconds).Msg("loginflow service initialised")
+
 	r := chi.NewRouter()
 	r.Post("/", s.handleInit)
 	r.Get("/flow/{lt}", s.handleBrowserFlow)
@@ -182,13 +184,18 @@ func tokenHash(token string) string {
 // handleInit implements POST /index.php/login/v2.
 // The NextCloud client calls this first to start a flow.
 func (s *svc) handleInit(w http.ResponseWriter, r *http.Request) {
+	log := appctx.GetLogger(r.Context()).With().Str("service", "loginflow").Str("handler", "init").Logger()
+	log.Info().Str("method", r.Method).Str("path", r.URL.Path).Str("remote", r.RemoteAddr).Str("user_agent", r.Header.Get("User-Agent")).Msg("incoming request")
+
 	lt, err := generateToken()
 	if err != nil {
+		log.Error().Err(err).Msg("could not generate login token")
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	pt, err := generateToken()
 	if err != nil {
+		log.Error().Err(err).Msg("could not generate poll token")
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -203,6 +210,7 @@ func (s *svc) handleInit(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	s.byLogin[f.loginHash] = f
 	s.byPoll[f.pollHash] = f
+	pending := len(s.byLogin)
 	s.mu.Unlock()
 
 	base := s.c.ServerBaseURL
@@ -214,16 +222,23 @@ func (s *svc) handleInit(w http.ResponseWriter, r *http.Request) {
 		Login: base + "/index.php/login/v2/flow/" + lt,
 	}
 
+	log.Info().Str("login_hash", f.loginHash).Str("poll_hash", f.pollHash).Str("login_url", resp.Login).Time("expires_at", f.expiresAt).Int("pending_flows", pending).Msg("flow created")
+
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Error().Err(err).Msg("could not encode init response")
+	}
 }
 
 // handleBrowserFlow implements GET /index.php/login/v2/flow/{lt}.
 // In the real implementation this would redirect to the web UI for SSO.
 // For the POC it auto-approves immediately for AutoApproveUser.
 func (s *svc) handleBrowserFlow(w http.ResponseWriter, r *http.Request) {
+	log := appctx.GetLogger(r.Context()).With().Str("service", "loginflow").Str("handler", "browserflow").Logger()
 	lt := chi.URLParam(r, "lt")
+	log.Info().Str("method", r.Method).Str("path", r.URL.Path).Str("remote", r.RemoteAddr).Bool("has_token", lt != "").Msg("incoming request")
 	if lt == "" {
+		log.Warn().Msg("missing login token in URL")
 		http.Error(w, "missing token", http.StatusBadRequest)
 		return
 	}
@@ -233,18 +248,26 @@ func (s *svc) handleBrowserFlow(w http.ResponseWriter, r *http.Request) {
 	f, ok := s.byLogin[lh]
 	s.mu.Unlock()
 
-	if !ok || time.Now().After(f.expiresAt) {
+	if !ok {
+		log.Warn().Str("login_hash", lh).Msg("flow not found")
+		http.Error(w, "flow not found or expired", http.StatusNotFound)
+		return
+	}
+	if time.Now().After(f.expiresAt) {
+		log.Warn().Str("login_hash", lh).Time("expires_at", f.expiresAt).Msg("flow expired")
 		http.Error(w, "flow not found or expired", http.StatusNotFound)
 		return
 	}
 
 	if f.approved {
+		log.Info().Str("login_hash", lh).Msg("flow already approved, returning already-approved page")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, htmlPage("Already approved", "This flow was already approved. You may close this window."))
 		return
 	}
 
 	// Build a user context for the configured auto-approve account.
+	log.Info().Str("login_hash", lh).Str("auto_approve_user", s.c.AutoApproveUser).Str("auto_approve_user_idp", s.c.AutoApproveUserIdp).Msg("auto-approving flow")
 	user := &userpb.User{
 		Id: &userpb.UserId{
 			OpaqueId: s.c.AutoApproveUser,
@@ -256,6 +279,7 @@ func (s *svc) handleBrowserFlow(w http.ResponseWriter, r *http.Request) {
 
 	ownerScope, err := scope.AddOwnerScope(nil)
 	if err != nil {
+		log.Error().Err(err).Msg("could not build owner scope")
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -263,6 +287,7 @@ func (s *svc) handleBrowserFlow(w http.ResponseWriter, r *http.Request) {
 	label := fmt.Sprintf("Nextcloud Desktop (%s)", f.userAgent)
 	appPass, err := s.am.GenerateAppPassword(ctx, ownerScope, label, nil)
 	if err != nil {
+		log.Error().Err(err).Str("label", label).Msg("could not generate app password")
 		http.Error(w, "could not generate app password: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -272,6 +297,8 @@ func (s *svc) handleBrowserFlow(w http.ResponseWriter, r *http.Request) {
 	f.username = s.c.AutoApproveUser
 	f.appPass = appPass.Password
 	s.mu.Unlock()
+
+	log.Info().Str("login_hash", lh).Str("username", s.c.AutoApproveUser).Str("label", label).Msg("app password generated, flow approved")
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprint(w, htmlPage("Access granted",
@@ -284,13 +311,18 @@ func (s *svc) handleBrowserFlow(w http.ResponseWriter, r *http.Request) {
 // open the login URL in a browser.  Returns 404 until the flow is approved,
 // then returns the credentials and deletes the flow.
 func (s *svc) handlePoll(w http.ResponseWriter, r *http.Request) {
+	log := appctx.GetLogger(r.Context()).With().Str("service", "loginflow").Str("handler", "poll").Logger()
+	log.Debug().Str("method", r.Method).Str("path", r.URL.Path).Str("remote", r.RemoteAddr).Msg("incoming request")
+
 	if err := r.ParseForm(); err != nil {
+		log.Warn().Err(err).Msg("could not parse poll form")
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 
 	pt := r.FormValue("token")
 	if pt == "" {
+		log.Warn().Msg("poll request missing token")
 		http.NotFound(w, r)
 		return
 	}
@@ -300,7 +332,18 @@ func (s *svc) handlePoll(w http.ResponseWriter, r *http.Request) {
 	f, ok := s.byPoll[ph]
 	s.mu.Unlock()
 
-	if !ok || time.Now().After(f.expiresAt) || !f.approved {
+	if !ok {
+		log.Debug().Str("poll_hash", ph).Msg("poll: flow not found (already consumed or never existed)")
+		http.NotFound(w, r)
+		return
+	}
+	if time.Now().After(f.expiresAt) {
+		log.Warn().Str("poll_hash", ph).Time("expires_at", f.expiresAt).Msg("poll: flow expired")
+		http.NotFound(w, r)
+		return
+	}
+	if !f.approved {
+		log.Debug().Str("poll_hash", ph).Msg("poll: flow not yet approved, returning 404")
 		http.NotFound(w, r)
 		return
 	}
@@ -319,8 +362,12 @@ func (s *svc) handlePoll(w http.ResponseWriter, r *http.Request) {
 		AppPassword: appPass,
 	}
 
+	log.Info().Str("poll_hash", ph).Str("username", username).Str("server", resp.Server).Msg("poll: flow approved, returning credentials and consuming flow")
+
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Error().Err(err).Msg("could not encode poll response")
+	}
 }
 
 func htmlPage(title, body string) string {
