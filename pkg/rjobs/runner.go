@@ -117,8 +117,7 @@ func (r *Runner) Start() {
 	// all-nodes periodic jobs run as local tickers, regardless of the store.
 	for _, p := range r.periodic {
 		if p.Scope == ScopeAllNodes {
-			r.wg.Add(1)
-			go r.runLocalTicker(ctx, p)
+			r.wg.Go(func() { r.runLocalTicker(ctx, p) })
 		}
 	}
 
@@ -142,12 +141,10 @@ func (r *Runner) Start() {
 		}
 	}
 
-	r.wg.Add(1)
-	go r.runScheduler(ctx)
+	r.wg.Go(func() { r.runScheduler(ctx) })
 
 	for i := 0; i < r.workers; i++ {
-		r.wg.Add(1)
-		go r.runDispatcher(ctx)
+		r.wg.Go(func() { r.runDispatcher(ctx) })
 	}
 
 	r.log.Info().Int("workers", r.workers).Msg("rjobs: runner started")
