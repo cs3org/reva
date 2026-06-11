@@ -1073,8 +1073,7 @@ func (fs *cephmountfs) GetQuota(ctx context.Context, ref *provider.Reference) (t
 		}
 
 		// check if error is "attribute not found" (continue to parent) vs other errors (stop)
-		errStr := err.Error()
-		if strings.Contains(errStr, "no data available") {
+		if errors.Is(err, xattr.ENOATTR) {
 			// Attribute not found, try parent
 			parentPath := filepath.Dir(currentPath)
 			if parentPath == currentPath || parentPath == fs.chrootDir || parentPath == "/" {
@@ -1180,7 +1179,7 @@ func (fs *cephmountfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider
 		}
 		if err := xattr.Remove(fullPath, key); err != nil {
 			// Ignore if the attribute doesn't exist
-			if !strings.Contains(err.Error(), "no such attribute") {
+			if !errors.Is(err, xattr.ENOATTR) {
 				wrappedErr := errors.Wrap(err, "cephmount: failed to remove xattr")
 				fs.logOperationError(ctx, "UnsetArbitraryMetadata", path, wrappedErr)
 				return wrappedErr
@@ -1273,10 +1272,15 @@ func (fs *cephmountfs) SetLock(ctx context.Context, ref *provider.Reference, loc
 	}
 
 	fs.logOperation(ctx, "SetLock", path)
+	log := appctx.GetLogger(ctx)
+	log.Debug().Str("path", path).Str("lockId", lock.LockId).Str("appName", lock.AppName).
+		Int32("type", int32(lock.Type)).Msg("cephmount: SetLock: requested")
 
 	// Open the file for locking
-	file, err := os.OpenFile(path, os.O_RDWR, os.FileMode(fs.conf.FilePerms))
+	fullPath := filepath.Join(fs.chrootDir, path)
+	file, err := os.OpenFile(fullPath, os.O_RDWR, os.FileMode(fs.conf.FilePerms))
 	if err != nil {
+		log.Error().Str("path", path).Str("fullPath", fullPath).Err(err).Msg("cephmount: SetLock: failed to open file for locking")
 		return errors.Wrap(err, "cephmount: failed to open file for locking")
 	}
 	defer file.Close()
@@ -1288,6 +1292,7 @@ func (fs *cephmountfs) SetLock(ctx context.Context, ref *provider.Reference, loc
 	}
 
 	if err := syscall.Flock(int(file.Fd()), lockType|syscall.LOCK_NB); err != nil {
+		log.Error().Str("path", path).Err(err).Msg("cephmount: SetLock: failed to acquire flock")
 		return errors.Wrap(err, "cephmount: failed to acquire file lock")
 	}
 
@@ -1297,7 +1302,12 @@ func (fs *cephmountfs) SetLock(ctx context.Context, ref *provider.Reference, loc
 			xattrLock: encodeLock(lock),
 		},
 	}
-	return fs.SetArbitraryMetadata(ctx, ref, md)
+	if err := fs.SetArbitraryMetadata(ctx, ref, md); err != nil {
+		log.Error().Str("path", path).Str("lockId", lock.LockId).Err(err).Msg("cephmount: SetLock: failed to store lock xattr")
+		return err
+	}
+	log.Debug().Str("path", path).Str("lockId", lock.LockId).Str("appName", lock.AppName).Msg("cephmount: SetLock: lock stored")
+	return nil
 }
 
 func (fs *cephmountfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
@@ -1307,29 +1317,42 @@ func (fs *cephmountfs) GetLock(ctx context.Context, ref *provider.Reference) (*p
 	}
 
 	fs.logOperation(ctx, "GetLock", path)
+	log := appctx.GetLogger(ctx)
 
 	// Try to read lock metadata
 	fullPath := filepath.Join(fs.chrootDir, path)
 	buf, err := xattr.Get(fullPath, xattrLock)
+	// ENOATTR (ENODATA on Linux, "no data available") means the lock
+	// xattr is not set, i.e. the file is not locked.
+	if len(buf) == 0 || (err != nil && !errors.Is(err, xattr.ENOATTR)) {
+		log.Debug().Str("path", path).Err(err).Msg("cephmount: GetLock: no lock xattr present, returning NotFound")
+		return nil, errtypes.NotFound("lock not found for ref")
+	}
 	if err != nil {
-		if strings.Contains(err.Error(), "no such attribute") {
-			return nil, errtypes.NotFound("file was not locked")
-		}
-		return nil, errors.Wrap(err, "cephmount: failed to get lock xattr")
+		log.Error().Str("path", path).Err(err).Msg("cephmount: GetLock: unreadable lock payload")
+		return nil, errors.Wrap(err, "cephmount: unreadable lock payload")
 	}
 
 	lock, err := decodeLock(string(buf))
 	if err != nil {
-		return nil, errors.Wrap(err, "malformed lock payload")
+		log.Error().Str("path", path).Err(err).Msg("cephmount: GetLock: malformed lock payload")
+		return nil, errors.Wrap(err, "cephmount: malformed lock payload")
 	}
 
 	// Check if lock has expired
-	if time.Unix(int64(lock.Expiration.Seconds), 0).Before(time.Now()) {
-		// Lock expired, remove it
-		fs.UnsetArbitraryMetadata(ctx, ref, []string{xattrLock})
-		return nil, errtypes.NotFound("lock has expired")
+	ttl := time.Until(time.Unix(int64(lock.Expiration.Seconds), 0))
+	if ttl < 0 {
+		// the lock expired
+		log.Debug().Str("path", path).Str("lockId", lock.LockId).Str("appName", lock.AppName).
+			Dur("expired_ago", -ttl).Msg("cephmount: GetLock: lock expired, dropping and returning NotFound")
+		if err := fs.UnsetArbitraryMetadata(ctx, ref, []string{xattrLock}); err != nil {
+			return nil, err
+		}
+		return nil, errtypes.NotFound("lock not found for ref")
 	}
 
+	log.Debug().Str("path", path).Str("lockId", lock.LockId).Str("appName", lock.AppName).
+		Dur("ttl", ttl).Msg("cephmount: GetLock: returning active lock")
 	return lock, nil
 }
 
@@ -1363,11 +1386,14 @@ func (fs *cephmountfs) Unlock(ctx context.Context, ref *provider.Reference, lock
 	}
 
 	fs.logOperation(ctx, "Unlock", path)
+	log := appctx.GetLogger(ctx)
+	log.Debug().Str("path", path).Str("lockId", lock.LockId).Str("appName", lock.AppName).Msg("cephmount: Unlock: requested")
 
 	oldLock, err := fs.GetLock(ctx, ref)
 	if err != nil {
 		switch err.(type) {
 		case errtypes.NotFound:
+			log.Debug().Str("path", path).Msg("cephmount: Unlock: file not locked")
 			return errtypes.BadRequest("file not found or not locked")
 		default:
 			return err
@@ -1376,26 +1402,38 @@ func (fs *cephmountfs) Unlock(ctx context.Context, ref *provider.Reference, lock
 
 	// Check if the lock id matches
 	if oldLock.LockId != lock.LockId {
+		log.Warn().Str("path", path).Str("requestedLockId", lock.LockId).Str("storedLockId", oldLock.LockId).
+			Msg("cephmount: Unlock: lock id does not match")
 		return errtypes.BadRequest("lock id does not match")
 	}
 
 	if !sameHolder(oldLock, lock) {
+		log.Warn().Str("path", path).Str("storedAppName", oldLock.AppName).Str("requestedAppName", lock.AppName).
+			Msg("cephmount: Unlock: caller does not hold the lock")
 		return errtypes.BadRequest("caller does not hold the lock")
 	}
 
 	// Open the file and unlock it
-	file, err := os.OpenFile(path, os.O_RDWR, os.FileMode(fs.conf.FilePerms))
+	fullPath := filepath.Join(fs.chrootDir, path)
+	file, err := os.OpenFile(fullPath, os.O_RDWR, os.FileMode(fs.conf.FilePerms))
 	if err != nil {
+		log.Error().Str("path", path).Str("fullPath", fullPath).Err(err).Msg("cephmount: Unlock: failed to open file for unlocking")
 		return errors.Wrap(err, "cephmount: failed to open file for unlocking")
 	}
 	defer file.Close()
 
 	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_UN); err != nil {
+		log.Error().Str("path", path).Err(err).Msg("cephmount: Unlock: failed to release flock")
 		return errors.Wrap(err, "cephmount: failed to release file lock")
 	}
 
 	// Remove lock metadata
-	return fs.UnsetArbitraryMetadata(ctx, ref, []string{xattrLock})
+	if err := fs.UnsetArbitraryMetadata(ctx, ref, []string{xattrLock}); err != nil {
+		log.Error().Str("path", path).Str("lockId", lock.LockId).Err(err).Msg("cephmount: Unlock: failed to remove lock xattr")
+		return err
+	}
+	log.Debug().Str("path", path).Str("lockId", lock.LockId).Msg("cephmount: Unlock: lock removed")
+	return nil
 }
 
 // resolveGranteeIdentifier resolves a grantee (user or group) to their system identifier (UID or GID)
