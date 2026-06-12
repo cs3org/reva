@@ -53,12 +53,17 @@ type Options struct {
 	// AckWait is the visibility timeout: how long a claimed run may be in
 	// flight before JetStream redelivers it. Defaults to one minute.
 	AckWait time.Duration
+	// Jobs is the set of job names this process has registered and is willing
+	// to run. The store subscribes only to these jobs, so a process never
+	// claims a run for a job it does not have registered; such a run waits in
+	// the stream for a process that does. Enqueue accepts any job name.
+	Jobs []string
 }
 
 type store struct {
 	nc     *nats.Conn
 	js     nats.JetStreamContext
-	sub    *nats.Subscription
+	subs   []*nats.Subscription
 	kv     nats.KeyValue
 	prefix string
 	log    zerolog.Logger
@@ -106,7 +111,7 @@ func New(ctx context.Context, opts Options) (rjobs.Store, error) {
 		inflight: make(map[rjobs.RunID]*nats.Msg),
 	}
 
-	if err := s.setup(opts.AckWait); err != nil {
+	if err := s.setup(opts.AckWait, opts.Jobs); err != nil {
 		nc.Close()
 		return nil, err
 	}
@@ -114,34 +119,53 @@ func New(ctx context.Context, opts Options) (rjobs.Store, error) {
 	return s, nil
 }
 
-func (s *store) streamName() string   { return s.prefix + "-runs" }
-func (s *store) consumerName() string { return s.prefix + "-worker" }
-func (s *store) subject() string      { return s.prefix + ".runs" }
-func (s *store) bucketName() string   { return s.prefix + "-schedule" }
+func (s *store) streamName() string      { return s.prefix + "-runs" }
+func (s *store) subjectWildcard() string { return s.prefix + ".runs.*" }
+func (s *store) bucketName() string      { return s.prefix + "-schedule" }
 
-func (s *store) setup(ackWait time.Duration) error {
+// subjectFor is the per-job work-queue subject. Runs for a job are published
+// here and only consumers subscribed to this subject can claim them.
+func (s *store) subjectFor(job string) string {
+	return s.prefix + ".runs." + subjectToken(job)
+}
+
+// consumerFor is the per-job durable consumer name. It is stable and shared by
+// every process that has the job registered, so those processes act as
+// competing consumers for that job.
+func (s *store) consumerFor(job string) string {
+	return s.prefix + "-worker-" + subjectToken(job)
+}
+
+func (s *store) setup(ackWait time.Duration, jobs []string) error {
+	// One work-queue stream captures every per-job subject. WorkQueuePolicy
+	// deletes a message once it is acked, so each run is delivered once.
 	if _, err := s.js.AddStream(&nats.StreamConfig{
 		Name:      s.streamName(),
-		Subjects:  []string{s.subject()},
+		Subjects:  []string{s.subjectWildcard()},
 		Retention: nats.WorkQueuePolicy,
 	}); err != nil {
 		return errors.Wrap(err, "rjobs: runs stream creation failed")
 	}
 
-	if _, err := s.js.AddConsumer(s.streamName(), &nats.ConsumerConfig{
-		Durable:       s.consumerName(),
-		AckPolicy:     nats.AckExplicitPolicy,
-		AckWait:       ackWait,
-		MaxAckPending: -1,
-	}); err != nil {
-		return errors.Wrap(err, "rjobs: runs consumer creation failed")
+	// Subscribe only to the jobs this process has registered: one durable,
+	// subject-filtered consumer per job. A run for a job not in this set is
+	// never delivered here; it waits in the stream for a process that has it.
+	for _, job := range jobs {
+		if _, err := s.js.AddConsumer(s.streamName(), &nats.ConsumerConfig{
+			Durable:       s.consumerFor(job),
+			FilterSubject: s.subjectFor(job),
+			AckPolicy:     nats.AckExplicitPolicy,
+			AckWait:       ackWait,
+			MaxAckPending: -1,
+		}); err != nil {
+			return errors.Wrapf(err, "rjobs: consumer creation failed for job %q", job)
+		}
+		sub, err := s.js.PullSubscribe(s.subjectFor(job), s.consumerFor(job), nats.Bind(s.streamName(), s.consumerFor(job)))
+		if err != nil {
+			return errors.Wrapf(err, "rjobs: pull subscription failed for job %q", job)
+		}
+		s.subs = append(s.subs, sub)
 	}
-
-	sub, err := s.js.PullSubscribe(s.subject(), s.consumerName(), nats.Bind(s.streamName(), s.consumerName()))
-	if err != nil {
-		return errors.Wrap(err, "rjobs: pull subscription failed")
-	}
-	s.sub = sub
 
 	kv, err := s.js.CreateKeyValue(&nats.KeyValueConfig{Bucket: s.bucketName()})
 	if err != nil {
@@ -150,6 +174,23 @@ func (s *store) setup(ackWait time.Duration) error {
 	s.kv = kv
 
 	return nil
+}
+
+// subjectToken encodes a job name into a single NATS subject token. Job names
+// may contain dots (e.g. "example.pingpong") and other characters that are not
+// valid in a subject token, so replace anything outside [A-Za-z0-9_] with '_'.
+func subjectToken(job string) string {
+	b := make([]byte, 0, len(job))
+	for i := 0; i < len(job); i++ {
+		c := job[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '_':
+			b = append(b, c)
+		default:
+			b = append(b, '_')
+		}
+	}
+	return string(b)
 }
 
 func (s *store) track(id rjobs.RunID, msg *nats.Msg) {
@@ -191,46 +232,66 @@ func (s *store) Enqueue(ctx context.Context, run rjobs.Run) (rjobs.RunID, error)
 		pubOpts = append(pubOpts, nats.MsgId(run.IdempotencyKey))
 	}
 
-	if _, err := s.js.Publish(s.subject(), payload, pubOpts...); err != nil {
+	if _, err := s.js.Publish(s.subjectFor(run.Job), payload, pubOpts...); err != nil {
 		return "", errors.Wrap(err, "rjobs: publishing run failed")
 	}
 	return run.ID, nil
 }
 
 func (s *store) Claim(ctx context.Context) (rjobs.Run, error) {
+	if len(s.subs) == 0 {
+		// no registered jobs: nothing to claim, block until shutdown.
+		<-ctx.Done()
+		return rjobs.Run{}, ctx.Err()
+	}
+
+	// Poll each per-job subscription in turn. The per-subscription fetch wait
+	// is spread so a full no-work cycle takes about fetchWait regardless of how
+	// many jobs are registered.
+	perSubWait := fetchWait / time.Duration(len(s.subs))
+	if perSubWait < 100*time.Millisecond {
+		perSubWait = 100 * time.Millisecond
+	}
+
 	for {
 		if err := ctx.Err(); err != nil {
 			return rjobs.Run{}, err
 		}
 
-		fetchCtx, cancel := context.WithTimeout(ctx, fetchWait)
-		msgs, err := s.sub.Fetch(1, nats.Context(fetchCtx))
-		cancel()
-		if err != nil {
-			if ctx.Err() != nil {
-				return rjobs.Run{}, ctx.Err()
+		for _, sub := range s.subs {
+			if err := ctx.Err(); err != nil {
+				return rjobs.Run{}, err
 			}
-			if errors.Is(err, nats.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
+
+			fetchCtx, cancel := context.WithTimeout(ctx, perSubWait)
+			msgs, err := sub.Fetch(1, nats.Context(fetchCtx))
+			cancel()
+			if err != nil {
+				if ctx.Err() != nil {
+					return rjobs.Run{}, ctx.Err()
+				}
+				if errors.Is(err, nats.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
+					continue // no work on this job right now, try the next
+				}
+				return rjobs.Run{}, errors.Wrap(err, "rjobs: fetching run failed")
+			}
+			if len(msgs) == 0 {
 				continue
 			}
-			return rjobs.Run{}, errors.Wrap(err, "rjobs: fetching run failed")
-		}
-		if len(msgs) == 0 {
-			continue
-		}
 
-		msg := msgs[0]
-		var run rjobs.Run
-		if err := json.Unmarshal(msg.Data, &run); err != nil {
-			// a run we cannot decode is poison; drop it so it does not block
-			// the queue, and keep going.
-			s.log.Error().Err(err).Msg("rjobs: dropping undecodable run")
-			_ = msg.Term()
-			continue
-		}
+			msg := msgs[0]
+			var run rjobs.Run
+			if err := json.Unmarshal(msg.Data, &run); err != nil {
+				// a run we cannot decode is poison; drop it so it does not
+				// block the queue, and keep going.
+				s.log.Error().Err(err).Msg("rjobs: dropping undecodable run")
+				_ = msg.Term()
+				continue
+			}
 
-		s.track(run.ID, msg)
-		return run, nil
+			s.track(run.ID, msg)
+			return run, nil
+		}
 	}
 }
 
@@ -355,8 +416,8 @@ func (s *store) DueScheduled(ctx context.Context, now time.Time) ([]rjobs.Schedu
 }
 
 func (s *store) Close(ctx context.Context) error {
-	if s.sub != nil {
-		_ = s.sub.Drain()
+	for _, sub := range s.subs {
+		_ = sub.Drain()
 	}
 	return s.nc.Drain()
 }

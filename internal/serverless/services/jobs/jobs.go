@@ -96,6 +96,7 @@ func (s *svc) Start() {
 				Address: s.conf.NatsAddress,
 				Token:   s.conf.NatsToken,
 				Prefix:  s.conf.NatsPrefix,
+				Jobs:    rjobs.RegisteredQueueJobNames(),
 			})
 			if err != nil {
 				s.log.Error().Err(err).Msg("jobs: connecting to the queue failed, leader and on-demand jobs disabled")
