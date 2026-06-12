@@ -32,8 +32,8 @@ func (s *svc) doStatus(w http.ResponseWriter, r *http.Request) {
 		Installed:      true,
 		Maintenance:    false,
 		NeedsDBUpgrade: false,
-		Version:        "10.0.11.5", // TODO(jfd) make build/config determined
-		VersionString:  "10.0.11",
+		Version:        "16.0.0.0", // TODO(jfd) make build/config determined
+		VersionString:  "16.0.0",
 		Edition:        "community",
 		ProductName:    "reva",
 		Product:        "reva",

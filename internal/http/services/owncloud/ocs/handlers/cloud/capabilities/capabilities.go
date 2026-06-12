@@ -65,10 +65,10 @@ func (h *Handler) Init(c *config.Config) {
 	// h.c.Capabilities.Core.Status.Maintenance is boolean
 	// h.c.Capabilities.Core.Status.NeedsDBUpgrade is boolean
 	if h.c.Capabilities.Core.Status.Version == "" {
-		h.c.Capabilities.Core.Status.Version = "10.0.11.5" // TODO make build determined
+		h.c.Capabilities.Core.Status.Version = "16.0.0.0" // TODO make build determined
 	}
 	if h.c.Capabilities.Core.Status.VersionString == "" {
-		h.c.Capabilities.Core.Status.VersionString = "10.0.11" // TODO make build determined
+		h.c.Capabilities.Core.Status.VersionString = "16.0.0" // TODO make build determined
 	}
 	if h.c.Capabilities.Core.Status.Edition == "" {
 		h.c.Capabilities.Core.Status.Edition = "community" // TODO make build determined
@@ -219,10 +219,10 @@ func (h *Handler) Init(c *config.Config) {
 	if h.c.Version == nil {
 		h.c.Version = &data.Version{
 			// TODO get from build env
-			Major:   10,
+			Major:   16,
 			Minor:   0,
-			Micro:   11,
-			String:  "10.0.11",
+			Micro:   0,
+			String:  "16.0.0",
 			Edition: "community",
 			Product: "reva",
 		}
