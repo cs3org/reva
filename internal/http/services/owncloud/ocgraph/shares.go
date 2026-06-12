@@ -694,18 +694,6 @@ func (s *svc) updateReceivedShare(w http.ResponseWriter, r *http.Request) {
 	resourceID := chi.URLParam(r, "resource-id")
 	resourceID, _ = url.QueryUnescape(resourceID)
 
-	parts := strings.Split(resourceID, "!")
-	if len(parts) != 2 {
-		handleBadRequest(ctx, fmt.Errorf("Invalid resource ID"), w)
-		return
-	}
-
-	spaceID, shareID := parts[0], parts[1]
-	if spaceID != fmt.Sprintf("%s$%s", shareJailID, shareJailID) {
-		handleCustomError(ctx, fmt.Errorf("spaceID for this share not found"), http.StatusNotFound, w)
-		return
-	}
-
 	// Now we decode the request body
 	req := &libregraph.DriveItem{}
 	dec := json.NewDecoder(r.Body)
@@ -721,13 +709,37 @@ func (s *svc) updateReceivedShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A regular received share has its id wrapped in the share jail form
+	// <shareJail>$<shareJail>!<shareID>, whereas a received OCM share carries a
+	// bare share id. We use the presence of the wrapper to route the update to
+	// the correct backend.
+	parts := strings.Split(resourceID, "!")
+	switch len(parts) {
+	case 2:
+		if parts[0] != fmt.Sprintf("%s$%s", shareJailID, shareJailID) {
+			handleCustomError(ctx, fmt.Errorf("spaceID for this share not found"), http.StatusNotFound, w)
+			return
+		}
+		s.updateReceivedRegularShare(ctx, w, gw, parts[1], *req.UIHidden)
+	case 1:
+		s.updateReceivedOCMShare(ctx, w, gw, parts[0], *req.UIHidden)
+	default:
+		handleBadRequest(ctx, fmt.Errorf("Invalid resource ID"), w)
+	}
+}
+
+// updateReceivedRegularShare hides (rejects) or shows (accepts) a regular
+// received share and writes the resulting DriveItem to w.
+func (s *svc) updateReceivedRegularShare(ctx context.Context, w http.ResponseWriter, gw gateway.GatewayAPIClient, shareID string, hidden bool) {
+	log := appctx.GetLogger(ctx)
+
 	shareRequest := &collaboration.UpdateReceivedShareRequest{
 		Share: &collaboration.ReceivedShare{
 			Share: &collaboration.Share{Id: &collaboration.ShareId{OpaqueId: shareID}},
 		},
 		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
 	}
-	if *req.UIHidden {
+	if hidden {
 		shareRequest.Share.State = collaboration.ShareState_SHARE_STATE_REJECTED
 	} else {
 		shareRequest.Share.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
@@ -762,6 +774,62 @@ func (s *svc) updateReceivedShare(w http.ResponseWriter, r *http.Request) {
 		ReceivedShare: shareRes.Share,
 		ResourceInfo:  statRes.Info,
 	})
+	if err != nil {
+		handleCustomError(ctx, fmt.Errorf("Error converting ReceivedShare to DriveItem"), http.StatusInternalServerError, w)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(drive); err != nil {
+		log.Error().Err(err).Msg("error marshalling ReceivedShare as json")
+		handleError(ctx, err, w)
+		return
+	}
+}
+
+// updateReceivedOCMShare hides or shows a received OCM share and writes the
+// resulting DriveItem to w. The share state cannot be reused here as it tracks
+// the embedded transfer lifecycle (pending -> transferring -> accepted), so the
+// hidden flag is carried by the dedicated Hidden field instead.
+func (s *svc) updateReceivedOCMShare(ctx context.Context, w http.ResponseWriter, gw gateway.GatewayAPIClient, shareID string, hidden bool) {
+	log := appctx.GetLogger(ctx)
+
+	shareRequest := &ocm.UpdateReceivedOCMShareRequest{
+		Share: &ocm.ReceivedShare{
+			Id:     &ocm.ShareId{OpaqueId: shareID},
+			Hidden: hidden,
+		},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"hidden"}},
+	}
+
+	shareRes, err := gw.UpdateReceivedOCMShare(ctx, shareRequest)
+	if err != nil {
+		handleError(ctx, err, w)
+		return
+	}
+	if shareRes.Status == nil || shareRes.Status.Code != rpc.Code_CODE_OK {
+		handleRpcStatus(ctx, shareRes.Status, "ocgraph: failed to update received OCM share", w)
+		return
+	}
+
+	// The update response does not carry the share, so fetch it back to build
+	// the DriveItem for the response.
+	getRes, err := gw.GetReceivedOCMShare(ctx, &ocm.GetReceivedOCMShareRequest{
+		Ref: &ocm.ShareReference{
+			Spec: &ocm.ShareReference_Id{
+				Id: &ocm.ShareId{OpaqueId: shareID},
+			},
+		},
+	})
+	if err != nil {
+		handleError(ctx, err, w)
+		return
+	}
+	if getRes.Status == nil || getRes.Status.Code != rpc.Code_CODE_OK {
+		handleRpcStatus(ctx, getRes.Status, "ocgraph: failed to get received OCM share", w)
+		return
+	}
+
+	drive, err := s.OCMReceivedShareToDriveItem(ctx, getRes.Share)
 	if err != nil {
 		handleCustomError(ctx, fmt.Errorf("Error converting ReceivedShare to DriveItem"), http.StatusInternalServerError, w)
 		return
