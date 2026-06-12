@@ -24,7 +24,6 @@ import (
 	"os"
 	"time"
 
-	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
@@ -200,11 +199,16 @@ func getAccessMethods(webdav, webapp, datatx bool, rol string) ([]*ocm.AccessMet
 		m = append(m, ocmshare.NewWebDavAccessMethod(perm, []ocm.AccessType{}, []string{}))
 	}
 	if webapp {
-		v, err := getOCMViewMode(rol)
+		perm, err := getOCMSharePerm(rol)
 		if err != nil {
 			return nil, err
 		}
-		m = append(m, ocmshare.NewWebappAccessMethod(v))
+		m = append(m, ocmshare.NewWebappAccessMethod(
+			&ocm.SharePermissions{Permissions: perm},
+			ocmshare.DefaultWebappRequirements,
+			ocmshare.DefaultWebappTargets,
+			"",
+		))
 	}
 	return m, nil
 }
@@ -217,14 +221,4 @@ func getOCMSharePerm(p string) (*provider.ResourcePermissions, error) {
 		return permissions.NewEditorRole().CS3ResourcePermissions(), nil
 	}
 	return nil, errors.New("invalid role: " + p)
-}
-
-func getOCMViewMode(p string) (appprovider.ViewMode, error) {
-	switch p {
-	case viewerPermission:
-		return appprovider.ViewMode_VIEW_MODE_READ_ONLY, nil
-	case editorPermission:
-		return appprovider.ViewMode_VIEW_MODE_READ_WRITE, nil
-	}
-	return 0, errors.New("invalid role: " + p)
 }

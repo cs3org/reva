@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -109,7 +108,9 @@ func testShare(token string, methods []*ocm.AccessMethod) *ocm.Share {
 func legacyMethods() []*ocm.AccessMethod {
 	return []*ocm.AccessMethod{
 		share.NewWebDavAccessMethod(permissions.NewViewerRole().CS3ResourcePermissions(), []ocm.AccessType{}, []string{}),
-		share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_ONLY),
+		share.NewWebappAccessMethod(
+			&ocm.SharePermissions{Permissions: permissions.NewViewerRole().CS3ResourcePermissions()},
+			share.DefaultWebappRequirements, share.DefaultWebappTargets, ""),
 	}
 }
 
@@ -120,7 +121,9 @@ func codeFlowMethods() []*ocm.AccessMethod {
 			[]ocm.AccessType{ocm.AccessType_ACCESS_TYPE_REMOTE},
 			[]string{"must-exchange-token"},
 		),
-		share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_ONLY),
+		share.NewWebappAccessMethod(
+			&ocm.SharePermissions{Permissions: permissions.NewViewerRole().CS3ResourcePermissions()},
+			share.DefaultWebappRequirements, share.DefaultWebappTargets, ""),
 	}
 }
 

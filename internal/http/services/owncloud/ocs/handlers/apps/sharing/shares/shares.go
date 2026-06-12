@@ -34,7 +34,6 @@ import (
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
-	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -701,13 +700,6 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 	response.WriteOCSSuccess(w, r, share)
 }
 
-func permissionsToViewMode(pint int) providerv1beta1.ViewMode {
-	if pint == 15 {
-		return providerv1beta1.ViewMode_VIEW_MODE_READ_WRITE
-	}
-	return providerv1beta1.ViewMode_VIEW_MODE_READ_ONLY
-}
-
 func (h *Handler) updateFederatedShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	ctx := r.Context()
 
@@ -759,7 +751,9 @@ func (h *Handler) updateFederatedShare(w http.ResponseWriter, r *http.Request, s
 					AccessMethods: &ocmv1beta1.AccessMethod{
 						Term: &ocmv1beta1.AccessMethod_WebappOptions{
 							WebappOptions: &ocmv1beta1.WebappAccessMethod{
-								ViewMode: permissionsToViewMode(pint),
+								Permissions: &ocmv1beta1.SharePermissions{
+									Permissions: permissions.RoleFromOCSPermissions(perms).CS3ResourcePermissions(),
+								},
 							},
 						},
 					},

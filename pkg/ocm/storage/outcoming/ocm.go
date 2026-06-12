@@ -27,7 +27,6 @@ import (
 	"slices"
 	"strings"
 
-	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -405,9 +404,7 @@ func getPermissionsFromShare(share *ocmv1beta1.Share) *provider.ResourcePermissi
 		case *ocmv1beta1.AccessMethod_WebdavOptions:
 			return v.WebdavOptions.Permissions
 		case *ocmv1beta1.AccessMethod_WebappOptions:
-			mode := v.WebappOptions.ViewMode
-			if mode == providerv1beta1.ViewMode_VIEW_MODE_READ_WRITE ||
-				mode == providerv1beta1.ViewMode_VIEW_MODE_PREVIEW {
+			if v.WebappOptions.GetPermissions().GetPermissions().GetInitiateFileUpload() {
 				return permissions.NewEditorRole().CS3ResourcePermissions()
 			}
 			return permissions.NewViewerRole().CS3ResourcePermissions()

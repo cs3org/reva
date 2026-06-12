@@ -30,7 +30,6 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ocmshare "github.com/cs3org/reva/v3/pkg/ocm/share"
-	utils "github.com/cs3org/reva/v3/pkg/utils"
 )
 
 // In this file we group the definitions of the OCM payloads according to the official specs
@@ -118,6 +117,23 @@ var validWebDAVRequirements = map[string]struct{}{
 	"must-exchange-token": {},
 }
 
+var validWebappPermissions = map[string]struct{}{
+	"view":  {},
+	"read":  {},
+	"write": {},
+	"share": {},
+}
+
+var validWebappRequirements = map[string]struct{}{
+	"must-use-mfa":        {},
+	"must-exchange-token": {},
+}
+
+var validWebappTargets = map[string]struct{}{
+	"blank":  {},
+	"iframe": {},
+}
+
 // protocols supported by the OCM API
 
 // WebDAV contains the parameters for the WebDAV protocol.
@@ -164,14 +180,39 @@ func (w *WebDAV) ToOCMProtocol() *ocm.Protocol {
 
 // Webapp contains the parameters for the Webapp protocol.
 type Webapp struct {
-	URI          string `json:"uri" validate:"required"`
-	ViewMode     string `json:"viewMode" validate:"required,dive,required,oneof=view read write"`
-	SharedSecret string `json:"sharedSecret"`
+	URI          string   `json:"uri" validate:"required"`
+	SharedSecret string   `json:"sharedSecret" validate:"required"`
+	Permissions  []string `json:"permissions" validate:"required,min=1,dive,required,oneof=view read write share"`
+	Requirements []string `json:"requirements" validate:"required,min=1"`
+	Targets      []string `json:"targets" validate:"required,min=1,dive,required,oneof=blank iframe"`
+	AppName      string   `json:"appName,omitempty"`
+	AppIconHint  string   `json:"appIconHint,omitempty"`
+	MediaTypes   []string `json:"mediaTypes,omitempty"`
 }
 
 // ToOCMProtocol convert the protocol to a ocm Protocol struct.
 func (w *Webapp) ToOCMProtocol() *ocm.Protocol {
-	return ocmshare.NewWebappProtocol(w.URI, utils.GetAppViewMode(w.ViewMode))
+	perms := &ocm.SharePermissions{
+		Permissions: &providerv1beta1.ResourcePermissions{},
+	}
+	for _, p := range w.Permissions {
+		switch p {
+		case "view":
+			perms.Permissions.GetPath = true
+			perms.Permissions.ListContainer = true
+			perms.Permissions.Stat = true
+		case "read":
+			perms.Permissions.GetPath = true
+			perms.Permissions.ListContainer = true
+			perms.Permissions.Stat = true
+			perms.Permissions.InitiateFileDownload = true
+		case "write":
+			perms.Permissions.InitiateFileUpload = true
+		case "share":
+			perms.Reshare = true
+		}
+	}
+	return ocmshare.NewWebappProtocol(w.URI, w.SharedSecret, perms, w.Requirements, w.Targets, w.AppName, w.AppIconHint, w.MediaTypes)
 }
 
 // Embedded contains the parameters for the Embedded protocol.
@@ -299,6 +340,38 @@ func (p Protocols) Validate() error {
 				return err
 			}
 		case *Webapp:
+			if data.SharedSecret == "" {
+				return errors.New("protocol webapp missing sharedSecret")
+			}
+			if len(data.Permissions) == 0 {
+				return errors.New("protocol webapp missing permissions")
+			}
+			for _, permission := range data.Permissions {
+				if _, ok := validWebappPermissions[permission]; !ok {
+					return fmt.Errorf("protocol webapp has unsupported permission %q", permission)
+				}
+			}
+			if len(data.Targets) == 0 {
+				return errors.New("protocol webapp missing targets")
+			}
+			for _, target := range data.Targets {
+				if _, ok := validWebappTargets[target]; !ok {
+					return fmt.Errorf("protocol webapp has unsupported target %q", target)
+				}
+			}
+			// The spec mandates that webapp requirements include `must-exchange-token`.
+			mustExchangeToken := false
+			for _, requirement := range data.Requirements {
+				if _, ok := validWebappRequirements[requirement]; !ok {
+					return fmt.Errorf("protocol webapp has unsupported requirement %q", requirement)
+				}
+				if requirement == "must-exchange-token" {
+					mustExchangeToken = true
+				}
+			}
+			if !mustExchangeToken {
+				return errors.New("protocol webapp requirements must include must-exchange-token")
+			}
 			if err := validateProtocolURI("webapp", data.URI); err != nil {
 				return err
 			}

@@ -222,13 +222,43 @@ func (s *service) getWebdavProtocol(share *ocm.Share, m *ocm.AccessMethod_Webdav
 	}
 }
 
-func (s *service) getWebappProtocol(share *ocm.Share) *ocmd.Webapp {
+func (s *service) getWebappProtocol(ocmShare *ocm.Share, m *ocm.AccessMethod_WebappOptions) *ocmd.Webapp {
 	var b strings.Builder
-	if err := s.webappTmpl.Execute(&b, share); err != nil {
+	if err := s.webappTmpl.Execute(&b, ocmShare); err != nil {
 		panic(err)
 	}
+
+	var perms []string
+	if m.WebappOptions.GetPermissions().GetPermissions().GetInitiateFileDownload() {
+		perms = append(perms, "read")
+	} else {
+		perms = append(perms, "view")
+	}
+	if m.WebappOptions.GetPermissions().GetPermissions().GetInitiateFileUpload() {
+		perms = append(perms, "write")
+	}
+	if m.WebappOptions.GetPermissions().GetReshare() {
+		perms = append(perms, "share")
+	}
+
+	// requirements and targets are required by the OCM specifications:
+	// fall back to the defaults for shares created before these were stored.
+	reqs := m.WebappOptions.Requirements
+	if len(reqs) == 0 {
+		reqs = share.DefaultWebappRequirements
+	}
+	targets := m.WebappOptions.Targets
+	if len(targets) == 0 {
+		targets = share.DefaultWebappTargets
+	}
+
 	return &ocmd.Webapp{
-		URI: b.String(),
+		URI:          b.String(),
+		SharedSecret: ocmShare.Token,
+		Permissions:  perms,
+		Requirements: reqs,
+		Targets:      targets,
+		AppName:      m.WebappOptions.AppName,
 	}
 }
 
@@ -245,7 +275,7 @@ func (s *service) getProtocols(ctx context.Context, share *ocm.Share) ocmd.Proto
 		case *ocm.AccessMethod_WebdavOptions:
 			p = append(p, s.getWebdavProtocol(share, t))
 		case *ocm.AccessMethod_WebappOptions:
-			p = append(p, s.getWebappProtocol(share))
+			p = append(p, s.getWebappProtocol(share, t))
 		}
 	}
 	return p

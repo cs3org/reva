@@ -449,7 +449,16 @@ func mergeAccessMethod(s *ocm.Share, incoming *ocm.AccessMethod) error {
 	case *ocm.AccessMethod_WebappOptions:
 		for _, am := range s.AccessMethods {
 			if existing, ok := am.Term.(*ocm.AccessMethod_WebappOptions); ok {
-				existing.WebappOptions.ViewMode = inc.WebappOptions.ViewMode
+				if err := validateImmutableStringSlice(existing.WebappOptions.Requirements, inc.WebappOptions.Requirements); err != nil {
+					return err
+				}
+				existing.WebappOptions.Permissions = inc.WebappOptions.Permissions
+				if len(inc.WebappOptions.Targets) > 0 {
+					existing.WebappOptions.Targets = inc.WebappOptions.Targets
+				}
+				if inc.WebappOptions.AppName != "" {
+					existing.WebappOptions.AppName = inc.WebappOptions.AppName
+				}
 				return nil
 			}
 		}

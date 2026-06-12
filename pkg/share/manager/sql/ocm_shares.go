@@ -139,7 +139,7 @@ func storeWebDAVAccessMethod(tx *gorm.DB, shareID uint, o *ocm.AccessMethod_Webd
 		Type:         model.WebDAVProtocol,
 		Permissions:  int(permissions.OCSFromCS3Permission(o.WebdavOptions.Permissions)),
 		AccessTypes:  accessTypesToInt(o.WebdavOptions.AccessTypes),
-		Requirements: requirementsToJSON(o.WebdavOptions.Requirements),
+		Requirements: stringsToJSON(o.WebdavOptions.Requirements),
 	}
 
 	err := tx.Create(accessMethod).Error
@@ -151,9 +151,12 @@ func storeWebDAVAccessMethod(tx *gorm.DB, shareID uint, o *ocm.AccessMethod_Webd
 
 func storeWebappAccessMethod(tx *gorm.DB, shareID uint, o *ocm.AccessMethod_WebappOptions) error {
 	accessMethod := &model.OcmShareProtocol{
-		OcmShareID:  uint(shareID),
-		Type:        model.WebappProtocol,
-		Permissions: viewModeToInt(o.WebappOptions.ViewMode),
+		OcmShareID:   uint(shareID),
+		Type:         model.WebappProtocol,
+		Permissions:  int(permissions.OCSFromCS3Permission(o.WebappOptions.GetPermissions().GetPermissions())),
+		Requirements: stringsToJSON(o.WebappOptions.Requirements),
+		Targets:      stringsToJSON(o.WebappOptions.Targets),
+		AppName:      o.WebappOptions.AppName,
 	}
 
 	err := tx.Create(accessMethod).Error
@@ -333,7 +336,7 @@ func storeWebDAVProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_WebdavOptio
 		SharedSecret:       o.WebdavOptions.SharedSecret,
 		Permissions:        int(permissions.OCSFromCS3Permission(o.WebdavOptions.Permissions.Permissions)),
 		AccessTypes:        accessTypesToInt(o.WebdavOptions.AccessTypes),
-		Requirements:       requirementsToJSON(o.WebdavOptions.Requirements),
+		Requirements:       stringsToJSON(o.WebdavOptions.Requirements),
 	}
 
 	if err := tx.Create(protocol).Error; err != nil {
@@ -348,7 +351,12 @@ func storeWebappProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_WebappOptio
 		Type:               model.WebappProtocol,
 		Uri:                o.WebappOptions.Uri,
 		SharedSecret:       o.WebappOptions.SharedSecret,
-		Permissions:        viewModeToInt(o.WebappOptions.ViewMode),
+		Permissions:        int(permissions.OCSFromCS3Permission(o.WebappOptions.GetPermissions().GetPermissions())),
+		Requirements:       stringsToJSON(o.WebappOptions.Requirements),
+		Targets:            stringsToJSON(o.WebappOptions.Targets),
+		AppName:            o.WebappOptions.AppName,
+		AppIconHint:        o.WebappOptions.AppIconHint,
+		MediaTypes:         stringsToJSON(o.WebappOptions.MediaTypes),
 	}
 
 	if err := tx.Create(protocol).Error; err != nil {
@@ -368,7 +376,7 @@ func storeEmbeddedProtocol(tx *gorm.DB, shareID int64, o *ocm.Protocol_EmbeddedO
 	return nil
 }
 
-func requirementsToJSON(reqs []string) datatypes.JSON {
+func stringsToJSON(reqs []string) datatypes.JSON {
 	if len(reqs) == 0 {
 		return nil
 	}
@@ -639,9 +647,19 @@ func (m *mgr) queriesUpdatesOnShare(ctx context.Context, id *ocm.ShareId, f ...*
 				})
 			case *ocm.AccessMethod_WebappOptions:
 				accessMethodUpdates = append(accessMethodUpdates, func(tx *gorm.DB) error {
+					// omitted fields mean "preserve stored value", as for webdav
+					u := map[string]any{
+						"permissions": int(permissions.RoleFromResourcePermissions(t.WebappOptions.GetPermissions().GetPermissions()).OCSPermissions()),
+					}
+					if len(t.WebappOptions.Targets) > 0 {
+						u["targets"] = stringsToJSON(t.WebappOptions.Targets)
+					}
+					if t.WebappOptions.AppName != "" {
+						u["app_name"] = t.WebappOptions.AppName
+					}
 					return tx.Model(&model.OcmShareProtocol{}).
 						Where("ocm_share_id = ? AND type = ?", id.OpaqueId, model.WebappProtocol).
-						Update("permissions", int(t.WebappOptions.ViewMode)).Error
+						Updates(u).Error
 				})
 			}
 		}
@@ -715,26 +733,36 @@ func validateImmutableFields(currentMethods []*ocm.AccessMethod, f ...*ocm.Updat
 		if !ok {
 			continue
 		}
-		wdav, ok := u.AccessMethods.Term.(*ocm.AccessMethod_WebdavOptions)
-		if !ok {
-			continue
-		}
-
-		var storedReqs []string
-		var storedATs []ocm.AccessType
-		for _, m := range currentMethods {
-			if existing, ok := m.Term.(*ocm.AccessMethod_WebdavOptions); ok {
-				storedReqs = existing.WebdavOptions.Requirements
-				storedATs = existing.WebdavOptions.AccessTypes
-				break
+		switch t := u.AccessMethods.Term.(type) {
+		case *ocm.AccessMethod_WebdavOptions:
+			var storedReqs []string
+			var storedATs []ocm.AccessType
+			for _, m := range currentMethods {
+				if existing, ok := m.Term.(*ocm.AccessMethod_WebdavOptions); ok {
+					storedReqs = existing.WebdavOptions.Requirements
+					storedATs = existing.WebdavOptions.AccessTypes
+					break
+				}
 			}
-		}
 
-		if err := checkImmutableStringSlice(storedReqs, wdav.WebdavOptions.Requirements, "requirements"); err != nil {
-			return err
-		}
-		if err := checkImmutableAccessTypes(storedATs, wdav.WebdavOptions.AccessTypes, "access_types"); err != nil {
-			return err
+			if err := checkImmutableStringSlice(storedReqs, t.WebdavOptions.Requirements, "requirements"); err != nil {
+				return err
+			}
+			if err := checkImmutableAccessTypes(storedATs, t.WebdavOptions.AccessTypes, "access_types"); err != nil {
+				return err
+			}
+		case *ocm.AccessMethod_WebappOptions:
+			var storedReqs []string
+			for _, m := range currentMethods {
+				if existing, ok := m.Term.(*ocm.AccessMethod_WebappOptions); ok {
+					storedReqs = existing.WebappOptions.Requirements
+					break
+				}
+			}
+
+			if err := checkImmutableStringSlice(storedReqs, t.WebappOptions.Requirements, "requirements"); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

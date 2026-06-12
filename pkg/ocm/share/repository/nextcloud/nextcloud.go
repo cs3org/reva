@@ -175,6 +175,18 @@ func (sm *Manager) StoreShare(ctx context.Context, share *ocm.Share) (*ocm.Share
 	return share, nil
 }
 
+// webappViewModeToSharePermissions maps the legacy EFSS view mode strings
+// to OCM share permissions.
+func webappViewModeToSharePermissions(viewMode string) *ocm.SharePermissions {
+	role := permissions.NewViewerRole()
+	if viewMode == "write" {
+		role = permissions.NewEditorRole()
+	}
+	return &ocm.SharePermissions{
+		Permissions: role.CS3ResourcePermissions(),
+	}
+}
+
 func (sm *Manager) efssShareToOcm(resp *EfssShare) *ocm.Share {
 	// Parse the JSON struct returned by the PHP SM app into an OCM share object
 
@@ -184,7 +196,9 @@ func (sm *Manager) efssShareToOcm(resp *EfssShare) *ocm.Share {
 		permissions.OcsPermissions(resp.Protocols.WebDAV.Permissions)).CS3ResourcePermissions(),
 		[]ocm.AccessType{ocm.AccessType_ACCESS_TYPE_REMOTE}, []string{}))
 	if resp.Protocols.WebApp.ViewMode != "" {
-		am = append(am, share.NewWebappAccessMethod(utils.GetAppViewMode(resp.Protocols.WebApp.ViewMode)))
+		am = append(am, share.NewWebappAccessMethod(
+			webappViewModeToSharePermissions(resp.Protocols.WebApp.ViewMode),
+			share.DefaultWebappRequirements, share.DefaultWebappTargets, ""))
 	}
 
 	// return the OCM Share payload
@@ -326,7 +340,9 @@ func efssReceivedShareToOcm(resp *ReceivedEfssShare) *ocm.ReceivedShare {
 		Permissions: permissions.RoleFromOCSPermissions(permissions.OcsPermissions(resp.Share.Protocols.WebDAV.Permissions)).CS3ResourcePermissions(),
 	}, []ocm.AccessType{ocm.AccessType_ACCESS_TYPE_DATATX}, []string{}))
 	if resp.Share.Protocols.WebApp.ViewMode != "" {
-		proto = append(proto, share.NewWebappProtocol(resp.Share.Protocols.WebApp.URI, utils.GetAppViewMode(resp.Share.Protocols.WebApp.ViewMode)))
+		proto = append(proto, share.NewWebappProtocol(resp.Share.Protocols.WebApp.URI, resp.Share.Token,
+			webappViewModeToSharePermissions(resp.Share.Protocols.WebApp.ViewMode),
+			share.DefaultWebappRequirements, share.DefaultWebappTargets, "", "", nil))
 	}
 
 	// return the OCM Received Share payload

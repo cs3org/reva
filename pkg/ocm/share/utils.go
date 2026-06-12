@@ -19,9 +19,16 @@
 package share
 
 import (
-	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+)
+
+// Defaults for webapp shares created by this server, according to
+// the OCM specifications: the webapp protocol requires non-empty
+// requirements (including `must-exchange-token`) and targets.
+var (
+	DefaultWebappRequirements = []string{"must-exchange-token"}
+	DefaultWebappTargets      = []string{"blank"}
 )
 
 // NewWebDAVProtocol is an abstraction for creating a WebDAV protocol.
@@ -40,12 +47,18 @@ func NewWebDAVProtocol(uri, sharedSecret string, perms *ocm.SharePermissions, ac
 }
 
 // NewWebappProtocol is an abstraction for creating a Webapp protocol.
-func NewWebappProtocol(uri string, viewMode appprovider.ViewMode) *ocm.Protocol {
+func NewWebappProtocol(uri, sharedSecret string, perms *ocm.SharePermissions, reqs, targets []string, appName, appIconHint string, mediaTypes []string) *ocm.Protocol {
 	return &ocm.Protocol{
 		Term: &ocm.Protocol_WebappOptions{
 			WebappOptions: &ocm.WebappProtocol{
-				Uri:      uri,
-				ViewMode: viewMode,
+				Uri:          uri,
+				SharedSecret: sharedSecret,
+				Permissions:  perms,
+				Requirements: reqs,
+				Targets:      targets,
+				AppName:      appName,
+				AppIconHint:  appIconHint,
+				MediaTypes:   mediaTypes,
 			},
 		},
 	}
@@ -78,11 +91,14 @@ func NewWebDavAccessMethod(perms *provider.ResourcePermissions, accTypes []ocm.A
 
 // NewWebappAccessMethod is an abstraction for creating a Webapp access method,
 // which is the protocol used by remote users to access an OCM share.
-func NewWebappAccessMethod(mode appprovider.ViewMode) *ocm.AccessMethod {
+func NewWebappAccessMethod(perms *ocm.SharePermissions, reqs, targets []string, appName string) *ocm.AccessMethod {
 	return &ocm.AccessMethod{
 		Term: &ocm.AccessMethod_WebappOptions{
 			WebappOptions: &ocm.WebappAccessMethod{
-				ViewMode: mode,
+				Permissions:  perms,
+				Requirements: reqs,
+				Targets:      targets,
+				AppName:      appName,
 			},
 		},
 	}
