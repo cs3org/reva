@@ -329,17 +329,33 @@ func newTestTransferrer(t *testing.T) Transferrer {
 
 func TestProcessMalformedPayload(t *testing.T) {
 	tr := newTestTransferrer(t)
-	if err := tr.Process(context.Background(), "{not valid json", "/dest"); err == nil {
+	called := false
+	if err := tr.Process(context.Background(), "{not valid json", "/dest", func(error) { called = true }); err == nil {
 		t.Error("Process with malformed payload: expected error, got nil")
+	}
+	if called {
+		t.Error("Process with malformed payload: onComplete must not be called")
 	}
 }
 
 func TestProcessNoTransferableEntries(t *testing.T) {
 	tr := newTestTransferrer(t)
 	// A valid payload with nothing transferable must be a no-op: it returns nil
-	// and does not require a token (no background transfer is started).
+	// and does not require a token (no background transfer is started). The
+	// onComplete callback is still invoked synchronously with a nil error.
 	payload := `{"@graph":[{"@id":"d","@type":"Dataset","name":"nothing to transfer"}]}`
-	if err := tr.Process(context.Background(), payload, "/dest"); err != nil {
+	var gotErr error
+	called := false
+	if err := tr.Process(context.Background(), payload, "/dest", func(err error) {
+		called = true
+		gotErr = err
+	}); err != nil {
 		t.Errorf("Process with no transferable entries: unexpected error %v", err)
+	}
+	if !called {
+		t.Error("Process with no transferable entries: onComplete was not called")
+	}
+	if gotErr != nil {
+		t.Errorf("Process with no transferable entries: onComplete error = %v, want nil", gotErr)
 	}
 }

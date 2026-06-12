@@ -59,6 +59,8 @@ func (h *embeddedHandler) ProcessEmbeddedShare(w http.ResponseWriter, r *http.Re
 	log := appctx.GetLogger(ctx)
 	queryParams := r.URL.Query()
 
+	log.Debug().Msg("processing embedded share")
+
 	dest_path := queryParams.Get("destination")
 	share_id := queryParams.Get("share_id")
 	process := queryParams.Get("process")
@@ -172,10 +174,11 @@ func CreateStateMapping(ctx context.Context, receivedOCMShare []*ocm.ReceivedSha
 
 func convertShareState(state ocm.ShareState) string {
 	stateMapping := map[ocm.ShareState]string{
-		ocm.ShareState_SHARE_STATE_INVALID:  "invalid",
-		ocm.ShareState_SHARE_STATE_PENDING:  "pending",
-		ocm.ShareState_SHARE_STATE_ACCEPTED: "accepted",
-		ocm.ShareState_SHARE_STATE_REJECTED: "rejected",
+		ocm.ShareState_SHARE_STATE_INVALID:      "invalid",
+		ocm.ShareState_SHARE_STATE_PENDING:      "pending",
+		ocm.ShareState_SHARE_STATE_ACCEPTED:     "accepted",
+		ocm.ShareState_SHARE_STATE_REJECTED:     "rejected",
+		ocm.ShareState_SHARE_STATE_TRANSFERRING: "transferring",
 	}
 	if val, ok := stateMapping[state]; ok {
 		return val
