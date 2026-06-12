@@ -75,8 +75,11 @@ type Store interface {
 	// Fail marks a run as failed and schedules it to become claimable again
 	// after retryAfter.
 	Fail(ctx context.Context, id RunID, retryAfter time.Duration) error
-	// RegisterScheduled records (or updates) a leader-scoped periodic job's
-	// schedule so DueScheduled can track its next-fire across restarts.
+	// RegisterScheduled records a leader-scoped periodic job's schedule so
+	// DueScheduled can track its next-fire across restarts. An existing
+	// next-fire is preserved across restarts, except when the configured
+	// interval changed, in which case the new interval and the given next-fire
+	// are adopted.
 	RegisterScheduled(ctx context.Context, job string, schedule Schedule, next time.Time) error
 	// DueScheduled returns the periodic jobs whose next-fire is at or before
 	// now, atomically advancing each one's stored next-fire by its interval.

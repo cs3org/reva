@@ -129,6 +129,28 @@ func TestGuardSkipsOverlap(t *testing.T) {
 	close(block)
 }
 
+func TestIsLeaderJob(t *testing.T) {
+	r := &Runner{
+		periodic: []Periodic{
+			{Name: "cleanup", Scope: ScopeLeader},
+			{Name: "warm", Scope: ScopeAllNodes},
+		},
+	}
+
+	if !r.isLeaderJob("cleanup") {
+		t.Error("a registered leader job should be reported as such")
+	}
+	// a job that flipped to all-nodes must not be treated as leader, so a
+	// stale schedule entry for it is skipped instead of double-running.
+	if r.isLeaderJob("warm") {
+		t.Error("an all-nodes job must not be reported as a leader job")
+	}
+	// a job no longer registered at all (deleted/renamed) is not a leader job.
+	if r.isLeaderJob("gone") {
+		t.Error("an unregistered job must not be reported as a leader job")
+	}
+}
+
 func resetRegistry() {
 	reg.mu.Lock()
 	defer reg.mu.Unlock()

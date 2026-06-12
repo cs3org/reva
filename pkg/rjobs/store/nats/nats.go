@@ -259,11 +259,33 @@ func (s *store) Fail(ctx context.Context, id rjobs.RunID, retryAfter time.Durati
 }
 
 func (s *store) RegisterScheduled(ctx context.Context, job string, schedule rjobs.Schedule, next time.Time) error {
-	// Only create the entry if it does not exist yet, so a restart keeps the
-	// next-fire that was already in flight instead of resetting the cadence.
-	if _, err := s.kv.Get(job); err == nil {
+	entry, err := s.kv.Get(job)
+	switch {
+	case err == nil:
+		// An entry exists. Keep it as-is on a restart so the cadence is not
+		// reset, UNLESS the configured interval changed: then adopt the new
+		// interval and the recomputed next-fire so a schedule change in config
+		// takes effect.
+		var cur scheduleState
+		if uerr := json.Unmarshal(entry.Value(), &cur); uerr != nil {
+			return errors.Wrap(uerr, "rjobs: reading schedule state failed")
+		}
+		if cur.Interval == schedule.Interval() {
+			return nil
+		}
+		st := scheduleState{Interval: schedule.Interval(), Next: next}
+		data, merr := json.Marshal(st)
+		if merr != nil {
+			return errors.Wrap(merr, "rjobs: marshalling schedule state failed")
+		}
+		if _, uerr := s.kv.Update(job, data, entry.Revision()); uerr != nil {
+			// another process updated it first; its write wins, which is fine.
+			return nil
+		}
 		return nil
-	} else if !errors.Is(err, nats.ErrKeyNotFound) {
+	case errors.Is(err, nats.ErrKeyNotFound):
+		// fall through to create below.
+	default:
 		return errors.Wrap(err, "rjobs: reading schedule state failed")
 	}
 

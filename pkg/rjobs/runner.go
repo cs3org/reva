@@ -259,6 +259,17 @@ func (r *Runner) runScheduler(ctx context.Context) {
 				continue
 			}
 			for _, d := range due {
+				// The store may surface a schedule entry for a job that is no
+				// longer a registered leader job: its scope changed to
+				// all-nodes, or it was deleted/renamed, leaving a stale entry
+				// in the store. Skip it here rather than enqueuing a run that
+				// would double-execute (all-nodes) or reference a job that no
+				// longer exists. The stale entry is left in place; it is
+				// harmless once it is never enqueued.
+				if !r.isLeaderJob(d.Job) {
+					r.log.Debug().Str("job", d.Job).Msg("rjobs: skipping stale schedule entry, not a registered leader job")
+					continue
+				}
 				if _, err := r.store.Enqueue(ctx, Run{Job: d.Job}); err != nil {
 					r.log.Error().Err(err).Str("job", d.Job).Msg("rjobs: enqueuing periodic run failed")
 				}
@@ -413,6 +424,14 @@ func (r *Runner) lookupPeriodic(name string) (Periodic, bool) {
 		}
 	}
 	return Periodic{}, false
+}
+
+// isLeaderJob reports whether name is currently registered as a leader-scoped
+// periodic job. The scheduler uses it to ignore stale schedule entries left by
+// a job that changed scope or was removed.
+func (r *Runner) isLeaderJob(name string) bool {
+	p, ok := r.lookupPeriodic(name)
+	return ok && p.Scope == ScopeLeader
 }
 
 // jitter returns a random non-negative duration in [0, max).
