@@ -24,13 +24,13 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
+	"slices"
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ocmshare "github.com/cs3org/reva/v3/pkg/ocm/share"
-	utils "github.com/cs3org/reva/v3/pkg/utils"
 )
 
 // In this file we group the definitions of the OCM payloads according to the official specs
@@ -118,6 +118,23 @@ var validWebDAVRequirements = map[string]struct{}{
 	"must-exchange-token": {},
 }
 
+var validWebappPermissions = map[string]struct{}{
+	"view":  {},
+	"read":  {},
+	"write": {},
+	"share": {},
+}
+
+var validWebappRequirements = map[string]struct{}{
+	"must-use-mfa":        {},
+	"must-exchange-token": {},
+}
+
+var validWebappTargets = map[string]struct{}{
+	"blank":  {},
+	"iframe": {},
+}
+
 // protocols supported by the OCM API
 
 // WebDAV contains the parameters for the WebDAV protocol.
@@ -164,14 +181,37 @@ func (w *WebDAV) ToOCMProtocol() *ocm.Protocol {
 
 // Webapp contains the parameters for the Webapp protocol.
 type Webapp struct {
-	URI          string `json:"uri" validate:"required"`
-	ViewMode     string `json:"viewMode" validate:"required,dive,required,oneof=view read write"`
-	SharedSecret string `json:"sharedSecret"`
+	URI          string   `json:"uri" validate:"required"`
+	SharedSecret string   `json:"sharedSecret" validate:"required"`
+	Permissions  []string `json:"permissions" validate:"required,min=1,dive,required,oneof=view read write share"`
+	Requirements []string `json:"requirements" validate:"required,min=1"`
+	Targets      []string `json:"targets" validate:"required,min=1,dive,required,oneof=blank iframe"`
+	AppName      string   `json:"appName,omitempty"`
+	AppIconHint  string   `json:"appIconHint,omitempty"`
+	MediaTypes   []string `json:"mediaTypes,omitempty"`
 }
 
 // ToOCMProtocol convert the protocol to a ocm Protocol struct.
 func (w *Webapp) ToOCMProtocol() *ocm.Protocol {
-	return ocmshare.NewWebappProtocol(w.URI, utils.GetAppViewMode(w.ViewMode))
+	perms := &providerv1beta1.ResourcePermissions{}
+	for _, p := range w.Permissions {
+		switch p {
+		case "view":
+			perms.GetPath = true
+			perms.ListContainer = true
+			perms.Stat = true
+		case "read":
+			perms.GetPath = true
+			perms.ListContainer = true
+			perms.Stat = true
+			perms.InitiateFileDownload = true
+		case "write":
+			perms.InitiateFileUpload = true
+		case "share":
+			perms.AddGrant = true
+		}
+	}
+	return ocmshare.NewWebappProtocol(w.URI, w.SharedSecret, perms, w.Requirements, w.Targets, w.AppName, w.AppIconHint, w.MediaTypes)
 }
 
 // Embedded contains the parameters for the Embedded protocol.
@@ -277,34 +317,59 @@ func (p Protocols) Validate() error {
 	for _, protocol := range p {
 		switch data := protocol.(type) {
 		case *WebDAV:
-			if data.SharedSecret == "" {
-				return errors.New("protocol webdav missing sharedSecret")
-			}
-			if len(data.Permissions) == 0 {
-				return errors.New("protocol webdav missing permissions")
-			}
-			// Reject unknown permission vocabularies here so they do not degrade into
-			// an empty CS3 permission set later in ToOCMProtocol.
-			for _, permission := range data.Permissions {
-				if _, ok := validWebDAVPermissions[permission]; !ok {
-					return fmt.Errorf("protocol webdav has unsupported permission %q", permission)
-				}
-			}
-			for _, requirement := range data.Requirements {
-				if _, ok := validWebDAVRequirements[requirement]; !ok {
-					return fmt.Errorf("protocol webdav has unsupported requirement %q", requirement)
-				}
-			}
-			if err := validateProtocolURI("webdav", data.URI); err != nil {
+			if err := validateSharedProtocolFields("webdav", data.SharedSecret, data.Permissions, validWebDAVPermissions, data.Requirements, validWebDAVRequirements, data.URI); err != nil {
 				return err
 			}
 		case *Webapp:
-			if err := validateProtocolURI("webapp", data.URI); err != nil {
+			if err := validateSharedProtocolFields("webapp", data.SharedSecret, data.Permissions, validWebappPermissions, data.Requirements, validWebappRequirements, data.URI); err != nil {
 				return err
+			}
+			if len(data.Targets) == 0 {
+				return errors.New("protocol webapp missing targets")
+			}
+			if err := validateVocabulary("webapp", "target", data.Targets, validWebappTargets); err != nil {
+				return err
+			}
+			// The spec mandates that webapp requirements include `must-exchange-token`.
+			if !slices.Contains(data.Requirements, "must-exchange-token") {
+				return errors.New("protocol webapp requirements must include must-exchange-token")
 			}
 		}
 	}
 
+	return nil
+}
+
+// validateSharedProtocolFields applies the checks common to the webdav and
+// webapp protocols: a shared secret must be present, at least one permission
+// must be set and drawn from the protocol's vocabulary, every requirement must
+// be recognised, and the URI must be well-formed.
+func validateSharedProtocolFields(name, sharedSecret string, permissions []string, validPermissions map[string]struct{}, requirements []string, validRequirements map[string]struct{}, uri string) error {
+	if sharedSecret == "" {
+		return fmt.Errorf("protocol %s missing sharedSecret", name)
+	}
+	if len(permissions) == 0 {
+		return fmt.Errorf("protocol %s missing permissions", name)
+	}
+	// Reject unknown permission vocabularies here so they do not degrade into
+	// an empty CS3 permission set later in ToOCMProtocol.
+	if err := validateVocabulary(name, "permission", permissions, validPermissions); err != nil {
+		return err
+	}
+	if err := validateVocabulary(name, "requirement", requirements, validRequirements); err != nil {
+		return err
+	}
+	return validateProtocolURI(name, uri)
+}
+
+// validateVocabulary checks that every value belongs to the allowed set,
+// reporting the first one that does not.
+func validateVocabulary(protocolName, kind string, values []string, valid map[string]struct{}) error {
+	for _, value := range values {
+		if _, ok := valid[value]; !ok {
+			return fmt.Errorf("protocol %s has unsupported %s %q", protocolName, kind, value)
+		}
+	}
 	return nil
 }
 

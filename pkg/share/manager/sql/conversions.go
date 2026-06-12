@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"strconv"
 
-	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -161,22 +160,6 @@ func convertToCS3OCMReceivedShare(s *model.OcmReceivedShare, p []*ocm.Protocol) 
 	return share
 }
 
-func viewModeToInt(v appprovider.ViewMode) int {
-	switch v {
-	case appprovider.ViewMode_VIEW_MODE_INVALID:
-		return 0
-	case appprovider.ViewMode_VIEW_MODE_VIEW_ONLY:
-		return 1
-	case appprovider.ViewMode_VIEW_MODE_READ_ONLY:
-		return 2
-	case appprovider.ViewMode_VIEW_MODE_READ_WRITE:
-		return 3
-	case appprovider.ViewMode_VIEW_MODE_PREVIEW:
-		return 4
-	}
-	return -1
-}
-
 func accessTypesIntToArray(at ocm.AccessType) []ocm.AccessType {
 	switch at {
 	case ocm.AccessType_ACCESS_TYPE_REMOTE:
@@ -190,7 +173,7 @@ func accessTypesIntToArray(at ocm.AccessType) []ocm.AccessType {
 	}
 }
 
-func requirementsFromJSON(r datatypes.JSON) []string {
+func stringsFromJSON(r datatypes.JSON) []string {
 	if r == nil {
 		return nil
 	}
@@ -207,10 +190,14 @@ func convertToCS3AccessMethod(m *model.OcmShareProtocol) *ocm.AccessMethod {
 		return share.NewWebDavAccessMethod(
 			permissions.RoleFromOCSPermissions(permissions.OcsPermissions(m.Permissions)).CS3ResourcePermissions(),
 			accessTypesIntToArray(ocm.AccessType(m.AccessTypes)),
-			requirementsFromJSON(m.Requirements),
+			stringsFromJSON(m.Requirements),
 		)
 	case model.WebappProtocol:
-		return share.NewWebappAccessMethod(appprovider.ViewMode(m.Permissions))
+		return share.NewWebappAccessMethod(
+			permissions.RoleFromOCSPermissions(permissions.OcsPermissions(m.Permissions)).CS3ResourcePermissions(),
+			stringsFromJSON(m.Requirements),
+			m.AppName,
+		)
 	}
 	return nil
 }
@@ -223,10 +210,17 @@ func convertToCS3Protocol(p *model.OcmReceivedShareProtocol) *ocm.Protocol {
 				Permissions: permissions.RoleFromOCSPermissions(permissions.OcsPermissions(p.Permissions)).CS3ResourcePermissions(),
 			},
 			accessTypesIntToArray(ocm.AccessType(p.AccessTypes)),
-			requirementsFromJSON(p.Requirements),
+			stringsFromJSON(p.Requirements),
 		)
 	case model.WebappProtocol:
-		return share.NewWebappProtocol(p.Uri, appprovider.ViewMode(p.Permissions))
+		return share.NewWebappProtocol(p.Uri, p.SharedSecret,
+			permissions.RoleFromOCSPermissions(permissions.OcsPermissions(p.Permissions)).CS3ResourcePermissions(),
+			stringsFromJSON(p.Requirements),
+			stringsFromJSON(p.Targets),
+			p.AppName,
+			p.AppIconHint,
+			stringsFromJSON(p.MediaTypes),
+		)
 	case model.EmbeddedProtocol:
 		return share.NewEmbeddedProtocol(string(p.Payload))
 	}

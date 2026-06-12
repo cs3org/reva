@@ -79,10 +79,14 @@ func TestUnmarshalProtocol(t *testing.T) {
 			},
 		},
 		{
-			raw: `{"name":"multi","options":{},"webapp":{"uri":"https://example.org/test"}}`,
+			raw: `{"name":"multi","options":{},"webapp":{"uri":"https://example.org/test","sharedSecret":"secret","permissions":["read"],"requirements":["must-exchange-token"],"targets":["blank"]}}`,
 			expected: []Protocol{
 				&Webapp{
-					URI: "https://example.org/test",
+					URI:          "https://example.org/test",
+					SharedSecret: "secret",
+					Permissions:  []string{"read"},
+					Requirements: []string{"must-exchange-token"},
+					Targets:      []string{"blank"},
 				},
 			},
 		},
@@ -95,7 +99,7 @@ func TestUnmarshalProtocol(t *testing.T) {
 			},
 		},
 		{
-			raw: `{"name":"multi","options":{},"webdav":{"sharedSecret":"secret","permissions":["read","write"],"uri":"https://example.org"},"webapp":{"uri":"https://example.org/test"}}`,
+			raw: `{"name":"multi","options":{},"webdav":{"sharedSecret":"secret","permissions":["read","write"],"uri":"https://example.org"},"webapp":{"uri":"https://example.org/test","sharedSecret":"secret","permissions":["read","write"],"requirements":["must-exchange-token"],"targets":["blank"]}}`,
 			expected: []Protocol{
 				&WebDAV{
 					SharedSecret: "secret",
@@ -103,7 +107,11 @@ func TestUnmarshalProtocol(t *testing.T) {
 					URI:          "https://example.org",
 				},
 				&Webapp{
-					URI: "https://example.org/test",
+					URI:          "https://example.org/test",
+					SharedSecret: "secret",
+					Permissions:  []string{"read", "write"},
+					Requirements: []string{"must-exchange-token"},
+					Targets:      []string{"blank"},
 				},
 			},
 		},
@@ -198,6 +206,142 @@ func TestProtocolsValidateAllowsSupportedWebDAVRequirement(t *testing.T) {
 	}
 }
 
+func TestProtocolsValidateWebapp(t *testing.T) {
+	tests := []struct {
+		name   string
+		webapp *Webapp
+		err    string
+	}{
+		{
+			name: "valid",
+			webapp: &Webapp{
+				SharedSecret: "secret",
+				Permissions:  []string{"read", "write"},
+				Requirements: []string{"must-exchange-token"},
+				Targets:      []string{"blank"},
+				URI:          "https://example.org/app",
+			},
+		},
+		{
+			name: "legacy payload without permissions is rejected",
+			webapp: &Webapp{
+				SharedSecret: "secret",
+				URI:          "https://example.org/app",
+			},
+			err: "protocol webapp missing permissions",
+		},
+		{
+			name: "missing sharedSecret",
+			webapp: &Webapp{
+				Permissions:  []string{"read"},
+				Requirements: []string{"must-exchange-token"},
+				Targets:      []string{"blank"},
+				URI:          "https://example.org/app",
+			},
+			err: "protocol webapp missing sharedSecret",
+		},
+		{
+			name: "missing targets",
+			webapp: &Webapp{
+				SharedSecret: "secret",
+				Permissions:  []string{"read"},
+				Requirements: []string{"must-exchange-token"},
+				URI:          "https://example.org/app",
+			},
+			err: "protocol webapp missing targets",
+		},
+		{
+			name: "requirements without must-exchange-token",
+			webapp: &Webapp{
+				SharedSecret: "secret",
+				Permissions:  []string{"read"},
+				Requirements: []string{"must-use-mfa"},
+				Targets:      []string{"blank"},
+				URI:          "https://example.org/app",
+			},
+			err: "protocol webapp requirements must include must-exchange-token",
+		},
+		{
+			name: "unsupported permission",
+			webapp: &Webapp{
+				SharedSecret: "secret",
+				Permissions:  []string{"admin"},
+				Requirements: []string{"must-exchange-token"},
+				Targets:      []string{"blank"},
+				URI:          "https://example.org/app",
+			},
+			err: `protocol webapp has unsupported permission "admin"`,
+		},
+		{
+			name: "unsupported target",
+			webapp: &Webapp{
+				SharedSecret: "secret",
+				Permissions:  []string{"read"},
+				Requirements: []string{"must-exchange-token"},
+				Targets:      []string{"popup"},
+				URI:          "https://example.org/app",
+			},
+			err: `protocol webapp has unsupported target "popup"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Protocols{tt.webapp}.Validate()
+			if tt.err == "" {
+				if err != nil {
+					t.Fatalf("Validate() returned error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("expected validation error")
+			}
+			if got := err.Error(); got != tt.err {
+				t.Fatalf("Validate() error = %q, want %q", got, tt.err)
+			}
+		})
+	}
+}
+
+func TestWebappToOCMProtocol(t *testing.T) {
+	w := &Webapp{
+		SharedSecret: "secret",
+		Permissions:  []string{"read", "write", "share"},
+		Requirements: []string{"must-exchange-token"},
+		Targets:      []string{"blank"},
+		URI:          "https://example.org/app",
+		AppName:      "Some App",
+		AppIconHint:  "text/plain",
+		MediaTypes:   []string{"text/plain"},
+	}
+
+	proto := w.ToOCMProtocol()
+	wapp := proto.GetWebappOptions()
+	if wapp == nil {
+		t.Fatal("expected Webapp protocol options")
+	}
+	if wapp.Uri != w.URI || wapp.SharedSecret != w.SharedSecret || wapp.AppName != w.AppName || wapp.AppIconHint != w.AppIconHint {
+		t.Errorf("scalar fields lost in ToOCMProtocol: got %+v", wapp)
+	}
+	if len(wapp.Requirements) != 1 || wapp.Requirements[0] != "must-exchange-token" {
+		t.Errorf("requirements lost in ToOCMProtocol: got %v", wapp.Requirements)
+	}
+	if len(wapp.Targets) != 1 || wapp.Targets[0] != "blank" {
+		t.Errorf("targets lost in ToOCMProtocol: got %v", wapp.Targets)
+	}
+	if len(wapp.MediaTypes) != 1 || wapp.MediaTypes[0] != "text/plain" {
+		t.Errorf("media types lost in ToOCMProtocol: got %v", wapp.MediaTypes)
+	}
+	p := wapp.GetSharePermissions()
+	if p == nil || !p.InitiateFileDownload || !p.InitiateFileUpload {
+		t.Errorf("permissions lost in ToOCMProtocol: got %v", p)
+	}
+	if !wapp.GetSharePermissions().GetAddGrant() {
+		t.Error("reshare permission lost in ToOCMProtocol")
+	}
+}
+
 func TestMarshalProtocol(t *testing.T) {
 	tests := []struct {
 		in       Protocols
@@ -252,8 +396,11 @@ func TestMarshalProtocol(t *testing.T) {
 		{
 			in: []Protocol{
 				&Webapp{
-					URI:      "https://example.org",
-					ViewMode: "read",
+					URI:          "https://example.org",
+					SharedSecret: "secret",
+					Permissions:  []string{"read"},
+					Requirements: []string{"must-exchange-token"},
+					Targets:      []string{"blank"},
 				},
 			},
 			expected: map[string]any{
@@ -261,8 +408,10 @@ func TestMarshalProtocol(t *testing.T) {
 				"options": map[string]any{},
 				"webapp": map[string]any{
 					"uri":          "https://example.org",
-					"viewMode":     "read",
-					"sharedSecret": "",
+					"sharedSecret": "secret",
+					"permissions":  []any{"read"},
+					"requirements": []any{"must-exchange-token"},
+					"targets":      []any{"blank"},
 				},
 			},
 		},
@@ -290,8 +439,11 @@ func TestMarshalProtocol(t *testing.T) {
 					URI:          "https://example.org",
 				},
 				&Webapp{
-					URI:      "https://example.org",
-					ViewMode: "read",
+					URI:          "https://example.org",
+					SharedSecret: "secret",
+					Permissions:  []string{"read"},
+					Requirements: []string{"must-exchange-token"},
+					Targets:      []string{"blank"},
 				},
 			},
 			expected: map[string]any{
@@ -305,8 +457,10 @@ func TestMarshalProtocol(t *testing.T) {
 				},
 				"webapp": map[string]any{
 					"uri":          "https://example.org",
-					"viewMode":     "read",
-					"sharedSecret": "",
+					"sharedSecret": "secret",
+					"permissions":  []any{"read"},
+					"requirements": []any{"must-exchange-token"},
+					"targets":      []any{"blank"},
 				},
 			},
 		},

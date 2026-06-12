@@ -33,10 +33,10 @@ func ocmShareUpdateCommand() *command {
 	cmd.Usage = func() string { return "Usage: ocm-share-update [-flags] <share_id>" }
 
 	webdavRol := cmd.String("webdav-rol", "viewer", "the permission for the WebDAV access method (viewer or editor)")
-	webappViewMode := cmd.String("webapp-mode", "view", "the view mode for the Webapp access method (read or write)")
+	webappRol := cmd.String("webapp-rol", "viewer", "the permission for the Webapp access method (viewer or editor)")
 
 	cmd.ResetFlags = func() {
-		*webdavRol, *webappViewMode = "viewer", "read"
+		*webdavRol, *webappRol = "viewer", "viewer"
 	}
 	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
@@ -45,8 +45,8 @@ func ocmShareUpdateCommand() *command {
 
 		id := cmd.Args()[0]
 
-		if *webdavRol == "" && *webappViewMode == "" {
-			return errors.New("use at least one of -webdav-rol or -webapp-mode flag")
+		if *webdavRol == "" && *webappRol == "" {
+			return errors.New("use at least one of -webdav-rol or -webapp-rol flag")
 		}
 
 		ctx := getAuthContext()
@@ -84,8 +84,8 @@ func ocmShareUpdateCommand() *command {
 			})
 		}
 
-		if *webappViewMode != "" {
-			mode, err := getOCMViewMode(*webappViewMode)
+		if *webappRol != "" {
+			perm, err := getOCMSharePerm(*webappRol)
 			if err != nil {
 				return err
 			}
@@ -94,7 +94,7 @@ func ocmShareUpdateCommand() *command {
 					AccessMethods: &ocm.AccessMethod{
 						Term: &ocm.AccessMethod_WebappOptions{
 							WebappOptions: &ocm.WebappAccessMethod{
-								ViewMode: mode,
+								Permissions: perm,
 							},
 						},
 					},

@@ -24,7 +24,6 @@ package ocmsharecode
 import (
 	"context"
 
-	provider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -172,14 +171,12 @@ func getRole(s *ocm.Share) (authpb.Role, string) {
 				return authpb.Role_ROLE_VIEWER, "viewer"
 			}
 		case *ocm.AccessMethod_WebappOptions:
-			viewMode := v.WebappOptions.ViewMode
-			if viewMode == provider.ViewMode_VIEW_MODE_VIEW_ONLY ||
-				viewMode == provider.ViewMode_VIEW_MODE_READ_ONLY {
-				return authpb.Role_ROLE_VIEWER, "viewer"
-			}
-			if viewMode == provider.ViewMode_VIEW_MODE_READ_WRITE ||
-				viewMode == provider.ViewMode_VIEW_MODE_PREVIEW {
+			p := v.WebappOptions.GetPermissions()
+			if p.GetInitiateFileUpload() {
 				return authpb.Role_ROLE_EDITOR, "editor"
+			}
+			if p != nil {
+				return authpb.Role_ROLE_VIEWER, "viewer"
 			}
 		}
 	}

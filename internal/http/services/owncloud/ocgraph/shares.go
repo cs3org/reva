@@ -187,7 +187,7 @@ func (s *svc) createOCMShare(ctx context.Context, gw gateway.GatewayAPIClient, r
 		return nil, errors.New("error sending a grpc GetInfoByDomain request" + recipientProviderInfo.Status.Message)
 	}
 
-	perm, viewMode := UnifiedRoleToOCMPermissions(role)
+	perm := UnifiedRoleToOCMPermissions(role)
 	resp, err := gw.CreateOCMShare(ctx, &ocm.CreateOCMShareRequest{
 		ResourceId: resourceId,
 		Grantee: &provider.Grantee{
@@ -199,7 +199,7 @@ func (s *svc) createOCMShare(ctx context.Context, gw gateway.GatewayAPIClient, r
 		RecipientMeshProvider: recipientProviderInfo.ProviderInfo,
 		AccessMethods: []*ocm.AccessMethod{
 			share.NewWebDavAccessMethod(perm, []ocm.AccessType{ocm.AccessType_ACCESS_TYPE_REMOTE}, []string{}),
-			share.NewWebappAccessMethod(viewMode),
+			share.NewWebappAccessMethod(perm, share.DefaultWebappRequirements, ""),
 		},
 	})
 
