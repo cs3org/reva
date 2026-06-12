@@ -640,8 +640,8 @@ func (fs *cephfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateSt
 	return nil, errors.New("cephfs: updateStorageSpace not supported")
 }
 
-func (fs *cephfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
-	return errors.New("cephfs: deleteStorageSpace not supported")
+func (fs *cephfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*storage.DeleteStorageSpaceResult, error) {
+	return nil, errors.New("cephfs: deleteStorageSpace not supported")
 }
 
 // GetLock returns an existing lock on the given reference

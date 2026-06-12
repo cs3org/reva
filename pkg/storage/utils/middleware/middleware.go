@@ -1062,7 +1062,7 @@ func (f *FS) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorage
 	return res0, res1
 }
 
-func (f *FS) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
+func (f *FS) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*storage.DeleteStorageSpaceResult, error) {
 	var (
 		err     error
 		unhook  UnHook
@@ -1071,20 +1071,20 @@ func (f *FS) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorage
 	for _, hook := range f.hooks {
 		ctx, unhook, err = hook("DeleteStorageSpace", ctx, req.GetId().GetOpaqueId())
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if unhook != nil {
 			unhooks = append(unhooks, unhook)
 		}
 	}
 
-	res0 := f.next.DeleteStorageSpace(ctx, req)
+	res0, err := f.next.DeleteStorageSpace(ctx, req)
 
 	for _, unhook := range unhooks {
 		if err := unhook(); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	return res0
+	return res0, err
 }

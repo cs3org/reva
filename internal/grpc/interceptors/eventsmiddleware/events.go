@@ -64,6 +64,9 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		// Register a slot for typed Delete results
 		ctx = storagespace.ContextRegisterDeleteResultSlot(ctx)
 
+		// Register a slot for typed DeleteStorageSpace results
+		ctx = storagespace.ContextRegisterDeleteStorageSpaceResultSlot(ctx)
+
 		res, err := handler(ctx, req)
 		if err != nil {
 			return res, err
@@ -180,7 +183,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			if isSuccess(v) {
 				r := req.(*provider.DeleteStorageSpaceRequest)
 				if utils.ExistsInOpaque(r.Opaque, "purge") {
-					ev = SpaceDeleted(v, r, executant)
+					ev = SpaceDeleted(v, r, storagespace.ContextGetDeleteStorageSpaceResult(ctx), executant)
 				} else {
 					ev = SpaceDisabled(v, r, executant)
 				}

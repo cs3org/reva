@@ -693,6 +693,6 @@ func (fs *s3FS) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStor
 }
 
 // DeleteStorageSpace deletes a storage space
-func (fs *s3FS) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
-	return errtypes.NotSupported("delete storage space")
+func (fs *s3FS) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*storage.DeleteStorageSpaceResult, error) {
+	return nil, errtypes.NotSupported("delete storage space")
 }

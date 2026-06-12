@@ -47,8 +47,8 @@ func (fs *hellofs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateS
 }
 
 // DeleteStorageSpace deletes a storage space
-func (fs *hellofs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
-	return errtypes.NotSupported("delete storage space")
+func (fs *hellofs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*storage.DeleteStorageSpaceResult, error) {
+	return nil, errtypes.NotSupported("delete storage space")
 }
 
 // CreateDir creates a resource of type container

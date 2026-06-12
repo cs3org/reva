@@ -31,6 +31,7 @@ const (
 	spaceOwnerSlotKey key = iota
 	moveResultSlotKey
 	deleteResultSlotKey
+	deleteStorageSpaceResultSlotKey
 )
 
 // --- space owner ---
@@ -130,6 +131,41 @@ func ContextSetDeleteResult(ctx context.Context, r *storage.DeleteResult) {
 // driver, or nil if none was set.
 func ContextGetDeleteResult(ctx context.Context) *storage.DeleteResult {
 	if slot, ok := ctx.Value(deleteResultSlotKey).(*deleteResultSlot); ok {
+		return slot.result
+	}
+	return nil
+}
+
+// --- delete storage space result ---
+
+type deleteStorageSpaceResultSlot struct {
+	result *storage.DeleteStorageSpaceResult
+}
+
+// ContextRegisterDeleteStorageSpaceResultSlot installs an empty slot in ctx so
+// that the storage driver can write delete-space metadata via
+// ContextSetDeleteStorageSpaceResult and the events middleware can read it via
+// ContextGetDeleteStorageSpaceResult after the handler returns. Subsequent
+// registrations are no-ops; the first registration wins.
+func ContextRegisterDeleteStorageSpaceResultSlot(ctx context.Context) context.Context {
+	if ctx.Value(deleteStorageSpaceResultSlotKey) != nil {
+		return ctx
+	}
+	return context.WithValue(ctx, deleteStorageSpaceResultSlotKey, &deleteStorageSpaceResultSlot{})
+}
+
+// ContextSetDeleteStorageSpaceResult writes r into the slot. Subsequent writes
+// overwrite the previous value. Does nothing if no slot was registered.
+func ContextSetDeleteStorageSpaceResult(ctx context.Context, r *storage.DeleteStorageSpaceResult) {
+	if slot, ok := ctx.Value(deleteStorageSpaceResultSlotKey).(*deleteStorageSpaceResultSlot); ok {
+		slot.result = r
+	}
+}
+
+// ContextGetDeleteStorageSpaceResult returns the delete-space result written by
+// the storage driver, or nil if none was set.
+func ContextGetDeleteStorageSpaceResult(ctx context.Context) *storage.DeleteStorageSpaceResult {
+	if slot, ok := ctx.Value(deleteStorageSpaceResultSlotKey).(*deleteStorageSpaceResultSlot); ok {
 		return slot.result
 	}
 	return nil

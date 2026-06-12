@@ -628,6 +628,6 @@ func (d *driver) UpdateStorageSpace(ctx context.Context, req *provider.UpdateSto
 	return nil, errtypes.NotSupported("operation not supported")
 }
 
-func (d *driver) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
-	return errtypes.NotSupported("operation not supported")
+func (d *driver) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*storage.DeleteStorageSpaceResult, error) {
+	return nil, errtypes.NotSupported("operation not supported")
 }

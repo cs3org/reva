@@ -19,6 +19,7 @@
 package eventsmiddleware
 
 import (
+	"encoding/json"
 	"testing"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -263,6 +264,98 @@ func TestItemTrashed(t *testing.T) {
 			}
 			if ev.Timestamp == nil {
 				t.Errorf("Timestamp: got nil, want non-nil")
+			}
+		})
+	}
+}
+
+// assertFinalMember checks a value-typed entry in the FinalMembers map without
+// copying it directly (which vet flags due to embedded sync.Mutex in protobuf
+// types). The entry is JSON round-tripped into a fresh pointer for inspection.
+func assertFinalMember(t *testing.T, m map[string]provider.ResourcePermissions, key string, ok func(*provider.ResourcePermissions) bool) {
+	t.Helper()
+	raw, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("marshal FinalMembers: %v", err)
+	}
+	out := map[string]*provider.ResourcePermissions{}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("unmarshal FinalMembers: %v", err)
+	}
+	got, exists := out[key]
+	if !exists {
+		t.Errorf("FinalMembers[%q]: missing", key)
+		return
+	}
+	if !ok(got) {
+		t.Errorf("FinalMembers[%q]: predicate failed: %+v", key, got)
+	}
+}
+
+func TestSpaceDeleted(t *testing.T) {
+	executant := &user.User{Id: &user.UserId{OpaqueId: "executant-id"}}
+	spaceID := &provider.StorageSpaceId{OpaqueId: "space-id"}
+
+	req := &provider.DeleteStorageSpaceRequest{Id: spaceID}
+	res := &provider.DeleteStorageSpaceResponse{}
+
+	finalMembers := map[string]provider.ResourcePermissions{
+		"user-1":  {Stat: true, GetPath: true},
+		"group-1": {Stat: true, AddGrant: true},
+	}
+
+	tests := []struct {
+		name         string
+		result       *storage.DeleteStorageSpaceResult
+		wantName     string
+		wantHasFinal bool
+	}{
+		{
+			name: "typed result is propagated",
+			result: &storage.DeleteStorageSpaceResult{
+				SpaceName:    "Mission to Venus",
+				FinalMembers: finalMembers,
+			},
+			wantName:     "Mission to Venus",
+			wantHasFinal: true,
+		},
+		{
+			name:     "empty result yields empty event fields",
+			result:   &storage.DeleteStorageSpaceResult{},
+			wantName: "",
+		},
+		{
+			name:     "nil result yields empty event fields",
+			result:   nil,
+			wantName: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ev := SpaceDeleted(res, req, tc.result, executant)
+
+			if ev.SpaceName != tc.wantName {
+				t.Errorf("SpaceName: got %q, want %q", ev.SpaceName, tc.wantName)
+			}
+			if tc.wantHasFinal {
+				if got, want := len(ev.FinalMembers), len(finalMembers); got != want {
+					t.Fatalf("FinalMembers length: got %d, want %d", got, want)
+				}
+				assertFinalMember(t, ev.FinalMembers, "user-1", func(p *provider.ResourcePermissions) bool {
+					return p.GetStat() && p.GetGetPath()
+				})
+				assertFinalMember(t, ev.FinalMembers, "group-1", func(p *provider.ResourcePermissions) bool {
+					return p.GetStat() && p.GetAddGrant()
+				})
+			} else if ev.FinalMembers != nil {
+				t.Errorf("FinalMembers: got non-nil, want nil")
+			}
+			if ev.ID == nil || ev.ID.GetOpaqueId() != spaceID.GetOpaqueId() {
+				t.Errorf("ID: got %v, want %v", ev.ID, spaceID)
+			}
+			if ev.Executant == nil || ev.Executant.GetOpaqueId() != executant.Id.OpaqueId {
+				t.Errorf("Executant: got %v, want %v", ev.Executant, executant.Id)
 			}
 		})
 	}

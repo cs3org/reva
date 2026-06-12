@@ -439,13 +439,17 @@ func SpaceDisabled(r *provider.DeleteStorageSpaceResponse, req *provider.DeleteS
 }
 
 // SpaceDeleted converts the response to an event
-func SpaceDeleted(r *provider.DeleteStorageSpaceResponse, req *provider.DeleteStorageSpaceRequest, executant *user.User) events.SpaceDeleted {
+func SpaceDeleted(r *provider.DeleteStorageSpaceResponse, req *provider.DeleteStorageSpaceRequest, result *storage.DeleteStorageSpaceResult, executant *user.User) events.SpaceDeleted {
+	var spaceName string
 	var final map[string]provider.ResourcePermissions
-	_ = utils.ReadJSONFromOpaque(r.GetOpaque(), "grants", &final)
+	if result != nil {
+		spaceName = result.SpaceName
+		final = result.FinalMembers
+	}
 	return events.SpaceDeleted{
 		Executant:    executant.GetId(),
 		ID:           req.Id,
-		SpaceName:    utils.ReadPlainFromOpaque(r.GetOpaque(), "spacename"),
+		SpaceName:    spaceName,
 		FinalMembers: final,
 		Timestamp:    time.Now(),
 	}

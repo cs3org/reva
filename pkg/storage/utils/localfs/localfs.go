@@ -1347,8 +1347,8 @@ func (fs *localfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateS
 }
 
 // DeleteStorageSpace deletes a storage space
-func (fs *localfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
-	return errtypes.NotSupported("delete storage space")
+func (fs *localfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*storage.DeleteStorageSpaceResult, error) {
+	return nil, errtypes.NotSupported("delete storage space")
 }
 
 func (fs *localfs) propagate(ctx context.Context, leafPath string) error {

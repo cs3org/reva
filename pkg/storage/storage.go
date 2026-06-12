@@ -174,8 +174,10 @@ type FS interface {
 	CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error)
 	// UpdateStorageSpace updates a storage space
 	UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error)
-	// DeleteStorageSpace deletes a storage space
-	DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error
+	// DeleteStorageSpace deletes a storage space.
+	// On a successful delete (purge), returns a DeleteStorageSpaceResult used by
+	// the wrapper to publish SpaceDeleted. SpaceDisabled does not need this data.
+	DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*DeleteStorageSpaceResult, error)
 
 	// CreateHome creates a users home
 	// Deprecated: use CreateStorageSpace with type personal
@@ -192,6 +194,17 @@ type DeleteResult struct {
 	SpaceOwner *userpb.UserId
 	// ResourceId is the stable identifier of the deleted resource, used as ItemTrashed.ID in the published event.
 	ResourceId *provider.ResourceId
+}
+
+// DeleteStorageSpaceResult is returned by FS.DeleteStorageSpace on a successful
+// purge. It carries the data the storageprovider wrapper needs to publish the
+// SpaceDeleted event. The SpaceDisabled flow does not consume it.
+type DeleteStorageSpaceResult struct {
+	// SpaceName is the name of the space at the time of deletion.
+	SpaceName string
+	// FinalMembers is the grant map of the space at the time of deletion,
+	// keyed by user/group opaque id.
+	FinalMembers map[string]provider.ResourcePermissions
 }
 
 // UnscopeFunc is a function that unscopes a user

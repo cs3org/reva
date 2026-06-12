@@ -127,7 +127,7 @@ var _ = Describe("Spaces", func() {
 				Expect(string(resp[0].Opaque.GetMap()["spaceAlias"].Value)).To(Equal("personal/username"))
 				Expect(resp[0].Name).To(Equal("username"))
 				Expect(resp[0].SpaceType).To(Equal("personal"))
-				err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
+				_, err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
 					Id: resp[0].GetId(),
 				})
 				Expect(err).To(HaveOccurred())
@@ -140,7 +140,7 @@ var _ = Describe("Spaces", func() {
 				Expect(string(resp[0].Opaque.GetMap()["spaceAlias"].Value)).To(Equal("personal/username"))
 				Expect(resp[0].Name).To(Equal("username"))
 				Expect(resp[0].SpaceType).To(Equal("personal"))
-				err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
+				_, err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
 					Id: resp[0].GetId(),
 				})
 				Expect(err).To(Not(HaveOccurred()))
@@ -153,7 +153,7 @@ var _ = Describe("Spaces", func() {
 				Expect(string(resp[0].Opaque.GetMap()["spaceAlias"].Value)).To(Equal("personal/username"))
 				Expect(resp[0].Name).To(Equal("username"))
 				Expect(resp[0].SpaceType).To(Equal("personal"))
-				err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
+				_, err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
 					Id: resp[0].GetId(),
 				})
 				Expect(err).To(HaveOccurred())
@@ -168,7 +168,7 @@ var _ = Describe("Spaces", func() {
 				Expect(resp.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 				Expect(resp.StorageSpace).ToNot(Equal(nil))
 				spaceID := resp.StorageSpace.GetId()
-				err = env.Fs.DeleteStorageSpace(env.Ctx, &provider.DeleteStorageSpaceRequest{
+				_, err = env.Fs.DeleteStorageSpace(env.Ctx, &provider.DeleteStorageSpaceRequest{
 					Id: spaceID,
 				})
 				Expect(err).To(Not(HaveOccurred()))
@@ -186,21 +186,21 @@ var _ = Describe("Spaces", func() {
 			})
 			It("fails as a unprivileged user", func() {
 				ctx := ctxpkg.ContextSetUser(context.Background(), env.Users[1])
-				err := env.Fs.DeleteStorageSpace(ctx, delReq)
+				_, err := env.Fs.DeleteStorageSpace(ctx, delReq)
 				Expect(err).To(HaveOccurred())
 			})
 			It("fails as a user with 'delete-all-home-spaces privilege", func() {
 				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteHomeSpacesUser)
-				err := env.Fs.DeleteStorageSpace(ctx, delReq)
+				_, err := env.Fs.DeleteStorageSpace(ctx, delReq)
 				Expect(err).To(HaveOccurred())
 			})
 			It("succeeds as a user with 'delete-all-spaces privilege", func() {
 				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteAllSpacesUser)
-				err := env.Fs.DeleteStorageSpace(ctx, delReq)
+				_, err := env.Fs.DeleteStorageSpace(ctx, delReq)
 				Expect(err).To(Not(HaveOccurred()))
 			})
 			It("succeeds as the space owner", func() {
-				err := env.Fs.DeleteStorageSpace(env.Ctx, delReq)
+				_, err := env.Fs.DeleteStorageSpace(env.Ctx, delReq)
 				Expect(err).To(Not(HaveOccurred()))
 			})
 		})
