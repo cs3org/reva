@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	nserver "github.com/nats-io/nats-server/v2/server"
 	"github.com/pkg/errors"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -273,6 +274,31 @@ func startRevads(configs []RevadConfig, variables map[string]string) (map[string
 		revads[c.Name] = revad
 	}
 	return revads, nil
+}
+
+func startNats() (address string, stop func(), err error) {
+	mutex.Lock()
+	p := port
+	port++
+	mutex.Unlock()
+
+	opts := &nserver.Options{
+		Host:      "localhost",
+		Port:      p,
+		NoLog:     true,
+		NoSigs:    true,
+		JetStream: true,
+	}
+	srv, err := nserver.NewServer(opts)
+	if err != nil {
+		return "", nil, err
+	}
+	srv.Start()
+	if !srv.ReadyForConnections(5 * time.Second) {
+		srv.Shutdown()
+		return "", nil, fmt.Errorf("nats server not ready within 5s")
+	}
+	return fmt.Sprintf("localhost:%d", p), srv.Shutdown, nil
 }
 
 func waitForPort(grpcAddress, expectedStatus string) error {

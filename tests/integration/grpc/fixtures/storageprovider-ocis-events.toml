@@ -1,0 +1,18 @@
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.storageprovider]
+driver = "ocis"
+
+[grpc.services.storageprovider.drivers.ocis]
+root = "{{root}}/storage"
+treetime_accounting = true
+treesize_accounting = true
+permissionssvc = "{{permissions_address}}"
+
+[grpc.services.storageprovider.drivers.ocis.filemetadatacache]
+cache_store = "noop"
+
+[grpc.interceptors.eventsmiddleware]
+type = "nats"
+address = "{{nats_address}}"
