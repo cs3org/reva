@@ -37,6 +37,11 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// fetchWait bounds a single Claim fetch. A quiet queue returns to the claim
+// loop after this interval so it can re-check the outer context, rather than
+// blocking on the server indefinitely.
+const fetchWait = 5 * time.Second
+
 // Options configures the NATS-backed store.
 type Options struct {
 	// Address is the NATS server address.
@@ -198,13 +203,14 @@ func (s *store) Claim(ctx context.Context) (rjobs.Run, error) {
 			return rjobs.Run{}, err
 		}
 
-		msgs, err := s.sub.Fetch(1, nats.Context(ctx))
+		fetchCtx, cancel := context.WithTimeout(ctx, fetchWait)
+		msgs, err := s.sub.Fetch(1, nats.Context(fetchCtx))
+		cancel()
 		if err != nil {
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			if ctx.Err() != nil {
 				return rjobs.Run{}, ctx.Err()
 			}
-			if errors.Is(err, nats.ErrTimeout) {
-				// no work right now, keep polling
+			if errors.Is(err, nats.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
 				continue
 			}
 			return rjobs.Run{}, errors.Wrap(err, "rjobs: fetching run failed")
