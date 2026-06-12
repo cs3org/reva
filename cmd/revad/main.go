@@ -338,6 +338,10 @@ func runMultiple(confs []*config.Config) {
 }
 
 func getPidfile() string {
+	if *pidFlag != "" {
+		return *pidFlag
+	}
+
 	uuid := uuid.New().String()
 	name := fmt.Sprintf("revad-%s.pid", uuid)
 
