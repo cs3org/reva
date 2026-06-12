@@ -224,12 +224,15 @@ func (d *driver) CreateDir(ctx context.Context, ref *provider.Reference) (*stora
 	return &storage.CreateDirResult{}, nil
 }
 
-func (d *driver) Delete(ctx context.Context, ref *provider.Reference) error {
+func (d *driver) Delete(ctx context.Context, ref *provider.Reference) (*storage.DeleteResult, error) {
 	client, _, rel, err := d.webdavClient(ctx, nil, ref)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return client.RemoveAll(rel)
+	if err := client.RemoveAll(rel); err != nil {
+		return nil, err
+	}
+	return &storage.DeleteResult{}, nil
 }
 
 func (d *driver) TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) (*storage.TouchFileResult, error) {

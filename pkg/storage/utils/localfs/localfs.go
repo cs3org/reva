@@ -813,14 +813,14 @@ func (fs *localfs) TouchFile(ctx context.Context, ref *provider.Reference, _ boo
 	return nil, fmt.Errorf("unimplemented: TouchFile")
 }
 
-func (fs *localfs) Delete(ctx context.Context, ref *provider.Reference) error {
+func (fs *localfs) Delete(ctx context.Context, ref *provider.Reference) (*storage.DeleteResult, error) {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "localfs: error resolving ref")
+		return nil, errors.Wrap(err, "localfs: error resolving ref")
 	}
 
 	if fs.isShareFolderRoot(ctx, fn) {
-		return errtypes.PermissionDenied("localfs: cannot delete the virtual share folder")
+		return nil, errtypes.PermissionDenied("localfs: cannot delete the virtual share folder")
 	}
 
 	var fp string
@@ -833,22 +833,25 @@ func (fs *localfs) Delete(ctx context.Context, ref *provider.Reference) error {
 	_, err = os.Stat(fp)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return errtypes.NotFound(fn)
+			return nil, errtypes.NotFound(fn)
 		}
-		return errors.Wrap(err, "localfs: error stating "+fp)
+		return nil, errors.Wrap(err, "localfs: error stating "+fp)
 	}
 
 	key := fmt.Sprintf("%s.d%d", path.Base(fn), time.Now().UnixNano()/int64(time.Millisecond))
 	if err := os.Rename(fp, fs.wrapRecycleBin(ctx, key)); err != nil {
-		return errors.Wrap(err, "localfs: could not delete item")
+		return nil, errors.Wrap(err, "localfs: could not delete item")
 	}
 
 	err = fs.addToRecycledDB(ctx, key, fn)
 	if err != nil {
-		return errors.Wrap(err, "localfs: error adding entry to DB")
+		return nil, errors.Wrap(err, "localfs: error adding entry to DB")
 	}
 
-	return fs.propagate(ctx, path.Dir(fp))
+	if err := fs.propagate(ctx, path.Dir(fp)); err != nil {
+		return nil, err
+	}
+	return &storage.DeleteResult{}, nil
 }
 
 func (fs *localfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (*storage.MoveResult, error) {

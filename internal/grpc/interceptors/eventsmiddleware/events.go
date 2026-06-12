@@ -61,6 +61,8 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		// the immutable context chain; values are read here after the handler returns.
 		ctx = storagespace.ContextRegisterSpaceOwnerSlot(ctx)
 		ctx = storagespace.ContextRegisterMoveResultSlot(ctx)
+		// Register a slot for typed Delete results
+		ctx = storagespace.ContextRegisterDeleteResultSlot(ctx)
 
 		res, err := handler(ctx, req)
 		if err != nil {
@@ -145,7 +147,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			}
 		case *provider.DeleteResponse:
 			if isSuccess(v) {
-				ev = ItemTrashed(v, req.(*provider.DeleteRequest), spaceOwnerID, executant)
+				ev = ItemTrashed(v, req.(*provider.DeleteRequest), storagespace.ContextGetDeleteResult(ctx), executant)
 			}
 		case *provider.PurgeRecycleResponse:
 			if isSuccess(v) {

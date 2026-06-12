@@ -178,7 +178,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 				Path: "/some/path",
 			}
-			err := nc.Delete(ctx, ref)
+			_, err := nc.Delete(ctx, ref)
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/Delete {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"}`)
 		})

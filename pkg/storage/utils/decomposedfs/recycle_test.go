@@ -23,11 +23,11 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	ctxpkg "github.com/owncloud/reva/v2/pkg/ctx"
 	"github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/permissions/mocks"
 	helpers "github.com/owncloud/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -59,13 +59,13 @@ var _ = Describe("Recycle", func() {
 			})
 
 			JustBeforeEach(func() {
-				err := env.Fs.Delete(env.Ctx, &provider.Reference{
+				_, err := env.Fs.Delete(env.Ctx, &provider.Reference{
 					ResourceId: env.SpaceRootRes,
 					Path:       "/dir1/file1",
 				})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = env.Fs.Delete(env.Ctx, &provider.Reference{
+				_, err = env.Fs.Delete(env.Ctx, &provider.Reference{
 					ResourceId: env.SpaceRootRes,
 					Path:       "/dir1/subdir1",
 				})
@@ -152,13 +152,13 @@ var _ = Describe("Recycle", func() {
 			})
 
 			JustBeforeEach(func() {
-				err := env.Fs.Delete(env.Ctx, &provider.Reference{
+				_, err := env.Fs.Delete(env.Ctx, &provider.Reference{
 					ResourceId: env.SpaceRootRes,
 					Path:       "/dir1/file1",
 				})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = env.Fs.Delete(ctx, &provider.Reference{
+				_, err = env.Fs.Delete(ctx, &provider.Reference{
 					ResourceId: env.SpaceRootRes,
 					Path:       "/dir1/subdir1",
 				})
@@ -255,13 +255,13 @@ var _ = Describe("Recycle", func() {
 			})
 
 			JustBeforeEach(func() {
-				err := env.Fs.Delete(env.Ctx, &provider.Reference{
+				_, err := env.Fs.Delete(env.Ctx, &provider.Reference{
 					ResourceId: env.SpaceRootRes,
 					Path:       "/dir1/file1",
 				})
 				Expect(err).ToNot(HaveOccurred())
 
-				err = env.Fs.Delete(env.Ctx, &provider.Reference{
+				_, err = env.Fs.Delete(env.Ctx, &provider.Reference{
 					ResourceId: projectID,
 					Path:       "/dir1/file1",
 				})
@@ -334,7 +334,7 @@ var _ = Describe("Recycle", func() {
 			})
 
 			It("can list the trashbin", func() {
-				err := env.Fs.Delete(env.Ctx, &provider.Reference{
+				_, err := env.Fs.Delete(env.Ctx, &provider.Reference{
 					ResourceId: env.SpaceRootRes,
 					Path:       "/dir1/file1",
 				})
@@ -346,7 +346,7 @@ var _ = Describe("Recycle", func() {
 			})
 
 			It("cannot delete files", func() {
-				err := env.Fs.Delete(ctx, &provider.Reference{
+				_, err := env.Fs.Delete(ctx, &provider.Reference{
 					ResourceId: env.SpaceRootRes,
 					Path:       "/dir1/file1",
 				})
@@ -359,7 +359,7 @@ var _ = Describe("Recycle", func() {
 			})
 
 			It("cannot purge files from trashbin", func() {
-				err := env.Fs.Delete(env.Ctx, &provider.Reference{
+				_, err := env.Fs.Delete(env.Ctx, &provider.Reference{
 					ResourceId: env.SpaceRootRes,
 					Path:       "/dir1/file1",
 				})
@@ -375,7 +375,7 @@ var _ = Describe("Recycle", func() {
 			})
 
 			It("cannot restore files from trashbin", func() {
-				err := env.Fs.Delete(env.Ctx, &provider.Reference{
+				_, err := env.Fs.Delete(env.Ctx, &provider.Reference{
 					ResourceId: env.SpaceRootRes,
 					Path:       "/dir1/file1",
 				})
@@ -419,14 +419,14 @@ var _ = Describe("Recycle", func() {
 		})
 
 		It("cannot delete, list, purge or restore", func() {
-			err := env.Fs.Delete(ctx, &provider.Reference{
+			_, err := env.Fs.Delete(ctx, &provider.Reference{
 				ResourceId: env.SpaceRootRes,
 				Path:       "/dir1/file1",
 			})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("not found"))
 
-			err = env.Fs.Delete(env.Ctx, &provider.Reference{
+			_, err = env.Fs.Delete(env.Ctx, &provider.Reference{
 				ResourceId: env.SpaceRootRes,
 				Path:       "/dir1/file1",
 			})

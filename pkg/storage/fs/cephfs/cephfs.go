@@ -174,12 +174,12 @@ func (fs *cephfs) TouchFile(ctx context.Context, ref *provider.Reference, markpr
 	return nil, fmt.Errorf("unimplemented: TouchFile")
 }
 
-func (fs *cephfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
+func (fs *cephfs) Delete(ctx context.Context, ref *provider.Reference) (_ *storage.DeleteResult, err error) {
 	var path string
 	user := fs.makeUser(ctx)
 	path, err = user.resolveRef(ref)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	user.op(func(cv *cacheVal) {
@@ -192,10 +192,13 @@ func (fs *cephfs) Delete(ctx context.Context, ref *provider.Reference) (err erro
 
 	//has already been deleted by direct mount
 	if err != nil && err.Error() == errNotFound {
-		return nil
+		return &storage.DeleteResult{}, nil
 	}
 
-	return getRevaError(err)
+	if err != nil {
+		return nil, getRevaError(err)
+	}
+	return &storage.DeleteResult{}, nil
 }
 
 func (fs *cephfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (*storage.MoveResult, error) {

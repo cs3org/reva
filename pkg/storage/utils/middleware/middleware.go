@@ -199,7 +199,7 @@ func (f *FS) TouchFile(ctx context.Context, ref *provider.Reference, markprocess
 	return result, err
 }
 
-func (f *FS) Delete(ctx context.Context, ref *provider.Reference) error {
+func (f *FS) Delete(ctx context.Context, ref *provider.Reference) (*storage.DeleteResult, error) {
 	var (
 		err     error
 		unhook  UnHook
@@ -208,22 +208,22 @@ func (f *FS) Delete(ctx context.Context, ref *provider.Reference) error {
 	for _, hook := range f.hooks {
 		ctx, unhook, err = hook("Delete", ctx, ref.GetResourceId().GetSpaceId())
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if unhook != nil {
 			unhooks = append(unhooks, unhook)
 		}
 	}
 
-	res0 := f.next.Delete(ctx, ref)
+	res0, err := f.next.Delete(ctx, ref)
 
 	for _, unhook := range unhooks {
 		if err := unhook(); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	return res0
+	return res0, err
 }
 
 func (f *FS) Move(ctx context.Context, oldRef, newRef *provider.Reference) (*storage.MoveResult, error) {

@@ -1084,37 +1084,47 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 }
 
 // Delete deletes the specified resource
-func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
+func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (dr *storage.DeleteResult, err error) {
 	ctx, span := tracer.Start(ctx, "Delete")
 	defer span.End()
 	var node *node.Node
 	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
-		return
+		return nil, err
 	}
 	if !node.Exists {
-		return errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+		return nil, errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+	}
+
+	if node.IsProcessing(ctx) {
+		return nil, errtypes.TooEarly("file is processing")
 	}
 
 	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
 	case err != nil:
-		return err
+		return nil, err
 	case !rp.Delete:
 		f, _ := storagespace.FormatReference(ref)
 		if rp.Stat {
-			return errtypes.PermissionDenied(f)
+			return nil, errtypes.PermissionDenied(f)
 		}
-		return errtypes.NotFound(f)
+		return nil, errtypes.NotFound(f)
 	}
-
-	// Set space owner in context
-	storagespace.ContextSetSpaceOwner(ctx, node.SpaceOwnerOrManager(ctx))
 
 	if err := node.CheckLock(ctx); err != nil {
-		return err
+		return nil, err
 	}
 
-	return fs.tp.Delete(ctx, node)
+	if err := fs.tp.Delete(ctx, node); err != nil {
+		return nil, err
+	}
+	return &storage.DeleteResult{
+		SpaceOwner: node.SpaceOwnerOrManager(ctx),
+		ResourceId: &provider.ResourceId{
+			SpaceId:  node.SpaceID,
+			OpaqueId: node.ID,
+		},
+	}, nil
 }
 
 // Download returns a reader to the specified resource

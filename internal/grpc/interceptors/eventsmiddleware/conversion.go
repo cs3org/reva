@@ -266,17 +266,30 @@ func FileUnlocked(r *provider.UnlockResponse, req *provider.UnlockRequest, space
 }
 
 // ItemTrashed converts the response to an event
-func ItemTrashed(r *provider.DeleteResponse, req *provider.DeleteRequest, spaceOwner *user.UserId, executant *user.User) events.ItemTrashed {
-	opaqueID := utils.ReadPlainFromOpaque(r.Opaque, "opaque_id")
+func ItemTrashed(r *provider.DeleteResponse, req *provider.DeleteRequest, result *storage.DeleteResult, executant *user.User) events.ItemTrashed {
+	var spaceOwner *user.UserId
+	var id *provider.ResourceId
+	if result != nil {
+		spaceOwner = result.SpaceOwner
+		id = result.ResourceId
+	}
+	reqID := req.GetRef().GetResourceId()
+	if id == nil {
+		if reqID != nil {
+			id = &provider.ResourceId{
+				StorageId: reqID.GetStorageId(),
+				SpaceId:   reqID.GetSpaceId(),
+				OpaqueId:  reqID.GetOpaqueId(),
+			}
+		}
+	} else if id.GetStorageId() == "" {
+		id.StorageId = reqID.GetStorageId()
+	}
 	return events.ItemTrashed{
-		SpaceOwner: spaceOwner,
-		Executant:  executant.GetId(),
-		Ref:        req.Ref,
-		ID: &provider.ResourceId{
-			StorageId: req.Ref.GetResourceId().GetStorageId(),
-			SpaceId:   req.Ref.GetResourceId().GetSpaceId(),
-			OpaqueId:  opaqueID,
-		},
+		SpaceOwner:        spaceOwner,
+		Executant:         executant.GetId(),
+		Ref:               req.Ref,
+		ID:                id,
 		Timestamp:         utils.TSNow(),
 		ImpersonatingUser: extractImpersonator(executant),
 	}

@@ -105,8 +105,9 @@ type FS interface {
 	// FIXME the mtime should either be a time.Time or a CS3 Timestamp, not a string
 	TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) (*TouchFileResult, error)
 	// Delete deletes a resource.
-	// If the storage driver supports a recycle bin it should moves it to the recycle bin
-	Delete(ctx context.Context, ref *provider.Reference) error
+	// If the storage driver supports a recycle bin it should move it to the recycle bin
+	// On success, returns a DeleteResult used by the wrapper to publish ItemTrashed.
+	Delete(ctx context.Context, ref *provider.Reference) (*DeleteResult, error)
 	// Move changes the path of a resource
 	Move(ctx context.Context, oldRef, newRef *provider.Reference) (*MoveResult, error)
 	// InitiateUpload returns a list of protocols with urls that can be used to append bytes to a new upload session
@@ -182,6 +183,15 @@ type FS interface {
 	// GetHome returns the path to the users home
 	// Deprecated: use ListStorageSpaces with type personal
 	GetHome(ctx context.Context) (string, error)
+}
+
+// DeleteResult is returned by FS.Delete on success. It carries the data the
+// storageprovider wrapper needs to publish the ItemTrashed event.
+type DeleteResult struct {
+	// SpaceOwner is the owner of the space the deleted resource belonged to.
+	SpaceOwner *userpb.UserId
+	// ResourceId is the stable identifier of the deleted resource, used as ItemTrashed.ID in the published event.
+	ResourceId *provider.ResourceId
 }
 
 // UnscopeFunc is a function that unscopes a user

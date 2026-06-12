@@ -1,3 +1,21 @@
+// Copyright 2018-2021 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
 package eventsmiddleware
 
 import (
@@ -144,4 +162,108 @@ func TestItemMoved(t *testing.T) {
 	require.Equal(t, newRef, ev.Ref)
 	require.Equal(t, oldRef, ev.OldReference)
 	require.NotNil(t, ev.Timestamp)
+}
+func TestItemTrashed(t *testing.T) {
+	executant := &user.User{Id: &user.UserId{OpaqueId: "executant-id"}}
+	spaceOwner := &user.UserId{OpaqueId: "space-owner-id"}
+
+	reqRef := &provider.Reference{
+		ResourceId: &provider.ResourceId{
+			StorageId: "storage-1",
+			SpaceId:   "space-1",
+			OpaqueId:  "request-opaque-id",
+		},
+	}
+	req := &provider.DeleteRequest{Ref: reqRef}
+	res := &provider.DeleteResponse{}
+
+	tests := []struct {
+		name              string
+		result            *storage.DeleteResult
+		wantStorageId     string
+		wantSpaceId       string
+		wantOpaqueId      string
+		wantSpaceOwnerNil bool
+	}{
+		{
+			name: "decomposedfs flow: typed result has SpaceId/OpaqueId, StorageId is filled from request",
+			result: &storage.DeleteResult{
+				SpaceOwner: spaceOwner,
+				ResourceId: &provider.ResourceId{
+					SpaceId:  "space-from-result",
+					OpaqueId: "opaque-from-result",
+				},
+			},
+			wantStorageId: "storage-1",
+			wantSpaceId:   "space-from-result",
+			wantOpaqueId:  "opaque-from-result",
+		},
+		{
+			name:              "non-decomposedfs flow: empty result falls back to req.Ref.ResourceId",
+			result:            &storage.DeleteResult{},
+			wantStorageId:     "storage-1",
+			wantSpaceId:       "space-1",
+			wantOpaqueId:      "request-opaque-id",
+			wantSpaceOwnerNil: true,
+		},
+		{
+			name:              "nil result falls back to req.Ref.ResourceId",
+			result:            nil,
+			wantStorageId:     "storage-1",
+			wantSpaceId:       "space-1",
+			wantOpaqueId:      "request-opaque-id",
+			wantSpaceOwnerNil: true,
+		},
+		{
+			name: "typed result with StorageId already set is preserved",
+			result: &storage.DeleteResult{
+				SpaceOwner: spaceOwner,
+				ResourceId: &provider.ResourceId{
+					StorageId: "storage-from-result",
+					SpaceId:   "space-from-result",
+					OpaqueId:  "opaque-from-result",
+				},
+			},
+			wantStorageId: "storage-from-result",
+			wantSpaceId:   "space-from-result",
+			wantOpaqueId:  "opaque-from-result",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ev := ItemTrashed(res, req, tc.result, executant)
+
+			if ev.ID == nil {
+				t.Fatalf("event ID is nil, want non-nil")
+			}
+			if got := ev.ID.GetStorageId(); got != tc.wantStorageId {
+				t.Errorf("StorageId: got %q, want %q", got, tc.wantStorageId)
+			}
+			if got := ev.ID.GetSpaceId(); got != tc.wantSpaceId {
+				t.Errorf("SpaceId: got %q, want %q", got, tc.wantSpaceId)
+			}
+			if got := ev.ID.GetOpaqueId(); got != tc.wantOpaqueId {
+				t.Errorf("OpaqueId: got %q, want %q", got, tc.wantOpaqueId)
+			}
+
+			if tc.wantSpaceOwnerNil {
+				if ev.SpaceOwner != nil {
+					t.Errorf("SpaceOwner: got %v, want nil", ev.SpaceOwner)
+				}
+			} else if ev.SpaceOwner == nil || ev.SpaceOwner.GetOpaqueId() != spaceOwner.GetOpaqueId() {
+				t.Errorf("SpaceOwner: got %v, want %v", ev.SpaceOwner, spaceOwner)
+			}
+
+			if ev.Executant.GetOpaqueId() != executant.Id.OpaqueId {
+				t.Errorf("Executant: got %v, want %v", ev.Executant, executant.Id)
+			}
+			if ev.Ref != reqRef {
+				t.Errorf("Ref: got %v, want %v", ev.Ref, reqRef)
+			}
+			if ev.Timestamp == nil {
+				t.Errorf("Timestamp: got nil, want non-nil")
+			}
+		})
+	}
 }

@@ -1741,28 +1741,34 @@ func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 	return nil
 }
 
-func (fs *eosfs) Delete(ctx context.Context, ref *provider.Reference) error {
+func (fs *eosfs) Delete(ctx context.Context, ref *provider.Reference) (*storage.DeleteResult, error) {
 	p, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "eosfs: error resolving reference")
+		return nil, errors.Wrap(err, "eosfs: error resolving reference")
 	}
 
 	if fs.isShareFolder(ctx, p) {
-		return fs.deleteShadow(ctx, p)
+		if err = fs.deleteShadow(ctx, p); err != nil {
+			return nil, err
+		}
+		return &storage.DeleteResult{}, nil
 	}
 
 	fn := fs.wrap(ctx, p)
 
 	u, err := getUser(ctx)
 	if err != nil {
-		return errors.Wrap(err, "eosfs: no user in ctx")
+		return nil, errors.Wrap(err, "eosfs: no user in ctx")
 	}
 	auth, err := fs.getUserAuth(ctx, u, fn)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return fs.c.Remove(ctx, auth, fn, false)
+	if err := fs.c.Remove(ctx, auth, fn, false); err != nil {
+		return nil, err
+	}
+	return &storage.DeleteResult{}, nil
 }
 
 func (fs *eosfs) deleteShadow(ctx context.Context, p string) error {

@@ -353,12 +353,12 @@ func (fs *s3FS) TouchFile(ctx context.Context, ref *provider.Reference, markproc
 	return nil, fmt.Errorf("unimplemented: TouchFile")
 }
 
-func (fs *s3FS) Delete(ctx context.Context, ref *provider.Reference) error {
+func (fs *s3FS) Delete(ctx context.Context, ref *provider.Reference) (*storage.DeleteResult, error) {
 	log := appctx.GetLogger(ctx)
 
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "error resolving ref")
+		return nil, errors.Wrap(err, "error resolving ref")
 	}
 
 	// first we need to find out if fn is a dir or a file
@@ -373,7 +373,7 @@ func (fs *s3FS) Delete(ctx context.Context, ref *provider.Reference) error {
 			switch aerr.Code() {
 			case s3.ErrCodeNoSuchBucket:
 			case s3.ErrCodeNoSuchKey:
-				return errtypes.NotFound(fn)
+				return nil, errtypes.NotFound(fn)
 			}
 		}
 		// it might be a directory, so we can batch delete the prefix + /
@@ -383,10 +383,10 @@ func (fs *s3FS) Delete(ctx context.Context, ref *provider.Reference) error {
 		})
 		batcher := s3manager.NewBatchDeleteWithClient(fs.client)
 		if err := batcher.Delete(aws.BackgroundContext(), iter); err != nil {
-			return err
+			return nil, err
 		}
 		// ok, we are done
-		return nil
+		return &storage.DeleteResult{}, nil
 	}
 
 	// we found an object, let's get rid of it
@@ -400,14 +400,14 @@ func (fs *s3FS) Delete(ctx context.Context, ref *provider.Reference) error {
 			switch aerr.Code() {
 			case s3.ErrCodeNoSuchBucket:
 			case s3.ErrCodeNoSuchKey:
-				return errtypes.NotFound(fn)
+				return nil, errtypes.NotFound(fn)
 			}
 		}
-		return errors.Wrap(err, "s3fs: error deleting "+fn)
+		return nil, errors.Wrap(err, "s3fs: error deleting "+fn)
 	}
 
 	log.Debug().Interface("result", result)
-	return nil
+	return &storage.DeleteResult{}, nil
 }
 
 // CreateStorageSpace creates a storage space

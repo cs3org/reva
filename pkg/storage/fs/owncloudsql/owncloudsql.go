@@ -1170,40 +1170,40 @@ func (fs *owncloudsqlfs) Unlock(ctx context.Context, ref *provider.Reference, lo
 // versions were not.
 // We will live with that compromise since this storage driver will be
 // deprecated soon.
-func (fs *owncloudsqlfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
+func (fs *owncloudsqlfs) Delete(ctx context.Context, ref *provider.Reference) (_ *storage.DeleteResult, err error) {
 	var ip string
 	if ip, err = fs.resolve(ctx, ref); err != nil {
-		return errors.Wrap(err, "owncloudsql: error resolving reference")
+		return nil, errors.Wrap(err, "owncloudsql: error resolving reference")
 	}
 
 	// check permissions
 	if perm, err := fs.readPermissions(ctx, ip); err == nil {
 		if !perm.Delete {
-			return errtypes.PermissionDenied("")
+			return nil, errtypes.PermissionDenied("")
 		}
 	} else {
 		if isNotFound(err) {
-			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
+			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
-		return errors.Wrap(err, "owncloudsql: error reading permissions")
+		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
 	_, err = os.Stat(ip)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
+			return nil, errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
-		return errors.Wrap(err, "owncloudsql: error stating "+ip)
+		return nil, errors.Wrap(err, "owncloudsql: error stating "+ip)
 	}
 
 	// Delete file into the owner's trash, not the user's (in case of shares)
 	rp, err := fs.getRecyclePathForUser(fs.getOwner(ip))
 	if err != nil {
-		return errors.Wrap(err, "owncloudsql: error resolving recycle path")
+		return nil, errors.Wrap(err, "owncloudsql: error resolving recycle path")
 	}
 
 	if err := os.MkdirAll(rp, 0700); err != nil {
-		return errors.Wrap(err, "owncloudsql: error creating trashbin dir "+rp)
+		return nil, errors.Wrap(err, "owncloudsql: error creating trashbin dir "+rp)
 	}
 
 	// ip is the path on disk ... we need only the path relative to root
@@ -1211,9 +1211,9 @@ func (fs *owncloudsqlfs) Delete(ctx context.Context, ref *provider.Reference) (e
 
 	err = fs.trash(ctx, ip, rp, origin)
 	if err != nil {
-		return errors.Wrapf(err, "owncloudsql: error deleting file %s", ip)
+		return nil, errors.Wrapf(err, "owncloudsql: error deleting file %s", ip)
 	}
-	return nil
+	return &storage.DeleteResult{}, nil
 }
 
 func (fs *owncloudsqlfs) trash(ctx context.Context, ip string, rp string, origin string) error {

@@ -22,7 +22,6 @@ import (
 	"context"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-
 	"github.com/owncloud/reva/v2/pkg/storage"
 )
 
@@ -30,7 +29,8 @@ type key int
 
 const (
 	spaceOwnerSlotKey key = iota
-	moveResultSlotKey key = iota
+	moveResultSlotKey
+	deleteResultSlotKey
 )
 
 // --- space owner ---
@@ -96,6 +96,40 @@ func ContextSetMoveResult(ctx context.Context, r *storage.MoveResult) {
 // or nil if none was set.
 func ContextGetMoveResult(ctx context.Context) *storage.MoveResult {
 	if slot, ok := ctx.Value(moveResultSlotKey).(*moveResultSlot); ok {
+		return slot.result
+	}
+	return nil
+}
+
+// --- delete result ---
+
+type deleteResultSlot struct {
+	result *storage.DeleteResult
+}
+
+// ContextRegisterDeleteResultSlot installs an empty slot in ctx so that the
+// storage driver can write delete metadata via ContextSetDeleteResult and the
+// events middleware can read it via ContextGetDeleteResult after the handler
+// returns. Subsequent registrations are no-ops; the first registration wins.
+func ContextRegisterDeleteResultSlot(ctx context.Context) context.Context {
+	if ctx.Value(deleteResultSlotKey) != nil {
+		return ctx
+	}
+	return context.WithValue(ctx, deleteResultSlotKey, &deleteResultSlot{})
+}
+
+// ContextSetDeleteResult writes r into the slot. Subsequent writes overwrite
+// the previous value. Does nothing if no slot was registered.
+func ContextSetDeleteResult(ctx context.Context, r *storage.DeleteResult) {
+	if slot, ok := ctx.Value(deleteResultSlotKey).(*deleteResultSlot); ok {
+		slot.result = r
+	}
+}
+
+// ContextGetDeleteResult returns the delete result written by the storage
+// driver, or nil if none was set.
+func ContextGetDeleteResult(ctx context.Context) *storage.DeleteResult {
+	if slot, ok := ctx.Value(deleteResultSlotKey).(*deleteResultSlot); ok {
 		return slot.result
 	}
 	return nil

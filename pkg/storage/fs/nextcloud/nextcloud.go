@@ -278,16 +278,19 @@ func (nc *StorageDriver) TouchFile(ctx context.Context, ref *provider.Reference,
 }
 
 // Delete as defined in the storage.FS interface
-func (nc *StorageDriver) Delete(ctx context.Context, ref *provider.Reference) error {
+func (nc *StorageDriver) Delete(ctx context.Context, ref *provider.Reference) (*storage.DeleteResult, error) {
 	bodyStr, err := json.Marshal(ref)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	log := appctx.GetLogger(ctx)
 	log.Info().Msgf("Delete %s", bodyStr)
 
 	_, _, err = nc.do(ctx, Action{"Delete", string(bodyStr)})
-	return err
+	if err != nil {
+		return nil, err
+	}
+	return &storage.DeleteResult{}, nil
 }
 
 // Move as defined in the storage.FS interface

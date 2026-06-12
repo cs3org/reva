@@ -148,7 +148,7 @@ var _ = Describe("Storage event SpaceOwner propagation", func() {
 				RestoreRecycleItem: true,
 			})
 
-			err := env.Fs.Delete(env.Ctx, &provider.Reference{
+			_, err := env.Fs.Delete(env.Ctx, &provider.Reference{
 				ResourceId: env.SpaceRootRes,
 				Path:       "/dir1/file1",
 			})

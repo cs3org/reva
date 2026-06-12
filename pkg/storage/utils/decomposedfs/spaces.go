@@ -700,7 +700,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 				},
 			}
 			// delete old image after new image was successfully set
-			_ = fs.Delete(ctx, delRef)
+			_, _ = fs.Delete(ctx, delRef)
 			// silently ignore failed deletion
 		}
 	}

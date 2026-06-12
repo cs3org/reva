@@ -65,8 +65,8 @@ func (fs *hellofs) TouchFile(ctx context.Context, ref *provider.Reference, _ boo
 
 // Delete deletes a resource.
 // If the storage driver supports a recycle bin it should moves it to the recycle bin
-func (fs *hellofs) Delete(ctx context.Context, ref *provider.Reference) error {
-	return errtypes.NotSupported("unimplemented")
+func (fs *hellofs) Delete(ctx context.Context, ref *provider.Reference) (*storage.DeleteResult, error) {
+	return nil, errtypes.NotSupported("unimplemented")
 }
 
 // Move changes the path of a resource
