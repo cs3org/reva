@@ -159,7 +159,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 				Path: "/some/path",
 			}
-			err := nc.CreateDir(ctx, ref)
+			_, err := nc.CreateDir(ctx, ref)
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/CreateDir {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"}`)
 		})
@@ -521,7 +521,7 @@ var _ = Describe("Nextcloud", func() {
 				Path: "some/file/path.txt",
 			}
 			key := "asdf"
-			err := nc.RestoreRevision(ctx, ref, key)
+			_, err := nc.RestoreRevision(ctx, ref, key)
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/RestoreRevision {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"key":"asdf"}`)
 		})
@@ -566,7 +566,7 @@ var _ = Describe("Nextcloud", func() {
 			}
 			path := "original/location/when/deleted.txt"
 			key := "asdf"
-			err := nc.RestoreRecycleItem(ctx, nil, key, path, restoreRef)
+			_, err := nc.RestoreRecycleItem(ctx, nil, key, path, restoreRef)
 			Expect(err).ToNot(HaveOccurred())
 			checkCalled(called, `POST /apps/sciencemesh/~tester/api/storage/RestoreRecycleItem {"key":"asdf","path":"original/location/when/deleted.txt","restoreRef":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"}}`)
 		})

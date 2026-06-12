@@ -282,7 +282,7 @@ var _ = Describe("gateway", func() {
 				Expect(rootEtag3).ToNot(Equal(rootEtag2))
 
 				By("creating a directory")
-				err = shard1Fs.CreateDir(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: shard1Space.Id.OpaqueId}, Path: "/newdirectory"})
+				_, err = shard1Fs.CreateDir(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: shard1Space.Id.OpaqueId}, Path: "/newdirectory"})
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(time.Second) // cache must expire
@@ -526,7 +526,7 @@ var _ = Describe("gateway", func() {
 				Expect(statRes.Info.Size).To(Equal(uint64(13)))
 
 				By("Uploading a new file into a subdir")
-				err = fs.CreateDir(ctx, &storagep.Reference{ResourceId: &rid, Path: "/newdir"})
+				_, err = fs.CreateDir(ctx, &storagep.Reference{ResourceId: &rid, Path: "/newdir"})
 				Expect(err).ToNot(HaveOccurred())
 				err = helpers.Upload(ctx, fs, &storagep.Reference{ResourceId: &rid, Path: "/newdir/newfile.txt"}, []byte("1234567890"))
 				Expect(err).ToNot(HaveOccurred())
@@ -567,7 +567,7 @@ var _ = Describe("gateway", func() {
 				Expect(statRes.Info.Size).To(Equal(uint64(13)))
 
 				By("Uploading a new file into a subdir")
-				err = embeddedFs.CreateDir(ctx, &storagep.Reference{ResourceId: &rid, Path: "/newdir"})
+				_, err = embeddedFs.CreateDir(ctx, &storagep.Reference{ResourceId: &rid, Path: "/newdir"})
 				Expect(err).ToNot(HaveOccurred())
 				err = helpers.Upload(ctx, embeddedFs, &storagep.Reference{ResourceId: &rid, Path: "/newdir/newfile.txt"}, []byte("1234567890"))
 				Expect(err).ToNot(HaveOccurred())
@@ -609,8 +609,11 @@ var _ = Describe("gateway", func() {
 				Expect(newEtag).ToNot(Equal(etag))
 
 				By("Creating a new dir")
-				err = fs.CreateDir(ctx, &storagep.Reference{ResourceId: &ssid, Path: "/newdir"})
+				writeResult, err := fs.CreateDir(ctx, &storagep.Reference{ResourceId: &ssid, Path: "/newdir"})
 				Expect(err).ToNot(HaveOccurred())
+				Expect(writeResult).ToNot(BeNil())
+				Expect(writeResult.SpaceOwner).ToNot(BeNil())
+				Expect(writeResult.SpaceOwner.OpaqueId).To(Equal(user.Id.OpaqueId))
 
 				time.Sleep(time.Second) // cache must expire
 				statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
@@ -653,7 +656,7 @@ var _ = Describe("gateway", func() {
 				Expect(newEtag).ToNot(Equal(etag))
 
 				By("Creating a new dir")
-				err = embeddedFs.CreateDir(ctx, &storagep.Reference{ResourceId: &essid, Path: "/newdir"})
+				_, err = embeddedFs.CreateDir(ctx, &storagep.Reference{ResourceId: &essid, Path: "/newdir"})
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(time.Second) // cache must expire
@@ -686,10 +689,17 @@ var _ = Describe("gateway", func() {
 				targetRef := &storagep.Reference{ResourceId: &hssid, Path: "./destination"}
 				dstRef := &storagep.Reference{ResourceId: &hssid, Path: "./destination/source"}
 
-				err = fs.CreateDir(ctx, sourceRef)
+				writeResult, err := fs.CreateDir(ctx, sourceRef)
 				Expect(err).ToNot(HaveOccurred())
-				err = fs.CreateDir(ctx, targetRef)
+				Expect(writeResult).ToNot(BeNil())
+				Expect(writeResult.SpaceOwner).ToNot(BeNil())
+				Expect(writeResult.SpaceOwner.OpaqueId).To(Equal(user.Id.OpaqueId))
+
+				writeResult, err = fs.CreateDir(ctx, targetRef)
 				Expect(err).ToNot(HaveOccurred())
+				Expect(writeResult).ToNot(BeNil())
+				Expect(writeResult.SpaceOwner).ToNot(BeNil())
+				Expect(writeResult.SpaceOwner.OpaqueId).To(Equal(user.Id.OpaqueId))
 
 				mvRes, err := serviceClient.Move(ctx, &storagep.MoveRequest{Source: sourceRef, Destination: dstRef})
 				Expect(err).ToNot(HaveOccurred())

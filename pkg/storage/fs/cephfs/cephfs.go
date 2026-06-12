@@ -148,11 +148,11 @@ func (fs *cephfs) CreateHome(ctx context.Context) (err error) {
 	return getRevaError(err)
 }
 
-func (fs *cephfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
+func (fs *cephfs) CreateDir(ctx context.Context, ref *provider.Reference) (*storage.CreateDirResult, error) {
 	user := fs.makeUser(ctx)
 	path, err := user.resolveRef(ref)
 	if err != nil {
-		return getRevaError(err)
+		return nil, getRevaError(err)
 	}
 
 	user.op(func(cv *cacheVal) {
@@ -163,12 +163,15 @@ func (fs *cephfs) CreateDir(ctx context.Context, ref *provider.Reference) error 
 		//TODO(tmourati): Add entry id logic
 	})
 
-	return getRevaError(err)
+	if err := getRevaError(err); err != nil {
+		return nil, err
+	}
+	return &storage.CreateDirResult{}, nil
 }
 
 // TouchFile as defined in the storage.FS interface
-func (fs *cephfs) TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) error {
-	return fmt.Errorf("unimplemented: TouchFile")
+func (fs *cephfs) TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) (*storage.TouchFileResult, error) {
+	return nil, fmt.Errorf("unimplemented: TouchFile")
 }
 
 func (fs *cephfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
@@ -216,7 +219,7 @@ func (fs *cephfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) 
 
 	// has already been moved by direct mount
 	if err != nil && err.Error() == errNotFound {
-		return nil, nil
+		return &storage.MoveResult{}, nil
 	}
 
 	return nil, getRevaError(err)
@@ -387,12 +390,12 @@ func (fs *cephfs) DownloadRevision(ctx context.Context, ref *provider.Reference,
 	return ri, file, getRevaError(err)
 }
 
-func (fs *cephfs) RestoreRevision(ctx context.Context, ref *provider.Reference, key string) (err error) {
+func (fs *cephfs) RestoreRevision(ctx context.Context, ref *provider.Reference, key string) (_ *storage.RestoreRevisionResult, err error) {
 	//TODO(tmourati): Fix entry id logic
 	var path string
 	user := fs.makeUser(ctx)
 	if path, err = user.resolveRef(ref); err != nil {
-		return errors.Wrap(err, "cephfs: error resolving ref")
+		return nil, errors.Wrap(err, "cephfs: error resolving ref")
 	}
 
 	user.op(func(cv *cacheVal) {
@@ -416,7 +419,10 @@ func (fs *cephfs) RestoreRevision(ctx context.Context, ref *provider.Reference, 
 		_, err = io.Copy(dst, src)
 	})
 
-	return getRevaError(err)
+	if err := getRevaError(err); err != nil {
+		return nil, err
+	}
+	return &storage.RestoreRevisionResult{}, nil
 }
 
 func (fs *cephfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (str string, err error) {
@@ -615,8 +621,8 @@ func (fs *cephfs) ListRecycle(ctx context.Context, ref *provider.Reference, key,
 	panic("implement me")
 }
 
-func (fs *cephfs) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
-	return errors.New("cephfs: restoreRecycleItem not supported")
+func (fs *cephfs) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) (*storage.RestoreRecycleItemResult, error) {
+	return nil, errors.New("cephfs: restoreRecycleItem not supported")
 }
 
 func (fs *cephfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
@@ -641,8 +647,8 @@ func (fs *cephfs) GetLock(ctx context.Context, ref *provider.Reference) (*provid
 }
 
 // SetLock puts a lock on the given reference
-func (fs *cephfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	return errtypes.NotSupported("unimplemented")
+func (fs *cephfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) (*storage.SetLockResult, error) {
+	return nil, errtypes.NotSupported("unimplemented")
 }
 
 // RefreshLock refreshes an existing lock on the given reference
@@ -651,6 +657,6 @@ func (fs *cephfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock
 }
 
 // Unlock removes an existing lock from the given reference
-func (fs *cephfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	return errtypes.NotSupported("unimplemented")
+func (fs *cephfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) (*storage.UnlockResult, error) {
+	return nil, errtypes.NotSupported("unimplemented")
 }

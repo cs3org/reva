@@ -218,7 +218,7 @@ func (t *TestEnv) CreateTestDir(name string, parentRef *providerv1beta1.Referenc
 	ref := parentRef
 	ref.Path = name
 
-	err := t.Fs.CreateDir(t.Ctx, ref)
+	_, err := t.Fs.CreateDir(t.Ctx, ref)
 	if err != nil {
 		return nil, err
 	}
@@ -338,7 +338,7 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 		CreateContainer: true,
 	}, nil).Times(1) // Permissions required for setup below
 	ref.Path = "./dir1/subdir1"
-	err = t.Fs.CreateDir(t.Ctx, ref)
+	_, err = t.Fs.CreateDir(t.Ctx, ref)
 	if err != nil {
 		return nil, err
 	}
@@ -354,7 +354,7 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 		CreateContainer: true,
 	}, nil).Times(1) // Permissions required for setup below
 	ref.Path = "/emptydir"
-	err = t.Fs.CreateDir(t.Ctx, ref)
+	_, err = t.Fs.CreateDir(t.Ctx, ref)
 	if err != nil {
 		return nil, err
 	}

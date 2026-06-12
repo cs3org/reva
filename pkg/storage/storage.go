@@ -24,16 +24,48 @@ import (
 	"net/url"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 )
 
-// MoveResult carries the resolved references returned by a successful Move.
 type MoveResult struct {
 	SpaceOwner   *user.UserId
 	OldReference *provider.Reference
 	NewReference *provider.Reference
+}
+
+type CreateDirResult struct {
+	SpaceOwner *userpb.UserId
+	SpaceID    string
+	ResourceID *provider.ResourceId
+}
+
+type TouchFileResult struct {
+	SpaceOwner *userpb.UserId
+	SpaceID    string
+	ResourceID *provider.ResourceId
+}
+
+type RestoreRevisionResult struct {
+	SpaceOwner *userpb.UserId
+	SpaceID    string
+}
+
+type RestoreRecycleItemResult struct {
+	SpaceOwner *userpb.UserId
+	SpaceID    string
+}
+
+type SetLockResult struct {
+	SpaceOwner *userpb.UserId
+	SpaceID    string
+}
+
+type UnlockResult struct {
+	SpaceOwner *userpb.UserId
+	SpaceID    string
 }
 
 // FS is the interface to implement access to the storage.
@@ -67,11 +99,11 @@ type FS interface {
 	// CreateReference creates a resource of type reference
 	CreateReference(ctx context.Context, path string, targetURI *url.URL) error
 	// CreateDir creates a resource of type container
-	CreateDir(ctx context.Context, ref *provider.Reference) error
+	CreateDir(ctx context.Context, ref *provider.Reference) (*CreateDirResult, error)
 	// TouchFile sets the mtime of a resource, creating an empty file if it does not exist
 	// FIXME the markprocessing flag is an implementation detail of decomposedfs, remove it from the function
 	// FIXME the mtime should either be a time.Time or a CS3 Timestamp, not a string
-	TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) error
+	TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) (*TouchFileResult, error)
 	// Delete deletes a resource.
 	// If the storage driver supports a recycle bin it should moves it to the recycle bin
 	Delete(ctx context.Context, ref *provider.Reference) error
@@ -89,7 +121,7 @@ type FS interface {
 	// DownloadRevision downloads a revision
 	DownloadRevision(ctx context.Context, ref *provider.Reference, key string, openReaderFunc func(md *provider.ResourceInfo) bool) (*provider.ResourceInfo, io.ReadCloser, error)
 	// RestoreRevision restores a revision
-	RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error
+	RestoreRevision(ctx context.Context, ref *provider.Reference, key string) (*RestoreRevisionResult, error)
 
 	// Recyce bin
 
@@ -97,7 +129,7 @@ type FS interface {
 	ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error)
 	// RestoreRecycleItem restores an item from the recyle bin
 	// if restoreRef is nil the resource should be restored at the original path
-	RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error
+	RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) (*RestoreRecycleItemResult, error)
 	// PurgeRecycleItem removes a resource from the recycle bin
 	PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error
 	// EmptyRecycle removes all resource from the recycle bin
@@ -129,11 +161,11 @@ type FS interface {
 	// GetLock returns an existing lock on the given reference
 	GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error)
 	// SetLock puts a lock on the given reference
-	SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error
+	SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) (*SetLockResult, error)
 	// RefreshLock refreshes an existing lock on the given reference
 	RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error
 	// Unlock removes an existing lock from the given reference
-	Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error
+	Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) (*UnlockResult, error)
 
 	// Spaces
 

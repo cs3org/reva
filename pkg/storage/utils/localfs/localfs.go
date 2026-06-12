@@ -720,8 +720,8 @@ func (fs *localfs) GetLock(ctx context.Context, ref *provider.Reference) (*provi
 }
 
 // SetLock puts a lock on the given reference
-func (fs *localfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	return errtypes.NotSupported("unimplemented")
+func (fs *localfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) (*storage.SetLockResult, error) {
+	return nil, errtypes.NotSupported("unimplemented")
 }
 
 // RefreshLock refreshes an existing lock on the given reference
@@ -730,8 +730,8 @@ func (fs *localfs) RefreshLock(ctx context.Context, ref *provider.Reference, loc
 }
 
 // Unlock removes an existing lock from the given reference
-func (fs *localfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	return errtypes.NotSupported("unimplemented")
+func (fs *localfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) (*storage.UnlockResult, error) {
+	return nil, errtypes.NotSupported("unimplemented")
 }
 
 func (fs *localfs) GetHome(ctx context.Context) (string, error) {
@@ -779,35 +779,38 @@ func (fs *localfs) createHomeInternal(ctx context.Context, fn string) error {
 	return nil
 }
 
-func (fs *localfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
+func (fs *localfs) CreateDir(ctx context.Context, ref *provider.Reference) (*storage.CreateDirResult, error) {
 
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	if fs.isShareFolder(ctx, fn) {
-		return errtypes.PermissionDenied("localfs: cannot create folder under the share folder")
+		return nil, errtypes.PermissionDenied("localfs: cannot create folder under the share folder")
 	}
 
 	fn = fs.wrap(ctx, fn)
 	if _, err := os.Stat(fn); err == nil {
-		return errtypes.AlreadyExists(fn)
+		return nil, errtypes.AlreadyExists(fn)
 	}
 	err = os.Mkdir(fn, 0700)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return errtypes.PreconditionFailed(fn)
+			return nil, errtypes.PreconditionFailed(fn)
 		}
-		return errors.Wrap(err, "localfs: error creating dir "+fn)
+		return nil, errors.Wrap(err, "localfs: error creating dir "+fn)
 	}
 
-	return fs.propagate(ctx, path.Dir(fn))
+	if err := fs.propagate(ctx, path.Dir(fn)); err != nil {
+		return nil, err
+	}
+	return &storage.CreateDirResult{}, nil
 }
 
 // TouchFile as defined in the storage.FS interface
-func (fs *localfs) TouchFile(ctx context.Context, ref *provider.Reference, _ bool, _ string) error {
-	return fmt.Errorf("unimplemented: TouchFile")
+func (fs *localfs) TouchFile(ctx context.Context, ref *provider.Reference, _ bool, _ string) (*storage.TouchFileResult, error) {
+	return nil, fmt.Errorf("unimplemented: TouchFile")
 }
 
 func (fs *localfs) Delete(ctx context.Context, ref *provider.Reference) error {
@@ -881,7 +884,7 @@ func (fs *localfs) Move(ctx context.Context, oldRef, newRef *provider.Reference)
 		return nil, err
 	}
 
-	return nil, nil
+	return &storage.MoveResult{}, nil
 }
 
 func (fs *localfs) moveReferences(ctx context.Context, oldName, newName string) error {
@@ -1172,14 +1175,14 @@ func (fs *localfs) DownloadRevision(ctx context.Context, ref *provider.Reference
 	return ri, r, nil
 }
 
-func (fs *localfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
+func (fs *localfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (*storage.RestoreRevisionResult, error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "localfs: error resolving ref")
+		return nil, errors.Wrap(err, "localfs: error resolving ref")
 	}
 
 	if fs.isShareFolder(ctx, np) {
-		return errtypes.PermissionDenied("localfs: cannot restore revisions under the virtual share folder")
+		return nil, errtypes.PermissionDenied("localfs: cannot restore revisions under the virtual share folder")
 	}
 
 	versionsDir := fs.wrapVersions(ctx, np)
@@ -1190,24 +1193,27 @@ func (fs *localfs) RestoreRevision(ctx context.Context, ref *provider.Reference,
 	vs, err := os.Stat(vp)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return errtypes.NotFound(revisionKey)
+			return nil, errtypes.NotFound(revisionKey)
 		}
-		return errors.Wrap(err, "localfs: error stating "+vp)
+		return nil, errors.Wrap(err, "localfs: error stating "+vp)
 	}
 
 	if !vs.Mode().IsRegular() {
-		return fmt.Errorf("%s is not a regular file", vp)
+		return nil, fmt.Errorf("%s is not a regular file", vp)
 	}
 
 	if err := fs.archiveRevision(ctx, np); err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := os.Rename(vp, np); err != nil {
-		return errors.Wrap(err, "localfs: error renaming from "+vp+" to "+np)
+		return nil, errors.Wrap(err, "localfs: error renaming from "+vp+" to "+np)
 	}
 
-	return fs.propagate(ctx, np)
+	if err := fs.propagate(ctx, np); err != nil {
+		return nil, err
+	}
+	return &storage.RestoreRevisionResult{}, nil
 }
 
 func (fs *localfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
@@ -1279,16 +1285,16 @@ func (fs *localfs) ListRecycle(ctx context.Context, ref *provider.Reference, key
 	return items, nil
 }
 
-func (fs *localfs) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
+func (fs *localfs) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) (*storage.RestoreRecycleItemResult, error) {
 
 	suffix := path.Ext(key)
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
-		return errors.New("localfs: invalid trash item suffix")
+		return nil, errors.New("localfs: invalid trash item suffix")
 	}
 
 	filePath, err := fs.getRecycledEntry(ctx, key)
 	if err != nil {
-		return errors.Wrap(err, "localfs: invalid key")
+		return nil, errors.Wrap(err, "localfs: invalid key")
 	}
 
 	var localRestorePath string
@@ -1302,27 +1308,30 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, ref *provider.Referen
 	}
 
 	if _, err = os.Stat(localRestorePath); err == nil {
-		return errors.New("localfs: can't restore - file already exists at original path")
+		return nil, errors.New("localfs: can't restore - file already exists at original path")
 	}
 
 	rp := fs.wrapRecycleBin(ctx, key)
 	if _, err = os.Stat(rp); err != nil {
 		if os.IsNotExist(err) {
-			return errtypes.NotFound(key)
+			return nil, errtypes.NotFound(key)
 		}
-		return errors.Wrap(err, "localfs: error stating "+rp)
+		return nil, errors.Wrap(err, "localfs: error stating "+rp)
 	}
 
 	if err := os.Rename(rp, localRestorePath); err != nil {
-		return errors.Wrap(err, "ocfs: could not restore item")
+		return nil, errors.Wrap(err, "ocfs: could not restore item")
 	}
 
 	err = fs.removeFromRecycledDB(ctx, key)
 	if err != nil {
-		return errors.Wrap(err, "localfs: error adding entry to DB")
+		return nil, errors.Wrap(err, "localfs: error adding entry to DB")
 	}
 
-	return fs.propagate(ctx, localRestorePath)
+	if err := fs.propagate(ctx, localRestorePath); err != nil {
+		return nil, err
+	}
+	return &storage.RestoreRecycleItemResult{}, nil
 }
 
 func (fs *localfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, unrestricted bool) ([]*provider.StorageSpace, error) {

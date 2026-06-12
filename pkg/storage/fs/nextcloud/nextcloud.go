@@ -257,21 +257,24 @@ func (nc *StorageDriver) CreateHome(ctx context.Context) error {
 }
 
 // CreateDir as defined in the storage.FS interface
-func (nc *StorageDriver) CreateDir(ctx context.Context, ref *provider.Reference) error {
+func (nc *StorageDriver) CreateDir(ctx context.Context, ref *provider.Reference) (*storage.CreateDirResult, error) {
 	bodyStr, err := json.Marshal(ref)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	log := appctx.GetLogger(ctx)
 	log.Info().Msgf("CreateDir %s", bodyStr)
 
 	_, _, err = nc.do(ctx, Action{"CreateDir", string(bodyStr)})
-	return err
+	if err != nil {
+		return nil, err
+	}
+	return &storage.CreateDirResult{}, nil
 }
 
 // TouchFile as defined in the storage.FS interface
-func (nc *StorageDriver) TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) error {
-	return fmt.Errorf("unimplemented: TouchFile")
+func (nc *StorageDriver) TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool, mtime string) (*storage.TouchFileResult, error) {
+	return nil, fmt.Errorf("unimplemented: TouchFile")
 }
 
 // Delete as defined in the storage.FS interface
@@ -302,7 +305,10 @@ func (nc *StorageDriver) Move(ctx context.Context, oldRef, newRef *provider.Refe
 	log.Info().Msgf("Move %s", bodyStr)
 
 	_, _, err := nc.do(ctx, Action{"Move", string(bodyStr)})
-	return nil, err
+	if err != nil {
+		return nil, err
+	}
+	return &storage.MoveResult{}, nil
 }
 
 // GetMD as defined in the storage.FS interface
@@ -505,7 +511,7 @@ func (nc *StorageDriver) DownloadRevision(ctx context.Context, ref *provider.Ref
 }
 
 // RestoreRevision as defined in the storage.FS interface
-func (nc *StorageDriver) RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error {
+func (nc *StorageDriver) RestoreRevision(ctx context.Context, ref *provider.Reference, key string) (*storage.RestoreRevisionResult, error) {
 	type paramsObj struct {
 		Ref *provider.Reference `json:"ref"`
 		Key string              `json:"key"`
@@ -519,7 +525,10 @@ func (nc *StorageDriver) RestoreRevision(ctx context.Context, ref *provider.Refe
 	log.Info().Msgf("RestoreRevision %s", bodyStr)
 
 	_, _, err := nc.do(ctx, Action{"RestoreRevision", string(bodyStr)})
-	return err
+	if err != nil {
+		return nil, err
+	}
+	return &storage.RestoreRevisionResult{}, nil
 }
 
 // ListRecycle as defined in the storage.FS interface
@@ -554,7 +563,7 @@ func (nc *StorageDriver) ListRecycle(ctx context.Context, ref *provider.Referenc
 }
 
 // RestoreRecycleItem as defined in the storage.FS interface
-func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
+func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) (*storage.RestoreRecycleItemResult, error) {
 	type paramsObj struct {
 		Key        string              `json:"key"`
 		Path       string              `json:"path"`
@@ -571,8 +580,10 @@ func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, ref *provider.R
 	log.Info().Msgf("RestoreRecycleItem %s", bodyStr)
 
 	_, _, err := nc.do(ctx, Action{"RestoreRecycleItem", string(bodyStr)})
-
-	return err
+	if err != nil {
+		return nil, err
+	}
+	return &storage.RestoreRecycleItemResult{}, nil
 }
 
 // PurgeRecycleItem as defined in the storage.FS interface
@@ -848,8 +859,8 @@ func (nc *StorageDriver) GetLock(ctx context.Context, ref *provider.Reference) (
 }
 
 // SetLock puts a lock on the given reference
-func (nc *StorageDriver) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	return errtypes.NotSupported("unimplemented")
+func (nc *StorageDriver) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) (*storage.SetLockResult, error) {
+	return nil, errtypes.NotSupported("unimplemented")
 }
 
 // RefreshLock refreshes an existing lock on the given reference
@@ -858,8 +869,8 @@ func (nc *StorageDriver) RefreshLock(ctx context.Context, ref *provider.Referenc
 }
 
 // Unlock removes an existing lock from the given reference
-func (nc *StorageDriver) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	return errtypes.NotSupported("unimplemented")
+func (nc *StorageDriver) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) (*storage.UnlockResult, error) {
+	return nil, errtypes.NotSupported("unimplemented")
 }
 
 // ListStorageSpaces as defined in the storage.FS interface

@@ -195,7 +195,7 @@ var _ = Describe("Decomposed", func() {
 							ResourceId: env.SpaceRootRes,
 							Path:       "./fightforit",
 						}
-						if err := env.Fs.CreateDir(env.Ctx, ref); err != nil {
+						if _, err := env.Fs.CreateDir(env.Ctx, ref); err != nil {
 							Expect(err).To(MatchError(ContainSubstring("already exists")))
 							rinfo, err := env.Fs.GetMD(env.Ctx, ref, nil, nil)
 							Expect(err).ToNot(HaveOccurred())
