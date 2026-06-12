@@ -58,8 +58,8 @@ providers = "{{file_providers}}"
 
 [grpc.services.ocmshareprovider]
 driver = "json"
-webdav_endpoint = "http://127.0.0.1:12345"
-webapp_template = "http://127.0.0.1:12345/external/sciencemesh/{{.Token}}{relative-path-to-shared-resource}"
+webdav_endpoint = "http://{{cernboxwebdav_address}}"
+webapp_template = "http://unused_server/external/sciencemesh/{{.Token}}{relative-path-to-shared-resource}"
 provider_domain = "127.0.0.1:12345"
 
 [grpc.services.ocmshareprovider.drivers.json]

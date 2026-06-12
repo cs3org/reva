@@ -128,7 +128,6 @@ var _ = Describe("ocm invitation workflow", func() {
 			}, map[string]Resource{
 				"ocm_share_cernbox_file": File{Content: "{}"},
 				"ocm_share_cesnet_file":  File{Content: "{}"},
-				"invite_token_file":      File{Content: "{}"},
 				"localhome_root":         Folder{},
 			}, variables, map[string]string{
 				"cernboxhttp": "127.0.0.1:12345",
