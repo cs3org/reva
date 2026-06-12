@@ -272,6 +272,13 @@ func (r *Runner) runScheduler(ctx context.Context) {
 				}
 				if _, err := r.store.Enqueue(ctx, Run{Job: d.Job}); err != nil {
 					r.log.Error().Err(err).Str("job", d.Job).Msg("rjobs: enqueuing periodic run failed")
+					continue
+				}
+				// mark the job as in flight so the scheduler does not enqueue
+				// another run until this one finishes (see execRun, which
+				// clears it).
+				if err := r.store.MarkScheduledRunning(ctx, d.Job); err != nil {
+					r.log.Error().Err(err).Str("job", d.Job).Msg("rjobs: marking schedule running failed")
 				}
 			}
 		}
@@ -299,9 +306,23 @@ func (r *Runner) runDispatcher(ctx context.Context) {
 }
 
 // execRun runs a claimed durable run (on-demand or leader periodic), records
-// its status transitions and acks/naks it.
+// its status transitions and acks/naks it. While the job runs it heartbeats
+// the store so a long run keeps its claim and is not redelivered.
 func (r *Runner) execRun(ctx context.Context, run Run) {
 	log := r.log.With().Str("job", run.Job).Str("run", string(run.ID)).Int("attempt", run.Attempt).Logger()
+
+	// once this run finishes, a leader-scoped periodic job is no longer in
+	// flight, so the scheduler may schedule it again.
+	if r.isLeaderJob(run.Job) {
+		defer func() {
+			if err := r.store.ClearScheduledRunning(ctx, run.Job); err != nil {
+				log.Error().Err(err).Msg("rjobs: clearing schedule running mark failed")
+			}
+		}()
+	}
+
+	stopBeat := r.startHeartbeat(ctx, run.ID, log)
+	defer stopBeat()
 
 	r.recordStatus(ctx, run, StateRunning, nil, nil, log)
 
@@ -319,6 +340,37 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 	if cerr := r.store.Complete(ctx, run.ID); cerr != nil {
 		log.Error().Err(cerr).Msg("rjobs: completing run errored")
 	}
+}
+
+// startHeartbeat keeps a claimed run's lease alive by calling the store's
+// Heartbeat on a ticker until the returned stop function is called. It lets a
+// job run for arbitrarily long (minutes or days) without being redelivered.
+func (r *Runner) startHeartbeat(ctx context.Context, id RunID, log zerolog.Logger) (stop func()) {
+	interval := r.store.HeartbeatInterval()
+	if interval <= 0 {
+		return func() {}
+	}
+
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := r.store.Heartbeat(ctx, id); err != nil {
+					log.Warn().Err(err).Msg("rjobs: heartbeat failed")
+				}
+			}
+		}
+	}()
+
+	var once sync.Once
+	return func() { once.Do(func() { close(done) }) }
 }
 
 // recordStatus upserts a run's status. Periodic runs (those matching a

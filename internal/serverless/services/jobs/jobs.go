@@ -23,6 +23,7 @@ package jobs
 
 import (
 	"context"
+	"time"
 
 	revadcfg "github.com/cs3org/reva/v3/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -39,10 +40,15 @@ func init() {
 }
 
 type config struct {
-	WorkerPoolSize int               `mapstructure:"worker_pool_size"`
-	NatsAddress    string            `mapstructure:"nats_address"`
-	NatsToken      string            `mapstructure:"nats_token"`
-	NatsPrefix     string            `mapstructure:"nats_prefix"`
+	WorkerPoolSize int    `mapstructure:"worker_pool_size"`
+	NatsAddress    string `mapstructure:"nats_address"`
+	NatsToken      string `mapstructure:"nats_token"`
+	NatsPrefix     string `mapstructure:"nats_prefix"`
+	// AckWaitSeconds is the visibility timeout: how long a claimed run may go
+	// without a heartbeat before it is redelivered. The runner heartbeats well
+	// within this window, so it bounds detection of a dead worker, not the
+	// maximum job duration.
+	AckWaitSeconds int               `mapstructure:"ack_wait_seconds"`
 	StatusDB       revadcfg.Database `mapstructure:"status_db"`
 }
 
@@ -52,6 +58,9 @@ func (c *config) ApplyDefaults() {
 	}
 	if c.NatsPrefix == "" {
 		c.NatsPrefix = "reva-jobs"
+	}
+	if c.AckWaitSeconds == 0 {
+		c.AckWaitSeconds = 60
 	}
 }
 
@@ -96,6 +105,7 @@ func (s *svc) Start() {
 				Address: s.conf.NatsAddress,
 				Token:   s.conf.NatsToken,
 				Prefix:  s.conf.NatsPrefix,
+				AckWait: time.Duration(s.conf.AckWaitSeconds) * time.Second,
 				Jobs:    rjobs.RegisteredQueueJobNames(),
 			})
 			if err != nil {

@@ -61,12 +61,13 @@ type Options struct {
 }
 
 type store struct {
-	nc     *nats.Conn
-	js     nats.JetStreamContext
-	subs   []*nats.Subscription
-	kv     nats.KeyValue
-	prefix string
-	log    zerolog.Logger
+	nc      *nats.Conn
+	js      nats.JetStreamContext
+	subs    []*nats.Subscription
+	kv      nats.KeyValue
+	prefix  string
+	ackWait time.Duration
+	log     zerolog.Logger
 
 	// inflight tracks the NATS message backing each claimed run, so that
 	// Complete and Fail can ack or nak the right message.
@@ -79,7 +80,18 @@ type store struct {
 type scheduleState struct {
 	Interval time.Duration `json:"interval"`
 	Next     time.Time     `json:"next"`
+	// RunningSince, when set, marks that a run of this job is in flight, so the
+	// scheduler does not enqueue another while it is still going. It is cleared
+	// when the run finishes, and ignored once older than runningHold so a
+	// crashed worker cannot block the schedule forever.
+	RunningSince *time.Time `json:"running_since,omitempty"`
 }
+
+// runningHold bounds how long a RunningSince mark is trusted. A legitimate long
+// run keeps its claim alive with heartbeats, but the schedule mark has no
+// heartbeat of its own, so we cap it: after this long the job is allowed to be
+// scheduled again even if the mark is still set (e.g. the marker crashed).
+const runningHold = 24 * time.Hour
 
 // New connects to NATS and sets up the stream, consumer and KV bucket.
 func New(ctx context.Context, opts Options) (rjobs.Store, error) {
@@ -107,6 +119,7 @@ func New(ctx context.Context, opts Options) (rjobs.Store, error) {
 		nc:       nc,
 		js:       js,
 		prefix:   opts.Prefix,
+		ackWait:  opts.AckWait,
 		log:      log,
 		inflight: make(map[rjobs.RunID]*nats.Msg),
 	}
@@ -319,6 +332,26 @@ func (s *store) Fail(ctx context.Context, id rjobs.RunID, retryAfter time.Durati
 	return nil
 }
 
+func (s *store) Heartbeat(ctx context.Context, id rjobs.RunID) error {
+	s.mu.Lock()
+	msg, ok := s.inflight[id]
+	s.mu.Unlock()
+	if !ok {
+		return errors.Errorf("rjobs: no in-flight run %q to heartbeat", id)
+	}
+	// InProgress resets the AckWait timer so JetStream does not redeliver a run
+	// that is still being worked on.
+	if err := msg.InProgress(nats.Context(ctx)); err != nil {
+		return errors.Wrap(err, "rjobs: heartbeat failed")
+	}
+	return nil
+}
+
+func (s *store) HeartbeatInterval() time.Duration {
+	// beat well within the visibility timeout so the lease never lapses.
+	return s.ackWait / 2
+}
+
 func (s *store) RegisterScheduled(ctx context.Context, job string, schedule rjobs.Schedule, next time.Time) error {
 	entry, err := s.kv.Get(job)
 	switch {
@@ -393,6 +426,12 @@ func (s *store) DueScheduled(ctx context.Context, now time.Time) ([]rjobs.Schedu
 			continue
 		}
 
+		// Skip a job whose previous run is still in flight, so a run that takes
+		// longer than its interval does not pile up. We still advance its
+		// next-fire past now so the schedule does not accumulate due ticks; the
+		// run resumes firing once it is cleared.
+		running := st.RunningSince != nil && now.Sub(*st.RunningSince) < runningHold
+
 		// Advance to the next fire after now. The Update is conditioned on the
 		// revision we just read, so if another scheduler advances it first our
 		// update fails and we skip the job: it fires exactly once.
@@ -410,9 +449,53 @@ func (s *store) DueScheduled(ctx context.Context, now time.Time) ([]rjobs.Schedu
 			// tick.
 			continue
 		}
+		if running {
+			s.log.Debug().Str("job", job).Msg("rjobs: skipping schedule, previous run still in flight")
+			continue
+		}
 		due = append(due, rjobs.ScheduledRun{Job: job, Next: next})
 	}
 	return due, nil
+}
+
+func (s *store) MarkScheduledRunning(ctx context.Context, job string) error {
+	return s.setRunningSince(job, true)
+}
+
+func (s *store) ClearScheduledRunning(ctx context.Context, job string) error {
+	return s.setRunningSince(job, false)
+}
+
+// setRunningSince sets or clears the RunningSince mark on a job's schedule
+// entry, conditioned on the revision so it composes with the scheduler.
+func (s *store) setRunningSince(job string, running bool) error {
+	entry, err := s.kv.Get(job)
+	if err != nil {
+		if errors.Is(err, nats.ErrKeyNotFound) {
+			return nil // no schedule entry (e.g. not a leader job); nothing to mark.
+		}
+		return errors.Wrap(err, "rjobs: reading schedule state failed")
+	}
+	var st scheduleState
+	if err := json.Unmarshal(entry.Value(), &st); err != nil {
+		return errors.Wrap(err, "rjobs: reading schedule state failed")
+	}
+	if running {
+		now := time.Now()
+		st.RunningSince = &now
+	} else {
+		st.RunningSince = nil
+	}
+	data, err := json.Marshal(st)
+	if err != nil {
+		return errors.Wrap(err, "rjobs: marshalling schedule state failed")
+	}
+	if _, err := s.kv.Update(job, data, entry.Revision()); err != nil {
+		// another writer updated it first; the mark is best-effort, so this is
+		// not fatal.
+		return nil
+	}
+	return nil
 }
 
 func (s *store) Close(ctx context.Context) error {

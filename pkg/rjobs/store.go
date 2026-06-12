@@ -75,6 +75,14 @@ type Store interface {
 	// Fail marks a run as failed and schedules it to become claimable again
 	// after retryAfter.
 	Fail(ctx context.Context, id RunID, retryAfter time.Duration) error
+	// Heartbeat extends the lease of an in-flight run, so a job that runs
+	// longer than the visibility timeout is not redelivered while it is still
+	// making progress. The runner calls it every HeartbeatInterval until the
+	// job returns.
+	Heartbeat(ctx context.Context, id RunID) error
+	// HeartbeatInterval is how often the runner should call Heartbeat for an
+	// in-flight run, chosen so the lease never lapses between beats.
+	HeartbeatInterval() time.Duration
 	// RegisterScheduled records a leader-scoped periodic job's schedule so
 	// DueScheduled can track its next-fire across restarts. An existing
 	// next-fire is preserved across restarts, except when the configured
@@ -82,8 +90,17 @@ type Store interface {
 	// are adopted.
 	RegisterScheduled(ctx context.Context, job string, schedule Schedule, next time.Time) error
 	// DueScheduled returns the periodic jobs whose next-fire is at or before
-	// now, atomically advancing each one's stored next-fire by its interval.
+	// now, atomically advancing each one's stored next-fire by its interval. A
+	// job whose previous run is still in flight (see MarkScheduledRunning) is
+	// not returned, so a run that takes longer than its interval does not pile
+	// up; its schedule resumes once the run is cleared.
 	DueScheduled(ctx context.Context, now time.Time) ([]ScheduledRun, error)
+	// MarkScheduledRunning records that a leader-scoped periodic job has a run
+	// in flight, so DueScheduled skips it until the run is cleared.
+	MarkScheduledRunning(ctx context.Context, job string) error
+	// ClearScheduledRunning clears the in-flight mark for a leader-scoped
+	// periodic job once its run finishes, letting its schedule resume.
+	ClearScheduledRunning(ctx context.Context, job string) error
 	// Close releases the store's resources.
 	Close(ctx context.Context) error
 }
