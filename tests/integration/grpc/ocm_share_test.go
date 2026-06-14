@@ -76,11 +76,11 @@ var _ = Describe("ocm share", func() {
 		cernboxgw   gatewaypb.GatewayAPIClient
 		cesnetgw    gatewaypb.GatewayAPIClient
 		cernbox     = &ocmproviderpb.ProviderInfo{
-			Name:         "cernbox",
+			Name:         "127.0.0.1:12345",
 			FullName:     "CERNBox",
 			Description:  "CERNBox provides cloud data storage to all CERN users.",
 			Organization: "CERN",
-			Domain:       "cernbox.cern.ch",
+			Domain:       "127.0.0.1:12345",
 			Homepage:     "https://cernbox.web.cern.ch",
 			Services: []*ocmproviderpb.Service{
 				{
@@ -101,7 +101,7 @@ var _ = Describe("ocm share", func() {
 		einstein = &userpb.User{
 			Id: &userpb.UserId{
 				OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
-				Idp:      "cernbox.cern.ch",
+				Idp:      "127.0.0.1:12345",
 				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username:    "einstein",
@@ -111,11 +111,11 @@ var _ = Describe("ocm share", func() {
 		marie = &userpb.User{
 			Id: &userpb.UserId{
 				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-				Idp:      "cesnet.cz",
+				Idp:      "127.0.0.1:54321",
 				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username:    "marie",
-			Mail:        "marie@cesnet.cz",
+			Mail:        "marie@cesnet",
 			DisplayName: "Marie Curie",
 		}
 	)
@@ -126,14 +126,14 @@ var _ = Describe("ocm share", func() {
 		ctxEinstein = ctxWithAuthToken(tokenManager, einstein)
 		ctxMarie = ctxWithAuthToken(tokenManager, marie)
 		revads, err = startRevads(map[string]string{
-			"cernboxgw":            "ocm-share/ocm-server-cernbox-grpc.toml",
-			"cernboxwebdav":        "ocm-share/cernbox-webdav-server.toml",
-			"cernboxhttp":          "ocm-share/ocm-server-cernbox-http.toml",
-			"cesnetgw":             "ocm-share/ocm-server-cesnet-grpc.toml",
-			"cesnethttp":           "ocm-share/ocm-server-cesnet-http.toml",
-			"cernboxoutcomingocm":  "ocm-share/ocm-cernbox-outcoming-shares.toml",
-			"cernboxocmdataserver": "ocm-share/ocm-cernbox-outcoming-dataserver.toml",
-			"cernboxmachineauth":   "ocm-share/cernbox-machine-authprovider.toml",
+			"cernboxgw":            "ocm-server-cernbox-grpc.toml",
+			"cernboxwebdav":        "cernbox-webdav-server.toml",
+			"cernboxhttp":          "ocm-server-cernbox-http.toml",
+			"cesnetgw":             "ocm-server-cesnet-grpc.toml",
+			"cesnethttp":           "ocm-server-cesnet-http.toml",
+			"cernboxoutcomingocm":  "ocm-cernbox-outcoming-shares.toml",
+			"cernboxocmdataserver": "ocm-cernbox-outcoming-dataserver.toml",
+			"cernboxmachineauth":   "cernbox-machine-authprovider.toml",
 		}, map[string]string{
 			"providers": "ocm-providers.demo.json",
 		}, map[string]Resource{
@@ -141,13 +141,16 @@ var _ = Describe("ocm share", func() {
 			"ocm_share_cesnet_file":  File{Content: "{}"},
 			"invite_token_file":      File{Content: "{}"},
 			"localhome_root":         Folder{},
-		}, variables)
+		}, variables, map[string]string{
+			"cernboxhttp": "127.0.0.1:12345",
+			"cesnethttp":  "127.0.0.1:54321",
+		})
 		Expect(err).ToNot(HaveOccurred())
 		cernboxgw, err = pool.GetGatewayServiceClient(pool.Endpoint(revads["cernboxgw"].GrpcAddress))
 		Expect(err).ToNot(HaveOccurred())
 		cesnetgw, err = pool.GetGatewayServiceClient(pool.Endpoint(revads["cesnetgw"].GrpcAddress))
 		Expect(err).ToNot(HaveOccurred())
-		cernbox.Services[0].Endpoint.Path = "http://" + revads["cernboxhttp"].GrpcAddress + "/ocm"
+		cernbox.Services[0].Endpoint.Path = "http://127.0.0.1:12345/ocm"
 
 		createHomeResp, err := cernboxgw.CreateHome(ctxEinstein, &provider.CreateHomeRequest{})
 		Expect(err).ToNot(HaveOccurred())
@@ -187,7 +190,7 @@ var _ = Describe("ocm share", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				cesnet, err := cernboxgw.GetInfoByDomain(ctxEinstein, &ocmproviderpb.GetInfoByDomainRequest{
-					Domain: "cesnet.cz",
+					Domain: "127.0.0.1:54321",
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(cesnet.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -280,7 +283,7 @@ var _ = Describe("ocm share", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				cesnet, err := cernboxgw.GetInfoByDomain(ctxEinstein, &ocmproviderpb.GetInfoByDomainRequest{
-					Domain: "cesnet.cz",
+					Domain: "127.0.0.1:54321",
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(cesnet.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -376,7 +379,7 @@ var _ = Describe("ocm share", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				cesnet, err := cernboxgw.GetInfoByDomain(ctxEinstein, &ocmproviderpb.GetInfoByDomainRequest{
-					Domain: "cesnet.cz",
+					Domain: "127.0.0.1:54321",
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(cesnet.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -479,7 +482,7 @@ var _ = Describe("ocm share", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				cesnet, err := cernboxgw.GetInfoByDomain(ctxEinstein, &ocmproviderpb.GetInfoByDomainRequest{
-					Domain: "cesnet.cz",
+					Domain: "127.0.0.1:54321",
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(cesnet.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -628,7 +631,7 @@ var _ = Describe("ocm share", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				cesnet, err := cernboxgw.GetInfoByDomain(ctxEinstein, &ocmproviderpb.GetInfoByDomainRequest{
-					Domain: "cesnet.cz",
+					Domain: "127.0.0.1:54321",
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(cesnet.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -670,7 +673,7 @@ var _ = Describe("ocm share", func() {
 		Context("einstein creates a share on a not existing resource", func() {
 			It("fail with not found error", func() {
 				cesnet, err := cernboxgw.GetInfoByDomain(ctxEinstein, &ocmproviderpb.GetInfoByDomainRequest{
-					Domain: "cesnet.cz",
+					Domain: "127.0.0.1:54321",
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(cesnet.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -705,7 +708,7 @@ var _ = Describe("ocm share", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				cesnet, err := cernboxgw.GetInfoByDomain(ctxEinstein, &ocmproviderpb.GetInfoByDomainRequest{
-					Domain: "cesnet.cz",
+					Domain: "127.0.0.1:54321",
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(cesnet.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))

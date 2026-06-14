@@ -26,6 +26,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -40,8 +41,8 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/reqres"
+	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/go-playground/validator/v10"
@@ -86,11 +87,15 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with remote sender", err)
 		return
 	}
+	owner, err := GetUserIdFromOCMAddress(req.Owner)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with remote owner", err)
+		return
+	}
 
-	// TODO(lopresti) here we extract the client IP from the request, but in case
-	// of a proxied request we should rather extract it from X-Forwarded-For or similar headers,
-	// or remove this logic altogether and rely on signed requests as per OCM standard
-	clientIP, err := utils.GetClientIP(r)
+	// extract the client IP (or the proxied one) from the request and validate it against the allowed providers
+	// TODO(lopresti) this should rather be replaced with signed requests as per more recent OCM specifications
+	senderIP, err := utils.GetClientIP(r)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, fmt.Sprintf("error retrieving client IP from request: %s", r.RemoteAddr), err)
 		return
@@ -99,7 +104,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		Domain: sender.Idp,
 		Services: []*ocmprovider.Service{
 			{
-				Host: clientIP,
+				Host: senderIP,
 			},
 		},
 	}
@@ -133,12 +138,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	owner, err := GetUserIdFromOCMAddress(req.Owner)
-	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with remote owner", err)
-		return
-	}
-	protocols, legacy, err := getAndResolveProtocols(ctx, req.Protocols, owner.Idp)
+	protocols, legacy, err := getAndResolveProtocols(ctx, req.Protocols, req.ResourceType, sender.Idp)
 	if err != nil || len(protocols) == 0 {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "error with protocols payload", err)
 		return
@@ -184,7 +184,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 
 	if createShareResp.Status.Code != rpc.Code_CODE_OK {
 		// TODO: define errors in the cs3apis
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "error creating ocm share", errors.New(createShareResp.Status.Message))
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "could not create ocm share", errors.New(createShareResp.Status.Message))
 		return
 	}
 
@@ -243,13 +243,33 @@ func getOCMShareType(st string) ocm.RecipientType {
 	}
 }
 
-func getAndResolveProtocols(ctx context.Context, p Protocols, ownerServer string) (protos []*ocm.Protocol, legacy bool, err error) {
+func getAndResolveProtocols(ctx context.Context, p Protocols, resType string, ownerServer string) (protos []*ocm.Protocol, legacy bool, err error) {
 	protos = make([]*ocm.Protocol, 0, len(p))
 	legacy = false
+
+	// discover remote resource types
+	ocmRTs, ocmEndpoint, err := discoverOcmResourceTypes(ctx, ownerServer)
+	if err != nil {
+		return nil, false, errors.Wrap(err, "error discovering remote OCM resource types")
+	}
+
 	for _, data := range p {
 		var uri string
+		var protoInfo any
+		var ok bool
 		ocmProto := data.ToOCMProtocol()
 		protocolName := GetProtocolName(data)
+		for _, rt := range ocmRTs {
+			if rt.Name == resType {
+				if protoInfo, ok = rt.Protocols[protocolName]; ok {
+					break
+				}
+			}
+		}
+		if protoInfo == nil {
+			return nil, false, fmt.Errorf("the remote OCM server does not advertise the %s OCM protocol for %s", protocolName, resType)
+		}
+
 		switch protocolName {
 		case "webdav":
 			uri = ocmProto.GetWebdavOptions().Uri
@@ -258,7 +278,10 @@ func getAndResolveProtocols(ctx context.Context, p Protocols, ownerServer string
 		case "embedded":
 			protos = append(protos, ocmProto)
 			continue
+		default:
+			return nil, false, fmt.Errorf("unsupported OCM protocol: %s", protocolName)
 		}
+
 		// Absolute URIs should already be clean sender-owned endpoints. Validate
 		// again here so malformed values fail before any discovery-based rewriting.
 		if err := validateProtocolURI(protocolName, uri); err != nil {
@@ -271,61 +294,42 @@ func getAndResolveProtocols(ctx context.Context, p Protocols, ownerServer string
 			protos = append(protos, ocmProto)
 			continue
 		}
-		// otherwise use as endpoint the owner's server from the payload
-		remoteRoot, err := discoverOcmRoot(ctx, ownerServer, protocolName)
-		if err != nil {
-			return nil, false, err
+
+		// otherwise use as endpoint the owner's server from the payload, if found:
+		// this can be accepted for `webdav` legacy shares where the `uri` is actually a
+		// (relative) path or missing
+		if protocolName != "webdav" {
+			return nil, false, fmt.Errorf("invalid protocol URI: missing host for protocol %s", protocolName)
 		}
+		protoRoot, ok := protoInfo.(string)
+		if !ok {
+			return nil, false, fmt.Errorf("missing host in URI %s and root webdav path not advertised by the remote OCM server", uri)
+		}
+
+		u, _ = url.Parse(ocmEndpoint)
 		if strings.HasPrefix(uri, "/") {
-			// only take the host from remoteRoot and append the absolute uri
-			u, _ := url.Parse(remoteRoot)
 			u.Path = uri
-			uri = u.String()
 		} else if uri == "" {
 			// case of an OCM v1.0 share with no uri, use root
-			uri = remoteRoot
+			u.Path = protoRoot
 			legacy = true
 		} else {
 			// relative uri
-			uri, _ = url.JoinPath(remoteRoot, uri)
+			u.Path = filepath.Join(protoRoot, uri)
 		}
-
-		switch protocolName {
-		case "webdav":
-			ocmProto.GetWebdavOptions().Uri = uri
-		case "webapp":
-			ocmProto.GetWebappOptions().Uri = uri
-		}
+		ocmProto.GetWebdavOptions().Uri = u.String()
 		protos = append(protos, ocmProto)
 	}
 
 	return protos, legacy, nil
 }
 
-func discoverOcmRoot(ctx context.Context, ownerServer string, proto string) (string, error) {
-	// implements the OCM discovery logic to fetch the root at the remote host that sent the share for the given proto, see
-	// https://cs3org.github.io/OCM-API/docs.html?branch=v1.1.0&repo=OCM-API&user=cs3org#/paths/~1ocm-provider/get
-	log := appctx.GetLogger(ctx)
-
+func discoverOcmResourceTypes(ctx context.Context, ownerServer string) ([]wellknown.ResourceTypes, string, error) {
 	ocmClient := NewClient(time.Duration(10)*time.Second, true)
-	ocmCaps, err := ocmClient.Discover(ctx, "https://"+ownerServer)
+	ocmCaps, err := ocmClient.Discover(ctx, ownerServer)
 	if err != nil {
-		log.Warn().Str("sender", ownerServer).Err(err).Msg("failed to discover OCM sender")
-		return "", err
-	}
-	for _, t := range ocmCaps.ResourceTypes {
-		protoRoot, ok := t.Protocols[proto]
-		if ok {
-			// assume the first resourceType that exposes a root is OK to use: as a matter of fact,
-			// no implementation exists yet that exposes multiple resource types with different roots.
-			u, _ := url.Parse(ocmCaps.Endpoint)
-			u.Path = protoRoot
-			u.RawQuery = ""
-			log.Debug().Str("sender", ownerServer).Str("proto", proto).Str("URL", u.String()).Msg("resolved protocol URL")
-			return u.String(), nil
-		}
+		return nil, "", err
 	}
 
-	log.Warn().Str("sender", ownerServer).Interface("response", ocmCaps).Msg("missing protocol root")
-	return "", errtypes.NotFound(fmt.Sprintf("root not found on OCM discovery for protocol %s", proto))
+	return ocmCaps.ResourceTypes, ocmCaps.Endpoint, nil
 }

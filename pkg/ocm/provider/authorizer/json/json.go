@@ -96,6 +96,9 @@ func normalizeDomain(d string) (string, error) {
 		return "", err
 	}
 
+	if u.Port() != "" {
+		return u.Hostname() + ":" + u.Port(), nil
+	}
 	return u.Hostname(), nil
 }
 

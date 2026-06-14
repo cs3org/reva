@@ -80,6 +80,7 @@ home_provider = "/home"
 driver = "local"
 mount_path = "/localfs"
 mount_id = "localfs"
+space_depth = 1
 data_server_url = "http://localhost:38001/data"
 minimum_allowed_path_level_for_share = 0
 expose_data_server = true
