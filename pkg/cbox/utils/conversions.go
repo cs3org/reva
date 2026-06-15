@@ -137,12 +137,18 @@ func IntToShareState(g int) collaboration.ShareState {
 
 // FormatUserID formats a CS3API user ID as a string.
 func FormatUserID(u *userpb.UserId) string {
+	if u == nil {
+		return ""
+	}
 	return u.OpaqueId
 }
 
 // FormatGroupID formats a CS3API group ID to a string.
-func FormatGroupID(u *grouppb.GroupId) string {
-	return u.OpaqueId
+func FormatGroupID(g *grouppb.GroupId) string {
+	if g == nil {
+		return ""
+	}
+	return g.OpaqueId
 }
 
 // MakeUserID generates a CS3API user ID from a username, ASSUMING user type is primary.
