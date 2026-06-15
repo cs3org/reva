@@ -726,7 +726,6 @@ func (s *svc) splitPath(_ context.Context, p string) []string {
 	return strings.SplitN(p, "/", 4) // ["home", "MyShares", "photos", "Ibiza/beach.png"]
 }
 
-
 func (s *svc) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
 	return &provider.CreateSymlinkResponse{
 		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CreateSymlink not implemented"), "CreateSymlink not implemented"),

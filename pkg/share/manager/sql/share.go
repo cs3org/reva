@@ -723,6 +723,27 @@ func (m *ShareMgr) appendShareFiltersToQuery(query *gorm.DB, filters []*collabor
 				}
 			}
 			query = query.Where(innerQuery)
+		case collaboration.Filter_TYPE_SPACE_ID:
+			innerQuery := m.db
+			for i, filter := range filters {
+				if i == 0 {
+					innerQuery = innerQuery.Where("space_id = ?", filter.GetSpaceId())
+				} else {
+					innerQuery = innerQuery.Or("space_id = ?", filter.GetSpaceId())
+				}
+			}
+			query = query.Where(innerQuery)
+		case collaboration.Filter_TYPE_GRANTEE:
+			innerQuery := m.db
+			for i, filter := range filters {
+				_, shareWith := conversions.FormatGrantee(filter.GetGrantee())
+				if i == 0 {
+					innerQuery = innerQuery.Where("share_with = ?", shareWith)
+				} else {
+					innerQuery = innerQuery.Or("share_with = ?", shareWith)
+				}
+			}
+			query = query.Where(innerQuery)
 		}
 	}
 }

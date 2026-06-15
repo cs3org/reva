@@ -36,7 +36,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/permissions"
-
+	"github.com/cs3org/reva/v3/pkg/sharehierarchy"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 )
 
@@ -107,6 +107,10 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 				}
 			}
 		} else {
+			if conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError); ok {
+				response.WriteOCSData(w, r, response.Meta{Status: "error", StatusCode: http.StatusConflict, Message: conflictErr.Message}, conflictErr, nil)
+				return
+			}
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "An error occurred when creating the share", err)
 		}
 	}

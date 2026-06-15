@@ -195,3 +195,31 @@ type IsChecksumMismatch interface {
 type IsInsufficientStorage interface {
 	IsInsufficientStorage()
 }
+
+// ShareParentConflict is returned when creating a share is redundant or inconsistent
+// because a parent resource is already shared with the same grantee.
+type ShareParentConflict string
+
+func (e ShareParentConflict) Error() string { return "error: share parent conflict: " + string(e) }
+
+// IsShareParentConflict marks the error as a share parent conflict.
+func (e ShareParentConflict) IsShareParentConflict() {}
+
+// ShareChildConflict is returned when creating or updating a share would cause existing
+// child shares to be deleted or have their effective permissions altered.
+type ShareChildConflict string
+
+func (e ShareChildConflict) Error() string { return "error: share child conflict: " + string(e) }
+
+// IsShareChildConflict marks the error as a share child conflict.
+func (e ShareChildConflict) IsShareChildConflict() {}
+
+// IsShareParentConflict is the interface to implement to signal a share parent conflict.
+type IsShareParentConflict interface {
+	IsShareParentConflict()
+}
+
+// IsShareChildConflict is the interface to implement to signal a share child conflict.
+type IsShareChildConflict interface {
+	IsShareChildConflict()
+}
