@@ -32,7 +32,7 @@ default_id_claim = "sub"
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="idp_to_id_claim" type="map[string]string" default= %}}
+{{% dir name="idp_to_id_claim" type="map[string]string" default=nil %}}
 Per-IDP claim to use as the user ID, keyed by the value of the identity_provider token claim. Overrides default_id_claim for matching IDPs. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidc/oidc.go#L68)
 {{< highlight toml >}}
 [auth.manager.oidc]

@@ -20,7 +20,9 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"strings"
@@ -54,6 +56,37 @@ import (
 )
 
 var userGroupsCache gcache.Cache
+
+const (
+	headerLinkedPrimaryAccount = "X-Oc-Linked-Primary-Account"
+	// OData-style code consumed by web (ownCloud Web linked-primary detection).
+	jsonLinkedPrimaryErrorCode = "linkedPrimaryAccount"
+	// Includes "linked primary account" substring for consumers that fall back on error.message wording.
+	jsonLinkedPrimaryErrorMessageEnglish = "This linked primary account cannot authenticate until it is unlinked via your user portal."
+)
+
+type linkedPrimaryODataError struct {
+	Error struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+var linkedPrimaryErrorJSONBody []byte
+
+// discardLogger is used when the request carries no contextual logger pointer (tests, defensive callers).
+var discardLogger = zerolog.New(io.Discard)
+
+func init() {
+	payload := linkedPrimaryODataError{}
+	payload.Error.Code = jsonLinkedPrimaryErrorCode
+	payload.Error.Message = jsonLinkedPrimaryErrorMessageEnglish
+	b, err := json.Marshal(&payload)
+	if err != nil {
+		panic("reva: marshal linked-primary error envelope: " + err.Error())
+	}
+	linkedPrimaryErrorJSONBody = b
+}
 
 type config struct {
 	Priority   int    `mapstructure:"priority"`
@@ -311,7 +344,7 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, sign
 		if res.Status.Code == rpc.Code_CODE_ABORTED {
 			// A conflict occurs when an identity cannot be resolved for a known reason,
 			// e.g. a lightweight account that has been linked to a primary account.
-			logError(isUnprotectedEndpoint, log, err, "conflict when generating access token from credentials", http.StatusConflict, w)
+			writeIdentityAuthConflictHTTPResponse(isUnprotectedEndpoint, w, log, err)
 		} else {
 			logError(isUnprotectedEndpoint, log, err, "error generating access token from credentials", http.StatusUnauthorized, w)
 		}
@@ -397,6 +430,32 @@ func logError(isUnprotectedEndpoint bool, log *zerolog.Logger, err error, msg st
 	if !isUnprotectedEndpoint {
 		log.Error().Err(err).Msg(msg)
 		w.WriteHeader(status)
+	}
+}
+
+// writeIdentityAuthConflictHTTPResponse responds with HTTP 409 and a Libre Graph-style JSON envelope
+// plus X-Oc-Linked-Primary-Account, matching expectations of ownCloud Web linked-primary sign-in handling.
+func writeIdentityAuthConflictHTTPResponse(isUnprotectedEndpoint bool, w http.ResponseWriter, log *zerolog.Logger, err error) {
+	if isUnprotectedEndpoint {
+		return
+	}
+	if log != nil {
+		log.Error().Err(err).Msg("conflict when generating access token from credentials")
+	} else {
+		discardLogger.Error().Err(err).Msg("conflict when generating access token from credentials")
+	}
+
+	w.Header().Set(headerLinkedPrimaryAccount, "true")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+
+	w.WriteHeader(http.StatusConflict)
+	if _, writeErr := w.Write(linkedPrimaryErrorJSONBody); writeErr != nil {
+		if log != nil {
+			log.Debug().Err(writeErr).Msg("failed writing linked-primary conflict response body")
+		} else {
+			discardLogger.Debug().Err(writeErr).Msg("failed writing linked-primary conflict response body")
+		}
 	}
 }
 
