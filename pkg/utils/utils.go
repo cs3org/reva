@@ -419,6 +419,9 @@ func HasOCMShareRole(u *userpb.User) (string, bool) {
 // HasPermissions returns true if all permissions defined in the struct toCheck
 // are set in the target.
 func HasPermissions(target, toCheck *provider.ResourcePermissions) bool {
+	if target == nil || toCheck == nil {
+		return false
+	}
 	targetStruct := reflect.ValueOf(target).Elem()
 	toCheckStruct := reflect.ValueOf(toCheck).Elem()
 
