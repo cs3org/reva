@@ -1660,6 +1660,18 @@ func (s *service) CreateSymlink(ctx context.Context, req *provider.CreateSymlink
 	}, nil
 }
 
+func (s *service) SetImmutable(ctx context.Context, req *provider.SetImmutableRequest) (*provider.SetImmutableResponse, error) {
+	return &provider.SetImmutableResponse{
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("SetImmutable not implemented"), "SetImmutable not implemented"),
+	}, nil
+}
+
+func (s *service) UnsetImmutable(ctx context.Context, req *provider.UnsetImmutableRequest) (*provider.UnsetImmutableResponse, error) {
+	return &provider.UnsetImmutableResponse{
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("UnsetImmutable not implemented"), "UnsetImmutable not implemented"),
+	}, nil
+}
+
 func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
