@@ -62,7 +62,7 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, ok := appctx.ContextGetUser(ctx)
+	_, ok := appctx.ContextGetUser(ctx)
 	if !ok {
 		handleCustomError(ctx, errors.New("No valid authorization found"), http.StatusUnauthorized, w)
 		return
@@ -94,7 +94,7 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if s.c.OCMEnabled && !utils.IsExternalUser(u) {
+	if s.c.OCMEnabled {
 		// include ocm shares in the response
 		ocmShareResp, err := gw.ListReceivedOCMShares(ctx, &ocm.ListReceivedOCMSharesRequest{
 			Filters: []*ocm.ListReceivedOCMSharesRequest_Filter{
