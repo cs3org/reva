@@ -250,14 +250,16 @@ func (s *service) getWebappProtocol(ocmShare *ocm.Share, m *ocm.AccessMethod_Web
 }
 
 // return the protocols that can be used by remote users to access a local OCM share.
-func (s *service) getProtocols(ctx context.Context, share *ocm.Share) ocmd.Protocols {
+func (s *service) getProtocols(ctx context.Context, share *ocm.Share, include_webapp bool) ocmd.Protocols {
 	var p ocmd.Protocols
 	for _, m := range share.AccessMethods {
 		switch t := m.Term.(type) {
 		case *ocm.AccessMethod_WebdavOptions:
 			p = append(p, s.getWebdavProtocol(share, t))
 		case *ocm.AccessMethod_WebappOptions:
-			p = append(p, s.getWebappProtocol(share, t))
+			if include_webapp {
+				p = append(p, s.getWebappProtocol(share, t))
+			}
 		}
 	}
 	return p
@@ -333,8 +335,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 
 	// and discover its resource types to understand how to send the share
 	ocmUrl, _ := url.Parse(ocmEndpoint)
-	//ocmDisco, err := s.client.Discover(ctx, ocmUrl.Scheme+"://"+ocmUrl.Host)
-	_, err = s.client.Discover(ctx, ocmUrl.Scheme+"://"+ocmUrl.Host)
+	ocmDisco, err := s.client.Discover(ctx, ocmUrl.Scheme+"://"+ocmUrl.Host)
 	if err != nil {
 		log.Error().Err(err).Msg("error discovering remote OCM provider capabilities")
 		return &ocm.CreateOCMShareResponse{
@@ -342,9 +343,33 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		}, nil
 	}
 
-	// TODO(lopresti) does the remote OCM server support the protocols and requirements we're sending?
+	// does the remote OCM server support the protocols and capabilities we're sending for this resource?
 	// iterate over ocmDisco.ResourceTypes to look for protocol + '-receive'
-	// and ocmDisco.Capabilities if we have requirements such as code flow
+	// and ocmDisco.Capabilities if we have requirements such as token exchange
+	resType := getResourceType(info)
+	webapp_supported := false
+	for _, rt := range ocmDisco.ResourceTypes {
+		if rt.Name != resType {
+			continue
+		}
+		for _, p := range rt.Protocols {
+			if p == "webapp-receive" {
+				// for now we ignore the targets as we only support "blank", which
+				// we assume the remote supports as well
+				webapp_supported = true
+			}
+			// if p == "webdav-receive" {
+			//   we cannot assume this is present as until OCM 1.2 it was given for granted,
+			//   therefore we optimistically assume it's supported
+			// }
+		}
+	}
+	token_exchange_supported := false
+	for _, caps := range ocmDisco.Capabilities {
+		if caps == "exchange-token" {
+			token_exchange_supported = true
+		}
+	}
 
 	// prepare the request to be sent to the remote OCM server
 	newShareReq := &ocmd.NewShareRequest{
@@ -361,8 +386,8 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		}),
 		SenderDisplayName: user.DisplayName,
 		ShareType:         "user",
-		ResourceType:      getResourceType(info),
-		Protocols:         s.getProtocols(ctx, ocmshare),
+		ResourceType:      resType,
+		Protocols:         s.getProtocols(ctx, ocmshare, webapp_supported && token_exchange_supported),
 	}
 
 	if req.Expiration != nil {
