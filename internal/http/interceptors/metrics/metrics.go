@@ -24,6 +24,7 @@ package metrics
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/cs3org/reva/v3/pkg/prom/registry"
 	"github.com/prometheus/client_golang/prometheus"
@@ -43,8 +44,9 @@ var counter = prometheus.NewCounterVec(
 	[]string{"code", "method"},
 )
 
-// duration is partitioned by the HTTP method and handler. It uses custom
-// buckets based on the expected request duration.
+// duration is partitioned by the HTTP method and handler. The handler label
+// must remain bounded to avoid Prometheus cardinality blow-up; see issue 4509.
+// It uses custom buckets based on the expected request duration.
 var duration = prometheus.NewHistogramVec(
 	prometheus.HistogramOpts{
 		Name:    "http_request_duration_seconds",
@@ -90,7 +92,7 @@ func NewPromCollectors(_ context.Context, m map[string]any) ([]prometheus.Collec
 func New() func(h http.Handler) http.Handler {
 	chain := func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			h = promhttp.InstrumentHandlerDuration(duration.MustCurryWith(prometheus.Labels{"handler": r.URL.Path}),
+			h = promhttp.InstrumentHandlerDuration(duration.MustCurryWith(prometheus.Labels{"handler": handlerLabel(r.URL.Path)}),
 				promhttp.InstrumentHandlerCounter(counter,
 					promhttp.InstrumentHandlerResponseSize(responseSize,
 						promhttp.InstrumentHandlerRequestSize(requestSize,
@@ -103,4 +105,21 @@ func New() func(h http.Handler) http.Handler {
 		})
 	}
 	return chain
+}
+
+// handlerLabel returns a bounded label for Prometheus metrics. It keeps only the
+// first path segment so user-bound URLs such as /remote.php/dav/files/<userid>
+// do not create one handler label per request path; see issue 4509.
+func handlerLabel(path string) string {
+	path = strings.SplitN(path, "?", 2)[0]
+	path = strings.TrimLeft(path, "/")
+	if path == "" {
+		return "/"
+	}
+
+	if i := strings.IndexByte(path, '/'); i >= 0 {
+		path = path[:i]
+	}
+
+	return "/" + path
 }
