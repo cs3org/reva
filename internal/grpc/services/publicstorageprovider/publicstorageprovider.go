@@ -722,6 +722,14 @@ func (s *service) CreateSymlink(ctx context.Context, req *provider.CreateSymlink
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
+func (s *service) SetImmutable(ctx context.Context, req *provider.SetImmutableRequest) (*provider.SetImmutableResponse, error) {
+	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+}
+
+func (s *service) UnsetImmutable(ctx context.Context, req *provider.UnsetImmutableRequest) (*provider.UnsetImmutableResponse, error) {
+	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+}
+
 func (s *service) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequest) (*provider.UpdateGrantResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
