@@ -964,7 +964,7 @@ func (s *svc) getOCMShareUpdateRequest(ctx context.Context, permission *libregra
 		return nil, errors.New("Failed to map permissions to role")
 	}
 
-	permissions, viewmode := UnifiedRoleToOCMPermissions(*unifiedRole.Id)
+	permissions := UnifiedRoleToOCMPermissions(*unifiedRole.Id)
 	if permissions == nil {
 		return nil, errors.New("Failed to map role to ocm permissions")
 	}
@@ -1002,7 +1002,7 @@ func (s *svc) getOCMShareUpdateRequest(ctx context.Context, permission *libregra
 			AccessMethods: &ocm.AccessMethod{
 				Term: &ocm.AccessMethod_WebappOptions{
 					WebappOptions: &ocm.WebappAccessMethod{
-						ViewMode: viewmode,
+						Permissions: permissions,
 					},
 				},
 			},

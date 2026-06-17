@@ -22,7 +22,6 @@ import (
 	"context"
 	"testing"
 
-	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -30,6 +29,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	authscope "github.com/cs3org/reva/v3/pkg/auth/scope"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 )
 
 func TestMakeRelative(t *testing.T) {
@@ -147,13 +147,13 @@ func TestGetPermissionsFromShare_WebDAV(t *testing.T) {
 	}
 }
 
-func TestGetPermissionsFromShare_WebAppReadWrite(t *testing.T) {
+func TestGetPermissionsFromShare_WebAppEditor(t *testing.T) {
 	share := &ocmv1beta1.Share{
 		AccessMethods: []*ocmv1beta1.AccessMethod{
 			{
 				Term: &ocmv1beta1.AccessMethod_WebappOptions{
 					WebappOptions: &ocmv1beta1.WebappAccessMethod{
-						ViewMode: providerv1beta1.ViewMode_VIEW_MODE_READ_WRITE,
+						Permissions: permissions.NewEditorRole().CS3ResourcePermissions(),
 					},
 				},
 			},
@@ -161,20 +161,20 @@ func TestGetPermissionsFromShare_WebAppReadWrite(t *testing.T) {
 	}
 	got := getPermissionsFromShare(share)
 	if got == nil {
-		t.Fatal("expected non-nil permissions for read-write webapp")
+		t.Fatal("expected non-nil permissions for editor webapp")
 	}
 	if !got.InitiateFileUpload {
 		t.Error("editor role should allow InitiateFileUpload")
 	}
 }
 
-func TestGetPermissionsFromShare_WebAppPreview(t *testing.T) {
+func TestGetPermissionsFromShare_WebAppViewer(t *testing.T) {
 	share := &ocmv1beta1.Share{
 		AccessMethods: []*ocmv1beta1.AccessMethod{
 			{
 				Term: &ocmv1beta1.AccessMethod_WebappOptions{
 					WebappOptions: &ocmv1beta1.WebappAccessMethod{
-						ViewMode: providerv1beta1.ViewMode_VIEW_MODE_PREVIEW,
+						Permissions: permissions.NewViewerRole().CS3ResourcePermissions(),
 					},
 				},
 			},
@@ -182,28 +182,7 @@ func TestGetPermissionsFromShare_WebAppPreview(t *testing.T) {
 	}
 	got := getPermissionsFromShare(share)
 	if got == nil {
-		t.Fatal("expected non-nil permissions for preview webapp")
-	}
-	if !got.InitiateFileUpload {
-		t.Error("preview mode should allow InitiateFileUpload")
-	}
-}
-
-func TestGetPermissionsFromShare_WebAppViewOnly(t *testing.T) {
-	share := &ocmv1beta1.Share{
-		AccessMethods: []*ocmv1beta1.AccessMethod{
-			{
-				Term: &ocmv1beta1.AccessMethod_WebappOptions{
-					WebappOptions: &ocmv1beta1.WebappAccessMethod{
-						ViewMode: providerv1beta1.ViewMode_VIEW_MODE_VIEW_ONLY,
-					},
-				},
-			},
-		},
-	}
-	got := getPermissionsFromShare(share)
-	if got == nil {
-		t.Fatal("expected non-nil permissions for view-only webapp")
+		t.Fatal("expected non-nil permissions for viewer webapp")
 	}
 	if got.InitiateFileUpload {
 		t.Error("viewer role should not allow InitiateFileUpload")

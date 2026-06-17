@@ -16,34 +16,57 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocmshares
+package share_test
 
 import (
 	"testing"
 
-	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	ocmshare "github.com/cs3org/reva/v3/pkg/ocm/share"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 )
 
-func TestGetRoleTreatsPreviewAsEditor(t *testing.T) {
+func TestGetRoleTreatsWebappUploadAsEditor(t *testing.T) {
 	share := &ocm.Share{
 		AccessMethods: []*ocm.AccessMethod{
 			{
 				Term: &ocm.AccessMethod_WebappOptions{
 					WebappOptions: &ocm.WebappAccessMethod{
-						ViewMode: appprovider.ViewMode_VIEW_MODE_PREVIEW,
+						Permissions: permissions.NewEditorRole().CS3ResourcePermissions(),
 					},
 				},
 			},
 		},
 	}
 
-	role, roleStr := getRole(share)
+	role, roleStr := ocmshare.GetRole(share)
 	if role != authpb.Role_ROLE_EDITOR {
-		t.Fatalf("getRole() role = %v, want %v", role, authpb.Role_ROLE_EDITOR)
+		t.Fatalf("GetRole() role = %v, want %v", role, authpb.Role_ROLE_EDITOR)
 	}
 	if roleStr != "editor" {
-		t.Fatalf("getRole() roleStr = %q, want %q", roleStr, "editor")
+		t.Fatalf("GetRole() roleStr = %q, want %q", roleStr, "editor")
+	}
+}
+
+func TestGetRoleTreatsWebappReadAsViewer(t *testing.T) {
+	share := &ocm.Share{
+		AccessMethods: []*ocm.AccessMethod{
+			{
+				Term: &ocm.AccessMethod_WebappOptions{
+					WebappOptions: &ocm.WebappAccessMethod{
+						Permissions: permissions.NewViewerRole().CS3ResourcePermissions(),
+					},
+				},
+			},
+		},
+	}
+
+	role, roleStr := ocmshare.GetRole(share)
+	if role != authpb.Role_ROLE_VIEWER {
+		t.Fatalf("GetRole() role = %v, want %v", role, authpb.Role_ROLE_VIEWER)
+	}
+	if roleStr != "viewer" {
+		t.Fatalf("GetRole() roleStr = %q, want %q", roleStr, "viewer")
 	}
 }

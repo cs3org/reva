@@ -19,10 +19,44 @@
 package share
 
 import (
-	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
+
+// Defaults for webapp shares created by this server, according to
+// the OCM specifications: the webapp protocol requires non-empty
+// requirements (including `must-exchange-token`) and targets.
+var (
+	DefaultWebappRequirements = []string{"must-exchange-token"}
+	DefaultWebappTargets      = []string{"blank"}
+)
+
+// GetRole derives the auth role (and its string form) granted by an OCM share.
+// It assumes all access methods carry consistent permissions and inspects the first match.
+func GetRole(s *ocm.Share) (authpb.Role, string) {
+	for _, m := range s.AccessMethods {
+		switch v := m.Term.(type) {
+		case *ocm.AccessMethod_WebdavOptions:
+			p := v.WebdavOptions.Permissions
+			if p.InitiateFileUpload {
+				return authpb.Role_ROLE_EDITOR, "editor"
+			}
+			if p.InitiateFileDownload {
+				return authpb.Role_ROLE_VIEWER, "viewer"
+			}
+		case *ocm.AccessMethod_WebappOptions:
+			p := v.WebappOptions.Permissions
+			if p.InitiateFileUpload {
+				return authpb.Role_ROLE_EDITOR, "editor"
+			}
+			if p.Stat {
+				return authpb.Role_ROLE_VIEWER, "viewer"
+			}
+		}
+	}
+	return authpb.Role_ROLE_INVALID, "invalid"
+}
 
 // NewWebDAVProtocol is an abstraction for creating a WebDAV protocol.
 func NewWebDAVProtocol(uri, sharedSecret string, perms *ocm.SharePermissions, accTypes []ocm.AccessType, reqs []string) *ocm.Protocol {
@@ -40,12 +74,18 @@ func NewWebDAVProtocol(uri, sharedSecret string, perms *ocm.SharePermissions, ac
 }
 
 // NewWebappProtocol is an abstraction for creating a Webapp protocol.
-func NewWebappProtocol(uri string, viewMode appprovider.ViewMode) *ocm.Protocol {
+func NewWebappProtocol(uri, sharedSecret string, perms *provider.ResourcePermissions, reqs, targets []string, appName, appIconHint string, mediaTypes []string) *ocm.Protocol {
 	return &ocm.Protocol{
 		Term: &ocm.Protocol_WebappOptions{
 			WebappOptions: &ocm.WebappProtocol{
-				Uri:      uri,
-				ViewMode: viewMode,
+				Uri:              uri,
+				SharedSecret:     sharedSecret,
+				SharePermissions: perms,
+				Requirements:     reqs,
+				Targets:          targets,
+				AppName:          appName,
+				AppIconHint:      appIconHint,
+				MediaTypes:       mediaTypes,
 			},
 		},
 	}
@@ -78,11 +118,13 @@ func NewWebDavAccessMethod(perms *provider.ResourcePermissions, accTypes []ocm.A
 
 // NewWebappAccessMethod is an abstraction for creating a Webapp access method,
 // which is the protocol used by remote users to access an OCM share.
-func NewWebappAccessMethod(mode appprovider.ViewMode) *ocm.AccessMethod {
+func NewWebappAccessMethod(perms *provider.ResourcePermissions, reqs []string, appName string) *ocm.AccessMethod {
 	return &ocm.AccessMethod{
 		Term: &ocm.AccessMethod_WebappOptions{
 			WebappOptions: &ocm.WebappAccessMethod{
-				ViewMode: mode,
+				Permissions:  perms,
+				Requirements: reqs,
+				AppName:      appName,
 			},
 		},
 	}

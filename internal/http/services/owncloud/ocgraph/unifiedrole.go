@@ -25,10 +25,9 @@ import (
 	"errors"
 	"slices"
 
-	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"google.golang.org/protobuf/proto"
@@ -532,18 +531,11 @@ func UnifiedRoleIDToDefinition(unifiedRoleID string) (*libregraph.UnifiedRoleDef
 	}
 }
 
-func UnifiedRoleToOCMPermissions(unifiedRoleID string) (*provider.ResourcePermissions, appprovider.ViewMode) {
+func UnifiedRoleToOCMPermissions(unifiedRoleID string) *provider.ResourcePermissions {
 	definition, exists := UnifiedRoleIDToDefinition(unifiedRoleID)
 	if !exists {
-		return nil, 0
+		return nil
 	}
 
-	permissions := PermissionsToCS3ResourcePermissions(definition.GetRolePermissions())
-
-	// Determine view mode based on role type
-	if unifiedRoleID == UnifiedRoleViewerID || unifiedRoleID == UnifiedRoleSpaceViewerID {
-		return permissions, appprovider.ViewMode_VIEW_MODE_READ_ONLY
-	}
-	// If it's not a viewer role, we assume it's an editor role, manager role is not implemented.
-	return permissions, appprovider.ViewMode_VIEW_MODE_READ_WRITE
+	return PermissionsToCS3ResourcePermissions(definition.GetRolePermissions())
 }

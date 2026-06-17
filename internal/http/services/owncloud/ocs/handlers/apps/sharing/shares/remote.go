@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"path/filepath"
 
-	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
@@ -113,7 +112,7 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 		RecipientMeshProvider: providerInfoResp.ProviderInfo,
 		AccessMethods: []*ocm.AccessMethod{
 			share.NewWebDavAccessMethod(role.CS3ResourcePermissions(), []ocm.AccessType{ocm.AccessType_ACCESS_TYPE_REMOTE}, []string{}),
-			share.NewWebappAccessMethod(getViewModeFromRole(role)),
+			share.NewWebappAccessMethod(role.CS3ResourcePermissions(), share.DefaultWebappRequirements, ""),
 		},
 	})
 	if err != nil {
@@ -154,16 +153,6 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 	}
 
 	response.WriteOCSSuccess(w, r, data)
-}
-
-func getViewModeFromRole(role *permissions.Role) providerv1beta1.ViewMode {
-	switch role.Name {
-	case permissions.RoleViewer:
-		return providerv1beta1.ViewMode_VIEW_MODE_READ_ONLY
-	case permissions.RoleEditor:
-		return providerv1beta1.ViewMode_VIEW_MODE_READ_WRITE
-	}
-	return providerv1beta1.ViewMode_VIEW_MODE_INVALID
 }
 
 // GetFederatedShare handles GET requests on /apps/files_sharing/api/v1/shares/remote_shares/{shareid}.

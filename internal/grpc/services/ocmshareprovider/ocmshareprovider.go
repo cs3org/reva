@@ -26,8 +26,6 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
-	"strings"
-	"text/template"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -80,7 +78,7 @@ type config struct {
 	GatewaySVC      string                    `mapstructure:"gatewaysvc"                                    validate:"required"`
 	ProviderDomain  string                    `docs:"The same domain registered in the provider authorizer" mapstructure:"provider_domain" validate:"required"`
 	WebDAVEndpoint  string                    `mapstructure:"webdav_endpoint"                               validate:"required"`
-	WebappTemplate  string                    `mapstructure:"webapp_template"                               validate:"required"`
+	WebAppEndpoint  string                    `mapstructure:"webapp_endpoint"                               validate:"required"`
 }
 
 type service struct {
@@ -88,7 +86,6 @@ type service struct {
 	repo        share.Repository
 	client      *ocmd.OCMClient
 	gateway     gateway.GatewayAPIClient
-	webappTmpl  *template.Template
 	walker      walker.Walker
 	transferrer embedded.Transferrer
 }
@@ -147,10 +144,6 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	tpl, err := template.New("webapp_template").Parse(c.WebappTemplate)
-	if err != nil {
-		return nil, err
-	}
 	walker := walker.NewWalker(gateway)
 
 	ocmcl := ocmd.NewClient(time.Duration(c.ClientTimeout)*time.Second, c.ClientInsecure)
@@ -159,7 +152,6 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		repo:        repo,
 		client:      ocmcl,
 		gateway:     gateway,
-		webappTmpl:  tpl,
 		walker:      walker,
 		transferrer: transferrer,
 	}
@@ -222,19 +214,48 @@ func (s *service) getWebdavProtocol(share *ocm.Share, m *ocm.AccessMethod_Webdav
 	}
 }
 
-func (s *service) getWebappProtocol(share *ocm.Share) *ocmd.Webapp {
-	var b strings.Builder
-	if err := s.webappTmpl.Execute(&b, share); err != nil {
-		panic(err)
-	}
-	return &ocmd.Webapp{
-		URI: b.String(),
-	}
+// webappURL builds the webapp protocol URI advertised to the recipient.
+// Per the OCM spec the webapp `uri` MUST be absolute (including a hostname), so
+// WebAppEndpoint must be configured as an absolute URL (scheme + host). The
+// share token is deliberately NOT embedded here: the spec requires the
+// sharedSecret to be carried separately and MUST NOT appear in any URI; it is
+// exchanged via must-exchange-token instead.
+func (s *service) webappURL(share *ocm.Share) string {
+	p, _ := url.JoinPath(s.conf.WebAppEndpoint, share.Id.OpaqueId)
+	return p
 }
 
-// walk traverses the path recursively to discover all resources in the tree.
-func (s *service) walk(ctx context.Context, path string, fn walker.WalkFunc) error {
-	return s.walker.Walk(ctx, path, fn)
+func (s *service) getWebappProtocol(ocmShare *ocm.Share, m *ocm.AccessMethod_WebappOptions) *ocmd.Webapp {
+	var perms []string
+	if m.WebappOptions.GetPermissions().GetInitiateFileDownload() {
+		perms = append(perms, "read")
+	} else {
+		perms = append(perms, "view")
+	}
+	if m.WebappOptions.GetPermissions().GetInitiateFileUpload() {
+		perms = append(perms, "write")
+	}
+	if m.WebappOptions.GetPermissions().GetAddGrant() {
+		perms = append(perms, "share")
+	}
+
+	// requirements are required by the OCM specifications: fall back to the
+	// defaults for shares created before these were stored.
+	reqs := m.WebappOptions.Requirements
+	if len(reqs) == 0 {
+		reqs = share.DefaultWebappRequirements
+	}
+
+	targets := share.DefaultWebappTargets
+
+	return &ocmd.Webapp{
+		URI:          s.webappURL(ocmShare),
+		SharedSecret: ocmShare.Token,
+		Permissions:  perms,
+		Requirements: reqs,
+		Targets:      targets,
+		AppName:      m.WebappOptions.AppName,
+	}
 }
 
 // AccessMethods are protocols used by remote users to access a local OCM share.
@@ -245,7 +266,7 @@ func (s *service) getProtocols(ctx context.Context, share *ocm.Share) ocmd.Proto
 		case *ocm.AccessMethod_WebdavOptions:
 			p = append(p, s.getWebdavProtocol(share, t))
 		case *ocm.AccessMethod_WebappOptions:
-			p = append(p, s.getWebappProtocol(share))
+			p = append(p, s.getWebappProtocol(share, t))
 		}
 	}
 	return p
