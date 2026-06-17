@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	ocmshareutil "github.com/cs3org/reva/v3/pkg/ocm/share"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils"
@@ -138,7 +139,7 @@ func (m *manager) Authenticate(ctx context.Context, clientID, code string) (*use
 		return nil, nil, errtypes.InternalError(userRes.Status.Message)
 	}
 
-	role, roleStr := getRole(shareRes.Share)
+	role, roleStr := ocmshareutil.GetRole(shareRes.Share)
 
 	// Use code-flow scope: shareId/resource-only, no embedded shared secret
 	s, err := scope.AddCodeFlowOCMShareScope(shareRes.Share, role, nil)
@@ -157,28 +158,4 @@ func (m *manager) Authenticate(ctx context.Context, clientID, code string) (*use
 	}
 
 	return user, s, nil
-}
-
-func getRole(s *ocm.Share) (authpb.Role, string) {
-	for _, m := range s.AccessMethods {
-		switch v := m.Term.(type) {
-		case *ocm.AccessMethod_WebdavOptions:
-			p := v.WebdavOptions.Permissions
-			if p.InitiateFileUpload {
-				return authpb.Role_ROLE_EDITOR, "editor"
-			}
-			if p.InitiateFileDownload {
-				return authpb.Role_ROLE_VIEWER, "viewer"
-			}
-		case *ocm.AccessMethod_WebappOptions:
-			p := v.WebappOptions.GetPermissions()
-			if p.GetInitiateFileUpload() {
-				return authpb.Role_ROLE_EDITOR, "editor"
-			}
-			if p != nil {
-				return authpb.Role_ROLE_VIEWER, "viewer"
-			}
-		}
-	}
-	return authpb.Role_ROLE_INVALID, "invalid"
 }

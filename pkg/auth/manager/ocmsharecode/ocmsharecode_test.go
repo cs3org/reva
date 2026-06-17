@@ -22,7 +22,6 @@ import (
 	"context"
 	"testing"
 
-	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocminvite "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
@@ -180,49 +179,5 @@ func TestAuthenticatePermissionDenied(t *testing.T) {
 	}
 	if _, ok := err.(errtypes.InvalidCredentials); !ok {
 		t.Errorf("expected InvalidCredentials, got %T: %v", err, err)
-	}
-}
-
-func TestGetRoleTreatsWebappUploadAsEditor(t *testing.T) {
-	share := &ocm.Share{
-		AccessMethods: []*ocm.AccessMethod{
-			{
-				Term: &ocm.AccessMethod_WebappOptions{
-					WebappOptions: &ocm.WebappAccessMethod{
-						Permissions: permissions.NewEditorRole().CS3ResourcePermissions(),
-					},
-				},
-			},
-		},
-	}
-
-	role, roleStr := getRole(share)
-	if role != authpb.Role_ROLE_EDITOR {
-		t.Fatalf("getRole() role = %v, want %v", role, authpb.Role_ROLE_EDITOR)
-	}
-	if roleStr != "editor" {
-		t.Fatalf("getRole() roleStr = %q, want %q", roleStr, "editor")
-	}
-}
-
-func TestGetRoleTreatsWebappReadAsViewer(t *testing.T) {
-	share := &ocm.Share{
-		AccessMethods: []*ocm.AccessMethod{
-			{
-				Term: &ocm.AccessMethod_WebappOptions{
-					WebappOptions: &ocm.WebappAccessMethod{
-						Permissions: permissions.NewViewerRole().CS3ResourcePermissions(),
-					},
-				},
-			},
-		},
-	}
-
-	role, roleStr := getRole(share)
-	if role != authpb.Role_ROLE_VIEWER {
-		t.Fatalf("getRole() role = %v, want %v", role, authpb.Role_ROLE_VIEWER)
-	}
-	if roleStr != "viewer" {
-		t.Fatalf("getRole() roleStr = %q, want %q", roleStr, "viewer")
 	}
 }

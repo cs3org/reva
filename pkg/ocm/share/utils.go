@@ -19,6 +19,7 @@
 package share
 
 import (
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
@@ -30,6 +31,32 @@ var (
 	DefaultWebappRequirements = []string{"must-exchange-token"}
 	DefaultWebappTargets      = []string{"blank"}
 )
+
+// GetRole derives the auth role (and its string form) granted by an OCM share.
+// It assumes all access methods carry consistent permissions and inspects the first match.
+func GetRole(s *ocm.Share) (authpb.Role, string) {
+	for _, m := range s.AccessMethods {
+		switch v := m.Term.(type) {
+		case *ocm.AccessMethod_WebdavOptions:
+			p := v.WebdavOptions.Permissions
+			if p.InitiateFileUpload {
+				return authpb.Role_ROLE_EDITOR, "editor"
+			}
+			if p.InitiateFileDownload {
+				return authpb.Role_ROLE_VIEWER, "viewer"
+			}
+		case *ocm.AccessMethod_WebappOptions:
+			p := v.WebappOptions.Permissions
+			if p.InitiateFileUpload {
+				return authpb.Role_ROLE_EDITOR, "editor"
+			}
+			if p.Stat {
+				return authpb.Role_ROLE_VIEWER, "viewer"
+			}
+		}
+	}
+	return authpb.Role_ROLE_INVALID, "invalid"
+}
 
 // NewWebDAVProtocol is an abstraction for creating a WebDAV protocol.
 func NewWebDAVProtocol(uri, sharedSecret string, perms *ocm.SharePermissions, accTypes []ocm.AccessType, reqs []string) *ocm.Protocol {
