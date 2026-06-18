@@ -75,8 +75,8 @@ func NewClient(timeout time.Duration, insecure bool) *OCMClient {
 func (c *OCMClient) Discover(ctx context.Context, endpoint string) (*wellknown.OcmDiscoveryData, error) {
 	log := appctx.GetLogger(ctx)
 
-	if !strings.Contains(endpoint, "http") {
-		if strings.Contains(endpoint, "localhost") || strings.Contains(endpoint, "127.0.0.1") {
+	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
+		if strings.HasPrefix(endpoint, "localhost") || strings.HasPrefix(endpoint, "127.0.0.1") {
 			// for testing purposes we allow no TLS on localhost
 			endpoint = "http://" + endpoint
 		} else {
