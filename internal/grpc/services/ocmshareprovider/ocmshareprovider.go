@@ -359,7 +359,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		if !ok {
 			continue
 		}
-		targets, ok := webappReceive["targets"].([]string)
+		targets, ok := webappReceive["targets"].([]any)
 		if !ok {
 			continue
 		}
