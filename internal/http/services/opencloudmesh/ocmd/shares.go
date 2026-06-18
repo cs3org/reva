@@ -289,7 +289,10 @@ func getAndResolveProtocols(ctx context.Context, p Protocols, resType string, ow
 		}
 
 		// If the `uri` contains a hostname, use it as is
-		u, _ := url.Parse(uri)
+		u, err := url.Parse(uri)
+		if err != nil {
+			return nil, false, errors.Wrapf(err, "error parsing protocol URI '%s'", uri)
+		}
 		if u.Host != "" {
 			protos = append(protos, ocmProto)
 			continue
@@ -299,14 +302,17 @@ func getAndResolveProtocols(ctx context.Context, p Protocols, resType string, ow
 		// this can be accepted for `webdav` legacy shares where the `uri` is actually a
 		// (relative) path or missing
 		if protocolName != "webdav" {
-			return nil, false, fmt.Errorf("invalid protocol URI: missing host for protocol %s", protocolName)
+			return nil, false, fmt.Errorf("invalid protocol URI: missing host for protocol '%s'", protocolName)
 		}
 		protoRoot, ok := protoInfo.(string)
 		if !ok {
-			return nil, false, fmt.Errorf("missing host in URI %s and root webdav path not advertised by the remote OCM server", uri)
+			return nil, false, fmt.Errorf("missing host in URI '%s' and root webdav path not advertised by the remote OCM server", uri)
 		}
 
-		u, _ = url.Parse(ocmEndpoint)
+		u, err = url.Parse(ocmEndpoint)
+		if err != nil {
+			return nil, false, errors.Wrapf(err, "error parsing remote OCM endpoint '%s'", ocmEndpoint)
+		}
 		if strings.HasPrefix(uri, "/") {
 			u.Path = uri
 		} else if uri == "" {
@@ -314,7 +320,7 @@ func getAndResolveProtocols(ctx context.Context, p Protocols, resType string, ow
 			u.Path = protoRoot
 			legacy = true
 		} else {
-			// relative uri
+			// relative uri: prepend the found protocol root
 			u.Path = filepath.Join(protoRoot, uri)
 		}
 		ocmProto.GetWebdavOptions().Uri = u.String()
