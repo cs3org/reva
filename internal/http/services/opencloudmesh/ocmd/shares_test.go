@@ -21,6 +21,8 @@ package ocmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -30,8 +32,40 @@ import (
 	ocmincoming "github.com/cs3org/go-cs3apis/cs3/ocm/incoming/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"google.golang.org/grpc"
 )
+
+// ocmDiscoveryServer starts a local httptest.Server that responds to
+// /.well-known/ocm with a minimal OcmDiscoveryData payload advertising
+// the given protocol for the given resource type.
+// The caller must call server.Close() when done.
+func ocmDiscoveryServer(t *testing.T, proto, resType string) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/.well-known/ocm", func(w http.ResponseWriter, r *http.Request) {
+		// srv.URL is not yet known when we register the handler, so we
+		// build the endpoint dynamically from the request.
+		endpoint := fmt.Sprintf("http://%s", r.Host)
+		disco := wellknown.OcmDiscoveryData{
+			Endpoint: endpoint,
+			ResourceTypes: []wellknown.ResourceTypes{
+				{
+					Name: resType,
+					Protocols: map[string]interface{}{
+						proto: "/remote.php/dav/ocm",
+					},
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(disco)
+	})
+	srv := httptest.NewServer(mux)
+	return srv
+}
+
+// --- gateway mock ---
 
 type sharesMockGW struct {
 	gateway.GatewayAPIClient
@@ -57,7 +91,17 @@ func (m *sharesMockGW) CreateOCMIncomingShare(context.Context, *ocmincoming.Crea
 	return m.createResp, nil
 }
 
+// --- tests ---
+
 func TestCreateShareReturnsServerErrorForNonOKCreateStatus(t *testing.T) {
+	// Start a local OCM discovery server so discoverOcmResourceTypes succeeds.
+	disco := ocmDiscoveryServer(t, "webdav", "file")
+	defer disco.Close()
+
+	// The sender's Idp must equal the host:port of our local discovery server
+	// so that discoverOcmResourceTypes calls it instead of the real internet.
+	senderAddr := disco.Listener.Addr().String() // e.g. "127.0.0.1:54321"
+
 	h := &sharesHandler{
 		gatewayClient: &sharesMockGW{
 			createResp: &ocmincoming.CreateOCMIncomingShareResponse{
@@ -69,28 +113,28 @@ func TestCreateShareReturnsServerErrorForNonOKCreateStatus(t *testing.T) {
 		},
 	}
 
-	body := []byte(`{
-		"shareWith":"marie@local.example.org",
-		"name":"test.txt",
-		"providerId":"provider-id",
-		"owner":"einstein@remote.example.org",
-		"sender":"einstein@remote.example.org",
-		"shareType":"user",
-		"resourceType":"file",
-		"protocol":{
-			"webdav":{
-				"sharedSecret":"secret",
-				"permissions":["read"],
-				"uri":"https://remote.example.org/remote.php/dav/files/einstein/test.txt"
-			}
-		}
-	}`)
+	body, _ := json.Marshal(map[string]any{
+		"shareWith":    "marie@local.example.org",
+		"name":         "test.txt",
+		"providerId":   "provider-id",
+		"owner":        fmt.Sprintf("einstein@%s", senderAddr),
+		"sender":       fmt.Sprintf("einstein@%s", senderAddr),
+		"shareType":    "user",
+		"resourceType": "file",
+		"protocol": map[string]any{
+			"webdav": map[string]any{
+				"sharedSecret": "secret",
+				"permissions":  []string{"read"},
+				"uri":          fmt.Sprintf("http://%s/remote.php/dav/files/einstein/test.txt", senderAddr),
+			},
+		},
+	})
 
 	req := httptest.NewRequest(http.MethodPost, "/ocm/shares", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.RemoteAddr = "192.0.2.15:12345"
-	rr := httptest.NewRecorder()
 
+	rr := httptest.NewRecorder()
 	h.CreateShare(rr, req)
 
 	if rr.Code != http.StatusInternalServerError {

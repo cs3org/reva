@@ -1,9 +1,9 @@
 [
 	{
-		"name": "cernbox",
+		"name": "127.0.0.1:12345",
 		"full_name": "CERNBox",
 		"organization": "CERN",
-		"domain": "cernbox.cern.ch",
+		"domain": "127.0.0.1:12345",
 		"homepage": "https://cernbox.web.cern.ch",
 		"description": "CERNBox provides cloud data storage to all CERN users.",
 		"services": [
@@ -14,11 +14,11 @@
 						"description": "CERNBox Open Cloud Mesh API"
 					},
 					"name": "CERNBox - OCM API",
-					"path": "http://{{cernboxhttp_address}}/ocm/",
+					"path": "http://127.0.0.1:12345/ocm/",
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "{{cernboxhttp_address}}"
+				"host": "127.0.0.1:12345"
 			}
 		]
 	},
@@ -26,8 +26,8 @@
 		"name": "oc-cesnet",
 		"full_name": "ownCloud@CESNET",
 		"organization": "CESNET",
-		"domain": "cesnet.cz",
-		"homepage": "https://owncloud.cesnet.cz",
+		"domain": "127.0.0.1:54321",
+		"homepage": "https://owncloud.cesnet",
 		"description": "OwnCloud has been designed for individual users.",
 		"services": [
 			{
@@ -37,11 +37,11 @@
 						"description": "CESNET Open Cloud Mesh API"
 					},
 					"name": "CESNET - OCM API",
-					"path": "http://{{cesnethttp_address}}/ocm/",
+					"path": "http://127.0.0.1:54321/ocm/",
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "{{cesnethttp_address}}"
+				"host": "127.0.0.1:54321"
 			}
 		]
 	}

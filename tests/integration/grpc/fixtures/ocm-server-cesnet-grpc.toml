@@ -11,6 +11,9 @@ authregistrysvc = "{{grpc_address}}"
 userprovidersvc = "{{grpc_address}}"
 ocminvitemanagersvc = "{{grpc_address}}"
 ocmproviderauthorizersvc = "{{grpc_address}}"
+ocmshareprovidersvc = "{{grpc_address}}"
+ocmincomingsvc = "{{grpc_address}}"
+datagateway = "http://127.0.0.1:54321/datagateway"
 
 [grpc.services.authregistry]
 driver = "static"
@@ -19,23 +22,32 @@ driver = "static"
 basic = "{{grpc_address}}"
 
 [grpc.services.ocminvitemanager]
-driver = "{{ocm_driver}}"
-provider_domain = "cesnet.cz"
+driver = "json"
+provider_domain = "127.0.0.1:54321"
 
 [grpc.services.ocminvitemanager.drivers.json]
 file = "{{invite_token_file}}"
-
-[grpc.services.ocminvitemanager.drivers.sql]
-db_username = "{{db_username}}"
-db_password = "{{db_password}}"
-db_address = "{{db_address}}"
-db_name = "{{db_name}}"
 
 [grpc.services.ocmproviderauthorizer]
 driver = "json"
 
 [grpc.services.ocmproviderauthorizer.drivers.json]
 providers = "{{file_providers}}"
+
+[grpc.services.ocmshareprovider]
+driver = "json"
+webdav_endpoint = "http://127.0.0.1:54321"
+webapp_endpoint = "http://127.0.0.1:54321/external/sciencemesh"
+provider_domain = "127.0.0.1:54321"
+
+[grpc.services.ocmshareprovider.drivers.json]
+file = "{{ocm_share_cesnet_file}}"
+
+[grpc.services.ocmincoming]
+driver = "json"
+
+[grpc.services.ocmincoming.drivers.json]
+file = "{{ocm_share_cesnet_file}}"
 
 [grpc.services.authprovider]
 auth_manager = "json"
@@ -48,3 +60,18 @@ driver = "json"
 
 [grpc.services.userprovider.drivers.json]
 users = "fixtures/ocm-users.demo.json"
+
+[grpc.services.storageregistry]
+[grpc.services.storageregistry.drivers.static]
+[grpc.services.storageregistry.drivers.static.rules]
+"/ocm" = {"address" = "{{grpc_address}}"}
+"984e7351-2729-4417-99b4-ab5e6d41fa97" = {"address" = "{{grpc_address}}"}
+
+[grpc.services.storageprovider]
+driver = "ocmreceived"
+mount_path = "/ocm"
+space_depth = 2
+mount_id = "984e7351-2729-4417-99b4-ab5e6d41fa97"
+data_server_url = "http://127.0.0.1:54321/data"
+
+[grpc.services.storageprovider.drivers.ocmreceived]

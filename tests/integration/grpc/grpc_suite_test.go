@@ -19,6 +19,7 @@
 package grpc_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -31,11 +32,16 @@ import (
 	"testing"
 	"time"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
+	"github.com/cs3org/reva/v3/pkg/token"
 	"github.com/cs3org/reva/v3/tests/helpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc/metadata"
 )
 
 const timeoutMs = 30000
@@ -94,9 +100,12 @@ type File struct {
 //
 // Special variables are created for the revad addresses, e.g. having a
 // `storage` and a `users` revad will make `storage_address` and
-// `users_address` available wit the dynamically assigned ports so that
+// `users_address` available with the dynamically assigned ports so that
 // the services can be made available to each other.
-func startRevads(configs map[string]string, externalFiles map[string]string, newResources map[string]Resource, variables map[string]string) (map[string]*Revad, error) {
+func startRevads(configs map[string]string, externalFiles map[string]string,
+	newResources map[string]Resource, variables map[string]string,
+	fixedAddresses ...map[string]string) (map[string]*Revad, error) {
+
 	mutex.Lock()
 	defer mutex.Unlock()
 
@@ -105,13 +114,25 @@ func startRevads(configs map[string]string, externalFiles map[string]string, new
 		return nil, errors.Wrapf(err, "cannot create tmpdir for")
 	}
 
-	var revads sync.Map //  map[string]*Revad{}
+	var revads sync.Map // map[string]*Revad{}
 	addresses := map[string]string{}
-	filesPath := map[string]string{}
-	for name := range configs {
-		addresses[name] = fmt.Sprintf("localhost:%d", port)
-		port++
+
+	// seed any predetermined addresses first so they are available for
+	// template substitution and waitForPort uses the correct address
+	for _, fixed := range fixedAddresses {
+		for name, addr := range fixed {
+			addresses[name] = addr
+		}
 	}
+	// assign dynamic ports only to services not already given a fixed address
+	for name := range configs {
+		if _, already := addresses[name]; !already {
+			addresses[name] = fmt.Sprintf("localhost:%d", port)
+			port++
+		}
+	}
+
+	filesPath := map[string]string{}
 	for name, p := range externalFiles {
 		rawFile, err := os.ReadFile(path.Join("fixtures", p))
 		if err != nil {
@@ -219,7 +240,7 @@ func startRevads(configs map[string]string, externalFiles map[string]string, new
 				return err
 			}
 
-			// even the port is open the service might not be available yet
+			// even if the port is open the service might not be available yet
 			time.Sleep(2 * time.Second)
 
 			revad := &Revad{
@@ -277,4 +298,16 @@ func waitForPort(grpcAddress, expectedStatus string) error {
 		timoutCounter++
 	}
 	return nil
+}
+
+func ctxWithAuthToken(tokenManager token.Manager, user *userpb.User) context.Context {
+	ctx := context.Background()
+	scope, err := scope.AddOwnerScope(nil)
+	Expect(err).ToNot(HaveOccurred())
+	tkn, err := tokenManager.MintToken(ctx, user, scope)
+	Expect(err).ToNot(HaveOccurred())
+	ctx = appctx.ContextSetToken(ctx, tkn)
+	ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, tkn)
+	ctx = appctx.ContextSetUser(ctx, user)
+	return ctx
 }

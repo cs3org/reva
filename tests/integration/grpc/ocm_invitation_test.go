@@ -34,15 +34,12 @@ import (
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/v3/pkg/token"
 	jwt "github.com/cs3org/reva/v3/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/list"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"google.golang.org/grpc/metadata"
 )
 
 type generateInviteResponse struct {
@@ -50,18 +47,6 @@ type generateInviteResponse struct {
 	Description string `json:"descriptions"`
 	Expiration  uint64 `json:"expiration"`
 	InviteLink  string `json:"invite_link"`
-}
-
-func ctxWithAuthToken(tokenManager token.Manager, user *userpb.User) context.Context {
-	ctx := context.Background()
-	scope, err := scope.AddOwnerScope(nil)
-	Expect(err).ToNot(HaveOccurred())
-	tkn, err := tokenManager.MintToken(ctx, user, scope)
-	Expect(err).ToNot(HaveOccurred())
-	ctx = appctx.ContextSetToken(ctx, tkn)
-	ctx = metadata.AppendToOutgoingContext(ctx, appctx.TokenHeader, tkn)
-	ctx = appctx.ContextSetUser(ctx, user)
-	return ctx
 }
 
 func ocmUserEqual(u1, u2 *userpb.User) bool {
@@ -80,11 +65,11 @@ var _ = Describe("ocm invitation workflow", func() {
 		cernboxgw   gatewaypb.GatewayAPIClient
 		cesnetgw    gatewaypb.GatewayAPIClient
 		cernbox     = &ocmproviderpb.ProviderInfo{
-			Name:         "cernbox",
+			Name:         "127.0.0.1:12345",
 			FullName:     "CERNBox",
 			Description:  "CERNBox provides cloud data storage to all CERN users.",
 			Organization: "CERN",
-			Domain:       "cernbox.cern.ch",
+			Domain:       "127.0.0.1:12345",
 			Homepage:     "https://cernbox.web.cern.ch",
 			Services: []*ocmproviderpb.Service{
 				{
@@ -106,7 +91,7 @@ var _ = Describe("ocm invitation workflow", func() {
 		einstein        = &userpb.User{
 			Id: &userpb.UserId{
 				OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
-				Idp:      "cernbox.cern.ch",
+				Idp:      "127.0.0.1:12345",
 				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username:    "einstein",
@@ -116,11 +101,11 @@ var _ = Describe("ocm invitation workflow", func() {
 		marie = &userpb.User{
 			Id: &userpb.UserId{
 				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-				Idp:      "cesnet.cz",
+				Idp:      "127.0.0.1:54321",
 				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username:    "marie",
-			Mail:        "marie@cesnet.cz",
+			Mail:        "marie@cesnet",
 			DisplayName: "Marie Curie",
 		}
 	)
@@ -140,13 +125,20 @@ var _ = Describe("ocm invitation workflow", func() {
 				"cesnethttp":  "ocm-server-cesnet-http.toml",
 			}, map[string]string{
 				"providers": "ocm-providers.demo.json",
-			}, nil, variables)
+			}, map[string]Resource{
+				"ocm_share_cernbox_file": File{Content: "{}"},
+				"ocm_share_cesnet_file":  File{Content: "{}"},
+				"localhome_root":         Folder{},
+			}, variables, map[string]string{
+				"cernboxhttp": "127.0.0.1:12345",
+				"cesnethttp":  "127.0.0.1:54321",
+			})
 			Expect(err).ToNot(HaveOccurred())
 			cernboxgw, err = pool.GetGatewayServiceClient(pool.Endpoint(revads["cernboxgw"].GrpcAddress))
 			Expect(err).ToNot(HaveOccurred())
 			cesnetgw, err = pool.GetGatewayServiceClient(pool.Endpoint(revads["cesnetgw"].GrpcAddress))
 			Expect(err).ToNot(HaveOccurred())
-			cernbox.Services[0].Endpoint.Path = "http://" + revads["cernboxhttp"].GrpcAddress + "/ocm"
+			cernbox.Services[0].Endpoint.Path = "http://127.0.0.1:12345/ocm"
 		})
 
 		AfterEach(func() {
@@ -180,10 +172,12 @@ var _ = Describe("ocm invitation workflow", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(forwardRes.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
+					By("einstein was accepted by marie")
 					Expect(forwardRes.DisplayName).To(Equal(einstein.DisplayName))
 					Expect(forwardRes.Email).To(Equal(einstein.Mail))
 					Expect(utils.UserEqual(forwardRes.UserId, einstein.Id)).To(BeTrue())
 
+					By("einstein knows about marie")
 					usersRes1, err := cernboxgw.FindAcceptedUsers(ctxEinstein, &invitepb.FindAcceptedUsersRequest{})
 					Expect(err).ToNot(HaveOccurred())
 					Expect(usersRes1.Status.Code).To(Equal(rpc.Code_CODE_OK))
@@ -191,6 +185,7 @@ var _ = Describe("ocm invitation workflow", func() {
 					info1 := usersRes1.AcceptedUsers[0]
 					Expect(ocmUserEqual(info1, marie)).To(BeTrue())
 
+					By("marie knows about einstein")
 					usersRes2, err := cesnetgw.FindAcceptedUsers(ctxMarie, &invitepb.FindAcceptedUsersRequest{})
 					Expect(err).ToNot(HaveOccurred())
 					Expect(usersRes2.Status.Code).To(Equal(rpc.Code_CODE_OK))
@@ -262,7 +257,7 @@ var _ = Describe("ocm invitation workflow", func() {
 			})
 		})
 
-		Describe("marie accept a non existing token", func() {
+		Describe("marie accepts a non existing token", func() {
 			var cleanup func()
 			BeforeEach(func() {
 				variables, cleanup, err = initData(driver, nil, nil)
@@ -304,8 +299,8 @@ var _ = Describe("ocm invitation workflow", func() {
 			})
 
 			JustBeforeEach(func() {
-				cesnetURL = revads["cesnethttp"].GrpcAddress
-				cernboxURL = revads["cernboxhttp"].GrpcAddress
+				cesnetURL = "127.0.0.1:54321"
+				cernboxURL = "127.0.0.1:12345"
 
 				var ok bool
 				tknMarie, ok = appctx.ContextGetToken(ctxMarie)
@@ -319,13 +314,13 @@ var _ = Describe("ocm invitation workflow", func() {
 				token = tknRes.InviteToken.Token
 			})
 
-			acceptInvite := func(revaToken, domain, provider, token string) int {
+			acceptInvite := func(revaToken, remote, provider, token string) int {
 				d, err := json.Marshal(map[string]string{
 					"token":          token,
 					"providerDomain": provider,
 				})
 				Expect(err).ToNot(HaveOccurred())
-				req, err := http.NewRequestWithContext(context.TODO(), http.MethodPost, fmt.Sprintf("http://%s/sciencemesh/accept-invite", domain), bytes.NewReader(d))
+				req, err := http.NewRequestWithContext(context.TODO(), http.MethodPost, fmt.Sprintf("http://%s/sciencemesh/accept-invite", remote), bytes.NewReader(d))
 				Expect(err).ToNot(HaveOccurred())
 				req.Header.Set("x-access-token", revaToken)
 				req.Header.Set("content-type", "application/json")
@@ -355,8 +350,8 @@ var _ = Describe("ocm invitation workflow", func() {
 				}
 			}
 
-			findAccepted := func(revaToken, domain string) ([]*remoteUser, int) {
-				req, err := http.NewRequestWithContext(context.TODO(), http.MethodGet, fmt.Sprintf("http://%s/sciencemesh/find-accepted-users", domain), nil)
+			findAccepted := func(revaToken, remote string) ([]*remoteUser, int) {
+				req, err := http.NewRequestWithContext(context.TODO(), http.MethodGet, fmt.Sprintf("http://%s/sciencemesh/find-accepted-users", remote), nil)
 				Expect(err).ToNot(HaveOccurred())
 				req.Header.Set("x-access-token", revaToken)
 
@@ -369,8 +364,8 @@ var _ = Describe("ocm invitation workflow", func() {
 				return users, res.StatusCode
 			}
 
-			generateToken := func(revaToken, domain string) (*generateInviteResponse, int) {
-				req, err := http.NewRequestWithContext(context.TODO(), http.MethodPost, fmt.Sprintf("http://%s/sciencemesh/generate-invite", domain), nil)
+			generateToken := func(revaToken, remote string) (*generateInviteResponse, int) {
+				req, err := http.NewRequestWithContext(context.TODO(), http.MethodPost, fmt.Sprintf("http://%s/sciencemesh/generate-invite", remote), nil)
 				Expect(err).ToNot(HaveOccurred())
 				req.Header.Set("x-access-token", revaToken)
 
@@ -387,7 +382,7 @@ var _ = Describe("ocm invitation workflow", func() {
 
 				Context("marie is not logged-in", func() {
 					It("fails with permission denied", func() {
-						code := acceptInvite("", cesnetURL, "cernbox.cern.ch", token)
+						code := acceptInvite("", cesnetURL, "127.0.0.1:12345", token)
 						Expect(code).To(Equal(http.StatusUnauthorized))
 					})
 				})
@@ -396,7 +391,7 @@ var _ = Describe("ocm invitation workflow", func() {
 					Expect(code).To(Equal(http.StatusOK))
 					Expect(ocmUsersEqual(list.Map(users, remoteToCs3User), []*userpb.User{})).To(BeTrue())
 
-					code = acceptInvite(tknMarie, cesnetURL, "cernbox.cern.ch", token)
+					code = acceptInvite(tknMarie, cesnetURL, "127.0.0.1:12345", token)
 					Expect(code).To(Equal(http.StatusOK))
 
 					users, code = findAccepted(tknEinstein, cernboxURL)
@@ -424,7 +419,7 @@ var _ = Describe("ocm invitation workflow", func() {
 					Expect(code).To(Equal(http.StatusOK))
 					Expect(ocmUsersEqual(list.Map(users, remoteToCs3User), []*userpb.User{marie})).To(BeTrue())
 
-					code = acceptInvite(tknMarie, cesnetURL, "cernbox.cern.ch", token)
+					code = acceptInvite(tknMarie, cesnetURL, "127.0.0.1:12345", token)
 					Expect(code).To(Equal(http.StatusConflict))
 
 					users, code = findAccepted(tknEinstein, cernboxURL)
@@ -458,7 +453,7 @@ var _ = Describe("ocm invitation workflow", func() {
 					Expect(code).To(Equal(http.StatusOK))
 					Expect(ocmUsersEqual(list.Map(users, remoteToCs3User), []*userpb.User{})).To(BeTrue())
 
-					code = acceptInvite(tknMarie, cesnetURL, "cernbox.cern.ch", expiredToken.Token)
+					code = acceptInvite(tknMarie, cesnetURL, "127.0.0.1:12345", expiredToken.Token)
 					Expect(code).To(Equal(http.StatusBadRequest))
 
 					users, code = findAccepted(tknEinstein, cernboxURL)
@@ -486,7 +481,7 @@ var _ = Describe("ocm invitation workflow", func() {
 					ocmToken, code := generateToken(tknEinstein, cernboxURL)
 					Expect(code).To(Equal(http.StatusOK))
 
-					code = acceptInvite(tknMarie, cesnetURL, "cernbox.cern.ch", ocmToken.Token)
+					code = acceptInvite(tknMarie, cesnetURL, "127.0.0.1:12345", ocmToken.Token)
 					Expect(code).To(Equal(http.StatusOK))
 
 					users, code = findAccepted(tknEinstein, cernboxURL)
