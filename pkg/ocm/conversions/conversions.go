@@ -95,7 +95,9 @@ func (c *Converter) OCMReceivedShareToDriveItem(ctx context.Context, receivedOCM
 	}
 
 	d := &libregraph.DriveItem{
-		UIHidden:          libregraph.PtrBool(false), // Doesn't exist for OCM shares
+		// The OCM share state tracks the embedded transfer lifecycle, so the
+		// hidden flag is carried by the dedicated Hidden field instead.
+		UIHidden:          libregraph.PtrBool(receivedOCMShare.GetHidden()),
 		ClientSynchronize: libregraph.PtrBool(false),
 		CreatedBy: &libregraph.IdentitySet{
 			User: lgOCMUser,

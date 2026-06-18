@@ -481,6 +481,11 @@ func (m *mgr) translateUpdateFieldMask(share *ocm.ReceivedShare, fieldMask *fiel
 		case "state":
 			updates["state"] = convertFromCS3OCMShareState(share.State)
 			newShare.State = share.State
+		case "hidden":
+			// The share state tracks the embedded transfer lifecycle, so the
+			// hidden flag is carried by the dedicated Hidden field instead.
+			updates["hidden"] = share.Hidden
+			newShare.Hidden = share.Hidden
 		default:
 			return nil, nil, errtypes.NotSupported("updating " + mask + " is not supported")
 		}
