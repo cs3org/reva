@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -312,7 +313,9 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		AccessMethods: req.AccessMethods,
 	}
 
-	// TOOD(lopresti) persist after sending to remote
+	// TODO(lopresti) this is to be persisted after sending to remote,
+	// which requires the repo to expose a GenerateID() method to create
+	// the share here as it's sent in the payload
 	ocmshare, err = s.repo.StoreShare(ctx, ocmshare)
 	if err != nil {
 		if errors.Is(err, share.ErrShareAlreadyExisting) {
@@ -352,17 +355,21 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		if rt.Name != resType {
 			continue
 		}
-		for _, p := range rt.Protocols {
-			if p == "webapp-receive" {
-				// for now we ignore the targets as we only support "blank", which
-				// we assume the remote supports as well
-				webapp_supported = true
-			}
-			// if p == "webdav-receive" {
-			//   we cannot assume this is present as until OCM 1.2 it was given for granted,
-			//   therefore we optimistically assume it's supported
-			// }
+		webappReceive, ok := rt.Protocols["webapp-receive"].(map[string]any)
+		if !ok {
+			continue
 		}
+		targets, ok := webappReceive["targets"].([]string)
+		if !ok {
+			continue
+		}
+		if slices.Contains(targets, "blank") {
+			webapp_supported = true
+		}
+
+		//  for webdav, we cannot assume this is present as until OCM 1.2 it was given for granted,
+		//  therefore we optimistically assume it's supported and move on
+		//	webdavReceive, ok := rt.Protocols["webdav-receive"].(map[string]any)
 	}
 	token_exchange_supported := false
 	for _, caps := range ocmDisco.Capabilities {
