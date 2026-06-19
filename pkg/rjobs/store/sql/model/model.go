@@ -1,4 +1,4 @@
-// Copyright 2018-2024 CERN
+// Copyright 2018-2026 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,13 +16,30 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+// Package model holds the GORM model for the SQL job status store.
+package model
 
 import (
-	// Load core serverless services.
-	_ "github.com/cs3org/reva/v3/internal/serverless/services/helloworld"
-	_ "github.com/cs3org/reva/v3/internal/serverless/services/jobs"
-	_ "github.com/cs3org/reva/v3/internal/serverless/services/notifications"
-	_ "github.com/cs3org/reva/v3/internal/serverless/services/plugins"
-	// Add your own service here.
+	"time"
+
+	"gorm.io/datatypes"
 )
+
+// Run is the persisted status of a single run, keyed by RunID.
+type Run struct {
+	RunID      string `gorm:"primaryKey;size:255"`
+	Job        string `gorm:"index;size:255"`
+	State      string `gorm:"index;size:32"`
+	Attempt    int
+	EnqueuedAt time.Time
+	StartedAt  *time.Time
+	FinishedAt *time.Time
+	LastError  string         `gorm:"type:text"`
+	Result     datatypes.JSON `gorm:"type:json"`
+}
+
+// TableName sets the table name explicitly so it does not collide with other
+// "runs" tables.
+func (Run) TableName() string {
+	return "job_runs"
+}
