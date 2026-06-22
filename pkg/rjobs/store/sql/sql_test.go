@@ -93,3 +93,64 @@ func TestGetNotFound(t *testing.T) {
 		t.Errorf("expected NotFound, got %T: %v", err, err)
 	}
 }
+
+func TestListByOwner(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Second)
+
+	alice := "alice"
+	bob := "bob"
+
+	put := func(id, owner, job string, state rjobs.State, enqueued time.Time) {
+		t.Helper()
+		if err := s.Put(ctx, rjobs.Status{
+			RunID:      rjobs.RunID(id),
+			Job:        job,
+			State:      state,
+			Attempt:    1,
+			EnqueuedAt: enqueued,
+			Owner:      owner,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	put("a1", alice, "export", rjobs.StateQueued, now)
+	put("a2", alice, "report", rjobs.StateSucceeded, now.Add(time.Second))
+	put("b1", bob, "export", rjobs.StateQueued, now)
+	put("internal", "", "cleanup", rjobs.StateRunning, now)
+
+	// all of alice's runs, most recently enqueued first.
+	got, err := s.List(ctx, rjobs.ListFilter{Owner: alice})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("alice runs = %d, want 2", len(got))
+	}
+	if got[0].RunID != "a2" || got[1].RunID != "a1" {
+		t.Errorf("order = %q,%q, want a2,a1", got[0].RunID, got[1].RunID)
+	}
+	if got[0].Owner != "alice" {
+		t.Errorf("owner not round-tripped: %q", got[0].Owner)
+	}
+
+	// narrowing by state keeps only the matching run.
+	got, err = s.List(ctx, rjobs.ListFilter{Owner: alice, States: []rjobs.State{rjobs.StateQueued}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].RunID != "a1" {
+		t.Fatalf("queued alice runs = %v, want [a1]", got)
+	}
+
+	// another user's listing is scoped to their own runs only.
+	got, err = s.List(ctx, rjobs.ListFilter{Owner: bob})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].RunID != "b1" {
+		t.Fatalf("bob runs = %v, want [b1]", got)
+	}
+}

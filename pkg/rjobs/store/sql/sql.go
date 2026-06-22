@@ -90,6 +90,44 @@ func (s *store) Get(ctx context.Context, id rjobs.RunID) (rjobs.Status, error) {
 	return fromModel(row)
 }
 
+func (s *store) List(ctx context.Context, f rjobs.ListFilter) ([]rjobs.Status, error) {
+	q := s.db.WithContext(ctx).Model(&model.Run{})
+	if f.Owner != "" {
+		q = q.Where("owner = ?", f.Owner)
+	}
+	if len(f.States) > 0 {
+		states := make([]string, len(f.States))
+		for i, st := range f.States {
+			states[i] = string(st)
+		}
+		q = q.Where("state IN ?", states)
+	}
+	if f.Job != "" {
+		q = q.Where("job = ?", f.Job)
+	}
+	q = q.Order("enqueued_at DESC")
+	if f.Limit > 0 {
+		q = q.Limit(f.Limit)
+	}
+	if f.Offset > 0 {
+		q = q.Offset(f.Offset)
+	}
+
+	var rows []model.Run
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, errors.Wrap(err, "rjobs sql: listing runs failed")
+	}
+	out := make([]rjobs.Status, 0, len(rows))
+	for _, row := range rows {
+		st, err := fromModel(row)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, st)
+	}
+	return out, nil
+}
+
 func (s *store) Close(ctx context.Context) error {
 	db, err := s.db.DB()
 	if err != nil {

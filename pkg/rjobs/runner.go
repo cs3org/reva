@@ -220,6 +220,18 @@ func (r *Runner) Status(ctx context.Context, id RunID) (Status, error) {
 	return r.status.Get(ctx, id)
 }
 
+// ListByOwner returns the runs created for the given user, most recently
+// enqueued first. It is the read side of WithOwner: a UI lists a user's jobs
+// with it. The filter narrows the result further (by state, job or page); its
+// Owner field is ignored, the owner argument wins.
+func (r *Runner) ListByOwner(ctx context.Context, owner string, f ListFilter) ([]Status, error) {
+	if r.status == nil {
+		return nil, errors.New("rjobs: no status store configured")
+	}
+	f.Owner = owner
+	return r.status.List(ctx, f)
+}
+
 // runLocalTicker drives an all-nodes periodic job on this replica. It never
 // touches the store.
 func (r *Runner) runLocalTicker(ctx context.Context, p Periodic) {

@@ -66,6 +66,22 @@ type Status struct {
 // behalf of a user, i.e. it carries no owner.
 func (s Status) Internal() bool { return s.Owner == "" }
 
+// ListFilter narrows a run listing. The zero value matches every run; the
+// common use is to set Owner so a user sees only their own runs.
+type ListFilter struct {
+	// Owner, when set, restricts the listing to runs created for that username.
+	Owner string
+	// States, when non-empty, restricts the listing to runs in any of these
+	// states.
+	States []State
+	// Job, when set, restricts the listing to runs of that job.
+	Job string
+	// Limit caps the number of returned runs; 0 returns all of them.
+	Limit int
+	// Offset skips that many runs from the start, for pagination.
+	Offset int
+}
+
 // StatusStore persists and serves the per-run status. It is a separate
 // concern from the work-queue Store: the queue handles delivery, the status
 // store handles observability, and a deployment may in principle back them
@@ -76,6 +92,8 @@ type StatusStore interface {
 	// Get returns the status of a run. It returns an errtypes.NotFound error
 	// if the run is unknown.
 	Get(ctx context.Context, id RunID) (Status, error)
+	// List returns the runs matching the filter, most recently enqueued first.
+	List(ctx context.Context, f ListFilter) ([]Status, error)
 	// Close releases the status store's resources.
 	Close(ctx context.Context) error
 }
