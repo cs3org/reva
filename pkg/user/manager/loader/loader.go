@@ -23,6 +23,5 @@ import (
 	_ "github.com/cs3org/reva/v3/pkg/user/manager/demo"
 	_ "github.com/cs3org/reva/v3/pkg/user/manager/json"
 	_ "github.com/cs3org/reva/v3/pkg/user/manager/ldap"
-	_ "github.com/cs3org/reva/v3/pkg/user/manager/nextcloud"
 	// Add your own here.
 )

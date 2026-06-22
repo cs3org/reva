@@ -27,6 +27,5 @@ import (
 	_ "github.com/cs3org/reva/v3/pkg/storage/fs/eos"
 	_ "github.com/cs3org/reva/v3/pkg/storage/fs/local"
 	_ "github.com/cs3org/reva/v3/pkg/storage/fs/localhome"
-	_ "github.com/cs3org/reva/v3/pkg/storage/fs/nextcloud"
 	// Add your own here.
 )
