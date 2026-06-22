@@ -107,7 +107,7 @@ func toModel(st rjobs.Status) (*model.Run, error) {
 		}
 		result = b
 	}
-	return &model.Run{
+	m := &model.Run{
 		RunID:      string(st.RunID),
 		Job:        st.Job,
 		State:      string(st.State),
@@ -117,7 +117,9 @@ func toModel(st rjobs.Status) (*model.Run, error) {
 		FinishedAt: st.FinishedAt,
 		LastError:  st.LastError,
 		Result:     result,
-	}, nil
+	}
+	m.Owner = st.Owner
+	return m, nil
 }
 
 func fromModel(row model.Run) (rjobs.Status, error) {
@@ -131,6 +133,7 @@ func fromModel(row model.Run) (rjobs.Status, error) {
 		FinishedAt: row.FinishedAt,
 		LastError:  row.LastError,
 	}
+	st.Owner = row.Owner
 	if len(row.Result) > 0 {
 		var p rjobs.Params
 		if err := json.Unmarshal(row.Result, &p); err != nil {

@@ -36,6 +36,10 @@ type Run struct {
 	FinishedAt *time.Time
 	LastError  string         `gorm:"type:text"`
 	Result     datatypes.JSON `gorm:"type:json"`
+
+	// Owner is the username the run was created for, empty for an internal run.
+	// It is indexed so a user's runs can be listed.
+	Owner string `gorm:"size:255;index:idx_owner"`
 }
 
 // TableName sets the table name explicitly so it does not collide with other
