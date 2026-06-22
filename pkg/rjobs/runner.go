@@ -202,6 +202,7 @@ func (r *Runner) Enqueue(ctx context.Context, name string, p Params, opts ...Enq
 		State:      StateQueued,
 		Attempt:    1,
 		EnqueuedAt: time.Now(),
+		Owner:      run.Owner,
 	}); err != nil {
 		// the run is already durably queued; a failed status write must not
 		// fail the enqueue, only lose observability for this run.
@@ -392,6 +393,7 @@ func (r *Runner) recordStatus(ctx context.Context, run Run, state State, result 
 		Attempt:    run.Attempt,
 		EnqueuedAt: run.EnqueuedAt,
 		Result:     result,
+		Owner:      run.Owner,
 	}
 	switch state {
 	case StateRunning:

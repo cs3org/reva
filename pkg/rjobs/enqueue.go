@@ -32,6 +32,15 @@ func WithIdempotencyKey(key string) EnqueueOption {
 	}
 }
 
+// WithOwner attributes the run to a user by username, so it appears in that
+// user's run listing (see Runner.ListByOwner). Without this option a run has no
+// owner and counts as internal.
+func WithOwner(username string) EnqueueOption {
+	return func(r *Run) {
+		r.Owner = username
+	}
+}
+
 // defaultRunner is the process-wide runner, set by the jobs service once at
 // startup. It lets any in-process reva component reach Enqueue without
 // threading the runner through every call site.

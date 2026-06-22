@@ -36,6 +36,10 @@ type Run struct {
 	Job string
 	// Params is the on-demand payload. Empty for periodic runs.
 	Params Params
+	// Owner is the username the run was created for, or empty for an internal
+	// run (periodic jobs, and on-demand jobs enqueued without WithOwner). It
+	// travels with the run so the worker can record it in the run's status.
+	Owner string
 	// IdempotencyKey, when set, collapses duplicate enqueues into a single
 	// run. Two enqueues with the same key yield the same run.
 	IdempotencyKey string

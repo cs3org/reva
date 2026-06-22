@@ -58,7 +58,13 @@ type Status struct {
 	LastError string
 	// Result is the payload returned by the job on success.
 	Result Params
+	// Owner is the username the run was created for, or empty for an internal run.
+	Owner string
 }
+
+// Internal reports whether the run was created by reva itself rather than on
+// behalf of a user, i.e. it carries no owner.
+func (s Status) Internal() bool { return s.Owner == "" }
 
 // StatusStore persists and serves the per-run status. It is a separate
 // concern from the work-queue Store: the queue handles delivery, the status
