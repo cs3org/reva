@@ -40,9 +40,15 @@ type Run struct {
 	// run (periodic jobs, and on-demand jobs enqueued without WithOwner). It
 	// travels with the run so the worker can record it in the run's status.
 	Owner string
-	// IdempotencyKey, when set, collapses duplicate enqueues into a single
-	// run. Two enqueues with the same key yield the same run.
-	IdempotencyKey string
+	// DedupKey, set through Unique, makes the run the only active one for its
+	// (Owner, DedupKey): while it is queued, running or retrying, another
+	// enqueue with the same key does not start a second run. It travels with the
+	// run so the reservation can be released once the run succeeds.
+	DedupKey string
+	// dedupReject selects Reject over the default Collapse when DedupKey is
+	// already held. It is read at enqueue time only and never leaves the
+	// process, so it is deliberately unexported and not serialised.
+	dedupReject bool
 	// Attempt is the 1-based delivery attempt for this run.
 	Attempt int
 	// EnqueuedAt is when the run was first persisted.
@@ -67,9 +73,7 @@ type ScheduledRun struct {
 // calling Complete or Fail, the lease expires and the run becomes claimable
 // again, giving at-least-once delivery.
 type Store interface {
-	// Enqueue persists a ready-to-run job instance and returns its id. If the
-	// run carries an IdempotencyKey that already has a live run, the existing
-	// run's id is returned and no new run is created.
+	// Enqueue persists a ready-to-run job instance and returns its id.
 	Enqueue(ctx context.Context, run Run) (RunID, error)
 	// Claim atomically leases the next ready run to the caller. It blocks
 	// until a run is available or ctx is cancelled.

@@ -154,3 +154,45 @@ func TestListByOwner(t *testing.T) {
 		t.Fatalf("bob runs = %v, want [b1]", got)
 	}
 }
+
+func TestReserve(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Second)
+
+	alice := "alice"
+	bob := "bob"
+	queued := func(id, owner string) rjobs.Status {
+		return rjobs.Status{RunID: rjobs.RunID(id), Job: "export", State: rjobs.StateQueued, Attempt: 1, EnqueuedAt: now, Owner: owner}
+	}
+
+	// the first reservation of a key wins.
+	if _, reserved, err := s.Reserve(ctx, queued("r1", alice), "export:1"); err != nil || !reserved {
+		t.Fatalf("first reservation should win: reserved=%v err=%v", reserved, err)
+	}
+
+	// a second one for the same (owner, key) collapses onto the holder.
+	existing, reserved, err := s.Reserve(ctx, queued("r2", alice), "export:1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reserved {
+		t.Fatal("second reservation must not win while the key is held")
+	}
+	if existing.RunID != "r1" {
+		t.Errorf("holder = %q, want r1", existing.RunID)
+	}
+
+	// a different user holding the same key is independent.
+	if _, reserved, err := s.Reserve(ctx, queued("r3", bob), "export:1"); err != nil || !reserved {
+		t.Fatalf("a different owner should reserve the same key: reserved=%v err=%v", reserved, err)
+	}
+
+	// once released, the key is free for a new run.
+	if err := s.Release(ctx, "r1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, reserved, err := s.Reserve(ctx, queued("r4", alice), "export:1"); err != nil || !reserved {
+		t.Fatalf("a released key should be reservable again: reserved=%v err=%v", reserved, err)
+	}
+}

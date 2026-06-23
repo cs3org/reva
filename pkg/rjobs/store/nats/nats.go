@@ -238,14 +238,7 @@ func (s *store) Enqueue(ctx context.Context, run rjobs.Run) (rjobs.RunID, error)
 		return "", errors.Wrap(err, "rjobs: marshalling run failed")
 	}
 
-	pubOpts := []nats.PubOpt{nats.Context(ctx)}
-	if run.IdempotencyKey != "" {
-		// JetStream dedups messages carrying the same Nats-Msg-Id within the
-		// stream's duplicate window, collapsing repeated enqueues.
-		pubOpts = append(pubOpts, nats.MsgId(run.IdempotencyKey))
-	}
-
-	if _, err := s.js.Publish(s.subjectFor(run.Job), payload, pubOpts...); err != nil {
+	if _, err := s.js.Publish(s.subjectFor(run.Job), payload, nats.Context(ctx)); err != nil {
 		return "", errors.Wrap(err, "rjobs: publishing run failed")
 	}
 	return run.ID, nil

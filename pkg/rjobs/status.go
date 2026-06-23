@@ -94,6 +94,15 @@ type StatusStore interface {
 	Get(ctx context.Context, id RunID) (Status, error)
 	// List returns the runs matching the filter, most recently enqueued first.
 	List(ctx context.Context, f ListFilter) ([]Status, error)
+	// Reserve persists s as a queued run while enforcing at most one active run
+	// per (Owner, key). If the key is already held by an active run it stores
+	// nothing and returns that run with reserved=false; otherwise it stores s
+	// and returns reserved=true.
+	Reserve(ctx context.Context, s Status, key string) (existing Status, reserved bool, err error)
+	// Release drops a run's uniqueness reservation once it no longer needs it
+	// (it succeeded, or it never reached the queue), freeing the key for a new
+	// run. It is a no-op for a run that holds no reservation.
+	Release(ctx context.Context, id RunID) error
 	// Close releases the status store's resources.
 	Close(ctx context.Context) error
 }

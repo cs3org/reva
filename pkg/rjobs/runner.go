@@ -20,11 +20,14 @@ package rjobs
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -191,6 +194,10 @@ func (r *Runner) Enqueue(ctx context.Context, name string, p Params, opts ...Enq
 		o(&run)
 	}
 
+	if run.DedupKey != "" {
+		return r.enqueueUnique(ctx, run)
+	}
+
 	id, err := r.store.Enqueue(ctx, run)
 	if err != nil {
 		return "", err
@@ -209,6 +216,56 @@ func (r *Runner) Enqueue(ctx context.Context, name string, p Params, opts ...Enq
 		r.log.Error().Err(err).Str("run", string(id)).Msg("rjobs: recording queued status failed")
 	}
 	return id, nil
+}
+
+// enqueueUnique enqueues a run that carries a Unique key. It reserves the key in
+// the status store before publishing, so two concurrent enqueues for the same
+// (owner, key) cannot both start a run: the reservation, backed by a unique
+// index, is the gate. On conflict it collapses onto the in-flight run (default)
+// or rejects, per the run's policy.
+func (r *Runner) enqueueUnique(ctx context.Context, run Run) (RunID, error) {
+	run.ID = RunID(uuid.New().String())
+	run.Attempt = 1
+	run.EnqueuedAt = time.Now()
+
+	queued := Status{
+		RunID:      run.ID,
+		Job:        run.Job,
+		State:      StateQueued,
+		Attempt:    1,
+		EnqueuedAt: run.EnqueuedAt,
+		Owner:      run.Owner,
+	}
+
+	existing, reserved, err := r.status.Reserve(ctx, queued, run.DedupKey)
+	if err != nil {
+		return "", err
+	}
+	if !reserved {
+		if run.dedupReject {
+			return "", errtypes.AlreadyExists(fmt.Sprintf("run %s already active for key %q", existing.RunID, run.DedupKey))
+		}
+		return existing.RunID, nil
+	}
+
+	if _, err := r.store.Enqueue(ctx, run); err != nil {
+		// the key is reserved but nothing reached the queue. Release it and mark
+		// the orphaned run failed, so the key is not stuck and no phantom queued
+		// run lingers.
+		if rerr := r.status.Release(ctx, run.ID); rerr != nil {
+			r.log.Error().Err(rerr).Str("run", string(run.ID)).Msg("rjobs: releasing reservation after failed enqueue errored")
+		}
+		now := time.Now()
+		failed := queued
+		failed.State = StateFailed
+		failed.FinishedAt = &now
+		failed.LastError = err.Error()
+		if perr := r.status.Put(ctx, failed); perr != nil {
+			r.log.Error().Err(perr).Str("run", string(run.ID)).Msg("rjobs: recording failed status after failed enqueue errored")
+		}
+		return "", err
+	}
+	return run.ID, nil
 }
 
 // Status returns the current status of a previously enqueued run. It returns
@@ -350,6 +407,12 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 	}
 
 	r.recordStatus(ctx, run, StateSucceeded, result, nil, log)
+	if run.DedupKey != "" && r.status != nil {
+		// the run is done; free its Unique key so a new run can take it.
+		if err := r.status.Release(ctx, run.ID); err != nil {
+			log.Error().Err(err).Msg("rjobs: releasing dedup reservation errored")
+		}
+	}
 	if cerr := r.store.Complete(ctx, run.ID); cerr != nil {
 		log.Error().Err(cerr).Msg("rjobs: completing run errored")
 	}

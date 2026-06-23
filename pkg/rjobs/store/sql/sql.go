@@ -54,7 +54,9 @@ func New(ctx context.Context, c config.Database) (rjobs.StatusStore, error) {
 }
 
 func openDB(c config.Database) (*gorm.DB, error) {
-	gormCfg := &gorm.Config{}
+	// TranslateError makes a unique-constraint violation surface as
+	// gorm.ErrDuplicatedKey across engines, which Reserve relies on.
+	gormCfg := &gorm.Config{TranslateError: true}
 	switch c.Engine {
 	case "sqlite":
 		return gorm.Open(sqlite.Open(c.DBName), gormCfg)
@@ -70,8 +72,9 @@ func (s *store) Put(ctx context.Context, st rjobs.Status) error {
 		return err
 	}
 	// upsert on the run id: the row is created on enqueue and updated on every
-	// later transition.
-	res := s.db.WithContext(ctx).Save(row)
+	// later transition. The reservation column is owned by Reserve/Release, so
+	// omit it here or a status update would wipe a live reservation.
+	res := s.db.WithContext(ctx).Omit("ActiveDedupKey").Save(row)
 	if res.Error != nil {
 		return errors.Wrap(res.Error, "rjobs sql: storing status failed")
 	}
@@ -126,6 +129,61 @@ func (s *store) List(ctx context.Context, f rjobs.ListFilter) ([]rjobs.Status, e
 		out = append(out, st)
 	}
 	return out, nil
+}
+
+func (s *store) Reserve(ctx context.Context, st rjobs.Status, key string) (rjobs.Status, bool, error) {
+	// Retry to cover the narrow window where the current holder releases the key
+	// between our failed insert and the lookup of that holder.
+	for attempt := 0; attempt < 5; attempt++ {
+		row, err := toModel(st)
+		if err != nil {
+			return rjobs.Status{}, false, err
+		}
+		row.ActiveDedupKey = &key
+
+		if err := s.db.WithContext(ctx).Create(row).Error; err == nil {
+			return rjobs.Status{}, true, nil
+		} else if !errors.Is(err, gorm.ErrDuplicatedKey) {
+			return rjobs.Status{}, false, errors.Wrap(err, "rjobs sql: reserving run failed")
+		}
+
+		holder, found, err := s.activeHolder(ctx, st.Owner, key)
+		if err != nil {
+			return rjobs.Status{}, false, err
+		}
+		if found {
+			return holder, false, nil
+		}
+		// the holder released the key just now; loop and try to take it.
+	}
+	return rjobs.Status{}, false, errors.New("rjobs sql: could not reserve run, key is contended")
+}
+
+func (s *store) Release(ctx context.Context, id rjobs.RunID) error {
+	res := s.db.WithContext(ctx).Model(&model.Run{}).
+		Where("run_id = ?", string(id)).
+		Update("active_dedup_key", nil)
+	if res.Error != nil {
+		return errors.Wrap(res.Error, "rjobs sql: releasing reservation failed")
+	}
+	return nil
+}
+
+// activeHolder loads the run currently holding key for owner, if any.
+func (s *store) activeHolder(ctx context.Context, owner, key string) (rjobs.Status, bool, error) {
+	q := s.db.WithContext(ctx).Where("owner = ? AND active_dedup_key = ?", owner, key)
+	var row model.Run
+	if err := q.First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return rjobs.Status{}, false, nil
+		}
+		return rjobs.Status{}, false, errors.Wrap(err, "rjobs sql: loading reservation holder failed")
+	}
+	st, err := fromModel(row)
+	if err != nil {
+		return rjobs.Status{}, false, err
+	}
+	return st, true, nil
 }
 
 func (s *store) Close(ctx context.Context) error {
