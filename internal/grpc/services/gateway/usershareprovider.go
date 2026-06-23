@@ -117,6 +117,8 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 	}
 
 	// If we commit to the storage, first we apply to the new resource, then we clean up
+	toDelete := sharehierarchy.Shares(result.ToDelete)
+	toReapply := sharehierarchy.Shares(result.ToReapply)
 	if s.c.CommitShareToStorageGrant {
 		if grantStatus, err := s.applyGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions); err != nil || grantStatus.Code != rpc.Code_CODE_OK {
 			if err != nil {
@@ -125,7 +127,7 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 			return &collaboration.CreateShareResponse{Status: grantStatus}, nil
 		}
 		// Remove grants for child shares made redundant by the new share.
-		if st, err := s.removeChildGrants(ctx, result.ToDelete); err != nil || st.Code != rpc.Code_CODE_OK {
+		if st, err := s.removeChildGrants(ctx, toDelete); err != nil || st.Code != rpc.Code_CODE_OK {
 			if err != nil {
 				return nil, err
 			}
@@ -133,7 +135,7 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 		}
 		// Re-apply grants for children that retain higher permissions (N=R, C=RW).
 		// ToReapply is already sorted shallowest-first by CheckGrantConsistency.
-		s.reapplyChildGrants(ctx, result.ToReapply)
+		s.reapplyChildGrants(ctx, toReapply)
 	}
 
 	// Finally, we write to the db
@@ -147,7 +149,7 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 	}
 
 	// And we remove from the db the deleted shares made redundant by the new share.
-	s.removeChildShareRecords(ctx, shareClient, result.ToDelete)
+	s.removeChildShareRecords(ctx, shareClient, toDelete)
 
 	return res, nil
 
@@ -406,8 +408,8 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 				Status: status.NewConflict(ctx, conflictErr, conflictErr.MarshalToJSON()),
 			}, nil
 		}
-		toDelete = result.ToDelete
-		toReapply = result.ToReapply
+		toDelete = sharehierarchy.Shares(result.ToDelete)
+		toReapply = sharehierarchy.Shares(result.ToReapply)
 	}
 
 	if isPermUpdate && s.c.CommitShareToStorageGrant {

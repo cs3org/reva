@@ -86,7 +86,8 @@ func TestCheckForAdd_ParentR_NodeR_Conflict(t *testing.T) {
 
 	_, err := checker.CheckGrantConsistency(context.Background(), "/a/b", readPerms, []*collaboration.Share{parent})
 	require.Error(t, err)
-	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError); _ = conflictErr
+	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError)
+	_ = conflictErr
 	assert.True(t, ok, "expected HierarchyConflictError, got %T: %v", err, err)
 }
 
@@ -97,7 +98,8 @@ func TestCheckForAdd_ParentRW_NodeR_Conflict(t *testing.T) {
 
 	_, err := checker.CheckGrantConsistency(context.Background(), "/a/b", readPerms, []*collaboration.Share{parent})
 	require.Error(t, err)
-	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError); _ = conflictErr
+	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError)
+	_ = conflictErr
 	assert.True(t, ok)
 }
 
@@ -108,7 +110,8 @@ func TestCheckForAdd_ParentRW_NodeRW_Conflict(t *testing.T) {
 
 	_, err := checker.CheckGrantConsistency(context.Background(), "/a/b", rwPerms, []*collaboration.Share{parent})
 	require.Error(t, err)
-	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError); _ = conflictErr
+	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError)
+	_ = conflictErr
 	assert.True(t, ok)
 }
 
@@ -121,7 +124,7 @@ func TestCheckForAdd_ChildRW_NodeR_ReApply(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, result.ToDelete)
 	require.Len(t, result.ToReapply, 1)
-	assert.Equal(t, "2", result.ToReapply[0].Id.OpaqueId)
+	assert.Equal(t, "2", result.ToReapply[0].Share.Id.OpaqueId)
 }
 
 func TestCheckForAdd_ChildR_NodeR_ToDelete(t *testing.T) {
@@ -132,8 +135,21 @@ func TestCheckForAdd_ChildR_NodeR_ToDelete(t *testing.T) {
 	result, err := checker.CheckGrantConsistency(context.Background(), "/a", readPerms, []*collaboration.Share{child})
 	require.NoError(t, err)
 	require.Len(t, result.ToDelete, 1)
-	assert.Equal(t, "2", result.ToDelete[0].Id.OpaqueId)
+	assert.Equal(t, "2", result.ToDelete[0].Share.Id.OpaqueId)
 	assert.Empty(t, result.ToReapply)
+}
+
+func TestNewChildConflictError_IncludesResolvedChildPath(t *testing.T) {
+	child := makeShare(2, "inode-ab", readPerms)
+	checker := &sharehierarchy.Checker{GetPath: pathMap(map[string]string{"inode-ab": "/a/b"})}
+
+	result, err := checker.CheckGrantConsistency(context.Background(), "/a", readPerms, []*collaboration.Share{child})
+	require.NoError(t, err)
+	require.Len(t, result.ToDelete, 1)
+
+	conflictErr := sharehierarchy.NewChildConflictError(sharehierarchy.ChildConflictMessage(result.ToDelete), result.ToDelete)
+	require.Len(t, conflictErr.ConflictingShares, 1)
+	assert.Equal(t, "/a/b", conflictErr.ConflictingShares[0].Path)
 }
 
 func TestCheckForAdd_ChildRW_NodeRW_ToDelete(t *testing.T) {
@@ -189,9 +205,9 @@ func TestCheckForAdd_MultipleChildren_MixedResult(t *testing.T) {
 	result, err := checker.CheckGrantConsistency(context.Background(), "/a", readPerms, []*collaboration.Share{childRW, childR})
 	require.NoError(t, err)
 	require.Len(t, result.ToReapply, 1)
-	assert.Equal(t, "1", result.ToReapply[0].Id.OpaqueId)
+	assert.Equal(t, "1", result.ToReapply[0].Share.Id.OpaqueId)
 	require.Len(t, result.ToDelete, 1)
-	assert.Equal(t, "2", result.ToDelete[0].Id.OpaqueId)
+	assert.Equal(t, "2", result.ToDelete[0].Share.Id.OpaqueId)
 }
 
 func TestCheckForAdd_SiblingPrefix_NotAncestor(t *testing.T) {
@@ -212,7 +228,8 @@ func TestCheckForAdd_DenyParent_Conflict(t *testing.T) {
 
 	_, err := checker.CheckGrantConsistency(context.Background(), "/a/b", readPerms, []*collaboration.Share{parent})
 	require.Error(t, err)
-	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError); _ = conflictErr
+	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError)
+	_ = conflictErr
 	assert.True(t, ok)
 }
 
@@ -245,7 +262,8 @@ func TestCheckForAdd_ParentDeny_NodeDeny_Conflict(t *testing.T) {
 
 	_, err := checker.CheckGrantConsistency(context.Background(), "/a/b", denyPerms, []*collaboration.Share{parent})
 	require.Error(t, err)
-	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError); _ = conflictErr
+	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError)
+	_ = conflictErr
 	assert.True(t, ok)
 }
 
@@ -256,7 +274,8 @@ func TestCheckForAdd_ParentDeny_NodeRW_Conflict(t *testing.T) {
 
 	_, err := checker.CheckGrantConsistency(context.Background(), "/a/b", rwPerms, []*collaboration.Share{parent})
 	require.Error(t, err)
-	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError); _ = conflictErr
+	conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError)
+	_ = conflictErr
 	assert.True(t, ok)
 }
 
@@ -269,7 +288,7 @@ func TestCheckForAdd_ChildDeny_NodeR_ToReapply(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, result.ToDelete)
 	require.Len(t, result.ToReapply, 1)
-	assert.Equal(t, "2", result.ToReapply[0].Id.OpaqueId)
+	assert.Equal(t, "2", result.ToReapply[0].Share.Id.OpaqueId)
 }
 
 func TestCheckForAdd_ChildDeny_NodeRW_ToReapply(t *testing.T) {
@@ -362,7 +381,7 @@ func TestToReapplySortedShallowestFirst(t *testing.T) {
 	result, err := checker.CheckGrantConsistency(context.Background(), "/a", readPerms, []*collaboration.Share{deep, root, mid})
 	require.NoError(t, err)
 	require.Len(t, result.ToReapply, 3)
-	assert.Equal(t, "2", result.ToReapply[0].Id.OpaqueId) // /a/b
-	assert.Equal(t, "3", result.ToReapply[1].Id.OpaqueId) // /a/b/c
-	assert.Equal(t, "1", result.ToReapply[2].Id.OpaqueId) // /a/b/c/d
+	assert.Equal(t, "2", result.ToReapply[0].Share.Id.OpaqueId) // /a/b
+	assert.Equal(t, "3", result.ToReapply[1].Share.Id.OpaqueId) // /a/b/c
+	assert.Equal(t, "1", result.ToReapply[2].Share.Id.OpaqueId) // /a/b/c/d
 }
