@@ -205,3 +205,64 @@ func TestReserve(t *testing.T) {
 		t.Fatalf("a released key should be reservable again: reserved=%v err=%v", reserved, err)
 	}
 }
+
+func TestRequestCancel(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Second)
+
+	if err := s.Put(ctx, rjobs.Status{
+		RunID: "run-1", Job: "j", State: rjobs.StateRunning, Attempt: 1, EnqueuedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := s.RequestCancel(ctx, "run-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.CancelRequested {
+		t.Error("CancelRequested should be set after RequestCancel")
+	}
+	if st.State != rjobs.StateCancelling {
+		t.Errorf("state = %q, want cancelling", st.State)
+	}
+
+	// a lifecycle write must not clobber the cancel intent.
+	if err := s.Put(ctx, rjobs.Status{
+		RunID: "run-1", Job: "j", State: rjobs.StateRunning, Attempt: 1, EnqueuedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Get(ctx, "run-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.CancelRequested {
+		t.Error("a Put must not clear CancelRequested")
+	}
+}
+
+func TestRequestCancelTerminalIsNoop(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Second)
+
+	if err := s.Put(ctx, rjobs.Status{
+		RunID: "done", Job: "j", State: rjobs.StateSucceeded, Attempt: 1, EnqueuedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := s.RequestCancel(ctx, "done")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.State != rjobs.StateSucceeded || st.CancelRequested {
+		t.Errorf("cancel of a terminal run must be a no-op, got state=%q cancel=%v", st.State, st.CancelRequested)
+	}
+
+	if _, err := s.RequestCancel(ctx, "missing"); err == nil {
+		t.Error("expected NotFound cancelling an unknown run")
+	}
+}

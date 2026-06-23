@@ -70,14 +70,36 @@ func (s *store) Put(ctx context.Context, st rjobs.Status) error {
 	if err != nil {
 		return err
 	}
-	// upsert on the run id: the row is created on enqueue and updated on every
-	// later transition. The reservation column is owned by Reserve/Release, so
-	// omit it here or a status update would wipe a live reservation.
-	res := s.db.WithContext(ctx).Omit("ActiveDedupKey").Save(row)
+	// later transition. The reservation column is owned by Reserve/Release and
+	// the cancel intent by RequestCancel, so both are omitted here: a lifecycle
+	// write must never wipe a live reservation or clobber a concurrent cancel.
+	res := s.db.WithContext(ctx).Omit("ActiveDedupKey", "CancelRequested").Save(row)
 	if res.Error != nil {
 		return errors.Wrap(res.Error, "rjobs sql: storing status failed")
 	}
 	return nil
+}
+
+func (s *store) RequestCancel(ctx context.Context, id rjobs.RunID) (rjobs.Status, error) {
+	// Flip the cancel intent with a targeted update that leaves the columns the
+	// worker owns (lifecycle state, timestamps, result) untouched. The state is
+	// advanced to cancelling only from a non-terminal state, so a cancel can
+	// neither resurrect a finished run nor undo a terminal state.
+	res := s.db.WithContext(ctx).Model(&model.Run{}).
+		Where("run_id = ? AND state IN ?", string(id), []string{
+			string(rjobs.StateQueued), string(rjobs.StateRunning), string(rjobs.StateFailed),
+		}).
+		Updates(map[string]any{
+			"cancel_requested": true,
+			"state":            string(rjobs.StateCancelling),
+		})
+	if res.Error != nil {
+		return rjobs.Status{}, errors.Wrap(res.Error, "rjobs sql: requesting cancel failed")
+	}
+	// Return the current status whether or not a row was updated: a terminal run
+	// is returned unchanged (idempotent cancel) and an unknown run yields
+	// NotFound from Get.
+	return s.Get(ctx, id)
 }
 
 func (s *store) Get(ctx context.Context, id rjobs.RunID) (rjobs.Status, error) {
@@ -211,15 +233,16 @@ func toModel(st rjobs.Status) (*model.Run, error) {
 		result = b
 	}
 	m := &model.Run{
-		RunID:      string(st.RunID),
-		Job:        st.Job,
-		State:      string(st.State),
-		Attempt:    st.Attempt,
-		EnqueuedAt: st.EnqueuedAt,
-		StartedAt:  st.StartedAt,
-		FinishedAt: st.FinishedAt,
-		LastError:  st.LastError,
-		Result:     result,
+		RunID:           string(st.RunID),
+		Job:             st.Job,
+		State:           string(st.State),
+		Attempt:         st.Attempt,
+		EnqueuedAt:      st.EnqueuedAt,
+		StartedAt:       st.StartedAt,
+		FinishedAt:      st.FinishedAt,
+		LastError:       st.LastError,
+		Result:          result,
+		CancelRequested: st.CancelRequested,
 	}
 	m.Owner = st.Owner
 	return m, nil
@@ -227,14 +250,15 @@ func toModel(st rjobs.Status) (*model.Run, error) {
 
 func fromModel(row model.Run) (rjobs.Status, error) {
 	st := rjobs.Status{
-		RunID:      rjobs.RunID(row.RunID),
-		Job:        row.Job,
-		State:      rjobs.State(row.State),
-		Attempt:    row.Attempt,
-		EnqueuedAt: row.EnqueuedAt,
-		StartedAt:  row.StartedAt,
-		FinishedAt: row.FinishedAt,
-		LastError:  row.LastError,
+		RunID:           rjobs.RunID(row.RunID),
+		Job:             row.Job,
+		State:           rjobs.State(row.State),
+		Attempt:         row.Attempt,
+		EnqueuedAt:      row.EnqueuedAt,
+		StartedAt:       row.StartedAt,
+		FinishedAt:      row.FinishedAt,
+		LastError:       row.LastError,
+		CancelRequested: row.CancelRequested,
 	}
 	st.Owner = row.Owner
 	if len(row.Result) > 0 {
