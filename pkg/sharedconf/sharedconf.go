@@ -67,6 +67,11 @@ func GetBlockedUsers() []string {
 	return sharedConf.BlockedUsers
 }
 
+// GetRegistry returns the process-level service registry configuration.
+func GetRegistry() config.Registry {
+	return sharedConf.Registry
+}
+
 func GetDBInfo(in config.Database) config.Database {
 	c := in
 

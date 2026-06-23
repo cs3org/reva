@@ -56,7 +56,26 @@ type Shared struct {
 	DataGateway           string   `default:"http://0.0.0.0:19001/datagateway" key:"datagateway"                        mapstructure:"datagateway"`
 	SkipUserGroupsInToken bool     `key:"skip_user_groups_in_token"            mapstructure:"skip_user_groups_in_token"`
 	BlockedUsers          []string `default:"[]"                               key:"blocked_users"                      mapstructure:"blocked_users"`
+	Registry              Registry `default:"{}"                               key:"registry"                           mapstructure:"registry"`
 	Database              `mapstructure:",squash"`
+}
+
+// Registry holds the process-level service registry configuration. It selects
+// the discovery backend ("memory" default, or a shared backend such as "nats")
+// and the heartbeat/liveness thresholds.
+type Registry struct {
+	// Driver selects the registry backend. Defaults to "memory" (in-process,
+	// zero external dependency).
+	Driver string `default:"memory" key:"driver" mapstructure:"driver"`
+	// Drivers holds per-driver configuration, keyed by driver name. The block
+	// for the active Driver is passed to its constructor.
+	Drivers map[string]map[string]any `key:"drivers" mapstructure:"drivers"`
+
+	// Heartbeat / liveness thresholds. Defaults shown.
+	HeartbeatInterval string `default:"5s"  key:"heartbeat_interval" mapstructure:"heartbeat_interval"`
+	DegradedAfter     string `default:"15s" key:"degraded_after"     mapstructure:"degraded_after"`
+	OfflineAfter      string `default:"30s" key:"offline_after"      mapstructure:"offline_after"`
+	ReapAfter         string `default:"5m"  key:"reap_after"         mapstructure:"reap_after"`
 }
 
 type Database struct {
@@ -173,7 +192,7 @@ func (c *Config) isValidKey(key string) bool {
 		return false
 	}
 	k := f.Key
-	e := reflect.TypeOf(c).Elem()
+	e := reflect.TypeFor[Config]()
 	for i := 0; i < e.NumField(); i++ {
 		f := e.Field(i)
 		prefix := f.Tag.Get("key")
