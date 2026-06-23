@@ -49,12 +49,18 @@ type HierarchyCheckResult struct {
 	// When force=true these are populated and the caller must remove them.
 	// When force=false and this slice would be non-empty, CheckForAdd returns
 	// ShareChildConflict instead of populating this field.
-	ToDelete []*collaboration.Share
+	ToDelete []ResolvedShare
 
 	// ToReapply contains child shares whose ACLs must be explicitly re-applied after
 	// adding the new ACL. This covers the (N=R, C=RW) case where the child has higher
 	// permissions than the new parent share and must retain its explicit ACL.
-	ToReapply []*collaboration.Share
+	ToReapply []ResolvedShare
+}
+
+// ResolvedShare wraps a share with the path resolved during hierarchy checking.
+type ResolvedShare struct {
+	Share *collaboration.Share
+	Path  string
 }
 
 // CheckGrantConsistency runs the two-step hierarchy check for creating or updating a share.
@@ -77,7 +83,6 @@ func (c *Checker) CheckGrantConsistency(ctx context.Context, nodePath string, no
 	log := appctx.GetLogger(ctx)
 	result := &HierarchyCheckResult{}
 	nodePermLevel := PermLevelFromCS3(nodePerms)
-	reapplyPaths := make(map[string]string)
 
 	log.Debug().Str("keyword", "sharehierarchy").Str("nodePath", nodePath).Str("nodePerms", nodePermLevel.String()).Int("existingShares", len(existingShares)).Msg("sharehierarchy: CheckGrantConsistency start")
 
@@ -101,6 +106,10 @@ func (c *Checker) CheckGrantConsistency(ctx context.Context, nodePath string, no
 				continue
 			}
 			log.Debug().Str("keyword", "sharehierarchy").Str("shareId", s.Id.OpaqueId).Str("parentPath", path).Str("parentPerms", sharePerms.String()).Str("nodePath", nodePath).Str("nodePerms", nodePermLevel.String()).Msg("sharehierarchy: parent conflict detected")
+			var sharee string
+			if s.Grantee != nil && s.Grantee.GetUserId() != nil {
+				sharee = s.Grantee.GetUserId().OpaqueId
+			}
 			return nil, &HierarchyConflictError{
 				ErrorType: "parent_conflict",
 				CanForce:  false,
@@ -113,6 +122,7 @@ func (c *Checker) CheckGrantConsistency(ctx context.Context, nodePath string, no
 						ID:             s.Id.OpaqueId,
 						Path:           path,
 						PermissionType: sharePerms.String(),
+						Sharee:         sharee,
 					},
 				},
 			}
@@ -124,17 +134,16 @@ func (c *Checker) CheckGrantConsistency(ctx context.Context, nodePath string, no
 			// Otherwise the child is redundant or would be implicitly elevated and must be deleted.
 			if sharePerms > nodePermLevel {
 				log.Debug().Str("keyword", "sharehierarchy").Str("shareId", s.Id.OpaqueId).Str("childPath", path).Str("childPerms", sharePerms.String()).Msg("sharehierarchy: child share has higher perms, will reapply")
-				result.ToReapply = append(result.ToReapply, s)
-				reapplyPaths[s.Id.OpaqueId] = path
+				result.ToReapply = append(result.ToReapply, ResolvedShare{Share: s, Path: path})
 			} else {
 				log.Debug().Str("keyword", "sharehierarchy").Str("shareId", s.Id.OpaqueId).Str("childPath", path).Str("childPerms", sharePerms.String()).Msg("sharehierarchy: child share is redundant, will delete")
-				result.ToDelete = append(result.ToDelete, s)
+				result.ToDelete = append(result.ToDelete, ResolvedShare{Share: s, Path: path})
 			}
 		}
 	}
 
 	// Sort ToReapply shallowest-first so the caller can apply ACLs in the correct order.
-	sortByPathDepthAsc(result.ToReapply, reapplyPaths)
+	sortResolvedSharesByPathDepthAsc(result.ToReapply)
 	log.Debug().Str("keyword", "sharehierarchy").Str("nodePath", nodePath).Int("toDelete", len(result.ToDelete)).Int("toReapply", len(result.ToReapply)).Msg("sharehierarchy: CheckGrantConsistency done")
 	return result, nil
 }
@@ -245,6 +254,22 @@ func sortByPathDepthAsc(shares []*collaboration.Share, paths map[string]string) 
 	})
 }
 
+// sortResolvedSharesByPathDepthAsc sorts resolved shares by ascending path depth.
+func sortResolvedSharesByPathDepthAsc(shares []ResolvedShare) {
+	sort.Slice(shares, func(i, j int) bool {
+		return strings.Count(shares[i].Path, string(os.PathSeparator)) < strings.Count(shares[j].Path, string(os.PathSeparator))
+	})
+}
+
+// Shares unwraps resolved shares for callers that only need the original share object.
+func Shares(resolved []ResolvedShare) []*collaboration.Share {
+	shares := make([]*collaboration.Share, 0, len(resolved))
+	for _, r := range resolved {
+		shares = append(shares, r.Share)
+	}
+	return shares
+}
+
 // isStrictAncestor returns true if ancestorPath is a proper prefix of childPath,
 // i.e. every component of ancestorPath is a parent of childPath.
 // "/a" is a strict ancestor of "/a/b" but not of "/a" itself or "/ab/c".
@@ -258,14 +283,12 @@ func isStrictAncestor(ancestorPath, childPath string) bool {
 
 // ChildConflictMessage builds a human-readable description of a child conflict
 // for use in error responses. Called by the gateway when force=false and ToDelete is non-empty.
-func ChildConflictMessage(shares []*collaboration.Share) string {
+func ChildConflictMessage(shares []ResolvedShare) string {
 	descs := make([]string, 0, len(shares))
-	for _, s := range shares {
+	for _, resolved := range shares {
+		s := resolved.Share
 		descs = append(descs, fmt.Sprintf("share %s (resource %s/%s)",
 			s.Id.OpaqueId, s.ResourceId.StorageId, s.ResourceId.OpaqueId))
 	}
-	return fmt.Sprintf(
-		"creating this share will delete %d child share(s): %s",
-		len(shares), strings.Join(descs, ", "),
-	)
+	return fmt.Sprintf("creating this share requires the deletion of %d child share(s)", len(shares))
 }

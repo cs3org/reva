@@ -143,7 +143,7 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *svc) createLocalShare(ctx context.Context, gw gateway.GatewayAPIClient, ri *provider.ResourceId, path string, owner *userpb.UserId, resourceType provider.ResourceType, recipientType string, recipientID string, exp *types.Timestamp, requestedPerms *provider.ResourcePermissions) (*collaboration.CreateShareResponse, error) {
+func (s *svc) createLocalShare(ctx context.Context, gw gateway.GatewayAPIClient, ri *provider.ResourceId, path string, owner *userpb.UserId, resourceType provider.ResourceType, recipientType string, recipientID string, exp *types.Timestamp, requestedPerms *provider.ResourcePermissions, force bool) (*collaboration.CreateShareResponse, error) {
 	grantee, err := s.toGrantee(ctx, recipientType, recipientID)
 	if err != nil {
 		return nil, err
@@ -318,11 +318,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 		// If the recipient is a user or a group, we create a local share
 		switch *recipient.LibreGraphRecipientType {
 		case "user", "group":
-<<<<<<< HEAD
-			resp, err := s.createLocalShare(ctx, gw, statRes.Info.Id, path, owner, statRes.Info.Type, *recipient.LibreGraphRecipientType, *recipient.ObjectId, exp, requestedPerms)
-=======
-			resp, err := s.createLocalShare(ctx, gw, storageID, itemID, path, owner, statRes.Info.Type, *recipient.LibreGraphRecipientType, *recipient.ObjectId, exp, requestedPerms, force)
->>>>>>> e44dc51c4 (make `force` param work)
+			resp, err := s.createLocalShare(ctx, gw, statRes.Info.Id, path, owner, statRes.Info.Type, *recipient.LibreGraphRecipientType, *recipient.ObjectId, exp, requestedPerms, force)
 			if err != nil {
 				if conflictErr, ok := err.(*sharehierarchy.HierarchyConflictError); ok {
 					w.Header().Set("Content-Type", "application/json")

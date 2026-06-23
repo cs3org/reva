@@ -20,8 +20,6 @@ package sharehierarchy
 
 import (
 	"encoding/json"
-
-	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 )
 
 // ConflictingShare identifies a share involved in a hierarchy conflict.
@@ -30,6 +28,7 @@ type ConflictingShare struct {
 	ResourceID     string `json:"resource_id,omitempty"`
 	Path           string `json:"path,omitempty"`
 	PermissionType string `json:"permission_type,omitempty"`
+	Sharee         string `json:"sharee,omitempty"`
 }
 
 // HierarchyConflictError is the structured payload returned when a share operation is
@@ -37,8 +36,8 @@ type ConflictingShare struct {
 // Status.Message field so the HTTP layer can decode it and return a 409 with detail.
 type HierarchyConflictError struct {
 	// ErrorType is either "parent_conflict" or "child_conflict".
-	ErrorType         string             `json:"error_type"`
-	Message           string             `json:"message"`
+	ErrorType string `json:"error_type"`
+	Message   string `json:"message"`
 	// CanForce indicates whether the caller may retry with force=true to override the conflict.
 	CanForce          bool               `json:"can_force"`
 	ConflictingShares []ConflictingShare `json:"conflicting_shares,omitempty"`
@@ -47,12 +46,21 @@ type HierarchyConflictError struct {
 func (e *HierarchyConflictError) Error() string { return e.Message }
 
 // NewChildConflictError builds a HierarchyConflictError for a would-delete-children situation.
-func NewChildConflictError(msg string, shares []*collaboration.Share) *HierarchyConflictError {
+func NewChildConflictError(msg string, shares []ResolvedShare) *HierarchyConflictError {
 	cs := make([]ConflictingShare, 0, len(shares))
-	for _, s := range shares {
+	for _, resolved := range shares {
+		s := resolved.Share
+		var sharee string
+		if s.Grantee != nil && s.Grantee.GetUserId() != nil {
+			sharee = s.Grantee.GetUserId().OpaqueId
+		}
+
 		cs = append(cs, ConflictingShare{
-			ID:         s.Id.OpaqueId,
-			ResourceID: s.ResourceId.StorageId + "!" + s.ResourceId.OpaqueId,
+			ID:             s.Id.OpaqueId,
+			ResourceID:     s.ResourceId.StorageId + "!" + s.ResourceId.OpaqueId,
+			Sharee:         sharee,
+			PermissionType: PermLevelFromCS3(s.Permissions.GetPermissions()).String(),
+			Path:           resolved.Path,
 		})
 	}
 	return &HierarchyConflictError{ErrorType: "child_conflict", CanForce: true, Message: msg, ConflictingShares: cs}
