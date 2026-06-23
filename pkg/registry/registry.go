@@ -18,32 +18,58 @@
 
 package registry
 
-// Registry provides with means for dynamically registering services.
+// Registry is the source of truth for where services live: a process registers
+// its services (Add) and resolves peers by name (GetService).
 type Registry interface {
-	// Add registers a Service on the memoryRegistry. Repeated names is allowed, services are distinguished by their metadata.
 	Add(Service) error
-
-	// GetService retrieves a Service and all of its nodes by Service name. It returns []*Service because we can have
-	// multiple versions of the same Service running alongside each others.
 	GetService(string) (Service, error)
+	ListServices() ([]Service, error)
+	Remove(Service) error
+	// Watch streams add/remove events; the memory backend never delivers.
+	Watch() (<-chan Event, error)
 }
 
-// Service defines a service.
+// Service is a named set of nodes.
 type Service interface {
 	Name() string
 	Nodes() []Node
 }
 
-// Node defines nodes on a service.
+// Node is a single instance serving a service.
 type Node interface {
-	// Address where the given node is running.
 	Address() string
-
-	// metadata is used in order to differentiate services implementations. For instance an AuthProvider Service could
-	// have multiple implementations, basic, bearer ..., metadata would be used to select the Service type depending on
-	// its implementation.
-	Metadata() map[string]string
-
-	// ID returns the node ID.
 	ID() string
+	// Metadata carries transport, version, host, pid, state and last_seen, and
+	// distinguishes implementations (e.g. auth basic vs bearer).
+	Metadata() map[string]string
 }
+
+type EventType string
+
+const (
+	EventAdd    EventType = "add"
+	EventRemove EventType = "remove"
+)
+
+// Event is a change to the registry; for EventRemove the Node carries at least
+// the ID.
+type Event struct {
+	Type    EventType
+	Service string
+	Node    Node
+}
+
+// Metadata keys and node states.
+const (
+	MetaState     = "state"
+	MetaLastSeen  = "last_seen"
+	MetaScheme    = "scheme"     // "http" | "https" for HTTP services
+	MetaPrefix    = "prefix"     // HTTP URL path prefix
+	MetaPublicURL = "public_url" // explicit external URL override
+	MetaMountID   = "mount_id"   // storage affinity key (data provider)
+
+	StateReady    = "ready"
+	StateDegraded = "degraded"
+	StateOffline  = "offline"
+	StateDraining = "draining"
+)
