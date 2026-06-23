@@ -20,9 +20,12 @@ package rjobs
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/cs3org/reva/v3/pkg/errtypes"
 )
 
 func TestAllNodesRunOnStart(t *testing.T) {
@@ -160,4 +163,162 @@ func resetRegistry() {
 	defer reg.mu.Unlock()
 	reg.periodic = make(map[string]Periodic)
 	reg.onDemand = make(map[string]NewJob)
+}
+
+// jobFunc adapts a function to the Job interface for tests.
+type jobFunc func(context.Context, Params) (Params, error)
+
+func (f jobFunc) Run(ctx context.Context, p Params) (Params, error) { return f(ctx, p) }
+
+// fakeStatus is an in-memory StatusStore. Like the real store, a Put never
+// clears the cancel intent: only RequestCancel owns it.
+type fakeStatus struct {
+	mu  sync.Mutex
+	rec map[RunID]Status
+}
+
+func newFakeStatus() *fakeStatus { return &fakeStatus{rec: make(map[RunID]Status)} }
+
+func (f *fakeStatus) Put(_ context.Context, s Status) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if cur, ok := f.rec[s.RunID]; ok {
+		s.CancelRequested = cur.CancelRequested
+	}
+	f.rec[s.RunID] = s
+	return nil
+}
+
+func (f *fakeStatus) Get(_ context.Context, id RunID) (Status, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	s, ok := f.rec[id]
+	if !ok {
+		return Status{}, errtypes.NotFound(string(id))
+	}
+	return s, nil
+}
+
+func (f *fakeStatus) RequestCancel(_ context.Context, id RunID) (Status, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	s, ok := f.rec[id]
+	if !ok {
+		return Status{}, errtypes.NotFound(string(id))
+	}
+	if s.State == StateSucceeded || s.State == StateCancelled {
+		return s, nil
+	}
+	s.CancelRequested = true
+	s.State = StateCancelling
+	f.rec[id] = s
+	return s, nil
+}
+
+// List, Reserve and Release are part of the StatusStore interface but are not
+// exercised by the cancellation tests; minimal implementations keep the fake
+// satisfying the interface.
+func (f *fakeStatus) List(context.Context, ListFilter) ([]Status, error) { return nil, nil }
+
+func (f *fakeStatus) Reserve(_ context.Context, s Status, _ string) (Status, bool, error) {
+	if err := f.Put(context.Background(), s); err != nil {
+		return Status{}, false, err
+	}
+	return s, true, nil
+}
+
+func (f *fakeStatus) Release(context.Context, RunID) error { return nil }
+
+func (f *fakeStatus) Close(context.Context) error { return nil }
+
+// oneRunStore hands out exactly one run, then blocks Claim until shutdown. It
+// records whether the run was Completed (acked) or Failed (retried).
+type oneRunStore struct {
+	run       Run
+	claimed   atomic.Bool
+	completed atomic.Bool
+	failed    atomic.Bool
+}
+
+func (s *oneRunStore) Enqueue(_ context.Context, r Run) (RunID, error) { return r.ID, nil }
+
+func (s *oneRunStore) Claim(ctx context.Context) (Run, error) {
+	if s.claimed.CompareAndSwap(false, true) {
+		return s.run, nil
+	}
+	<-ctx.Done()
+	return Run{}, ctx.Err()
+}
+
+func (s *oneRunStore) Complete(context.Context, RunID) error { s.completed.Store(true); return nil }
+func (s *oneRunStore) Fail(context.Context, RunID, time.Duration) error {
+	s.failed.Store(true)
+	return nil
+}
+func (s *oneRunStore) Heartbeat(context.Context, RunID) error { return nil }
+func (s *oneRunStore) HeartbeatInterval() time.Duration       { return 20 * time.Millisecond }
+func (s *oneRunStore) DueScheduled(context.Context, time.Time) ([]ScheduledRun, error) {
+	return nil, nil
+}
+func (s *oneRunStore) RegisterScheduled(context.Context, string, Schedule, time.Time) error {
+	return nil
+}
+func (s *oneRunStore) MarkScheduledRunning(context.Context, string) error  { return nil }
+func (s *oneRunStore) ClearScheduledRunning(context.Context, string) error { return nil }
+func (s *oneRunStore) Close(context.Context) error                         { return nil }
+
+func TestCancelStopsRunningJob(t *testing.T) {
+	resetRegistry()
+
+	started := make(chan struct{})
+	if err := RegisterOnDemand("test.cancelme", func(context.Context, map[string]any) (Job, error) {
+		return jobFunc(func(ctx context.Context, _ Params) (Params, error) {
+			close(started)
+			<-ctx.Done() // cooperative: stop as soon as the run is cancelled
+			return nil, ctx.Err()
+		}), nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	status := newFakeStatus()
+	store := &oneRunStore{run: Run{ID: "run-1", Job: "test.cancelme", Attempt: 1}}
+	_ = status.Put(context.Background(), Status{RunID: "run-1", Job: "test.cancelme", State: StateQueued})
+
+	r, err := NewRunner(context.Background(), Options{Workers: 1, Store: store, Status: status})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Start()
+	defer r.Stop(context.Background())
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("job did not start")
+	}
+
+	if _, err := r.Cancel(context.Background(), "run-1"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(2 * time.Second)
+	for {
+		got, _ := status.Get(context.Background(), "run-1")
+		if got.State == StateCancelled {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("run did not reach cancelled, last state %q", got.State)
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+
+	if !store.completed.Load() {
+		t.Error("a cancelled run must be acked via Complete")
+	}
+	if store.failed.Load() {
+		t.Error("a cancelled run must not be failed/retried")
+	}
 }
