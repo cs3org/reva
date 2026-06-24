@@ -307,6 +307,38 @@ func (r *Runner) enqueueUnique(ctx context.Context, run Run) (RunID, error) {
 	return run.ID, nil
 }
 
+// TriggerNow enqueues an immediate, out-of-band run of a leader-scoped periodic
+// job, on top of its schedule: the regular cadence is left untouched, so this is
+// an extra run, not a reschedule. It respects the job's single-flight guard, so
+// it is rejected with an error if a run of the job is already in flight. Like
+// Enqueue it is in-process; on-demand and all-nodes jobs cannot be triggered.
+func (r *Runner) TriggerNow(ctx context.Context, job string) error {
+	if r.store == nil {
+		return errors.New("rjobs: cannot trigger, no store configured")
+	}
+	if !r.isLeaderJob(job) {
+		return errors.Errorf("rjobs: %q is not a registered leader periodic job", job)
+	}
+
+	acquired, err := r.store.TryMarkScheduledRunning(ctx, job)
+	if err != nil {
+		return err
+	}
+	if !acquired {
+		return errors.Errorf("rjobs: a run of %q is already in flight", job)
+	}
+
+	if _, err := r.store.Enqueue(ctx, Run{Job: job}); err != nil {
+		// release the gate we just took so the job is not stuck marked-running.
+		if cerr := r.store.ClearScheduledRunning(ctx, job); cerr != nil {
+			r.log.Error().Err(cerr).Str("job", job).Msg("rjobs: releasing schedule mark after a failed trigger errored")
+		}
+		return errors.Wrap(err, "rjobs: enqueuing triggered run failed")
+	}
+	r.log.Info().Str("job", job).Msg("rjobs: triggered an immediate run")
+	return nil
+}
+
 // Status returns the current status of a previously enqueued run. It returns
 // an errtypes.NotFound error if the run is unknown.
 func (r *Runner) Status(ctx context.Context, id RunID) (Status, error) {

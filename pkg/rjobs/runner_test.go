@@ -105,7 +105,10 @@ func (stubStore) RegisterScheduled(context.Context, string, Schedule, time.Time)
 }
 func (stubStore) MarkScheduledRunning(context.Context, string) error  { return nil }
 func (stubStore) ClearScheduledRunning(context.Context, string) error { return nil }
-func (stubStore) Close(context.Context) error                         { return nil }
+func (stubStore) TryMarkScheduledRunning(context.Context, string) (bool, error) {
+	return false, nil
+}
+func (stubStore) Close(context.Context) error { return nil }
 
 func TestGuardSkipsOverlap(t *testing.T) {
 	r := &Runner{running: make(map[string]bool)}
@@ -265,7 +268,10 @@ func (s *oneRunStore) RegisterScheduled(context.Context, string, Schedule, time.
 }
 func (s *oneRunStore) MarkScheduledRunning(context.Context, string) error  { return nil }
 func (s *oneRunStore) ClearScheduledRunning(context.Context, string) error { return nil }
-func (s *oneRunStore) Close(context.Context) error                         { return nil }
+func (s *oneRunStore) TryMarkScheduledRunning(context.Context, string) (bool, error) {
+	return false, nil
+}
+func (s *oneRunStore) Close(context.Context) error { return nil }
 
 func TestCancelStopsRunningJob(t *testing.T) {
 	resetRegistry()
@@ -400,5 +406,63 @@ func TestCancelBroadcastStopsRemoteRun(t *testing.T) {
 	}
 	if !store.completed.Load() {
 		t.Error("a broadcast-cancelled run must be acked via Complete")
+	}
+}
+
+// triggerStore records what TriggerNow does: whether it took the single-flight
+// gate and what it enqueued.
+type triggerStore struct {
+	stubStore
+	mu       sync.Mutex
+	acquire  bool
+	enqueued []string
+}
+
+func (s *triggerStore) TryMarkScheduledRunning(context.Context, string) (bool, error) {
+	return s.acquire, nil
+}
+
+func (s *triggerStore) Enqueue(_ context.Context, run Run) (RunID, error) {
+	s.mu.Lock()
+	s.enqueued = append(s.enqueued, run.Job)
+	s.mu.Unlock()
+	return "rid", nil
+}
+
+func TestTriggerNow(t *testing.T) {
+	resetRegistry()
+	if err := RegisterPeriodic(Periodic{
+		Name: "test.cleanup", Schedule: "@every 1h", Scope: ScopeLeader,
+		Run: func(context.Context) error { return nil },
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	store := &triggerStore{acquire: true}
+	r, err := NewRunner(context.Background(), Options{Workers: 1, Store: store, Status: newFakeStatus()})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := r.TriggerNow(context.Background(), "test.cleanup"); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.enqueued) != 1 || store.enqueued[0] != "test.cleanup" {
+		t.Fatalf("expected one enqueue of test.cleanup, got %v", store.enqueued)
+	}
+
+	// With a run already in flight the gate is not acquired: trigger is rejected
+	// and enqueues nothing.
+	store.acquire = false
+	if err := r.TriggerNow(context.Background(), "test.cleanup"); err == nil {
+		t.Error("expected an error triggering a job already in flight")
+	}
+	if len(store.enqueued) != 1 {
+		t.Errorf("a rejected trigger must not enqueue, got %v", store.enqueued)
+	}
+
+	// On-demand and unregistered jobs cannot be triggered.
+	if err := r.TriggerNow(context.Background(), "nope"); err == nil {
+		t.Error("expected an error triggering an unregistered job")
 	}
 }

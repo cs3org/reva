@@ -463,6 +463,36 @@ func (s *store) MarkScheduledRunning(ctx context.Context, job string) error {
 	return s.setRunningSince(job, true)
 }
 
+func (s *store) TryMarkScheduledRunning(ctx context.Context, job string) (bool, error) {
+	entry, err := s.kv.Get(job)
+	if err != nil {
+		if errors.Is(err, nats.ErrKeyNotFound) {
+			return false, errors.Errorf("rjobs: no schedule registered for job %q", job)
+		}
+		return false, errors.Wrap(err, "rjobs: reading schedule state failed")
+	}
+	var st scheduleState
+	if err := json.Unmarshal(entry.Value(), &st); err != nil {
+		return false, errors.Wrap(err, "rjobs: reading schedule state failed")
+	}
+	// Already running, and the mark is still fresh: do not start a second run.
+	if st.RunningSince != nil && time.Since(*st.RunningSince) < runningHold {
+		return false, nil
+	}
+	now := time.Now()
+	st.RunningSince = &now
+	data, err := json.Marshal(st)
+	if err != nil {
+		return false, errors.Wrap(err, "rjobs: marshalling schedule state failed")
+	}
+	// Conditioned on the revision we read, so a concurrent trigger or scheduler
+	// cannot also acquire the gate: the loser's update fails and it backs off.
+	if _, err := s.kv.Update(job, data, entry.Revision()); err != nil {
+		return false, nil
+	}
+	return true, nil
+}
+
 func (s *store) ClearScheduledRunning(ctx context.Context, job string) error {
 	return s.setRunningSince(job, false)
 }

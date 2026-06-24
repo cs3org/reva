@@ -106,6 +106,13 @@ type Store interface {
 	// MarkScheduledRunning records that a leader-scoped periodic job has a run
 	// in flight, so DueScheduled skips it until the run is cleared.
 	MarkScheduledRunning(ctx context.Context, job string) error
+	// TryMarkScheduledRunning marks a leader-scoped periodic job as having a run
+	// in flight, but only if one is not already marked, reporting whether it
+	// acquired the mark. It is the single-flight gate for an out-of-band trigger:
+	// the caller that acquires it may enqueue an immediate run, and
+	// ClearScheduledRunning releases it when the run finishes. It returns an
+	// error if the job has no registered schedule.
+	TryMarkScheduledRunning(ctx context.Context, job string) (bool, error)
 	// ClearScheduledRunning clears the in-flight mark for a leader-scoped
 	// periodic job once its run finishes, letting its schedule resume.
 	ClearScheduledRunning(ctx context.Context, job string) error
