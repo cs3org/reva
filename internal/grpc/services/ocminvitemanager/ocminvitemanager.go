@@ -35,7 +35,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	revaservice "github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
@@ -65,6 +65,7 @@ type config struct {
 }
 
 type service struct {
+	revaservice.Base
 	conf      *config
 	repo      invite.Repository
 	ocmClient *ocmd.OCMClient
@@ -278,7 +279,7 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 }
 
 func (s *service) getUserInfo(ctx context.Context, id *userpb.UserId) (*userpb.User, error) {
-	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySVC))
+	gw, err := s.Clients().Gateway(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -35,7 +35,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -187,7 +187,7 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 		return nil, err
 	}
 
-	appProviderClient, err := pool.GetAppProviderClient(pool.Endpoint(provider.Address))
+	appProviderClient, err := service.AppProviderAt(provider.Address)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling GetAppProviderClient")
 	}
@@ -207,7 +207,7 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 }
 
 func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceInfo, app string) (*registry.ProviderInfo, error) {
-	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
+	c, err := s.Clients().AppRegistry(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting appregistry client")
 		return nil, err

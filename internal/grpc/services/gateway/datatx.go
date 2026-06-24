@@ -23,12 +23,11 @@ import (
 
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
 
 func (s *svc) CreateTransfer(ctx context.Context, req *datatx.CreateTransferRequest) (*datatx.CreateTransferResponse, error) {
-	c, err := pool.GetDataTxClient(pool.Endpoint(s.c.DataTxEndpoint))
+	c, err := s.Clients().DataTx(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetDataTxClient")
 		return &datatx.CreateTransferResponse{
@@ -45,7 +44,7 @@ func (s *svc) CreateTransfer(ctx context.Context, req *datatx.CreateTransferRequ
 }
 
 func (s *svc) GetTransferStatus(ctx context.Context, req *datatx.GetTransferStatusRequest) (*datatx.GetTransferStatusResponse, error) {
-	c, err := pool.GetDataTxClient(pool.Endpoint(s.c.DataTxEndpoint))
+	c, err := s.Clients().DataTx(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetDataTxClient")
 		return &datatx.GetTransferStatusResponse{
@@ -62,7 +61,7 @@ func (s *svc) GetTransferStatus(ctx context.Context, req *datatx.GetTransferStat
 }
 
 func (s *svc) CancelTransfer(ctx context.Context, req *datatx.CancelTransferRequest) (*datatx.CancelTransferResponse, error) {
-	c, err := pool.GetDataTxClient(pool.Endpoint(s.c.DataTxEndpoint))
+	c, err := s.Clients().DataTx(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetDataTxClient")
 		return &datatx.CancelTransferResponse{
@@ -79,7 +78,7 @@ func (s *svc) CancelTransfer(ctx context.Context, req *datatx.CancelTransferRequ
 }
 
 func (s *svc) ListTransfers(ctx context.Context, req *datatx.ListTransfersRequest) (*datatx.ListTransfersResponse, error) {
-	c, err := pool.GetDataTxClient(pool.Endpoint(s.c.DataTxEndpoint))
+	c, err := s.Clients().DataTx(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetDataTxClient")
 		return &datatx.ListTransfersResponse{
@@ -96,7 +95,7 @@ func (s *svc) ListTransfers(ctx context.Context, req *datatx.ListTransfersReques
 }
 
 func (s *svc) RetryTransfer(ctx context.Context, req *datatx.RetryTransferRequest) (*datatx.RetryTransferResponse, error) {
-	c, err := pool.GetDataTxClient(pool.Endpoint(s.c.DataTxEndpoint))
+	c, err := s.Clients().DataTx(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetDataTxClient")
 		return &datatx.RetryTransferResponse{

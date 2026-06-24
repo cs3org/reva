@@ -23,12 +23,11 @@ import (
 
 	permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
 
 func (s *svc) CheckPermission(ctx context.Context, req *permissions.CheckPermissionRequest) (*permissions.CheckPermissionResponse, error) {
-	c, err := pool.GetPermissionsClient(pool.Endpoint(s.c.PermissionsEndpoint))
+	c, err := s.Clients().Permissions(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetPermissionssClient")
 		return &permissions.CheckPermissionResponse{
