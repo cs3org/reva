@@ -151,6 +151,15 @@ func (r *Runner) Start() {
 		return
 	}
 
+	// subscribe to cluster-wide cancel broadcasts so a cancel issued on another
+	// process can stop a run executing here. It is optional: without it cancels
+	// still land via the backstop poll, just not instantly.
+	if bus, ok := r.store.(ControlBus); ok {
+		if err := bus.SubscribeCancel(ctx, r.tripLocal); err != nil {
+			r.log.Error().Err(err).Msg("rjobs: subscribing to cancel broadcasts failed, cancels fall back to the backstop poll")
+		}
+	}
+
 	// register leader-scoped schedules so the scheduler can track them.
 	for _, p := range r.periodic {
 		if p.Scope != ScopeLeader {
@@ -338,8 +347,10 @@ func (r *Runner) Cancel(ctx context.Context, id RunID) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	// Fast path: if the run is executing on this process, stop it now.
-	r.cancelLocal(id)
+	// Fast path: stop it now if it runs here, and broadcast so a worker running
+	// it on another process stops without waiting for the backstop poll.
+	r.tripLocal(CancelSignal{RunID: id})
+	r.broadcastCancel(ctx, CancelSignal{RunID: id})
 	return st, nil
 }
 
@@ -358,17 +369,41 @@ func (r *Runner) deregisterRun(id RunID) {
 	r.cancelsMu.Unlock()
 }
 
-// cancelLocal stops a run if it is executing on this process, reporting whether
-// it was found here. It is the node-local half of a cancel and a no-op when the
-// run is queued or running elsewhere.
-func (r *Runner) cancelLocal(id RunID) bool {
+// tripLocal stops any run matching sig that is executing on this process: a run
+// by id (on-demand) or every in-flight run of a job (periodic). It is the
+// node-local half of a cancel, invoked directly and from the cancel broadcast,
+// and a no-op when no matching run is running here.
+func (r *Runner) tripLocal(sig CancelSignal) {
 	r.cancelsMu.Lock()
 	defer r.cancelsMu.Unlock()
-	h, ok := r.cancels[id]
-	if ok {
-		h.trip()
+	if sig.RunID != "" {
+		if h, ok := r.cancels[sig.RunID]; ok {
+			h.trip()
+		}
+		return
 	}
-	return ok
+	if sig.Job == "" {
+		return
+	}
+	for _, h := range r.cancels {
+		if h.job == sig.Job {
+			h.trip()
+		}
+	}
+}
+
+// broadcastCancel best-effort publishes a cancel signal to the other processes
+// when the store supports it, so a run executing elsewhere stops without waiting
+// for its backstop poll. A failure only falls back to that poll, so it is
+// logged, not returned.
+func (r *Runner) broadcastCancel(ctx context.Context, sig CancelSignal) {
+	bus, ok := r.store.(ControlBus)
+	if !ok {
+		return
+	}
+	if err := bus.PublishCancel(ctx, sig); err != nil {
+		r.log.Warn().Err(err).Msg("rjobs: broadcasting cancel failed; relying on the backstop poll")
+	}
 }
 
 // runLocalTicker drives an all-nodes periodic job on this replica. It never

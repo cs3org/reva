@@ -69,6 +69,9 @@ type store struct {
 	ackWait time.Duration
 	log     zerolog.Logger
 
+	// ctrlSub is the core-NATS subscription for cancel broadcasts, if subscribed.
+	ctrlSub *nats.Subscription
+
 	// inflight tracks the NATS message backing each claimed run, so that
 	// Complete and Fail can ack or nak the right message.
 	mu       sync.Mutex
@@ -135,6 +138,11 @@ func New(ctx context.Context, opts Options) (rjobs.Store, error) {
 func (s *store) streamName() string      { return s.prefix + "-runs" }
 func (s *store) subjectWildcard() string { return s.prefix + ".runs.*" }
 func (s *store) bucketName() string      { return s.prefix + "-schedule" }
+
+// controlSubject carries best-effort cancel broadcasts. It is plain core-NATS
+// pub/sub, not JetStream: a signal reaches the processes connected right now,
+// which is all the fast path needs; the durable cancel intent is the backstop.
+func (s *store) controlSubject() string { return s.prefix + ".control.cancel" }
 
 // subjectFor is the per-job work-queue subject. Runs for a job are published
 // here and only consumers subscribed to this subject can claim them.
@@ -491,7 +499,39 @@ func (s *store) setRunningSince(job string, running bool) error {
 	return nil
 }
 
+// PublishCancel broadcasts a cancel signal to every subscribed process.
+func (s *store) PublishCancel(ctx context.Context, sig rjobs.CancelSignal) error {
+	data, err := json.Marshal(sig)
+	if err != nil {
+		return errors.Wrap(err, "rjobs: marshalling cancel signal failed")
+	}
+	if err := s.nc.Publish(s.controlSubject(), data); err != nil {
+		return errors.Wrap(err, "rjobs: publishing cancel signal failed")
+	}
+	return nil
+}
+
+// SubscribeCancel delivers every cancel broadcast in the cluster to handler.
+func (s *store) SubscribeCancel(ctx context.Context, handler func(rjobs.CancelSignal)) error {
+	sub, err := s.nc.Subscribe(s.controlSubject(), func(msg *nats.Msg) {
+		var sig rjobs.CancelSignal
+		if err := json.Unmarshal(msg.Data, &sig); err != nil {
+			s.log.Error().Err(err).Msg("rjobs: dropping undecodable cancel signal")
+			return
+		}
+		handler(sig)
+	})
+	if err != nil {
+		return errors.Wrap(err, "rjobs: subscribing to cancel signals failed")
+	}
+	s.ctrlSub = sub
+	return nil
+}
+
 func (s *store) Close(ctx context.Context) error {
+	if s.ctrlSub != nil {
+		_ = s.ctrlSub.Drain()
+	}
 	for _, sub := range s.subs {
 		_ = sub.Drain()
 	}

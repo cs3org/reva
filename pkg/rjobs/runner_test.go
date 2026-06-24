@@ -322,3 +322,83 @@ func TestCancelStopsRunningJob(t *testing.T) {
 		t.Error("a cancelled run must not be failed/retried")
 	}
 }
+
+// busStore is a oneRunStore that also implements ControlBus, delivering a
+// published cancel straight to the subscribed handler (loopback), so a test can
+// simulate a cancel issued on another process.
+type busStore struct {
+	oneRunStore
+	mu      sync.Mutex
+	handler func(CancelSignal)
+}
+
+func (s *busStore) PublishCancel(_ context.Context, sig CancelSignal) error {
+	s.mu.Lock()
+	h := s.handler
+	s.mu.Unlock()
+	if h != nil {
+		h(sig)
+	}
+	return nil
+}
+
+func (s *busStore) SubscribeCancel(_ context.Context, handler func(CancelSignal)) error {
+	s.mu.Lock()
+	s.handler = handler
+	s.mu.Unlock()
+	return nil
+}
+
+func TestCancelBroadcastStopsRemoteRun(t *testing.T) {
+	resetRegistry()
+
+	started := make(chan struct{})
+	if err := RegisterOnDemand("test.remote", func(context.Context, map[string]any) (Job, error) {
+		return jobFunc(func(ctx context.Context, _ Params) (Params, error) {
+			close(started)
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}), nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	status := newFakeStatus()
+	store := &busStore{oneRunStore: oneRunStore{run: Run{ID: "run-1", Job: "test.remote", Attempt: 1}}}
+	_ = status.Put(context.Background(), Status{RunID: "run-1", Job: "test.remote", State: StateQueued})
+
+	r, err := NewRunner(context.Background(), Options{Workers: 1, Store: store, Status: status})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Start()
+	defer r.Stop(context.Background())
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("job did not start")
+	}
+
+	// Simulate a cancel issued on another process: it reaches us only via the
+	// bus, not through this runner's Cancel.
+	if err := store.PublishCancel(context.Background(), CancelSignal{RunID: "run-1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(2 * time.Second)
+	for {
+		got, _ := status.Get(context.Background(), "run-1")
+		if got.State == StateCancelled {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("run did not reach cancelled, last state %q", got.State)
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	if !store.completed.Load() {
+		t.Error("a broadcast-cancelled run must be acked via Complete")
+	}
+}

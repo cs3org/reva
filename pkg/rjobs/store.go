@@ -112,3 +112,27 @@ type Store interface {
 	// Close releases the store's resources.
 	Close(ctx context.Context) error
 }
+
+// CancelSignal is a best-effort, cluster-wide notification that a run should be
+// cancelled. Exactly one field is set: RunID targets a single on-demand run;
+// Job targets the in-flight run of a periodic job, which each process matches
+// against the runs it is currently executing.
+type CancelSignal struct {
+	RunID RunID
+	Job   string
+}
+
+// ControlBus is an optional capability of a Store: a best-effort, cluster-wide
+// pub/sub that delivers cancel signals to whichever process is running a given
+// run, without waiting for the durable backstop poll. It is strictly an
+// optimisation over the durable cancel intent: a dropped signal only delays a
+// cancel to the next poll, it never loses it. A Store that does not implement
+// ControlBus still cancels correctly, just not instantly across processes.
+type ControlBus interface {
+	// PublishCancel broadcasts a cancel signal to every subscribed process.
+	PublishCancel(ctx context.Context, sig CancelSignal) error
+	// SubscribeCancel registers handler for every cancel signal published in the
+	// cluster, including by other processes. It returns once the subscription is
+	// active.
+	SubscribeCancel(ctx context.Context, handler func(CancelSignal)) error
+}
