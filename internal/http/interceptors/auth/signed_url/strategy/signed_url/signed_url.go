@@ -19,6 +19,7 @@
 package basic
 
 import (
+	"context"
 	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
@@ -33,7 +34,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth"
 	"github.com/cs3org/reva/v3/pkg/auth/signing"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/pbkdf2"
@@ -45,15 +46,15 @@ func init() {
 
 type Config struct {
 	// PreSignedURL is the config for the pre-signed url interceptor
-	AllowedHTTPMethods   []string `mapstructure:"allowed_http_methods"`
-	Enabled              bool     `mapstructure:"enabled"`
-	SigningKeySecret     string   `mapstructure:"signing_key_secret"`
-	UserProviderEndpoint string   `mapstructure:"userprovidersvc"`
+	AllowedHTTPMethods []string `mapstructure:"allowed_http_methods"`
+	Enabled            bool     `mapstructure:"enabled"`
+	SigningKeySecret   string   `mapstructure:"signing_key_secret"`
 	// Default: one day
 	MaxExpirySeconds int `mapstructure:"max_expiry_seconds" docs:"nil; Default: one day"`
 }
 
 type SignedURLAuthenticator struct {
+	service.Base
 	config *Config
 }
 
@@ -285,12 +286,20 @@ func (m SignedURLAuthenticator) createSignature(url string, signingKey []byte) s
 	return hex.EncodeToString(hash)
 }
 
+func (m *SignedURLAuthenticator) userProviderClient(ctx context.Context) (user.UserAPIClient, error) {
+	c := m.Clients()
+	if c == nil {
+		return nil, errors.New("signed_url: no registry resolver available")
+	}
+	return c.UserProvider(ctx)
+}
+
 // Authenticate implements the authenticator interface to authenticate requests via signed URL auth.
-func (m SignedURLAuthenticator) Authenticate(r *http.Request) (*http.Request, bool) {
+func (m *SignedURLAuthenticator) Authenticate(r *http.Request) (*http.Request, bool) {
 	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Str("authenticator", "signed_url").Str("path", r.URL.Path).Logger()
 
-	client, err := pool.GetUserProviderServiceClient(pool.Endpoint(m.config.UserProviderEndpoint))
+	client, err := m.userProviderClient(ctx)
 	if err != nil {
 		return nil, false
 	}

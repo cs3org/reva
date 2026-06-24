@@ -31,26 +31,28 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+
 	"github.com/cs3org/reva/v3/internal/http/interceptors/auth/credential/registry"
 	signedurlregistry "github.com/cs3org/reva/v3/internal/http/interceptors/auth/signed_url/registry"
 	tokenregistry "github.com/cs3org/reva/v3/internal/http/interceptors/auth/token/registry"
 	tokenwriterregistry "github.com/cs3org/reva/v3/internal/http/interceptors/auth/tokenwriter/registry"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 
-	"github.com/cs3org/reva/v3/pkg/auth"
-	"github.com/cs3org/reva/v3/pkg/auth/scope"
-	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/v3/pkg/rhttp/global"
-	"github.com/cs3org/reva/v3/pkg/sharedconf"
-	"github.com/cs3org/reva/v3/pkg/token"
-	tokenmgr "github.com/cs3org/reva/v3/pkg/token/manager/registry"
-	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/cs3org/reva/v3/pkg/auth"
+	"github.com/cs3org/reva/v3/pkg/auth/scope"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v3/pkg/rhttp/global"
+	"github.com/cs3org/reva/v3/pkg/service"
+	"github.com/cs3org/reva/v3/pkg/sharedconf"
+	"github.com/cs3org/reva/v3/pkg/token"
+	tokenmgr "github.com/cs3org/reva/v3/pkg/token/manager/registry"
+	"github.com/cs3org/reva/v3/pkg/utils"
 )
 
 var userGroupsCache gcache.Cache
@@ -83,7 +85,7 @@ func parseConfig(m map[string]any) (*config, error) {
 	return c, nil
 }
 
-// New returns a new middleware with defined priority.
+// New returns a new auth middleware.
 func New(m map[string]any, unprotected []string) (global.Middleware, error) {
 	conf, err := parseConfig(m)
 	if err != nil {
@@ -176,41 +178,68 @@ func New(m map[string]any, unprotected []string) (global.Middleware, error) {
 		return nil, err
 	}
 
-	chain := func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// OPTION requests need to pass for preflight requests
-			// TODO(labkode): this will break options for auth protected routes.
-			// Maybe running the CORS middleware before auth kicks in is enough.
-			if r.Method == http.MethodOptions {
-				h.ServeHTTP(w, r)
-				return
-			}
-
-			log := appctx.GetLogger(r.Context())
-
-			if utils.Skip(r.URL.Path, unprotected) {
-				log.Info().Interface("unprotected", unprotected).Msg("skipping auth check for: " + r.URL.Path)
-			} else {
-				ctx, err := authenticateUser(w, r, conf, signedUrlChain, tokenStrategyChain, tokenManager, tokenWriter, credChain, false)
-				if err != nil {
-					return
-				}
-				r = r.WithContext(ctx)
-			}
-
-			h.ServeHTTP(w, r)
-		})
+	mw := &middleware{
+		conf:               conf,
+		unprotected:        unprotected,
+		signedURLChain:     signedUrlChain,
+		tokenStrategyChain: tokenStrategyChain,
+		tokenManager:       tokenManager,
+		tokenWriter:        tokenWriter,
+		credChain:          credChain,
 	}
-	return chain, nil
+	return mw.handler, nil
 }
 
-func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, signedURLStrategies []auth.SignedURLStrategy, tokenStrategies []auth.TokenStrategy, tokenManager token.Manager, tokenWriter auth.TokenWriter, credChain map[string]auth.CredentialStrategy, isUnprotectedEndpoint bool) (context.Context, error) {
+type middleware struct {
+	conf               *config
+	unprotected        []string
+	signedURLChain     []auth.SignedURLStrategy
+	tokenStrategyChain []auth.TokenStrategy
+	tokenManager       token.Manager
+	tokenWriter        auth.TokenWriter
+	credChain          map[string]auth.CredentialStrategy
+}
+
+func (m *middleware) handler(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// OPTION requests need to pass for preflight requests
+		// TODO(labkode): this will break options for auth protected routes.
+		// Maybe running the CORS middleware before auth kicks in is enough.
+		if r.Method == http.MethodOptions {
+			h.ServeHTTP(w, r)
+			return
+		}
+
+		log := appctx.GetLogger(r.Context())
+
+		if utils.Skip(r.URL.Path, m.unprotected) {
+			log.Info().Interface("unprotected", m.unprotected).Msg("skipping auth check for: " + r.URL.Path)
+		} else {
+			ctx, err := m.authenticateUser(w, r, false)
+			if err != nil {
+				return
+			}
+			r = r.WithContext(ctx)
+		}
+
+		h.ServeHTTP(w, r)
+	})
+}
+
+func (m *middleware) authenticateUser(w http.ResponseWriter, r *http.Request, isUnprotectedEndpoint bool) (context.Context, error) {
+	conf := m.conf
+	signedURLStrategies := m.signedURLChain
+	tokenStrategies := m.tokenStrategyChain
+	tokenManager := m.tokenManager
+	tokenWriter := m.tokenWriter
+	credChain := m.credChain
+
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	// Add the request user-agent to the ctx
 	ctx = metadata.NewIncomingContext(ctx, metadata.New(map[string]string{appctx.UserAgentHeader: r.UserAgent()}))
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(conf.GatewaySvc))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		logError(isUnprotectedEndpoint, log, err, "error getting the authsvc client", http.StatusUnauthorized, w)
 		return nil, err
