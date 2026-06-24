@@ -138,6 +138,8 @@ address = "0.0.0.0:38001"
 
 [http.services.dataprovider]
 driver = "local"
+mount_id = "localfs"
+public_url = "http://localhost:38001/data"
 
 [http.services.dataprovider.drivers.local]
 root = "./tmp/revalocalstorage/data"

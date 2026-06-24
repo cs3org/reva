@@ -11,6 +11,9 @@ import (
 	typepb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 
 	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/registry"
+	"github.com/cs3org/reva/v3/pkg/registry/memory"
+	svc "github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/storage"
 )
 
@@ -151,22 +154,30 @@ func (f *captureRootMountFS) Shutdown(ctx context.Context) error { return nil }
 
 func newServiceForInitiateUploadTest(t *testing.T, fs storage.FS, expose bool) *service {
 	t.Helper()
-	u, err := url.Parse("http://localhost/data")
-	if err != nil {
-		t.Fatal(err)
-	}
 	xs, err := parseXSTypes(map[string]uint32{"md5": 100})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &service{
-		conf:          &config{ExposeDataServer: expose},
-		storage:       fs,
-		mountPath:     "/",
-		mountID:       "test-mount-id",
-		dataServerURL: u,
-		availableXS:   xs,
+	const mountID = "test-mount-id"
+	s := &service{
+		conf:        &config{ExposeDataServer: expose},
+		storage:     fs,
+		mountPath:   "/",
+		mountID:     mountID,
+		availableXS: xs,
 	}
+	// Install a global resolver over a memory registry holding the paired data
+	// provider, so s.dataServerURL resolves to http://localhost/data.
+	reg := memory.New(nil)
+	_ = reg.Add(registry.NewService("dataprovider", []registry.Node{
+		registry.NewNode("dp1", "localhost", map[string]string{
+			registry.MetaState:     registry.StateReady,
+			registry.MetaMountID:   mountID,
+			registry.MetaPublicURL: "http://localhost/data",
+		}),
+	}))
+	svc.SetGlobal(svc.NewClients(reg))
+	return s
 }
 
 func TestInitiateFileUploadRemapsRootPathForSingleFileWithExposeDataServer(t *testing.T) {

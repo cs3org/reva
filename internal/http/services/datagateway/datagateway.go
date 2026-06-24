@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
+	"github.com/cs3org/reva/v3/pkg/registry"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
@@ -60,6 +61,9 @@ type config struct {
 	TransferSharedSecret string `mapstructure:"transfer_shared_secret"                                  validate:"required"`
 	Timeout              int64  `mapstructure:"timeout"`
 	Insecure             bool   `docs:"false;Whether to skip certificate checks when sending requests." mapstructure:"insecure"`
+	// PublicURL is the externally reachable URL of this data gateway, advertised
+	// in the registry. If empty, consumers reconstruct it from scheme+address+prefix.
+	PublicURL string `mapstructure:"public_url"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -96,6 +100,14 @@ func New(ctx context.Context, m map[string]any) (global.Service, error) {
 	}
 	s.setHandler()
 	return s, nil
+}
+
+// RegistryMetadata advertises the externally reachable URL, if configured.
+func (s *svc) RegistryMetadata() map[string]string {
+	if s.conf.PublicURL == "" {
+		return nil
+	}
+	return map[string]string{registry.MetaPublicURL: s.conf.PublicURL}
 }
 
 // Close performs cleanup.

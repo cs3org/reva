@@ -31,7 +31,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -43,8 +42,8 @@ import (
 	"github.com/cs3org/reva/v3/pkg/plugin"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
+	svc "github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/share/cache"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/spaces"
@@ -71,7 +70,6 @@ type config struct {
 	MountID               string                    `docs:"-;The ID of the mounted file system."                                                                         mapstructure:"mount_id"`
 	Driver                string                    `docs:"localhome;The storage driver to be used."                                                                     mapstructure:"driver"`
 	Drivers               map[string]map[string]any `docs:"url:pkg/storage/fs/localhome/localhome.go"                                                                    mapstructure:"drivers"`
-	DataServerURL         string                    `docs:"http://localhost/data;The URL for the data server."                                                           mapstructure:"data_server_url"`
 	ExposeDataServer      bool                      `docs:"false;Whether to expose data server."                                                                         mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
 	AvailableXS           map[string]uint32         `docs:"nil;List of available checksums."                                                                             mapstructure:"available_checksums"`
 	CustomMimeTypesJSON   string                    `docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types." mapstructure:"custom_mime_types_json"`
@@ -96,15 +94,6 @@ func (c *config) ApplyDefaults() {
 		c.MountID = "00000000-0000-0000-0000-000000000000"
 	}
 
-	if c.DataServerURL == "" {
-		host, err := os.Hostname()
-		if err != nil || host == "" {
-			c.DataServerURL = "http://0.0.0.0:19001/data"
-		} else {
-			c.DataServerURL = fmt.Sprintf("http://%s:19001/data", host)
-		}
-	}
-
 	if c.SpaceInfoCacheDriver == "" {
 		c.SpaceInfoCacheDriver = "memory_space"
 	}
@@ -122,11 +111,24 @@ type FSWithListRegexSuport interface {
 }
 
 type service struct {
+	svc.Base
 	conf               *config
 	storage            storage.FS
 	mountPath, mountID string
-	dataServerURL      *url.URL
 	availableXS        []*provider.ResourceChecksumPriority
+}
+
+// dataServerURL resolves this storage's data provider from the registry (by
+// matching mount_id) and returns its base URL.
+func (s *service) dataServerURL(ctx context.Context) (*url.URL, error) {
+	ep, err := s.Clients().HTTPEndpoint(ctx,
+		svc.ByName("dataprovider"),
+		svc.ByMetadata("mount_id", s.mountID),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return url.Parse(ep.URL())
 }
 
 func (s *service) Close() error {
@@ -198,12 +200,6 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		log.Error().Msgf("the space_depth parameter should be set to at least the depth of the mount_path. For mount_path %s the space_depth should be set to at least %d", mountPath, pathLevels(mountPath))
 	}
 
-	// parse data server url
-	u, err := url.Parse(c.DataServerURL)
-	if err != nil {
-		return nil, err
-	}
-
 	// validate available checksums
 	xsTypes, err := parseXSTypes(c.AvailableXS)
 	if err != nil {
@@ -221,12 +217,11 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 	}
 
 	service := &service{
-		conf:          &c,
-		storage:       fs,
-		mountPath:     mountPath,
-		mountID:       mountID,
-		dataServerURL: u,
-		availableXS:   xsTypes,
+		conf:        &c,
+		storage:     fs,
+		mountPath:   mountPath,
+		mountID:     mountID,
+		availableXS: xsTypes,
 	}
 
 	return service, nil
@@ -433,7 +428,13 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	// For example, https://data-server.example.org/home/docs/myfile.txt
 	// or ownclouds://data-server.example.org/home/docs/myfile.txt
 	log := appctx.GetLogger(ctx)
-	u := *s.dataServerURL
+	du, err := s.dataServerURL(ctx)
+	if err != nil {
+		return &provider.InitiateFileDownloadResponse{
+			Status: status.NewInternal(ctx, err, "error resolving data server"),
+		}, nil
+	}
+	u := *du
 	log.Info().Str("data-server", u.String()).Interface("ref", req.Ref).Msg("file download")
 
 	protocol := &provider.FileDownloadProtocol{Expose: s.conf.ExposeDataServer}
@@ -569,10 +570,16 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		}, nil
 	}
 
+	du, err := s.dataServerURL(ctx)
+	if err != nil {
+		return &provider.InitiateFileUploadResponse{
+			Status: status.NewInternal(ctx, err, "error resolving data server"),
+		}, nil
+	}
 	protocols := make([]*provider.FileUploadProtocol, len(uploadIDs))
 	var i int
 	for protocol, ID := range uploadIDs {
-		u := *s.dataServerURL
+		u := *du
 		u.Path = path.Join(u.Path, protocol, ID)
 		protocols[i] = &provider.FileUploadProtocol{
 			Protocol:           protocol,
@@ -1796,10 +1803,6 @@ func (v descendingMtime) Swap(i, j int) {
 	v[i], v[j] = v[j], v[i]
 }
 
-func (s *service) getClient() (gateway.GatewayAPIClient, error) {
-	return pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
-}
-
 func getCacheManager(c *config) (cache.SpaceInfoCache, error) {
 	factory, err := cachereg.GetCacheFunc[cache.SpaceInfoCache](c.SpaceInfoCacheDriver)
 	if err != nil {
@@ -1809,7 +1812,7 @@ func getCacheManager(c *config) (cache.SpaceInfoCache, error) {
 }
 
 func (s *service) fetchSpace(ctx context.Context, spaceID string) (*provider.StorageSpace, error) {
-	gw, err := s.getGatewayClient()
+	gw, err := svc.Gateway(ctx)
 	log := appctx.GetLogger(ctx)
 
 	request := &provider.ListStorageSpacesRequest{
@@ -1847,6 +1850,3 @@ func (s *service) fetchSpace(ctx context.Context, spaceID string) (*provider.Sto
 	return space, nil
 }
 
-func (s *service) getGatewayClient() (gateway.GatewayAPIClient, error) {
-	return pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
-}
