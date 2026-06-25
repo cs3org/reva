@@ -225,36 +225,54 @@ func (m SignedURLAuthenticator) signatureIsValid(req *http.Request) (err error) 
 }
 
 func (m SignedURLAuthenticator) buildUrlToSign(req *http.Request) string {
-	q := req.URL.Query()
-
-	// We only take into account params required for signing
-	signParameters := make(url.Values)
-	for _, p := range _requiredParamsToSign {
-		signParameters.Add(p, q.Get(p))
-		q.Del(p)
-	}
-
-	// Optional resource-selecting params (e.g. the archiver's path/id/arch_type)
-	// are only signed when present. Add every value so repeated params survive.
-	for _, p := range _optionalParamsToSign {
-		for _, val := range q[p] {
-			signParameters.Add(p, val)
-		}
-		q.Del(p)
-	}
-
-	// Now let's remove any remaining query params that are not part of the URL that is to be signed
-	for qParam := range req.URL.Query() {
-		q.Del(qParam)
-	}
-
 	urlToSign := *req.URL
-	urlToSign.RawQuery = signParameters.Encode()
+	urlToSign.RawQuery = signedRawQuery(req.URL.RawQuery)
 	u := urlToSign.String()
 	if !urlToSign.IsAbs() {
 		u = "https://" + req.Host + u
 	}
 	return u
+}
+
+func signedRawQuery(rawQuery string) string {
+	if rawQuery == "" {
+		return ""
+	}
+
+	signParameters := make([]string, 0)
+	for _, p := range strings.Split(rawQuery, "&") {
+		rawName, _, _ := strings.Cut(p, "=")
+		if parameterIsSigned(rawName) {
+			signParameters = append(signParameters, p)
+		}
+	}
+	return strings.Join(signParameters, "&")
+}
+
+func parameterIsSigned(rawName string) bool {
+	if parameterNameIsSigned(rawName) {
+		return true
+	}
+
+	name, err := url.QueryUnescape(rawName)
+	if err != nil || name == rawName {
+		return false
+	}
+	return parameterNameIsSigned(name)
+}
+
+func parameterNameIsSigned(name string) bool {
+	for _, p := range _requiredParamsToSign {
+		if name == p {
+			return true
+		}
+	}
+	for _, p := range _optionalParamsToSign {
+		if name == p {
+			return true
+		}
+	}
+	return false
 }
 
 func (m SignedURLAuthenticator) createSignature(url string, signingKey []byte) string {
