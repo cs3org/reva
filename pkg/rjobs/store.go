@@ -114,8 +114,19 @@ type Store interface {
 	// error if the job has no registered schedule.
 	TryMarkScheduledRunning(ctx context.Context, job string) (bool, error)
 	// ClearScheduledRunning clears the in-flight mark for a leader-scoped
-	// periodic job once its run finishes, letting its schedule resume.
+	// periodic job once its run finishes, letting its schedule resume. It also
+	// clears any cancel intent recorded by RequestCancelScheduled, so a cancel
+	// can never carry over to the job's next run.
 	ClearScheduledRunning(ctx context.Context, job string) error
+	// RequestCancelScheduled records a cancel intent for a leader-scoped periodic
+	// job's in-flight run, reporting whether a run was in flight to cancel. It
+	// only marks while a run is actually running, and ClearScheduledRunning
+	// clears it, so the intent never leaks to a later run.
+	RequestCancelScheduled(ctx context.Context, job string) (bool, error)
+	// ScheduledCancelRequested reports whether a cancel has been requested for a
+	// leader-scoped periodic job's in-flight run. The worker running the job
+	// polls it as the backstop to the cancel broadcast.
+	ScheduledCancelRequested(ctx context.Context, job string) (bool, error)
 	// Close releases the store's resources.
 	Close(ctx context.Context) error
 }

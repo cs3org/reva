@@ -88,6 +88,10 @@ type scheduleState struct {
 	// when the run finishes, and ignored once older than runningHold so a
 	// crashed worker cannot block the schedule forever.
 	RunningSince *time.Time `json:"running_since,omitempty"`
+	// CancelRequested, when set, asks the worker running this job to stop the
+	// current run. It is set only while a run is in flight and cleared when the
+	// run ends, so it never carries over to a later run.
+	CancelRequested *time.Time `json:"cancel_requested,omitempty"`
 }
 
 // runningHold bounds how long a RunningSince mark is trusted. A legitimate long
@@ -497,6 +501,55 @@ func (s *store) ClearScheduledRunning(ctx context.Context, job string) error {
 	return s.setRunningSince(job, false)
 }
 
+// RequestCancelScheduled records a cancel intent for a job's in-flight run. It
+// only marks when a run is actually running, so the intent can never carry over
+// to a future scheduled run; ClearScheduledRunning clears it when the run ends.
+func (s *store) RequestCancelScheduled(ctx context.Context, job string) (bool, error) {
+	entry, err := s.kv.Get(job)
+	if err != nil {
+		if errors.Is(err, nats.ErrKeyNotFound) {
+			return false, nil
+		}
+		return false, errors.Wrap(err, "rjobs: reading schedule state failed")
+	}
+	var st scheduleState
+	if err := json.Unmarshal(entry.Value(), &st); err != nil {
+		return false, errors.Wrap(err, "rjobs: reading schedule state failed")
+	}
+	if st.RunningSince == nil {
+		return false, nil // nothing in flight to cancel.
+	}
+	now := time.Now()
+	st.CancelRequested = &now
+	data, err := json.Marshal(st)
+	if err != nil {
+		return false, errors.Wrap(err, "rjobs: marshalling schedule state failed")
+	}
+	if _, err := s.kv.Update(job, data, entry.Revision()); err != nil {
+		// lost the race to another writer; report not-cancelled so the caller can
+		// retry rather than assume it took effect.
+		return false, nil
+	}
+	return true, nil
+}
+
+// ScheduledCancelRequested reports whether a cancel is pending for a job's
+// in-flight run.
+func (s *store) ScheduledCancelRequested(ctx context.Context, job string) (bool, error) {
+	entry, err := s.kv.Get(job)
+	if err != nil {
+		if errors.Is(err, nats.ErrKeyNotFound) {
+			return false, nil
+		}
+		return false, errors.Wrap(err, "rjobs: reading schedule state failed")
+	}
+	var st scheduleState
+	if err := json.Unmarshal(entry.Value(), &st); err != nil {
+		return false, errors.Wrap(err, "rjobs: reading schedule state failed")
+	}
+	return st.CancelRequested != nil, nil
+}
+
 // setRunningSince sets or clears the RunningSince mark on a job's schedule
 // entry, conditioned on the revision so it composes with the scheduler.
 func (s *store) setRunningSince(job string, running bool) error {
@@ -516,6 +569,9 @@ func (s *store) setRunningSince(job string, running bool) error {
 		st.RunningSince = &now
 	} else {
 		st.RunningSince = nil
+		// a finished run clears any cancel intent, so it cannot leak into the
+		// job's next scheduled run.
+		st.CancelRequested = nil
 	}
 	data, err := json.Marshal(st)
 	if err != nil {

@@ -108,6 +108,12 @@ func (stubStore) ClearScheduledRunning(context.Context, string) error { return n
 func (stubStore) TryMarkScheduledRunning(context.Context, string) (bool, error) {
 	return false, nil
 }
+func (stubStore) RequestCancelScheduled(context.Context, string) (bool, error) {
+	return false, nil
+}
+func (stubStore) ScheduledCancelRequested(context.Context, string) (bool, error) {
+	return false, nil
+}
 func (stubStore) Close(context.Context) error { return nil }
 
 func TestGuardSkipsOverlap(t *testing.T) {
@@ -269,6 +275,12 @@ func (s *oneRunStore) RegisterScheduled(context.Context, string, Schedule, time.
 func (s *oneRunStore) MarkScheduledRunning(context.Context, string) error  { return nil }
 func (s *oneRunStore) ClearScheduledRunning(context.Context, string) error { return nil }
 func (s *oneRunStore) TryMarkScheduledRunning(context.Context, string) (bool, error) {
+	return false, nil
+}
+func (s *oneRunStore) RequestCancelScheduled(context.Context, string) (bool, error) {
+	return false, nil
+}
+func (s *oneRunStore) ScheduledCancelRequested(context.Context, string) (bool, error) {
 	return false, nil
 }
 func (s *oneRunStore) Close(context.Context) error { return nil }
@@ -464,5 +476,128 @@ func TestTriggerNow(t *testing.T) {
 	// On-demand and unregistered jobs cannot be triggered.
 	if err := r.TriggerNow(context.Background(), "nope"); err == nil {
 		t.Error("expected an error triggering an unregistered job")
+	}
+}
+
+// periodicStore delivers one leader-periodic run and tracks the schedule's
+// in-flight and cancel state by job name, like the real KV-backed store.
+type periodicStore struct {
+	run       Run
+	claimed   atomic.Bool
+	completed atomic.Bool
+	mu        sync.Mutex
+	running   bool
+	cancelReq bool
+}
+
+func (s *periodicStore) Enqueue(_ context.Context, r Run) (RunID, error) { return r.ID, nil }
+
+func (s *periodicStore) Claim(ctx context.Context) (Run, error) {
+	if s.claimed.CompareAndSwap(false, true) {
+		s.mu.Lock()
+		s.running = true
+		s.mu.Unlock()
+		return s.run, nil
+	}
+	<-ctx.Done()
+	return Run{}, ctx.Err()
+}
+
+func (s *periodicStore) Complete(context.Context, RunID) error            { s.completed.Store(true); return nil }
+func (s *periodicStore) Fail(context.Context, RunID, time.Duration) error { return nil }
+func (s *periodicStore) Heartbeat(context.Context, RunID) error           { return nil }
+func (s *periodicStore) HeartbeatInterval() time.Duration                 { return 20 * time.Millisecond }
+func (s *periodicStore) DueScheduled(context.Context, time.Time) ([]ScheduledRun, error) {
+	return nil, nil
+}
+func (s *periodicStore) RegisterScheduled(context.Context, string, Schedule, time.Time) error {
+	return nil
+}
+func (s *periodicStore) MarkScheduledRunning(context.Context, string) error { return nil }
+func (s *periodicStore) TryMarkScheduledRunning(context.Context, string) (bool, error) {
+	return false, nil
+}
+func (s *periodicStore) ClearScheduledRunning(context.Context, string) error {
+	s.mu.Lock()
+	s.running = false
+	s.cancelReq = false
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *periodicStore) RequestCancelScheduled(context.Context, string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.running {
+		return false, nil
+	}
+	s.cancelReq = true
+	return true, nil
+}
+
+func (s *periodicStore) ScheduledCancelRequested(context.Context, string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cancelReq, nil
+}
+
+func (s *periodicStore) inFlight() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.running
+}
+
+func (s *periodicStore) Close(context.Context) error { return nil }
+
+func TestCancelPeriodicStopsInFlightRun(t *testing.T) {
+	resetRegistry()
+
+	started := make(chan struct{})
+	if err := RegisterPeriodic(Periodic{
+		Name: "test.periodic", Schedule: "@every 1h", Scope: ScopeLeader,
+		Run: func(ctx context.Context) error {
+			close(started)
+			<-ctx.Done() // cooperative: stop when the run is cancelled
+			return ctx.Err()
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	store := &periodicStore{run: Run{ID: "run-1", Job: "test.periodic", Attempt: 1}}
+	r, err := NewRunner(context.Background(), Options{Workers: 1, Store: store, Status: newFakeStatus()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Start()
+	defer r.Stop(context.Background())
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("periodic job did not start")
+	}
+
+	if err := r.CancelPeriodic(context.Background(), "test.periodic"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait until the run has fully wound down: the in-flight mark is cleared by
+	// the last deferred step of execRun, so this also implies the run was acked.
+	deadline := time.After(2 * time.Second)
+	for store.inFlight() {
+		select {
+		case <-deadline:
+			t.Fatal("cancelled periodic run did not wind down")
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	if !store.completed.Load() {
+		t.Fatal("cancelled periodic run was not acked via Complete")
+	}
+
+	// With nothing in flight, a second cancel is an error, not a silent no-op.
+	if err := r.CancelPeriodic(context.Background(), "test.periodic"); err == nil {
+		t.Error("expected an error cancelling a job with no run in flight")
 	}
 }

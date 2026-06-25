@@ -386,6 +386,35 @@ func (r *Runner) Cancel(ctx context.Context, id RunID) (Status, error) {
 	return st, nil
 }
 
+// CancelPeriodic requests cancellation of the in-flight run of a leader-scoped
+// periodic job, addressed by job name (a leader job has at most one run in
+// flight). Like Cancel it is cooperative and asynchronous. The schedule itself
+// is untouched, so the job keeps firing on its normal cadence; this stops only
+// the current run. It returns an error if the job is not a registered leader
+// job or if no run of it is currently in flight.
+func (r *Runner) CancelPeriodic(ctx context.Context, job string) error {
+	if r.store == nil {
+		return errors.New("rjobs: cannot cancel, no store configured")
+	}
+	if !r.isLeaderJob(job) {
+		return errors.Errorf("rjobs: %q is not a registered leader periodic job", job)
+	}
+
+	running, err := r.store.RequestCancelScheduled(ctx, job)
+	if err != nil {
+		return err
+	}
+	if !running {
+		return errors.Errorf("rjobs: no run of %q is currently in flight", job)
+	}
+
+	// Fast path: stop it here if it runs on this process, and broadcast to the
+	// process running it otherwise.
+	r.tripLocal(CancelSignal{Job: job})
+	r.broadcastCancel(ctx, CancelSignal{Job: job})
+	return nil
+}
+
 // registerRun records a run's cancellation handle for the duration of its
 // execution on this process.
 func (r *Runner) registerRun(id RunID, h *runHandle) {
@@ -602,7 +631,13 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 // driven separately through the schedule store.
 func (r *Runner) cancelRequested(ctx context.Context, run Run) bool {
 	if _, ok := r.lookupPeriodic(run.Job); ok {
-		return false
+		// Periodic runs are not status-tracked; their cancel intent lives in the
+		// schedule store, keyed by job name.
+		req, err := r.store.ScheduledCancelRequested(ctx, run.Job)
+		if err != nil {
+			return false
+		}
+		return req
 	}
 	st, err := r.status.Get(ctx, run.ID)
 	if err != nil {
