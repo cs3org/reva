@@ -163,7 +163,7 @@ Use the `RunID` to read a single run back:
 
 ```go
 st, err := rjobs.Default().Status(ctx, runID)
-// st.State is queued | running | succeeded | failed
+// st.State is queued | running | succeeded | failed | cancelling | cancelled
 // st.Result holds the payload the job returned on success
 // st.LastError holds the error of the last failed attempt
 ```
@@ -185,6 +185,52 @@ runs, err := rjobs.Default().ListByOwner(ctx, username, rjobs.ListFilter{
     Limit:  50,
 })
 ```
+
+### Cancelling a run
+
+Cancel a run by its `RunID`. It works whether the run is still queued or already
+running, and on whichever process is running it:
+
+```go
+st, err := rjobs.Default().Cancel(ctx, runID)
+// st.State is cancelling until the run actually stops, then cancelled.
+```
+
+Cancellation is **cooperative and asynchronous**: the framework cancels the
+`context.Context` passed to the job, and the job has to observe it and return —
+which a job that already respects its context for shutdown does for free.
+
+```go
+func (j *exportJob) Run(ctx context.Context, p rjobs.Params) (rjobs.Params, error) {
+    rows, err := j.db.QueryContext(ctx, "...") // returns promptly on cancel
+    // ...or, in a long CPU-bound loop, check between chunks:
+    if err := ctx.Err(); err != nil {
+        return nil, err
+    }
+}
+```
+
+A job that ignores its context runs to completion and is only then marked
+cancelled. Unlike `failed`, `cancelled` is **terminal**: the run is acked and
+never retried. Cancelling a finished run is a no-op.
+
+### Cancelling or triggering a scheduled job
+
+A `ScopeLeader` periodic job is cancelled or triggered by **name** (an on-demand
+job is "triggered" simply by enqueueing it; an all-nodes job is a pure local
+ticker on every process, so it is neither):
+
+```go
+// stop the run in flight right now; the schedule keeps firing as usual.
+err := rjobs.Default().CancelPeriodic(ctx, "mycomponent.cleanup")
+
+// run an extra execution immediately, on top of the regular cadence.
+err = rjobs.Default().TriggerNow(ctx, "mycomponent.cleanup")
+```
+
+`TriggerNow` respects the job's single-flight guard, so it is rejected if a run
+is already in flight, and it leaves the schedule's next-fire untouched: it is an
+extra run, not a reschedule. Like `Enqueue`, all of these are in-process today.
 
 ## Configuration
 
