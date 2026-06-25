@@ -40,9 +40,8 @@ import (
 	"github.com/cs3org/reva/v3/pkg/projects/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/rgrpc"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	revaservice "github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/share/cache"
-	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v3/pkg/utils"
@@ -86,7 +85,6 @@ func (c *config) ApplyDefaults() {
 type service struct {
 	c                    *config
 	projects             projects.Catalogue
-	gw                   gateway.GatewayAPIClient
 	resourceInfoCache    cache.ResourceInfoCache
 	resourceInfoCacheTTL time.Duration
 	timeoutSkipSpaces    time.Duration
@@ -102,15 +100,9 @@ func New(ctx context.Context, m map[string]any) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(sharedconf.GetGatewaySVC("")))
-	if err != nil {
-		return nil, err
-	}
-
 	svc := service{
 		c:        &c,
 		projects: s,
-		gw:       client,
 	}
 
 	ricache, err := getCacheManager(&c)
@@ -317,6 +309,11 @@ func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpa
 	log := appctx.GetLogger(ctx)
 	// Add quota
 
+	gw, err := revaservice.Gateway(ctx)
+	if err != nil {
+		return err
+	}
+
 	ownerCtx := ctx
 	if proj.Owner != nil && proj.Owner.Id.OpaqueId != "root" {
 		// To get the quota for a project, we cannot do the request
@@ -330,7 +327,7 @@ func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpa
 		// but we need to keep it here until we migrate all of the old
 		// project quota nodes
 		// See CERNBOX-3995
-		authRes, err := s.gw.Authenticate(ctx, &gateway.AuthenticateRequest{
+		authRes, err := gw.Authenticate(ctx, &gateway.AuthenticateRequest{
 			Type:         "machine",
 			ClientId:     proj.Owner.Id.OpaqueId,
 			ClientSecret: s.c.MachineSecret,
@@ -352,7 +349,7 @@ func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpa
 	}
 
 	log.Debug().Msgf("Fetching quota for project %s", proj.Name)
-	quota, err := s.gw.GetQuota(ownerCtx, &gateway.GetQuotaRequest{
+	quota, err := gw.GetQuota(ownerCtx, &gateway.GetQuotaRequest{
 		Ref: &provider.Reference{
 			Path: proj.RootInfo.Path,
 		},
@@ -371,7 +368,7 @@ func (s *service) decorateProject(ctx context.Context, proj *provider.StorageSpa
 	if res, err := s.resourceInfoCache.Get(proj.RootInfo.Path); err == nil && res != nil {
 		resourceInfo = res
 	} else {
-		statRes, err := s.gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
+		statRes, err := gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
 			Path: proj.RootInfo.Path,
 		}})
 		if err != nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
@@ -390,8 +387,13 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 		return nil, nil // lightweight and federated accounts are not eligible for a user space
 	}
 
+	gw, err := revaservice.Gateway(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	home := templates.WithUser(user, s.c.UserSpace) // TODO: we can use gw.GetHome() call
-	stat, err := s.gw.Stat(ctx, &provider.StatRequest{
+	stat, err := gw.Stat(ctx, &provider.StatRequest{
 		Ref: &provider.Reference{
 			Path: home,
 		},
@@ -403,7 +405,7 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 		return nil, fmt.Errorf("failed to stat %s: got status %s with message: %s", home, stat.Status.GetCode().String(), stat.Status.GetMessage())
 	}
 
-	quota, err := s.gw.GetQuota(ctx, &gateway.GetQuotaRequest{
+	quota, err := gw.GetQuota(ctx, &gateway.GetQuotaRequest{
 		Ref: &provider.Reference{
 			Path: home,
 		},
@@ -437,6 +439,12 @@ func (s *service) userSpace(ctx context.Context, user *userpb.User) (*provider.S
 
 func (s *service) getAllPublicSpaces(ctx context.Context) ([]*provider.StorageSpace, error) {
 	log := appctx.GetLogger(ctx)
+
+	gw, err := revaservice.Gateway(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	publicSpaces := make([]*provider.StorageSpace, 0)
 	for spaceName, content := range s.c.PublicSpaces {
 		path, ok := content["path"]
@@ -449,7 +457,7 @@ func (s *service) getAllPublicSpaces(ctx context.Context) ([]*provider.StorageSp
 		if res, err := s.resourceInfoCache.Get(path); err == nil && res != nil {
 			resourceInfo = res
 		} else {
-			statRes, err := s.gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
+			statRes, err := gw.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
 				Path: path,
 			}})
 			if err != nil || statRes == nil || statRes.Status == nil || statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
