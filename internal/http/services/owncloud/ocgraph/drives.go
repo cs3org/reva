@@ -163,13 +163,19 @@ func generateCs3StorageSpaceFilters(request *godata.GoDataRequest) ([]*provider.
 
 func (s *svc) cs3StorageSpaceToDrive(ctx context.Context, user *userpb.User, space *provider.StorageSpace) *libregraph.Drive {
 	log := appctx.GetLogger(ctx)
+	if space == nil {
+		return nil
+	}
 
 	drive := &libregraph.Drive{
-		DriveAlias: libregraph.PtrString(space.RootInfo.Path[1:]),
-		Id:         libregraph.PtrString(space.Id.OpaqueId),
-		Name:       space.Name,
-		DriveType:  libregraph.PtrString(space.SpaceType),
-		Special:    []libregraph.DriveItem{},
+		Id:        libregraph.PtrString(space.Id.OpaqueId),
+		Name:      space.Name,
+		DriveType: libregraph.PtrString(space.SpaceType),
+		Special:   []libregraph.DriveItem{},
+	}
+
+	if space.RootInfo != nil {
+		drive.DriveAlias = libregraph.PtrString(space.RootInfo.Path[1:])
 	}
 
 	drive.Root = &libregraph.DriveItem{}
@@ -187,8 +193,10 @@ func (s *svc) cs3StorageSpaceToDrive(ctx context.Context, user *userpb.User, spa
 				if err == nil && res.Status.Code == rpcv1beta1.Code_CODE_OK {
 					item := s.ResourceInfoToDriveItem(res.Info, "readme")
 					drive.Special = append(drive.Special, item)
+				} else if err != nil {
+					log.Error().Err(err).Any("spaceid", space.Id).Msg("Failed to stat space README")
 				} else {
-					log.Error().Err(err).Str("spaceid", space.Id.OpaqueId).Any("status", res.Status).Msg("Failed to stat space README")
+					log.Error().Any("status", res.Status).Msg("Failed to stat space README")
 				}
 			}
 			if space.ThumbnailId != "" {
@@ -199,8 +207,10 @@ func (s *svc) cs3StorageSpaceToDrive(ctx context.Context, user *userpb.User, spa
 				})
 				if err == nil && res.Status.Code == rpcv1beta1.Code_CODE_OK {
 					drive.Special = append(drive.Special, s.ResourceInfoToDriveItem(res.Info, "image"))
+				} else if err != nil {
+					log.Error().Err(err).Any("spaceid", space.Id).Msg("Failed to stat space thumbnail")
 				} else {
-					log.Error().Err(err).Str("spaceid", space.Id.OpaqueId).Any("status", res.Status).Msg("Failed to stat space thumbnail")
+					log.Error().Any("status", res.Status).Msg("Failed to stat space thumbnail")
 				}
 			}
 		} else {

@@ -481,7 +481,6 @@ func checkPreconditions(w http.ResponseWriter, r *http.Request, log zerolog.Logg
 		err := handleMacOSFinder(w, r)
 		if err != nil {
 			log.Debug().Err(err).Msg("error handling Mac OS corner-case")
-			w.WriteHeader(http.StatusInternalServerError)
 			return false
 		}
 	}
