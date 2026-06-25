@@ -52,7 +52,7 @@ func ocmDiscoveryServer(t *testing.T, proto, resType string) *httptest.Server {
 			ResourceTypes: []wellknown.ResourceTypes{
 				{
 					Name: resType,
-					Protocols: map[string]interface{}{
+					Protocols: map[string]any{
 						proto: "/remote.php/dav/ocm",
 					},
 				},
@@ -102,16 +102,15 @@ func TestCreateShareReturnsServerErrorForNonOKCreateStatus(t *testing.T) {
 	// so that discoverOcmResourceTypes calls it instead of the real internet.
 	senderAddr := disco.Listener.Addr().String() // e.g. "127.0.0.1:54321"
 
-	h := &sharesHandler{
-		gatewayClient: &sharesMockGW{
-			createResp: &ocmincoming.CreateOCMIncomingShareResponse{
-				Status: &rpc.Status{
-					Code:    rpc.Code_CODE_INTERNAL,
-					Message: "store failed",
-				},
+	stampGateway(&sharesMockGW{
+		createResp: &ocmincoming.CreateOCMIncomingShareResponse{
+			Status: &rpc.Status{
+				Code:    rpc.Code_CODE_INTERNAL,
+				Message: "store failed",
 			},
 		},
-	}
+	})
+	h := &sharesHandler{}
 
 	body, _ := json.Marshal(map[string]any{
 		"shareWith":    "marie@local.example.org",

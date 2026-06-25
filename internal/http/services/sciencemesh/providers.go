@@ -24,24 +24,15 @@ import (
 	"net/http"
 	"strings"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v3/internal/http/services/reqres"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 )
 
-type providersHandler struct {
-	gatewayClient gateway.GatewayAPIClient
-}
+type providersHandler struct{}
 
 func (h *providersHandler) init(c *config) error {
-	var err error
-	h.gatewayClient, err = pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -55,7 +46,13 @@ func (h *providersHandler) ListProviders(w http.ResponseWriter, r *http.Request)
 	ctx := r.Context()
 	term := strings.ToLower(r.URL.Query().Get("search"))
 
-	listRes, err := h.gatewayClient.ListAllProviders(ctx, &providerpb.ListAllProvidersRequest{})
+	gatewayClient, err := service.Gateway(ctx)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error getting gateway client", err)
+		return
+	}
+
+	listRes, err := gatewayClient.ListAllProviders(ctx, &providerpb.ListAllProvidersRequest{})
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error listing all providers", err)
 		return

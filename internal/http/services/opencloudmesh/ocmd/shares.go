@@ -30,7 +30,6 @@ import (
 	"strings"
 	"time"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/pkg/errors"
 
@@ -43,7 +42,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/reqres"
 	"github.com/cs3org/reva/v3/internal/http/services/wellknown"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/go-playground/validator/v10"
 	"github.com/studio-b12/gowebdav"
@@ -52,16 +51,10 @@ import (
 var validate = validator.New()
 
 type sharesHandler struct {
-	gatewayClient              gateway.GatewayAPIClient
 	exposeRecipientDisplayName bool
 }
 
 func (h *sharesHandler) init(c *config) error {
-	var err error
-	h.gatewayClient, err = pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
-	if err != nil {
-		return err
-	}
 	h.exposeRecipientDisplayName = c.ExposeRecipientDisplayName
 	return nil
 }
@@ -108,7 +101,13 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 	}
-	providerAllowedResp, err := h.gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
+	gatewayClient, err := service.Gateway(ctx)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error getting gateway client", err)
+		return
+	}
+
+	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
 		Provider: &providerInfo,
 	})
 	if err != nil {
@@ -126,7 +125,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userRes, err := h.gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
+	userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
 		UserId: &userpb.UserId{OpaqueId: shareWith.OpaqueId}, SkipFetchingUserGroups: true,
 	})
 	if err != nil {
@@ -176,7 +175,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Info().Str("resource_id", req.ProviderID).Str("sender", req.Sender).Str("resource_type", req.ResourceType).Msg("CreateOCMIncomingShare payload")
-	createShareResp, err := h.gatewayClient.CreateOCMIncomingShare(ctx, createShareReq)
+	createShareResp, err := gatewayClient.CreateOCMIncomingShare(ctx, createShareReq)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error creating ocm share", err)
 		return

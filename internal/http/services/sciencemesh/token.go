@@ -25,7 +25,6 @@ import (
 	"mime"
 	"net/http"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
@@ -33,13 +32,12 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/reqres"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/smtpclient"
 	"github.com/cs3org/reva/v3/pkg/utils/list"
 )
 
 type tokenHandler struct {
-	gatewayClient    gateway.GatewayAPIClient
 	smtpCredentials  *smtpclient.SMTPCredentials
 	meshDirectoryURL string
 	providerDomain   string
@@ -48,12 +46,6 @@ type tokenHandler struct {
 }
 
 func (h *tokenHandler) init(c *config) error {
-	var err error
-	h.gatewayClient, err = pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
-	if err != nil {
-		return err
-	}
-
 	if c.SMTPCredentials != nil {
 		h.smtpCredentials = smtpclient.NewSMTPCredentials(c.SMTPCredentials)
 	}
@@ -85,8 +77,14 @@ type token struct {
 func (h *tokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	gatewayClient, err := service.Gateway(ctx)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error getting gateway client", err)
+		return
+	}
+
 	query := r.URL.Query()
-	token, err := h.gatewayClient.GenerateInviteToken(ctx, &invitepb.GenerateInviteTokenRequest{
+	token, err := gatewayClient.GenerateInviteToken(ctx, &invitepb.GenerateInviteTokenRequest{
 		Description: query.Get("description"),
 	})
 	if err != nil {
@@ -152,7 +150,13 @@ func (h *tokenHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	providerInfo, err := h.gatewayClient.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
+	gatewayClient, err := service.Gateway(ctx)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error getting gateway client", err)
+		return
+	}
+
+	providerInfo, err := gatewayClient.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
 		Domain: req.ProviderDomain,
 	})
 	if err != nil {
@@ -170,7 +174,7 @@ func (h *tokenHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		},
 		OriginSystemProvider: providerInfo.ProviderInfo,
 	}
-	forwardInviteResponse, err := h.gatewayClient.ForwardInvite(ctx, forwardInviteReq)
+	forwardInviteResponse, err := gatewayClient.ForwardInvite(ctx, forwardInviteReq)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error sending a grpc forward invite request", err)
 		return
@@ -224,7 +228,13 @@ type remoteUser struct {
 func (h *tokenHandler) FindAccepted(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	res, err := h.gatewayClient.FindAcceptedUsers(ctx, &invitepb.FindAcceptedUsersRequest{})
+	gatewayClient, err := service.Gateway(ctx)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error getting gateway client", err)
+		return
+	}
+
+	res, err := gatewayClient.FindAcceptedUsers(ctx, &invitepb.FindAcceptedUsersRequest{})
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error sending a grpc find accepted users request", err)
 		return
@@ -258,7 +268,13 @@ func (h *tokenHandler) DeleteAccepted(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := h.gatewayClient.DeleteAcceptedUser(ctx, &invitepb.DeleteAcceptedUserRequest{
+	gatewayClient, err := service.Gateway(ctx)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error getting gateway client", err)
+		return
+	}
+
+	res, err := gatewayClient.DeleteAcceptedUser(ctx, &invitepb.DeleteAcceptedUserRequest{
 		RemoteUserId: &userpb.UserId{
 			Idp:      req.Idp,
 			OpaqueId: req.UserID,
@@ -297,7 +313,13 @@ func getDeleteAcceptedRequest(r *http.Request) (*deleteAcceptedRequest, error) {
 func (h *tokenHandler) ListInvite(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	res, err := h.gatewayClient.ListInviteTokens(ctx, &invitepb.ListInviteTokensRequest{})
+	gatewayClient, err := service.Gateway(ctx)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error getting gateway client", err)
+		return
+	}
+
+	res, err := gatewayClient.ListInviteTokens(ctx, &invitepb.ListInviteTokensRequest{})
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error listing tokens", err)
 		return

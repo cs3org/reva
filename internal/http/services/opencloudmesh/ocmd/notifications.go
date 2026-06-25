@@ -23,25 +23,15 @@ import (
 	"mime"
 	"net/http"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-
 	"github.com/cs3org/reva/v3/internal/http/services/reqres"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 )
 
 // var validate = validator.New()
 
-type notifHandler struct {
-	gatewayClient gateway.GatewayAPIClient
-}
+type notifHandler struct{}
 
 func (h *notifHandler) init(c *config) error {
-	var err error
-	h.gatewayClient, err = pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
