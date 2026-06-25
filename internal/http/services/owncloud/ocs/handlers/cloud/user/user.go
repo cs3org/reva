@@ -35,7 +35,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth/signing"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 )
 
 // The Handler renders the user endpoint.
@@ -120,7 +120,7 @@ func isValidTime(check time.Time) bool {
 }
 
 func (h *Handler) getLanguage(ctx context.Context) string {
-	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		return ""
 	}
@@ -163,7 +163,7 @@ func (h *Handler) UpdateSelf(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) updateLanguage(ctx context.Context, lang string) error {
-	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		return err
 	}

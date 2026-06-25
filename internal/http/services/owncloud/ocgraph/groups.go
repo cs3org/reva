@@ -33,10 +33,11 @@ import (
 	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"github.com/pkg/errors"
+
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/service"
 )
 
 type GroupSelectableProperty string
@@ -63,7 +64,7 @@ func (s *svc) listGroups(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting gateway client")
 		handleError(ctx, err, w)
@@ -120,7 +121,7 @@ func (s *svc) listGroups(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *svc) getGroupInfo(ctx context.Context, id *groupv1beta1.GroupId) (*groupv1beta1.Group, error) {
-	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, err
 	}

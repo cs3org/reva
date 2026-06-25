@@ -29,23 +29,24 @@ import (
 	"strings"
 	"time"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageProvider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/myofficefiles"
 	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/cs3org/reva/v3/pkg/utils"
 
+	"github.com/pkg/errors"
+
 	"github.com/cs3org/reva/v3/pkg/httpclient"
 	"github.com/cs3org/reva/v3/pkg/notification/notificationhelper"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rhttp/global"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
-	"github.com/pkg/errors"
 )
 
 type ctxKey int
@@ -236,8 +237,8 @@ func (s *svc) Handler() http.Handler {
 		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
 		switch head {
 		case "s":
-			if strings.HasSuffix(r.URL.Path, "/download") {
-				r.URL.Path = strings.TrimSuffix(r.URL.Path, "/download")
+			if before, ok := strings.CutSuffix(r.URL.Path, "/download"); ok {
+				r.URL.Path = before
 				s.handleLegacyPublicLinkDownload(w, r)
 				return
 			}
@@ -296,10 +297,6 @@ func (s *svc) Handler() http.Handler {
 		log.Warn().Msg("resource not found")
 		w.WriteHeader(http.StatusNotFound)
 	})
-}
-
-func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
-	return pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
 }
 
 func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, requestPath string) string {
@@ -376,17 +373,17 @@ func extractDestination(r *http.Request, ns string) (string, error) {
 // replaceAllStringSubmatchFunc is taken from 'Go: Replace String with Regular Expression Callback'
 // see: https://elliotchance.medium.com/go-replace-string-with-regular-expression-callback-f89948bad0bb
 func replaceAllStringSubmatchFunc(re *regexp.Regexp, str string, repl func([]string) string) string {
-	result := ""
+	var result strings.Builder
 	lastIndex := 0
 	for _, v := range re.FindAllStringSubmatchIndex(str, -1) {
 		groups := []string{}
 		for i := 0; i < len(v); i += 2 {
 			groups = append(groups, str[v[i]:v[i+1]])
 		}
-		result += str[lastIndex:v[0]] + repl(groups)
+		result.WriteString(str[lastIndex:v[0]] + repl(groups))
 		lastIndex = v[1]
 	}
-	return result + str[lastIndex:]
+	return result.String() + str[lastIndex:]
 }
 
 var hrefre = regexp.MustCompile(`([^A-Za-z0-9_\-.~()/:@!$])`)
@@ -408,7 +405,7 @@ func encodePath(path string) string {
 
 func (s *svc) lookUpStorageSpaceReference(ctx context.Context, spaceID string, relativePath string) (*storageProvider.Reference, *rpc.Status, error) {
 	// Get the getway client
-	gatewayClient, err := s.getClient()
+	gatewayClient, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, nil, err
 	}

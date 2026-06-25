@@ -32,7 +32,7 @@ import (
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/go-chi/chi/v5"
 	"github.com/juliangruber/go-intersect"
 )
@@ -104,7 +104,7 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gc, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gc, err := service.Gateway(ctx)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting gateway client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -142,7 +142,7 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		relative = float32(float64(used)/float64(total)) * 100
 	}
 
-	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting gateway client", fmt.Errorf("error getting gateway client"))
 		return

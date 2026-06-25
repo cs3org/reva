@@ -17,14 +17,16 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 
-	"github.com/cs3org/reva/v3/pkg/appctx"
-	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"github.com/cs3org/reva/v3/pkg/permissions"
-	"github.com/cs3org/reva/v3/pkg/spaces"
 	"github.com/go-chi/chi/v5"
 	libregraph "github.com/owncloud/libre-graph-api-go"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/cs3org/reva/v3/pkg/appctx"
+	"github.com/cs3org/reva/v3/pkg/errtypes"
+	"github.com/cs3org/reva/v3/pkg/permissions"
+	"github.com/cs3org/reva/v3/pkg/service"
+	"github.com/cs3org/reva/v3/pkg/spaces"
 )
 
 // Enum for sharetype in GenericShare
@@ -72,7 +74,7 @@ func (s *svc) getGenericShare(ctx context.Context, shareID string, resourceId *p
 	log := appctx.GetLogger(ctx)
 	// Next, we need to determine if it is a link or a permission update request
 	// we try to get a share, if this succeeds, it's a share, otherwise we assume it's a link
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		return nil, err
@@ -241,7 +243,7 @@ func (s *svc) deleteDrivePermissions(w http.ResponseWriter, r *http.Request) {
 func (s *svc) updateLinkPermissions(ctx context.Context, w http.ResponseWriter, link *linkv1beta1.PublicShare, permission *libregraph.Permission, resourceId *provider.ResourceId) {
 	log := appctx.GetLogger(ctx)
 
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -306,7 +308,7 @@ func (s *svc) updateLinkPermissions(ctx context.Context, w http.ResponseWriter, 
 func (s *svc) updateSharePermissions(ctx context.Context, w http.ResponseWriter, genericShare GenericShare, lgPerm *libregraph.Permission, resourceId *provider.ResourceId) {
 	log := appctx.GetLogger(ctx)
 
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -439,7 +441,7 @@ func (s *svc) updateLinkPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -482,7 +484,7 @@ func (s *svc) updateLinkPassword(w http.ResponseWriter, r *http.Request) {
 func (s *svc) deleteLinkPermissions(ctx context.Context, w http.ResponseWriter, r *http.Request, linkId *linkv1beta1.PublicShareId) {
 	log := appctx.GetLogger(ctx)
 
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -512,7 +514,7 @@ func (s *svc) deleteLinkPermissions(ctx context.Context, w http.ResponseWriter, 
 func (s *svc) deleteSharePermissions(ctx context.Context, w http.ResponseWriter, r *http.Request, genericShare *GenericShare) {
 	log := appctx.GetLogger(ctx)
 
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -589,7 +591,7 @@ func (s *svc) getRootDrivePermissions(w http.ResponseWriter, r *http.Request) {
 func (s *svc) getPermissionsByCs3Reference(ctx context.Context, ref *provider.Reference) (actions []string, roles []*libregraph.UnifiedRoleDefinition, perms []*libregraph.Permission, err error) {
 	log := appctx.GetLogger(ctx)
 
-	gw, err := s.getClient()
+	gw, err := service.Gateway(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		return nil, nil, nil, err
