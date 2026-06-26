@@ -167,6 +167,53 @@ func TestIsLeaderJob(t *testing.T) {
 	}
 }
 
+// funcJob adapts a plain function to the Job interface for tests.
+type funcJob func(ctx context.Context, p Params) (Params, error)
+
+func (f funcJob) Run(ctx context.Context, p Params) (Params, error) { return f(ctx, p) }
+
+func TestInvokePassesOnDemandConfig(t *testing.T) {
+	resetRegistry()
+
+	got := make(map[string]map[string]any)
+	register := func(name string) {
+		err := RegisterOnDemand(name, func(ctx context.Context, m map[string]any) (Job, error) {
+			got[name] = m
+			return funcJob(func(ctx context.Context, p Params) (Params, error) { return nil, nil }), nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	register("test.configured")
+	register("test.bare")
+
+	r, err := NewRunner(context.Background(), Options{
+		OnDemandConfig: map[string]map[string]any{
+			"test.configured": {"greeting": "hello"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := r.invoke(context.Background(), Run{Job: "test.configured"}, r.log); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.invoke(context.Background(), Run{Job: "test.bare"}, r.log); err != nil {
+		t.Fatal(err)
+	}
+
+	if g := got["test.configured"]["greeting"]; g != "hello" {
+		t.Errorf("configured job did not receive its config section: got %v", got["test.configured"])
+	}
+	// a job with no config section is built with a nil map, not an empty one,
+	// so it can tell "unset" apart and rely on its own defaults.
+	if got["test.bare"] != nil {
+		t.Errorf("a job without a config section should receive nil, got %v", got["test.bare"])
+	}
+}
+
 func resetRegistry() {
 	reg.mu.Lock()
 	defer reg.mu.Unlock()
