@@ -74,17 +74,17 @@ type DirectoryServiceServer struct {
 // NewShareRequest contains the payload of an OCM /share request.
 // https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1shares/post
 type NewShareRequest struct {
-	ShareWith         string    `json:"shareWith"         validate:"required"`                  // identifier of the recipient of the share
-	Name              string    `json:"name"              validate:"required"`                  // name of the resource
-	Description       string    `json:"description"`                                            // (optional) description of the resource
-	ProviderID        string    `json:"providerId"        validate:"required"`                  // unique identifier of the resource at provider side
-	Owner             string    `json:"owner"             validate:"required"`                  // unique identifier of the owner at provider side
-	Sender            string    `json:"sender"            validate:"required"`                  // unique indentifier of the user who wants to share the resource at provider side
-	OwnerDisplayName  string    `json:"ownerDisplayName"`                                       // display name of the owner of the resource
-	SenderDisplayName string    `json:"senderDisplayName"`                                      // dispay name of the user who wants to share the resource
-	Code              string    `json:"code"`                                                   // nonce to be exchanged for a bearer token (not implemented for now)
-	ShareType         string    `json:"shareType"         validate:"required,oneof=user group"` // recipient share type (user or group)
-	ResourceType      string    `json:"resourceType"      validate:"required,oneof=file folder embedded"`
+	ShareWith         string    `json:"shareWith"         validate:"required"`                             // identifier of the recipient of the share
+	Name              string    `json:"name"              validate:"required"`                             // name of the resource
+	Description       string    `json:"description"`                                                       // (optional) description of the resource
+	ProviderID        string    `json:"providerId"        validate:"required"`                             // unique identifier of the resource at provider side
+	Owner             string    `json:"owner"             validate:"required"`                             // unique identifier of the owner at provider side
+	Sender            string    `json:"sender"            validate:"required"`                             // unique indentifier of the user who wants to share the resource at provider side
+	OwnerDisplayName  string    `json:"ownerDisplayName"`                                                  // display name of the owner of the resource
+	SenderDisplayName string    `json:"senderDisplayName"`                                                 // dispay name of the user who wants to share the resource
+	Code              string    `json:"code"`                                                              // nonce to be exchanged for a bearer token (not implemented for now)
+	ShareType         string    `json:"shareType"         validate:"required,oneof=user group federation"` // recipient share type (user or group)
+	ResourceType      string    `json:"resourceType"      validate:"required"`
 	Expiration        uint64    `json:"expiration"`
 	Protocols         Protocols `json:"protocol"          validate:"required"`
 }
