@@ -28,7 +28,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	authscope "github.com/cs3org/reva/v3/pkg/auth/scope"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"google.golang.org/grpc"
 )
 
@@ -43,14 +42,14 @@ func (m *mockGateway) Stat(_ context.Context, _ *provider.StatRequest, _ ...grpc
 }
 
 func TestGetPathForExternalLinkPrefersOCMShareID(t *testing.T) {
-	pool.RegisterGatewayServiceClient(&mockGateway{
+	stampGateway(&mockGateway{
 		statResp: &provider.StatResponse{
 			Info: &provider.ResourceInfo{
 				Path: "/home/user/docs/file.txt",
 				Id:   &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
 			},
 		},
-	}, "")
+	})
 
 	share := &ocmv1beta1.Share{
 		Id:         &ocmv1beta1.ShareId{OpaqueId: "share-123"},
@@ -78,14 +77,14 @@ func TestGetPathForExternalLinkPrefersOCMShareID(t *testing.T) {
 }
 
 func TestGetPathForExternalLinkFallsBackToToken(t *testing.T) {
-	pool.RegisterGatewayServiceClient(&mockGateway{
+	stampGateway(&mockGateway{
 		statResp: &provider.StatResponse{
 			Info: &provider.ResourceInfo{
 				Path: "/home/user/docs/file.txt",
 				Id:   &provider.ResourceId{StorageId: "stor", OpaqueId: "res"},
 			},
 		},
-	}, "")
+	})
 
 	share := &ocmv1beta1.Share{
 		Id:         &ocmv1beta1.ShareId{},

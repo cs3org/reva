@@ -44,7 +44,7 @@ func ocmDiscoveryServer(t *testing.T, proto, resType string) *httptest.Server {
 			ResourceTypes: []wellknown.ResourceTypes{
 				{
 					Name: resType,
-					Protocols: map[string]interface{}{
+					Protocols: map[string]any{
 						proto: "/remote.php/dav/ocm",
 					},
 				},
@@ -586,7 +586,7 @@ func TestWithExchangeStatRetryRetriesAndReturnsFreshShare(t *testing.T) {
 	share2.Name = "fresh-name"
 
 	d := newTestReceivedDriver()
-	d.gateway = &mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share1, share2}}
+	stampGateway(&mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share1, share2}})
 
 	ref := &provider.Reference{Path: "/share-abc/docs"}
 	fnCalls := 0
@@ -655,7 +655,7 @@ func TestWithExchangeRetrySecond401ReturnsInvalidCredentials(t *testing.T) {
 	senderAddr := srv.Listener.Addr().String()
 	share := testCodeFlowReceivedShare(senderAddr, srv.URL)
 	d := newTestReceivedDriver()
-	d.gateway = &mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share, share}}
+	stampGateway(&mockReceivedGateway{shares: []*ocmpb.ReceivedShare{share, share}})
 
 	ref := &provider.Reference{Path: "/share-abc/docs"}
 	fnCalls := 0

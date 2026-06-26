@@ -29,12 +29,13 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/pkg/errors"
+
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	eosclient "github.com/cs3org/reva/v3/pkg/storage/fs/eos/client"
 	"github.com/cs3org/reva/v3/pkg/utils"
-	"github.com/pkg/errors"
 )
 
 // GetLock returns an existing lock on the given reference.
@@ -319,7 +320,7 @@ func (fs *Eosfs) setLock(ctx context.Context, lock *provider.Lock, path string) 
 }
 
 func (fs *Eosfs) getUserFromID(ctx context.Context, userID *userpb.UserId) (*userpb.User, error) {
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.conf.GatewaySvc))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, err
 	}

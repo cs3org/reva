@@ -28,14 +28,12 @@ import (
 	"strings"
 	"time"
 
-	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	conversions "github.com/cs3org/reva/v3/pkg/cbox/utils"
 	"github.com/cs3org/reva/v3/pkg/ocm/invite"
 	"github.com/cs3org/reva/v3/pkg/ocm/invite/repository/registry"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -48,9 +46,8 @@ func init() {
 
 // Client is an API client.
 type Client struct {
-	Config        *config
-	HTTPClient    *http.Client
-	GatewayClient gatewayv1beta1.GatewayAPIClient
+	Config     *config
+	HTTPClient *http.Client
 }
 
 type config struct {
@@ -80,15 +77,9 @@ func New(ctx context.Context, m map[string]any) (invite.Repository, error) {
 		return nil, errors.Wrap(err, "error parsing config for nextcloud invite repository")
 	}
 
-	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(config.GatewaySvc))
-	if err != nil {
-		return nil, err
-	}
-
 	client := &Client{
-		Config:        config,
-		HTTPClient:    &http.Client{},
-		GatewayClient: gw,
+		Config:     config,
+		HTTPClient: &http.Client{},
 	}
 
 	return client, nil

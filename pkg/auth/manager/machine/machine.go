@@ -31,7 +31,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
@@ -81,7 +81,7 @@ func (m *manager) Authenticate(ctx context.Context, user, secret string) (*userp
 		return nil, nil, errtypes.InvalidCredentials("")
 	}
 
-	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(m.GatewayAddr))
+	gtw, err := service.Gateway(ctx)
 	if err != nil {
 		return nil, nil, err
 	}

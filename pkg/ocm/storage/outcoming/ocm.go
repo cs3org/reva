@@ -33,22 +33,24 @@ import (
 	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+
 	"github.com/cs3org/reva/v3/internal/http/services/datagateway"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocdav"
 	authscope "github.com/cs3org/reva/v3/pkg/auth/scope"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 
+	"github.com/pkg/errors"
+	"google.golang.org/grpc/metadata"
+
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/httpclient"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v3/pkg/rhttp/router"
+	"github.com/cs3org/reva/v3/pkg/service"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
 	"github.com/cs3org/reva/v3/pkg/storage"
 	"github.com/cs3org/reva/v3/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/v3/pkg/utils/cfg"
-	"github.com/pkg/errors"
-	"google.golang.org/grpc/metadata"
 )
 
 func init() {
@@ -56,8 +58,7 @@ func init() {
 }
 
 type driver struct {
-	c       *config
-	gateway gateway.GatewayAPIClient
+	c *config
 }
 
 type config struct {
@@ -77,21 +78,19 @@ func New(ctx context.Context, m map[string]any) (storage.FS, error) {
 		return nil, err
 	}
 
-	gateway, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySVC))
-	if err != nil {
-		return nil, err
-	}
-
 	d := &driver{
-		c:       &c,
-		gateway: gateway,
+		c: &c,
 	}
 
 	return d, nil
 }
 
 func (d *driver) resolveByShareID(ctx context.Context, shareID string) (*ocmv1beta1.Share, error) {
-	shareRes, err := d.gateway.GetOCMShare(ctx, &ocmv1beta1.GetOCMShareRequest{
+	gw, err := service.Gateway(ctx)
+	if err != nil {
+		return nil, err
+	}
+	shareRes, err := gw.GetOCMShare(ctx, &ocmv1beta1.GetOCMShareRequest{
 		Ref: &ocmv1beta1.ShareReference{
 			Spec: &ocmv1beta1.ShareReference_Id{
 				Id: &ocmv1beta1.ShareId{OpaqueId: shareID},
@@ -112,7 +111,11 @@ func (d *driver) resolveByShareID(ctx context.Context, shareID string) (*ocmv1be
 }
 
 func (d *driver) resolveToken(ctx context.Context, token string) (*ocmv1beta1.Share, error) {
-	shareRes, err := d.gateway.GetOCMShare(ctx, &ocmv1beta1.GetOCMShareRequest{
+	gw, err := service.Gateway(ctx)
+	if err != nil {
+		return nil, err
+	}
+	shareRes, err := gw.GetOCMShare(ctx, &ocmv1beta1.GetOCMShareRequest{
 		Ref: &ocmv1beta1.ShareReference{
 			Spec: &ocmv1beta1.ShareReference_Token{
 				Token: token,
@@ -133,7 +136,11 @@ func (d *driver) resolveToken(ctx context.Context, token string) (*ocmv1beta1.Sh
 }
 
 func (d *driver) stat(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
-	statRes, err := d.gateway.Stat(ctx, &provider.StatRequest{Ref: ref})
+	gw, err := service.Gateway(ctx)
+	if err != nil {
+		return nil, err
+	}
+	statRes, err := gw.Stat(ctx, &provider.StatRequest{Ref: ref})
 	switch {
 	case err != nil:
 		return nil, err
@@ -272,7 +279,11 @@ func (d *driver) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	}
 
 	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, ref *provider.Reference) error {
-		res, err := d.gateway.CreateContainer(ctx, &provider.CreateContainerRequest{Ref: ref})
+		gw, err := service.Gateway(ctx)
+		if err != nil {
+			return err
+		}
+		res, err := gw.CreateContainer(ctx, &provider.CreateContainerRequest{Ref: ref})
 		switch {
 		case err != nil:
 			return err
@@ -291,7 +302,11 @@ func (d *driver) TouchFile(ctx context.Context, ref *provider.Reference) error {
 	}
 
 	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, ref *provider.Reference) error {
-		res, err := d.gateway.TouchFile(ctx, &provider.TouchFileRequest{Ref: ref})
+		gw, err := service.Gateway(ctx)
+		if err != nil {
+			return err
+		}
+		res, err := gw.TouchFile(ctx, &provider.TouchFileRequest{Ref: ref})
 		switch {
 		case err != nil:
 			return err
@@ -310,7 +325,11 @@ func (d *driver) Delete(ctx context.Context, ref *provider.Reference) error {
 	}
 
 	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, ref *provider.Reference) error {
-		res, err := d.gateway.Delete(ctx, &provider.DeleteRequest{Ref: ref})
+		gw, err := service.Gateway(ctx)
+		if err != nil {
+			return err
+		}
+		res, err := gw.Delete(ctx, &provider.DeleteRequest{Ref: ref})
 		switch {
 		case err != nil:
 			return err
@@ -327,7 +346,11 @@ func (d *driver) Move(ctx context.Context, from, to *provider.Reference) error {
 }
 
 func (d *driver) opFromUser(ctx context.Context, userID *userv1beta1.UserId, f func(ctx context.Context) error) error {
-	userRes, err := d.gateway.GetUser(ctx, &userv1beta1.GetUserRequest{
+	gw, err := service.Gateway(ctx)
+	if err != nil {
+		return err
+	}
+	userRes, err := gw.GetUser(ctx, &userv1beta1.GetUserRequest{
 		UserId: userID,
 	})
 	if err != nil {
@@ -337,7 +360,7 @@ func (d *driver) opFromUser(ctx context.Context, userID *userv1beta1.UserId, f f
 		return errors.New(userRes.Status.Message)
 	}
 
-	authRes, err := d.gateway.Authenticate(context.TODO(), &gateway.AuthenticateRequest{
+	authRes, err := gw.Authenticate(context.TODO(), &gateway.AuthenticateRequest{
 		Type:         "machine",
 		ClientId:     userRes.User.Username,
 		ClientSecret: d.c.MachineSecret,
@@ -431,7 +454,11 @@ func (d *driver) ListFolder(ctx context.Context, ref *provider.Reference, _ []st
 
 	var infos []*provider.ResourceInfo
 	if err := d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
-		lstRes, err := d.gateway.ListContainer(ctx, &provider.ListContainerRequest{Ref: newRef})
+		gw, err := service.Gateway(ctx)
+		if err != nil {
+			return err
+		}
+		lstRes, err := gw.ListContainer(ctx, &provider.ListContainerRequest{Ref: newRef})
 		switch {
 		case err != nil:
 			return err
@@ -499,7 +526,11 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, content io
 	}
 
 	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
-		initRes, err := d.gateway.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
+		gw, err := service.Gateway(ctx)
+		if err != nil {
+			return err
+		}
+		initRes, err := gw.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
 			Ref:    newRef,
 			LockId: metadata["lockid"]})
 		switch {
@@ -563,7 +594,11 @@ func (d *driver) Download(ctx context.Context, ref *provider.Reference, ranges [
 
 	var r io.ReadCloser
 	if err := d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
-		initRes, err := d.gateway.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{Ref: newRef})
+		gw, err := service.Gateway(ctx)
+		if err != nil {
+			return err
+		}
+		initRes, err := gw.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{Ref: newRef})
 		switch {
 		case err != nil:
 			return err
@@ -616,7 +651,11 @@ func (d *driver) SetLock(ctx context.Context, ref *provider.Reference, lock *pro
 	}
 
 	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
-		lockRes, err := d.gateway.SetLock(ctx, &provider.SetLockRequest{
+		gw, err := service.Gateway(ctx)
+		if err != nil {
+			return err
+		}
+		lockRes, err := gw.SetLock(ctx, &provider.SetLockRequest{
 			Ref:  newRef,
 			Lock: lock,
 		})
@@ -642,7 +681,11 @@ func (d *driver) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 
 	var lock *provider.Lock
 	if err := d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
-		lockRes, err := d.gateway.GetLock(ctx, &provider.GetLockRequest{Ref: newRef})
+		gw, err := service.Gateway(ctx)
+		if err != nil {
+			return err
+		}
+		lockRes, err := gw.GetLock(ctx, &provider.GetLockRequest{Ref: newRef})
 		switch {
 		case err != nil:
 			return err
@@ -667,7 +710,11 @@ func (d *driver) RefreshLock(ctx context.Context, ref *provider.Reference, lock 
 	}
 
 	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
-		lockRes, err := d.gateway.RefreshLock(ctx, &provider.RefreshLockRequest{
+		gw, err := service.Gateway(ctx)
+		if err != nil {
+			return err
+		}
+		lockRes, err := gw.RefreshLock(ctx, &provider.RefreshLockRequest{
 			Ref:            newRef,
 			ExistingLockId: existingLockID,
 			Lock:           lock,
@@ -693,7 +740,11 @@ func (d *driver) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 	}
 
 	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
-		lockRes, err := d.gateway.Unlock(ctx, &provider.UnlockRequest{
+		gw, err := service.Gateway(ctx)
+		if err != nil {
+			return err
+		}
+		lockRes, err := gw.Unlock(ctx, &provider.UnlockRequest{
 			Ref:  newRef,
 			Lock: lock,
 		})
@@ -718,7 +769,11 @@ func (d *driver) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 	}
 
 	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
-		res, err := d.gateway.SetArbitraryMetadata(ctx, &provider.SetArbitraryMetadataRequest{
+		gw, err := service.Gateway(ctx)
+		if err != nil {
+			return err
+		}
+		res, err := gw.SetArbitraryMetadata(ctx, &provider.SetArbitraryMetadataRequest{
 			Ref:               newRef,
 			ArbitraryMetadata: md,
 		})
@@ -741,7 +796,11 @@ func (d *driver) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 	}
 
 	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
-		res, err := d.gateway.UnsetArbitraryMetadata(ctx, &provider.UnsetArbitraryMetadataRequest{
+		gw, err := service.Gateway(ctx)
+		if err != nil {
+			return err
+		}
+		res, err := gw.UnsetArbitraryMetadata(ctx, &provider.UnsetArbitraryMetadataRequest{
 			Ref:                   newRef,
 			ArbitraryMetadataKeys: keys,
 		})

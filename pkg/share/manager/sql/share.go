@@ -37,7 +37,7 @@ import (
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	revashare "github.com/cs3org/reva/v3/pkg/share"
 	"github.com/cs3org/reva/v3/pkg/share/manager/sql/model"
 	"github.com/cs3org/reva/v3/pkg/utils"
@@ -441,7 +441,7 @@ func (m *ShareMgr) MoveShare(ctx context.Context, ref *collaboration.ShareRefere
 }
 
 func (m *ShareMgr) getPath(ctx context.Context, resID *provider.ResourceId) (string, error) {
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(m.c.GatewaySvc))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -664,7 +664,7 @@ func (m *ShareMgr) getGrantee(ctx context.Context, share model.Share) *provider.
 }
 
 func (m *ShareMgr) getUserType(ctx context.Context, username string) (userpb.UserType, error) {
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(m.c.GatewaySvc))
+	client, err := service.Gateway(ctx)
 	if err != nil {
 		return userpb.UserType_USER_TYPE_PRIMARY, err
 	}
