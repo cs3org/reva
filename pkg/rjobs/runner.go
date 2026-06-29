@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -68,6 +69,34 @@ type Runner struct {
 	// Skip.
 	runningMu sync.Mutex
 	running   map[string]bool
+
+	// cancels holds the cancellation handle of every run currently executing on
+	// this process, so a cancel request can interrupt the right run. A run is
+	// added when execRun starts it and removed when it returns.
+	cancelsMu sync.Mutex
+	cancels   map[RunID]*runHandle
+}
+
+// runHandle is the per-run cancellation handle held while a run executes on
+// this process. cancel stops the run's context; cancelled records that the stop
+// was an explicit cancellation and not a shutdown, so execRun finalises the run
+// as cancelled instead of retrying it. once keeps tripping it idempotent across
+// the several places that may request it (a direct local cancel, the cancel
+// broadcast, the backstop poll).
+type runHandle struct {
+	job       string
+	cancel    context.CancelFunc
+	cancelled atomic.Bool
+	once      sync.Once
+}
+
+// trip marks the run cancelled and cancels its context. Only the first call has
+// an effect.
+func (h *runHandle) trip() {
+	h.once.Do(func() {
+		h.cancelled.Store(true)
+		h.cancel()
+	})
 }
 
 // NewRunner builds a Runner from the registered jobs and the given options.
@@ -83,6 +112,7 @@ func NewRunner(ctx context.Context, opts Options) (*Runner, error) {
 		log:      *appctx.GetLogger(ctx),
 		periodic: registeredPeriodic(),
 		running:  make(map[string]bool),
+		cancels:  make(map[RunID]*runHandle),
 	}
 
 	// leader-scoped and on-demand work both need a store.
@@ -119,6 +149,15 @@ func (r *Runner) Start() {
 	if r.store == nil {
 		r.log.Info().Int("local_jobs", len(r.periodic)).Msg("rjobs: started without a store, only all-nodes jobs run")
 		return
+	}
+
+	// subscribe to cluster-wide cancel broadcasts so a cancel issued on another
+	// process can stop a run executing here. It is optional: without it cancels
+	// still land via the backstop poll, just not instantly.
+	if bus, ok := r.store.(ControlBus); ok {
+		if err := bus.SubscribeCancel(ctx, r.tripLocal); err != nil {
+			r.log.Error().Err(err).Msg("rjobs: subscribing to cancel broadcasts failed, cancels fall back to the backstop poll")
+		}
 	}
 
 	// register leader-scoped schedules so the scheduler can track them.
@@ -268,6 +307,38 @@ func (r *Runner) enqueueUnique(ctx context.Context, run Run) (RunID, error) {
 	return run.ID, nil
 }
 
+// TriggerNow enqueues an immediate, out-of-band run of a leader-scoped periodic
+// job, on top of its schedule: the regular cadence is left untouched, so this is
+// an extra run, not a reschedule. It respects the job's single-flight guard, so
+// it is rejected with an error if a run of the job is already in flight. Like
+// Enqueue it is in-process; on-demand and all-nodes jobs cannot be triggered.
+func (r *Runner) TriggerNow(ctx context.Context, job string) error {
+	if r.store == nil {
+		return errors.New("rjobs: cannot trigger, no store configured")
+	}
+	if !r.isLeaderJob(job) {
+		return errors.Errorf("rjobs: %q is not a registered leader periodic job", job)
+	}
+
+	acquired, err := r.store.TryMarkScheduledRunning(ctx, job)
+	if err != nil {
+		return err
+	}
+	if !acquired {
+		return errors.Errorf("rjobs: a run of %q is already in flight", job)
+	}
+
+	if _, err := r.store.Enqueue(ctx, Run{Job: job}); err != nil {
+		// release the gate we just took so the job is not stuck marked-running.
+		if cerr := r.store.ClearScheduledRunning(ctx, job); cerr != nil {
+			r.log.Error().Err(cerr).Str("job", job).Msg("rjobs: releasing schedule mark after a failed trigger errored")
+		}
+		return errors.Wrap(err, "rjobs: enqueuing triggered run failed")
+	}
+	r.log.Info().Str("job", job).Msg("rjobs: triggered an immediate run")
+	return nil
+}
+
 // Status returns the current status of a previously enqueued run. It returns
 // an errtypes.NotFound error if the run is unknown.
 func (r *Runner) Status(ctx context.Context, id RunID) (Status, error) {
@@ -289,6 +360,111 @@ func (r *Runner) ListByOwner(ctx context.Context, owner string, f ListFilter) ([
 	f.Owner = owner
 	f.Internal = false
 	return r.status.List(ctx, f)
+}
+
+// Cancel requests cancellation of a previously enqueued run and returns its
+// updated status. Cancellation is cooperative and asynchronous: it records a
+// durable cancel intent and stops the run on this process if it is running
+// here. The run reaches StateCancelled once it actually stops, so callers
+// observe Status to confirm. A run that ignores its context runs to completion.
+// Cancelling a finished run is a no-op; it returns an errtypes.NotFound error
+// if the run is unknown.
+func (r *Runner) Cancel(ctx context.Context, id RunID) (Status, error) {
+	if r.status == nil {
+		return Status{}, errors.New("rjobs: no status store configured")
+	}
+	// Durable intent first: it is the source of truth and the backstop should
+	// the fast local path not reach the worker running the job.
+	st, err := r.status.RequestCancel(ctx, id)
+	if err != nil {
+		return Status{}, err
+	}
+	// Fast path: stop it now if it runs here, and broadcast so a worker running
+	// it on another process stops without waiting for the backstop poll.
+	r.tripLocal(CancelSignal{RunID: id})
+	r.broadcastCancel(ctx, CancelSignal{RunID: id})
+	return st, nil
+}
+
+// CancelPeriodic requests cancellation of the in-flight run of a leader-scoped
+// periodic job, addressed by job name (a leader job has at most one run in
+// flight). Like Cancel it is cooperative and asynchronous. The schedule itself
+// is untouched, so the job keeps firing on its normal cadence; this stops only
+// the current run. It returns an error if the job is not a registered leader
+// job or if no run of it is currently in flight.
+func (r *Runner) CancelPeriodic(ctx context.Context, job string) error {
+	if r.store == nil {
+		return errors.New("rjobs: cannot cancel, no store configured")
+	}
+	if !r.isLeaderJob(job) {
+		return errors.Errorf("rjobs: %q is not a registered leader periodic job", job)
+	}
+
+	running, err := r.store.RequestCancelScheduled(ctx, job)
+	if err != nil {
+		return err
+	}
+	if !running {
+		return errors.Errorf("rjobs: no run of %q is currently in flight", job)
+	}
+
+	// Fast path: stop it here if it runs on this process, and broadcast to the
+	// process running it otherwise.
+	r.tripLocal(CancelSignal{Job: job})
+	r.broadcastCancel(ctx, CancelSignal{Job: job})
+	return nil
+}
+
+// registerRun records a run's cancellation handle for the duration of its
+// execution on this process.
+func (r *Runner) registerRun(id RunID, h *runHandle) {
+	r.cancelsMu.Lock()
+	r.cancels[id] = h
+	r.cancelsMu.Unlock()
+}
+
+// deregisterRun drops a run's cancellation handle once it has finished.
+func (r *Runner) deregisterRun(id RunID) {
+	r.cancelsMu.Lock()
+	delete(r.cancels, id)
+	r.cancelsMu.Unlock()
+}
+
+// tripLocal stops any run matching sig that is executing on this process: a run
+// by id (on-demand) or every in-flight run of a job (periodic). It is the
+// node-local half of a cancel, invoked directly and from the cancel broadcast,
+// and a no-op when no matching run is running here.
+func (r *Runner) tripLocal(sig CancelSignal) {
+	r.cancelsMu.Lock()
+	defer r.cancelsMu.Unlock()
+	if sig.RunID != "" {
+		if h, ok := r.cancels[sig.RunID]; ok {
+			h.trip()
+		}
+		return
+	}
+	if sig.Job == "" {
+		return
+	}
+	for _, h := range r.cancels {
+		if h.job == sig.Job {
+			h.trip()
+		}
+	}
+}
+
+// broadcastCancel best-effort publishes a cancel signal to the other processes
+// when the store supports it, so a run executing elsewhere stops without waiting
+// for its backstop poll. A failure only falls back to that poll, so it is
+// logged, not returned.
+func (r *Runner) broadcastCancel(ctx context.Context, sig CancelSignal) {
+	bus, ok := r.store.(ControlBus)
+	if !ok {
+		return
+	}
+	if err := bus.PublishCancel(ctx, sig); err != nil {
+		r.log.Warn().Err(err).Msg("rjobs: broadcasting cancel failed; relying on the backstop poll")
+	}
 }
 
 // runLocalTicker drives an all-nodes periodic job on this replica. It never
@@ -393,12 +569,41 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 		}()
 	}
 
-	stopBeat := r.startHeartbeat(ctx, run.ID, log)
+	// Per-run cancellable context, registered so a cancel request can interrupt
+	// this specific run. It derives from ctx, so a shutdown still cancels it too;
+	// the runHandle.cancelled flag is what tells the two apart below.
+	runCtx, cancel := context.WithCancel(ctx)
+	h := &runHandle{job: run.Job, cancel: cancel}
+	r.registerRun(run.ID, h)
+	defer r.deregisterRun(run.ID)
+	defer cancel()
+
+	// A cancellation may have arrived while the run was queued or waiting to be
+	// retried. Honour it before doing any work: drop the run as cancelled
+	// instead of executing it.
+	if r.cancelRequested(ctx, run) {
+		log.Info().Msg("rjobs: run cancelled before it started")
+		r.finishCancelled(ctx, run, log)
+		return
+	}
+
+	stopBeat := r.startHeartbeat(ctx, run, h, log)
 	defer stopBeat()
 
 	r.recordStatus(ctx, run, StateRunning, nil, nil, log)
 
-	result, err := r.invoke(ctx, run, log)
+	result, err := r.invoke(runCtx, run, log)
+
+	// An explicit cancellation wins over the job's return value: the run is
+	// terminal and must not be retried, whether the job returned an error or
+	// not. A shutdown does not set this flag, so in-flight work is still retried
+	// after a restart.
+	if h.cancelled.Load() {
+		log.Info().Msg("rjobs: run cancelled")
+		r.finishCancelled(ctx, run, log)
+		return
+	}
+
 	if err != nil {
 		log.Error().Err(err).Msg("rjobs: run failed")
 		r.recordStatus(ctx, run, StateFailed, nil, err, log)
@@ -420,10 +625,42 @@ func (r *Runner) execRun(ctx context.Context, run Run) {
 	}
 }
 
+// cancelRequested reports whether a cancellation has been requested for run. It
+// reads the durable cancel intent kept in the status store. Periodic runs are
+// not status-tracked, so this is always false for them; their cancellation is
+// driven separately through the schedule store.
+func (r *Runner) cancelRequested(ctx context.Context, run Run) bool {
+	if _, ok := r.lookupPeriodic(run.Job); ok {
+		// Periodic runs are not status-tracked; their cancel intent lives in the
+		// schedule store, keyed by job name.
+		req, err := r.store.ScheduledCancelRequested(ctx, run.Job)
+		if err != nil {
+			return false
+		}
+		return req
+	}
+	st, err := r.status.Get(ctx, run.ID)
+	if err != nil {
+		// A missing or unreadable status must not block execution; the run just
+		// misses its cancel check this round.
+		return false
+	}
+	return st.CancelRequested
+}
+
+// finishCancelled records a run as cancelled and acks it so it is not
+// redelivered. Cancellation is terminal, unlike a failure.
+func (r *Runner) finishCancelled(ctx context.Context, run Run, log zerolog.Logger) {
+	r.recordStatus(ctx, run, StateCancelled, nil, nil, log)
+	if err := r.store.Complete(ctx, run.ID); err != nil {
+		log.Error().Err(err).Msg("rjobs: completing cancelled run errored")
+	}
+}
+
 // startHeartbeat keeps a claimed run's lease alive by calling the store's
 // Heartbeat on a ticker until the returned stop function is called. It lets a
 // job run for arbitrarily long (minutes or days) without being redelivered.
-func (r *Runner) startHeartbeat(ctx context.Context, id RunID, log zerolog.Logger) (stop func()) {
+func (r *Runner) startHeartbeat(ctx context.Context, run Run, h *runHandle, log zerolog.Logger) (stop func()) {
 	interval := r.store.HeartbeatInterval()
 	if interval <= 0 {
 		return func() {}
@@ -440,8 +677,16 @@ func (r *Runner) startHeartbeat(ctx context.Context, id RunID, log zerolog.Logge
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if err := r.store.Heartbeat(ctx, id); err != nil {
+				if err := r.store.Heartbeat(ctx, run.ID); err != nil {
 					log.Warn().Err(err).Msg("rjobs: heartbeat failed")
+				}
+				// Backstop for a cancel that did not reach this worker by the
+				// fast path: notice the durable cancel intent and stop the run.
+				// It keeps beating afterwards so the lease stays alive while the
+				// job winds down.
+				if !h.cancelled.Load() && r.cancelRequested(ctx, run) {
+					log.Info().Msg("rjobs: cancellation observed, stopping run")
+					h.trip()
 				}
 			}
 		}
@@ -475,7 +720,7 @@ func (r *Runner) recordStatus(ctx context.Context, run Run, state State, result 
 	switch state {
 	case StateRunning:
 		st.StartedAt = &now
-	case StateSucceeded, StateFailed:
+	case StateSucceeded, StateFailed, StateCancelled:
 		st.FinishedAt = &now
 	}
 	if runErr != nil {

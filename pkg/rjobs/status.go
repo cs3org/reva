@@ -40,6 +40,15 @@ const (
 	// back to queued and be retried. A client should read StateFailed as
 	// "last attempt failed, another is coming", not "given up".
 	StateFailed State = "failed"
+	// StateCancelling means a cancellation was requested and the framework is
+	// winding the run down. It is transient: the run becomes StateCancelled once
+	// it actually stops, or, if it was still queued, as soon as a worker claims
+	// it and drops it.
+	StateCancelling State = "cancelling"
+	// StateCancelled is the terminal state of a run stopped by an explicit
+	// cancellation. Unlike StateFailed it is NOT retried: the run is acked and
+	// never redelivered.
+	StateCancelled State = "cancelled"
 )
 
 // Status is the observable state of a single run, addressable by its RunID.
@@ -60,6 +69,10 @@ type Status struct {
 	Result Params
 	// Owner is the username the run was created for, or empty for an internal run.
 	Owner string
+	// CancelRequested is set once a cancellation has been requested for the run.
+	// The worker executing the run observes it and stops; a still-queued run is
+	// dropped when claimed. It stays false for runs that were never cancelled.
+	CancelRequested bool
 }
 
 // Internal reports whether the run was created by reva itself rather than on
@@ -107,6 +120,13 @@ type StatusStore interface {
 	// (it succeeded, or it never reached the queue), freeing the key for a new
 	// run. It is a no-op for a run that holds no reservation.
 	Release(ctx context.Context, id RunID) error
+	// RequestCancel records that a run should be cancelled and returns its
+	// updated status. It is a targeted write of the cancel intent, not a full
+	// status upsert, so it does not race with the worker's lifecycle writes. It
+	// is a no-op on a run that has already reached a terminal state (succeeded
+	// or cancelled), returning that status unchanged, which makes cancel
+	// idempotent. It returns an errtypes.NotFound error if the run is unknown.
+	RequestCancel(ctx context.Context, id RunID) (Status, error)
 	// Close releases the status store's resources.
 	Close(ctx context.Context) error
 }

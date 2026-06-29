@@ -106,9 +106,51 @@ type Store interface {
 	// MarkScheduledRunning records that a leader-scoped periodic job has a run
 	// in flight, so DueScheduled skips it until the run is cleared.
 	MarkScheduledRunning(ctx context.Context, job string) error
+	// TryMarkScheduledRunning marks a leader-scoped periodic job as having a run
+	// in flight, but only if one is not already marked, reporting whether it
+	// acquired the mark. It is the single-flight gate for an out-of-band trigger:
+	// the caller that acquires it may enqueue an immediate run, and
+	// ClearScheduledRunning releases it when the run finishes. It returns an
+	// error if the job has no registered schedule.
+	TryMarkScheduledRunning(ctx context.Context, job string) (bool, error)
 	// ClearScheduledRunning clears the in-flight mark for a leader-scoped
-	// periodic job once its run finishes, letting its schedule resume.
+	// periodic job once its run finishes, letting its schedule resume. It also
+	// clears any cancel intent recorded by RequestCancelScheduled, so a cancel
+	// can never carry over to the job's next run.
 	ClearScheduledRunning(ctx context.Context, job string) error
+	// RequestCancelScheduled records a cancel intent for a leader-scoped periodic
+	// job's in-flight run, reporting whether a run was in flight to cancel. It
+	// only marks while a run is actually running, and ClearScheduledRunning
+	// clears it, so the intent never leaks to a later run.
+	RequestCancelScheduled(ctx context.Context, job string) (bool, error)
+	// ScheduledCancelRequested reports whether a cancel has been requested for a
+	// leader-scoped periodic job's in-flight run. The worker running the job
+	// polls it as the backstop to the cancel broadcast.
+	ScheduledCancelRequested(ctx context.Context, job string) (bool, error)
 	// Close releases the store's resources.
 	Close(ctx context.Context) error
+}
+
+// CancelSignal is a best-effort, cluster-wide notification that a run should be
+// cancelled. Exactly one field is set: RunID targets a single on-demand run;
+// Job targets the in-flight run of a periodic job, which each process matches
+// against the runs it is currently executing.
+type CancelSignal struct {
+	RunID RunID
+	Job   string
+}
+
+// ControlBus is an optional capability of a Store: a best-effort, cluster-wide
+// pub/sub that delivers cancel signals to whichever process is running a given
+// run, without waiting for the durable backstop poll. It is strictly an
+// optimisation over the durable cancel intent: a dropped signal only delays a
+// cancel to the next poll, it never loses it. A Store that does not implement
+// ControlBus still cancels correctly, just not instantly across processes.
+type ControlBus interface {
+	// PublishCancel broadcasts a cancel signal to every subscribed process.
+	PublishCancel(ctx context.Context, sig CancelSignal) error
+	// SubscribeCancel registers handler for every cancel signal published in the
+	// cluster, including by other processes. It returns once the subscription is
+	// active.
+	SubscribeCancel(ctx context.Context, handler func(CancelSignal)) error
 }

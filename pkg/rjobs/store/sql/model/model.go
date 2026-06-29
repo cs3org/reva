@@ -48,6 +48,9 @@ type Run struct {
 	// (owner, key), while ordinary runs — whose key is NULL — stay entirely
 	// unconstrained.
 	ActiveDedupKey *string `gorm:"size:255;uniqueIndex:idx_active_dedup,priority:2"`
+
+	// CancelRequested is set once a cancellation has been requested for the run.
+	CancelRequested bool
 }
 
 // TableName sets the table name explicitly so it does not collide with other
