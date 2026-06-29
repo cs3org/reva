@@ -149,6 +149,10 @@ gen-doc:
 dist: gen-doc
 	go run tools/create-artifacts/main.go -version $(VERSION) -commit $(GIT_COMMIT) -goversion $(GO_VERSION)
 
+# use the following as `NEWVER=3.x.y make release`
+release: gen-doc
+	go run tools/prepare-release/main.go -version $(NEWVER) -commit -tag
+
 
 ################################################################################
 # Clean
