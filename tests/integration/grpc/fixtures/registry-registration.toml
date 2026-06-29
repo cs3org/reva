@@ -1,0 +1,50 @@
+[log]
+level = "error"
+
+# A revad running a mix of gRPC and HTTP services, registering into a shared
+# NATS registry under a per-test bucket. The test reads the bucket back and
+# asserts each loaded service registered with the expected metadata.
+
+[shared.registry]
+driver = "nats"
+
+[shared.registry.drivers.nats]
+address = "{{nats_address}}"
+bucket = "{{registry_bucket}}"
+
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.storageprovider]
+driver = "localhome"
+mount_id = "registration-mount-id"
+
+[grpc.services.storageprovider.drivers.localhome]
+root = "{{root}}/storage"
+
+[grpc.services.authprovider]
+auth_manager = "json"
+
+[grpc.services.authprovider.auth_managers.json]
+users = "fixtures/ocm-users.demo.json"
+
+[grpc.services.userprovider]
+driver = "json"
+
+[grpc.services.userprovider.drivers.json]
+users = "fixtures/ocm-users.demo.json"
+
+[http]
+address = "{{http_address}}"
+
+[http.services.dataprovider]
+driver = "localhome"
+mount_id = "registration-mount-id"
+public_url = "http://{{http_address}}/data"
+
+[http.services.dataprovider.drivers.localhome]
+root = "{{root}}/storage"
+
+[http.services.datagateway]
+public_url = "http://{{http_address}}/datagateway"
+transfer_shared_secret = "changemeplease"

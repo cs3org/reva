@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net"
 	"os"
 	"os/exec"
@@ -60,6 +61,7 @@ type cleanupFunc func(bool) error
 type Revad struct {
 	TmpRoot     string      // Temporary directory on disk. Will be cleaned up by the Cleanup func.
 	GrpcAddress string      // Address of the grpc service
+	HTTPAddress string      // Address of the http service (if the config uses {{http_address}})
 	Cleanup     cleanupFunc // Function to kill the process and cleanup the temp. root. If the given parameter is true the files will be kept to make debugging failures easier.
 }
 
@@ -116,20 +118,22 @@ func startRevads(configs map[string]string, externalFiles map[string]string,
 
 	var revads sync.Map // map[string]*Revad{}
 	addresses := map[string]string{}
+	httpAddresses := map[string]string{}
 
 	// seed any predetermined addresses first so they are available for
 	// template substitution and waitForPort uses the correct address
 	for _, fixed := range fixedAddresses {
-		for name, addr := range fixed {
-			addresses[name] = addr
-		}
+		maps.Copy(addresses, fixed)
 	}
-	// assign dynamic ports only to services not already given a fixed address
+	// assign a dynamic grpc port to services not already given a fixed address,
+	// plus an http port to every config.
 	for name := range configs {
 		if _, already := addresses[name]; !already {
 			addresses[name] = fmt.Sprintf("localhost:%d", port)
 			port++
 		}
+		httpAddresses[name] = fmt.Sprintf("localhost:%d", port)
+		port++
 	}
 
 	filesPath := map[string]string{}
@@ -145,7 +149,13 @@ func startRevads(configs map[string]string, externalFiles map[string]string,
 		for name, address := range addresses {
 			cfg = strings.ReplaceAll(cfg, "{{"+name+"_address}}", address)
 		}
+		for name, address := range httpAddresses {
+			cfg = strings.ReplaceAll(cfg, "{{"+name+"_http_address}}", address)
+		}
 		newFilePath := path.Join(tmpRoot, p)
+		if err := os.MkdirAll(filepath.Dir(newFilePath), 0755); err != nil {
+			return nil, errors.Wrapf(err, "cannot create external file folders")
+		}
 		err = os.WriteFile(newFilePath, []byte(cfg), 0600)
 		if err != nil {
 			return nil, errors.Wrapf(err, "error writing file")
@@ -186,9 +196,9 @@ func startRevads(configs map[string]string, externalFiles map[string]string,
 	g := new(errgroup.Group)
 
 	for name, config := range configs {
-		name, config := name, config
 		g.Go(func() error {
 			ownAddress := addresses[name]
+			ownHTTPAddress := httpAddresses[name]
 
 			newCfgPath := path.Join(tmpRoot, config)
 			rawCfg, err := os.ReadFile(path.Join("fixtures", config))
@@ -202,6 +212,7 @@ func startRevads(configs map[string]string, externalFiles map[string]string,
 				cfg = strings.ReplaceAll(cfg, "{{"+name+"}}", path)
 			}
 			cfg = strings.ReplaceAll(cfg, "{{grpc_address}}", ownAddress)
+			cfg = strings.ReplaceAll(cfg, "{{http_address}}", ownHTTPAddress)
 			if url, ok := addresses["gateway"]; ok {
 				cfg = strings.ReplaceAll(cfg, "{{gateway_address}}", url)
 			}
@@ -210,6 +221,9 @@ func startRevads(configs map[string]string, externalFiles map[string]string,
 			}
 			for name, address := range addresses {
 				cfg = strings.ReplaceAll(cfg, "{{"+name+"_address}}", address)
+			}
+			for name, address := range httpAddresses {
+				cfg = strings.ReplaceAll(cfg, "{{"+name+"_http_address}}", address)
 			}
 			if err := os.MkdirAll(filepath.Dir(newCfgPath), 0755); err != nil {
 				return errors.Wrapf(err, "cannot create config folders")
@@ -246,6 +260,7 @@ func startRevads(configs map[string]string, externalFiles map[string]string,
 			revad := &Revad{
 				TmpRoot:     tmpRoot,
 				GrpcAddress: ownAddress,
+				HTTPAddress: ownHTTPAddress,
 				Cleanup: func(keepLogs bool) error {
 					err := cmd.Process.Signal(os.Kill)
 					if err != nil {
