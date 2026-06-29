@@ -57,14 +57,27 @@ type OCMClient struct {
 	client *http.Client
 }
 
+// newOCMTransport returns the HTTP transport used for outbound OCM requests.
+// It honors the standard HTTP_PROXY, HTTPS_PROXY, and NO_PROXY environment
+// variables and optionally skips TLS certificate verification.
+func newOCMTransport(insecure bool) *http.Transport {
+	var tr *http.Transport
+	if dt, ok := http.DefaultTransport.(*http.Transport); ok {
+		tr = dt.Clone()
+	} else {
+		tr = &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+		}
+	}
+	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: insecure}
+	return tr
+}
+
 // NewClient returns a new OCMClient.
 func NewClient(timeout time.Duration, insecure bool) *OCMClient {
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: insecure},
-	}
 	return &OCMClient{
 		client: &http.Client{
-			Transport: tr,
+			Transport: newOCMTransport(insecure),
 			Timeout:   timeout,
 		},
 	}

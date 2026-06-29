@@ -23,11 +23,29 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 )
+
+var proxyEnvKeys = []string{
+	"HTTP_PROXY",
+	"HTTPS_PROXY",
+	"NO_PROXY",
+	"http_proxy",
+	"https_proxy",
+	"no_proxy",
+}
+
+func TestMain(m *testing.M) {
+	for _, key := range proxyEnvKeys {
+		_ = os.Unsetenv(key)
+	}
+	os.Exit(m.Run())
+}
 
 func TestExchangeTokenSuccess(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -168,5 +186,75 @@ func TestExchangeTokenMalformedJSON(t *testing.T) {
 	_, _, err := c.ExchangeToken(context.Background(), srv.URL, "code", "")
 	if err == nil {
 		t.Fatal("expected error for malformed JSON response")
+	}
+}
+
+// roundTripperFunc adapts a plain function to http.RoundTripper, used to make
+// http.DefaultTransport a non-*http.Transport for the fallback test.
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// TestNewOCMTransportUsesProxyFromEnvironment is the core regression guard: the
+// outbound transport must be wired to http.ProxyFromEnvironment, not left nil.
+func TestNewOCMTransportUsesProxyFromEnvironment(t *testing.T) {
+	tr := newOCMTransport(false)
+	if tr.Proxy == nil {
+		t.Fatal("transport Proxy must not be nil")
+	}
+	got := reflect.ValueOf(tr.Proxy).Pointer()
+	want := reflect.ValueOf(http.ProxyFromEnvironment).Pointer()
+	if got != want {
+		t.Error("transport Proxy must be http.ProxyFromEnvironment")
+	}
+}
+
+// TestNewOCMTransportInsecureSkipVerify checks the TLS contract is preserved.
+func TestNewOCMTransportInsecureSkipVerify(t *testing.T) {
+	for _, insecure := range []bool{false, true} {
+		tr := newOCMTransport(insecure)
+		if tr.TLSClientConfig == nil {
+			t.Fatalf("insecure=%v: TLSClientConfig is nil", insecure)
+		}
+		if tr.TLSClientConfig.InsecureSkipVerify != insecure {
+			t.Errorf("insecure=%v: InsecureSkipVerify = %v, want %v", insecure, tr.TLSClientConfig.InsecureSkipVerify, insecure)
+		}
+	}
+}
+
+// TestNewOCMTransportFallback covers the branch where http.DefaultTransport is
+// not a *http.Transport, so the helper builds the transport directly.
+func TestNewOCMTransportFallback(t *testing.T) {
+	orig := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = orig })
+	http.DefaultTransport = roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return nil, nil
+	})
+
+	tr := newOCMTransport(true)
+	if tr.Proxy == nil {
+		t.Fatal("fallback transport Proxy must not be nil")
+	}
+	if got, want := reflect.ValueOf(tr.Proxy).Pointer(), reflect.ValueOf(http.ProxyFromEnvironment).Pointer(); got != want {
+		t.Error("fallback transport Proxy must be http.ProxyFromEnvironment")
+	}
+	if tr.TLSClientConfig == nil || !tr.TLSClientConfig.InsecureSkipVerify {
+		t.Error("fallback transport must set InsecureSkipVerify=true")
+	}
+}
+
+// TestNewClientUsesOCMTransport confirms the public constructor wires the
+// proxy-aware transport and request timeout into the HTTP client.
+func TestNewClientUsesOCMTransport(t *testing.T) {
+	c := NewClient(7*time.Second, true)
+	if c.client.Timeout != 7*time.Second {
+		t.Errorf("client timeout: got %v, want %v", c.client.Timeout, 7*time.Second)
+	}
+	tr, ok := c.client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("client transport: got %T, want *http.Transport", c.client.Transport)
+	}
+	if tr.Proxy == nil {
+		t.Fatal("client transport Proxy must not be nil")
 	}
 }
