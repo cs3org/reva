@@ -3,6 +3,16 @@
 [shared]
 gatewaysvc = "{{grpc_address}}"
 
+# Single cesnet revad: the gRPC gateway and the cesnet HTTP services (ocm,
+# sciencemesh, wellknown, datagateway, dataprovider) run in one process, so they
+# share one in-process service registry and the HTTP services discover the
+# co-resident gateway. Discovery is registry-based (no gateway address fallback)
+# and the registry is per-process (memory driver), so every service that calls
+# the gateway must be co-resident with it.
+
+[shared.registry]
+driver = "memory"
+
 [grpc]
 address = "{{grpc_address}}"
 
@@ -11,6 +21,7 @@ authregistrysvc = "{{grpc_address}}"
 userprovidersvc = "{{grpc_address}}"
 ocminvitemanagersvc = "{{grpc_address}}"
 ocmproviderauthorizersvc = "{{grpc_address}}"
+storageregistrysvc = "{{grpc_address}}"
 ocmshareprovidersvc = "{{grpc_address}}"
 ocmincomingsvc = "{{grpc_address}}"
 datagateway = "http://127.0.0.1:54321/datagateway"
@@ -75,3 +86,40 @@ mount_id = "984e7351-2729-4417-99b4-ab5e6d41fa97"
 data_server_url = "http://127.0.0.1:54321/data"
 
 [grpc.services.storageprovider.drivers.ocmreceived]
+
+# All cesnet HTTP services run in this same process so they discover the
+# co-resident gateway through the in-process registry.
+[http]
+address = "127.0.0.1:54321"
+
+[http.services.ocm]
+
+[http.services.sciencemesh]
+provider_domain = "127.0.0.1:54321"
+mesh_directory_url = "http://meshdir"
+smtp_credentials = {}
+
+[http.middlewares.cors]
+
+[http.middlewares.providerauthorizer]
+driver = "json"
+
+[http.middlewares.providerauthorizer.drivers.json]
+providers = "fixtures/ocm-providers.demo.json"
+
+[http.services.datagateway]
+public_url = "http://127.0.0.1:54321/datagateway"
+
+[http.services.dataprovider]
+driver = "ocmreceived"
+mount_id = "984e7351-2729-4417-99b4-ab5e6d41fa97"
+public_url = "http://127.0.0.1:54321/data"
+
+[http.services.dataprovider.drivers.ocmreceived]
+
+[http.services.wellknown]
+[http.services.wellknown.ocmprovider]
+ocm_prefix = "ocm"
+provider = "Reva for CESNET"
+endpoint = "http://127.0.0.1:54321"
+enable_webapp = true

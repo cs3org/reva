@@ -26,7 +26,7 @@ import (
 
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	jwt "github.com/cs3org/reva/v3/pkg/token/manager/jwt"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -68,7 +68,7 @@ var _ = Describe("user providers", func() {
 
 		revads, err = startRevads(dependencies, nil, nil, map[string]string{})
 		Expect(err).ToNot(HaveOccurred())
-		serviceClient, err = pool.GetUserProviderServiceClient(pool.Endpoint(revads["users"].GrpcAddress))
+		serviceClient, err = service.UserProviderAt(revads["users"].GrpcAddress)
 		Expect(err).ToNot(HaveOccurred())
 	})
 

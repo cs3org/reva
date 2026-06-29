@@ -1,5 +1,8 @@
 [log]
 
+[shared.registry]
+driver = "memory"
+
 [grpc]
 address = "{{grpc_address}}"
 
@@ -8,5 +11,20 @@ driver = "nextcloud"
 space_depth = 0
 
 [grpc.services.storageprovider.drivers.nextcloud]
+endpoint = "http://localhost:8080/apps/sciencemesh/"
+mock_http = true
+
+# A data provider sharing the storage provider's (default) mount id, so the
+# storage provider can discover its data server through the registry on
+# InitiateFileUpload/Download (there is no data_server_url anymore).
+[http]
+address = "{{http_address}}"
+
+[http.services.dataprovider]
+driver = "nextcloud"
+mount_id = "00000000-0000-0000-0000-000000000000"
+public_url = "http://{{http_address}}/data"
+
+[http.services.dataprovider.drivers.nextcloud]
 endpoint = "http://localhost:8080/apps/sciencemesh/"
 mock_http = true

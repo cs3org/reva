@@ -26,7 +26,7 @@ import (
 	storagep "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/auth/scope"
-	"github.com/cs3org/reva/v3/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v3/pkg/service"
 	jwt "github.com/cs3org/reva/v3/pkg/token/manager/jwt"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -85,7 +85,7 @@ var _ = Describe("storage providers", func() {
 
 		revads, err = startRevads(dependencies, nil, nil, variables)
 		Expect(err).ToNot(HaveOccurred())
-		serviceClient, err = pool.GetStorageProviderServiceClient(pool.Endpoint(revads["storage"].GrpcAddress))
+		serviceClient, err = service.StorageProviderAt(revads["storage"].GrpcAddress)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
