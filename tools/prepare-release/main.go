@@ -93,7 +93,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	cmd = exec.Command("mv", "changelog/unreleased", newChangelog)
+	if err := os.MkdirAll(newChangelog, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "error creating changelog directory: %s", err)
+		os.Exit(1)
+	}
+
+	cmd = exec.Command("/bin/sh", "-c", "mv changelog/unreleased/*.md "+newChangelog)
 	run(cmd)
 
 	// install release-deps: calens
