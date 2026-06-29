@@ -71,6 +71,10 @@ func (s Status) Internal() bool { return s.Owner == "" }
 type ListFilter struct {
 	// Owner, when set, restricts the listing to runs created for that username.
 	Owner string
+	// Internal, when true, restricts the listing to internal runs — those with
+	// no owner (periodic jobs, and on-demand jobs enqueued without WithOwner).
+	// It is mutually exclusive with Owner.
+	Internal bool
 	// States, when non-empty, restricts the listing to runs in any of these
 	// states.
 	States []State

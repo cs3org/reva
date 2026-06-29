@@ -153,6 +153,15 @@ func TestListByOwner(t *testing.T) {
 	if len(got) != 1 || got[0].RunID != "b1" {
 		t.Fatalf("bob runs = %v, want [b1]", got)
 	}
+
+	// the internal-only filter returns just the no-owner runs.
+	got, err = s.List(ctx, rjobs.ListFilter{Internal: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].RunID != "internal" {
+		t.Fatalf("internal runs = %v, want [internal]", got)
+	}
 }
 
 func TestReserve(t *testing.T) {

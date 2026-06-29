@@ -176,7 +176,8 @@ means "the last attempt failed, another is coming".
 `ListByOwner` returns the runs created for a user with `WithOwner`, most
 recently enqueued first — the read side a UI uses to show "my jobs". The filter
 narrows the result by state, job or page; internal runs (those with no owner)
-never show up in it.
+never show up in it. To list those instead, a system/admin listing can pass
+`ListFilter{Internal: true}`.
 
 ```go
 runs, err := rjobs.Default().ListByOwner(ctx, username, rjobs.ListFilter{

@@ -94,7 +94,10 @@ func (s *store) Get(ctx context.Context, id rjobs.RunID) (rjobs.Status, error) {
 
 func (s *store) List(ctx context.Context, f rjobs.ListFilter) ([]rjobs.Status, error) {
 	q := s.db.WithContext(ctx).Model(&model.Run{})
-	if f.Owner != "" {
+	switch {
+	case f.Internal:
+		q = q.Where("owner = ?", "")
+	case f.Owner != "":
 		q = q.Where("owner = ?", f.Owner)
 	}
 	if len(f.States) > 0 {

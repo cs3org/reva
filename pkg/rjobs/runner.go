@@ -280,12 +280,14 @@ func (r *Runner) Status(ctx context.Context, id RunID) (Status, error) {
 // ListByOwner returns the runs created for the given user, most recently
 // enqueued first. It is the read side of WithOwner: a UI lists a user's jobs
 // with it. The filter narrows the result further (by state, job or page); its
-// Owner field is ignored, the owner argument wins.
+// Owner and Internal fields are ignored — the owner argument wins and internal
+// runs are never included.
 func (r *Runner) ListByOwner(ctx context.Context, owner string, f ListFilter) ([]Status, error) {
 	if r.status == nil {
 		return nil, errors.New("rjobs: no status store configured")
 	}
 	f.Owner = owner
+	f.Internal = false
 	return r.status.List(ctx, f)
 }
 
