@@ -224,8 +224,12 @@ func getResourceTypeFromOCMRequest(t string) ocm.SharedResourceType {
 		return ocm.SharedResourceType_SHARE_RESOURCE_TYPE_FILE
 	case "folder":
 		return ocm.SharedResourceType_SHARE_RESOURCE_TYPE_CONTAINER
-	case "embedded":
+	case "ro-crate":
+		// RO-Crate resources are processed as embedded payloads
 		return ocm.SharedResourceType_SHARE_RESOURCE_TYPE_EMBEDDED
+	// Similarly, JSON resources could be processed as embedded payloads, should we need them
+	//case "json":
+	//	return ocm.SharedResourceType_SHARE_RESOURCE_TYPE_EMBEDDED
 	default:
 		return ocm.SharedResourceType_SHARE_RESOURCE_TYPE_INVALID
 	}
@@ -238,7 +242,7 @@ func getOCMShareType(st string) ocm.RecipientType {
 	case "group":
 		return ocm.RecipientType_RECIPIENT_TYPE_GROUP
 	default:
-		// for now assume user share if not provided
+		// legacy OCM endpoints used to not send the recipient type, so default to `user` if not provided
 		return ocm.RecipientType_RECIPIENT_TYPE_USER
 	}
 }
