@@ -35,6 +35,7 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type store struct {
@@ -54,9 +55,7 @@ func New(ctx context.Context, c config.Database) (rjobs.StatusStore, error) {
 }
 
 func openDB(c config.Database) (*gorm.DB, error) {
-	// TranslateError makes a unique-constraint violation surface as
-	// gorm.ErrDuplicatedKey across engines, which Reserve relies on.
-	gormCfg := &gorm.Config{TranslateError: true}
+	gormCfg := &gorm.Config{}
 	switch c.Engine {
 	case "sqlite":
 		return gorm.Open(sqlite.Open(c.DBName), gormCfg)
@@ -133,7 +132,7 @@ func (s *store) List(ctx context.Context, f rjobs.ListFilter) ([]rjobs.Status, e
 
 func (s *store) Reserve(ctx context.Context, st rjobs.Status, key string) (rjobs.Status, bool, error) {
 	// Retry to cover the narrow window where the current holder releases the key
-	// between our failed insert and the lookup of that holder.
+	// between our insert seeing it taken and the lookup of that holder.
 	for attempt := 0; attempt < 5; attempt++ {
 		row, err := toModel(st)
 		if err != nil {
@@ -141,10 +140,15 @@ func (s *store) Reserve(ctx context.Context, st rjobs.Status, key string) (rjobs
 		}
 		row.ActiveDedupKey = &key
 
-		if err := s.db.WithContext(ctx).Create(row).Error; err == nil {
+		// Insert unless (owner, key) is already taken: a unique-index conflict is
+		// the expected "key already held" case, so the database skips it instead
+		// of erroring. RowsAffected == 1 means our row went in — we won the key.
+		res := s.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(row)
+		if res.Error != nil {
+			return rjobs.Status{}, false, errors.Wrap(res.Error, "rjobs sql: reserving run failed")
+		}
+		if res.RowsAffected == 1 {
 			return rjobs.Status{}, true, nil
-		} else if !errors.Is(err, gorm.ErrDuplicatedKey) {
-			return rjobs.Status{}, false, errors.Wrap(err, "rjobs sql: reserving run failed")
 		}
 
 		holder, found, err := s.activeHolder(ctx, st.Owner, key)
