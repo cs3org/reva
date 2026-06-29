@@ -35,6 +35,7 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type store struct {
@@ -70,8 +71,9 @@ func (s *store) Put(ctx context.Context, st rjobs.Status) error {
 		return err
 	}
 	// upsert on the run id: the row is created on enqueue and updated on every
-	// later transition.
-	res := s.db.WithContext(ctx).Save(row)
+	// later transition. The reservation column is owned by Reserve/Release, so
+	// omit it here or a status update would wipe a live reservation.
+	res := s.db.WithContext(ctx).Omit("ActiveDedupKey").Save(row)
 	if res.Error != nil {
 		return errors.Wrap(res.Error, "rjobs sql: storing status failed")
 	}
@@ -88,6 +90,107 @@ func (s *store) Get(ctx context.Context, id rjobs.RunID) (rjobs.Status, error) {
 		return rjobs.Status{}, errors.Wrap(res.Error, "rjobs sql: reading status failed")
 	}
 	return fromModel(row)
+}
+
+func (s *store) List(ctx context.Context, f rjobs.ListFilter) ([]rjobs.Status, error) {
+	q := s.db.WithContext(ctx).Model(&model.Run{})
+	switch {
+	case f.Internal:
+		q = q.Where("owner = ?", "")
+	case f.Owner != "":
+		q = q.Where("owner = ?", f.Owner)
+	}
+	if len(f.States) > 0 {
+		states := make([]string, len(f.States))
+		for i, st := range f.States {
+			states[i] = string(st)
+		}
+		q = q.Where("state IN ?", states)
+	}
+	if f.Job != "" {
+		q = q.Where("job = ?", f.Job)
+	}
+	q = q.Order("enqueued_at DESC")
+	if f.Limit > 0 {
+		q = q.Limit(f.Limit)
+	}
+	if f.Offset > 0 {
+		q = q.Offset(f.Offset)
+	}
+
+	var rows []model.Run
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, errors.Wrap(err, "rjobs sql: listing runs failed")
+	}
+	out := make([]rjobs.Status, 0, len(rows))
+	for _, row := range rows {
+		st, err := fromModel(row)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, st)
+	}
+	return out, nil
+}
+
+func (s *store) Reserve(ctx context.Context, st rjobs.Status, key string) (rjobs.Status, bool, error) {
+	// Retry to cover the narrow window where the current holder releases the key
+	// between our insert seeing it taken and the lookup of that holder.
+	for attempt := 0; attempt < 5; attempt++ {
+		row, err := toModel(st)
+		if err != nil {
+			return rjobs.Status{}, false, err
+		}
+		row.ActiveDedupKey = &key
+
+		// Insert unless (owner, key) is already taken: a unique-index conflict is
+		// the expected "key already held" case, so the database skips it instead
+		// of erroring. RowsAffected == 1 means our row went in — we won the key.
+		res := s.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(row)
+		if res.Error != nil {
+			return rjobs.Status{}, false, errors.Wrap(res.Error, "rjobs sql: reserving run failed")
+		}
+		if res.RowsAffected == 1 {
+			return rjobs.Status{}, true, nil
+		}
+
+		holder, found, err := s.activeHolder(ctx, st.Owner, key)
+		if err != nil {
+			return rjobs.Status{}, false, err
+		}
+		if found {
+			return holder, false, nil
+		}
+		// the holder released the key just now; loop and try to take it.
+	}
+	return rjobs.Status{}, false, errors.New("rjobs sql: could not reserve run, key is contended")
+}
+
+func (s *store) Release(ctx context.Context, id rjobs.RunID) error {
+	res := s.db.WithContext(ctx).Model(&model.Run{}).
+		Where("run_id = ?", string(id)).
+		Update("active_dedup_key", nil)
+	if res.Error != nil {
+		return errors.Wrap(res.Error, "rjobs sql: releasing reservation failed")
+	}
+	return nil
+}
+
+// activeHolder loads the run currently holding key for owner, if any.
+func (s *store) activeHolder(ctx context.Context, owner, key string) (rjobs.Status, bool, error) {
+	q := s.db.WithContext(ctx).Where("owner = ? AND active_dedup_key = ?", owner, key)
+	var row model.Run
+	if err := q.First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return rjobs.Status{}, false, nil
+		}
+		return rjobs.Status{}, false, errors.Wrap(err, "rjobs sql: loading reservation holder failed")
+	}
+	st, err := fromModel(row)
+	if err != nil {
+		return rjobs.Status{}, false, err
+	}
+	return st, true, nil
 }
 
 func (s *store) Close(ctx context.Context) error {
@@ -107,7 +210,7 @@ func toModel(st rjobs.Status) (*model.Run, error) {
 		}
 		result = b
 	}
-	return &model.Run{
+	m := &model.Run{
 		RunID:      string(st.RunID),
 		Job:        st.Job,
 		State:      string(st.State),
@@ -117,7 +220,9 @@ func toModel(st rjobs.Status) (*model.Run, error) {
 		FinishedAt: st.FinishedAt,
 		LastError:  st.LastError,
 		Result:     result,
-	}, nil
+	}
+	m.Owner = st.Owner
+	return m, nil
 }
 
 func fromModel(row model.Run) (rjobs.Status, error) {
@@ -131,6 +236,7 @@ func fromModel(row model.Run) (rjobs.Status, error) {
 		FinishedAt: row.FinishedAt,
 		LastError:  row.LastError,
 	}
+	st.Owner = row.Owner
 	if len(row.Result) > 0 {
 		var p rjobs.Params
 		if err := json.Unmarshal(row.Result, &p); err != nil {

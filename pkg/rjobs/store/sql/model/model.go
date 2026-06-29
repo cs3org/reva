@@ -36,6 +36,18 @@ type Run struct {
 	FinishedAt *time.Time
 	LastError  string         `gorm:"type:text"`
 	Result     datatypes.JSON `gorm:"type:json"`
+
+	// Owner is the username the run was created for, empty for an internal run.
+	// It is indexed so a user's runs can be listed, and it is the first column
+	// of the active-dedup unique index below.
+	Owner string `gorm:"size:255;index:idx_owner;uniqueIndex:idx_active_dedup,priority:1"`
+
+	// ActiveDedupKey carries a run's Unique key while it is active (queued,
+	// running or retrying) and is NULL otherwise. The unique index over
+	// (owner, active_dedup_key) therefore allows at most one active run per
+	// (owner, key), while ordinary runs — whose key is NULL — stay entirely
+	// unconstrained.
+	ActiveDedupKey *string `gorm:"size:255;uniqueIndex:idx_active_dedup,priority:2"`
 }
 
 // TableName sets the table name explicitly so it does not collide with other

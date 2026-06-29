@@ -23,12 +23,39 @@ import "sync"
 // EnqueueOption customises an on-demand enqueue.
 type EnqueueOption func(*Run)
 
-// WithIdempotencyKey collapses duplicate enqueues carrying the same key into a
-// single run. Use it to make a user action (e.g. clicking "export" twice)
-// enqueue at most one run.
-func WithIdempotencyKey(key string) EnqueueOption {
+// ConflictPolicy decides what Enqueue does when a Unique key is already held by
+// an active run.
+type ConflictPolicy int
+
+const (
+	// Collapse returns the existing run's id, so a duplicate request rides on
+	// the run already in flight. It is the default.
+	Collapse ConflictPolicy = iota
+	// Reject makes Enqueue fail with an errtypes.AlreadyExists error instead of
+	// reusing the in-flight run.
+	Reject
+)
+
+// Unique makes the run the only active one for its (owner, key): while a run
+// with this key is queued, running or retrying, a second Enqueue with the same
+// key does not start another. The reservation is released once the run
+// succeeds, so the key is free again afterwards; fold any finer scope (one per
+// day, one per space, ...) into the key. With no policy a conflict collapses
+// onto the existing run and Enqueue returns its id; pass Reject to fail
+// instead. Pair it with WithOwner to make uniqueness per user.
+func Unique(key string, policy ...ConflictPolicy) EnqueueOption {
 	return func(r *Run) {
-		r.IdempotencyKey = key
+		r.DedupKey = key
+		r.dedupReject = len(policy) > 0 && policy[0] == Reject
+	}
+}
+
+// WithOwner attributes the run to a user by username, so it appears in that
+// user's run listing (see Runner.ListByOwner). Without this option a run has no
+// owner and counts as internal.
+func WithOwner(username string) EnqueueOption {
+	return func(r *Run) {
+		r.Owner = username
 	}
 }
 

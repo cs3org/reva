@@ -128,16 +128,38 @@ if runner == nil {
 }
 
 runID, err := runner.Enqueue(ctx, "mycomponent.export", rjobs.Params{
-    "user_id": uid,
-}, rjobs.WithIdempotencyKey("export:"+uid)) // collapse duplicate requests
+    "space_id": spaceID,
+})
 ```
+
+By default a run is **internal**: it belongs to reva, not to a user. Two
+optional, independent options change that — nothing happens unless you ask for
+it:
+
+```go
+runID, err := runner.Enqueue(ctx, "mycomponent.export", params,
+    rjobs.WithOwner(user.Username),     // attribute the run to a user
+    rjobs.Unique("export:"+spaceID),    // at most one active run for this key
+)
+```
+
+- `WithOwner(username)` records the run against a user, so it shows up in that
+  user's listing (see below). Without it the run has no owner and stays
+  internal.
+- `Unique(key)` makes the run the only active one for its `(owner, key)`: while
+  a run with that key is queued, running or retrying, a second `Enqueue` with
+  the same key does not start another — it returns the id of the one already in
+  flight. The reservation is released once the run **succeeds**, so the key is
+  free again afterwards; fold any finer scope (one per space, one per day, ...)
+  into the key. Pass `rjobs.Reject` as a second argument to fail with an
+  `errtypes.AlreadyExists` error instead of collapsing onto the in-flight run.
 
 `Enqueue` is the seam a future RPC service would wrap; today it is in-process
 only.
 
 ### Checking a run's status
 
-Use the `RunID` to read status back:
+Use the `RunID` to read a single run back:
 
 ```go
 st, err := rjobs.Default().Status(ctx, runID)
@@ -148,6 +170,21 @@ st, err := rjobs.Default().Status(ctx, runID)
 
 Note that `failed` is **not terminal**: a failed run is retried, so `failed`
 means "the last attempt failed, another is coming".
+
+### Listing a user's runs
+
+`ListByOwner` returns the runs created for a user with `WithOwner`, most
+recently enqueued first — the read side a UI uses to show "my jobs". The filter
+narrows the result by state, job or page; internal runs (those with no owner)
+never show up in it. To list those instead, a system/admin listing can pass
+`ListFilter{Internal: true}`.
+
+```go
+runs, err := rjobs.Default().ListByOwner(ctx, username, rjobs.ListFilter{
+    States: []rjobs.State{rjobs.StateQueued, rjobs.StateRunning},
+    Limit:  50,
+})
+```
 
 ## Configuration
 

@@ -58,6 +58,32 @@ type Status struct {
 	LastError string
 	// Result is the payload returned by the job on success.
 	Result Params
+	// Owner is the username the run was created for, or empty for an internal run.
+	Owner string
+}
+
+// Internal reports whether the run was created by reva itself rather than on
+// behalf of a user, i.e. it carries no owner.
+func (s Status) Internal() bool { return s.Owner == "" }
+
+// ListFilter narrows a run listing. The zero value matches every run; the
+// common use is to set Owner so a user sees only their own runs.
+type ListFilter struct {
+	// Owner, when set, restricts the listing to runs created for that username.
+	Owner string
+	// Internal, when true, restricts the listing to internal runs — those with
+	// no owner (periodic jobs, and on-demand jobs enqueued without WithOwner).
+	// It is mutually exclusive with Owner.
+	Internal bool
+	// States, when non-empty, restricts the listing to runs in any of these
+	// states.
+	States []State
+	// Job, when set, restricts the listing to runs of that job.
+	Job string
+	// Limit caps the number of returned runs; 0 returns all of them.
+	Limit int
+	// Offset skips that many runs from the start, for pagination.
+	Offset int
 }
 
 // StatusStore persists and serves the per-run status. It is a separate
@@ -70,6 +96,17 @@ type StatusStore interface {
 	// Get returns the status of a run. It returns an errtypes.NotFound error
 	// if the run is unknown.
 	Get(ctx context.Context, id RunID) (Status, error)
+	// List returns the runs matching the filter, most recently enqueued first.
+	List(ctx context.Context, f ListFilter) ([]Status, error)
+	// Reserve persists s as a queued run while enforcing at most one active run
+	// per (Owner, key). If the key is already held by an active run it stores
+	// nothing and returns that run with reserved=false; otherwise it stores s
+	// and returns reserved=true.
+	Reserve(ctx context.Context, s Status, key string) (existing Status, reserved bool, err error)
+	// Release drops a run's uniqueness reservation once it no longer needs it
+	// (it succeeded, or it never reached the queue), freeing the key for a new
+	// run. It is a no-op for a run that holds no reservation.
+	Release(ctx context.Context, id RunID) error
 	// Close releases the status store's resources.
 	Close(ctx context.Context) error
 }
