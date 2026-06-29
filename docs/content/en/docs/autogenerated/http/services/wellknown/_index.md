@@ -40,16 +40,8 @@ webdav_root = "/remote.php/dav/ocm"
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="webapp_root" type="string" default="/external/sciencemesh" %}}
-The root URL to serve Web apps via OCM. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L37)
-{{< highlight toml >}}
-[http.services.wellknown]
-webapp_root = "/external/sciencemesh"
-{{< /highlight >}}
-{{% /dir %}}
-
 {{% dir name="invite_accept_dialog" type="string" default="/open-cloud-mesh/accept-invite" %}}
-The frontend URL where to land when receiving an invitation [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L38)
+The frontend URL where to land when receiving an invitation [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L37)
 {{< highlight toml >}}
 [http.services.wellknown]
 invite_accept_dialog = "/open-cloud-mesh/accept-invite"
@@ -57,23 +49,15 @@ invite_accept_dialog = "/open-cloud-mesh/accept-invite"
 {{% /dir %}}
 
 {{% dir name="enable_webapp" type="bool" default=false %}}
-Whether web apps are enabled in OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L39)
+Whether web apps are enabled in OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L38)
 {{< highlight toml >}}
 [http.services.wellknown]
 enable_webapp = false
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="enable_datatx" type="bool" default=false %}}
-Whether data transfers are enabled in OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L40)
-{{< highlight toml >}}
-[http.services.wellknown]
-enable_datatx = false
-{{< /highlight >}}
-{{% /dir %}}
-
 {{% dir name="enable_embedded" type="bool" default=false %}}
-Whether embedded shares are enabled in OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L41)
+Whether embedded shares are enabled in OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L39)
 {{< highlight toml >}}
 [http.services.wellknown]
 enable_embedded = false
@@ -81,7 +65,7 @@ enable_embedded = false
 {{% /dir %}}
 
 {{% dir name="enable_code_flow" type="bool" default=false %}}
-Whether code-flow token exchange is enabled in OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L42)
+Whether code-flow token exchange is enabled in OCM shares. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/wellknown/ocm.go#L40)
 {{< highlight toml >}}
 [http.services.wellknown]
 enable_code_flow = false
