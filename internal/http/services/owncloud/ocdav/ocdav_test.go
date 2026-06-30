@@ -25,8 +25,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	mockgateway "github.com/cs3org/go-cs3apis/mocks/github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
+	"github.com/stretchr/testify/mock"
 )
 
 /*
@@ -48,6 +52,80 @@ func TestWrapResourceID(t *testing.T) {
 
 	if wrapped != expected {
 		t.Errorf("wrapped id doesn't have the expected format: got %s expected %s", wrapped, expected)
+	}
+}
+
+func TestPublicFilesSignatureAuthTakesPrecedenceOverBasicAuth(t *testing.T) {
+	token := "public-token"
+	signature := "signed-value"
+	expiration := "2026-06-29T18:48:01+02:00"
+	request := httptest.NewRequest(http.MethodGet, "https://example.org/remote.php/dav/public-files/public-token/file.txt?oc-signature=signed-value&expiration=2026-06-29T18%3A48%3A01%2B02%3A00", nil)
+	request.SetBasicAuth(token, "wrong-password")
+
+	gatewayClient := mockgateway.NewMockGatewayAPIClient(t)
+	gatewayClient.On("Authenticate", mock.Anything, mock.MatchedBy(func(req *gatewayv1beta1.AuthenticateRequest) bool {
+		return req.Type == "publicshares" &&
+			req.ClientId == token &&
+			req.ClientSecret == "signature|"+signature+"|"+expiration
+	})).Return(&gatewayv1beta1.AuthenticateResponse{
+		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+	}, nil).Once()
+
+	res, hasBasicAuthHeader, unauthorized, err := authenticatePublicFilesRequest(context.Background(), request, gatewayClient, token)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if unauthorized {
+		t.Fatal("expected signed GET request to be authorized for authentication")
+	}
+	if !hasBasicAuthHeader {
+		t.Fatal("expected request to report the present Basic auth header")
+	}
+	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		t.Fatalf("expected OK status, got %v", res.GetStatus().GetCode())
+	}
+}
+
+func TestPublicFilesBasicAuthIsUsedWithoutSignature(t *testing.T) {
+	token := "public-token"
+	password := "public-password"
+	request := httptest.NewRequest(http.MethodGet, "https://example.org/remote.php/dav/public-files/public-token/file.txt", nil)
+	request.SetBasicAuth(token, password)
+
+	gatewayClient := mockgateway.NewMockGatewayAPIClient(t)
+	gatewayClient.On("Authenticate", mock.Anything, mock.MatchedBy(func(req *gatewayv1beta1.AuthenticateRequest) bool {
+		return req.Type == "publicshares" &&
+			req.ClientId == token &&
+			req.ClientSecret == "password|"+password
+	})).Return(&gatewayv1beta1.AuthenticateResponse{
+		Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+	}, nil).Once()
+
+	_, hasBasicAuthHeader, unauthorized, err := authenticatePublicFilesRequest(context.Background(), request, gatewayClient, token)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if unauthorized {
+		t.Fatal("expected Basic auth request to be authorized for authentication")
+	}
+	if !hasBasicAuthHeader {
+		t.Fatal("expected request to report the present Basic auth header")
+	}
+}
+
+func TestPublicFilesSignatureAuthRejectsNonGet(t *testing.T) {
+	request := httptest.NewRequest(http.MethodDelete, "https://example.org/remote.php/dav/public-files/public-token/file.txt?oc-signature=signed-value&expiration=2026-06-29T18%3A48%3A01%2B02%3A00", nil)
+
+	gatewayClient := mockgateway.NewMockGatewayAPIClient(t)
+	res, _, unauthorized, err := authenticatePublicFilesRequest(context.Background(), request, gatewayClient, "public-token")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if !unauthorized {
+		t.Fatal("expected signed non-GET request to be unauthorized")
+	}
+	if res != nil {
+		t.Fatalf("expected no authentication response, got %v", res)
 	}
 }
 

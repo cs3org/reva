@@ -66,6 +66,8 @@ const (
 	ctxKeyIncomingURL = "ctxKeyIncomingURL"
 )
 
+const publicLinkSignatureParam = "oc-signature"
+
 func (h *DavHandler) init(c *Config) error {
 	h.AvatarsHandler = new(AvatarsHandler)
 	if err := h.AvatarsHandler.init(c); err != nil {
@@ -354,24 +356,10 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			var res *gatewayv1beta1.AuthenticateResponse
 			token, _ := router.ShiftPath(r.URL.Path)
 			ctx = context.WithValue(ctx, ctxPublicLink, token)
-			var hasValidBasicAuthHeader bool
-			var pass string
-
-			if _, pass, hasValidBasicAuthHeader = r.BasicAuth(); hasValidBasicAuthHeader {
-				log.Info().Str("token", token).Msg("Handling public-files DAV request with BasicAuth")
-				res, err = handleBasicAuth(r.Context(), c, token, pass)
-			} else {
-				q := r.URL.Query()
-				sig := q.Get("signature")
-				expiration := q.Get("expiration")
-				// We restrict the pre-signed urls to downloads.
-				if sig != "" && expiration != "" && r.Method != http.MethodGet {
-					w.WriteHeader(http.StatusUnauthorized)
-					log.Info().Str("token", token).Msg("Client tried to use pre-signed URL for a method other than GET, which is not allowed")
-					return
-				}
-				log.Info().Str("token", token).Str("sig", sig).Msg("Handling public-files DAV request with handleSignatureAuth()")
-				res, err = handleSignatureAuth(ctx, c, token, sig, expiration)
+			res, hasValidBasicAuthHeader, unauthorized, err := authenticatePublicFilesRequest(ctx, r, c, token)
+			if unauthorized {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
 			}
 
 			switch {
@@ -456,6 +444,29 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			HandleWebdavError(log, w, b, err)
 		}
 	})
+}
+
+func authenticatePublicFilesRequest(ctx context.Context, r *http.Request, c gatewayv1beta1.GatewayAPIClient, token string) (*gatewayv1beta1.AuthenticateResponse, bool, bool, error) {
+	log := appctx.GetLogger(ctx)
+	q := r.URL.Query()
+	sig := q.Get(publicLinkSignatureParam)
+	expiration := q.Get("expiration")
+	_, pass, hasValidBasicAuthHeader := r.BasicAuth()
+
+	if sig != "" || expiration != "" || !hasValidBasicAuthHeader {
+		// We restrict the pre-signed urls to downloads.
+		if sig != "" && expiration != "" && r.Method != http.MethodGet {
+			log.Info().Str("token", token).Msg("Client tried to use pre-signed URL for a method other than GET, which is not allowed")
+			return nil, hasValidBasicAuthHeader, true, nil
+		}
+		log.Info().Str("token", token).Str("sig", sig).Msg("Handling public-files DAV request with handleSignatureAuth()")
+		res, err := handleSignatureAuth(ctx, c, token, sig, expiration)
+		return res, hasValidBasicAuthHeader, false, err
+	}
+
+	log.Info().Str("token", token).Msg("Handling public-files DAV request with BasicAuth")
+	res, err := handleBasicAuth(ctx, c, token, pass)
+	return res, hasValidBasicAuthHeader, false, err
 }
 
 func getTokenStatInfo(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, token string) (*provider.StatResponse, error) {
