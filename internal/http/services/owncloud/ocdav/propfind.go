@@ -899,7 +899,9 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 							var sb strings.Builder
 
 							sb.WriteString(md.Path)
-							sb.WriteString("?signature=")
+							sb.WriteString("?")
+							sb.WriteString(publicLinkSignatureParam)
+							sb.WriteString("=")
 							sb.WriteString(ls.Signature.Signature)
 							sb.WriteString("&expiration=")
 							sb.WriteString(url.QueryEscape(expiration.Format(time.RFC3339)))
