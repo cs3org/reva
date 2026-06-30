@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"testing"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -139,5 +140,34 @@ func TestCreateShareReturnsServerErrorForNonOKCreateStatus(t *testing.T) {
 
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatalf("CreateShare() status = %d, want %d", rr.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestMatchesAutoAccept(t *testing.T) {
+	h := &sharesHandler{
+		autoAcceptProviders: []*regexp.Regexp{
+			regexp.MustCompile(`^trusted\.example\.org$`),
+			regexp.MustCompile(`\.cern\.ch$`),
+		},
+	}
+
+	cases := map[string]bool{
+		"trusted.example.org":      true,
+		"data.cern.ch":             true,
+		"sub.data.cern.ch":         true,
+		"untrusted.example.org":    false,
+		"trusted.example.org.evil": false,
+		"cern.ch.evil":             false,
+	}
+	for domain, want := range cases {
+		if got := h.matchesAutoAccept(domain); got != want {
+			t.Errorf("matchesAutoAccept(%q) = %v, want %v", domain, got, want)
+		}
+	}
+
+	// no configured providers -> never matches
+	empty := &sharesHandler{}
+	if empty.matchesAutoAccept("trusted.example.org") {
+		t.Errorf("matchesAutoAccept with no providers should return false")
 	}
 }
