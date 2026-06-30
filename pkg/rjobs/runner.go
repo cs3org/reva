@@ -50,17 +50,23 @@ type Options struct {
 	// Status records and serves per-run status. It is required whenever Store
 	// is set, since every durable run gets a status record.
 	Status StatusStore
+	// OnDemandConfig holds the configuration of the on-demand jobs, keyed by
+	// job name. When a run is dispatched the entry for its job is handed to the
+	// job's constructor; a job with no entry is built with a nil map and falls
+	// back to its own defaults.
+	OnDemandConfig map[string]map[string]any
 }
 
 // Runner owns the scheduling, dispatching and execution of jobs. A process
 // has a single Runner, created by the jobs service and reachable through
 // Default for in-process Enqueue.
 type Runner struct {
-	workers  int
-	store    Store
-	status   StatusStore
-	log      zerolog.Logger
-	periodic []Periodic
+	workers        int
+	store          Store
+	status         StatusStore
+	log            zerolog.Logger
+	periodic       []Periodic
+	onDemandConfig map[string]map[string]any
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -106,13 +112,14 @@ func NewRunner(ctx context.Context, opts Options) (*Runner, error) {
 	}
 
 	r := &Runner{
-		workers:  opts.Workers,
-		store:    opts.Store,
-		status:   opts.Status,
-		log:      *appctx.GetLogger(ctx),
-		periodic: registeredPeriodic(),
-		running:  make(map[string]bool),
-		cancels:  make(map[RunID]*runHandle),
+		workers:        opts.Workers,
+		store:          opts.Store,
+		status:         opts.Status,
+		log:            *appctx.GetLogger(ctx),
+		periodic:       registeredPeriodic(),
+		onDemandConfig: opts.OnDemandConfig,
+		running:        make(map[string]bool),
+		cancels:        make(map[RunID]*runHandle),
 	}
 
 	// leader-scoped and on-demand work both need a store.
@@ -747,7 +754,7 @@ func (r *Runner) invoke(ctx context.Context, run Run, log zerolog.Logger) (Param
 	if !ok {
 		return nil, errors.Errorf("rjobs: run references unknown job %q", run.Job)
 	}
-	job, err := newFunc(jobCtx, nil)
+	job, err := newFunc(jobCtx, r.onDemandConfig[run.Job])
 	if err != nil {
 		return nil, errors.Wrap(err, "rjobs: building on-demand job failed")
 	}

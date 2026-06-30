@@ -99,13 +99,33 @@ Register a constructor by name; the framework builds the job and calls `Run`
 with the per-run parameters. The returned `Params` are stored as the run's
 result.
 
+The constructor receives the job's own configuration section from the config
+file (see [Configuration](#configuration)), so a job can load what it needs at
+startup just like any other service, and decode it the same way. Distinguish
+the two inputs: `m` is static configuration, `p` is the per-run payload from
+`Enqueue`.
+
 ```go
 func init() {
     _ = rjobs.RegisterOnDemand("mycomponent.export", New)
 }
 
+type config struct {
+    TmpDir string `mapstructure:"tmp_dir"`
+}
+
+func (c *config) ApplyDefaults() {
+    if c.TmpDir == "" {
+        c.TmpDir = "/tmp"
+    }
+}
+
 func New(ctx context.Context, m map[string]any) (rjobs.Job, error) {
-    return &exportJob{ /* ... */ }, nil
+    var c config
+    if err := cfg.Decode(m, &c); err != nil {
+        return nil, err
+    }
+    return &exportJob{tmpDir: c.TmpDir}, nil
 }
 
 func (j *exportJob) Run(ctx context.Context, p rjobs.Params) (rjobs.Params, error) {
@@ -252,3 +272,20 @@ db_name     = "reva_jobs"
 Without `nats_address` the runner still starts, but only `ScopeAllNodes`
 periodic jobs run; on-demand and `ScopeLeader` jobs need the queue and the
 status DB.
+
+### On-demand job configuration
+
+Each on-demand job gets its own section under `on_demand`, keyed by the name it
+was registered under. The section is handed to the job's constructor (the `m`
+argument), so a job loads its static configuration there. Because job names
+contain dots and dots separate TOML tables, the name must be **quoted** in the
+table header:
+
+```toml
+[serverless.services.jobs.on_demand."mycomponent.export"]
+tmp_dir   = "/var/lib/reva/export"
+max_items = 1000
+```
+
+A job with no section is built with an empty configuration, so jobs that only
+read per-run parameters need no entry at all.

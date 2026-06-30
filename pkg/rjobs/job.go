@@ -85,7 +85,10 @@ type Job interface {
 }
 
 // NewJob constructs an on-demand job from its configuration. It is the
-// function registered with RegisterOnDemand.
+// function registered with RegisterOnDemand. The map is the job's own section
+// of the service configuration
+// ([serverless.services.jobs.on_demand."<name>"]), or nil when the job has no
+// such section, in which case it should fall back to its defaults.
 type NewJob func(ctx context.Context, m map[string]any) (Job, error)
 
 // Periodic describes a job that runs on a schedule. The Run closure is

@@ -50,6 +50,12 @@ type config struct {
 	// maximum job duration.
 	AckWaitSeconds int               `mapstructure:"ack_wait_seconds"`
 	StatusDB       revadcfg.Database `mapstructure:"status_db"`
+	// OnDemand holds the configuration of the on-demand jobs, keyed by job
+	// name. Each entry is the job's own config section and is handed to the
+	// job's constructor when a run is dispatched. Job names contain dots, so
+	// the name must be quoted in the table header, e.g.
+	// [serverless.services.jobs.on_demand."example.pingpong"].
+	OnDemand map[string]map[string]any `mapstructure:"on_demand"`
 }
 
 func (c *config) ApplyDefaults() {
@@ -90,7 +96,8 @@ func New(ctx context.Context, m map[string]any) (rserverless.Service, error) {
 // for single-node setups that only warm local caches.
 func (s *svc) Start() {
 	opts := rjobs.Options{
-		Workers: s.conf.WorkerPoolSize,
+		Workers:        s.conf.WorkerPoolSize,
+		OnDemandConfig: s.conf.OnDemand,
 	}
 
 	// the durable queue and the status store go together: on-demand and
