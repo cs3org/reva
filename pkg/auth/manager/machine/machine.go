@@ -76,7 +76,7 @@ func New(ctx context.Context, conf map[string]any) (auth.Manager, error) {
 // Authenticate impersonate an user if the provided secret is equal to the api-key.
 func (m *manager) Authenticate(ctx context.Context, user, secret string) (*userpb.User, map[string]*authpb.Scope, error) {
 	log := appctx.GetLogger(ctx)
-	log.Trace().Msgf("Machine Authenticate user '%s' secret '%s'", user, secret)
+	log.Trace().Msgf("Machine Authenticate user '%s'", user)
 	if m.APIKey != secret {
 		return nil, nil, errtypes.InvalidCredentials("")
 	}
