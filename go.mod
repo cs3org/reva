@@ -32,7 +32,6 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
-	github.com/jt-nti/gproto v0.0.0-20210304092907-23e645af1351
 	github.com/juliangruber/go-intersect v1.1.0
 	github.com/mattn/go-sqlite3 v1.14.47
 	github.com/maxymania/go-system v0.0.0-20170110133659-647cc364bf0b

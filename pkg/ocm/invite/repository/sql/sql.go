@@ -20,7 +20,6 @@ package sql
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"time"
 
@@ -31,20 +30,21 @@ import (
 	conversions "github.com/cs3org/reva/v3/pkg/cbox/utils"
 	"github.com/cs3org/reva/v3/pkg/errtypes"
 	"github.com/cs3org/reva/v3/pkg/ocm/invite"
-	"github.com/cs3org/reva/v3/pkg/utils/cfg"
-	"github.com/go-sql-driver/mysql"
-
 	"github.com/cs3org/reva/v3/pkg/ocm/invite/repository/registry"
 	"github.com/cs3org/reva/v3/pkg/sharedconf"
+	"github.com/cs3org/reva/v3/pkg/utils/cfg"
 	"github.com/pkg/errors"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
-// This module implement the invite.Repository interface as a mysql driver.
+// This module implements the invite.Repository interface using gorm.
 //
 // The OCM Invitation tokens are saved in the table:
 //     ocm_tokens(*token*, initiator, expiration, description)
 //
-// The OCM remote user are saved in the table:
+// The OCM remote users are saved in the table:
 //     ocm_remote_users(*initiator*, *opaque_user_id*, *idp*, email, display_name)
 
 func init() {
@@ -53,7 +53,7 @@ func init() {
 
 type mgr struct {
 	c  *Config
-	db *sql.DB
+	db *gorm.DB
 }
 
 type Config struct {
@@ -66,6 +66,29 @@ func (c *Config) ApplyDefaults() {
 	c.Database = sharedconf.GetDBInfo(c.Database)
 }
 
+// OcmToken is the gorm model for the ocm_tokens table.
+type OcmToken struct {
+	gorm.Model
+	Token       string `gorm:"size:255;uniqueIndex:i_ocmtoken_token"`
+	Initiator   string `gorm:"size:255;index:i_ocmtoken_initiator"`
+	Expiration  time.Time
+	Description string `gorm:"size:255"`
+}
+
+// OcmRemoteUser is the gorm model for the ocm_remote_users table.
+//
+// The i_ocmremoteuser_unique index enforces a single row per
+// (initiator, opaque_user_id, idp). A soft-deleted row keeps occupying that
+// index, so AddRemoteUser revives it rather than inserting a duplicate.
+type OcmRemoteUser struct {
+	gorm.Model
+	Initiator    string `gorm:"size:255;index:i_ocmremoteuser_initiator;uniqueIndex:i_ocmremoteuser_unique"`
+	OpaqueUserID string `gorm:"size:255;uniqueIndex:i_ocmremoteuser_unique"`
+	Idp          string `gorm:"size:255;uniqueIndex:i_ocmremoteuser_unique"`
+	Email        string `gorm:"size:255"`
+	DisplayName  string `gorm:"size:255"`
+}
+
 // New creates a sql repository for ocm tokens and users.
 func New(ctx context.Context, m map[string]any) (invite.Repository, error) {
 	var c Config
@@ -74,119 +97,135 @@ func New(ctx context.Context, m map[string]any) (invite.Repository, error) {
 	}
 	c.ApplyDefaults()
 
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true", c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName))
+	var db *gorm.DB
+	var err error
+	switch c.Engine {
+	case "sqlite":
+		db, err = gorm.Open(sqlite.Open(c.DBName), &gorm.Config{})
+	case "mysql":
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true", c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName)
+		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	default: // default is mysql
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true", c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName)
+		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	}
 	if err != nil {
-		return nil, errors.Wrap(err, "sql: error opening connection to mysql database")
+		return nil, errors.Wrap(err, "sql: error opening connection to database using engine "+c.Engine)
 	}
 
-	mgr := mgr{
+	// Migrate schemas
+	if err := db.AutoMigrate(&OcmToken{}, &OcmRemoteUser{}); err != nil {
+		return nil, errors.Wrap(err, "sql: failed to migrate ocm invite schemas")
+	}
+
+	return &mgr{
 		c:  &c,
 		db: db,
-	}
-	return &mgr, nil
-}
-
-// AddToken stores the token in the repository.
-func (m *mgr) AddToken(ctx context.Context, token *invitepb.InviteToken) error {
-	query := "INSERT INTO ocm_tokens SET token=?,initiator=?,expiration=?,description=?"
-	_, err := m.db.ExecContext(ctx, query, token.Token, conversions.FormatUserID(token.UserId), timestampToTime(token.Expiration), token.Description)
-	return err
+	}, nil
 }
 
 func timestampToTime(t *types.Timestamp) time.Time {
 	return time.Unix(int64(t.Seconds), int64(t.Nanos))
 }
 
-type dbToken struct {
-	Token       string
-	Initiator   string
-	Expiration  time.Time
-	Description string
+// AddToken stores the token in the repository.
+func (m *mgr) AddToken(ctx context.Context, token *invitepb.InviteToken) error {
+	t := &OcmToken{
+		Token:       token.Token,
+		Initiator:   conversions.FormatUserID(token.UserId),
+		Expiration:  timestampToTime(token.Expiration),
+		Description: token.Description,
+	}
+	return m.db.WithContext(ctx).Create(t).Error
+}
+
+func convertToInviteToken(t *OcmToken) *invitepb.InviteToken {
+	return &invitepb.InviteToken{
+		Token:  t.Token,
+		UserId: conversions.MakeUserID(t.Initiator),
+		Expiration: &types.Timestamp{
+			Seconds: uint64(t.Expiration.Unix()),
+		},
+		Description: t.Description,
+	}
 }
 
 // GetToken gets the token from the repository.
 func (m *mgr) GetToken(ctx context.Context, token string) (*invitepb.InviteToken, error) {
-	query := "SELECT token, initiator, expiration, description FROM ocm_tokens where token=?"
-
-	var tkn dbToken
-	if err := m.db.QueryRowContext(ctx, query, token).Scan(&tkn.Token, &tkn.Initiator, &tkn.Expiration, &tkn.Description); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+	var t OcmToken
+	res := m.db.WithContext(ctx).Where("token = ?", token).First(&t)
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 			return nil, invite.ErrTokenNotFound
 		}
-		return nil, err
+		return nil, res.Error
 	}
-	return convertToInviteToken(tkn), nil
+	return convertToInviteToken(&t), nil
 }
 
-func convertToInviteToken(tkn dbToken) *invitepb.InviteToken {
-	return &invitepb.InviteToken{
-		Token:  tkn.Token,
-		UserId: conversions.MakeUserID(tkn.Initiator),
-		Expiration: &types.Timestamp{
-			Seconds: uint64(tkn.Expiration.Unix()),
-		},
-		Description: tkn.Description,
-	}
-}
-
+// ListTokens gets the valid tokens from the repository (i.e. not expired).
 func (m *mgr) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*invitepb.InviteToken, error) {
-	query := "SELECT token, initiator, expiration, description FROM ocm_tokens WHERE initiator=? AND expiration > NOW()"
-
-	tokens := []*invitepb.InviteToken{}
-	rows, err := m.db.QueryContext(ctx, query, conversions.FormatUserID(initiator))
-	if err != nil {
-		return nil, err
+	var ts []OcmToken
+	res := m.db.WithContext(ctx).
+		Where("initiator = ?", conversions.FormatUserID(initiator)).
+		Where("expiration > ?", time.Now()).
+		Find(&ts)
+	if res.Error != nil {
+		return nil, res.Error
 	}
 
-	var tkn dbToken
-	for rows.Next() {
-		if err := rows.Scan(&tkn.Token, &tkn.Initiator, &tkn.Expiration, &tkn.Description); err != nil {
-			continue
-		}
-		tokens = append(tokens, convertToInviteToken(tkn))
+	tokens := make([]*invitepb.InviteToken, 0, len(ts))
+	for i := range ts {
+		tokens = append(tokens, convertToInviteToken(&ts[i]))
 	}
-
 	return tokens, nil
 }
 
 // AddRemoteUser stores the remote user.
+//
+// A previously deleted user is soft-deleted, so its row still occupies the
+// i_ocmremoteuser_unique index. To let the same user be accepted again we look
+// up any existing row (including soft-deleted ones): if it is still active we
+// report ErrUserAlreadyAccepted, otherwise we revive it by clearing deleted_at
+// and refreshing its details.
 func (m *mgr) AddRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.User) error {
-	query := "INSERT INTO ocm_remote_users SET initiator=?, opaque_user_id=?, idp=?, email=?, display_name=?"
-	if _, err := m.db.ExecContext(ctx, query, conversions.FormatUserID(initiator), conversions.FormatUserID(remoteUser.Id), remoteUser.Id.Idp, remoteUser.Mail, remoteUser.DisplayName); err != nil {
-		// check if the user already exist in the db
-		// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_dup_entry
-		var e *mysql.MySQLError
-		if errors.As(err, &e) && e.Number == 1062 {
-			return invite.ErrUserAlreadyAccepted
-		}
-		return err
+	u := &OcmRemoteUser{
+		Initiator:    conversions.FormatUserID(initiator),
+		OpaqueUserID: conversions.FormatUserID(remoteUser.Id),
+		Idp:          remoteUser.Id.Idp,
+		Email:        remoteUser.Mail,
+		DisplayName:  remoteUser.DisplayName,
 	}
-	return nil
-}
 
-type dbOCMUser struct {
-	OpaqueUserID string
-	Idp          string
-	Email        string
-	DisplayName  string
-}
+	return m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var existing OcmRemoteUser
+		err := tx.Unscoped().
+			Where("initiator = ?", u.Initiator).
+			Where("opaque_user_id = ?", u.OpaqueUserID).
+			Where("idp = ?", u.Idp).
+			First(&existing).Error
 
-// GetRemoteUser retrieves details about a remote user who has accepted an invite to share.
-func (m *mgr) GetRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUserID *userpb.UserId) (*userpb.User, error) {
-	query := "SELECT opaque_user_id, idp, email, display_name FROM ocm_remote_users WHERE initiator=? AND opaque_user_id=? AND idp=?"
-
-	var user dbOCMUser
-	if err := m.db.QueryRowContext(ctx, query, conversions.FormatUserID(initiator), conversions.FormatUserID(remoteUserID), remoteUserID.Idp).
-		Scan(&user.OpaqueUserID, &user.Idp, &user.Email, &user.DisplayName); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, errtypes.NotFound(remoteUserID.OpaqueId)
+		switch {
+		case err == nil:
+			if !existing.DeletedAt.Valid {
+				// row exists and is not soft-deleted: the user is already accepted.
+				return invite.ErrUserAlreadyAccepted
+			}
+			// revive the soft-deleted row and refresh its details.
+			return tx.Unscoped().Model(&existing).Updates(map[string]any{
+				"deleted_at":   nil,
+				"email":        u.Email,
+				"display_name": u.DisplayName,
+			}).Error
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			return tx.Create(u).Error
+		default:
+			return err
 		}
-		return nil, err
-	}
-	return user.toCS3User(), nil
+	})
 }
 
-func (u *dbOCMUser) toCS3User() *userpb.User {
+func (u *OcmRemoteUser) toCS3User() *userpb.User {
 	return &userpb.User{
 		Id: &userpb.UserId{
 			Idp:      u.Idp,
@@ -198,37 +237,54 @@ func (u *dbOCMUser) toCS3User() *userpb.User {
 	}
 }
 
+// GetRemoteUser retrieves details about a remote user who has accepted an invite to share.
+func (m *mgr) GetRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUserID *userpb.UserId) (*userpb.User, error) {
+	var u OcmRemoteUser
+	res := m.db.WithContext(ctx).
+		Where("initiator = ?", conversions.FormatUserID(initiator)).
+		Where("opaque_user_id = ?", conversions.FormatUserID(remoteUserID)).
+		Where("idp = ?", remoteUserID.Idp).
+		First(&u)
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			return nil, errtypes.NotFound(remoteUserID.OpaqueId)
+		}
+		return nil, res.Error
+	}
+	return u.toCS3User(), nil
+}
+
 // FindRemoteUsers finds remote users who have accepted invites based on their attributes.
 func (m *mgr) FindRemoteUsers(ctx context.Context, initiator *userpb.UserId, attr string) ([]*userpb.User, error) {
 	// TODO: (gdelmont) this query can get really slow in case the number of rows is too high.
 	// For the time being this is not expected, but if in future this happens, consider to add
 	// a fulltext index.
-	query := "SELECT opaque_user_id, idp, email, display_name FROM ocm_remote_users WHERE initiator=? AND (opaque_user_id LIKE ? OR idp LIKE ? OR email LIKE ? OR display_name LIKE ?)"
 	s := "%" + attr + "%"
-	params := []any{conversions.FormatUserID(initiator), s, s, s, s}
-
-	rows, err := m.db.QueryContext(ctx, query, params...)
-	if err != nil {
-		return nil, err
+	var us []OcmRemoteUser
+	res := m.db.WithContext(ctx).
+		Where("initiator = ?", conversions.FormatUserID(initiator)).
+		Where("opaque_user_id LIKE ? OR idp LIKE ? OR email LIKE ? OR display_name LIKE ?", s, s, s, s).
+		Find(&us)
+	if res.Error != nil {
+		return nil, res.Error
 	}
 
-	var u dbOCMUser
-	var users []*userpb.User
-	for rows.Next() {
-		if err := rows.Scan(&u.OpaqueUserID, &u.Idp, &u.Email, &u.DisplayName); err != nil {
-			continue
-		}
-		users = append(users, u.toCS3User())
+	users := make([]*userpb.User, 0, len(us))
+	for i := range us {
+		users = append(users, us[i].toCS3User())
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
 	return users, nil
 }
 
+// DeleteRemoteUser removes the remote user from the initiator's list.
+//
+// This is a soft delete: the row is kept but its deleted_at is stamped, so gorm
+// excludes it from subsequent queries. AddRemoteUser revives such a row if the
+// same user is accepted again.
 func (m *mgr) DeleteRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.UserId) error {
-	query := "DELETE FROM ocm_remote_users WHERE initiator=? AND opaque_user_id=? AND idp=?"
-	_, err := m.db.ExecContext(ctx, query, conversions.FormatUserID(initiator), conversions.FormatUserID(remoteUser), remoteUser.Idp)
-	return err
+	return m.db.WithContext(ctx).
+		Where("initiator = ?", conversions.FormatUserID(initiator)).
+		Where("opaque_user_id = ?", conversions.FormatUserID(remoteUser)).
+		Where("idp = ?", remoteUser.Idp).
+		Delete(&OcmRemoteUser{}).Error
 }
