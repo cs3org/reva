@@ -19,6 +19,7 @@
 package wellknown
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -38,13 +39,7 @@ func TestInitWithCodeFlowEnabled(t *testing.T) {
 		t.Errorf("tokenEndPoint: got %s, want https://cernbox.cern.ch/ocm/token", h.data.TokenEndPoint)
 	}
 
-	found := false
-	for _, cap := range h.data.Capabilities {
-		if cap == "exchange-token" {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(h.data.Capabilities, "exchange-token")
 	if !found {
 		t.Errorf("expected exchange-token capability, got %v", h.data.Capabilities)
 	}

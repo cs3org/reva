@@ -52,7 +52,7 @@ func ocmDiscoveryServer(t *testing.T, proto, resType string) *httptest.Server {
 			ResourceTypes: []wellknown.ResourceTypes{
 				{
 					Name: resType,
-					Protocols: map[string]interface{}{
+					Protocols: map[string]any{
 						proto: "/remote.php/dav/ocm",
 					},
 				},

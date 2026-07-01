@@ -158,7 +158,7 @@ func (s *store) List(ctx context.Context, f rjobs.ListFilter) ([]rjobs.Status, e
 func (s *store) Reserve(ctx context.Context, st rjobs.Status, key string) (rjobs.Status, bool, error) {
 	// Retry to cover the narrow window where the current holder releases the key
 	// between our insert seeing it taken and the lookup of that holder.
-	for attempt := 0; attempt < 5; attempt++ {
+	for range 5 {
 		row, err := toModel(st)
 		if err != nil {
 			return rjobs.Status{}, false, err

@@ -308,7 +308,7 @@ func (m *ProjectsManager) GetProject(ctx context.Context, name string) (*Project
 func (m *ProjectsManager) UpdateProjectStatus(ctx context.Context, name string, status projects.ProjectStatus) error {
 	log := appctx.GetLogger(ctx)
 
-	updates := map[string]interface{}{
+	updates := map[string]any{
 		"status": status,
 	}
 

@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -171,10 +172,8 @@ func getWebDAVProtocol(protocols []*ocmpb.Protocol) (*ocmpb.WebDAVProtocol, bool
 func requiresExchange(protocols []*ocmpb.Protocol) bool {
 	for _, p := range protocols {
 		if dav, ok := p.Term.(*ocmpb.Protocol_WebdavOptions); ok {
-			for _, r := range dav.WebdavOptions.Requirements {
-				if r == "must-exchange-token" {
-					return true
-				}
+			if slices.Contains(dav.WebdavOptions.Requirements, "must-exchange-token") {
+				return true
 			}
 		}
 	}

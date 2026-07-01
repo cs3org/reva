@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/url"
 	"os"
 	"os/exec"
@@ -471,9 +472,7 @@ func (fs *cephmountfs) fileAsResourceInfo(path string, info os.FileInfo, mdKeys 
 	}
 	// Populate arbitrary metadata from the file's stored user.* xattrs, then add
 	// the computed inode/device entries (added last so they always win).
-	for k, v := range fs.readArbitraryMetadata(path, mdKeys) {
-		ri.ArbitraryMetadata.Metadata[k] = v
-	}
+	maps.Copy(ri.ArbitraryMetadata.Metadata, fs.readArbitraryMetadata(path, mdKeys))
 	// Set inode and device info
 	ri.ArbitraryMetadata.Metadata["inode"] = strconv.FormatUint(stat.Ino, 10)
 	ri.ArbitraryMetadata.Metadata["device"] = strconv.FormatUint(uint64(stat.Dev), 10)
@@ -1003,8 +1002,8 @@ func (fs *cephmountfs) ListGrants(ctx context.Context, ref *provider.Reference) 
 	log := appctx.GetLogger(ctx)
 
 	// Parse getfacl output
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(output), "\n")
+	for line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
