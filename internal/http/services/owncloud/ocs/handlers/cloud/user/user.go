@@ -29,6 +29,7 @@ import (
 
 	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
@@ -40,7 +41,6 @@ import (
 
 // The Handler renders the user endpoint.
 type Handler struct {
-	gatewayAddr      string
 	allowedLanguages []string
 	signingKeySecret string
 }
@@ -50,7 +50,6 @@ func (h *Handler) Init(c *config.Config) error {
 	if len(c.SigningKeySecret) < 32 {
 		return errors.New("Please set a signing key secret with an appropriate length")
 	}
-	h.gatewayAddr = c.GatewaySvc
 	h.allowedLanguages = c.AllowedLanguages
 	h.signingKeySecret = c.SigningKeySecret
 	if len(h.allowedLanguages) == 0 {

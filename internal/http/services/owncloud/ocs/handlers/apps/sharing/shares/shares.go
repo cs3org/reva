@@ -42,6 +42,7 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
@@ -49,6 +50,11 @@ import (
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/permissions"
 	"github.com/cs3org/reva/v3/pkg/spaces"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 
 	"github.com/cs3org/reva/v3/pkg/notification"
 	"github.com/cs3org/reva/v3/pkg/notification/notificationhelper"
@@ -61,10 +67,6 @@ import (
 	warmupreg "github.com/cs3org/reva/v3/pkg/share/cache/warmup/registry"
 	"github.com/cs3org/reva/v3/pkg/utils"
 	"github.com/cs3org/reva/v3/pkg/utils/resourceid"
-	"github.com/go-chi/chi/v5"
-	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -73,8 +75,6 @@ const (
 
 // Handler implements the shares part of the ownCloud sharing API.
 type Handler struct {
-	gatewayAddr            string
-	storageRegistryAddr    string
 	publicURL              string
 	sharePrefix            string
 	homeNamespace          string
@@ -116,8 +116,6 @@ func getCacheManager(c *config.Config) (cache.ResourceInfoCache, error) {
 
 // Init initializes this and any contained handlers.
 func (h *Handler) Init(c *config.Config, l *zerolog.Logger) {
-	h.gatewayAddr = c.GatewaySvc
-	h.storageRegistryAddr = c.StorageregistrySvc
 	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
 	h.homeNamespace = c.HomeNamespace

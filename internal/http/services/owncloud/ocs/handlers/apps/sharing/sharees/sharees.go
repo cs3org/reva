@@ -23,6 +23,7 @@ import (
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
@@ -33,13 +34,11 @@ import (
 
 // Handler implements the ownCloud sharing API.
 type Handler struct {
-	gatewayAddr             string
 	additionalInfoAttribute string
 }
 
 // Init initializes this and any contained handlers.
 func (h *Handler) Init(c *config.Config) {
-	h.gatewayAddr = c.GatewaySvc
 	h.additionalInfoAttribute = c.AdditionalInfoAttribute
 }
 

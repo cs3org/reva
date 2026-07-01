@@ -20,7 +20,6 @@ package config
 
 import (
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/data"
-	"github.com/cs3org/reva/v3/pkg/sharedconf"
 )
 
 // Config holds the config options that need to be passed down to all ocs handlers.
@@ -28,8 +27,6 @@ type Config struct {
 	Prefix                   string                    `mapstructure:"prefix"`
 	Config                   data.ConfigData           `mapstructure:"config"`
 	Capabilities             data.CapabilitiesData     `mapstructure:"capabilities"`
-	GatewaySvc               string                    `mapstructure:"gatewaysvc"`
-	StorageregistrySvc       string                    `mapstructure:"storage_registry_svc"`
 	DefaultUploadProtocol    string                    `mapstructure:"default_upload_protocol"`
 	UserAgentChunkingMap     map[string]string         `mapstructure:"user_agent_chunking_map"`
 	GroupBasedCapabilities   map[string][]string       `mapstructure:"group_based_capabilities"`
@@ -78,6 +75,4 @@ func (c *Config) ApplyDefaults() {
 	if c.UserIdentifierCacheTTL == 0 {
 		c.UserIdentifierCacheTTL = 60
 	}
-
-	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }

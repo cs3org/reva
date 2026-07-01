@@ -27,25 +27,24 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/go-chi/chi/v5"
+	"github.com/juliangruber/go-intersect"
+
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v3/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v3/pkg/appctx"
 	"github.com/cs3org/reva/v3/pkg/service"
-	"github.com/go-chi/chi/v5"
-	"github.com/juliangruber/go-intersect"
 )
 
 // Handler renders user data for the user id given in the url path.
 type Handler struct {
-	gatewayAddr            string
 	capabilitiesGroupBased map[string][]string
 }
 
 // Init initializes this and any contained handlers.
 func (h *Handler) Init(c *config.Config) {
-	h.gatewayAddr = c.GatewaySvc
 	h.capabilitiesGroupBased = c.GroupBasedCapabilities
 }
 
