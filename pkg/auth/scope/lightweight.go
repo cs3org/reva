@@ -32,7 +32,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func lightweightAccountScope(_ context.Context, scope *authpb.Scope, resource any, _ *zerolog.Logger) (bool, error) {
+func lightweightAccountScope(_ context.Context, scope *authpb.Scope, resource any, log *zerolog.Logger) (bool, error) {
 	// Lightweight accounts have access to resources shared with them.
 	// These cannot be resolved from here, but need to be added to the scope from
 	// where the call to mint tokens is made.
@@ -48,6 +48,7 @@ func lightweightAccountScope(_ context.Context, scope *authpb.Scope, resource an
 	case string:
 		return checkLightweightPath(v), nil
 	}
+	log.Debug().Str("request_type", utils.TypeOf(resource)).Msg("lightweightAccountScope: type not supported")
 	return false, nil
 }
 
