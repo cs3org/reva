@@ -142,7 +142,7 @@ func (s *svc) getSharedWithMe(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *svc) createLocalShare(ctx context.Context, gw gateway.GatewayAPIClient, storageID, itemID, path string, owner *userpb.UserId, resourceType provider.ResourceType, recipientType string, recipientID string, exp *types.Timestamp, requestedPerms *provider.ResourcePermissions) (*collaboration.CreateShareResponse, error) {
+func (s *svc) createLocalShare(ctx context.Context, gw gateway.GatewayAPIClient, ri *provider.ResourceId, path string, owner *userpb.UserId, resourceType provider.ResourceType, recipientType string, recipientID string, exp *types.Timestamp, requestedPerms *provider.ResourcePermissions) (*collaboration.CreateShareResponse, error) {
 	grantee, err := s.toGrantee(ctx, recipientType, recipientID)
 	if err != nil {
 		return nil, err
@@ -150,10 +150,7 @@ func (s *svc) createLocalShare(ctx context.Context, gw gateway.GatewayAPIClient,
 
 	createShareRequest := &collaboration.CreateShareRequest{
 		ResourceInfo: &provider.ResourceInfo{
-			Id: &provider.ResourceId{
-				StorageId: storageID,
-				OpaqueId:  itemID,
-			},
+			Id:    ri,
 			Path:  path,
 			Owner: owner,
 			Type:  resourceType,
@@ -303,7 +300,7 @@ func (s *svc) share(w http.ResponseWriter, r *http.Request) {
 		// If the recipient is a user or a group, we create a local share
 		switch *recipient.LibreGraphRecipientType {
 		case "user", "group":
-			resp, err := s.createLocalShare(ctx, gw, storageID, itemID, path, owner, statRes.Info.Type, *recipient.LibreGraphRecipientType, *recipient.ObjectId, exp, requestedPerms)
+			resp, err := s.createLocalShare(ctx, gw, statRes.Info.Id, path, owner, statRes.Info.Type, *recipient.LibreGraphRecipientType, *recipient.ObjectId, exp, requestedPerms)
 			if err != nil {
 				log.Error().Err(err).Msg("")
 				handleError(ctx, err, w)
