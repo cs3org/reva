@@ -54,6 +54,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
@@ -756,11 +757,11 @@ func benchmarkUploadDirectories(b *testing.B, depth int) {
 	}
 
 	// Create directory structure on filesystem
-	dirPath := ""
+	var dirPath strings.Builder
 	for i := range depth {
-		dirPath += fmt.Sprintf("/level_%d", i)
+		dirPath.WriteString(fmt.Sprintf("/level_%d", i))
 		// Create directory through filesystem
-		dirRef := &provider.Reference{Path: dirPath}
+		dirRef := &provider.Reference{Path: dirPath.String()}
 		err := fs.CreateDir(ctx, dirRef)
 		if err != nil {
 			// Directory might already exist, which is fine
@@ -774,7 +775,7 @@ func benchmarkUploadDirectories(b *testing.B, depth int) {
 
 	for i := 0; b.Loop(); i++ {
 		// Upload to the deepest directory
-		fileName := fmt.Sprintf("%s/upload_%d.txt", dirPath, i)
+		fileName := fmt.Sprintf("%s/upload_%d.txt", dirPath.String(), i)
 		ref := &provider.Reference{Path: fileName}
 
 		// Create reader from test data
@@ -1361,14 +1362,6 @@ func benchmarkMultiUserConcurrentReads(b *testing.B, userCount, readsPerUser int
 				errorCount, totalJobs, float64(errorCount)/float64(totalJobs)*100, lastError)
 		}
 	}
-}
-
-// Helper function for min (Go 1.21+)
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // Benchmark-specific helper functions

@@ -112,7 +112,7 @@ func lookupStruct(key string, v reflect.Value) (any, error) {
 	return nil, ErrKeyNotFound{Key: key}
 }
 
-var typeLookuper = reflect.TypeOf((*Lookuper)(nil)).Elem()
+var typeLookuper = reflect.TypeFor[Lookuper]()
 
 // lookupByType recursively looks up the given key in v.
 func lookupByType(key string, v reflect.Value) (any, error) {

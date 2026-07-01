@@ -266,10 +266,7 @@ func (s *store) Claim(ctx context.Context) (rjobs.Run, error) {
 	// Poll each per-job subscription in turn. The per-subscription fetch wait
 	// is spread so a full no-work cycle takes about fetchWait regardless of how
 	// many jobs are registered.
-	perSubWait := fetchWait / time.Duration(len(s.subs))
-	if perSubWait < 100*time.Millisecond {
-		perSubWait = 100 * time.Millisecond
-	}
+	perSubWait := max(fetchWait/time.Duration(len(s.subs)), 100*time.Millisecond)
 
 	for {
 		if err := ctx.Err(); err != nil {

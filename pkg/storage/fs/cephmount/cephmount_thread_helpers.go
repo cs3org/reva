@@ -236,7 +236,7 @@ func (fs *cephmountfs) setXattrAsUser(ctx context.Context, path, key string, dat
 
 // getXattrAsUser gets an extended attribute on the user's thread with correct UID
 func (fs *cephmountfs) getXattrAsUser(ctx context.Context, path, key string) ([]byte, error) {
-	result, err := fs.executeAsUser(ctx, func() (interface{}, error) {
+	result, err := fs.executeAsUser(ctx, func() (any, error) {
 		fullPath := filepath.Join(fs.chrootDir, path)
 		return xattr.Get(fullPath, key)
 	})
@@ -256,7 +256,7 @@ func (fs *cephmountfs) removeXattrAsUser(ctx context.Context, path, key string) 
 
 // listXattrsAsUser lists extended attributes on the user's thread with correct UID
 func (fs *cephmountfs) listXattrsAsUser(ctx context.Context, path string) ([]string, error) {
-	result, err := fs.executeAsUser(ctx, func() (interface{}, error) {
+	result, err := fs.executeAsUser(ctx, func() (any, error) {
 		fullPath := filepath.Join(fs.chrootDir, path)
 		return xattr.List(fullPath)
 	})

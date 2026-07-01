@@ -173,7 +173,7 @@ func (c *Config) isValidKey(key string) bool {
 		return false
 	}
 	k := f.Key
-	e := reflect.TypeOf(c).Elem()
+	e := reflect.TypeFor[Config]()
 	for i := 0; i < e.NumField(); i++ {
 		f := e.Field(i)
 		prefix := f.Tag.Get("key")

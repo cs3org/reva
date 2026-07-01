@@ -20,6 +20,7 @@ package ocmshares
 
 import (
 	"context"
+	"slices"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -112,10 +113,8 @@ func (m *manager) Authenticate(ctx context.Context, ocmshare, token string) (*us
 	// Reject direct-secret access to shares that require token exchange
 	for _, am := range shareRes.Share.AccessMethods {
 		if dav, ok := am.Term.(*ocm.AccessMethod_WebdavOptions); ok {
-			for _, r := range dav.WebdavOptions.Requirements {
-				if r == "must-exchange-token" {
-					return nil, nil, errtypes.InvalidCredentials("share requires token exchange")
-				}
+			if slices.Contains(dav.WebdavOptions.Requirements, "must-exchange-token") {
+				return nil, nil, errtypes.InvalidCredentials("share requires token exchange")
 			}
 		}
 	}
