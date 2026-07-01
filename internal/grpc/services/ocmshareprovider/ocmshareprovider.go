@@ -313,20 +313,38 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		AccessMethods: req.AccessMethods,
 	}
 
-	// TODO(lopresti) this is to be persisted after sending to remote,
-	// which requires the repo to expose a GenerateID() method to create
-	// the share here as it's sent in the payload
-	ocmshare, err = s.repo.StoreShare(ctx, ocmshare)
-	if err != nil {
-		if errors.Is(err, share.ErrShareAlreadyExisting) {
-			return &ocm.CreateOCMShareResponse{
-				Status: status.NewAlreadyExists(ctx, err, "share already exists"),
-			}, nil
-		}
+	// Since the share is persisted only after the remote server has accepted it,
+	// check upfront whether it already exists: this avoids sending it to the
+	// remote (and leaving a dangling share there) only to fail on the local
+	// duplicate afterwards.
+	switch _, err := s.repo.GetShare(ctx, user, &ocm.ShareReference{
+		Spec: &ocm.ShareReference_Key{
+			Key: &ocm.ShareKey{
+				Owner:      info.Owner,
+				ResourceId: req.ResourceId,
+				Grantee:    req.Grantee,
+			},
+		},
+	}); {
+	case err == nil:
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewAlreadyExists(ctx, share.ErrShareAlreadyExisting, "share already exists"),
+		}, nil
+	case !errors.Is(err, share.ErrShareNotFound):
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, err, err.Error()),
 		}, nil
 	}
+
+	// The share is persisted only once the remote server has accepted it, but
+	// its ID is part of the payload sent there, so the ID is generated upfront.
+	shareID, err := s.repo.GenerateID(ctx)
+	if err != nil {
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInternal(ctx, err, err.Error()),
+		}, nil
+	}
+	ocmshare.Id = shareID
 
 	// look for the remote OCM endpoint
 	ocmEndpoint, err := ocmim.GetOCMEndpoint(req.RecipientMeshProvider)
@@ -403,15 +421,6 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 
 	newShareRes, err := s.client.NewShare(ctx, ocmEndpoint, newShareReq)
 	if err != nil {
-		// if the request doesn't succeed we need to roll back the share creation
-		delErr := s.repo.DeleteShare(ctx, user, &ocm.ShareReference{
-			Spec: &ocm.ShareReference_Id{
-				Id: ocmshare.Id,
-			},
-		})
-		if delErr != nil {
-			log.Error().Err(delErr).Msg("error rolling back share after failed remote share creation")
-		}
 		switch {
 		case errors.Is(err, ocmd.ErrInvalidParameters):
 			return &ocm.CreateOCMShareResponse{
@@ -428,9 +437,19 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		}
 	}
 
+	stored, err := s.repo.StoreShare(ctx, ocmshare)
+	if err != nil {
+		// the remote server has already accepted the share, so a failure here
+		// leaves a dangling share on the remote end
+		log.Error().Err(err).Str("shareid", ocmshare.Id.OpaqueId).Msg("remote share created but persisting it locally failed")
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInternal(ctx, err, err.Error()),
+		}, nil
+	}
+
 	res := &ocm.CreateOCMShareResponse{
 		Status:               status.NewOK(ctx),
-		Share:                ocmshare,
+		Share:                stored,
 		RecipientDisplayName: newShareRes.RecipientDisplayName,
 	}
 	return res, nil

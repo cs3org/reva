@@ -68,6 +68,17 @@ func getOcmShare(accessMethods []*ocm.AccessMethod, grantee *provider.Grantee, c
 	}
 }
 
+// storeOcmShareWithID reserves an ID and stores the share, mirroring how the
+// service always sets a pre-generated ID before calling StoreShare.
+func storeOcmShareWithID(mgr share.Repository, ctx context.Context, s *ocm.Share) (*ocm.Share, error) {
+	id, err := mgr.GenerateID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s.Id = id
+	return mgr.StoreShare(ctx, s)
+}
+
 func getWebDavProtocol(uri string, sharedsecret string, perms *ocm.SharePermissions, role string) *ocm.Protocol {
 	switch role {
 	case "viewer":
@@ -249,7 +260,7 @@ func TestGetOCMShareById(t *testing.T) {
 	grantee := getUserOcmShareGrantee("sharee1")
 	accessMethods := getOcmAccessMethods("viewer")
 
-	share, err := mgr.StoreShare(userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "sometoken"))
+	share, err := storeOcmShareWithID(mgr, userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "sometoken"))
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
@@ -272,6 +283,47 @@ func TestGetOCMShareById(t *testing.T) {
 	}
 }
 
+func TestStoreOCMShareWithPregeneratedID(t *testing.T) {
+	mgr, err, teardown := setupSuiteOcmShares(t)
+	defer teardown(t)
+
+	userctx := getUserContext("123456")
+	user, _ := appctx.ContextGetUser(userctx)
+	grantee := getUserOcmShareGrantee("sharee1")
+	accessMethods := getOcmAccessMethods("viewer")
+
+	id, err := mgr.GenerateID(userctx)
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+
+	ocmshare := getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "sometoken")
+	ocmshare.Id = id
+
+	stored, err := mgr.StoreShare(userctx, ocmshare)
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+	if stored.Id.OpaqueId != id.OpaqueId {
+		t.Errorf("Expected share to be stored under pre-generated ID %s, got %s", id.OpaqueId, stored.Id.OpaqueId)
+	}
+
+	retrievedShare, err := mgr.GetShare(userctx, user, &ocm.ShareReference{
+		Spec: &ocm.ShareReference_Id{
+			Id: id,
+		},
+	})
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+	if retrievedShare.Id.OpaqueId != id.OpaqueId {
+		t.Errorf("Expected share ID %s, got %s", id.OpaqueId, retrievedShare.Id.OpaqueId)
+	}
+}
+
 func TestGetOCMShareByIdAllowsFederatedGrantee(t *testing.T) {
 	mgr, err, teardown := setupSuiteOcmShares(t)
 	defer teardown(t)
@@ -284,7 +336,7 @@ func TestGetOCMShareByIdAllowsFederatedGrantee(t *testing.T) {
 	grantee.GetUserId().Idp = "nextcloud1.docker"
 	accessMethods := getOcmAccessMethods("viewer")
 
-	share, err := mgr.StoreShare(ownerCtx, getOcmShare(accessMethods, grantee, owner.Id, getResourceId(), "federatedtoken"))
+	share, err := storeOcmShareWithID(mgr, ownerCtx, getOcmShare(accessMethods, grantee, owner.Id, getResourceId(), "federatedtoken"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,7 +380,7 @@ func TestGetOcmShareByKey(t *testing.T) {
 		},
 	}
 
-	share, err := mgr.StoreShare(userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "sometoken"))
+	share, err := storeOcmShareWithID(mgr, userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "sometoken"))
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
@@ -360,7 +412,7 @@ func TestGetOCMShareByToken(t *testing.T) {
 		},
 	}
 
-	share, err := mgr.StoreShare(userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "sometoken"))
+	share, err := storeOcmShareWithID(mgr, userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "sometoken"))
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
@@ -386,13 +438,13 @@ func TestDoNotCreateTheSameShareTwice(t *testing.T) {
 	grantee := getUserOcmShareGrantee("sharee1")
 	accessMethods := getOcmAccessMethods("viewer")
 
-	_, err = mgr.StoreShare(userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "sometoken"))
+	_, err = storeOcmShareWithID(mgr, userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "sometoken"))
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
 	}
 
-	_, err = mgr.StoreShare(userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "sometoken"))
+	_, err = storeOcmShareWithID(mgr, userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "sometoken"))
 	if err == nil {
 		t.Error("Expected error when creating the same share twice, but got none")
 		t.FailNow()
@@ -409,13 +461,13 @@ func TestListOCMShares(t *testing.T) {
 	grantee2 := getUserOcmShareGrantee("sharee2")
 	accessMethods := getOcmAccessMethods("viewer")
 
-	_, err = mgr.StoreShare(userctx, getOcmShare(accessMethods, grantee1, user.Id, getResourceId(), "sometoken"))
+	_, err = storeOcmShareWithID(mgr, userctx, getOcmShare(accessMethods, grantee1, user.Id, getResourceId(), "sometoken"))
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
 	}
 
-	_, err = mgr.StoreShare(userctx, getOcmShare(accessMethods, grantee2, user.Id, getResourceId(), "someothertoken"))
+	_, err = storeOcmShareWithID(mgr, userctx, getOcmShare(accessMethods, grantee2, user.Id, getResourceId(), "someothertoken"))
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
@@ -506,7 +558,7 @@ func TestDeleteOCMShare(t *testing.T) {
 	grantee := getUserOcmShareGrantee("sharee1")
 	accessMethods := getOcmAccessMethods("viewer")
 
-	share, err := mgr.StoreShare(userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "sometoken"))
+	share, err := storeOcmShareWithID(mgr, userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "sometoken"))
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
@@ -540,7 +592,7 @@ func TestUpdateOCMShare(t *testing.T) {
 	grantee := getUserOcmShareGrantee("sharee1")
 	accessMethods := getOcmAccessMethods("viewer")
 
-	share, err := mgr.StoreShare(userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "sometoken"))
+	share, err := storeOcmShareWithID(mgr, userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "sometoken"))
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
@@ -580,7 +632,7 @@ func TestListOCMSharesWithOwnerFilter(t *testing.T) {
 	grantee2 := getUserOcmShareGrantee("sharee2")
 	accessMethods := getOcmAccessMethods("viewer")
 
-	_, err = mgr.StoreShare(userctx, getOcmShare(accessMethods, grantee1, user.Id, getResourceId(), "sometoken"))
+	_, err = storeOcmShareWithID(mgr, userctx, getOcmShare(accessMethods, grantee1, user.Id, getResourceId(), "sometoken"))
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
@@ -591,7 +643,7 @@ func TestListOCMSharesWithOwnerFilter(t *testing.T) {
 		Type:     userpb.UserType_USER_TYPE_APPLICATION,
 	}
 
-	_, err = mgr.StoreShare(userctx, getOcmShare(accessMethods, grantee2, u, getResourceId(), "someothertoken"))
+	_, err = storeOcmShareWithID(mgr, userctx, getOcmShare(accessMethods, grantee2, u, getResourceId(), "someothertoken"))
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
@@ -624,7 +676,7 @@ func TestOutgoingShareRoundTripsRequirementsAndAccessTypes(t *testing.T) {
 	grantee := getUserOcmShareGrantee("sharee1")
 	accessMethods := getOcmAccessMethodsWithCodeFlow("viewer")
 
-	stored, err := mgr.StoreShare(userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "codeflowtoken"))
+	stored, err := storeOcmShareWithID(mgr, userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "codeflowtoken"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -688,7 +740,7 @@ func TestUpdatePreservesRequirementsWhenFieldsOmitted(t *testing.T) {
 	grantee := getUserOcmShareGrantee("sharee1")
 	accessMethods := getOcmAccessMethodsWithCodeFlow("viewer")
 
-	stored, err := mgr.StoreShare(userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "cftoken-ocs"))
+	stored, err := storeOcmShareWithID(mgr, userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "cftoken-ocs"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -737,7 +789,7 @@ func TestUpdatePreservesRequirementsWithExplicitEmptySlice(t *testing.T) {
 	grantee := getUserOcmShareGrantee("sharee1")
 	accessMethods := getOcmAccessMethodsWithCodeFlow("viewer")
 
-	stored, err := mgr.StoreShare(userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "cftoken-graph"))
+	stored, err := storeOcmShareWithID(mgr, userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "cftoken-graph"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -787,7 +839,7 @@ func TestUpdateRejectsDifferentRequirements(t *testing.T) {
 	grantee := getUserOcmShareGrantee("sharee1")
 	accessMethods := getOcmAccessMethodsWithCodeFlow("viewer")
 
-	stored, err := mgr.StoreShare(userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "cftoken-reject"))
+	stored, err := storeOcmShareWithID(mgr, userctx, getOcmShare(accessMethods, grantee, user.Id, getResourceId(), "cftoken-reject"))
 	if err != nil {
 		t.Fatal(err)
 	}

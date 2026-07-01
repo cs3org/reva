@@ -30,7 +30,13 @@ import (
 
 // Repository is the interface that manipulates the OCM shares repository.
 type Repository interface {
-	// StoreShare stores a share.
+	// GenerateID generates a unique ID for a new share, so that the share can
+	// be referenced (e.g. in the payload sent to the remote OCM server) before
+	// it is persisted with StoreShare.
+	GenerateID(ctx context.Context) (*ocm.ShareId, error)
+
+	// StoreShare stores a share. The share must carry an ID pre-generated with
+	// GenerateID, under which it is stored.
 	StoreShare(ctx context.Context, share *ocm.Share) (*ocm.Share, error)
 
 	// GetShare gets the information for a share by the given ref.
