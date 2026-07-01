@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -240,7 +241,7 @@ func signedRawQuery(rawQuery string) string {
 	}
 
 	signParameters := make([]string, 0)
-	for _, p := range strings.Split(rawQuery, "&") {
+	for p := range strings.SplitSeq(rawQuery, "&") {
 		rawName, _, _ := strings.Cut(p, "=")
 		if parameterIsSigned(rawName) {
 			signParameters = append(signParameters, p)
@@ -262,17 +263,10 @@ func parameterIsSigned(rawName string) bool {
 }
 
 func parameterNameIsSigned(name string) bool {
-	for _, p := range _requiredParamsToSign {
-		if name == p {
-			return true
-		}
+	if slices.Contains(_requiredParamsToSign, name) {
+		return true
 	}
-	for _, p := range _optionalParamsToSign {
-		if name == p {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(_optionalParamsToSign, name)
 }
 
 func (m SignedURLAuthenticator) createSignature(url string, signingKey []byte) string {

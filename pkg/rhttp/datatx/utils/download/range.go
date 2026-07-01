@@ -60,11 +60,11 @@ func ParseRange(s string, size int64) ([]storage.Range, error) {
 		if ra == "" {
 			continue
 		}
-		i := strings.Index(ra, "-")
-		if i < 0 {
+		before, after, ok := strings.Cut(ra, "-")
+		if !ok {
 			return nil, nil
 		}
-		start, end := textproto.TrimString(ra[:i]), textproto.TrimString(ra[i+1:])
+		start, end := textproto.TrimString(before), textproto.TrimString(after)
 		var r storage.Range
 		if start == "" {
 			// If no start is specified, end specifies the

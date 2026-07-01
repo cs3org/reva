@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -90,10 +91,8 @@ func (e crateEntity) HasType(want string) bool {
 
 	var many []string
 	if err := json.Unmarshal(e.Type, &many); err == nil {
-		for _, t := range many {
-			if t == want {
-				return true
-			}
+		if slices.Contains(many, want) {
+			return true
 		}
 	}
 

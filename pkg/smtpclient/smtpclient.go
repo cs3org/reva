@@ -79,16 +79,16 @@ func (creds *SMTPCredentials) SendMail(recipient, subject, body string) error {
 		"Content-Transfer-Encoding": "base64",
 	}
 
-	message := ""
+	var message strings.Builder
 	for k, v := range headers {
-		message += fmt.Sprintf("%s: %s\r\n", k, v)
+		message.WriteString(fmt.Sprintf("%s: %s\r\n", k, v))
 	}
-	message += "\r\n" + base64.StdEncoding.EncodeToString([]byte(body))
+	message.WriteString("\r\n" + base64.StdEncoding.EncodeToString([]byte(body)))
 
 	if creds.DisableAuth {
-		return creds.sendMailSMTP(recipient, subject, message)
+		return creds.sendMailSMTP(recipient, subject, message.String())
 	}
-	return creds.sendMailAuthSMTP(recipient, subject, message)
+	return creds.sendMailAuthSMTP(recipient, subject, message.String())
 }
 
 func (creds *SMTPCredentials) sendMailAuthSMTP(recipient, subject, message string) error {

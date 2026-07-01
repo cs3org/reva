@@ -225,9 +225,9 @@ func (w *Embedded) ToOCMProtocol() *ocm.Protocol {
 }
 
 var protocolImpl = map[string]reflect.Type{
-	"webdav":   reflect.TypeOf(WebDAV{}),
-	"webapp":   reflect.TypeOf(Webapp{}),
-	"embedded": reflect.TypeOf(Embedded{}),
+	"webdav":   reflect.TypeFor[WebDAV](),
+	"webapp":   reflect.TypeFor[Webapp](),
+	"embedded": reflect.TypeFor[Embedded](),
 }
 
 // UnmarshalJSON implements the Unmarshaler interface.

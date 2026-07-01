@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net"
 	"os"
 	"os/exec"
@@ -120,9 +121,7 @@ func startRevads(configs map[string]string, externalFiles map[string]string,
 	// seed any predetermined addresses first so they are available for
 	// template substitution and waitForPort uses the correct address
 	for _, fixed := range fixedAddresses {
-		for name, addr := range fixed {
-			addresses[name] = addr
-		}
+		maps.Copy(addresses, fixed)
 	}
 	// assign dynamic ports only to services not already given a fixed address
 	for name := range configs {
@@ -186,7 +185,6 @@ func startRevads(configs map[string]string, externalFiles map[string]string,
 	g := new(errgroup.Group)
 
 	for name, config := range configs {
-		name, config := name, config
 		g.Go(func() error {
 			ownAddress := addresses[name]
 

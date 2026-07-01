@@ -118,8 +118,8 @@ func ParseFstabEntry(ctx context.Context, fstabLine string) (*FstabMountInfo, er
 		// Fallback to standard patterns if derivation fails
 		configFile = "/etc/ceph/ceph.conf"
 		// For keyring, convert secretfile to keyring if it's a .key file
-		if strings.HasSuffix(secretFile, ".key") {
-			keyringFile = strings.TrimSuffix(secretFile, ".key") + ".keyring"
+		if before, ok := strings.CutSuffix(secretFile, ".key"); ok {
+			keyringFile = before + ".keyring"
 		} else {
 			// Standard keyring pattern
 			keyringFile = fmt.Sprintf("/etc/ceph/ceph.client.%s.keyring", clientName)

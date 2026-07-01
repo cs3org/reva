@@ -26,10 +26,11 @@ import (
 	"os"
 	"os/user"
 	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
-	"strconv"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v3/pkg/appctx"
@@ -182,27 +183,28 @@ func (r *PrivilegeVerificationResult) String() string {
 		status = "PARTIAL"
 	}
 
-	summary := fmt.Sprintf("Privilege Status: %s\n", status)
-	summary += fmt.Sprintf("Current UID/GID: %d/%d, fsuid/fsgid: %d/%d\n",
-		r.CurrentUID, r.CurrentGID, r.CurrentFsUID, r.CurrentFsGID)
-	summary += fmt.Sprintf("Can change UID: %t, Can change GID: %t\n",
-		r.CanChangeUID, r.CanChangeGID)
+	var summary strings.Builder
+	summary.WriteString(fmt.Sprintf("Privilege Status: %s\n", status))
+	summary.WriteString(fmt.Sprintf("Current UID/GID: %d/%d, fsuid/fsgid: %d/%d\n",
+		r.CurrentUID, r.CurrentGID, r.CurrentFsUID, r.CurrentFsGID))
+	summary.WriteString(fmt.Sprintf("Can change UID: %t, Can change GID: %t\n",
+		r.CanChangeUID, r.CanChangeGID))
 
 	if len(r.ErrorMessages) > 0 {
-		summary += "Issues:\n"
+		summary.WriteString("Issues:\n")
 		for _, msg := range r.ErrorMessages {
-			summary += fmt.Sprintf("  - %s\n", msg)
+			summary.WriteString(fmt.Sprintf("  - %s\n", msg))
 		}
 	}
 
 	if len(r.Recommendations) > 0 {
-		summary += "Recommendations:\n"
+		summary.WriteString("Recommendations:\n")
 		for _, rec := range r.Recommendations {
-			summary += fmt.Sprintf("  - %s\n", rec)
+			summary.WriteString(fmt.Sprintf("  - %s\n", rec))
 		}
 	}
 
-	return summary
+	return summary.String()
 }
 
 // UserThreadPool manages a pool of threads, each dedicated to a specific user UID
@@ -420,7 +422,6 @@ func (p *UserThreadPool) cleanupExpiredThreads() {
 		}
 	}
 }
-
 
 func (ut *UserThread) getUserAdditionalGroupIDs(username string) ([]int, error) {
 	u, err := user.Lookup(username)
